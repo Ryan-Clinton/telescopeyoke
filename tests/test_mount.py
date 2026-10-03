@@ -6,6 +6,7 @@ import pytest
 
 import config
 import mount
+import tracking
 from simulator import SimulatedHandset
 
 SITE = config.example()["site"]
@@ -144,3 +145,75 @@ def test_a_centring_run_can_be_recorded(scope, tmp_path):
     scope.goto_target(target, SITE)
     steps = json.loads((tmp_path / "run" / "steps.json").read_text())
     assert steps and target in steps[0]["text"]
+
+
+class FakeClock:
+    """Time that only moves when something sleeps, so tests need not wait."""
+
+    def __init__(self):
+        import time
+        self.t = time.time()
+
+    def now(self):
+        return self.t
+
+    def sleep(self, seconds):
+        self.t += seconds
+
+
+@pytest.mark.parametrize("west", [True, False])
+@pytest.mark.parametrize("natural", [-1.4, 0.9])
+def test_drift_cancelling_settles_on_either_side_of_the_mount(tmp_path, monkeypatch, west, natural):
+    """A sky that slides in Dec at a steady rate, as with a rough polar
+    alignment: the Dec creep should end up cancelling it, whichever side of
+    the mount the tube is on and whichever way the drift runs."""
+    from astropy.time import Time
+    for name in ("CLOCK_FILE", "POINTING_FILE", "DRIFT_FILE"):
+        monkeypatch.setattr(mount, name, tmp_path / f"{name}.json")
+    clock = FakeClock()
+    monkeypatch.setattr(mount.time, "sleep", clock.sleep)
+    handset = SimulatedHandset(slew_seconds=0, clock=clock.now)
+    scope = mount.Mount(handset=handset)
+    scope.save_clock(SITE)
+    scope.goto((handset.sidereal() - (40 if west else -40)) % 360, 30)
+    scope.tracking(True)
+    assert scope.west() == west
+    began = clock.now()
+
+    def sky(ra_hint, dec_hint, radius=30, exposure=1.0):
+        # Where the handset thinks it points, plus what the sky has slid by.
+        ra, dec = scope.radec()
+        slid = natural * (clock.now() - began) / 3600
+        return {"ra": ra, "dec": mount.wrap(dec) + slid, "when": Time(clock.now(), format="unix")}
+
+    monkeypatch.setattr(scope, "where_really", sky)
+    residual, sigma = scope.cancel_drift(SITE, rounds=6)
+    assert abs(residual) <= 0.15
+    creep = handset.rates[17] * 3600
+    assert natural + tracking.creep_effect(creep, west) == pytest.approx(residual, abs=0.05)
+    # What it learned is the natural drift, not the leftover.
+    model = scope.drift_model(SITE)
+    assert model.observations[-1]["rate"] == pytest.approx(natural, abs=0.1)
+    assert model.creep == pytest.approx(creep)   # the rate really set, in quarter-arcsecond steps
+
+
+def test_a_goto_starts_the_creep_its_part_of_the_sky_needs(scope):
+    scope.zenith(SITE)
+    model = scope.drift_model(SITE)
+    model.set_polar(-9.4, 0.0)
+    target = next(name for name in mount.STARS
+                  if abs(mount.where(mount.find_target(name), SITE)[0]) < 75
+                  and mount.where(mount.find_target(name), SITE)[2] > 25)
+    scope.goto_target(target, SITE)
+    hour_angle = mount.where(mount.find_target(target), SITE)[0]
+    expected = tracking.creep_for(model.predict(hour_angle), scope.west())
+    assert scope.s.rates[17] * 3600 == pytest.approx(expected, abs=0.2)
+
+
+def test_with_nothing_learned_a_goto_leaves_the_dec_motor_alone(scope):
+    scope.zenith(SITE)
+    target = next(name for name in mount.STARS
+                  if abs(mount.where(mount.find_target(name), SITE)[0]) < 75
+                  and mount.where(mount.find_target(name), SITE)[2] > 25)
+    scope.goto_target(target, SITE)
+    assert scope.s.rates[17] == 0

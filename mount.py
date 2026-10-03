@@ -7,9 +7,12 @@
     ./mount.py goto M81 --solve   ...then photograph the sky, work out the real
                           aim, and correct it until the object is centred
     ./mount.py point 225 10   point at compass bearing 225°, 10° up, and hold
-    ./mount.py drift      measure how fast the aim is sliding and set the Dec
-                          motor creeping the other way to cancel it. Makes up
-                          for a rough polar alignment. Repeat after a big slew.
+    ./mount.py drift      measure how fast the aim is sliding in Dec and set
+                          the Dec motor creeping the other way to cancel it
+    ./mount.py compensate measure the polar axis, say how to fix it, and
+                          meanwhile cancel the drift it causes. After this,
+                          every GoTo starts with the creep its part of the sky
+                          needs. It slews about 25° twice to take its measure.
     ./mount.py sync       photograph the sky where it is now, work out the real
                           aim, and remember the error for later GoTos. Do this
                           once after setting up, on any patch of stars.
@@ -37,6 +40,7 @@ from pathlib import Path
 import serial
 
 import config
+import tracking
 from watch import Watching
 
 ROOT = Path(__file__).parent
@@ -54,8 +58,9 @@ LOCK_FILE = ROOT / "MOTION_LOCKED"
 # Pointing error found by plate solving, carried into later GoTos.
 POINTING_FILE = ROOT / "cache" / "pointing.json"
 CENTRED = 2 / 60  # degrees; close enough to stop correcting
-# Dec motor creep rate that cancels the drift, from `mount.py drift`.
-DRIFT_FILE = ROOT / "cache" / "drift.json"
+LAST_SOLVE = ROOT / "cache" / "last_solve.json"
+# What has been learned about the drift, and the Dec creep now running.
+DRIFT_FILE = ROOT / "cache" / "drift_model.json"
 SETTLE = 30       # seconds to wait after a slew before photographing
 
 # Raw axis angles, in degrees, as the handset's "z" query reports them.
@@ -164,67 +169,122 @@ class Mount:
     def dec_creep(self, rate):
         """Turn the Dec axis steadily at `rate` arcseconds per second
         (positive raises the axis readout); 0 stops it. The handset takes the
-        rate in quarter-arcsecond steps."""
+        rate in quarter-arcsecond steps, so the rate actually set is returned."""
         steps = min(round(abs(rate) * 4), 0xFFFF)
         self.ask(bytes([ord("P"), 3, DEC, 6 if rate >= 0 else 7, steps >> 8, steps & 0xFF, 0, 0]))
+        return math.copysign(steps / 4, rate) if steps else 0.0
 
-    def apply_drift_correction(self):
-        """Restart the stored Dec creep, if it was measured on this side of
-        the mount since the handset was last set up."""
-        if not (DRIFT_FILE.exists() and CLOCK_FILE.exists()):
-            return
-        saved = json.loads(DRIFT_FILE.read_text())
-        if (saved["saved"] > json.loads(CLOCK_FILE.read_text())["saved"]
-                and saved["west"] == (self.axes()[1] > 90)):
-            self.dec_creep(saved["dec_axis_rate"])
+    def west(self):
+        """True with the tube swung over the pole, as for targets west of
+        the meridian (the Dec axis reads past 90°)."""
+        return self.axes()[1] > 90
 
-    def measure_drift(self, site, gap=45):
-        """Plate-solve twice, `gap` seconds apart, and return how fast the aim
-        is sliding across the sky as (east-west, Dec) in arcseconds per
-        second, or None. Zero means perfect tracking."""
+    def drift_model(self, site):
+        """What has been learned about the drift since the handset was set up;
+        anything older belongs to a different setting-up and is forgotten."""
+        model = tracking.Model(DRIFT_FILE, latitude=site["latitude"])
+        if model.path.exists() and CLOCK_FILE.exists():
+            saved = json.loads(model.path.read_text()).get("saved", 0)
+            if saved < json.loads(CLOCK_FILE.read_text())["saved"]:
+                model.forget()
+        return model
+
+    def true_hour_angle(self, site):
+        """Where the mount is aimed, as an hour angle in degrees, allowing
+        for the handset's clock and the pointing error found by plate solving."""
         offset = json.loads(CLOCK_FILE.read_text())["offset_deg"]
-        error = load_pointing_error(self.axes()[1] > 90)
-        sidereal = true_sidereal(site)
-        believed_ha = wrap(sidereal + offset - self.radec()[0]) + error[0]
-        first = self.where_really(sidereal - believed_ha, wrap(self.radec()[1]) + error[1],
-                                  radius=20)
-        if not first:
+        error = load_pointing_error(self.west())
+        return wrap(true_sidereal(site) + offset - self.radec()[0]) + error[0]
+
+    def apply_drift_correction(self, site):
+        """Start the Dec motor creeping against the drift expected where the
+        mount now points, from the drift model. Does nothing if the model
+        knows nothing about this part of the sky."""
+        if not CLOCK_FILE.exists():
             return None
-        time.sleep(gap)
-        second = self.where_really(first["ra"], first["dec"], radius=5)
-        if not second:
+        model = self.drift_model(site)
+        expected = model.predict(self.true_hour_angle(site))
+        if expected is None:
+            return None
+        model.creep = self.dec_creep(tracking.creep_for(expected, self.west()))
+        model.save()
+        return expected
+
+    def measure_drift(self, site, solves=4, gap=30):
+        """Plate-solve several times, `gap` seconds apart, and fit a line
+        through them. Returns how fast the aim is sliding across the sky as
+        (east-west, Dec, uncertainty in Dec), in arcseconds per second, or
+        None if the sky could not be solved. Zero means perfect tracking."""
+        error = load_pointing_error(self.west())
+        hint_ra = true_sidereal(site) - self.true_hour_angle(site)
+        found = self.where_really(hint_ra, wrap(self.radec()[1]) + error[1], radius=20)
+        if not found:
+            return None
+        fixes = [found]
+        for _ in range(solves - 1):
+            time.sleep(gap)
+            found = self.where_really(fixes[-1]["ra"], fixes[-1]["dec"], radius=5)
+            if found:   # a passing cloud costs one point, not the measurement
+                fixes.append(found)
+        if len(fixes) < 2:
             return None
         # A perfectly tracked aim keeps the same sky coordinates.
-        seconds = (second["when"] - first["when"]).sec
-        east_west = wrap(second["ra"] - first["ra"]) * math.cos(math.radians(first["dec"]))
-        return east_west * 3600 / seconds, (second["dec"] - first["dec"]) * 3600 / seconds
+        seconds = [(f["when"] - fixes[0]["when"]).sec for f in fixes]
+        shrink = math.cos(math.radians(fixes[0]["dec"]))
+        east_west, _ = tracking.line_fit(
+            seconds, [wrap(f["ra"] - fixes[0]["ra"]) * shrink * 3600 for f in fixes])
+        dec, sigma = tracking.line_fit(seconds, [f["dec"] * 3600 for f in fixes])
+        return east_west, dec, sigma
 
-    def cancel_drift(self, site):
-        """Measure the drift and set the Dec motor creeping against it, then
-        measure again and refine."""
-        west = self.axes()[1] > 90
-        rate = 0.0
-        if DRIFT_FILE.exists():
-            saved = json.loads(DRIFT_FILE.read_text())
-            if saved["west"] == west:
-                rate = saved["dec_axis_rate"]
-        self.dec_creep(rate)
-        for attempt in range(3):
+    def cancel_drift(self, site, rounds=3):
+        """Measure the Dec drift and set the Dec motor creeping against it,
+        then measure again and refine. Each measurement of the natural drift
+        is added to the drift model. Returns the last (residual, uncertainty)."""
+        west = self.west()
+        model = self.drift_model(site)
+        creep = self.dec_creep(model.creep if model.creep is not None else 0.0)
+        residual = sigma = None
+        for attempt in range(rounds):
             drift = self.measure_drift(site)
             if drift is None:
                 raise SystemExit("Could not plate-solve; drift not measured.")
-            print(f"drift: {drift[0]:+.2f} arcsec/s east-west, {drift[1]:+.2f} in Dec "
-                  f"(Dec motor creeping at {rate:+.2f})", flush=True)
-            if abs(drift[1]) < 0.15:
+            east_west, residual, sigma = drift
+            sure = "" if sigma is None else f" ±{sigma:.2f}"
+            natural = residual - tracking.creep_effect(creep, west)
+            model.observe(self.true_hour_angle(site), wrap(self.radec()[1]), natural, sigma)
+            wanted, decided = tracking.next_creep(creep, residual, sigma, west)
+            creep = self.dec_creep(wanted)
+            self.say(f"Dec drift {residual:+.2f}{sure} arcsec/s (east-west {east_west:+.2f}); "
+                     f"creep {creep:+.2f}: {decided}")
+            model.creep = creep
+            model.save()
+            if "left alone" in decided:
                 break
-            # With the tube over the pole (west side), raising the axis
-            # readout lowers the Dec the scope points at.
-            rate += drift[1] if west else -drift[1]
-            self.dec_creep(rate)
-            DRIFT_FILE.write_text(json.dumps(
-                {"dec_axis_rate": rate, "west": west, "saved": time.time()}))
-            # The Dec gears have slack, so a new rate takes a while to bite.
-            time.sleep(60)
+            if attempt < rounds - 1:
+                # The Dec gears have slack, so a new rate takes a while to bite.
+                time.sleep(60)
+        return residual, sigma
+
+    def compensate(self, site):
+        """Wonky alignment mode: measure how far the polar axis is out, say
+        how to fix it mechanically, then make the best of it as it stands by
+        cancelling the drift it causes."""
+        import polaralign
+        self.say("Measuring the polar axis...")
+        azimuth, altitude = polaralign.measure(self, site)
+        model = self.drift_model(site)
+        model.set_polar(azimuth, altitude)
+        self.say(polaralign.describe(azimuth, altitude))
+        self.say("Or leave it alone, and the drift it causes will be compensated.")
+        expected = self.apply_drift_correction(site)
+        self.say(f"Estimated Dec drift here: {expected:+.2f} arcsec/s. Compensating...")
+        time.sleep(60)   # let the Dec gears take up their slack
+        residual, sigma = self.cancel_drift(site, rounds=2)
+        sure = "" if sigma is None else f" ±{sigma:.2f}"
+        limit = tracking.exposure_limit(residual)
+        self.say(f"Residual: {residual:+.2f}{sure} arcsec/s. Good for exposures of about "
+                 f"{limit:.0f} s; the stacker's alignment deals with the slow turning "
+                 "of the field that remains.")
 
     def seek(self, axis, target):
         """Turn one axis to a raw angle with fixed-rate slews, steering by the
@@ -344,7 +404,7 @@ class Mount:
             self.goto((true_sidereal(site) + offset - (hour_angle - error[0])) % 360,
                       dec - error[1])
             self.tracking(True)
-            self.apply_drift_correction()
+            self.apply_drift_correction(site)
             if solve and self.demo:
                 print("  (demo: no camera, so no plate solve)")
             if not solve or self.demo:
@@ -389,6 +449,12 @@ class Mount:
         found = solver.solve(image, ra_hint, dec_hint, radius)
         if found:
             found["when"] = when  # solving can take a while; the sky moves on
+            # Kept for shoot.py's drift assist, which needs to know which way
+            # up the camera is.
+            (ROOT / "cache").mkdir(exist_ok=True)
+            LAST_SOLVE.write_text(json.dumps(
+                {k: found[k] for k in ("ra", "dec", "rotation", "scale", "cd") if k in found}
+                | {"saved": time.time()}))
         return found
 
     def sync(self, site):
@@ -440,7 +506,7 @@ def use_demo_cache():
     global CLOCK_FILE, POINTING_FILE, DRIFT_FILE
     CLOCK_FILE = ROOT / "cache" / "demo_handset_clock.json"
     POINTING_FILE = ROOT / "cache" / "demo_pointing.json"
-    DRIFT_FILE = ROOT / "cache" / "demo_drift.json"
+    DRIFT_FILE = ROOT / "cache" / "demo_drift_model.json"
 
 
 def load_pointing_error(west):
@@ -536,7 +602,7 @@ def report(mount):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("command", choices=["status", "zenith", "home", "stop", "goto", "point",
-                                       "sync", "drift"])
+                                       "sync", "drift", "compensate"])
     ap.add_argument("target", nargs="*",
                     help="object for goto (e.g. M81), or bearing and height for point")
     ap.add_argument("--port", help="serial port (default: found by the adapter name "
@@ -552,14 +618,14 @@ def main():
     args = ap.parse_args()
 
     if args.demo:
-        if args.command in ("sync", "drift"):
+        if args.command in ("sync", "drift", "compensate"):
             ap.error(f"{args.command} needs the real camera; there is no demo of it")
         use_demo_cache()
         site = config.example()["site"]
     else:
         site = config.load()["site"]
 
-    if args.command in ("zenith", "home", "goto", "point") and LOCK_FILE.exists():
+    if args.command in ("zenith", "home", "goto", "point", "compensate") and LOCK_FILE.exists():
         raise SystemExit(f"Motion is locked: {LOCK_FILE.read_text().strip()}")
 
     mount = Mount(args.port, watch=not args.no_watch, demo=args.demo)
@@ -585,6 +651,8 @@ def main():
                 mount.sync(site)
             elif args.command == "drift":
                 mount.cancel_drift(site)
+            elif args.command == "compensate":
+                mount.compensate(site)
     except BaseException:
         # Never leave a motor running after an error or Ctrl+C.
         mount.stop()

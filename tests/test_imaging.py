@@ -91,3 +91,55 @@ def test_a_perfectly_aligned_axis_reads_as_the_pole():
     altitude, azimuth = polaralign.to_altaz(polaralign.axis_of(points), 55.07)
     assert altitude == pytest.approx(55.07, abs=0.01)
     assert azimuth == pytest.approx(0, abs=0.01)
+
+
+def gaussian_field(sigma, count=40, shape=(1200, 1600), seed=3):
+    """Stars of a given width scattered on a noisy sky."""
+    field_rng = np.random.default_rng(seed)
+    image = field_rng.normal(300, 5, shape).astype(np.float32)
+    reach = int(6 * sigma) + 2
+    for _ in range(count):
+        x, y = field_rng.uniform(60, shape[1] - 60), field_rng.uniform(60, shape[0] - 60)
+        x0, y0 = int(round(x)), int(round(y))
+        yy, xx = np.mgrid[y0 - reach:y0 + reach + 1, x0 - reach:x0 + reach + 1]
+        spot = np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / (2 * sigma ** 2))
+        image[y0 - reach:y0 + reach + 1, x0 - reach:x0 + reach + 1] += \
+            field_rng.uniform(3e4, 1e5) * spot / spot.sum()
+    return image
+
+
+def test_half_flux_radius_of_a_gaussian_star_is_what_theory_says():
+    # Half the light of a Gaussian of width sigma lies within 1.177 sigma.
+    for sigma in (1.5, 3.0):
+        hfr, count = focus.measure_stars(gaussian_field(sigma))
+        assert count >= 20
+        assert hfr == pytest.approx(1.177 * sigma, rel=0.12)
+
+
+def test_focus_needs_at_least_three_stars():
+    assert focus.measure_stars(rng.normal(300, 5, (600, 800)).astype(np.float32)) == (None, 0)
+
+
+def test_focus_talk_through_a_pass_through_focus_and_back():
+    tracker = focus.FocusTracker()
+    said = [tracker.feed(v) for v in (7.0, 6.2, 5.3, 4.6, 4.1, 4.0, 4.1, 4.4, 5.0, 5.6)]
+    assert said[0] == "7.0"
+    assert any(s.startswith("Improving") and "Best" in s for s in said[3:6])
+    passed = [s for s in said if s.startswith("Minimum passed")]
+    assert len(passed) == 1 and "Reverse slightly" in passed[0]
+    # Coming back the other way, it says when the best has been regained.
+    back = [tracker.feed(v) for v in (5.0, 4.4, 4.0, 3.9, 3.9)]
+    assert any(s.startswith("Best focus") and s.endswith("Hold.") for s in back)
+
+
+def test_focus_does_not_chase_the_seeing():
+    tracker = focus.FocusTracker()
+    jitter = np.random.default_rng(8).normal(4.0, 0.12, 30)
+    said = [tracker.feed(float(v)) for v in jitter]
+    assert set(said[3:]) == {"No change."}
+
+
+def test_a_real_worsening_is_reported_once_not_every_frame():
+    tracker = focus.FocusTracker()
+    said = [tracker.feed(v) for v in (4.0, 4.0, 4.0, 6.0, 6.0, 6.0, 6.0)]
+    assert sum(s.startswith("Worse") for s in said) == 1

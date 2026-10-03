@@ -4,6 +4,7 @@
     ./shoot.py M27                          60 frames of 2 s
     ./shoot.py M27 --frames 300 --exposure auto
     ./shoot.py M27 --no-recentre            never move the mount
+    ./shoot.py M27 --assist                 also trim the Dec motor's creep as it goes
 
 Short exposures keep the stars round on a mount that drifts; averaging many
 of them brings out faint detail and smooths the grain. For each frame it:
@@ -15,6 +16,12 @@ updates as it goes.
 
 At the end restack.py goes back over all the raw frames for the best result.
 Everything is kept under frames/NAME/<date-time>/.
+
+With --assist, the frames themselves act as a slow tracking sensor: every
+so often the drift measured from how far frames had to be shifted is used to
+trim the Dec motor's creep (see ./mount.py drift). It corrects the steady
+slide from a rough polar alignment, not the gears' wobble; it is drift
+assist, not guiding.
 
 When the target has drifted well off centre the mount is sent back to it,
 which needs serial access:
@@ -32,6 +39,7 @@ from PIL import Image
 
 import restack
 import stacking
+import tracking
 from camera import Camera, stretch
 
 ROOT = Path(__file__).parent
@@ -41,6 +49,7 @@ WEB = ROOT / "web"
 # spreads the sensor's fixed pattern around, which averaging then removes.
 DRIFT_LIMIT = 0.2
 TRIAL_EXPOSURES = (1, 2, 3, 4)
+ASSIST_EVERY = 15   # accepted frames between trims of the Dec creep
 
 
 class Session:
@@ -55,6 +64,7 @@ class Session:
         self.reference, self.stack = None, None
         self.accepted, self.log = [], []
         self.drift = 0.0   # how far the newest frame was from the first, in frame heights
+        self.track = []    # (time, x shift, y shift) of accepted frames since the last trim
 
     def process(self, index, mosaic, header):
         """Everything that happens to one frame. Returns its log line."""
@@ -76,6 +86,7 @@ class Session:
                 registered, info = stacking.register(rgb, lum, stars, self.reference)
             entry.update(info)
             self.drift = float(np.hypot(*info["shift"])) / rgb.shape[0]
+            self.track.append((time.time(), *info["shift"]))
             self.stack.add(registered)
             self.accepted.append(q)
             self.publish()
@@ -122,6 +133,41 @@ def recentre(target):
     return True
 
 
+def assist(session):
+    """Trim the Dec motor's creep from the drift the frames themselves show.
+    Returns False if it cannot be done (no mount, or no plate solve to tell
+    which way up the camera is)."""
+    import config
+    import mount
+    if not mount.LAST_SOLVE.exists():
+        print("  drift assist needs a plate solve first; skipped", flush=True)
+        return False
+    cd = json.loads(mount.LAST_SOLVE.read_text()).get("cd")
+    if not cd:
+        return False
+    times = [t for t, _, _ in session.track]
+    residual, sigma = tracking.drift_from_shifts(times, [(x, y) for _, x, y in session.track], cd)
+    try:
+        scope = mount.Mount(watch=False)
+    except (OSError, SystemExit):
+        return False
+    site = config.load()["site"]
+    west = scope.west()
+    model = scope.drift_model(site)
+    creep = model.creep if model.creep is not None else 0.0
+    model.observe(scope.true_hour_angle(site), mount.wrap(scope.radec()[1]),
+                  residual - tracking.creep_effect(creep, west), sigma)
+    wanted, decided = tracking.next_creep(creep, residual, sigma, west)
+    new = scope.dec_creep(wanted)
+    model.creep = new
+    model.save()
+    sure = "" if sigma is None else f" ±{sigma:.2f}"
+    print(f"  Tracking assist: Dec drift {residual:+.2f}{sure} arcsec/s; creep "
+          f"{creep:+.2f} -> {new:+.2f} ({decided})", flush=True)
+    session.track.clear()
+    return True
+
+
 def pick_exposure(gain, calibration_for):
     """Try a few exposure lengths and keep the longest whose stars are still
     round and tight: the most light per frame the tracking allows tonight."""
@@ -153,6 +199,8 @@ def main():
     ap.add_argument("--recentre", type=int, metavar="N", default=0,
                     help="also re-centre every N frames, whatever the drift")
     ap.add_argument("--no-recentre", action="store_true", help="never move the mount")
+    ap.add_argument("--assist", action="store_true",
+                    help="trim the Dec motor's creep from the drift the frames show")
     ap.add_argument("--no-save", action="store_true", help="do not keep the raw frames")
     ap.add_argument("--no-restack", action="store_true", help="skip the final quality pass")
     args = ap.parse_args()
@@ -181,6 +229,10 @@ def main():
                 print(f"  drifted {session.drift * 100:.0f}% of the frame; re-centring", flush=True)
                 recentre(args.name)
                 session.drift, since_centre = 0.0, 0
+                session.track.clear()   # the slew, not drift, moved the next frames
+            elif args.assist and moving and len(session.track) >= ASSIST_EVERY:
+                if not assist(session):
+                    args.assist = False
             with Camera(gain=args.gain) as cam:
                 while index < args.frames:
                     mosaic, header = cam.frame(exposure)
@@ -191,6 +243,8 @@ def main():
                     pending = worker.submit(session.process, index, mosaic, header)
                     due = args.recentre and since_centre >= args.recentre
                     if moving and (session.drift > DRIFT_LIMIT or due):
+                        break
+                    if args.assist and moving and len(session.track) >= ASSIST_EVERY:
                         break
         if pending:
             print(pending.result(), flush=True)

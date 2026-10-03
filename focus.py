@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
-"""Focusing aid: take quick frames, measure the brightest star, show it big.
+"""Focusing aid you can use without looking at a screen.
 
-    ./focus.py                 on a bright star: smaller "star size" is sharper
-    ./focus.py --scene         on rooftops or trees: bigger "sharpness" is sharper
+    ./focus.py                 on stars: it speaks as you turn the focuser
+    ./focus.py --tones         a rising pitch instead of speech
+    ./focus.py --scene         on rooftops or trees, in daylight
 
-Runs for 15 minutes (Ctrl+C to stop sooner). After each frame the laptop says
-"better", "worse" or "same" compared with the frame before, and the web page
-shows the picture. Turn the focuser a little, then wait for the next verdict.
+On stars it measures many at once and reports their half-flux radius (HFR):
+the radius holding half of a star's light, in pixels. Smaller is sharper;
+about 2 is good focus on this telescope. It says things like "Improving.
+4.8", "No change", "Worse. Go back", and, once the numbers turn round,
+"Minimum passed. Reverse slightly". Readings are steadied over three frames
+and small changes are ignored, so it does not chase the air's shimmering.
+
+With the star badly out of focus it falls back to measuring the one big ring.
+Runs for 15 minutes (Ctrl+C to stop sooner); the web page shows the picture.
 """
 import argparse
 import subprocess
@@ -17,6 +24,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
 
+import stacking
 from camera import PORT, WHITE, Camera, luminance
 
 ROOT = Path(__file__).parent
@@ -64,6 +72,106 @@ def measure(lum):
     return cx, cy, float(diameter)
 
 
+def half_flux_radius(lum, x, y, reach):
+    """Radius in pixels holding half of one star's light, or None if the star
+    is too close to the edge."""
+    x0, y0 = int(round(x)), int(round(y))
+    if not (reach <= x0 < lum.shape[1] - reach and reach <= y0 < lum.shape[0] - reach):
+        return None
+    box = lum[y0 - reach:y0 + reach + 1, x0 - reach:x0 + reach + 1].astype(np.float32)
+    yy, xx = np.indices(box.shape)
+    distance = np.hypot(yy - (y - y0 + reach), xx - (x - x0 + reach))
+    # The sky's level is taken from the rim of the box.
+    box = box - np.median(box[distance > reach - 2])
+    inside = distance <= reach - 2
+    order = np.argsort(distance[inside])
+    light = np.cumsum(np.clip(box[inside][order], 0, None))
+    if light[-1] <= 0:
+        return None
+    return float(distance[inside][order][np.searchsorted(light, light[-1] / 2)])
+
+
+def measure_stars(lum, most=40):
+    """(median half-flux radius, number of stars used) over the field's best
+    stars, leaving out burnt-out ones; (None, 0) with fewer than three."""
+    stars = stacking.find_stars(lum, limit=120)
+    radii = []
+    for x, y, _, fwhm, _ in stars:
+        if lum[int(y), int(x)] >= 0.9 * 4 * WHITE:   # burnt out: its shape lies
+            continue
+        radius = half_flux_radius(lum, x, y, reach=int(np.clip(3 * fwhm, 8, 40)))
+        if radius:
+            radii.append(radius)
+        if len(radii) >= most:
+            break
+    if len(radii) < 3:
+        return None, len(radii)
+    return float(np.median(radii)), len(radii)
+
+
+class FocusTracker:
+    """Turns a stream of focus readings into what to tell the person at the
+    focuser. Readings are steadied over the last three, and a change only
+    counts if it beats both a percentage and the readings' own scatter."""
+
+    def __init__(self, percent=4.0):
+        self.percent = percent
+        self.raw, self.steady = [], None   # steady: last value announced as a change
+        self.best = None
+        self.falling = 0                   # improvements in a row
+        self.passed = False                # gone through the minimum and out the far side
+
+    def scatter(self):
+        """How much single readings jitter with nothing being changed. Taken
+        from how far each reading sits from the line between its neighbours,
+        so a steady rise or fall while the focuser is turned does not count."""
+        if len(self.raw) < 5:
+            return 0.0
+        recent = np.array(self.raw[-11:])
+        bends = np.abs(recent[:-2] - 2 * recent[1:-1] + recent[2:])
+        return 1.4826 * float(np.median(bends)) / np.sqrt(6)
+
+    def feed(self, value):
+        """Take a new reading; return the words to say."""
+        self.raw.append(value)
+        now = float(np.median(self.raw[-3:]))
+        if len(self.raw) <= 3:
+            # Settle on a starting value before judging any change.
+            self.steady = self.best = now
+            return f"{now:.1f}"
+        threshold = max(self.percent / 100 * self.steady, 3 * self.scatter())
+        if now < self.steady - threshold:
+            self.steady, self.falling = now, self.falling + 1
+            if now <= self.best:
+                self.best = now
+                if self.passed:
+                    self.passed = False
+                    return f"Best focus. {now:.1f}. Hold."
+                return f"Improving. {now:.1f}. Best."
+            if self.passed and now <= self.best + threshold:
+                self.passed = False
+                return f"Best focus. {now:.1f}. Hold."
+            return f"Improving. {now:.1f}."
+        if now > self.steady + threshold:
+            came_down = self.falling >= 2
+            self.steady, self.falling = now, 0
+            if came_down and not self.passed and now > self.best + threshold:
+                self.passed = True
+                return f"Minimum passed. Reverse slightly. Best was {self.best:.1f}."
+            return f"Worse. {now:.1f}. Go back."
+        return "No change."
+
+
+def tone(value, worst, floor=1.5):
+    """A short tone whose pitch rises as focus improves: 300 Hz at the first
+    reading, 1200 Hz at a perfect star."""
+    span = max(worst - floor, 1e-6)
+    pitch = 300 + 900 * float(np.clip((worst - value) / span, 0, 1))
+    subprocess.Popen(["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", "-f", "lavfi",
+                      "-i", f"sine=frequency={pitch:.0f}:duration=0.25"],
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
 def sharpness(lum):
     """Edge strength relative to brightness; peaks at best focus."""
     gx, gy = np.diff(lum, axis=1), np.diff(lum, axis=0)
@@ -92,6 +200,8 @@ def main():
     ap.add_argument("--exposure", type=float, default=0.05, help="starting exposure, seconds")
     ap.add_argument("--gain", type=int, default=300)
     ap.add_argument("--quiet", action="store_true", help="no speech from the laptop")
+    ap.add_argument("--tones", action="store_true",
+                    help="a tone that rises in pitch as focus improves, instead of speech")
     ap.add_argument("--port", type=int, default=PORT)
     args = ap.parse_args()
 
@@ -99,6 +209,7 @@ def main():
 
     exposure, best = args.exposure, None
     frame, previous = 0, None
+    tracker, first = FocusTracker(), None
     end = time.monotonic() + args.minutes * 60
     try:
         while time.monotonic() < end:
@@ -110,53 +221,62 @@ def main():
             rows, cols = lum.shape[0] // 4 * 4, lum.shape[1] // 4 * 4
             blocks = lum[:rows, :cols].reshape(rows // 4, 4, cols // 4, 4).mean(axis=(1, 3))
             top = float(blocks.max()) * level
-            found = None if args.scene else measure(lum)
             # Stretch between the darkest and brightest parts of the frame.
             low, high = np.percentile(lum[::4, ::4], (1, 99.7))
             shown = np.clip((lum - low) / max(high - low, 1e-6), 0, 1) * 255
+            frame += 1
+            words = None
             if args.scene:
                 value = sharpness(lum)
                 best = value if best is None else max(best, value)
-                image = Image.fromarray(shown.astype(np.uint8)).convert("RGB")
-                image = image.resize((900, round(900 * image.height / image.width)))
+                picture = shown
                 text = f"sharpness {value:.1f}   best {best:.1f}"
                 if lum.mean() * level < 30 and exposure >= MAX_EXPOSURE:
                     text = "too dark to see anything"
                 # Judge exposure on the whole view, not its brightest point.
                 top = float(np.percentile(lum, 99)) * level * 1.6
-            elif found:
-                x, y, diameter = found
-                best = diameter if best is None else min(best, diameter)
-                x0, y0 = int(max(x - CROP, 0)), int(max(y - CROP, 0))
-                view = shown[y0:y0 + 2 * CROP, x0:x0 + 2 * CROP]
-                image = Image.fromarray(view.astype(np.uint8)).convert("RGB")
-                image = image.resize((900, round(900 * image.height / image.width)))
-                text = f"star size {diameter:.1f}   best {best:.1f}"
+                if previous is not None:
+                    change = (value - previous) / max(abs(previous), 1e-6)
+                    words = "better" if change > 0.04 else "worse" if change < -0.04 else "same"
+                    text += f"  {words.upper() if words != 'same' else words}"
+                previous = value
             else:
-                image = Image.fromarray(shown.astype(np.uint8)).convert("RGB")
-                image = image.resize((900, round(900 * image.height / image.width)))
-                text = "no star in view"
-            # Say how this frame compares with the last one, on the picture
-            # and out loud.
-            frame += 1
-            score = value if args.scene else (-found[2] if found else None)
-            trend = ""
-            if score is not None and previous is not None:
-                change = (score - previous) / max(abs(previous), 1e-6)
-                if change > 0.04:
-                    trend, spoken = "SHARPER", "better"
-                elif change < -0.04:
-                    trend, spoken = "SOFTER", "worse"
+                value, count = measure_stars(lum)
+                ring = None if value else measure(lum)
+                picture = shown
+                if value:
+                    text = f"HFR {value:.1f}   {count} stars"
+                    # Show the middle of the frame, where stars are big
+                    # enough to see on a phone.
+                    h, w = shown.shape[0] // 2, shown.shape[1] // 2
+                    picture = shown[h - CROP:h + CROP, w - CROP:w + CROP]
+                    # Many stars are wanted, so let the few brightest burn
+                    # out: set the exposure by about the 30th brightest spot.
+                    top = float(np.partition(blocks.ravel(), -30)[-30]) * level * 2
+                elif ring:
+                    # Too far out for separate stars: one big ring. Its radius
+                    # stands in for the HFR until stars appear.
+                    x, y, diameter = ring
+                    value = diameter / 2
+                    x0, y0 = int(max(x - CROP, 0)), int(max(y - CROP, 0))
+                    picture = shown[y0:y0 + 2 * CROP, x0:x0 + 2 * CROP]
+                    text = f"ring radius {value:.0f}   (far from focus)"
                 else:
-                    trend, spoken = "same", "same"
-                if not args.quiet:
-                    # In star mode the size itself is worth hearing.
-                    say(spoken if args.scene else f"{spoken}, {-score:.0f}")
-            elif score is None and not args.quiet:
-                say("no star")
-            previous = score
-            text = f"#{frame} {time.strftime('%H:%M:%S')}  {text}  {trend}"
+                    text = "no star in view"
+                    words = "no star"
+                if value:
+                    first = first or value
+                    words = tracker.feed(value)
+                    text += f"   best {tracker.best:.1f}   {words.split('.')[0]}"
+            image = Image.fromarray(picture.astype(np.uint8)).convert("RGB")
+            image = image.resize((900, round(900 * image.height / image.width)))
+            text = f"#{frame} {time.strftime('%H:%M:%S')}  {text}"
             annotate(image, text).save(PREVIEW, quality=85)
+            if words and not args.quiet:
+                if args.tones and not args.scene and value:
+                    tone(value, first)
+                else:
+                    say(words)
             print(f"{time.strftime('%H:%M:%S')}  {text}   (exposure {exposure:g}s, peak {top:.0f})",
                   flush=True)
             # Keep the star bright but not burnt out.

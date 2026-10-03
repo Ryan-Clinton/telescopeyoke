@@ -51,12 +51,17 @@ def solve(image, ra_hint=None, dec_hint=None, radius=30, field=FIELD_HEIGHT, tim
              if path.with_suffix(".ini").exists() else []) if "=" in line)
     if result.get("PLTSOLVD") != "T":
         return None
-    return {
+    found = {
         "ra": float(result["CRVAL1"]), "dec": float(result["CRVAL2"]),
         "rotation": float(result.get("CROTA2", 0)),
         "scale": abs(float(result["CDELT2"])) * 3600,
         "seconds": round(time.monotonic() - started, 1),
     }
+    if all(k in result for k in ("CD1_1", "CD1_2", "CD2_1", "CD2_2")):
+        # Degrees of sky (east-west, north-south) per pixel across and up.
+        found["cd"] = [[float(result["CD1_1"]), float(result["CD1_2"])],
+                       [float(result["CD2_1"]), float(result["CD2_2"])]]
+    return found
 
 
 def main():

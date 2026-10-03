@@ -26,7 +26,8 @@ position set by eye, a rough polar alignment.
 - 🎯 **Ranks targets for your actual sky**: altitude, moonlight, light pollution, blocked horizons
 - 🔭 **Controls SynScan mounts** through the handset, with the handset's clock errors corrected
 - 🧭 **Plate-solves and centres GoTos automatically** (`goto M27 --solve`)
-- 🔊 **Speaks focus feedback**: "better, 66" … "worse, 80" while you turn the focuser
+- 🔊 **Talks you through focusing**, eyes on the focuser not the screen: "Improving. 4.8" … "Minimum passed. Reverse slightly" … "Best focus. Hold"
+- 📐 **Makes the best of a rough polar alignment**: measures how far out the mount is, predicts the drift that causes anywhere in the sky, and creeps a motor against it
 - 📷 **Captures and stacks images**: every raw frame kept, poor frames rejected, stars lined up to a fraction of a pixel, satellite trails clipped out
 - 🏠 **Shows it all on a web page** you can watch from indoors
 - 🛑 **Keeps the mount inside physical limits**, with a motion lock and a webcam watching every slew
@@ -109,7 +110,7 @@ report** issue; rows marked "community tested" will be added from those.
 | `tonight.py` | Report for the night: darkness, Moon, weather verdict, ranked targets. `--html` writes the web page. |
 | `serve.py` | Serves `web/` on port 8080 and rebuilds the page every 10 minutes. |
 | `clouds.py` | Fetches the latest infrared satellite image with the site marked on it. |
-| `mount.py` | Moves the mount: `status`, `home`, `zenith`, `goto NAME [--solve]`, `point AZ ALT`, `sync`, `drift`, `stop`. |
+| `mount.py` | Moves the mount: `status`, `home`, `zenith`, `goto NAME [--solve]`, `point AZ ALT`, `sync`, `drift`, `compensate`, `stop`. |
 | `snap.py` | Takes one camera frame, saves the FITS in `frames/`, publishes a preview. |
 | `shoot.py` | Takes a picture: many short exposures, each checked, lined up and stacked live, with the raw frames kept. `--exposure auto` picks the longest exposure the tracking allows. |
 | `restack.py` | The quality pass: goes back over a session's raw frames, keeps the best, weights and clips them, and writes the finished picture. `shoot.py` runs it at the end. |
@@ -117,7 +118,7 @@ report** issue; rows marked "community tested" will be added from those.
 | `camera_test.py` | `--gain-sweep` tries a range of gains on tonight's sky and suggests one. |
 | `compare.py` | Shows the same patch of sky from several stacks side by side at full size, with star measurements for each. |
 | `process.py` | Turns a finished stack into a cleaner picture: level sky, white stars, smoothed colour noise. |
-| `focus.py` | Focusing aid that speaks "better" or "worse" and the star size. `--scene` for a daytime view. |
+| `focus.py` | Hands-free focusing aid: measures many stars at once and speaks the result. `--tones` for a rising pitch instead of speech, `--scene` for a daytime view. |
 | `solve.py` | Plate-solves a frame: where is the telescope really pointing? |
 | `polaralign.py` | Measures how far the polar axis is from the pole, from three plate solves. |
 | `skywatch.py` | Photographs the sky every minute and stops when stars appear. |
@@ -155,6 +156,8 @@ plan the night → GoTo → photograph → plate-solve (ASTAP) → correct → p
   driver stalls.
 - **`stacking.py`** is the imaging pipeline's working parts, used live by
   `shoot.py` and again afterwards by `restack.py`.
+- **`tracking.py`** predicts the drift a misaligned polar axis causes and
+  decides how to trim the Dec motor against it.
 - **`simulator.py`** is a pretend handset and mount behind `--demo` and the
   tests.
 
@@ -213,6 +216,44 @@ Things worth knowing:
 - **Raw frames are large**: about 20 MB each, so a 300-frame session is 6 GB.
   Delete a session's `light-*.fits` once you are happy with `final.fits`, or
   use `--no-save`.
+
+## The mount is wonky; measure how wonky
+
+telescopeyoke does not assume a careful polar alignment, and it does not
+trust the handset's own alignment model. It measures what the stars actually
+do.
+
+A polar axis that misses the pole makes the aim slide slowly in declination,
+at a rate that depends only on the hour angle. So:
+
+- `./mount.py compensate` photographs the sky at three RA positions, works
+  out where the axis really points, and tells you how to fix it mechanically
+  ("swing the north end 1.4° west, raise the axis 0.6°"). Or leave it: it
+  then predicts the drift where the telescope is aimed, sets the Dec motor
+  creeping against it, measures what is left, and says what exposure that
+  allows.
+- After that, every GoTo starts with the creep its part of the sky needs.
+- `./mount.py drift` measures and trims the drift on its own: several plate
+  solves with a line fitted through them, an uncertainty on the answer, part
+  of the error corrected at a time, and the Dec motor never reversed for a
+  small overshoot, because its gears have slack.
+- `./shoot.py --assist` lets the pictures themselves report the drift, and
+  trims the creep as the run goes.
+
+What this cannot do: with the axis off the pole, the field still turns slowly
+about the target, and the gears' own periodic wobble is untouched. The
+stacker's rotation alignment deals with the first; short exposures deal with
+the second. It is drift assist, not guiding.
+
+## Focusing by ear
+
+`./focus.py` is built for a manual focuser in the dark: turn the knob, listen.
+It measures the half-flux radius (HFR) of up to forty stars at once, steadies
+the readings over three frames, and ignores changes smaller than the air's
+own shimmer. It says "Improving. 4.8", "No change", "Worse. Go back", and,
+when the numbers bottom out and rise again, "Minimum passed. Reverse
+slightly", then "Best focus. Hold" when you are back on it. `--tones` swaps
+the speech for a tone whose pitch rises as focus improves.
 
 ## Setup
 
@@ -297,10 +338,13 @@ sub-pixel and rotation alignment, clipped and weighted stacking, saved raw
 frames, the quality pass).
 
 Written but not yet run for real: `calibrate.py` (no dark or flat frames have
-been taken yet), `camera_test.py --gain-sweep`, `shoot.py --exposure auto`.
+been taken yet) and `camera_test.py --gain-sweep`.
 
-Working but only lightly tested: `mount.py drift` (cancels declination drift
-by creeping the Dec motor; the gears' slack makes it slow to settle).
+Rewritten since they were last used on real hardware, and so far proven only
+against the simulator and made-up data: `focus.py` (multi-star HFR and the
+new spoken guidance), `mount.py drift` (line-fitted, with the drift model),
+`mount.py compensate` and `shoot.py --assist`. An earlier, cruder
+`mount.py drift` did cancel most of the drift on the real mount.
 
 Written but never run on the real mount: `polaralign.py` (its geometry is
 checked by the tests against a simulated misaligned mount).
@@ -310,7 +354,9 @@ mount logic against the simulated handset, frame alignment and hot-pixel
 removal, star measurement and frame rejection, sub-pixel and rotation
 registration, clipped stacking, calibration arithmetic, a whole simulated
 imaging run, the focus measurement, the polar alignment geometry, the INDI
-message handling, and the demo report end to end. The tests cannot cover the
+message handling, the drift formula against a mount modelled from first
+principles, drift cancelling on both sides of the simulated mount, and the
+demo report end to end. The tests cannot cover the
 real mount, camera or sky.
 
 Known limits:

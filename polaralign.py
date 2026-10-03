@@ -50,10 +50,10 @@ def to_altaz(v, latitude):
     return math.degrees(math.asin(up)), math.degrees(math.atan2(east, north))
 
 
-def main():
-    argparse.ArgumentParser(description=__doc__.splitlines()[0]).parse_args()
-    site = config.load()["site"]
-    scope = mount.Mount()
+def measure(scope, site):
+    """Photograph the sky at three RA-axis positions and return the polar
+    axis's error as (degrees east of north, degrees too high). Slews about
+    STEP degrees twice, away from the meridian, and returns to where it was."""
     offset = json.loads(mount.CLOCK_FILE.read_text())["offset_deg"]
 
     def believed_hour_angle():
@@ -77,27 +77,41 @@ def main():
                      or scope.where_really(hint_ra, dec_handset, radius=90))
             if not found:
                 raise SystemExit("Could not plate-solve; cloud, or too few stars here.")
-            ha, dec, alt = mount.where(found, site)
+            ha, dec, alt = mount.where(found, site, found["when"])
             points.append((ha, dec))
-            print(f"position {i + 1}: hour angle {ha / 15:+.3f} h, Dec {dec:+.2f}°, "
-                  f"altitude {alt:.0f}°", flush=True)
+            scope.say(f"position {i + 1}: hour angle {ha / 15:+.3f} h, Dec {dec:+.2f}°, "
+                      f"altitude {alt:.0f}°")
         # Back to where it started.
         scope.goto((mount.true_sidereal(site) + offset - start_ha) % 360, dec_handset)
         scope.tracking(True)
     except BaseException:
         scope.stop()
         raise
-
     altitude, azimuth = to_altaz(axis_of(points), site["latitude"])
-    up = altitude - site["latitude"]
-    total = math.degrees(math.acos(min(1.0, axis_of(points)[2])))
-    print(f"\nThe polar axis points {total:.1f}° away from the pole.")
-    print(f"  left-right: it points {abs(azimuth):.1f}° too far "
-          f"{'east' if azimuth > 0 else 'west'} of north; "
-          f"swing the mount's north end {abs(azimuth):.1f}° to the "
-          f"{'west' if azimuth > 0 else 'east'}")
-    print(f"  up-down:    it points {abs(up):.1f}° too {'high' if up > 0 else 'low'}; "
-          f"{'lower' if up > 0 else 'raise'} the axis by {abs(up):.1f}°")
+    return azimuth, altitude - site["latitude"]
+
+
+def describe(azimuth, altitude):
+    """The polar error in words, with what to do to the mount about it."""
+    total = math.hypot(azimuth * math.cos(math.radians(55)), altitude)
+    return (f"The polar axis is about {total:.1f}° from the pole.\n"
+            f"  left-right: it points {abs(azimuth):.1f}° too far "
+            f"{'east' if azimuth > 0 else 'west'} of north; swing the mount's north end "
+            f"{abs(azimuth):.1f}° to the {'west' if azimuth > 0 else 'east'}\n"
+            f"  up-down:    it points {abs(altitude):.1f}° too {'high' if altitude > 0 else 'low'}; "
+            f"{'lower' if altitude > 0 else 'raise'} the axis by {abs(altitude):.1f}°")
+
+
+def main():
+    argparse.ArgumentParser(description=__doc__.splitlines()[0]).parse_args()
+    site = config.load()["site"]
+    scope = mount.Mount()
+    azimuth, altitude = measure(scope, site)
+    # Keep it: the drift it causes can now be predicted anywhere in the sky.
+    scope.drift_model(site).set_polar(azimuth, altitude)
+    print("\n" + describe(azimuth, altitude))
+    print("Adjust and run this again, or leave it and run './mount.py drift' to "
+          "cancel the drift it causes.")
 
 
 if __name__ == "__main__":
