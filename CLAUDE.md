@@ -35,9 +35,10 @@ ChatGPT directly. Every round, do all four steps in order:
   (`./tonight.py --offline`, `./mount.py status`, `./clouds.py`).
 - C. Apply the docs suggestions, and update the docs to match anything new
   from B. Docs must match the code at the end of every round.
-- D. Name the path the next round should look at, and say "Ready for ChatGPT
-  round N+1." The next step is always another round until the user says
-  "move on".
+- D. Commit and push, without asking: ChatGPT reads the public repository,
+  so a round is not finished until it is pushed. Then name the path the next
+  round should look at, and say "Ready for ChatGPT round N+1." The next step
+  is always another round until the user says "move on".
 
 **Skip reasons (closed list).** Every suggestion gets applied unless one of
 these five applies:
