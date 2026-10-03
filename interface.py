@@ -6,6 +6,7 @@ People read the commands' ordinary output. Programs and language models ask
 for --json and get this instead; its shape is described in schemas/ and only
 changes with SCHEMA_VERSION.
 """
+import contextlib
 import json
 import sys
 from datetime import datetime, timezone
@@ -28,6 +29,9 @@ ERRORS = {
     "GOTO_REFUSED": (True, "The handset would not accept the GoTo."),
     "PLATE_SOLVE_FAILED": (True, "Usual causes: cloud, focus, too few stars. Take a frame and look."),
     "CAMERA_NOT_CONNECTED": (False, "Plug in the camera and start its INDI driver."),
+    "NO_STARS": (True, "No stars in the frame: cloud, the cap, or far out of focus. Look at "
+                       "the newest frame, then try again."),
+    "NO_USABLE_FRAMES": (True, "Every frame was rejected; see the reasons in the session log."),
     "NO_SESSION": (False, "No imaging run has been recorded yet."),
     "NO_CONFIG": (False, "Copy config.example.toml to config.toml and set the location."),
     "DEMO_UNSUPPORTED": (False, "This needs the real camera; there is no demo of it."),
@@ -100,3 +104,14 @@ def run(command, work):
         return envelope(command, errors=[error("INTERNAL_ERROR", f"{type(problem).__name__}: {problem}")])
     data, warnings = result if isinstance(result, tuple) else (result, ())
     return envelope(command, data, warnings)
+
+
+def main(command, work, as_json=False):
+    """Run a script's work. Normally it prints as it always has. With as_json,
+    whatever it prints goes to stderr and one envelope goes to stdout, so a
+    program reading stdout gets JSON and nothing else."""
+    if not as_json:
+        return work()
+    with contextlib.redirect_stdout(sys.stderr):
+        result = run(command, work)
+    raise SystemExit(emit(result))

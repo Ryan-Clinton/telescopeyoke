@@ -22,6 +22,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+import interface
 import process
 import stacking
 
@@ -34,8 +35,8 @@ def find_session(name):
         return path
     sessions = sorted((ROOT / "frames" / name.replace(" ", "")).glob("*/"))
     if not sessions:
-        raise SystemExit(f"No saved session for {name}. shoot.py keeps raw frames in "
-                         f"frames/{name}/<date-time>/.")
+        raise interface.Refusal("NO_SESSION", f"No saved session for {name}. shoot.py keeps "
+                                f"raw frames in frames/{name}/<date-time>/.")
     return sessions[-1]
 
 
@@ -132,7 +133,13 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
         image.save(session / "final.jpg", quality=93)
         image.save(ROOT / "web" / f"{name}-final.jpg", quality=93)
     (session / "restack.json").write_text(json.dumps(
-        {"kept": [f["file"] for f in chosen], "frames": frames}, indent=1))
+        {"kept": [f["file"] for f in chosen], "frames": frames,
+         "summary": {"captured": len(frames), "stacked": len(chosen),
+                     "left_out": len(frames) - len(chosen), "total_exposure_s": total,
+                     "median_residual_px": round(float(np.median(residuals)), 3) if residuals else None,
+                     "seconds": round(time.perf_counter() - began, 1),
+                     "picture": str(session / "final.jpg"), "stack": str(session / "final.fits")}},
+        indent=1))
     say(f"{len(frames)} captured, {len(chosen)} stacked, {len(frames) - len(chosen)} left out; "
         f"total exposure {total:.0f} s")
     if residuals:
@@ -155,8 +162,15 @@ def main():
     ap.add_argument("--workers", type=int,
                     help="worker processes (default: one per processor core)")
     ap.add_argument("--profile", action="store_true", help="report where the time went")
+    ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
-    run(find_session(args.session), args.keep, workers=args.workers, profile=args.profile)
+
+    def work():
+        session = find_session(args.session)
+        run(session, args.keep, workers=args.workers, profile=args.profile)
+        return json.loads((session / "restack.json").read_text())["summary"]
+
+    interface.main("restack", work, args.json)
 
 
 if __name__ == "__main__":

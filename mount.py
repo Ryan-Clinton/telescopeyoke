@@ -84,6 +84,7 @@ class Mount:
         (anything with the serial port's write/read_until interface)."""
         self.demo = demo or handset is not None
         self.recording = None   # folder to keep each solve frame and message in
+        self.can_solve = not self.demo   # the simulated mount has no camera behind it
         # The webcam photographs the scope during every real move unless told
         # not to.
         self.watching = Watching if watch and not self.demo else contextlib.nullcontext
@@ -407,9 +408,9 @@ class Mount:
                       dec - error[1])
             self.tracking(True)
             self.apply_drift_correction(site)
-            if solve and self.demo:
+            if solve and not self.can_solve:
                 print("  (demo: no camera, so no plate solve)")
-            if not solve or self.demo:
+            if not solve or not self.can_solve:
                 return
             # After a slew the gears take a while to bite again and the stars
             # streak, which the solver cannot handle. Wait, and try twice.

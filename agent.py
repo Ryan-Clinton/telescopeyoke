@@ -204,6 +204,108 @@ def target(name, demo=False):
     return out
 
 
+def _scale():
+    """Arcseconds per pixel of the half-size frames: from the last plate solve
+    if there is one, else from the camera and telescope in the settings."""
+    if mount.LAST_SOLVE.exists():
+        return json.loads(mount.LAST_SOLVE.read_text())["scale"]
+    cfg = config.load() if config.FILE.exists() else config.example()
+    pixel = config.hardware()["camera"]["pixel_size_um"]
+    return 206.265 * 2 * pixel / cfg["scope"]["focal_length_mm"]
+
+
+def _trend(kept, recent=5):
+    """How the newest accepted frames compare with the ones before them."""
+    if len(kept) < 2 * recent:
+        return None
+    middle = lambda frames, key: sorted(f[key] for f in frames)[len(frames) // 2]
+    before, after = kept[:-recent], kept[-recent:]
+    percent = lambda key: round(100 * (middle(after, key) / max(middle(before, key), 1e-6) - 1))
+    return {"fwhm_change_percent": percent("fwhm"), "stars_change_percent": percent("stars"),
+            "roundness_change": round(middle(after, "roundness") - middle(before, "roundness"), 2)}
+
+
+def _explain(trend):
+    """Put a name to what is going wrong, from which measurements moved."""
+    notes = []
+    if not trend:
+        return notes
+    wider, fewer = trend["fwhm_change_percent"], -trend["stars_change_percent"]
+    oval = -trend["roundness_change"]
+    if fewer >= 30:
+        notes.append(f"Star count is down {fewer}%: likely cloud or dew.")
+    if oval >= 0.1:
+        notes.append(f"Stars are less round (by {oval:.2f}): likely tracking or wind.")
+    if wider >= 15 and fewer < 30 and oval < 0.1:
+        notes.append(f"Stars are {wider}% wider while their number and shape hold steady: "
+                     "likely focus (or seeing), not cloud or tracking.")
+    return notes
+
+
+def observing(demo=False):
+    """One read-only snapshot of everything that bears on the picture: the
+    sky, the focus, the tracking and the imaging run, with a plain-words note
+    when the measurements point at a cause."""
+    import focus
+    import tracking
+    out = {"sky": {}, "optics": {"focus_state": "unknown"}, "tracking": {},
+           "imaging": {"state": "idle"}, "notes": []}
+    try:
+        weather = _report(demo)["weather"]
+        if weather:
+            now = min(weather["hours"], key=lambda h: abs(h["time"].timestamp() - time.time()))
+            out["sky"] = {"verdict": weather["verdict"], "cloud_percent": now["cloud"],
+                          "seeing": now["seeing"], "transparency": now["transparency"],
+                          "humidity_percent": now["humidity"],
+                          "dew_margin_c": round(now["temp"] - now["dew_point"], 1)}
+            if out["sky"]["dew_margin_c"] < 2:
+                out["notes"].append("Air is within 2°C of the dew point: optics may fog.")
+    except Exception as problem:   # no forecast must not hide the rest
+        out["sky"] = {"error": str(problem)}
+
+    if focus.FOCUS_FILE.exists():
+        reading = json.loads(focus.FOCUS_FILE.read_text())
+        good = reading["hfr"] <= 1.1 * reading["best_hfr"]
+        out["optics"] = {"hfr": reading["hfr"], "best_hfr": reading["best_hfr"],
+                         "stars": reading["stars"], "age_s": round(time.time() - reading["saved"]),
+                         "focus_state": "good" if good else "soft"}
+
+    if mount.DRIFT_FILE.exists():
+        model = tracking.Model(mount.DRIFT_FILE)
+        out["tracking"]["dec_creep_arcsec_s"] = model.creep
+        if model.observations:
+            out["tracking"]["natural_dec_drift_arcsec_s"] = round(model.observations[-1]["rate"], 2)
+        out["tracking"]["polar_error"] = model.polar
+
+    try:
+        run = session()
+    except interface.Refusal:
+        return out
+    log = stacking.read_log(ROOT / run["folder"])
+    kept = [f for f in log if f["accepted"]]
+    out["imaging"] = {k: run.get(k) for k in ("state", "name", "captured", "accepted",
+                                              "acceptance_rate", "median_fwhm", "reasons")}
+    trend = _trend(kept)
+    if trend:
+        out["imaging"]["trend"] = trend
+    # How fast the stars slide across the frame, from the shifts the stacker
+    # measured; the median step ignores the jump at a re-centre.
+    timed = [f for f in kept if f.get("taken") and f.get("shift")][-20:]
+    steps = [((b["shift"][0] - a["shift"][0]) ** 2 + (b["shift"][1] - a["shift"][1]) ** 2) ** 0.5
+             / (b["taken"] - a["taken"]) for a, b in zip(timed, timed[1:]) if b["taken"] > a["taken"]]
+    if steps:
+        drift = sorted(steps)[len(steps) // 2] * _scale()
+        out["tracking"]["drift_arcsec_s"] = round(drift, 2)
+        out["tracking"]["max_recommended_exposure_s"] = round(tracking.exposure_limit(drift), 1)
+    if run["state"] == "capturing":
+        out["notes"] += _explain(trend)
+        if run["captured"] >= 10 and run["acceptance_rate"] < 0.5:
+            why = next(iter(run["reasons"]), "no reason recorded")
+            out["notes"].append(f"Only {100 * run['acceptance_rate']:.0f}% of frames kept; "
+                                f"mostly: {why}.")
+    return out
+
+
 def context(demo=False):
     """A short plain-text briefing for a model starting a session."""
     caps, now = capabilities(), status()
@@ -228,6 +330,12 @@ def context(demo=False):
     if run["target"]:
         lines += ["Imaging:", f"  {run['target']}: {run['state']}, {run['captured']} frames, "
                               f"{run['accepted']} accepted.", ""]
+    try:
+        notes = observing(demo)["notes"]
+    except Exception:
+        notes = []
+    if notes:
+        lines += ["Worth knowing:"] + [f"  {note}" for note in notes] + [""]
     limits = caps["motion"]["limits"]
     lines += ["Constraints:",
               f"  Motion is {'LOCKED' if caps['motion']['locked'] else 'not locked'}; a person must "

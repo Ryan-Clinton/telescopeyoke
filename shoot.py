@@ -37,6 +37,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+import interface
 import restack
 import snap
 import stacking
@@ -83,6 +84,7 @@ class Session:
     def absorb(self, result, taken=None):
         """Add a processed frame to the stack and the log. Returns its log line."""
         entry, frame = result["entry"], result["frame"]
+        entry["taken"] = round(taken or time.time(), 2)
         self.timings.add(result["timings"])
         if entry["accepted"]:
             with self.timings.phase("stack"):
@@ -218,7 +220,8 @@ def pick_exposure(gain, calibration_for):
             print(f"  {seconds} s  {shape}", flush=True)
     chosen = stacking.choose_exposure(trials)
     if chosen is None:
-        raise SystemExit("No stars in any trial exposure: cloud, or badly out of focus.")
+        raise interface.Refusal("NO_STARS", "No stars in any trial exposure: cloud, or "
+                                "badly out of focus.")
     print(f"Selected exposure: {chosen} s")
     return float(chosen)
 
@@ -238,8 +241,37 @@ def main():
     ap.add_argument("--no-save", action="store_true", help="do not keep the raw frames")
     ap.add_argument("--no-restack", action="store_true", help="skip the final quality pass")
     ap.add_argument("--profile", action="store_true", help="report where the time went")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="say what would be done; no camera, no mount")
+    ap.add_argument("--json", action="store_true", help="answer in JSON once the run is over")
     args = ap.parse_args()
+    work = (lambda: plan(args)) if args.dry_run else (lambda: run(args))
+    return interface.main("shoot.dry_run" if args.dry_run else "shoot", work, args.json)
 
+
+def plan(args):
+    """What a run would do, checked against the mount's limits, with nothing
+    touched."""
+    import config
+    import mount
+    out = {"target": args.name, "frames": args.frames, "exposure": args.exposure,
+           "gain": args.gain, "keeps_raw_frames": not args.no_save,
+           "quality_pass": not (args.no_save or args.no_restack), "would_move": False}
+    if not args.no_recentre:
+        site = (config.load() if config.FILE.exists() else config.example())["site"]
+        try:
+            goto = mount.plan_goto(args.name, site)
+            goto.pop("side_note", None)
+            out.update(would_move=True, goto=goto)
+        except interface.Refusal as refusal:
+            # shoot.py carries on without the mount when it cannot be moved.
+            out["goto"] = {"would_move": False, "error": refusal.as_error()}
+    for key, value in out.items():
+        print(f"{key}: {value}")
+    return out
+
+
+def run(args):
     moving = not args.no_recentre
     if moving:
         moving = recentre(args.name)
@@ -310,7 +342,7 @@ def main():
     session.finish()
     used = len(session.accepted)
     if not used:
-        raise SystemExit("No usable frames.")
+        raise interface.Refusal("NO_USABLE_FRAMES", "No usable frames.")
     minutes = (time.monotonic() - started) / 60
     print(f"\n{index} captured, {used} accepted, {index - used} rejected "
           f"({100 * used / index:.0f}% kept) in {minutes:.0f} min")
@@ -322,6 +354,11 @@ def main():
         print("\nQuality pass over the raw frames:")
         restack.run(session.folder, profile=args.profile)
     print(f"Session folder: {session.folder}")
+    final = session.folder / "final.jpg"
+    return {"target": session.name, "folder": str(session.folder), "exposure_s": exposure,
+            "captured": index, "accepted": used, "rejected": index - used,
+            "integration_s": used * exposure, "minutes": round(minutes, 1),
+            "picture": str(final if final.exists() else session.folder / "live.fits")}
 
 
 if __name__ == "__main__":

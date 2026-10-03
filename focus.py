@@ -16,6 +16,7 @@ With the star badly out of focus it falls back to measuring the one big ring.
 Runs for 15 minutes (Ctrl+C to stop sooner); the web page shows the picture.
 """
 import argparse
+import json
 import subprocess
 import time
 from pathlib import Path
@@ -24,12 +25,15 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
 
+import interface
 import snap
 import stacking
 from camera import PORT, WHITE, Camera, luminance
 
 ROOT = Path(__file__).parent
 PREVIEW = ROOT / "web" / "latest.jpg"
+# The newest reading, kept so the status tools can say how good focus was.
+FOCUS_FILE = ROOT / "cache" / "focus.json"
 CROP = 300          # half-width in pixels of the box shown around the star
 MIN_EXPOSURE, MAX_EXPOSURE = 0.001, 2.0
 
@@ -204,16 +208,23 @@ def main():
     ap.add_argument("--tones", action="store_true",
                     help="a tone that rises in pitch as focus improves, instead of speech")
     ap.add_argument("--port", type=int, default=PORT)
+    ap.add_argument("--frames", type=int, help="stop after this many frames")
+    ap.add_argument("--json", action="store_true", help="the last reading as JSON at the end")
     args = ap.parse_args()
+    return interface.main("focus", lambda: run(args), args.json)
 
+
+def run(args):
+    """The focusing loop. Returns the last reading."""
     cam = Camera(args.port, args.gain)
+    reading = {}
 
     exposure, best = args.exposure, None
     frame, previous = 0, None
     tracker, first = FocusTracker(), None
     end = time.monotonic() + args.minutes * 60
     try:
-        while time.monotonic() < end:
+        while time.monotonic() < end and not (args.frames and frame >= args.frames):
             mosaic, _ = cam.frame(exposure)
             lum = luminance(mosaic)
             # Brightness on a 0-255 scale, whatever the sensor's bit depth.
@@ -269,6 +280,12 @@ def main():
                     first = first or value
                     words = tracker.feed(value)
                     text += f"   best {tracker.best:.1f}   {words.split('.')[0]}"
+                    if not ring:
+                        reading = {"hfr": round(value, 2), "stars": count,
+                                   "best_hfr": round(tracker.best, 2), "advice": words,
+                                   "exposure_s": exposure, "saved": time.time()}
+                        FOCUS_FILE.parent.mkdir(exist_ok=True)
+                        FOCUS_FILE.write_text(json.dumps(reading))
             image = Image.fromarray(picture.astype(np.uint8)).convert("RGB")
             image = image.resize((900, round(900 * image.height / image.width)))
             text = f"#{frame} {time.strftime('%H:%M:%S')}  {text}"
@@ -290,6 +307,11 @@ def main():
         pass
     finally:
         cam.close()
+    if not reading:
+        if args.scene:
+            return {"sharpness": best, "frames": frame}
+        raise interface.Refusal("NO_STARS", "No stars were measured.")
+    return dict(reading, frames=frame)
 
 
 if __name__ == "__main__":

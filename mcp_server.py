@@ -16,6 +16,7 @@ so this needs no extra library.
 """
 import json
 import sys
+from pathlib import Path
 
 import agent
 import interface
@@ -62,6 +63,10 @@ TOOLS = {
         {"include_frames": {"type": "boolean", "default": False},
          "limit": {"type": "integer", "minimum": 1, "maximum": 200, "default": 50}}, [],
         lambda a: agent.session(a.get("include_frames", False), a.get("limit", 50)), False),
+    "get_observing_state": (
+        "One snapshot of what bears on the picture: sky, focus, tracking and the imaging run, "
+        "with notes naming the likely cause when quality is falling (cloud, focus, tracking).",
+        DEMO, [], lambda a: agent.observing(a.get("demo", False)), True),
     "simulate_goto": (
         "Check a GoTo without moving anything: is the target high enough and within the "
         "mount's limits, which side of the mount, and any warnings. This never moves the "
@@ -75,6 +80,8 @@ RESOURCES = {
     "telescope://capabilities": ("What can be done right now", lambda: agent.capabilities()),
     "telescope://night": ("Tonight in brief", lambda: agent.night()),
     "telescope://session/current": ("The newest imaging run", lambda: agent.session()),
+    "telescope://observing": ("Sky, focus, tracking and imaging in one snapshot",
+                              lambda: agent.observing()),
 }
 
 
@@ -87,9 +94,29 @@ def _simulate(name):
     return plan
 
 
+# Which file in schemas/ describes each tool's data.
+OUTPUT = {"get_agent_context": "context", "get_capabilities": "capabilities", "get_status": "status",
+          "get_night_plan": "night", "list_targets": "targets", "get_target": "target",
+          "get_current_session": "image-session", "get_observing_state": "observing",
+          "simulate_goto": "goto-plan"}
+SCHEMAS = Path(__file__).parent / "schemas"
+
+
+def output_schema(tool):
+    """The envelope with this tool's data spelt out. A refusal carries empty data."""
+    read = lambda name: json.loads((SCHEMAS / f"{name}.schema.json").read_text())
+    whole, data = read("envelope"), read(OUTPUT[tool])
+    for key in ("$schema", "$id"):
+        whole.pop(key, None)
+        data.pop(key, None)
+    whole["properties"]["data"] = {"anyOf": [data, {"type": "object", "maxProperties": 0}]}
+    return whole
+
+
 def tool_list():
     return [{"name": name, "description": description,
              "inputSchema": {"type": "object", "properties": properties, "required": required},
+             "outputSchema": output_schema(name),
              "annotations": dict(READ_ONLY, openWorldHint=online)}
             for name, (description, properties, required, _, online) in TOOLS.items()]
 

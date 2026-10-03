@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/target.schema.json",
+  "title": "Target",
+  "description": "One object: where it is now and whether a GoTo is allowed (ty target NAME).",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "kind",
+    "altitude_deg",
+    "hour_angle_hours",
+    "dec_deg",
+    "goto"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "kind": {
+      "type": "string"
+    },
+    "altitude_deg": {
+      "type": "number"
+    },
+    "hour_angle_hours": {
+      "type": "number"
+    },
+    "dec_deg": {
+      "type": "number"
+    },
+    "goto": {
+      "type": "object",
+      "required": [
+        "allowed"
+      ],
+      "properties": {
+        "allowed": {
+          "type": "boolean"
+        },
+        "pier_side": {
+          "enum": [
+            "east",
+            "west"
+          ]
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "error": {
+          "type": "object"
+        }
+      }
+    }
+  }
+}

@@ -73,7 +73,7 @@ cd telescopeyoke
 **Use the planner for real** (still no telescope needed): put your location
 in `config.toml`, then `./tonight.py`.
 
-**Run a telescope:** `./install.sh`, then follow [Setup](#setup).
+**Run a telescope:** `./install.sh`, then follow [Setup](docs/setup.md).
 
 ## Three parts, usable separately
 
@@ -112,6 +112,7 @@ report** issue; rows marked "community tested" will be added from those.
 | `clouds.py` | Fetches the latest infrared satellite image with the site marked on it. |
 | `mount.py` | Moves the mount: `status`, `home`, `zenith`, `goto NAME [--solve]`, `point AZ ALT`, `sync`, `drift`, `compensate`, `stop`. |
 | `liveview.py` | Takes a frame every few seconds so the status page shows what the telescope sees now. Steps aside while `shoot.py` runs. |
+| `horizon.py` | Sweeps the sky and reports which directions are blocked by houses, hedges and trees, as lines for `config.toml`. |
 | `snap.py` | Takes one camera frame, saves the FITS in `frames/`, publishes a preview. |
 | `shoot.py` | Takes a picture: many short exposures, each checked, lined up and stacked live, with the raw frames kept. `--exposure auto` picks the longest exposure the tracking allows. |
 | `restack.py` | The quality pass: goes back over a session's raw frames, keeps the best, weights and clips them, and writes the finished picture. `shoot.py` runs it at the end. |
@@ -127,7 +128,7 @@ report** issue; rows marked "community tested" will be added from those.
 | `replay.py` | Turns a centring run recorded with `mount.py goto --solve --record` into a GIF. |
 | `watch.py` | Photographs the telescope itself with the webcam. |
 | `build_catalogue.py` | Regenerates `data/targets.csv` from OpenNGC. |
-| `ty` | One front door for programs and AI agents: `capabilities`, `status`, `context`, `night`, `targets`, `target NAME`, `session`, `doctor`. Always answers in JSON. |
+| `ty` | One front door for programs and AI agents: `capabilities`, `status`, `context`, `night`, `targets`, `target NAME`, `session`, `observing`, `doctor`. Add `--json` for a fixed machine-readable shape. |
 | `mcp_server.py` | Read-only MCP server offering the same information to MCP-aware assistants. |
 
 `tonight.py`, `serve.py` and `mount.py` accept `--demo`.
@@ -135,41 +136,6 @@ report** issue; rows marked "community tested" will be added from those.
 The status page shows two pictures while imaging: **Now**, the newest single
 exposure straight from the camera, and **Live stack**, everything added up so
 far.
-
-## For programs and AI agents
-
-Everything a person can read, a program can read too, in one stable shape.
-Start with [AGENTS.md](AGENTS.md); the details are in [docs/agents/](docs/agents/).
-
-```
-./ty capabilities                         # what is connected, allowed and locked
-./ty status                               # mount, camera, imaging run, system
-./ty context                              # a short plain-text briefing for an agent
-./mount.py goto M27 --dry-run --json      # what a move would do, without moving
-```
-
-- **`--json`** on `mount.py`, `doctor.py` and `tonight.py`, and always from
-  `ty`. Every answer is the same envelope: `schema_version`, `ok`, `command`,
-  `timestamp`, `data`, `warnings`, `errors`. The shapes are JSON Schemas in
-  [`schemas/`](schemas/).
-- **Error codes that stay put**, such as `MOTION_LOCKED`,
-  `TARGET_BELOW_ALTITUDE_LIMIT` and `HANDSET_NOT_SET_UP`, each saying whether
-  retrying can help and what to do instead.
-- **`--dry-run`** on every command that moves the mount: the same checks, the
-  planned move and any warning (such as the tube swinging over the pole), and
-  the hardware is never opened.
-- **Web API**: `GET /api/v1/status`, `/capabilities`, `/night`, `/targets`,
-  `/target/NAME`, `/session/current` and `/context` on the status page's port.
-- **MCP**: `./mcp_server.py` over stdio; setup in
-  [docs/agents/mcp.md](docs/agents/mcp.md).
-
-The web API and the MCP server are read-only: they can report, plan and
-simulate, and cannot move the mount or start the camera. Moving the telescope
-from an agent means running `mount.py`, with the same limits as a person and
-only when a person has asked for that move.
-[`evals/`](evals/) holds the situations an agent should handle well; the test
-suite checks the interface gives the right answer in each. They have not yet
-been run with a model in the loop.
 
 ## How it works
 
@@ -205,138 +171,25 @@ plan the night → GoTo → photograph → plate-solve (ASTAP) → correct → p
 - **`simulator.py`** is a pretend handset and mount behind `--demo` and the
   tests.
 
-## How a picture is made
+## Going deeper
 
-`shoot.py` works on many short exposures, because a modest mount cannot hold
-a star still for long. Each frame goes through:
+| Page | What is in it |
+|---|---|
+| [How a picture is made](docs/imaging.md) | Calibration, frame checks, lining up, stacking, the quality pass. |
+| [Focusing by ear](docs/focus.md) | Turn the knob and the laptop talks you onto focus. |
+| [The mount is wonky; measure how wonky](docs/tracking.md) | Drift from a rough polar alignment, and how it is cancelled. |
+| [Setup](docs/setup.md) | Installing, the camera driver, the plate solver, what the computer needs. |
+| [For programs and AI agents](docs/agents/README.md) | `--json`, `--dry-run`, the `ty` command, the web API and the MCP server. |
+| [Checking it under real sky](docs/validation.md) | The five experiments that will show whether the clever parts work. |
 
-```
-raw frame → saved to disk → dark and flat applied → 2x2 Bayer cells to RGB
-→ stars measured (sharpness, roundness, brightness, count)
-→ rejected if cloud, wind or a knock spoiled it
-→ lined up on the first frame: shift and rotation, to a fraction of a pixel
-→ added to a running stack that leaves out satellite trails
-→ web page updated
-```
+**Focus without looking at the laptop.** `./focus.py` measures up to 40 stars
+at once and speaks: "Improving", "Best focus. Hold", "Minimum passed. Reverse
+slightly". It ignores the shimmer of the air, so it does not send you chasing it.
 
-It prints a line per frame, such as `032 ACCEPT  FWHM 3.4  round 0.93  stars
-74` or `033 REJECT  star brightness down 41% (cloud)`.
-
-When the run ends, `restack.py` does the same job again with hindsight: it
-measures every saved frame, judges each against the better half of the
-session (so a half-cloudy night does not set a cloudy standard), keeps the
-best 85% of those that pass, lines them up on the sharpest, weights each by
-sharpness, roundness, transparency and noise, clips
-outliers against the whole session's average, removes the sky gradient, and
-writes `final.fits` and `final.jpg` in the session folder
-(`frames/NAME/<date-time>/`).
-
-Things worth knowing:
-
-- **It uses the whole processor, and the camera never waits for it.** The
-  per-frame work is shared between worker processes, one per physical core.
-  If frames ever arrive faster than they can be stacked live, the extra ones
-  are saved raw and marked `LATER`, and the quality pass picks them up.
-  `--profile` on `shoot.py` or `restack.py` reports where the time went.
-- **Frames are checked cheaply before the expensive work.** Quality is judged
-  on a quarter-size image first; only frames that pass are calibrated in
-  full, cleaned and lined up.
-- **The 2x2 Bayer reduction is deliberate.** It halves the resolution to
-  about 1.3 arcseconds per pixel on this telescope, which suits ordinary
-  seeing; the sensor's native 0.66 would only record blur more finely.
-- **Drift is used, not fought.** The mount is only sent back to the target
-  once it has drifted a fifth of the frame. Until then the stars wander over
-  different pixels, so the sensor's fixed pattern averages away.
-- **Calibration frames make a visible difference** and are picked up
-  automatically once made:
-
-      ./calibrate.py dark --exposure 2 --gain 1500    # cap on; match your exposure and gain
-      ./calibrate.py bias --gain 1500                 # cap on
-      ./calibrate.py flat                             # cap off, evenly lit: twilight sky through a white T-shirt
-
-  Masters are averaged with outliers left out. A flat is filed under the
-  `setup` name in `config.toml`, because it only suits the arrangement it was
-  taken with: change the name and take a new flat whenever the camera is
-  rotated or refitted. This camera cannot report its temperature, so with a
-  bias and a dark at the same gain the dark is scaled to each frame's own hot
-  pixels instead of being matched by temperature.
-- **Alignment is shift and rotation only**, no scale or lens distortion,
-  which is enough for one session through one set of optics. `restack.py`
-  reports how closely the stars matched; if that ever nears a pixel, it is
-  time for more.
-
-- **Raw frames are large**: about 20 MB each, so a 300-frame session is 6 GB.
-  Delete a session's `light-*.fits` once you are happy with `final.fits`, or
-  use `--no-save`.
-
-## The mount is wonky; measure how wonky
-
-telescopeyoke does not assume a careful polar alignment, and it does not
-trust the handset's own alignment model. It measures what the stars actually
-do.
-
-A polar axis that misses the pole makes the aim slide slowly in declination,
-at a rate that depends only on the hour angle. So:
-
-- `./mount.py compensate` photographs the sky at three RA positions, works
-  out where the axis really points, and tells you how to fix it mechanically
-  ("swing the north end 1.4° west, raise the axis 0.6°"). Or leave it: it
-  then predicts the drift where the telescope is aimed, sets the Dec motor
-  creeping against it, measures what is left, and says what exposure that
-  allows.
-- After that, every GoTo starts with the creep its part of the sky needs.
-- `./mount.py drift` measures and trims the drift on its own: several plate
-  solves with a line fitted through them, an uncertainty on the answer, part
-  of the error corrected at a time, and the Dec motor never reversed for a
-  small overshoot, because its gears have slack.
-- `./shoot.py --assist` lets the pictures themselves report the drift, and
-  trims the creep as the run goes.
-
-What this cannot do: with the axis off the pole, the field still turns slowly
-about the target, and the gears' own periodic wobble is untouched. The
-stacker's rotation alignment deals with the first; short exposures deal with
-the second. It is drift assist, not guiding.
-
-## Focusing by ear
-
-`./focus.py` is built for a manual focuser in the dark: turn the knob, listen.
-It measures the half-flux radius (HFR) of up to forty stars at once, steadies
-the readings over three frames, and ignores changes smaller than the air's
-own shimmer. It says "Improving. 4.8", "No change", "Worse. Go back", and,
-when the numbers bottom out and rise again, "Minimum passed. Reverse
-slightly", then "Best focus. Hold" when you are back on it. `--tones` swaps
-the speech for a tone whose pitch rises as focus improves.
-
-## Setup
-
-1. `./install.sh` installs the packaged software and creates `config.toml`
-   from the example. Put in your location, and your camera's INDI driver and
-   sensor details if they differ. Run `./doctor.py` (or `./install.sh
-   --check`) at any point to see what is still missing.
-2. Install the ASTAP D20 star database (about 400 MB) from
-   <https://sourceforge.net/projects/astap-program/files/star_databases/>;
-   it installs into `/opt/astap`.
-3. If your camera's INDI driver is not packaged, build it. For the Altair
-   driver on Ubuntu 26.04, from the
-   [indi-3rdparty](https://github.com/indilib/indi-3rdparty) repository at
-   the tag matching the installed INDI (`v1.9.9`):
-
-       sudo apt install cmake libindi-dev libcfitsio-dev libnova-dev libusb-1.0-0-dev zlib1g-dev
-       cd libaltaircam && cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_POLICY_VERSION_MINIMUM=3.5 . \
-           && make && sudo make install
-       cd ../indi-toupbase     # first trim CMakeLists.txt to the indi_altair_ccd target only
-       cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_POLICY_VERSION_MINIMUM=3.5 . \
-           && make && sudo make install
-
-4. INDI server: by default the scripts connect to one you have started
-   (`indiserver indi_altair_ccd`). If nothing else uses INDI on the machine,
-   set `manage_server = true` under `[indi]` in `config.toml` and they will
-   start and restart it themselves. Leave it off if a guider, focuser or
-   filter wheel shares the server, because a restart cuts them all off.
-
-On Ubuntu and Debian, `install.sh` takes the Python libraries from the
-distribution's own packages. `pyproject.toml` lists the same libraries with
-the oldest versions known to work, and is what CI and `pip install .` use.
+**For programs and AI agents**, every command answers in one JSON shape with
+`--json`, anything that moves the mount can be checked first with `--dry-run`,
+and a read-only web API and MCP server offer the same information. Start with
+[AGENTS.md](AGENTS.md).
 
 ## A night's routine
 
@@ -345,7 +198,7 @@ the oldest versions known to work, and is what CI and `pip install .` use.
 2. `./mount.py zenith` to measure the handset's clock and check the mount
    moves correctly.
 3. Focus: `./focus.py --scene` on something distant in daylight, then
-   `./focus.py` on stars. Aim for a star size under 10.
+   `./focus.py` on stars. Turn the focuser slowly and listen: stop at "Best focus. Hold".
 4. `./mount.py sync` on any patch of stars, so later GoTos allow for the home
    position having been set by eye.
 5. `./mount.py goto M27 --solve`, then `./shoot.py M27 --frames 48 --recentre 8`.
@@ -423,15 +276,6 @@ Known limits:
   the axis readout instead.
 - The target ranking in `tonight.py` uses weights chosen by judgement.
 
-## What it needs from the computer
-
-A 2017 four-core laptop (i7-7700HQ, 22 GB of memory, an SSD) runs all of this
-with room to spare while the camera is the slow part. Capture, mount control
-and the webcam must stay on the machine the hardware is plugged into. The
-quality pass only needs a session's folder of raw frames, so it can be run on
-a faster machine later if sessions grow into thousands of frames; the
-telescope never depends on a second computer or on Wi-Fi to keep working.
-
 ## Roadmap
 
 Near term:
@@ -440,7 +284,6 @@ Near term:
   mounts come before any new feature.
 - Recordings for this page: a GoTo-and-centre run (`--record` and `replay.py`
   are ready for it) and a focusing session.
-- Splitting this README into shorter pages under `docs/` once it grows further.
 - More of the camera's quirks moved into `config.toml` as other cameras are tried.
 - Faster frames: a newer camera driver, or USB 3. The camera currently
   collects light for about a seventh of the time, so this is the largest
@@ -461,6 +304,9 @@ Later, if people ask for them:
 - Letting an agent request a move over MCP, carried out only after a person
   approves that exact move (designed in `docs/agents/safety.md`, not built).
 - The agent scenarios in `evals/` run with a real model in the loop.
+- The MCP server moved onto the official MCP Python SDK, once MCP is a feature people
+  rely on. Today's hand-written one speaks the protocol directly to avoid a dependency;
+  the telescope logic stays in `agent.py` either way.
 - Guiding and focuser support.
 
 Not planned: ASCOM, mobile apps, a React front end, cloud services, AI target

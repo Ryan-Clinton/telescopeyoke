@@ -225,3 +225,56 @@ def test_the_briefing_states_the_motion_rule(quiet):
     text = agent.context(demo=True)
     assert "a person must ask for each move" in text and "--dry-run" in text
     assert len(text.splitlines()) < 30   # a briefing, not a manual
+
+
+def test_every_mcp_tool_publishes_the_shape_of_its_answer(quiet, monkeypatch):
+    sky(monkeypatch, 30.0, 55.0)
+    arguments = {"get_target": {"name": "M27", "demo": True}, "simulate_goto": {"target": "M27"}}
+    for tool in mcp_server.tool_list():
+        jsonschema.Draft202012Validator.check_schema(tool["outputSchema"])
+        answer = mcp_server.call_tool(tool["name"], arguments.get(tool["name"], {"demo": True}))
+        # A refusal (no imaging run yet) must fit the published shape too.
+        jsonschema.validate(answer["structuredContent"], tool["outputSchema"])
+    assert set(mcp_server.OUTPUT) == set(mcp_server.TOOLS)
+
+
+def test_the_schema_version_in_code_is_the_one_published():
+    assert schema("envelope")["properties"]["schema_version"]["const"] == interface.SCHEMA_VERSION
+
+
+def frames(count, **late):
+    """A log of good frames whose last five differ by `late`."""
+    good = {"fwhm": 4.0, "roundness": 0.9, "stars": 100, "accepted": True, "reason": ""}
+    return [dict(good, **(late if i >= count - 5 else {}), index=i + 1) for i in range(count)]
+
+
+def test_scenario_falling_quality_is_given_a_cause():
+    assert SCENARIOS["diagnose_soft_focus"]["expected_tools"] == ["get_observing_state"]
+    focus = agent._explain(agent._trend(frames(20, fwhm=5.2)))
+    assert len(focus) == 1 and "focus" in focus[0] and "30% wider" in focus[0]
+    cloud = agent._explain(agent._trend(frames(20, stars=40)))
+    assert len(cloud) == 1 and "cloud" in cloud[0]
+    wind = agent._explain(agent._trend(frames(20, roundness=0.7)))
+    assert len(wind) == 1 and "tracking" in wind[0]
+    assert agent._explain(agent._trend(frames(20))) == []
+    assert agent._trend(frames(6)) is None   # too few frames to say
+
+
+def test_the_observing_state_with_nothing_running(quiet, monkeypatch):
+    import focus
+    monkeypatch.setattr(focus, "FOCUS_FILE", quiet / "focus.json")
+    result = valid(interface.run("observing", lambda: agent.observing(demo=True)), "observing")
+    assert result["data"]["optics"] == {"focus_state": "unknown"}
+    assert result["data"]["imaging"] == {"state": "idle"}
+
+
+def test_scripts_asked_for_json_print_nothing_else(capsys):
+    def chatty():
+        print("progress")
+        return {"answer": 42}
+    with pytest.raises(SystemExit) as stop:
+        interface.main("chatty", chatty, as_json=True)
+    out, err = capsys.readouterr()
+    assert stop.value.code == 0 and json.loads(out)["data"] == {"answer": 42}
+    assert "progress" in err and "progress" not in out
+    assert interface.main("chatty", chatty) == {"answer": 42}

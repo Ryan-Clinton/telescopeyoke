@@ -15,6 +15,7 @@ from astropy.io import fits
 
 import config
 from indi import Indi, IndiError
+from interface import Refusal
 
 SETTINGS = config.hardware()
 DRIVER = SETTINGS["camera"]["driver"]
@@ -58,7 +59,7 @@ class Camera:
         self.name = next((d for d in c.devices() if c.get(d, "CCD_EXPOSURE")
                           or "Altair" in d), None)
         if self.name is None:
-            raise SystemExit("No camera found. Is it plugged in?")
+            raise Refusal("CAMERA_NOT_CONNECTED", "No camera found. Is it plugged in?")
         c.connect(self.name)
         # The next two exist only on Altair/ToupTek drivers.
         if c.get(self.name, "CCD_AUTO_EXPOSURE"):

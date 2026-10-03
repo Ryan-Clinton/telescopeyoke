@@ -1,0 +1,151 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/observing.schema.json",
+  "title": "Observing state",
+  "description": "One snapshot of sky, optics, tracking and imaging, with notes naming a likely cause when the measurements point at one (ty observing).",
+  "type": "object",
+  "required": [
+    "sky",
+    "optics",
+    "tracking",
+    "imaging",
+    "notes"
+  ],
+  "properties": {
+    "sky": {
+      "type": "object",
+      "properties": {
+        "verdict": {
+          "enum": [
+            "GO",
+            "MARGINAL",
+            "NO-GO"
+          ]
+        },
+        "cloud_percent": {
+          "type": "number"
+        },
+        "seeing": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "transparency": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "humidity_percent": {
+          "type": "number"
+        },
+        "dew_margin_c": {
+          "type": "number"
+        }
+      }
+    },
+    "optics": {
+      "type": "object",
+      "required": [
+        "focus_state"
+      ],
+      "properties": {
+        "focus_state": {
+          "enum": [
+            "good",
+            "soft",
+            "unknown"
+          ]
+        },
+        "hfr": {
+          "type": "number"
+        },
+        "best_hfr": {
+          "type": "number"
+        },
+        "stars": {
+          "type": "integer"
+        },
+        "age_s": {
+          "type": "integer"
+        }
+      }
+    },
+    "tracking": {
+      "type": "object",
+      "properties": {
+        "drift_arcsec_s": {
+          "type": "number"
+        },
+        "max_recommended_exposure_s": {
+          "type": "number"
+        },
+        "dec_creep_arcsec_s": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "natural_dec_drift_arcsec_s": {
+          "type": "number"
+        },
+        "polar_error": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    },
+    "imaging": {
+      "type": "object",
+      "required": [
+        "state"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "idle",
+            "capturing",
+            "processing",
+            "finished"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "captured": {
+          "type": "integer"
+        },
+        "accepted": {
+          "type": "integer"
+        },
+        "acceptance_rate": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "median_fwhm": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "reasons": {
+          "type": "object"
+        },
+        "trend": {
+          "type": "object"
+        }
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

@@ -9,6 +9,7 @@
     ./ty targets --limit 5   the best targets (--now, --kind galaxy)
     ./ty target M27          one object: where it is, whether a GoTo is allowed
     ./ty session             the newest imaging run (--frames 50 for detail)
+    ./ty observing           sky, focus, tracking and imaging in one snapshot
     ./ty mount ...           everything mount.py does, e.g. ./ty mount goto M27 --dry-run
     ./ty tonight ...         the full report, as tonight.py
 
@@ -51,11 +52,12 @@ def main():
         import importlib
         module = importlib.import_module(PASS_THROUGH[sys.argv[1]])
         sys.argv = [f"ty {sys.argv[1]}"] + sys.argv[2:]
-        return module.main()
+        module.main()
+        return 0
 
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["capabilities", "status", "context", "doctor", "night",
-                                        "targets", "target", "session"])
+                                        "targets", "target", "session", "observing"])
     ap.add_argument("name", nargs="?", help="object name, for 'target'")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--demo", action="store_true", help="made-up weather at the example site")
@@ -83,6 +85,7 @@ def main():
         "targets": lambda: agent.targets(args.limit, args.kind, args.now, args.demo),
         "target": lambda: agent.target(args.name, args.demo),
         "session": lambda: agent.session(bool(args.frames), args.frames or 50),
+        "observing": lambda: agent.observing(args.demo),
     }[args.command]
     result = interface.run(args.command, work)
     if args.json:

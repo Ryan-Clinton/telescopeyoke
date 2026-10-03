@@ -60,6 +60,8 @@
               "MOUNT_NOT_CONNECTED",
               "NO_CONFIG",
               "NO_SESSION",
+              "NO_STARS",
+              "NO_USABLE_FRAMES",
               "PLATE_SOLVE_FAILED",
               "SLEW_TIMED_OUT",
               "TARGET_BELOW_ALTITUDE_LIMIT",

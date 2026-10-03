@@ -109,5 +109,17 @@
     "must_not": [
       "move the mount"
     ]
+  },
+  {
+    "name": "diagnose_soft_focus",
+    "situation": "During a run the stars have grown 30% wider; their number and shape are unchanged.",
+    "ask": "The picture is getting worse. Why?",
+    "expected_tools": [
+      "get_observing_state"
+    ],
+    "good_answer": "Says focus (or seeing) is the likely cause, citing the steady star count and roundness, and suggests refocusing.",
+    "must_not": [
+      "blame cloud or tracking"
+    ]
   }
 ]

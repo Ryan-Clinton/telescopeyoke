@@ -149,3 +149,19 @@ def test_the_demo_page_has_a_made_up_run_to_show():
     status = demo.status()
     assert status["captured"] == status["accepted"] + status["rejected"]
     assert len(status["series"]["fwhm"]) == len(status["series"]["accepted"]) == 60
+
+
+def test_a_horizon_sweep_becomes_the_planners_blocked_list():
+    import horizon
+    looks = []
+    for az in (0, 90, 180, 270):
+        for alt in (25, 40, 55, 70):
+            house = az in (180, 270) and alt <= 40      # stars only above 40° to the south and west
+            wall = az == 0                              # nothing at all to the north
+            looks.append({"az": az, "alt": alt, "open": None if (az == 90 and alt == 25) else
+                          not (house or wall)})
+    assert horizon.blocked(looks) == [
+        {"from": 315.0, "to": 45.0, "altitude": 90},
+        {"from": 135.0, "to": 315.0, "altitude": 48}]
+    assert "#" in horizon.chart(looks) and "." in horizon.chart(looks)
+    assert len(horizon.looks(30)) == 48

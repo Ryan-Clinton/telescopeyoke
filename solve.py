@@ -4,6 +4,7 @@
     ./solve.py                      take a frame and solve it
     ./solve.py --file frames/x.fits solve a saved frame
     ./solve.py --near M57           tell the solver roughly where to look
+    ./solve.py --json               the answer as JSON
 
 Uses ASTAP with its D20 star database. Prints the centre of the frame as
 J2000 RA/Dec, the camera's rotation and the image scale.
@@ -18,6 +19,7 @@ import numpy as np
 from astropy.io import fits
 
 import config
+import interface
 from camera import Camera, luminance
 
 ROOT = Path(__file__).parent
@@ -65,15 +67,19 @@ def solve(image, ra_hint=None, dec_hint=None, radius=30, field=FIELD_HEIGHT, tim
 
 
 def main():
-    from astropy import units as u
-    from astropy.coordinates import Angle
-
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--file", help="solve this FITS frame instead of taking one")
     ap.add_argument("--exposure", type=float, default=3.0)
     ap.add_argument("--gain", type=int, default=300)
     ap.add_argument("--near", help="object the scope is roughly aimed at")
+    ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
+    interface.main("solve", lambda: run(args), args.json)
+
+
+def run(args):
+    from astropy import units as u
+    from astropy.coordinates import Angle
 
     if args.file:
         data = fits.getdata(args.file)
@@ -90,12 +96,16 @@ def main():
         hint = (target["ra"], target["dec"])
     found = solve(image, *hint)
     if not found:
-        raise SystemExit("No solution: too few stars, out of focus, or cloud.")
+        raise interface.Refusal("PLATE_SOLVE_FAILED",
+                                "No solution: too few stars, out of focus, or cloud.")
     ra = Angle(found["ra"] * u.deg).to_string(unit=u.hour, sep="hms", precision=1)
     dec = Angle(found["dec"] * u.deg).to_string(sep="dms", precision=0, alwayssign=True)
     print(f"centre RA {ra}  Dec {dec}  (J2000)")
     print(f"rotation {found['rotation']:.1f}°, scale {found['scale']:.2f} arcsec/pixel, "
           f"solved in {found['seconds']}s")
+    return {"ra_deg": found["ra"], "dec_deg": found["dec"], "ra": ra, "dec": dec,
+            "rotation_deg": found["rotation"], "scale_arcsec_per_pixel": found["scale"],
+            "seconds": found["seconds"]}
 
 
 if __name__ == "__main__":

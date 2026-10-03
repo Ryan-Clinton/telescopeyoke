@@ -21,6 +21,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 import clouds
 import config
+import agent
 import demo
 import sky
 import stacking
@@ -142,7 +143,7 @@ def status_forever(seconds=2):
     """Keep web/status.json describing the newest imaging run, so the page can
     show how far it has got without being rebuilt."""
     target = WEB / "status.json"
-    system, checked = None, 0.0
+    system, checked, notes = None, 0.0, []
     names = {t["id"]: t["name"] for t in sky.load_targets()}
     while True:
         try:
@@ -160,7 +161,12 @@ def status_forever(seconds=2):
             # The system checks open a connection to INDI, so do them less often.
             if time.time() - checked > 15:
                 system, checked = system_status(status.get("age")), time.time()
+                try:
+                    notes = agent.observing()["notes"]
+                except Exception:
+                    notes = []
             status["system"] = system
+            status["notes"] = notes
             partial = target.with_suffix(".part")
             partial.write_text(json.dumps(status))
             partial.replace(target)
@@ -176,6 +182,7 @@ class Handler(SimpleHTTPRequestHandler):
         /api/v1/status  /api/v1/capabilities  /api/v1/night
         /api/v1/targets?limit=10&kind=galaxy&now=1
         /api/v1/target/M27  /api/v1/session/current  /api/v1/context
+        /api/v1/observing
 
     GET only. Nothing here can move the mount or change anything."""
 
@@ -198,6 +205,7 @@ class Handler(SimpleHTTPRequestHandler):
             "session/current": lambda: agent.session(query.get("frames") in ("1", "true"),
                                                      int(query.get("limit", 50))),
             "context": lambda: {"text": agent.context(self.demo)},
+            "observing": lambda: agent.observing(self.demo),
         }
         if name.startswith("target/"):
             work = lambda: agent.target(unquote(name[len("target/"):]), self.demo)

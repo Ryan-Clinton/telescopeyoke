@@ -310,6 +310,7 @@ PAGE = Template(r"""<!doctype html>
       <div class="metrics" id="run-metrics"></div>
       <div class="pills" id="run-pills"></div>
       <div class="dim" id="run-last" style="margin-top:8px"></div>
+      <div id="run-notes" style="margin-top:8px"></div>
     </div>
     <figure id="now" hidden>
       <figcaption><b>NOW</b> <span id="now-detail"></span></figcaption>
@@ -433,6 +434,7 @@ atlas. Comets: COBS and JPL Horizons. Cloud imagery: EUMETSAT. Catalogue: OpenNG
     $$("run-pills").replaceChildren(...Object.entries(run.reasons || {}).map(
       ([why, n]) => make("span", n + " " + why, "pill")));
     $$("run-last").textContent = run.last ? "Newest frame " + ago(run.age) + ": " + run.last : "";
+    $$("run-notes").replaceChildren(...(run.notes || []).map(note => make("div", "⚠ " + note)));
     $$("run").hidden = false;
     return true;
   }

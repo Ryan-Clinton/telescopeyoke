@@ -9,3 +9,4 @@ web/
 MOTION_LOCKED
 recordings/
 calibration/
+.claude/

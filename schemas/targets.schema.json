@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/targets.schema.json",
+  "title": "Targets",
+  "description": "The best targets tonight, best first (ty targets).",
+  "type": "object",
+  "required": [
+    "count",
+    "targets"
+  ],
+  "properties": {
+    "count": {
+      "type": "integer"
+    },
+    "targets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "score",
+          "observable_now"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "score": {
+            "type": "number"
+          },
+          "observable_now": {
+            "type": "boolean"
+          },
+          "direction": {
+            "type": "string"
+          },
+          "best_altitude_deg": {
+            "type": "number"
+          },
+          "tags": {
+            "type": "array"
+          }
+        }
+      }
+    }
+  }
+}
