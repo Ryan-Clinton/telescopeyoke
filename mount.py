@@ -22,6 +22,9 @@ as RA axis 0° and Dec 90°.
 
 Until you have logged out and back in since being added to the dialout group,
 run it as:  sudo -u $USER -g dialout ./mount.py zenith
+
+Add --demo to any command to try it against a simulated mount with nothing
+plugged in:  ./mount.py --demo goto M27
 """
 import argparse
 import contextlib
@@ -69,11 +72,22 @@ SLEW_TIMEOUT = 150
 
 
 class Mount:
-    def __init__(self, port=None, watch=True):
-        # The webcam photographs the scope during every move unless told not to.
-        self.watching = Watching if watch else contextlib.nullcontext
-        port = port or next(iter(sorted(glob.glob("/dev/serial/by-id/*FTDI*"))), "/dev/ttyUSB0")
-        self.s = serial.Serial(port, 9600, timeout=2)
+    def __init__(self, port=None, watch=True, demo=False, handset=None):
+        """`demo` drives a simulated handset; `handset` supplies one directly
+        (anything with the serial port's write/read_until interface)."""
+        self.demo = demo or handset is not None
+        # The webcam photographs the scope during every real move unless told
+        # not to.
+        self.watching = Watching if watch and not self.demo else contextlib.nullcontext
+        if self.demo:
+            from simulator import SimulatedHandset
+            self.s = handset or SimulatedHandset()
+        else:
+            # The handset's lead is recognised by its USB adapter's name.
+            match = config.hardware()["mount"]["serial_match"]
+            port = port or next(iter(sorted(glob.glob(f"/dev/serial/by-id/*{match}*"))),
+                                "/dev/ttyUSB0")
+            self.s = serial.Serial(port, 9600, timeout=2)
         if self.ask(b"Kx") != b"x#":
             raise SystemExit("The handset is not answering. Is it on and past its "
                              "start-up screens?")
@@ -240,12 +254,14 @@ class Mount:
                 time.sleep(1)
 
     def handset_sidereal(self):
-        """The handset's own sidereal time in degrees. Only valid while the
-        mount has not flipped over the pole, i.e. at home or the zenith."""
+        """The handset's own sidereal time in degrees, from where it says it
+        is pointing and where its RA axis actually is."""
         ra, _ = self.radec()
-        ra_axis, _ = self.axes()
-        # RA axis angle past the meridian mark is the hour angle.
-        return (ra + ra_axis - MERIDIAN_RA_AXIS) % 360
+        ra_axis, dec_axis = self.axes()
+        # RA axis angle past the meridian mark is the hour angle; with the
+        # tube swung over the pole (Dec axis past 90°) it is half a turn on.
+        hour_angle = ra_axis - MERIDIAN_RA_AXIS + (180 if 90 < dec_axis < 270 else 0)
+        return (ra + hour_angle) % 360
 
     def home(self):
         self.tracking(False)
@@ -312,7 +328,9 @@ class Mount:
                       dec - error[1])
             self.tracking(True)
             self.apply_drift_correction()
-            if not solve:
+            if solve and self.demo:
+                print("  (demo: no camera, so no plate solve)")
+            if not solve or self.demo:
                 return
             # After a slew the gears take a while to bite again and the stars
             # streak, which the solver cannot handle. Wait, and try twice.
@@ -395,6 +413,14 @@ def direction(azimuth, altitude, site):
         raise SystemExit("That is within 40° of the Sun; not slewing.")
     hadec = spot.transform_to(HADec(obstime=now, location=here))
     return hadec.ha.deg, hadec.dec.deg
+
+
+def use_demo_cache():
+    """Keep the simulated mount's measurements apart from the real one's."""
+    global CLOCK_FILE, POINTING_FILE, DRIFT_FILE
+    CLOCK_FILE = ROOT / "cache" / "demo_handset_clock.json"
+    POINTING_FILE = ROOT / "cache" / "demo_pointing.json"
+    DRIFT_FILE = ROOT / "cache" / "demo_drift.json"
 
 
 def load_pointing_error(west):
@@ -493,18 +519,27 @@ def main():
                                        "sync", "drift"])
     ap.add_argument("target", nargs="*",
                     help="object for goto (e.g. M81), or bearing and height for point")
-    ap.add_argument("--port", help="serial port (default: the FTDI lead)")
+    ap.add_argument("--port", help="serial port (default: found by the adapter name "
+                                   "in config.toml)")
     ap.add_argument("--no-watch", action="store_true", help="skip the webcam pictures")
     ap.add_argument("--solve", action="store_true",
                     help="with goto: plate-solve and correct until centred")
+    ap.add_argument("--demo", action="store_true",
+                    help="use a simulated mount at the example site; nothing moves")
     args = ap.parse_args()
 
-    site = config.load()["site"]
+    if args.demo:
+        if args.command in ("sync", "drift"):
+            ap.error(f"{args.command} needs the real camera; there is no demo of it")
+        use_demo_cache()
+        site = config.example()["site"]
+    else:
+        site = config.load()["site"]
 
     if args.command in ("zenith", "home", "goto", "point") and LOCK_FILE.exists():
         raise SystemExit(f"Motion is locked: {LOCK_FILE.read_text().strip()}")
 
-    mount = Mount(args.port, watch=not args.no_watch)
+    mount = Mount(args.port, watch=not args.no_watch, demo=args.demo)
     try:
         if args.command == "stop":
             mount.stop()

@@ -12,7 +12,7 @@ import numpy as np
 from astropy.io import fits
 from PIL import Image
 
-from camera import Camera, colour, stretch
+from camera import PORT, Camera, colour, stretch
 
 ROOT = Path(__file__).parent
 FRAMES = ROOT / "frames"
@@ -41,7 +41,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--exposure", type=float, default=1.0, help="seconds")
     ap.add_argument("--gain", type=int, default=300, help="camera gain (100 = lowest)")
-    ap.add_argument("--port", type=int, default=7624)
+    ap.add_argument("--port", type=int, default=PORT)
     args = ap.parse_args()
 
     started = time.monotonic()

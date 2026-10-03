@@ -24,3 +24,24 @@ blocked = []
 [scope]
 aperture_mm = 150
 focal_length_mm = 750
+
+[camera]
+# INDI driver for the camera, and the sensor's details. The plate solver
+# works out the field of view from these and the focal length above.
+driver = "indi_altair_ccd"
+bit_depth = 12
+pixel_size_um = 2.4
+width = 5440
+height = 3648
+
+[mount]
+# Part of the name of the USB adapter on the handset's serial lead, as it
+# appears under /dev/serial/by-id/.
+serial_match = "FTDI"
+
+[indi]
+port = 7624
+# true: start and restart the INDI server for the camera automatically. That
+# stops any INDI server already running, so leave it false if other equipment
+# shares one, and start "indiserver <driver>" yourself.
+manage_server = false

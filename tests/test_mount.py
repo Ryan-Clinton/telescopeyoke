@@ -1,0 +1,129 @@
+"""Mount logic, run against the simulated handset: nothing here can move a
+real telescope."""
+import json
+
+import pytest
+
+import config
+import mount
+from simulator import SimulatedHandset
+
+SITE = config.example()["site"]
+
+
+@pytest.fixture
+def scope(tmp_path, monkeypatch):
+    # Keep the tests' measurements out of the real cache.
+    monkeypatch.setattr(mount, "CLOCK_FILE", tmp_path / "clock.json")
+    monkeypatch.setattr(mount, "POINTING_FILE", tmp_path / "pointing.json")
+    monkeypatch.setattr(mount, "DRIFT_FILE", tmp_path / "drift.json")
+    monkeypatch.setattr(mount, "LOCK_FILE", tmp_path / "MOTION_LOCKED")
+    return mount.Mount(handset=SimulatedHandset(slew_seconds=0))
+
+
+def test_wrap_folds_angles():
+    assert mount.wrap(190) == -170
+    assert mount.wrap(-190) == 170
+    assert mount.wrap(45) == 45
+
+
+def test_angles_are_sent_as_32_bit_hex():
+    assert mount.encode(0) == "00000000"
+    assert mount.encode(180) == "80000000"
+    assert mount.encode(90) == "40000000"
+    assert mount.encode(-90) == "C0000000"
+
+
+def test_it_starts_at_home(scope):
+    assert scope.at_home()
+    assert scope.axes() == pytest.approx([0, 90], abs=0.01)
+
+
+def test_a_handset_left_on_its_version_screen_is_refused():
+    with pytest.raises(SystemExit, match="not been set up"):
+        mount.Mount(handset=SimulatedHandset(year=22))
+
+
+def test_zenith_puts_the_tube_on_the_meridian_at_the_sites_latitude(scope):
+    scope.zenith(SITE)
+    ra_axis, dec_axis = scope.axes()
+    assert ra_axis == pytest.approx(90, abs=0.1)
+    assert dec_axis == pytest.approx(SITE["latitude"], abs=0.1)
+
+
+def test_the_handset_clock_error_is_measured_and_stored(scope):
+    scope.zenith(SITE)
+    offset = json.loads(mount.CLOCK_FILE.read_text())["offset_deg"]
+    expected = mount.wrap(scope.s.sidereal() - mount.true_sidereal(SITE))
+    assert offset == pytest.approx(expected, abs=0.1)
+
+
+def test_the_handset_clock_reads_the_same_on_either_side_of_the_pole(scope):
+    scope.zenith(SITE)
+    east = scope.handset_sidereal()
+    scope.goto((scope.s.sidereal() - 40) % 360, 30)   # 40° west: over the pole
+    assert scope.axes()[1] > 90
+    assert mount.wrap(scope.handset_sidereal() - east) == pytest.approx(0, abs=0.1)
+
+
+def test_goto_lands_on_the_target(scope):
+    scope.zenith(SITE)
+    target = max(mount.STARS, key=lambda name: mount.where(
+        mount.find_target(name), SITE)[2] if abs(mount.where(
+            mount.find_target(name), SITE)[0]) < 75 else -99)
+    scope.goto_target(target, SITE)
+    hour_angle, dec, _ = mount.where(mount.find_target(target), SITE)
+    believed = mount.wrap(scope.s.sidereal() - scope.radec()[0])
+    assert believed == pytest.approx(hour_angle, abs=0.2)
+    assert mount.wrap(scope.radec()[1]) == pytest.approx(dec, abs=0.1)
+
+
+def test_goto_needs_the_clock_measured_first(scope):
+    with pytest.raises(SystemExit, match="zenith"):
+        scope.goto_target("Vega", SITE)
+
+
+def test_targets_too_low_or_too_far_round_are_refused(scope, monkeypatch):
+    scope.zenith(SITE)
+    monkeypatch.setattr(mount, "where", lambda target, site, when=None: (30.0, 20.0, 12.0))
+    with pytest.raises(SystemExit, match="only 12° up"):
+        scope.goto_target("Vega", SITE)
+    monkeypatch.setattr(mount, "where", lambda target, site, when=None: (100.0, 60.0, 45.0))
+    with pytest.raises(SystemExit, match="beyond the 5.75 h limit"):
+        scope.goto_target("Vega", SITE)
+    assert scope.axes() == pytest.approx([90, SITE["latitude"]], abs=0.2)  # never moved
+
+
+def test_pointing_at_a_bearing_refuses_the_ground(scope):
+    scope.zenith(SITE)
+    with pytest.raises(SystemExit, match="between 2° and 89°"):
+        scope.point(180, 0, SITE)
+
+
+def test_the_stored_pointing_error_reverses_in_dec_across_the_pole(scope):
+    mount.CLOCK_FILE.write_text(json.dumps({"offset_deg": 0, "saved": 1}))
+    mount.save_pointing_error([-10.0, -12.0], west=True)
+    assert mount.load_pointing_error(west=True) == [-10.0, -12.0]
+    assert mount.load_pointing_error(west=False) == [-10.0, 12.0]
+
+
+def test_an_old_pointing_error_is_ignored_after_the_handset_is_restarted(scope):
+    mount.save_pointing_error([-10.0, -12.0], west=True)
+    saved = json.loads(mount.POINTING_FILE.read_text())["saved"]
+    mount.CLOCK_FILE.write_text(json.dumps({"offset_deg": 0, "saved": saved + 60}))
+    assert mount.load_pointing_error(west=True) == [0.0, 0.0]
+
+
+def test_catalogue_and_star_names_resolve():
+    assert mount.find_target("m 27")["name"] == "Dumbbell Nebula"
+    assert mount.find_target("Ring Nebula")["id"] == "M57"
+    assert mount.find_target("vega")["dec"] == pytest.approx(38.78, abs=0.01)
+    with pytest.raises(SystemExit):
+        mount.find_target("not a real object")
+
+
+def test_dec_creep_is_sent_in_quarter_arcsecond_steps(scope):
+    scope.dec_creep(-1.5)
+    assert scope.s.rates[17] == pytest.approx(-1.5 / 3600)
+    scope.dec_creep(0)
+    assert scope.s.rates[17] == 0

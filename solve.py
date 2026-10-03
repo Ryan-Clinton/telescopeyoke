@@ -17,13 +17,15 @@ from pathlib import Path
 import numpy as np
 from astropy.io import fits
 
+import config
 from camera import Camera, luminance
 
 ROOT = Path(__file__).parent
 ASTAP = "astap_cli"
 DATABASE = "/opt/astap"
-# Field height in degrees: 3648 pixels of 2.4 µm behind 750 mm.
-FIELD_HEIGHT = 0.67
+# Height of the camera's view in degrees, from the sensor and focal length
+# in config.toml (0.67° for the 183C behind 750 mm).
+FIELD_HEIGHT = round(config.field_height(), 3)
 
 
 def solve(image, ra_hint=None, dec_hint=None, radius=30, field=FIELD_HEIGHT, timeout=180):

@@ -1,0 +1,29 @@
+[project]
+name = "telescopeyoke"
+version = "0.1.0"
+description = "Turn a SynScan telescope into a smart telescope: night planning, GoTo, plate solving, auto-centring, focusing and stacking from a Linux laptop."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.11"
+dependencies = [
+    "astropy>=6.0",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "pillow>=10.1",
+    "requests>=2.31",
+    "pyserial>=3.5",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.urls]
+Repository = "https://github.com/Ryan-Clinton/telescopeyoke"
+
+# The scripts are run from a checkout, not installed as a package.
+[tool.setuptools]
+py-modules = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

@@ -13,17 +13,24 @@ import time
 import numpy as np
 from astropy.io import fits
 
+import config
 from indi import Indi, IndiError
 
-DRIVER = "indi_altair_ccd"
+SETTINGS = config.hardware()
+DRIVER = SETTINGS["camera"]["driver"]
+PORT = SETTINGS["indi"]["port"]
+# Whether this project may start and restart the INDI server itself. Leave it
+# off if other equipment (a guider, focuser, filter wheel) shares the server:
+# restarting would cut them all off.
+MANAGE_SERVER = SETTINGS["indi"]["manage_server"]
 # Extra waiting time the driver allows per exposure. At its default of 1.2
 # most exposures over a second time out on USB 2.
 TIMEOUT_FACTOR = 10
-WHITE = 4095  # 12-bit sensor
+WHITE = 2 ** SETTINGS["camera"]["bit_depth"] - 1  # brightest raw value
 
 
 class Camera:
-    def __init__(self, port=7624, gain=300):
+    def __init__(self, port=PORT, gain=300):
         self.port, self.gain = port, gain
         self._open()
 
@@ -40,6 +47,11 @@ class Camera:
         try:
             self.client = Indi(port=self.port)
         except OSError:
+            if not MANAGE_SERVER:
+                raise SystemExit(
+                    f"No INDI server on port {self.port}. Start one with "
+                    f"'indiserver {DRIVER}', or set manage_server = true under "
+                    "[indi] in config.toml to have it started for you.")
             start_driver(self.port)
             self.client = Indi(port=self.port)
         c = self.client
@@ -48,8 +60,11 @@ class Camera:
         if self.name is None:
             raise SystemExit("No camera found. Is it plugged in?")
         c.connect(self.name)
-        c.set(self.name, "CCD_AUTO_EXPOSURE", TC_AUTO_EXPOSURE_OFF="On")
-        c.set(self.name, "TIMEOUT_FACTOR", VALUE=TIMEOUT_FACTOR)
+        # The next two exist only on Altair/ToupTek drivers.
+        if c.get(self.name, "CCD_AUTO_EXPOSURE"):
+            c.set(self.name, "CCD_AUTO_EXPOSURE", TC_AUTO_EXPOSURE_OFF="On")
+        if c.get(self.name, "TIMEOUT_FACTOR"):
+            c.set(self.name, "TIMEOUT_FACTOR", VALUE=TIMEOUT_FACTOR)
         c.set(self.name, "CCD_BINNING", HOR_BIN=1, VER_BIN=1)
         c.set(self.name, "CCD_CAPTURE_FORMAT", INDI_RAW="On")
         c.set(self.name, "CCD_CONTROLS", Gain=self.gain)
@@ -57,7 +72,8 @@ class Camera:
 
     def frame(self, seconds):
         """One exposure as (uint16 Bayer mosaic, FITS header). If the driver
-        stops delivering, it is restarted once and the exposure retried."""
+        stops delivering and manage_server is on, it is restarted once and
+        the exposure retried."""
         wait = 12 + 6 * seconds
         for attempt in range(2):
             try:
@@ -65,14 +81,15 @@ class Camera:
                 with fits.open(io.BytesIO(raw)) as hdul:
                     return hdul[0].data, hdul[0].header
             except (IndiError, OSError):
-                if attempt:
+                if attempt or not MANAGE_SERVER:
                     raise
                 start_driver(self.port)
                 self._open()
 
 
-def start_driver(port=7624):
-    """(Re)start the INDI server with the camera driver."""
+def start_driver(port=PORT):
+    """(Re)start the INDI server with the camera driver. This stops any INDI
+    server already running, so it is only used when manage_server is on."""
     subprocess.run(["pkill", "-x", "indiserver"])
     subprocess.run(["pkill", "-x", DRIVER])
     time.sleep(2)

@@ -17,7 +17,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
 
-from camera import WHITE, Camera, luminance
+from camera import PORT, WHITE, Camera, luminance
 
 ROOT = Path(__file__).parent
 PREVIEW = ROOT / "web" / "latest.jpg"
@@ -92,7 +92,7 @@ def main():
     ap.add_argument("--exposure", type=float, default=0.05, help="starting exposure, seconds")
     ap.add_argument("--gain", type=int, default=300)
     ap.add_argument("--quiet", action="store_true", help="no speech from the laptop")
-    ap.add_argument("--port", type=int, default=7624)
+    ap.add_argument("--port", type=int, default=PORT)
     args = ap.parse_args()
 
     cam = Camera(args.port, args.gain)

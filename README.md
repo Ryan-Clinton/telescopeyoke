@@ -1,22 +1,87 @@
-# telescopeyoke
+# telescopeyoke 🔭
 
-Scripts for driving a small telescope from a Linux laptop left outside with
-it: planning the night, moving the mount, taking and checking camera frames,
-and watching it all from indoors on a web page.
+**Turn an ordinary SynScan telescope into a locally controlled smart telescope.**
 
-Built for, and only tested with:
+[![tests](https://github.com/Ryan-Clinton/telescopeyoke/actions/workflows/tests.yml/badge.svg)](https://github.com/Ryan-Clinton/telescopeyoke/actions/workflows/tests.yml)
 
-- Sky-Watcher Explorer 150P (150 mm f/5 Newtonian) on an EQ3 Pro SynScan mount
-- SynScan handset, firmware 3.35, connected by its serial lead through an FTDI
-  USB adapter
-- Altair Hypercam 183C camera on USB 2
-- a USB webcam pointed at the telescope
-- Ubuntu 26.04, Python 3.14
+![The web page: tonight's verdict, the latest frame through the telescope, and ranked targets](docs/dashboard.jpg)
 
-This is a first-night project. Some parts are well exercised, others have
-never seen a star; see "State of things" below.
+telescopeyoke is a lightweight telescope automation system for Linux. It runs
+on a laptop left beside a modest SynScan telescope and camera, and you watch
+from indoors. It plans the night, checks the weather and moonlight, ranks
+targets for your own sky, slews the mount, plate-solves where the telescope is
+really pointing, re-centres the target, helps you focus, and stacks short
+exposures into a picture.
 
-## Scripts
+It is built for the inexpensive gear many amateur astronomers already own,
+and for the things that gear gets wrong: a handset with the wrong time, a home
+position set by eye, a rough polar alignment.
+
+## What it does
+
+- 🌙 **Plans tonight's observing**: darkness, Moon, and a GO / MARGINAL / NO-GO verdict
+- ☁️ **Checks cloud, rain, wind, dew and seeing**, plus a live satellite cloud picture
+- 🎯 **Ranks targets for your actual sky**: altitude, moonlight, light pollution, blocked horizons
+- 🔭 **Controls SynScan mounts** through the handset, with the handset's clock errors corrected
+- 🧭 **Plate-solves and centres GoTos automatically** (`goto M27 --solve`)
+- 🔊 **Speaks focus feedback**: "better, 66" … "worse, 80" while you turn the focuser
+- 📷 **Captures and stacks images**, re-centring as the sky drifts
+- 🏠 **Shows it all on a web page** you can watch from indoors
+- 🛑 **Keeps the mount inside physical limits**, with a motion lock and a webcam watching every slew
+
+## See it working
+
+The page above is what `./serve.py` shows. This is a picture it took on its
+first night out: the Dumbbell Nebula (M27), 48 two-second exposures through a
+150 mm Newtonian on an EQ3 mount that was polar aligned by eye.
+
+![The Dumbbell Nebula, stacked by shoot.py](docs/m27-result.jpg)
+
+## Quick start
+
+**Try it with no telescope and no setup:**
+
+```bash
+git clone https://github.com/Ryan-Clinton/telescopeyoke
+cd telescopeyoke
+./install.sh --planner        # Python libraries only (Ubuntu/Debian)
+./tonight.py --demo           # tonight's report with made-up weather
+./serve.py --demo             # the web page, on http://localhost:8080
+./mount.py --demo goto M27    # drive a simulated mount
+```
+
+**Use the planner for real** (still no telescope needed): put your location
+in `config.toml`, then `./tonight.py`.
+
+**Run a telescope:** `./install.sh`, then follow [Setup](#setup).
+
+## Three parts, usable separately
+
+| Part | Commands | Needs |
+|---|---|---|
+| **Planner** | `tonight.py`, `serve.py`, `clouds.py` | Any computer with Python. No telescope. |
+| **Control** | `mount.py`, `polaralign.py`, `watch.py` | A SynScan mount and its serial lead. |
+| **Imaging** | `snap.py`, `focus.py`, `solve.py`, `shoot.py`, `skywatch.py` | An INDI camera and ASTAP. |
+
+Start with the planner; add hardware when you have it.
+
+## Hardware
+
+| | Status |
+|---|---|
+| Sky-Watcher EQ3 Pro SynScan, handset firmware 3.35, FTDI serial lead | **Tested** |
+| Sky-Watcher Explorer 150P (150 mm f/5 Newtonian) | **Tested** |
+| Altair Hypercam 183C on USB 2 | **Tested** |
+| Ubuntu 26.04, Python 3.14 | **Tested** |
+| Other SynScan mounts (EQ5, HEQ5, EQ6) with a handset | Likely: same serial protocol. Untested. |
+| Other INDI cameras | Likely for mono or RGGB colour sensors: set the driver and sensor size in `config.toml`. Untested. |
+| Other telescopes | Set the focal length in `config.toml`. |
+| Mounts driven without a handset (EQDIR), ASCOM, Alpaca | Not supported. |
+
+Currently tested on one setup only. Other SynScan mounts and INDI cameras are
+the next target; if you try one, please open an issue saying what happened.
+
+## Commands
 
 | Script | What it does |
 |---|---|
@@ -33,24 +98,43 @@ never seen a star; see "State of things" below.
 | `watch.py` | Photographs the telescope itself with the webcam. |
 | `build_catalogue.py` | Regenerates `data/targets.csv` from OpenNGC. |
 
-Supporting modules: `sky.py` (astronomy), `feeds.py` (weather, seeing, light
-pollution, comets), `camera.py` and `indi.py` (the camera), `config.py`.
+`tonight.py`, `serve.py` and `mount.py` accept `--demo`.
+
+## How it works
+
+```
+plan the night → GoTo → photograph → plate-solve (ASTAP) → correct → photograph … → stack
+```
+
+- **`sky.py`** does the astronomy locally with astropy: positions, darkness,
+  moonlight (Krisciunas & Schaefer's model), and a score for each target.
+- **`feeds.py`** fetches weather, seeing, light pollution and comets, and
+  caches them so the report still works when the Wi-Fi drops.
+- **`mount.py`** speaks the SynScan handset's serial protocol. It measures how
+  wrong the handset's clock is and corrects every GoTo for it, steers by the
+  raw axis angles where the handset's own GoTo is unreliable, and stores the
+  pointing error found by plate solving.
+- **`indi.py`** is a small INDI client written for this project: about 150
+  lines that read and set properties and receive image BLOBs over the XML
+  protocol, with no dependencies. The stock INDI command-line tools cannot
+  address a device whose name contains a dot, which this camera's does.
+- **`camera.py`** wraps that into "give me a frame", and recovers when the
+  driver stalls.
+- **`simulator.py`** is a pretend handset and mount behind `--demo` and the
+  tests.
 
 ## Setup
 
-1. Copy `config.example.toml` to `config.toml` and enter your location.
-2. Install the packaged software:
-
-       sudo apt install indi-bin astap-cli ffmpeg python3-astropy python3-scipy \
-            python3-serial python3-pil python3-requests
-       sudo usermod -aG dialout $USER      # then log out and back in
-
-3. Install the ASTAP D20 star database (about 400 MB) from
+1. `./install.sh` installs the packaged software and creates `config.toml`
+   from the example. Put in your location, and your camera's INDI driver and
+   sensor details if they differ.
+2. Install the ASTAP D20 star database (about 400 MB) from
    <https://sourceforge.net/projects/astap-program/files/star_databases/>;
    it installs into `/opt/astap`.
-4. Build the Altair camera driver. Ubuntu does not package it. From the
+3. If your camera's INDI driver is not packaged, build it. For the Altair
+   driver on Ubuntu 26.04, from the
    [indi-3rdparty](https://github.com/indilib/indi-3rdparty) repository at
-   the tag matching the installed INDI (`v1.9.9` on Ubuntu 26.04):
+   the tag matching the installed INDI (`v1.9.9`):
 
        sudo apt install cmake libindi-dev libcfitsio-dev libnova-dev libusb-1.0-0-dev zlib1g-dev
        cd libaltaircam && cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_POLICY_VERSION_MINIMUM=3.5 . \
@@ -58,6 +142,30 @@ pollution, comets), `camera.py` and `indi.py` (the camera), `config.py`.
        cd ../indi-toupbase     # first trim CMakeLists.txt to the indi_altair_ccd target only
        cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_POLICY_VERSION_MINIMUM=3.5 . \
            && make && sudo make install
+
+4. INDI server: by default the scripts connect to one you have started
+   (`indiserver indi_altair_ccd`). If nothing else uses INDI on the machine,
+   set `manage_server = true` under `[indi]` in `config.toml` and they will
+   start and restart it themselves. Leave it off if a guider, focuser or
+   filter wheel shares the server, because a restart cuts them all off.
+
+The Python dependencies are listed in `pyproject.toml`.
+
+## A night's routine
+
+1. Set the mount in the home position, power on, and take the handset to its
+   main menu.
+2. `./mount.py zenith` to measure the handset's clock and check the mount
+   moves correctly.
+3. Focus: `./focus.py --scene` on something distant in daylight, then
+   `./focus.py` on stars. Aim for a star size under 10.
+4. `./mount.py sync` on any patch of stars, so later GoTos allow for the home
+   position having been set by eye.
+5. `./mount.py goto M27 --solve`, then `./shoot.py M27 --frames 48 --recentre 8`.
+
+Commands that move the mount need serial access; until you have logged out
+and back in after joining the `dialout` group, prefix them with
+`sudo -u $USER -g dialout`.
 
 ## Safety
 
@@ -77,24 +185,11 @@ The laptop cannot see what the telescope is about to hit.
 - Creating a file called `MOTION_LOCKED` in this folder blocks all movement.
 - `mount.py` will not go below 20° altitude or more than 5.75 hours from the
   meridian.
+- **The web page is read-only on purpose.** It is served to the whole home
+  network with no login, which is fine for pictures and reports. Nothing that
+  moves the mount will be added to it without authentication designed first.
 
-## A night's routine
-
-1. Set the mount in the home position, power on, and take the handset to its
-   main menu.
-2. `./mount.py zenith` to measure the handset's clock and check the mount
-   moves correctly.
-3. Focus: `./focus.py --scene` on something distant in daylight, then
-   `./focus.py` on stars. Aim for a star size under 10.
-4. `./mount.py sync` on any patch of stars, so later GoTos allow for the home
-   position having been set by eye.
-5. `./mount.py goto M27 --solve`, then `./shoot.py M27 --frames 48 --recentre 8`.
-
-Commands that move the mount need serial access; until you have logged out
-and back in after joining the `dialout` group, prefix them with
-`sudo -u $USER -g dialout`.
-
-## State of things
+## Current status
 
 Working on real hardware and real stars: the night report and web page,
 mount moves through the handset, camera frames, focusing, plate solving,
@@ -105,7 +200,13 @@ Working but only lightly tested: `mount.py drift` (cancels declination drift
 by creeping the Dec motor; the gears' slack makes it slow to settle).
 
 Written but never run on the real mount: `polaralign.py` (its geometry is
-checked against a simulated misaligned mount).
+checked by the tests against a simulated misaligned mount).
+
+Covered by automated tests (`pytest`, run on every push): the astronomy, the
+mount logic against the simulated handset, frame alignment and hot-pixel
+removal, the focus measurement, the polar alignment geometry, the INDI
+message handling, and the demo report end to end. The tests cannot cover the
+real mount, camera or sky.
 
 Known limits:
 
@@ -119,6 +220,34 @@ Known limits:
   the axis readout instead.
 - The target ranking in `tonight.py` uses weights chosen by judgement.
 
+## Roadmap
+
+Near term:
+
+- Recordings for this page: a GoTo-and-centre run and a focusing session.
+- A hardware compatibility table that grows from other people's reports.
+- More of the camera's quirks moved into `config.toml` as other cameras are tried.
+- Faster frames: a newer camera driver, or USB 3.
+
+Later, if people ask for them:
+
+- Raspberry Pi or other small computer strapped to the telescope.
+- Controls on the web page, behind a login.
+- Guiding and focuser support.
+
+Not planned: ASCOM, mobile apps, Docker images, plugin systems, a large
+sequencing engine. Bigger projects (NINA, KStars/Ekos) do those well; this
+one stays small and aimed at ordinary SynScan gear.
+
+## Contributing
+
+Reports from other hardware are the most useful contribution: what mount,
+handset firmware and camera you tried, and what happened. Open an issue.
+
+For code, run `pytest` before sending a pull request. The tests need no
+hardware. Anything that changes how the mount moves should come with a test
+against `simulator.py`.
+
 ## Data sources
 
 Weather: [Open-Meteo](https://open-meteo.com). Seeing: [7Timer](https://www.7timer.info).
@@ -126,5 +255,8 @@ Light pollution: [D. Lorenz's atlas](https://djlorenz.github.io/astronomy/lp/).
 Comets: [COBS](https://cobs.si) and [JPL Horizons](https://ssd.jpl.nasa.gov/horizons/).
 Cloud imagery: [EUMETSAT](https://view.eumetsat.int).
 
-`data/targets.csv` is derived from [OpenNGC](https://github.com/mattiaverga/OpenNGC)
-and is licensed CC-BY-SA-4.0.
+## Licence
+
+MIT; see `LICENSE`. `data/targets.csv` is derived from
+[OpenNGC](https://github.com/mattiaverga/OpenNGC) and is licensed
+CC-BY-SA-4.0.

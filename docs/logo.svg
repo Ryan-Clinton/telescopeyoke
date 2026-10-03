@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="telescopeyoke logo">
+  <!-- a telescope tube held in a yoke, with an arc for each axis -->
+  <rect width="120" height="120" rx="20" fill="#0b0d12"/>
+  <path d="M26 96 V58 a34 34 0 0 1 68 0 V96" fill="none" stroke="#8a93a6" stroke-width="7" stroke-linecap="round"/>
+  <g transform="rotate(-35 60 58)">
+    <rect x="30" y="47" width="60" height="22" rx="4" fill="#d7dce6"/>
+    <rect x="84" y="44" width="10" height="28" rx="3" fill="#4cc38a"/>
+  </g>
+  <circle cx="26" cy="58" r="5" fill="#e0b341"/>
+  <circle cx="94" cy="58" r="5" fill="#e0b341"/>
+  <path d="M40 104 a28 10 0 0 0 40 0" fill="none" stroke="#e0b341" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="98" cy="20" r="2.5" fill="#d7dce6"/>
+  <circle cx="84" cy="12" r="1.5" fill="#d7dce6"/>
+</svg>

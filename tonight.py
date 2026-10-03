@@ -6,6 +6,7 @@
     ./tonight.py --json          machine-readable, for driving the mount
     ./tonight.py --html web/index.html
     ./tonight.py --offline       skip weather, seeing and comets
+    ./tonight.py --demo          try it with made-up weather at an example site
 """
 import argparse
 import html
@@ -26,16 +27,16 @@ ROOT = Path(__file__).parent
 
 # --- gathering ---------------------------------------------------------------
 
-def weather_report(night, lat, lon):
+def weather_report(night, lat, lon, source=feeds):
     """Hourly conditions through the night plus a go/no-go verdict."""
-    w = feeds.weather(lat, lon)
+    w = source.weather(lat, lon)
     if not w:
         return None
     t = np.array(w["time"], dtype=float)
     keep = (night.at(t, night.sun_alt) < sky.BODY_SUN_LIMIT) \
         & (t >= night.unix[0]) & (t <= night.unix[-1]) \
         & (t >= datetime.now(timezone.utc).timestamp() - 3600)
-    blocks = feeds.seeing(lat, lon) or []
+    blocks = source.seeing(lat, lon) or []
     hours = []
     for i in np.flatnonzero(keep):
         near = min(blocks, key=lambda b: abs(b["time"] - t[i]), default=None)
@@ -94,11 +95,11 @@ def weather_report(night, lat, lon):
     }
 
 
-def comet_results(night, lat, lon, elevation):
+def comet_results(night, lat, lon, elevation, source=feeds):
     start = datetime.fromtimestamp(night.unix[0], timezone.utc)
     stop = datetime.fromtimestamp(night.unix[-1], timezone.utc)
     out = []
-    for c in feeds.comets(lat, lon, elevation, start, stop) or []:
+    for c in source.comets(lat, lon, elevation, start, stop) or []:
         track = np.array(c["track"])
         ra = np.degrees(np.unwrap(np.radians(track[:, 1])))
         ra = night.at(night.unix, np.interp(night.unix, track[:, 0], ra)) % 360
@@ -111,7 +112,11 @@ def comet_results(night, lat, lon, elevation):
     return out
 
 
-def build(cfg, date=None, offline=False):
+def build(cfg, date=None, offline=False, demo=False):
+    # In demo mode the weather and sky brightness come from demo.py.
+    source = feeds
+    if demo:
+        import demo as source
     site = cfg["site"]
     lat, lon = site["latitude"], site["longitude"]
     night = sky.Night(cfg, date)
@@ -121,7 +126,7 @@ def build(cfg, date=None, offline=False):
         pollution = {"sqm": site["sqm"], "bortle": feeds.bortle(site["sqm"]),
                      "source": "config.toml"}
     elif not offline:
-        pollution = feeds.light_pollution(lat, lon)
+        pollution = source.light_pollution(lat, lon)
     if pollution:
         night.sqm = pollution["sqm"]
 
@@ -141,7 +146,7 @@ def build(cfg, date=None, offline=False):
         if r:
             results.append(r)
     if not offline:
-        results += comet_results(night, lat, lon, site.get("elevation_m", 0))
+        results += comet_results(night, lat, lon, site.get("elevation_m", 0), source)
     results.sort(key=lambda r: -r["score"])
 
     mid = len(night.unix) // 2
@@ -163,7 +168,7 @@ def build(cfg, date=None, offline=False):
             "up_in_darkness": bool((night.dark & (night.moon_alt > 0)).any()),
         },
         "light_pollution": pollution,
-        "weather": None if offline else weather_report(night, lat, lon),
+        "weather": None if offline else weather_report(night, lat, lon, source),
         "targets": results,
     }
 
@@ -379,11 +384,14 @@ def main():
     ap.add_argument("--top", type=int, default=25, help="targets to list")
     ap.add_argument("--kind", help="only this type, e.g. galaxy, planet, globular")
     ap.add_argument("--offline", action="store_true")
+    ap.add_argument("--demo", action="store_true",
+                    help="made-up weather at the example site; needs no setup")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--html", metavar="FILE", help="also write an HTML page")
     args = ap.parse_args()
 
-    rep = build(config.load(), args.date, args.offline)
+    cfg = config.example() if args.demo else config.load()
+    rep = build(cfg, args.date, args.offline, args.demo)
     if args.kind:
         rep["targets"] = [t for t in rep["targets"] if args.kind == t["kind"]
                           or args.kind in t["kind"].replace("+", " ").split()]
