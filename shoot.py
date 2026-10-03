@@ -55,10 +55,13 @@ ASSIST_EVERY = 15   # accepted frames between trims of the Dec creep
 class Session:
     """One run on one target: the folder, the running stack and the log."""
 
-    def __init__(self, name, exposure, gain, save=True):
+    def __init__(self, name, exposure, gain, save=True, frames=None):
         self.name = name.replace(" ", "")
         self.folder = ROOT / "frames" / self.name / f"{datetime.now():%Y%m%d-%H%M%S}"
         self.folder.mkdir(parents=True, exist_ok=True)
+        # What was asked for, so the web page can say "frame 31 of 200".
+        (self.folder / "session.json").write_text(json.dumps(
+            {"name": self.name, "frames": frames, "exposure": exposure, "gain": gain}))
         self.exposure, self.gain, self.save = exposure, gain, save
         self.calibration = stacking.Calibration(exposure, gain)
         self.reference, self.stack = None, None
@@ -213,7 +216,7 @@ def main():
     else:
         exposure = float(args.exposure)
 
-    session = Session(args.name, exposure, args.gain, save=not args.no_save)
+    session = Session(args.name, exposure, args.gain, save=not args.no_save, frames=args.frames)
     print(f"{session.name}: {args.frames} frames of {exposure:g} s at gain {args.gain}; "
           f"calibration: {session.calibration.describe()}", flush=True)
     index, since_centre, started = 0, 0, time.monotonic()

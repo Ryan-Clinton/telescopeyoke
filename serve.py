@@ -13,9 +13,12 @@ import time
 import traceback
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
+import json
+
 import clouds
 import config
 import demo
+import stacking
 import tonight
 
 WEB = tonight.ROOT / "web"
@@ -40,6 +43,23 @@ def rebuild_forever(minutes, top, demo_mode):
         time.sleep(minutes * 60)
 
 
+def status_forever(seconds=2):
+    """Keep web/status.json describing the newest imaging run, so the page can
+    show how far it has got without being rebuilt."""
+    target = WEB / "status.json"
+    while True:
+        try:
+            sessions = sorted((tonight.ROOT / "frames").glob("*/*/frames.json"),
+                              key=lambda p: p.stat().st_mtime)
+            status = stacking.run_status(sessions[-1].parent) if sessions else {}
+            partial = target.with_suffix(".part")
+            partial.write_text(json.dumps(status))
+            partial.replace(target)
+        except Exception:
+            traceback.print_exc()
+        time.sleep(seconds)
+
+
 def lan_address():
     with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
         try:
@@ -61,6 +81,8 @@ def main():
     WEB.mkdir(exist_ok=True)
     threading.Thread(target=rebuild_forever, args=(args.every, args.top, args.demo),
                      daemon=True).start()
+    if not args.demo:
+        threading.Thread(target=status_forever, daemon=True).start()
     # The page is read-only, so it is served to the whole home network without
     # a login. Anything that could move the mount must not be added here
     # without authentication designed in first.

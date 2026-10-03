@@ -384,6 +384,39 @@ def read_log(session):
     return json.loads(path.read_text()) if path.exists() else []
 
 
+def run_status(session, now=None):
+    """Where an imaging run has got to, for the web page: frames taken, kept
+    and dropped, why the dropped ones were dropped, and the newest frame."""
+    import time
+    session = Path(session)
+    log = read_log(session)
+    plan = {}
+    if (session / "session.json").exists():
+        plan = json.loads((session / "session.json").read_text())
+    rejected = [f for f in log if not f["accepted"]]
+    reasons = {}
+    for f in rejected:
+        # "star brightness down 61% (cloud)" and "... 54% (cloud)" are one reason.
+        reason = re.sub(r" \d+%", "", f["reason"])
+        reasons[reason] = reasons.get(reason, 0) + 1
+    status = {
+        "name": plan.get("name", session.parent.name),
+        "planned": plan.get("frames"), "exposure": plan.get("exposure"),
+        "captured": len(log), "accepted": len(log) - len(rejected), "rejected": len(rejected),
+        "reasons": dict(sorted(reasons.items(), key=lambda item: -item[1])),
+        "finished": (session / "final.fits").exists() or (session / "live.fits").exists(),
+        "restacked": (session / "final.fits").exists(),
+    }
+    if log:
+        last = log[-1]
+        status["last"] = ("accepted" if last["accepted"] else "rejected: " + last["reason"])
+        if last.get("fwhm"):
+            status["last"] += f", FWHM {last['fwhm']:.1f}, {last['stars']} stars"
+    newest = max((p.stat().st_mtime for p in session.glob("*.json")), default=0)
+    status["age"] = round((now or time.time()) - newest)
+    return status
+
+
 # --- choosing the exposure -----------------------------------------------------
 
 def choose_exposure(trials, keep_round=0.85, allow_bloat=1.25):

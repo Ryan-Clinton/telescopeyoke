@@ -307,7 +307,10 @@ PAGE = """<!doctype html>
 <div class="dim">Night of {date} &middot; updated {generated} &middot; refreshes every 5 minutes</div>
 {verdict}
 <dl>{summary}</dl>
-{scope}
+<div id="run" hidden>
+  <h2>Imaging run</h2>
+  <dl id="run-details"></dl>
+</div>
 {camera}
 <h2>Top targets</h2>
 <div class="scroll">{targets}</div>
@@ -316,6 +319,7 @@ including moonlight; higher is darker.</p>
 {clouds}
 <h2>Hour by hour</h2>
 <div class="scroll">{weather}</div>
+{scope}
 <p class="dim">Weather: Open-Meteo. Seeing: 7Timer. Light pollution: D. Lorenz atlas.
 Comets: COBS and JPL Horizons. Catalogue: OpenNGC (CC-BY-SA-4.0).</p>
 </main>
@@ -326,6 +330,46 @@ Comets: COBS and JPL Horizons. Catalogue: OpenNGC (CC-BY-SA-4.0).</p>
       img.src = img.dataset.live + "?t=" + Date.now();
     }}
   }}, 1000);
+
+  // How far the current imaging run has got, from status.json.
+  function ago(seconds) {{
+    if (seconds < 90) return seconds + " s ago";
+    if (seconds < 5400) return Math.round(seconds / 60) + " min ago";
+    return Math.round(seconds / 3600) + " h ago";
+  }}
+  async function showRun() {{
+    let run;
+    try {{
+      run = await (await fetch("status.json?t=" + Date.now())).json();
+    }} catch (error) {{
+      return;
+    }}
+    if (!run.name || !run.captured) return;
+    const rows = [];
+    const add = (label, value) => rows.push([label, value]);
+    const state = run.restacked ? "finished; final picture made"
+      : run.finished ? "finished; making the final picture"
+      : run.age > 180 ? "stopped or re-centring (no frame for " + ago(run.age).replace(" ago", "") + ")"
+      : "running";
+    add("Target", run.name + " \u2014 " + state);
+    add("Frames", run.captured + (run.planned ? " of " + run.planned : "") +
+        (run.exposure ? " (" + run.exposure + " s each)" : ""));
+    add("Kept", run.accepted + " (" + Math.round(100 * run.accepted / run.captured) + "%)" +
+        (run.exposure ? ", " + Math.round(run.accepted * run.exposure) + " s of exposure" : ""));
+    const reasons = Object.entries(run.reasons || {{}}).map(([why, n]) => n + " " + why).join("; ");
+    add("Dropped", run.rejected + (reasons ? ": " + reasons : ""));
+    if (run.last) add("Newest frame", run.last + " (" + ago(run.age) + ")");
+    const list = document.getElementById("run-details");
+    list.replaceChildren(...rows.flatMap(([label, value]) => {{
+      const dt = document.createElement("dt"), dd = document.createElement("dd");
+      dt.textContent = label;
+      dd.textContent = value;
+      return [dt, dd];
+    }}));
+    document.getElementById("run").hidden = false;
+  }}
+  showRun();
+  setInterval(showRun, 2000);
 </script>
 </body></html>
 """
@@ -358,7 +402,7 @@ def render_html(rep, top, out_dir):
                   '<img src="clouds.jpg" alt="Infrared satellite image of cloud over the site">')
     scope = ""
     if (out_dir / "scope.jpg").exists():
-        scope = ('<h2>The telescope (laptop camera, updates during slews)</h2>'
+        scope = ('<h2>The telescope (webcam, updates during slews)</h2>'
                  '<img src="scope.jpg" data-live="scope.jpg" alt="View of the telescope">')
     return PAGE.format(
         site=html.escape(rep["site"]), date=f"{rep['date']:%A %d %B %Y}",

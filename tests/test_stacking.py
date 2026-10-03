@@ -329,3 +329,13 @@ def test_the_quality_pass_rebuilds_the_picture_from_the_raw_frames(session):
     assert "light-0007.fits" not in summary["kept"]
     assert 6 <= len(summary["kept"]) <= 9
     assert not (run.folder / "registered").exists()   # working files tidied away
+
+
+def test_the_web_page_can_be_told_how_far_a_run_has_got(session):
+    run, _ = session
+    status = stacking.run_status(run.folder)
+    assert status["name"] == "Test" and status["exposure"] == 2.0
+    assert (status["captured"], status["accepted"], status["rejected"]) == (10, 9, 1)
+    assert status["reasons"] == {"star brightness down (cloud)": 1}
+    assert status["last"].startswith("accepted, FWHM")
+    assert status["finished"]
