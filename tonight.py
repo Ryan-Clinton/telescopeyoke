@@ -302,6 +302,12 @@ PAGE = """<!doctype html>
   th {{ color: var(--dim); font-weight: 600; font-size: 13px; }}
   tr:last-child td {{ border-bottom: 0; }}
   img {{ max-width: 100%; border-radius: 8px; border: 1px solid var(--line); }}
+  .gallery {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }}
+  .gallery a {{ color: var(--text); text-decoration: none; font-size: 13px; }}
+  .gallery a:hover {{ text-decoration: underline; }}
+  .gallery img {{ width: 100%; aspect-ratio: 3 / 2; object-fit: cover; display: block;
+                  margin-bottom: 4px; }}
+  .gallery span {{ color: var(--dim); display: block; }}
 </style></head><body><main>
 <h1>{site}</h1>
 <div class="dim">Night of {date} &middot; updated {generated} &middot; refreshes every 5 minutes</div>
@@ -312,6 +318,10 @@ PAGE = """<!doctype html>
   <dl id="run-details"></dl>
 </div>
 {camera}
+<div id="pictures" hidden>
+  <h2>Pictures</h2>
+  <div class="gallery" id="gallery"></div>
+</div>
 <h2>Top targets</h2>
 <div class="scroll">{targets}</div>
 <p class="dim">Sky is the background brightness at each target's best time,
@@ -344,6 +354,7 @@ Comets: COBS and JPL Horizons. Catalogue: OpenNGC (CC-BY-SA-4.0).</p>
     }} catch (error) {{
       return;
     }}
+    showPictures(run.pictures || []);
     if (!run.name || !run.captured) return;
     const rows = [];
     const add = (label, value) => rows.push([label, value]);
@@ -367,6 +378,29 @@ Comets: COBS and JPL Horizons. Catalogue: OpenNGC (CC-BY-SA-4.0).</p>
       return [dt, dd];
     }}));
     document.getElementById("run").hidden = false;
+  }}
+
+  // Links to the finished pictures, newest first.
+  let shownPictures = "";
+  function showPictures(pictures) {{
+    const key = JSON.stringify(pictures.map(p => [p.file, Math.round(p.time)]));
+    if (!pictures.length || key === shownPictures) return;
+    shownPictures = key;
+    document.getElementById("gallery").replaceChildren(...pictures.map(p => {{
+      const link = document.createElement("a");
+      link.href = p.file;
+      link.target = "_blank";
+      const thumb = document.createElement("img");
+      thumb.src = p.file + "?t=" + Math.round(p.time);
+      thumb.loading = "lazy";
+      thumb.alt = (p.target + " " + p.kind).trim();
+      const when = new Date(p.time * 1000).toLocaleTimeString([], {{hour: "2-digit", minute: "2-digit"}});
+      const label = document.createElement("span");
+      label.textContent = p.kind + " \u00b7 " + when;
+      link.append(thumb, (p.target || "Comparison"), label);
+      return link;
+    }}));
+    document.getElementById("pictures").hidden = false;
   }}
   showRun();
   setInterval(showRun, 2000);

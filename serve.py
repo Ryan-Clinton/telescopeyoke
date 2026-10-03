@@ -43,6 +43,31 @@ def rebuild_forever(minutes, top, demo_mode):
         time.sleep(minutes * 60)
 
 
+# Pictures in web/ that are part of the page's furniture, not results.
+NOT_RESULTS = {"latest.jpg", "scope.jpg", "clouds.jpg"}
+KINDS = (("-final", "final (quality pass)"), ("-processed-closeup", "processed close-up"),
+         ("-processed", "processed"), ("-closeup", "close-up"), ("compare", "comparison"))
+
+
+def pictures():
+    """Finished pictures in web/, newest first, described for the page."""
+    found = []
+    for path in WEB.glob("*.jpg"):
+        if path.name in NOT_RESULTS or path.name.endswith(".part.jpg"):
+            continue
+        stem = path.stem
+        kind = next((label for ending, label in KINDS if stem.endswith(ending) or stem == ending),
+                    "live stack")
+        target = stem
+        for ending, _ in KINDS:
+            if stem.endswith(ending):
+                target = stem[:-len(ending)]
+                break
+        found.append({"file": path.name, "target": target.upper() if target != "compare" else "",
+                      "kind": kind, "time": path.stat().st_mtime})
+    return sorted(found, key=lambda p: -p["time"])
+
+
 def status_forever(seconds=2):
     """Keep web/status.json describing the newest imaging run, so the page can
     show how far it has got without being rebuilt."""
@@ -52,6 +77,7 @@ def status_forever(seconds=2):
             sessions = sorted((tonight.ROOT / "frames").glob("*/*/frames.json"),
                               key=lambda p: p.stat().st_mtime)
             status = stacking.run_status(sessions[-1].parent) if sessions else {}
+            status["pictures"] = pictures()
             partial = target.with_suffix(".part")
             partial.write_text(json.dumps(status))
             partial.replace(target)
