@@ -15,7 +15,13 @@ A bias is the camera's zero level, used when there is no matching dark.
 A flat is a picture of an evenly lit surface. It records the darkening
 towards the corners and the dust shadows, so dividing by it removes them.
 Point at the twilight sky with a white T-shirt stretched over the tube, or at
-an evenly lit wall. Flats stay valid until the camera is turned or removed.
+an evenly lit wall. A flat stays valid until the camera is turned or removed,
+so each is filed under the 'setup' name in config.toml; change that name when
+the arrangement changes and take a new flat.
+
+A bias taken at the same gain as the dark also lets the dark adapt to the
+sensor's temperature, which this camera cannot report: the dark is scaled to
+match each frame's own hot pixels.
 
 Masters are saved in calibration/ and picked up automatically by shoot.py
 and restack.py.
@@ -38,12 +44,19 @@ def capture(cam, exposure, count, label):
     return frames
 
 
-def median_stack(frames):
-    """Per-pixel median, a strip at a time so memory stays modest."""
+def master(frames, clip=3.0):
+    """Per-pixel average with outliers left out, a strip at a time so memory
+    stays modest. Values more than `clip` robust standard deviations from the
+    pixel's median (a cosmic ray, a passing light) are ignored; averaging the
+    rest is less grainy than taking the median alone."""
     rows = frames[0].shape[0]
     out = np.empty(frames[0].shape, np.float32)
     for start in range(0, rows, 256):
-        out[start:start + 256] = np.median([f[start:start + 256] for f in frames], axis=0)
+        strip = np.array([f[start:start + 256] for f in frames], dtype=np.float32)
+        middle = np.median(strip, axis=0)
+        spread = 1.4826 * np.median(np.abs(strip - middle), axis=0)
+        keep = np.abs(strip - middle) <= clip * spread + 1.0
+        out[start:start + 256] = (strip * keep).sum(axis=0) / np.maximum(keep.sum(axis=0), 1)
     return out
 
 
@@ -93,15 +106,15 @@ def main():
             frames = capture(cam, args.exposure, args.frames, "dark")
             if np.median(frames[0][::8, ::8]) > 0.2 * WHITE:
                 raise SystemExit("Those frames are bright. Darks need the cap on.")
-            save(stacking.master_path("dark", args.exposure, args.gain), median_stack(frames),
+            save(stacking.master_path("dark", args.exposure, args.gain), master(frames),
                  EXPTIME=args.exposure, GAIN=args.gain, NFRAMES=args.frames)
         elif args.kind == "bias":
             frames = capture(cam, 0.001, args.frames, "bias")
-            save(stacking.master_path("bias", gain=args.gain), median_stack(frames),
+            save(stacking.master_path("bias", gain=args.gain), master(frames),
                  GAIN=args.gain, NFRAMES=args.frames)
         else:
             seconds = flat_exposure(cam)
-            flat = median_stack(capture(cam, seconds, args.frames, "flat"))
+            flat = master(capture(cam, seconds, args.frames, "flat"))
             bias_path = stacking.master_path("bias", gain=args.gain)
             if bias_path.exists():
                 flat -= fits.getdata(bias_path)
@@ -109,7 +122,10 @@ def main():
                 print("No bias for this gain; the flat will be slightly weak. "
                       f"Run: ./calibrate.py bias --gain {args.gain}")
             save(stacking.master_path("flat"), normalise_flat(flat),
-                 EXPTIME=seconds, GAIN=args.gain, NFRAMES=args.frames)
+                 EXPTIME=seconds, GAIN=args.gain, NFRAMES=args.frames, SETUP=stacking.setup_name())
+            print(f"This flat is filed under the camera setup \"{stacking.setup_name()}\". If "
+                  "you rotate or remove the camera, change 'setup' under [camera] in "
+                  "config.toml and take a new one.")
 
 
 if __name__ == "__main__":

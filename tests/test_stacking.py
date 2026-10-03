@@ -95,8 +95,8 @@ def test_shift_and_rotation_are_recovered_from_the_stars():
     reference = reference_for(render(xy, flux))
     lum = render(moved(xy, 5.3, -8.6, degrees=0.4), flux, seed=3)
     rough = stacking.offset(reference["square"], stacking.centre_square(lum))
-    r, t, matched = stacking.align(stacking.find_stars(lum), reference["stars"], rough)
-    assert matched >= 40
+    r, t, matched, residual = stacking.align(stacking.find_stars(lum), reference["stars"], rough)
+    assert matched >= 40 and residual < 0.2
     assert np.degrees(np.arctan2(r[1, 0], r[0, 0])) == pytest.approx(-0.4, abs=0.03)
 
 
@@ -114,8 +114,9 @@ def test_registered_stars_land_on_the_reference_stars():
 
 def test_too_few_stars_falls_back_to_the_rough_shift():
     stars = np.array([[10.0, 10.0, 1, 3, 1]], np.float32)
-    r, t, matched = stacking.align(stars, stars, (2.5, -4.0))
-    assert matched == 0 and np.allclose(r, np.eye(2)) and np.allclose(t, [-4.0, 2.5])
+    r, t, matched, residual = stacking.align(stars, stars, (2.5, -4.0))
+    assert matched == 0 and residual is None
+    assert np.allclose(r, np.eye(2)) and np.allclose(t, [-4.0, 2.5])
 
 
 def test_a_satellite_trail_in_one_frame_is_left_out_of_the_stack():
@@ -156,11 +157,69 @@ def test_frames_spoiled_by_cloud_wind_or_light_are_rejected():
     assert not stacking.judge(good(stars=3), [])[0]
 
 
-def test_sharper_cleaner_frames_weigh_more():
+def test_sharper_rounder_clearer_cleaner_frames_weigh_more():
     best = good(fwhm=3.0)
     assert stacking.weight(best, best) == 1.0
     assert stacking.weight(good(fwhm=4.0), best) == pytest.approx(0.5625)
+    assert stacking.weight(good(fwhm=3.0, flux=4e4), best) == pytest.approx(0.8)      # hazier
+    assert stacking.weight(good(fwhm=3.0, roundness=0.72), best) == pytest.approx(0.8)  # trailed
     assert stacking.weight(good(fwhm=9.0), best) == 0.25   # never ignored entirely
+
+
+def test_a_half_cloudy_session_is_judged_against_its_good_half():
+    clear = [dict(good(), file=f"clear-{i}") for i in range(10)]
+    hazy = [dict(good(flux=2.6e4, stars=80), file=f"hazy-{i}") for i in range(10)]
+    # Against the session's own average, the hazy frames would look normal.
+    assert stacking.judge(hazy[0], clear + hazy)[0]
+    kept = restack.select(clear + hazy, keep=1.0)
+    assert {f["file"] for f in kept} == {f["file"] for f in clear}
+
+
+def test_two_stars_are_never_matched_to_the_same_reference_star():
+    reference = np.array([[100.0, 100.0], [200.0, 100.0], [300.0, 100.0]])
+    crowded = np.array([[100.4, 100.0], [101.2, 100.0], [200.3, 100.0]])   # two near the first
+    mine, theirs = stacking.pair_up(crowded, reference, 4.0)
+    assert list(mine) == [0, 2] and list(theirs) == [0, 1]
+
+
+def test_a_wrongly_matched_star_does_not_bend_the_alignment():
+    xy, flux = field(60)
+    reference = np.column_stack([xy, flux, np.full(60, 4.0), np.ones(60)]).astype(np.float32)
+    frame = reference.copy()
+    frame[:, :2] = moved(xy, 2.0, -1.0, degrees=0.3)
+    frame[0, :2] += [1.5, 1.5]   # one star in the wrong place, still within matching range
+    r, t, matched, residual = stacking.align(frame, reference, (1.0, -2.0))
+    assert matched == 59 and residual < 0.01
+    assert np.degrees(np.arctan2(r[1, 0], r[0, 0])) == pytest.approx(-0.3, abs=0.005)
+
+
+def test_flats_are_filed_by_camera_setup(tmp_path, monkeypatch):
+    monkeypatch.setattr(stacking, "CALIBRATION", tmp_path)
+    assert stacking.master_path("flat").name == "flat-default.fits"
+    monkeypatch.setattr(stacking, "setup_name", lambda: "rotated-90")
+    assert stacking.master_path("flat").name == "flat-rotated-90.fits"
+    calibrate.save(stacking.master_path("flat"), np.full((4, 4), 0.5))
+    assert stacking.Calibration(2, 1500).flat is not None
+    monkeypatch.setattr(stacking, "setup_name", lambda: "refitted")
+    assert stacking.Calibration(2, 1500).flat is None   # the old flat no longer applies
+
+
+def test_the_dark_is_scaled_to_a_warmer_sensor(tmp_path, monkeypatch):
+    monkeypatch.setattr(stacking, "CALIBRATION", tmp_path)
+    rng = np.random.default_rng(4)
+    bias = np.full((400, 400), 100.0, np.float32)
+    current = np.zeros((400, 400), np.float32)
+    hot = rng.choice(160000, 400, replace=False)
+    current.ravel()[hot] = rng.uniform(200, 900, 400)      # hot pixels
+    calibrate.save(stacking.master_path("bias", gain=1500), bias)
+    calibrate.save(stacking.master_path("dark", 2, 1500), bias + current)
+    calibration = stacking.Calibration(2, 1500)
+    # Tonight the sensor is warmer: the hot pixels are 1.6 times as strong.
+    light = (bias + 1.6 * current + 300).astype(np.uint16)
+    cleaned = calibration.apply(light)
+    assert calibration.scale == pytest.approx(1.6, abs=0.02)
+    assert abs(float(cleaned.ravel()[hot].mean()) - 300) < 2    # hot pixels gone
+    assert np.median(cleaned) == pytest.approx(300, abs=1)
 
 
 def test_calibration_is_raw_minus_dark_over_flat(tmp_path, monkeypatch):
@@ -181,9 +240,18 @@ def test_with_no_calibration_frames_the_raw_frame_passes_through(tmp_path, monke
     assert np.allclose(calibration.apply(np.full((4, 4), 300, np.uint16)), 300)
 
 
-def test_master_frames_are_medians_and_flats_average_one_per_colour():
-    frames = [np.full((600, 8), v, np.uint16) for v in (10, 12, 500)]   # one outlier
-    assert np.allclose(calibrate.median_stack(frames), 12)
+def test_master_frames_average_with_outliers_left_out():
+    rng = np.random.default_rng(6)
+    frames = [(1000 + rng.normal(0, 10, (600, 8))).astype(np.float32) for _ in range(20)]
+    frames[7][100, 3] = 4000    # a cosmic ray in one frame
+    result = calibrate.master(frames)
+    assert result[100, 3] == pytest.approx(1000, abs=10)
+    # Averaging the survivors is steadier than a plain median.
+    plain = np.median(frames, axis=0)
+    assert result.std() < plain.std()
+
+
+def test_flats_average_one_per_colour():
     flat = np.ones((4, 4), np.float32)
     flat[0::2, 0::2], flat[1::2, 1::2] = 2000, 500   # red brighter, blue dimmer
     flat[0::2, 1::2] = flat[1::2, 0::2] = 1000

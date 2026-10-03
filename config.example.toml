@@ -33,6 +33,11 @@ bit_depth = 12
 pixel_size_um = 2.4
 width = 5440
 height = 3648
+# A name for how the camera currently sits on the telescope. Flat frames are
+# filed under it, because a flat only suits the arrangement it was taken
+# with: change the name (and take new flats) whenever you rotate the camera,
+# take it off and put it back, or change anything in the light path.
+setup = "default"
 
 [mount]
 # Part of the name of the USB adapter on the handset's serial lead, as it

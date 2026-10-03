@@ -70,7 +70,8 @@ class Session:
             if self.reference is None:
                 self.reference = {"square": stacking.centre_square(lum), "stars": stars}
                 self.stack = stacking.Stack(rgb.shape)
-                registered, info = rgb, {"shift": [0.0, 0.0], "rotation": 0.0, "matched": len(stars)}
+                registered, info = rgb, {"shift": [0.0, 0.0], "rotation": 0.0,
+                                         "matched": len(stars), "residual": 0.0}
             else:
                 registered, info = stacking.register(rgb, lum, stars, self.reference)
             entry.update(info)

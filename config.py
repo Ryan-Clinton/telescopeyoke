@@ -13,7 +13,7 @@ DEFAULTS = {
     "horizon": {"min_altitude": 20, "blocked": []},
     "scope": {"aperture_mm": 150, "focal_length_mm": 750},
     "camera": {"driver": "indi_altair_ccd", "bit_depth": 12, "pixel_size_um": 2.4,
-               "width": 5440, "height": 3648},
+               "width": 5440, "height": 3648, "setup": "default"},
     "mount": {"serial_match": "FTDI"},
     "indi": {"port": 7624, "manage_server": False},
 }

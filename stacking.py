@@ -7,6 +7,7 @@ per 2x2 Bayer cell), about 1.3 arcseconds per pixel on the 150P, which suits
 ordinary seeing better than the sensor's native 0.66.
 """
 import json
+import re
 from pathlib import Path
 
 import numpy as np
@@ -14,6 +15,7 @@ from astropy.io import fits
 from scipy import ndimage
 from scipy.spatial import cKDTree
 
+import config
 from camera import colour
 
 ROOT = Path(__file__).parent
@@ -24,12 +26,19 @@ MIN_MATCHES = 6     # stars needed to trust a star-by-star alignment
 
 # --- calibration ---------------------------------------------------------------
 
+def setup_name():
+    """The current camera arrangement's name from config.toml, safe for a
+    file name."""
+    return re.sub(r"[^A-Za-z0-9_-]+", "-", str(config.hardware()["camera"]["setup"]))
+
+
 def master_path(kind, exposure=None, gain=None):
     if kind == "dark":
         return CALIBRATION / f"dark-{exposure:g}s-g{gain}.fits"
     if kind == "bias":
         return CALIBRATION / f"bias-g{gain}.fits"
-    return CALIBRATION / "flat.fits"
+    # A flat belongs to one arrangement of camera and telescope.
+    return CALIBRATION / f"flat-{setup_name()}.fits"
 
 
 class Calibration:
@@ -42,6 +51,14 @@ class Calibration:
         self.dark = load(master_path("dark", exposure, gain))
         self.bias = load(master_path("bias", gain=gain))
         self.flat = load(master_path("flat"))
+        self.scale = 1.0   # how strongly the dark was applied to the last frame
+        self.hot = None
+        if self.dark is not None and self.bias is not None:
+            # The part of the dark that grows with temperature, and where its
+            # hottest pixels are: they show how warm the sensor is now.
+            self.current = self.dark - self.bias
+            level = np.percentile(self.current[::4, ::4], 99.9)
+            self.hot = np.flatnonzero(self.current > max(level, 1.0))
 
     def describe(self):
         have = [name for name in ("dark", "bias", "flat") if getattr(self, name) is not None]
@@ -49,9 +66,18 @@ class Calibration:
 
     def apply(self, mosaic):
         """(raw - dark) / flat on the raw Bayer mosaic. The dark carries the
-        camera's offset with it; without a dark the bias alone is removed."""
+        camera's offset with it; without a dark the bias alone is removed.
+
+        This camera has no temperature sensor to match darks by. With both a
+        dark and a bias, the dark's hot pixels are compared with the same
+        pixels in the frame, and the dark is scaled to fit: a warmer sensor
+        needs more of it, a cooler one less."""
         frame = mosaic.astype(np.float32)
-        if self.dark is not None:
+        if self.hot is not None and len(self.hot) >= 50:
+            excess = frame.ravel()[self.hot] - np.median(frame[::8, ::8])
+            self.scale = float(np.clip(np.median(excess / self.current.ravel()[self.hot]), 0.3, 3.0))
+            frame -= self.bias + self.scale * self.current
+        elif self.dark is not None:
             frame -= self.dark
         elif self.bias is not None:
             frame -= self.bias
@@ -174,10 +200,22 @@ def judge(q, accepted):
 
 
 def weight(q, best):
-    """How much a frame counts in the final stack: sharper and cleaner frames
-    count for more. `best` is the best frame's quality."""
-    value = ((best["fwhm"] / q["fwhm"]) ** 2) * ((best["noise"] / q["noise"]) ** 2)
-    return float(np.clip(value, 0.25, 1.0))
+    """How much a frame counts in the final stack, against the best frame:
+    sharpness x roundness x transparency x cleanness. No frame that passed
+    the checks counts for less than a quarter."""
+    sharpness = (best["fwhm"] / q["fwhm"]) ** 2
+    shape = min(q["roundness"] / best["roundness"], 1.0)
+    transparency = min(q["flux"] / best["flux"], 1.0) if best.get("flux") else 1.0
+    cleanness = (best["noise"] / q["noise"]) ** 2
+    return float(np.clip(sharpness * shape * transparency * cleanness, 0.25, 1.0))
+
+
+def baseline(frames):
+    """The frames to judge the rest of a session against: the better half.
+    If much of the session was under cloud, the session's own average would
+    be mediocre and let poor frames through."""
+    ranked = sorted(frames, key=lambda f: f["fwhm"] / (max(f["roundness"], 0.1) * max(f["flux"], 1e-6)))
+    return ranked[:max(3, len(ranked) // 2)]
 
 
 # --- registration --------------------------------------------------------------
@@ -211,9 +249,12 @@ def offset(reference, square):
     return (dy - n if dy > n / 2 else dy), (dx - n if dx > n / 2 else dx)
 
 
-def fit_similarity(source, target):
+def fit_rigid(source, target):
     """Rotation matrix R and shift t with target ≈ R·source + t, for matched
-    (x, y) points: the best rigid fit, with no change of scale."""
+    (x, y) points: the best rigid fit, with no change of scale. Scale and
+    lens distortion are left alone on purpose; every frame in a session comes
+    through the same optics. The residual each frame reports would show it if
+    that ever stopped being enough."""
     cs, ct = source.mean(axis=0), target.mean(axis=0)
     u, _, vt = np.linalg.svd((source - cs).T @ (target - ct))
     r = (u @ vt).T
@@ -223,25 +264,44 @@ def fit_similarity(source, target):
     return r, ct - r @ cs
 
 
+def pair_up(moved, reference_xy, tolerance):
+    """Indices (frame star, reference star) of stars that are each other's
+    nearest neighbour and within `tolerance` pixels: one partner each, so two
+    stars can never be matched to the same reference star."""
+    distance, nearest = cKDTree(reference_xy).query(moved)
+    _, back = cKDTree(moved).query(reference_xy)
+    mine = np.arange(len(moved))
+    mutual = (back[nearest] == mine) & (distance < tolerance)
+    return mine[mutual], nearest[mutual]
+
+
 def align(stars, reference_stars, rough):
     """Rotation and shift taking this frame's stars onto the reference's,
-    starting from a rough (dy, dx) shift. Returns (R, t, matches); with too
-    few matched stars the rough shift is returned as it stands."""
+    starting from a rough (dy, dx) shift. Returns (R, t, matches, residual),
+    the residual being the typical distance left between matched stars in
+    pixels. With too few matched stars the rough shift is returned as it
+    stands."""
     r, t = np.eye(2), np.array([rough[1], rough[0]], dtype=float)
     if len(stars) < MIN_MATCHES or len(reference_stars) < MIN_MATCHES:
-        return r, t, 0
-    tree = cKDTree(reference_stars[:, :2])
-    matched = 0
+        return r, t, 0, None
+    xy = stars[:, :2].astype(float)
+    reference_xy = reference_stars[:, :2].astype(float)
+    matched, residual = 0, None
     for tolerance in (4.0, 2.0):
-        moved = stars[:, :2] @ r.T + t
-        distance, nearest = tree.query(moved)
-        good = distance < tolerance
-        if good.sum() < MIN_MATCHES:
+        a, b = pair_up(xy @ r.T + t, reference_xy, tolerance)
+        if len(a) < MIN_MATCHES:
             break
-        r, t = fit_similarity(stars[good, :2].astype(float),
-                              reference_stars[nearest[good], :2].astype(float))
-        matched = int(good.sum())
-    return r, t, matched
+        r, t = fit_rigid(xy[a], reference_xy[b])
+        # Drop pairs the fit leaves far out (a wrong match or a blended
+        # star), and fit again without them.
+        left = np.hypot(*(xy[a] @ r.T + t - reference_xy[b]).T)
+        close = left <= max(2.5 * np.median(left), 0.3)
+        if MIN_MATCHES <= close.sum() < len(a):
+            a, b = a[close], b[close]
+            r, t = fit_rigid(xy[a], reference_xy[b])
+            left = np.hypot(*(xy[a] @ r.T + t - reference_xy[b]).T)
+        matched, residual = len(a), float(np.median(left))
+    return r, t, matched, residual
 
 
 def warp(rgb, r, t):
@@ -263,10 +323,10 @@ def register(rgb, lum, stars, reference):
     """Line a frame up with the reference frame. `reference` is a dict with
     the reference's "square" and "stars". Returns (registered frame, info)."""
     rough = offset(reference["square"], centre_square(lum))
-    r, t, matched = align(stars, reference["stars"], rough)
+    r, t, matched, residual = align(stars, reference["stars"], rough)
     rotation = float(np.degrees(np.arctan2(r[1, 0], r[0, 0])))
     return warp(rgb, r, t), {"shift": [float(t[0]), float(t[1])], "rotation": rotation,
-                             "matched": matched}
+                             "matched": matched, "residual": residual}
 
 
 # --- stacking ------------------------------------------------------------------

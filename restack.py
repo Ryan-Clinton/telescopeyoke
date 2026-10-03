@@ -53,7 +53,12 @@ def select(frames, keep=0.85):
     """Frames worth stacking, best first: the ones that pass the checks
     against the session as a whole, then the best `keep` fraction of those."""
     usable = [f for f in frames if f["stars"] >= 8]
-    passed = [f for f in usable if stacking.judge(f, usable)[0]]
+    if not usable:
+        return []
+    # Judge against the better half of the session, not its average: a
+    # session that was half cloud should not set a cloudy standard.
+    standard = stacking.baseline(usable)
+    passed = [f for f in usable if stacking.judge(f, standard)[0]]
     # Sharp, round, with plenty of stars.
     passed.sort(key=lambda f: f["fwhm"] / max(f["roundness"], 0.1))
     return passed[:max(1, round(len(passed) * keep))]
@@ -92,9 +97,13 @@ def run(session, keep=0.85, say=print):
     weights = {}
     try:
         first = stacking.Stack(rgb.shape, after=10 ** 9)   # no clipping yet
+        residuals = []
         for f in chosen:
             rgb, lum = prepared(f["file"])
-            registered, _ = stacking.register(rgb, lum, stacking.find_stars(lum), reference)
+            registered, info = stacking.register(rgb, lum, stacking.find_stars(lum), reference)
+            f.update(info)
+            if info["residual"] is not None:
+                residuals.append(info["residual"])
             weights[f["file"]] = stacking.weight(f, best)
             np.save(work / (f["file"] + ".npy"), registered.astype(np.float16))
             first.add(registered, weights[f["file"]])
@@ -121,6 +130,11 @@ def run(session, keep=0.85, say=print):
         {"kept": [f["file"] for f in chosen], "frames": frames}, indent=1))
     say(f"{len(frames)} captured, {len(chosen)} stacked, {len(frames) - len(chosen)} left out; "
         f"total exposure {total:.0f} s")
+    if residuals:
+        # If this creeps up towards a pixel, rotation and shift are no longer
+        # enough and the alignment needs to allow for scale or distortion.
+        say(f"alignment: stars matched to {np.median(residuals):.2f} pixel (worst frame "
+            f"{max(residuals):.2f})")
     say(f"saved {session / 'final.fits'}, final.jpg and web/{name}-final.jpg")
     return session / "final.jpg"
 

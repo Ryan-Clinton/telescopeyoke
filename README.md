@@ -115,6 +115,7 @@ report** issue; rows marked "community tested" will be added from those.
 | `restack.py` | The quality pass: goes back over a session's raw frames, keeps the best, weights and clips them, and writes the finished picture. `shoot.py` runs it at the end. |
 | `calibrate.py` | Makes master dark, bias and flat frames, which `shoot.py` and `restack.py` then apply automatically. |
 | `camera_test.py` | `--gain-sweep` tries a range of gains on tonight's sky and suggests one. |
+| `compare.py` | Shows the same patch of sky from several stacks side by side at full size, with star measurements for each. |
 | `process.py` | Turns a finished stack into a cleaner picture: level sky, white stars, smoothed colour noise. |
 | `focus.py` | Focusing aid that speaks "better" or "worse" and the star size. `--scene` for a daytime view. |
 | `solve.py` | Plate-solves a frame: where is the telescope really pointing? |
@@ -175,8 +176,10 @@ It prints a line per frame, such as `032 ACCEPT  FWHM 3.4  round 0.93  stars
 74` or `033 REJECT  star brightness down 41% (cloud)`.
 
 When the run ends, `restack.py` does the same job again with hindsight: it
-measures every saved frame, keeps the best 85% of the good ones, lines them
-up on the sharpest, gives sharper and cleaner frames more weight, clips
+measures every saved frame, judges each against the better half of the
+session (so a half-cloudy night does not set a cloudy standard), keeps the
+best 85% of those that pass, lines them up on the sharpest, weights each by
+sharpness, roundness, transparency and noise, clips
 outliers against the whole session's average, removes the sky gradient, and
 writes `final.fits` and `final.jpg` in the session folder
 (`frames/NAME/<date-time>/`).
@@ -195,6 +198,17 @@ Things worth knowing:
       ./calibrate.py dark --exposure 2 --gain 1500    # cap on; match your exposure and gain
       ./calibrate.py bias --gain 1500                 # cap on
       ./calibrate.py flat                             # cap off, evenly lit: twilight sky through a white T-shirt
+
+  Masters are averaged with outliers left out. A flat is filed under the
+  `setup` name in `config.toml`, because it only suits the arrangement it was
+  taken with: change the name and take a new flat whenever the camera is
+  rotated or refitted. This camera cannot report its temperature, so with a
+  bias and a dark at the same gain the dark is scaled to each frame's own hot
+  pixels instead of being matched by temperature.
+- **Alignment is shift and rotation only**, no scale or lens distortion,
+  which is enough for one session through one set of optics. `restack.py`
+  reports how closely the stars matched; if that ever nears a pixel, it is
+  time for more.
 
 - **Raw frames are large**: about 20 MB each, so a 300-frame session is 6 GB.
   Delete a session's `light-*.fits` once you are happy with `final.fits`, or
@@ -329,7 +343,9 @@ Near term:
 
 Later, for image quality, in this order: colour calibration from catalogue
 stars (the plate solve already identifies them); gentle deconvolution, once
-calibration and alignment are proven; drizzle on the raw Bayer frames.
+calibration and alignment are proven; sky-gradient removal frame by frame;
+drizzle on the raw Bayer frames. None of these before a controlled
+comparison has shown what the current pipeline gains on real data.
 
 Later, if people ask for them:
 
