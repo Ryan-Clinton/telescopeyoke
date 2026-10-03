@@ -2,6 +2,8 @@
 
 **Turn an ordinary SynScan telescope into a locally controlled smart telescope.**
 
+*Give your old SynScan telescope a brain.*
+
 [![tests](https://github.com/Ryan-Clinton/telescopeyoke/actions/workflows/tests.yml/badge.svg)](https://github.com/Ryan-Clinton/telescopeyoke/actions/workflows/tests.yml)
 
 ![The web page: tonight's verdict, the latest frame through the telescope, and ranked targets](docs/dashboard.jpg)
@@ -31,9 +33,25 @@ position set by eye, a rough polar alignment.
 
 ## See it working
 
-The page above is what `./serve.py` shows. This is a picture it took on its
-first night out: the Dumbbell Nebula (M27), 48 two-second exposures through a
-150 mm Newtonian on an EQ3 mount that was polar aligned by eye.
+**Planned.** The page at the top is what `./serve.py` shows: tonight's
+verdict and the targets worth pointing at, ranked for your sky.
+
+**Found.** A real run from the first night. The mount's home position had
+been set by eye and was about ten degrees out; the telescope photographed the
+sky, worked out where it really was, and corrected itself:
+
+```
+$ ./mount.py goto M27 --solve
+M27 Dumbbell Nebula: altitude 57°, hour angle +0.36 h (west: the tube will swing over the pole)
+  off by -107.0' in hour angle, +94.4' in Dec
+  off by -6.2' in hour angle, -11.4' in Dec
+  off by +1.0' in hour angle, -1.8' in Dec
+  centred
+```
+
+**Captured.** The Dumbbell Nebula (M27) from that night: 48 two-second
+exposures through a 150 mm Newtonian on an EQ3 mount that was polar aligned
+by eye.
 
 ![The Dumbbell Nebula, stacked by shoot.py](docs/m27-result.jpg)
 
@@ -45,6 +63,7 @@ first night out: the Dumbbell Nebula (M27), 48 two-second exposures through a
 git clone https://github.com/Ryan-Clinton/telescopeyoke
 cd telescopeyoke
 ./install.sh --planner        # Python libraries only (Ubuntu/Debian)
+./doctor.py                   # what is installed and connected
 ./tonight.py --demo           # tonight's report with made-up weather
 ./serve.py --demo             # the web page, on http://localhost:8080
 ./mount.py --demo goto M27    # drive a simulated mount
@@ -67,19 +86,21 @@ Start with the planner; add hardware when you have it.
 
 ## Hardware
 
-| | Status |
+| Hardware | Status |
 |---|---|
-| Sky-Watcher EQ3 Pro SynScan, handset firmware 3.35, FTDI serial lead | **Tested** |
-| Sky-Watcher Explorer 150P (150 mm f/5 Newtonian) | **Tested** |
-| Altair Hypercam 183C on USB 2 | **Tested** |
-| Ubuntu 26.04, Python 3.14 | **Tested** |
-| Other SynScan mounts (EQ5, HEQ5, EQ6) with a handset | Likely: same serial protocol. Untested. |
-| Other INDI cameras | Likely for mono or RGGB colour sensors: set the driver and sensor size in `config.toml`. Untested. |
+| Sky-Watcher EQ3 Pro SynScan, handset firmware 3.35, FTDI serial lead | ✅ Tested by the author |
+| Sky-Watcher Explorer 150P (150 mm f/5 Newtonian) | ✅ Tested by the author |
+| Altair Hypercam 183C on USB 2 | ✅ Tested by the author |
+| Ubuntu 26.04, Python 3.14 | ✅ Tested by the author |
+| Python 3.11, 3.12, 3.13 | ✅ Tests pass in CI (no hardware) |
+| EQ5, HEQ5, EQ6 with a SynScan handset | ⚠️ Untested. Likely: same serial protocol. |
+| Other INDI cameras | ⚠️ Untested. Likely for mono or RGGB colour sensors: set the driver and sensor size in `config.toml`. |
 | Other telescopes | Set the focal length in `config.toml`. |
-| Mounts driven without a handset (EQDIR), ASCOM, Alpaca | Not supported. |
+| Mounts driven without a handset (EQDIR), ASCOM, Alpaca | ❌ Not supported. |
 
-Currently tested on one setup only. Other SynScan mounts and INDI cameras are
-the next target; if you try one, please open an issue saying what happened.
+Tested on one setup so far, and nobody but the author has run it yet. If you
+try it on anything, working or not, please open a **Hardware compatibility
+report** issue; rows marked "community tested" will be added from those.
 
 ## Commands
 
@@ -91,16 +112,24 @@ the next target; if you try one, please open an issue saying what happened.
 | `mount.py` | Moves the mount: `status`, `home`, `zenith`, `goto NAME [--solve]`, `point AZ ALT`, `sync`, `drift`, `stop`. |
 | `snap.py` | Takes one camera frame, saves the FITS in `frames/`, publishes a preview. |
 | `shoot.py` | Takes a picture: many short exposures lined up and averaged, re-centring as it goes. |
+| `process.py` | Turns a finished stack into a cleaner picture: level sky, white stars, smoothed colour noise. |
 | `focus.py` | Focusing aid that speaks "better" or "worse" and the star size. `--scene` for a daytime view. |
 | `solve.py` | Plate-solves a frame: where is the telescope really pointing? |
 | `polaralign.py` | Measures how far the polar axis is from the pole, from three plate solves. |
 | `skywatch.py` | Photographs the sky every minute and stops when stars appear. |
+| `doctor.py` | Checks what is installed and connected, and says what is ready: planner, mount, imaging. |
+| `replay.py` | Turns a centring run recorded with `mount.py goto --solve --record` into a GIF. |
 | `watch.py` | Photographs the telescope itself with the webcam. |
 | `build_catalogue.py` | Regenerates `data/targets.csv` from OpenNGC. |
 
 `tonight.py`, `serve.py` and `mount.py` accept `--demo`.
 
 ## How it works
+
+It is deliberately small: a dozen short scripts with plain names
+(`mount.py`, `focus.py`, `solve.py`, `shoot.py`, `tonight.py`). One person
+can read it and understand how the whole telescope works, and it means to
+stay that way.
 
 ```
 plan the night → GoTo → photograph → plate-solve (ASTAP) → correct → photograph … → stack
@@ -127,7 +156,8 @@ plan the night → GoTo → photograph → plate-solve (ASTAP) → correct → p
 
 1. `./install.sh` installs the packaged software and creates `config.toml`
    from the example. Put in your location, and your camera's INDI driver and
-   sensor details if they differ.
+   sensor details if they differ. Run `./doctor.py` (or `./install.sh
+   --check`) at any point to see what is still missing.
 2. Install the ASTAP D20 star database (about 400 MB) from
    <https://sourceforge.net/projects/astap-program/files/star_databases/>;
    it installs into `/opt/astap`.
@@ -149,7 +179,9 @@ plan the night → GoTo → photograph → plate-solve (ASTAP) → correct → p
    start and restart it themselves. Leave it off if a guider, focuser or
    filter wheel shares the server, because a restart cuts them all off.
 
-The Python dependencies are listed in `pyproject.toml`.
+On Ubuntu and Debian, `install.sh` takes the Python libraries from the
+distribution's own packages. `pyproject.toml` lists the same libraries with
+the oldest versions known to work, and is what CI and `pip install .` use.
 
 ## A night's routine
 
@@ -202,7 +234,7 @@ by creeping the Dec motor; the gears' slack makes it slow to settle).
 Written but never run on the real mount: `polaralign.py` (its geometry is
 checked by the tests against a simulated misaligned mount).
 
-Covered by automated tests (`pytest`, run on every push): the astronomy, the
+Covered by automated tests (`pytest`, run on every push on Python 3.11 to 3.14): the astronomy, the
 mount logic against the simulated handset, frame alignment and hot-pixel
 removal, the focus measurement, the polar alignment geometry, the INDI
 message handling, and the demo report end to end. The tests cannot cover the
@@ -224,8 +256,11 @@ Known limits:
 
 Near term:
 
-- Recordings for this page: a GoTo-and-centre run and a focusing session.
-- A hardware compatibility table that grows from other people's reports.
+- Someone other than the author running it. Reports from other SynScan
+  mounts come before any new feature.
+- Recordings for this page: a GoTo-and-centre run (`--record` and `replay.py`
+  are ready for it) and a focusing session.
+- Splitting this README into shorter pages under `docs/` once it grows further.
 - More of the camera's quirks moved into `config.toml` as other cameras are tried.
 - Faster frames: a newer camera driver, or USB 3.
 
@@ -235,17 +270,17 @@ Later, if people ask for them:
 - Controls on the web page, behind a login.
 - Guiding and focuser support.
 
-Not planned: ASCOM, mobile apps, Docker images, plugin systems, a large
-sequencing engine. Bigger projects (NINA, KStars/Ekos) do those well; this
-one stays small and aimed at ordinary SynScan gear.
+Not planned: ASCOM, mobile apps, a React front end, cloud services, AI target
+selection, Docker images, plugin systems, a sequencing language. Bigger
+projects (NINA, KStars/Ekos) do those well; this one stays small, readable,
+and aimed at ordinary SynScan gear.
 
 ## Contributing
 
-Reports from other hardware are the most useful contribution: what mount,
-handset firmware and camera you tried, and what happened. Open an issue.
-
-For code, run `pytest` before sending a pull request. The tests need no
-hardware. Anything that changes how the mount moves should come with a test
+Reports from other hardware are the most useful contribution: open a
+**Hardware compatibility report** issue with your mount, handset firmware and
+camera, and what happened. For code, see [CONTRIBUTING.md](CONTRIBUTING.md):
+run `pytest`, and anything that changes how the mount moves comes with a test
 against `simulator.py`.
 
 ## Data sources

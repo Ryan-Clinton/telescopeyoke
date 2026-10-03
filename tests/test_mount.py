@@ -127,3 +127,14 @@ def test_dec_creep_is_sent_in_quarter_arcsecond_steps(scope):
     assert scope.s.rates[17] == pytest.approx(-1.5 / 3600)
     scope.dec_creep(0)
     assert scope.s.rates[17] == 0
+
+
+def test_a_centring_run_can_be_recorded(scope, tmp_path):
+    scope.zenith(SITE)
+    scope.record(tmp_path / "run")
+    target = next(name for name in mount.STARS
+                  if abs(mount.where(mount.find_target(name), SITE)[0]) < 75
+                  and mount.where(mount.find_target(name), SITE)[2] > 25)
+    scope.goto_target(target, SITE)
+    steps = json.loads((tmp_path / "run" / "steps.json").read_text())
+    assert steps and target in steps[0]["text"]

@@ -7,10 +7,16 @@ on:
 jobs:
   tests:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-      - run: pip install astropy numpy scipy pillow requests pyserial pytest
+          python-version: ${{ matrix.python-version }}
+      - run: pip install ".[test]"
       - run: pytest -q
+      - run: ./tonight.py --demo --top 5
+      - run: ./mount.py --demo goto M27

@@ -3,11 +3,21 @@
 #
 #   ./install.sh            everything that can be installed from packages
 #   ./install.sh --planner  only what the night planner and demo need
+#   ./install.sh --check    install nothing; report what is present and connected
+#
+# Python libraries come from the distribution's packages (python3-astropy and
+# so on), which is the simplest route on Ubuntu and Debian. pyproject.toml
+# lists the same libraries with the oldest versions known to work; it is what
+# CI and "pip install ." use.
 #
 # It does not build a camera driver or download the plate solver's star
 # database; it prints what is left to do at the end.
 set -euo pipefail
 cd "$(dirname "$0")"
+
+if [ "${1:-}" = "--check" ]; then
+    exec ./doctor.py
+fi
 
 planner_only=false
 [ "${1:-}" = "--planner" ] && planner_only=true
@@ -29,6 +39,7 @@ fi
 if $planner_only; then
     echo
     echo "Done. Try:  ./tonight.py --demo     then, with your location set:  ./tonight.py"
+    echo "Check the setup at any time with:  ./doctor.py"
     exit 0
 fi
 
@@ -52,4 +63,7 @@ Done. Still to do by hand:
 Then try, with nothing plugged in:
     ./tonight.py --demo
     ./mount.py --demo goto M27
+
+and check what is ready with:
+    ./doctor.py
 NEXT

@@ -76,6 +76,7 @@ class Mount:
         """`demo` drives a simulated handset; `handset` supplies one directly
         (anything with the serial port's write/read_until interface)."""
         self.demo = demo or handset is not None
+        self.recording = None   # folder to keep each solve frame and message in
         # The webcam photographs the scope during every real move unless told
         # not to.
         self.watching = Watching if watch and not self.demo else contextlib.nullcontext
@@ -99,6 +100,22 @@ class Mount:
             raise SystemExit("The handset has not been set up since power-on (its "
                              "date is still the default). Press ENTER through its "
                              "start-up screens to the main menu, entering today's date.")
+
+    def record(self, folder):
+        """Keep every plate-solve frame and progress message from now on, for
+        replay.py to turn into an animation."""
+        self.recording = Path(folder)
+        self.recording.mkdir(parents=True, exist_ok=True)
+        (self.recording / "steps.json").write_text("[]")
+
+    def say(self, text):
+        """Print a progress message, and note it in the recording if any."""
+        print(text, flush=True)
+        if self.recording:
+            steps = json.loads((self.recording / "steps.json").read_text())
+            frames = len(list(self.recording.glob("frame-*.jpg")))
+            steps.append({"text": text, "frame": frames, "time": time.time()})
+            (self.recording / "steps.json").write_text(json.dumps(steps, indent=1))
 
     def ask(self, command):
         self.s.reset_input_buffer()
@@ -316,8 +333,8 @@ class Mount:
                 f"{target['id']} is {abs(hour_angle) / 15:.1f} h from the meridian, "
                 f"beyond the {MAX_HOUR_ANGLE} h limit; not slewing.")
         side = "west: the tube will swing over the pole" if hour_angle > 0 else "east"
-        print(f"{target['id']} {target['name']}: altitude {altitude:.0f}°, "
-              f"hour angle {hour_angle / 15:+.2f} h ({side})")
+        self.say(f"{target['id']} {target['name']}: altitude {altitude:.0f}°, "
+                 f"hour angle {hour_angle / 15:+.2f} h ({side})")
         # Ask for the RA that puts the tube at the true hour angle, less the
         # pointing error measured by earlier plate solves.
         west = hour_angle > 0
@@ -340,15 +357,15 @@ class Mount:
                 time.sleep(SETTLE)
                 miss = self.measure_miss(target, site)
             if miss is None:
-                print("Could not plate-solve the frame; aim left uncorrected.")
+                self.say("Could not plate-solve the frame; aim left uncorrected.")
                 return
-            print(f"  off by {miss[0] * 60:+.1f}' in hour angle, {miss[1] * 60:+.1f}' in Dec")
+            self.say(f"  off by {miss[0] * 60:+.1f}' in hour angle, {miss[1] * 60:+.1f}' in Dec")
             if max(abs(miss[0]), abs(miss[1])) < CENTRED:
-                print("  centred")
+                self.say("  centred")
                 return
             error = [error[0] + miss[0], error[1] + miss[1]]
             save_pointing_error(error, west)
-        print("  still not centred after 4 tries")
+        self.say("  still not centred after 4 tries")
 
     def where_really(self, ra_hint, dec_hint, radius=30, exposure=1.0):
         """Photograph the sky and plate-solve it. Returns the J2000 position
@@ -364,6 +381,9 @@ class Mount:
             mosaic, _ = cam.frame(exposure)
         when = Time.now()
         snap.publish(mosaic)
+        if self.recording:
+            count = len(list(self.recording.glob("frame-*.jpg")))
+            snap.publish(mosaic, self.recording / f"frame-{count + 1:02d}.jpg")
         # Hot pixels look like stars to the solver; a median filter removes them.
         image = ndimage.median_filter(luminance(mosaic), 3)
         found = solver.solve(image, ra_hint, dec_hint, radius)
@@ -526,6 +546,9 @@ def main():
                     help="with goto: plate-solve and correct until centred")
     ap.add_argument("--demo", action="store_true",
                     help="use a simulated mount at the example site; nothing moves")
+    ap.add_argument("--record", metavar="FOLDER",
+                    help="with goto --solve: keep each solve frame and message there, "
+                         "for replay.py to animate")
     args = ap.parse_args()
 
     if args.demo:
@@ -540,6 +563,8 @@ def main():
         raise SystemExit(f"Motion is locked: {LOCK_FILE.read_text().strip()}")
 
     mount = Mount(args.port, watch=not args.no_watch, demo=args.demo)
+    if args.record:
+        mount.record(args.record)
     try:
         if args.command == "stop":
             mount.stop()

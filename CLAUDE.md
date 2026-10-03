@@ -9,6 +9,9 @@ proven on real hardware.
 
 - **Small and specific.** This is automation for ordinary SynScan gear, not a
   general observatory suite. No ASCOM, plugin systems or sequencing engines.
+- **Small enough to understand.** Short scripts with plain names; one person
+  can read the lot. Prefer a few clear lines to an abstraction, and do not
+  generalise for hardware nobody has reported trying.
 - **Nothing moves the mount without a person having asked for that move.**
   The web page is read-only; controls would need authentication first.
 - **The user's location stays out of the repository.** `config.toml`, `web/`,
@@ -32,7 +35,8 @@ ChatGPT directly. Every round, do all four steps in order:
 - B. Apply the code changes, then check it still builds. In this project
   that means every script still parses and imports, and anything that can be
   run without moving the mount or needing clear sky still runs
-  (`./tonight.py --offline`, `./mount.py status`, `./clouds.py`).
+  (`pytest`, `./doctor.py`, `./tonight.py --offline`, `./mount.py status`,
+  `./clouds.py`).
 - C. Apply the docs suggestions, and update the docs to match anything new
   from B. Docs must match the code at the end of every round.
 - D. Commit and push, without asking: ChatGPT reads the public repository,

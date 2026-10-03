@@ -78,3 +78,37 @@ def test_indi_images_and_messages_are_collected():
             '<defNumber name="CCD_EXPOSURE_VALUE">1</defNumber></defNumberVector>')
     feed(c, '<delProperty device="cam" name="CCD_EXPOSURE"/>')
     assert c.get("cam", "CCD_EXPOSURE") is None
+
+
+def test_doctor_runs_with_nothing_attached():
+    import doctor
+    results = doctor.run(offline=True, skip_handset=True)
+    assert set(results) == {"planner", "mount", "imaging"}
+    for checks in results.values():
+        assert all(status in (doctor.OK, doctor.WARN, doctor.FAIL) and message
+                   for status, message in checks)
+    assert doctor.check_python()[0] == doctor.OK
+    assert doctor.check_catalogue()[0] == doctor.OK
+
+
+def test_doctor_verdict_needs_the_planner_basics_for_everything():
+    import doctor
+    good, bad = [(doctor.OK, "fine")], [(doctor.FAIL, "broken")]
+    warned = [(doctor.WARN, "not ideal")]
+    assert doctor.ready({"planner": good, "mount": warned, "imaging": bad}) == {
+        "planner": True, "mount": True, "imaging": False}
+    assert doctor.ready({"planner": bad, "mount": good, "imaging": good}) == {
+        "planner": False, "mount": False, "imaging": False}
+
+
+def test_a_recorded_run_becomes_an_animation(tmp_path):
+    import json
+    from PIL import Image
+    import replay
+    Image.new("RGB", (160, 107), (40, 40, 60)).save(tmp_path / "frame-01.jpg")
+    (tmp_path / "steps.json").write_text(json.dumps([
+        {"text": "M27 Dumbbell Nebula: altitude 53°", "frame": 0, "time": 0},
+        {"text": "  off by +11.4' in hour angle", "frame": 1, "time": 40},
+        {"text": "  centred", "frame": 1, "time": 80}]))
+    frames = replay.build(tmp_path, command="./mount.py goto M27 --solve")
+    assert len(frames) == 3 and frames[0].size == frames[2].size
