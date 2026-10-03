@@ -304,8 +304,8 @@ class Mount:
     def point(self, azimuth, altitude, site):
         """Aim at a fixed direction, e.g. a distant rooftop, and hold there."""
         if not CLOCK_FILE.exists():
-            raise SystemExit("Run './mount.py zenith' first so the handset's "
-                             "clock can be measured.")
+            # Reading the handset's clock needs no movement, so do it now.
+            self.save_clock(site)
         if not 2 <= altitude <= 89:
             raise SystemExit("Altitude must be between 2° and 89°.")
         offset = json.loads(CLOCK_FILE.read_text())["offset_deg"]
@@ -321,8 +321,8 @@ class Mount:
 
     def goto_target(self, name, site, solve=False):
         if not CLOCK_FILE.exists():
-            raise SystemExit("Run './mount.py zenith' first so the handset's "
-                             "clock can be measured.")
+            # Reading the handset's clock needs no movement, so do it now.
+            self.save_clock(site)
         offset = json.loads(CLOCK_FILE.read_text())["offset_deg"]
         target = find_target(name)
         hour_angle, dec, altitude = where(target, site)

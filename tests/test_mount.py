@@ -78,9 +78,15 @@ def test_goto_lands_on_the_target(scope):
     assert mount.wrap(scope.radec()[1]) == pytest.approx(dec, abs=0.1)
 
 
-def test_goto_needs_the_clock_measured_first(scope):
-    with pytest.raises(SystemExit, match="zenith"):
-        scope.goto_target("Vega", SITE)
+def test_goto_measures_the_handset_clock_itself_if_nobody_has(scope):
+    assert not mount.CLOCK_FILE.exists()
+    target = next(name for name in mount.STARS
+                  if abs(mount.where(mount.find_target(name), SITE)[0]) < 75
+                  and mount.where(mount.find_target(name), SITE)[2] > 25)
+    scope.goto_target(target, SITE)
+    assert mount.CLOCK_FILE.exists()
+    hour_angle = mount.where(mount.find_target(target), SITE)[0]
+    assert mount.wrap(scope.s.sidereal() - scope.radec()[0]) == pytest.approx(hour_angle, abs=0.2)
 
 
 def test_targets_too_low_or_too_far_round_are_refused(scope, monkeypatch):
