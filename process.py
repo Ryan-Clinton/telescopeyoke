@@ -20,22 +20,27 @@ from scipy import ndimage
 ROOT = Path(__file__).parent
 
 
-def process(rgb, detail=0.8, colour=5.0, stretch=25.0):
+def process(rgb, detail=0.8, colour=5.0, stretch=25.0, background=2, saturation=1.25):
     """rgb: float array (rows, cols, 3) from a stack. Returns 8-bit RGB."""
     rgb = rgb.astype(np.float32)
     # Level each channel: take out the sky glow and its gradient, then match
     # the channels' scales on the stars so the sky is neutral grey.
-    # Only a flat tilt is removed. Anything finer would take the nebula out
-    # with the sky.
+    # Take out the sky glow with a smooth surface fitted to the sky alone:
+    # a tilt, or a gentle bowl at order 2. Anything finer would remove the
+    # nebula along with the sky.
     rows, cols = rgb.shape[:2]
     yy, xx = np.mgrid[0:rows:64, 0:cols:64]
-    design = np.column_stack([np.ones(yy.size), yy.ravel(), xx.ravel()])
+    terms = lambda y, x: [np.ones_like(y), y, x] + ([y * y, x * x, y * x] if background == 2 else [])
+    ys, xs = yy.ravel() / rows, xx.ravel() / cols
+    design = np.column_stack(terms(ys, xs))
+    full_y, full_x = np.mgrid[0:rows, 0:cols]
+    full = [t.astype(np.float32) for t in terms(full_y / rows, full_x / cols)]
     for c in range(3):
         samples = ndimage.median_filter(rgb[::64, ::64, c], 3).ravel()
-        keep = samples < np.percentile(samples, 60)   # sky, not stars or nebula
+        # Sky only: leave out stars, nebula and the empty edges of a stack.
+        keep = (samples < np.percentile(samples, 60)) & (samples != 0)
         fit, *_ = np.linalg.lstsq(design[keep], samples[keep], rcond=None)
-        full_y, full_x = np.mgrid[0:rows, 0:cols]
-        rgb[..., c] -= (fit[0] + fit[1] * full_y + fit[2] * full_x).astype(np.float32)
+        rgb[..., c] -= sum(k * t for k, t in zip(fit, full))
     # Colour balance: the average star is white. Stars are the pixels far
     # above the sky in every channel.
     grey = rgb.mean(axis=2)
@@ -58,6 +63,9 @@ def process(rgb, detail=0.8, colour=5.0, stretch=25.0):
     black, white = -2.0 * softness, np.percentile(brightness, 99.995)
     scaled = np.clip((rgb - black) / (white - black), 0, 1)
     out = np.arcsinh(stretch * scaled) / np.arcsinh(stretch)
+    # A little more colour, pushed out from each pixel's own grey level.
+    grey = out.mean(axis=2, keepdims=True)
+    out = grey + saturation * (out - grey)
     return (255 * np.clip(out, 0, 1)).astype(np.uint8)
 
 
@@ -68,21 +76,28 @@ def main():
                     help="also save a close-up this many pixels wide")
     ap.add_argument("--detail", type=float, default=0.8,
                     help="brightness smoothing in pixels; more is smoother and softer")
+    ap.add_argument("--saturation", type=float, default=1.25, help="colour strength; 1 is as shot")
     ap.add_argument("--stretch", type=float, default=25,
                     help="how hard faint parts are brightened: about 25 for a bright "
                          "object like the Ring, 100 or more for a faint nebula")
     args = ap.parse_args()
 
     name = args.name.replace(" ", "")
-    stacks = sorted((ROOT / "frames").glob(f"{name}-*.fits"))
+    # Newest stack for this object: a restacked session's final.fits if there
+    # is one, else shoot.py's own running stack.
+    stacks = sorted(list((ROOT / "frames").glob(f"{name}-*.fits"))
+                    + list((ROOT / "frames" / name).glob("*/final.fits"))
+                    + list((ROOT / "frames" / name).glob("*/live.fits")),
+                    key=lambda p: p.stat().st_mtime)
     if not stacks:
         raise SystemExit(f"No stack for {name} in frames/. Run ./shoot.py {name} first.")
     data = fits.getdata(stacks[-1])
     image = Image.fromarray(process(np.moveaxis(data, 0, 2), args.detail,
-                                    colour=6 * args.detail + 1, stretch=args.stretch))
+                                    colour=6 * args.detail + 1, stretch=args.stretch,
+                                    saturation=args.saturation))
     out = ROOT / "web" / f"{name}-processed.jpg"
     image.save(out, quality=93)
-    print(f"{stacks[-1].name} -> {out}")
+    print(f"{stacks[-1].relative_to(ROOT)} -> {out}")
     if args.crop:
         # shoot.py lines every frame up on the first, which was taken just
         # after centring, so the object is in the middle.

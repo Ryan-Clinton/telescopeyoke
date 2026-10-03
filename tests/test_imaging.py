@@ -1,4 +1,5 @@
-"""Stacking, focusing, star counting and the polar alignment geometry."""
+"""Focusing, star counting, colour handling and the polar alignment
+geometry. The stacking pipeline has its own tests in test_stacking.py."""
 import math
 
 import numpy as np
@@ -8,7 +9,6 @@ from scipy import ndimage
 import camera
 import focus
 import polaralign
-import shoot
 import skywatch
 
 rng = np.random.default_rng(0)
@@ -20,29 +20,6 @@ def star_field(shape=(1824, 2720), count=300, blur=1.5):
     xs = rng.integers(50, shape[1] - 50, count)
     stars[ys, xs] = rng.uniform(500, 5000, count)
     return ndimage.gaussian_filter(stars, blur) * 20
-
-
-def test_frames_are_lined_up_on_the_stars_not_the_sensor_pattern():
-    stars = star_field()
-    pattern = rng.normal(0, 8, stars.shape)   # fixed from frame to frame
-
-    def frame(dy, dx):
-        lum = ndimage.shift(stars, (dy, dx), order=0) + pattern + 300
-        return np.dstack([lum / 3] * 3)
-
-    reference = shoot.centre_square(frame(0, 0))
-    for moved in ((7, -12), (-30, 45), (0, 3)):
-        dy, dx = shoot.offset(reference, shoot.centre_square(frame(*moved)))
-        assert (dy, dx) == (-moved[0], -moved[1])
-
-
-def test_hot_pixels_are_removed_but_stars_kept():
-    rgb = np.full((60, 60, 3), 100.0) + rng.normal(0, 2, (60, 60, 3))
-    rgb[30, 30] = 4000          # a single hot pixel
-    rgb[10:13, 10:13] += 800    # a small star
-    cleaned = shoot.clean(rgb)
-    assert cleaned[30, 30].max() < 150
-    assert cleaned[11, 11].min() > 700
 
 
 def test_colour_and_luminance_from_a_bayer_mosaic():

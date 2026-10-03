@@ -27,7 +27,7 @@ position set by eye, a rough polar alignment.
 - 🔭 **Controls SynScan mounts** through the handset, with the handset's clock errors corrected
 - 🧭 **Plate-solves and centres GoTos automatically** (`goto M27 --solve`)
 - 🔊 **Speaks focus feedback**: "better, 66" … "worse, 80" while you turn the focuser
-- 📷 **Captures and stacks images**, re-centring as the sky drifts
+- 📷 **Captures and stacks images**: every raw frame kept, poor frames rejected, stars lined up to a fraction of a pixel, satellite trails clipped out
 - 🏠 **Shows it all on a web page** you can watch from indoors
 - 🛑 **Keeps the mount inside physical limits**, with a motion lock and a webcam watching every slew
 
@@ -111,7 +111,10 @@ report** issue; rows marked "community tested" will be added from those.
 | `clouds.py` | Fetches the latest infrared satellite image with the site marked on it. |
 | `mount.py` | Moves the mount: `status`, `home`, `zenith`, `goto NAME [--solve]`, `point AZ ALT`, `sync`, `drift`, `stop`. |
 | `snap.py` | Takes one camera frame, saves the FITS in `frames/`, publishes a preview. |
-| `shoot.py` | Takes a picture: many short exposures lined up and averaged, re-centring as it goes. |
+| `shoot.py` | Takes a picture: many short exposures, each checked, lined up and stacked live, with the raw frames kept. `--exposure auto` picks the longest exposure the tracking allows. |
+| `restack.py` | The quality pass: goes back over a session's raw frames, keeps the best, weights and clips them, and writes the finished picture. `shoot.py` runs it at the end. |
+| `calibrate.py` | Makes master dark, bias and flat frames, which `shoot.py` and `restack.py` then apply automatically. |
+| `camera_test.py` | `--gain-sweep` tries a range of gains on tonight's sky and suggests one. |
 | `process.py` | Turns a finished stack into a cleaner picture: level sky, white stars, smoothed colour noise. |
 | `focus.py` | Focusing aid that speaks "better" or "worse" and the star size. `--scene` for a daytime view. |
 | `solve.py` | Plate-solves a frame: where is the telescope really pointing? |
@@ -149,8 +152,53 @@ plan the night → GoTo → photograph → plate-solve (ASTAP) → correct → p
   address a device whose name contains a dot, which this camera's does.
 - **`camera.py`** wraps that into "give me a frame", and recovers when the
   driver stalls.
+- **`stacking.py`** is the imaging pipeline's working parts, used live by
+  `shoot.py` and again afterwards by `restack.py`.
 - **`simulator.py`** is a pretend handset and mount behind `--demo` and the
   tests.
+
+## How a picture is made
+
+`shoot.py` works on many short exposures, because a modest mount cannot hold
+a star still for long. Each frame goes through:
+
+```
+raw frame → saved to disk → dark and flat applied → 2x2 Bayer cells to RGB
+→ stars measured (sharpness, roundness, brightness, count)
+→ rejected if cloud, wind or a knock spoiled it
+→ lined up on the first frame: shift and rotation, to a fraction of a pixel
+→ added to a running stack that leaves out satellite trails
+→ web page updated
+```
+
+It prints a line per frame, such as `032 ACCEPT  FWHM 3.4  round 0.93  stars
+74` or `033 REJECT  star brightness down 41% (cloud)`.
+
+When the run ends, `restack.py` does the same job again with hindsight: it
+measures every saved frame, keeps the best 85% of the good ones, lines them
+up on the sharpest, gives sharper and cleaner frames more weight, clips
+outliers against the whole session's average, removes the sky gradient, and
+writes `final.fits` and `final.jpg` in the session folder
+(`frames/NAME/<date-time>/`).
+
+Things worth knowing:
+
+- **The 2x2 Bayer reduction is deliberate.** It halves the resolution to
+  about 1.3 arcseconds per pixel on this telescope, which suits ordinary
+  seeing; the sensor's native 0.66 would only record blur more finely.
+- **Drift is used, not fought.** The mount is only sent back to the target
+  once it has drifted a fifth of the frame. Until then the stars wander over
+  different pixels, so the sensor's fixed pattern averages away.
+- **Calibration frames make a visible difference** and are picked up
+  automatically once made:
+
+      ./calibrate.py dark --exposure 2 --gain 1500    # cap on; match your exposure and gain
+      ./calibrate.py bias --gain 1500                 # cap on
+      ./calibrate.py flat                             # cap off, evenly lit: twilight sky through a white T-shirt
+
+- **Raw frames are large**: about 20 MB each, so a 300-frame session is 6 GB.
+  Delete a session's `light-*.fits` once you are happy with `final.fits`, or
+  use `--no-save`.
 
 ## Setup
 
@@ -225,8 +273,17 @@ The laptop cannot see what the telescope is about to hit.
 
 Working on real hardware and real stars: the night report and web page,
 mount moves through the handset, camera frames, focusing, plate solving,
-`goto --solve` (centres a target to a fraction of an arcminute), `sync`, and
-stacking with `shoot.py`.
+`goto --solve` (centres a target to a fraction of an arcminute) and `sync`.
+The pictures on this page came from an earlier, simpler version of
+`shoot.py`.
+
+Rewritten since those pictures, tested on simulated star fields, and being
+proven on real sky: the stacking pipeline (frame scoring and rejection,
+sub-pixel and rotation alignment, clipped and weighted stacking, saved raw
+frames, the quality pass).
+
+Written but not yet run for real: `calibrate.py` (no dark or flat frames have
+been taken yet), `camera_test.py --gain-sweep`, `shoot.py --exposure auto`.
 
 Working but only lightly tested: `mount.py drift` (cancels declination drift
 by creeping the Dec motor; the gears' slack makes it slow to settle).
@@ -236,7 +293,9 @@ checked by the tests against a simulated misaligned mount).
 
 Covered by automated tests (`pytest`, run on every push on Python 3.11 to 3.14): the astronomy, the
 mount logic against the simulated handset, frame alignment and hot-pixel
-removal, the focus measurement, the polar alignment geometry, the INDI
+removal, star measurement and frame rejection, sub-pixel and rotation
+registration, clipped stacking, calibration arithmetic, a whole simulated
+imaging run, the focus measurement, the polar alignment geometry, the INDI
 message handling, and the demo report end to end. The tests cannot cover the
 real mount, camera or sky.
 
@@ -262,7 +321,15 @@ Near term:
   are ready for it) and a focusing session.
 - Splitting this README into shorter pages under `docs/` once it grows further.
 - More of the camera's quirks moved into `config.toml` as other cameras are tried.
-- Faster frames: a newer camera driver, or USB 3.
+- Faster frames: a newer camera driver, or USB 3. The camera currently
+  collects light for about a seventh of the time, so this is the largest
+  single gain available.
+- Dark and flat frames taken and in use, and the gain chosen from a sweep
+  instead of by guesswork.
+
+Later, for image quality, in this order: colour calibration from catalogue
+stars (the plate solve already identifies them); gentle deconvolution, once
+calibration and alignment are proven; drizzle on the raw Bayer frames.
 
 Later, if people ask for them:
 

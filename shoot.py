@@ -1,134 +1,211 @@
 #!/usr/bin/env python3
-"""Take a picture: several short exposures lined up and averaged.
+"""Take a picture: many short exposures, checked, lined up and averaged.
 
-    ./shoot.py M27                     12 frames of 2 s
-    ./shoot.py M27 --frames 30 --exposure 2
-    ./shoot.py M27 --frames 48 --recentre 8    re-centre on M27 every 8 frames
+    ./shoot.py M27                          60 frames of 2 s
+    ./shoot.py M27 --frames 300 --exposure auto
+    ./shoot.py M27 --no-recentre            never move the mount
 
-The mount drifts off target over a few minutes, so long runs need --recentre.
-That moves the mount by small amounts, so it needs serial access:
-    sudo -u $USER -g dialout ./shoot.py M27 --frames 48 --recentre 8
+Short exposures keep the stars round on a mount that drifts; averaging many
+of them brings out faint detail and smooths the grain. For each frame it:
+keeps the raw file, applies the dark and flat frames if calibrate.py has made
+them, measures the stars, drops the frame if cloud or a knock spoiled it,
+lines it up to a fraction of a pixel (rotation included), and adds it to a
+running stack that leaves out satellite trails. The picture on the web page
+updates as it goes.
 
-Short exposures keep the stars round while the mount drifts; averaging them
-brings out faint detail and smooths the grain. The picture on the web page
-updates after every frame, and the result is saved as web/NAME.jpg and
-frames/NAME-*.fits.
+At the end restack.py goes back over all the raw frames for the best result.
+Everything is kept under frames/NAME/<date-time>/.
+
+When the target has drifted well off centre the mount is sent back to it,
+which needs serial access:
+    sudo -u $USER -g dialout ./shoot.py M27 --frames 300
 """
 import argparse
+import json
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
 import numpy as np
-from astropy.io import fits
 from PIL import Image
-from scipy import ndimage
 
-from camera import Camera, colour, stretch
+import restack
+import stacking
+from camera import Camera, stretch
 
 ROOT = Path(__file__).parent
 WEB = ROOT / "web"
-FRAMES = ROOT / "frames"
-REGISTER = 1024  # side of the central square used to line frames up
+# Send the mount back to the target once it has drifted this far off centre,
+# as a fraction of the frame's height. The drift up to then is welcome: it
+# spreads the sensor's fixed pattern around, which averaging then removes.
+DRIFT_LIMIT = 0.2
+TRIAL_EXPOSURES = (1, 2, 3, 4)
 
 
-def clean(rgb):
-    """Replace hot pixels: anything far brighter than its neighbours."""
-    out = rgb.copy()
-    for c in range(3):
-        plane = rgb[..., c]
-        local = ndimage.median_filter(plane, 3)
-        spread = 1.4826 * np.median(np.abs(plane - local)) + 1e-6
-        hot = plane - local > 8 * spread
-        out[..., c][hot] = local[hot]
-    return out
+class Session:
+    """One run on one target: the folder, the running stack and the log."""
 
+    def __init__(self, name, exposure, gain, save=True):
+        self.name = name.replace(" ", "")
+        self.folder = ROOT / "frames" / self.name / f"{datetime.now():%Y%m%d-%H%M%S}"
+        self.folder.mkdir(parents=True, exist_ok=True)
+        self.exposure, self.gain, self.save = exposure, gain, save
+        self.calibration = stacking.Calibration(exposure, gain)
+        self.reference, self.stack = None, None
+        self.accepted, self.log = [], []
+        self.drift = 0.0   # how far the newest frame was from the first, in frame heights
 
-def centre_square(rgb):
-    """The middle of the frame reduced to its stars only. The sensor's own
-    fixed pattern and dust shadows sit still from frame to frame, and would
-    otherwise fool the line-up into finding no movement at all."""
-    lum = rgb.sum(axis=2)
-    y, x = (lum.shape[0] - REGISTER) // 2, (lum.shape[1] - REGISTER) // 2
-    square = ndimage.gaussian_filter(lum[y:y + REGISTER, x:x + REGISTER], 1.5)
-    square = square - ndimage.uniform_filter(square, 64)
-    noise = 1.4826 * np.median(np.abs(square))
-    return np.clip(square - 5 * noise, 0, None)
+    def process(self, index, mosaic, header):
+        """Everything that happens to one frame. Returns its log line."""
+        if self.save:
+            stacking.save_light(self.folder, index, mosaic, header)
+        rgb = stacking.prepare(mosaic, self.calibration)
+        lum = rgb.sum(axis=2)
+        stars = stacking.find_stars(lum)
+        q = stacking.quality(lum, stars)
+        keep, reason = stacking.judge(q, self.accepted)
+        entry = dict(q, index=index, accepted=keep, reason=reason)
+        if keep:
+            if self.reference is None:
+                self.reference = {"square": stacking.centre_square(lum), "stars": stars}
+                self.stack = stacking.Stack(rgb.shape)
+                registered, info = rgb, {"shift": [0.0, 0.0], "rotation": 0.0, "matched": len(stars)}
+            else:
+                registered, info = stacking.register(rgb, lum, stars, self.reference)
+            entry.update(info)
+            self.drift = float(np.hypot(*info["shift"])) / rgb.shape[0]
+            self.stack.add(registered)
+            self.accepted.append(q)
+            self.publish()
+        self.log.append(entry)
+        (self.folder / "frames.json").write_text(json.dumps(self.log, indent=1))
+        if keep:
+            return (f"{index:03d} ACCEPT  FWHM {q['fwhm']:.1f}  round {q['roundness']:.2f}  "
+                    f"stars {q['stars']}")
+        detail = "" if q["fwhm"] is None else f"FWHM {q['fwhm']:.1f}  "
+        return f"{index:03d} REJECT  {detail}{reason}"
 
+    def publish(self):
+        image = Image.fromarray(stretch(self.stack.result()))
+        WEB.mkdir(exist_ok=True)
+        image.resize((1600, round(1600 * image.height / image.width)), Image.LANCZOS) \
+             .save(WEB / "latest.jpg", quality=88)
+        image.save(WEB / f"{self.name}.jpg", quality=92)
 
-def offset(reference, square):
-    """(rows, cols) to shift a frame by so its stars land on the reference's."""
-    fa, fb = np.fft.fft2(reference), np.fft.fft2(square)
-    match = np.fft.ifft2(fa * fb.conj()).real
-    dy, dx = np.unravel_index(np.argmax(match), match.shape)
-    return (dy - REGISTER if dy > REGISTER // 2 else dy,
-            dx - REGISTER if dx > REGISTER // 2 else dx)
-
-
-def publish(stack, name, count, total):
-    image = Image.fromarray(stretch(stack))
-    WEB.mkdir(exist_ok=True)
-    image.resize((1600, round(1600 * image.height / image.width)), Image.LANCZOS) \
-         .save(WEB / "latest.jpg", quality=88)
-    image.save(WEB / f"{name}.jpg", quality=92)
-    print(f"{datetime.now():%H:%M:%S}  {name}: {count} of {total} frames stacked", flush=True)
-
-
-def add(mosaic, total, used, reference):
-    """Line one raw frame up with the first and add it to the running sum."""
-    rgb = clean(colour(mosaic))
-    square = centre_square(rgb)
-    if reference is None:
-        return rgb.copy(), 1, square
-    dy, dx = offset(reference, square)
-    if max(abs(dy), abs(dx)) > REGISTER // 3:
-        print("  frame skipped: could not line it up (cloud or a knock?)", flush=True)
-        return total, used, reference
-    return total + ndimage.shift(rgb, (dy, dx, 0), order=0, mode="nearest"), used + 1, reference
+    def finish(self):
+        if not self.accepted:
+            return
+        stacking.write_stack(self.folder / "live.fits", self.stack.result(),
+                             {"OBJECT": self.name, "NFRAMES": len(self.accepted),
+                              "EXPTIME": self.exposure * len(self.accepted), "GAIN": self.gain})
 
 
 def recentre(target):
-    """Put the target back in the middle of the frame by plate solving."""
+    """Put the target back in the middle of the frame by plate solving.
+    Returns False if the mount cannot be reached."""
     import config
     import mount
-    scope = mount.Mount(watch=False)
+    try:
+        scope = mount.Mount(watch=False)
+    except (OSError, SystemExit) as problem:
+        print(f"  mount not available ({problem}); carrying on without re-centring", flush=True)
+        return False
     try:
         scope.goto_target(target, config.load()["site"], solve=True)
+    except SystemExit as problem:
+        print(f"  could not re-centre: {problem}", flush=True)
     except BaseException:
         scope.stop()
         raise
+    return True
+
+
+def pick_exposure(gain, calibration_for):
+    """Try a few exposure lengths and keep the longest whose stars are still
+    round and tight: the most light per frame the tracking allows tonight."""
+    trials = []
+    print("Tracking test:")
+    with Camera(gain=gain) as cam:
+        for seconds in TRIAL_EXPOSURES:
+            mosaic, _ = cam.frame(seconds)
+            lum = stacking.prepare(mosaic, calibration_for(seconds)).sum(axis=2)
+            q = stacking.quality(lum, stacking.find_stars(lum))
+            trials.append((seconds, q))
+            shape = "no stars" if q["fwhm"] is None else \
+                f"FWHM {q['fwhm']:.1f}  roundness {q['roundness']:.2f}  stars {q['stars']}"
+            print(f"  {seconds} s  {shape}", flush=True)
+    chosen = stacking.choose_exposure(trials)
+    if chosen is None:
+        raise SystemExit("No stars in any trial exposure: cloud, or badly out of focus.")
+    print(f"Selected exposure: {chosen} s")
+    return float(chosen)
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("name", help="what it is a picture of; used for the file names")
-    ap.add_argument("--frames", type=int, default=12)
-    ap.add_argument("--exposure", type=float, default=2.0, help="seconds per frame")
+    ap.add_argument("name", help="what it is a picture of; a catalogue name allows re-centring")
+    ap.add_argument("--frames", type=int, default=60)
+    ap.add_argument("--exposure", default="2",
+                    help="seconds per frame, or 'auto' to test what the tracking allows")
     ap.add_argument("--gain", type=int, default=1500)
     ap.add_argument("--recentre", type=int, metavar="N", default=0,
-                    help="slew back onto the target every N frames")
+                    help="also re-centre every N frames, whatever the drift")
+    ap.add_argument("--no-recentre", action="store_true", help="never move the mount")
+    ap.add_argument("--no-save", action="store_true", help="do not keep the raw frames")
+    ap.add_argument("--no-restack", action="store_true", help="skip the final quality pass")
     args = ap.parse_args()
-    name = args.name.replace(" ", "")
 
-    total, used, reference = None, 0, None
-    batch = args.recentre or args.frames
-    for start in range(0, args.frames, batch):
-        if args.recentre:
-            recentre(args.name)
-        with Camera(gain=args.gain) as cam:
-            for _ in range(min(batch, args.frames - start)):
-                mosaic, _ = cam.frame(args.exposure)
-                total, used, reference = add(mosaic, total, used, reference)
-                if used:
-                    publish(total / used, name, used, args.frames)
+    moving = not args.no_recentre
+    if moving:
+        moving = recentre(args.name)
+    if args.exposure == "auto":
+        exposure = pick_exposure(args.gain, lambda s: stacking.Calibration(s, args.gain))
+    else:
+        exposure = float(args.exposure)
+
+    session = Session(args.name, exposure, args.gain, save=not args.no_save)
+    print(f"{session.name}: {args.frames} frames of {exposure:g} s at gain {args.gain}; "
+          f"calibration: {session.calibration.describe()}", flush=True)
+    index, since_centre, started = 0, 0, time.monotonic()
+    # Each frame is processed while the next is being exposed.
+    with ThreadPoolExecutor(1) as worker:
+        pending = None
+        while index < args.frames:
+            due = args.recentre and since_centre >= args.recentre
+            if moving and (session.drift > DRIFT_LIMIT or due):
+                if pending:
+                    print(pending.result(), flush=True)
+                    pending = None
+                print(f"  drifted {session.drift * 100:.0f}% of the frame; re-centring", flush=True)
+                recentre(args.name)
+                session.drift, since_centre = 0.0, 0
+            with Camera(gain=args.gain) as cam:
+                while index < args.frames:
+                    mosaic, header = cam.frame(exposure)
+                    index += 1
+                    since_centre += 1
+                    if pending:
+                        print(pending.result(), flush=True)
+                    pending = worker.submit(session.process, index, mosaic, header)
+                    due = args.recentre and since_centre >= args.recentre
+                    if moving and (session.drift > DRIFT_LIMIT or due):
+                        break
+        if pending:
+            print(pending.result(), flush=True)
+
+    session.finish()
+    used = len(session.accepted)
     if not used:
         raise SystemExit("No usable frames.")
-    FRAMES.mkdir(exist_ok=True)
-    path = FRAMES / f"{name}-{datetime.now():%Y%m%d-%H%M%S}.fits"
-    header = fits.Header({"OBJECT": args.name, "EXPTIME": args.exposure * used,
-                          "NFRAMES": used, "GAIN": args.gain})
-    fits.PrimaryHDU(np.moveaxis(total / used, 2, 0).astype(np.float32), header).writeto(path)
-    print(f"saved {path} and {WEB / (name + '.jpg')}")
+    minutes = (time.monotonic() - started) / 60
+    print(f"\n{index} captured, {used} accepted, {index - used} rejected "
+          f"({100 * used / index:.0f}% kept) in {minutes:.0f} min")
+    print(f"Total accepted exposure: {used * exposure:.0f} s")
+    if session.save and not args.no_restack:
+        print("\nQuality pass over the raw frames:")
+        restack.run(session.folder)
+    print(f"Session folder: {session.folder}")
 
 
 if __name__ == "__main__":
