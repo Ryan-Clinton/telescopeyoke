@@ -30,7 +30,7 @@ which needs serial access:
 import argparse
 import json
 import time
-from concurrent.futures import ThreadPoolExecutor
+from collections import deque
 from datetime import datetime
 from pathlib import Path
 
@@ -38,6 +38,7 @@ import numpy as np
 from PIL import Image
 
 import restack
+import snap
 import stacking
 import tracking
 from camera import Camera, stretch
@@ -50,12 +51,14 @@ WEB = ROOT / "web"
 DRIFT_LIMIT = 0.2
 TRIAL_EXPOSURES = (1, 2, 3, 4)
 ASSIST_EVERY = 15   # accepted frames between trims of the Dec creep
+PREVIEW_EVERY = 3.0  # seconds between updates of the picture on the web page
+BACKLOG = 8         # frames allowed to wait for the live stack before it skips some
 
 
 class Session:
     """One run on one target: the folder, the running stack and the log."""
 
-    def __init__(self, name, exposure, gain, save=True, frames=None):
+    def __init__(self, name, exposure, gain, save=True, frames=None, preview_every=PREVIEW_EVERY):
         self.name = name.replace(" ", "")
         self.folder = ROOT / "frames" / self.name / f"{datetime.now():%Y%m%d-%H%M%S}"
         self.folder.mkdir(parents=True, exist_ok=True)
@@ -68,49 +71,74 @@ class Session:
         self.accepted, self.log = [], []
         self.drift = 0.0   # how far the newest frame was from the first, in frame heights
         self.track = []    # (time, x shift, y shift) of accepted frames since the last trim
+        self.timings = stacking.Timings()
+        self.preview_every, self.published = preview_every, 0.0
 
-    def process(self, index, mosaic, header):
-        """Everything that happens to one frame. Returns its log line."""
-        if self.save:
-            stacking.save_light(self.folder, index, mosaic, header)
-        rgb = stacking.prepare(mosaic, self.calibration)
-        lum = rgb.sum(axis=2)
-        stars = stacking.find_stars(lum)
-        q = stacking.quality(lum, stars)
-        keep, reason = stacking.judge(q, self.accepted)
-        entry = dict(q, index=index, accepted=keep, reason=reason)
-        if keep:
-            if self.reference is None:
-                self.reference = {"square": stacking.centre_square(lum), "stars": stars}
-                self.stack = stacking.Stack(rgb.shape)
-                registered, info = rgb, {"shift": [0.0, 0.0], "rotation": 0.0,
-                                         "matched": len(stars), "residual": 0.0}
-            else:
-                registered, info = stacking.register(rgb, lum, stars, self.reference)
-            entry.update(info)
-            self.drift = float(np.hypot(*info["shift"])) / rgb.shape[0]
-            self.track.append((time.time(), *info["shift"]))
-            self.stack.add(registered)
-            self.accepted.append(q)
+    def job(self, index, mosaic, header):
+        """Arguments for stacking.live_frame for this frame, as things stand."""
+        cards = {k: header[k] for k in ("EXPTIME", "GAIN", "DATE-OBS", "BAYERPAT") if k in header}
+        return (mosaic, cards, self.exposure, self.gain, str(self.folder), index, self.save,
+                self.accepted[-30:], self.reference)
+
+    def absorb(self, result, taken=None):
+        """Add a processed frame to the stack and the log. Returns its log line."""
+        entry, frame = result["entry"], result["frame"]
+        self.timings.add(result["timings"])
+        if entry["accepted"]:
+            with self.timings.phase("stack"):
+                if self.reference is None:
+                    self.reference = result["reference"]
+                    self.stack = stacking.Stack(frame.shape)
+                self.drift = float(np.hypot(*entry["shift"])) / frame.shape[0]
+                self.track.append((taken or time.time(), *entry["shift"]))
+                self.stack.add(frame)
+                self.accepted.append({k: entry[k] for k in
+                                      ("fwhm", "roundness", "stars", "flux", "background", "noise")})
             self.publish()
         self.log.append(entry)
-        (self.folder / "frames.json").write_text(json.dumps(self.log, indent=1))
-        if keep:
-            return (f"{index:03d} ACCEPT  FWHM {q['fwhm']:.1f}  round {q['roundness']:.2f}  "
-                    f"stars {q['stars']}")
-        detail = "" if q["fwhm"] is None else f"FWHM {q['fwhm']:.1f}  "
-        return f"{index:03d} REJECT  {detail}{reason}"
+        stacking.append_log(self.folder, entry)
+        index = entry["index"]
+        if entry["accepted"]:
+            return (f"{index:03d} ACCEPT  FWHM {entry['fwhm']:.1f}  round {entry['roundness']:.2f}  "
+                    f"stars {entry['stars']}")
+        detail = "" if entry["fwhm"] is None else f"FWHM {entry['fwhm']:.1f}  "
+        return f"{index:03d} REJECT  {detail}{entry['reason']}"
 
-    def publish(self):
-        image = Image.fromarray(stretch(self.stack.result()))
-        WEB.mkdir(exist_ok=True)
-        image.resize((1600, round(1600 * image.height / image.width)), Image.LANCZOS) \
-             .save(WEB / "latest.jpg", quality=88)
-        image.save(WEB / f"{self.name}.jpg", quality=92)
+    def process(self, index, mosaic, header):
+        """One frame start to finish, in this process. The live run shares
+        the first half between worker processes instead."""
+        return self.absorb(stacking.live_frame(*self.job(index, mosaic, header)))
+
+    def defer(self, index):
+        """Note a frame the live stack had no time for; its raw file is kept
+        for the quality pass."""
+        entry = {"index": index, "accepted": False, "fwhm": None, "stars": 0,
+                 "reason": "live stack behind; kept for the quality pass"}
+        self.log.append(entry)
+        stacking.append_log(self.folder, entry)
+        return f"{index:03d} LATER   {entry['reason']}"
+
+    def publish(self, force=False):
+        """Update the picture on the web page, at most every few seconds: when
+        frames arrive quickly the page does not need every one."""
+        if not force and time.monotonic() - self.published < self.preview_every:
+            return
+        with self.timings.phase("update the web page"):
+            image = Image.fromarray(stretch(self.stack.result()))
+            WEB.mkdir(exist_ok=True)
+            image.resize((1600, round(1600 * image.height / image.width)), Image.LANCZOS) \
+                 .save(WEB / "latest.jpg", quality=88)
+            image.save(WEB / f"{self.name}.jpg", quality=92)
+            seconds = self.exposure * len(self.accepted)
+            snap.label("live stack", f"{len(self.accepted)} accepted frames · {seconds:.0f} s "
+                       "integration", WEB)
+        self.published = time.monotonic()
 
     def finish(self):
+        (self.folder / "frames.json").write_text(json.dumps(self.log, indent=1))
         if not self.accepted:
             return
+        self.publish(force=True)
         stacking.write_stack(self.folder / "live.fits", self.stack.result(),
                              {"OBJECT": self.name, "NFRAMES": len(self.accepted),
                               "EXPTIME": self.exposure * len(self.accepted), "GAIN": self.gain})
@@ -206,6 +234,7 @@ def main():
                     help="trim the Dec motor's creep from the drift the frames show")
     ap.add_argument("--no-save", action="store_true", help="do not keep the raw frames")
     ap.add_argument("--no-restack", action="store_true", help="skip the final quality pass")
+    ap.add_argument("--profile", action="store_true", help="report where the time went")
     args = ap.parse_args()
 
     moving = not args.no_recentre
@@ -217,23 +246,31 @@ def main():
         exposure = float(args.exposure)
 
     session = Session(args.name, exposure, args.gain, save=not args.no_save, frames=args.frames)
+    workers = max(1, stacking.cores() - 1)   # one core stays free for the camera and the stack
     print(f"{session.name}: {args.frames} frames of {exposure:g} s at gain {args.gain}; "
-          f"calibration: {session.calibration.describe()}", flush=True)
+          f"calibration: {session.calibration.describe()}; {workers} workers", flush=True)
     index, since_centre, started = 0, 0, time.monotonic()
-    # Each frame is processed while the next is being exposed.
-    with ThreadPoolExecutor(1) as worker:
-        pending = None
+    waiting = deque()   # (future, time taken) for frames being processed, oldest first
+
+    def collect(everything=False):
+        """Take finished frames into the stack, in the order they were taken.
+        With `everything`, wait for all of them."""
+        while waiting and (everything or waiting[0][0].done()
+                           or session.reference is None):
+            future, taken = waiting.popleft()
+            print(session.absorb(future.result(), taken), flush=True)
+
+    with stacking.worker_pool(workers) as pool:
         while index < args.frames:
             due = args.recentre and since_centre >= args.recentre
             if moving and (session.drift > DRIFT_LIMIT or due):
-                if pending:
-                    print(pending.result(), flush=True)
-                    pending = None
+                collect(everything=True)
                 print(f"  drifted {session.drift * 100:.0f}% of the frame; re-centring", flush=True)
                 recentre(args.name)
                 session.drift, since_centre = 0.0, 0
                 session.track.clear()   # the slew, not drift, moved the next frames
             elif args.assist and moving and len(session.track) >= ASSIST_EVERY:
+                collect(everything=True)
                 if not assist(session):
                     args.assist = False
             with Camera(gain=args.gain) as cam:
@@ -241,16 +278,26 @@ def main():
                     mosaic, header = cam.frame(exposure)
                     index += 1
                     since_centre += 1
-                    if pending:
-                        print(pending.result(), flush=True)
-                    pending = worker.submit(session.process, index, mosaic, header)
+                    collect()
+                    if len(waiting) >= BACKLOG:
+                        # Capture never waits for processing: this frame's raw
+                        # file is kept and the quality pass will use it.
+                        cards = {k: header[k] for k in ("EXPTIME", "GAIN", "DATE-OBS", "BAYERPAT")
+                                 if k in header}
+                        if session.save:
+                            pool.submit(stacking.save_only, mosaic, cards, str(session.folder), index)
+                        print(session.defer(index), flush=True)
+                    else:
+                        # Until the first good frame has become the reference
+                        # the others cannot be lined up, so collect() waits for it.
+                        waiting.append((pool.submit(stacking.live_frame,
+                                                    *session.job(index, mosaic, header)), time.time()))
                     due = args.recentre and since_centre >= args.recentre
                     if moving and (session.drift > DRIFT_LIMIT or due):
                         break
                     if args.assist and moving and len(session.track) >= ASSIST_EVERY:
                         break
-        if pending:
-            print(pending.result(), flush=True)
+        collect(everything=True)
 
     session.finish()
     used = len(session.accepted)
@@ -260,9 +307,12 @@ def main():
     print(f"\n{index} captured, {used} accepted, {index - used} rejected "
           f"({100 * used / index:.0f}% kept) in {minutes:.0f} min")
     print(f"Total accepted exposure: {used * exposure:.0f} s")
+    if args.profile:
+        print("Where the processing time went (summed over the workers):")
+        print(session.timings.report(time.monotonic() - started))
     if session.save and not args.no_restack:
         print("\nQuality pass over the raw frames:")
-        restack.run(session.folder)
+        restack.run(session.folder, profile=args.profile)
     print(f"Session folder: {session.folder}")
 
 

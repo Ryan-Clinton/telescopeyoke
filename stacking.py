@@ -6,8 +6,14 @@ Frames are handled as float32 RGB at half the sensor's resolution (one pixel
 per 2x2 Bayer cell), about 1.3 arcseconds per pixel on the 150P, which suits
 ordinary seeing better than the sensor's native 0.66.
 """
+import functools
 import json
+import multiprocessing
+import os
 import re
+import time
+from concurrent.futures import ProcessPoolExecutor
+from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
@@ -16,12 +22,77 @@ from scipy import ndimage
 from scipy.spatial import cKDTree
 
 import config
-from camera import colour
+from camera import colour, luminance
 
 ROOT = Path(__file__).parent
 CALIBRATION = ROOT / "calibration"
 REGISTER = 1024     # side of the central square used for the first rough line-up
 MIN_MATCHES = 6     # stars needed to trust a star-by-star alignment
+
+
+# --- using the whole processor -------------------------------------------------
+
+def cores():
+    """Physical processor cores. Image work gains little from the extra
+    logical threads, so the worker count follows the real cores."""
+    try:
+        text = Path("/proc/cpuinfo").read_text()
+        found = {(block.split("physical id")[1].split("\n")[0], block.split("core id")[1].split("\n")[0])
+                 for block in text.split("\n\n") if "core id" in block}
+        if found:
+            return len(found)
+    except (OSError, IndexError):
+        pass
+    return max(1, (os.cpu_count() or 2) // 2)
+
+
+@contextmanager
+def worker_pool(workers=None):
+    """A pool of worker processes for work that is independent frame to
+    frame. Each worker is held to one maths thread: the pool supplies the
+    parallelism, and letting every worker start its own threads as well would
+    have them fighting over the same cores."""
+    limits = ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS")
+    before = {name: os.environ.get(name) for name in limits}
+    os.environ.update({name: "1" for name in limits})
+    try:
+        # "spawn" starts each worker afresh, so the limits above apply to it.
+        with ProcessPoolExecutor(max_workers=workers or cores(),
+                                 mp_context=multiprocessing.get_context("spawn")) as pool:
+            yield pool
+    finally:
+        for name, value in before.items():
+            if value is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = value
+
+
+class Timings:
+    """Seconds spent in each phase of the work, for --profile."""
+
+    def __init__(self):
+        self.seconds = {}
+
+    @contextmanager
+    def phase(self, name):
+        started = time.perf_counter()
+        try:
+            yield
+        finally:
+            self.seconds[name] = self.seconds.get(name, 0.0) + time.perf_counter() - started
+
+    def add(self, other):
+        for name, value in (other.seconds if isinstance(other, Timings) else other).items():
+            self.seconds[name] = self.seconds.get(name, 0.0) + value
+
+    def report(self, wall=None):
+        lines = [f"  {name:<22}{value:8.1f} s" for name, value in self.seconds.items()]
+        total = sum(self.seconds.values())
+        lines.append(f"  {'work done':<22}{total:8.1f} s")
+        if wall is not None:
+            lines.append(f"  {'time on the clock':<22}{wall:8.1f} s")
+        return "\n".join(lines)
 
 
 # --- calibration ---------------------------------------------------------------
@@ -124,6 +195,12 @@ def load_light(path):
 
 # --- stars and frame quality ---------------------------------------------------
 
+@functools.lru_cache(maxsize=4)
+def _grid(shape):
+    """Row and column number of every pixel, built once per frame size."""
+    return np.indices(shape, dtype=np.float32)
+
+
 def find_stars(lum, limit=300):
     """Stars in a brightness image, brightest first, as rows of
     (x, y, flux, fwhm, roundness). FWHM is in pixels; roundness is 1 for a
@@ -140,7 +217,7 @@ def find_stars(lum, limit=300):
     area = ndimage.sum_labels(mask, labels, index)
     value = np.where(mask, work, 0)
     flux = ndimage.sum_labels(value, labels, index)
-    yy, xx = np.indices(lum.shape, dtype=np.float32)
+    yy, xx = _grid(lum.shape)
     x = ndimage.sum_labels(value * xx, labels, index) / flux
     y = ndimage.sum_labels(value * yy, labels, index) / flux
     xx2 = ndimage.sum_labels(value * xx * xx, labels, index) / flux - x * x
@@ -172,6 +249,24 @@ def quality(lum, stars):
             # before it hides them.
             "flux": float(np.median(stars[:30, 2])),
             "background": background, "noise": noise}
+
+
+def quick_quality(mosaic, calibration):
+    """A frame's quality from a quarter-size brightness image: a fraction of
+    the work of the full treatment, and enough to tell a good frame from a
+    spoiled one before spending that work on it. The numbers are scaled to
+    match what the full-size image would give."""
+    lum = luminance(calibration.apply(mosaic))
+    rows, cols = lum.shape[0] // 2 * 2, lum.shape[1] // 2 * 2
+    small = lum[:rows, :cols].reshape(rows // 2, 2, cols // 2, 2).mean(axis=(1, 3))
+    small = ndimage.median_filter(small, 3)   # hot pixels are not stars
+    stars = find_stars(small)
+    q = quality(small, stars)
+    if q["fwhm"] is not None:
+        q["fwhm"] *= 2
+    q["flux"] *= 4
+    q["noise"] *= 2
+    return q
 
 
 def judge(q, accepted):
@@ -374,13 +469,114 @@ class Stack:
         return np.where(self.weights > 0, self.mean(), 0).astype(np.float32)
 
 
+# --- work done in the worker processes -----------------------------------------
+
+@functools.lru_cache(maxsize=2)
+def _calibration(exposure, gain):
+    return Calibration(exposure, gain)
+
+
+def measure_file(path, exposure, gain):
+    """Worker: the quick quality of one saved raw frame, with timings."""
+    timings = Timings()
+    with timings.phase("load raw frames"):
+        mosaic, _ = load_light(Path(path))
+    with timings.phase("measure quality"):
+        q = quick_quality(mosaic, _calibration(exposure, gain))
+    q["file"] = Path(path).name
+    return q, timings.seconds
+
+
+def register_file(path, exposure, gain, reference, store, slot, shape):
+    """Worker: prepare one raw frame in full, line it up on the reference and
+    write it into its slot of the shared file of registered frames."""
+    timings = Timings()
+    with timings.phase("load raw frames"):
+        mosaic, _ = load_light(Path(path))
+    with timings.phase("calibrate and clean"):
+        rgb = prepare(mosaic, _calibration(exposure, gain))
+        lum = rgb.sum(axis=2)
+    with timings.phase("find stars"):
+        stars = find_stars(lum)
+    with timings.phase("line up"):
+        rough = offset(reference["square"], centre_square(lum))
+        r, t, matched, residual = align(stars, reference["stars"], rough)
+    with timings.phase("resample"):
+        registered = warp(rgb, r, t)
+    with timings.phase("write registered"):
+        frames = np.memmap(store, dtype=np.float16, mode="r+", shape=shape)
+        frames[slot] = registered
+        frames.flush()
+    info = {"shift": [float(t[0]), float(t[1])],
+            "rotation": float(np.degrees(np.arctan2(r[1, 0], r[0, 0]))),
+            "matched": matched, "residual": residual}
+    return info, timings.seconds
+
+
+def live_frame(mosaic, header, exposure, gain, folder, index, save, recent, reference):
+    """Worker: everything that can be done to one live frame without the
+    running stack. Keeps the raw file, checks the frame quickly against the
+    recently accepted ones (`recent`), and only if it passes prepares it in
+    full and lines it up on `reference` (None for the first frame, which
+    becomes the reference). Returns a dict with the log entry, the frame
+    ready to stack (or None), and what a first frame needs to be a reference."""
+    timings = Timings()
+    if save:
+        with timings.phase("save raw frames"):
+            save_light(Path(folder), index, mosaic, header)
+    calibration = _calibration(exposure, gain)
+    with timings.phase("measure quality"):
+        q = quick_quality(mosaic, calibration)
+    keep, reason = judge(q, recent)
+    out = {"entry": dict(q, index=index, accepted=keep, reason=reason), "frame": None,
+           "reference": None, "timings": timings.seconds}
+    if not keep:
+        return out
+    with timings.phase("calibrate and clean"):
+        rgb = prepare(mosaic, calibration)
+        lum = rgb.sum(axis=2)
+    with timings.phase("find stars"):
+        stars = find_stars(lum)
+    if reference is None:
+        out["frame"] = rgb
+        out["reference"] = {"square": centre_square(lum), "stars": stars}
+        out["entry"].update(shift=[0.0, 0.0], rotation=0.0, matched=len(stars), residual=0.0)
+        return out
+    with timings.phase("line up"):
+        rough = offset(reference["square"], centre_square(lum))
+        r, t, matched, residual = align(stars, reference["stars"], rough)
+    with timings.phase("resample"):
+        out["frame"] = warp(rgb, r, t)
+    out["entry"].update(shift=[float(t[0]), float(t[1])],
+                        rotation=float(np.degrees(np.arctan2(r[1, 0], r[0, 0]))),
+                        matched=matched, residual=residual)
+    return out
+
+
+def save_only(mosaic, header, folder, index):
+    """Worker: keep a raw frame the live stack had no time for."""
+    save_light(Path(folder), index, mosaic, header)
+    return index
+
+
 def write_stack(path, rgb, header):
     fits.PrimaryHDU(np.moveaxis(rgb, 2, 0).astype(np.float32), fits.Header(header)).writeto(
         path, overwrite=True)
 
 
+def append_log(session, entry):
+    """Add one frame's entry to the session's log. One line per frame, so a
+    long run does not rewrite the whole log every frame."""
+    with (Path(session) / "frames.jsonl").open("a") as f:
+        f.write(json.dumps(entry) + "\n")
+
+
 def read_log(session):
-    path = Path(session) / "frames.json"
+    """Every frame's entry so far."""
+    lines = Path(session) / "frames.jsonl"
+    if lines.exists():
+        return [json.loads(line) for line in lines.read_text().splitlines() if line.strip()]
+    path = Path(session) / "frames.json"   # sessions from before the line-per-frame log
     return json.loads(path.read_text()) if path.exists() else []
 
 
@@ -412,7 +608,41 @@ def run_status(session, now=None):
         status["last"] = ("accepted" if last["accepted"] else "rejected: " + last["reason"])
         if last.get("fwhm"):
             status["last"] += f", FWHM {last['fwhm']:.1f}, {last['stars']} stars"
-    newest = max((p.stat().st_mtime for p in session.glob("*.json")), default=0)
+    kept = [f for f in log if f["accepted"]]
+    if plan.get("exposure"):
+        status["integration"] = round(plan["exposure"] * len(kept))
+    if kept:
+        # The newest accepted frame against the run's typical frame, so the
+        # page can say whether focus, cloud or drift is getting worse.
+        newest = kept[-1]
+        typical = {k: float(np.median([f[k] for f in kept])) for k in ("fwhm", "roundness", "stars")}
+        height = 1824.0   # half-size frame height, for drift as a share of the frame
+        drift = 100 * float(np.hypot(*newest.get("shift", [0, 0]))) / height
+
+        def verdict(good, fair):
+            return "good" if good else "watch" if fair else "poor"
+
+        status["latest"] = {
+            "fwhm": [round(newest["fwhm"], 1),
+                     verdict(newest["fwhm"] <= 1.15 * typical["fwhm"],
+                             newest["fwhm"] <= 1.4 * typical["fwhm"])],
+            "roundness": [round(newest["roundness"], 2),
+                          verdict(newest["roundness"] >= 0.8, newest["roundness"] >= 0.65)],
+            "stars": [newest["stars"],
+                      verdict(newest["stars"] >= 0.8 * typical["stars"],
+                              newest["stars"] >= 0.5 * typical["stars"])],
+            "drift": [round(drift), verdict(drift < 10, drift < 20)],
+            "rotation": [round(newest.get("rotation", 0.0), 3), "good"],
+        }
+        recent = log[-60:]
+        status["series"] = {
+            "fwhm": [f.get("fwhm") for f in recent],
+            "stars": [f.get("stars") for f in recent],
+            "drift": [round(100 * float(np.hypot(*f["shift"])) / height, 1) if f.get("shift") else None
+                      for f in recent],
+            "accepted": [bool(f["accepted"]) for f in recent],
+        }
+    newest = max((p.stat().st_mtime for p in session.glob("*.json*")), default=0)
     status["age"] = round((now or time.time()) - newest)
     return status
 

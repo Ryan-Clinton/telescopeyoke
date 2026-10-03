@@ -6,7 +6,7 @@
 
 [![tests](https://github.com/Ryan-Clinton/telescopeyoke/actions/workflows/tests.yml/badge.svg)](https://github.com/Ryan-Clinton/telescopeyoke/actions/workflows/tests.yml)
 
-![The web page: tonight's verdict, the latest frame through the telescope, and ranked targets](docs/dashboard.jpg)
+![The status page: tonight's verdict, a live imaging run with its quality readings, the stacked picture, the best targets, the night's timeline and the state of the kit](docs/dashboard.jpg)
 
 telescopeyoke is a lightweight telescope automation system for Linux. It runs
 on a laptop left beside a modest SynScan telescope and camera, and you watch
@@ -29,7 +29,7 @@ position set by eye, a rough polar alignment.
 - 🔊 **Talks you through focusing**, eyes on the focuser not the screen: "Improving. 4.8" … "Minimum passed. Reverse slightly" … "Best focus. Hold"
 - 📐 **Makes the best of a rough polar alignment**: measures how far out the mount is, predicts the drift that causes anywhere in the sky, and creeps a motor against it
 - 📷 **Captures and stacks images**: every raw frame kept, poor frames rejected, stars lined up to a fraction of a pixel, satellite trails clipped out
-- 🏠 **Shows it all on a web page** you can watch from indoors
+- 🏠 **Shows it all on a status page** you can watch from indoors: the verdict, the run's progress and star quality frame by frame, the live stack, what to point at now, and the state of the kit
 - 🛑 **Keeps the mount inside physical limits**, with a motion lock and a webcam watching every slew
 
 ## See it working
@@ -108,7 +108,7 @@ report** issue; rows marked "community tested" will be added from those.
 | Script | What it does |
 |---|---|
 | `tonight.py` | Report for the night: darkness, Moon, weather verdict, ranked targets. `--html` writes the web page. |
-| `serve.py` | Serves `web/` on port 8080 and rebuilds the page every 10 minutes. |
+| `serve.py` | Serves the status page on port 8080: the night's report rebuilt every 10 minutes, and the imaging run, pictures and system panel refreshed every two seconds. |
 | `clouds.py` | Fetches the latest infrared satellite image with the site marked on it. |
 | `mount.py` | Moves the mount: `status`, `home`, `zenith`, `goto NAME [--solve]`, `point AZ ALT`, `sync`, `drift`, `compensate`, `stop`. |
 | `snap.py` | Takes one camera frame, saves the FITS in `frames/`, publishes a preview. |
@@ -158,6 +158,8 @@ plan the night → GoTo → photograph → plate-solve (ASTAP) → correct → p
   `shoot.py` and again afterwards by `restack.py`.
 - **`tracking.py`** predicts the drift a misaligned polar axis causes and
   decides how to trim the Dec motor against it.
+- **`page.py`** lays the report out as the status page. It is plain HTML
+  with a little JavaScript reading `status.json`: no framework, no controls.
 - **`simulator.py`** is a pretend handset and mount behind `--demo` and the
   tests.
 
@@ -189,6 +191,14 @@ writes `final.fits` and `final.jpg` in the session folder
 
 Things worth knowing:
 
+- **It uses the whole processor, and the camera never waits for it.** The
+  per-frame work is shared between worker processes, one per physical core.
+  If frames ever arrive faster than they can be stacked live, the extra ones
+  are saved raw and marked `LATER`, and the quality pass picks them up.
+  `--profile` on `shoot.py` or `restack.py` reports where the time went.
+- **Frames are checked cheaply before the expensive work.** Quality is judged
+  on a quarter-size image first; only frames that pass are calibrated in
+  full, cleaned and lined up.
 - **The 2x2 Bayer reduction is deliberate.** It halves the resolution to
   about 1.3 arcseconds per pixel on this telescope, which suits ordinary
   seeing; the sensor's native 0.66 would only record blur more finely.
@@ -370,6 +380,15 @@ Known limits:
 - The handset's GoTo overshoots right next to the pole, so `home` steers by
   the axis readout instead.
 - The target ranking in `tonight.py` uses weights chosen by judgement.
+
+## What it needs from the computer
+
+A 2017 four-core laptop (i7-7700HQ, 22 GB of memory, an SSD) runs all of this
+with room to spare while the camera is the slow part. Capture, mount control
+and the webcam must stay on the machine the hardware is plugged into. The
+quality pass only needs a session's folder of raw frames, so it can be run on
+a faster machine later if sessions grow into thousands of frames; the
+telescope never depends on a second computer or on Wi-Fi to keep working.
 
 ## Roadmap
 

@@ -9,7 +9,6 @@
     ./tonight.py --demo          try it with made-up weather at an example site
 """
 import argparse
-import html
 import json
 import statistics
 import sys
@@ -149,6 +148,12 @@ def build(cfg, date=None, offline=False, demo=False):
         results += comet_results(night, lat, lon, site.get("elevation_m", 0), source)
     results.sort(key=lambda r: -r["score"])
 
+    now = datetime.now(night.tz)
+    for t in results:
+        # A window "starting" within the next few minutes is open now: the
+        # sky is only sampled every ten minutes.
+        t["now"] = t["start"] <= now + timedelta(minutes=sky.STEP_MIN) and now <= t["end"]
+        t["tags"] = target_tags(t, pollution, now)
     mid = len(night.unix) // 2
     # Moonrise and moonset only matter between dusk and dawn.
     moon_rise, moon_set = night.crossings(night.moon_alt, 0, night.sun_alt < 0)
@@ -161,7 +166,9 @@ def build(cfg, date=None, offline=False, demo=False):
         "dark_level": night.dark_level,
         "dark_start": dark and dark[0], "dark_end": dark and dark[1],
         "dark_hours": round(float(night.dark.sum() * sky.STEP_MIN / 60), 1),
+        "now": now,
         "moon": {
+            "up_at_sunset": bool(night.moon_alt[int(np.argmax(night.sun_alt < 0))] > 0),
             "illumination": round(float(night.moon_illum[mid]) * 100),
             "waxing": bool(night.moon_waxing),
             "rise": moon_rise, "set": moon_set,
@@ -171,6 +178,28 @@ def build(cfg, date=None, offline=False, demo=False):
         "weather": None if offline else weather_report(night, lat, lon, source),
         "targets": results,
     }
+
+
+def target_tags(t, pollution, now):
+    """Short reasons a target ranks where it does, for the page."""
+    tags = []
+    if t["best_alt"] >= 60:
+        tags.append("HIGH")
+    elif t["best_alt"] < 30:
+        tags.append("LOW")
+    if t["kind"] not in ("moon", "planet"):
+        base = pollution["sqm"] if pollution else 21.0
+        if t["sky"] >= base - 0.2:
+            tags.append("DARK SKY")
+        elif t["sky"] < base - 0.7:
+            tags.append("MOONLIGHT")
+        if t["moon_sep"] is not None and t["moon_sep"] >= 60 and t["sky"] < base - 0.2:
+            tags.append("MOON FAR")
+    if t["hours"] >= 3:
+        tags.append("GOOD WINDOW")
+    if t["start"] > now + timedelta(minutes=sky.STEP_MIN):
+        tags.append(f"FROM {t['start']:%H:%M}")
+    return tags
 
 
 # --- rendering ---------------------------------------------------------------
@@ -271,188 +300,10 @@ def render_text(rep, top):
     return "\n".join(out)
 
 
-PAGE = """<!doctype html>
-<html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta http-equiv="refresh" content="300">
-<title>Telescope - tonight</title>
-<style>
-  :root {{ --bg: #0b0d12; --panel: #141821; --line: #262c3a; --text: #d7dce6;
-          --dim: #8a93a6; --go: #4cc38a; --marginal: #e0b341; --nogo: #e5636b; }}
-  * {{ box-sizing: border-box; }}
-  body {{ margin: 0; padding: 20px 16px 40px; background: var(--bg);
-         color: var(--text); font: 15px/1.5 system-ui, sans-serif; }}
-  main {{ max-width: 1100px; margin: 0 auto; }}
-  h1 {{ font-size: 22px; margin: 0 0 2px; }}
-  h2 {{ font-size: 15px; margin: 28px 0 8px; color: var(--dim);
-       text-transform: uppercase; letter-spacing: .06em; }}
-  .dim {{ color: var(--dim); font-size: 13px; }}
-  .verdict {{ display: inline-block; margin: 14px 0 4px; padding: 4px 14px;
-             border-radius: 999px; font-weight: 700; color: #0b0d12; }}
-  .GO {{ background: var(--go); }} .MARGINAL {{ background: var(--marginal); }}
-  .NO-GO {{ background: var(--nogo); }}
-  dl {{ display: grid; grid-template-columns: 90px 1fr; gap: 6px 12px;
-       background: var(--panel); border: 1px solid var(--line);
-       border-radius: 8px; padding: 14px 16px; margin: 10px 0 0; }}
-  dt {{ color: var(--dim); }} dd {{ margin: 0; }}
-  .scroll {{ overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }}
-  table {{ border-collapse: collapse; width: 100%; background: var(--panel);
-          font-variant-numeric: tabular-nums; white-space: nowrap; }}
-  th, td {{ padding: 6px 10px; text-align: left; border-bottom: 1px solid var(--line); }}
-  th {{ color: var(--dim); font-weight: 600; font-size: 13px; }}
-  tr:last-child td {{ border-bottom: 0; }}
-  img {{ max-width: 100%; border-radius: 8px; border: 1px solid var(--line); }}
-  .gallery {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }}
-  .gallery a {{ color: var(--text); text-decoration: none; font-size: 13px; }}
-  .gallery a:hover {{ text-decoration: underline; }}
-  .gallery img {{ width: 100%; aspect-ratio: 3 / 2; object-fit: cover; display: block;
-                  margin-bottom: 4px; }}
-  .gallery span {{ color: var(--dim); display: block; }}
-</style></head><body><main>
-<h1>{site}</h1>
-<div class="dim">Night of {date} &middot; updated {generated} &middot; refreshes every 5 minutes</div>
-{verdict}
-<dl>{summary}</dl>
-<div id="run" hidden>
-  <h2>Imaging run</h2>
-  <dl id="run-details"></dl>
-</div>
-{camera}
-<div id="pictures" hidden>
-  <h2>Pictures</h2>
-  <div class="gallery" id="gallery"></div>
-</div>
-<h2>Top targets</h2>
-<div class="scroll">{targets}</div>
-<p class="dim">Sky is the background brightness at each target's best time,
-including moonlight; higher is darker.</p>
-{clouds}
-<h2>Hour by hour</h2>
-<div class="scroll">{weather}</div>
-{scope}
-<p class="dim">Weather: Open-Meteo. Seeing: 7Timer. Light pollution: D. Lorenz atlas.
-Comets: COBS and JPL Horizons. Catalogue: OpenNGC (CC-BY-SA-4.0).</p>
-</main>
-<script>
-  // Reload the telescope pictures without reloading the whole page.
-  setInterval(() => {{
-    for (const img of document.querySelectorAll("img[data-live]")) {{
-      img.src = img.dataset.live + "?t=" + Date.now();
-    }}
-  }}, 1000);
-
-  // How far the current imaging run has got, from status.json.
-  function ago(seconds) {{
-    if (seconds < 90) return seconds + " s ago";
-    if (seconds < 5400) return Math.round(seconds / 60) + " min ago";
-    return Math.round(seconds / 3600) + " h ago";
-  }}
-  async function showRun() {{
-    let run;
-    try {{
-      run = await (await fetch("status.json?t=" + Date.now())).json();
-    }} catch (error) {{
-      return;
-    }}
-    showPictures(run.pictures || []);
-    if (!run.name || !run.captured) return;
-    const rows = [];
-    const add = (label, value) => rows.push([label, value]);
-    const state = run.restacked ? "finished; final picture made"
-      : run.finished ? "finished; making the final picture"
-      : run.age > 180 ? "stopped or re-centring (no frame for " + ago(run.age).replace(" ago", "") + ")"
-      : "running";
-    add("Target", run.name + " \u2014 " + state);
-    add("Frames", run.captured + (run.planned ? " of " + run.planned : "") +
-        (run.exposure ? " (" + run.exposure + " s each)" : ""));
-    add("Kept", run.accepted + " (" + Math.round(100 * run.accepted / run.captured) + "%)" +
-        (run.exposure ? ", " + Math.round(run.accepted * run.exposure) + " s of exposure" : ""));
-    const reasons = Object.entries(run.reasons || {{}}).map(([why, n]) => n + " " + why).join("; ");
-    add("Dropped", run.rejected + (reasons ? ": " + reasons : ""));
-    if (run.last) add("Newest frame", run.last + " (" + ago(run.age) + ")");
-    const list = document.getElementById("run-details");
-    list.replaceChildren(...rows.flatMap(([label, value]) => {{
-      const dt = document.createElement("dt"), dd = document.createElement("dd");
-      dt.textContent = label;
-      dd.textContent = value;
-      return [dt, dd];
-    }}));
-    document.getElementById("run").hidden = false;
-  }}
-
-  // Links to the finished pictures, newest first.
-  let shownPictures = "";
-  function showPictures(pictures) {{
-    const key = JSON.stringify(pictures.map(p => [p.file, Math.round(p.time)]));
-    if (!pictures.length || key === shownPictures) return;
-    shownPictures = key;
-    document.getElementById("gallery").replaceChildren(...pictures.map(p => {{
-      const link = document.createElement("a");
-      link.href = p.file;
-      link.target = "_blank";
-      const thumb = document.createElement("img");
-      thumb.src = p.file + "?t=" + Math.round(p.time);
-      thumb.loading = "lazy";
-      thumb.alt = (p.target + " " + p.kind).trim();
-      const when = new Date(p.time * 1000).toLocaleTimeString([], {{hour: "2-digit", minute: "2-digit"}});
-      const label = document.createElement("span");
-      label.textContent = p.kind + " \u00b7 " + when;
-      link.append(thumb, (p.target || "Comparison"), label);
-      return link;
-    }}));
-    document.getElementById("pictures").hidden = false;
-  }}
-  showRun();
-  setInterval(showRun, 2000);
-</script>
-</body></html>
-"""
-
-
-def html_table(head, rows):
-    e = html.escape
-    cells = lambda tag, r: "".join(f"<{tag}>{e(c)}</{tag}>" for c in r)
-    body = "".join(f"<tr>{cells('td', r)}</tr>" for r in rows)
-    return f"<table><thead><tr>{cells('th', head)}</tr></thead><tbody>{body}</tbody></table>"
-
-
-def render_html(rep, top, out_dir):
-    w = rep["weather"]
-    verdict = f'<div class="verdict {w["verdict"]}">{w["verdict"]}</div>' if w else ""
-    summary = "".join(f"<dt>{k}</dt><dd>{html.escape(v)}</dd>"
-                      for k, v in summary_lines(rep))
-    # Shown once the camera side saves frames next to the page.
-    camera = ""
-    frame = out_dir / "latest.jpg"
-    if frame.exists():
-        # The timestamp stops the browser showing a cached older frame.
-        taken = datetime.fromtimestamp(frame.stat().st_mtime, rep["generated"].tzinfo)
-        camera = ('<h2>Latest frame through the telescope</h2>'
-                  f'<img src="latest.jpg?t={taken.timestamp():.0f}" data-live="latest.jpg" '
-                  'alt="Latest camera frame">')
-    clouds = ""
-    if (out_dir / "clouds.jpg").exists():
-        clouds = ('<h2>Cloud from the satellite (bright = cloud, dark = clear)</h2>'
-                  '<img src="clouds.jpg" alt="Infrared satellite image of cloud over the site">')
-    scope = ""
-    if (out_dir / "scope.jpg").exists():
-        scope = ('<h2>The telescope (webcam, updates during slews)</h2>'
-                 '<img src="scope.jpg" data-live="scope.jpg" alt="View of the telescope">')
-    return PAGE.format(
-        site=html.escape(rep["site"]), date=f"{rep['date']:%A %d %B %Y}",
-        generated=f"{rep['generated']:%H:%M}", verdict=verdict, summary=summary,
-        camera=camera, scope=scope, clouds=clouds,
-        targets=html_table(TARGET_HEAD, [target_row(i, t) for i, t in
-                                         enumerate(rep["targets"][:top], 1)]),
-        weather=html_table(WEATHER_HEAD, [weather_row(h) for h in w["hours"]])
-        if w else "<p class='dim'>No forecast available.</p>",
-    )
-
-
 def write_html(rep, top, path):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(render_html(rep, top, path.parent))
+    """Write the status page for a report; the page itself lives in page.py."""
+    import page
+    page.write(rep, top, path)
 
 
 def main():

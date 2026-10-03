@@ -84,3 +84,37 @@ def _fill_lookups():
 
 
 _fill_lookups()
+
+
+def status():
+    """A made-up imaging run for the page's live panels: a hundred frames
+    into three hundred on the Dumbbell, with a patch of cloud in the middle."""
+    import random
+    rng = random.Random(27)
+    fwhm, stars, drift, accepted = [], [], [], []
+    for i in range(60):
+        cloudy = 28 <= i <= 33
+        accepted.append(not cloudy)
+        fwhm.append(round(3.6 + 0.4 * rng.random() + (0.8 if cloudy else 0), 1))
+        stars.append(int(80 + 12 * rng.random()) // (3 if cloudy else 1))
+        drift.append(None if cloudy else round((i % 30) * 0.6, 1))
+    return {
+        "name": "M27", "title": "M27 — Dumbbell Nebula", "planned": 300, "exposure": 2.0,
+        "captured": 97, "accepted": 81, "rejected": 16, "integration": 162,
+        "reasons": {"star brightness down (cloud)": 11, "stars trailed (wind or a knock?)": 5},
+        "finished": False, "restacked": False, "age": 3,
+        "last": "accepted, FWHM 3.7, 83 stars",
+        "latest": {"fwhm": [3.7, "good"], "roundness": [0.92, "good"], "stars": [83, "good"],
+                   "drift": [4, "good"], "rotation": [0.012, "good"]},
+        "series": {"fwhm": fwhm, "stars": stars, "drift": drift, "accepted": accepted},
+        "image": {"kind": "live stack", "detail": "81 accepted frames · 162 s integration", "age": 3},
+        "pictures": [], "scope_age": None,
+        "system": [{"label": "Mount lead", "text": "connected", "level": "good"},
+                   {"label": "Last plate solve", "text": "38 s ago", "level": "good"},
+                   {"label": "INDI server", "text": "running", "level": "good"},
+                   {"label": "Camera", "text": "capturing", "level": "good"},
+                   {"label": "Plate solver", "text": "ready", "level": "good"},
+                   {"label": "Weather forecast", "text": "4 min ago", "level": "good"},
+                   {"label": "Satellite image", "text": "11 min ago", "level": "good"},
+                   {"label": "Disk free", "text": "118 GB", "level": "good"}],
+    }

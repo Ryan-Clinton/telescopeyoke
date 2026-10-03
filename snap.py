@@ -4,6 +4,7 @@
     ./snap.py --exposure 2 --gain 300
 """
 import argparse
+import json
 import time
 from datetime import datetime
 from pathlib import Path
@@ -20,7 +21,15 @@ PREVIEW = ROOT / "web" / "latest.jpg"
 PREVIEW_WIDTH = 1600
 
 
-def publish(mosaic, path=PREVIEW):
+def label(kind, detail="", folder=None):
+    """Note beside web/latest.jpg saying what it is a picture of, so the page
+    can tell a single exposure from a stack."""
+    folder = folder or PREVIEW.parent
+    folder.mkdir(exist_ok=True)
+    (folder / "latest.json").write_text(json.dumps({"kind": kind, "detail": detail}))
+
+
+def publish(mosaic, path=PREVIEW, kind="single frame", detail=""):
     """Write a colour preview of a raw frame for the web page."""
     image = Image.fromarray(stretch(colour(mosaic)))
     if image.width > PREVIEW_WIDTH:
@@ -28,6 +37,8 @@ def publish(mosaic, path=PREVIEW):
         image = image.resize((PREVIEW_WIDTH, height), Image.LANCZOS)
     path.parent.mkdir(exist_ok=True)
     image.save(path, quality=88)
+    if path == PREVIEW:
+        label(kind, detail)
 
 
 def save(mosaic, header):
@@ -49,7 +60,7 @@ def main():
         mosaic, header = cam.frame(args.exposure)
     took = time.monotonic() - started
     path = save(mosaic, header)
-    publish(mosaic)
+    publish(mosaic, detail=f"{args.exposure:g} s")
     print(f"{args.exposure:g}s exposure, {took:.1f}s in total")
     print(f"frame {mosaic.shape}, min {mosaic.min()}, median {np.median(mosaic):.0f}, "
           f"max {mosaic.max()} (of 4095)")

@@ -48,7 +48,7 @@ def main():
             started = time.monotonic()
             mosaic, header = cam.frame(args.exposure)
             stars = count_stars(luminance(mosaic))
-            publish(mosaic)
+            publish(mosaic, kind="sky check", detail=f"{args.exposure:g} s")
             print(f"{datetime.now():%H:%M:%S}  {stars} stars, sky level "
                   f"{np.median(mosaic):.0f}", flush=True)
             streak = streak + 1 if stars >= ENOUGH_STARS else 0

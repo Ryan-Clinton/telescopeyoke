@@ -24,6 +24,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
 
+import snap
 import stacking
 from camera import PORT, WHITE, Camera, luminance
 
@@ -272,6 +273,7 @@ def main():
             image = image.resize((900, round(900 * image.height / image.width)))
             text = f"#{frame} {time.strftime('%H:%M:%S')}  {text}"
             annotate(image, text).save(PREVIEW, quality=85)
+            snap.label("focus view", f"{exposure:g} s", PREVIEW.parent)
             if words and not args.quiet:
                 if args.tones and not args.scene and value:
                     tone(value, first)

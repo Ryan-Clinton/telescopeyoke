@@ -112,3 +112,40 @@ def test_a_recorded_run_becomes_an_animation(tmp_path):
         {"text": "  centred", "frame": 1, "time": 80}]))
     frames = replay.build(tmp_path, command="./mount.py goto M27 --solve")
     assert len(frames) == 3 and frames[0].size == frames[2].size
+
+
+def test_the_status_page_has_its_console_sections(tmp_path):
+    import page
+    report = tonight.build(config.example(), demo=True)
+    text = page.render(report, 10, tmp_path)
+    for expected in ("Tonight", "Clear window", "Moon", "Dew risk", 'id="run"', 'id="system"',
+                     "The night", "All 10 ranked targets", "Weather hour by hour"):
+        assert expected in text
+    assert ("Best now" in text) or ("Best tonight" in text)
+    assert "$" not in text.split("<script>")[0]   # every placeholder was filled in
+
+
+def test_weather_cells_are_coloured_by_how_bad_they_are():
+    import page
+    assert page.level(8, 25, 60) == "good" and page.level(45, 25, 60) == "fair"
+    assert page.level(90, 25, 60) == "bad"
+    assert page.level(5.0, 4, 2, higher_is_better=True) == "good"
+    assert page.level(1.0, 4, 2, higher_is_better=True) == "bad"
+    assert [page.condition(c) for c in (2, 4, 7)] == ["Good", "Average", "Poor"]
+
+
+def test_targets_carry_the_reasons_for_their_rank():
+    from datetime import datetime, timedelta, timezone
+    now = datetime(2026, 10, 3, 22, 0, tzinfo=timezone.utc)
+    target = {"kind": "galaxy", "best_alt": 72, "sky": 20.5, "moon_sep": 95, "hours": 5.0,
+              "start": now - timedelta(hours=1), "end": now + timedelta(hours=4)}
+    assert tonight.target_tags(target, {"sqm": 20.55}, now) == ["HIGH", "DARK SKY", "GOOD WINDOW"]
+    washed = dict(target, best_alt=25, sky=19.2, hours=1.0, start=now + timedelta(hours=2))
+    assert tonight.target_tags(washed, {"sqm": 20.55}, now) == ["LOW", "MOONLIGHT", "MOON FAR", "FROM 00:00"]
+
+
+def test_the_demo_page_has_a_made_up_run_to_show():
+    import demo
+    status = demo.status()
+    assert status["captured"] == status["accepted"] + status["rejected"]
+    assert len(status["series"]["fwhm"]) == len(status["series"]["accepted"]) == 60

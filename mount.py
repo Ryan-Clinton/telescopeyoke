@@ -440,7 +440,7 @@ class Mount:
         with Camera(gain=2000) as cam:
             mosaic, _ = cam.frame(exposure)
         when = Time.now()
-        snap.publish(mosaic)
+        snap.publish(mosaic, kind="plate-solve frame", detail=f"{exposure:g} s")
         if self.recording:
             count = len(list(self.recording.glob("frame-*.jpg")))
             snap.publish(mosaic, self.recording / f"frame-{count + 1:02d}.jpg")
