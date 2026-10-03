@@ -20,3 +20,5 @@ jobs:
       - run: pytest -q
       - run: ./tonight.py --demo --top 5
       - run: ./mount.py --demo goto M27
+      - run: ./ty capabilities --json
+      - run: ./mount.py --demo goto M27 --dry-run --json

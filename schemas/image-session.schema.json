@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/image-session.schema.json",
+  "title": "Imaging session",
+  "description": "data of: ty session --json",
+  "type": "object",
+  "required": [
+    "name",
+    "state",
+    "captured",
+    "accepted",
+    "rejected",
+    "reasons"
+  ],
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "state": {
+      "enum": [
+        "idle",
+        "capturing",
+        "processing",
+        "finished"
+      ]
+    },
+    "planned": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "exposure": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "captured": {
+      "type": "integer"
+    },
+    "accepted": {
+      "type": "integer"
+    },
+    "rejected": {
+      "type": "integer"
+    },
+    "acceptance_rate": {
+      "type": "number"
+    },
+    "reasons": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      }
+    },
+    "frames": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  }
+}

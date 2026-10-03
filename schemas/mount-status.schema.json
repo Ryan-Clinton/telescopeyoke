@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/mount-status.schema.json",
+  "title": "Mount status",
+  "description": "data of: ty mount status --json (asks the handset)",
+  "type": "object",
+  "required": [
+    "state",
+    "at_home",
+    "ra_hours",
+    "dec_deg",
+    "pier_side",
+    "motion_locked"
+  ],
+  "properties": {
+    "state": {
+      "enum": [
+        "slewing",
+        "tracking",
+        "stopped"
+      ]
+    },
+    "at_home": {
+      "type": "boolean"
+    },
+    "ra_hours": {
+      "type": "number"
+    },
+    "dec_deg": {
+      "type": "number"
+    },
+    "ra_axis_deg": {
+      "type": "number"
+    },
+    "dec_axis_deg": {
+      "type": "number"
+    },
+    "pier_side": {
+      "enum": [
+        "east",
+        "west"
+      ]
+    },
+    "motion_locked": {
+      "type": "boolean"
+    }
+  }
+}

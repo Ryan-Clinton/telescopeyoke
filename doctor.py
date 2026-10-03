@@ -4,6 +4,7 @@
     ./doctor.py                  check everything
     ./doctor.py --offline        skip the network check
     ./doctor.py --skip-handset   do not open the mount's serial port
+    ./doctor.py --json           the same as data, for programs
 
 It only looks; nothing is changed and the mount is never moved. The handset
 check sends two status questions, so skip it while another command is using
@@ -205,13 +206,29 @@ def ready(results):
             "imaging": passed["planner"] and passed["imaging"]}
 
 
+def report(offline=False, skip_handset=False):
+    """The check as plain data: what is ready, and each component's state."""
+    results = run(offline, skip_handset)
+    return {
+        "ready": ready(results),
+        "components": {section: [{"status": status, "message": message}
+                                 for status, message in checks]
+                       for section, checks in results.items()},
+    }
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--offline", action="store_true", help="skip the network check")
     ap.add_argument("--skip-handset", action="store_true",
                     help="do not open the mount's serial port")
+    ap.add_argument("--json", action="store_true", help="answer in JSON (see schemas/)")
     args = ap.parse_args()
 
+    if args.json:
+        import interface
+        result = interface.run("doctor", lambda: report(args.offline, args.skip_handset))
+        sys.exit(interface.emit(result) or (0 if result["data"]["ready"]["planner"] else 1))
     results = run(args.offline, args.skip_handset)
     print("telescopeyoke system check\n")
     for section, checks in results.items():

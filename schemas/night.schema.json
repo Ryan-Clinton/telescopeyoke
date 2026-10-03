@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/night.schema.json",
+  "title": "Night",
+  "description": "data of: ty night --json",
+  "type": "object",
+  "required": [
+    "site",
+    "verdict",
+    "darkness",
+    "moon",
+    "best_now"
+  ],
+  "properties": {
+    "site": {
+      "type": "string"
+    },
+    "verdict": {
+      "enum": [
+        "GO",
+        "MARGINAL",
+        "NO-GO",
+        null
+      ]
+    },
+    "clear_hours": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "darkness": {
+      "type": "object"
+    },
+    "moon": {
+      "type": "object"
+    },
+    "best_now": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  }
+}

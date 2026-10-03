@@ -17,6 +17,7 @@ import json
 import os
 import shutil
 from pathlib import Path
+from urllib.parse import parse_qs, unquote, urlparse
 
 import clouds
 import config
@@ -48,7 +49,7 @@ def rebuild_forever(minutes, top, demo_mode):
 
 
 # Pictures in web/ that are part of the page's furniture, not results.
-NOT_RESULTS = {"latest.jpg", "scope.jpg", "clouds.jpg"}
+NOT_RESULTS = {"latest.jpg", "stack.jpg", "scope.jpg", "clouds.jpg"}
 KINDS = (("-final", "final (quality pass)"), ("-processed-closeup", "processed close-up"),
          ("-processed", "processed"), ("-closeup", "close-up"), ("compare", "comparison"))
 
@@ -127,13 +128,13 @@ def system_status(run_age=None):
     return rows
 
 
-def image_status():
-    """What web/latest.jpg is a picture of, from the note written beside it."""
-    note = WEB / "latest.json"
-    if not (note.exists() and (WEB / "latest.jpg").exists()):
+def image_status(name):
+    """What web/<name>.jpg is a picture of, from the note written beside it."""
+    note = WEB / f"{name}.json"
+    if not (note.exists() and (WEB / f"{name}.jpg").exists()):
         return None
     info = json.loads(note.read_text())
-    info["age"] = age(WEB / "latest.jpg")
+    info["age"] = age(WEB / f"{name}.jpg")
     return info
 
 
@@ -153,7 +154,8 @@ def status_forever(seconds=2):
                 full = names.get(status["name"], "")
                 status["title"] = f"{status['name']} — {full}" if full else status["name"]
             status["pictures"] = pictures()
-            status["image"] = image_status()
+            status["now"] = image_status("latest")     # the newest single exposure
+            status["stack"] = image_status("stack")    # the running stack
             status["scope_age"] = age(WEB / "scope.jpg")
             # The system checks open a connection to INDI, so do them less often.
             if time.time() - checked > 15:
@@ -165,6 +167,54 @@ def status_forever(seconds=2):
         except Exception:
             traceback.print_exc()
         time.sleep(seconds)
+
+
+class Handler(SimpleHTTPRequestHandler):
+    """The static page, plus a small read-only API with the same answers the
+    `ty` command gives:
+
+        /api/v1/status  /api/v1/capabilities  /api/v1/night
+        /api/v1/targets?limit=10&kind=galaxy&now=1
+        /api/v1/target/M27  /api/v1/session/current  /api/v1/context
+
+    GET only. Nothing here can move the mount or change anything."""
+
+    demo = False
+
+    def do_GET(self):
+        url = urlparse(self.path)
+        if not url.path.startswith("/api/v1/"):
+            return super().do_GET()
+        import agent
+        import interface
+        name = url.path[len("/api/v1/"):].strip("/")
+        query = {k: v[0] for k, v in parse_qs(url.query).items()}
+        routes = {
+            "status": agent.status,
+            "capabilities": agent.capabilities,
+            "night": lambda: agent.night(self.demo),
+            "targets": lambda: agent.targets(int(query.get("limit", 10)), query.get("kind"),
+                                             query.get("now") in ("1", "true"), self.demo),
+            "session/current": lambda: agent.session(query.get("frames") in ("1", "true"),
+                                                     int(query.get("limit", 50))),
+            "context": lambda: {"text": agent.context(self.demo)},
+        }
+        if name.startswith("target/"):
+            work = lambda: agent.target(unquote(name[len("target/"):]), self.demo)
+        elif name in routes:
+            work = routes[name]
+        else:
+            work = lambda: (_ for _ in ()).throw(
+                interface.Refusal("INVALID_REQUEST", f"No such endpoint: /api/v1/{name}"))
+        result = interface.run(name, work)
+        body = json.dumps(result, default=interface.jsonable).encode()
+        self.send_response(200 if result["ok"] else 404 if name not in routes
+                           and not name.startswith("target/") else 409)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
 
 
 def lan_address():
@@ -196,7 +246,8 @@ def main():
     # The page is read-only, so it is served to the whole home network without
     # a login. Anything that could move the mount must not be added here
     # without authentication designed in first.
-    handler = functools.partial(SimpleHTTPRequestHandler, directory=str(WEB))
+    Handler.demo = args.demo
+    handler = functools.partial(Handler, directory=str(WEB))
     print(f"Serving on http://{lan_address()}:{args.port}  (Ctrl+C to stop)", flush=True)
     ThreadingHTTPServer(("0.0.0.0", args.port), handler).serve_forever()
 

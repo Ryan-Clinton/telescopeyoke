@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/errors.schema.json",
+  "title": "Error",
+  "description": "One reason a command refused or failed. The codes are stable.",
+  "type": "object",
+  "required": [
+    "code",
+    "message",
+    "retryable",
+    "advice"
+  ],
+  "properties": {
+    "code": {
+      "enum": [
+        "ALTITUDE_OUT_OF_RANGE",
+        "CAMERA_NOT_CONNECTED",
+        "DEMO_UNSUPPORTED",
+        "GOTO_REFUSED",
+        "HANDSET_NOT_ANSWERING",
+        "HANDSET_NOT_SET_UP",
+        "INTERNAL_ERROR",
+        "INVALID_REQUEST",
+        "MOTION_LOCKED",
+        "MOUNT_NOT_CONNECTED",
+        "NO_CONFIG",
+        "NO_SESSION",
+        "PLATE_SOLVE_FAILED",
+        "SLEW_TIMED_OUT",
+        "TARGET_BELOW_ALTITUDE_LIMIT",
+        "TARGET_BEYOND_HOUR_ANGLE_LIMIT",
+        "TARGET_NEAR_SUN",
+        "TARGET_UNKNOWN"
+      ]
+    },
+    "message": {
+      "type": "string"
+    },
+    "retryable": {
+      "type": "boolean"
+    },
+    "advice": {
+      "type": "string"
+    }
+  }
+}

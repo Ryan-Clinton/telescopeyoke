@@ -1,0 +1,16 @@
+# telescopeyoke
+
+> Lightweight SynScan telescope automation for Linux: night planning, GoTo with plate-solve centring, focusing, imaging and stacking, with a read-only interface for agents.
+
+## Agent documentation
+
+- [AGENTS.md](AGENTS.md): the map: layout, commands, safety rules
+- [Commands](docs/agents/commands.md): what each returns and whether it moves anything
+- [States and errors](docs/agents/state-model.md): the JSON envelope, states, error codes
+- [Safety](docs/agents/safety.md): the rules about moving the mount
+- [MCP and web API](docs/agents/mcp.md)
+- [Worked examples](docs/agents/examples.md)
+
+## User documentation
+
+- [README.md](README.md)

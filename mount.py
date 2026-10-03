@@ -34,6 +34,7 @@ import contextlib
 import glob
 import json
 import math
+import sys
 import time
 from pathlib import Path
 
@@ -41,6 +42,7 @@ import serial
 
 import config
 import tracking
+from interface import Refusal, emit, envelope, run as answer
 from watch import Watching
 
 ROOT = Path(__file__).parent
@@ -95,16 +97,17 @@ class Mount:
                                 "/dev/ttyUSB0")
             self.s = serial.Serial(port, 9600, timeout=2)
         if self.ask(b"Kx") != b"x#":
-            raise SystemExit("The handset is not answering. Is it on and past its "
-                             "start-up screens?")
+            raise Refusal("HANDSET_NOT_ANSWERING", "The handset is not answering. Is it on "
+                          "and past its start-up screens?")
         # The handset answers even while still on its version screen, where it
         # has not read the mount's gearing and moves by the wrong amounts. Its
         # clock shows the default year 2022 until someone sets it up.
         clock = self.ask(b"h")
         if len(clock) == 9 and clock[5] == 22:
-            raise SystemExit("The handset has not been set up since power-on (its "
-                             "date is still the default). Press ENTER through its "
-                             "start-up screens to the main menu, entering today's date.")
+            raise Refusal("HANDSET_NOT_SET_UP",
+                          "The handset has not been set up since power-on (its date is "
+                          "still the default). Press ENTER through its start-up screens "
+                          "to the main menu, entering today's date.")
 
     def record(self, folder):
         """Keep every plate-solve frame and progress message from now on, for
@@ -134,7 +137,7 @@ class Mount:
             if len(reply) == 18:
                 return [int(x, 16) / 2**32 * 360 for x in reply[:-1].decode().split(",")]
             time.sleep(0.5)
-        raise SystemExit("The handset stopped answering position queries.")
+        raise Refusal("HANDSET_NOT_ANSWERING", "The handset stopped answering position queries.")
 
     def radec(self):
         """Sky position (RA, Dec) in degrees, as the handset believes it."""
@@ -146,6 +149,16 @@ class Mount:
 
     def slewing(self):
         return self.ask(b"L").startswith(b"1")
+
+    def state(self):
+        """'slewing', 'tracking' or 'stopped', by asking and by watching the
+        RA axis for a moment: tracking turns it at the sky's rate."""
+        if self.slewing():
+            return "slewing"
+        first = self.axes()[0]
+        time.sleep(1.5)
+        rate = wrap(self.axes()[0] - first) * 3600 / 1.5   # arcseconds per second
+        return "tracking" if 8 < rate < 25 else "stopped"
 
     def at_home(self):
         ra_axis, dec_axis = self.axes()
@@ -247,7 +260,7 @@ class Mount:
         for attempt in range(rounds):
             drift = self.measure_drift(site)
             if drift is None:
-                raise SystemExit("Could not plate-solve; drift not measured.")
+                raise Refusal("PLATE_SOLVE_FAILED", "Could not plate-solve; drift not measured.")
             east_west, residual, sigma = drift
             sure = "" if sigma is None else f" ±{sigma:.2f}"
             natural = residual - tracking.creep_effect(creep, west)
@@ -314,7 +327,7 @@ class Mount:
                     break
                 if time.monotonic() - began > SLEW_TIMEOUT:
                     self.rate(axis, direction, 0)
-                    raise SystemExit("Axis did not arrive in time; stopped.")
+                    raise Refusal("SLEW_TIMED_OUT", "Axis did not arrive in time; stopped.")
             self.rate(axis, direction, 0)
             time.sleep(0.5)
 
@@ -322,12 +335,12 @@ class Mount:
         """Handset GoTo to a sky position in degrees; waits until it stops."""
         with self.watching():
             if self.ask(f"r{encode(ra)},{encode(dec)}".encode()) != b"#":
-                raise SystemExit("The handset refused the GoTo.")
+                raise Refusal("GOTO_REFUSED", "The handset refused the GoTo.")
             began = time.monotonic()
             while self.slewing():
                 if time.monotonic() - began > SLEW_TIMEOUT:
                     self.stop()
-                    raise SystemExit("GoTo did not finish in time; stopped.")
+                    raise Refusal("SLEW_TIMED_OUT", "GoTo did not finish in time; stopped.")
                 time.sleep(1)
 
     def handset_sidereal(self):
@@ -366,16 +379,11 @@ class Mount:
         if not CLOCK_FILE.exists():
             # Reading the handset's clock needs no movement, so do it now.
             self.save_clock(site)
-        if not 2 <= altitude <= 89:
-            raise SystemExit("Altitude must be between 2° and 89°.")
+        plan = plan_point(azimuth, altitude, site)
         offset = json.loads(CLOCK_FILE.read_text())["offset_deg"]
-        hour_angle, dec = direction(azimuth, altitude, site)
-        if abs(hour_angle) > MAX_HOUR_ANGLE * 15:
-            raise SystemExit(f"That is {abs(hour_angle) / 15:.1f} h from the meridian, "
-                             f"beyond the {MAX_HOUR_ANGLE} h limit; not slewing.")
-        side = "west: the tube will swing over the pole" if hour_angle > 0 else "east"
+        hour_angle, dec = plan["hour_angle_hours"] * 15, plan["dec_deg"]
         print(f"bearing {azimuth:.0f}°, {altitude:.0f}° up: hour angle "
-              f"{hour_angle / 15:+.2f} h, Dec {dec:+.1f}° ({side})")
+              f"{hour_angle / 15:+.2f} h, Dec {dec:+.1f}° ({plan['side_note']})")
         self.goto((true_sidereal(site) + offset - hour_angle) % 360, dec)
         self.tracking(False)
 
@@ -384,17 +392,11 @@ class Mount:
             # Reading the handset's clock needs no movement, so do it now.
             self.save_clock(site)
         offset = json.loads(CLOCK_FILE.read_text())["offset_deg"]
+        plan = plan_goto(name, site)
         target = find_target(name)
-        hour_angle, dec, altitude = where(target, site)
-        if altitude < MIN_ALTITUDE:
-            raise SystemExit(f"{target['id']} is only {altitude:.0f}° up; not slewing.")
-        if abs(hour_angle) > MAX_HOUR_ANGLE * 15:
-            raise SystemExit(
-                f"{target['id']} is {abs(hour_angle) / 15:.1f} h from the meridian, "
-                f"beyond the {MAX_HOUR_ANGLE} h limit; not slewing.")
-        side = "west: the tube will swing over the pole" if hour_angle > 0 else "east"
+        hour_angle, altitude = plan["hour_angle_hours"] * 15, plan["altitude_deg"]
         self.say(f"{target['id']} {target['name']}: altitude {altitude:.0f}°, "
-                 f"hour angle {hour_angle / 15:+.2f} h ({side})")
+                 f"hour angle {hour_angle / 15:+.2f} h ({plan['side_note']})")
         # Ask for the RA that puts the tube at the true hour angle, less the
         # pointing error measured by earlier plate solves.
         west = hour_angle > 0
@@ -465,7 +467,8 @@ class Mount:
         believed_ha = wrap(sidereal + offset - ra_handset)
         found = self.where_really(sidereal - believed_ha, wrap(dec_handset), radius=40)
         if not found:
-            raise SystemExit("Could not plate-solve: cloud, too few stars, or out of focus.")
+            raise Refusal("PLATE_SOLVE_FAILED",
+                          "Could not plate-solve: cloud, too few stars, or out of focus.")
         actual = where(found, site, found["when"])
         error = [wrap(actual[0] - believed_ha), actual[1] - wrap(dec_handset)]
         # Dec axis past 90° means the tube is over the pole, on the west side.
@@ -496,9 +499,51 @@ def direction(azimuth, altitude, site):
     spot = SkyCoord(az=azimuth * u.deg, alt=altitude * u.deg, frame=frame)
     sun = get_sun(now).transform_to(frame)
     if sun.alt.deg > -1 and spot.separation(sun).deg < 40:
-        raise SystemExit("That is within 40° of the Sun; not slewing.")
+        raise Refusal("TARGET_NEAR_SUN", "That is within 40° of the Sun; not slewing.")
     hadec = spot.transform_to(HADec(obstime=now, location=here))
     return hadec.ha.deg, hadec.dec.deg
+
+
+def _plan(hour_angle, dec, altitude, label):
+    """The checks every aimed move must pass, and what the move would involve.
+    Raises a Refusal if it must not be made; needs no hardware."""
+    if LOCK_FILE.exists():
+        raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text().strip()}")
+    if abs(hour_angle) > MAX_HOUR_ANGLE * 15:
+        raise Refusal("TARGET_BEYOND_HOUR_ANGLE_LIMIT",
+                      f"{label} is {abs(hour_angle) / 15:.1f} h from the meridian, beyond the "
+                      f"{MAX_HOUR_ANGLE} h limit; not slewing.")
+    west = hour_angle > 0
+    warnings = ["The tube will swing over the pole."] if west else []
+    return {
+        "would_move": True, "safe": True,
+        "altitude_deg": round(float(altitude), 1), "dec_deg": round(float(dec), 2),
+        "hour_angle_hours": round(float(hour_angle) / 15, 3),
+        "pier_side": "west" if west else "east",
+        "side_note": "west: the tube will swing over the pole" if west else "east",
+        "warnings": warnings,
+    }
+
+
+def plan_goto(name, site):
+    """What a GoTo to a catalogue object would do, checked against the limits,
+    without moving anything."""
+    target = find_target(name)
+    hour_angle, dec, altitude = where(target, site)
+    if altitude < MIN_ALTITUDE:
+        raise Refusal("TARGET_BELOW_ALTITUDE_LIMIT",
+                      f"{target['id']} is only {altitude:.0f}° up; not slewing.")
+    plan = _plan(hour_angle, dec, altitude, target["id"])
+    return dict(plan, target=target["id"], name=target.get("name", ""))
+
+
+def plan_point(azimuth, altitude, site):
+    """What pointing at a compass bearing and height would do, without moving."""
+    if not 2 <= altitude <= 89:
+        raise Refusal("ALTITUDE_OUT_OF_RANGE", "Altitude must be between 2° and 89°.")
+    hour_angle, dec = direction(azimuth, altitude, site)
+    plan = _plan(hour_angle, dec, altitude, "That")
+    return dict(plan, azimuth_deg=azimuth)
 
 
 def use_demo_cache():
@@ -565,7 +610,7 @@ def find_target(name):
         if wanted in (t["id"].replace(" ", "").lower(), t["alt_id"].replace(" ", "").lower(),
                       t["name"].replace(" ", "").lower()):
             return t
-    raise SystemExit(f"'{name}' is not in the catalogue.")
+    raise Refusal("TARGET_UNKNOWN", f"'{name}' is not in the catalogue.")
 
 
 def where(target, site, when=None):
@@ -591,12 +636,23 @@ def encode(degrees):
     return f"{int(round(degrees % 360 / 360 * 2**32)) & 0xFFFFFF00:08X}"
 
 
-def report(mount):
+def snapshot(mount):
+    """Where the mount is and what it is doing, as plain data."""
     ra, dec = mount.radec()
     ra_axis, dec_axis = mount.axes()
-    state = "slewing" if mount.slewing() else "at home" if mount.at_home() else "stopped"
-    print(f"{state}: RA {ra / 15:.4f} h, Dec {wrap(dec):+.2f}°  "
-          f"(axes: RA {ra_axis:.2f}°, Dec {dec_axis:.2f}°)")
+    return {"state": mount.state(), "at_home": mount.at_home(),
+            "ra_hours": round(ra / 15, 4), "dec_deg": round(wrap(dec), 3),
+            "ra_axis_deg": round(ra_axis, 2), "dec_axis_deg": round(dec_axis, 2),
+            "pier_side": "west" if dec_axis > 90 else "east",
+            "motion_locked": LOCK_FILE.exists()}
+
+
+def report(mount):
+    now = snapshot(mount)
+    state = "at home" if now["at_home"] else now["state"]
+    print(f"{state}: RA {now['ra_hours']:.4f} h, Dec {now['dec_deg']:+.2f}°  "
+          f"(axes: RA {now['ra_axis_deg']:.2f}°, Dec {now['dec_axis_deg']:.2f}°)")
+    return now
 
 
 def main():
@@ -612,6 +668,11 @@ def main():
                     help="with goto: plate-solve and correct until centred")
     ap.add_argument("--demo", action="store_true",
                     help="use a simulated mount at the example site; nothing moves")
+    ap.add_argument("--json", action="store_true",
+                    help="answer in JSON on stdout (see schemas/)")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="check the move against the limits and say what it would do; "
+                         "nothing moves and no hardware is needed")
     ap.add_argument("--record", metavar="FOLDER",
                     help="with goto --solve: keep each solve frame and message there, "
                          "for replay.py to animate")
@@ -624,9 +685,67 @@ def main():
         site = config.example()["site"]
     else:
         site = config.load()["site"]
+    if args.command == "goto" and not args.target:
+        ap.error("goto needs a target, e.g. goto M81")
+    if args.command == "point" and len(args.target) != 2:
+        ap.error("point needs a bearing and a height, e.g. point 225 10")
+
+    if args.dry_run:
+        sys.exit(dry_run(args, site))
+    if args.json:
+        import io
+        from contextlib import redirect_stdout
+        # The progress messages people read go to stderr, so stdout holds
+        # exactly one JSON document.
+        with redirect_stdout(sys.stderr):
+            result = answer(f"mount.{args.command}", lambda: act(args, site))
+        sys.exit(emit(result))
+    act(args, site)
+
+
+def dry_run(args, site):
+    """Say what a command would do, as JSON or a sentence. Returns an exit code."""
+    def plan():
+        if args.command == "goto":
+            return plan_goto(" ".join(args.target), site)
+        if args.command == "point":
+            return plan_point(float(args.target[0]), float(args.target[1]), site)
+        if args.command in ("status", "sync", "drift", "stop"):
+            return {"would_move": False, "safe": True, "warnings": []}
+        if LOCK_FILE.exists():
+            raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text().strip()}")
+        notes = {"home": "Returns to the home position, by the axis readouts.",
+                 "zenith": "Goes home if not there, then slews to straight up.",
+                 "compensate": "Slews about 25° twice on the side of the meridian it is on, "
+                               "then returns."}
+        return {"would_move": True, "safe": True, "warnings": [notes[args.command]]}
+
+    result = answer(f"mount.{args.command}.dry_run", plan)
+    if result["ok"]:
+        result["warnings"] = result["data"].pop("warnings", [])
+        result["data"].pop("side_note", None)
+    if args.json:
+        return emit(result)
+    if not result["ok"]:
+        print(f"Would refuse: {result['errors'][0]['message']}")
+        return 1
+    data = result["data"]
+    if "altitude_deg" in data:
+        print(f"Would slew to altitude {data['altitude_deg']:.0f}°, hour angle "
+              f"{data['hour_angle_hours']:+.2f} h, on the {data['pier_side']} side.")
+    else:
+        print("Would move the mount." if data["would_move"] else "Would not move the mount.")
+    for warning in result["warnings"]:
+        print(f"Note: {warning}")
+    return 0
+
+
+def act(args, site):
+    """Carry a command out on the mount (or the simulated one). Returns the
+    mount's state afterwards."""
 
     if args.command in ("zenith", "home", "goto", "point", "compensate") and LOCK_FILE.exists():
-        raise SystemExit(f"Motion is locked: {LOCK_FILE.read_text().strip()}")
+        raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text().strip()}")
 
     mount = Mount(args.port, watch=not args.no_watch, demo=args.demo)
     if args.record:
@@ -635,10 +754,6 @@ def main():
         if args.command == "stop":
             mount.stop()
         elif args.command != "status":
-            if args.command == "goto" and not args.target:
-                ap.error("goto needs a target, e.g. goto M81")
-            if args.command == "point" and len(args.target) != 2:
-                ap.error("point needs a bearing and a height, e.g. point 225 10")
             if args.command == "zenith":
                 mount.zenith(site)
             elif args.command == "goto":
@@ -657,7 +772,7 @@ def main():
         # Never leave a motor running after an error or Ctrl+C.
         mount.stop()
         raise
-    report(mount)
+    return report(mount)
 
 
 if __name__ == "__main__":

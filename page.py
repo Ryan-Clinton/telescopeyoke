@@ -216,8 +216,10 @@ PAGE = Template(r"""<!doctype html>
   .card.bad .card-big, .bad, .poor { color: var(--bad); }
   .conditions { margin: 10px 2px 0; color: var(--dim); font-size: 14px; }
 
-  .live { display: grid; grid-template-columns: minmax(300px, 5fr) 7fr; gap: 12px; align-items: start; }
-  @media (max-width: 820px) { .live { grid-template-columns: 1fr; } }
+  .live { display: grid; grid-template-columns: minmax(290px, 4fr) 5fr 5fr; gap: 12px;
+          align-items: start; }
+  @media (max-width: 1000px) { .live { grid-template-columns: 1fr 1fr; } .live .panel { grid-column: 1 / -1; } }
+  @media (max-width: 600px) { .live { grid-template-columns: 1fr; } }
   .run-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   .run-title { font-size: 18px; font-weight: 700; }
   .state { font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--dim);
@@ -309,9 +311,13 @@ PAGE = Template(r"""<!doctype html>
       <div class="pills" id="run-pills"></div>
       <div class="dim" id="run-last" style="margin-top:8px"></div>
     </div>
+    <figure id="now" hidden>
+      <figcaption><b>NOW</b> <span id="now-detail"></span></figcaption>
+      <img data-live="latest.jpg" alt="The newest single exposure through the telescope">
+    </figure>
     <figure id="stack" hidden>
       <figcaption><b id="stack-kind"></b> <span id="stack-detail"></span></figcaption>
-      <img data-live="latest.jpg" alt="The newest picture through the telescope">
+      <img data-live="stack.jpg" alt="The running stack of accepted frames">
     </figure>
   </div>
 </div>
@@ -431,11 +437,17 @@ atlas. Comets: COBS and JPL Horizons. Cloud imagery: EUMETSAT. Catalogue: OpenNG
     return true;
   }
 
-  function showImage(image) {
+  // The newest single exposure, and separately the running stack. A
+  // picture that has not changed for a while is marked as old.
+  function showImage(figure, image, kind) {
+    $$(figure).hidden = !image;
     if (!image) return false;
-    $$("stack-kind").textContent = image.kind.toUpperCase();
-    $$("stack-detail").textContent = [image.detail, ago(image.age)].filter(Boolean).join(" · ");
-    $$("stack").hidden = false;
+    if (kind) $$(kind).textContent = image.kind.toUpperCase();
+    const stale = image.age > 120;
+    const detail = $$(figure + "-detail");
+    detail.textContent = [kind ? "" : image.kind, image.detail,
+                          (stale ? "not updating: " : "") + ago(image.age)].filter(Boolean).join(" · ");
+    detail.className = stale ? "fair" : "";
     return true;
   }
 
@@ -476,8 +488,9 @@ atlas. Comets: COBS and JPL Horizons. Cloud imagery: EUMETSAT. Catalogue: OpenNG
     } catch (error) {
       return;
     }
-    const run = showRun(status), image = showImage(status.image);
-    $$("live-section").hidden = !(run || image);
+    const run = showRun(status);
+    const now = showImage("now", status.now), stack = showImage("stack", status.stack, "stack-kind");
+    $$("live-section").hidden = !(run || now || stack);
     showPictures(status.pictures || []);
     showSystem(status.system);
     // The webcam comes to the top while the mount is slewing.

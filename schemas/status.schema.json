@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/status.schema.json",
+  "title": "Status",
+  "description": "data of: ty status --json",
+  "type": "object",
+  "required": [
+    "mount",
+    "camera",
+    "imaging",
+    "solver"
+  ],
+  "properties": {
+    "mount": {
+      "type": "object",
+      "required": [
+        "state",
+        "motion_locked"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "offline",
+            "connected"
+          ]
+        },
+        "motion_locked": {
+          "type": "boolean"
+        },
+        "last_plate_solve_age_s": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "live_state_command": {
+          "type": "string"
+        }
+      }
+    },
+    "camera": {
+      "type": "object",
+      "required": [
+        "state"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "offline",
+            "idle",
+            "capturing"
+          ]
+        },
+        "newest_frame_age_s": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    },
+    "imaging": {
+      "type": "object",
+      "required": [
+        "state",
+        "target",
+        "captured",
+        "accepted"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "idle",
+            "capturing",
+            "processing",
+            "finished"
+          ]
+        },
+        "target": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "captured": {
+          "type": "integer"
+        },
+        "accepted": {
+          "type": "integer"
+        }
+      }
+    },
+    "solver": {
+      "type": "object",
+      "required": [
+        "state"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "ready",
+            "unavailable"
+          ]
+        }
+      }
+    }
+  }
+}

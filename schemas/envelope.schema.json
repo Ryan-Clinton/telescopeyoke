@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/envelope.schema.json",
+  "title": "Envelope",
+  "description": "The shape of every --json answer, web API response and MCP tool result.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "ok",
+    "command",
+    "timestamp",
+    "data",
+    "warnings",
+    "errors"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "command": {
+      "type": "string"
+    },
+    "timestamp": {
+      "type": "string"
+    },
+    "data": {
+      "type": "object"
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "retryable",
+          "advice"
+        ],
+        "properties": {
+          "code": {
+            "enum": [
+              "ALTITUDE_OUT_OF_RANGE",
+              "CAMERA_NOT_CONNECTED",
+              "DEMO_UNSUPPORTED",
+              "GOTO_REFUSED",
+              "HANDSET_NOT_ANSWERING",
+              "HANDSET_NOT_SET_UP",
+              "INTERNAL_ERROR",
+              "INVALID_REQUEST",
+              "MOTION_LOCKED",
+              "MOUNT_NOT_CONNECTED",
+              "NO_CONFIG",
+              "NO_SESSION",
+              "PLATE_SOLVE_FAILED",
+              "SLEW_TIMED_OUT",
+              "TARGET_BELOW_ALTITUDE_LIMIT",
+              "TARGET_BEYOND_HOUR_ANGLE_LIMIT",
+              "TARGET_NEAR_SUN",
+              "TARGET_UNKNOWN"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "retryable": {
+            "type": "boolean"
+          },
+          "advice": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

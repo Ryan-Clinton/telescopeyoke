@@ -111,6 +111,7 @@ report** issue; rows marked "community tested" will be added from those.
 | `serve.py` | Serves the status page on port 8080: the night's report rebuilt every 10 minutes, and the imaging run, pictures and system panel refreshed every two seconds. |
 | `clouds.py` | Fetches the latest infrared satellite image with the site marked on it. |
 | `mount.py` | Moves the mount: `status`, `home`, `zenith`, `goto NAME [--solve]`, `point AZ ALT`, `sync`, `drift`, `compensate`, `stop`. |
+| `liveview.py` | Takes a frame every few seconds so the status page shows what the telescope sees now. Steps aside while `shoot.py` runs. |
 | `snap.py` | Takes one camera frame, saves the FITS in `frames/`, publishes a preview. |
 | `shoot.py` | Takes a picture: many short exposures, each checked, lined up and stacked live, with the raw frames kept. `--exposure auto` picks the longest exposure the tracking allows. |
 | `restack.py` | The quality pass: goes back over a session's raw frames, keeps the best, weights and clips them, and writes the finished picture. `shoot.py` runs it at the end. |
@@ -126,8 +127,49 @@ report** issue; rows marked "community tested" will be added from those.
 | `replay.py` | Turns a centring run recorded with `mount.py goto --solve --record` into a GIF. |
 | `watch.py` | Photographs the telescope itself with the webcam. |
 | `build_catalogue.py` | Regenerates `data/targets.csv` from OpenNGC. |
+| `ty` | One front door for programs and AI agents: `capabilities`, `status`, `context`, `night`, `targets`, `target NAME`, `session`, `doctor`. Always answers in JSON. |
+| `mcp_server.py` | Read-only MCP server offering the same information to MCP-aware assistants. |
 
 `tonight.py`, `serve.py` and `mount.py` accept `--demo`.
+
+The status page shows two pictures while imaging: **Now**, the newest single
+exposure straight from the camera, and **Live stack**, everything added up so
+far.
+
+## For programs and AI agents
+
+Everything a person can read, a program can read too, in one stable shape.
+Start with [AGENTS.md](AGENTS.md); the details are in [docs/agents/](docs/agents/).
+
+```
+./ty capabilities                         # what is connected, allowed and locked
+./ty status                               # mount, camera, imaging run, system
+./ty context                              # a short plain-text briefing for an agent
+./mount.py goto M27 --dry-run --json      # what a move would do, without moving
+```
+
+- **`--json`** on `mount.py`, `doctor.py` and `tonight.py`, and always from
+  `ty`. Every answer is the same envelope: `schema_version`, `ok`, `command`,
+  `timestamp`, `data`, `warnings`, `errors`. The shapes are JSON Schemas in
+  [`schemas/`](schemas/).
+- **Error codes that stay put**, such as `MOTION_LOCKED`,
+  `TARGET_BELOW_ALTITUDE_LIMIT` and `HANDSET_NOT_SET_UP`, each saying whether
+  retrying can help and what to do instead.
+- **`--dry-run`** on every command that moves the mount: the same checks, the
+  planned move and any warning (such as the tube swinging over the pole), and
+  the hardware is never opened.
+- **Web API**: `GET /api/v1/status`, `/capabilities`, `/night`, `/targets`,
+  `/target/NAME`, `/session/current` and `/context` on the status page's port.
+- **MCP**: `./mcp_server.py` over stdio; setup in
+  [docs/agents/mcp.md](docs/agents/mcp.md).
+
+The web API and the MCP server are read-only: they can report, plan and
+simulate, and cannot move the mount or start the camera. Moving the telescope
+from an agent means running `mount.py`, with the same limits as a person and
+only when a person has asked for that move.
+[`evals/`](evals/) holds the situations an agent should handle well; the test
+suite checks the interface gives the right answer in each. They have not yet
+been run with a model in the loop.
 
 ## How it works
 
@@ -416,6 +458,9 @@ Later, if people ask for them:
 
 - Raspberry Pi or other small computer strapped to the telescope.
 - Controls on the web page, behind a login.
+- Letting an agent request a move over MCP, carried out only after a person
+  approves that exact move (designed in `docs/agents/safety.md`, not built).
+- The agent scenarios in `evals/` run with a real model in the loop.
 - Guiding and focuser support.
 
 Not planned: ASCOM, mobile apps, a React front end, cloud services, AI target

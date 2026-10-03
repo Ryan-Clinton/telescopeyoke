@@ -1,0 +1,90 @@
+# telescopeyoke: notes for coding and operating agents
+
+A lightweight telescope automation system for Linux: night planning, SynScan
+mount control, plate solving, focusing and stacking, on a laptop left beside
+the telescope. `README.md` is the user's guide; this file is the map for
+agents. Deeper notes are in `docs/agents/`.
+
+## Start here
+
+```bash
+./ty context            # a short briefing: tonight, hardware, imaging run, the motion rules
+./ty capabilities --json
+./doctor.py --json      # what is installed and connected
+pytest -q               # about a minute; needs no hardware
+```
+
+Everything runs without a telescope: `./tonight.py --demo`, `./serve.py --demo`,
+`./ty mount --demo goto M27`.
+
+## Layout
+
+| Files | What they are |
+|---|---|
+| `ty` | One command over everything; `--json` on any subcommand |
+| `agent.py`, `interface.py` | Read-only facts for programs; the JSON envelope, error codes, states |
+| `mcp_server.py` | Read-only MCP server over `agent.py` |
+| `tonight.py`, `sky.py`, `feeds.py`, `page.py`, `serve.py` | Planner, status page, read-only web API |
+| `mount.py`, `tracking.py`, `polaralign.py`, `simulator.py` | Mount control, drift model, simulated handset |
+| `camera.py`, `indi.py`, `snap.py`, `liveview.py`, `focus.py` | Camera and focusing |
+| `shoot.py`, `stacking.py`, `restack.py`, `process.py`, `calibrate.py` | Imaging pipeline |
+| `schemas/`, `tests/`, `evals/` | Output schemas, tests, agent scenarios |
+
+## Safe without hardware
+
+All of `ty` except `ty mount` with a motion command; anything with `--demo`;
+anything with `--dry-run`; `pytest`; `doctor.py`.
+
+## Commands that move the telescope
+
+`mount.py goto | point | zenith | home | compensate`, and `shoot.py` (which
+re-centres), `polaralign.py`. `mount.py drift` and `shoot.py --assist` change
+a motor's creep rate. `mount.py stop` is always allowed.
+
+## Safety invariants (do not weaken these)
+
+1. **A person asks for each move.** An agent never decides to move the mount,
+   and never removes `MOTION_LOCKED`. Check a move with `--dry-run`, report
+   what it would do, and let the person run or approve it.
+2. **The web server and the MCP server are read-only.** No motion, no
+   capture, no writes; do not add any without authentication designed first.
+3. **Limits stay in the code:** minimum altitude 20°, at most 5.75 h from the
+   meridian, 40° from the Sun, and refusal when the handset is not set up.
+4. **Anything that changes how the mount moves needs a test against
+   `simulator.py`.**
+5. **The user's location never goes in the repository:** `config.toml`,
+   `web/`, `frames/`, `cache/`, `calibration/` are ignored. Do not publish
+   photos of the garden.
+
+## Design principles
+
+- **Small and specific.** Automation for ordinary SynScan gear, not a general
+  observatory suite. No ASCOM, plugin systems or sequencing engines.
+- **Small enough to understand.** One person can read the lot. Prefer a few
+  clear lines to an abstraction; do not generalise for hardware nobody has
+  reported trying.
+- **Honest status.** Say what is proven on real hardware and what is not.
+- **Runs without hardware.** `--demo` and the tests cover everything they can.
+- **One implementation, several interfaces.** The CLI, `--json`, the web API
+  and MCP all call the same functions.
+
+## Conventions
+
+- Short scripts, plain functions, comments that say why. Match the file you
+  are in. No new dependencies without a strong reason.
+- Machine output: `--json` gives one envelope (`schemas/envelope.schema.json`)
+  on stdout; progress goes to stderr; exit code 0 only if `ok`. Error codes
+  live in `interface.py` and are stable. Bump `SCHEMA_VERSION` for any
+  breaking change.
+- Keep `--demo` and the tests working with every change.
+- The README's "Current status" must stay true about what is proven on real
+  hardware.
+
+## More
+
+- `docs/agents/commands.md`: every command, what it returns, whether it moves anything
+- `docs/agents/state-model.md`: states, error codes, the envelope
+- `docs/agents/safety.md`: why the rules above exist, and the planned approval design
+- `docs/agents/mcp.md`: the MCP server and the web API
+- `docs/agents/examples.md`: worked examples of answering common requests
+- `docs/agents/architecture.md`, `testing.md`, `hardware.md`

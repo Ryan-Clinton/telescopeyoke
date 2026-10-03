@@ -73,8 +73,9 @@ def install_sample_frame(web):
     """Put a real picture taken with this software where the page expects the
     latest camera frame, unless the camera has already put one there."""
     web.mkdir(exist_ok=True)
-    if SAMPLE_FRAME.exists() and not (web / "latest.jpg").exists():
-        shutil.copy(SAMPLE_FRAME, web / "latest.jpg")
+    for name in ("latest.jpg", "stack.jpg"):
+        if SAMPLE_FRAME.exists() and not (web / name).exists():
+            shutil.copy(SAMPLE_FRAME, web / name)
 
 
 def _fill_lookups():
@@ -107,7 +108,9 @@ def status():
         "latest": {"fwhm": [3.7, "good"], "roundness": [0.92, "good"], "stars": [83, "good"],
                    "drift": [4, "good"], "rotation": [0.012, "good"]},
         "series": {"fwhm": fwhm, "stars": stars, "drift": drift, "accepted": accepted},
-        "image": {"kind": "live stack", "detail": "81 accepted frames · 162 s integration", "age": 3},
+        "now": {"kind": "newest frame", "detail": "frame 97 · 2 s", "age": 3},
+        "stack": {"kind": "live stack of M27", "detail": "81 accepted frames · 162 s integration",
+                  "age": 3},
         "pictures": [], "scope_age": None,
         "system": [{"label": "Mount lead", "text": "connected", "level": "good"},
                    {"label": "Last plate solve", "text": "38 s ago", "level": "good"},

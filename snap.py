@@ -21,22 +21,26 @@ PREVIEW = ROOT / "web" / "latest.jpg"
 PREVIEW_WIDTH = 1600
 
 
-def label(kind, detail="", folder=None):
-    """Note beside web/latest.jpg saying what it is a picture of, so the page
-    can tell a single exposure from a stack."""
+def label(kind, detail="", folder=None, name="latest"):
+    """Note beside a picture in web/ saying what it is a picture of."""
     folder = folder or PREVIEW.parent
     folder.mkdir(exist_ok=True)
-    (folder / "latest.json").write_text(json.dumps({"kind": kind, "detail": detail}))
+    (folder / f"{name}.json").write_text(json.dumps({"kind": kind, "detail": detail}))
 
 
-def publish(mosaic, path=PREVIEW, kind="single frame", detail=""):
-    """Write a colour preview of a raw frame for the web page."""
-    image = Image.fromarray(stretch(colour(mosaic)))
+def publish(mosaic, path=PREVIEW, kind="single frame", detail="", quick=False):
+    """Write a colour preview of a raw frame. web/latest.jpg, the default, is
+    always the newest single exposure: what the telescope sees now. `quick`
+    halves the size first, for callers that publish every frame."""
+    rgb = colour(mosaic)
+    image = Image.fromarray(stretch(rgb[::2, ::2] if quick else rgb))
     if image.width > PREVIEW_WIDTH:
         height = round(image.height * PREVIEW_WIDTH / image.width)
         image = image.resize((PREVIEW_WIDTH, height), Image.LANCZOS)
     path.parent.mkdir(exist_ok=True)
-    image.save(path, quality=88)
+    partial = path.with_suffix(".part.jpg")
+    image.save(partial, quality=88)
+    partial.replace(path)   # the page never loads a half-written picture
     if path == PREVIEW:
         label(kind, detail)
 

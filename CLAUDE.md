@@ -1,26 +1,15 @@
-# telescopeyoke
+# telescopeyoke: Claude-specific notes
 
-A lightweight telescope automation system: night planning, SynScan mount
-control, plate solving, focusing and stacking. See `README.md` for what each
-command does, the safety rules for moving the mount, and what is and is not
-proven on real hardware.
+Read `AGENTS.md` first: it has the layout, the commands, the safety rules and
+the conventions, and applies to every agent. This file only adds how Claude
+works with this particular user.
 
-## Design principles
-
-- **Small and specific.** This is automation for ordinary SynScan gear, not a
-  general observatory suite. No ASCOM, plugin systems or sequencing engines.
-- **Small enough to understand.** Short scripts with plain names; one person
-  can read the lot. Prefer a few clear lines to an abstraction, and do not
-  generalise for hardware nobody has reported trying.
-- **Nothing moves the mount without a person having asked for that move.**
-  The web page is read-only; controls would need authentication first.
-- **The user's location stays out of the repository.** `config.toml`, `web/`,
-  `frames/` and `cache/` are never committed, and nothing published shows the
-  garden or the address.
-- **Honest status.** The README says which parts are proven on real hardware
-  and which are not; keep it true.
-- **Runs without hardware.** `--demo` and the tests use `simulator.py` and
-  `demo.py`; new features should keep both working.
+- Run anything expected to take more than a minute in the background and
+  carry on with the next task.
+- Turn each procedure that works into a command in the project as soon as it
+  works.
+- Slew the real mount only when the user has asked for that move. Say first
+  if the tube will swing over the pole.
 
 ## ChatGPT audit loop
 

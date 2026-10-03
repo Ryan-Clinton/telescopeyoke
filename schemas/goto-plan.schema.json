@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/goto-plan.schema.json",
+  "title": "GoTo plan",
+  "description": "data of: ty mount goto NAME --dry-run --json, and of the MCP tool simulate_goto",
+  "type": "object",
+  "required": [
+    "would_move",
+    "safe",
+    "altitude_deg",
+    "hour_angle_hours",
+    "pier_side"
+  ],
+  "properties": {
+    "would_move": {
+      "type": "boolean"
+    },
+    "safe": {
+      "type": "boolean"
+    },
+    "target": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "altitude_deg": {
+      "type": "number"
+    },
+    "dec_deg": {
+      "type": "number"
+    },
+    "hour_angle_hours": {
+      "type": "number"
+    },
+    "pier_side": {
+      "enum": [
+        "east",
+        "west"
+      ]
+    }
+  }
+}

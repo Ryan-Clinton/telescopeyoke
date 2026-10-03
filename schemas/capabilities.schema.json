@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/capabilities.schema.json",
+  "title": "Capabilities",
+  "description": "data of: ty capabilities --json",
+  "type": "object",
+  "required": [
+    "version",
+    "planner",
+    "mount",
+    "camera",
+    "plate_solver",
+    "imaging",
+    "motion",
+    "components"
+  ],
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "planner": {
+      "type": "object",
+      "required": [
+        "available"
+      ],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        }
+      }
+    },
+    "mount": {
+      "type": "object",
+      "required": [
+        "available"
+      ],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        }
+      }
+    },
+    "camera": {
+      "type": "object",
+      "required": [
+        "available"
+      ],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        }
+      }
+    },
+    "plate_solver": {
+      "type": "object",
+      "required": [
+        "available"
+      ],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        }
+      }
+    },
+    "imaging": {
+      "type": "object",
+      "required": [
+        "available"
+      ],
+      "properties": {
+        "available": {
+          "type": "boolean"
+        }
+      }
+    },
+    "motion": {
+      "type": "object",
+      "required": [
+        "locked",
+        "approval",
+        "limits"
+      ],
+      "properties": {
+        "locked": {
+          "type": "boolean"
+        },
+        "lock_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "approval": {
+          "type": "string"
+        },
+        "limits": {
+          "type": "object"
+        }
+      }
+    },
+    "components": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "status",
+          "message"
+        ],
+        "properties": {
+          "status": {
+            "enum": [
+              "ok",
+              "warn",
+              "fail"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

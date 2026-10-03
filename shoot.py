@@ -126,12 +126,15 @@ class Session:
         with self.timings.phase("update the web page"):
             image = Image.fromarray(stretch(self.stack.result()))
             WEB.mkdir(exist_ok=True)
+            # The stack has its own picture; web/latest.jpg stays the newest
+            # single frame, so the page shows both.
             image.resize((1600, round(1600 * image.height / image.width)), Image.LANCZOS) \
-                 .save(WEB / "latest.jpg", quality=88)
+                 .save(WEB / "stack.part.jpg", quality=88)
+            (WEB / "stack.part.jpg").replace(WEB / "stack.jpg")
             image.save(WEB / f"{self.name}.jpg", quality=92)
             seconds = self.exposure * len(self.accepted)
-            snap.label("live stack", f"{len(self.accepted)} accepted frames · {seconds:.0f} s "
-                       "integration", WEB)
+            snap.label(f"live stack of {self.name}", f"{len(self.accepted)} accepted frames · "
+                       f"{seconds:.0f} s integration", WEB, name="stack")
         self.published = time.monotonic()
 
     def finish(self):
@@ -250,6 +253,7 @@ def main():
     print(f"{session.name}: {args.frames} frames of {exposure:g} s at gain {args.gain}; "
           f"calibration: {session.calibration.describe()}; {workers} workers", flush=True)
     index, since_centre, started = 0, 0, time.monotonic()
+    shown = 0.0   # when the newest raw frame was last put on the web page
     waiting = deque()   # (future, time taken) for frames being processed, oldest first
 
     def collect(everything=False):
@@ -278,6 +282,10 @@ def main():
                     mosaic, header = cam.frame(exposure)
                     index += 1
                     since_centre += 1
+                    if time.monotonic() - shown >= PREVIEW_EVERY:
+                        snap.publish(mosaic, kind="newest frame", quick=True,
+                                     detail=f"frame {index} · {exposure:g} s")
+                        shown = time.monotonic()
                     collect()
                     if len(waiting) >= BACKLOG:
                         # Capture never waits for processing: this frame's raw
