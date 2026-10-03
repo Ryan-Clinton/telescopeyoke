@@ -1,0 +1,9 @@
+# Your own location
+config.toml
+
+# Generated at run time
+__pycache__/
+cache/
+frames/
+web/
+MOTION_LOCKED

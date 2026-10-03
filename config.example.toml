@@ -1,0 +1,26 @@
+# Copy this file to config.toml and fill in your own site.
+# config.toml is not committed, since it gives away where you live.
+
+[site]
+name = "My back garden"
+# Decimal degrees; west longitudes are negative. A postcode's centre is
+# accurate enough.
+latitude = 51.4779
+longitude = -0.0015
+elevation_m = 45
+timezone = "Europe/London"
+# Zenith sky brightness in mag/arcsec². Leave unset to look it up in the
+# light pollution atlas; set it if you measure the real value with a meter.
+# sqm = 20.55
+
+[horizon]
+# Lowest altitude (degrees) worth pointing at in any direction.
+min_altitude = 20
+# Directions blocked by houses, trees etc. Azimuth runs 0 = north, 90 = east,
+# 180 = south, 270 = west. Example: the house blocks the south up to 40°:
+#   blocked = [ { from = 150, to = 210, altitude = 40 } ]
+blocked = []
+
+[scope]
+aperture_mm = 150
+focal_length_mm = 750
