@@ -36,11 +36,21 @@
 
   <section id="home" class="task">
     <div id="attention" class="attention"></div>
-    <h1>Tonight <span id="home-verdict" class="word"></span></h1>
-    <div id="window" class="window"></div>
-    <p id="moon" class="quiet"></p>
-    <h2>Best now</h2>
-    <div id="best"></div>
+    <div id="cards" class="cards"></div>
+    <p id="conditions" class="quiet"></p>
+    <h2 id="best-title">Best now</h2>
+    <div id="best" class="targets"></div>
+    <h2 id="later-title">Later tonight</h2>
+    <div id="later" class="targets"></div>
+    <h2>The night</h2>
+    <svg id="timeline" class="timeline" viewBox="0 0 900 104"></svg>
+    <p id="night-words" class="quiet"></p>
+    <details><summary>All ranked targets</summary><div id="ranked-table" class="scroll"></div></details>
+    <details><summary>Weather hour by hour</summary><div id="weather-table" class="scroll"></div></details>
+    <div id="clouds-part">
+      <h2>Cloud from the satellite (bright is cloud, dark is clear)</h2>
+      <img id="clouds" class="wide-picture" alt="Satellite picture of the cloud">
+    </div>
   </section>
 
   <section id="targets" class="task" hidden>
@@ -85,6 +95,10 @@
       <button type="button" data-plan="drift" data-needs="imaging">Measure drift</button>
       <button type="button" data-plan="compensate" data-needs="imaging">Compensate</button>
     </div>
+    <div id="scope-part">
+      <h2>The telescope (webcam, updates during slews)</h2>
+      <img id="scope-picture" class="wide-picture" alt="The telescope, from the webcam">
+    </div>
     <p id="demo-mount" class="quiet" hidden>In the demo each command starts a fresh simulated mount at its home position, so a position is not carried from one move to the next.</p>
   </section>
 
@@ -106,16 +120,19 @@
   </section>
 
   <section id="imaging" class="task" hidden>
-    <div class="viewer">
-      <div class="tabs">
-        <button type="button" data-picture="stack.jpg" class="on">Live stack</button>
-        <button type="button" data-picture="latest.jpg">Last exposure</button>
-        <span id="picture-note" class="quiet"></span>
-      </div>
-      <img id="picture" class="picture" alt="The telescope's picture">
+    <div id="viewer" class="viewer">
+      <figure data-picture="latest.jpg"><figcaption><b>NOW</b> <span id="now-note" class="quiet"></span></figcaption>
+        <img id="picture-now" class="picture" alt="The newest frame"></figure>
+      <figure data-picture="stack.jpg"><figcaption><b id="stack-title">STACK</b> <span id="stack-note" class="quiet"></span></figcaption>
+        <img id="picture-stack" class="picture" alt="The stack so far"></figure>
     </div>
+    <p id="picture-note" class="quiet"></p>
     <div id="measures" class="measures"></div>
     <div id="reasons" class="reasons"></div>
+    <div id="gallery-part">
+      <h2>Pictures</h2>
+      <div id="gallery" class="gallery"></div>
+    </div>
   </section>
 
   <section id="tools" class="task" hidden>
@@ -143,6 +160,7 @@
 
   <section id="system" class="task" hidden>
     <h1>System</h1>
+    <dl id="system-rows" class="facts"></dl>
     <div id="doctor"></div>
     <div class="buttons"><button type="button" id="recheck">Check again</button></div>
   </section>

@@ -35,30 +35,35 @@ def card(title, big, small="", tone=""):
             f'<div class="card-big">{e(big)}</div><div class="card-small">{e(small)}</div></div>')
 
 
-def cards(rep):
+def card_data(rep):
+    """The cards as (title, big, small, tone), for this page and the console."""
     w, moon = rep["weather"], rep["moon"]
     out = []
     if w:
         tone = {"GO": "good", "MARGINAL": "fair", "NO-GO": "bad"}[w["verdict"]]
-        out.append(card("Tonight", w["verdict"], f"average cloud {w['mean_cloud']}%", tone))
+        out.append(("Tonight", w["verdict"], f"average cloud {w['mean_cloud']}%", tone))
         if w["clear_hours"]:
             until = w["clear_to"] + timedelta(hours=1)
-            out.append(card("Clear window", f"{w['clear_from']:%H:%M}–{until:%H:%M}",
-                            f"{w['clear_hours']} hours"))
+            out.append(("Clear window", f"{w['clear_from']:%H:%M}–{until:%H:%M}",
+                        f"{w['clear_hours']} hours", ""))
         else:
-            out.append(card("Clear window", "none", "no clear hour forecast", "bad"))
+            out.append(("Clear window", "none", "no clear hour forecast", "bad"))
     else:
-        out.append(card("Tonight", "?", "no forecast available"))
+        out.append(("Tonight", "?", "no forecast available", ""))
     events = [f"{word} {t:%H:%M}" for t, word in ((moon["rise"], "rises"), (moon["set"], "sets")) if t]
-    out.append(card("Moon", f"{moon['illumination']}% {'waxing' if moon['waxing'] else 'waning'}",
-                    ", ".join(events) or "no rise or set tonight"))
+    out.append(("Moon", f"{moon['illumination']}% {'waxing' if moon['waxing'] else 'waning'}",
+                ", ".join(events) or "no rise or set tonight", ""))
     if w:
         gap = min(h["temp"] - h["dew_point"] for h in w["hours"])
         risk = "HIGH" if gap <= 2 else "MODERATE" if gap <= 4 else "LOW"
         damp = next((h for h in w["hours"] if h["temp"] - h["dew_point"] <= 2), None)
         small = f"from {damp['time']:%H:%M}; gap {gap:.1f}°C" if damp else f"smallest gap {gap:.1f}°C"
-        out.append(card("Dew risk", risk, small, {"HIGH": "bad", "MODERATE": "fair", "LOW": "good"}[risk]))
-    return "".join(out)
+        out.append(("Dew risk", risk, small, {"HIGH": "bad", "MODERATE": "fair", "LOW": "good"}[risk]))
+    return out
+
+
+def cards(rep):
+    return "".join(card(*one) for one in card_data(rep))
 
 
 def conditions(rep):

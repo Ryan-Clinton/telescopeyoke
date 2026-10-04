@@ -15,7 +15,7 @@ const SVG = "http://www.w3.org/2000/svg";
 const STALE = 600;   // seconds after which an old measurement is taken off the bar
 
 const seen = { state: null, night: null, targets: null, observing: null, session: null, job: null,
-               doctor: null, focus: null, catalogue: null, horizon: null };
+               doctor: null, focus: null, catalogue: null, horizon: null, report: null, system: null, gallery: null };
 let task = "home", chosen = null, filter = null, plan = null, trail = [], lastJobId = null;
 let unread = 0, logged = new Set();
 
@@ -243,7 +243,9 @@ function drawTop() {
   $("site").textContent = state.site || "";
   $("demo").hidden = $("demo-mount").hidden = !state.demo;
   if (night) {
-    const until = night.clear_window ? ` · clear ${clockTime(night.clear_window[0])} to ${clockTime(night.clear_window[1])}` : "";
+    // The same words as the Clear window card, when the report has arrived.
+    const card = seen.report && seen.report.cards.find((c) => c.title === "Clear window");
+    const until = card ? ` · clear ${card.big}` : night.clear_window ? ` · clear ${clockTime(night.clear_window[0])} to ${clockTime(night.clear_window[1])}` : "";
     $("verdict").textContent = `${night.verdict}${until}`;
     $("verdict").className = `verdict ${night.verdict === "GO" ? "good" : night.verdict === "NO-GO" ? "bad" : "warn"}`;
   }
@@ -328,8 +330,64 @@ function bestNow() {
   return list.find((t) => t.observable_now) || null;
 }
 
+// A picture is fetched again every ten seconds: the address changes, so the
+// browser asks; the console ignores what follows the "?".
+function picture(node, name) {
+  const src = `/pictures/${name}?v=${Math.floor(Date.now() / 10000)}`;
+  if (node.getAttribute("src") !== src) node.setAttribute("src", src);
+}
+
+function showOnlyIfThere(image, part) {
+  // A picture that is not there (no webcam, no satellite image yet) takes its heading with it.
+  image.addEventListener("error", () => { part.hidden = true; });
+  image.addEventListener("load", () => { part.hidden = false; });
+}
+
+function targetCard(t, rank) {
+  return el("div", { class: "target", on: { click: () => { choose(t.id); show("targets"); } } },
+            el("div", { class: "head" }, el("span", { class: "rank", text: rank }),
+               el("span", { class: "name", text: `${t.id} ${t.name || ""}`.trim() }), el("span", { class: "score", text: t.score })),
+            el("div", { class: "quiet", text: `${t.kind} · best ${clockTime(t.best)} · ${t.best_alt}° ${t.direction} · ${clockTime(t.start)}–${clockTime(t.end)}` }),
+            el("div", { class: "tags", text: (t.tags || []).join(" · ") }),
+            el("button", { type: "button", text: "Go to", "data-needs": "mount", "data-gate": "goto",
+                           on: { click: (event) => { event.stopPropagation(); makePlan("goto", { target: t.id }); } } }));
+}
+
+function drawTimeline(report) {
+  const night = report.night, moon = report.moon, svg = $("timeline");
+  const start = new Date(night.sunset).getTime(), end = new Date(night.sunrise).getTime();
+  if (!(end > start)) return fill(svg);
+  const left = 70, width = 820, at = (t) => left + width * Math.min(Math.max((new Date(t).getTime() - start) / (end - start), 0), 1);
+  const parts = [], lanes = [["Darkness", 4], ["Moon up", 30], ["Cloud %", 56]];
+  for (const [name, y] of lanes) parts.push(el("text", { x: 0, y: y + 14, text: name }), el("rect", { class: "lane", x: left, y, width, height: 20 }));
+  const band = (kind, y, a, b) => { if (a && b && new Date(b) > new Date(a)) parts.push(el("rect", { class: kind, x: at(a), y, width: Math.max(1, at(b) - at(a)), height: 20 })); };
+  band("dark", 4, night.dark_start, night.dark_end);
+  if (moon.up_at_sunset) band("moon", 30, night.sunset, moon.set || night.sunrise);
+  if (moon.rise) band("moon", 30, moon.rise, moon.set && new Date(moon.set) > new Date(moon.rise) ? moon.set : night.sunrise);
+  for (const hour of report.hours) {
+    const from = new Date(hour.time).getTime();
+    if (from < start || from >= end) continue;
+    const x = at(from), w = at(from + 3600000) - x;
+    parts.push(el("rect", { class: hour.level, x, y: 56, width: Math.max(1, w - 1), height: 20 }),
+               el("text", { class: "cell-text", x: x + w / 2 - 6, y: 70, text: hour.cloud }));
+  }
+  for (let t = Math.ceil(start / 3600000) * 3600000; t < end; t += 3600000) {
+    parts.push(el("text", { x: at(t) - 6, y: 96, text: String(new Date(t).getHours()).padStart(2, "0") }));
+  }
+  const now = Date.now();
+  if (now >= start && now <= end) parts.push(el("rect", { class: "now", x: at(now), y: 0, width: 2, height: 80 }));
+  fill(svg, parts);
+  $("night-words").textContent = `Sunset ${clockTime(night.sunset)} · ${night.dark_level} dark ${clockTime(night.dark_start)}–${clockTime(night.dark_end)} · sunrise ${clockTime(night.sunrise)}. The white mark is now.`;
+}
+
+function table(head, rows, pick) {
+  const cell = (tag, c) => Array.isArray(c) ? el(tag, { class: c[1], text: c[0] }) : el(tag, { text: c });
+  return el("table", {}, el("thead", {}, el("tr", {}, head.map((h) => cell("th", h)))),
+            el("tbody", {}, rows.map((row, i) => el("tr", pick ? { class: "pick", on: { click: () => pick(i) } } : {}, row.map((c) => cell("td", c))))));
+}
+
 function drawHome() {
-  const night = seen.night, watch = seen.observing;
+  const watch = seen.observing, report = seen.report;
   if (watch) {
     const notes = watch.notes || [], run = watch.imaging || {}, alert = notes.length > 0;
     const reasons = [];
@@ -346,22 +404,24 @@ function drawHome() {
          el("ul", {}, (alert ? notes : reasons).map((text) => el("li", { text }))), alert ? trend : null, remedy);
     $("attention").className = `attention ${alert ? "alert" : ""}`;
   }
-  if (night) {
-    $("home-verdict").textContent = night.verdict;
-    $("home-verdict").className = `word ${night.verdict === "GO" ? "good" : night.verdict === "NO-GO" ? "bad" : "warn"}`;
-    const start = new Date(night.sunset).getTime(), end = new Date(night.sunrise).getTime(), at = (t) => 600 * (new Date(t).getTime() - start) / (end - start);
-    const bar = el("svg", { viewBox: "0 0 600 26", preserveAspectRatio: "none" }, el("rect", { x: 0, y: 10, width: 600, height: 6, class: "blocked", fill: "currentColor", opacity: 0.2 }));
-    if (night.clear_window) bar.append(el("rect", { x: at(night.clear_window[0]), y: 10, width: Math.max(2, at(night.clear_window[1]) - at(night.clear_window[0])), height: 6, fill: "currentColor" }));
-    const now = at(Date.now());
-    if (now >= 0 && now <= 600) bar.append(el("rect", { x: now, y: 2, width: 2, height: 22, fill: "currentColor" }));
-    fill($("window"), bar, el("div", { class: "quiet", text: night.clear_window
-      ? `Clear from ${clockTime(night.clear_window[0])} to ${clockTime(night.clear_window[1])}; dark from ${clockTime(night.darkness.start)} to ${clockTime(night.darkness.end)}. The mark is now.`
-      : "No clear window tonight." }));
-    const moon = night.moon;
-    $("moon").textContent = `Moon ${moon.illumination}% lit` + (moon.set ? `, sets ${clockTime(moon.set)}` : moon.rise ? `, rises ${clockTime(moon.rise)}` : "");
+  if (!report) return;
+  fill($("cards"), report.cards.map((c) => el("div", {}, el("div", { class: "title", text: c.title }),
+       el("div", { class: `big ${c.tone === "fair" ? "warn" : c.tone}`, text: c.big }), el("div", { class: "quiet", text: c.small }))));
+  $("conditions").textContent = report.conditions;
+  const now = report.targets.filter((t) => t.now).slice(0, 5);
+  const later = report.targets.filter((t) => !t.now && new Date(t.start) > new Date()).slice(0, 5);
+  $("best-title").hidden = $("best").hidden = !now.length;
+  fill($("best"), now.map((t, i) => targetCard(t, i + 1)));
+  $("later-title").textContent = now.length ? "Later tonight" : "Best tonight";
+  $("later-title").hidden = $("later").hidden = !later.length;
+  fill($("later"), later.map((t, i) => targetCard(t, i + 1)));
+  drawTimeline(report);
+  if (!$("ranked-table").firstChild || $("ranked-table").dataset.made !== String(report.targets.length)) {
+    fill($("ranked-table"), table(report.target_head, report.targets.map((t) => t.row), (i) => { choose(report.targets[i].id); show("targets"); }));
+    $("ranked-table").dataset.made = String(report.targets.length);
+    fill($("weather-table"), table(report.weather_head, report.weather_rows));
   }
-  const list = ((seen.targets && seen.targets.targets) || []).filter((t) => t.observable_now).slice(0, 5);
-  fill($("best"), list.length ? list.map((t, i) => targetRow(t, i === 0)) : el("p", { class: "quiet", text: "Nothing is well placed just now." }));
+  picture($("clouds"), "clouds.jpg");
   gateAll();
 }
 
@@ -441,6 +501,7 @@ function drawMount() {
                         ["Correction applied", t.dec_creep_arcsec_s != null ? `${t.dec_creep_arcsec_s} "/s` : null],
                         ["Drift left", t.drift_arcsec_s != null ? `${t.drift_arcsec_s} "/s` : null],
                         ["Longest exposure advised", t.max_recommended_exposure_s != null ? `${t.max_recommended_exposure_s} s` : null]]);
+  picture($("scope-picture"), "scope.jpg");
   gateAll();
 }
 
@@ -466,26 +527,37 @@ function drawFocus() {
   gateAll();
 }
 
-let picture = "stack.jpg";
 function drawImaging() {
   const run = seen.session;
-  $("picture").src = `/pictures/${picture}`;   // fetched afresh each time: nothing is cached
-  for (const tab of document.querySelectorAll("[data-picture]")) tab.classList.toggle("on", tab.dataset.picture === picture);
+  picture($("picture-now"), "latest.jpg");
+  picture($("picture-stack"), "stack.jpg");
   if (!run || !run.latest) {
     $("picture-note").textContent = "No imaging run yet.";
-    return fill($("measures")), fill($("reasons"));
+    fill($("measures")); fill($("reasons"));
+  } else {
+    $("now-note").textContent = run.now ? `${run.now.detail} · ${age(run.now.age)}` : "the newest frame";
+    $("stack-title").textContent = (run.stack && run.stack.kind ? run.stack.kind : `stack of ${run.name}`).toUpperCase();
+    $("stack-note").textContent = run.stack ? run.stack.detail : `${run.accepted} accepted frames · ${run.integration ?? 0} s`;
+    $("picture-note").textContent = mode() === "imaging" ? "Click a picture to see it alone." : `${run.name}: ${run.state || "finished"}, ${age(run.age)}. Click a picture to see it alone.`;
+    const series = run.series || {}, measure = (label, key, unit) => {
+      const [value, word] = run.latest[key] || [null, ""];
+      const line = el("svg", { class: "spark", viewBox: "0 0 120 26", preserveAspectRatio: "none" });
+      spark(line, series[key] || [], series.accepted);
+      return el("div", { class: "measure" }, el("div", { class: "label", text: label }),
+                el("div", { class: "value" }, `${value ?? "–"}${unit || ""} `, el("span", { class: `word ${word}`, text: (word || "").toUpperCase() })), line);
+    };
+    fill($("measures"), measure("FWHM", "fwhm", " px"), measure("Roundness", "roundness"), measure("Stars", "stars"),
+         measure("Drift", "drift", "%"), measure("Rotation", "rotation", "°"));
+    const reasons = Object.entries(run.reasons || {});
+    fill($("reasons"), reasons.length ? ["Rejected: ", ...reasons.flatMap(([why, count]) => [el("b", { text: count }), ` ${why}   `])] : "No frames rejected.");
   }
-  $("picture-note").textContent = mode() === "imaging" ? "" : `${run.name}: ${run.state || "finished"}, ${age(run.age)}`;
-  const series = run.series || {}, measure = (label, key, unit) => {
-    const [value, word] = run.latest[key] || [null, ""];
-    const line = el("svg", { class: "spark", viewBox: "0 0 120 26", preserveAspectRatio: "none" });
-    spark(line, series[key] || [], series.accepted);
-    return el("div", { class: "measure" }, el("div", { class: "label", text: label }),
-              el("div", { class: "value" }, `${value ?? "–"}${unit || ""} `, el("span", { class: `word ${word}`, text: (word || "").toUpperCase() })), line);
-  };
-  fill($("measures"), measure("FWHM", "fwhm"), measure("Roundness", "roundness"), measure("Stars", "stars"), measure("Drift", "drift", "%"));
-  const reasons = Object.entries(run.reasons || {});
-  fill($("reasons"), reasons.length ? ["Rejected: ", ...reasons.flatMap(([why, count]) => [el("b", { text: count }), ` ${why}   `])] : "No frames rejected.");
+  const found = (seen.gallery && seen.gallery.pictures) || [];
+  $("gallery-part").hidden = !found.length;
+  if ($("gallery").dataset.made !== found.map((p) => p.file + p.time).join()) {
+    fill($("gallery"), found.map((p) => el("figure", {}, el("figcaption", { text: `${p.target} ${p.kind}`.trim() }),
+         el("img", { src: `/pictures/${encodeURIComponent(p.file)}`, alt: `${p.target} ${p.kind}`, loading: "lazy" }))));
+    $("gallery").dataset.made = found.map((p) => p.file + p.time).join();
+  }
 }
 
 function openSheet(target) {
@@ -527,7 +599,8 @@ function drawTools() {
 }
 
 function drawSystem() {
-  const report = seen.doctor;
+  const report = seen.doctor, rows = (seen.system && seen.system.rows) || [];
+  fill($("system-rows"), rows.flatMap((row) => [el("dt", { text: row.label }), el("dd", { class: row.level === "fair" ? "warn" : row.level, text: row.text })]));
   if (!report) return;
   const marks = { ok: ["✓", "good"], warn: ["!", "warn"], fail: ["✗", "bad"] };
   fill($("doctor"), Object.entries(report.components).flatMap(([section, checks]) => [
@@ -606,7 +679,9 @@ async function refresh() {
   busy = true;
   const wanted = ["state", "job", "session", "focus"];
   if (slow % 3 === 0) wanted.push("observing");
-  if (slow % 30 === 0 || !seen.night) wanted.push("night", "targets");
+  if (slow % 30 === 0 || !seen.night) wanted.push("night", "targets", "report");
+  if (task === "system" || !seen.system) wanted.push("system");
+  if (task === "imaging" && slow % 5 === 0 || !seen.gallery) wanted.push("gallery");
   if (!seen.catalogue) wanted.push("catalogue");
   if (task === "system" || !seen.doctor) wanted.push("doctor");
   if (task === "tools") wanted.push("horizon");
@@ -623,8 +698,16 @@ document.addEventListener("click", (event) => {
   if (button.dataset.plan) return makePlan(button.dataset.plan, {});
   if (button.dataset.action) return act(button.dataset.action, button.dataset.kind ? { kind: button.dataset.kind } : {});
   if (button.dataset.filter) { filter = filter === button.dataset.filter ? null : button.dataset.filter; return drawTargets(); }
-  if (button.dataset.picture) { picture = button.dataset.picture; return drawImaging(); }
 });
+for (const figure of document.querySelectorAll("#viewer figure")) {
+  figure.addEventListener("click", () => {
+    const alone = $("viewer").classList.contains("solo") && figure.classList.contains("chosen");
+    for (const other of document.querySelectorAll("#viewer figure")) other.classList.toggle("chosen", other === figure && !alone);
+    $("viewer").classList.toggle("solo", !alone);
+  });
+}
+showOnlyIfThere($("clouds"), $("clouds-part"));
+showOnlyIfThere($("scope-picture"), $("scope-part"));
 
 $("stop").addEventListener("click", stop);
 $("search").addEventListener("input", drawTargets);

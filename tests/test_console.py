@@ -103,7 +103,7 @@ def test_requests_without_the_key_or_from_elsewhere_are_refused(desk):
 
 def test_reading_starts_nothing(desk):
     for name in ("state", "job", "night", "targets", "observing", "session", "doctor", "catalogue",
-                 "focus", "horizon", "target/M27"):
+                 "focus", "horizon", "report", "system", "gallery", "target/M27"):
         status, answer = desk.json(f"/api/{name}")
         assert status == 200 and answer["ok"], name
     assert desk.jobs.current is None and not desk.jobs.history and not desk.jobs.plans
@@ -115,6 +115,49 @@ def test_only_the_named_files_and_pictures_are_served(desk):
     assert desk("/pictures/index.html")[0] == 404
     assert desk("/console.py")[0] == 404
     assert desk("/config.toml")[0] == 404
+
+
+def test_the_night_is_reported_as_the_status_page_shows_it(desk):
+    import config
+    import page
+    import tonight
+    report = desk.json("/api/report")[1]["data"]
+    rep = tonight.build(config.example(), demo=True)
+    assert [c["title"] for c in report["cards"]] == [c[0] for c in page.card_data(rep)]
+    assert report["conditions"] == page.conditions(rep)
+    assert report["weather_head"] == tonight.WEATHER_HEAD and len(report["weather_rows"]) == len(rep["weather"]["hours"])
+    assert len(report["targets"]) == 40 and report["targets"][0]["row"][1] == rep["targets"][0]["id"]
+    assert {"tags", "score", "best", "start", "end", "now"} <= set(report["targets"][0])
+    assert all(hour["level"] in ("good", "fair", "bad") for hour in report["hours"])
+    assert desk.json("/api/system")[1]["data"]["rows"][0].keys() == {"label", "text", "level"}
+
+
+def test_the_demo_shows_only_its_own_pictures(desk):
+    # The made-up run has the sample picture; nothing the real camera, webcam
+    # or satellite left in web/ is shown beside it.
+    assert desk("/pictures/stack.jpg?v=123")[0] == 200
+    assert desk("/pictures/clouds.jpg")[0] == 404 and desk("/pictures/scope.jpg")[0] == 404
+    assert desk.json("/api/gallery")[1]["data"]["pictures"] == []
+    assert desk("/pictures/M27-final.jpg")[0] == 404
+
+
+def test_finished_pictures_are_served_by_name_and_nothing_else(tmp_path, monkeypatch):
+    import serve
+    (tmp_path / "M27-final.jpg").write_bytes(b"picture")
+    (tmp_path / "secret.txt").write_text("no")
+    monkeypatch.setattr(serve, "WEB", tmp_path)
+    monkeypatch.setattr(console, "WEB", tmp_path)
+    server, key = console.serve(port=0, demo=False)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+    try:
+        assert urllib.request.urlopen(f"{base}/pictures/M27-final.jpg").read() == b"picture"
+        for name in ("secret.txt", "../console.py", "M27-final.jpg/../secret.txt"):
+            with pytest.raises(urllib.error.HTTPError):
+                urllib.request.urlopen(f"{base}/pictures/{name}")
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 # --- the page's own files ---------------------------------------------------------

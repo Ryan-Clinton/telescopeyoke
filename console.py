@@ -45,7 +45,7 @@ FILES = {"/": ("index.html", "text/html; charset=utf-8"),
          "/console.css": ("console.css", "text/css; charset=utf-8"),
          "/console.js": ("console.js", "text/javascript; charset=utf-8"),
          "/icons.svg": ("icons.svg", "image/svg+xml")}
-PICTURES = ("latest.jpg", "stack.jpg", "scope.jpg")
+PICTURES = ("latest.jpg", "stack.jpg", "scope.jpg", "clouds.jpg")
 
 HEADERS = {
     "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; style-src 'self'; "
@@ -545,6 +545,54 @@ class Reader:
         return {"targets": stars + [{k: t[k] for k in ("id", "alt_id", "name", "kind")}
                                     for t in sky.load_targets()]}
 
+    def report(self):
+        """The night as the status page shows it: the cards, the conditions,
+        the timeline's hours, the ranked targets and the weather table."""
+        import config
+        import page
+        import tonight
+        cfg = config.example() if self.demo or not config.FILE.exists() else config.load()
+        rep = tonight.build(cfg, demo=self.demo)
+        w = rep["weather"]
+        return {
+            "cards": [dict(zip(("title", "big", "small", "tone"), one)) for one in page.card_data(rep)],
+            "conditions": page.conditions(rep),
+            "night": {k: rep[k] for k in ("sunset", "sunrise", "dark_start", "dark_end", "dark_level", "now")},
+            "moon": rep["moon"],
+            "hours": [{"time": h["time"], "cloud": h["cloud"], "level": page.level(h["cloud"], 25, 60)}
+                      for h in w["hours"]] if w else [],
+            "weather_head": tonight.WEATHER_HEAD,
+            "weather_rows": page.weather_rows(w) if w else [],
+            "target_head": tonight.TARGET_HEAD,
+            "targets": [{"id": t["id"], "name": t["name"], "kind": t["kind"], "score": round(t["score"]),
+                         "best": t["best"], "best_alt": round(t["best_alt"]), "direction": t["direction"],
+                         "start": t["start"], "end": t["end"], "tags": t["tags"], "now": t["now"],
+                         "row": tonight.target_row(i, t)}
+                        for i, t in enumerate(rep["targets"][:40], 1)],
+        }
+
+    def system(self):
+        """The state of the kit as the status page's rows."""
+        if self.demo:
+            import demo
+            return {"rows": demo.status()["system"]}
+        import serve
+        return {"rows": serve.system_status()}
+
+    def finished(self):
+        """File names of the finished pictures in web/. None in the demo: its
+        run is made up, and the real ones are not part of it."""
+        if self.demo:
+            return []
+        import serve
+        return [p["file"] for p in serve.pictures()]
+
+    def gallery(self):
+        if self.demo:
+            return {"pictures": []}
+        import serve
+        return {"pictures": serve.pictures()}
+
     def focus(self):
         import focus
         if not focus.FOCUS_FILE.exists():
@@ -578,6 +626,9 @@ class Reader:
             "catalogue": (self.catalogue, 3600),
             "focus": (self.focus, 1),
             "horizon": (self.horizon, 30),
+            "report": (self.report, 300),
+            "system": (self.system, 10),
+            "gallery": (self.gallery, 10),
         }
         if name not in routes:
             return None
@@ -648,9 +699,9 @@ class Handler(BaseHTTPRequestHandler):
                 # The demo's run is made up, so its picture is the sample one:
                 # never whatever the real camera last left in web/.
                 import demo
-                if name != "scope.jpg" and demo.SAMPLE_FRAME.exists():
+                if name in ("stack.jpg", "latest.jpg") and demo.SAMPLE_FRAME.exists():
                     return self.send(200, demo.SAMPLE_FRAME.read_bytes(), "image/jpeg")
-            elif name in PICTURES and (WEB / name).exists():
+            elif (name in PICTURES or name in self.reader.finished()) and (WEB / name).exists():
                 return self.send(200, (WEB / name).read_bytes(), "image/jpeg")
             return self.send(404, b"", "text/plain")
         if path.startswith("/api/"):

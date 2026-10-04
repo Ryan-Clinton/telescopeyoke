@@ -77,8 +77,9 @@ The console is a third program, and this is its design:
    internet, and cannot be shown inside another page. That rules out even
    `style="display:none"` on one element and a `<script>` block in the
    page: everything shown or hidden is done with classes, and all the
-   JavaScript is in `console.js`. Because nothing is cached, a picture is
-   fetched again with a plain request; no made-up query strings.
+   JavaScript is in `console.js`. A picture on the page is fetched again
+   every ten seconds by a number added to its address, which the console
+   ignores; an unchanged address would never be asked for twice.
 5. **A person confirms each move, on a plan.** Pressing anything that moves
    the mount first runs the command with `--dry-run` and shows the plan (see
    "The move plan"). The mount moves only when the person presses the
@@ -422,10 +423,16 @@ In the tables, **Moves** means the action goes through the move plan.
 
 ### Home: what to do now
 
-Tonight's verdict, large. The clear window as a bar with "now" marked. The
-Moon: how full, when it sets. The best target now as a card with its score,
-kind, height and direction, best time, and "Details" and "Go to"; the next
-few as one line each. All from `agent.night` and `agent.targets`.
+Everything the status page says about the night, since the person at the
+telescope should not need a second page for it: the four cards (tonight's
+verdict, clear window, Moon, dew risk); the line of seeing, transparency,
+wind and sky brightness; the best five targets now and the best five later,
+each with its score, kind, best time, height, window and tags, and a Go to
+button; the night as a timeline of darkness, Moon and cloud by the hour; the
+full ranked table and the weather hour by hour, folded until opened; and the
+satellite's cloud picture. The cards, the conditions line and the tables are
+made by the same functions as the status page's (`page.card_data`,
+`page.conditions`, `page.weather_rows`, `tonight.target_row`).
 
 Above it, one card from `agent.observing`, and it deserves care: it is what
 this project knows that a plain hardware controller does not. Either
@@ -507,12 +514,12 @@ choice restarts the aid.
 
 ### Imaging
 
-The richest screen. The picture in the middle with a switch between the live
-stack and the last exposure (`web/stack.jpg`, `web/latest.jpg`), both side
-by side on a wide screen. On the right the target, the state, frames taken of
+The richest screen. The newest frame and the live stack side by side
+(`web/latest.jpg`, `web/stack.jpg`); clicking one shows it alone. Below the
+measurements, the finished pictures kept in `web/`. On the right the target, the state, frames taken of
 those planned with a bar, seconds kept, share kept, exposure and gain. Below,
-four measurements each with its newest value, a word (good, fair, poor) and a
-sparkline from the run's series: FWHM, roundness, star count, drift. Then the
+five measurements each with its newest value, a word (good, fair, poor) and a
+sparkline from the run's series: FWHM, roundness, star count, drift, rotation. Then the
 reasons frames were rejected, as counts. All from `agent.session` and
 `agent.observing`.
 
@@ -566,7 +573,9 @@ Two of these get a picture for a result:
 
 ### System
 
-The doctor's checks as a list with a tick, a warning or a cross each; a line
+The status page's rows first (mount lead, last plate solve, camera, plate
+solver, how old the forecast and the satellite picture are, disk space),
+from the same function. Then the doctor's checks as a list with a tick, a warning or a cross each; a line
 opens to show the doctor's advice. Disk space. "Check again" runs the
 doctor.
 
