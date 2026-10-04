@@ -42,8 +42,11 @@ pytest
 
 The mount is real machinery and the software cannot see it. Do not add
 anything that moves it without a person having asked for that move, and do
-not add controls to the web page: it is served to the local network without
-a login.
+not add controls to the status page (`serve.py`): it is served to the local
+network without a login. Controls belong in the console (`console.py`),
+which answers this computer only; a new control there is one more row in its
+table of fixed commands, with a test, and anything that moves the mount goes
+through the plan a person confirms.
 
 ## What is out of scope
 

@@ -31,6 +31,7 @@ import argparse
 import numpy as np
 from astropy.io import fits
 
+import interface
 import stacking
 from camera import WHITE, Camera
 
@@ -99,8 +100,12 @@ def main():
     ap.add_argument("--exposure", type=float, default=2.0, help="seconds, for darks")
     ap.add_argument("--gain", type=int, default=1500)
     ap.add_argument("--frames", type=int, default=20)
+    ap.add_argument("--json", action="store_true", help="answer in JSON at the end")
     args = ap.parse_args()
+    return interface.main("calibrate", lambda: run(args), args.json)
 
+
+def run(args):
     with Camera(gain=args.gain) as cam:
         if args.kind == "dark":
             frames = capture(cam, args.exposure, args.frames, "dark")
@@ -126,6 +131,7 @@ def main():
             print(f"This flat is filed under the camera setup \"{stacking.setup_name()}\". If "
                   "you rotate or remove the camera, change 'setup' under [camera] in "
                   "config.toml and take a new one.")
+    return {"kind": args.kind, "frames": args.frames, "gain": args.gain}
 
 
 if __name__ == "__main__":

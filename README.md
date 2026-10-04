@@ -117,6 +117,7 @@ report** issue; rows marked "community tested" will be added from those.
 | `clouds.py` | Fetches the latest infrared satellite image with the site marked on it. |
 | `mount.py` | Moves the mount: `status`, `home`, `zenith`, `goto NAME [--solve]`, `point AZ ALT`, `sync`, `drift`, `compensate`, `stop`. |
 | `liveview.py` | Takes a frame every few seconds so the status page shows what the telescope sees now. Steps aside while `shoot.py` runs. |
+| `console.py` | A control console in the browser, for the person beside the telescope: targets, GoTo with a plan to confirm, focusing, imaging, tools. This computer only. `./console.py --demo` tries it with nothing plugged in. |
 | `horizon.py` | Sweeps the sky and reports which directions are blocked by houses, hedges and trees, as lines for `config.toml`. `--trace` follows the top of whatever is in the way right round and checks its own answer; `--daylight` works by day, going by brightness instead of stars. |
 | `snap.py` | Takes one camera frame, saves the FITS in `frames/`, publishes a preview. |
 | `shoot.py` | Takes a picture: many short exposures, each checked, lined up and stacked live, with the raw frames kept. `--exposure auto` picks the longest exposure the tracking allows. `--frames 0` carries on until cloud stops it. While it runs, `./ty run stop` ends it cleanly with its final picture; `recentre`, `assist-on` and `assist-off` are also understood. |
@@ -269,6 +270,12 @@ new spoken guidance), `mount.py drift` (line-fitted, with the drift model),
 
 Written but never run on the real mount: `polaralign.py` (its geometry is
 checked by the tests against a simulated misaligned mount).
+
+Written but never used with a real mount or camera: the control console
+(`console.py`). Its server, its refusals, the plan-then-confirm step and Stop
+are tested against the simulated mount and stand-in jobs; the page has been
+looked at in demo mode only. How long Stop takes during a real slew, on
+Linux and on Windows, has not been measured.
 
 Written but never run on the real mount or camera: `horizon.py --trace` and
 `horizon.py --daylight`. The following and its checks are tested against the

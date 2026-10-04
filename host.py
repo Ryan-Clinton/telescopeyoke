@@ -258,6 +258,30 @@ def has_speech():
     return WARN, "spd-say not found; the focusing aid will be silent"
 
 
+# --- asking a running script to end ------------------------------------------
+
+# A script the console started must be able to be asked to end as Ctrl+C
+# would, so that it closes the camera properly. On Windows a console event
+# can only be sent to a process started in its own group, and what arrives
+# is Ctrl+Break, which Python would otherwise treat as "die at once".
+# It must share this program's console to receive one, so it is not given
+# CREATE_NO_WINDOW as the other helper programs are.
+OWN_GROUP = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP} if WINDOWS else {}
+
+if WINDOWS:
+    import signal
+    try:
+        signal.signal(signal.SIGBREAK, signal.default_int_handler)
+    except ValueError:
+        pass   # not the main thread: nothing was started this way
+
+
+def ask_to_end(child):
+    """Ask a child started with **OWN_GROUP to stop as Ctrl+C would."""
+    import signal
+    child.send_signal(signal.CTRL_BREAK_EVENT if WINDOWS else signal.SIGINT)
+
+
 # --- previews on the web page -------------------------------------------------
 
 def replace_preview(partial, final, patience=1.0):

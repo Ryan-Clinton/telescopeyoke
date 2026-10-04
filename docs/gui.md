@@ -52,7 +52,8 @@ The console is a third program, and this is its design:
    starts, opens the browser at `http://127.0.0.1:PORT/?key=...`, and keeps
    the key in memory only. Every request that does anything must carry it in
    a header. A request without it gets 403. The page reads the key from the
-   address once, keeps it in a variable, and at once rewrites the address
+   address once, keeps it for that browser tab (in `sessionStorage`, so that
+   reloading the page still works; it is gone when the tab is closed), and at once rewrites the address
    without it (`history.replaceState`), so the key is not left in the
    browser's history, a bookmark, a copied address or a screenshot.
 3. **Not reachable from other web pages.** Refuse any request whose `Host`
@@ -678,6 +679,24 @@ harmless commands or `--demo`.
    of a bright picture.
 4. That Stop can be found and pressed at once, by someone who has not been
    told where it is.
+
+## What is built, and what is not
+
+Built: the server and its safety (steps 1), the frame (2), the picture
+workspace with Home and System (3), Targets and Mount with the move plan
+(4), Focus (5), Imaging's controls (6), and of step 7 the Mount screen's
+technical controls, the horizon survey with its plot of blocked directions,
+the camera tests, calibration and restacking.
+
+Not built, because the scripts do not yet report what they need (see "Small
+changes the scripts need first"): polar alignment in Tools; a target's
+height through the night against the skyline; distance from the Sun and the
+bearing on a move plan; distance from the Moon; the last throughput figures
+on System; the estimate of how long a run will take.
+
+Nothing has been used with a real mount or camera. In demo mode only the
+mount actions run, against the simulated mount; the camera actions say they
+need the real camera.
 
 ## To decide before starting
 

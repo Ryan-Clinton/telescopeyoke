@@ -22,7 +22,13 @@ come from that.
 
 The limits, the lock file and the handset check are in `mount.py` and covered
 by tests against `simulator.py`. The web API and the MCP server offer no
-motion at all. Rule 1 is a convention: nothing in the code can tell a person's
+motion at all. The control console (`console.py`) offers motion to a person
+at this computer only: it listens on `127.0.0.1`, needs a key made at
+start-up, shows the dry-run plan and moves only on that plan being
+confirmed, and makes the plan again at the moment of confirming. It runs
+`mount.py` and the other scripts as they are, so the limits and the lock
+apply unchanged. It adds no protection against a program on the same
+computer running `mount.py` itself. Rule 1 is a convention: nothing in the code can tell a person's
 request from an agent's own idea when both run the same command.
 
 ## Planned: approval that an agent cannot grant itself

@@ -26,6 +26,7 @@ Everything runs without a telescope: `./tonight.py --demo`, `./serve.py --demo`,
 | `agent.py`, `interface.py` | Read-only facts for programs; the JSON envelope, error codes, states |
 | `mcp_server.py` | Read-only MCP server over `agent.py` |
 | `tonight.py`, `sky.py`, `feeds.py`, `page.py`, `serve.py` | Planner, status page, read-only web API |
+| `console.py`, `console/` | Control console in the browser, on this computer only; runs the other scripts |
 | `mount.py`, `tracking.py`, `polaralign.py`, `simulator.py` | Mount control, drift model, simulated handset |
 | `camera.py`, `indi.py`, `altair.py`, `snap.py`, `liveview.py`, `focus.py` | Camera (through INDI, or Altair's own library) and focusing |
 | `host.py` | Everything that differs between Linux and Windows, in one place |
@@ -50,6 +51,11 @@ a motor's creep rate. `mount.py stop` is always allowed.
    what it would do, and let the person run or approve it.
 2. **The web server and the MCP server are read-only.** No motion, no
    capture, no writes; do not add any without authentication designed first.
+   The control console (`console.py`) is the one place with buttons, and it
+   keeps to its own rules: it listens on `127.0.0.1` only, needs the key made
+   when it starts, runs only the fixed commands in its table, and moves the
+   mount only after a person confirms a plan. Do not loosen any of those,
+   and do not give it a way to listen on the network.
 3. **Limits stay in the code:** minimum altitude 20°, at most 5.75 h from the
    meridian, 40° from the Sun, and refusal when the handset is not set up.
 4. **Anything that changes how the mount moves needs a test against

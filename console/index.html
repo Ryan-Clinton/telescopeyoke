@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>telescopeyoke console</title>
+<link rel="stylesheet" href="/console.css">
+<script src="/console.js" defer></script>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">TELESCOPEYOKE <span id="site" class="quiet"></span></div>
+  <div id="demo" class="demo" hidden>DEMO: no real telescope is being controlled</div>
+  <div id="verdict" class="verdict"></div>
+  <div class="grow"></div>
+  <div id="top-states" class="states"></div>
+  <label class="switch"><input type="checkbox" id="night"> Night vision</label>
+  <label class="switch"><input type="checkbox" id="dim"> Dim pictures</label>
+  <div id="clock" class="clock"></div>
+  <button id="stop" class="stop" type="button" title="Stop the mount (Ctrl+Shift+Space)">STOP</button>
+</header>
+
+<nav class="tasks" aria-label="Tasks">
+  <a href="#home" data-task="home"><svg><use href="/icons.svg#home"/></svg><span>Home</span></a>
+  <a href="#targets" data-task="targets"><svg><use href="/icons.svg#targets"/></svg><span>Targets</span></a>
+  <a href="#mount" data-task="mount"><svg><use href="/icons.svg#mount"/></svg><span>Mount</span></a>
+  <a href="#focus" data-task="focus"><svg><use href="/icons.svg#focus"/></svg><span>Focus</span></a>
+  <a href="#imaging" data-task="imaging"><svg><use href="/icons.svg#imaging"/></svg><span>Imaging</span></a>
+  <a href="#tools" data-task="tools"><svg><use href="/icons.svg#tools"/></svg><span>Tools</span></a>
+  <a href="#system" data-task="system"><svg><use href="/icons.svg#system"/></svg><span>System</span></a>
+</nav>
+
+<main class="work">
+
+  <section id="home" class="task">
+    <div id="attention" class="attention"></div>
+    <h1>Tonight <span id="home-verdict" class="word"></span></h1>
+    <div id="window" class="window"></div>
+    <p id="moon" class="quiet"></p>
+    <h2>Best now</h2>
+    <div id="best"></div>
+  </section>
+
+  <section id="targets" class="task" hidden>
+    <h1>Targets</h1>
+    <input id="search" type="search" placeholder="Search the catalogue: M27, Dumbbell, NGC 6853, Vega" autocomplete="off">
+    <div class="filters" id="filters">
+      <button type="button" data-filter="now">Up now</button>
+      <button type="button" data-filter="galaxy">Galaxy</button>
+      <button type="button" data-filter="nebula">Nebula</button>
+      <button type="button" data-filter="cluster">Cluster</button>
+      <button type="button" data-filter="planet">Planet</button>
+    </div>
+    <div class="columns">
+      <div class="list">
+        <h2>Best tonight</h2>
+        <div id="ranked"></div>
+        <h2>Catalogue</h2>
+        <div id="catalogue"></div>
+      </div>
+      <div id="chosen" class="chosen"></div>
+    </div>
+  </section>
+
+  <section id="mount" class="task" hidden>
+    <h1>Mount <span id="mount-state" class="word"></span></h1>
+    <p id="lock" class="warn" hidden></p>
+    <dl id="position" class="facts"></dl>
+    <div class="buttons">
+      <button type="button" data-go="targets">Go to target</button>
+      <button type="button" data-plan="home" data-needs="mount">Home</button>
+      <button type="button" data-plan="zenith" data-needs="mount">Zenith</button>
+      <button type="button" data-action="position" data-needs="mount">Read position</button>
+    </div>
+    <h2>Pointing</h2>
+    <dl id="pointing" class="facts"></dl>
+    <div class="buttons">
+      <button type="button" data-action="sync" data-needs="imaging">Sync from plate solve</button>
+    </div>
+    <h2>Tracking</h2>
+    <dl id="tracking" class="facts"></dl>
+    <div class="buttons">
+      <button type="button" data-plan="drift" data-needs="imaging">Measure drift</button>
+      <button type="button" data-plan="compensate" data-needs="imaging">Compensate</button>
+    </div>
+    <p id="demo-mount" class="quiet" hidden>In the demo each command starts a fresh simulated mount at its home position, so a position is not carried from one move to the next.</p>
+  </section>
+
+  <section id="focus" class="task" hidden>
+    <h1>Focus</h1>
+    <div class="focus">
+      <div id="hfr" class="huge">–</div>
+      <div class="quiet">HFR, pixels</div>
+      <div id="focus-trend" class="trend"></div>
+      <div id="focus-best" class="quiet"></div>
+      <svg id="focus-trail" class="spark wide" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
+      <div id="focus-advice" class="advice"></div>
+    </div>
+    <div class="buttons">
+      <label>Sound <select id="focus-sound"><option value="speech">Speech</option><option value="tones">Tones</option><option value="silent">Silent</option></select></label>
+      <button type="button" id="focus-start" data-needs="camera">Start focusing</button>
+      <button type="button" id="focus-finish" hidden>Finish focusing</button>
+    </div>
+  </section>
+
+  <section id="imaging" class="task" hidden>
+    <div class="viewer">
+      <div class="tabs">
+        <button type="button" data-picture="stack.jpg" class="on">Live stack</button>
+        <button type="button" data-picture="latest.jpg">Last exposure</button>
+        <span id="picture-note" class="quiet"></span>
+      </div>
+      <img id="picture" class="picture" alt="The telescope's picture">
+    </div>
+    <div id="measures" class="measures"></div>
+    <div id="reasons" class="reasons"></div>
+  </section>
+
+  <section id="tools" class="task" hidden>
+    <h1>Tools</h1>
+    <h2>Alignment</h2>
+    <div class="tool"><div><b>Horizon survey</b><span>Find what blocks the sky from where the telescope stands.</span></div>
+      <label class="switch"><input type="checkbox" id="horizon-trace" checked> Follow the skyline</label>
+      <label class="switch"><input type="checkbox" id="horizon-daylight"> By day</label>
+      <button type="button" id="horizon-run" data-needs="imaging">Plan</button></div>
+    <svg id="horizon-plot" class="plot" viewBox="0 0 720 200"></svg>
+    <h2>Camera</h2>
+    <div class="tool"><div><b>What the camera is</b><span>Model, sensor, link.</span></div><button type="button" data-action="camera-capabilities" data-needs="camera">View</button></div>
+    <div class="tool"><div><b>Throughput</b><span>How long a frame takes to arrive.</span></div><button type="button" data-action="camera-throughput" data-needs="camera">Run</button></div>
+    <div class="tool"><div><b>Gain sweep</b><span>Noise and range at each gain.</span></div><button type="button" data-action="camera-gain-sweep" data-needs="camera">Run</button></div>
+    <h2>Calibration</h2>
+    <div class="tool"><div><b>Dark frames</b><span>Cap on.</span></div><button type="button" data-action="calibrate" data-kind="dark" data-needs="camera">Capture</button></div>
+    <div class="tool"><div><b>Bias frames</b><span>Cap on.</span></div><button type="button" data-action="calibrate" data-kind="bias" data-needs="camera">Capture</button></div>
+    <div class="tool"><div><b>Flat frames</b><span>Point at an evenly lit surface.</span></div><button type="button" data-action="calibrate" data-kind="flat" data-needs="camera">Capture</button></div>
+    <h2>Processing</h2>
+    <div class="tool"><div><b>Restack the last session</b><span id="restack-name"></span></div><button type="button" id="restack-run">Run</button></div>
+    <div class="tool"><div><b>Combine sessions</b><span>Every saved session of the same target, as one picture.</span></div><button type="button" id="restack-all">Run</button></div>
+    <pre id="tool-result" class="result" hidden></pre>
+  </section>
+
+  <section id="system" class="task" hidden>
+    <h1>System</h1>
+    <div id="doctor"></div>
+    <div class="buttons"><button type="button" id="recheck">Check again</button></div>
+  </section>
+
+</main>
+
+<aside id="rail" class="rail"></aside>
+
+<footer class="bottom">
+  <div id="statusline" class="statusline"></div>
+  <button type="button" id="log-toggle" class="logline"><span id="log-newest"></span><span id="log-count" class="quiet"></span></button>
+  <div id="log" class="log" hidden>
+    <label class="switch"><input type="checkbox" id="technical"> Show technical details</label>
+    <div id="log-lines"></div>
+  </div>
+</footer>
+
+<div id="shade" class="shade" hidden></div>
+<div id="plan" class="card" role="dialog" aria-modal="true" hidden></div>
+<aside id="sheet" class="sheet" hidden>
+  <h2>Start imaging</h2>
+  <p id="sheet-target" class="strong"></p>
+  <label>Exposure <select id="run-exposure"><option value="auto">Auto</option><option value="1">1 s</option><option value="2" selected>2 s</option><option value="3">3 s</option><option value="4">4 s</option></select></label>
+  <label>Frames <input id="run-frames" type="number" min="1" max="5000" value="300"></label>
+  <label>Gain <input id="run-gain" type="number" min="100" max="5000" value="1500"></label>
+  <label class="switch"><input type="checkbox" id="run-recentre" checked> Re-centre automatically</label>
+  <label class="switch"><input type="checkbox" id="run-assist"> Drift assist</label>
+  <p id="run-estimate" class="quiet"></p>
+  <div class="buttons"><button type="button" id="sheet-cancel">Cancel</button><button type="button" id="sheet-plan" class="primary">Plan the run</button></div>
+</aside>
+<div id="notices" class="notices" aria-live="polite"></div>
+
+</body>
+</html>

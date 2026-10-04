@@ -31,6 +31,17 @@ On Ubuntu and Debian, `install.sh` takes the Python libraries from the
 distribution's own packages. `pyproject.toml` lists the same libraries with
 the oldest versions known to work, and is what CI and `pip install .` use.
 
+## The control console
+
+`./console.py` (or `./ty console`; on Windows `python console.py`) opens a
+page in the browser with buttons for the things a night needs: choosing a
+target, GoTo, focusing, imaging and the tools. It answers this computer only,
+so it is used at the computer beside the telescope. Every move is shown as a
+plan first and happens only when you confirm it; Stop is always at the top
+right. `./console.py --demo` tries it with a simulated mount and nothing
+plugged in. The status page (`serve.py`) is separate and stays read-only for
+watching from elsewhere in the house.
+
 ## Windows
 
 telescopeyoke runs natively on Windows 10 and 11: no WSL and no ASCOM. What

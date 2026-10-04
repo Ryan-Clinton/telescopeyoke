@@ -75,9 +75,10 @@ def capabilities():
     }
 
 
-def session(include_frames=False, limit=50):
+def session(include_frames=False, limit=50, include_series=False):
     """The newest imaging run: counts, the latest frame's quality, and why
-    frames were dropped. Frame-by-frame detail only on request."""
+    frames were dropped. Frame-by-frame detail only on request; so is the
+    series of recent measurements, for drawing."""
     folders = {p.parent for p in (ROOT / "frames").glob("*/*/frames.json*")}
     if not folders:
         raise interface.Refusal("NO_SESSION", "No imaging run has been recorded yet.")
@@ -96,6 +97,8 @@ def session(include_frames=False, limit=50):
         kept = [v for v in series["fwhm"] if v is not None]
         if kept:
             status["median_fwhm"] = round(sorted(kept)[len(kept) // 2], 1)
+    if include_series and series:
+        status["series"] = series
     return status
 
 

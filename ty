@@ -12,6 +12,7 @@
     ./ty observing           sky, focus, tracking and imaging in one snapshot
     ./ty run stop            tell the imaging run that is going to finish now and make its
                              picture (also: recentre, assist-on, assist-off)
+    ./ty console             the control console in the browser, on this computer only
     ./ty mount ...           everything mount.py does, e.g. ./ty mount goto M27 --dry-run
     ./ty tonight ...         the full report, as tonight.py
 
@@ -24,7 +25,7 @@ import json
 import sys
 
 PASS_THROUGH = {"mount": "mount", "tonight": "tonight", "shoot": "shoot", "focus": "focus",
-                "solve": "solve", "restack": "restack"}
+                "solve": "solve", "restack": "restack", "console": "console"}
 
 
 def show(value, indent=0):
