@@ -44,6 +44,9 @@ if (Test-Path config.toml) {
     Write-Host "config.toml: created from the example. Edit it and put in your own location."
 }
 
+# Where Altair's SDK files go; they are not part of this project.
+New-Item -ItemType Directory -Force vendor\altair | Out-Null
+
 Write-Host @"
 
 Done. Still to do by hand:

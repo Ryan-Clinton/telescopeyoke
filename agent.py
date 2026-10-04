@@ -36,7 +36,7 @@ def components():
         "python_libraries": doctor.check_libraries(), "config": doctor.check_config(),
         "catalogue": doctor.check_catalogue(), "serial_access": doctor.check_serial_access(),
         "mount_lead": doctor.check_serial_lead(), "plate_solver": doctor.check_solver(),
-        "star_database": doctor.check_star_database(), "indi_server": doctor.check_indi_server(),
+        "star_database": doctor.check_star_database(), "camera_transport": doctor.check_indi_server(),
         "camera": doctor.check_camera(), "webcam": doctor.check_webcam(),
     }
     return {name: {"status": status, "message": message} for name, (status, message) in checks.items()}
@@ -59,10 +59,10 @@ def capabilities():
             "always_allowed": ["stop"],
             "dry_run": True,
         },
-        "camera": {"available": good("indi_server", "camera"),
+        "camera": {"available": good("camera_transport", "camera"),
                    "connected": parts["camera"]["status"] == doctor.OK},
         "plate_solver": {"available": good("plate_solver", "star_database"), "name": "ASTAP"},
-        "imaging": {"available": good("indi_server", "camera", "plate_solver", "star_database")},
+        "imaging": {"available": good("camera_transport", "camera", "plate_solver", "star_database")},
         "motion": {
             "locked": locked,
             "lock_reason": mount.LOCK_FILE.read_text(encoding="utf-8").strip() if locked else None,

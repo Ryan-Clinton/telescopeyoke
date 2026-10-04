@@ -17,6 +17,7 @@ import struct
 import sys
 import threading
 import time
+from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -104,10 +105,11 @@ class AltairCamera:
         # What the library's own thread tells us, and what we are waiting for.
         self._changed = threading.Condition()
         self._waiting = False     # an exposure has been triggered and not yet collected
-        self._ready = False       # its frame has arrived
+        self._ready = 0           # frames that have arrived for it and not been pulled
         self._failure = None      # or the camera said why it will not
-        self._shifted = None      # whether the 12 bits arrive at the top of the 16
+        self._shifted = None      # whether the 12 bits arrive at the top of the 16, once certain
         self.exposures = 0        # how many have been triggered
+        self._forget_clock()
         self._open()
 
     def __enter__(self):
@@ -117,6 +119,11 @@ class AltairCamera:
         self.close()
 
     # --- opening and closing ---------------------------------------------------
+
+    def _forget_clock(self):
+        self.clock = None             # True once the camera's frame stamps have proved usable
+        self._last = None             # (stamp, arrival) of the last good frame
+        self._offsets = deque(maxlen=20)   # arrival minus stamp, for recent good frames
 
     def _open(self):
         lib, camera = self.lib, SETTINGS["camera"]
@@ -174,7 +181,7 @@ class AltairCamera:
                 # that timed out. It must never answer the next request, so it
                 # is not remembered; frame() discards it before it triggers.
                 if self._waiting:
-                    self._ready = True
+                    self._ready += 1
             elif event == lib.ALTAIRCAM_EVENT_DISCONNECTED:
                 self._failure = "the camera was unplugged"
             elif event == lib.ALTAIRCAM_EVENT_ERROR:
@@ -199,31 +206,35 @@ class AltairCamera:
         handle.put_ExpoTime(max(1, round(seconds * 1e6)))
         handle.put_ExpoAGain(self.gain)
         with self._changed:
-            self._waiting = self._ready = False
-            self._failure = None
+            self._waiting, self._ready, self._failure = False, 0, None
         self._discard()
         with self._changed:
             self.exposures += 1
             self._waiting = True
-        started, began = datetime.now(timezone.utc), time.monotonic()
+        started, began = datetime.now(timezone.utc), time.perf_counter()
         handle.Trigger(1)
         give_up = began + wait_for(seconds)
         while True:
             with self._changed:
                 arrived = self._changed.wait_for(lambda: self._ready or self._failure,
-                                                 timeout=max(0, give_up - time.monotonic()))
+                                                 timeout=max(0, give_up - time.perf_counter()))
                 failure = self._failure
-                early = arrived and not failure and time.monotonic() - began < 0.9 * seconds
-                if early:
-                    self._ready = False
-                else:
-                    self._waiting = False
-            if not early:
+                if arrived and not failure:
+                    self._ready -= 1      # one frame is there to be pulled
+            if failure or not arrived:
                 break
-            # No exposure can be back before its shutter has closed: this is
-            # a late frame from an earlier one. Take it out of the way and
-            # keep waiting for ours.
-            self._pull()
+            # Is it ours? No exposure can be back before its shutter has
+            # closed, and the camera's own clock says when a frame was taken.
+            # A late frame from an earlier exposure is taken out of the way
+            # and the wait goes on for ours.
+            landed = time.perf_counter()
+            data, info = self._pull()
+            # (The 50 ms is slack for timing; a focusing exposure is shorter.)
+            if landed - began >= 0.9 * seconds - 0.05 and not self._older(info, began):
+                self._learn(info, landed)
+                break
+        with self._changed:
+            self._waiting = False
         if failure or not arrived:
             # Cancel it and empty the pipes, so a frame that turns up late
             # cannot be taken for the next one.
@@ -234,14 +245,53 @@ class AltairCamera:
             self._discard()
             raise CameraError(failure or f"no frame within {wait_for(seconds):.0f} s "
                                          f"of a {seconds:g} s exposure")
-        return self._normalise(self._pull()), started
+        return self._normalise(data), started
 
     def _pull(self):
-        """The frame the library is holding, as it gave it."""
+        """The frame the library is holding, as it gave it, and what the
+        camera says about it (its sequence number and timestamp)."""
         data = np.empty((self.height, self.width), dtype=np.uint16)
         buffer = (ctypes.c_ubyte * data.nbytes).from_buffer(data)
-        self.handle.PullImageV3(buffer, 0, 16, -1, None)   # -1: rows packed with no padding
-        return data
+        info = self.lib.AltaircamFrameInfoV3()
+        self.handle.PullImageV3(buffer, 0, 16, -1, info)   # -1: rows packed with no padding
+        return data, info
+
+    # The camera stamps each frame with its own clock, in microseconds from a
+    # start nobody documents. Three things make it usable. The gap between
+    # two frames' stamps must match the gap between their arrivals here, or
+    # it is not a clock we understand and it is never used. The smallest
+    # (arrival - stamp) seen ties the camera's clock to this computer's. And
+    # a stamp lower than the last good one means the clock has started again,
+    # so what was learned is dropped.
+
+    def _learn(self, info, landed):
+        """Note a frame known to be good, to tie the camera's clock to ours."""
+        stamp = getattr(info, "timestamp", 0) / 1e6
+        if not stamp or self.clock is False:
+            return
+        if self._last and stamp < self._last[0]:
+            self._forget_clock()
+        if self._last:
+            gap, real = stamp - self._last[0], landed - self._last[1]
+            if real >= 1.5:      # closer together than this, the two gaps say nothing
+                if abs(gap - real) > 1 + 0.1 * real:
+                    self.clock = False      # leave it out for good
+                    return
+                self.clock = True
+        self._last = (stamp, landed)
+        # From recent frames only, so two clocks that drift apart over a
+        # long night never make a good frame look old.
+        self._offsets.append(landed - stamp)
+
+    def _older(self, info, began):
+        """True if the camera's clock says this frame was taken before the
+        exposure now being waited for was even asked for."""
+        stamp = getattr(info, "timestamp", 0) / 1e6
+        if not self.clock or not stamp or stamp < self._last[0]:
+            return False
+        # The estimate can only be late, by the quickest delivery seen, so a
+        # frame it puts before the trigger really was taken before it.
+        return stamp + min(self._offsets) < began - 0.05
 
     def _normalise(self, data):
         """Values from 0 to WHITE. The library may hand the sensor's 12 bits
@@ -250,9 +300,19 @@ class AltairCamera:
         spare = 16 - self.bits
         if spare <= 0:
             return data
-        if self._shifted is None and data.any():
-            self._shifted = not (np.bitwise_or.reduce(data, axis=None) & ((1 << spare) - 1))
-        if self._shifted:
+        shifted = self._shifted
+        if shifted is None:
+            # Two things settle it for good: a value above WHITE can only be
+            # shifted up, and a value using the bottom bits cannot be. A dark
+            # frame may show neither; it is judged by itself, by its empty
+            # bottom bits, and the question stays open for the next frame.
+            if data.max() > WHITE:
+                shifted = self._shifted = True
+            elif np.bitwise_or.reduce(data, axis=None) & ((1 << spare) - 1):
+                shifted = self._shifted = False
+            else:
+                shifted = bool(data.any())
+        if shifted:
             data >>= spare
         return data
 
@@ -294,6 +354,10 @@ class AltairCamera:
             "flags": hex(flags), "usb3_camera_on_usb2_port": bool(flags & USB3_ON_USB2),
             "size": [self.width, self.height], "bit_depth": self.bits, "bayer": self.pattern,
             "readout_speed": handle.get_Speed(), "max_readout_speed": handle.MaxSpeed(),
+            # None until two frames have been taken; False if the camera's
+            # frame stamps turned out not to keep time.
+            "frame_clock_usable": self.clock,
+            "values_shifted_up": self._shifted,
         }
 
 
@@ -335,8 +399,10 @@ def checks():
     slow = [d.displayname for d in found if d.model.flag & USB3_ON_USB2]
     if slow:
         out.append((WARN, f"{slow[0]} is a USB 3 camera on a USB 2 port; frames will be slow"))
-    if len(found) > 1 and not SETTINGS["camera"].get("serial"):
-        out.append((FAIL, f"{len(found)} cameras found; name one with serial under [camera] in config.toml"))
-    else:
-        out.append((OK, f"camera: {found[0].displayname}"))
+    try:
+        # The same choice frame-taking makes, so this names the camera that
+        # will really be used when config.toml picks one of several.
+        out.append((OK, f"camera: {choose(lib, SETTINGS['camera'].get('serial')).displayname}"))
+    except Refusal as refusal:
+        out.append((FAIL, refusal.message))
     return out

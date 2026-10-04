@@ -201,7 +201,8 @@ class Speaker:
         self.thread = None
 
     def say(self, words):
-        if self.thread is None:
+        if self.thread is None or not self.thread.is_alive():
+            # Started on first use, and again if the speaking program died.
             # A daemon thread, and a child that ends when its input closes,
             # so nothing here keeps the program alive after focusing ends.
             self.thread = threading.Thread(target=self._run, daemon=True)

@@ -43,8 +43,19 @@ wrapper. Correct this section when the camera has been used.
   is, compared with an INDI frame of the same star field. A flipped frame
   would send plate-solved corrections the wrong way, so do that comparison
   before `goto --solve` is trusted with this route.
-- A frame that arrives sooner than the exposure could have finished is
-  treated as a late one from an earlier exposure and thrown away.
+- **A late frame must not answer the next request.** Two guards, besides
+  cancelling and flushing after a time-out. A frame that arrives sooner than
+  the exposure could have finished is thrown away. And each frame carries
+  the camera's own timestamp: once two good frames at least 1.5 s apart have
+  shown that clock keeps time with the computer's, a frame the clock says
+  was taken before the current trigger is thrown away too. If the stamps do
+  not keep time they are never used. `./camera_test.py --capabilities`
+  reports `frame_clock_usable`; check it reads true on the real camera,
+  because until it does the second guard is doing nothing.
+- **Bit alignment** is settled only by certain evidence: a value above 4095
+  means the 12 bits are shifted up, a value using the bottom four bits means
+  they are not. A dark frame showing neither is judged by itself and
+  settles nothing. `--capabilities` reports `values_shifted_up`.
 - The wait for a frame is the INDI route's `12 + 6 x exposure` seconds, as an
   upper limit, until `./camera_test.py --throughput` has measured the real
   figure at each readout speed. Record those figures here.
@@ -54,7 +65,12 @@ wrapper. Correct this section when the camera has been used.
 ## Windows
 
 - The handset's lead is found among the COM ports by its adapter's name; no
-  port is ever guessed.
+  port is ever guessed. Seen for real on Windows 11: the tested FTDI lead
+  appears as "USB Serial Port (COM5)", maker FTDI, and `serial_match =
+  "FTDI"` finds it among three ports. Nothing has been sent to the handset
+  from Windows yet.
+- The webcam is asked for 1280x720. A DirectShow camera that does not offer
+  that size will give no picture; untried on a real one.
 - A preview under `web/` cannot be replaced while the web server has it
   open; `host.replace_preview` retries for a second and then keeps the old
   one. Nothing else may use it.

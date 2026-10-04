@@ -240,6 +240,17 @@ def test_no_speech_program_leaves_focusing_silent_not_broken():
     assert not speaker.thread.is_alive()
 
 
+def test_speech_starts_again_if_the_speaking_program_died(tmp_path):
+    log = tmp_path / "spoken.txt"
+    once = "import sys; open(sys.argv[1], 'a').write(sys.stdin.readline())"   # says one phrase and exits
+    speaker = host.Speaker([sys.executable, "-c", once, str(log)])
+    for words in ("first", "second"):
+        speaker.say(words)
+        speaker.thread.join(timeout=20)      # its program has gone, so the worker ends
+        assert not speaker.thread.is_alive()
+    assert log.read_text(encoding="utf-8").split() == ["first", "second"]
+
+
 # --- the doctor and the status page ----------------------------------------------------------------------
 
 @pytest.mark.skipif(not host.WINDOWS, reason="what the doctor says on Windows")

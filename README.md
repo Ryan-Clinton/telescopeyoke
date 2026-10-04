@@ -253,8 +253,10 @@ the only one reached. The camera has not taken a frame on Windows, and the
 mount and camera have not been used together there. The Windows camera route
 (`altair.py`, which reads the camera through Altair's own library instead of
 INDI) has only been run against a made-up copy of that library, on either
-system. The COM port search, the plate solver's Windows paths, the DirectShow
-webcam and the spoken focusing aid are likewise untried on real equipment.
+system. The handset's FTDI lead has been found by name among the COM ports,
+but nothing has been sent to the handset from Windows. The plate solver's
+Windows paths, the DirectShow webcam and the spoken focusing aid are untried
+on real equipment.
 
 Written but not yet run for real: `calibrate.py` (no dark or flat frames have
 been taken yet) and `camera_test.py --gain-sweep`.

@@ -33,6 +33,8 @@ class World:
         self.obeys_cancel = True  # a cancelled exposure delivers nothing
         self.unplug = False       # report a disconnect instead of a frame
         self.level = 1000         # value the next frame is filled with
+        self.stamps = True        # frames carry the camera's clock; False: always 0
+        self.clock_rate = 1.0     # how fast that clock runs against the real one
         self.triggers = 0
 
 
@@ -51,6 +53,9 @@ def fake_sdk(world):
     lib.ALTAIRCAM_OPTION_RAW, lib.ALTAIRCAM_OPTION_BITDEPTH = 0x04, 0x06
     lib.ALTAIRCAM_OPTION_TRIGGER, lib.ALTAIRCAM_OPTION_BINNING = 0x0b, 0x17
     lib.ALTAIRCAM_OPTION_FLUSH = 0x3d
+
+    class AltaircamFrameInfoV3:
+        seq = timestamp = 0
 
     class HRESULTException(Exception):
         def __init__(self, hr):
@@ -88,6 +93,7 @@ def fake_sdk(world):
                 return
             world.triggers += 1
             mine, level = world.triggers, world.level
+            taken = time.monotonic() + self.exposure / 1e6    # when the shutter closes
             delay = world.delays.pop(0) if world.delays else world.delay
             delay = max(delay, self.exposure / 1e6)   # the shutter has to close first
             if world.silent:
@@ -97,15 +103,22 @@ def fake_sdk(world):
                 time.sleep(delay)
                 if world.unplug:
                     self.callback(lib.ALTAIRCAM_EVENT_DISCONNECTED, self.context)
-                elif not (mine in self.cancelled and world.obeys_cancel):
-                    self.held.append(frame_of(level) << (4 if world.shifted else 0))
+                elif self.closed or (mine in self.cancelled and world.obeys_cancel):
+                    return
+                else:
+                    # Stamped by the camera's own clock, which starts somewhere arbitrary.
+                    stamp = round((1234.5 + taken * world.clock_rate) * 1e6) if world.stamps else 0
+                    self.held.append((frame_of(level) << (4 if world.shifted else 0), mine, stamp))
                     self.callback(lib.ALTAIRCAM_EVENT_IMAGE, self.context)
             threading.Thread(target=deliver, daemon=True).start()
 
         def PullImageV3(self, buffer, still, bits, pitch, info):
             if not self.held:
                 raise HRESULTException(0x80004005)
-            np.frombuffer(buffer, dtype=np.uint16)[:] = self.held.pop(0).ravel()
+            data, seq, stamp = self.held.pop(0)
+            np.frombuffer(buffer, dtype=np.uint16)[:] = data.ravel()
+            if info is not None:
+                info.seq, info.timestamp = seq, stamp
 
         def Stop(self): pass
         def Close(self): self.closed += 1
@@ -128,6 +141,7 @@ def fake_sdk(world):
             return "fake"
 
     lib.HRESULTException, lib.Altaircam = HRESULTException, Altaircam
+    lib.AltaircamFrameInfoV3 = AltaircamFrameInfoV3
     return lib
 
 
@@ -277,10 +291,81 @@ def test_a_late_frame_never_answers_the_next_request(sdk, world):
     assert data.max() == 223
 
 
+def late_frame_lands_near_the_end_of_the_next_exposure(cam, world):
+    """An exposure fails, and its frame, from a camera that ignores the
+    cancel, turns up 1.9 s into the 2 s exposure that follows: too late for
+    "it came back before the shutter could have closed" to catch."""
+    world.obeys_cancel = False
+    world.delays, world.level = [99, 99, 2.2], 111     # the third try's frame is the late one
+    with pytest.raises(IndiError):
+        cam.frame(0.01)
+    altair.wait_for = lambda seconds: 6.0
+    world.delays, world.level = [2.1], 222
+    return cam.frame(2.0)[0]
+
+
+def test_without_the_cameras_clock_that_late_frame_would_get_through(sdk, world):
+    """What the clock is for: this is the failure the test below guards."""
+    world.stamps = False
+    with altair.AltairCamera() as cam:
+        cam.frame(0.01)
+        time.sleep(1.6)
+        cam.frame(0.01)
+        data = late_frame_lands_near_the_end_of_the_next_exposure(cam, world)
+    assert data.max() == 112
+
+
+def test_a_late_frame_arriving_near_the_end_of_the_next_exposure_is_refused(sdk, world):
+    with altair.AltairCamera() as cam:
+        cam.frame(0.01)
+        time.sleep(1.6)       # two frames far enough apart to check the camera's clock
+        cam.frame(0.01)
+        data = late_frame_lands_near_the_end_of_the_next_exposure(cam, world)
+        assert cam.clock is True
+    assert data.max() == 223
+
+
+def test_the_cameras_clock_is_only_trusted_once_it_has_kept_time(sdk, world):
+    world.clock_rate = 0.001      # stamps that barely advance: not a clock we understand
+    with altair.AltairCamera() as cam:
+        for _ in range(3):
+            time.sleep(2.2)
+            data, _ = cam.frame(0.01)
+            assert data.shape == (HEIGHT, WIDTH)      # good frames are never turned away
+        assert cam.clock is False
+
+
+def test_frames_with_no_stamp_are_still_accepted(sdk, world):
+    world.stamps = False
+    with altair.AltairCamera() as cam:
+        for _ in range(3):
+            assert cam.frame(0.01)[0].shape == (HEIGHT, WIDTH)
+        assert cam.clock is None
+
+
+def test_a_dark_first_frame_does_not_settle_how_values_are_aligned(sdk, world):
+    """Low-aligned values that happen to be multiples of 16: nothing certain
+    can be said, so the question stays open and a later frame settles it."""
+    with altair.AltairCamera() as cam:
+        cam.handle.Trigger = None     # frames are handed over directly below
+        dark = np.full((HEIGHT, WIDTH), 32, dtype=np.uint16)
+        cam._normalise(dark.copy())
+        assert cam._shifted is None
+        ordinary = np.full((HEIGHT, WIDTH), 1001, dtype=np.uint16)
+        assert cam._normalise(ordinary.copy()).max() == 1001 and cam._shifted is False
+        assert cam._normalise(dark.copy()).max() == 32
+
+
+def test_a_value_above_white_settles_that_values_are_shifted_up(sdk, world):
+    with altair.AltairCamera() as cam:
+        bright = np.full((HEIGHT, WIDTH), 4000 << 4, dtype=np.uint16)
+        assert cam._normalise(bright).max() == 4000 and cam._shifted is True
+
+
 def test_a_frame_nobody_asked_for_is_not_kept(sdk, world):
     with altair.AltairCamera() as cam:
         handle = sdk.Altaircam.opened[-1]
-        handle.held.append(frame_of(111))
+        handle.held.append((frame_of(111), 0, 0))
         handle.callback(sdk.ALTAIRCAM_EVENT_IMAGE, handle.context)   # out of the blue
         world.level = 222
         data, _ = cam.frame(0.01)
@@ -342,6 +427,18 @@ def test_the_readout_speed_is_left_alone_unless_config_names_one(world, monkeypa
     lib = use_sdk(world, monkeypatch, readout_speed=0)
     with altair.AltairCamera():
         assert lib.Altaircam.opened[-1].speed == 0
+
+
+def test_the_doctor_names_the_camera_that_config_picks(world, monkeypatch, tmp_path):
+    world.cameras = [("Altair ALTAIRH183C", "SN-A"), ("Altair GPCAM", "SN-B")]
+    (tmp_path / "altaircam.py").write_text("", encoding="utf-8")
+    (tmp_path / "altaircam.dll").write_text("", encoding="utf-8")
+    monkeypatch.setattr(altair, "VENDOR", tmp_path)
+    use_sdk(world, monkeypatch, serial="SN-B")
+    assert altair.checks()[-1] == ("ok", "camera: Altair GPCAM")
+    use_sdk(world, monkeypatch)
+    status, message = altair.checks()[-1]
+    assert status == "fail" and "SN-A" in message and "SN-B" in message
 
 
 def test_the_doctor_says_which_sdk_file_is_missing(tmp_path, monkeypatch):
