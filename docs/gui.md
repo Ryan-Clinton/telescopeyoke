@@ -73,7 +73,11 @@ The console is a third program, and this is its design:
    ```
 
    So the page has no inline scripts or styles, loads nothing from the
-   internet, and cannot be shown inside another page.
+   internet, and cannot be shown inside another page. That rules out even
+   `style="display:none"` on one element and a `<script>` block in the
+   page: everything shown or hidden is done with classes, and all the
+   JavaScript is in `console.js`. Because nothing is cached, a picture is
+   fetched again with a plain request; no made-up query strings.
 5. **A person confirms each move, on a plan.** Pressing anything that moves
    the mount first runs the command with `--dry-run` and shows the plan (see
    "The move plan"). The mount moves only when the person presses the
@@ -133,7 +137,17 @@ browser (this computer) ── POST /api/plan/goto ──► console.py ── s
     killed job can refuse the next one, so test that a second job starts
     after the first is finished this way.
   - *Stop*: end whatever holds the mount at once, without waiting, then run
-    `mount.py stop`.
+    `mount.py stop`. In this order, exactly:
+    1. Mark the job as being stopped by Stop.
+    2. From that moment nothing may start or restart a job that opens the
+       mount: no retry, no recovery, no queued confirm. Only `mount.py stop`.
+    3. Kill the process that holds the serial port.
+    4. Wait only until the system says that process has gone.
+    5. Start `mount.py stop` at once.
+    6. Report the time from the press to the handset's reply.
+
+    The ban in step 2 lasts until `mount.py stop` has answered. A job runner
+    that helpfully reopens the mount while Stop is under way would defeat it.
 - **An imaging run** is finished with `ty run stop`, which lets it make its
   picture. Stop stops the mount; "Finish run" sends the order.
 - **Closing the browser stops nothing.** Jobs belong to `console.py`. Closing
@@ -156,7 +170,7 @@ browser (this computer) ── POST /api/plan/goto ──► console.py ── s
 | Route | Does |
 |---|---|
 | `POST /api/plan/ACTION` | runs the action's dry run; returns the plan and a plan id |
-| `POST /api/confirm/ID` | starts the planned job. An id works once, for the command it was made for, for two minutes |
+| `POST /api/confirm/ID` | makes the plan again, and starts the job only if it is unchanged (see "The move plan"). An id works once, for the command it was made for, for two minutes |
 | `POST /api/action/ACTION` | starts an action that does not move the mount |
 | `POST /api/stop` | ends the mount job and stops the mount |
 
@@ -237,7 +251,12 @@ This should look like an instrument, not a business dashboard. One dominant
 work surface. Space, thin rules and the size and weight of type do the
 grouping; a box is drawn only round a real group, never a box inside a box,
 and not every number gets one. Corners rounded by 6 to 8 pixels at most. No
-gradients, no shadows for decoration.
+gradients, no shadows for decoration. The picture in the work area has no
+frame at all, and the controls beside it are visibly secondary to it.
+
+No emoji anywhere in the interface: they look different in every browser and
+system. Icons come from `console/icons.svg`; otherwise use words or shapes
+drawn in CSS.
 
 ### Type
 
@@ -291,6 +310,18 @@ disconnected". The warnings come from the note in `agent.observing`. A dialog
 that blocks the page is used only when a person has to decide something,
 which means the move plan.
 
+### Three outcomes, three names
+
+The page and the log keep these apart, in words and in colour:
+
+| Outcome | Example | Shown as |
+|---|---|---|
+| Plan refused | "M27 is only 12° up; not slewing." | amber: nothing was started |
+| Job failed | "Camera disconnected during focusing." | red: something went wrong |
+| Job finished | "Focusing ended." | plain: it did what was asked |
+
+A refusal is the limits working, not a fault, and must not look like one.
+
 ### The activity log
 
 Folded, it shows the newest line and a count of unread ones. Open, it shows
@@ -339,6 +370,14 @@ Never the browser's own `confirm()` box. A card in the middle of the page:
   mount all over the sky, over the pole and back, for about an hour".
 - A refusal uses the same card with no confirm button: the message, the
   advice, and Close.
+- **Confirm makes the plan again before anything moves.** A plan describes
+  the world when it was made, and the sky and the mount move on. The plan id
+  holds the action, its parameters and when it was made. On Confirm the
+  console runs the dry run once more. If the answer is the same in what
+  matters (allowed, the side of the mount, the warnings, and height and hour
+  angle within a degree) the job starts. If not, nothing moves: the page
+  says "The situation has changed. Look at the new plan", shows the new
+  plan, and gives it a new id to confirm.
 
 Starting an imaging run says when and why the mount will move, not just that
 it will. `shoot.py` centres the target before the first frame and re-centres
@@ -391,7 +430,9 @@ It shows the measurements that moved and the ones that did not, the likely
 cause in the words `agent.observing` already gives, and one button for the
 remedy: Start focusing for focus, "Look at the newest frame" for cloud. It
 is plain diagnosis from numbers already measured; it must not claim more
-than the note does.
+than the note does. "Focus is the most likely cause: stars are wider while
+their number and the drift are steady" is right. "Your focuser has slipped"
+is not: the console cannot know that.
 
 ### Targets
 
@@ -616,6 +657,14 @@ harmless commands or `--demo`.
 - After loading, the address in the browser no longer holds the key.
 - Finish asks the job to end and waits before killing it; Stop does not
   wait. After a finished camera job a second one starts.
+- While Stop is under way, a confirm, a retry or any other request that
+  would open the mount is refused, until `mount.py stop` has answered.
+- Confirm runs the dry run again. If the new plan differs (make the target
+  set between plan and confirm, or put `MOTION_LOCKED` in place), nothing
+  starts and a new plan with a new id comes back.
+- A refused plan, a failed job and a finished job are reported as three
+  different outcomes.
+- No emoji in the page's files.
 - In demo the page says DEMO.
 - The existing suite still passes on Linux and Windows.
 
