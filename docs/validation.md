@@ -14,6 +14,24 @@ Results go here as they are obtained; until then each one says "not yet run".
 | 4 | Does `--exposure auto` pick the exposure that gathers most usable light? | Run the same target at 1, 2, 3 and 4 s; compare accepted integration time and star shape with what auto chose. | Not yet run. |
 | 5 | Do four worker processes give the expected speed-up? | `./restack.py SESSION --profile` on 200 to 500 frames, with `--workers 1` and `--workers 4`. | 200 frames: 23.5 minutes before the rewrite, 3.9 minutes with four workers. |
 
+## Why frames are slow: what has been checked
+
+A 1 s exposure takes about 9 s to arrive and a 2 s one about 14 s. Checked on
+the Hypercam 183C over a USB 2 lead:
+
+| Suspect | Finding |
+|---|---|
+| USB link negotiated at the wrong speed | No: 480 Mbps, the USB 2 maximum (`./doctor.py` now reports it). |
+| Readout speed left at its slowest | No: the driver's Speed control is already at 2, the top of its 0-2 range. |
+| A frame-rate cap left on | No: FPS Limit is 0, which means none. |
+| Sharing the USB bus | The camera, both webcams and the mount lead share the laptop's one USB 2 bus. The external webcam only runs while the mount moves. |
+| Sending four times the pixels needed | Open. The camera offers 2736 x 1824 and 1824 x 1216 modes and 2x2 binning; the pipeline halves the frame anyway. Whether those modes keep the colour pattern is not yet known. |
+| Trigger and packaging overhead | Open: driver-sequenced "fast" exposures and native (non-FITS) transfer are untried. |
+
+`./camera_test.py --throughput` times all of the open ones and prints the
+frame time, the share of time the shutter is open, and the colour-pattern
+check for each. Not yet run: it needs the camera to itself.
+
 ## Known weaknesses found by the tests
 
 - The focus tracker judges change against the readings' own jitter. If the

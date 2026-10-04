@@ -143,3 +143,30 @@ def test_a_real_worsening_is_reported_once_not_every_frame():
     tracker = focus.FocusTracker()
     said = [tracker.feed(v) for v in (4.0, 4.0, 4.0, 6.0, 6.0, 6.0, 6.0)]
     assert sum(s.startswith("Worse") for s in said) == 1
+
+
+def test_the_indi_client_keeps_each_settings_range():
+    import indi
+    client = indi.Indi.__new__(indi.Indi)
+    client.props, client.blobs, client.messages = {}, [], []
+    from xml.etree.ElementTree import fromstring
+    client._handle(fromstring(
+        '<defNumberVector device="Cam" name="CCD_CONTROLS" state="Ok">'
+        '<defNumber name="Speed" label="Speed" min="0" max="2" step="1">2</defNumber>'
+        '<defNumber name="Gain" label="Gain" min="100" max="5000" step="1">300</defNumber>'
+        '</defNumberVector>'))
+    assert client.limits("Cam", "CCD_CONTROLS", "Speed") == (0.0, 2.0)
+    assert client.get("Cam", "CCD_CONTROLS", "Gain") == "300"
+    # An update carries no range; the one from the definition is kept.
+    client._handle(fromstring('<setNumberVector device="Cam" name="CCD_CONTROLS" state="Ok">'
+                              '<oneNumber name="Gain">1500</oneNumber></setNumberVector>'))
+    assert client.get("Cam", "CCD_CONTROLS", "Gain") == "1500"
+    assert client.limits("Cam", "CCD_CONTROLS", "Gain") == (100.0, 5000.0)
+    assert client.limits("Cam", "CCD_CONTROLS", "Hue") is None
+
+
+def test_duty_cycle_is_the_share_of_time_the_shutter_is_open():
+    import camera_test
+    assert camera_test.duty(1.0, 9.0) == 11
+    assert camera_test.duty(2.0, 14.0) == 14
+    assert camera_test.duty(2.0, 2.5) == 80

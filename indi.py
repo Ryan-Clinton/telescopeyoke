@@ -22,7 +22,8 @@ class Indi:
         self.parser = XMLPullParser(["start", "end"])
         self.parser.feed("<stream>")
         self.depth = 0
-        # (device, property) -> {"kind", "state", "items": {element: value}}
+        # (device, property) -> {"kind", "state", "items": {element: value},
+        #                          "meta": {element: {"label", "min", "max", "step"}}}
         self.props = {}
         self.blobs = []     # (device, format, bytes), oldest first
         self.messages = []  # driver log lines
@@ -65,11 +66,16 @@ class Indi:
                 self.blobs.append((device, one.get("format"),
                                    base64.b64decode(one.text or "")))
         elif tag.startswith(("def", "set")) and tag.endswith("Vector"):
-            prop = self.props.setdefault((device, name), {"items": {}})
+            prop = self.props.setdefault((device, name), {"items": {}, "meta": {}})
             prop["kind"] = tag[3:-6]
             prop["state"] = el.get("state", prop.get("state"))
             for one in el:
                 prop["items"][one.get("name")] = (one.text or "").strip()
+                # A definition also says what the element is called and, for
+                # numbers, the range it accepts; updates do not repeat that.
+                described = {k: one.get(k) for k in ("label", "min", "max", "step") if one.get(k)}
+                if described:
+                    prop["meta"][one.get("name")] = described
 
     # --- reading ------------------------------------------------------------
 
@@ -94,6 +100,13 @@ class Indi:
     def wait_for(self, device, name, timeout=10):
         return self.wait(lambda: self.props.get((device, name)), timeout,
                          f"{device}.{name}")
+
+    def limits(self, device, name, element):
+        """(lowest, highest) a number element accepts, or None if the driver did not say."""
+        meta = (self.props.get((device, name)) or {}).get("meta", {}).get(element, {})
+        if "min" in meta and "max" in meta:
+            return float(meta["min"]), float(meta["max"])
+        return None
 
     # --- writing ------------------------------------------------------------
 

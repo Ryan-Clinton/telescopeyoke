@@ -149,6 +149,27 @@ def check_indi_server():
     return OK, f"INDI server on port {port}"
 
 
+def check_camera_link():
+    """How fast the camera's USB connection is. Linux lists every USB device
+    with its speed; the camera is found by a name set in config.toml."""
+    import config
+    from pathlib import Path
+    match = config.hardware()["camera"].get("usb_match", "ALTAIR").lower()
+    for device in Path("/sys/bus/usb/devices").glob("*"):
+        product = device / "product"
+        if product.exists() and match in product.read_text().lower():
+            speed = int((device / "speed").read_text())
+            name = {12: "USB 1 full speed: far too slow for a camera", 480: "USB 2 high speed",
+                    5000: "USB 3", 10000: "USB 3.1"}.get(speed, "")
+            # "auto" lets Linux power the port down when idle, which some
+            # astronomy cameras take badly during long sessions.
+            control = device / "power" / "control"
+            saving = control.exists() and control.read_text().strip() == "auto"
+            note = "; USB power saving is on for it" if saving else ""
+            return (FAIL if speed < 480 else OK), f"camera USB link: {speed} Mbps ({name}){note}"
+    return WARN, "camera USB link: camera not found on USB"
+
+
 def check_camera():
     import config
     port = config.hardware()["indi"]["port"]
@@ -193,7 +214,7 @@ def run(offline=False, skip_handset=False):
     mount.append(check_webcam())
     imaging = [check_program("astap_cli", "plate solver"), check_star_database(),
                check_program("indiserver", "INDI"), check_program(driver, "camera driver"),
-               check_indi_server(), check_camera(), check_speech()]
+               check_indi_server(), check_camera(), check_camera_link(), check_speech()]
     return {"planner": planner, "mount": mount, "imaging": imaging}
 
 
