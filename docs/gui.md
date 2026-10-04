@@ -19,13 +19,19 @@ existing status page.
 | Controls on the existing page (`serve.py`) | No. That page is served to the whole home network with no login, and must stay read-only. |
 | Tkinter | No new dependency, but a second look to maintain, poor at showing live pictures, and none of the existing page can be reused. On Ubuntu it is a separate package. |
 | Qt (PySide6), NiceGUI, Flet, pywebview | Each is a large dependency or a framework. `CONTRIBUTING.md` rules those out. |
-| **A local page from the standard library's `http.server`** | Chosen. No new dependency, the same on both systems, reuses the status page's look, pictures and JSON, and Windows users already have a browser. |
+| **A local page from the standard library's `http.server`** | Chosen. No new dependency, the same on both systems, reuses the status page's pictures and JSON, and Windows users already have a browser. |
 
 **The console runs the existing commands; it contains no telescope logic.**
 Each button starts one of the project's scripts as a separate process with
 `--json`, exactly as a person would type it. So the console cannot do
 anything the command line cannot, every limit and the `MOTION_LOCKED` file
 apply unchanged, and there is still one implementation.
+
+**It is built around what the person is doing now,** not a status page with
+buttons added and not a wall of every control. The picture or the task is in
+the middle, the state of the equipment is round the edge, and only the
+controls that make sense in the present state are shown. The project is
+small; the console should look it.
 
 ## The rule this changes
 
@@ -46,11 +52,14 @@ The console is a third program, and this is its design:
    rebinding), and any action whose `Origin` header is present and is not
    the console's own. Send no CORS headers. Actions are `POST` only; `GET`
    never changes anything.
-4. **A person confirms each move.** Pressing a move button runs the command
-   with `--dry-run` and shows the plan: altitude, hour angle, side of the
-   mount, and any warning such as "the tube will swing over the pole". The
-   mount moves only when the person then presses Confirm on that plan. A
-   refusal is shown with its message and advice, and offers no way round.
+4. **A person confirms each move, on a plan.** Pressing anything that moves
+   the mount first runs the command with `--dry-run` and shows the plan (see
+   "The move plan"). The mount moves only when the person presses the
+   confirm button on that plan. A refusal is shown with its message and
+   advice, and offers no way round. Something that goes on moving the mount
+   by itself afterwards (an imaging run that re-centres, the horizon survey,
+   drift compensation) says so on its plan, in plain words, and the one
+   confirmation covers it.
 5. **Stop is always there.** A Stop button is on screen at all times, needs
    no confirmation, and works whatever else is running.
 
@@ -63,26 +72,23 @@ built.
 ## How it works
 
 ```
-browser (this computer) ── POST /do/goto ──► console.py ── starts ──► python mount.py goto M27 --json
-        ▲                                        │                          │
-        └────── GET /job (progress, result) ─────┘◄── stderr lines, stdout envelope
+browser (this computer) ── POST /api/plan/goto ──► console.py ── starts ──► python mount.py goto M27 --dry-run --json
+        ▲                  POST /api/confirm/ID                              python mount.py goto M27 --json
+        └────── GET /api/job (progress, result) ───┘◄── stderr lines, stdout envelope
 ```
 
 - **One job at a time.** `console.py` holds at most one running job that
   uses the mount or the camera. A second request while one runs is refused
-  with a message naming the job. Read-only requests (status, targets) are
-  never blocked.
+  with a message naming the job. Read-only requests are never blocked.
 - **Progress.** With `--json` each script prints progress on stderr and one
-  envelope on stdout. The console keeps the stderr lines for the page's log
-  and shows the envelope's result or error when the job ends.
+  envelope on stdout. The console keeps the stderr lines for the activity
+  log and shows the envelope's result or error when the job ends.
 - **Fixed commands only.** The console holds a table of the actions it
-  offers and builds each command as a list of arguments. A target name must
-  be one the catalogue knows (`mount.find_target`); numbers are checked
-  against a range. Never pass a string from the browser to a shell.
-- **Status.** The page reads the same answers as the existing API
-  (`agent.status`, `agent.capabilities`, `agent.observing`, `agent.targets`)
-  through the console's own `GET` routes, and shows the same pictures from
-  `web/`.
+  offers (the tables under "The screens") and builds each command as a list
+  of arguments. A target name must be one the catalogue knows
+  (`mount.find_target`); numbers are checked against a range; a session
+  folder must be one that exists under `frames/`. The browser never sends a
+  command line, and nothing from it reaches a shell.
 - **Stop.** On Linux, `mount.py stop` can open the serial port while a slew
   is running. **On Windows a COM port can be opened by one process only**,
   so the console must end the running mount job first, then run
@@ -90,31 +96,320 @@ browser (this computer) ── POST /do/goto ──► console.py ── starts 
   takes from press to the handset's reply and show it in the log; the aim is
   under two seconds. This cannot be proven against the simulator, so it is
   on the hardware check list below.
-- **An imaging run** is stopped with `ty run stop`, which lets it finish its
-  picture. The Stop button stops the mount; a separate "Finish run" button
-  sends the order.
+- **An imaging run** is finished with `ty run stop`, which lets it make its
+  picture. Stop stops the mount; "Finish run" sends the order.
 - **Closing the browser stops nothing.** Jobs belong to `console.py`. Closing
   `console.py` ends its running job and sends the mount a stop.
 
-## What the first version offers
+### Routes
 
-Keep it to what a night needs. One page, the status page's style.
+`GET` routes only read. Each returns the project's usual envelope.
 
-| Area | Shows | Buttons |
+| Route | Answers from |
+|---|---|
+| `GET /api/state` | `agent.status`, `agent.capabilities`, the running job, the lock: everything the frame of the page needs, in one request |
+| `GET /api/night`, `/api/targets`, `/api/target/NAME` | `agent.night`, `agent.targets`, `agent.target` |
+| `GET /api/observing` | `agent.observing` |
+| `GET /api/session` | `agent.session`, with the per-frame series |
+| `GET /api/doctor` | `doctor.report` |
+| `GET /api/job` | the running or last job: its name, progress lines, result |
+| `GET /pictures/NAME` | the pictures in `web/` (`latest.jpg`, `stack.jpg`, `scope.jpg`) |
+
+| Route | Does |
+|---|---|
+| `POST /api/plan/ACTION` | runs the action's dry run; returns the plan and a plan id |
+| `POST /api/confirm/ID` | starts the planned job. An id works once, for the command it was made for, for two minutes |
+| `POST /api/action/ACTION` | starts an action that does not move the mount |
+| `POST /api/stop` | ends the mount job and stops the mount |
+
+`ACTION` is a name from the console's table, never a script name or a path.
+
+### Files
+
+```
+console.py              the server: key, checks, jobs, the table of actions
+console/index.html      the one page
+console/console.css     the whole look, both themes
+console/console.js      navigation, polling, dialogs, sparklines
+console/icons.svg       the few icons, as one sprite
+```
+
+Plain HTML, CSS and JavaScript. No npm, no bundler, no JavaScript library,
+no framework. These files are part of the repository, so they go in a new
+`console/` folder: `web/` is generated at run time, ignored by git, and
+served to the whole network by `serve.py`, so nothing of the console may be
+put there.
+
+## The look
+
+### The frame
+
+The frame stays put; the middle changes with the task.
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ TELESCOPEYOKE  My back garden   ● GO · clear to 01:10       22:47   [ STOP ] │
+├────────┬───────────────────────────────────────────┬─────────────────────────┤
+│ Home   │                                           │ M27  Dumbbell Nebula    │
+│ Targets│                                           │ ● IMAGING               │
+│ Mount  │                                           │ 127 / 300               │
+│ Focus  │                WORK AREA                  │ █████████░░░ 42%        │
+│ Imaging│          newest frame or stack            │ 218 s kept · 87% kept   │
+│ Tools  │                                           │                         │
+│ System │                                           │ [ Finish ] [ Re-centre ]│
+├────────┴───────────────────────────────────────────┴─────────────────────────┤
+│ Mount TRACKING · Camera CAPTURING · Solver READY · FWHM 3.4 · 74 stars       │
+│ ▸ 22:47:11  centred M27 to 1.8′                                    3 new  ︿ │
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+- **Top bar:** the name, the site's name from `config.toml`, tonight's
+  verdict and clear window, the mount's and camera's state, the clock, and
+  Stop. Always visible.
+- **Left:** seven tasks, not seven scripts: Home, Targets, Mount, Focus,
+  Imaging, Tools, System. Switching shows and hides sections of the one page
+  with no reload. The address carries the task (`#home`, `#targets`, ...) so
+  the browser's back button works.
+- **Right:** the current target and the controls for what is happening now.
+- **Bottom:** one line of states and the newest measurements, and the
+  activity log, folded to one line until opened.
+
+### Colour
+
+Dark charcoal background, off-white text. Colour carries meaning and nothing
+else: green for working and healthy, amber for warnings and for a plan
+waiting to be confirmed, red for Stop and for faults only, and one muted blue
+for ordinary buttons. No other button colours, so Stop cannot be mistaken.
+
+### Night vision
+
+A switch in the top bar puts one class on `<body>`: near-black background,
+deep red and warm amber text, no blue anywhere, much lower brightness. A
+second switch, "Dim pictures", shows frames and stacks at low brightness
+until the pointer is on them: a bright stretched picture appearing does more
+harm to dark-adapted eyes than any menu. Both switches are remembered in the
+browser.
+
+### Controls follow the state
+
+Show what can be done now, not everything that exists.
+
+| State | Main controls shown |
+|---|---|
+| Idle | Go to, Focus, Start imaging |
+| Slewing | Stop |
+| Focusing | Finish focusing |
+| Imaging | Finish run, Re-centre, Drift assist on/off |
+
+A control that cannot be used now is shown disabled **with the reason beside
+it**, taken from `agent.capabilities` and the doctor's messages, for example
+"Start imaging: ASTAP star database not found". Never a bare grey button.
+
+### Notices
+
+Things that finish or go wrong raise a small notice at the edge that fades:
+"M27 centred to 1.3′", "Imaging started", "Focus has worsened", "Camera
+disconnected". The warnings come from the note in `agent.observing`. A dialog
+that blocks the page is used only when a person has to decide something,
+which means the move plan.
+
+### The activity log
+
+Folded, it shows the newest line and a count of unread ones. Open, it shows
+the progress lines of recent jobs in plain words with their times. A "Show
+technical details" switch shows the scripts' raw output and the JSON
+envelopes, for finding faults.
+
+### Keys
+
+`G` targets, `F` focus, `I` imaging, `L` the log, `Esc` closes a drawer or a
+plan. They do nothing while the cursor is in a text box. **No key moves the
+mount**, and Confirm on a plan is never the focused button when the plan
+opens, so Enter cannot move it by accident. `Ctrl+Shift+Space` is Stop.
+
+## The move plan
+
+Never the browser's own `confirm()` box. A card in the middle of the page:
+
+```
+┌───────────────────── MOVE PLAN ─────────────────────┐
+│               M27  Dumbbell Nebula                   │
+│                                                      │
+│  Now                      Going to       [ webcam  ] │
+│  Az 192°  Alt 48°         Az 221°        [ picture ] │
+│                           Alt 61°                    │
+│  Hour angle  +0.42 h      Side  WEST                 │
+│                                                      │
+│  ✓ Above the 20° altitude limit                      │
+│  ✓ Within 5.75 h of the meridian                     │
+│  ✓ 94° from the Sun                                  │
+│  ⚠ The tube will swing over the pole.                │
+│                                                      │
+│              [ Cancel ]        [ GO TO M27 ]         │
+└──────────────────────────────────────────────────────┘
+```
+
+- Everything on it comes from the dry run's answer and from
+  `agent.capabilities`' limits. Warnings are shown in the script's own words.
+- The webcam's newest picture of the telescope is shown beside the plan when
+  there is a webcam, with its age. It does not make the move safe; it lets
+  the person look before agreeing.
+- The same card, with different words, is used for Home, Zenith, Compensate,
+  starting an imaging run, the horizon survey and polar alignment. For
+  those that keep moving the mount afterwards the card says so: "This run
+  re-centres the mount by itself as the target drifts", "This moves the
+  mount all over the sky, over the pole and back, for about an hour".
+- A refusal uses the same card with no confirm button: the message, the
+  advice, and Close.
+
+## The screens
+
+In the tables, **Moves** means the action goes through the move plan.
+
+### Home: what to do now
+
+Tonight's verdict, large. The clear window as a bar with "now" marked. The
+Moon: how full, when it sets. The best target now as a card with its score,
+kind, height and direction, best time, and "Details" and "Go to"; the next
+few as one line each. All from `agent.night` and `agent.targets`.
+
+Above it, one card from `agent.observing`: "Everything looks good", with the
+reasons (centred, focus near tonight's best, most frames kept), or
+"Attention", with what changed and the likely cause in the words the note
+already gives, and a button for the remedy ("Start focusing").
+
+### Targets
+
+A search box over the catalogue and the ranked list, with filters: up now,
+galaxy, nebula, cluster, planet. Choosing one opens its details from
+`agent.target`: height, direction, best time, window, distance from the
+Moon, and whether a GoTo is allowed now and if not why. Nobody has to
+remember how a name is spelled.
+
+| Control | Runs | Moves |
 |---|---|---|
-| Tonight | verdict, clear window, best targets now | Go to (per target) |
-| Mount | state, position, side, lock, limits | Stop, Home, Zenith, Go to NAME, with or without plate-solve centring |
-| Camera | newest frame, star count | Take a frame, Start focusing aid / Stop it |
-| Imaging | the run's progress, as the status page shows it | Start run (target, exposure, frames), Finish run, Re-centre |
-| System | the doctor's checks, with its advice | Check again |
-| Log | progress lines and results of the last jobs | |
+| Go to | `mount.py goto NAME` | yes |
+| Centre with plate solve | `mount.py goto NAME --solve` | yes |
 
-If `MOTION_LOCKED` exists, the mount buttons are shown disabled with the
-lock's reason. The console never creates or removes the lock.
+### Mount
 
-**Not in this version:** editing `config.toml`, calibration frames, polar
-alignment, the horizon survey, drift measurement, anything on a phone, any
-access from another computer.
+Not a joystick. The state, position (RA, Dec, height, bearing), side of the
+mount, the lock and the limits; the age of the last plate solve and the
+pointing error it found; the drift model: the natural Dec drift, the
+correction applied, what is left.
+
+| Control | Runs | Moves |
+|---|---|---|
+| Go to target | opens Targets | |
+| Home | `mount.py home` | yes |
+| Zenith | `mount.py zenith` | yes |
+| Sync from plate solve | `mount.py sync` | no (camera only) |
+| Measure drift | `mount.py drift` | changes the Dec motor's creep: plan card |
+| Compensate | `mount.py compensate` | yes |
+| Read position | `mount.py status` | no |
+
+If `MOTION_LOCKED` exists, the moving controls are disabled with the lock's
+reason. The console never creates or removes the lock.
+
+### Focus
+
+A mode of its own, with almost nothing on it: the star, the HFR as a very
+large number, whether it is improving or getting worse, tonight's best, a
+short trail of the last readings, and the advice in the script's words
+("minimum passed: turn back slightly", "best focus"). The readings come
+from the file `focus.py` already writes; the trail is the readings the page
+has seen since the aid started.
+
+| Control | Runs | Moves |
+|---|---|---|
+| Start focusing (speech, tones or silent, chosen here) | `focus.py`, with `--tones` or `--quiet` | no |
+| Finish focusing | ends the job | no |
+
+Speech and tones are options the script is started with, so changing the
+choice restarts the aid.
+
+### Imaging
+
+The richest screen. The picture in the middle with a switch between the live
+stack and the last exposure (`web/stack.jpg`, `web/latest.jpg`), both side
+by side on a wide screen. On the right the target, the state, frames taken of
+those planned with a bar, seconds kept, share kept, exposure and gain. Below,
+four measurements each with its newest value, a word (good, fair, poor) and a
+sparkline from the run's series: FWHM, roundness, star count, drift. Then the
+reasons frames were rejected, as counts. All from `agent.session` and
+`agent.observing`.
+
+Starting a run opens a sheet at the side, not a form page: target, exposure
+(auto, or 1 to 4 s), frames, gain, re-centre on or off, drift assist on or
+off. It shows the exposure time that would be kept and an estimate of how
+long the run will take, worked out from the time between frames in the
+newest saved run with this camera. With no earlier run it says the time is
+not known yet; it does not guess.
+
+| Control | Runs | Moves |
+|---|---|---|
+| Start run | `shoot.py NAME --frames N --exposure E --gain G`, with `--assist`, `--no-recentre` as chosen | yes, unless re-centre is off |
+| Finish run | `ty run stop` | no |
+| Re-centre | `ty run recentre` | the run moves the mount; it was agreed when the run started |
+| Drift assist on / off | `ty run assist-on` / `assist-off` | changes the Dec motor's creep |
+
+### Tools
+
+The technical jobs, out of the way of a normal night. Each is one line with
+what it does and a button.
+
+| Group | Control | Runs | Moves |
+|---|---|---|---|
+| Alignment | Polar alignment measurement | `polaralign.py` | yes |
+| | Horizon survey (grid, or follow the skyline; by night or by day) | `horizon.py`, with `--trace`, `--daylight` | yes |
+| Camera | What the camera is | `camera_test.py --capabilities` | no |
+| | Throughput | `camera_test.py --throughput` | no |
+| | Gain sweep | `camera_test.py --gain-sweep` | no |
+| Calibration | Dark, flat, bias frames | `calibrate.py dark\|flat\|bias` | no |
+| Processing | Restack the last session | `restack.py NAME` | no |
+| | Combine sessions | `restack.py NAME --all`, or chosen session folders | no |
+
+Two of these get a picture for a result:
+
+- **Polar alignment:** a small diagram of the pole and where the mount's
+  axis really points, the total error, and for each of the two adjustments
+  which way it is off and which way to turn the mount.
+- **Horizon survey:** the skyline as a plot, height against bearing round
+  from north, with what is blocked filled in. It is drawn from
+  `cache/horizon.json` and from the `blocked` list in `config.toml`, and is
+  also shown on the Targets screen behind the chosen target's path.
+
+### System
+
+The doctor's checks as a list with a tick, a warning or a cross each; a line
+opens to show the doctor's advice. Disk space. The camera's details: model,
+sensor, link. The time a frame takes (exposure, and the whole cycle from one
+frame to the next) from the newest run, when there is one. "Check again"
+runs the doctor.
+
+## Small changes the scripts need first
+
+The console only shows what the scripts report. These are additions; none
+changes what a command does.
+
+1. **Dry runs where they are missing.** `polaralign.py` has no `--dry-run`
+   and no `--json`; it needs both before the console may offer it. Check
+   `mount.py drift --dry-run`: it says nothing would move, which is true of
+   the tube but not of the Dec motor's creep; the plan must say the creep
+   will change.
+2. **More on the plan.** `mount.py ... --dry-run` should also give the
+   target's bearing and its distance from the Sun, so the plan card can show
+   them. Where the mount is now comes from `mount.py status`, asked for only
+   when no job holds the mount.
+3. **What sets a target's window.** For "M31 clears your roof at 23:48",
+   `agent.target` needs to say whether the start of the window is set by the
+   altitude limit or by the blocked horizon. Until it does, the console does
+   not say it.
+4. **Camera test results.** `camera_test.py` prints its results and keeps
+   nothing. To show the last measured throughput on the System screen it
+   needs to save them under `cache/`.
+
+Each of these comes with its test, and the schemas kept in step.
 
 ## Launching
 
@@ -129,17 +424,24 @@ access from another computer.
 
 ## Work, in order
 
-1. **Skeleton and safety.** `console.py`: the server on `127.0.0.1`, the
-   key, the `Host` and `Origin` checks, the job runner, Stop, and a page
-   with status and a log. Done when the tests below pass and
-   `console.py --demo` shows live status.
-2. **Mount.** Plan-then-confirm for Go to, Home and Zenith. Done when, in
-   demo, a Go to shows its plan, moves the simulated mount after Confirm,
-   and a refusal (below the altitude limit, locked) is shown without a way
-   round.
-3. **Camera and focusing.** Take a frame; start and stop the focusing aid.
-4. **Imaging.** Start a run, watch it, Finish run, Re-centre.
-5. **Documents.** README (a screenshot from `--demo` only: no photographs of
+Build the whole frame first, with all seven tasks in the navigation, so that
+nothing added later needs it redesigned. A task not yet built is left out of
+the navigation, not shown empty.
+
+1. **Server and safety.** `console.py`: `127.0.0.1`, the key, the `Host`
+   and `Origin` checks, the job runner, the routes, Stop. Done when the
+   tests below pass.
+2. **The frame.** Top bar, navigation, bottom bar, activity log, notices,
+   both themes, the keys. Home and System, which only read. Done when
+   `console.py --demo` shows a live Home and System.
+3. **Targets and Mount.** The picker, the move plan, Go to, Home, Zenith,
+   refusals. Done when, in demo, a Go to shows its plan, moves the simulated
+   mount after Confirm, and a refusal is shown without a way round.
+4. **Focus.**
+5. **Imaging.** The start sheet, the workspace, Finish, Re-centre, assist.
+6. **Mount's technical controls and Tools,** after the script changes above.
+   The two result pictures.
+7. **Documents.** README (a screenshot from `--demo` only: no photographs of
    the garden), `docs/setup.md`, `AGENTS.md` (layout table, and safety
    invariant 2 reworded to name the console and its limits),
    `docs/agents/safety.md` ("What enforces them today"), `CONTRIBUTING.md`.
@@ -154,18 +456,21 @@ harmless commands or `--demo`.
   `Origin` is refused, for every action.
 - No `GET` route starts a job or changes a file.
 - The server is bound to `127.0.0.1`: assert the socket's address.
-- A second job while one runs is refused; status requests still answer.
+- A second job while one runs is refused; reading still answers.
 - Stop ends a running job and then runs the stop command, in that order.
-- A move without a confirmed plan is refused. A plan is single-use and
-  belongs to one command: confirming it twice, or confirming a different
-  target, is refused.
+- Every action marked "Moves" above is refused without a confirmed plan. A
+  plan works once, for one command, for two minutes: confirming it twice,
+  late, or for a different target is refused.
 - With `MOTION_LOCKED` present every move is refused and Stop still works.
-- An unknown target name, or text with shell characters in it, never reaches
-  a command line.
+- An unknown action, an unknown target, a session folder outside `frames/`,
+  or text with shell characters in it never reaches a command line.
+- Every action in the tables builds exactly the command written beside it.
 - Against `simulator.py`: Go to through the console ends where
   `mount.py --demo goto` ends.
-- The existing suite still passes on Linux and Windows, and `serve.py` and
+- Nothing under `console/` is served by `serve.py`, and `serve.py` and
   `mcp_server.py` still offer no action.
+- The page's files load nothing from the internet.
+- The existing suite still passes on Linux and Windows.
 
 ## Checks only the person at the telescope can do
 
@@ -173,7 +478,10 @@ harmless commands or `--demo`.
    that the mount really stops.
 2. A whole night from the console: Go to with centring, focus, a run,
    Finish run.
-3. That the page stays usable in the dark: dim, red-friendly, large Stop.
+3. Night vision and "Dim pictures" in real darkness: readable, and no flash
+   of a bright picture.
+4. That Stop can be found and pressed at once, by someone who has not been
+   told where it is.
 
 ## To decide before starting
 
@@ -188,5 +496,6 @@ harmless commands or `--demo`.
 
 ## Out of scope
 
-A desktop toolkit, a phone app, accounts and logins, remote access over the
-internet, a sequencing language, editing settings in the browser.
+A desktop toolkit, a phone app, accounts and logins, access from another
+computer or over the internet, a sequencing language, a joystick or any
+hand-slewing control, editing settings in the browser.
