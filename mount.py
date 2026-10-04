@@ -101,7 +101,13 @@ class Mount:
                               f"No serial port matches \"{match}\" (serial_match under "
                               f"[mount] in config.toml). Ports seen: {seen or 'none'}. "
                               "Plug in the handset's lead, or name the port with --port.")
-            self.s = serial.Serial(port, 9600, timeout=2)
+            if "://" in port:
+                # A network address in pyserial's form, such as
+                # socket://127.0.0.1:11882 for the SynScan app standing in
+                # for the handset over a SynScan Wi-Fi dongle.
+                self.s = serial.serial_for_url(port, 9600, timeout=2)
+            else:
+                self.s = serial.Serial(port, 9600, timeout=2)
         if self.ask(b"Kx") != b"x#":
             raise Refusal("HANDSET_NOT_ANSWERING", "The handset is not answering. Is it on "
                           "and past its start-up screens?")
@@ -674,7 +680,8 @@ def main():
     ap.add_argument("target", nargs="*",
                     help="object for goto (e.g. M81), or bearing and height for point")
     ap.add_argument("--port", help="serial port (default: found by the adapter name "
-                                   "in config.toml)")
+                                   "in config.toml), or a network address such as "
+                                   "socket://127.0.0.1:11882")
     ap.add_argument("--no-watch", action="store_true", help="skip the webcam pictures")
     ap.add_argument("--solve", action="store_true",
                     help="with goto: plate-solve and correct until centred")
