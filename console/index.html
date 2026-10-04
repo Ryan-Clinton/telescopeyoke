@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="no-referrer">
-<title>telescopeyoke console</title>
+<title>TelescopeYoke</title>
 <link rel="stylesheet" href="/console.css">
 <script src="/console.js" defer></script>
 </head>
@@ -23,13 +23,28 @@
 </header>
 
 <nav class="tasks" aria-label="Tasks">
-  <a href="#home" data-task="home"><svg><use href="/icons.svg#home"/></svg><span>Home</span></a>
+  <div class="group">Observe</div>
+  <a href="#home" data-task="home"><svg><use href="/icons.svg#home"/></svg><span>Tonight</span></a>
   <a href="#targets" data-task="targets"><svg><use href="/icons.svg#targets"/></svg><span>Targets</span></a>
-  <a href="#mount" data-task="mount"><svg><use href="/icons.svg#mount"/></svg><span>Mount</span></a>
-  <a href="#focus" data-task="focus"><svg><use href="/icons.svg#focus"/></svg><span>Focus</span></a>
   <a href="#imaging" data-task="imaging"><svg><use href="/icons.svg#imaging"/></svg><span>Imaging</span></a>
-  <a href="#tools" data-task="tools"><svg><use href="/icons.svg#tools"/></svg><span>Tools</span></a>
-  <a href="#system" data-task="system"><svg><use href="/icons.svg#system"/></svg><span>System</span></a>
+  <a href="#focus" data-task="focus"><svg><use href="/icons.svg#focus"/></svg><span>Focus</span></a>
+  <a href="#mount" data-task="mount"><svg><use href="/icons.svg#mount"/></svg><span>Mount</span></a>
+  <a href="#status" data-task="status" data-only="companion"><svg><use href="/icons.svg#system"/></svg><span>Status</span></a>
+  <div class="group" data-only="app">Equipment</div>
+  <a href="#camera" data-task="camera" data-only="app"><svg><use href="/icons.svg#imaging"/></svg><span>Camera</span></a>
+  <a href="#telescope" data-task="telescope" data-only="app"><svg><use href="/icons.svg#mount"/></svg><span>Telescope</span></a>
+  <a href="#solver" data-task="solver" data-only="app"><svg><use href="/icons.svg#targets"/></svg><span>Plate solver</span></a>
+  <a href="#webcam" data-task="webcam" data-only="app"><svg><use href="/icons.svg#focus"/></svg><span>Webcam</span></a>
+  <div class="group" data-only="app">Tools</div>
+  <a href="#horizon" data-task="horizon" data-only="app"><svg><use href="/icons.svg#tools"/></svg><span>Horizon</span></a>
+  <a href="#calibration" data-task="calibration" data-only="app"><svg><use href="/icons.svg#tools"/></svg><span>Calibration</span></a>
+  <a href="#testing" data-task="testing" data-only="app"><svg><use href="/icons.svg#tools"/></svg><span>Camera testing</span></a>
+  <a href="#processing" data-task="processing" data-only="app"><svg><use href="/icons.svg#tools"/></svg><span>Processing</span></a>
+  <div class="group" data-only="app">System</div>
+  <a href="#doctor" data-task="doctor" data-only="app"><svg><use href="/icons.svg#system"/></svg><span>Doctor</span></a>
+  <a href="#settings" data-task="settings" data-only="app"><svg><use href="/icons.svg#tools"/></svg><span>Settings</span></a>
+  <a href="#logs" data-task="logs" data-only="app"><svg><use href="/icons.svg#home"/></svg><span>Logs</span></a>
+  <a href="#about" data-task="about" data-only="app"><svg><use href="/icons.svg#home"/></svg><span>About</span></a>
 </nav>
 
 <main class="work">
@@ -135,34 +150,107 @@
     </div>
   </section>
 
-  <section id="tools" class="task" hidden>
-    <h1>Tools</h1>
-    <h2>Alignment</h2>
+  <section id="status" class="task" data-only="companion" hidden>
+    <h1>Status</h1>
+    <dl id="status-rows" class="facts"></dl>
+    <p class="quiet">Setting up and testing the equipment is done in the TelescopeYoke application on the computer beside the telescope.</p>
+  </section>
+
+  <section id="welcome" class="task" data-only="app" hidden>
+    <h1>Welcome to TelescopeYoke</h1>
+    <p class="quiet">This is what is ready and what still needs doing before a night at the telescope.</p>
+    <div id="welcome-list"></div>
+    <div class="buttons" id="welcome-fix"></div>
+    <p id="welcome-demo" class="quiet"></p>
+    <div class="buttons"><button type="button" class="primary" data-go="home">Go to Tonight</button></div>
+  </section>
+
+  <section id="camera" class="task" data-only="app" hidden>
+    <h1>Camera</h1>
+    <dl id="camera-facts" class="facts"></dl>
+    <div id="camera-checks"></div>
+    <div class="buttons">
+      <button type="button" data-action="camera-setup">Set up the camera</button>
+      <button type="button" data-action="camera-capabilities" data-needs="camera">What the camera is</button>
+    </div>
+    <p class="quiet">"Set up" checks the camera is plugged in and has a driver, takes Altair's library files out of their SDK if they are missing, and takes a test frame.</p>
+    <pre id="camera-result" class="result" hidden></pre>
+  </section>
+
+  <section id="telescope" class="task" data-only="app" hidden>
+    <h1>Telescope</h1>
+    <dl id="telescope-facts" class="facts"></dl>
+    <div id="telescope-checks"></div>
+    <div class="buttons"><button type="button" data-action="position" data-needs="mount">Read position</button></div>
+    <p id="telescope-note" class="quiet"></p>
+  </section>
+
+  <section id="solver" class="task" data-only="app" hidden>
+    <h1>Plate solver</h1>
+    <p class="quiet">ASTAP works out where the telescope is really pointing from the stars in a frame. It needs its program and the D20 star database.</p>
+    <div id="solver-checks"></div>
+  </section>
+
+  <section id="webcam" class="task" data-only="app" hidden>
+    <h1>Webcam</h1>
+    <p class="quiet">A webcam pointed at the telescope photographs it during every move, so you can look before agreeing to one.</p>
+    <div id="webcam-checks"></div>
+    <div id="webcam-part"><img id="webcam-picture" class="wide-picture" alt="The telescope, from the webcam"></div>
+  </section>
+
+  <section id="horizon" class="task" data-only="app" hidden>
+    <h1>Horizon</h1>
     <div class="tool"><div><b>Horizon survey</b><span>Find what blocks the sky from where the telescope stands.</span></div>
       <label class="switch"><input type="checkbox" id="horizon-trace" checked> Follow the skyline</label>
       <label class="switch"><input type="checkbox" id="horizon-daylight"> By day</label>
       <button type="button" id="horizon-run" data-needs="imaging">Plan</button></div>
     <svg id="horizon-plot" class="plot" viewBox="0 0 720 200"></svg>
-    <h2>Camera</h2>
-    <div class="tool"><div><b>Set up the camera</b><span>Checks the driver and Altair's library, puts right what it can, takes a test frame.</span></div><button type="button" data-action="camera-setup">Set up</button></div>
-    <div class="tool"><div><b>What the camera is</b><span>Model, sensor, link.</span></div><button type="button" data-action="camera-capabilities" data-needs="camera">View</button></div>
-    <div class="tool"><div><b>Throughput</b><span>How long a frame takes to arrive.</span></div><button type="button" data-action="camera-throughput" data-needs="camera">Run</button></div>
-    <div class="tool"><div><b>Gain sweep</b><span>Noise and range at each gain.</span></div><button type="button" data-action="camera-gain-sweep" data-needs="camera">Run</button></div>
-    <h2>Calibration</h2>
+  </section>
+
+  <section id="calibration" class="task" data-only="app" hidden>
+    <h1>Calibration</h1>
     <div class="tool"><div><b>Dark frames</b><span>Cap on.</span></div><button type="button" data-action="calibrate" data-kind="dark" data-needs="camera">Capture</button></div>
     <div class="tool"><div><b>Bias frames</b><span>Cap on.</span></div><button type="button" data-action="calibrate" data-kind="bias" data-needs="camera">Capture</button></div>
     <div class="tool"><div><b>Flat frames</b><span>Point at an evenly lit surface.</span></div><button type="button" data-action="calibrate" data-kind="flat" data-needs="camera">Capture</button></div>
-    <h2>Processing</h2>
-    <div class="tool"><div><b>Restack the last session</b><span id="restack-name"></span></div><button type="button" id="restack-run">Run</button></div>
-    <div class="tool"><div><b>Combine sessions</b><span>Every saved session of the same target, as one picture.</span></div><button type="button" id="restack-all">Run</button></div>
+  </section>
+
+  <section id="testing" class="task" data-only="app" hidden>
+    <h1>Camera testing</h1>
+    <div class="tool"><div><b>Throughput</b><span>How long a frame takes to arrive.</span></div><button type="button" data-action="camera-throughput" data-needs="camera">Run</button></div>
+    <div class="tool"><div><b>Gain sweep</b><span>Noise and range at each gain.</span></div><button type="button" data-action="camera-gain-sweep" data-needs="camera">Run</button></div>
     <pre id="tool-result" class="result" hidden></pre>
   </section>
 
-  <section id="system" class="task" hidden>
-    <h1>System</h1>
+  <section id="processing" class="task" data-only="app" hidden>
+    <h1>Processing</h1>
+    <div class="tool"><div><b>Restack the last session</b><span id="restack-name"></span></div><button type="button" id="restack-run">Run</button></div>
+    <div class="tool"><div><b>Combine sessions</b><span>Every saved session of the same target, as one picture.</span></div><button type="button" id="restack-all">Run</button></div>
+  </section>
+
+  <section id="doctor" class="task" data-only="app" hidden>
+    <h1>Doctor</h1>
     <dl id="system-rows" class="facts"></dl>
-    <div id="doctor"></div>
+    <div id="doctor-checks"></div>
     <div class="buttons"><button type="button" id="recheck">Check again</button></div>
+  </section>
+
+  <section id="settings" class="task" data-only="app" hidden>
+    <h1>Settings</h1>
+    <dl id="settings-facts" class="facts"></dl>
+    <div class="buttons"><button type="button" id="open-settings">Open the settings file</button></div>
+    <p class="quiet">The settings are one text file, config.toml: your location, the telescope, the camera and how the mount is reached. Each setting is explained beside it in the file. Changes take effect the next time something is started.</p>
+  </section>
+
+  <section id="logs" class="task" data-only="app" hidden>
+    <h1>Logs</h1>
+    <label class="switch"><input type="checkbox" id="technical-logs"> Show technical details</label>
+    <div id="logs-lines" class="log open"></div>
+  </section>
+
+  <section id="about" class="task" data-only="app" hidden>
+    <h1>About</h1>
+    <dl id="about-facts" class="facts"></dl>
+    <p class="quiet">TelescopeYoke plans the night, slews a SynScan mount, plate-solves, helps you focus and stacks short exposures. Every move is checked against its limits and shown as a plan before anything turns.</p>
   </section>
 
 </main>

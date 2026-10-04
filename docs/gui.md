@@ -1,4 +1,32 @@
-# A control console: specification
+# The application and its companion page: specification
+
+**Since this was first written the shape has changed.** A page that is
+started from a terminal and opens in a browser is not an application, on
+Ubuntu or anywhere else. So:
+
+- **TelescopeYoke is an application** (`app.py`): a window of its own, an
+  icon, an entry in the applications menu, no terminal and no browser. It is
+  built on Ubuntu first, with GTK and a WebKit view, which Ubuntu already
+  has; on Windows the same program uses the WebView2 control through
+  pywebview, or Edge's application mode without it.
+- **Its screens are grouped by what they are for:** Observe (Tonight,
+  Targets, Imaging, Focus, Mount), Equipment (Camera, Telescope, Plate
+  solver, Webcam), Tools (Horizon, Calibration, Camera testing, Processing)
+  and System (Doctor, Settings, Logs, About). When something the telescope
+  needs is missing it opens on a Welcome screen that says what, with a
+  button to the screen that deals with it.
+- **`console.py` by itself is the companion page:** the observing screens
+  and a Status screen, in a browser on the same computer. Setting up and
+  testing the equipment is refused there, by the server and not just hidden
+  on the page.
+- **Not built:** reaching the companion from a phone or another computer. It
+  needs pairing and its own list of what may be done from another room; it
+  is a separate piece of work and must not be done by simply listening on
+  the network.
+
+Everything below about safety, plans, Stop and the commands behind each
+control applies to both. Where it says "the console" read "the application
+and its companion page"; the server is the same program.
 
 This is a work order for an agent (or a person). The aim is that someone who
 is used to pressing buttons in NINA or SharpCap can run a night with

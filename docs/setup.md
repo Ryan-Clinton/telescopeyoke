@@ -56,16 +56,27 @@ adapter has only been found and read.
 
 Close the SynScan app and anything else talking to the mount first.
 
-## The control console
+## The application
 
-`./console.py` (or `./ty console`; on Windows `python console.py`) opens a
-page in the browser with buttons for the things a night needs: choosing a
-target, GoTo, focusing, imaging and the tools. It answers this computer only,
-so it is used at the computer beside the telescope. Every move is shown as a
-plan first and happens only when you confirm it; Stop is always at the top
-right. `./console.py --demo` tries it with a simulated mount and nothing
-plugged in. The status page (`serve.py`) is separate and stays read-only for
-watching from elsewhere in the house.
+`./install.sh` puts **TelescopeYoke** in the applications menu, with
+**TelescopeYoke (demo)** beside it for trying everything with nothing plugged
+in. On Windows, `install.ps1` puts the same two in the Start Menu. From a
+terminal it is `./app.py` (or `python app.py` on Windows).
+
+It opens in a window of its own. The first time, or whenever something the
+telescope needs is missing, it opens on a Welcome screen that lists what is
+ready and what is not, with a button to the screen that deals with each:
+Camera, Telescope, Plate solver, Webcam, Settings. After that it opens on
+Tonight.
+
+Every move is shown as a plan first and happens only when you confirm it.
+Stop is always at the top right. Closing the window ends whatever is running
+and tells the mount to stop; if something is running it asks first.
+
+`./console.py` gives the observing screens alone as a page in a browser on
+the same computer, without the equipment and tools. The status page
+(`serve.py`) is separate and stays read-only for watching from elsewhere in
+the house.
 
 ## Windows
 

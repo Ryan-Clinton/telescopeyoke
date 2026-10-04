@@ -302,7 +302,7 @@ function drawRail() {
                      ? [button("Re-centre", () => act("run-recentre")), button("Drift assist on", () => act("run-assist-on")),
                         button("Drift assist off", () => act("run-assist-off"))]
                      : [el("p", { class: "quiet", text: seen.job.run_scope ? "Started without re-centring: this run does not move the mount."
-                                                                           : "This run was not started from the console, so only Finish is offered here." })])));
+                                                                           : "This run was started from a terminal, so only Finish is offered here." })])));
   }
   const nodes = [el("div", { class: "quiet", text: job ? "WORKING" : "NO RUN" })];
   if (job) nodes.push(el("div", { class: "name", text: job.label }), el("div", { class: "buttons" }, button("Finish", finish)));
@@ -576,12 +576,73 @@ function estimate() {
     : `Up to ${Math.round(frames * exposure / 60)} min of exposure. ` + (cycle ? `About ${Math.round(frames * cycle / 60)} min in all, from the last run's ${cycle} s per frame.` : "How long it takes in all is not known yet: there is no earlier run to measure it from.");
 }
 
-// --- tools, system ------------------------------------------------------------
+// --- equipment, tools, system: the application's own screens ------------------
 
-function drawTools() {
-  const run = seen.session, h = seen.horizon;
-  $("restack-name").textContent = run && run.name ? `${run.name}, from its saved raw frames.` : "No session saved yet.";
-  $("restack-run").disabled = $("restack-all").disabled = !(run && run.name) || !!(seen.job && seen.job.running) || (seen.state && seen.state.demo);
+const MARKS = { ok: ["✓", "good"], warn: ["!", "warn"], fail: ["✗", "bad"] };
+
+function checkLines(node, names) {
+  // The doctor's own lines for these parts of the kit, each with its advice.
+  const parts = (seen.state && seen.state.capabilities.components) || {};
+  fill(node, names.filter((n) => parts[n]).map((n) => el("div", { class: "check" },
+       el("span", { class: `mark ${MARKS[parts[n].status][1]}`, text: MARKS[parts[n].status][0] }), el("span", { text: parts[n].message }))));
+}
+
+function facts(node, pairs) {
+  fill(node, pairs.filter(([, v]) => v != null && v !== "").flatMap(([k, v]) => [el("dt", { text: k }), el("dd", { text: v })]));
+}
+
+function drawWelcome() {
+  const state = seen.state;
+  if (!state) return;
+  const parts = state.capabilities.components || {};
+  const rows = [["Settings", state.configured ? { status: "ok", message: "config.toml is in place" } : { status: "fail", message: "No settings file yet: your location has not been set" }, "settings"],
+                ["Mount", parts.mount_lead, "telescope"], ["Camera", parts.camera, "camera"], ["Plate solver", parts.plate_solver, "solver"],
+                ["Star database", parts.star_database, "solver"], ["Webcam", parts.webcam, "webcam"]].filter(([, part]) => part);
+  fill($("welcome-list"), rows.map(([name, part]) => el("div", { class: "step" },
+       el("span", { class: `mark ${MARKS[part.status][1]}`, text: MARKS[part.status][0] }), el("span", { class: "name", text: name }), el("span", { class: "what", text: part.message }))));
+  const todo = [...new Map(rows.filter(([, part]) => part.status !== "ok").map(([name, , where]) => [where, name])).entries()];
+  fill($("welcome-fix"), todo.map(([where, name]) => el("button", { type: "button", text: `Set up: ${name.toLowerCase()}`, on: { click: () => show(where) } })));
+  $("welcome-demo").textContent = state.demo ? "" : "To try everything with nothing plugged in, start TelescopeYoke (demo) from the applications menu.";
+}
+
+function needsWelcome() {
+  const state = seen.state, parts = state.capabilities.components || {};
+  return state.mode === "app" && !state.demo && (!state.configured || ["mount_lead", "camera", "plate_solver", "star_database"].some((n) => parts[n] && parts[n].status === "fail"));
+}
+
+function drawCamera() {
+  const state = seen.state;
+  if (!state) return;
+  facts($("camera-facts"), [["Read through", state.camera_backend === "altair" ? "Altair's own library" : "the INDI driver"], ["State", state.camera.state]]);
+  checkLines($("camera-checks"), ["camera_transport", "camera"]);
+  gateAll();
+}
+
+function drawTelescope() {
+  const state = seen.state, position = seen.job && seen.job.position;
+  if (!state) return;
+  const link = { handset: "a serial lead to the SynScan handset", wifi: "the SynScan Wi-Fi adapter (no handset)", eqdir: "an EQDIR lead (no handset)" }[state.mount_link] || state.mount_link;
+  const limits = state.capabilities.motion.limits;
+  facts($("telescope-facts"), [["Reached by", link], ["State", state.mount.state],
+        ["Position", position ? `RA ${position.ra_hours} h, Dec ${position.dec_deg}°, read ${age(Date.now() / 1000 - position.read)}` : "not read yet"],
+        ["Limits", `at least ${limits.min_altitude_deg}° up, within ${limits.max_hour_angle_hours} h of the meridian, ${limits.sun_exclusion_deg}° from the Sun`],
+        ["Motion lock", state.capabilities.motion.locked ? `locked: ${state.capabilities.motion.lock_reason}` : "not locked"]]);
+  checkLines($("telescope-checks"), ["serial_access", "mount_lead"]);
+  $("telescope-note").textContent = state.mount_link === "handset"
+    ? "After every power-on the handset must be taken through its start-up screens to its main menu, with today's date."
+    : "Without a handset the mount must be told where home is, and once which way its Dec motor turns. Both are done from a terminal with someone beside the mount: ./mount.py sethome and ./mount.py directions.";
+  gateAll();
+}
+
+function drawSolver() { checkLines($("solver-checks"), ["plate_solver", "star_database"]); }
+
+function drawWebcam() {
+  checkLines($("webcam-checks"), ["webcam"]);
+  picture($("webcam-picture"), "scope.jpg");
+}
+
+function drawHorizon() {
+  const h = seen.horizon;
   if (h) {
     const plot = $("horizon-plot"), x = (az) => 30 + (az / 360) * 680, y = (alt) => 180 - (alt / 90) * 170, parts = [];
     for (const alt of [0, 30, 60, 90]) parts.push(el("line", { class: "axis", x1: 30, x2: 710, y1: y(alt), y2: y(alt) }), el("text", { x: 4, y: y(alt) + 3, text: `${alt}°` }));
@@ -598,15 +659,39 @@ function drawTools() {
   gateAll();
 }
 
-function drawSystem() {
-  const report = seen.doctor, rows = (seen.system && seen.system.rows) || [];
-  fill($("system-rows"), rows.flatMap((row) => [el("dt", { text: row.label }), el("dd", { class: row.level === "fair" ? "warn" : row.level, text: row.text })]));
+function drawProcessing() {
+  const run = seen.session;
+  $("restack-name").textContent = run && run.name ? `${run.name}, from its saved raw frames.` : "No session saved yet.";
+  $("restack-run").disabled = $("restack-all").disabled = !(run && run.name) || !!(seen.job && seen.job.running) || (seen.state && seen.state.demo);
+}
+
+function statusRows(node) {
+  const rows = (seen.system && seen.system.rows) || [];
+  fill(node, rows.flatMap((row) => [el("dt", { text: row.label }), el("dd", { class: row.level === "fair" ? "warn" : row.level, text: row.text })]));
+}
+
+function drawDoctor() {
+  const report = seen.doctor;
+  statusRows($("system-rows"));
   if (!report) return;
-  const marks = { ok: ["✓", "good"], warn: ["!", "warn"], fail: ["✗", "bad"] };
-  fill($("doctor"), Object.entries(report.components).flatMap(([section, checks]) => [
+  fill($("doctor-checks"), Object.entries(report.components).flatMap(([section, checks]) => [
     el("h2", { text: `${section} ${report.ready && report.ready[section.toLowerCase()] === false ? "· not ready" : ""}` }),
-    ...checks.map((check) => el("div", { class: "check" }, el("span", { class: `mark ${marks[check.status][1]}`, text: marks[check.status][0] }), el("span", { text: check.message }))),
+    ...checks.map((check) => el("div", { class: "check" }, el("span", { class: `mark ${MARKS[check.status][1]}`, text: MARKS[check.status][0] }), el("span", { text: check.message }))),
   ]));
+}
+
+function drawSettings() {
+  const state = seen.state;
+  if (!state) return;
+  facts($("settings-facts"), [["Settings file", state.settings_file], ["In place", state.configured ? "yes" : "not yet: opening it makes one from the example"],
+        ["Site", state.site], ["Mount reached by", state.mount_link], ["Camera read through", state.camera_backend]]);
+  $("open-settings").disabled = !!state.demo;
+}
+
+function drawAbout() {
+  const state = seen.state;
+  if (state) facts($("about-facts"), [["Version", state.version], ["Running on", { linux: "Linux", win32: "Windows", darwin: "macOS" }[state.system] || state.system],
+                                      ["Source", "github.com/Ryan-Clinton/telescopeyoke"], ["Licence", "MIT"]]);
 }
 
 // --- the activity log ---------------------------------------------------------------
@@ -615,7 +700,9 @@ function record(entry) {
   const id = `${entry.time}|${entry.text}`;
   if (logged.has(id)) return;
   logged.add(id);
-  $("log-lines").append(el("div", { class: `line ${entry.kind || ""}` }, el("span", { class: "t", text: hms(entry.time) }), entry.text));
+  for (const where of ["log-lines", "logs-lines"]) {
+    $(where).append(el("div", { class: `line ${entry.kind || ""}` }, el("span", { class: "t", text: hms(entry.time) }), entry.text));
+  }
   $("log-newest").textContent = `${hms(entry.time)}  ${entry.text}`;
   if ($("log").hidden) unread += 1;
   $("log-count").textContent = unread ? `${unread} new` : "";
@@ -631,11 +718,15 @@ function drawLog() {
     if (job.state === "ended") {
       const words = { finished: "finished", failed: `FAILED: ${(job.error || {}).message || ""}`, stopped: "ended by Stop" }[job.outcome];
       record({ time: job.ended, text: `${job.label}: ${words}`, kind: job.outcome === "failed" ? "failed" : "head" });
-      if ($("technical").checked && job.result) record({ time: job.ended + 0.001, text: JSON.stringify(job.result), kind: "technical" });
+      if (($("technical").checked || $("technical-logs").checked) && job.result) record({ time: job.ended + 0.001, text: JSON.stringify(job.result), kind: "technical" });
       if (job.id !== lastJobId && job === jobs.recent[jobs.recent.length - 1]) {
         if (lastJobId !== null || job.ended > started) notice(`${job.label}: ${words}`, job.outcome === "failed" ? "failed" : "");
         lastJobId = job.id;
-        if (job.action.startsWith("camera-") && job.result) { $("tool-result").hidden = false; $("tool-result").textContent = job.action === "camera-setup" ? setupWords(job.result) : JSON.stringify(job.result, null, 1); }
+        if (job.action.startsWith("camera-") && job.result) {
+          const box = $(["camera-setup", "camera-capabilities"].includes(job.action) ? "camera-result" : "tool-result");
+          box.hidden = false;
+          box.textContent = job.action === "camera-setup" ? setupWords(job.result) : JSON.stringify(job.result, null, 1);
+        }
       }
     }
   }
@@ -652,19 +743,37 @@ $("log-newest").textContent = "Activity log";
 
 // --- navigation, polling, keys -----------------------------------------------------
 
+let welcomed = false;
 function show(name) {
-  if (!$(name) || !$(name).classList.contains("task")) name = "home";
+  const section = $(name), mode = seen.state && seen.state.mode;
+  // A screen that belongs to the other mode is not shown: back to Tonight.
+  if (!section || !section.classList.contains("task") || (mode && section.dataset.only && section.dataset.only !== mode)) name = "home";
   task = name;
-  for (const section of document.querySelectorAll(".task")) section.hidden = section.id !== name;
+  for (const other of document.querySelectorAll(".task")) other.hidden = other.id !== name;
   for (const link of document.querySelectorAll(".tasks a")) link.classList.toggle("on", link.dataset.task === name);
   if (location.hash !== `#${name}`) history.replaceState(null, "", `#${name}`);
   draw();
   refresh();
 }
 
+const SCREENS = { home: drawHome, targets: drawTargets, mount: drawMount, focus: drawFocus, imaging: drawImaging,
+                  status: () => statusRows($("status-rows")), welcome: drawWelcome, camera: drawCamera, telescope: drawTelescope,
+                  solver: drawSolver, webcam: drawWebcam, horizon: drawHorizon, calibration: gateAll, testing: gateAll,
+                  processing: drawProcessing, doctor: drawDoctor, settings: drawSettings, logs: () => {}, about: drawAbout };
+
 function draw() {
+  if (seen.state) {
+    document.body.classList.toggle("mode-app", seen.state.mode === "app");
+    document.body.classList.toggle("mode-companion", seen.state.mode !== "app");
+    // The first time the application opens with something still to set up, it opens on Welcome.
+    if (!welcomed) {
+      welcomed = true;
+      if (task === "home" && needsWelcome()) return show("welcome");
+      if ($(task) && $(task).dataset.only && $(task).dataset.only !== seen.state.mode) return show("home");
+    }
+  }
   drawTop(); drawBottom(); drawRail(); drawLog();
-  ({ home: drawHome, targets: drawTargets, mount: drawMount, focus: drawFocus, imaging: drawImaging, tools: drawTools, system: drawSystem })[task]();
+  SCREENS[task]();
 }
 
 async function load(name) {
@@ -680,11 +789,11 @@ async function refresh() {
   const wanted = ["state", "job", "session", "focus"];
   if (slow % 3 === 0) wanted.push("observing");
   if (slow % 30 === 0 || !seen.night) wanted.push("night", "targets", "report");
-  if (task === "system" || !seen.system) wanted.push("system");
+  if (["doctor", "status"].includes(task) || !seen.system) wanted.push("system");
   if (task === "imaging" && slow % 5 === 0 || !seen.gallery) wanted.push("gallery");
   if (!seen.catalogue) wanted.push("catalogue");
-  if (task === "system" || !seen.doctor) wanted.push("doctor");
-  if (task === "tools") wanted.push("horizon");
+  if (task === "doctor" || !seen.doctor) wanted.push("doctor");
+  if (task === "horizon") wanted.push("horizon");
   slow += 1;
   await Promise.all(wanted.map(load));
   busy = false;
@@ -736,6 +845,13 @@ $("run-recentre").addEventListener("change", () => {
 });
 $("log-toggle").addEventListener("click", () => { $("log").hidden = !$("log").hidden; unread = 0; $("log-count").textContent = ""; });
 $("technical").addEventListener("change", drawLog);
+$("technical-logs").addEventListener("change", drawLog);
+$("open-settings").addEventListener("click", async () => {
+  const reply = await ask("/api/open/settings", {});
+  notice(reply.ok ? (reply.data.created ? "Made config.toml from the example and opened it. Put your own location in it." : "Opened the settings file.") : reply.errors[0].message, reply.ok ? "" : "failed");
+  refresh();
+});
+showOnlyIfThere($("webcam-picture"), $("webcam-part"));
 
 for (const [id, name] of [["night", "night"], ["dim", "dim"]]) {
   $(id).checked = localStorage.getItem(name) === "1";

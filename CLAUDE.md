@@ -56,6 +56,11 @@ that may have set.
   function, its file in `schemas/`, and `tests/test_interface.py`, which
   checks the envelope, the MCP tools' `outputSchema` and the scenarios in
   `evals/scenarios.json`.
+- The application is `app.py`: it runs `console.py`'s server in "app" mode and
+  shows `console/index.html` in a GTK window (Ubuntu) or WebView2 (Windows).
+  `console.py` alone serves the same page in "companion" mode, where the
+  actions in `console.WORKSTATION` are refused. A screen for the application
+  only is marked `data-only="app"` in the page.
 - `ty` passes `mount`, `tonight`, `shoot`, `focus`, `solve` and `restack`
   straight through to those scripts' own `main()`. The rest are read-only
   views from `agent.py` and `doctor.py`, except `ty run`, which leaves an

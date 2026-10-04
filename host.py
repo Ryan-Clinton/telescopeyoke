@@ -258,6 +258,72 @@ def has_speech():
     return WARN, "spd-say not found; the focusing aid will be silent"
 
 
+# --- the application in the system's menu -------------------------------------
+
+DESKTOP_ENTRY = """[Desktop Entry]
+Type=Application
+Name={name}
+Comment=Plan the night and run the telescope
+Exec="{python}" "{script}"{arguments}
+Icon={icon}
+Terminal=false
+Categories=Science;Astronomy;
+StartupWMClass=telescopeyoke
+"""
+
+SHORTCUT = ("$s = (New-Object -ComObject WScript.Shell).CreateShortcut($env:TY_LINK); "
+            "$s.TargetPath = $env:TY_TARGET; $s.Arguments = $env:TY_ARGUMENTS; "
+            "$s.WorkingDirectory = $env:TY_FOLDER; $s.IconLocation = $env:TY_ICON; "
+            "$s.Description = 'Plan the night and run the telescope'; $s.Save()")
+
+
+def install_launcher(root, python=None):
+    """Put TelescopeYoke, and its demo, in the applications menu (Linux) or
+    the Start Menu (Windows), so it is started like any other program: no
+    terminal, its own icon. Returns the files written."""
+    root, python = Path(root), python or sys.executable
+    entries = (("TelescopeYoke", ""), ("TelescopeYoke (demo)", " --demo"))
+    written = []
+    if WINDOWS:
+        # pythonw runs a program with no console window behind it.
+        windowless = Path(python).with_name("pythonw.exe")
+        target = str(windowless if windowless.exists() else python)
+        menu = Path(os.environ["APPDATA"]) / "Microsoft" / "Windows" / "Start Menu" / "Programs"
+        menu.mkdir(parents=True, exist_ok=True)
+        for name, arguments in entries:
+            link = menu / f"{name}.lnk"
+            values = {"TY_LINK": str(link), "TY_TARGET": target, "TY_FOLDER": str(root),
+                      "TY_ARGUMENTS": f'"{root / "app.py"}"{arguments}',
+                      "TY_ICON": str(root / "console" / "telescopeyoke.ico")}
+            # The values go in by the environment, never into the command's text.
+            subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command", SHORTCUT],
+                           env={**os.environ, **values}, check=True, timeout=60, **QUIET)
+            written.append(link)
+        return written
+    menu = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "applications"
+    menu.mkdir(parents=True, exist_ok=True)
+    for name, arguments in entries:
+        entry = menu / ("telescopeyoke.desktop" if not arguments else "telescopeyoke-demo.desktop")
+        entry.write_text(DESKTOP_ENTRY.format(name=name, python=python, script=root / "app.py",
+                                              arguments=arguments, icon=root / "console" / "telescopeyoke.png"),
+                         encoding="utf-8")
+        entry.chmod(0o755)
+        written.append(entry)
+    return written
+
+
+# --- opening a file for the person to edit ---------------------------------
+
+def open_file(path):
+    """Open a file in whatever the system uses for it (a text editor, for
+    config.toml), without waiting for it to be closed."""
+    if WINDOWS:
+        os.startfile(str(path))      # noqa: S606  (the user's own settings file)
+    else:
+        subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", str(path)],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
 # --- asking a running script to end ------------------------------------------
 
 # A script the console started must be able to be asked to end as Ctrl+C

@@ -76,11 +76,16 @@ On Windows 10 or 11, in PowerShell: `.\install.ps1`, then the same commands
 written as `python doctor.py`, `python tonight.py --demo` and so on, and
 `.\ty.cmd` (or `python ty`) for `./ty`. See [Setup](docs/setup.md#windows).
 
-**Prefer buttons?** `./console.py --demo` opens the control console in your
-browser: Targets, Mount, Focus, Imaging, Tools and System screens, on this
-computer only. With a real mount, every move is checked with a dry run and
-shown as a plan, and nothing moves until you confirm it. It has not yet been
-used with a real mount or camera.
+**The application.** `./install.sh` puts **TelescopeYoke** and **TelescopeYoke
+(demo)** in the applications menu (on Windows, `install.ps1` puts them in the
+Start Menu). It opens in a window of its own, with no terminal and no
+browser: Tonight, Targets, Imaging, Focus and Mount for observing; Camera,
+Telescope, Plate solver and Webcam for setting the equipment up; the tools;
+and the doctor, settings and logs. The first time, it opens on what is ready
+and what still needs doing. With a real mount, every move is checked with a
+dry run and shown as a plan, and nothing moves until you confirm it. From a
+terminal it is `./app.py`, or `./app.py --demo`. It has not yet been used
+with a real mount or camera.
 
 **Use the planner for real** (still no telescope needed): put your location
 in `config.toml`, then `./tonight.py`.
@@ -126,7 +131,8 @@ report** issue; rows marked "community tested" will be added from those.
 | `clouds.py` | Fetches the latest infrared satellite image with the site marked on it. |
 | `mount.py` | Moves the mount: `status`, `home`, `zenith`, `goto NAME [--solve]`, `point AZ ALT`, `sync`, `drift`, `compensate`, `stop`. |
 | `liveview.py` | Takes a frame every few seconds so the status page shows what the telescope sees now. Steps aside while `shoot.py` runs. |
-| `console.py` | A control console in the browser, for the person beside the telescope: targets, GoTo with a plan to confirm, focusing, imaging, tools. This computer only. `./console.py --demo` tries it with nothing plugged in. |
+| `app.py` | TelescopeYoke, the application: one window with everything in it, started from the applications menu. `./app.py --demo` tries it with nothing plugged in. |
+| `console.py` | The same observing screens as a page in a browser, without the equipment set-up and tools: the companion to the application. This computer only. |
 | `horizon.py` | Sweeps the sky and reports which directions are blocked by houses, hedges and trees, as lines for `config.toml`. `--trace` follows the top of whatever is in the way right round and checks its own answer; `--daylight` works by day, going by brightness instead of stars. |
 | `snap.py` | Takes one camera frame, saves the FITS in `frames/`, publishes a preview. |
 | `shoot.py` | Takes a picture: many short exposures, each checked, lined up and stacked live, with the raw frames kept. `--exposure auto` picks the longest exposure the tracking allows. `--frames 0` carries on until cloud stops it. While it runs, `./ty run stop` ends it cleanly with its final picture; `recentre`, `assist-on` and `assist-off` are also understood. |
@@ -291,10 +297,13 @@ status, on a real EQ3. Every movement is tested only against a simulated
 motor board, and which way the Dec motor turns has to be checked on each
 mount, with someone watching, before a GoTo is allowed.
 
-Written but never used with a real mount or camera: the control console
-(`console.py`). Its server, its refusals, the plan-then-confirm step and Stop
-are tested against the simulated mount and stand-in jobs; the page has been
-looked at in demo mode only. How long Stop takes during a real slew, on
+Written but never used with a real mount or camera: the application
+(`app.py`) and its companion page (`console.py`). The server, its refusals,
+the plan-then-confirm step and Stop are tested against the simulated mount
+and stand-in jobs; the screens have been looked at in demo mode only. The
+window itself has been opened on Ubuntu (GTK with WebKit). On Windows the
+window (WebView2 through pywebview, or Edge's application mode) and the Start
+Menu shortcuts have not been tried on a real machine. How long Stop takes during a real slew, on
 Linux and on Windows, has not been measured.
 
 Written but never run on the real mount or camera: `horizon.py --trace` and

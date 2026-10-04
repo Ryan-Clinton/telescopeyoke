@@ -44,6 +44,17 @@ if (Test-Path config.toml) {
     Write-Host "config.toml: created from the example. Edit it and put in your own location."
 }
 
+# The application's window. pywebview shows it in Windows' own WebView2
+# control; without it the application uses Edge's application mode instead,
+# so a failure here is not fatal.
+python -m pip install pywebview
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "pywebview did not install; TelescopeYoke will open its window with Edge instead."
+}
+
+# TelescopeYoke and its demo in the Start Menu.
+python app.py --install-launcher
+
 # Where Altair's SDK files go; they are not part of this project.
 New-Item -ItemType Directory -Force vendor\altair | Out-Null
 

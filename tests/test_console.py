@@ -32,7 +32,7 @@ BROKEN = "import sys; print('the camera fell off', file=sys.stderr); sys.exit(1)
 @pytest.fixture
 def desk():
     """A console on a free port, in demo mode, and a way to ask it things."""
-    server, key = console.serve(port=0, demo=True)
+    server, key = console.serve(port=0, demo=True, mode="app")
     port = server.server_address[1]
     threading.Thread(target=server.serve_forever, daemon=True).start()
 
@@ -174,7 +174,8 @@ def test_the_page_has_nothing_inline_and_loads_nothing_from_the_internet():
 def test_there_are_no_emoji_in_the_page():
     emoji = re.compile("[\U0001F000-\U0001FAFF☀-⛿⭐⭕️]")
     for path in PAGE.iterdir():
-        assert not emoji.search(path.read_text(encoding="utf-8")), path.name
+        if path.suffix not in (".png", ".ico"):       # the icon's pictures are not text
+            assert not emoji.search(path.read_text(encoding="utf-8")), path.name
 
 
 def test_the_page_takes_the_key_out_of_the_address_and_says_demo():
@@ -491,3 +492,77 @@ def test_closing_the_console_always_tells_the_mount_to_stop(desk, monkeypatch):
     assert child.poll() is not None
     wait_for(lambda: desk.jobs.history)
     assert desk.jobs.history[-1]["result"] == {"closed": True}               # and it was let close the camera
+
+
+# --- the application's window and the companion page ---------------------------------
+
+def test_the_companion_page_is_refused_what_belongs_to_the_application():
+    server, key = console.serve(port=0, demo=False)          # as "console.py" in a browser starts it
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    jobs, started = server.RequestHandlerClass.jobs, []
+    jobs.start = lambda cmd, **more: started.append(cmd)
+    base = f"http://127.0.0.1:{server.server_address[1]}"
+
+    def post(path, body=None):
+        request = urllib.request.Request(base + path, data=json.dumps(body or {}).encode(),
+                                         headers={"X-Console-Key": key})
+        try:
+            with urllib.request.urlopen(request, timeout=60) as reply:
+                return reply.status, json.loads(reply.read())
+        except urllib.error.HTTPError as refused:
+            return refused.code, json.loads(refused.read())
+    try:
+        assert jobs.mode == "companion"
+        for action in console.WORKSTATION:
+            if action == "open-settings":
+                continue
+            path = "plan" if console.ACTIONS[action].get("moves") else "action"
+            status, answer = post(f"/api/{path}/{action}", {"target": "M27", "kind": "dark"})
+            assert status == 403 and "TelescopeYoke application" in answer["errors"][0]["message"], action
+        assert post("/api/open/settings")[0] == 403
+        request = urllib.request.Request(base + "/api/state", headers={"X-Console-Key": key})
+        state = json.loads(urllib.request.urlopen(request, timeout=60).read())["data"]
+        assert state["mode"] == "companion" and not set(state["available"]) & set(console.WORKSTATION)
+        assert {"goto", "run", "focus", "run-finish"} <= set(state["available"])     # observing is all there
+        assert not started
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_the_application_offers_everything_and_says_how_it_is_set_up(desk):
+    state = desk.json("/api/state")[1]["data"]
+    assert state["mode"] == "app" and state["version"] and state["mount_link"] == "handset"
+    assert state["settings_file"].endswith("config.toml") and state["camera_backend"] in ("indi", "altair")
+    # The demo has no settings of its own to edit.
+    status, answer = desk.json("/api/open/settings", {})
+    assert status == 409 and answer["errors"][0]["code"] == "DEMO_UNSUPPORTED"
+
+
+def test_opening_the_settings_makes_them_from_the_example_first(tmp_path, monkeypatch):
+    import config
+    import host
+    opened = []
+    monkeypatch.setattr(config, "FILE", tmp_path / "config.toml")
+    monkeypatch.setattr(host, "open_file", opened.append)
+    server, key = console.serve(port=0, demo=False, mode="app")
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    request = urllib.request.Request(f"http://127.0.0.1:{server.server_address[1]}/api/open/settings",
+                                     data=b"{}", headers={"X-Console-Key": key})
+    try:
+        answer = json.loads(urllib.request.urlopen(request, timeout=60).read())["data"]
+        assert answer["created"] and opened == [tmp_path / "config.toml"]
+        assert (tmp_path / "config.toml").read_text(encoding="utf-8") == config.EXAMPLE.read_text(encoding="utf-8")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_the_page_keeps_the_equipment_screens_to_the_application():
+    page = (PAGE / "index.html").read_text(encoding="utf-8")
+    for screen in ("camera", "telescope", "solver", "webcam", "horizon", "calibration", "testing",
+                   "processing", "doctor", "settings", "logs", "about", "welcome"):
+        assert re.search(rf'<section id="{screen}" class="task" data-only="app"', page), screen
+    for screen in ("home", "targets", "imaging", "focus", "mount"):
+        assert re.search(rf'<section id="{screen}" class="task"(?! data-only)', page), screen
+    assert '<section id="status" class="task" data-only="companion"' in page

@@ -181,6 +181,10 @@ ACTIONS = {
 }
 # What the simulated mount can show. The rest need the real camera.
 DEMO_ACTIONS = ("goto", "home", "zenith", "position")
+# Setting up and testing the equipment belongs to the application's own
+# window. The companion page in a browser is for observing, and is refused these.
+WORKSTATION = ("camera-setup", "camera-capabilities", "camera-throughput", "camera-gain-sweep",
+               "calibrate", "horizon", "restack", "drift", "compensate", "sync", "open-settings")
 # Orders that have a run move the mount or change its motors.
 MOVING_ORDERS = ("run-recentre", "run-assist-on", "run-assist-off")
 
@@ -239,8 +243,8 @@ class Jobs:
     """At most one job holds the mount or the camera. This is the rule, not a
     first version of something cleverer."""
 
-    def __init__(self, demo=False, start=start):
-        self.demo, self.start = demo, start
+    def __init__(self, demo=False, start=start, mode="app"):
+        self.demo, self.start, self.mode = demo, start, mode
         self.lock = threading.Lock()
         self.current = None       # the job running now
         self.history = []         # finished ones, newest last
@@ -288,6 +292,7 @@ class Jobs:
     def plan(self, action, params):
         if action not in ACTIONS:
             raise Refused(f"No such action: {action}", status=404)
+        self.allowed_here(action)
         if not moves(action, params):
             raise Refused(f"{action} is not planned; it does not move the mount.")
         found = self.dry_run(action, params)
@@ -316,9 +321,14 @@ class Jobs:
             return dict(fresh, changed=True, message="The situation has changed. Look at the new plan.")
         return self.begin(held["action"], held["params"], stops)
 
+    def allowed_here(self, action):
+        if self.mode == "companion" and action in WORKSTATION:
+            raise Refused("That is done in the TelescopeYoke application, not in the companion page.", 403)
+
     def act(self, action, params):
         if action not in ACTIONS:
             raise Refused(f"No such action: {action}", status=404)
+        self.allowed_here(action)
         if moves(action, params):
             raise Refused(f"{label(action, params)} moves the mount: it needs a confirmed plan.")
         if action in MOVING_ORDERS:
@@ -497,8 +507,8 @@ class Reader:
     """The read-only answers, each kept for a little while so that a page
     asking every two seconds does not run the doctor every two seconds."""
 
-    def __init__(self, demo=False):
-        self.demo, self.kept, self.lock = demo, {}, threading.Lock()
+    def __init__(self, demo=False, mode="app"):
+        self.demo, self.mode, self.kept, self.lock = demo, mode, {}, threading.Lock()
 
     def get(self, name, work, seconds):
         with self.lock:
@@ -525,10 +535,21 @@ class Reader:
                     "camera": {"state": "capturing"}, "solver": {"state": "ready"},
                     "imaging": {"state": "capturing", "target": run["name"], "captured": run["captured"],
                                 "accepted": run["accepted"]},
-                    "capabilities": agent.capabilities(), "available": list(DEMO_ACTIONS)}
+                    "capabilities": agent.capabilities(), "available": list(DEMO_ACTIONS), **self.about()}
         site = (config.load() if config.FILE.exists() else config.example())["site"]["name"]
         return dict(agent.status(), demo=False, site=site, capabilities=agent.capabilities(),
-                    available=list(ACTIONS))
+                    available=[a for a in ACTIONS if self.mode == "app" or a not in WORKSTATION],
+                    **self.about())
+
+    def about(self):
+        """What this is and how it is set up, for the page's frame."""
+        import agent
+        import config
+        import doctor
+        hardware = config.hardware()
+        return {"mode": self.mode, "version": agent.VERSION, "configured": config.FILE.exists(),
+                "settings_file": str(config.FILE), "camera_backend": hardware["camera"]["backend"],
+                "mount_link": doctor.mount_link(), "system": sys.platform}
 
     def session(self):
         import agent
@@ -715,6 +736,20 @@ class Handler(BaseHTTPRequestHandler):
                 return self.answer(result, 200 if result["ok"] else 409)
         self.refuse("console", Refused(f"No such page: {path}", 404))
 
+    def open_settings(self):
+        """Open config.toml in the system's own editor, making it from the
+        example first if there is none. Only the application's window may."""
+        import config
+        import shutil as files
+        self.jobs.allowed_here("open-settings")
+        if self.jobs.demo:
+            raise Refused("The demo uses the example settings; there is nothing to edit.", code="DEMO_UNSUPPORTED")
+        made = not config.FILE.exists()
+        if made:
+            files.copy(config.EXAMPLE, config.FILE)
+        host.open_file(config.FILE)
+        return {"opened": str(config.FILE), "created": made}
+
     # -- acting
 
     def do_POST(self):
@@ -741,7 +776,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.refuse(name, Refused("The request was not understood.", 400))
         jobs = self.jobs
         try:
-            if name == "stop":
+            if name == "open/settings":
+                data = self.open_settings()
+            elif name == "stop":
                 data = jobs.stop()
             elif name == "finish":
                 data = jobs.finish()
@@ -763,11 +800,14 @@ class Handler(BaseHTTPRequestHandler):
         self.answer(interface.envelope(name, data))
 
 
-def serve(port=8081, demo=False, key=None, start_job=start):
-    """The console's server, bound to this computer only, and its key."""
+def serve(port=8081, demo=False, key=None, start_job=start, mode="companion"):
+    """The console's server, bound to this computer only, and its key.
+    `mode` is "app" for the application's own window, which offers
+    everything, or "companion" for the page in a browser, which offers
+    observing and nothing that sets the equipment up."""
     key = key or secrets.token_urlsafe(24)
     handler = type("ConsoleHandler", (Handler,), {
-        "key": key, "port": port, "jobs": Jobs(demo, start_job), "reader": Reader(demo)})
+        "key": key, "port": port, "jobs": Jobs(demo, start_job, mode), "reader": Reader(demo, mode)})
     server = ThreadingHTTPServer(("127.0.0.1", port), handler)
     handler.port = server.server_address[1]   # the real one, when port 0 asked for any
     return server, key

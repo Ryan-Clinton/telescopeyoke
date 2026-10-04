@@ -23,6 +23,8 @@ planner_only=false
 [ "${1:-}" = "--planner" ] && planner_only=true
 
 packages=(python3-astropy python3-scipy python3-numpy python3-pil python3-requests python3-serial)
+# The application's own window: GTK with a WebKit view.
+packages+=(python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1)
 if ! $planner_only; then
     packages+=(indi-bin astap-cli ffmpeg speech-dispatcher)
 fi
@@ -36,9 +38,13 @@ if [ ! -f config.toml ]; then
     echo "Created config.toml from the example. Edit it and put in your own location."
 fi
 
+# TelescopeYoke and its demo in the applications menu.
+./app.py --install-launcher
+
 if $planner_only; then
     echo
-    echo "Done. Try:  ./tonight.py --demo     then, with your location set:  ./tonight.py"
+    echo "Done. Start TelescopeYoke (demo) from the applications menu, or try:  ./tonight.py --demo"
+    echo "Then, with your location set:  ./tonight.py"
     echo "Check the setup at any time with:  ./doctor.py"
     exit 0
 fi

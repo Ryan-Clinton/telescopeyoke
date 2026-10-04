@@ -26,7 +26,8 @@ Everything runs without a telescope: `./tonight.py --demo`, `./serve.py --demo`,
 | `agent.py`, `interface.py` | Read-only facts for programs; the JSON envelope, error codes, states |
 | `mcp_server.py` | Read-only MCP server over `agent.py` |
 | `tonight.py`, `sky.py`, `feeds.py`, `page.py`, `serve.py` | Planner, status page, read-only web API |
-| `console.py`, `console/` | Control console in the browser, on this computer only; runs the other scripts |
+| `app.py` | TelescopeYoke, the application: a window of its own over `console.py`'s server, with every screen |
+| `console.py`, `console/` | The server and the page behind the application; run by itself, the companion page in a browser (observing only). This computer only; runs the other scripts |
 | `mount.py`, `tracking.py`, `polaralign.py`, `simulator.py` | Mount control, drift model, simulated handset and motor board |
 | `direct.py` | The mount without its handset (Wi-Fi adapter or EQDIR lead): stands in for the handset so `mount.py` is unchanged |
 | `camera.py`, `indi.py`, `altair.py`, `snap.py`, `liveview.py`, `focus.py` | Camera (through INDI, or Altair's own library) and focusing |
