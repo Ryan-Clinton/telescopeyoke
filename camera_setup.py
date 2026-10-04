@@ -35,8 +35,10 @@ import interface
 
 ROOT = Path(__file__).parent
 SDK_PAGE = "https://www.altairastro.help/download-category/software/"
-OK, FIXED, TODO, FAIL = "ok", "fixed", "todo", "fail"
-MARK = {OK: "✓", FIXED: "✓", TODO: "→", FAIL: "✗"}
+# "warn" is something worth knowing that does not stop the camera working.
+OK, FIXED, WARN, TODO, FAIL = "ok", "fixed", "warn", "todo", "fail"
+MARK = {OK: "✓", FIXED: "✓", WARN: "!", TODO: "→", FAIL: "✗"}
+GOOD = (OK, FIXED, WARN)
 
 
 def vendor():
@@ -116,10 +118,10 @@ class Steps:
     def add(self, name, status, message, **more):
         self.done.append({"step": name, "status": status, "message": message, **more})
         print(f"  {MARK[status]} {message}", flush=True)
-        return status in (OK, FIXED)
+        return status in GOOD
 
     def ready(self):
-        return all(s["status"] in (OK, FIXED) for s in self.done)
+        return all(s["status"] in GOOD for s in self.done)
 
 
 def check_files(steps, args):
@@ -150,7 +152,7 @@ def check_library(steps):
     import altair
     good = True
     for status, message in altair.checks()[1:]:      # the first is Python, done already
-        good = steps.add("library", {host.OK: OK, host.WARN: OK, host.FAIL: FAIL}[status],
+        good = steps.add("library", {host.OK: OK, host.WARN: WARN, host.FAIL: FAIL}[status],
                          message) and good
     return good
 
@@ -184,8 +186,10 @@ def test_frame(steps, exposure, gain):
         return steps.add("frame", FAIL, f"the test frame has values up to {frame['max']}, above the "
                                         f"sensor's {WHITE}: the bit depth is being read wrongly",
                          frame=frame, camera=details)
-    steps.add("camera", OK, f"camera: {details.get('model')}"
-              + (f", serial {details['serial']}" if details.get("serial") else ""), camera=details)
+    if details.get("serial"):
+        steps.add("camera", OK, f"serial {details['serial']}, firmware {details.get('firmware')}, "
+                                f"readout speed {details.get('readout_speed')} of "
+                                f"{details.get('max_readout_speed')}", camera=details)
     return steps.add("frame", OK, f"test frame: {frame['size'][0]} x {frame['size'][1]}, "
                                   f"{exposure:g} s exposure arrived in {frame['seconds']} s, values "
                                   f"{frame['min']} to {frame['max']} (median {frame['median']:.0f})",

@@ -27,47 +27,66 @@ Quirks worth knowing before changing code:
 ## The camera through Altair's library (`altair.py`)
 
 The route used on Windows, and available on Linux with `[camera] backend =
-"altair"`. **Nothing below has been run on a real camera yet**; it comes from
-`altaircam.h` version 1.53.2 and from tests against a made-up copy of the
-wrapper. Correct this section when the camera has been used.
+"altair"`. Run on the real Hypercam 183C on Windows 11 on 2026-10-04, on a
+USB 2 lead, with SDK 60.31589.20260531 and the camera's firmware
+1.4.1.20170111. Indoors, with no telescope and no lens. It has not been run
+on Linux, and no star has been through it.
+
+What was seen:
+
+- **Windows needs nothing installed for the driver.** Plugged in, the camera
+  appears as `ALTAIRH183C` (USB `16D0:0C78`) and Windows gives it its own
+  WinUSB driver at once. Altair's library finds it under that driver, as
+  `ALTAIRH183C(USB2.0)`. AltairCapture was never installed.
+- **Altair's SDK cannot be fetched unattended.** Their site gives it only to
+  a logged-in visitor, by a link that expires. `camera_setup.py` takes the
+  two files from a zip the person has downloaded.
+- **The frame buffer is passed as a C string pointer.** The wrapper declares
+  it `c_char_p` and refuses a ctypes array ("argument 2: wrong type"); the
+  array's memory is cast. The made-up wrapper in the tests refuses the same.
+- **Frames are 5440 x 3648, RGGB, 12 bits at the bottom of each 16-bit
+  value** (0 to 4094 seen, bottom bits in use). Nothing has to be shifted on
+  this camera with this SDK. The code still checks every session.
+- **The camera stamps nothing on its frames.** Sequence number, timestamp and
+  exposure time in the frame information all read 0. So the guard that tells
+  a late frame by the camera's clock does nothing on this camera
+  (`frame_clock_usable` stays unset), and the other guards carry it:
+  cancelling and flushing after a time-out, and throwing away a frame that
+  comes back before its shutter could have closed.
+- **Readout speed 2, the highest and the camera's own setting, is the
+  quickest.** For a 1 s exposure a frame took 17.3 s at speed 0, 11.7 s at
+  speed 1 and 8.7 s at speed 2. `[camera] readout_speed` is therefore left
+  unset. Grain was not compared: the sensor was in room light and burnt out.
+- **The slow frames are the camera on USB 2, not INDI.** Triggered one at a
+  time, a 0.1 s exposure arrives in 3.5 s and a 1 s exposure in 8.7 s,
+  much as through INDI on Linux (about 4 s plus five times the exposure).
+- **Free-running is quicker than triggering, and is not used yet.** With the
+  camera left running (`ALTAIRCAM_OPTION_TRIGGER` 0) full frames arrived
+  every 1.14 s at 0.1 s exposure and every 6.35 s at 1 s. That would speed
+  focusing about three times and imaging by about a quarter. It needs its
+  own way of telling which exposure a frame belongs to, so it is a separate
+  piece of work.
+
+Still to do on real hardware:
+
+- **Compare a frame with the INDI route's on the same star field:** the
+  Bayer pattern reads RGGB on both, but which way up the picture is has not
+  been compared. A flipped frame would send plate-solved corrections the
+  wrong way, so do that before `goto --solve` is trusted with this route.
+- **Gain:** that the numbers mean the same as the INDI driver's.
+- **A USB 3 lead**, which the camera supports and has never had.
+- **Linux**, with `backend = "altair"`.
+
+How it works, for whoever changes it:
 
 - The sequence is: raw mode, full bit depth, software trigger, pull mode with
   a callback; then per frame set exposure and gain, discard anything
   waiting, trigger one, wait, pull one.
-- **Seen on Windows 11 with the real 183C (2026-10-04):** plugged in, it
-  appears as `ALTAIRH183C` (USB `16D0:0C78`) and Windows gives it its own
-  WinUSB driver at once, with nothing installed. Whether Altair's library
-  then finds it under that driver has not been tried: Altair's SDK and
-  AltairCapture are given only to a logged-in visitor of their site, so
-  nothing can fetch them unattended. `camera_setup.py` takes the files from
-  a zip the person has downloaded.
-- **Still to confirm on the camera:** that the vendor's `altaircam.py` has
-  the calls used (it was not available when this was written; they follow
-  the header and ToupTek's wrapper, which Altair's is a renamed copy of);
-  whether the 12 bits arrive at the bottom or the top of each 16-bit value
-  (the code detects it from the first frame); that gain numbers mean the
-  same as the INDI driver's; the Bayer pattern and which way up the frame
-  is, compared with an INDI frame of the same star field. A flipped frame
-  would send plate-solved corrections the wrong way, so do that comparison
-  before `goto --solve` is trusted with this route.
-- **A late frame must not answer the next request.** Two guards, besides
-  cancelling and flushing after a time-out. A frame that arrives sooner than
-  the exposure could have finished is thrown away. And each frame carries
-  the camera's own timestamp: once two good frames at least 1.5 s apart have
-  shown that clock keeps time with the computer's, a frame the clock says
-  was taken before the current trigger is thrown away too. If the stamps do
-  not keep time they are never used. `./camera_test.py --capabilities`
-  reports `frame_clock_usable`; check it reads true on the real camera,
-  because until it does the second guard is doing nothing.
-- **Bit alignment** is settled only by certain evidence: a value above 4095
-  means the 12 bits are shifted up, a value using the bottom four bits means
-  they are not. A dark frame showing neither is judged by itself and
-  settles nothing. `--capabilities` reports `values_shifted_up`.
-- The wait for a frame is the INDI route's `12 + 6 x exposure` seconds, as an
-  upper limit, until `./camera_test.py --throughput` has measured the real
-  figure at each readout speed. Record those figures here.
-- `[camera] readout_speed` is left unset: the camera keeps its own setting
-  until the measurements say which level is best.
+- Bit alignment is settled only by certain evidence: a value above 4095 means
+  the 12 bits are shifted up, a value using the bottom four bits means they
+  are not. A dark frame showing neither is judged by itself.
+- The wait for a frame is `12 + 6 x exposure` seconds, the INDI route's
+  figure. The measurements above sit well inside it.
 
 ## Windows
 

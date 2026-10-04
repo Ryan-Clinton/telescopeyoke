@@ -569,7 +569,7 @@ function drawLog() {
 }
 // The camera setup's answer in words: each check, then the verdict.
 function setupWords(result) {
-  const marks = { ok: "\u2713", fixed: "\u2713", todo: "\u2192", fail: "\u2717" };
+  const marks = { ok: "\u2713", fixed: "\u2713", warn: "!", todo: "\u2192", fail: "\u2717" };
   const lines = (result.steps || []).map((step) => `${marks[step.status] || "?"} ${step.message}`);
   lines.push("", result.ready ? "The camera is ready." : "Not ready yet. Do what the marked line says, then press Set up again.");
   return lines.join("\n");

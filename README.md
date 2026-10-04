@@ -106,7 +106,7 @@ Start with the planner; add hardware when you have it.
 | Altair Hypercam 183C on USB 2 | ✅ Tested by the author |
 | Ubuntu 26.04, Python 3.14 | ✅ Tested by the author |
 | Python 3.11, 3.12, 3.13 | ✅ Tests pass in CI (no hardware) |
-| Windows 10 and 11 | ⚠️ Tests and the demo pass with no hardware (Windows 11, Python 3.12). No camera or mount has been used on Windows yet. |
+| Windows 10 and 11 | ⚠️ Tests and the demo pass with no hardware. The camera has taken frames on Windows 11, indoors. No mount has been driven from Windows, and camera and mount have not been used together there. |
 | EQ5, HEQ5, EQ6 with a SynScan handset | ⚠️ Untested. Likely: same serial protocol. |
 | Other INDI cameras | ⚠️ Untested. Likely for mono or RGGB colour sensors: set the driver and sensor size in `config.toml`. |
 | Other telescopes | Set the focal length in `config.toml`. |
@@ -260,16 +260,16 @@ proven on real sky: the stacking pipeline (frame scoring and rejection,
 sub-pixel and rotation alignment, clipped and weighted stacking, saved raw
 frames, the quality pass).
 
-Windows: the tests and every `--demo` command pass, on Windows 11 with
-Python 3.12, with nothing plugged in. That is the first of three levels and
-the only one reached. The camera has not taken a frame on Windows, and the
-mount and camera have not been used together there. The Windows camera route
-(`altair.py`, which reads the camera through Altair's own library instead of
-INDI) has only been run against a made-up copy of that library, on either
-system. The handset's FTDI lead has been found by name among the COM ports,
-but nothing has been sent to the handset from Windows. The plate solver's
-Windows paths, the DirectShow webcam and the spoken focusing aid are untried
-on real equipment.
+Windows: the tests and every `--demo` command pass with nothing plugged in,
+and the camera has taken frames there: a Hypercam 183C on Windows 11, read
+through Altair's own library (`altair.py`) instead of INDI, set up from
+nothing by `camera_setup.py`. That was indoors with no telescope, so no star
+has been through that route, and its picture has not been compared with the
+INDI route's for which way up it is. The mount has not been driven from
+Windows: the handset's lead has been found by name among the COM ports and
+nothing more. The plate solver's Windows paths, the DirectShow webcam and the
+spoken focusing aid are untried on real equipment. Camera and mount have not
+been used together on Windows.
 
 Written but not yet run for real: `calibrate.py` (no dark or flat frames have
 been taken yet) and `camera_test.py --gain-sweep`.

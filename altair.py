@@ -251,7 +251,9 @@ class AltairCamera:
         """The frame the library is holding, as it gave it, and what the
         camera says about it (its sequence number and timestamp)."""
         data = np.empty((self.height, self.width), dtype=np.uint16)
-        buffer = (ctypes.c_ubyte * data.nbytes).from_buffer(data)
+        # The wrapper declares the buffer as a C string pointer, so the array's
+        # own memory is handed over as one; the library writes the frame into it.
+        buffer = ctypes.cast((ctypes.c_ubyte * data.nbytes).from_buffer(data), ctypes.c_char_p)
         info = self.lib.AltaircamFrameInfoV3()
         self.handle.PullImageV3(buffer, 0, 16, -1, info)   # -1: rows packed with no padding
         return data, info
