@@ -63,7 +63,7 @@ def test_star_counter_tells_stars_from_cloud():
 
 
 def test_polar_axis_is_recovered_from_three_points():
-    latitude = 55.07
+    latitude = 52.0
 
     def from_altaz(alt, az):
         a, z, l = (math.radians(v) for v in (alt, az, latitude))
@@ -88,8 +88,8 @@ def test_polar_axis_is_recovered_from_three_points():
 
 def test_a_perfectly_aligned_axis_reads_as_the_pole():
     points = [(h, 40.0) for h in (10.0, 35.0, 60.0)]   # same Dec, different hour angles
-    altitude, azimuth = polaralign.to_altaz(polaralign.axis_of(points), 55.07)
-    assert altitude == pytest.approx(55.07, abs=0.01)
+    altitude, azimuth = polaralign.to_altaz(polaralign.axis_of(points), 52.0)
+    assert altitude == pytest.approx(52.0, abs=0.01)
     assert azimuth == pytest.approx(0, abs=0.01)
 
 

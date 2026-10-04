@@ -19,6 +19,7 @@ jobs:
       - run: pip install ".[test]"
       - run: pytest -q
       - run: ./tonight.py --demo --top 5
-      - run: ./mount.py --demo goto M27
+      # The zenith is always reachable; a named object may have set when this runs.
+      - run: ./mount.py --demo zenith
       - run: ./ty capabilities --json
-      - run: ./mount.py --demo goto M27 --dry-run --json
+      - run: ./mount.py --demo zenith --dry-run --json
