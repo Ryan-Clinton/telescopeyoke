@@ -170,3 +170,13 @@ def test_duty_cycle_is_the_share_of_time_the_shutter_is_open():
     assert camera_test.duty(1.0, 9.0) == 11
     assert camera_test.duty(2.0, 14.0) == 14
     assert camera_test.duty(2.0, 2.5) == 80
+
+
+def test_the_stretch_is_chosen_so_faint_glow_shows():
+    import process
+    # The fainter the glow against the brightest thing in the frame, the harder the stretch.
+    gentle, hard = process.auto_stretch(0.05), process.auto_stretch(0.002)
+    assert 10 <= gentle < hard <= 3000
+    shown = np.arcsinh(hard * 0.002) / np.arcsinh(hard)
+    assert shown == pytest.approx(process.FAINT_SHOWN, abs=0.01)
+    assert process.auto_stretch(0.5) == 10.0      # already bright: no more than the gentlest

@@ -395,3 +395,18 @@ def test_sessions_at_different_gains_are_refused(tmp_path, monkeypatch):
     stacking.save_light(other, 1, as_mosaic(render(*field())), {"EXPTIME": 2.0, "GAIN": 300.0})
     with pytest.raises(SystemExit, match="different gains"):
         restack.run([one, other], say=lambda *_: None)
+
+
+def test_a_field_that_has_turned_a_few_degrees_is_still_lined_up():
+    """With the polar axis well out the field turns over an hour; the stars
+    far from the centre move too far for a plain shift to pair them."""
+    xy, flux = field()
+    reference = render(xy, flux)
+    later = render(moved(xy, 14.0, -9.0, degrees=4.0), flux, seed=5)
+    stars, reference_stars = stacking.find_stars(later), stacking.find_stars(reference)
+    rough = stacking.offset(stacking.centre_square(reference), stacking.centre_square(later))
+    plain = stacking.align(stars, reference_stars, rough)
+    centre = (SHAPE[1] / 2, SHAPE[0] / 2)
+    r, t, matched, residual = stacking.align(stars, reference_stars, rough, centre)
+    assert matched > 60 and matched > 2 * plain[2] and residual < 0.3
+    assert np.degrees(np.arctan2(r[1, 0], r[0, 0])) == pytest.approx(-4.0, abs=0.05)

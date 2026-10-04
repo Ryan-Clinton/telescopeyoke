@@ -25,7 +25,9 @@ import config
 from camera import colour, luminance
 
 ROOT = Path(__file__).parent
-CALIBRATION = ROOT / "calibration"
+# Where the master dark, bias and flat frames are kept. The tests point this
+# at an empty folder, for the worker processes too, through TY_CALIBRATION.
+CALIBRATION = Path(os.environ.get("TY_CALIBRATION") or ROOT / "calibration")
 REGISTER = 1024     # side of the central square used for the first rough line-up
 MIN_MATCHES = 6     # stars needed to trust a star-by-star alignment
 
@@ -370,19 +372,11 @@ def pair_up(moved, reference_xy, tolerance):
     return mine[mutual], nearest[mutual]
 
 
-def align(stars, reference_stars, rough):
-    """Rotation and shift taking this frame's stars onto the reference's,
-    starting from a rough (dy, dx) shift. Returns (R, t, matches, residual),
-    the residual being the typical distance left between matched stars in
-    pixels. With too few matched stars the rough shift is returned as it
-    stands."""
-    r, t = np.eye(2), np.array([rough[1], rough[0]], dtype=float)
-    if len(stars) < MIN_MATCHES or len(reference_stars) < MIN_MATCHES:
-        return r, t, 0, None
-    xy = stars[:, :2].astype(float)
-    reference_xy = reference_stars[:, :2].astype(float)
+def _refine(xy, reference_xy, r, t):
+    """Improve a starting rotation and shift by pairing stars, loosely at
+    first and then tightly. Returns (R, t, matches, residual)."""
     matched, residual = 0, None
-    for tolerance in (4.0, 2.0):
+    for tolerance in (12.0, 6.0, 4.0, 2.0):
         a, b = pair_up(xy @ r.T + t, reference_xy, tolerance)
         if len(a) < MIN_MATCHES:
             break
@@ -397,6 +391,48 @@ def align(stars, reference_stars, rough):
             left = np.hypot(*(xy[a] @ r.T + t - reference_xy[b]).T)
         matched, residual = len(a), float(np.median(left))
     return r, t, matched, residual
+
+
+def align(stars, reference_stars, rough, centre=None):
+    """Rotation and shift taking this frame's stars onto the reference's,
+    starting from a rough (dy, dx) shift. Returns (R, t, matches, residual),
+    the residual being the typical distance left between matched stars in
+    pixels. With too few matched stars the rough shift is returned as it
+    stands.
+
+    On a mount whose polar axis is well out, the field slowly turns: a few
+    degrees in an hour. If the plain attempt pairs few stars and `centre`
+    (x, y of the frame's middle) is given, a turn of up to 8 degrees either
+    way about the centre is tried and the best start is refined."""
+    r, t = np.eye(2), np.array([rough[1], rough[0]], dtype=float)
+    if len(stars) < MIN_MATCHES or len(reference_stars) < MIN_MATCHES:
+        return r, t, 0, None
+    xy = stars[:, :2].astype(float)
+    reference_xy = reference_stars[:, :2].astype(float)
+    found = _refine(xy, reference_xy, r, t)
+    if centre is None or found[2] >= min(len(xy), len(reference_xy)) / 3:
+        return found if found[2] else (r, t, 0, None)
+    centre = np.asarray(centre, dtype=float)
+    # For each trial angle, let the brightest stars vote on the shift: every
+    # pair of (frame star, reference star) proposes one, and the true shift
+    # is the one many pairs agree on. This needs no starting guess.
+    bright, bright_reference = xy[:60], reference_xy[:60]
+    best, start = 0, None
+    for degrees in np.arange(-8.0, 8.5, 0.5):
+        a = np.radians(degrees)
+        turn = np.array([[np.cos(a), -np.sin(a)], [np.sin(a), np.cos(a)]])
+        turned = (bright - centre) @ turn.T + centre
+        proposals = (bright_reference[:, None, :] - turned[None, :, :]).reshape(-1, 2)
+        cells, counts = np.unique(np.round(proposals / 8.0).astype(int), axis=0, return_counts=True)
+        top = counts.argmax()
+        if counts[top] > best:
+            agreed = proposals[np.all(np.abs(proposals - cells[top] * 8.0) <= 8.0, axis=1)]
+            best, start = int(counts[top]), (turn, centre - turn @ centre + np.median(agreed, axis=0))
+    if start is not None and best >= MIN_MATCHES:
+        turned = _refine(xy, reference_xy, *start)
+        if turned[2] > found[2]:
+            found = turned
+    return found if found[2] else (r, t, 0, None)
 
 
 def warp(rgb, r, t):
@@ -500,7 +536,8 @@ def register_file(path, exposure, gain, reference, store, slot, shape, scale=1.0
         stars = find_stars(lum)
     with timings.phase("line up"):
         rough = offset(reference["square"], centre_square(lum))
-        r, t, matched, residual = align(stars, reference["stars"], rough)
+        centre = (lum.shape[1] / 2, lum.shape[0] / 2)
+        r, t, matched, residual = align(stars, reference["stars"], rough, centre)
         flipped = False
         if try_flip and matched < 8:
             # Taken on the other side of the meridian, the picture is upside
@@ -509,7 +546,7 @@ def register_file(path, exposure, gain, reference, store, slot, shape, scale=1.0
             turned_lum = turned.sum(axis=2)
             turned_stars = find_stars(turned_lum)
             again = align(turned_stars, reference["stars"],
-                          offset(reference["square"], centre_square(turned_lum)))
+                          offset(reference["square"], centre_square(turned_lum)), centre)
             if again[2] > matched:
                 rgb, flipped = turned, True
                 r, t, matched, residual = again

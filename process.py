@@ -20,7 +20,7 @@ from scipy import ndimage
 ROOT = Path(__file__).parent
 
 
-def process(rgb, detail=0.8, colour=5.0, stretch=25.0, background=2, saturation=1.25):
+def process(rgb, detail=0.8, colour=5.0, stretch=None, background=2, saturation=1.25):
     """rgb: float array (rows, cols, 3) from a stack. Returns 8-bit RGB."""
     rgb = rgb.astype(np.float32)
     # Level each channel: take out the sky glow and its gradient, then match
@@ -62,11 +62,32 @@ def process(rgb, detail=0.8, colour=5.0, stretch=25.0, background=2, saturation=
     softness = 1.0 / np.sqrt(1 + detail ** 2 * 12)   # noise left after smoothing
     black, white = -2.0 * softness, np.percentile(brightness, 99.995)
     scaled = np.clip((rgb - black) / (white - black), 0, 1)
+    if stretch is None:
+        stretch = auto_stretch((FAINT - black) / (white - black))
     out = np.arcsinh(stretch * scaled) / np.arcsinh(stretch)
     # A little more colour, pushed out from each pixel's own grey level.
     grey = out.mean(axis=2, keepdims=True)
     out = grey + saturation * (out - grey)
     return (255 * np.clip(out, 0, 1)).astype(np.uint8)
+
+
+FAINT = 6.0          # a glow this many times the sky's grain above the sky...
+FAINT_SHOWN = 0.22   # ...is shown at this share of full brightness
+
+
+def auto_stretch(faint, shown=FAINT_SHOWN, lowest=10.0, highest=3000.0):
+    """How hard to stretch so that a faint glow comes out clearly visible,
+    whatever the brightest thing in the frame is. `faint` is the glow's level
+    as a share of the white point. Found by halving the range."""
+    curve = lambda k: np.arcsinh(k * faint) / np.arcsinh(k)
+    if curve(lowest) >= shown:
+        return lowest
+    if curve(highest) <= shown:
+        return highest
+    for _ in range(40):
+        middle = (lowest * highest) ** 0.5
+        lowest, highest = (middle, highest) if curve(middle) < shown else (lowest, middle)
+    return lowest
 
 
 def main():
@@ -77,9 +98,9 @@ def main():
     ap.add_argument("--detail", type=float, default=0.8,
                     help="brightness smoothing in pixels; more is smoother and softer")
     ap.add_argument("--saturation", type=float, default=1.25, help="colour strength; 1 is as shot")
-    ap.add_argument("--stretch", type=float, default=25,
-                    help="how hard faint parts are brightened: about 25 for a bright "
-                         "object like the Ring, 100 or more for a faint nebula")
+    ap.add_argument("--stretch", type=float,
+                    help="how hard faint parts are brightened (default: chosen from the "
+                         "picture so faint glow shows); about 25 is gentle, 500 is hard")
     args = ap.parse_args()
 
     name = args.name.replace(" ", "")

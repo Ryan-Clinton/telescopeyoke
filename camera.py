@@ -66,6 +66,11 @@ class Camera:
             c.set(self.name, "CCD_AUTO_EXPOSURE", TC_AUTO_EXPOSURE_OFF="On")
         if c.get(self.name, "TIMEOUT_FACTOR"):
             c.set(self.name, "TIMEOUT_FACTOR", VALUE=TIMEOUT_FACTOR)
+        modes = c.get(self.name, "CCD_RESOLUTION")
+        if modes and next(iter(modes.values())) != "On":
+            # The first mode listed is the full sensor. Something (a test, a
+            # crash) left a smaller one selected.
+            c.set(self.name, "CCD_RESOLUTION", **{next(iter(modes)): "On"})
         c.set(self.name, "CCD_BINNING", HOR_BIN=1, VER_BIN=1)
         c.set(self.name, "CCD_CAPTURE_FORMAT", INDI_RAW="On")
         c.set(self.name, "CCD_CONTROLS", Gain=self.gain)
