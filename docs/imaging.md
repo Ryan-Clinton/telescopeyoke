@@ -63,3 +63,20 @@ Things worth knowing:
 - **Raw frames are large**: about 20 MB each, so a 300-frame session is 6 GB.
   Delete a session's `light-*.fits` once you are happy with `final.fits`, or
   use `--no-save`.
+
+## One picture from several sessions
+
+Faint detail needs more light than one run usually collects. `./restack.py
+M31 --all` stacks every saved M31 session into one picture, and `./restack.py
+FOLDER FOLDER ...` stacks the ones named. The result goes to
+`frames/M31/combined/` and `web/M31-final.jpg`.
+
+- Sessions may differ in exposure length: frames are scaled to the first
+  session's, and a longer frame counts for more because it is cleaner.
+- They must share a gain; mixed gains are refused.
+- The camera must not have been turned in the focuser between them. Frames
+  that share fewer than eight stars with the reference are left out and
+  counted in the report, so a turned session costs time but does not smear
+  the picture.
+
+Proven on made-up star fields; not yet on real sessions.

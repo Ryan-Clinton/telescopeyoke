@@ -487,7 +487,7 @@ def measure_file(path, exposure, gain):
     return q, timings.seconds
 
 
-def register_file(path, exposure, gain, reference, store, slot, shape):
+def register_file(path, exposure, gain, reference, store, slot, shape, scale=1.0):
     """Worker: prepare one raw frame in full, line it up on the reference and
     write it into its slot of the shared file of registered frames."""
     timings = Timings()
@@ -502,7 +502,8 @@ def register_file(path, exposure, gain, reference, store, slot, shape):
         rough = offset(reference["square"], centre_square(lum))
         r, t, matched, residual = align(stars, reference["stars"], rough)
     with timings.phase("resample"):
-        registered = warp(rgb, r, t)
+        # `scale` puts frames of a different exposure length on the same footing.
+        registered = warp(rgb, r, t) * scale
     with timings.phase("write registered"):
         frames = np.memmap(store, dtype=np.float16, mode="r+", shape=shape)
         frames[slot] = registered

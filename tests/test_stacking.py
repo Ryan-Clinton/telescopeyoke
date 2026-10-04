@@ -339,3 +339,55 @@ def test_the_web_page_can_be_told_how_far_a_run_has_got(session):
     assert status["reasons"] == {"star brightness down (cloud)": 1}
     assert status["last"].startswith("accepted, FWHM")
     assert status["finished"]
+
+
+def saved_session(folder, name, exposure, turned=0.0, count=6, seed=0):
+    """Raw frames of the same field, as shoot.py leaves them. A longer
+    exposure collects proportionally more light from stars and sky alike."""
+    session = folder / "frames" / "Test" / name
+    session.mkdir(parents=True)
+    xy, flux = field()
+    for i in range(count):
+        lum = render(moved(xy, 1.5 * i + seed, -1.0 * i, degrees=turned), flux * exposure / 2,
+                     sky=150.0 * exposure, seed=seed + i)
+        stacking.save_light(session, i + 1, as_mosaic(lum), {"EXPTIME": exposure, "GAIN": 1500.0})
+    return session
+
+
+def test_sessions_of_different_lengths_combine_into_one_picture(tmp_path, monkeypatch):
+    monkeypatch.setattr(restack, "ROOT", tmp_path)
+    monkeypatch.setattr(stacking, "CALIBRATION", tmp_path / "calibration")
+    first = saved_session(tmp_path, "20261003-230000", exposure=2.0)
+    second = saved_session(tmp_path, "20261004-010000", exposure=4.0, seed=40)
+    turned = saved_session(tmp_path, "20261005-220000", exposure=2.0, turned=25.0, seed=80)
+    assert restack.all_sessions("Test") == [first, second, turned]
+
+    said = []
+    picture = restack.run([first, second, turned], keep=1.0, say=said.append, workers=2)
+    assert picture == tmp_path / "frames" / "Test" / "combined" / "final.jpg" and picture.exists()
+    summary = json.loads((picture.parent / "restack.json").read_text())
+    kept = summary["kept"]
+    # Both nights with the camera as it was are in; the night it was turned is not.
+    assert sum(k.startswith("20261003") for k in kept) == 6
+    assert sum(k.startswith("20261004") for k in kept) == 6
+    assert not any(k.startswith("20261005") for k in kept)
+    assert any("would not line up" in line for line in said)
+    assert summary["summary"]["total_exposure_s"] == 6 * 2.0 + 6 * 4.0
+    # The 4 s frames were scaled to match the 2 s ones, so the stars are not doubled up or smeared.
+    from astropy.io import fits
+    lum = fits.getdata(picture.parent / "final.fits").astype(np.float32).sum(axis=0)
+    q = stacking.quality(lum, stacking.find_stars(lum))
+    assert q["roundness"] > 0.85 and q["fwhm"] < 5.5
+    # The combined folder is not mistaken for a session, and one session alone still works.
+    assert restack.all_sessions("Test") == [first, second, turned]
+    assert restack.find_session("Test") == turned
+
+
+def test_sessions_at_different_gains_are_refused(tmp_path, monkeypatch):
+    monkeypatch.setattr(stacking, "CALIBRATION", tmp_path / "calibration")
+    one = saved_session(tmp_path, "a", exposure=2.0, count=1)
+    other = tmp_path / "frames" / "Test" / "b"
+    other.mkdir()
+    stacking.save_light(other, 1, as_mosaic(render(*field())), {"EXPTIME": 2.0, "GAIN": 300.0})
+    with pytest.raises(SystemExit, match="different gains"):
+        restack.run([one, other], say=lambda *_: None)

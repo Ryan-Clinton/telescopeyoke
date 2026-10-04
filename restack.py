@@ -5,6 +5,8 @@
     ./restack.py frames/M27/20261003-231500
     ./restack.py M27 --keep 0.8         use only the best 80% of the good frames
     ./restack.py M27 --profile          also report where the time went
+    ./restack.py M27 --all              every M27 session as one picture
+    ./restack.py frames/M27/A frames/M27/B    these sessions as one picture
 
 shoot.py stacks as it goes so there is something to watch. This goes back
 over every raw frame with the whole session known: it measures them all
@@ -13,6 +15,11 @@ the sharpest frame, weights the better frames more, and averages with
 outliers (satellites, aircraft, cosmic rays) clipped out. Then it removes the
 sky gradient and writes a finished picture. The frame-by-frame work is shared
 between the processor's cores.
+
+Several sessions, from one night or many, can go into one picture, written
+to frames/NAME/combined/. They may differ in exposure length but not in
+gain, and the camera must not have been turned in the focuser between
+them: frames that will not line up on the reference are left out.
 """
 import argparse
 import json
@@ -27,17 +34,25 @@ import process
 import stacking
 
 ROOT = Path(__file__).parent
+COMBINED = "combined"   # folder under frames/NAME/ for a picture made from several sessions
+MIN_MATCHED = 8         # stars a frame must share with the reference to count as lined up
 
 
 def find_session(name):
     path = Path(name)
     if path.is_dir():
         return path
-    sessions = sorted((ROOT / "frames" / name.replace(" ", "")).glob("*/"))
+    sessions = all_sessions(name)
     if not sessions:
         raise interface.Refusal("NO_SESSION", f"No saved session for {name}. shoot.py keeps "
                                 f"raw frames in frames/{name}/<date-time>/.")
     return sessions[-1]
+
+
+def all_sessions(name):
+    """Every saved session of an object, oldest first."""
+    folder = ROOT / "frames" / name.replace(" ", "")
+    return sorted(p for p in folder.glob("*/") if p.name != COMBINED and any(p.glob("light-*.fits")))
 
 
 def select(frames, keep=0.85):
@@ -56,25 +71,49 @@ def select(frames, keep=0.85):
 
 
 def run(session, keep=0.85, say=print, workers=None, profile=False):
-    session = Path(session)
-    lights = sorted(session.glob("light-*.fits"))
-    if not lights:
-        raise SystemExit(f"No raw frames in {session}.")
+    """Stack one session, or a list of sessions into one picture."""
+    sessions = [Path(s) for s in session] if isinstance(session, (list, tuple)) else [Path(session)]
+    several = len(sessions) > 1
     began = time.perf_counter()
     timings = stacking.Timings()
-    _, header = stacking.load_light(lights[0])
-    exposure, gain = float(header.get("EXPTIME", 0)), int(float(header.get("GAIN", 0)))
-    calibration = stacking.Calibration(exposure, gain)
     workers = workers or stacking.cores()
-    say(f"{session}: {len(lights)} raw frames, {exposure:g} s at gain {gain}; "
-        f"calibration: {calibration.describe()}; {workers} workers")
+    lights, exposures, gains = [], [], set()
+    for one in sessions:
+        found = sorted(one.glob("light-*.fits"))
+        if not found:
+            raise interface.Refusal("NO_SESSION", f"No raw frames in {one}.")
+        _, header = stacking.load_light(found[0])
+        seconds, gain = float(header.get("EXPTIME", 0)), int(float(header.get("GAIN", 0)))
+        calibration = stacking.Calibration(seconds, gain)
+        say(f"{one}: {len(found)} raw frames, {seconds:g} s at gain {gain}; "
+            f"calibration: {calibration.describe()}")
+        lights += found
+        exposures += [seconds] * len(found)
+        gains.add(gain)
+    if len(gains) > 1:
+        raise interface.Refusal("INVALID_REQUEST", "These sessions were taken at different gains "
+                                f"({sorted(gains)}); they cannot go into one picture.")
+    # Frames of other lengths are scaled to the first session's, so a 4 s
+    # frame and a 2 s frame of the same star agree before they are averaged.
+    exposure = exposures[0]
+    scales = [exposure / e if e else 1.0 for e in exposures]
+    session = sessions[0].parent / COMBINED if several else sessions[0]
+    session.mkdir(exist_ok=True)
+    say(f"{len(lights)} frames in all; {workers} workers")
 
     work = session / "registered.dat"
     with stacking.worker_pool(workers) as pool:
         # First pass, every frame, cheaply: is it worth stacking?
         frames = []
-        for q, spent in pool.map(stacking.measure_file, [str(p) for p in lights],
-                                 [exposure] * len(lights), [gain] * len(lights)):
+        measured = pool.map(stacking.measure_file, [str(p) for p in lights],
+                            exposures, [gain] * len(lights))
+        for (q, spent), path, seconds, scale in zip(measured, lights, exposures, scales):
+            for key in ("flux", "background", "noise"):
+                if q.get(key) is not None:
+                    q[key] *= scale
+            q.update(path=str(path), exposure=seconds, scale=scale)
+            if several:
+                q["file"] = f"{path.parent.name}/{path.name}"
             frames.append(q)
             timings.add(spent)
         chosen = select(frames, keep)
@@ -88,17 +127,17 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
         # the sharpest frame. The results go into one file shared between the
         # workers, so memory holds a frame per worker and not the whole run.
         with timings.phase("calibrate and clean"):
-            mosaic, _ = stacking.load_light(session / best["file"])
-            rgb = stacking.prepare(mosaic, calibration)
+            mosaic, _ = stacking.load_light(Path(best["path"]))
+            rgb = stacking.prepare(mosaic, stacking.Calibration(best["exposure"], gain))
             lum = rgb.sum(axis=2)
         reference = {"square": stacking.centre_square(lum), "stars": stacking.find_stars(lum)}
         shape = (len(chosen), *rgb.shape)
         np.memmap(work, dtype=np.float16, mode="w+", shape=shape).flush()
         try:
             n = len(chosen)
-            results = pool.map(stacking.register_file, [str(session / f["file"]) for f in chosen],
-                               [exposure] * n, [gain] * n, [reference] * n, [str(work)] * n,
-                               range(n), [shape] * n)
+            results = pool.map(stacking.register_file, [f["path"] for f in chosen],
+                               [f["exposure"] for f in chosen], [gain] * n, [reference] * n,
+                               [str(work)] * n, range(n), [shape] * n, [f["scale"] for f in chosen])
             residuals = []
             for f, (info, spent) in zip(chosen, results):
                 f.update(info)
@@ -106,24 +145,38 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
                 if info["residual"] is not None:
                     residuals.append(info["residual"])
             weights = [stacking.weight(f, best) for f in chosen]
+            if several:
+                # A frame from another session that found few of the reference's
+                # stars has not lined up (the camera was turned, or it is a
+                # different field); it would only smear the picture.
+                lost = [i for i, f in enumerate(chosen) if f["matched"] < MIN_MATCHED]
+                for i in lost:
+                    weights[i] = 0.0
+                if lost:
+                    say(f"{len(lost)} frames would not line up on the reference and were left out")
+                if len(lost) == n - 1 and n > 1:
+                    say("Nothing from the other sessions lined up: was the camera turned?")
 
             registered = np.memmap(work, dtype=np.float16, mode="r", shape=shape)
             with timings.phase("stack"):
                 first = stacking.Stack(rgb.shape, after=10 ** 9)   # no clipping yet
                 for i in range(n):
-                    first.add(registered[i].astype(np.float32), weights[i])
+                    if weights[i]:
+                        first.add(registered[i].astype(np.float32), weights[i])
                 # Now that the average and its spread are known, leave out
                 # whatever strays too far from them.
                 final = stacking.Stack(rgb.shape)
                 final.reference = (first.mean(), first.spread())
                 for i in range(n):
-                    final.add(registered[i].astype(np.float32), weights[i])
+                    if weights[i]:
+                        final.add(registered[i].astype(np.float32), weights[i])
             del registered
         finally:
             work.unlink(missing_ok=True)
 
     stacked = final.result()
-    total = exposure * len(chosen)
+    chosen = [f for f, w in zip(chosen, weights) if w]
+    total = sum(f["exposure"] for f in chosen)
     with timings.phase("finish the picture"):
         stacking.write_stack(session / "final.fits", stacked,
                              {"EXPTIME": total, "NFRAMES": len(chosen), "GAIN": gain})
@@ -136,6 +189,7 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
         {"kept": [f["file"] for f in chosen], "frames": frames,
          "summary": {"captured": len(frames), "stacked": len(chosen),
                      "left_out": len(frames) - len(chosen), "total_exposure_s": total,
+                     "sessions": [str(s) for s in sessions],
                      "median_residual_px": round(float(np.median(residuals)), 3) if residuals else None,
                      "seconds": round(time.perf_counter() - began, 1),
                      "picture": str(session / "final.jpg"), "stack": str(session / "final.fits")}},
@@ -156,7 +210,10 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("session", help="object name (newest session) or a session folder")
+    ap.add_argument("session", nargs="+",
+                    help="object name (newest session), or one or more session folders")
+    ap.add_argument("--all", action="store_true",
+                    help="with an object name: every saved session of it, as one picture")
     ap.add_argument("--keep", type=float, default=0.85,
                     help="fraction of the good frames to stack, best first")
     ap.add_argument("--workers", type=int,
@@ -166,9 +223,15 @@ def main():
     args = ap.parse_args()
 
     def work():
-        session = find_session(args.session)
-        run(session, args.keep, workers=args.workers, profile=args.profile)
-        return json.loads((session / "restack.json").read_text())["summary"]
+        if args.all:
+            sessions = all_sessions(args.session[0])
+            if not sessions:
+                raise interface.Refusal("NO_SESSION", f"No saved session for {args.session[0]}.")
+        else:
+            sessions = [find_session(name) for name in args.session]
+        picture = run(sessions if len(sessions) > 1 else sessions[0], args.keep,
+                      workers=args.workers, profile=args.profile)
+        return json.loads((picture.parent / "restack.json").read_text())["summary"]
 
     interface.main("restack", work, args.json)
 
