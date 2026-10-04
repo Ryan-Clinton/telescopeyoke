@@ -74,6 +74,8 @@ FOLDER FOLDER ...` stacks the ones named. The result goes to
 - Sessions may differ in exposure length: frames are scaled to the first
   session's, and a longer frame counts for more because it is cleaner.
 - They must share a gain; mixed gains are refused.
+- Frames taken after the mount has swung to the other side of the meridian
+  arrive upside down; they are recognised and turned back.
 - The camera must not have been turned in the focuser between them. Frames
   that share fewer than eight stars with the reference are left out and
   counted in the report, so a turned session costs time but does not smear

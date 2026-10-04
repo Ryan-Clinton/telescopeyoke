@@ -487,7 +487,7 @@ def measure_file(path, exposure, gain):
     return q, timings.seconds
 
 
-def register_file(path, exposure, gain, reference, store, slot, shape, scale=1.0):
+def register_file(path, exposure, gain, reference, store, slot, shape, scale=1.0, try_flip=False):
     """Worker: prepare one raw frame in full, line it up on the reference and
     write it into its slot of the shared file of registered frames."""
     timings = Timings()
@@ -501,6 +501,18 @@ def register_file(path, exposure, gain, reference, store, slot, shape, scale=1.0
     with timings.phase("line up"):
         rough = offset(reference["square"], centre_square(lum))
         r, t, matched, residual = align(stars, reference["stars"], rough)
+        flipped = False
+        if try_flip and matched < 8:
+            # Taken on the other side of the meridian, the picture is upside
+            # down: the tube swung over the pole in between. Turn it and retry.
+            turned = np.ascontiguousarray(rgb[::-1, ::-1])
+            turned_lum = turned.sum(axis=2)
+            turned_stars = find_stars(turned_lum)
+            again = align(turned_stars, reference["stars"],
+                          offset(reference["square"], centre_square(turned_lum)))
+            if again[2] > matched:
+                rgb, flipped = turned, True
+                r, t, matched, residual = again
     with timings.phase("resample"):
         # `scale` puts frames of a different exposure length on the same footing.
         registered = warp(rgb, r, t) * scale
@@ -510,7 +522,7 @@ def register_file(path, exposure, gain, reference, store, slot, shape, scale=1.0
         frames.flush()
     info = {"shift": [float(t[0]), float(t[1])],
             "rotation": float(np.degrees(np.arctan2(r[1, 0], r[0, 0]))),
-            "matched": matched, "residual": residual}
+            "matched": matched, "residual": residual, "flipped": flipped}
     return info, timings.seconds
 
 

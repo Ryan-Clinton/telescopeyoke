@@ -360,26 +360,30 @@ def test_sessions_of_different_lengths_combine_into_one_picture(tmp_path, monkey
     first = saved_session(tmp_path, "20261003-230000", exposure=2.0)
     second = saved_session(tmp_path, "20261004-010000", exposure=4.0, seed=40)
     turned = saved_session(tmp_path, "20261005-220000", exposure=2.0, turned=25.0, seed=80)
-    assert restack.all_sessions("Test") == [first, second, turned]
+    # After the mount swings over the pole the same field arrives upside down.
+    flipped = saved_session(tmp_path, "20261004-030000", exposure=2.0, turned=180.0, seed=120)
+    assert restack.all_sessions("Test") == [first, second, flipped, turned]
 
     said = []
-    picture = restack.run([first, second, turned], keep=1.0, say=said.append, workers=2)
+    picture = restack.run([first, second, flipped, turned], keep=1.0, say=said.append, workers=2)
     assert picture == tmp_path / "frames" / "Test" / "combined" / "final.jpg" and picture.exists()
     summary = json.loads((picture.parent / "restack.json").read_text())
     kept = summary["kept"]
     # Both nights with the camera as it was are in; the night it was turned is not.
     assert sum(k.startswith("20261003") for k in kept) == 6
-    assert sum(k.startswith("20261004") for k in kept) == 6
+    assert sum(k.startswith("20261004-01") for k in kept) == 6
+    assert sum(k.startswith("20261004-03") for k in kept) == 6
+    assert any("turned the right way up" in line for line in said)
     assert not any(k.startswith("20261005") for k in kept)
     assert any("would not line up" in line for line in said)
-    assert summary["summary"]["total_exposure_s"] == 6 * 2.0 + 6 * 4.0
+    assert summary["summary"]["total_exposure_s"] == 6 * 2.0 + 6 * 4.0 + 6 * 2.0
     # The 4 s frames were scaled to match the 2 s ones, so the stars are not doubled up or smeared.
     from astropy.io import fits
     lum = fits.getdata(picture.parent / "final.fits").astype(np.float32).sum(axis=0)
     q = stacking.quality(lum, stacking.find_stars(lum))
     assert q["roundness"] > 0.85 and q["fwhm"] < 5.5
     # The combined folder is not mistaken for a session, and one session alone still works.
-    assert restack.all_sessions("Test") == [first, second, turned]
+    assert restack.all_sessions("Test") == [first, second, flipped, turned]
     assert restack.find_session("Test") == turned
 
 

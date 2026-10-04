@@ -19,7 +19,9 @@ between the processor's cores.
 Several sessions, from one night or many, can go into one picture, written
 to frames/NAME/combined/. They may differ in exposure length but not in
 gain, and the camera must not have been turned in the focuser between
-them: frames that will not line up on the reference are left out.
+them: frames that will not line up on the reference are left out. Frames
+taken after the mount has swung to the other side of the meridian come out
+upside down and are turned back automatically.
 """
 import argparse
 import json
@@ -137,7 +139,8 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
             n = len(chosen)
             results = pool.map(stacking.register_file, [f["path"] for f in chosen],
                                [f["exposure"] for f in chosen], [gain] * n, [reference] * n,
-                               [str(work)] * n, range(n), [shape] * n, [f["scale"] for f in chosen])
+                               [str(work)] * n, range(n), [shape] * n, [f["scale"] for f in chosen],
+                               [several] * n)
             residuals = []
             for f, (info, spent) in zip(chosen, results):
                 f.update(info)
@@ -149,6 +152,10 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
                 # A frame from another session that found few of the reference's
                 # stars has not lined up (the camera was turned, or it is a
                 # different field); it would only smear the picture.
+                turned = sum(f["flipped"] for f in chosen)
+                if turned:
+                    say(f"{turned} frames were taken on the other side of the meridian and "
+                        "were turned the right way up")
                 lost = [i for i, f in enumerate(chosen) if f["matched"] < MIN_MATCHED]
                 for i in lost:
                     weights[i] = 0.0
