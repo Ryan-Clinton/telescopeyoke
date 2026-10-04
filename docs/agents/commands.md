@@ -42,6 +42,13 @@ drifts unless given `--no-recentre`.
 `snap.py`, `liveview.py`, `focus.py`, `solve.py`, `skywatch.py`,
 `calibrate.py`, `camera_test.py`, `shoot.py --no-recentre`.
 
+`camera_setup.py` gets the camera ready and is safe to run at any time: it
+checks the camera is plugged in and has a driver, copies Altair's library
+files out of their SDK zip into `vendor/altair/` if they are missing, and
+takes one short test frame. `--check` copies nothing and takes no frame.
+`--json` gives each step as `{step, status, message}` with `ready` and, when
+not ready, `next`: the one thing the person has to do.
+
 ## Output rules
 
 - With `--json`, stdout holds exactly one JSON document; anything else is on stderr.

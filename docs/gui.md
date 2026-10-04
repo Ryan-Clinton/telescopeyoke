@@ -539,7 +539,8 @@ what it does and a button.
 |---|---|---|---|
 | Alignment | Polar alignment measurement | `polaralign.py` | yes |
 | | Horizon survey (grid, or follow the skyline; by night or by day) | `horizon.py`, with `--trace`, `--daylight` | yes |
-| Camera | What the camera is | `camera_test.py --capabilities` | no |
+| Camera | Set up the camera | `camera_setup.py --open` | no |
+| | What the camera is | `camera_test.py --capabilities` | no |
 | | Throughput | `camera_test.py --throughput` | no |
 | | Gain sweep | `camera_test.py --gain-sweep` | no |
 | Calibration | Dark, flat, bias frames | `calibrate.py dark\|flat\|bias` | no |

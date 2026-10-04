@@ -53,10 +53,9 @@ Done. Still to do by hand:
 
   [ ] config.toml: your location. Write Windows paths with forward slashes,
       such as "C:/Program Files/astap".
-  [ ] Camera driver: install AltairCapture from altairastro.help, check the
-      camera shows a picture in it, then close it.
-  [ ] Camera library: from Altair's SDK zip, copy python\altaircam.py and
-      the 64-bit altaircam.dll into vendor\altair\.
+  [ ] Camera: download "Altair Camera SDK" from altairastro.help (you have
+      to register there) and leave the zip in Downloads. Then plug the
+      camera in and run:  python camera_setup.py
   [ ] Plate solver: ASTAP's command-line program (astap_cli.exe) and the D20
       star database, both in C:\Program Files\astap.
   [ ] ffmpeg, with ffplay, on PATH: for the webcam and the focusing tones.

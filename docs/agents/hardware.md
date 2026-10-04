@@ -34,6 +34,13 @@ wrapper. Correct this section when the camera has been used.
 - The sequence is: raw mode, full bit depth, software trigger, pull mode with
   a callback; then per frame set exposure and gain, discard anything
   waiting, trigger one, wait, pull one.
+- **Seen on Windows 11 with the real 183C (2026-10-04):** plugged in, it
+  appears as `ALTAIRH183C` (USB `16D0:0C78`) and Windows gives it its own
+  WinUSB driver at once, with nothing installed. Whether Altair's library
+  then finds it under that driver has not been tried: Altair's SDK and
+  AltairCapture are given only to a logged-in visitor of their site, so
+  nothing can fetch them unattended. `camera_setup.py` takes the files from
+  a zip the person has downloaded.
 - **Still to confirm on the camera:** that the vendor's `altaircam.py` has
   the calls used (it was not available when this was written; they follow
   the header and ToupTek's wrapper, which Altair's is a renamed copy of);

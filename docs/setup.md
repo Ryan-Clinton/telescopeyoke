@@ -67,14 +67,21 @@ goto M27` is typed `python mount.py goto M27`, and `./ty status` is
    work: `'C:\Program Files\astap'`.
 3. **Camera.** INDI does not run on Windows, so the camera is read through
    Altair's own library.
-   - Install AltairCapture from <https://www.altairastro.help>. Its
-     installer puts the camera's Windows driver in place. Check the camera
-     shows a picture in it, then close it: only one program can hold the
-     camera. telescopeyoke does not use AltairCapture itself.
-   - Download the Altair Camera SDK from the same site. From the zip, copy
-     `altaircam.py` (in its `python` folder) and the 64-bit `altaircam.dll`
-     (in its `win` `x64` folder) into `vendor\altair\` in the project. These
-     files are Altair's and are not part of this repository.
+   - Download "Altair Camera SDK" from <https://www.altairastro.help>
+     (Software downloads). Their site gives it only to a logged-in visitor,
+     so register there first; this is the one step nothing can do for you.
+     Leave the zip in your Downloads folder.
+   - Plug the camera in and run `python camera_setup.py`, or press "Set up
+     the camera" under Tools in the console. It checks the camera is there
+     and has a driver, takes `altaircam.py` and the 64-bit `altaircam.dll`
+     out of the zip into `vendor\altair\`, loads the library and takes a
+     test frame, saying at each step what it found. Those files are
+     Altair's and are not part of this repository. `--check` only looks.
+   - The driver: on the Windows 11 machine this was tried on, Windows gave
+     the camera its own built-in driver (WinUSB) as soon as it was plugged
+     in. If the setup says there is no working driver, install AltairCapture
+     from the same site, which brings one; check the camera shows a picture
+     in it, then close it, because only one program can hold the camera.
    - If frames are slow or cut off, open the camera and the USB hub it hangs
      from in Device Manager and, on the Power Management tab, untick "Allow
      the computer to turn off this device to save power".
