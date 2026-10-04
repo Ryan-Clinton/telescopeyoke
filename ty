@@ -10,6 +10,8 @@
     ./ty target M27          one object: where it is, whether a GoTo is allowed
     ./ty session             the newest imaging run (--frames 50 for detail)
     ./ty observing           sky, focus, tracking and imaging in one snapshot
+    ./ty run stop            tell the imaging run that is going to finish now and make its
+                             picture (also: recentre, assist-on, assist-off)
     ./ty mount ...           everything mount.py does, e.g. ./ty mount goto M27 --dry-run
     ./ty tonight ...         the full report, as tonight.py
 
@@ -57,8 +59,8 @@ def main():
 
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["capabilities", "status", "context", "doctor", "night",
-                                        "targets", "target", "session", "observing"])
-    ap.add_argument("name", nargs="?", help="object name, for 'target'")
+                                        "targets", "target", "session", "observing", "run"])
+    ap.add_argument("name", nargs="?", help="object name, for 'target'; the order, for 'run'")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--demo", action="store_true", help="made-up weather at the example site")
     ap.add_argument("--limit", type=int, default=10)
@@ -86,6 +88,7 @@ def main():
         "target": lambda: agent.target(args.name, args.demo),
         "session": lambda: agent.session(bool(args.frames), args.frames or 50),
         "observing": lambda: agent.observing(args.demo),
+        "run": lambda: __import__("shoot").tell(args.name or ""),
     }[args.command]
     result = interface.run(args.command, work)
     if args.json:

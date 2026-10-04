@@ -52,6 +52,9 @@ WEB = ROOT / "web"
 DRIFT_LIMIT = 0.2
 TRIAL_EXPOSURES = (1, 2, 3, 4)
 ASSIST_EVERY = 15   # accepted frames between trims of the Dec creep
+# A running run looks here after every frame for an order from "ty run ...".
+ORDERS = ROOT / "cache" / "run_order.txt"
+KNOWN_ORDERS = ("stop", "recentre", "assist-on", "assist-off")
 CLOUD_STOP = 20     # with --frames 0, stop after this many rejected frames in a row
 PREVIEW_EVERY = 3.0  # seconds between updates of the picture on the web page
 BACKLOG = 8         # frames allowed to wait for the live stack before it skips some
@@ -148,6 +151,25 @@ class Session:
         stacking.write_stack(self.folder / "live.fits", self.stack.result(),
                              {"OBJECT": self.name, "NFRAMES": len(self.accepted),
                               "EXPTIME": self.exposure * len(self.accepted), "GAIN": self.gain})
+
+
+def tell(order):
+    """Leave an order for the run that is going."""
+    if order not in KNOWN_ORDERS:
+        raise interface.Refusal("INVALID_REQUEST", f"Unknown order '{order}'. Known: "
+                                + ", ".join(KNOWN_ORDERS))
+    ORDERS.parent.mkdir(exist_ok=True)
+    ORDERS.write_text(order)
+    return {"order": order, "note": "The run acts on it after its next frame."}
+
+
+def order():
+    """The order left for this run, if any; it is taken, so it acts once."""
+    if not ORDERS.exists():
+        return None
+    found = ORDERS.read_text().strip()
+    ORDERS.unlink()
+    return found if found in KNOWN_ORDERS else None
 
 
 def recentre(target):
@@ -287,6 +309,8 @@ def run(args):
     print(f"{session.name}: {args.frames or 'an open-ended run of'} frames of {exposure:g} s at gain {args.gain}; "
           f"calibration: {session.calibration.describe()}; {workers} workers", flush=True)
     index, since_centre, started = 0, 0, time.monotonic()
+    ORDERS.unlink(missing_ok=True)   # an order left for an earlier run is not for this one
+    told = {"stop": False, "recentre": False}
     shown = 0.0   # when the newest raw frame was last put on the web page
     waiting = deque()   # (future, time taken) for frames being processed, oldest first
 
@@ -294,6 +318,8 @@ def run(args):
         """Whether to take another frame. With no fixed number, carry on
         until a run of frames in a row has been lost, which means cloud (or
         dawn, or dew) has ended the session."""
+        if told["stop"]:
+            return False
         if args.frames:
             return index < args.frames
         latest = session.log[-CLOUD_STOP:]
@@ -312,8 +338,9 @@ def run(args):
 
     with stacking.worker_pool(workers) as pool:
         while more():
-            due = args.recentre and since_centre >= args.recentre
+            due = (args.recentre and since_centre >= args.recentre) or told["recentre"]
             if moving and (session.drift > DRIFT_LIMIT or due):
+                told["recentre"] = False
                 collect(everything=True)
                 print(f"  drifted {session.drift * 100:.0f}% of the frame; re-centring", flush=True)
                 recentre(args.name)
@@ -346,7 +373,16 @@ def run(args):
                         # the others cannot be lined up, so collect() waits for it.
                         waiting.append((pool.submit(stacking.live_frame,
                                                     *session.job(index, mosaic, header)), time.time()))
-                    due = args.recentre and since_centre >= args.recentre
+                    asked = order()
+                    if asked:
+                        print(f"  told to {asked}", flush=True)
+                    if asked == "stop":
+                        told["stop"] = True
+                        break
+                    if asked in ("assist-on", "assist-off"):
+                        args.assist = asked == "assist-on"
+                    told["recentre"] = told["recentre"] or asked == "recentre"
+                    due = (args.recentre and since_centre >= args.recentre) or told["recentre"]
                     if moving and (session.drift > DRIFT_LIMIT or due):
                         break
                     if args.assist and moving and len(session.track) >= ASSIST_EVERY:

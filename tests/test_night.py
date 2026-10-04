@@ -200,3 +200,25 @@ def test_an_open_ended_run_stops_when_cloud_arrives(night, monkeypatch, capsys):
     summary = shoot.main()
     assert "the last 5 frames were all rejected; stopping" in capsys.readouterr().out
     assert 6 <= summary["accepted"] <= 8 and 13 <= summary["captured"] <= 22
+
+
+def test_a_running_run_can_be_told_to_stop(night, monkeypatch, capsys):
+    _, folder = night
+    monkeypatch.setattr(shoot, "ORDERS", folder / "run_order.txt")
+    Sky.pause = 0.6
+    taken = FakeCamera.frame
+
+    def frame(self, seconds):
+        if Sky.taken == 5:
+            assert shoot.tell("stop")["order"] == "stop"     # as "ty run stop" would, mid-run
+        return taken(self, seconds)
+
+    monkeypatch.setattr(FakeCamera, "frame", frame)
+    monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "0", "--exposure", "2",
+                                      "--no-recentre", "--no-restack"])
+    summary = shoot.main()
+    assert "told to stop" in capsys.readouterr().out
+    assert summary["captured"] == 6 and (folder / summary["folder"] / "live.fits").exists()
+    assert not shoot.ORDERS.exists()
+    with pytest.raises(SystemExit, match="Unknown order"):
+        shoot.tell("explode")
