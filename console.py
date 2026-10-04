@@ -665,6 +665,13 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         path = urlparse(self.path).path
         name = path[len("/api/"):].strip("/") if path.startswith("/api/") else ""
+        # Take what was sent before answering, even to refuse: on Windows a
+        # refusal sent with the request still unread arrives as a broken connection.
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = 0
+        sent = self.rfile.read(min(max(length, 0), 65536))
         if not self.ours():
             return self.refuse(name, Refused("Not this console's address.", 400))
         if not self.same_origin():
@@ -672,8 +679,7 @@ class Handler(BaseHTTPRequestHandler):
         if not self.keyed():
             return self.refuse(name, Refused("The console's key is missing or wrong.", 403))
         try:
-            length = int(self.headers.get("Content-Length") or 0)
-            params = json.loads(self.rfile.read(length) or b"{}") if length <= 4096 else None
+            params = json.loads(sent or b"{}") if length <= 4096 else None
             if not isinstance(params, dict):
                 raise ValueError
         except ValueError:
