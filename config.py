@@ -21,7 +21,9 @@ DEFAULTS = {
                # How frames are fetched: through the INDI driver, or straight
                # from Altair's own library. INDI does not run on Windows.
                "backend": "altair" if sys.platform == "win32" else "indi"},
-    "mount": {"serial_match": "FTDI"},
+    # link: "handset" (a serial lead to the SynScan handset), or with no handset
+    # "wifi" (the SynScan Wi-Fi adapter) or "eqdir" (an EQDIR lead).
+    "mount": {"serial_match": "FTDI", "link": "handset"},
     "indi": {"port": 7624, "manage_server": False},
 }
 

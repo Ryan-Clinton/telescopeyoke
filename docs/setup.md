@@ -31,6 +31,31 @@ On Ubuntu and Debian, `install.sh` takes the Python libraries from the
 distribution's own packages. `pyproject.toml` lists the same libraries with
 the oldest versions known to work, and is what CI and `pip install .` use.
 
+## The mount without its handset
+
+The tested way to reach the mount is a serial lead to the SynScan handset.
+It can also be reached with the handset unplugged, through the SynScan Wi-Fi
+adapter or an EQDIR lead. **No real mount has been moved this way yet**; the
+adapter has only been found and read.
+
+1. In `config.toml` under `[mount]`, set `link = "wifi"` (or `"eqdir"`).
+   The Wi-Fi adapter is found by asking the network. It makes its own
+   network, `SynScan_WiFi_xxxx`; it is simpler to use the SynScan app once to
+   have it join yours, so the computer keeps its internet connection.
+2. `./doctor.py` says what answered and what is still to do.
+3. Put the mount at its home position (counterweight bar down, tube pointing
+   at the pole) and run `./mount.py sethome`. It moves nothing. Do it again
+   whenever the mount has been switched off and moved, or its clutches
+   loosened: unlike the handset, the motor board cannot be told by buttons.
+4. Once for each mount, with someone standing by it: `./mount.py directions`.
+   It tips the tube 5° from home, asks which way it went, and puts it back.
+   Until then a GoTo is refused, because the Dec motor turning the other way
+   would send the tube to the wrong side of the pole.
+5. Then everything is as with the handset: `./mount.py goto M27 --dry-run`
+   first, and stand by the mount for the first real moves.
+
+Close the SynScan app and anything else talking to the mount first.
+
 ## The control console
 
 `./console.py` (or `./ty console`; on Windows `python console.py`) opens a

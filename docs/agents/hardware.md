@@ -62,6 +62,44 @@ wrapper. Correct this section when the camera has been used.
 - `[camera] readout_speed` is left unset: the camera keeps its own setting
   until the measurements say which level is best.
 
+## The mount without its handset (`direct.py`)
+
+The SynScan Wi-Fi adapter and an EQDIR lead plug in where the handset would
+and reach the motor board directly. The board counts motor steps and knows
+nothing about the sky, so `direct.DirectHandset` answers the handset commands
+`mount.py` sends and does the handset's sums itself.
+
+Read from a real EQ3 through the Wi-Fi adapter (and nothing more: **no real
+mount has been moved through this link**):
+
+- The adapter answers on UDP port 11880. On the network it makes itself
+  (`SynScan_WiFi_xxxx`, open) it is 192.168.4.1. It can also join the home
+  network, and then answers a broadcast, which is how `direct.Udp.find`
+  finds it.
+- One message, one reply: `:e1\r` gives `=010703\r`. Numbers are six hex
+  digits, low byte first. Version `010703` is model 3 (EQ3), firmware 1.07.
+- 4,576,000 counts per turn on both axes, timer 35,477, high-speed ratio 16,
+  35,200 counts per worm turn (130 teeth).
+- Both counts read 0x800000 when the board is switched on. When first read
+  they were exactly a quarter turn either side of that, with the motors
+  stopped: another program (the SynScan app, most likely) had set them. So
+  the counts mean nothing until home is recorded: `./mount.py sethome`.
+- Status is three hex digits: the first says slewing or GoTo mode, backward,
+  and high speed; the second running and blocked; the third whether the
+  motors have been switched on.
+
+Taken from the published protocol and other open software, not yet seen on
+the mount: the orders (`F` switch on, `G` mode and direction, `H` counts to
+turn, `M` where to slow, `I` step period, `J` go, `K` stop, `L` stop dead),
+that the board refuses a change of mode while turning, and that "forward" on
+the RA axis is the way the sky turns. **Which way the Dec motor turns is not
+known for any mount until `./mount.py directions` has asked a person**, and
+GoTo is refused until then.
+
+What the handset did that this link does not: nothing is aligned on stars,
+so pointing is as good as the home position and the polar alignment, exactly
+as with the handset left unaligned; plate solving corrects it the same way.
+
 ## Windows
 
 - The handset's lead is found among the COM ports by its adapter's name; no

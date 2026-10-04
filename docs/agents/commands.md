@@ -33,6 +33,9 @@
 ## Moves the mount (a person must have asked)
 
 `ty mount goto NAME [--solve]`, `point AZ ALT`, `zenith`, `home`, `compensate`.
+Without a handset only: `ty mount directions` tips the tube 5° and back and
+asks a person which way it went; `ty mount sethome` records the home position
+and moves nothing.
 `ty mount drift` changes the Dec motor's creep. `ty mount stop` halts
 everything and is always allowed. `shoot.py` re-centres the target as it
 drifts unless given `--no-recentre`.

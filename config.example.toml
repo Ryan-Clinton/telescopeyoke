@@ -51,6 +51,15 @@ setup = "default"
 # appears under /dev/serial/by-id/, or on Windows against the COM port in
 # Device Manager. A handset plugged in by its own USB socket is "Prolific".
 serial_match = "FTDI"
+# How the mount is reached. "handset": a serial lead to the SynScan handset,
+# which is the tested way. With no handset plugged in: "wifi" for the SynScan
+# Wi-Fi adapter, or "eqdir" for an EQDIR lead (found by serial_match). On
+# these two the mount must be told where home is (./mount.py sethome) and,
+# once, which way its Dec motor turns (./mount.py directions).
+# link = "wifi"
+# The Wi-Fi adapter's address. Leave it out to find the adapter by asking the
+# network; it is 192.168.4.1 on the network the adapter makes itself.
+# address = "192.168.4.1"
 
 # The plate solver. Leave this out to use astap_cli with its database in
 # /opt/astap on Linux, or astap_cli.exe from PATH or C:/Program Files/astap on

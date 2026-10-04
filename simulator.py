@@ -119,3 +119,92 @@ class SimulatedHandset:
             self.rates[axis] = speed if command in (36, 6) else -speed
             return b"#"
         return b""
+
+
+class SimulatedBoard:
+    """A pretend motor board, for the link that has no handset (the Wi-Fi
+    adapter or an EQDIR lead). It stands where direct.Udp would: exchange()
+    takes one message and returns the board's answer.
+
+    It keeps a count for each axis and obeys the orders direct.Board gives:
+    turn at a rate, or turn by so many counts and stop. `dec_sign` is which
+    way counting up turns the Dec axis on this pretend mount, so the tests
+    can check that both kinds of mount are handled.
+    """
+    COUNTS, CLOCK, RATIO = 4576000, 35477, 16     # an EQ3's, as read from a real one
+
+    def __init__(self, goto_seconds=0.0, clock=time.time, start=(0x800000, 0x800000)):
+        self.clock, self.goto_seconds = clock, goto_seconds
+        self.axes = {a: {"pos": float(start[i]), "mode": "1", "back": False, "period": 0, "steps": 0,
+                         "running": False, "until": 0.0, "from": 0.0, "to": 0.0, "began": 0.0, "ready": False}
+                     for i, a in enumerate("12")}
+        self.updated = clock()
+        self.orders = []      # every message that was not a question, for the tests to read
+
+    def name(self):
+        return "simulated motor board"
+
+    def close(self):
+        pass
+
+    def _advance(self):
+        now = self.clock()
+        elapsed, self.updated = now - self.updated, now
+        for a in self.axes.values():
+            if not a["running"]:
+                continue
+            if a["mode"] in "02":                 # going to a place
+                if now >= a["until"]:
+                    a["pos"], a["running"] = a["to"], False
+                else:
+                    share = (now - a["began"]) / max(a["until"] - a["began"], 1e-9)
+                    a["pos"] = a["from"] + share * (a["to"] - a["from"])
+            elif a["period"]:                     # turning steadily
+                rate = self.CLOCK / a["period"] * (self.RATIO if a["mode"] == "3" else 1)
+                a["pos"] += (-rate if a["back"] else rate) * elapsed
+
+    def exchange(self, message):
+        self._advance()
+        text = message.decode().strip()
+        letter, axis, data = text[1], text[2], text[3:]
+        a = self.axes[axis]
+        number = lambda: int(data[4:6] + data[2:4] + data[0:2], 16)
+        code = lambda v: f"{v & 0xFF:02X}{(v >> 8) & 0xFF:02X}{(v >> 16) & 0xFF:02X}"
+        if letter in "FKLGHMIJE":
+            self.orders.append(text)
+        if letter == "e":
+            return b"=010703\r"
+        if letter == "a":
+            return f"={code(self.COUNTS)}\r".encode()
+        if letter == "b":
+            return f"={code(self.CLOCK)}\r".encode()
+        if letter == "g":
+            return f"={self.RATIO:02X}\r".encode()
+        if letter == "j":
+            return f"={code(round(a['pos']))}\r".encode()
+        if letter == "f":
+            first = (0 if a["mode"] in "02" else 1) | (2 if a["back"] else 0) | (4 if a["mode"] in "03" else 0)
+            return f"={first:X}{1 if a['running'] else 0:X}{1 if a['ready'] else 0:X}\r".encode()
+        if letter == "F":
+            a["ready"] = True
+        elif letter in "KL":
+            a["running"] = False
+        elif letter in "GHIJ" and a["running"] and letter != "I":
+            return b"!2\r"                         # the real board refuses these while turning
+        elif letter == "G":
+            a["mode"], a["back"] = data[0], data[1] == "1"
+        elif letter == "H":
+            a["steps"] = number()
+        elif letter == "I":
+            a["period"] = number()
+        elif letter == "J":
+            if not a["ready"]:
+                return b"!4\r"                     # not switched on yet
+            a["running"], a["began"] = True, self.clock()
+            if a["mode"] in "02":
+                a["from"] = a["pos"]
+                a["to"] = a["pos"] + (-a["steps"] if a["back"] else a["steps"])
+                a["until"] = a["began"] + self.goto_seconds
+        elif letter == "E":
+            a["pos"] = float(number())
+        return b"=\r"

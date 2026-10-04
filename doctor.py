@@ -12,6 +12,7 @@ the mount.
 """
 import argparse
 import glob
+import json
 import importlib
 import shutil
 import socket
@@ -75,16 +76,62 @@ def check_network():
     return OK, "weather service reachable"
 
 
-def find_serial_port():
+def mount_link():
+    """How config.toml says the mount is reached: "handset", "wifi" or "eqdir"."""
     import config
-    return host.serial_port(config.hardware()["mount"]["serial_match"])
+    return config.hardware()["mount"].get("link", "handset")
+
+
+def find_serial_port():
+    """The mount's lead, or with the Wi-Fi adapter its address; None if not found."""
+    import config
+    settings = config.hardware()["mount"]
+    if mount_link() == "wifi":
+        import direct
+        return settings.get("address") or next(iter(direct.Udp.find(wait=0.7)), None)
+    return host.serial_port(settings["serial_match"])
 
 
 def check_serial_access():
+    if mount_link() == "wifi":
+        return OK, "serial access (not needed: the mount is reached over Wi-Fi)"
     return host.serial_access()
 
 
+def check_direct():
+    """The mount reached without its handset: what answers, and whether it
+    has been told the two things a handset would know. Reads only."""
+    import direct
+    import config
+    where = find_serial_port()
+    if not where:
+        return FAIL, "motor board not checked: no link to the mount"
+    try:
+        link = direct.Udp(where) if mount_link() == "wifi" else direct.Serial(where, config.hardware()["mount"].get("baud", 9600))
+        try:
+            seen = direct.describe(link)
+        finally:
+            link.close()
+    except Exception as error:
+        return FAIL, f"motor board not answering: {getattr(error, 'message', error)}"
+    state = json.loads(direct.STATE_FILE.read_text(encoding="utf-8")) if direct.STATE_FILE.exists() else {}
+    board = f"{seen['model']} motor board, firmware {seen['firmware']}"
+    if not state.get("home") and seen["position_counts"] != [direct.POWER_ON, direct.POWER_ON]:
+        return FAIL, (f"{board}: it has not been told where home is. With the mount at home, "
+                      "run ./mount.py sethome")
+    if state.get("dec_sign") is None:
+        return WARN, (f"{board}: the Dec motor's direction has not been checked, so GoTo is "
+                      "refused. With someone watching the mount, run ./mount.py directions")
+    return OK, f"{board}, home recorded and Dec direction checked"
+
+
 def check_serial_lead():
+    if mount_link() == "wifi":
+        where = find_serial_port()
+        if where:
+            return OK, f"SynScan Wi-Fi adapter ({where})"
+        return FAIL, ("SynScan Wi-Fi adapter not found: join its network (SynScan_WiFi_xxxx), or "
+                      "put it on this one and set address under [mount] in config.toml")
     port = find_serial_port()
     if not port:
         if host.WINDOWS:
@@ -98,6 +145,8 @@ def check_serial_lead():
 
 
 def check_handset():
+    if mount_link() != "handset":
+        return check_direct()
     port = find_serial_port()
     if not port:
         return FAIL, "handset not checked: no serial lead"

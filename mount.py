@@ -91,6 +91,14 @@ class Mount:
         if self.demo:
             from simulator import SimulatedHandset
             self.s = handset or SimulatedHandset()
+        elif config.hardware()["mount"].get("link", "handset") != "handset":
+            # No handset: the Wi-Fi adapter or an EQDIR lead reaches the motor
+            # board, and direct.py does the handset's part.
+            import direct
+            settings = config.hardware()["mount"]
+            site = (config.load() if config.FILE.exists() else config.example())["site"]
+            self.s = direct.DirectHandset(direct.Board(direct.open_link(settings, port)),
+                                          lambda: true_sidereal(site))
         else:
             # The handset's lead is recognised by its USB adapter's name.
             match = config.hardware()["mount"]["serial_match"]
@@ -371,6 +379,56 @@ class Mount:
             # Dec first, so the tube is up by the pole before the RA axis swings.
             self.seek(DEC, HOME_DEC_AXIS)
             self.seek(RA, HOME_RA_AXIS)
+
+    def direct(self):
+        """The stand-in for the handset when the mount is reached without
+        one, or a refusal: these commands mean nothing with a real handset."""
+        if not hasattr(self.s, "board"):
+            raise Refusal("INVALID_REQUEST", "That is only for a mount reached without its handset "
+                          "(link = \"wifi\" or \"eqdir\" under [mount] in config.toml). The handset "
+                          "knows these things itself.")
+        return self.s
+
+    def set_home(self):
+        """Record that the mount is at its home position now. Moves nothing."""
+        counts = self.direct().set_home()
+        print(f"Home recorded at motor counts {counts[0]}, {counts[1]}. This holds until the mount "
+              "is switched off or its clutches are loosened.")
+
+    def check_directions(self, ask=input):
+        """Find out, with a person watching, which way the Dec motor turns:
+        tip the tube 5° from home, ask which way it went, and put it back."""
+        import direct
+        hand = self.direct()
+        if not self.at_home():
+            raise Refusal("GOTO_REFUSED", "The direction check starts from the home position. Run "
+                          "./mount.py home first (or ./mount.py sethome if it is already there).")
+        board, step = hand.board, hand.board.counts(direct.DEC, 5)
+
+        def turn(steps):
+            board.ready()
+            board.move(direct.DEC, steps)
+            began = time.monotonic()
+            while board.status(direct.DEC)["running"]:
+                if time.monotonic() - began > 60:
+                    board.halt(direct.DEC)
+                    raise Refusal("SLEW_TIMED_OUT", "The Dec axis did not finish its 5° turn; stopped.")
+                time.sleep(0.2)
+
+        with self.watching():
+            turn(step)
+            try:
+                said = ask("The tube has tipped 5° away from the pole. Stand behind the mount facing "
+                           "north, the way the tube was pointing. Did the front of the tube tip to "
+                           "your RIGHT (east) or your LEFT (west)? [e/w] ").strip().lower()[:1]
+            finally:
+                turn(-step)     # back to home, whatever was answered
+        if said not in ("e", "w"):
+            raise Refusal("INVALID_REQUEST", "Answer e or w. The tube is back at home; nothing was recorded.")
+        # At home, a Dec axis reading below 90° aims east of the pole. So if
+        # counting up tipped the tube east, counting up lowers the reading.
+        hand.set_dec_sign(-1 if said == "e" else 1)
+        print("Recorded. GoTo is now allowed on this link.")
 
     def zenith(self, site):
         # The handset's GoTo picks the correct side of the mount, but only
@@ -670,7 +728,7 @@ def report(mount):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("command", choices=["status", "zenith", "home", "stop", "goto", "point",
-                                       "sync", "drift", "compensate"])
+                                       "sync", "drift", "compensate", "sethome", "directions"])
     ap.add_argument("target", nargs="*",
                     help="object for goto (e.g. M81), or bearing and height for point")
     ap.add_argument("--port", help="serial port (default: found by the adapter name "
@@ -693,6 +751,8 @@ def main():
     if args.demo:
         if args.command in ("sync", "drift", "compensate"):
             ap.error(f"{args.command} needs the real camera; there is no demo of it")
+        if args.command in ("sethome", "directions"):
+            ap.error(f"{args.command} is for a real mount reached without its handset")
         use_demo_cache()
         site = config.example()["site"]
     else:
@@ -724,12 +784,18 @@ def dry_run(args, site):
             return plan_point(float(args.target[0]), float(args.target[1]), site)
         if args.command in ("status", "sync", "drift", "stop"):
             return {"would_move": False, "safe": True, "warnings": []}
+        if args.command == "sethome":
+            return {"would_move": False, "safe": True,
+                    "warnings": ["Records where the motors are now as the home position. Only "
+                                 "right if the mount really is at home."]}
         if LOCK_FILE.exists():
             raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text(encoding='utf-8').strip()}")
         notes = {"home": "Returns to the home position, by the axis readouts.",
                  "zenith": "Goes home if not there, then slews to straight up.",
                  "compensate": "Slews about 25° twice on the side of the meridian it is on, "
-                               "then returns."}
+                               "then returns.",
+                 "directions": "Tips the tube 5° from home on the Dec axis, asks which way it "
+                               "went, and puts it back. Someone must be watching the mount."}
         return {"would_move": True, "safe": True, "warnings": [notes[args.command]]}
 
     result = answer(f"mount.{args.command}.dry_run", plan)
@@ -756,7 +822,7 @@ def act(args, site):
     """Carry a command out on the mount (or the simulated one). Returns the
     mount's state afterwards."""
 
-    if args.command in ("zenith", "home", "goto", "point", "compensate") and LOCK_FILE.exists():
+    if args.command in ("zenith", "home", "goto", "point", "compensate", "directions") and LOCK_FILE.exists():
         raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text(encoding='utf-8').strip()}")
 
     mount = Mount(args.port, watch=not args.no_watch, demo=args.demo)
@@ -780,6 +846,10 @@ def act(args, site):
                 mount.cancel_drift(site)
             elif args.command == "compensate":
                 mount.compensate(site)
+            elif args.command == "sethome":
+                mount.set_home()
+            elif args.command == "directions":
+                mount.check_directions()
     except BaseException:
         # Never leave a motor running after an error or Ctrl+C.
         mount.stop()

@@ -107,6 +107,7 @@ Start with the planner; add hardware when you have it.
 | Ubuntu 26.04, Python 3.14 | ✅ Tested by the author |
 | Python 3.11, 3.12, 3.13 | ✅ Tests pass in CI (no hardware) |
 | Windows 10 and 11 | ⚠️ Tests and the demo pass with no hardware (Windows 11, Python 3.12). No camera or mount has been used on Windows yet. |
+| SynScan Wi-Fi adapter, or an EQDIR lead (no handset) | ⚠️ The adapter has been found and read on a real EQ3 (firmware, gearing, position). No mount has been moved through it yet; the EQDIR lead is untried. |
 | EQ5, HEQ5, EQ6 with a SynScan handset | ⚠️ Untested. Likely: same serial protocol. |
 | Other INDI cameras | ⚠️ Untested. Likely for mono or RGGB colour sensors: set the driver and sensor size in `config.toml`. |
 | Other telescopes | Set the focal length in `config.toml`. |
@@ -281,6 +282,13 @@ new spoken guidance), `mount.py drift` (line-fitted, with the drift model),
 
 Written but never run on the real mount: `polaralign.py` (its geometry is
 checked by the tests against a simulated misaligned mount).
+
+Written but never moved a real mount: control without the handset, through
+the SynScan Wi-Fi adapter or an EQDIR lead (`direct.py`). The adapter has
+been found on the network and asked for its firmware, gearing, position and
+status, on a real EQ3. Every movement is tested only against a simulated
+motor board, and which way the Dec motor turns has to be checked on each
+mount, with someone watching, before a GoTo is allowed.
 
 Written but never used with a real mount or camera: the control console
 (`console.py`). Its server, its refusals, the plan-then-confirm step and Stop

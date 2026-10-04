@@ -27,7 +27,8 @@ Everything runs without a telescope: `./tonight.py --demo`, `./serve.py --demo`,
 | `mcp_server.py` | Read-only MCP server over `agent.py` |
 | `tonight.py`, `sky.py`, `feeds.py`, `page.py`, `serve.py` | Planner, status page, read-only web API |
 | `console.py`, `console/` | Control console in the browser, on this computer only; runs the other scripts |
-| `mount.py`, `tracking.py`, `polaralign.py`, `simulator.py` | Mount control, drift model, simulated handset |
+| `mount.py`, `tracking.py`, `polaralign.py`, `simulator.py` | Mount control, drift model, simulated handset and motor board |
+| `direct.py` | The mount without its handset (Wi-Fi adapter or EQDIR lead): stands in for the handset so `mount.py` is unchanged |
 | `camera.py`, `indi.py`, `altair.py`, `snap.py`, `liveview.py`, `focus.py` | Camera (through INDI, or Altair's own library) and focusing |
 | `host.py` | Everything that differs between Linux and Windows, in one place |
 | `shoot.py`, `stacking.py`, `restack.py`, `process.py`, `calibrate.py` | Imaging pipeline |
@@ -40,7 +41,7 @@ anything with `--dry-run`; `pytest`; `doctor.py`.
 
 ## Commands that move the telescope
 
-`mount.py goto | point | zenith | home | compensate`, and `shoot.py` (which
+`mount.py goto | point | zenith | home | compensate | directions`, and `shoot.py` (which
 re-centres), `polaralign.py`. `mount.py drift` and `shoot.py --assist` change
 a motor's creep rate. `mount.py stop` is always allowed.
 
@@ -58,6 +59,9 @@ a motor's creep rate. `mount.py stop` is always allowed.
    and do not give it a way to listen on the network.
 3. **Limits stay in the code:** minimum altitude 20°, at most 5.75 h from the
    meridian, 40° from the Sun, and refusal when the handset is not set up.
+   Without a handset (`direct.py`) the same refusals stand in for it: no
+   movement until home has been recorded, and no GoTo until a person has
+   watched which way the Dec motor turns. Never record either for the user.
 4. **Anything that changes how the mount moves needs a test against
    `simulator.py`.**
 5. **The user's location never goes in the repository:** `config.toml`,
