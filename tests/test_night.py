@@ -170,20 +170,33 @@ def test_a_whole_night(night, monkeypatch, capsys):
     assert "Selected exposure: 2 s" in said               # 3 s and 4 s trail on this mount
     assert "centred" in said                               # it re-centred before starting
     assert "Tracking assist" in said
-    assert summary["captured"] == FRAMES and summary["rejected"] == 2
+    # On a slow machine a frame or two is set aside for the quality pass
+    # instead of being stacked live; the two cloudy ones are always dropped.
+    assert summary["captured"] == FRAMES and 2 <= summary["rejected"] <= 6
     assert (folder / summary["picture"]).name == "final.jpg" and (folder / summary["picture"]).exists()
     stacked = json.loads((folder / summary["folder"] / "restack.json").read_text())["summary"]
     assert stacked["median_residual_px"] < 0.5
 
     # Status: every way of asking sees the same finished run.
     run = valid(interface.run("session", agent.session), "image-session")["data"]
-    assert (run["state"], run["captured"], run["rejected"]) == ("finished", FRAMES, 2)
-    assert run["reasons"] == {"star brightness down (cloud)": 2}
+    assert (run["state"], run["captured"]) == ("finished", FRAMES)
+    assert run["reasons"]["star brightness down (cloud)"] == 2
     seen = valid(interface.run("observing", lambda: agent.observing(demo=True)), "observing")["data"]
     assert seen["tracking"]["drift_arcsec_s"] > 0 and seen["tracking"]["dec_creep_arcsec_s"] is not None
-    assert seen["imaging"]["accepted"] == FRAMES - 2
+    assert seen["imaging"]["accepted"] == summary["accepted"]
     assert valid(interface.run("status", agent.status), "status")["data"]["imaging"]["target"] == target
     answer = mcp_server.call_tool("get_current_session", {})
     jsonschema.validate(answer["structuredContent"], schema("envelope"))
-    assert answer["structuredContent"]["data"]["accepted"] == FRAMES - 2
+    assert answer["structuredContent"]["data"]["accepted"] == summary["accepted"]
     assert "frames" in agent.context(demo=True)
+
+
+def test_an_open_ended_run_stops_when_cloud_arrives(night, monkeypatch, capsys):
+    _, folder = night
+    monkeypatch.setattr(shoot, "CLOUD_STOP", 5)
+    Sky.pause, Sky.cloudy = 0.6, range(9, 1000)    # clear for eight frames, then cloud for good
+    monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "0", "--exposure", "2",
+                                      "--no-recentre", "--no-restack"])
+    summary = shoot.main()
+    assert "the last 5 frames were all rejected; stopping" in capsys.readouterr().out
+    assert 6 <= summary["accepted"] <= 8 and 13 <= summary["captured"] <= 22

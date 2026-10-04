@@ -52,6 +52,7 @@ WEB = ROOT / "web"
 DRIFT_LIMIT = 0.2
 TRIAL_EXPOSURES = (1, 2, 3, 4)
 ASSIST_EVERY = 15   # accepted frames between trims of the Dec creep
+CLOUD_STOP = 20     # with --frames 0, stop after this many rejected frames in a row
 PREVIEW_EVERY = 3.0  # seconds between updates of the picture on the web page
 BACKLOG = 8         # frames allowed to wait for the live stack before it skips some
 
@@ -229,7 +230,8 @@ def pick_exposure(gain, calibration_for):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("name", help="what it is a picture of; a catalogue name allows re-centring")
-    ap.add_argument("--frames", type=int, default=60)
+    ap.add_argument("--frames", type=int, default=60,
+                    help="how many to take; 0 carries on until cloud stops it")
     ap.add_argument("--exposure", default="2",
                     help="seconds per frame, or 'auto' to test what the tracking allows")
     ap.add_argument("--gain", type=int, default=1500)
@@ -280,13 +282,25 @@ def run(args):
     else:
         exposure = float(args.exposure)
 
-    session = Session(args.name, exposure, args.gain, save=not args.no_save, frames=args.frames)
+    session = Session(args.name, exposure, args.gain, save=not args.no_save, frames=args.frames or None)
     workers = max(1, stacking.cores() - 1)   # one core stays free for the camera and the stack
-    print(f"{session.name}: {args.frames} frames of {exposure:g} s at gain {args.gain}; "
+    print(f"{session.name}: {args.frames or 'an open-ended run of'} frames of {exposure:g} s at gain {args.gain}; "
           f"calibration: {session.calibration.describe()}; {workers} workers", flush=True)
     index, since_centre, started = 0, 0, time.monotonic()
     shown = 0.0   # when the newest raw frame was last put on the web page
     waiting = deque()   # (future, time taken) for frames being processed, oldest first
+
+    def more():
+        """Whether to take another frame. With no fixed number, carry on
+        until a run of frames in a row has been lost, which means cloud (or
+        dawn, or dew) has ended the session."""
+        if args.frames:
+            return index < args.frames
+        latest = session.log[-CLOUD_STOP:]
+        if len(latest) == CLOUD_STOP and not any(f["accepted"] for f in latest):
+            print(f"  the last {CLOUD_STOP} frames were all rejected; stopping", flush=True)
+            return False
+        return True
 
     def collect(everything=False):
         """Take finished frames into the stack, in the order they were taken.
@@ -297,7 +311,7 @@ def run(args):
             print(session.absorb(future.result(), taken), flush=True)
 
     with stacking.worker_pool(workers) as pool:
-        while index < args.frames:
+        while more():
             due = args.recentre and since_centre >= args.recentre
             if moving and (session.drift > DRIFT_LIMIT or due):
                 collect(everything=True)
@@ -310,7 +324,7 @@ def run(args):
                 if not assist(session):
                     args.assist = False
             with Camera(gain=args.gain) as cam:
-                while index < args.frames:
+                while more():
                     mosaic, header = cam.frame(exposure)
                     index += 1
                     since_centre += 1
