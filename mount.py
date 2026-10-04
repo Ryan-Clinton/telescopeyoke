@@ -311,7 +311,12 @@ class Mount:
         # Find which way reduces the error.
         direction = POSITIVE
         self.rate(axis, direction, 6)
-        time.sleep(1.5)
+        # Wait until the readout has actually moved: after creeping the other
+        # way the gears take a moment to bite, and judging too early picks
+        # the wrong direction.
+        began = time.monotonic()
+        while abs(error() - start) < 0.05 and time.monotonic() - began < 8:
+            time.sleep(0.2)
         if abs(error()) > abs(start):
             self.rate(axis, direction, 0)
             direction = NEGATIVE
@@ -356,6 +361,7 @@ class Mount:
 
     def home(self):
         self.tracking(False)
+        self.dec_creep(0)   # a drift correction left running would fight the seek
         with self.watching():
             # Dec first, so the tube is up by the pole before the RA axis swings.
             self.seek(DEC, HOME_DEC_AXIS)
