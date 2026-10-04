@@ -2,6 +2,8 @@
 handling, and small lookups."""
 from xml.etree.ElementTree import XMLPullParser
 
+import pytest
+
 import config
 import feeds
 import indi
@@ -165,3 +167,91 @@ def test_a_horizon_sweep_becomes_the_planners_blocked_list():
         {"from": 135.0, "to": 315.0, "altitude": 48}]
     assert "#" in horizon.chart(looks) and "." in horizon.chart(looks)
     assert len(horizon.looks(30)) == 48
+
+
+def made_up_skyline(az):
+    """A house to the south 40° high, a tree at 300° reaching 58°, a fence
+    below the lowest look everywhere else."""
+    return 40 if 140 <= az <= 220 else 58 if az == 300 else 10
+
+
+def watcher(skyline=made_up_skyline, unreachable=lambda az, alt: False):
+    seen = []
+
+    def look(az, alt):
+        seen.append((az, alt))
+        return None if unreachable(az, alt) else alt > skyline(az)
+    look.seen = seen
+    return look
+
+
+def test_tracing_follows_the_top_of_what_is_in_the_way():
+    import horizon
+    look = watcher()
+    found, warnings = horizon.trace(look, list(range(0, 360, 20)), low=20)
+    assert not warnings
+    for f in found:
+        real = made_up_skyline(f["az"])
+        if real < 20:
+            assert f["state"] == "open" and f["clear"] == 20
+        else:
+            assert f["state"] == "edge" and f["shut"] <= real < f["clear"] <= real + horizon.FINE
+    # Corners get a look in between: the house's ends and both sides of the tree.
+    assert {130, 230, 290, 310} <= {f["az"] for f in found}
+    # Far fewer looks than a grid as fine would take (18 bearings x 18 heights).
+    assert len(look.seen) < 80
+    walls = horizon.skyline_blocked(found)
+    assert {"from": 135.0, "to": 225.0} == {k: walls[0][k] for k in ("from", "to")}
+    assert 40 < walls[0]["altitude"] <= 43
+    assert "blocked up to" in horizon.profile(found, 20)
+
+
+def test_tracing_checks_itself():
+    import horizon
+    import interface
+    # No sky anywhere: it stops before surveying anything.
+    with pytest.raises(interface.Refusal) as refusal:
+        horizon.trace(watcher(lambda az: 90), [0, 90, 180, 270], low=20)
+    assert refusal.value.code_name == "NO_SKY"
+
+    # Something that passes for sky with nothing but wall above it is doubted.
+    def patchy(az, alt, seen=[]):
+        return alt > 30 and not (az == 90 and 44 <= alt <= 60)
+    found, warnings = horizon.trace(patchy, [0, 90, 180, 270], low=20)
+    assert [f.get("doubt") for f in found] == [None, True, None, None]
+    assert "Bearing 90" in warnings[0]
+
+    # The mount slips part-way round: the first bearing no longer looks the same.
+    calls = []
+
+    def slipping(az, alt):
+        calls.append(az)
+        return alt > (30 if len(calls) < 12 else 50)
+    found, warnings = horizon.trace(slipping, [0, 90, 180, 270], low=20)
+    assert any("different answer" in w for w in warnings)
+
+
+def test_tracing_leaves_out_what_the_mount_may_not_reach():
+    import horizon
+    # Nothing below 50° may be looked at towards the north; all of the west is out.
+    limits = lambda az, alt: (az == 0 and alt < 50) or az == 270
+    found, _ = horizon.trace(watcher(unreachable=limits), [0, 90, 180, 270], low=20)
+    states = {f["az"]: f["state"] for f in found}
+    assert states == {0: "open", 90: "open", 135: "open", 180: "edge", 270: "unreachable"}
+    assert found[0]["clear"] >= 50
+    house = next(f for f in found if f["az"] == 180)
+    assert [w["altitude"] for w in horizon.skyline_blocked(found)] == [house["clear"]]
+
+
+def test_daylight_tells_sky_from_wall():
+    import horizon
+    import numpy as np
+    sky = np.full((640, 960), 1300, np.uint16)
+    wall = np.full((640, 960), 250, np.uint16)
+    rooftop = sky.copy()
+    rooftop[320:] = 250          # the edge of a roof across the middle of the frame
+    dusty = sky.copy()
+    dusty[100:110, 200:210] = 300   # a dust speck is not a wall
+    assert horizon.is_sky(sky, 1300)[0] and horizon.is_sky(dusty, 1300)[0]
+    assert horizon.is_sky(sky * 0.6, 1300)[0]      # sky is dimmer low down
+    assert not horizon.is_sky(wall, 1300)[0] and not horizon.is_sky(rooftop, 1300)[0]

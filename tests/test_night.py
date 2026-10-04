@@ -184,7 +184,7 @@ def test_a_whole_night(night, monkeypatch, capsys):
     seen = valid(interface.run("observing", lambda: agent.observing(demo=True)), "observing")["data"]
     assert seen["tracking"]["drift_arcsec_s"] > 0 and seen["tracking"]["dec_creep_arcsec_s"] is not None
     assert seen["imaging"]["accepted"] == summary["accepted"]
-    assert valid(interface.run("status", agent.status), "status")["data"]["imaging"]["target"] == target
+    assert valid(interface.run("status", agent.status), "status")["data"]["imaging"]["target"] == target.replace(" ", "")   # a run is named as its folder is
     answer = mcp_server.call_tool("get_current_session", {})
     jsonschema.validate(answer["structuredContent"], schema("envelope"))
     assert answer["structuredContent"]["data"]["accepted"] == summary["accepted"]

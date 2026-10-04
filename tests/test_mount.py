@@ -217,3 +217,74 @@ def test_with_nothing_learned_a_goto_leaves_the_dec_motor_alone(scope):
                   and mount.where(mount.find_target(name), SITE)[2] > 25)
     scope.goto_target(target, SITE)
     assert scope.s.rates[17] == 0
+
+
+def test_a_daylight_skyline_survey_on_the_simulated_mount(scope, monkeypatch, tmp_path):
+    """horizon.py's eye drives the mount and reads the camera. The made-up
+    camera shows sky or wall according to where the simulated mount points."""
+    import numpy as np
+    from astropy import units as u
+    from astropy.coordinates import AltAz, HADec, SkyCoord
+    from astropy.time import Time
+
+    import camera
+    import horizon
+    import interface
+    import snap
+
+    wall = lambda az: 38.5 if 60 <= az <= 130 or 230 <= az <= 300 else 0
+
+    class Camera:
+        def __init__(self, gain=300):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            pass
+
+        def frame(self, seconds):
+            offset = json.loads(mount.CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
+            ra, dec = scope.radec()
+            now, here = Time.now(), mount.location(SITE)
+            spot = SkyCoord(HADec(ha=mount.wrap(mount.true_sidereal(SITE) + offset - ra) * u.deg,
+                                  dec=mount.wrap(dec) * u.deg, obstime=now, location=here))
+            spot = spot.transform_to(AltAz(obstime=now, location=here))
+            Camera.aimed.append((spot.az.deg, spot.alt.deg))
+            bright = 650000 * seconds     # in proportion to the exposure, as raw frames are
+            level = bright if spot.alt.deg > wall(spot.az.deg) else bright / 6
+            return np.full((640, 960), min(level, camera.WHITE), np.uint16), {}
+
+    Camera.aimed = []
+    monkeypatch.setattr(camera, "Camera", Camera)
+    monkeypatch.setattr(mount, "Mount", lambda *a, **k: scope)
+    monkeypatch.setattr(snap, "publish", lambda *a, **k: None)
+    monkeypatch.setattr(horizon, "STEADY", 0)
+
+    with horizon.eye(SITE, 0.002, 100, daylight=True) as look:
+        found, warnings = horizon.trace(look, sorted(range(0, 360, 45), key=horizon.side), low=20)
+    assert not warnings
+    measured = [f for f in found if f["state"] != "unreachable"]
+    assert len(measured) >= 3      # the Sun and the meridian limit rule some out, whatever the hour
+    for f in measured:
+        if wall(f["az"]) and f["state"] == "edge":
+            assert 38.5 < f["clear"] <= 38.5 + horizon.FINE
+        elif wall(f["az"]):
+            # The limits stopped it looking low enough to meet the wall.
+            assert f["state"] == "open" and f["clear"] > 38.5
+        else:
+            assert f["state"] == "open"
+    # The mount really went where each look asked.
+    asked = [(l["az"], l["alt"]) for l in look.log if l["open"] is not None]
+    for (az, alt), (got_az, got_alt) in zip(asked, Camera.aimed[-len(asked):]):
+        assert abs(mount.wrap(az - got_az)) < 0.5 and abs(alt - got_alt) < 0.5
+    assert not scope.s.tracking    # by day it holds still on the rooftop
+
+    # Locked: it refuses before the mount is asked for anything.
+    mount.LOCK_FILE.write_text("testing", encoding="utf-8")
+    before = scope.axes()
+    with pytest.raises(interface.Refusal) as refusal:
+        with horizon.eye(SITE, 0.002, 100, daylight=True) as look:
+            horizon.trace(look, [0, 90], low=20)
+    assert refusal.value.code_name == "MOTION_LOCKED" and scope.axes() == before

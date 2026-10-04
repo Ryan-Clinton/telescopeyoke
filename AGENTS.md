@@ -12,7 +12,7 @@ agents. Deeper notes are in `docs/agents/`.
 ./ty context            # a short briefing: tonight, hardware, imaging run, the motion rules
 ./ty capabilities --json
 ./doctor.py --json      # what is installed and connected
-pytest -q               # about a minute; needs no hardware
+pytest -q               # about three minutes; needs no hardware
 ```
 
 Everything runs without a telescope: `./tonight.py --demo`, `./serve.py --demo`,

@@ -25,6 +25,7 @@
         "MOUNT_NOT_CONNECTED",
         "NO_CONFIG",
         "NO_SESSION",
+        "NO_SKY",
         "NO_STARS",
         "NO_USABLE_FRAMES",
         "PLATE_SOLVE_FAILED",

@@ -47,6 +47,7 @@ Defined in `interface.py`; `schemas/errors.schema.json` lists them.
 | `GOTO_REFUSED` | yes | The handset would not accept the GoTo. |
 | `PLATE_SOLVE_FAILED` | yes | Cloud, focus, or too few stars. Take a frame and look. |
 | `NO_SESSION` | no | No imaging run recorded yet. |
+| `NO_SKY` | yes | The horizon survey saw no open sky high up: cap, cloud or exposure. |
 | `INVALID_REQUEST`, `INTERNAL_ERROR` | no | Bad arguments; unexpected failure. |
 
 ## Sizes

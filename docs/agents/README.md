@@ -35,7 +35,7 @@ only when a person has asked for that move.
 suite checks the interface gives the right answer in each. They have not yet
 been run with a model in the loop.
 
-## More in this round
+## Also
 
 - `./ty observing` (also `/api/v1/observing` and the MCP tool
   `get_observing_state`): sky, focus, tracking and the imaging run in one
@@ -53,5 +53,5 @@ been run with a model in the loop.
 ## The schemas are a public interface
 
 Field names in `schemas/` do not change casually. New fields may be added
-under schema version 1.0. A renamed field keeps its old name working as a
-deprecated alias. Anything that would break a reader raises the version to 2.0.
+under schema version 1.0. Anything that would break a reader raises the version
+to 2.0.

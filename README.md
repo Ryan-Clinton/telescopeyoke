@@ -117,7 +117,7 @@ report** issue; rows marked "community tested" will be added from those.
 | `clouds.py` | Fetches the latest infrared satellite image with the site marked on it. |
 | `mount.py` | Moves the mount: `status`, `home`, `zenith`, `goto NAME [--solve]`, `point AZ ALT`, `sync`, `drift`, `compensate`, `stop`. |
 | `liveview.py` | Takes a frame every few seconds so the status page shows what the telescope sees now. Steps aside while `shoot.py` runs. |
-| `horizon.py` | Sweeps the sky and reports which directions are blocked by houses, hedges and trees, as lines for `config.toml`. |
+| `horizon.py` | Sweeps the sky and reports which directions are blocked by houses, hedges and trees, as lines for `config.toml`. `--trace` follows the top of whatever is in the way right round and checks its own answer; `--daylight` works by day, going by brightness instead of stars. |
 | `snap.py` | Takes one camera frame, saves the FITS in `frames/`, publishes a preview. |
 | `shoot.py` | Takes a picture: many short exposures, each checked, lined up and stacked live, with the raw frames kept. `--exposure auto` picks the longest exposure the tracking allows. `--frames 0` carries on until cloud stops it. While it runs, `./ty run stop` ends it cleanly with its final picture; `recentre`, `assist-on` and `assist-off` are also understood. |
 | `restack.py` | The quality pass: goes back over a session's raw frames, keeps the best, weights and clips them, and writes the finished picture. `shoot.py` runs it at the end. `--all`, or several session folders, stacks sessions from one night or many into one picture. |
@@ -269,6 +269,11 @@ new spoken guidance), `mount.py drift` (line-fitted, with the drift model),
 
 Written but never run on the real mount: `polaralign.py` (its geometry is
 checked by the tests against a simulated misaligned mount).
+
+Written but never run on the real mount or camera: `horizon.py --trace` and
+`horizon.py --daylight`. The following and its checks are tested against the
+simulated mount; the brightness levels that tell daytime sky from a wall are
+first guesses and have not seen a real frame.
 
 Covered by automated tests (`pytest`, run on every push on Python 3.11 to 3.14): the astronomy, the
 mount logic against the simulated handset, frame alignment and hot-pixel

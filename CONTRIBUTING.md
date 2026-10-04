@@ -24,7 +24,7 @@ pytest
 ## Code
 
 - **Run `pytest` before sending a pull request.** The tests need no hardware
-  and take a few seconds. CI runs them on Python 3.11 to 3.14.
+  and take about three minutes. CI runs them on Python 3.11 to 3.14.
 - **Anything that changes how the mount moves needs a test against
   `simulator.py`.** If the simulator cannot express what you need, extend it
   in the same pull request.

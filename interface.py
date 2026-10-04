@@ -34,6 +34,8 @@ ERRORS = {
                                     "see what doctor.py says about the camera."),
     "NO_STARS": (True, "No stars in the frame: cloud, the cap, or far out of focus. Look at "
                        "the newest frame, then try again."),
+    "NO_SKY": (True, "The camera saw no open sky high up: the cap, thick cloud, or the exposure. "
+                     "Look at the newest frame, then try again."),
     "NO_USABLE_FRAMES": (True, "Every frame was rejected; see the reasons in the session log."),
     "NO_SESSION": (False, "No imaging run has been recorded yet."),
     "NO_CONFIG": (False, "Copy config.example.toml to config.toml and set the location."),
