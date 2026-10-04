@@ -281,10 +281,10 @@ already gives, and a button for the remedy ("Start focusing").
 ### Targets
 
 A search box over the catalogue and the ranked list, with filters: up now,
-galaxy, nebula, cluster, planet. Choosing one opens its details from
-`agent.target`: height, direction, best time, window, distance from the
-Moon, and whether a GoTo is allowed now and if not why. Nobody has to
-remember how a name is spelled.
+galaxy, nebula, cluster, planet. Choosing one opens its details: score,
+direction, best time, window and tags from its entry in `agent.targets`;
+height now, and whether a GoTo is allowed now and if not why, from
+`agent.target`. Nobody has to remember how a name is spelled.
 
 | Control | Runs | Moves |
 |---|---|---|
@@ -405,6 +405,9 @@ changes what a command does.
    `agent.target` needs to say whether the start of the window is set by the
    altitude limit or by the blocked horizon. Until it does, the console does
    not say it.
+   The same goes for a target's distance from the Moon: the planner uses it
+   in the score but does not report it, so the console shows it only once
+   `agent.targets` does.
 4. **Camera test results.** `camera_test.py` prints its results and keeps
    nothing. To show the last measured throughput on the System screen it
    needs to save them under `cache/`.
