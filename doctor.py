@@ -50,7 +50,7 @@ def check_catalogue():
     path = ROOT / "data" / "targets.csv"
     if not path.exists():
         return FAIL, "target catalogue data/targets.csv is missing"
-    return OK, f"target catalogue ({sum(1 for _ in path.open(encoding="utf-8")) - 1} objects)"
+    return OK, f"target catalogue ({sum(1 for _ in path.open(encoding='utf-8')) - 1} objects)"
 
 
 def check_config():

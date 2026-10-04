@@ -520,7 +520,7 @@ def _plan(hour_angle, dec, altitude, label):
     """The checks every aimed move must pass, and what the move would involve.
     Raises a Refusal if it must not be made; needs no hardware."""
     if LOCK_FILE.exists():
-        raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text(encoding="utf-8").strip()}")
+        raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text(encoding='utf-8').strip()}")
     if abs(hour_angle) > MAX_HOUR_ANGLE * 15:
         raise Refusal("TARGET_BEYOND_HOUR_ANGLE_LIMIT",
                       f"{label} is {abs(hour_angle) / 15:.1f} h from the meridian, beyond the "
@@ -725,7 +725,7 @@ def dry_run(args, site):
         if args.command in ("status", "sync", "drift", "stop"):
             return {"would_move": False, "safe": True, "warnings": []}
         if LOCK_FILE.exists():
-            raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text(encoding="utf-8").strip()}")
+            raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text(encoding='utf-8').strip()}")
         notes = {"home": "Returns to the home position, by the axis readouts.",
                  "zenith": "Goes home if not there, then slews to straight up.",
                  "compensate": "Slews about 25° twice on the side of the meridian it is on, "
@@ -757,7 +757,7 @@ def act(args, site):
     mount's state afterwards."""
 
     if args.command in ("zenith", "home", "goto", "point", "compensate") and LOCK_FILE.exists():
-        raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text(encoding="utf-8").strip()}")
+        raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text(encoding='utf-8').strip()}")
 
     mount = Mount(args.port, watch=not args.no_watch, demo=args.demo)
     if args.record:

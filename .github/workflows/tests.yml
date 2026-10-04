@@ -41,5 +41,5 @@ jobs:
       - run: python -m pytest -q
       - run: python tonight.py --demo --top 5
       - run: python mount.py --demo zenith
-      - run: .	y.cmd capabilities --json
+      - run: .\ty.cmd capabilities --json
       - run: python mount.py --demo zenith --dry-run --json
