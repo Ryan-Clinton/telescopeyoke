@@ -327,3 +327,46 @@ def temperature():
     if WINDOWS or not zone.exists():
         return None
     return int(zone.read_text()) / 1000
+
+
+# --- whether the camera is plugged in, and has a driver -----------------------
+
+DEVICE_QUERY = (
+    "$found = Get-PnpDevice -PresentOnly | Where-Object { $_.FriendlyName -like '*MATCH*' } | "
+    "ForEach-Object { [pscustomobject]@{ name = $_.FriendlyName; status = [string]$_.Status; "
+    "problem = [int]$_.ConfigManagerErrorCode; driver = [string](Get-PnpDeviceProperty "
+    "-InstanceId $_.InstanceId -KeyName DEVPKEY_Device_Service -ErrorAction SilentlyContinue).Data } }; "
+    "ConvertTo-Json @($found) -Compress")
+
+
+def camera_device(match):
+    """What the system knows of a plugged-in camera whose name contains
+    `match`, before any camera library is involved: {"name", "ready",
+    "driver", "detail"}, or None if nothing of that name is plugged in."""
+    if WINDOWS:
+        if not match.replace(" ", "").replace("-", "").isalnum():
+            return None      # the name goes into a command: letters and digits only
+        import json
+        done = subprocess.run(["powershell", "-NoProfile", "-NonInteractive", "-Command",
+                               DEVICE_QUERY.replace("MATCH", match)],
+                              capture_output=True, text=True, encoding="utf-8", errors="replace",
+                              timeout=60, **QUIET)
+        try:
+            found = json.loads(done.stdout or "[]")
+        except ValueError:
+            found = []
+        if not found:
+            return None
+        device = found[0]
+        ready = device["status"] == "OK" and bool(device["driver"])
+        detail = (f"driver {device['driver']}" if ready else
+                  f"Windows has no working driver for it (status {device['status']}, "
+                  f"problem code {device['problem']})")
+        return {"name": device["name"], "ready": ready, "driver": device["driver"], "detail": detail}
+    match = match.lower()
+    for device in Path("/sys/bus/usb/devices").glob("*"):
+        product = device / "product"
+        if product.exists() and match in product.read_text().lower():
+            return {"name": product.read_text().strip(), "ready": True, "driver": "",
+                    "detail": camera_usb_link(match)[1]}
+    return None

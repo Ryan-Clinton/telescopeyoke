@@ -161,6 +161,10 @@ ACTIONS = {
     "horizon":    {"label": "Horizon survey", "command": survey, "uses": "mount", "moves": True,
                    "says": "This moves the mount all over the sky, over the pole and back, for "
                            "about a minute per look. Keep clear of it while it runs."},
+    # Fetches nothing from the network and needs no camera to start: it is
+    # what says why there is no camera yet.
+    "camera-setup": {"label": "Set up the camera", "uses": "camera", "moves": False,
+                     "command": lambda p: ["camera_setup.py", "--open"]},
     "camera-capabilities": {"label": "What the camera is", "uses": "camera", "moves": False,
                             "command": lambda p: ["camera_test.py", "--capabilities"]},
     "camera-throughput":   {"label": "Throughput test", "uses": "camera", "moves": False,
@@ -302,7 +306,7 @@ class Jobs:
         sky and the mount move on."""
         with self.lock:
             held = self.plans.get(plan_id)
-            if held is None or held["used"] or time.time() - held["made"] > PLAN_LIFE:
+            if held is None or held["used"] or time.time() - held["made"] >= PLAN_LIFE:
                 raise Refused("That plan is no longer valid. Make it again.", status=410)
             held["used"] = True
             stops = self.stops

@@ -2,6 +2,7 @@
 contract: nothing above camera.Camera can tell which one it has. Neither
 needs a camera: the INDI route talks to a made-up INDI client and the SDK
 route to a made-up copy of Altair's wrapper."""
+import ctypes
 import io
 import threading
 import time
@@ -115,8 +116,12 @@ def fake_sdk(world):
         def PullImageV3(self, buffer, still, bits, pitch, info):
             if not self.held:
                 raise HRESULTException(0x80004005)
+            # As the real wrapper: the buffer is declared a C string pointer,
+            # and anything else is refused before the library is reached.
+            if not isinstance(buffer, (bytes, ctypes.c_char_p)):
+                raise ctypes.ArgumentError("argument 2: TypeError: wrong type")
             data, seq, stamp = self.held.pop(0)
-            np.frombuffer(buffer, dtype=np.uint16)[:] = data.ravel()
+            ctypes.memmove(buffer, data.tobytes(), data.nbytes)
             if info is not None:
                 info.seq, info.timestamp = seq, stamp
 

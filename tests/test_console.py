@@ -171,6 +171,7 @@ def test_every_action_builds_exactly_its_command():
     assert tail("focus") == ["focus.py"] and tail("focus", {"sound": "tones"}) == ["focus.py", "--tones"]
     assert tail("focus", {"sound": "silent"}) == ["focus.py", "--quiet"]
     assert tail("horizon", {"trace": True, "daylight": True}) == ["horizon.py", "--trace", "--daylight"]
+    assert tail("camera-setup") == ["camera_setup.py", "--open"]
     assert tail("camera-capabilities") == ["camera_test.py", "--capabilities"]
     assert tail("camera-throughput") == ["camera_test.py", "--throughput"]
     assert tail("camera-gain-sweep") == ["camera_test.py", "--gain-sweep"]

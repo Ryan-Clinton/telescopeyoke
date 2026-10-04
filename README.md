@@ -9,8 +9,8 @@
 ![The status page: tonight's verdict, a live imaging run with its quality readings, the stacked picture, the best targets, the night's timeline and the state of the kit](docs/dashboard.jpg)
 
 telescopeyoke is a lightweight telescope automation system for Linux. It
-also runs natively on Windows, where the tests and the demo pass but no
-camera or mount has been used yet. It runs
+also runs natively on Windows, where the tests and the demo pass and the
+camera has taken frames, but no mount has been driven yet. It runs
 on a laptop left beside a modest SynScan telescope and camera, and you watch
 from indoors. It plans the night, checks the weather and moonlight, ranks
 targets for your own sky, slews the mount, plate-solves where the telescope is
@@ -106,7 +106,7 @@ Start with the planner; add hardware when you have it.
 | Altair Hypercam 183C on USB 2 | ✅ Tested by the author |
 | Ubuntu 26.04, Python 3.14 | ✅ Tested by the author |
 | Python 3.11, 3.12, 3.13 | ✅ Tests pass in CI (no hardware) |
-| Windows 10 and 11 | ⚠️ Tests and the demo pass with no hardware (Windows 11, Python 3.12). No camera or mount has been used on Windows yet. |
+| Windows 10 and 11 | ⚠️ Tests and the demo pass with no hardware. The camera has taken frames on Windows 11, indoors. No mount has been driven from Windows, and camera and mount have not been used together there. |
 | SynScan Wi-Fi adapter, or an EQDIR lead (no handset) | ⚠️ The adapter has been found and read on a real EQ3 (firmware, gearing, position). No mount has been moved through it yet; the EQDIR lead is untried. |
 | EQ5, HEQ5, EQ6 with a SynScan handset | ⚠️ Untested. Likely: same serial protocol. |
 | Other INDI cameras | ⚠️ Untested. Likely for mono or RGGB colour sensors: set the driver and sensor size in `config.toml`. |
@@ -132,6 +132,7 @@ report** issue; rows marked "community tested" will be added from those.
 | `shoot.py` | Takes a picture: many short exposures, each checked, lined up and stacked live, with the raw frames kept. `--exposure auto` picks the longest exposure the tracking allows. `--frames 0` carries on until cloud stops it. While it runs, `./ty run stop` ends it cleanly with its final picture; `recentre`, `assist-on` and `assist-off` are also understood. |
 | `restack.py` | The quality pass: goes back over a session's raw frames, keeps the best, weights and clips them, and writes the finished picture. `shoot.py` runs it at the end. `--all`, or several session folders, stacks sessions from one night or many into one picture. |
 | `calibrate.py` | Makes master dark, bias and flat frames, which `shoot.py` and `restack.py` then apply automatically. |
+| `camera_setup.py` | Gets the camera ready: checks it is plugged in and has a driver, takes Altair's library files out of their SDK zip if they are missing, and takes a test frame. `--check` only looks. Also the "Set up the camera" button in the console. |
 | `camera_test.py` | `--capabilities` lists what the camera offers; `--throughput` times every way of getting frames off it; `--gain-sweep` tries a range of gains on tonight's sky and suggests one. |
 | `compare.py` | Shows the same patch of sky from several stacks side by side at full size, with star measurements for each. |
 | `process.py` | Turns a finished stack into a cleaner picture: level sky, white stars, smoothed colour noise. |
@@ -260,16 +261,16 @@ proven on real sky: the stacking pipeline (frame scoring and rejection,
 sub-pixel and rotation alignment, clipped and weighted stacking, saved raw
 frames, the quality pass).
 
-Windows: the tests and every `--demo` command pass, on Windows 11 with
-Python 3.12, with nothing plugged in. That is the first of three levels and
-the only one reached. The camera has not taken a frame on Windows, and the
-mount and camera have not been used together there. The Windows camera route
-(`altair.py`, which reads the camera through Altair's own library instead of
-INDI) has only been run against a made-up copy of that library, on either
-system. The handset's FTDI lead has been found by name among the COM ports,
-but nothing has been sent to the handset from Windows. The plate solver's
-Windows paths, the DirectShow webcam and the spoken focusing aid are untried
-on real equipment.
+Windows: the tests and every `--demo` command pass with nothing plugged in,
+and the camera has taken frames there: a Hypercam 183C on Windows 11, read
+through Altair's own library (`altair.py`) instead of INDI, set up from
+nothing by `camera_setup.py`. That was indoors with no telescope, so no star
+has been through that route, and its picture has not been compared with the
+INDI route's for which way up it is. The mount has not been driven from
+Windows: the handset's lead has been found by name among the COM ports and
+nothing more. The plate solver's Windows paths, the DirectShow webcam and the
+spoken focusing aid are untried on real equipment. Camera and mount have not
+been used together on Windows.
 
 Written but not yet run for real: `calibrate.py` (no dark or flat frames have
 been taken yet) and `camera_test.py --gain-sweep`.

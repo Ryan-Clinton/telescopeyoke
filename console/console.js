@@ -562,10 +562,17 @@ function drawLog() {
       if (job.id !== lastJobId && job === jobs.recent[jobs.recent.length - 1]) {
         if (lastJobId !== null || job.ended > started) notice(`${job.label}: ${words}`, job.outcome === "failed" ? "failed" : "");
         lastJobId = job.id;
-        if (job.action.startsWith("camera-") && job.result) { $("tool-result").hidden = false; $("tool-result").textContent = JSON.stringify(job.result, null, 1); }
+        if (job.action.startsWith("camera-") && job.result) { $("tool-result").hidden = false; $("tool-result").textContent = job.action === "camera-setup" ? setupWords(job.result) : JSON.stringify(job.result, null, 1); }
       }
     }
   }
+}
+// The camera setup's answer in words: each check, then the verdict.
+function setupWords(result) {
+  const marks = { ok: "\u2713", fixed: "\u2713", warn: "!", todo: "\u2192", fail: "\u2717" };
+  const lines = (result.steps || []).map((step) => `${marks[step.status] || "?"} ${step.message}`);
+  lines.push("", result.ready ? "The camera is ready." : "Not ready yet. Do what the marked line says, then press Set up again.");
+  return lines.join("\n");
 }
 const started = Date.now() / 1000;
 $("log-newest").textContent = "Activity log";
