@@ -110,11 +110,9 @@ def run(params):
     exposure = choice(params, "exposure", ("auto", "1", "2", "3", "4"), "2")
     cmd = ["shoot.py", target_name(params), "--frames", str(number(params, "frames", 1, 5000, 60, True)),
            "--exposure", exposure, "--gain", str(number(params, "gain", 100, 5000, 1500, True))]
-    if params.get("assist"):
-        cmd.append("--assist")
     if not params.get("recentre", True):
-        cmd.append("--no-recentre")
-    return cmd
+        return cmd + ["--no-recentre"]   # shoot.py then never touches the mount, assist included
+    return cmd + (["--assist"] if params.get("assist") else [])
 
 
 def focusing(params):
@@ -179,6 +177,24 @@ ACTIONS = {
 }
 # What the simulated mount can show. The rest need the real camera.
 DEMO_ACTIONS = ("goto", "home", "zenith", "position")
+# Orders that have a run move the mount or change its motors.
+MOVING_ORDERS = ("run-recentre", "run-assist-on", "run-assist-off")
+
+
+def moves(action, params):
+    """Whether this needs a plan a person confirms. An imaging run started
+    without re-centring never touches the mount, so it does not."""
+    if action == "run":
+        return bool(params.get("recentre", True))
+    return bool(ACTIONS[action].get("moves"))
+
+
+def uses(action, params):
+    """What it holds while it runs: "mount" (which Stop ends at once),
+    "camera", or None."""
+    if action == "run" and not params.get("recentre", True):
+        return "camera"
+    return ACTIONS[action]["uses"]
 
 
 def command(action, params, demo=False, dry_run=False):
@@ -226,6 +242,11 @@ class Jobs:
         self.history = []         # finished ones, newest last
         self.plans = {}           # id -> {"action", "params", "made", "plan", "used"}
         self.stopping = False     # Stop is under way: nothing may open the mount
+        # Counts presses of Stop. A request to start the mount that was already
+        # on its way when Stop was pressed carries the old count and is dead
+        # for good: it must not start once Stop has finished.
+        self.stops = 0
+        self.run_scope = None     # what the run started here was allowed: {"mount": bool}
         self.position = None      # the last answer from "Read position", with its time
 
     # -- reading
@@ -240,7 +261,7 @@ class Jobs:
         with self.lock:
             return {"running": self.describe(self.current),
                     "recent": [self.describe(j) for j in self.history[-10:]],
-                    "stopping": self.stopping, "position": self.position}
+                    "stopping": self.stopping, "position": self.position, "run_scope": self.run_scope}
 
     # -- planning and starting
 
@@ -261,7 +282,9 @@ class Jobs:
         return plan
 
     def plan(self, action, params):
-        if not ACTIONS.get(action, {}).get("moves"):
+        if action not in ACTIONS:
+            raise Refused(f"No such action: {action}", status=404)
+        if not moves(action, params):
             raise Refused(f"{action} is not planned; it does not move the mount.")
         found = self.dry_run(action, params)
         with self.lock:
@@ -282,33 +305,54 @@ class Jobs:
             if held is None or held["used"] or time.time() - held["made"] > PLAN_LIFE:
                 raise Refused("That plan is no longer valid. Make it again.", status=410)
             held["used"] = True
+            stops = self.stops
         again = self.dry_run(held["action"], held["params"])
         if changed(held["plan"], again):
             fresh = self.plan(held["action"], held["params"])
             return dict(fresh, changed=True, message="The situation has changed. Look at the new plan.")
-        return self.begin(held["action"], held["params"])
+        return self.begin(held["action"], held["params"], stops)
 
     def act(self, action, params):
         if action not in ACTIONS:
             raise Refused(f"No such action: {action}", status=404)
-        if ACTIONS[action].get("moves"):
+        if moves(action, params):
             raise Refused(f"{label(action, params)} moves the mount: it needs a confirmed plan.")
-        return self.begin(action, params)
+        if action in MOVING_ORDERS:
+            # shoot.py ignores these in a run started without re-centring, and
+            # the console cannot know what a run started elsewhere was allowed.
+            with self.lock:
+                scope = self.run_scope
+            if scope is None:
+                raise Refused("No imaging run started from this console is going. Give the order "
+                              "where the run was started.")
+            if not scope["mount"]:
+                raise Refused("This run was started without re-centring, so it may not move the "
+                              "mount. Finish it and start one with re-centring.")
+        with self.lock:
+            stops = self.stops
+        return self.begin(action, params, stops)
 
-    def begin(self, action, params):
-        spec = ACTIONS[action]
+    def begin(self, action, params, stops=None):
+        """Start an action. `stops` is the count of Stop presses when the
+        request was made; if Stop has been pressed since, it is refused."""
+        using = uses(action, params)
         cmd = command(action, params, self.demo)
         with self.lock:
-            if self.stopping and spec["uses"] == "mount":
-                raise Refused("Stop is under way. Nothing may use the mount until it has answered.")
-            if spec["uses"] and self.current:
+            touches_mount = using == "mount" or action in MOVING_ORDERS
+            if touches_mount and (self.stopping or (stops is not None and stops != self.stops)):
+                raise Refused("Stop was pressed. This request is cancelled; plan it again if it is "
+                              "still wanted." if not self.stopping else
+                              "Stop is under way. Nothing may use the mount until it has answered.")
+            if using and self.current:
                 raise Refused(f"Busy: {self.current['label']} is running.")
             job = {"id": uuid.uuid4().hex, "action": action, "label": label(action, params),
-                   "uses": spec["uses"], "state": "running", "outcome": None, "started": time.time(),
+                   "uses": using, "state": "running", "outcome": None, "started": time.time(),
                    "ended": None, "lines": [], "result": None, "error": None, "stopped": False}
             job["child"] = self.start(cmd, **host.OWN_GROUP)
-            if spec["uses"]:
+            if using:
                 self.current = job
+            if action == "run":
+                self.run_scope = {"mount": using == "mount"}
         threading.Thread(target=self._watch, args=(job,), daemon=True).start()
         return {"job": self.describe(job)}
 
@@ -345,6 +389,8 @@ class Jobs:
                 self.position = dict(job["result"], read=job["ended"])
             if self.current is job:
                 self.current = None
+            if job["action"] == "run":
+                self.run_scope = None
             self.history.append(job)
             del self.history[:-20]
 
@@ -380,6 +426,7 @@ class Jobs:
         pressed = time.monotonic()
         with self.lock:
             self.stopping = True
+            self.stops += 1      # every mount start already on its way is now dead
             job = self.current if self.current and self.current["uses"] == "mount" else None
             if job:
                 job["stopped"] = True
@@ -399,6 +446,20 @@ class Jobs:
         return {"stopped": ok, "seconds": took, "ended_job": job["label"] if job else None,
                 "error": None if ok else (answer["errors"][0] if answer and answer["errors"] else
                                           {"message": done.stderr.strip()[-300:] or "no answer"})}
+
+
+    def close(self):
+        """The console is closing: end whatever is running, and always tell
+        the mount to stop, whether or not anything here was using it."""
+        with self.lock:
+            job = self.current
+        if job and job["uses"] != "mount":
+            try:
+                host.ask_to_end(job["child"])
+                job["child"].wait(timeout=FINISH_WAIT)
+            except (OSError, subprocess.TimeoutExpired):
+                job["child"].kill()
+        return self.stop()
 
 
 class PlanRefused(Exception):
@@ -671,10 +732,11 @@ def main():
     except KeyboardInterrupt:
         pass
     finally:
-        # Closing the console ends its job and stops the mount.
-        if jobs.current:
-            print("Stopping the mount.", flush=True)
-            jobs.stop() if jobs.current["uses"] == "mount" else jobs.current["child"].kill()
+        # Closing the console ends its job and always tells the mount to stop.
+        print("Closing: stopping the mount.", flush=True)
+        answer = jobs.close()
+        if not answer["stopped"]:
+            print(f"The mount did not answer the stop: {answer['error'].get('message', '')}", flush=True)
 
 
 if __name__ == "__main__":

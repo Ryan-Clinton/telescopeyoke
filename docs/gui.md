@@ -149,10 +149,17 @@ browser (this computer) ── POST /api/plan/goto ──► console.py ── s
 
     The ban in step 2 lasts until `mount.py stop` has answered. A job runner
     that helpfully reopens the mount while Stop is under way would defeat it.
+
+    A request to start the mount that was already on its way when Stop was
+    pressed (a Confirm busy making its plan again) is dead for good: it must
+    not start once Stop has finished. The console counts presses of Stop and
+    a start carries the count it was made under.
 - **An imaging run** is finished with `ty run stop`, which lets it make its
   picture. Stop stops the mount; "Finish run" sends the order.
 - **Closing the browser stops nothing.** Jobs belong to `console.py`. Closing
-  `console.py` ends its running job and sends the mount a stop.
+  `console.py` ends its running job (a camera job is asked to end first, so
+  the camera is closed properly) and always sends the mount a stop, whether
+  or not anything was running.
 
 ### Routes
 
@@ -398,8 +405,16 @@ Capture
             [ Cancel ]        [ START M27 ]
 ```
 
-With re-centring switched off the first two parts read "The mount will not
-be moved", and the card needs no move confirmation.
+With re-centring switched off, `shoot.py` never touches the mount (drift
+assist included), so the run is a camera job: there is no plan to confirm,
+Stop does not end it, and it is started directly.
+
+The console remembers what the run it started was allowed. Re-centre and
+drift assist on or off are offered, and passed on, only in a run that was
+started here with re-centring. In a run started without it they are refused,
+since the run would ignore them; in a run started from the command line only
+Finish is offered, because the console cannot know what that run was
+allowed.
 
 ## The screens
 

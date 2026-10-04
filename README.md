@@ -8,7 +8,9 @@
 
 ![The status page: tonight's verdict, a live imaging run with its quality readings, the stacked picture, the best targets, the night's timeline and the state of the kit](docs/dashboard.jpg)
 
-telescopeyoke is a lightweight telescope automation system for Linux. It runs
+telescopeyoke is a lightweight telescope automation system for Linux. It
+also runs natively on Windows, where the tests and the demo pass but no
+camera or mount has been used yet. It runs
 on a laptop left beside a modest SynScan telescope and camera, and you watch
 from indoors. It plans the night, checks the weather and moonlight, ranks
 targets for your own sky, slews the mount, plate-solves where the telescope is
@@ -72,7 +74,13 @@ cd telescopeyoke
 
 On Windows 10 or 11, in PowerShell: `.\install.ps1`, then the same commands
 written as `python doctor.py`, `python tonight.py --demo` and so on, and
-`.\ty` for `./ty`. See [Setup](docs/setup.md#windows).
+`.\ty.cmd` (or `python ty`) for `./ty`. See [Setup](docs/setup.md#windows).
+
+**Prefer buttons?** `./console.py --demo` opens the control console in your
+browser: Targets, Mount, Focus, Imaging, Tools and System screens, on this
+computer only. With a real mount, every move is checked with a dry run and
+shown as a plan, and nothing moves until you confirm it. It has not yet been
+used with a real mount or camera.
 
 **Use the planner for real** (still no telescope needed): put your location
 in `config.toml`, then `./tonight.py`.
@@ -85,7 +93,7 @@ in `config.toml`, then `./tonight.py`.
 |---|---|---|
 | **Planner** | `tonight.py`, `serve.py`, `clouds.py` | Any computer with Python. No telescope. |
 | **Control** | `mount.py`, `polaralign.py`, `watch.py` | A SynScan mount and its serial lead. |
-| **Imaging** | `snap.py`, `focus.py`, `solve.py`, `shoot.py`, `skywatch.py` | An INDI camera and ASTAP. |
+| **Imaging** | `snap.py`, `focus.py`, `solve.py`, `shoot.py`, `skywatch.py` | A supported camera and ASTAP. On Linux the camera is read through INDI; on Windows through Altair's own library, which is the only camera route there. |
 
 Start with the planner; add hardware when you have it.
 
@@ -231,9 +239,12 @@ The laptop cannot see what the telescope is about to hit.
 - Creating a file called `MOTION_LOCKED` in this folder blocks all movement.
 - `mount.py` will not go below 20° altitude or more than 5.75 hours from the
   meridian.
-- **The web page is read-only on purpose.** It is served to the whole home
-  network with no login, which is fine for pictures and reports. Nothing that
-  moves the mount will be added to it without authentication designed first.
+- **The status page (`serve.py`) is read-only on purpose.** It is served to
+  the whole home network with no login, which is fine for pictures and
+  reports. Nothing that moves the mount will be added to it.
+- **The control console (`console.py`) answers this computer only.** It
+  needs a key made each time it starts, shows every move as a plan first,
+  and moves the mount only when that plan is confirmed.
 
 ## Current status
 

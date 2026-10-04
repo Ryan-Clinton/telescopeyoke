@@ -162,9 +162,11 @@ def test_every_action_builds_exactly_its_command():
     assert tail("home", demo=True, dry_run=True) == ["mount.py", "--demo", "home", "--dry-run"]
     assert tail("sync") == ["mount.py", "sync"] and tail("drift") == ["mount.py", "drift"]
     assert tail("compensate") == ["mount.py", "compensate"] and tail("position") == ["mount.py", "status"]
+    assert tail("run", {"target": "M27", "frames": 300, "exposure": "auto", "gain": 300, "assist": True}) == \
+        ["shoot.py", "M27", "--frames", "300", "--exposure", "auto", "--gain", "300", "--assist"]
     assert tail("run", {"target": "M27", "frames": 300, "exposure": "auto", "gain": 300, "assist": True,
                         "recentre": False}) == \
-        ["shoot.py", "M27", "--frames", "300", "--exposure", "auto", "--gain", "300", "--assist", "--no-recentre"]
+        ["shoot.py", "M27", "--frames", "300", "--exposure", "auto", "--gain", "300", "--no-recentre"]
     assert tail("run", {"target": "M27"}) == ["shoot.py", "M27", "--frames", "60", "--exposure", "2", "--gain", "1500"]
     assert tail("focus") == ["focus.py"] and tail("focus", {"sound": "tones"}) == ["focus.py", "--tones"]
     assert tail("focus", {"sound": "silent"}) == ["focus.py", "--quiet"]
@@ -234,7 +236,7 @@ def test_confirm_makes_the_plan_again(desk, monkeypatch):
     answers = [dict(seen), dict(seen, altitude_deg=48.4, hour_angle_hours=2.03)]
     monkeypatch.setattr(desk.jobs, "dry_run", lambda action, params: answers.pop(0))
     started = []
-    monkeypatch.setattr(desk.jobs, "begin", lambda action, params: started.append(action) or {"job": {}})
+    monkeypatch.setattr(desk.jobs, "begin", lambda action, params, stops=None: started.append(action) or {"job": {}})
     plan = desk.json("/api/plan/goto", {"target": "M27"})[1]["data"]["id"]
     assert "job" in desk.json(f"/api/confirm/{plan}", {})[1]["data"]      # the sky moved a little: still the plan
     assert started == ["goto"]
@@ -364,3 +366,84 @@ def test_stop_leaves_a_camera_job_alone(desk, monkeypatch):
     wait_for(lambda: desk.jobs.current and desk.jobs.current["lines"])
     assert desk.json("/api/stop", {})[1]["data"]["ended_job"] is None
     assert desk.jobs.current and desk.jobs.current["child"].poll() is None
+
+
+def test_a_confirm_already_on_its_way_is_dead_once_stop_is_pressed(desk, monkeypatch):
+    """Confirm makes the plan again before starting, which takes a moment. Stop
+    pressed in that moment must kill the request for good: it may not start
+    the mount after Stop has finished."""
+    plan_made, let_go, started = threading.Event(), threading.Event(), []
+    plan = {"would_move": True, "safe": True, "altitude_deg": 50.0, "hour_angle_hours": 1.0, "pier_side": "west"}
+    calls = []
+
+    def slow_dry_run(action, params):
+        calls.append(action)
+        if len(calls) == 2:          # the second making of the plan, inside Confirm
+            plan_made.set()
+            assert let_go.wait(20)
+        return dict(plan)
+    monkeypatch.setattr(desk.jobs, "dry_run", slow_dry_run)
+    monkeypatch.setattr(desk.jobs, "start", lambda cmd, **more: started.append(cmd))
+    plan_id = desk.json("/api/plan/zenith", {})[1]["data"]["id"]
+    answer = {}
+    confirm = threading.Thread(target=lambda: answer.update(reply=desk.json(f"/api/confirm/{plan_id}", {})))
+    confirm.start()
+    assert plan_made.wait(20)
+    assert desk.json("/api/stop", {})[1]["data"]["stopped"]      # Stop runs, and finishes
+    assert desk.jobs.stopping is False
+    let_go.set()
+    confirm.join(20)
+    status, reply = answer["reply"]
+    assert status == 409 and "Stop was pressed" in reply["errors"][0]["message"]
+    assert not started and desk.jobs.current is None
+    # A plan made after Stop is a new request by the person, and works.
+    monkeypatch.setattr(desk.jobs, "dry_run", lambda action, params: dict(plan))
+    fresh = desk.json("/api/plan/zenith", {})[1]["data"]["id"]
+    monkeypatch.setattr(desk.jobs, "begin", lambda action, params, stops=None: {"job": {"action": action}})
+    assert desk.json(f"/api/confirm/{fresh}", {})[1]["data"]["job"]["action"] == "zenith"
+
+
+def test_a_run_without_recentring_is_a_camera_job_and_needs_no_plan(desk, monkeypatch):
+    still = {"target": "M27", "recentre": False, "assist": True}
+    assert console.uses("run", still) == "camera" and not console.moves("run", still)
+    assert console.uses("run", {"target": "M27"}) == "mount" and console.moves("run", {"target": "M27"})
+    assert "--assist" not in console.command("run", still) and "--no-recentre" in console.command("run", still)
+    assert desk.json("/api/plan/run", still)[1]["ok"] is False          # nothing to plan
+    assert desk.json("/api/action/run", {"target": "M27"})[0] == 409    # with re-centring: a plan first
+
+    monkeypatch.setattr(console, "DEMO_ACTIONS", console.DEMO_ACTIONS + ("run",) + console.MOVING_ORDERS)
+    stand_in(monkeypatch, POLITE, action="run")
+    # No run going: the console does not pass on orders that move the mount.
+    assert "No imaging run started from this console" in desk.json("/api/action/run-recentre", {})[1]["errors"][0]["message"]
+    assert desk.json("/api/action/run", still)[1]["ok"]
+    wait_for(lambda: desk.jobs.current and desk.jobs.current["lines"])
+    assert desk.json("/api/job")[1]["data"]["run_scope"] == {"mount": False}
+    for order in console.MOVING_ORDERS:
+        status, answer = desk.json(f"/api/action/{order}", {})
+        assert status == 409 and "without re-centring" in answer["errors"][0]["message"], order
+    # Stop is for the mount: this run is only taking frames, and carries on.
+    assert desk.json("/api/stop", {})[1]["data"]["ended_job"] is None
+    assert desk.jobs.current["child"].poll() is None
+    desk.json("/api/finish", {})
+    wait_for(lambda: desk.jobs.current is None)
+    assert desk.jobs.run_scope is None
+
+
+def test_closing_the_console_always_tells_the_mount_to_stop(desk, monkeypatch):
+    sent, real_run = [], subprocess.run
+
+    def run(cmd, **more):
+        sent.append(cmd[-2:])
+        return real_run(cmd, **more)
+    monkeypatch.setattr(console.subprocess, "run", run)
+    assert desk.jobs.close()["stopped"] and sent == [["stop", "--json"]]      # nothing was running
+
+    monkeypatch.setattr(console, "DEMO_ACTIONS", console.DEMO_ACTIONS + ("focus",))
+    stand_in(monkeypatch, POLITE)
+    desk.json("/api/action/focus", {})
+    wait_for(lambda: desk.jobs.current and desk.jobs.current["lines"])
+    child = desk.jobs.current["child"]
+    assert desk.jobs.close()["stopped"] and len(sent) == 2                   # a camera job was running
+    assert child.poll() is not None
+    wait_for(lambda: desk.jobs.history)
+    assert desk.jobs.history[-1]["result"] == {"closed": True}               # and it was let close the camera

@@ -186,7 +186,7 @@ function planLines(data) {
                el("p", { text: p.would_move ? `The telescope slews to ${p.target}, plate-solves and centres it.` : "The mount will not be moved." }),
                el("p", { class: "quiet", text: "During imaging" }),
                el("p", { text: p.would_move ? `It may re-centre ${p.target} when it has drifted more than 20% of the frame.` : "The mount will not be moved." }),
-               $("run-assist").checked ? el("p", { text: "Drift assist will adjust the Dec motor." }) : null,
+               el("p", { text: $("run-assist").checked ? "Drift assist will adjust the Dec motor." : "Drift assist is off; switching it on during the run adjusts the Dec motor." }),
                el("p", { class: "quiet", text: "Capture" }),
                el("p", { text: `${p.frames} frames · ${p.exposure === "auto" ? "exposure chosen from the tracking" : p.exposure + " s each"} · gain ${p.gain}` }));
   }
@@ -195,7 +195,7 @@ function planLines(data) {
 
 function showPlan(data) {
   plan = data;
-  const scope = seen.state.scope_age != null || true;
+  // The webcam's picture is always tried; with no webcam it fails to load and is taken out.
   const picture = el("img", { src: "/pictures/scope.jpg", alt: "" });
   const beside = el("div", { class: "scope" }, picture, el("div", { class: "quiet", text: "The telescope, from the webcam" }));
   picture.addEventListener("error", () => beside.remove());
@@ -203,7 +203,7 @@ function showPlan(data) {
   fill($("plan"),
        el("div", { class: "kind", text: data.action === "run" ? "IMAGING PLAN" : "MOVE PLAN" }),
        el("h3", { text: data.label }),
-       el("div", { class: "body" }, el("div", {}, planLines(data)), scope ? beside : null),
+       el("div", { class: "body" }, el("div", {}, planLines(data)), beside),
        el("div", { class: "buttons" }, cancel,
           el("button", { type: "button", class: "confirm", text: data.label.toUpperCase(), on: { click: confirmPlan } })));
   $("plan").className = "card";
@@ -294,9 +294,13 @@ function drawRail() {
                 run.planned ? el("progress", { max: run.planned, value: run.captured }) : null,
                 el("p", { text: `${run.integration ?? 0} s kept · ${share}% kept` }),
                 el("p", { class: "quiet", text: `Exposure ${run.exposure} s` }),
-                el("div", { class: "buttons" },
-                   button("Finish run", () => act("run-finish")), button("Re-centre", () => act("run-recentre")),
-                   button("Drift assist on", () => act("run-assist-on")), button("Drift assist off", () => act("run-assist-off"))));
+                // Orders that move the mount are offered only in a run started here with re-centring.
+                el("div", { class: "buttons" }, button("Finish run", () => act("run-finish")),
+                   ...(seen.job.run_scope && seen.job.run_scope.mount
+                     ? [button("Re-centre", () => act("run-recentre")), button("Drift assist on", () => act("run-assist-on")),
+                        button("Drift assist off", () => act("run-assist-off"))]
+                     : [el("p", { class: "quiet", text: seen.job.run_scope ? "Started without re-centring: this run does not move the mount."
+                                                                           : "This run was not started from the console, so only Finish is offered here." })])));
   }
   const nodes = [el("div", { class: "quiet", text: job ? "WORKING" : "NO RUN" })];
   if (job) nodes.push(el("div", { class: "name", text: job.label }), el("div", { class: "buttons" }, button("Finish", finish)));
@@ -627,9 +631,19 @@ $("sheet-cancel").addEventListener("click", closeCard);
 $("shade").addEventListener("click", closeCard);
 $("run-frames").addEventListener("input", estimate);
 $("run-exposure").addEventListener("change", estimate);
-$("sheet-plan").addEventListener("click", () => makePlan("run", {
-  target: $("sheet").dataset.target, exposure: $("run-exposure").value, frames: Number($("run-frames").value),
-  gain: Number($("run-gain").value), recentre: $("run-recentre").checked, assist: $("run-assist").checked }));
+$("sheet-plan").addEventListener("click", () => {
+  const params = { target: $("sheet").dataset.target, exposure: $("run-exposure").value, frames: Number($("run-frames").value),
+                   gain: Number($("run-gain").value), recentre: $("run-recentre").checked,
+                   assist: $("run-recentre").checked && $("run-assist").checked };
+  // Without re-centring the run never touches the mount: there is no move to plan.
+  if (params.recentre) return makePlan("run", params);
+  closeCard();
+  act("run", params);
+});
+$("run-recentre").addEventListener("change", () => {
+  $("run-assist").disabled = !$("run-recentre").checked;
+  $("sheet-plan").textContent = $("run-recentre").checked ? "Plan the run" : "Start (the mount is not moved)";
+});
 $("log-toggle").addEventListener("click", () => { $("log").hidden = !$("log").hidden; unread = 0; $("log-count").textContent = ""; });
 $("technical").addEventListener("change", drawLog);
 
