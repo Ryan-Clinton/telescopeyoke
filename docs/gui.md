@@ -27,6 +27,11 @@ Each button starts one of the project's scripts as a separate process with
 anything the command line cannot, every limit and the `MOTION_LOCKED` file
 apply unchanged, and there is still one implementation.
 
+**It does not replace the status page.** `serve.py` stays as it is: read
+only, on the home network, for watching the night from indoors or a phone.
+The console is for the person beside the telescope. Two programs with two
+jobs is the design, not a stage on the way to one.
+
 **It is built around what the person is doing now,** not a status page with
 buttons added and not a wall of every control. The picture or the task is in
 the middle, the state of the equipment is round the edge, and only the
@@ -46,21 +51,41 @@ The console is a third program, and this is its design:
 2. **A key made at start-up.** `console.py` makes a random key each time it
    starts, opens the browser at `http://127.0.0.1:PORT/?key=...`, and keeps
    the key in memory only. Every request that does anything must carry it in
-   a header. A request without it gets 403.
+   a header. A request without it gets 403. The page reads the key from the
+   address once, keeps it in a variable, and at once rewrites the address
+   without it (`history.replaceState`), so the key is not left in the
+   browser's history, a bookmark, a copied address or a screenshot.
 3. **Not reachable from other web pages.** Refuse any request whose `Host`
    header is not `127.0.0.1:PORT` or `localhost:PORT` (this stops DNS
    rebinding), and any action whose `Origin` header is present and is not
    the console's own. Send no CORS headers. Actions are `POST` only; `GET`
    never changes anything.
-4. **A person confirms each move, on a plan.** Pressing anything that moves
+4. **The browser is told to trust nothing else.** Every response carries:
+
+   ```
+   Content-Security-Policy: default-src 'self'; img-src 'self' data:;
+       style-src 'self'; script-src 'self'; connect-src 'self';
+       frame-ancestors 'none'; base-uri 'none'; form-action 'self'
+   X-Frame-Options: DENY
+   X-Content-Type-Options: nosniff
+   Referrer-Policy: no-referrer
+   Cache-Control: no-store
+   ```
+
+   So the page has no inline scripts or styles, loads nothing from the
+   internet, and cannot be shown inside another page.
+5. **A person confirms each move, on a plan.** Pressing anything that moves
    the mount first runs the command with `--dry-run` and shows the plan (see
    "The move plan"). The mount moves only when the person presses the
    confirm button on that plan. A refusal is shown with its message and
    advice, and offers no way round. Something that goes on moving the mount
    by itself afterwards (an imaging run that re-centres, the horizon survey,
    drift compensation) says so on its plan, in plain words, and the one
-   confirmation covers it.
-5. **Stop is always there.** A Stop button is on screen at all times, needs
+   confirmation covers it. What the person agrees to is a behaviour with
+   stated bounds ("may re-centre M27 when it has drifted more than 20% of
+   the frame"), not each motor command; a run must never stop to ask again
+   while nobody is watching.
+6. **Stop is always there.** A Stop button is on screen at all times, needs
    no confirmation, and works whatever else is running.
 
 Be honest in the docs about what this does not do: a program running on the
@@ -79,7 +104,10 @@ browser (this computer) ── POST /api/plan/goto ──► console.py ── s
 
 - **One job at a time.** `console.py` holds at most one running job that
   uses the mount or the camera. A second request while one runs is refused
-  with a message naming the job. Read-only requests are never blocked.
+  with a message naming the job ("Camera busy: focusing"). Read-only
+  requests are never blocked. This is the rule, not a first version of
+  something cleverer: do not let jobs share the camera or the mount, queue
+  behind one another, or run side by side.
 - **Progress.** With `--json` each script prints progress on stderr and one
   envelope on stdout. The console keeps the stderr lines for the activity
   log and shows the envelope's result or error when the job ends.
@@ -96,6 +124,16 @@ browser (this computer) ── POST /api/plan/goto ──► console.py ── s
   takes from press to the handset's reply and show it in the log; the aim is
   under two seconds. This cannot be proven against the simulator, so it is
   on the hardware check list below.
+- **Finishing a job is not Stop.** They are two different things in the job
+  runner:
+  - *Finish* (focusing, a camera test, calibration): ask the script to end
+    as Ctrl+C would, so it closes the camera properly; wait a few seconds;
+    kill it only if it has not gone. How a process is asked differs between
+    Linux and Windows and belongs in `host.py`. A camera left open by a
+    killed job can refuse the next one, so test that a second job starts
+    after the first is finished this way.
+  - *Stop*: end whatever holds the mount at once, without waiting, then run
+    `mount.py stop`.
 - **An imaging run** is finished with `ty run stop`, which lets it make its
   picture. Stop stops the mount; "Finish run" sends the order.
 - **Closing the browser stops nothing.** Jobs belong to `console.py`. Closing
@@ -165,14 +203,54 @@ The frame stays put; the middle changes with the task.
 
 - **Top bar:** the name, the site's name from `config.toml`, tonight's
   verdict and clear window, the mount's and camera's state, the clock, and
-  Stop. Always visible.
+  Stop. Always visible. Started with `--demo` it also shows **DEMO: no real
+  telescope is being controlled**, plainly, so that neither the person nor a
+  screenshot can mislead.
 - **Left:** seven tasks, not seven scripts: Home, Targets, Mount, Focus,
   Imaging, Tools, System. Switching shows and hides sections of the one page
   with no reload. The address carries the task (`#home`, `#targets`, ...) so
   the browser's back button works.
-- **Right:** the current target and the controls for what is happening now.
+- **Right:** one panel whose contents depend on the state (below).
 - **Bottom:** one line of states and the newest measurements, and the
   activity log, folded to one line until opened.
+
+**Measurements go stale.** FWHM, star count, drift, the focus reading and
+the last plate solve are shown bare only while the job that makes them is
+running. After that each carries its age ("FWHM 3.4 · 2 min ago"), and
+after ten minutes it is taken off the bar. A number from twenty minutes ago
+must never look like now.
+
+### The right-hand panel
+
+The same place, a different purpose in each state:
+
+| State | Shows | Buttons |
+|---|---|---|
+| Idle | "No run". The best target now, its height and direction | Go to it, Start imaging |
+| Moving | where it is going, height now and at the end, seconds so far | Stop |
+| Focusing | the HFR, large; improving or worsening; tonight's best | Finish |
+| Imaging | target, frames of those planned, a bar, seconds kept, share kept | Finish run, Re-centre |
+
+### Restraint
+
+This should look like an instrument, not a business dashboard. One dominant
+work surface. Space, thin rules and the size and weight of type do the
+grouping; a box is drawn only round a real group, never a box inside a box,
+and not every number gets one. Corners rounded by 6 to 8 pixels at most. No
+gradients, no shadows for decoration.
+
+### Type
+
+No web font. The system's own:
+`font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif`.
+Numbers use `font-variant-numeric: tabular-nums` so they do not jiggle as
+they change; only the activity log is monospace (`ui-monospace`).
+
+### Screen size
+
+Built for a laptop: it must work fully at 1366 × 768, and from 1280 × 720
+up. Narrower than that, the navigation shrinks to icons and the right-hand
+panel drops below the work area. Nothing is done for phone widths.
 
 ### Colour
 
@@ -262,6 +340,27 @@ Never the browser's own `confirm()` box. A card in the middle of the page:
 - A refusal uses the same card with no confirm button: the message, the
   advice, and Close.
 
+Starting an imaging run says when and why the mount will move, not just that
+it will. `shoot.py` centres the target before the first frame and re-centres
+when the drift passes 20% of the frame, so the card reads:
+
+```
+START IMAGING M27
+
+Before imaging
+  The telescope slews to M27, plate-solves and centres it.
+During imaging
+  It may re-centre M27 when it has drifted more than 20% of the frame.
+  Drift assist will adjust the Dec motor.          (only if switched on)
+Capture
+  300 frames · 2 s each · gain 1500
+
+            [ Cancel ]        [ START M27 ]
+```
+
+With re-centring switched off the first two parts read "The mount will not
+be moved", and the card needs no move confirmation.
+
 ## The screens
 
 In the tables, **Moves** means the action goes through the move plan.
@@ -273,14 +372,35 @@ Moon: how full, when it sets. The best target now as a card with its score,
 kind, height and direction, best time, and "Details" and "Go to"; the next
 few as one line each. All from `agent.night` and `agent.targets`.
 
-Above it, one card from `agent.observing`: "Everything looks good", with the
-reasons (centred, focus near tonight's best, most frames kept), or
-"Attention", with what changed and the likely cause in the words the note
-already gives, and a button for the remedy ("Start focusing").
+Above it, one card from `agent.observing`, and it deserves care: it is what
+this project knows that a plain hardware controller does not. Either
+"Everything looks good", with the reasons (centred, focus near tonight's
+best, most frames kept), or "Attention":
+
+```
+ATTENTION   Focus appears to be slipping.
+
+HFR          3.3 → 4.6
+Star count   72 → 70    steady
+Tracking     steady
+
+Likely focus, not cloud or tracking.            [ Start focusing ]
+```
+
+It shows the measurements that moved and the ones that did not, the likely
+cause in the words `agent.observing` already gives, and one button for the
+remedy: Start focusing for focus, "Look at the newest frame" for cloud. It
+is plain diagnosis from numbers already measured; it must not claim more
+than the note does.
 
 ### Targets
 
-A search box over the catalogue and the ranked list, with filters: up now,
+A search box over the **whole catalogue**, not only tonight's ranked list: a
+name, a second designation or a common name finds a target, as
+`mount.find_target` already allows ("M27", "Dumbbell", "NGC 6853", "Vega").
+Results are in two groups, "Best tonight" and "Catalogue". Something ranked
+low, or not at all, can still be chosen; whether the mount may go there is
+for the plan to say. Filters: up now,
 galaxy, nebula, cluster, planet. Choosing one opens its details: score,
 direction, best time, window and tags from its entry in `agent.targets`;
 height now, and whether a GoTo is allowed now and if not why, from
@@ -373,19 +493,31 @@ Two of these get a picture for a result:
 
 - **Polar alignment:** a small diagram of the pole and where the mount's
   axis really points, the total error, and for each of the two adjustments
-  which way it is off and which way to turn the mount.
+  which way it is off and which way to turn the mount ("1.4° west: move the
+  mount east"; "0.8° high: lower it"). No jargon unless a line is opened.
+  Beneath it, what happens if it is left alone: the Dec drift the model in
+  `tracking.py` predicts near the current target, and that the project can
+  cancel most of that drift but not the slow turning of the field.
 - **Horizon survey:** the skyline as a plot, height against bearing round
   from north, with what is blocked filled in. It is drawn from
-  `cache/horizon.json` and from the `blocked` list in `config.toml`, and is
-  also shown on the Targets screen behind the chosen target's path.
+  `cache/horizon.json` and from the `blocked` list in `config.toml`. On the
+  Targets screen the chosen target's height through the night is drawn
+  against it, with the altitude limit as a line and the moment it "clears
+  the roof" marked: when it can really be seen from this garden, which
+  height alone does not tell.
 
 ### System
 
 The doctor's checks as a list with a tick, a warning or a cross each; a line
-opens to show the doctor's advice. Disk space. The camera's details: model,
-sensor, link. The time a frame takes (exposure, and the whole cycle from one
-frame to the next) from the newest run, when there is one. "Check again"
-runs the doctor.
+opens to show the doctor's advice. Disk space. "Check again" runs the
+doctor.
+
+Under Camera: model, sensor size and bit depth, how frames are fetched (INDI
+or Altair's library), the USB link, the readout speed; and for a stated
+exposure the time to deliver a frame, the whole cycle and the share of the
+time spent exposing, from the last throughput test, with its date. A
+"Benchmark" button runs the test again, so a different lead, port or
+setting can be judged by its numbers.
 
 ## Small changes the scripts need first
 
@@ -405,6 +537,8 @@ changes what a command does.
    `agent.target` needs to say whether the start of the window is set by the
    altitude limit or by the blocked horizon. Until it does, the console does
    not say it.
+   Drawing a target's height through the night needs the planner to give
+   that curve, which it works out but does not report.
    The same goes for a target's distance from the Moon: the planner uses it
    in the score but does not report it, so the console shows it only once
    `agent.targets` does.
@@ -431,20 +565,25 @@ Build the whole frame first, with all seven tasks in the navigation, so that
 nothing added later needs it redesigned. A task not yet built is left out of
 the navigation, not shown empty.
 
-1. **Server and safety.** `console.py`: `127.0.0.1`, the key, the `Host`
-   and `Origin` checks, the job runner, the routes, Stop. Done when the
-   tests below pass.
-2. **The frame.** Top bar, navigation, bottom bar, activity log, notices,
-   both themes, the keys. Home and System, which only read. Done when
-   `console.py --demo` shows a live Home and System.
-3. **Targets and Mount.** The picker, the move plan, Go to, Home, Zenith,
+1. **Server and safety.** `console.py`: `127.0.0.1`, the key, the headers,
+   the `Host` and `Origin` checks, the job runner with Finish and Stop, the
+   routes. Done when the tests below pass.
+2. **The frame, on demo data.** Top bar, navigation, right-hand panel,
+   bottom bar, activity log, notices, both themes, the keys, at 1366 × 768.
+3. **The picture workspace.** The Imaging screen's viewer and measurements,
+   reading the demo run. The picture is the largest thing the page will ever
+   show, so the frame is fitted round it before anything else is laid out.
+   Home and System, which only read, follow. Done when `console.py --demo`
+   shows a live Home, Imaging and System.
+4. **Targets and Mount.** The picker, the move plan, Go to, Home, Zenith,
    refusals. Done when, in demo, a Go to shows its plan, moves the simulated
    mount after Confirm, and a refusal is shown without a way round.
-4. **Focus.**
-5. **Imaging.** The start sheet, the workspace, Finish, Re-centre, assist.
-6. **Mount's technical controls and Tools,** after the script changes above.
+5. **Focus.**
+6. **Imaging's controls.** The start sheet and its plan, Finish, Re-centre,
+   assist.
+7. **Mount's technical controls and Tools,** after the script changes above.
    The two result pictures.
-7. **Documents.** README (a screenshot from `--demo` only: no photographs of
+8. **Documents.** README (a screenshot from `--demo` only: no photographs of
    the garden), `docs/setup.md`, `AGENTS.md` (layout table, and safety
    invariant 2 reworded to name the console and its limits),
    `docs/agents/safety.md` ("What enforces them today"), `CONTRIBUTING.md`.
@@ -472,7 +611,12 @@ harmless commands or `--demo`.
   `mount.py --demo goto` ends.
 - Nothing under `console/` is served by `serve.py`, and `serve.py` and
   `mcp_server.py` still offer no action.
-- The page's files load nothing from the internet.
+- The page's files load nothing from the internet and contain no inline
+  script or style; every response carries the headers listed above.
+- After loading, the address in the browser no longer holds the key.
+- Finish asks the job to end and waits before killing it; Stop does not
+  wait. After a finished camera job a second one starts.
+- In demo the page says DEMO.
 - The existing suite still passes on Linux and Windows.
 
 ## Checks only the person at the telescope can do
