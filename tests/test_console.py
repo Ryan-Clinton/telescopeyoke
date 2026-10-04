@@ -22,7 +22,9 @@ PAGE = ROOT / "console"
 # A stand-in job: it waits, and ends properly when asked to as Ctrl+C would.
 POLITE = ("import json, sys, time, host\n"
           "print('working', file=sys.stderr, flush=True)\n"
-          "try:\n    time.sleep(60)\nexcept KeyboardInterrupt:\n    pass\n"
+          # Short waits, as a script taking frames has: on Windows a request to
+          # end is only noticed between calls, not in the middle of one.
+          "try:\n    for _ in range(600):\n        time.sleep(0.1)\nexcept KeyboardInterrupt:\n    pass\n"
           "print(json.dumps({'ok': True, 'data': {'closed': True}, 'warnings': [], 'errors': []}))\n")
 BROKEN = "import sys; print('the camera fell off', file=sys.stderr); sys.exit(1)"
 

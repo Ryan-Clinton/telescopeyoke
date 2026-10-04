@@ -35,7 +35,9 @@ WEB = ROOT / "web"
 PYTHON = sys.executable
 
 PLAN_LIFE = 120     # seconds a plan may be confirmed for
-FINISH_WAIT = 8     # seconds a job asked to end is given before it is killed
+# Seconds a job asked to end is given before it is killed. On Windows the
+# request is only noticed between calls, so it must outlast a frame arriving.
+FINISH_WAIT = 30
 KEEP_LINES = 400    # progress lines kept per job
 
 # The page's own files, and the pictures it may show. Nothing else is served.
