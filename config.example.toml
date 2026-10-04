@@ -38,11 +38,33 @@ height = 3648
 # with: change the name (and take new flats) whenever you rotate the camera,
 # take it off and put it back, or change anything in the light path.
 setup = "default"
+# How frames are fetched from the camera. "indi" is the INDI driver above
+# and the default on Linux. "altair" is Altair's own library, with its files
+# in vendor/altair/; it is the default on Windows, where INDI does not run.
+# backend = "altair"
+# With the "altair" backend only:
+# serial = "..."          which camera to use when more than one is plugged in
+# readout_speed = 1       the camera's readout speed level; unset leaves it as it is
 
 [mount]
 # Part of the name of the USB adapter on the handset's serial lead, as it
-# appears under /dev/serial/by-id/.
+# appears under /dev/serial/by-id/, or on Windows against the COM port in
+# Device Manager. A handset plugged in by its own USB socket is "Prolific".
 serial_match = "FTDI"
+
+# The plate solver. Leave this out to use astap_cli with its database in
+# /opt/astap on Linux, or astap_cli.exe from PATH or C:/Program Files/astap on
+# Windows, with the database beside it. Write Windows paths with forward
+# slashes: in double quotes a backslash starts an escape.
+# [solver]
+# program = "C:/Program Files/astap/astap_cli.exe"
+# database = "C:/Program Files/astap"
+
+# The webcam that photographs the telescope, on Windows only: its name as
+# listed by   ffmpeg -list_devices true -f dshow -i dummy
+# Linux finds one by itself. With none named, slews are not photographed.
+# [webcam]
+# device = "USB2.0 PC CAMERA"
 
 [indi]
 port = 7624

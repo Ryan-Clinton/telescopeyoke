@@ -31,7 +31,6 @@ plugged in:  ./mount.py --demo goto M27
 """
 import argparse
 import contextlib
-import glob
 import json
 import math
 import sys
@@ -41,6 +40,7 @@ from pathlib import Path
 import serial
 
 import config
+import host
 import tracking
 from interface import Refusal, emit, envelope, run as answer
 from watch import Watching
@@ -94,8 +94,13 @@ class Mount:
         else:
             # The handset's lead is recognised by its USB adapter's name.
             match = config.hardware()["mount"]["serial_match"]
-            port = port or next(iter(sorted(glob.glob(f"/dev/serial/by-id/*{match}*"))),
-                                "/dev/ttyUSB0")
+            port = port or host.serial_port(match) or host.serial_fallback()
+            if port is None:
+                seen = ", ".join(f"{device} ({name})" for device, name in host.serial_ports())
+                raise Refusal("HANDSET_NOT_ANSWERING",
+                              f"No serial port matches \"{match}\" (serial_match under "
+                              f"[mount] in config.toml). Ports seen: {seen or 'none'}. "
+                              "Plug in the handset's lead, or name the port with --port.")
             self.s = serial.Serial(port, 9600, timeout=2)
         if self.ask(b"Kx") != b"x#":
             raise Refusal("HANDSET_NOT_ANSWERING", "The handset is not answering. Is it on "
@@ -115,16 +120,16 @@ class Mount:
         replay.py to turn into an animation."""
         self.recording = Path(folder)
         self.recording.mkdir(parents=True, exist_ok=True)
-        (self.recording / "steps.json").write_text("[]")
+        (self.recording / "steps.json").write_text("[]", encoding="utf-8")
 
     def say(self, text):
         """Print a progress message, and note it in the recording if any."""
         print(text, flush=True)
         if self.recording:
-            steps = json.loads((self.recording / "steps.json").read_text())
+            steps = json.loads((self.recording / "steps.json").read_text(encoding="utf-8"))
             frames = len(list(self.recording.glob("frame-*.jpg")))
             steps.append({"text": text, "frame": frames, "time": time.time()})
-            (self.recording / "steps.json").write_text(json.dumps(steps, indent=1))
+            (self.recording / "steps.json").write_text(json.dumps(steps, indent=1), encoding="utf-8")
 
     def ask(self, command):
         self.s.reset_input_buffer()
@@ -198,15 +203,15 @@ class Mount:
         anything older belongs to a different setting-up and is forgotten."""
         model = tracking.Model(DRIFT_FILE, latitude=site["latitude"])
         if model.path.exists() and CLOCK_FILE.exists():
-            saved = json.loads(model.path.read_text()).get("saved", 0)
-            if saved < json.loads(CLOCK_FILE.read_text())["saved"]:
+            saved = json.loads(model.path.read_text(encoding="utf-8")).get("saved", 0)
+            if saved < json.loads(CLOCK_FILE.read_text(encoding="utf-8"))["saved"]:
                 model.forget()
         return model
 
     def true_hour_angle(self, site):
         """Where the mount is aimed, as an hour angle in degrees, allowing
         for the handset's clock and the pointing error found by plate solving."""
-        offset = json.loads(CLOCK_FILE.read_text())["offset_deg"]
+        offset = json.loads(CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
         error = load_pointing_error(self.west())
         return wrap(true_sidereal(site) + offset - self.radec()[0]) + error[0]
 
@@ -379,7 +384,7 @@ class Mount:
     def save_clock(self, site):
         offset = wrap(self.handset_sidereal() - true_sidereal(site))
         CLOCK_FILE.parent.mkdir(exist_ok=True)
-        CLOCK_FILE.write_text(json.dumps({"offset_deg": offset, "saved": time.time()}))
+        CLOCK_FILE.write_text(json.dumps({"offset_deg": offset, "saved": time.time()}), encoding="utf-8")
 
     def point(self, azimuth, altitude, site):
         """Aim at a fixed direction, e.g. a distant rooftop, and hold there."""
@@ -387,7 +392,7 @@ class Mount:
             # Reading the handset's clock needs no movement, so do it now.
             self.save_clock(site)
         plan = plan_point(azimuth, altitude, site)
-        offset = json.loads(CLOCK_FILE.read_text())["offset_deg"]
+        offset = json.loads(CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
         hour_angle, dec = plan["hour_angle_hours"] * 15, plan["dec_deg"]
         print(f"bearing {azimuth:.0f}°, {altitude:.0f}° up: hour angle "
               f"{hour_angle / 15:+.2f} h, Dec {dec:+.1f}° ({plan['side_note']})")
@@ -398,7 +403,7 @@ class Mount:
         if not CLOCK_FILE.exists():
             # Reading the handset's clock needs no movement, so do it now.
             self.save_clock(site)
-        offset = json.loads(CLOCK_FILE.read_text())["offset_deg"]
+        offset = json.loads(CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
         plan = plan_goto(name, site)
         target = find_target(name)
         hour_angle, altitude = plan["hour_angle_hours"] * 15, plan["altitude_deg"]
@@ -463,12 +468,12 @@ class Mount:
             (ROOT / "cache").mkdir(exist_ok=True)
             LAST_SOLVE.write_text(json.dumps(
                 {k: found[k] for k in ("ra", "dec", "rotation", "scale", "cd") if k in found}
-                | {"saved": time.time()}))
+                | {"saved": time.time()}), encoding="utf-8")
         return found
 
     def sync(self, site):
         """Measure the pointing error where the scope is now and store it."""
-        offset = json.loads(CLOCK_FILE.read_text())["offset_deg"]
+        offset = json.loads(CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
         ra_handset, dec_handset = self.radec()
         sidereal = true_sidereal(site)
         believed_ha = wrap(sidereal + offset - ra_handset)
@@ -515,7 +520,7 @@ def _plan(hour_angle, dec, altitude, label):
     """The checks every aimed move must pass, and what the move would involve.
     Raises a Refusal if it must not be made; needs no hardware."""
     if LOCK_FILE.exists():
-        raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text().strip()}")
+        raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text(encoding="utf-8").strip()}")
     if abs(hour_angle) > MAX_HOUR_ANGLE * 15:
         raise Refusal("TARGET_BEYOND_HOUR_ANGLE_LIMIT",
                       f"{label} is {abs(hour_angle) / 15:.1f} h from the meridian, beyond the "
@@ -568,8 +573,8 @@ def load_pointing_error(west):
     being set by eye, and a Dec-axis offset reverses when the tube swings
     over the pole for the other side."""
     if POINTING_FILE.exists() and CLOCK_FILE.exists():
-        saved = json.loads(POINTING_FILE.read_text())
-        if saved["saved"] > json.loads(CLOCK_FILE.read_text())["saved"]:
+        saved = json.loads(POINTING_FILE.read_text(encoding="utf-8"))
+        if saved["saved"] > json.loads(CLOCK_FILE.read_text(encoding="utf-8"))["saved"]:
             ha, dec = saved["error_deg"]
             return [ha, dec if saved["west"] == west else -dec]
     return [0.0, 0.0]
@@ -577,7 +582,7 @@ def load_pointing_error(west):
 
 def save_pointing_error(error, west):
     POINTING_FILE.write_text(json.dumps(
-        {"error_deg": list(error), "west": bool(west), "saved": time.time()}))
+        {"error_deg": list(error), "west": bool(west), "saved": time.time()}), encoding="utf-8")
 
 
 def location(site):
@@ -720,7 +725,7 @@ def dry_run(args, site):
         if args.command in ("status", "sync", "drift", "stop"):
             return {"would_move": False, "safe": True, "warnings": []}
         if LOCK_FILE.exists():
-            raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text().strip()}")
+            raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text(encoding="utf-8").strip()}")
         notes = {"home": "Returns to the home position, by the axis readouts.",
                  "zenith": "Goes home if not there, then slews to straight up.",
                  "compensate": "Slews about 25° twice on the side of the meridian it is on, "
@@ -752,7 +757,7 @@ def act(args, site):
     mount's state afterwards."""
 
     if args.command in ("zenith", "home", "goto", "point", "compensate") and LOCK_FILE.exists():
-        raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text().strip()}")
+        raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text(encoding="utf-8").strip()}")
 
     mount = Mount(args.port, watch=not args.no_watch, demo=args.demo)
     if args.record:

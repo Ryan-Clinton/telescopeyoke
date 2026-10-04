@@ -91,7 +91,7 @@ def sweep(site, step, exposure, gain):
     scope = mount.Mount()
     if not mount.CLOCK_FILE.exists():
         scope.save_clock(site)
-    offset = json.loads(mount.CLOCK_FILE.read_text())["offset_deg"]
+    offset = json.loads(mount.CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
     results = []
     try:
         with Camera(gain=gain) as cam:
@@ -149,7 +149,7 @@ def run(args):
     results = sweep(site, args.step, args.exposure, args.gain)
     found = blocked(results)
     RESULTS.parent.mkdir(exist_ok=True)
-    RESULTS.write_text(json.dumps({"saved": time.time(), "looks": results, "blocked": found}, indent=1))
+    RESULTS.write_text(json.dumps({"saved": time.time(), "looks": results, "blocked": found}, indent=1), encoding="utf-8")
     print("\n" + chart(results))
     if found:
         print("\nPut this under [horizon] in config.toml:\nblocked = [")

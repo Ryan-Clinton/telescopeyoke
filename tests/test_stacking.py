@@ -309,7 +309,7 @@ def test_a_run_keeps_raw_frames_logs_each_one_and_rejects_the_cloudy_one(session
     assert len(list(run.folder.glob("light-*.fits"))) == 10
     assert sum("ACCEPT" in line for line in lines) == 9
     assert "007 REJECT" in lines[6] and "cloud" in lines[6]
-    log = json.loads((run.folder / "frames.json").read_text())
+    log = json.loads((run.folder / "frames.json").read_text(encoding="utf-8"))
     assert [entry["accepted"] for entry in log].count(False) == 1
     assert (run.folder / "live.fits").exists()
     assert run.drift > 0
@@ -325,7 +325,7 @@ def test_the_quality_pass_rebuilds_the_picture_from_the_raw_frames(session):
     run, _ = session
     picture = restack.run(run.folder, say=lambda *_: None)
     assert picture.exists() and (run.folder / "final.fits").exists()
-    summary = json.loads((run.folder / "restack.json").read_text())
+    summary = json.loads((run.folder / "restack.json").read_text(encoding="utf-8"))
     assert "light-0007.fits" not in summary["kept"]
     assert 6 <= len(summary["kept"]) <= 9
     assert not (run.folder / "registered").exists()   # working files tidied away
@@ -367,7 +367,7 @@ def test_sessions_of_different_lengths_combine_into_one_picture(tmp_path, monkey
     said = []
     picture = restack.run([first, second, flipped, turned], keep=1.0, say=said.append, workers=2)
     assert picture == tmp_path / "frames" / "Test" / "combined" / "final.jpg" and picture.exists()
-    summary = json.loads((picture.parent / "restack.json").read_text())
+    summary = json.loads((picture.parent / "restack.json").read_text(encoding="utf-8"))
     kept = summary["kept"]
     # Both nights with the camera as it was are in; the night it was turned is not.
     assert sum(k.startswith("20261003") for k in kept) == 6

@@ -1,6 +1,7 @@
 # telescopeyoke: notes for coding and operating agents
 
-A lightweight telescope automation system for Linux: night planning, SynScan
+A lightweight telescope automation system for Linux, and for Windows where
+the tests pass but no hardware has been run yet: night planning, SynScan
 mount control, plate solving, focusing and stacking, on a laptop left beside
 the telescope. `README.md` is the user's guide; this file is the map for
 agents. Deeper notes are in `docs/agents/`.
@@ -26,7 +27,8 @@ Everything runs without a telescope: `./tonight.py --demo`, `./serve.py --demo`,
 | `mcp_server.py` | Read-only MCP server over `agent.py` |
 | `tonight.py`, `sky.py`, `feeds.py`, `page.py`, `serve.py` | Planner, status page, read-only web API |
 | `mount.py`, `tracking.py`, `polaralign.py`, `simulator.py` | Mount control, drift model, simulated handset |
-| `camera.py`, `indi.py`, `snap.py`, `liveview.py`, `focus.py` | Camera and focusing |
+| `camera.py`, `indi.py`, `altair.py`, `snap.py`, `liveview.py`, `focus.py` | Camera (through INDI, or Altair's own library) and focusing |
+| `host.py` | Everything that differs between Linux and Windows, in one place |
 | `shoot.py`, `stacking.py`, `restack.py`, `process.py`, `calibrate.py` | Imaging pipeline |
 | `schemas/`, `tests/`, `evals/` | Output schemas, tests, agent scenarios |
 

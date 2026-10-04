@@ -1,7 +1,11 @@
 """Site and equipment settings, read from config.toml."""
 import copy
+import shutil
+import sys
 import tomllib
 from pathlib import Path
+
+import host  # noqa: F401  (every script passes through here: makes output UTF-8)
 
 ROOT = Path(__file__).parent
 FILE = ROOT / "config.toml"
@@ -13,10 +17,16 @@ DEFAULTS = {
     "horizon": {"min_altitude": 20, "blocked": []},
     "scope": {"aperture_mm": 150, "focal_length_mm": 750},
     "camera": {"driver": "indi_altair_ccd", "bit_depth": 12, "pixel_size_um": 2.4,
-               "width": 5440, "height": 3648, "setup": "default"},
+               "width": 5440, "height": 3648, "setup": "default",
+               # How frames are fetched: through the INDI driver, or straight
+               # from Altair's own library. INDI does not run on Windows.
+               "backend": "altair" if sys.platform == "win32" else "indi"},
     "mount": {"serial_match": "FTDI"},
     "indi": {"port": 7624, "manage_server": False},
 }
+
+# Where ASTAP's installer puts the program and the star database on Windows.
+SOLVER_FOLDERS = ("C:/Program Files/astap",)
 
 
 def _merged(given):
@@ -50,6 +60,25 @@ def hardware():
 def example():
     """The placeholder site shipped with the project, for the demo mode."""
     return _merged(_read(EXAMPLE))
+
+
+def solver(cfg=None):
+    """The plate solver's program and the folder holding its star database.
+    config.toml's [solver] section wins. Otherwise, on Linux, astap_cli and
+    /opt/astap; on Windows, astap_cli.exe from PATH or from where ASTAP's
+    installer puts it, with the database in the same folder."""
+    given = (cfg or hardware()).get("solver", {})
+    program, database = given.get("program"), given.get("database")
+    if sys.platform != "win32":
+        return {"program": program or "astap_cli", "database": database or "/opt/astap"}
+    if not program:
+        found = shutil.which("astap_cli")
+        installed = [Path(folder) / "astap_cli.exe" for folder in SOLVER_FOLDERS]
+        program = found or str(next((p for p in installed if p.exists()), installed[0]))
+    if not database:
+        beside = Path(shutil.which(program) or program).parent
+        database = str(beside)
+    return {"program": program, "database": database}
 
 
 def field_height(cfg=None):

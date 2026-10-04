@@ -23,3 +23,40 @@ Quirks worth knowing before changing code:
 - **The camera reports no temperature;** darks are scaled to each frame's hot
   pixels instead.
 - **The web server never opens the mount's serial port.**
+
+## The camera through Altair's library (`altair.py`)
+
+The route used on Windows, and available on Linux with `[camera] backend =
+"altair"`. **Nothing below has been run on a real camera yet**; it comes from
+`altaircam.h` version 1.53.2 and from tests against a made-up copy of the
+wrapper. Correct this section when the camera has been used.
+
+- The sequence is: raw mode, full bit depth, software trigger, pull mode with
+  a callback; then per frame set exposure and gain, discard anything
+  waiting, trigger one, wait, pull one.
+- **Still to confirm on the camera:** that the vendor's `altaircam.py` has
+  the calls used (it was not available when this was written; they follow
+  the header and ToupTek's wrapper, which Altair's is a renamed copy of);
+  whether the 12 bits arrive at the bottom or the top of each 16-bit value
+  (the code detects it from the first frame); that gain numbers mean the
+  same as the INDI driver's; the Bayer pattern and which way up the frame
+  is, compared with an INDI frame of the same star field. A flipped frame
+  would send plate-solved corrections the wrong way, so do that comparison
+  before `goto --solve` is trusted with this route.
+- A frame that arrives sooner than the exposure could have finished is
+  treated as a late one from an earlier exposure and thrown away.
+- The wait for a frame is the INDI route's `12 + 6 x exposure` seconds, as an
+  upper limit, until `./camera_test.py --throughput` has measured the real
+  figure at each readout speed. Record those figures here.
+- `[camera] readout_speed` is left unset: the camera keeps its own setting
+  until the measurements say which level is best.
+
+## Windows
+
+- The handset's lead is found among the COM ports by its adapter's name; no
+  port is ever guessed.
+- A preview under `web/` cannot be replaced while the web server has it
+  open; `host.replace_preview` retries for a second and then keeps the old
+  one. Nothing else may use it.
+- Speech is one PowerShell kept open for the run, fed a phrase per line.
+- Helper programs are started with `CREATE_NO_WINDOW` (`host.QUIET`).

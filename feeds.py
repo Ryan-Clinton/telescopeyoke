@@ -22,15 +22,15 @@ def _cached(key, max_age_h, fetch):
     """Return fetch()'s JSON-able result, reusing a recent copy from disk."""
     path = CACHE / f"{key}.json"
     if path.exists() and time.time() - path.stat().st_mtime < max_age_h * 3600:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding="utf-8"))
     try:
         value = fetch()
     except (requests.RequestException, ValueError, KeyError, OSError):
         # A stale copy beats nothing.
-        return json.loads(path.read_text()) if path.exists() else None
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
     if value is not None:
         CACHE.mkdir(exist_ok=True)
-        path.write_text(json.dumps(value))
+        path.write_text(json.dumps(value), encoding="utf-8")
     return value
 
 

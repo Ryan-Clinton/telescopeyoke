@@ -37,6 +37,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+import host
 import interface
 import restack
 import snap
@@ -64,12 +65,12 @@ class Session:
     """One run on one target: the folder, the running stack and the log."""
 
     def __init__(self, name, exposure, gain, save=True, frames=None, preview_every=PREVIEW_EVERY):
-        self.name = name.replace(" ", "")
+        self.name = stacking.folder_name(name)
         self.folder = ROOT / "frames" / self.name / f"{datetime.now():%Y%m%d-%H%M%S}"
         self.folder.mkdir(parents=True, exist_ok=True)
         # What was asked for, so the web page can say "frame 31 of 200".
         (self.folder / "session.json").write_text(json.dumps(
-            {"name": self.name, "frames": frames, "exposure": exposure, "gain": gain}))
+            {"name": self.name, "frames": frames, "exposure": exposure, "gain": gain}), encoding="utf-8")
         self.exposure, self.gain, self.save = exposure, gain, save
         self.calibration = stacking.Calibration(exposure, gain)
         self.reference, self.stack = None, None
@@ -136,7 +137,7 @@ class Session:
             # single frame, so the page shows both.
             image.resize((1600, round(1600 * image.height / image.width)), Image.LANCZOS) \
                  .save(WEB / "stack.part.jpg", quality=88)
-            (WEB / "stack.part.jpg").replace(WEB / "stack.jpg")
+            host.replace_preview(WEB / "stack.part.jpg", WEB / "stack.jpg")
             image.save(WEB / f"{self.name}.jpg", quality=92)
             seconds = self.exposure * len(self.accepted)
             snap.label(f"live stack of {self.name}", f"{len(self.accepted)} accepted frames · "
@@ -144,7 +145,7 @@ class Session:
         self.published = time.monotonic()
 
     def finish(self):
-        (self.folder / "frames.json").write_text(json.dumps(self.log, indent=1))
+        (self.folder / "frames.json").write_text(json.dumps(self.log, indent=1), encoding="utf-8")
         if not self.accepted:
             return
         self.publish(force=True)
@@ -159,7 +160,7 @@ def tell(order):
         raise interface.Refusal("INVALID_REQUEST", f"Unknown order '{order}'. Known: "
                                 + ", ".join(KNOWN_ORDERS))
     ORDERS.parent.mkdir(exist_ok=True)
-    ORDERS.write_text(order)
+    ORDERS.write_text(order, encoding="utf-8")
     return {"order": order, "note": "The run acts on it after its next frame."}
 
 
@@ -167,7 +168,7 @@ def order():
     """The order left for this run, if any; it is taken, so it acts once."""
     if not ORDERS.exists():
         return None
-    found = ORDERS.read_text().strip()
+    found = ORDERS.read_text(encoding="utf-8").strip()
     ORDERS.unlink()
     return found if found in KNOWN_ORDERS else None
 
@@ -201,7 +202,7 @@ def assist(session):
     if not mount.LAST_SOLVE.exists():
         print("  drift assist needs a plate solve first; skipped", flush=True)
         return False
-    cd = json.loads(mount.LAST_SOLVE.read_text()).get("cd")
+    cd = json.loads(mount.LAST_SOLVE.read_text(encoding="utf-8")).get("cd")
     if not cd:
         return False
     times = [t for t, _, _ in session.track]

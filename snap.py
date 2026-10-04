@@ -13,6 +13,7 @@ import numpy as np
 from astropy.io import fits
 from PIL import Image
 
+import host
 from camera import PORT, Camera, colour, stretch
 
 ROOT = Path(__file__).parent
@@ -25,7 +26,7 @@ def label(kind, detail="", folder=None, name="latest"):
     """Note beside a picture in web/ saying what it is a picture of."""
     folder = folder or PREVIEW.parent
     folder.mkdir(exist_ok=True)
-    (folder / f"{name}.json").write_text(json.dumps({"kind": kind, "detail": detail}))
+    (folder / f"{name}.json").write_text(json.dumps({"kind": kind, "detail": detail}), encoding="utf-8")
 
 
 def publish(mosaic, path=PREVIEW, kind="single frame", detail="", quick=False):
@@ -40,7 +41,7 @@ def publish(mosaic, path=PREVIEW, kind="single frame", detail="", quick=False):
     path.parent.mkdir(exist_ok=True)
     partial = path.with_suffix(".part.jpg")
     image.save(partial, quality=88)
-    partial.replace(path)   # the page never loads a half-written picture
+    host.replace_preview(partial, path)   # the page never loads a half-written picture
     if path == PREVIEW:
         label(kind, detail)
 

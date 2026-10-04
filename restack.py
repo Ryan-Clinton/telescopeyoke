@@ -53,7 +53,7 @@ def find_session(name):
 
 def all_sessions(name):
     """Every saved session of an object, oldest first."""
-    folder = ROOT / "frames" / name.replace(" ", "")
+    folder = ROOT / "frames" / stacking.folder_name(name)
     return sorted(p for p in folder.glob("*/") if p.name != COMBINED and any(p.glob("light-*.fits")))
 
 
@@ -200,7 +200,7 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
                      "median_residual_px": round(float(np.median(residuals)), 3) if residuals else None,
                      "seconds": round(time.perf_counter() - began, 1),
                      "picture": str(session / "final.jpg"), "stack": str(session / "final.fits")}},
-        indent=1))
+        indent=1), encoding="utf-8")
     say(f"{len(frames)} captured, {len(chosen)} stacked, {len(frames) - len(chosen)} left out; "
         f"total exposure {total:.0f} s")
     if residuals:
@@ -238,7 +238,7 @@ def main():
             sessions = [find_session(name) for name in args.session]
         picture = run(sessions if len(sessions) > 1 else sessions[0], args.keep,
                       workers=args.workers, profile=args.profile)
-        return json.loads((picture.parent / "restack.json").read_text())["summary"]
+        return json.loads((picture.parent / "restack.json").read_text(encoding="utf-8"))["summary"]
 
     interface.main("restack", work, args.json)
 

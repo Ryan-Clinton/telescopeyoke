@@ -12,6 +12,8 @@ import sys
 import urllib.request
 from pathlib import Path
 
+import host  # noqa: F401  (makes printed output UTF-8 on Windows)
+
 BASE = "https://raw.githubusercontent.com/mattiaverga/OpenNGC/master/database_files/"
 FILES = ("NGC.csv", "addendum.csv")
 OUT = Path(__file__).parent / "data" / "targets.csv"
@@ -98,7 +100,7 @@ def main():
 
     out.sort(key=lambda t: (t["messier"] == "", t["messier"] or 0, t["id"]))
     OUT.parent.mkdir(exist_ok=True)
-    with OUT.open("w", newline="") as f:
+    with OUT.open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=list(out[0]))
         w.writeheader()
         w.writerows(out)

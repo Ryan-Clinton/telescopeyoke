@@ -17,6 +17,8 @@ from astropy.io import fits
 from PIL import Image
 from scipy import ndimage
 
+import stacking
+
 ROOT = Path(__file__).parent
 
 
@@ -103,7 +105,7 @@ def main():
                          "picture so faint glow shows); about 25 is gentle, 500 is hard")
     args = ap.parse_args()
 
-    name = args.name.replace(" ", "")
+    name = stacking.folder_name(args.name)
     # Newest stack for this object: a restacked session's final.fits if there
     # is one, else shoot.py's own running stack.
     stacks = sorted(list((ROOT / "frames").glob(f"{name}-*.fits"))

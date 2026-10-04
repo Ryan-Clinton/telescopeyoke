@@ -70,6 +70,10 @@ cd telescopeyoke
 ./mount.py --demo goto M27    # drive a simulated mount
 ```
 
+On Windows 10 or 11, in PowerShell: `.\install.ps1`, then the same commands
+written as `python doctor.py`, `python tonight.py --demo` and so on, and
+`.\ty` for `./ty`. See [Setup](docs/setup.md#windows).
+
 **Use the planner for real** (still no telescope needed): put your location
 in `config.toml`, then `./tonight.py`.
 
@@ -94,6 +98,7 @@ Start with the planner; add hardware when you have it.
 | Altair Hypercam 183C on USB 2 | ✅ Tested by the author |
 | Ubuntu 26.04, Python 3.14 | ✅ Tested by the author |
 | Python 3.11, 3.12, 3.13 | ✅ Tests pass in CI (no hardware) |
+| Windows 10 and 11 | ⚠️ Tests and the demo pass with no hardware (Windows 11, Python 3.12). No camera or mount has been used on Windows yet. |
 | EQ5, HEQ5, EQ6 with a SynScan handset | ⚠️ Untested. Likely: same serial protocol. |
 | Other INDI cameras | ⚠️ Untested. Likely for mono or RGGB colour sensors: set the driver and sensor size in `config.toml`. |
 | Other telescopes | Set the focal length in `config.toml`. |
@@ -241,6 +246,15 @@ Rewritten since those pictures, tested on simulated star fields, and being
 proven on real sky: the stacking pipeline (frame scoring and rejection,
 sub-pixel and rotation alignment, clipped and weighted stacking, saved raw
 frames, the quality pass).
+
+Windows: the tests and every `--demo` command pass, on Windows 11 with
+Python 3.12, with nothing plugged in. That is the first of three levels and
+the only one reached. The camera has not taken a frame on Windows, and the
+mount and camera have not been used together there. The Windows camera route
+(`altair.py`, which reads the camera through Altair's own library instead of
+INDI) has only been run against a made-up copy of that library, on either
+system. The COM port search, the plate solver's Windows paths, the DirectShow
+webcam and the spoken focusing aid are likewise untried on real equipment.
 
 Written but not yet run for real: `calibrate.py` (no dark or flat frames have
 been taken yet) and `camera_test.py --gain-sweep`.

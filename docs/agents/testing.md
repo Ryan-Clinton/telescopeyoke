@@ -5,13 +5,19 @@ pytest -q                         # everything, about a minute, no hardware
 pytest -q tests/test_mount.py     # mount logic against the simulated handset
 ```
 
-CI runs the suite and the demo commands on Python 3.11 to 3.14.
+CI runs the suite and the demo commands on Python 3.11 to 3.14, on Linux and
+on Windows. Neither has any hardware.
 
 - `tests/test_sky.py`, `test_planner.py`: astronomy, the report, the page, doctor.
 - `tests/test_mount.py`, `test_tracking.py`: limits, GoTo, drift model and
   cancelling, on both sides of the mount.
 - `tests/test_stacking.py`, `test_imaging.py`: the imaging pipeline on
   made-up star fields with known answers; focusing.
+- `tests/test_camera.py`: one contract held by both camera routes, INDI and
+  Altair's library, each against a made-up stand-in; and the SDK route's own
+  hazards (late frames, time-outs, an unplugged camera, two cameras).
+- `tests/test_host.py`: what differs on Windows (`host.py`): COM ports,
+  previews held open, speech in order, UTF-8 output through a pipe.
 - `tests/test_interface.py`: the JSON envelope against `schemas/`, error
   codes, dry runs, the MCP server, and the scenarios in `evals/`.
 

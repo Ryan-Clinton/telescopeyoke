@@ -1,4 +1,6 @@
-"""The telescope camera (Altair Hypercam 183C) through its INDI driver.
+"""The telescope camera (Altair Hypercam 183C) through its INDI driver, or,
+with [camera] backend = "altair" in config.toml, through Altair's own library
+(altair.py), which is the only route on Windows.
 
     with Camera() as cam:
         data, header = cam.frame(2.0)      # raw 12-bit Bayer mosaic
@@ -30,7 +32,18 @@ TIMEOUT_FACTOR = 10
 WHITE = 2 ** SETTINGS["camera"]["bit_depth"] - 1  # brightest raw value
 
 
+BACKEND = SETTINGS["camera"]["backend"]   # "indi", or "altair" for Altair's own library
+
+
 class Camera:
+    def __new__(cls, port=PORT, gain=300):
+        # With the SDK backend the caller gets altair.py's camera instead. It
+        # is not a Camera, so the INDI set-up below never runs for it.
+        if cls is Camera and BACKEND == "altair":
+            from altair import AltairCamera
+            return AltairCamera(gain=gain)
+        return super().__new__(cls)
+
     def __init__(self, port=PORT, gain=300):
         self.port, self.gain = port, gain
         self._open()

@@ -6,7 +6,11 @@
     ./camera_test.py --gain-sweep       try a range of gains on tonight's sky
     ./camera_test.py --gain-sweep --gains 300 900 1500 2500 --exposure 2
 
---throughput takes a few frames in each mode the driver offers (readout
+With [camera] backend = "altair" the camera is read through Altair's own
+library: --capabilities then shows the model, versions and how it is
+connected, and --throughput times each readout speed and measures its grain.
+
+Through INDI, --throughput takes a few frames in each mode the driver offers (readout
 speeds, smaller resolutions, binning, back-to-back "fast" exposures, native
 transfer) and reports how long a frame takes in each and what share of the
 time the shutter is open. It puts the camera back as it found it. Nothing
@@ -27,7 +31,9 @@ import numpy as np
 
 import interface
 import stacking
-from camera import WHITE, Camera, luminance
+from camera import BACKEND, WHITE, Camera, luminance
+
+SDK = BACKEND == "altair"   # frames come through Altair's library, not INDI
 
 GAINS = (300, 600, 900, 1200, 1500, 1800)
 
@@ -194,6 +200,50 @@ def throughput(exposure, frames, gain):
     return results
 
 
+def show_details(found):
+    """What Altair's library says about the camera and how it is connected."""
+    for label, key in (("Camera", "model"), ("Serial number", "serial"), ("SDK version", "sdk_version"),
+                       ("Firmware", "firmware"), ("Flags", "flags"), ("Bit depth", "bit_depth"),
+                       ("Colour pattern", "bayer")):
+        print(f"{label + ':':<16}{found[key]}")
+    print(f"{'Frame:':<16}{found['size'][0]} x {found['size'][1]}")
+    print(f"{'Readout speed:':<16}{found['readout_speed']} (range 0-{found['max_readout_speed']})")
+    print(f"{'USB:':<16}" + ("a USB 3 camera on a USB 2 port: frames will be slow"
+                             if found["usb3_camera_on_usb2_port"] else "not held back by a USB 2 port"))
+
+
+def throughput_sdk(exposure, frames, gain):
+    """Through Altair's library: time a frame at each readout speed, and
+    measure the grain, so a faster level is only chosen if it costs nothing.
+    Put the cap on for the grain figure to mean anything."""
+    results = []
+    with Camera(gain=gain) as cam:
+        was, top = cam.handle.get_Speed(), cam.handle.MaxSpeed()
+        print(f"{frames} frames of {exposure:g} s at each readout speed (now {was})\n"
+              f"{'mode':<18} {'exposure':>8} {'frame':>8} {'overhead':>9} {'open':>5} {'grain':>7}")
+        try:
+            for level in range(top + 1):
+                mode = f"readout speed {level}"
+                try:
+                    cam.handle.put_Speed(level)
+                    row = timed(cam, exposure, frames)
+                    mosaic, _ = cam.frame(exposure)
+                    # Grain from the difference of neighbouring same-colour
+                    # pixels, so a gradient across the frame does not count.
+                    cell = mosaic[0::2, 0::2].astype(np.float32)
+                    row["noise"] = round(float(np.std(cell[:, 1:] - cell[:, :-1])) / 2 ** 0.5, 2)
+                    row["overhead_s"] = round(row["cycle_s"] - exposure, 2)
+                    results.append({"mode": mode, "exposure_s": exposure, **row})
+                    print(f"{mode:<18} {exposure:>7g}s {row['cycle_s']:>7.2f}s {row['overhead_s']:>8.2f}s "
+                          f"{row['duty_percent']:>4}% {row['noise']:>7.2f}", flush=True)
+                except Exception as problem:
+                    results.append({"mode": mode, "failed": str(problem) or type(problem).__name__})
+                    print(f"{mode:<18} failed: {results[-1]['failed']}", flush=True)
+        finally:
+            cam.handle.put_Speed(was)
+    return results
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     what = ap.add_mutually_exclusive_group(required=True)
@@ -212,11 +262,11 @@ def main():
 def run(args):
     if args.capabilities:
         with Camera(gain=args.gain) as cam:
-            found = capabilities(cam)
-        show_capabilities(found)
+            found = cam.details() if SDK else capabilities(cam)
+        (show_details if SDK else show_capabilities)(found)
         return found
     if args.throughput:
-        results = throughput(args.exposure or 1.0, args.frames, args.gain)
+        results = (throughput_sdk if SDK else throughput)(args.exposure or 1.0, args.frames, args.gain)
         good = [r for r in results if "failed" not in r]
         if good:
             best = min(good, key=lambda r: r["cycle_s"])

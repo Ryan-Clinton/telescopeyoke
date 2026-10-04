@@ -54,7 +54,7 @@ def measure(scope, site):
     """Photograph the sky at three RA-axis positions and return the polar
     axis's error as (degrees east of north, degrees too high). Slews about
     STEP degrees twice, away from the meridian, and returns to where it was."""
-    offset = json.loads(mount.CLOCK_FILE.read_text())["offset_deg"]
+    offset = json.loads(mount.CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
 
     def believed_hour_angle():
         return mount.wrap(mount.true_sidereal(site) + offset - scope.radec()[0])

@@ -31,6 +31,61 @@ On Ubuntu and Debian, `install.sh` takes the Python libraries from the
 distribution's own packages. `pyproject.toml` lists the same libraries with
 the oldest versions known to work, and is what CI and `pip install .` use.
 
+## Windows
+
+telescopeyoke runs natively on Windows 10 and 11: no WSL and no ASCOM. What
+has and has not been proven there is in the README's "Current status".
+
+Commands in these documents are written for Linux. On Windows `./mount.py
+goto M27` is typed `python mount.py goto M27`, and `./ty status` is
+`.\ty status`.
+
+1. Install 64-bit Python 3.11 or newer from python.org, ticking "Add
+   python.exe to PATH". Then, in PowerShell in the project folder:
+
+       .\install.ps1
+
+   If Windows answers that running scripts is disabled, run it this once as
+   `powershell -ExecutionPolicy Bypass -File .\install.ps1`. It installs the
+   Python libraries and creates `config.toml`; it needs no administrator
+   rights and changes no system setting. `python doctor.py` then says what
+   is still missing, and how to fix each thing.
+2. **Paths in `config.toml`** are written with forward slashes:
+   `"C:/Program Files/astap"`. Inside double quotes a backslash starts an
+   escape, so `"C:\Program Files\astap"` is an error. Single quotes also
+   work: `'C:\Program Files\astap'`.
+3. **Camera.** INDI does not run on Windows, so the camera is read through
+   Altair's own library.
+   - Install AltairCapture from <https://www.altairastro.help>. Its
+     installer puts the camera's Windows driver in place. Check the camera
+     shows a picture in it, then close it: only one program can hold the
+     camera. telescopeyoke does not use AltairCapture itself.
+   - Download the Altair Camera SDK from the same site. From the zip, copy
+     `altaircam.py` (in its `python` folder) and the 64-bit `altaircam.dll`
+     (in its `win` `x64` folder) into `vendor\altair\` in the project. These
+     files are Altair's and are not part of this repository.
+   - If frames are slow or cut off, open the camera and the USB hub it hangs
+     from in Device Manager and, on the Power Management tab, untick "Allow
+     the computer to turn off this device to save power".
+4. **Mount.** The handset's lead shows up as a COM port, found by its
+   adapter's name: `serial_match = "FTDI"` under `[mount]` suits the tested
+   lead. A handset plugged in by its own USB socket is a Prolific PL2303
+   port: install Prolific's driver and set `serial_match = "Prolific"`.
+   `--port COM5` overrides the search. If nothing matches, the command
+   refuses and lists the ports it saw; it never guesses one. Close EQMod,
+   SharpCap, NINA or anything else holding the port.
+5. **Plate solver.** Install ASTAP's command-line program, `astap_cli.exe`,
+   and the D20 star database, both into `C:\Program Files\astap`. To keep
+   them elsewhere, name them under `[solver]` in `config.toml`.
+6. **Webcam and sound.** Install ffmpeg, including `ffplay`, and put it on
+   PATH. List the cameras with `ffmpeg -list_devices true -f dshow -i dummy`
+   and put the one that watches the telescope under `[webcam] device` in
+   `config.toml`. Without `ffplay` the focusing aid speaks but has no tones.
+7. **Sending `--json` to a file.** The output is UTF-8. Windows PowerShell
+   5.1 re-encodes what a program prints before `>` writes it; to keep it
+   exact use `cmd /c "python doctor.py --json > result.json"`, or PowerShell
+   7.
+
 ## What it needs from the computer
 
 A 2017 four-core laptop (i7-7700HQ, 22 GB of memory, an SSD) runs all of this

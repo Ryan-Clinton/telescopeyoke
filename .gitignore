@@ -10,3 +10,8 @@ MOTION_LOCKED
 recordings/
 calibration/
 .claude/
+
+# Local Python environment and vendor SDK files (see docs/windows-port.md)
+.venv/
+*.egg-info/
+vendor/

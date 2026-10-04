@@ -12,13 +12,13 @@ the mount.
 """
 import argparse
 import glob
-import grp
 import importlib
-import os
 import shutil
 import socket
 import sys
 from pathlib import Path
+
+import host
 
 ROOT = Path(__file__).parent
 OK, WARN, FAIL = "ok", "warn", "fail"
@@ -50,7 +50,7 @@ def check_catalogue():
     path = ROOT / "data" / "targets.csv"
     if not path.exists():
         return FAIL, "target catalogue data/targets.csv is missing"
-    return OK, f"target catalogue ({sum(1 for _ in path.open()) - 1} objects)"
+    return OK, f"target catalogue ({sum(1 for _ in path.open(encoding="utf-8")) - 1} objects)"
 
 
 def check_config():
@@ -77,28 +77,22 @@ def check_network():
 
 def find_serial_port():
     import config
-    match = config.hardware()["mount"]["serial_match"]
-    ports = sorted(glob.glob(f"/dev/serial/by-id/*{match}*"))
-    return ports[0] if ports else None
+    return host.serial_port(config.hardware()["mount"]["serial_match"])
 
 
 def check_serial_access():
-    try:
-        members = grp.getgrnam("dialout")
-    except KeyError:
-        return WARN, "no dialout group on this system"
-    user = os.environ.get("USER", "")
-    if members.gr_gid in os.getgroups() or members.gr_gid == os.getegid():
-        return OK, "serial access (dialout group)"
-    if user in members.gr_mem:
-        return WARN, ("in the dialout group but not yet active: log out and back in, or "
-                      "prefix mount commands with: sudo -u $USER -g dialout")
-    return FAIL, "not in the dialout group: sudo usermod -aG dialout $USER"
+    return host.serial_access()
 
 
 def check_serial_lead():
     port = find_serial_port()
     if not port:
+        if host.WINDOWS:
+            import config
+            seen = ", ".join(f"{device} {name}" for device, name in host.serial_ports()) or "none"
+            return FAIL, (f"handset serial lead not found: no COM port matches "
+                          f"\"{config.hardware()['mount']['serial_match']}\" (serial_match "
+                          f"under [mount] in config.toml). Ports seen: {seen}")
         return FAIL, "handset serial lead not found (is it plugged in?)"
     return OK, f"handset serial lead ({Path(port).name})"
 
@@ -129,15 +123,32 @@ def check_program(name, purpose):
     return FAIL, f"{name} not found ({purpose})"
 
 
+def check_solver():
+    import config
+    program = config.solver()["program"]
+    if shutil.which(program):
+        return OK, f"{Path(program).name} (plate solver)"
+    if host.WINDOWS:
+        return FAIL, (f"{Path(program).name} not found (plate solver). Install ASTAP's "
+                      "command-line program, astap_cli.exe (astap.exe alone is not enough), "
+                      "or name it under [solver] program in config.toml. "
+                      "Looked on PATH and in " + ", ".join(config.SOLVER_FOLDERS))
+    return FAIL, f"{program} not found (plate solver)"
+
+
 def check_star_database():
-    if glob.glob("/opt/astap/d20_*"):
+    import config
+    folder = config.solver()["database"]
+    if glob.glob(str(Path(folder) / "d20_*")):
         return OK, "ASTAP D20 star database"
-    return FAIL, "ASTAP D20 star database not found in /opt/astap"
+    return FAIL, f"ASTAP D20 star database not found in {folder}"
 
 
 def check_indi_server():
     import config
     settings = config.hardware()
+    if settings["camera"]["backend"] != "indi":
+        return OK, "INDI server not used: the camera is read through the Altair SDK"
     port = settings["indi"]["port"]
     try:
         socket.create_connection(("localhost", port), timeout=2).close()
@@ -150,28 +161,15 @@ def check_indi_server():
 
 
 def check_camera_link():
-    """How fast the camera's USB connection is. Linux lists every USB device
-    with its speed; the camera is found by a name set in config.toml."""
     import config
-    from pathlib import Path
-    match = config.hardware()["camera"].get("usb_match", "ALTAIR").lower()
-    for device in Path("/sys/bus/usb/devices").glob("*"):
-        product = device / "product"
-        if product.exists() and match in product.read_text().lower():
-            speed = int((device / "speed").read_text())
-            name = {12: "USB 1 full speed: far too slow for a camera", 480: "USB 2 high speed",
-                    5000: "USB 3", 10000: "USB 3.1"}.get(speed, "")
-            # "auto" lets Linux power the port down when idle, which some
-            # astronomy cameras take badly during long sessions.
-            control = device / "power" / "control"
-            saving = control.exists() and control.read_text().strip() == "auto"
-            note = "; USB power saving is on for it" if saving else ""
-            return (FAIL if speed < 480 else OK), f"camera USB link: {speed} Mbps ({name}){note}"
-    return WARN, "camera USB link: camera not found on USB"
+    return host.camera_usb_link(config.hardware()["camera"].get("usb_match", "ALTAIR"))
 
 
 def check_camera():
     import config
+    if config.hardware()["camera"]["backend"] == "altair":
+        import altair
+        return altair.checks()[-1]
     port = config.hardware()["indi"]["port"]
     try:
         from indi import Indi
@@ -188,17 +186,17 @@ def check_camera():
 
 
 def check_webcam():
-    if not shutil.which("ffmpeg"):
-        return WARN, "ffmpeg not found; the webcam watch will not work"
-    if not glob.glob("/dev/video*"):
-        return WARN, "no webcam; slews will not be photographed"
-    return OK, "webcam and ffmpeg"
+    return host.has_webcam()
 
 
 def check_speech():
-    if shutil.which("spd-say"):
-        return OK, "speech (spd-say) for the focusing aid"
-    return WARN, "spd-say not found; the focusing aid will be silent"
+    return host.has_speech()
+
+
+def check_tones():
+    if shutil.which("ffplay"):
+        return OK, "ffplay (focusing tones)"
+    return WARN, "ffplay not found; the focusing aid will speak but cannot play tones"
 
 
 def run(offline=False, skip_handset=False):
@@ -212,9 +210,14 @@ def run(offline=False, skip_handset=False):
     if not skip_handset:
         mount.append(check_handset())
     mount.append(check_webcam())
-    imaging = [check_program("astap_cli", "plate solver"), check_star_database(),
-               check_program("indiserver", "INDI"), check_program(driver, "camera driver"),
-               check_indi_server(), check_camera(), check_camera_link(), check_speech()]
+    imaging = [check_solver(), check_star_database()]
+    if config.hardware()["camera"]["backend"] == "altair":
+        import altair
+        imaging += altair.checks()
+    else:
+        imaging += [check_program("indiserver", "INDI"), check_program(driver, "camera driver"),
+                    check_indi_server(), check_camera()]
+    imaging += [check_camera_link(), check_speech(), check_tones()]
     return {"planner": planner, "mount": mount, "imaging": imaging}
 
 

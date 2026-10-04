@@ -537,4 +537,4 @@ def render(rep, top, out_dir):
 def write(rep, top, path):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(render(rep, top, path.parent))
+    path.write_text(render(rep, top, path.parent), encoding="utf-8")

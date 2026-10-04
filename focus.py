@@ -17,6 +17,7 @@ Runs for 15 minutes (Ctrl+C to stop sooner); the web page shows the picture.
 """
 import argparse
 import json
+import shutil
 import subprocess
 import time
 from pathlib import Path
@@ -25,6 +26,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
 
+import host
 import interface
 import snap
 import stacking
@@ -172,9 +174,12 @@ def tone(value, worst, floor=1.5):
     reading, 1200 Hz at a perfect star."""
     span = max(worst - floor, 1e-6)
     pitch = 300 + 900 * float(np.clip((worst - value) / span, 0, 1))
-    subprocess.Popen(["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", "-f", "lavfi",
-                      "-i", f"sine=frequency={pitch:.0f}:duration=0.25"],
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        subprocess.Popen(["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", "-f", "lavfi",
+                          "-i", f"sine=frequency={pitch:.0f}:duration=0.25"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **host.QUIET)
+    except FileNotFoundError:
+        pass   # no ffplay: main() has already said so
 
 
 def sharpness(lum):
@@ -185,8 +190,7 @@ def sharpness(lum):
 
 def say(words):
     """Speak through the laptop's speaker without holding up the next frame."""
-    subprocess.Popen(["spd-say", "-r", "20", words],
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    host.speak(words)
 
 
 def annotate(image, text, colour=(255, 220, 90)):
@@ -216,6 +220,9 @@ def main():
 
 def run(args):
     """The focusing loop. Returns the last reading."""
+    if args.tones and not shutil.which("ffplay"):
+        print("ffplay is not installed, so there are no tones; speaking instead.", flush=True)
+        args.tones = False
     cam = Camera(args.port, args.gain)
     reading = {}
 
@@ -285,7 +292,7 @@ def run(args):
                                    "best_hfr": round(tracker.best, 2), "advice": words,
                                    "exposure_s": exposure, "saved": time.time()}
                         FOCUS_FILE.parent.mkdir(exist_ok=True)
-                        FOCUS_FILE.write_text(json.dumps(reading))
+                        FOCUS_FILE.write_text(json.dumps(reading), encoding="utf-8")
             image = Image.fromarray(picture.astype(np.uint8)).convert("RGB")
             image = image.resize((900, round(900 * image.height / image.width)))
             text = f"#{frame} {time.strftime('%H:%M:%S')}  {text}"

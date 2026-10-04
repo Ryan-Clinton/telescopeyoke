@@ -11,6 +11,8 @@ import json
 import sys
 from datetime import datetime, timezone
 
+import host  # noqa: F401  (makes --json output UTF-8 on every system)
+
 SCHEMA_VERSION = "1.0"
 
 # Every way a command can refuse or fail, with whether trying again unchanged
@@ -28,7 +30,8 @@ ERRORS = {
     "SLEW_TIMED_OUT": (True, "The mount was stopped; check it is free to move."),
     "GOTO_REFUSED": (True, "The handset would not accept the GoTo."),
     "PLATE_SOLVE_FAILED": (True, "Usual causes: cloud, focus, too few stars. Take a frame and look."),
-    "CAMERA_NOT_CONNECTED": (False, "Plug in the camera and start its INDI driver."),
+    "CAMERA_NOT_CONNECTED": (False, "Plug in the camera. Through INDI, start its driver; on Windows, "
+                                    "see what doctor.py says about the camera."),
     "NO_STARS": (True, "No stars in the frame: cloud, the cap, or far out of focus. Look at "
                        "the newest frame, then try again."),
     "NO_USABLE_FRAMES": (True, "Every frame was rejected; see the reasons in the session log."),

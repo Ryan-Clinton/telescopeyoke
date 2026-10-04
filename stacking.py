@@ -32,13 +32,33 @@ REGISTER = 1024     # side of the central square used for the first rough line-u
 MIN_MATCHES = 6     # stars needed to trust a star-by-star alignment
 
 
+# --- names that become folders ---------------------------------------------------
+
+# Windows refuses these characters in a file name, and these names whatever
+# follows the dot. A comet's designation has a "/", which is wrong everywhere.
+REFUSED = '<>:"/\\|?*'
+RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{n}" for n in range(1, 10)),
+            *(f"LPT{n}" for n in range(1, 10))}
+
+
+def folder_name(name):
+    """A target's name as the folder its frames are kept in: spaces removed,
+    and made safe on both Linux and Windows so a frames/ folder can be copied
+    between them. Names that are already safe (M27, NGC7000) are unchanged."""
+    safe = "".join("-" if c in REFUSED or ord(c) < 32 else c for c in name.replace(" ", ""))
+    safe = safe.rstrip(".") or "unnamed"
+    if safe.split(".")[0].upper() in RESERVED:
+        safe += "_"
+    return safe
+
+
 # --- using the whole processor -------------------------------------------------
 
 def cores():
     """Physical processor cores. Image work gains little from the extra
     logical threads, so the worker count follows the real cores."""
     try:
-        text = Path("/proc/cpuinfo").read_text()
+        text = Path("/proc/cpuinfo").read_text(encoding="utf-8")
         found = {(block.split("physical id")[1].split("\n")[0], block.split("core id")[1].split("\n")[0])
                  for block in text.split("\n\n") if "core id" in block}
         if found:
@@ -617,7 +637,7 @@ def write_stack(path, rgb, header):
 def append_log(session, entry):
     """Add one frame's entry to the session's log. One line per frame, so a
     long run does not rewrite the whole log every frame."""
-    with (Path(session) / "frames.jsonl").open("a") as f:
+    with (Path(session) / "frames.jsonl").open("a", encoding="utf-8") as f:
         f.write(json.dumps(entry) + "\n")
 
 
@@ -625,9 +645,9 @@ def read_log(session):
     """Every frame's entry so far."""
     lines = Path(session) / "frames.jsonl"
     if lines.exists():
-        return [json.loads(line) for line in lines.read_text().splitlines() if line.strip()]
+        return [json.loads(line) for line in lines.read_text(encoding="utf-8").splitlines() if line.strip()]
     path = Path(session) / "frames.json"   # sessions from before the line-per-frame log
-    return json.loads(path.read_text()) if path.exists() else []
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
 
 
 def run_status(session, now=None):
@@ -638,7 +658,7 @@ def run_status(session, now=None):
     log = read_log(session)
     plan = {}
     if (session / "session.json").exists():
-        plan = json.loads((session / "session.json").read_text())
+        plan = json.loads((session / "session.json").read_text(encoding="utf-8"))
     rejected = [f for f in log if not f["accepted"]]
     reasons = {}
     for f in rejected:

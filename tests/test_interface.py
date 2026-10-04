@@ -18,11 +18,11 @@ from simulator import SimulatedHandset
 
 ROOT = Path(__file__).parent.parent
 SITE = config.example()["site"]
-SCENARIOS = {s["name"]: s for s in json.loads((ROOT / "evals" / "scenarios.json").read_text())}
+SCENARIOS = {s["name"]: s for s in json.loads((ROOT / "evals" / "scenarios.json").read_text(encoding="utf-8"))}
 
 
 def schema(name):
-    return json.loads((ROOT / "schemas" / f"{name}.schema.json").read_text())
+    return json.loads((ROOT / "schemas" / f"{name}.schema.json").read_text(encoding="utf-8"))
 
 
 def valid(result, data_schema=None):
@@ -125,7 +125,7 @@ def test_scenario_refuse_beyond_hour_angle(quiet, monkeypatch):
 
 def test_scenario_never_move_when_locked(quiet, monkeypatch):
     sky(monkeypatch, 30.0, 55.0)
-    mount.LOCK_FILE.write_text("something caught on the mount")
+    mount.LOCK_FILE.write_text("something caught on the mount", encoding="utf-8")
     assert agent.capabilities()["motion"]["locked"]
     assert agent.capabilities()["motion"]["lock_reason"] == "something caught on the mount"
     error = refusal(lambda: mount.plan_goto("M27", SITE))

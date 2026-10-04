@@ -22,9 +22,11 @@ import config
 import interface
 from camera import Camera, luminance
 
+import host
+
 ROOT = Path(__file__).parent
-ASTAP = "astap_cli"
-DATABASE = "/opt/astap"
+SOLVER = config.solver()
+ASTAP, DATABASE = SOLVER["program"], SOLVER["database"]
 # Height of the camera's view in degrees, from the sensor and focal length
 # in config.toml (0.67° for the 183C behind 750 mm).
 FIELD_HEIGHT = round(config.field_height(), 3)
@@ -46,10 +48,10 @@ def solve(image, ra_hint=None, dec_hint=None, radius=30, field=FIELD_HEIGHT, tim
             cmd += ["-ra", f"{ra_hint / 15:.5f}", "-spd", f"{dec_hint + 90:.4f}",
                     "-r", str(radius)]
         started = time.monotonic()
-        subprocess.run(cmd, capture_output=True, timeout=timeout)
+        subprocess.run(cmd, capture_output=True, timeout=timeout, **host.QUIET)
         result = dict(
             line.split("=", 1) for line in
-            (path.with_suffix(".ini").read_text().splitlines()
+            (path.with_suffix(".ini").read_text(encoding="utf-8", errors="replace").splitlines()
              if path.with_suffix(".ini").exists() else []) if "=" in line)
     if result.get("PLTSOLVD") != "T":
         return None

@@ -54,7 +54,7 @@ def test_zenith_puts_the_tube_on_the_meridian_at_the_sites_latitude(scope):
 
 def test_the_handset_clock_error_is_measured_and_stored(scope):
     scope.zenith(SITE)
-    offset = json.loads(mount.CLOCK_FILE.read_text())["offset_deg"]
+    offset = json.loads(mount.CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
     expected = mount.wrap(scope.s.sidereal() - mount.true_sidereal(SITE))
     assert offset == pytest.approx(expected, abs=0.1)
 
@@ -108,7 +108,7 @@ def test_pointing_at_a_bearing_refuses_the_ground(scope):
 
 
 def test_the_stored_pointing_error_reverses_in_dec_across_the_pole(scope):
-    mount.CLOCK_FILE.write_text(json.dumps({"offset_deg": 0, "saved": 1}))
+    mount.CLOCK_FILE.write_text(json.dumps({"offset_deg": 0, "saved": 1}), encoding="utf-8")
     mount.save_pointing_error([-10.0, -12.0], west=True)
     assert mount.load_pointing_error(west=True) == [-10.0, -12.0]
     assert mount.load_pointing_error(west=False) == [-10.0, 12.0]
@@ -116,8 +116,8 @@ def test_the_stored_pointing_error_reverses_in_dec_across_the_pole(scope):
 
 def test_an_old_pointing_error_is_ignored_after_the_handset_is_restarted(scope):
     mount.save_pointing_error([-10.0, -12.0], west=True)
-    saved = json.loads(mount.POINTING_FILE.read_text())["saved"]
-    mount.CLOCK_FILE.write_text(json.dumps({"offset_deg": 0, "saved": saved + 60}))
+    saved = json.loads(mount.POINTING_FILE.read_text(encoding="utf-8"))["saved"]
+    mount.CLOCK_FILE.write_text(json.dumps({"offset_deg": 0, "saved": saved + 60}), encoding="utf-8")
     assert mount.load_pointing_error(west=True) == [0.0, 0.0]
 
 
@@ -143,7 +143,7 @@ def test_a_centring_run_can_be_recorded(scope, tmp_path):
                   if abs(mount.where(mount.find_target(name), SITE)[0]) < 75
                   and mount.where(mount.find_target(name), SITE)[2] > 25)
     scope.goto_target(target, SITE)
-    steps = json.loads((tmp_path / "run" / "steps.json").read_text())
+    steps = json.loads((tmp_path / "run" / "steps.json").read_text(encoding="utf-8"))
     assert steps and target in steps[0]["text"]
 
 

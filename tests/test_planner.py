@@ -21,7 +21,7 @@ def test_demo_report_builds_without_network_or_setup():
 def test_report_renders_as_a_web_page(tmp_path):
     report = tonight.build(config.example(), demo=True)
     tonight.write_html(report, 10, tmp_path / "index.html")
-    page = (tmp_path / "index.html").read_text()
+    page = (tmp_path / "index.html").read_text(encoding="utf-8")
     assert "<table>" in page and "My back garden" in page
 
 
@@ -109,7 +109,7 @@ def test_a_recorded_run_becomes_an_animation(tmp_path):
     (tmp_path / "steps.json").write_text(json.dumps([
         {"text": "M27 Dumbbell Nebula: altitude 53°", "frame": 0, "time": 0},
         {"text": "  off by +11.4' in hour angle", "frame": 1, "time": 40},
-        {"text": "  centred", "frame": 1, "time": 80}]))
+        {"text": "  centred", "frame": 1, "time": 80}]), encoding="utf-8")
     frames = replay.build(tmp_path, command="./mount.py goto M27 --solve")
     assert len(frames) == 3 and frames[0].size == frames[2].size
 

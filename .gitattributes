@@ -1,0 +1,8 @@
+# Keep LF in the repository and in every checkout: a Windows checkout would
+# otherwise put CRLF after the shebang in ty and break it on Linux.
+* text=auto eol=lf
+# The two Windows-only kinds keep Windows endings.
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+# Written by the csv module with CRLF row endings; keep it byte for byte.
+data/targets.csv -text

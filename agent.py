@@ -35,7 +35,7 @@ def components():
     checks = {
         "python_libraries": doctor.check_libraries(), "config": doctor.check_config(),
         "catalogue": doctor.check_catalogue(), "serial_access": doctor.check_serial_access(),
-        "mount_lead": doctor.check_serial_lead(), "plate_solver": doctor.check_program("astap_cli", "plate solver"),
+        "mount_lead": doctor.check_serial_lead(), "plate_solver": doctor.check_solver(),
         "star_database": doctor.check_star_database(), "indi_server": doctor.check_indi_server(),
         "camera": doctor.check_camera(), "webcam": doctor.check_webcam(),
     }
@@ -65,7 +65,7 @@ def capabilities():
         "imaging": {"available": good("indi_server", "camera", "plate_solver", "star_database")},
         "motion": {
             "locked": locked,
-            "lock_reason": mount.LOCK_FILE.read_text().strip() if locked else None,
+            "lock_reason": mount.LOCK_FILE.read_text(encoding="utf-8").strip() if locked else None,
             "approval": "A person must ask for each move. Software, including an agent, must "
                         "not decide to move the mount or remove the lock by itself.",
             "limits": {"min_altitude_deg": mount.MIN_ALTITUDE,
@@ -208,7 +208,7 @@ def _scale():
     """Arcseconds per pixel of the half-size frames: from the last plate solve
     if there is one, else from the camera and telescope in the settings."""
     if mount.LAST_SOLVE.exists():
-        return json.loads(mount.LAST_SOLVE.read_text())["scale"]
+        return json.loads(mount.LAST_SOLVE.read_text(encoding="utf-8"))["scale"]
     cfg = config.load() if config.FILE.exists() else config.example()
     pixel = config.hardware()["camera"]["pixel_size_um"]
     return 206.265 * 2 * pixel / cfg["scope"]["focal_length_mm"]
@@ -264,7 +264,7 @@ def observing(demo=False):
         out["sky"] = {"error": str(problem)}
 
     if focus.FOCUS_FILE.exists():
-        reading = json.loads(focus.FOCUS_FILE.read_text())
+        reading = json.loads(focus.FOCUS_FILE.read_text(encoding="utf-8"))
         good = reading["hfr"] <= 1.1 * reading["best_hfr"]
         out["optics"] = {"hfr": reading["hfr"], "best_hfr": reading["best_hfr"],
                          "stars": reading["stars"], "age_s": round(time.time() - reading["saved"]),

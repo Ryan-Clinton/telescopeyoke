@@ -133,7 +133,7 @@ class Model:
         self.path, self.latitude = Path(path), latitude
         self.polar, self.observations, self.creep = None, [], None
         if self.path.exists():
-            saved = json.loads(self.path.read_text())
+            saved = json.loads(self.path.read_text(encoding="utf-8"))
             self.polar = saved.get("polar")
             self.observations = saved.get("observations", [])
             self.creep = saved.get("creep")
@@ -141,7 +141,7 @@ class Model:
     def save(self):
         self.path.parent.mkdir(exist_ok=True)
         self.path.write_text(json.dumps({"polar": self.polar, "observations": self.observations,
-                                         "creep": self.creep, "saved": time.time()}, indent=1))
+                                         "creep": self.creep, "saved": time.time()}, indent=1), encoding="utf-8")
 
     def forget(self):
         """Start again: the mount has been moved or re-aligned."""

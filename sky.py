@@ -54,7 +54,7 @@ def load_targets():
     def number(text):
         return float(text) if text else None
 
-    with CATALOGUE.open() as f:
+    with CATALOGUE.open(encoding="utf-8") as f:
         return [
             {"id": r["id"], "alt_id": r["alt_id"], "name": r["name"],
              "kind": r["kind"], "const": r["const"],

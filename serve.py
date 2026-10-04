@@ -14,15 +14,14 @@ import traceback
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 
 import json
-import os
 import shutil
-from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 import clouds
 import config
 import agent
 import demo
+import host
 import sky
 import stacking
 import tonight
@@ -104,13 +103,14 @@ def system_status(run_age=None):
     solved = age(mount.LAST_SOLVE)
     add("Last plate solve", *(fresh(solved, 900) if solved is not None else ("none yet", "fair")))
     marks = {doctor.OK: "good", doctor.WARN: "fair", doctor.FAIL: "bad"}
-    status, message = doctor.check_indi_server()
-    add("INDI server", "running" if status == doctor.OK else message, marks[status])
+    if config.hardware()["camera"]["backend"] == "indi":
+        status, message = doctor.check_indi_server()
+        add("INDI server", "running" if status == doctor.OK else message, marks[status])
     status, message = doctor.check_camera()
     capturing = run_age is not None and run_age < 60
     add("Camera", ("capturing" if capturing else "connected") if status == doctor.OK else message,
         marks[status])
-    solver = (doctor.check_program("astap_cli", "")[0] == doctor.OK
+    solver = (doctor.check_solver()[0] == doctor.OK
               and doctor.check_star_database()[0] == doctor.OK)
     add("Plate solver", "ready" if solver else "not installed", "good" if solver else "bad")
     cache = tonight.ROOT / "cache"
@@ -120,11 +120,11 @@ def system_status(run_age=None):
     add("Satellite image", *fresh(age(WEB / "clouds.jpg"), 1800))
     free = shutil.disk_usage(tonight.ROOT).free / 1e9
     add("Disk free", f"{free:.0f} GB", "good" if free > 20 else "fair" if free > 5 else "bad")
-    load = 100 * os.getloadavg()[0] / (os.cpu_count() or 1)
-    add("Processor", f"{load:.0f}% busy", "good" if load < 80 else "fair")
-    zone = Path("/sys/class/thermal/thermal_zone0/temp")
-    if zone.exists():
-        degrees = int(zone.read_text()) / 1000
+    load = host.processor_load()
+    if load is not None:
+        add("Processor", f"{load:.0f}% busy", "good" if load < 80 else "fair")
+    degrees = host.temperature()
+    if degrees is not None:
         add("Temperature", f"{degrees:.0f}°C", "good" if degrees < 80 else "fair" if degrees < 92 else "bad")
     return rows
 
@@ -134,7 +134,7 @@ def image_status(name):
     note = WEB / f"{name}.json"
     if not (note.exists() and (WEB / f"{name}.jpg").exists()):
         return None
-    info = json.loads(note.read_text())
+    info = json.loads(note.read_text(encoding="utf-8"))
     info["age"] = age(WEB / f"{name}.jpg")
     return info
 
@@ -168,8 +168,8 @@ def status_forever(seconds=2):
             status["system"] = system
             status["notes"] = notes
             partial = target.with_suffix(".part")
-            partial.write_text(json.dumps(status))
-            partial.replace(target)
+            partial.write_text(json.dumps(status), encoding="utf-8")
+            host.replace_preview(partial, target)
         except Exception:
             traceback.print_exc()
         time.sleep(seconds)
@@ -248,7 +248,7 @@ def main():
                      daemon=True).start()
     if args.demo:
         # A made-up imaging run, so the live parts of the page have something to show.
-        (WEB / "status.json").write_text(json.dumps(demo.status()))
+        (WEB / "status.json").write_text(json.dumps(demo.status()), encoding="utf-8")
     else:
         threading.Thread(target=status_forever, daemon=True).start()
     # The page is read-only, so it is served to the whole home network without

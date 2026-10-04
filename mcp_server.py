@@ -104,7 +104,7 @@ SCHEMAS = Path(__file__).parent / "schemas"
 
 def output_schema(tool):
     """The envelope with this tool's data spelt out. A refusal carries empty data."""
-    read = lambda name: json.loads((SCHEMAS / f"{name}.schema.json").read_text())
+    read = lambda name: json.loads((SCHEMAS / f"{name}.schema.json").read_text(encoding="utf-8"))
     whole, data = read("envelope"), read(OUTPUT[tool])
     for key in ("$schema", "$id"):
         whole.pop(key, None)

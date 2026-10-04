@@ -102,7 +102,7 @@ def night(tmp_path, monkeypatch):
     def solver(image, ra_hint=None, dec_hint=None, radius=30, **_):
         """Where the simulated mount is really aimed: where the handset
         believes, plus the error left by the rough home position."""
-        offset = json.loads(mount.CLOCK_FILE.read_text())["offset_deg"]
+        offset = json.loads(mount.CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
         ra_handset, dec_handset = scope.radec()
         hour_angle = mount.wrap(mount.true_sidereal(SITE) + offset - ra_handset) + HOME_ERROR[0]
         spot = SkyCoord(HADec(ha=hour_angle * u.deg, dec=(mount.wrap(dec_handset) + HOME_ERROR[1]) * u.deg,
@@ -139,7 +139,7 @@ def test_a_whole_night(night, monkeypatch, capsys):
     scope.goto_target(target, SITE, solve=True)
     said = capsys.readouterr().out
     assert "off by +90.0'" in said and "centred" in said
-    assert json.loads(mount.POINTING_FILE.read_text())["error_deg"] == pytest.approx(HOME_ERROR, abs=0.05)
+    assert json.loads(mount.POINTING_FILE.read_text(encoding="utf-8"))["error_deg"] == pytest.approx(HOME_ERROR, abs=0.05)
     assert scope.state() == "tracking"
 
     # Focus: the knob is turned steadily towards focus and a little past it.
@@ -174,7 +174,7 @@ def test_a_whole_night(night, monkeypatch, capsys):
     # instead of being stacked live; the two cloudy ones are always dropped.
     assert summary["captured"] == FRAMES and 2 <= summary["rejected"] <= 6
     assert (folder / summary["picture"]).name == "final.jpg" and (folder / summary["picture"]).exists()
-    stacked = json.loads((folder / summary["folder"] / "restack.json").read_text())["summary"]
+    stacked = json.loads((folder / summary["folder"] / "restack.json").read_text(encoding="utf-8"))["summary"]
     assert stacked["median_residual_px"] < 0.5
 
     # Status: every way of asking sees the same finished run.

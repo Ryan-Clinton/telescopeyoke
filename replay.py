@@ -13,6 +13,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont
 
+import host  # noqa: F401  (makes printed output UTF-8 on Windows)
+
 WIDTH, PICTURE, LINES = 720, 480, 6
 BACKGROUND, TEXT, DIM = (11, 13, 18), (215, 220, 230), (138, 147, 166)
 
@@ -20,7 +22,7 @@ BACKGROUND, TEXT, DIM = (11, 13, 18), (215, 220, 230), (138, 147, 166)
 def build(folder, command=None):
     """List of PIL frames for the recording in `folder`."""
     folder = Path(folder)
-    steps = json.loads((folder / "steps.json").read_text())
+    steps = json.loads((folder / "steps.json").read_text(encoding="utf-8"))
     if not steps:
         raise SystemExit("The recording is empty.")
     font = ImageFont.load_default(size=19)
