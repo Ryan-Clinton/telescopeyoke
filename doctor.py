@@ -287,7 +287,10 @@ def run(offline=False, skip_handset=False):
         mount.append(check_handset())
     mount.append(check_webcam())
     imaging = [check_solver(), check_star_database()]
-    if config.hardware()["camera"]["backend"] == "altair":
+    if config.DEMO:
+        # The pretend camera is the same on every system: no driver, no library.
+        imaging += [check_camera()]
+    elif config.hardware()["camera"]["backend"] == "altair":
         import altair
         imaging += altair.checks()
     else:
