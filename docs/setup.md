@@ -69,6 +69,13 @@ ready and what is not, with a button to the screen that deals with each:
 Camera, Telescope, Plate solver, Webcam, Settings. After that it opens on
 Tonight.
 
+**Settings** is where your location, the telescope, the camera and how the
+mount is reached are set, each with a note saying what it is. Saving checks
+every value first and writes nothing if one is wrong. The settings live in
+`config.toml`, which can still be edited by hand; saving from the
+application changes only the values you changed, keeps the file's comments,
+and leaves the previous version beside it as `config.toml.bak`.
+
 Every move is shown as a plan first and happens only when you confirm it.
 Stop is always at the top right. Closing the window ends whatever is running
 and tells the mount to stop; if something is running it asks first.

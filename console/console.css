@@ -54,6 +54,12 @@ h2 { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: u
 .tasks .group:first-child { padding-top: 2px; }
 body.mode-companion [data-only="app"], body.mode-app [data-only="companion"] { display: none !important; }
 .log.open { max-height: none; border-top: 0; padding-left: 0; }
+.settings { display: grid; grid-template-columns: 240px minmax(160px, 320px) 1fr; gap: 8px 16px; align-items: center; max-width: 1100px; }
+.settings h2 { grid-column: 1 / -1; }
+.settings input[type=text], .settings input[type=number], .settings select { width: 100%; color: var(--text); background: var(--bg);
+  border: 1px solid var(--rule); border-radius: 6px; padding: 6px 10px; font: inherit; }
+.settings input:focus, .settings select:focus { border-color: var(--act); outline: none; }
+.settings .help { color: var(--dim); font-size: 12.5px; }
 .step { display: flex; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--rule); align-items: baseline; }
 .step .mark { width: 14px; font-weight: 700; } .step .name { min-width: 130px; font-weight: 600; }
 .step .what { flex: 1; color: var(--dim); }

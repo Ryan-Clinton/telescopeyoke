@@ -61,6 +61,9 @@ that may have set.
   `console.py` alone serves the same page in "companion" mode, where the
   actions in `console.WORKSTATION` are refused. A screen for the application
   only is marked `data-only="app"` in the page.
+- A setting the application can change is one row in `config.SETTINGS`
+  (label, kind, help, limits); the Settings form, the checking and the
+  writing all follow from that row.
 - `ty` passes `mount`, `tonight`, `shoot`, `focus`, `solve` and `restack`
   straight through to those scripts' own `main()`. The rest are read-only
   views from `agent.py` and `doctor.py`, except `ty run`, which leaves an

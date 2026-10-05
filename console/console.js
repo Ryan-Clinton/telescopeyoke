@@ -680,12 +680,55 @@ function drawDoctor() {
   ]));
 }
 
+const SECTIONS = { site: "Where the telescope is", horizon: "Horizon", scope: "Telescope", camera: "Camera", mount: "Mount",
+                   solver: "Plate solver", webcam: "Webcam", indi: "INDI" };
+
+async function loadSettings() {
+  const reply = await ask("/api/settings");
+  if (!reply.ok) return;
+  const all = reply.data, form = $("settings-form"), parts = [];
+  let section = null;
+  for (const f of all.fields) {
+    if (f.section !== section) parts.push(el("h2", { text: SECTIONS[f.section] || f.section }));
+    section = f.section;
+    const name = `${f.section}.${f.key}`, id = `set-${f.section}-${f.key}`;
+    let input;
+    if (f.kind === "choice") {
+      input = el("select", { id, name }, f.optional ? el("option", { value: "", text: "(the usual)" }) : null,
+                 f.choices.map((c) => el("option", { value: c, text: c, selected: c === f.value })));
+    } else if (f.kind === "yesno") {
+      input = el("input", { id, name, type: "checkbox", checked: f.value === true });
+    } else {
+      input = el("input", { id, name, type: f.kind === "text" ? "text" : "number", value: f.value ?? "", step: f.kind === "whole" ? 1 : "any",
+                            min: f.min, max: f.max, placeholder: f.optional ? "blank: the usual" : "" });
+    }
+    input.dataset.kind = f.kind;
+    parts.push(el("label", { for: id, text: f.label }), input, el("span", { class: "help", text: f.help }));
+  }
+  fill(form, parts);
+  $("settings-note").textContent = all.demo ? "The demo uses the example settings; they cannot be changed here."
+    : all.exists ? `Saved in ${all.file}.` : `No settings file yet. Saving makes ${all.file}; put your own location in first.`;
+  $("save-settings").disabled = $("open-settings").disabled = !!all.demo;
+  $("settings-wrong").hidden = true;
+}
+
 function drawSettings() {
-  const state = seen.state;
-  if (!state) return;
-  facts($("settings-facts"), [["Settings file", state.settings_file], ["In place", state.configured ? "yes" : "not yet: opening it makes one from the example"],
-        ["Site", state.site], ["Mount reached by", state.mount_link], ["Camera read through", state.camera_backend]]);
-  $("open-settings").disabled = !!state.demo;
+  // The form is built when the screen is opened, and not again while someone is typing in it.
+  if (!$("settings-form").firstChild) loadSettings();
+}
+
+async function saveSettings() {
+  const values = {};
+  for (const input of $("settings-form").querySelectorAll("[name]")) {
+    values[input.name] = input.dataset.kind === "yesno" ? input.checked : input.value;
+  }
+  const reply = await ask("/api/settings", { values });
+  $("settings-wrong").hidden = reply.ok;
+  if (!reply.ok) { $("settings-wrong").textContent = reply.errors[0].message; return notice("The settings were not saved.", "failed"); }
+  notice(reply.data.saved ? `Saved ${reply.data.saved} setting${reply.data.saved === 1 ? "" : "s"}.` : "Nothing had changed.");
+  seen.report = seen.night = seen.targets = null;      // the night is worked out again for the new place
+  await loadSettings();
+  refresh();
 }
 
 function drawAbout() {
@@ -849,9 +892,11 @@ $("technical-logs").addEventListener("change", drawLog);
 $("open-settings").addEventListener("click", async () => {
   const reply = await ask("/api/open/settings", {});
   notice(reply.ok ? (reply.data.created ? "Made config.toml from the example and opened it. Put your own location in it." : "Opened the settings file.") : reply.errors[0].message, reply.ok ? "" : "failed");
+  fill($("settings-form"));      // edited by hand: read it afresh next time
   refresh();
 });
 showOnlyIfThere($("webcam-picture"), $("webcam-part"));
+$("save-settings").addEventListener("click", saveSettings);
 
 for (const [id, name] of [["night", "night"], ["dim", "dim"]]) {
   $(id).checked = localStorage.getItem(name) === "1";

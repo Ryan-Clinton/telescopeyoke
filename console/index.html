@@ -236,9 +236,14 @@
 
   <section id="settings" class="task" data-only="app" hidden>
     <h1>Settings</h1>
-    <dl id="settings-facts" class="facts"></dl>
-    <div class="buttons"><button type="button" id="open-settings">Open the settings file</button></div>
-    <p class="quiet">The settings are one text file, config.toml: your location, the telescope, the camera and how the mount is reached. Each setting is explained beside it in the file. Changes take effect the next time something is started.</p>
+    <p id="settings-note" class="quiet"></p>
+    <form id="settings-form" class="settings" autocomplete="off"></form>
+    <div class="buttons">
+      <button type="button" id="save-settings" class="primary">Save</button>
+      <button type="button" id="open-settings">Open the settings file</button>
+    </div>
+    <p id="settings-wrong" class="warn" hidden></p>
+    <p class="quiet">Changes take effect the next time something is started. The settings are kept in one text file, config.toml, with a note beside each; the last version is kept beside it as config.toml.bak.</p>
   </section>
 
   <section id="logs" class="task" data-only="app" hidden>

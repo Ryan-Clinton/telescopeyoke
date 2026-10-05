@@ -614,6 +614,21 @@ class Reader:
         import serve
         return {"pictures": serve.pictures()}
 
+    def settings(self):
+        """Every setting the application can change, with its value now."""
+        import config
+        if self.mode != "app":
+            raise interface.Refusal("INVALID_REQUEST", "Settings are changed in the TelescopeYoke application.")
+        written = config._read(config.EXAMPLE if self.demo or not config.FILE.exists() else config.FILE)
+        in_use = config._merged(written)
+        # A setting that may be left blank shows what the file says, blank
+        # included; the rest show the value in use, default or not.
+        return {"file": str(config.FILE), "exists": config.FILE.exists(), "demo": self.demo,
+                "fields": [dict({"section": section, "key": key, "label": label, "kind": kind, "help": text,
+                                 "value": (written if limits.get("optional") else in_use).get(section, {}).get(key)},
+                                **limits)
+                           for section, key, label, kind, text, limits in config.SETTINGS]}
+
     def focus(self):
         import focus
         if not focus.FOCUS_FILE.exists():
@@ -648,6 +663,7 @@ class Reader:
             "focus": (self.focus, 1),
             "horizon": (self.horizon, 30),
             "report": (self.report, 300),
+            "settings": (self.settings, 0),
             "system": (self.system, 10),
             "gallery": (self.gallery, 10),
         }
@@ -736,6 +752,43 @@ class Handler(BaseHTTPRequestHandler):
                 return self.answer(result, 200 if result["ok"] else 409)
         self.refuse("console", Refused(f"No such page: {path}", 404))
 
+    def save_settings(self, params):
+        """Change settings in config.toml from the application's Settings
+        screen. Every value is checked first; nothing is written if any is
+        wrong."""
+        import config
+        self.jobs.allowed_here("open-settings")
+        if self.jobs.demo:
+            raise Refused("The demo uses the example settings; there is nothing to save.", code="DEMO_UNSUPPORTED")
+        given = params.get("values")
+        if not isinstance(given, dict) or not given:
+            raise Refused("No settings were sent.")
+        written = config._read(config.FILE) if config.FILE.exists() else {}
+        in_use = config._merged(written)
+        changes, wrong = {}, []
+        for name, value in given.items():
+            section, _, key = str(name).partition(".")
+            try:
+                value = config.checked(section, key, value)
+            except ValueError as problem:
+                wrong.append(str(problem))
+                continue
+            # Only what differs from the value in use is written, so saving
+            # does not fill the file with defaults.
+            before = (written if value is None else in_use).get(section, {}).get(key)
+            if before != value:
+                changes[(section, key)] = value
+        if wrong:
+            raise Refused(" ".join(wrong))
+        try:
+            if changes or not config.FILE.exists():
+                config.save(changes)
+        except (ValueError, OSError) as problem:
+            raise Refused(f"The settings were not saved: {problem}", 500, "INTERNAL_ERROR")
+        with self.reader.lock:
+            self.reader.kept.clear()      # everything read from now on uses the new settings
+        return {"saved": len(changes), "file": str(config.FILE)}
+
     def open_settings(self):
         """Open config.toml in the system's own editor, making it from the
         example first if there is none. Only the application's window may."""
@@ -778,6 +831,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if name == "open/settings":
                 data = self.open_settings()
+            elif name == "settings":
+                data = self.save_settings(params)
             elif name == "stop":
                 data = jobs.stop()
             elif name == "finish":

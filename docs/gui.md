@@ -15,6 +15,10 @@ Ubuntu or anywhere else. So:
   and System (Doctor, Settings, Logs, About). When something the telescope
   needs is missing it opens on a Welcome screen that says what, with a
   button to the screen that deals with it.
+- **Settings are changed in the application,** on a form with every value
+  checked before anything is written. `config.save` changes values in
+  `config.toml` in place and keeps its comments; the companion page and the
+  demo are refused.
 - **`console.py` by itself is the companion page:** the observing screens
   and a Status screen, in a browser on the same computer. Setting up and
   testing the equipment is refused there, by the server and not just hidden
