@@ -11,6 +11,8 @@ typical star stands above the background grain. Writes web/compare.jpg.
 import argparse
 from pathlib import Path
 
+import config
+
 import numpy as np
 from astropy.io import fits
 from PIL import Image, ImageDraw, ImageFont
@@ -45,7 +47,7 @@ def main():
     ap.add_argument("stacks", nargs="+", help="stack FITS files of the same target")
     ap.add_argument("--labels", nargs="+")
     ap.add_argument("--size", type=int, default=320, help="width of the patch in image pixels")
-    ap.add_argument("--output", default=str(ROOT / "web" / "compare.jpg"))
+    ap.add_argument("--output", default=str(config.DATA / "web" / "compare.jpg"))
     args = ap.parse_args()
     labels = args.labels or [Path(p).parent.name + "/" + Path(p).name for p in args.stacks]
 

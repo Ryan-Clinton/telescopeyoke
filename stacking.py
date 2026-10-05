@@ -27,7 +27,7 @@ from camera import colour, luminance
 ROOT = Path(__file__).parent
 # Where the master dark, bias and flat frames are kept. The tests point this
 # at an empty folder, for the worker processes too, through TY_CALIBRATION.
-CALIBRATION = Path(os.environ.get("TY_CALIBRATION") or ROOT / "calibration")
+CALIBRATION = Path(os.environ.get("TY_CALIBRATION") or config.DATA / "calibration")
 REGISTER = 1024     # side of the central square used for the first rough line-up
 MIN_MATCHES = 6     # stars needed to trust a star-by-star alignment
 

@@ -18,7 +18,7 @@ from PIL import Image, ImageDraw, ImageFont
 import config
 
 ROOT = Path(__file__).parent
-PICTURE = ROOT / "web" / "clouds.jpg"
+PICTURE = config.DATA / "web" / "clouds.jpg"
 WMS = "https://view.eumetsat.int/geoserver/wms"
 WIDTH, HEIGHT = 1110, 510
 # Degrees of latitude and longitude shown either side of the site.
@@ -38,7 +38,7 @@ def _layer(name, box, transparent=False):
 def coastline(box):
     """Yellow coastline overlay for the map; fetched once and kept, since the
     service that draws it fails now and then. None if it has never worked."""
-    kept = ROOT / "cache" / "coastline_{:.2f}_{:.2f}.png".format(*box[:2])
+    kept = config.DATA / "cache" / "coastline_{:.2f}_{:.2f}.png".format(*box[:2])
     if not kept.exists():
         try:
             lines = np.array(_layer("backgrounds:ne_10m_coastline", box, True).convert("RGBA"))

@@ -50,8 +50,13 @@ that may have set.
 - `config.toml` holds the user's real site and is ignored. `config.load()`
   needs it; `config.hardware()` works without it and `config.example()`
   never reads it. Tests and `--demo` take their site from `config.example()`.
-- `conftest.py` points `TY_CALIBRATION` at an empty temporary directory so
-  tests never pick up the real master frames in `calibration/`.
+- Every file a script keeps (frames, pictures, remembered measurements) is
+  under `config.DATA`: the repository root for real, `demo/` in the demo
+  (`config.DEMO`, from `TY_DEMO=1`), and a scratch folder in the tests.
+  `conftest.py` sets `TY_DATA` and `TY_CALIBRATION` before anything is
+  imported, so a test cannot write into a real night's files even if its
+  fixture forgets to redirect something. Never build a path to `frames/`,
+  `web/` or `cache/` from `ROOT`.
 - A change to any `--json` output touches three places together: the
   function, its file in `schemas/`, and `tests/test_interface.py`, which
   checks the envelope, the MCP tools' `outputSchema` and the scenarios in

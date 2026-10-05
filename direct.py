@@ -37,8 +37,10 @@ from pathlib import Path
 
 from interface import Refusal
 
+import config
+
 ROOT = Path(__file__).parent
-STATE_FILE = ROOT / "cache" / "direct_mount.json"
+STATE_FILE = config.DATA / "cache" / "direct_mount.json"
 PORT = 11880                 # the Wi-Fi adapter listens here, on UDP
 ADAPTER = "192.168.4.1"      # its address on the network it makes itself
 RA, DEC = "1", "2"           # the board's names for the axes

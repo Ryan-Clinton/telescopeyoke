@@ -21,10 +21,12 @@ import math
 import time
 from pathlib import Path
 
+import config
+
 import numpy as np
 
 ROOT = Path(__file__).parent
-MODEL_FILE = ROOT / "cache" / "drift_model.json"
+MODEL_FILE = config.DATA / "cache" / "drift_model.json"
 SIDEREAL = 15.041          # arcseconds of sky per second of time
 AGGRESSIVENESS = 0.7       # share of a measured error corrected in one go
 DEADBAND = 0.15            # arcsec/s of leftover drift not worth chasing

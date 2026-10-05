@@ -37,6 +37,9 @@ def solve(image, ra_hint=None, dec_hint=None, radius=30, field=FIELD_HEIGHT, tim
     the whole sky is searched, which is slow. Returns a dict with ra, dec
     (degrees, J2000), rotation (degrees), scale (arcsec per pixel of the
     image given) and seconds, or None if no match was found."""
+    if config.DEMO:
+        import simulator
+        return simulator.solve(image, ra_hint, dec_hint, radius)
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "frame.fits"
         fits.PrimaryHDU(np.clip(image, 0, 65535).astype(np.uint16)).writeto(path)

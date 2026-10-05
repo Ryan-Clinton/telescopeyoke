@@ -12,6 +12,8 @@ detail), and uses a gentler stretch with a properly dark sky.
 import argparse
 from pathlib import Path
 
+import config
+
 import numpy as np
 from astropy.io import fits
 from PIL import Image
@@ -108,9 +110,9 @@ def main():
     name = stacking.folder_name(args.name)
     # Newest stack for this object: a restacked session's final.fits if there
     # is one, else shoot.py's own running stack.
-    stacks = sorted(list((ROOT / "frames").glob(f"{name}-*.fits"))
-                    + list((ROOT / "frames" / name).glob("*/final.fits"))
-                    + list((ROOT / "frames" / name).glob("*/live.fits")),
+    stacks = sorted(list((config.DATA / "frames").glob(f"{name}-*.fits"))
+                    + list((config.DATA / "frames" / name).glob("*/final.fits"))
+                    + list((config.DATA / "frames" / name).glob("*/live.fits")),
                     key=lambda p: p.stat().st_mtime)
     if not stacks:
         raise SystemExit(f"No stack for {name} in frames/. Run ./shoot.py {name} first.")
@@ -118,7 +120,7 @@ def main():
     image = Image.fromarray(process(np.moveaxis(data, 0, 2), args.detail,
                                     colour=6 * args.detail + 1, stretch=args.stretch,
                                     saturation=args.saturation))
-    out = ROOT / "web" / f"{name}-processed.jpg"
+    out = config.DATA / "web" / f"{name}-processed.jpg"
     image.save(out, quality=93)
     print(f"{stacks[-1].relative_to(ROOT)} -> {out}")
     if args.crop:
@@ -128,7 +130,7 @@ def main():
         w, h = args.crop, args.crop * 2 // 3
         close = image.crop((x - w // 2, y - h // 2, x + w // 2, y + h // 2))
         close = close.resize((1350, 900), Image.LANCZOS)
-        close.save(ROOT / "web" / f"{name}-processed-closeup.jpg", quality=93)
+        close.save(config.DATA / "web" / f"{name}-processed-closeup.jpg", quality=93)
         print(f"close-up -> web/{name}-processed-closeup.jpg")
 
 

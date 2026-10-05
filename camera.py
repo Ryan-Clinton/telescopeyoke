@@ -39,6 +39,10 @@ class Camera:
     def __new__(cls, port=PORT, gain=300):
         # With the SDK backend the caller gets altair.py's camera instead. It
         # is not a Camera, so the INDI set-up below never runs for it.
+        if cls is Camera and config.DEMO:
+            # The demo's pretend camera and sky.
+            from simulator import SimulatedCamera
+            return SimulatedCamera(port, gain)
         if cls is Camera and BACKEND == "altair":
             from altair import AltairCamera
             return AltairCamera(gain=gain)

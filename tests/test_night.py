@@ -81,6 +81,7 @@ def night(tmp_path, monkeypatch):
     monkeypatch.setattr(mount, "SETTLE", 0)
     for module in (shoot, restack, agent):
         monkeypatch.setattr(module, "ROOT", tmp_path)
+    monkeypatch.setattr(config, "DATA", tmp_path)
     monkeypatch.setattr(shoot, "WEB", tmp_path / "web")
     monkeypatch.setattr(agent, "WEB", tmp_path / "web")
     monkeypatch.setattr(stacking, "CALIBRATION", tmp_path / "calibration")

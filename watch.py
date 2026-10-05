@@ -15,8 +15,10 @@ from pathlib import Path
 
 import host
 
+import config
+
 ROOT = Path(__file__).parent
-PICTURE = ROOT / "web" / "scope.jpg"
+PICTURE = config.DATA / "web" / "scope.jpg"
 
 
 def device():

@@ -208,3 +208,153 @@ class SimulatedBoard:
         elif letter == "E":
             a["pos"] = float(number())
         return b"=\r"
+
+
+# --- a pretend camera and sky, for the demo --------------------------------------
+#
+# The demo runs the real focusing aid, the real imaging run and the real
+# plate-solve corrections on frames made here: a field of stars that drifts,
+# blurs, clouds over or stops arriving as the demo is told to. It imitates no
+# particular camera; it is there so that every screen can be used, and
+# tested, with nothing plugged in.
+
+SHAPE = (1100, 1300)              # half-size frame, in pixels: rows, columns
+BEST_FOCUS = 1.5                  # star width in pixels at best focus
+HOME_ERROR = (1.5, -1.0)          # how far a home position set by eye leaves the aim off: hour angle, Dec (degrees)
+SKY = {"focus": 4, "cloud": False, "unplugged": False, "drift": True, "offset": [0.0, 0.0], "frames": 0}
+DEMO_SCOPE = None                 # the simulated mount in this program, if one has been opened
+
+
+def _sky_file():
+    import config
+    return config.DATA / "cache" / "demo_sky.json"
+
+
+def sky():
+    """What the pretend sky and camera are doing: how far the focuser is from
+    best focus (in turns of the knob), cloud, the lead pulled out, drift."""
+    import json
+    path = _sky_file()
+    state = dict(SKY)
+    if path.exists():
+        try:
+            state.update(json.loads(path.read_text(encoding="utf-8")))
+        except ValueError:
+            pass
+    return state
+
+
+def set_sky(**changes):
+    import json
+    state = dict(sky(), **changes)
+    state["focus"] = max(-12, min(12, int(state["focus"])))
+    path = _sky_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial = path.with_suffix(".part")
+    partial.write_text(json.dumps(state), encoding="utf-8")
+    partial.replace(path)
+    return state
+
+
+def recentred():
+    """The mount has just been aimed afresh: the target is back in the middle."""
+    set_sky(offset=[0.0, 0.0])
+
+
+def star_field(name, count=140):
+    """The same made-up stars every time for the same target."""
+    import zlib
+
+    import numpy as np
+    rng = np.random.default_rng(zlib.crc32(str(name).encode()))
+    xy = np.column_stack([rng.uniform(40, SHAPE[1] - 40, count), rng.uniform(40, SHAPE[0] - 40, count)])
+    return xy, rng.uniform(2e4, 2e5, count)
+
+
+def render(xy, flux, sigma, sky_level=300.0, noise=4.0, seed=0):
+    """A brightness image with a round star at each (x, y)."""
+    import numpy as np
+    image = np.zeros(SHAPE, np.float32)
+    reach = int(6 * sigma) + 1
+    for (x, y), f in zip(xy, flux):
+        x0, y0 = int(round(x)), int(round(y))
+        if not (reach < x0 < SHAPE[1] - reach and reach < y0 < SHAPE[0] - reach):
+            continue
+        yy, xx = np.mgrid[y0 - reach:y0 + reach + 1, x0 - reach:x0 + reach + 1]
+        spot = np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / (2 * sigma ** 2))
+        image[y0 - reach:y0 + reach + 1, x0 - reach:x0 + reach + 1] += f * spot / spot.sum()
+    return image + sky_level + np.random.default_rng(seed).normal(0, noise, SHAPE).astype(np.float32)
+
+
+class SimulatedCamera:
+    """Stands where camera.Camera would: frame(seconds) gives a raw Bayer
+    mosaic and a header, as the real one does."""
+    name = "simulated camera"
+    DRIFT = (1.4, -0.8)        # pixels the stars move between frames while the drift is on
+
+    def __init__(self, port=None, gain=300, wait=None):
+        import os
+        # TY_DEMO_FAST skips the waiting, for the tests.
+        self.gain, self.wait = gain, os.environ.get("TY_DEMO_FAST") != "1" if wait is None else wait
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        pass
+
+    close = __exit__
+
+    def frame(self, seconds):
+        import numpy as np
+
+        from indi import IndiError
+        state = sky()
+        if state["unplugged"]:
+            raise IndiError("the camera was unplugged (the demo's pretend camera: plug it back in on the Demo screen)")
+        if self.wait:
+            time.sleep(min(seconds, 4.0) + 0.4)      # a frame takes its exposure and a little more
+        n = state["frames"] + 1
+        offset = state["offset"]
+        if state["drift"]:
+            offset = [offset[0] + self.DRIFT[0], offset[1] + self.DRIFT[1]]
+        set_sky(frames=n, offset=offset)
+        xy, flux = star_field(state.get("target", "demo"))
+        sigma = BEST_FOCUS + 0.45 * abs(state["focus"])
+        light = min(seconds, 4.0) / 2 * (0.25 if state["cloud"] else 1.0)
+        lum = render(xy + offset, flux * light, sigma, seed=n)
+        mosaic = np.repeat(np.repeat(lum / 4, 2, axis=0), 2, axis=1)
+        header = {"EXPTIME": float(seconds), "GAIN": float(self.gain), "BAYERPAT": "RGGB",
+                  "DATE-OBS": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())}
+        return np.clip(mosaic, 0, 4095).astype(np.uint16), header
+
+
+def solve(image, ra_hint=None, dec_hint=None, radius=30, **_):
+    """A pretend plate solve: where the simulated mount is really aimed,
+    which is where its handset believes plus the error a home position set by
+    eye leaves. So a GoTo with centring has something real to correct."""
+    if sky()["cloud"]:
+        return None                      # no stars through cloud, as for real
+    scale = 1.32
+    answer = {"rotation": 0.0, "scale": scale, "seconds": 0.4,
+              "cd": [[-scale / 3600, 0.0], [0.0, scale / 3600]]}
+    scope = DEMO_SCOPE
+    if scope is None:
+        if ra_hint is None:
+            return None
+        return dict(answer, ra=ra_hint % 360, dec=dec_hint)
+    import json
+
+    from astropy import units as u
+    from astropy.coordinates import HADec, ICRS, SkyCoord
+    from astropy.time import Time
+
+    import config
+    import mount
+    site = config.load()["site"]
+    offset = json.loads(mount.CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"] if mount.CLOCK_FILE.exists() else 0.0
+    ra_handset, dec_handset = scope.radec()
+    hour_angle = mount.wrap(mount.true_sidereal(site) + offset - ra_handset) + HOME_ERROR[0]
+    spot = SkyCoord(HADec(ha=hour_angle * u.deg, dec=(mount.wrap(dec_handset) + HOME_ERROR[1]) * u.deg,
+                          obstime=Time.now(), location=mount.location(site))).transform_to(ICRS())
+    return dict(answer, ra=spot.ra.deg, dec=spot.dec.deg)

@@ -41,6 +41,7 @@ def quiet(tmp_path, monkeypatch):
         monkeypatch.setattr(mount, name, tmp_path / f"{name}.json")
     monkeypatch.setattr(mount, "LOCK_FILE", tmp_path / "MOTION_LOCKED")
     monkeypatch.setattr(agent, "ROOT", tmp_path)
+    monkeypatch.setattr(config, "DATA", tmp_path)
     monkeypatch.setattr(agent, "WEB", tmp_path / "web")
     return tmp_path
 
@@ -150,6 +151,7 @@ def test_scenario_no_session_yet(quiet):
 
 def test_scenario_diagnose_cloud(quiet, monkeypatch):
     monkeypatch.setattr(shoot, "ROOT", quiet)
+    monkeypatch.setattr(config, "DATA", quiet)
     monkeypatch.setattr(shoot, "WEB", quiet / "web")
     run = shoot.Session("M27", exposure=2.0, gain=1500, frames=20, save=False)
     clear = {"fwhm": 4.0, "roundness": 0.9, "stars": 100, "flux": 5e4, "background": 300, "noise": 5.0}

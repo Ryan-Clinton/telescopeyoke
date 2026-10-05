@@ -49,7 +49,7 @@ ROOT = Path(__file__).parent
 # How far the handset's idea of sidereal time is from the true one, in degrees.
 # Its clock and location are wrong, so every GoTo is corrected by this. It
 # holds until the handset is switched off.
-CLOCK_FILE = ROOT / "cache" / "handset_clock.json"
+CLOCK_FILE = config.DATA / "cache" / "handset_clock.json"
 MIN_ALTITUDE = 20
 # Furthest from the meridian a GoTo may point, in hours. Beyond 6 h the tube
 # is under the pole and swings down towards the tripod legs.
@@ -58,12 +58,15 @@ MAX_HOUR_ANGLE = 5.75
 # say why. Delete it only once the cause has been dealt with.
 LOCK_FILE = ROOT / "MOTION_LOCKED"
 # Pointing error found by plate solving, carried into later GoTos.
-POINTING_FILE = ROOT / "cache" / "pointing.json"
+POINTING_FILE = config.DATA / "cache" / "pointing.json"
 CENTRED = 2 / 60  # degrees; close enough to stop correcting
-LAST_SOLVE = ROOT / "cache" / "last_solve.json"
+LAST_SOLVE = config.DATA / "cache" / "last_solve.json"
 # What has been learned about the drift, and the Dec creep now running.
-DRIFT_FILE = ROOT / "cache" / "drift_model.json"
+DRIFT_FILE = config.DATA / "cache" / "drift_model.json"
 SETTLE = 30       # seconds to wait after a slew before photographing
+if config.DEMO:
+    import os
+    SETTLE = 0 if os.environ.get("TY_DEMO_FAST") == "1" else 2
 
 # Raw axis angles, in degrees, as the handset's "z" query reports them.
 HOME_RA_AXIS = 0.0
@@ -82,15 +85,21 @@ class Mount:
     def __init__(self, port=None, watch=True, demo=False, handset=None):
         """`demo` drives a simulated handset; `handset` supplies one directly
         (anything with the serial port's write/read_until interface)."""
-        self.demo = demo or handset is not None
+        self.demo = demo or handset is not None or config.DEMO
         self.recording = None   # folder to keep each solve frame and message in
-        self.can_solve = not self.demo   # the simulated mount has no camera behind it
+        # A simulated mount has no camera behind it, except in the full demo,
+        # which has a pretend camera and sky to solve.
+        self.can_solve = not self.demo or (config.DEMO and handset is None)
         # The webcam photographs the scope during every real move unless told
         # not to.
         self.watching = Watching if watch and not self.demo else contextlib.nullcontext
         if self.demo:
-            from simulator import SimulatedHandset
-            self.s = handset or SimulatedHandset()
+            import simulator
+            import os
+            quick = os.environ.get("TY_DEMO_FAST") == "1"
+            self.s = handset or simulator.SimulatedHandset(slew_seconds=0.0 if quick else 2.0)
+            if handset is None:
+                simulator.DEMO_SCOPE = self
         elif config.hardware()["mount"].get("link", "handset") != "handset":
             # No handset: the Wi-Fi adapter or an EQDIR lead reaches the motor
             # board, and direct.py does the handset's part.
@@ -361,6 +370,9 @@ class Mount:
                     self.stop()
                     raise Refusal("SLEW_TIMED_OUT", "GoTo did not finish in time; stopped.")
                 time.sleep(1)
+        if config.DEMO:
+            import simulator
+            simulator.recentred()    # the pretend sky is centred on wherever it was sent
 
     def handset_sidereal(self):
         """The handset's own sidereal time in degrees, from where it says it
@@ -464,6 +476,9 @@ class Mount:
         offset = json.loads(CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
         plan = plan_goto(name, site)
         target = find_target(name)
+        if config.DEMO:
+            import simulator
+            simulator.set_sky(target=target["id"])     # the pretend sky shows this target's stars
         hour_angle, altitude = plan["hour_angle_hours"] * 15, plan["altitude_deg"]
         self.say(f"{target['id']} {target['name']}: altitude {altitude:.0f}°, "
                  f"hour angle {hour_angle / 15:+.2f} h ({plan['side_note']})")
@@ -523,7 +538,7 @@ class Mount:
             found["when"] = when  # solving can take a while; the sky moves on
             # Kept for shoot.py's drift assist, which needs to know which way
             # up the camera is.
-            (ROOT / "cache").mkdir(exist_ok=True)
+            (config.DATA / "cache").mkdir(exist_ok=True)
             LAST_SOLVE.write_text(json.dumps(
                 {k: found[k] for k in ("ra", "dec", "rotation", "scale", "cd") if k in found}
                 | {"saved": time.time()}), encoding="utf-8")
@@ -619,9 +634,9 @@ def plan_point(azimuth, altitude, site):
 def use_demo_cache():
     """Keep the simulated mount's measurements apart from the real one's."""
     global CLOCK_FILE, POINTING_FILE, DRIFT_FILE
-    CLOCK_FILE = ROOT / "cache" / "demo_handset_clock.json"
-    POINTING_FILE = ROOT / "cache" / "demo_pointing.json"
-    DRIFT_FILE = ROOT / "cache" / "demo_drift_model.json"
+    CLOCK_FILE = config.DATA / "cache" / "demo_handset_clock.json"
+    POINTING_FILE = config.DATA / "cache" / "demo_pointing.json"
+    DRIFT_FILE = config.DATA / "cache" / "demo_drift_model.json"
 
 
 def load_pointing_error(west):
@@ -748,7 +763,8 @@ def main():
                          "for replay.py to animate")
     args = ap.parse_args()
 
-    if args.demo:
+    args.demo = args.demo or config.DEMO
+    if args.demo and not config.DEMO:
         if args.command in ("sync", "drift", "compensate"):
             ap.error(f"{args.command} needs the real camera; there is no demo of it")
         if args.command in ("sethome", "directions"):

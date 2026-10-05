@@ -42,7 +42,7 @@ import config
 import interface
 
 ROOT = Path(__file__).parent
-RESULTS = ROOT / "cache" / "horizon.json"
+RESULTS = config.DATA / "cache" / "horizon.json"
 ALTITUDES = (25, 40, 55, 70)
 ENOUGH_STARS = 8
 STEADY = 5      # seconds for the tube to stop shaking before a frame

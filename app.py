@@ -15,15 +15,21 @@ Ubuntu, the WebView2 control through pywebview on Windows, and failing those
 the installed Chrome, Chromium or Edge in its application mode. Only if none
 of them is there does it fall back to a tab in the ordinary browser.
 """
+import os
+import sys
+
+if "--demo" in sys.argv[1:]:
+    os.environ["TY_DEMO"] = "1"      # before anything is imported: the demo keeps its own files
+
 import argparse
 import shutil
 import subprocess
-import sys
 import tempfile
 import threading
 import webbrowser
 from pathlib import Path
 
+import config
 import console
 import host
 
@@ -166,7 +172,7 @@ def main():
         for written in host.install_launcher(ROOT):
             print(f"added {written}")
         return
-    shown = run(args.demo, args.self_test)
+    shown = run(args.demo or config.DEMO, args.self_test)
     if args.self_test and not shown:
         print("window: none of GTK with WebKit or pywebview is available here", flush=True)
         sys.exit(1)

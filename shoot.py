@@ -34,6 +34,8 @@ from collections import deque
 from datetime import datetime
 from pathlib import Path
 
+import config
+
 import numpy as np
 from PIL import Image
 
@@ -46,7 +48,7 @@ import tracking
 from camera import Camera, stretch
 
 ROOT = Path(__file__).parent
-WEB = ROOT / "web"
+WEB = config.DATA / "web"
 # Send the mount back to the target once it has drifted this far off centre,
 # as a fraction of the frame's height. The drift up to then is welcome: it
 # spreads the sensor's fixed pattern around, which averaging then removes.
@@ -54,7 +56,7 @@ DRIFT_LIMIT = 0.2
 TRIAL_EXPOSURES = (1, 2, 3, 4)
 ASSIST_EVERY = 15   # accepted frames between trims of the Dec creep
 # A running run looks here after every frame for an order from "ty run ...".
-ORDERS = ROOT / "cache" / "run_order.txt"
+ORDERS = config.DATA / "cache" / "run_order.txt"
 KNOWN_ORDERS = ("stop", "recentre", "assist-on", "assist-off")
 CLOUD_STOP = 20     # with --frames 0, stop after this many rejected frames in a row
 PREVIEW_EVERY = 3.0  # seconds between updates of the picture on the web page
@@ -66,7 +68,7 @@ class Session:
 
     def __init__(self, name, exposure, gain, save=True, frames=None, preview_every=PREVIEW_EVERY):
         self.name = stacking.folder_name(name)
-        self.folder = ROOT / "frames" / self.name / f"{datetime.now():%Y%m%d-%H%M%S}"
+        self.folder = config.DATA / "frames" / self.name / f"{datetime.now():%Y%m%d-%H%M%S}"
         self.folder.mkdir(parents=True, exist_ok=True)
         # What was asked for, so the web page can say "frame 31 of 200".
         (self.folder / "session.json").write_text(json.dumps(

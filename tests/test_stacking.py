@@ -1,4 +1,5 @@
 """The imaging pipeline, on made-up star fields where the right answer is known."""
+import config
 import json
 
 import numpy as np
@@ -289,6 +290,7 @@ def session(tmp_path_factory):
     tmp_path = tmp_path_factory.mktemp("run")
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(shoot, "ROOT", tmp_path)
+        patch.setattr(config, "DATA", tmp_path)
         patch.setattr(shoot, "WEB", tmp_path / "web")
         patch.setattr(restack, "ROOT", tmp_path)
         patch.setattr(stacking, "CALIBRATION", tmp_path / "calibration")
@@ -356,6 +358,7 @@ def saved_session(folder, name, exposure, turned=0.0, count=6, seed=0):
 
 def test_sessions_of_different_lengths_combine_into_one_picture(tmp_path, monkeypatch):
     monkeypatch.setattr(restack, "ROOT", tmp_path)
+    monkeypatch.setattr(config, "DATA", tmp_path)
     monkeypatch.setattr(stacking, "CALIBRATION", tmp_path / "calibration")
     first = saved_session(tmp_path, "20261003-230000", exposure=2.0)
     second = saved_session(tmp_path, "20261004-010000", exposure=4.0, seed=40)

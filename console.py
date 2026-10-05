@@ -13,11 +13,17 @@ It listens on this computer only and needs a key made each time it starts.
 serve.py remains the read-only page for the rest of the house. The design is
 in docs/gui.md.
 """
+import os
+import sys
+
+if "--demo" in sys.argv[1:]:
+    os.environ["TY_DEMO"] = "1"      # before anything is imported: the demo keeps its own files
+
 import argparse
 import json
+import math
 import secrets
 import subprocess
-import sys
 import threading
 import time
 import uuid
@@ -26,12 +32,13 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+import config
 import host
 import interface
 
 ROOT = Path(__file__).parent
 PAGE = ROOT / "console"
-WEB = ROOT / "web"
+WEB = config.DATA / "web"
 PYTHON = sys.executable
 
 PLAN_LIFE = 120     # seconds a plan may be confirmed for
@@ -179,8 +186,10 @@ ACTIONS = {
     "run-assist-on":  {"label": "Drift assist on", "command": lambda p: ["ty", "run", "assist-on"], "uses": None},
     "run-assist-off": {"label": "Drift assist off", "command": lambda p: ["ty", "run", "assist-off"], "uses": None},
 }
-# What the simulated mount can show. The rest need the real camera.
-DEMO_ACTIONS = ("goto", "home", "zenith", "position")
+# The demo has a pretend mount, camera and sky, so nearly everything runs in
+# it. These do not: they test or set up real equipment.
+NOT_IN_DEMO = ("camera-setup", "camera-capabilities", "camera-throughput", "camera-gain-sweep",
+               "calibrate", "sync", "drift", "compensate")
 # Setting up and testing the equipment belongs to the application's own
 # window. The companion page in a browser is for observing, and is refused these.
 WORKSTATION = ("camera-setup", "camera-capabilities", "camera-throughput", "camera-gain-sweep",
@@ -209,11 +218,9 @@ def command(action, params, demo=False, dry_run=False):
     """The full command line for an action, as a list. Never a string."""
     if action not in ACTIONS:
         raise Refused(f"No such action: {action}", status=404)
-    if demo and action not in DEMO_ACTIONS:
-        raise Refused("That needs the real camera or mount; there is no demo of it.", code="DEMO_UNSUPPORTED")
+    if demo and action in NOT_IN_DEMO:
+        raise Refused("That tests or sets up real equipment; there is no demo of it.", code="DEMO_UNSUPPORTED")
     cmd = [PYTHON, str(ROOT / (script := ACTIONS[action]["command"](params))[0])] + script[1:]
-    if demo:
-        cmd.insert(2, "--demo")
     if dry_run:
         cmd.append("--dry-run")
     return cmd + ["--json"]
@@ -228,6 +235,15 @@ def label(action, params):
 def start(cmd, **more):
     return subprocess.Popen(cmd, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                             text=True, encoding="utf-8", errors="replace", **more)
+
+
+def surroundings(demo):
+    """The environment a command is started in. In the demo it says so, and
+    says where the demo keeps its files, so the command uses the pretend
+    mount and camera and never touches a real night's files."""
+    if not demo:
+        return None
+    return {**os.environ, "TY_DEMO": "1", "TY_DATA": str(config.DATA)}
 
 
 def envelope_from(text):
@@ -277,7 +293,7 @@ class Jobs:
         """The plan for a move, or a Refused carrying the script's refusal."""
         done = subprocess.run(command(action, params, self.demo, dry_run=True), cwd=ROOT,
                               capture_output=True, text=True, encoding="utf-8", errors="replace",
-                              timeout=120, **host.QUIET)
+                              timeout=120, env=surroundings(self.demo), **host.QUIET)
         answer = envelope_from(done.stdout)
         if answer is None:
             raise Refused("The plan could not be made: " + (done.stderr.strip()[-300:] or "no answer"),
@@ -362,7 +378,7 @@ class Jobs:
             job = {"id": uuid.uuid4().hex, "action": action, "label": label(action, params),
                    "uses": using, "state": "running", "outcome": None, "started": time.time(),
                    "ended": None, "lines": [], "result": None, "error": None, "stopped": False}
-            job["child"] = self.start(cmd, **host.OWN_GROUP)
+            job["child"] = self.start(cmd, env=surroundings(self.demo), **host.OWN_GROUP)
             if using:
                 self.current = job
             if action == "run":
@@ -448,9 +464,9 @@ class Jobs:
             if job:
                 job["child"].kill()
                 job["child"].wait(timeout=10)   # until the system says it has gone
-            cmd = [PYTHON, str(ROOT / "mount.py")] + (["--demo"] if self.demo else []) + ["stop", "--json"]
+            cmd = [PYTHON, str(ROOT / "mount.py"), "stop", "--json"]
             done = subprocess.run(cmd, cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
-                                  errors="replace", timeout=30, **host.QUIET)
+                                  errors="replace", timeout=30, env=surroundings(self.demo), **host.QUIET)
             answer = envelope_from(done.stdout)
         finally:
             with self.lock:
@@ -527,19 +543,15 @@ class Reader:
     def state(self):
         import agent
         import config
-        if self.demo:
-            import demo
-            run = demo.status()
-            return {"demo": True, "site": config.example()["site"]["name"],
-                    "mount": {"state": "tracking", "motion_locked": False},
-                    "camera": {"state": "capturing"}, "solver": {"state": "ready"},
-                    "imaging": {"state": "capturing", "target": run["name"], "captured": run["captured"],
-                                "accepted": run["accepted"]},
-                    "capabilities": agent.capabilities(), "available": list(DEMO_ACTIONS), **self.about()}
         site = (config.load() if config.FILE.exists() else config.example())["site"]["name"]
-        return dict(agent.status(), demo=False, site=site, capabilities=agent.capabilities(),
-                    available=[a for a in ACTIONS if self.mode == "app" or a not in WORKSTATION],
-                    **self.about())
+        sky = {}
+        if self.demo:
+            import simulator
+            sky = {"sky": simulator.sky()}
+        return dict(agent.status(), demo=self.demo, site=site, capabilities=agent.capabilities(),
+                    available=[a for a in ACTIONS if (self.mode == "app" or a not in WORKSTATION)
+                               and not (self.demo and a in NOT_IN_DEMO)],
+                    **sky, **self.about())
 
     def about(self):
         """What this is and how it is set up, for the page's frame."""
@@ -553,11 +565,10 @@ class Reader:
 
     def session(self):
         import agent
-        if self.demo:
-            import demo
-            run = demo.status()
-            return dict(run, state="capturing", acceptance_rate=round(run["accepted"] / run["captured"], 3))
-        return agent.session(include_series=True)
+        try:
+            return agent.session(include_series=True)
+        except interface.Refusal:
+            return {"none": True}      # no imaging run yet: not a fault
 
     def catalogue(self):
         import mount
@@ -594,25 +605,32 @@ class Reader:
 
     def system(self):
         """The state of the kit as the status page's rows."""
-        if self.demo:
-            import demo
-            return {"rows": demo.status()["system"]}
         import serve
         return {"rows": serve.system_status()}
 
     def finished(self):
         """File names of the finished pictures in web/. None in the demo: its
         run is made up, and the real ones are not part of it."""
-        if self.demo:
-            return []
         import serve
         return [p["file"] for p in serve.pictures()]
 
     def gallery(self):
-        if self.demo:
-            return {"pictures": []}
         import serve
         return {"pictures": serve.pictures()}
+
+    def framing(self, name):
+        """How a target fits the camera: the field of view from the sensor
+        and focal length in the settings, and the target's size from the
+        catalogue where it gives one."""
+        import config
+        import mount
+        cfg = config.hardware()
+        camera, focal = cfg["camera"], cfg["scope"]["focal_length_mm"]
+        degrees = lambda pixels: math.degrees(pixels * camera["pixel_size_um"] / 1000 / focal)
+        target = mount.find_target(name)
+        return {"field_deg": [round(degrees(camera["width"]), 3), round(degrees(camera["height"]), 3)],
+                "scale_arcsec_px": round(206.265 * camera["pixel_size_um"] / focal, 2),
+                "size_arcmin": target.get("size"), "minor_arcmin": target.get("minor")}
 
     def settings(self):
         """Every setting the application can change, with its value now."""
@@ -651,7 +669,7 @@ class Reader:
         demo = self.demo
         if name.startswith("target/"):
             wanted = unquote(name[len("target/"):])
-            return interface.run("target", lambda: agent.target(wanted, demo))
+            return interface.run("target", lambda: dict(agent.target(wanted, demo), framing=self.framing(wanted)))
         routes = {
             "state": (self.state, 2),
             "night": (lambda: agent.night(demo), 300),
@@ -732,13 +750,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, (PAGE / name).read_bytes(), kind)
         if path.startswith("/pictures/"):
             name = path[len("/pictures/"):]
-            if name in PICTURES and self.jobs.demo:
-                # The demo's run is made up, so its picture is the sample one:
-                # never whatever the real camera last left in web/.
-                import demo
-                if name in ("stack.jpg", "latest.jpg") and demo.SAMPLE_FRAME.exists():
-                    return self.send(200, demo.SAMPLE_FRAME.read_bytes(), "image/jpeg")
-            elif (name in PICTURES or name in self.reader.finished()) and (WEB / name).exists():
+            if (name in PICTURES or name in self.reader.finished()) and (WEB / name).exists():
                 return self.send(200, (WEB / name).read_bytes(), "image/jpeg")
             return self.send(404, b"", "text/plain")
         if path.startswith("/api/"):
@@ -751,6 +763,24 @@ class Handler(BaseHTTPRequestHandler):
             if result is not None:
                 return self.answer(result, 200 if result["ok"] else 409)
         self.refuse("console", Refused(f"No such page: {path}", 404))
+
+    def demo_sky(self, params):
+        """Tell the demo's pretend sky and camera what to do: cloud, the
+        focuser turned, the camera's lead pulled out, drift. Nothing real."""
+        import simulator
+        if not self.jobs.demo:
+            raise Refused("That is only for the demo.", 403)
+        changes = {}
+        for key in ("cloud", "unplugged", "drift"):
+            if key in params:
+                if not isinstance(params[key], bool):
+                    raise Refused(f"{key} must be on or off.")
+                changes[key] = params[key]
+        if "turn" in params:
+            if params["turn"] not in (-1, 1):
+                raise Refused("The focuser turns one step in or out.")
+            changes["focus"] = simulator.sky()["focus"] + params["turn"]
+        return {"sky": simulator.set_sky(**changes)}
 
     def save_settings(self, params):
         """Change settings in config.toml from the application's Settings
@@ -829,7 +859,9 @@ class Handler(BaseHTTPRequestHandler):
             return self.refuse(name, Refused("The request was not understood.", 400))
         jobs = self.jobs
         try:
-            if name == "open/settings":
+            if name == "demo":
+                data = self.demo_sky(params)
+            elif name == "open/settings":
                 data = self.open_settings()
             elif name == "settings":
                 data = self.save_settings(params)
@@ -872,9 +904,10 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--port", type=int, default=8081)
     ap.add_argument("--demo", action="store_true",
-                    help="a simulated mount and a made-up imaging run; needs no telescope")
+                    help="a simulated mount, camera and sky; needs no telescope")
     ap.add_argument("--no-browser", action="store_true", help="print the address and do not open it")
     args = ap.parse_args()
+    args.demo = args.demo or config.DEMO
 
     server, key = serve(args.port, args.demo)
     address = f"http://127.0.0.1:{server.server_address[1]}/?key={key}"

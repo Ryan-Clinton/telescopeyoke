@@ -45,6 +45,8 @@
   <a href="#settings" data-task="settings" data-only="app"><svg><use href="/icons.svg#tools"/></svg><span>Settings</span></a>
   <a href="#logs" data-task="logs" data-only="app"><svg><use href="/icons.svg#home"/></svg><span>Logs</span></a>
   <a href="#about" data-task="about" data-only="app"><svg><use href="/icons.svg#home"/></svg><span>About</span></a>
+  <div class="group" data-demo>Demo</div>
+  <a href="#demo-sky" data-task="demo-sky" data-demo><svg><use href="/icons.svg#targets"/></svg><span>The pretend sky</span></a>
 </nav>
 
 <main class="work">
@@ -114,7 +116,7 @@
       <h2>The telescope (webcam, updates during slews)</h2>
       <img id="scope-picture" class="wide-picture" alt="The telescope, from the webcam">
     </div>
-    <p id="demo-mount" class="quiet" hidden>In the demo each command starts a fresh simulated mount at its home position, so a position is not carried from one move to the next.</p>
+    <p id="demo-mount" class="quiet" hidden>In the demo each command starts a fresh pretend mount at its home position, so a position is not carried from one move to the next.</p>
   </section>
 
   <section id="focus" class="task" hidden>
@@ -250,6 +252,20 @@
     <h1>Logs</h1>
     <label class="switch"><input type="checkbox" id="technical-logs"> Show technical details</label>
     <div id="logs-lines" class="log open"></div>
+  </section>
+
+  <section id="demo-sky" class="task" data-demo hidden>
+    <h1>The pretend sky</h1>
+    <p class="quiet">The demo has a pretend mount, camera and sky. Focusing, imaging and centring run exactly as they would for real, on frames made up here. These switches let you see how the application behaves when a night goes wrong.</p>
+    <dl id="sky-facts" class="facts"></dl>
+    <h2>Focuser</h2>
+    <div class="buttons"><button type="button" data-turn="-1">Turn in</button><button type="button" data-turn="1">Turn out</button></div>
+    <h2>Weather and faults</h2>
+    <div class="buttons">
+      <button type="button" data-sky="cloud" id="sky-cloud"></button>
+      <button type="button" data-sky="drift" id="sky-drift"></button>
+      <button type="button" data-sky="unplugged" id="sky-unplugged"></button>
+    </div>
   </section>
 
   <section id="about" class="task" data-only="app" hidden>

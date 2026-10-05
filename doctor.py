@@ -55,6 +55,8 @@ def check_catalogue():
 
 
 def check_config():
+    if _demo():
+        return OK, "the example site (demo)"
     import config
     if not config.FILE.exists():
         return WARN, "no config.toml: copy config.example.toml and set your location"
@@ -76,6 +78,11 @@ def check_network():
     return OK, "weather service reachable"
 
 
+def _demo():
+    import config
+    return config.DEMO
+
+
 def mount_link():
     """How config.toml says the mount is reached: "handset", "wifi" or "eqdir"."""
     import config
@@ -93,6 +100,8 @@ def find_serial_port():
 
 
 def check_serial_access():
+    if _demo():
+        return OK, "serial access (not needed: the mount is simulated)"
     if mount_link() == "wifi":
         return OK, "serial access (not needed: the mount is reached over Wi-Fi)"
     return host.serial_access()
@@ -126,6 +135,8 @@ def check_direct():
 
 
 def check_serial_lead():
+    if _demo():
+        return OK, "simulated mount (demo)"
     if mount_link() == "wifi":
         where = find_serial_port()
         if where:
@@ -145,6 +156,8 @@ def check_serial_lead():
 
 
 def check_handset():
+    if _demo():
+        return OK, "simulated handset, set up (demo)"
     if mount_link() != "handset":
         return check_direct()
     port = find_serial_port()
@@ -173,6 +186,8 @@ def check_program(name, purpose):
 
 
 def check_solver():
+    if _demo():
+        return OK, "simulated plate solver (demo)"
     import config
     program = config.solver()["program"]
     if shutil.which(program):
@@ -186,6 +201,8 @@ def check_solver():
 
 
 def check_star_database():
+    if _demo():
+        return OK, "star database (not needed in the demo)"
     import config
     folder = config.solver()["database"]
     if glob.glob(str(Path(folder) / "d20_*")):
@@ -194,6 +211,8 @@ def check_star_database():
 
 
 def check_indi_server():
+    if _demo():
+        return OK, "INDI server (not needed: the camera is simulated)"
     import config
     settings = config.hardware()
     if settings["camera"]["backend"] != "indi":
@@ -210,11 +229,15 @@ def check_indi_server():
 
 
 def check_camera_link():
+    if _demo():
+        return OK, "camera USB link (not needed in the demo)"
     import config
     return host.camera_usb_link(config.hardware()["camera"].get("usb_match", "ALTAIR"))
 
 
 def check_camera():
+    if _demo():
+        return OK, "simulated camera (demo)"
     import config
     if config.hardware()["camera"]["backend"] == "altair":
         import altair
@@ -235,6 +258,8 @@ def check_camera():
 
 
 def check_webcam():
+    if _demo():
+        return WARN, "no webcam in the demo; slews are not photographed"
     return host.has_webcam()
 
 

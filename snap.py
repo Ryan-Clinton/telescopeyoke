@@ -9,6 +9,8 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import config
+
 import numpy as np
 from astropy.io import fits
 from PIL import Image
@@ -17,8 +19,8 @@ import host
 from camera import PORT, Camera, colour, stretch
 
 ROOT = Path(__file__).parent
-FRAMES = ROOT / "frames"
-PREVIEW = ROOT / "web" / "latest.jpg"
+FRAMES = config.DATA / "frames"
+PREVIEW = config.DATA / "web" / "latest.jpg"
 PREVIEW_WIDTH = 1600
 
 

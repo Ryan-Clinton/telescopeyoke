@@ -17,12 +17,14 @@ import skywatch
 import snap
 from camera import Camera, luminance
 
+import config
+
 ROOT = Path(__file__).parent
 
 
 def run_active(seconds=45):
     """True if an imaging run has logged a frame in the last while."""
-    logs = list((ROOT / "frames").glob("*/*/frames.jsonl"))
+    logs = list((config.DATA / "frames").glob("*/*/frames.jsonl"))
     return any(time.time() - p.stat().st_mtime < seconds for p in logs)
 
 

@@ -22,6 +22,8 @@ import subprocess
 import time
 from pathlib import Path
 
+import config
+
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
@@ -33,9 +35,9 @@ import stacking
 from camera import PORT, WHITE, Camera, luminance
 
 ROOT = Path(__file__).parent
-PREVIEW = ROOT / "web" / "latest.jpg"
+PREVIEW = config.DATA / "web" / "latest.jpg"
 # The newest reading, kept so the status tools can say how good focus was.
-FOCUS_FILE = ROOT / "cache" / "focus.json"
+FOCUS_FILE = config.DATA / "cache" / "focus.json"
 CROP = 300          # half-width in pixels of the box shown around the star
 MIN_EXPOSURE, MAX_EXPOSURE = 0.001, 2.0
 
@@ -296,6 +298,7 @@ def run(args):
             image = Image.fromarray(picture.astype(np.uint8)).convert("RGB")
             image = image.resize((900, round(900 * image.height / image.width)))
             text = f"#{frame} {time.strftime('%H:%M:%S')}  {text}"
+            PREVIEW.parent.mkdir(exist_ok=True)    # the first thing run on a new machine may be this
             annotate(image, text).save(PREVIEW, quality=85)
             snap.label("focus view", f"{exposure:g} s", PREVIEW.parent)
             if words and not args.quiet:

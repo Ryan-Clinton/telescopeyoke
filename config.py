@@ -1,5 +1,6 @@
 """Site and equipment settings, read from config.toml."""
 import copy
+import os
 import shutil
 import sys
 import tomllib
@@ -8,8 +9,19 @@ from pathlib import Path
 import host  # noqa: F401  (every script passes through here: makes output UTF-8)
 
 ROOT = Path(__file__).parent
-FILE = ROOT / "config.toml"
 EXAMPLE = ROOT / "config.example.toml"
+
+# The demo: a simulated mount and camera at the example site, with nothing
+# plugged in. It is a property of the whole program, set when it starts
+# (app.py --demo, console.py --demo, or TY_DEMO=1), and every command the
+# program starts inherits it.
+DEMO = os.environ.get("TY_DEMO") == "1"
+# Where frames, pictures and remembered measurements are kept. The demo keeps
+# its own, so that nothing made up is ever mixed with a real night's files.
+DATA = Path(os.environ.get("TY_DATA") or (ROOT / "demo" if DEMO else ROOT))
+if DATA != ROOT:
+    DATA.mkdir(parents=True, exist_ok=True)     # the scripts make their own folders inside it
+FILE = ROOT / "config.toml"
 
 # Used for anything config.toml leaves out. These describe the hardware the
 # project was built with, so an older config.toml keeps working.
@@ -47,7 +59,10 @@ def _read(path):
 
 
 def load():
-    """Everything, including the observing site. Needs config.toml."""
+    """Everything, including the observing site. Needs config.toml; the demo
+    uses the example site instead."""
+    if DEMO:
+        return example()
     if not FILE.exists():
         raise SystemExit("No config.toml. Copy config.example.toml to config.toml "
                          "and put your own location in it.")
@@ -55,8 +70,9 @@ def load():
 
 
 def hardware():
-    """Equipment settings only; works without a config.toml."""
-    return _merged(_read(FILE) if FILE.exists() else {})
+    """Equipment settings only; works without a config.toml. The demo's
+    equipment is the example's, whatever is plugged in for real."""
+    return _merged(_read(FILE) if FILE.exists() and not DEMO else _read(EXAMPLE))
 
 
 def example():

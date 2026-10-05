@@ -87,6 +87,13 @@ dry run and shown as a plan, and nothing moves until you confirm it. From a
 terminal it is `./app.py`, or `./app.py --demo`. It has not yet been used
 with a real mount or camera.
 
+**The demo is the whole thing on a pretend telescope.** TelescopeYoke (demo)
+has a pretend mount, camera and sky: a GoTo is centred by plate solving,
+the focusing aid follows a focuser you turn with a button, and an imaging
+run stacks frames and rejects the ones taken after you bring the cloud
+over. It runs the same commands as a real night and keeps its files in a
+folder of its own (`demo/`), apart from anything real.
+
 **Use the planner for real** (still no telescope needed): put your location
 in `config.toml`, then `./tonight.py`.
 

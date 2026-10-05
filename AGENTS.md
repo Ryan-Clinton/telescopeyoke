@@ -16,7 +16,10 @@ pytest -q               # about three minutes; needs no hardware
 ```
 
 Everything runs without a telescope: `./tonight.py --demo`, `./serve.py --demo`,
-`./ty mount --demo goto M27`.
+`./ty mount --demo goto M27`. `./app.py --demo` (or `TY_DEMO=1` before any
+command) is the full demo: a pretend mount, camera and sky from
+`simulator.py`, with the real focusing, imaging and centring code running on
+them and every file kept under `demo/`.
 
 ## Layout
 

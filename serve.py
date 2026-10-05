@@ -26,7 +26,7 @@ import sky
 import stacking
 import tonight
 
-WEB = tonight.ROOT / "web"
+WEB = config.DATA / "web"
 
 
 def rebuild_forever(minutes, top, demo_mode):
@@ -113,7 +113,7 @@ def system_status(run_age=None):
     solver = (doctor.check_solver()[0] == doctor.OK
               and doctor.check_star_database()[0] == doctor.OK)
     add("Plate solver", "ready" if solver else "not installed", "good" if solver else "bad")
-    cache = tonight.ROOT / "cache"
+    cache = config.DATA / "cache"
     newest = lambda pattern: min((age(p) for p in cache.glob(pattern)), default=None)
     add("Weather forecast", *fresh(newest("weather_*.json"), 3600))
     add("Seeing forecast", *fresh(newest("seeing_*.json"), 6 * 3600))
@@ -148,7 +148,7 @@ def status_forever(seconds=2):
     while True:
         try:
             # A session is any folder with a frame log, newest activity last.
-            folders = {p.parent for p in (tonight.ROOT / "frames").glob("*/*/frames.json*")}
+            folders = {p.parent for p in (config.DATA / "frames").glob("*/*/frames.json*")}
             sessions = sorted(folders, key=lambda d: max(q.stat().st_mtime for q in d.glob("*.json*")))
             status = stacking.run_status(sessions[-1]) if sessions else {}
             if status.get("name"):

@@ -25,5 +25,9 @@ Rules: a change to how the mount moves comes with a simulator test; a change
 to JSON output keeps the schemas and tests in step; tests never need a
 camera, a mount, the network or `config.toml`.
 
+`tests/test_demo.py` runs the real commands in the full demo (pretend mount,
+camera and sky) in a scratch folder: a GoTo with centring, the focusing aid,
+an imaging run, cloud and a pulled lead.
+
 What the tests cannot cover: the real mount, camera and sky. Say in the
 README's status section what has and has not been run for real.

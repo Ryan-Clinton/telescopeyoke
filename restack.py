@@ -28,6 +28,8 @@ import json
 import time
 from pathlib import Path
 
+import config
+
 import numpy as np
 from PIL import Image
 
@@ -53,7 +55,7 @@ def find_session(name):
 
 def all_sessions(name):
     """Every saved session of an object, oldest first."""
-    folder = ROOT / "frames" / stacking.folder_name(name)
+    folder = config.DATA / "frames" / stacking.folder_name(name)
     return sorted(p for p in folder.glob("*/") if p.name != COMBINED and any(p.glob("light-*.fits")))
 
 
@@ -189,9 +191,9 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
                              {"EXPTIME": total, "NFRAMES": len(chosen), "GAIN": gain})
         name = session.parent.name
         image = Image.fromarray(process.process(stacked))
-        (ROOT / "web").mkdir(exist_ok=True)
+        (config.DATA / "web").mkdir(exist_ok=True)
         image.save(session / "final.jpg", quality=93)
-        image.save(ROOT / "web" / f"{name}-final.jpg", quality=93)
+        image.save(config.DATA / "web" / f"{name}-final.jpg", quality=93)
     (session / "restack.json").write_text(json.dumps(
         {"kept": [f["file"] for f in chosen], "frames": frames,
          "summary": {"captured": len(frames), "stacked": len(chosen),

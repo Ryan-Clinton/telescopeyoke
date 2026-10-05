@@ -53,6 +53,7 @@ h2 { font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: u
                 padding: 12px 14px 4px; }
 .tasks .group:first-child { padding-top: 2px; }
 body.mode-companion [data-only="app"], body.mode-app [data-only="companion"] { display: none !important; }
+body:not(.is-demo) [data-demo] { display: none !important; }
 .log.open { max-height: none; border-top: 0; padding-left: 0; }
 .settings { display: grid; grid-template-columns: 240px minmax(160px, 320px) 1fr; gap: 8px 16px; align-items: center; max-width: 1100px; }
 .settings h2 { grid-column: 1 / -1; }
@@ -122,6 +123,9 @@ select { color: var(--text); background: var(--bg); }
 .columns { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 28px; }
 .list { min-width: 0; }
 .chosen { position: sticky; top: 0; align-self: start; }
+.framing svg { width: 100%; max-width: 280px; display: block; margin: 10px 0 4px; }
+.framing .field { fill: #000; stroke: var(--dim); stroke-width: 1; }
+.framing .object { fill: var(--act); fill-opacity: .35; stroke: var(--act-text); stroke-width: 1; }
 .facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 18px; margin: 8px 0; }
 .facts dt { color: var(--dim); } .facts dd { margin: 0; }
 

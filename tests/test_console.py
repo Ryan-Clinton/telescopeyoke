@@ -30,8 +30,21 @@ BROKEN = "import sys; print('the camera fell off', file=sys.stderr); sys.exit(1)
 
 
 @pytest.fixture
-def desk():
-    """A console on a free port, in demo mode, and a way to ask it things."""
+def desk(tmp_path, monkeypatch):
+    """A console on a free port, in the demo, and a way to ask it things. The
+    demo keeps its files in a folder of the test's own."""
+    import agent
+    import config
+    import focus
+    import horizon
+    import mount
+    import serve
+    monkeypatch.setattr(config, "DEMO", True)
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    for module, name, where in ((agent, "WEB", "web"), (console, "WEB", "web"), (serve, "WEB", "web"),
+                                (focus, "FOCUS_FILE", "cache/focus.json"), (horizon, "RESULTS", "cache/horizon.json"),
+                                (mount, "LAST_SOLVE", "cache/last_solve.json")):
+        monkeypatch.setattr(module, name, tmp_path / where)
     server, key = console.serve(port=0, demo=True, mode="app")
     port = server.server_address[1]
     threading.Thread(target=server.serve_forever, daemon=True).start()
@@ -132,13 +145,25 @@ def test_the_night_is_reported_as_the_status_page_shows_it(desk):
     assert desk.json("/api/system")[1]["data"]["rows"][0].keys() == {"label", "text", "level"}
 
 
-def test_the_demo_shows_only_its_own_pictures(desk):
-    # The made-up run has the sample picture; nothing the real camera, webcam
-    # or satellite left in web/ is shown beside it.
-    assert desk("/pictures/stack.jpg?v=123")[0] == 200
-    assert desk("/pictures/clouds.jpg")[0] == 404 and desk("/pictures/scope.jpg")[0] == 404
+def test_the_demo_keeps_its_own_pictures_and_tells_the_pretend_sky(desk, tmp_path):
+    # Nothing the real camera, webcam or satellite left in web/ is shown in the demo.
+    assert desk("/pictures/stack.jpg?v=123")[0] == 404 and desk("/pictures/clouds.jpg")[0] == 404
     assert desk.json("/api/gallery")[1]["data"]["pictures"] == []
-    assert desk("/pictures/M27-final.jpg")[0] == 404
+    (tmp_path / "web").mkdir(exist_ok=True)
+    (tmp_path / "web" / "stack.jpg").write_bytes(b"made up")
+    assert desk("/pictures/stack.jpg?v=124")[2] == b"made up"
+    assert desk.json("/api/session")[1]["data"] == {"none": True}        # no run yet is not a fault
+
+    sky = desk.json("/api/state")[1]["data"]["sky"]
+    assert sky["cloud"] is False and sky["unplugged"] is False
+    assert desk.json("/api/demo", {"cloud": True, "turn": -1})[1]["data"]["sky"]["cloud"] is True
+    assert desk.json("/api/demo", {"turn": 1})[1]["data"]["sky"]["focus"] == sky["focus"]
+    for bad in ({"cloud": "yes"}, {"turn": 5}):
+        assert desk.json("/api/demo", bad)[0] == 409
+    for action in console.NOT_IN_DEMO:
+        path = "plan" if console.ACTIONS[action].get("moves") else "action"
+        answer = desk.json(f"/api/{path}/{action}", {"kind": "dark"})[1]
+        assert answer["errors"][0]["code"] == "DEMO_UNSUPPORTED", action
 
 
 def test_finished_pictures_are_served_by_name_and_nothing_else(tmp_path, monkeypatch):
@@ -203,7 +228,7 @@ def test_every_action_builds_exactly_its_command():
     assert tail("goto", {"target": "m27"}) == ["mount.py", "goto", "M27"]
     assert tail("goto", {"target": "Dumbbell Nebula", "solve": True}) == ["mount.py", "goto", "M27", "--solve"]
     assert tail("home") == ["mount.py", "home"] and tail("zenith") == ["mount.py", "zenith"]
-    assert tail("home", demo=True, dry_run=True) == ["mount.py", "--demo", "home", "--dry-run"]
+    assert tail("home", demo=True, dry_run=True) == ["mount.py", "home", "--dry-run"]
     assert tail("sync") == ["mount.py", "sync"] and tail("drift") == ["mount.py", "drift"]
     assert tail("compensate") == ["mount.py", "compensate"] and tail("position") == ["mount.py", "status"]
     assert tail("run", {"target": "M27", "frames": 300, "exposure": "auto", "gain": 300, "assist": True}) == \
@@ -314,10 +339,9 @@ def test_the_simulated_mount_refuses_what_the_real_one_would(desk):
 # --- one job, finishing, and Stop ------------------------------------------------------
 
 def test_one_job_at_a_time_and_reading_still_answers(desk, monkeypatch):
-    monkeypatch.setattr(console, "DEMO_ACTIONS", console.DEMO_ACTIONS + ("focus", "calibrate"))
     stand_in(monkeypatch, POLITE)
     assert desk.json("/api/action/focus", {})[1]["ok"]
-    status, answer = desk.json("/api/action/calibrate", {"kind": "dark"})
+    status, answer = desk.json("/api/action/restack", {"target": "M27"})
     assert status == 409 and "Busy: Focusing is running" in answer["errors"][0]["message"]
     plan = desk.json("/api/plan/home", {})[1]["data"]["id"]
     assert "Busy" in desk.json(f"/api/confirm/{plan}", {})[1]["errors"][0]["message"]
@@ -327,7 +351,6 @@ def test_one_job_at_a_time_and_reading_still_answers(desk, monkeypatch):
 
 
 def test_finishing_lets_the_job_close_and_the_next_one_start(desk, monkeypatch):
-    monkeypatch.setattr(console, "DEMO_ACTIONS", console.DEMO_ACTIONS + ("focus",))
     stand_in(monkeypatch, POLITE)
     desk.json("/api/action/focus", {})
     wait_for(lambda: desk.jobs.current and desk.jobs.current["lines"])      # it is up and waiting
@@ -340,7 +363,6 @@ def test_finishing_lets_the_job_close_and_the_next_one_start(desk, monkeypatch):
 
 
 def test_a_job_that_will_not_end_is_killed_after_the_wait(desk, monkeypatch):
-    monkeypatch.setattr(console, "DEMO_ACTIONS", console.DEMO_ACTIONS + ("focus",))
     monkeypatch.setattr(console, "FINISH_WAIT", 0.5)
     stand_in(monkeypatch, "import time, signal, sys, host\n"
                           "signal.signal(signal.SIGINT, signal.SIG_IGN)\n"
@@ -353,7 +375,6 @@ def test_a_job_that_will_not_end_is_killed_after_the_wait(desk, monkeypatch):
 
 
 def test_the_three_outcomes_are_kept_apart(desk, monkeypatch):
-    monkeypatch.setattr(console, "DEMO_ACTIONS", console.DEMO_ACTIONS + ("focus",))
     refused = desk.json("/api/plan/goto", {"target": "Vega"})[1]
     if "refused" in refused["data"]:                       # below a limit at this hour: a refusal, not a fault
         assert refused["ok"] and refused["data"]["refused"]["code"].startswith("TARGET_")
@@ -405,7 +426,6 @@ def test_stop_with_nothing_running_still_tells_the_mount(desk):
 
 
 def test_stop_leaves_a_camera_job_alone(desk, monkeypatch):
-    monkeypatch.setattr(console, "DEMO_ACTIONS", console.DEMO_ACTIONS + ("focus",))
     stand_in(monkeypatch, POLITE)
     desk.json("/api/action/focus", {})
     wait_for(lambda: desk.jobs.current and desk.jobs.current["lines"])
@@ -456,7 +476,6 @@ def test_a_run_without_recentring_is_a_camera_job_and_needs_no_plan(desk, monkey
     assert desk.json("/api/plan/run", still)[1]["ok"] is False          # nothing to plan
     assert desk.json("/api/action/run", {"target": "M27"})[0] == 409    # with re-centring: a plan first
 
-    monkeypatch.setattr(console, "DEMO_ACTIONS", console.DEMO_ACTIONS + ("run",) + console.MOVING_ORDERS)
     stand_in(monkeypatch, POLITE, action="run")
     # No run going: the console does not pass on orders that move the mount.
     assert "No imaging run started from this console" in desk.json("/api/action/run-recentre", {})[1]["errors"][0]["message"]
@@ -483,7 +502,6 @@ def test_closing_the_console_always_tells_the_mount_to_stop(desk, monkeypatch):
     monkeypatch.setattr(console.subprocess, "run", run)
     assert desk.jobs.close()["stopped"] and sent == [["stop", "--json"]]      # nothing was running
 
-    monkeypatch.setattr(console, "DEMO_ACTIONS", console.DEMO_ACTIONS + ("focus",))
     stand_in(monkeypatch, POLITE)
     desk.json("/api/action/focus", {})
     wait_for(lambda: desk.jobs.current and desk.jobs.current["lines"])
@@ -566,3 +584,11 @@ def test_the_page_keeps_the_equipment_screens_to_the_application():
     for screen in ("home", "targets", "imaging", "focus", "mount"):
         assert re.search(rf'<section id="{screen}" class="task"(?! data-only)', page), screen
     assert '<section id="status" class="task" data-only="companion"' in page
+
+
+def test_a_target_comes_with_how_it_fits_the_camera(desk):
+    framing = desk.json("/api/target/M31")[1]["data"]["framing"]
+    # The example's 183C behind 750 mm: about 1.0 by 0.67 degrees, 0.66 arcseconds a pixel.
+    assert framing["field_deg"] == pytest.approx([0.997, 0.669], abs=0.01) and framing["scale_arcsec_px"] == 0.66
+    assert framing["size_arcmin"] > 60                      # Andromeda is far wider than the frame
+    assert desk.json("/api/target/Vega")[1]["data"]["framing"]["size_arcmin"] is None

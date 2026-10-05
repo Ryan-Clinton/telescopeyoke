@@ -17,7 +17,7 @@ import mount
 import stacking
 
 ROOT = Path(__file__).parent
-WEB = ROOT / "web"
+WEB = config.DATA / "web"
 VERSION = "0.1.0"
 _night_cache = {}
 
@@ -79,14 +79,14 @@ def session(include_frames=False, limit=50, include_series=False):
     """The newest imaging run: counts, the latest frame's quality, and why
     frames were dropped. Frame-by-frame detail only on request; so is the
     series of recent measurements, for drawing."""
-    folders = {p.parent for p in (ROOT / "frames").glob("*/*/frames.json*")}
+    folders = {p.parent for p in (config.DATA / "frames").glob("*/*/frames.json*")}
     if not folders:
         raise interface.Refusal("NO_SESSION", "No imaging run has been recorded yet.")
     newest = max(folders, key=lambda d: max(q.stat().st_mtime for q in d.glob("*.json*")))
     status = stacking.run_status(newest)
     series = status.pop("series", None)
     status["state"] = imaging_state(status)
-    status["folder"] = str(newest.relative_to(ROOT))
+    status["folder"] = str(newest.relative_to(config.DATA))
     if status["captured"]:
         status["acceptance_rate"] = round(status["accepted"] / status["captured"], 3)
     if include_frames:

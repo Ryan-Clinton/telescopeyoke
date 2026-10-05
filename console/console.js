@@ -78,7 +78,6 @@ function unavailable(needs) {
   const state = seen.state;
   if (!state) return "Waiting for the console.";
   const caps = state.capabilities, parts = caps.components || {};
-  if (state.demo) return null;
   const failing = (...names) => names.map((n) => parts[n]).find((p) => p && p.status === "fail");
   if (needs === "mount" || needs === "imaging") {
     if (caps.motion.locked && needs === "mount") return `Motion is locked: ${caps.motion.lock_reason}`;
@@ -100,7 +99,7 @@ function gate(button, action, needs) {
   // A control that cannot be used says why, beside it. Never a bare grey button.
   const state = seen.state;
   let why = unavailable(needs);
-  if (state && state.demo && action && !state.available.includes(action)) why = "Not in the demo: it needs the real camera.";
+  if (state && state.demo && action && !state.available.includes(action)) why = "Not in the demo: it tests or sets up real equipment.";
   const running = seen.job && seen.job.running;
   if (!why && running && action !== "stop") why = `Busy: ${running.label} is running.`;
   button.disabled = !!why;
@@ -456,6 +455,25 @@ function drawTargets() {
   gateAll();
 }
 
+function framing(t) {
+  // How the target fits the camera: the field as a rectangle, the target drawn to scale inside it.
+  const f = t.framing;
+  if (!f) return null;
+  const [wide, high] = f.field_deg, w = 280, h = Math.round(280 * high / wide), parts = [];
+  parts.push(el("rect", { class: "field", x: 1, y: 1, width: w - 2, height: h - 2 }));
+  let words = `Field ${wide.toFixed(2)}° × ${high.toFixed(2)}° · ${f.scale_arcsec_px}″ per pixel.`;
+  if (f.size_arcmin) {
+    const across = f.size_arcmin / 60, down = (f.minor_arcmin || f.size_arcmin) / 60, px = w / wide;
+    parts.push(el("ellipse", { class: "object", cx: w / 2, cy: h / 2, rx: Math.max(1.5, across * px / 2), ry: Math.max(1.5, down * px / 2) }));
+    const share = Math.round(100 * across / wide);
+    words += ` ${t.id} is ${f.size_arcmin}′ across: ` + (across > wide ? "larger than the frame, so only part of it fits." : share < 3 ? "very small in the frame." : `about ${share}% of the frame's width.`);
+  } else {
+    parts.push(el("circle", { class: "object", cx: w / 2, cy: h / 2, r: 2 }));
+    words += " The catalogue gives no size for it.";
+  }
+  return el("div", { class: "framing" }, el("svg", { viewBox: `0 0 ${w} ${h}` }, parts), el("p", { class: "quiet", text: words }));
+}
+
 async function choose(id) {
   chosen = id;
   const reply = await ask(`/api/target/${encodeURIComponent(id)}`);
@@ -473,7 +491,7 @@ async function choose(id) {
   const go = el("button", { type: "button", text: `Go to ${t.id}`, "data-needs": "mount", "data-gate": "goto", on: { click: () => makePlan("goto", { target: t.id }) } });
   const centre = el("button", { type: "button", text: "Centre with plate solve", "data-needs": "imaging", "data-gate": "goto", on: { click: () => makePlan("goto", { target: t.id, solve: true }) } });
   const image = el("button", { type: "button", text: "Start imaging", "data-needs": "imaging", "data-gate": "run", on: { click: () => openSheet(t.id) } });
-  fill($("chosen"), el("div", { class: "strong", text: `${t.id} ${t.name || ""}` }), facts,
+  fill($("chosen"), el("div", { class: "strong", text: `${t.id} ${t.name || ""}` }), facts, framing(t),
        allowed === false ? el("p", { class: "warn", text: `A GoTo is not allowed now: ${(t.goto.refusal || {}).message || t.goto.reason || "outside the limits"}` }) : null,
        el("div", { class: "buttons" }, go, centre, image));
   gateAll();
@@ -731,6 +749,25 @@ async function saveSettings() {
   refresh();
 }
 
+function drawDemoSky() {
+  const sky = seen.state && seen.state.sky;
+  if (!sky) return;
+  const away = Math.abs(sky.focus);
+  facts($("sky-facts"), [["Focuser", away ? `${away} turn${away === 1 ? "" : "s"} ${sky.focus > 0 ? "outside" : "inside"} best focus` : "at best focus"],
+        ["Cloud", sky.cloud ? "clouded over" : "clear"], ["Drift", sky.drift ? "the stars drift between frames" : "none"],
+        ["Camera's lead", sky.unplugged ? "pulled out" : "plugged in"], ["Frames taken", sky.frames]]);
+  $("sky-cloud").textContent = sky.cloud ? "Clear the cloud" : "Cloud over";
+  $("sky-drift").textContent = sky.drift ? "Stop the drift" : "Start the drift";
+  $("sky-unplugged").textContent = sky.unplugged ? "Plug the camera back in" : "Pull the camera's lead out";
+}
+
+async function tellSky(change) {
+  const reply = await ask("/api/demo", change);
+  if (!reply.ok) return notice(reply.errors[0].message, "failed");
+  seen.state.sky = reply.data.sky;
+  drawDemoSky();
+}
+
 function drawAbout() {
   const state = seen.state;
   if (state) facts($("about-facts"), [["Version", state.version], ["Running on", { linux: "Linux", win32: "Windows", darwin: "macOS" }[state.system] || state.system],
@@ -802,12 +839,14 @@ function show(name) {
 const SCREENS = { home: drawHome, targets: drawTargets, mount: drawMount, focus: drawFocus, imaging: drawImaging,
                   status: () => statusRows($("status-rows")), welcome: drawWelcome, camera: drawCamera, telescope: drawTelescope,
                   solver: drawSolver, webcam: drawWebcam, horizon: drawHorizon, calibration: gateAll, testing: gateAll,
-                  processing: drawProcessing, doctor: drawDoctor, settings: drawSettings, logs: () => {}, about: drawAbout };
+                  processing: drawProcessing, doctor: drawDoctor, settings: drawSettings, logs: () => {}, about: drawAbout,
+                  "demo-sky": drawDemoSky };
 
 function draw() {
   if (seen.state) {
     document.body.classList.toggle("mode-app", seen.state.mode === "app");
     document.body.classList.toggle("mode-companion", seen.state.mode !== "app");
+    document.body.classList.toggle("is-demo", !!seen.state.demo);
     // The first time the application opens with something still to set up, it opens on Welcome.
     if (!welcomed) {
       welcomed = true;
@@ -847,6 +886,8 @@ document.addEventListener("click", (event) => {
   const button = event.target.closest("button");
   if (!button || button.disabled) return;
   if (button.dataset.go) return show(button.dataset.go);
+  if (button.dataset.turn) return tellSky({ turn: Number(button.dataset.turn) });
+  if (button.dataset.sky) return tellSky({ [button.dataset.sky]: !(seen.state.sky || {})[button.dataset.sky] });
   if (button.dataset.plan) return makePlan(button.dataset.plan, {});
   if (button.dataset.action) return act(button.dataset.action, button.dataset.kind ? { kind: button.dataset.kind } : {});
   if (button.dataset.filter) { filter = filter === button.dataset.filter ? null : button.dataset.filter; return drawTargets(); }
