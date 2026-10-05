@@ -180,6 +180,8 @@ def check_handset():
 
 
 def check_program(name, purpose):
+    if _demo():
+        return OK, f"{name} ({purpose}; not needed in the demo)"
     if shutil.which(name):
         return OK, f"{name} ({purpose})"
     return FAIL, f"{name} not found ({purpose})"
