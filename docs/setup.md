@@ -56,6 +56,27 @@ adapter has only been found and read.
 
 Close the SynScan app and anything else talking to the mount first.
 
+## Setting the azimuth by day
+
+Once the polar axis's height is right it stays right; what changes each time
+the mount is carried out is which way it faces. Two things make that
+repeatable:
+
+1. **Mark where the tripod's feet go.** Three dots of paint, or better three
+   shallow dimples for the leg tips.
+2. **Remember a landmark.** On a night when the polar alignment measurement
+   says the axis is right, point the telescope at a distant fixed thing a few
+   hundred metres away or more, centre it, and choose "Remember it" (Tools,
+   Azimuth by landmark; or `./landmark.py remember chimney`). Next time, by
+   day, "Check" turns the telescope to the same axis readings and shows the
+   view with a cross where the landmark was. Turn the azimuth bolts until it
+   is back on the cross.
+
+Set the home position the same way each time: the axis readings count from
+wherever the mount was when it was switched on. A miss left to right is what
+the azimuth bolts correct; a miss up or down means home was set a little
+differently.
+
 ## The application
 
 `./install.sh` puts **TelescopeYoke** in the applications menu, with

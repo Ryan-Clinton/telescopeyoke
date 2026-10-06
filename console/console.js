@@ -16,7 +16,7 @@ const STALE = 600;   // seconds after which an old measurement is taken off the 
 
 const seen = { state: null, night: null, targets: null, observing: null, session: null, job: null,
                doctor: null, focus: null, catalogue: null, horizon: null, report: null, system: null, gallery: null,
-               polar: null };
+               polar: null, landmarks: null };
 let task = "home", chosen = null, filter = null, plan = null, trail = [], lastJobId = null;
 let unread = 0, logged = new Set();
 
@@ -682,6 +682,28 @@ function drawPolar() {
     + "If it is left as it is, the drift it causes can be cancelled from the Mount screen, but the picture will still slowly turn.";
 }
 
+let shownLandmark = null;
+function drawLandmark() {
+  const all = (seen.landmarks && seen.landmarks.landmarks) || [];
+  fill($("landmark-list"), all.length ? all.map((mark) => {
+    const check = el("button", { type: "button", text: "Check", "data-needs": "imaging", "data-gate": "landmark-check",
+                                 on: { click: () => { shownLandmark = mark.name; makePlan("landmark-check", { name: mark.name }); } } });
+    const stars = mark.polar_when_remembered ? "after a star measurement" : "before any star measurement: remember it again once the axis is right";
+    return el("div", { class: "tool" }, el("div", {}, el("b", { text: mark.name }),
+              el("span", { text: `bearing ${mark.bearing_deg.toFixed(1)}°, ${mark.height_deg.toFixed(1)}° up · ${stars}` })),
+              el("button", { type: "button", text: "Show", on: { click: () => { shownLandmark = mark.name; drawLandmark(); } } }), check);
+  }) : el("p", { class: "quiet", text: "None remembered yet." }));
+  const chosen = all.find((mark) => mark.name === shownLandmark) || null;
+  $("landmark-views").hidden = !chosen;
+  if (chosen) {
+    const src = `/landmarks/${encodeURIComponent(chosen.name)}.jpg`;
+    if ($("landmark-ref").getAttribute("src") !== src) $("landmark-ref").setAttribute("src", src);
+    $("landmark-then").textContent = chosen.name;
+    picture($("landmark-now"), "landmark.jpg");
+  }
+  gateAll();
+}
+
 function drawSolver() { checkLines($("solver-checks"), ["plate_solver", "star_database"]); }
 
 function drawWebcam() {
@@ -868,7 +890,7 @@ function show(name) {
 
 const SCREENS = { home: drawHome, targets: drawTargets, mount: drawMount, focus: drawFocus, imaging: drawImaging,
                   status: () => statusRows($("status-rows")), welcome: drawWelcome, camera: drawCamera, telescope: drawTelescope,
-                  solver: drawSolver, webcam: drawWebcam, horizon: drawHorizon, polar: drawPolar, calibration: gateAll, testing: gateAll,
+                  solver: drawSolver, webcam: drawWebcam, horizon: drawHorizon, polar: drawPolar, landmark: drawLandmark, calibration: gateAll, testing: gateAll,
                   processing: drawProcessing, doctor: drawDoctor, settings: drawSettings, logs: () => {}, about: drawAbout,
                   "demo-sky": drawDemoSky };
 
@@ -907,6 +929,7 @@ async function refresh() {
   if (task === "doctor" || !seen.doctor) wanted.push("doctor");
   if (task === "horizon") wanted.push("horizon");
   if (task === "polar") wanted.push("polar");
+  if (task === "landmark") wanted.push("landmarks");
   slow += 1;
   await Promise.all(wanted.map(load));
   busy = false;
@@ -977,6 +1000,8 @@ $("open-settings").addEventListener("click", async () => {
 });
 showOnlyIfThere($("webcam-picture"), $("webcam-part"));
 $("save-settings").addEventListener("click", saveSettings);
+$("point-plan").addEventListener("click", () => makePlan("point", { bearing: $("point-bearing").value, height: $("point-height").value }));
+$("landmark-remember").addEventListener("click", () => { shownLandmark = $("landmark-name").value.trim().replace(/ /g, "-").toLowerCase(); act("landmark-remember", { name: $("landmark-name").value }); });
 
 for (const [id, name] of [["night", "night"], ["dim", "dim"]]) {
   $(id).checked = localStorage.getItem(name) === "1";

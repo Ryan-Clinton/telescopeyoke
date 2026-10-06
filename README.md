@@ -203,6 +203,8 @@ it. For a question first ("will it work with my HEQ5?"), ask in
 | `liveview.py` | Takes a frame every few seconds so the status page shows what the telescope sees now. Steps aside while `shoot.py` runs. |
 | `app.py` | TelescopeYoke, the application: one window with everything in it, started from the applications menu. `./app.py --demo` tries it with nothing plugged in. |
 | `console.py` | The same observing screens as a page in a browser, without the equipment set-up and tools: the companion to the application. This computer only. |
+| `polaralign.py` | Measures how far the polar axis is from the pole by plate solving at three positions, and says which way to turn each adjuster. |
+| `landmark.py` | Sets the azimuth by day: remembers a distant fixed thing with the telescope's axis readings, and next time turns back to it and shows how far it has moved. |
 | `horizon.py` | Sweeps the sky and reports which directions are blocked by houses, hedges and trees, as lines for `config.toml`. `--trace` follows the top of whatever is in the way right round and checks its own answer; `--daylight` works by day, going by brightness instead of stars. |
 | `snap.py` | Takes one camera frame, saves the FITS in `frames/`, publishes a preview. |
 | `shoot.py` | Takes a picture: many short exposures, each checked, lined up and stacked live, with the raw frames kept. `--exposure auto` picks the longest exposure the tracking allows. `--frames 0` carries on until cloud stops it. While it runs, `./ty run stop` ends it cleanly with its final picture; `recentre`, `assist-on` and `assist-off` are also understood. |
@@ -387,6 +389,11 @@ version and the mount's model. Both are in Sky-Watcher's published protocol
 and both only read, but they are tested against the simulated handset alone.
 `try-demo.cmd` and `install.ps1 -Demo` have not been run on a real Windows
 machine; `./install.sh --demo` and `./tour.py` have been, on Ubuntu.
+
+Written but never run on the real mount or camera: `landmark.py`. Finding
+how far a view has moved is tested on made-up rooftops, and the turning back
+on the simulated mount. Daytime frames have never been taken with the real
+camera, so its choice of exposure is untried.
 
 Written but never run on the real mount or camera: `horizon.py --trace` and
 `horizon.py --daylight`. The following and its checks are tested against the

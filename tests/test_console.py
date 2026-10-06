@@ -244,6 +244,12 @@ def test_every_action_builds_exactly_its_command():
     assert tail("horizon", {"trace": True, "daylight": True}) == ["horizon.py", "--trace", "--daylight"]
     assert tail("camera-setup") == ["camera_setup.py", "--open"]
     assert tail("polar") == ["polaralign.py"] and console.moves("polar", {})
+    assert tail("point", {"bearing": "112.5", "height": 8}) == ["mount.py", "point", "112.5", "8"]
+    assert tail("landmark-remember", {"name": "Old Chimney"}) == ["landmark.py", "remember", "old-chimney"]
+    assert tail("landmark-check", {"name": "mast"}) == ["landmark.py", "check", "mast", "--watch", "40"]
+    for bad in ({"name": "../x"}, {"name": ""}, {"bearing": 400, "height": 5}, {"bearing": 10, "height": 0}):
+        with pytest.raises(console.Refused):
+            console.command("landmark-check" if "name" in bad else "point", bad)
     assert tail("camera-capabilities") == ["camera_test.py", "--capabilities"]
     assert tail("camera-throughput") == ["camera_test.py", "--throughput"]
     assert tail("camera-gain-sweep") == ["camera_test.py", "--gain-sweep"]
@@ -253,7 +259,7 @@ def test_every_action_builds_exactly_its_command():
     assert tail("run-assist-on") == ["ty", "run", "assist-on"] and tail("run-assist-off") == ["ty", "run", "assist-off"]
     # Every script the table names exists, and every moving one can be planned.
     for name, spec in console.ACTIONS.items():
-        assert (ROOT / spec["command"]({"target": "M27"})[0]).exists(), name
+        assert (ROOT / spec["command"]({"target": "M27", "name": "mast", "bearing": 90, "height": 10})[0]).exists(), name
 
 
 def test_nothing_from_the_browser_reaches_a_command_line(desk, monkeypatch):
@@ -581,7 +587,7 @@ def test_opening_the_settings_makes_them_from_the_example_first(tmp_path, monkey
 
 def test_the_page_keeps_the_equipment_screens_to_the_application():
     page = (PAGE / "index.html").read_text(encoding="utf-8")
-    for screen in ("camera", "telescope", "solver", "webcam", "polar", "horizon", "calibration", "testing",
+    for screen in ("camera", "telescope", "solver", "webcam", "polar", "landmark", "horizon", "calibration", "testing",
                    "processing", "doctor", "settings", "logs", "about", "welcome"):
         assert re.search(rf'<section id="{screen}" class="task" data-only="app"', page), screen
     for screen in ("home", "targets", "imaging", "focus", "mount"):

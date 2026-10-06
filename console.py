@@ -52,7 +52,7 @@ FILES = {"/": ("index.html", "text/html; charset=utf-8"),
          "/console.css": ("console.css", "text/css; charset=utf-8"),
          "/console.js": ("console.js", "text/javascript; charset=utf-8"),
          "/icons.svg": ("icons.svg", "image/svg+xml")}
-PICTURES = ("latest.jpg", "stack.jpg", "scope.jpg", "clouds.jpg")
+PICTURES = ("latest.jpg", "stack.jpg", "scope.jpg", "clouds.jpg", "landmark.jpg")
 
 HEADERS = {
     "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; style-src 'self'; "
@@ -136,6 +136,18 @@ def survey(params):
     return cmd
 
 
+def landmark_name(params):
+    import landmark
+    try:
+        return landmark.name_ok(str(params.get("name", "")))
+    except interface.Refusal as refusal:
+        raise Refused(refusal.message)
+
+
+def pointing(params):
+    return ["mount.py", "point", f"{number(params, 'bearing', 0, 360):g}", f"{number(params, 'height', 2, 89):g}"]
+
+
 def calibration(params):
     kind = choice(params, "kind", ("dark", "bias", "flat"), "dark")
     return ["calibrate.py", kind, "--frames", str(number(params, "frames", 1, 200, 20, True)),
@@ -172,6 +184,14 @@ ACTIONS = {
     # what says why there is no camera yet.
     "camera-setup": {"label": "Set up the camera", "uses": "camera", "moves": False,
                      "command": lambda p: ["camera_setup.py", "--open"]},
+    "point":      {"label": "Point at a bearing", "command": pointing, "uses": "mount", "moves": True},
+    "landmark-remember": {"label": "Remember landmark", "uses": "mount", "moves": False,
+                          "command": lambda p: ["landmark.py", "remember", landmark_name(p)]},
+    "landmark-check":    {"label": "Check landmark", "uses": "mount", "moves": True,
+                          "command": lambda p: ["landmark.py", "check", landmark_name(p), "--watch", "40"],
+                          "says": "The mount turns to where it was when the landmark was remembered, holds "
+                                  "there, and photographs it every few seconds for two minutes while you "
+                                  "turn the azimuth bolts. Press Finish when it is on the cross."},
     "polar":      {"label": "Polar alignment", "command": lambda p: ["polaralign.py"], "uses": "mount", "moves": True,
                    "says": "This photographs the sky where the telescope is, slews 25° away from the "
                            "meridian twice, photographing each time, and returns. Start from a target "
@@ -193,11 +213,15 @@ ACTIONS = {
 # The demo has a pretend mount, camera and sky, so nearly everything runs in
 # it. These do not: they test or set up real equipment.
 NOT_IN_DEMO = ("camera-setup", "camera-capabilities", "camera-throughput", "camera-gain-sweep",
-               "calibrate", "sync", "drift", "compensate")
+               "calibrate", "sync", "drift", "compensate",
+               # Each demo command starts a fresh pretend mount at home, so there
+               # is no "where it was pointing" for a landmark to be remembered at.
+               "landmark-remember", "landmark-check")
 # Setting up and testing the equipment belongs to the application's own
 # window. The companion page in a browser is for observing, and is refused these.
 WORKSTATION = ("camera-setup", "camera-capabilities", "camera-throughput", "camera-gain-sweep",
-               "calibrate", "horizon", "polar", "restack", "drift", "compensate", "sync", "open-settings")
+               "calibrate", "horizon", "polar", "point", "landmark-remember", "landmark-check", "restack",
+               "drift", "compensate", "sync", "open-settings")
 # Orders that have a run move the mount or change its motors.
 MOVING_ORDERS = ("run-recentre", "run-assist-on", "run-assist-off")
 
@@ -622,6 +646,10 @@ class Reader:
         import serve
         return {"pictures": serve.pictures()}
 
+    def landmarks(self):
+        import landmark
+        return {"landmarks": landmark.listed(), "degrees_per_pixel": landmark.scale()}
+
     def polar(self):
         """The last polar alignment measurement, if there is one."""
         import mount
@@ -698,6 +726,7 @@ class Reader:
             "horizon": (self.horizon, 30),
             "report": (self.report, 300),
             "polar": (self.polar, 2),
+            "landmarks": (self.landmarks, 2),
             "settings": (self.settings, 0),
             "system": (self.system, 10),
             "gallery": (self.gallery, 10),
@@ -765,6 +794,13 @@ class Handler(BaseHTTPRequestHandler):
         if path in FILES:
             name, kind = FILES[path]
             return self.send(200, (PAGE / name).read_bytes(), kind)
+        if path.startswith("/landmarks/"):
+            # The picture kept with a remembered landmark, by its name only.
+            import landmark
+            wanted = path[len("/landmarks/"):]
+            if wanted in [f"{note['name']}.jpg" for note in landmark.listed()]:
+                return self.send(200, (landmark.FOLDER / wanted).read_bytes(), "image/jpeg")
+            return self.send(404, b"", "text/plain")
         if path.startswith("/pictures/"):
             name = path[len("/pictures/"):]
             if (name in PICTURES or name in self.reader.finished()) and (WEB / name).exists():

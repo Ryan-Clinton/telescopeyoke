@@ -37,6 +37,7 @@
   <a href="#webcam" data-task="webcam" data-only="app"><svg><use href="/icons.svg#focus"/></svg><span>Webcam</span></a>
   <div class="group" data-only="app">Tools</div>
   <a href="#polar" data-task="polar" data-only="app"><svg><use href="/icons.svg#mount"/></svg><span>Polar alignment</span></a>
+  <a href="#landmark" data-task="landmark" data-only="app"><svg><use href="/icons.svg#targets"/></svg><span>Azimuth by landmark</span></a>
   <a href="#horizon" data-task="horizon" data-only="app"><svg><use href="/icons.svg#tools"/></svg><span>Horizon</span></a>
   <a href="#calibration" data-task="calibration" data-only="app"><svg><use href="/icons.svg#tools"/></svg><span>Calibration</span></a>
   <a href="#testing" data-task="testing" data-only="app"><svg><use href="/icons.svg#tools"/></svg><span>Camera testing</span></a>
@@ -212,6 +213,28 @@
         <dl id="polar-facts" class="facts"></dl>
         <p id="polar-note" class="quiet"></p>
       </div>
+    </div>
+  </section>
+
+  <section id="landmark" class="task" data-only="app" hidden>
+    <h1>Azimuth by landmark</h1>
+    <p class="quiet">With the polar axis's height set once, all that changes from one setting-up to the next is which way the mount faces. Remember a distant fixed thing (a chimney, a mast, a street lamp) on a night when the star measurement says the axis is right. Next time, by day, Check turns the telescope back to it and shows where it sits now; turn the azimuth bolts until it is on the cross. Put the tripod on its marks and set home the same way each time.</p>
+    <h2>Remember one</h2>
+    <div class="buttons">
+      <label>Bearing <input id="point-bearing" type="number" min="0" max="360" step="any" placeholder="0 to 360"></label>
+      <label>Height <input id="point-height" type="number" min="2" max="89" step="any" placeholder="2 to 89"></label>
+      <button type="button" id="point-plan" data-needs="mount" data-gate="point">Point there</button>
+    </div>
+    <p class="quiet">Point roughly at it, centre it with the handset's buttons while watching the newest frame, then give it a name.</p>
+    <div class="buttons">
+      <label>Name <input id="landmark-name" type="text" maxlength="40" placeholder="chimney"></label>
+      <button type="button" id="landmark-remember" data-needs="imaging" data-gate="landmark-remember">Remember it</button>
+    </div>
+    <h2>Remembered</h2>
+    <div id="landmark-list"></div>
+    <div class="viewer" id="landmark-views" hidden>
+      <figure><figcaption><b>REMEMBERED</b> <span id="landmark-then" class="quiet"></span></figcaption><img id="landmark-ref" class="picture" alt="The landmark as remembered"></figure>
+      <figure><figcaption><b>NOW</b> <span class="quiet">the cross is where it belongs</span></figcaption><img id="landmark-now" class="picture" alt="The landmark now"></figure>
     </div>
   </section>
 

@@ -32,7 +32,7 @@ them and every file kept under `demo/`.
 | `tonight.py`, `sky.py`, `feeds.py`, `page.py`, `serve.py` | Planner, status page, read-only web API |
 | `app.py` | TelescopeYoke, the application: a window of its own over `console.py`'s server, with every screen |
 | `console.py`, `console/` | The server and the page behind the application; run by itself, the companion page in a browser (observing only). This computer only; runs the other scripts |
-| `mount.py`, `tracking.py`, `polaralign.py`, `simulator.py` | Mount control, drift model, simulated handset and motor board |
+| `mount.py`, `tracking.py`, `polaralign.py`, `landmark.py`, `simulator.py` | Mount control, drift model, polar alignment by the stars, azimuth by a remembered landmark, simulated handset and motor board |
 | `direct.py` | The mount without its handset (Wi-Fi adapter or EQDIR lead): stands in for the handset so `mount.py` is unchanged |
 | `camera.py`, `indi.py`, `altair.py`, `snap.py`, `liveview.py`, `focus.py` | Camera (through INDI, or Altair's own library) and focusing |
 | `host.py` | Everything that differs between Linux and Windows, in one place |
@@ -49,7 +49,7 @@ anything with `--dry-run`; `pytest`; `doctor.py`.
 ## Commands that move the telescope
 
 `mount.py goto | point | zenith | home | compensate | directions`, and `shoot.py` (which
-re-centres), `polaralign.py`. `mount.py drift` and `shoot.py --assist` change
+re-centres), `polaralign.py`, `landmark.py check`, `horizon.py`. `mount.py drift` and `shoot.py --assist` change
 a motor's creep rate. `mount.py stop` is always allowed.
 
 ## Safety invariants (do not weaken these)
