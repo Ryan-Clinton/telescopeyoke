@@ -249,6 +249,8 @@ def test_each_rig_has_its_own_settings_and_its_own_files(tmp_path, monkeypatch):
 
     import agent
     monkeypatch.setattr(config, "RIGS", tmp_path)
+    # No config.toml of anyone's: a new rig starts from the example here.
+    monkeypatch.setattr(config, "ROOT", tmp_path / "nowhere")
     assert config.rigs() == []
     made = config.new_rig("heq5")
     assert made == tmp_path / "heq5.toml" and made.exists() and config.rigs() == ["heq5"]
