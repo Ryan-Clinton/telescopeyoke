@@ -8,6 +8,9 @@ with [camera] backend = "altair" in config.toml, through Altair's own library
 Frames are slow on this driver over USB 2: about 4 s plus five times the
 exposure length, so a 2 s exposure takes roughly 14 s to arrive. On USB 3 a
 1 s exposure arrives in about 1.5 s.
+
+    cam.use("focus_fast")                  # quick frames for focusing: binned 2x2 if the camera will
+    cam.use("imaging")                     # the full sensor again
 """
 import io
 import subprocess
@@ -35,6 +38,14 @@ WHITE = 2 ** SETTINGS["camera"]["bit_depth"] - 1  # brightest raw value
 
 BACKEND = SETTINGS["camera"]["backend"]   # "indi", or "altair" for Altair's own library
 
+# What a caller wants its frames for, and the binning that asks of the
+# camera. A caller names the purpose with cam.use(); only this layer and the
+# routes under it know a camera's own settings. Focusing judges brightness
+# alone, so its quick frames may be binned whatever that does to the colour
+# pattern. Imaging is never binned: the darks, the colour and the plate
+# scale all assume the full sensor.
+PROFILES = {"imaging": 1, "focus_fine": 1, "focus_fast": 2}
+
 
 class Camera:
     def __new__(cls, port=PORT, gain=300):
@@ -51,6 +62,8 @@ class Camera:
 
     def __init__(self, port=PORT, gain=300):
         self.port, self.gain = port, gain
+        self.binning = 1                 # what the frames now arriving are binned by
+        self.refuses_binning = False     # asked once and it failed: not asked again
         self._open()
 
     def __enter__(self):
@@ -90,6 +103,7 @@ class Camera:
             # crash) left a smaller one selected.
             c.set(self.name, "CCD_RESOLUTION", **{next(iter(modes)): "On"})
         c.set(self.name, "CCD_BINNING", HOR_BIN=1, VER_BIN=1)
+        self.binning = 1
         c.set(self.name, "CCD_CAPTURE_FORMAT", INDI_RAW="On")
         if (c.get(self.name, "CCD_TRANSFER_FORMAT") or {}).get("FORMAT_FITS", "On") != "On":
             # Left on native transfer (camera_test.py did, when its trial of
@@ -97,6 +111,26 @@ class Camera:
             c.set(self.name, "CCD_TRANSFER_FORMAT", FORMAT_FITS="On")
         c.set(self.name, "CCD_CONTROLS", Gain=self.gain)
         c.pump(1)
+
+    def use(self, profile):
+        """Set the camera up for what its frames are for (a name in PROFILES)
+        and return the binning now in effect. A camera that will not bin
+        stays on the full sensor and the answer is 1; frame() then gives
+        what it always gave."""
+        wanted = PROFILES[profile]
+        if wanted == self.binning or (wanted > 1 and self.refuses_binning):
+            return self.binning
+        try:
+            self.client.set(self.name, "CCD_BINNING", HOR_BIN=wanted, VER_BIN=wanted)
+            self.binning = wanted
+        except (IndiError, OSError):
+            # On 6 October 2026 asking the open camera for 2x2 once ended
+            # with the connection to the server broken. Open it afresh, on
+            # the full sensor, and do not ask this camera again.
+            self.refuses_binning = True
+            self.close()
+            self._open()
+        return self.binning
 
     def frame(self, seconds):
         """One exposure as (uint16 Bayer mosaic, FITS header). If the driver
@@ -107,7 +141,10 @@ class Camera:
             try:
                 _, raw = self.client.expose(self.name, seconds, timeout=wait, attempts=2)
                 with fits.open(io.BytesIO(raw)) as hdul:
-                    return hdul[0].data, hdul[0].header
+                    data, header = hdul[0].data, hdul[0].header
+                # The frame itself says how it was binned, whatever was asked for.
+                self.binning = int(header.get("XBINNING", self.binning))
+                return data, header
             except (IndiError, OSError):
                 if attempt or not MANAGE_SERVER:
                     raise

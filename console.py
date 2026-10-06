@@ -123,8 +123,8 @@ def run(params):
 
 
 def focusing(params):
-    sound = choice(params, "sound", ("speech", "tones", "silent"), "speech")
-    return ["focus.py"] + {"speech": [], "tones": ["--tones"], "silent": ["--quiet"]}[sound]
+    sound = choice(params, "sound", ("sound", "silent"), "sound")
+    return ["focus.py"] + {"sound": [], "silent": ["--quiet"]}[sound]
 
 
 def survey(params):
@@ -770,11 +770,18 @@ class Reader:
                            for section, key, label, kind, text, limits in config.SETTINGS]}
 
     def focus(self):
+        """The newest reading on many stars, and `live`: the newest frame's
+        reading whatever it was (a ring, one star, nothing at all), with its
+        level and its timing. Either is None if there has been none."""
         import focus
-        if not focus.FOCUS_FILE.exists():
-            return {"reading": None}
-        reading = json.loads(focus.FOCUS_FILE.read_text(encoding="utf-8"))
-        return {"reading": dict(reading, age_s=round(time.time() - reading["saved"]))}
+        out = {}
+        for key, path in (("reading", focus.FOCUS_FILE), ("live", focus.LIVE_FILE)):
+            try:
+                found = json.loads(path.read_text(encoding="utf-8"))
+                out[key] = dict(found, age_s=round(time.time() - found["saved"]))
+            except (OSError, ValueError, KeyError):
+                out[key] = None
+        return out
 
     def horizon(self):
         import config

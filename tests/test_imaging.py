@@ -121,31 +121,6 @@ def test_focus_needs_at_least_three_stars():
     assert focus.measure_stars(rng.normal(300, 5, (600, 800)).astype(np.float32)) == (None, 0)
 
 
-def test_focus_talk_through_a_pass_through_focus_and_back():
-    tracker = focus.FocusTracker()
-    said = [tracker.feed(v) for v in (7.0, 6.2, 5.3, 4.6, 4.1, 4.0, 4.1, 4.4, 5.0, 5.6)]
-    assert said[0] == "7.0"
-    assert any(s.startswith("Improving") and "Best" in s for s in said[3:6])
-    passed = [s for s in said if s.startswith("Minimum passed")]
-    assert len(passed) == 1 and "Reverse slightly" in passed[0]
-    # Coming back the other way, it says when the best has been regained.
-    back = [tracker.feed(v) for v in (5.0, 4.4, 4.0, 3.9, 3.9)]
-    assert any(s.startswith("Best focus") and s.endswith("Hold.") for s in back)
-
-
-def test_focus_does_not_chase_the_seeing():
-    tracker = focus.FocusTracker()
-    jitter = np.random.default_rng(8).normal(4.0, 0.12, 30)
-    said = [tracker.feed(float(v)) for v in jitter]
-    assert all(words.startswith("No change. ") for words in said[3:])
-
-
-def test_a_real_worsening_is_reported_once_not_every_frame():
-    tracker = focus.FocusTracker()
-    said = [tracker.feed(v) for v in (4.0, 4.0, 4.0, 6.0, 6.0, 6.0, 6.0)]
-    assert sum(s.startswith("Worse") for s in said) == 1
-
-
 def test_the_indi_client_keeps_each_settings_range():
     import indi
     client = indi.Indi.__new__(indi.Indi)

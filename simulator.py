@@ -299,6 +299,13 @@ class SimulatedCamera:
         import os
         # TY_DEMO_FAST skips the waiting, for the tests.
         self.gain, self.wait = gain, os.environ.get("TY_DEMO_FAST") != "1" if wait is None else wait
+        self.binning = 1
+
+    def use(self, profile):
+        """As camera.Camera.use: the binning its frames now come with."""
+        from camera import PROFILES
+        self.binning = PROFILES[profile]
+        return self.binning
 
     def __enter__(self):
         return self
@@ -316,7 +323,8 @@ class SimulatedCamera:
         if state["unplugged"]:
             raise IndiError("the camera was unplugged (the demo's pretend camera: plug it back in on the Demo screen)")
         if self.wait:
-            time.sleep(min(seconds, 4.0) + 0.4)      # a frame takes its exposure and a little more
+            # A frame takes its exposure and a little more; a binned one, less more.
+            time.sleep(min(seconds, 4.0) + 0.4 / self.binning)
         n = state["frames"] + 1
         offset = state["offset"]
         if state["drift"]:
@@ -327,6 +335,10 @@ class SimulatedCamera:
         light = min(seconds, 4.0) / 2 * (0.25 if state["cloud"] else 1.0)
         lum = render(xy + offset, flux * light, sigma, seed=n)
         mosaic = np.repeat(np.repeat(lum / 4, 2, axis=0), 2, axis=1)
+        if self.binning > 1:
+            # Each block of sensor pixels averaged into one, as a binned camera sends it.
+            b = self.binning
+            mosaic = mosaic.reshape(mosaic.shape[0] // b, b, mosaic.shape[1] // b, b).mean(axis=(1, 3))
         header = {"EXPTIME": float(seconds), "GAIN": float(self.gain), "BAYERPAT": "RGGB",
                   "DATE-OBS": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime())}
         return np.clip(mosaic, 0, 4095).astype(np.uint16), header

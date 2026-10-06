@@ -64,6 +64,7 @@ which system they are on.
 | `webcam_input()` | `-f v4l2 ... -i /dev/v4l/by-id/...` (`watch.py:22`) | `-f dshow -i video=<name>`, name from config |
 | `has_webcam()` | `/dev/video*` (`doctor.py:193`) | config names one and `ffmpeg -list_devices true -f dshow -i dummy` lists that exact name (step 6) |
 | `speak(words)` | `spd-say` (`focus.py:186`) | one background worker speaking phrases in order through PowerShell and `System.Speech` (step 6) |
+| `play(path)` | the first of `pw-play`, `paplay`, `aplay`, `ffplay` | `winsound.PlaySound`, from the standard library |
 | `replace_preview(partial, final)` | `os.replace` (`watch.py:41`, `snap.py:43`, `shoot.py:139`, `serve.py:172`) | the same, retried while the file is open elsewhere (step 1) |
 | `processor_load()` | `os.getloadavg()` (`serve.py:123`) | `None`; the page leaves the row out |
 | `temperature()` | `/sys/class/thermal` (`serve.py:125`) | `None` |
@@ -147,7 +148,7 @@ Python (3.11 and 3.14). The suite takes about 2.5 minutes on Linux.
   `config.example.toml` to `config.toml` if absent. It says what it did on
   each of those, then lists what is left to do by hand: AltairCapture for
   the camera driver, the SDK files in `vendor/altair/`, ASTAP, the D20 star
-  database, and ffmpeg with ffplay. It installs nothing with administrator
+  database, and ffmpeg. It installs nothing with administrator
   rights and changes no system setting.
 - Windows may refuse to run the script ("running scripts is disabled on
   this system"). Do not change the user's execution policy. Document the
@@ -173,9 +174,9 @@ status page loads from another machine on the network.
 
 - The handset's COM port, or that none matched and which ports were seen.
 - ASTAP and its star database, where step 5 looks for them.
-- `ffmpeg` and `ffplay` as two separate lines. Some Windows builds of ffmpeg
-  leave `ffplay` out. Without it the focusing aid has speech but no tones,
-  and doctor says so as a warning, not a failure.
+- `ffmpeg`, and the focusing aid's sounds. (This step first asked for
+  `ffplay` as a line of its own, for the tones. The sounds are now WAV files
+  played by Windows itself through `host.play`, so `ffplay` is not needed.)
 - The configured webcam, and speech.
 - The camera, through whichever route `config.toml` selects. For the SDK
   route that is four lines: Python is 64-bit; `vendor/altair/altaircam.py`
@@ -251,9 +252,10 @@ Windows as on Linux.
   a device. Read stderr and ignore the exit code. The check is whether the
   configured name appears in that list; when it does not, show the names
   that were listed.
-- `focus.py` tones use `ffplay` and need no change where `ffplay` is
-  installed. Where it is not, focusing carries on without tones and says so
-  once at the start.
+- `focus.py`'s click and tone are small WAV files it writes itself, played
+  by `host.play`: Windows' own `winsound` there, with a newer sound cutting
+  off one still playing; on Linux the first of `pw-play`, `paplay`, `aplay`
+  or `ffplay`. (This step first used `ffplay` on both systems.)
 - Speech goes through `host.speak`, and on Windows it must not start one
   PowerShell per phrase: each takes about a second to start, so phrases
   would overlap or come out of order, which makes focusing by ear useless.
@@ -268,16 +270,15 @@ Windows as on Linux.
   The worker must not keep the program alive after focusing ends. On Linux
   `speak` stays the `spd-say` call it is today.
 - **No console windows.** A helper program started in the background on
-  Windows (PowerShell for speech, `ffplay` for tones, `ffmpeg` for the
-  webcam, ASTAP) must not open a console window of its own. From a
+  Windows (PowerShell for speech, `ffmpeg` for the webcam, ASTAP) must not open a console window of its own. From a
   terminal it would not, but started from `serve.py` or `mcp_server.py`
   running without a console it can flash one up every few seconds. Start
   them with `creationflags=subprocess.CREATE_NO_WINDOW`, set in one place
   in `host.py` and passed nothing on Linux. The command the user typed
   still prints to its terminal as usual.
 
-Done when: `python watch.py` saves a picture; `python focus.py` makes tones
-and speaks; and during a focus run of twenty frames no two phrases overlap
+Done when: `python watch.py` saves a picture; `python focus.py` clicks, makes
+tones and speaks; and during a focus run of twenty frames no two phrases overlap
 and none is spoken out of order.
 
 ### 7. Camera through the Altair SDK

@@ -38,10 +38,13 @@ class World:
         self.clock_rate = 1.0     # how fast that clock runs against the real one
         self.triggers = 0
         self.native = False       # INDI only: left sending frames that are not FITS
+        self.binning = 1          # what the camera has been set to bin by
+        self.bins = True          # False: asking it to bin fails
+        self.asked_to_bin = 0     # how many times 2x2 or more was asked for
 
 
-def frame_of(level):
-    data = np.full((HEIGHT, WIDTH), level, dtype=np.uint16)
+def frame_of(level, binning=1):
+    data = np.full((HEIGHT // binning, WIDTH // binning), level, dtype=np.uint16)
     data[::2, ::2] += 1    # a real frame is never all one value
     return data
 
@@ -70,6 +73,11 @@ def fake_sdk(world):
             self.options, self.speed = {}, 1
 
         def put_Option(self, option, value):
+            if option == lib.ALTAIRCAM_OPTION_BINNING:
+                world.asked_to_bin += value > 1
+                if value > 1 and not world.bins:
+                    raise HRESULTException(0x80004001)
+                world.binning = value
             self.options[option] = value
             if option == lib.ALTAIRCAM_OPTION_FLUSH:
                 self.held.clear()
@@ -82,6 +90,7 @@ def fake_sdk(world):
         def get_Speed(self): return self.speed
         def MaxSpeed(self): return 2
         def get_Size(self): return WIDTH, HEIGHT
+        def get_FinalSize(self): return WIDTH // world.binning, HEIGHT // world.binning
         def get_RawFormat(self): return int.from_bytes(b"RGGB", "little"), 12
         def SerialNumber(self): return self.serial
         def FwVersion(self): return "1.0"
@@ -110,7 +119,7 @@ def fake_sdk(world):
                 else:
                     # Stamped by the camera's own clock, which starts somewhere arbitrary.
                     stamp = round((1234.5 + taken * world.clock_rate) * 1e6) if world.stamps else 0
-                    self.held.append((frame_of(level) << (4 if world.shifted else 0), mine, stamp))
+                    self.held.append((frame_of(level, world.binning) << (4 if world.shifted else 0), mine, stamp))
                     self.callback(lib.ALTAIRCAM_EVENT_IMAGE, self.context)
             threading.Thread(target=deliver, daemon=True).start()
 
@@ -171,6 +180,12 @@ def fake_indi(world):
                 self.gain = values["Gain"]
             if name == "CCD_TRANSFER_FORMAT":
                 world.native = values.get("FORMAT_FITS") != "On"
+            if name == "CCD_BINNING":
+                world.asked_to_bin += values["HOR_BIN"] > 1
+                if values["HOR_BIN"] > 1 and not world.bins:
+                    # As on 6 October 2026: the connection to the server went.
+                    raise IndiError("connection lost")
+                world.binning = values["HOR_BIN"]
 
         def connect(self, device): pass
         def pump(self, seconds): pass
@@ -185,9 +200,10 @@ def fake_indi(world):
             started = datetime.now(timezone.utc)
             time.sleep(world.delay)
             header = fits.Header({"EXPTIME": seconds, "GAIN": float(self.gain), "BAYERPAT": "RGGB",
+                                  "XBINNING": world.binning,
                                   "DATE-OBS": started.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3]})
             out = io.BytesIO()
-            fits.PrimaryHDU(frame_of(world.level), header).writeto(out)
+            fits.PrimaryHDU(frame_of(world.level, world.binning), header).writeto(out)
             return ".fits", out.getvalue()
     return Client
 
@@ -268,6 +284,33 @@ def test_closing_twice_does_no_harm(route, world):
     cam.frame(0.01)
     cam.close()
     cam.close()
+
+
+def test_quick_frames_for_focusing_are_binned_and_imaging_frames_never_are(route, world):
+    with camera.Camera() as cam:
+        assert cam.frame(0.01)[0].shape == (HEIGHT, WIDTH)
+        assert cam.use("focus_fast") == 2
+        assert cam.frame(0.01)[0].shape == (HEIGHT // 2, WIDTH // 2) and cam.binning == 2
+        assert cam.use("focus_fine") == 1
+        assert cam.frame(0.01)[0].shape == (HEIGHT, WIDTH)
+        cam.use("focus_fast")
+        assert cam.use("imaging") == 1 and cam.frame(0.01)[0].shape == (HEIGHT, WIDTH)
+    assert camera.PROFILES["imaging"] == 1
+
+
+def test_a_camera_that_will_not_bin_carries_on_with_the_full_sensor(route, world):
+    world.bins = False
+    with camera.Camera() as cam:
+        assert cam.use("focus_fast") == 1                 # it failed, and the camera was opened afresh
+        assert cam.frame(0.01)[0].shape == (HEIGHT, WIDTH)
+        assert cam.use("focus_fast") == 1
+        assert world.asked_to_bin == 1                    # and it is not asked a second time
+
+
+def test_a_camera_left_binned_is_opened_on_the_full_sensor(route, world):
+    world.binning = 2             # as a focusing run that was killed would leave it
+    with camera.Camera() as cam:
+        assert cam.frame(0.01)[0].shape == (HEIGHT, WIDTH)
 
 
 def test_a_camera_left_on_native_transfer_is_put_back_to_fits(world, monkeypatch):

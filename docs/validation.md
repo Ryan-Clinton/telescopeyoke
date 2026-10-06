@@ -8,7 +8,7 @@ Results go here as they are obtained; until then each one says "not yet run".
 
 | # | Question | How | Result |
 |---|---|---|---|
-| 1 | Does "Best focus. Hold" land on the sharpest point? | `./focus.py`, noting the HFR when it speaks, then compare the star width (FWHM) of a stack taken there with one taken a touch either side. | Not yet run. |
+| 1 | Does "Focus good. Hold" land on the sharpest point, and how long does a turn of the knob take to be heard? | `./focus.py`, noting the HFR when it speaks and the `feedback_s` it prints on each level, then compare the star width (FWHM) of a stack taken there with one taken a touch either side. | Not yet run. |
 | 2 | How much Dec drift does the compensation remove? | `./mount.py drift` before, `./mount.py compensate`, `./mount.py drift` after, at three or more hour angles. | First try did not settle; see the results below. One early figure: about -1.4"/s natural drift near M27 with the polar axis roughly 9 degrees out. |
 | 3 | Does the quality pass beat the live stack and a plain stack? | `./compare.py` on the same 200 to 300 raw frames stacked three ways: star width, roundness, background noise, faint detail. | Partly: on 200 frames of M27, star width went from 8.4 to 6.9 px and roundness from 0.67 to 0.92 against the first-night stacker. |
 | 4 | Does `--exposure auto` pick the exposure that gathers most usable light? | Run the same target at 1, 2, 3 and 4 s; compare accepted integration time and star shape with what auto chose. | It chose 1 s twice, on roundness. Whether 2 s would have given a better picture despite the stretch is untested. |
@@ -139,7 +139,10 @@ M31 from a back garden, polar axis about 9 degrees out, USB 2 lead.
 
 ## Known weaknesses found by the tests
 
-- The focus tracker judges change against the readings' own jitter. If the
-  knob is turned in steps with a pause after each, the steps themselves
-  inflate that jitter and some real changes are announced as "No change".
-  Turning slowly and steadily avoids it. Found by `tests/test_night.py`.
+- The focus tracker judges change against the readings' own jitter. With the
+  knob turned in steps and a pause after each, the steps themselves used to
+  inflate that jitter, and real changes went unannounced. Found by
+  `tests/test_night.py`. The jitter is now also judged from the usual step
+  between one reading and the next, and the smaller figure believed when the
+  two disagree by half. A step at every second frame can still pass for
+  jitter; a pause of two frames or more after each turn does not.

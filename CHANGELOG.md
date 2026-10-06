@@ -5,14 +5,33 @@ README's "Current status" is the full account.
 
 ## Not yet released
 
+- **Focusing by ear, reworked for quick frames** (`docs/focus.md`). A click
+  and a tone for every frame measured, the tone higher as focus improves,
+  with the camera already exposing the next frame. Three levels it moves
+  between by itself: quick binned frames judged one at a time, then many
+  stars on binned frames, then the full sensor with the readings steadied.
+  Words only at the turning points: "Level two", "Level three. Fine focus",
+  "Minimum passed. Reverse slightly", "Best focus", "Focus good. Hold".
+  Sizes are also given in arcseconds, the levels are set in them, and each
+  run that ends on "Focus good" teaches the next what good focus comes to.
+  Every frame's capture, measuring and feedback times are printed and kept.
+  Proven on made-up star fields only: no real camera has run it.
+- Changed: `focus.py` no longer speaks every reading, and `--tones` has gone,
+  the click and tone being what it does unless `--quiet`. The Focus screen's
+  sound choice is "Clicks and tones" or "Silent".
+- The camera layer takes a purpose, `cam.use("focus_fast")`,
+  `cam.use("focus_fine")` or `cam.use("imaging")`, and sets the binning
+  itself on either route. A camera that will not bin carries on unbinned.
+- The focusing sounds no longer need `ffplay`: Linux plays them with
+  `pw-play`, `paplay`, `aplay` or `ffplay`, Windows by itself.
 - **First night of polar alignment by plate solving on the real mount**
   (6 October 2026): from about 6° to 0.2° from the pole in five rounds.
   `./polaralign.py --step DEG` turns less between photographs, for a garden
   where the third would be of a house or a tree, and a round waits 5 s after
   each turn, not 30.
 - **`focus.py` measures only the bright stars.** Far out of focus it had been
-  reading the sky's grain. The tone is louder and unbroken, and `--numbers`
-  speaks each reading and nothing else.
+  reading the sky's grain. `--numbers` speaks each reading in place of the
+  click and tone.
 - **The pointing error is kept for each side of the meridian**, not as one
   figure reversed across the pole, which sent every first GoTo across the
   meridian 6° wide on the real mount.

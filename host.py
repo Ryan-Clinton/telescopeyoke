@@ -295,6 +295,47 @@ def speak(words):
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
+# --- sounds for the focusing aid -----------------------------------------------
+
+# Programs that play a WAV file on Linux, the quickest to start first.
+PLAYERS = (["pw-play"], ["paplay"], ["aplay", "-q"],
+           ["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet"])
+
+
+def player():
+    """The command that plays a sound file on Linux, or None with none installed."""
+    return next((command for command in PLAYERS if shutil.which(command[0])), None)
+
+
+def play(path):
+    """Play a WAV file through the computer's speaker without waiting for it.
+    Returns False where nothing can play one."""
+    if WINDOWS:
+        import winsound
+        try:
+            # A newer sound cuts off one still playing: the newest reading is the one to hear.
+            winsound.PlaySound(str(path), winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT)
+        except RuntimeError:
+            return False
+        return True
+    command = player()
+    if command is None:
+        return False
+    subprocess.Popen(command + [str(path)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return True
+
+
+def has_sound():
+    """(status, message) for the doctor."""
+    if WINDOWS:
+        return OK, "sounds (Windows' own player) for the focusing aid"
+    command = player()
+    if command:
+        return OK, f"sounds ({command[0]}) for the focusing aid"
+    return WARN, ("no sound player found (pw-play, paplay, aplay or ffplay); the focusing aid "
+                  "will speak its changes of state but has no click or tone")
+
+
 def has_speech():
     """(status, message) for the doctor."""
     if WINDOWS:

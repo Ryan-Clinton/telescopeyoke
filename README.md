@@ -44,7 +44,7 @@ position set by eye, a rough polar alignment.
 - 🎯 **Ranks targets for your actual sky**: altitude, moonlight, light pollution, and your own skyline, measured from a phone panorama or by the telescope
 - 🔭 **Controls SynScan mounts** through the handset, with the handset's clock errors corrected
 - 🧭 **Plate-solves and centres GoTos automatically** (`goto M27 --solve`)
-- 🔊 **Talks you through focusing**, eyes on the focuser not the screen: "Improving. 4.8" … "Minimum passed. Reverse slightly" … "Best focus. Hold"
+- 🔊 **Focusing by ear**, eyes on the focuser not the screen: a click and a tone for every frame, higher as focus improves, and a few words at the turning points: "Level two" … "Minimum passed. Reverse slightly" … "Focus good. Hold"
 - 📐 **Makes the best of a rough polar alignment**: measures how far out the mount is, predicts the drift that causes anywhere in the sky, and creeps a motor against it
 - 📷 **Captures and stacks images**: every raw frame kept, poor frames rejected, stars lined up to a fraction of a pixel, satellite trails clipped out
 - 🏠 **Shows it all on a status page** you can watch from indoors: the verdict, the run's progress and star quality frame by frame, the live stack, what to point at now, and the state of the kit
@@ -262,7 +262,7 @@ lock (`MOTION_LOCKED`) stops every rig at once.
 | `camera_test.py` | `--capabilities` lists what the camera offers; `--throughput` times every way of getting frames off it; `--gain-sweep` tries a range of gains on tonight's sky and suggests one. |
 | `compare.py` | Shows the same patch of sky from several stacks side by side at full size, with star measurements for each. |
 | `process.py` | Turns a finished stack into a cleaner picture: level sky, white stars, smoothed colour noise. |
-| `focus.py` | Hands-free focusing aid: measures many stars at once and speaks the result. `--tones` for a rising pitch instead of speech, `--numbers` for each reading as a number and nothing else, `--field` to go first to a bright star with many round it (this moves the telescope), `--scene` for a daytime view. |
+| `focus.py` | Hands-free focusing aid: a click and a tone for every frame measured, higher as focus improves, in three levels from quick binned frames to many stars on the full sensor. `--quiet` for no sound, `--numbers` for each reading spoken as a number, `--field` to go first to a bright star with many round it (this moves the telescope), `--scene` for a daytime view. |
 | `solve.py` | Plate-solves a frame: where is the telescope really pointing? |
 | `polaralign.py` | Measures how far the polar axis is from the pole, from three plate solves. |
 | `skywatch.py` | Photographs the sky every minute and stops when stars appear. |
@@ -326,9 +326,12 @@ plan the night → GoTo → photograph → plate-solve (ASTAP) → correct → p
 | [For programs and AI agents](docs/agents/README.md) | `--json`, `--dry-run`, the `ty` command, the web API and the MCP server. |
 | [Checking it under real sky](docs/validation.md) | The five experiments that will show whether the clever parts work. |
 
-**Focus without looking at the laptop.** `./focus.py` measures up to 40 stars
-at once and speaks: "Improving", "Best focus. Hold", "Minimum passed. Reverse
-slightly". It ignores the shimmer of the air, so it does not send you chasing it.
+**Focus without looking at the laptop.** `./focus.py` clicks as each frame is
+measured and follows it with a tone that rises as focus improves. It starts
+on quick binned frames, says "Level two" when separate stars appear and
+"Level three. Fine focus" when it moves to the full sensor and up to 40 stars
+at once, then "Minimum passed. Reverse slightly" and "Focus good. Hold". It
+ignores the shimmer of the air, so it does not send you chasing it.
 
 **For programs and AI agents**, every command answers in one JSON shape with
 `--json`, anything that moves the mount can be checked first with `--dry-run`,
@@ -342,7 +345,8 @@ and a read-only web API and MCP server offer the same information. Start with
 2. `./mount.py zenith` to measure the handset's clock and check the mount
    moves correctly.
 3. Focus: `./focus.py --scene` on something distant in daylight, then
-   `./focus.py` on stars. Turn the focuser slowly and listen: stop at "Best focus. Hold".
+   `./focus.py` on stars. Turn the focuser and listen for the tone to rise: go on
+   until "Minimum passed", come back, and stop at "Focus good. Hold".
 4. `./mount.py sync` on any patch of stars, so later GoTos allow for the home
    position having been set by eye.
 5. `./mount.py goto M27 --solve`, then `./shoot.py M27 --frames 48 --recentre 8`.
@@ -404,7 +408,8 @@ Written but not yet run for real: `calibrate.py` (no dark or flat frames have
 been taken yet) and `camera_test.py --gain-sweep`.
 
 Rewritten since they were last used on real hardware, and so far proven only
-against the simulator and made-up data: `mount.py drift` (line-fitted, with the drift model),
+against the simulator and made-up data: `focus.py` (multi-star HFR, the
+three levels, binned frames and the click and tone), `mount.py drift` (line-fitted, with the drift model),
 `mount.py compensate` and `shoot.py --assist`. An earlier, cruder
 `mount.py drift` did cancel most of the drift on the real mount.
 
@@ -424,15 +429,15 @@ now keeps clear of the directions listed as blocked and goes back to where
 it started when a photograph will not solve; both are tested on the
 simulated mount and neither has happened on the real one since.
 
-`focus.py` on many stars was first used on the real telescope on 6 October
-2026 and at first misled: far out of focus it measured forty specks of grain
-and hot pixels, read 3.2 whatever was done, and the focuser was turned the
-wrong way by it. It now measures only stars within a third of the second
-brightest, and with that the reading fell from 11 to about 2 as the focuser
-was turned and the stars became points. The tone was too quiet and came in
-beeps; it is now louder and unbroken. `--numbers` is new. The plate solver
-would not take the soft stars at dusk either, and now tries again on a frame
-averaged in blocks. Later the same night, with the focuser far out and no
+The way `focus.py` measures stars was used on the real telescope on 6 October
+2026, before the click and tone were written, and at first misled: far out
+of focus it measured forty specks of grain and hot pixels, read 3.2 whatever
+was done, and the focuser was turned the wrong way by it. It now measures
+only stars within a third of the second brightest, and with that the reading
+fell from 11 to about 2 as the focuser was turned and the stars became
+points. The user asked for the numbers spoken and nothing else, which is
+`--numbers`. The plate solver would not take the soft stars at dusk either,
+and now tries again on a frame averaged in blocks. Later the same night, with the focuser far out and no
 star left to find, it read 2.2 from specks of the sky's grain; a star must
 now stand out from the grain by 8 to count, and the rings are measured in
 their place. On a field of four or five stars it still jumps about, most of

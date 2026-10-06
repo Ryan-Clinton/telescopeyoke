@@ -125,15 +125,18 @@
   <section id="focus" class="task" hidden>
     <h1>Focus</h1>
     <div class="focus">
+      <div id="focus-level" class="trend"></div>
       <div id="hfr" class="huge">–</div>
-      <div class="quiet">HFR, pixels</div>
+      <div id="focus-unit" class="quiet">HFR, pixels</div>
+      <progress id="focus-meter" class="meter" max="1" value="0" hidden></progress>
       <div id="focus-trend" class="trend"></div>
       <div id="focus-best" class="quiet"></div>
       <svg id="focus-trail" class="spark wide" viewBox="0 0 200 40" preserveAspectRatio="none"></svg>
       <div id="focus-advice" class="advice"></div>
+      <div id="focus-timing" class="quiet"></div>
     </div>
     <div class="buttons">
-      <label>Sound <select id="focus-sound"><option value="speech">Speech</option><option value="tones">Tones</option><option value="silent">Silent</option></select></label>
+      <label>Sound <select id="focus-sound"><option value="sound">Clicks and tones</option><option value="silent">Silent</option></select></label>
       <button type="button" id="focus-start" data-needs="camera">Start focusing</button>
       <button type="button" id="focus-finish" hidden>Finish focusing</button>
     </div>

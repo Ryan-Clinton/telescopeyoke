@@ -283,9 +283,9 @@ function drawRail() {
                 el("div", { class: "buttons" }, button("STOP", stop, { class: "stop" })));
   }
   if (now === "focusing") {
-    const reading = (seen.focus && seen.focus.reading) || {};
+    const reading = (seen.focus && (seen.focus.live || seen.focus.reading)) || {};
     return fill($("rail"), el("div", { class: "quiet", text: "FOCUSING" }), el("div", { class: "big", text: reading.hfr ?? "–" }),
-                el("p", { class: "quiet", text: reading.best_hfr ? `Best tonight ${reading.best_hfr}` : "" }),
+                el("p", { class: "quiet", text: reading.best_hfr ? `Best ${reading.best_hfr}` : "" }),
                 el("div", { class: "buttons" }, button("Finish focusing", finish)));
   }
   if (now === "imaging" && run) {
@@ -524,24 +524,43 @@ function drawMount() {
   gateAll();
 }
 
+const FOCUS_LEVELS = { 1: "COARSE", 2: "STARS", 3: "FINE" };
+const FOCUS_TRENDS = { improving: "IMPROVING", worse: "GETTING WORSE", steady: "STEADY", uncertain: "TOO FEW STARS", lost: "NO STAR IN VIEW" };
+
 function drawFocus() {
-  const reading = seen.focus && seen.focus.reading, focusing = mode() === "focusing";
+  const focusing = mode() === "focusing", kept = seen.focus && seen.focus.reading, live = seen.focus && seen.focus.live;
+  // While the aid runs, every frame's reading; afterwards, the last one taken on stars.
+  const reading = focusing && live && live.age_s < STALE ? live : kept;
   $("focus-start").hidden = focusing;
   $("focus-finish").hidden = !focusing;
   if (!reading || (!focusing && reading.age_s > STALE)) {
     $("hfr").textContent = "–";
-    fill($("focus-trend")); fill($("focus-advice"));
+    for (const id of ["focus-level", "focus-trend", "focus-advice", "focus-timing"]) fill($(id));
+    $("focus-meter").hidden = true;
+    $("focus-unit").textContent = "HFR, pixels";
     $("focus-best").textContent = reading ? `Last reading ${reading.hfr}, ${age(reading.age_s)}` : "No reading yet.";
     return gateAll();
   }
-  if (focusing && (!trail.length || trail[trail.length - 1].saved !== reading.saved)) trail.push({ saved: reading.saved, hfr: reading.hfr });
+  if (focusing && reading.hfr != null && (!trail.length || trail[trail.length - 1].saved !== reading.saved)) trail.push({ saved: reading.saved, hfr: reading.hfr });
   trail = trail.slice(-40);
-  const before = trail.length > 1 ? trail[trail.length - 2].hfr : null;
-  $("hfr").textContent = reading.hfr;
-  $("focus-trend").textContent = before == null ? "" : reading.hfr < before ? "IMPROVING" : reading.hfr > before ? "GETTING WORSE" : "STEADY";
-  $("focus-trend").className = `trend ${before != null && reading.hfr > before ? "warn" : "good"}`;
-  $("focus-best").textContent = `Best tonight ${reading.best_hfr} · ${reading.stars} stars` + (focusing ? "" : ` · ${age(reading.age_s)}`);
+  const good = reading.state === "good", poor = ["worse", "uncertain", "lost"].includes(reading.trend);
+  $("focus-level").textContent = reading.level ? `LEVEL ${reading.level} · ${FOCUS_LEVELS[reading.level]}` : "";
+  $("hfr").textContent = reading.hfr ?? "–";
+  $("focus-unit").textContent = (reading.kind === "ring" ? "radius of the brightest star, pixels" : "HFR, pixels")
+    + (reading.hfr_arcsec != null ? ` · ${reading.hfr_arcsec}″` : "");
+  $("focus-meter").hidden = reading.meter == null;
+  $("focus-meter").value = reading.meter || 0;
+  $("focus-trend").textContent = good ? "✓ FOCUS GOOD" : FOCUS_TRENDS[reading.trend] || "";
+  $("focus-trend").className = `trend ${poor && !good ? "warn" : "good"}`;
+  $("focus-best").textContent = [reading.best_hfr != null ? `Best ${reading.best_hfr}` : null,
+                                 reading.stars ? `${reading.stars} stars` : null,
+                                 reading.scatter ? `scatter ±${reading.scatter}` : null,
+                                 focusing ? null : age(reading.age_s)].filter(Boolean).join(" · ");
   $("focus-advice").textContent = reading.advice || "";
+  const timing = reading.timing;
+  $("focus-timing").textContent = timing
+    ? `Heard ${timing.feedback_s} s after each exposure begins: ${timing.capture_s} s for the frame, ${timing.process_s} s to measure it`
+    : "";
   spark($("focus-trail"), trail.map((r) => r.hfr));
   gateAll();
 }
