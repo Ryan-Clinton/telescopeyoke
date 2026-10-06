@@ -19,6 +19,18 @@ README's "Current status" is the full account.
 - **`focus.py --field`** goes first to a bright star with many round it
   (it moves the telescope), and the meter no longer takes specks of grain
   for stars when the focuser is far out.
+- **The final picture is framed where most frames sat**, not where the
+  sharpest one happened to be, and the live run matches stars on a frame that
+  has drifted past the rough line-up, so it knows how far it has drifted and
+  re-centres when it should.
+- **An object that fills the frame keeps its glow**: only a level is taken
+  off its sky, and the colours are balanced on the stars alone.
+- **The live picture is finished like the final one** from the fifth frame,
+  and a run that cloud stops leaves the live view running.
+- **`polaralign.py` keeps clear of what is known to be in the way** and goes
+  back to where it started when a photograph will not solve.
+- **A run says so when frames arrive faster than their exposure.** The 183C
+  here exposes for about 0.63 of what it is asked; see the README.
 - **`solve.py` tries again on a frame averaged in blocks** when stars too
   soft to be taken for stars leave the first try with nothing.
 - **The skyline from a phone panorama** (`./panorama.py`, and the Horizon

@@ -274,6 +274,19 @@ def pick_exposure(gain, calibration_for):
     return float(chosen)
 
 
+def short_changed(taken, exposure):
+    """The typical time between frames, if it is less than the exposure
+    asked for, which no camera doing as it is told can manage; None
+    otherwise. On 6 October 2026 the 183C delivered a "15 s" frame every
+    11.6 s: it was exposing for about two-thirds of what it was asked."""
+    times = sorted(t for t in taken if t)
+    gaps = [b - a for a, b in zip(times, times[1:])]
+    if len(gaps) < 5:
+        return None
+    typical = float(np.median(gaps))
+    return typical if typical < 0.97 * exposure else None
+
+
 LIVE_MINUTES = 120  # how long the live view carries on after cloud has stopped a run
 
 
@@ -443,6 +456,11 @@ def run(args):
     print(f"\n{index} captured, {used} accepted, {index - used} rejected "
           f"({100 * used / index:.0f}% kept) in {minutes:.0f} min")
     print(f"Total accepted exposure: {used * exposure:.0f} s")
+    short = None if config.DEMO else short_changed([f.get("taken") for f in session.log], exposure)
+    if short:
+        print(f"  But a frame arrived every {short:.1f} s, less than the {exposure:g} s each was meant to "
+              f"take: the camera is exposing for less than it is asked, and the true total is nearer "
+              f"{used * short:.0f} s at most. See the README's current status.")
     if args.profile:
         print("Where the processing time went (summed over the workers):")
         print(session.timings.report(time.monotonic() - started))

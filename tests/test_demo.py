@@ -141,6 +141,26 @@ def test_polar_alignment_finds_the_pretend_mounts_error(demo):
         f"scope.goto_target({target!r}, site)\n"
         "print(json.dumps(polaralign.measure(scope, site, step=10)))").splitlines()[-1])
     assert found == pytest.approx([1.4, 0.8], abs=0.1)
+    # A photograph that will not solve (a tree, a cloud) sends it back to
+    # where it started, not left pointing at whatever hid the stars.
+    back = json.loads(demo.python(
+        "import json, config, mount, polaralign, interface\n"
+        "site = config.load()['site']\n"
+        "scope = mount.Mount()\n"
+        f"scope.goto_target({target!r}, site)\n"
+        "start = scope.axes()[0]\n"
+        "real, looks = scope.where_really, []\n"
+        "def hidden(*a, **k):\n"
+        "    looks.append(1)\n"
+        "    return real(*a, **k) if len(looks) < 3 else None\n"
+        "scope.where_really = hidden\n"
+        "try:\n"
+        "    polaralign.measure(scope, site, step=10)\n"
+        "    said = ''\n"
+        "except interface.Refusal as refusal:\n"
+        "    said = refusal.message\n"
+        "print(json.dumps([said, abs((scope.axes()[0] - start + 180) % 360 - 180)]))").splitlines()[-1])
+    assert "back where it started" in back[0] and back[1] < 1.0
     # From the home position it refuses: turning the RA axis there shows nothing.
     refused = json.loads(demo("polaralign.py", "--json", check=False).stdout)
     assert not refused["ok"] and "too near the pole" in refused["errors"][0]["message"]

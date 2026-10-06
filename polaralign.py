@@ -41,6 +41,7 @@ LEAST = 5.0
 # they were sent; here it does not matter where on its circle a photograph
 # lands, only that it is on it, and a one-second frame does not streak.
 SETTLE = 5
+CLEAR = 3.0   # degrees a photograph must be above anything known to be in the way
 
 
 def vector(hour_angle, dec):
@@ -68,10 +69,13 @@ def to_altaz(v, latitude):
     return math.degrees(math.asin(up)), math.degrees(math.atan2(east, north))
 
 
-def positions(start_ha, dec, west, site, step=STEP):
+def positions(start_ha, dec, west, site, step=STEP, skyline=None):
     """The three (hour angle, Dec) positions to photograph, checked against
-    the limits every aimed move must pass. Raises a Refusal, before anything
-    has moved, if any of them is out of bounds."""
+    the limits every aimed move must pass, and against what is known to be
+    in the way (`skyline`, the settings' [horizon]). Raises a Refusal, before
+    anything has moved, if any of them is out of bounds or behind something:
+    on the first night out the third photograph was of a house, and then of
+    a tree."""
     if dec > 75:
         raise interface.Refusal("INVALID_REQUEST",
                                 "The telescope is pointing too near the pole for this: turning the RA "
@@ -90,10 +94,21 @@ def positions(start_ha, dec, west, site, step=STEP):
             raise interface.Refusal("TARGET_BELOW_ALTITUDE_LIMIT",
                                     f"One of the three positions would be only {altitude:.0f}° up. Start "
                                     "from a higher target.")
+        if skyline:
+            import horizon
+            azimuth = to_altaz(vector(hour_angle, dec), site["latitude"])[1] % 360
+            top = horizon.in_the_way(skyline, azimuth)
+            if altitude < top + CLEAR:
+                turned = abs(hour_angle - start_ha)
+                raise interface.Refusal("INVALID_REQUEST",
+                                        f"After turning {turned:.0f}° the telescope would look at bearing "
+                                        f"{azimuth:.0f}°, {altitude:.0f}° up, where the view is blocked up to "
+                                        f"{top:.0f}°. Use a smaller --step, or start from a star on the other "
+                                        "side of the meridian.")
     return spots
 
 
-def measure(scope, site, step=STEP):
+def measure(scope, site, step=STEP, skyline=None):
     """Photograph the sky at three RA-axis positions and return the polar
     axis's error as (degrees east of north, degrees too high). Slews about
     step degrees twice, away from the meridian, and returns to where it was."""
@@ -106,7 +121,7 @@ def measure(scope, site, step=STEP):
     dec_handset = mount.wrap(scope.radec()[1])
     # Step away from the meridian, on the side the tube is already on. All
     # three positions are checked before the first move.
-    planned = positions(start_ha, dec_handset, scope.axes()[1] > 90, site, step)
+    planned = positions(start_ha, dec_handset, scope.axes()[1] > 90, site, step, skyline)
     points = []
     try:
         for i, (target_ha, _) in enumerate(planned):
@@ -114,12 +129,25 @@ def measure(scope, site, step=STEP):
                 scope.goto((mount.true_sidereal(site) + offset - target_ha) % 360, dec_handset)
                 scope.tracking(True)
                 time.sleep(min(mount.SETTLE, SETTLE))
-            # Tell the solver roughly where to look, then widen if needed.
-            hint_ra = mount.true_sidereal(site) - target_ha
-            found = (scope.where_really(hint_ra, dec_handset, radius=40)
-                     or scope.where_really(hint_ra, dec_handset, radius=90))
+            # Tell the solver roughly where to look, then widen if needed:
+            # where the handset believes it is, put right by the pointing
+            # error last measured on this side. Without that the search
+            # began 6° out on the real mount and one solve took a minute.
+            error = mount.load_pointing_error(scope.axes()[1] > 90)
+            hint_ra = mount.true_sidereal(site) - (target_ha + error[0])
+            hint_dec = dec_handset + error[1]
+            found = (scope.where_really(hint_ra, hint_dec, radius=40)
+                     or scope.where_really(hint_ra, hint_dec, radius=90))
             if not found:
-                raise SystemExit("Could not plate-solve; cloud, or too few stars here.")
+                if i:
+                    # Not left pointing at whatever hid the stars.
+                    scope.say("no stars here; going back to where it started")
+                    scope.goto((mount.true_sidereal(site) + offset - start_ha) % 360, dec_handset)
+                    scope.tracking(True)
+                raise interface.Refusal("PLATE_SOLVE_FAILED",
+                                        f"Could not plate-solve at position {i + 1}: cloud, or something in the "
+                                        "way. Nothing was measured"
+                                        + ("; the telescope is back where it started." if i else "."))
             ha, dec, alt = mount.where(found, site, found["when"])
             points.append((ha, dec))
             scope.say(f"position {i + 1}: hour angle {ha / 15:+.3f} h, Dec {dec:+.2f}°, "
@@ -169,11 +197,12 @@ def run(args):
                 "positions are checked against the altitude and meridian limits before the first move.")
         print(f"Would move the mount. {note}")
         return {"would_move": True, "safe": True, "step_deg": step}, [note]
-    site = config.load()["site"]
+    settings = config.load()
+    site = settings["site"]
     scope = mount.Mount()
     if not mount.CLOCK_FILE.exists():
         scope.save_clock(site)      # reading the handset's clock moves nothing
-    azimuth, altitude = measure(scope, site, step)
+    azimuth, altitude = measure(scope, site, step, settings.get("horizon"))
     # Keep it: the drift it causes can now be predicted anywhere in the sky.
     scope.drift_model(site).set_polar(azimuth, altitude)
     words = describe(azimuth, altitude)

@@ -420,7 +420,9 @@ tried on the real mount. Its geometry is checked by the tests, and in the
 demo it finds the pretend mount's polar error (1.4° east, 0.8° high) through
 the real plate-solve path. It checks its three positions against the
 altitude and meridian limits, and the motion lock, before anything moves. It
-does not yet keep clear of the directions listed as blocked.
+now keeps clear of the directions listed as blocked and goes back to where
+it started when a photograph will not solve; both are tested on the
+simulated mount and neither has happened on the real one since.
 
 `focus.py` on many stars was first used on the real telescope on 6 October
 2026 and at first misled: far out of focus it measured forty specks of grain
@@ -442,6 +444,22 @@ polar axis 0.2° from the pole the real mount was 5.8° out in Dec on the east
 side and 0.2° on the west, where one figure reversed across the pole had
 been assumed; the next two GoTos on the east side landed 5' and 14' out in
 Dec. The cause of the difference is not known.
+
+The first imaging run after that alignment (207 frames of M31, cloud ending
+it after 41 minutes) showed four faults. The camera exposes for less than it
+is asked: frames meant to take 15 s arrived every 11.6 s, and timed alone,
+each second asked for added 0.63 s. telescopeyoke and the INDI driver both
+pass the time straight on, so the fault is in or below Altair's library
+(1.53 of September 2022 here); a like fault is on record for another ToupTek
+camera, but it is not confirmed to be the same, and no star-trail test has
+been made. Every integration time reported is overstated by about a third
+until it is fixed; a run now says so when it sees it. The mount drifted 19
+arcminutes in 26 minutes with the polar axis 0.2° out, which that does not
+explain; `mount.py drift` was not run. The live run under-read that drift
+and re-centred late, and the final picture was framed on the most drifted
+frame, with most of the galaxy's glow taken for sky. Those last are fixed
+and the picture remade from the same frames; the fixes have not yet been
+through a run on the real mount.
 
 Written but never moved a real mount: control without the handset, through
 the SynScan Wi-Fi adapter or an EQDIR lead (`direct.py`). The adapter has

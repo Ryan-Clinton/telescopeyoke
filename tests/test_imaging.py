@@ -192,6 +192,14 @@ def test_polar_alignment_checks_all_three_positions_before_moving(tmp_path, monk
     assert polaralign.positions(15.0, 30.0, True, site)[2] == (65.0, 30.0)
     # Smaller turns, for a clear patch between a house and a tree.
     assert polaralign.positions(-15.0, 30.0, False, site, step=10)[2] == (-35.0, 30.0)
+    # Something known to be in the way of the third photograph stops it
+    # before anything moves; turning less keeps clear of it.
+    altitude, azimuth = polaralign.to_altaz(polaralign.vector(-65.0, 30.0), site["latitude"])
+    tree = {"blocked": [{"from": azimuth % 360 - 4, "to": azimuth % 360 + 4, "altitude": altitude + 5}]}
+    with pytest.raises(interface.Refusal) as refused:
+        polaralign.positions(-15.0, 30.0, False, site, skyline=tree)
+    assert "blocked" in refused.value.message and "--step" in refused.value.message
+    assert len(polaralign.positions(-15.0, 30.0, False, site, step=10, skyline=tree)) == 3
     for start, dec, code in ((-50.0, 30.0, "TARGET_BEYOND_HOUR_ANGLE_LIMIT"),     # would end 6.7 h out
                              (-20.0, -10.0, "TARGET_BELOW_ALTITUDE_LIMIT"),       # ends too low
                              (-15.0, 85.0, "INVALID_REQUEST")):                   # at the pole: nothing to see

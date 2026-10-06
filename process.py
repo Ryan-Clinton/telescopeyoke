@@ -61,8 +61,21 @@ def process(rgb, detail=0.8, colour=5.0, stretch=None, background=2, saturation=
     spread = 1.4826 * np.median(np.abs(grey - glow))
     stars = (grey - glow > 15 * spread) & (grey < 0.5 * grey.max())
     if stars.sum() > 200:
-        balance = (rgb[stars] - (glow[stars][:, None] if background == 0 else 0.0)).mean(axis=0)
+        balance = rgb[stars].mean(axis=0)
+        if background == 0:
+            # Each colour's own glow under the stars, not the average of the
+            # three: before balancing, green is much the strongest, and
+            # taking the average off left the galaxy and the sky magenta.
+            balance = balance - np.array([ndimage.gaussian_filter(rgb[..., c], 8)[stars].mean()
+                                          for c in range(3)])
         rgb *= balance.mean() / balance
+    if background == 0:
+        # With the colours scaled, what was left of the sky is no longer the
+        # same in each: make the darkest tenth of the picture grey again.
+        small = ndimage.median_filter(rgb[::64, ::64], (3, 3, 1)).reshape(-1, 3)
+        level = small.mean(axis=1)
+        dark = small[(level != 0) & (level <= np.percentile(level[level != 0], 10))] if (level != 0).any() else small
+        rgb -= dark.mean(axis=0) - dark.mean()
     grey = rgb.mean(axis=2)
     glow = ndimage.gaussian_filter(grey, 8) if background == 0 else 0.0
     rgb /= 1.4826 * np.median(np.abs(grey - glow))   # in units of the sky noise

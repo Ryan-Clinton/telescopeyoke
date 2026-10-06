@@ -457,3 +457,40 @@ def test_cloud_stopping_a_run_leaves_the_live_view_running(monkeypatch, tmp_path
     log.write_text("{}\n", encoding="utf-8")
     assert liveview.run_active()                                 # a frame just logged: a run is going
     assert not liveview.run_active(since=log.stat().st_mtime + 1)   # ...but it was before this live view began
+
+
+def test_an_object_that_fills_the_frame_keeps_its_glow_and_its_colour():
+    """With only a level taken off the sky, a broad glow across the whole
+    frame is still there afterwards, white stars leave it and the sky without
+    a tint though the sensor sees far more green, and a small object is
+    finished as before."""
+    import process
+    rows, cols = 700, 900
+    rng = np.random.default_rng(4)
+    yy, xx = np.mgrid[0:rows, 0:cols]
+    glow = 400 * np.exp(-(((xx - 450) / 500) ** 2 + ((yy - 350) / 260) ** 2))
+    stars = np.zeros((rows, cols))
+    for x, y in zip(rng.integers(20, cols - 20, 400), rng.integers(20, rows - 20, 400)):
+        stars[y - 1:y + 2, x - 1:x + 2] += 3000
+    seen = np.array([0.6, 1.5, 0.8])                      # how strongly the sensor answers in each colour
+    rgb = ((glow + stars + 200)[..., None] * seen + rng.normal(0, 3, (rows, cols, 3))).astype(np.float32)
+
+    kept = process.process(rgb, background=0).astype(float)
+    bowl = process.process(rgb, background=2).astype(float)
+    middle, corner = (slice(300, 400), slice(400, 500)), (slice(0, 60), slice(0, 60))
+    assert kept[middle].mean() > bowl[middle].mean() + 20          # the bowl took the glow for sky
+    assert kept[middle].mean() > kept[corner].mean() + 40          # brighter in the middle, as it is
+    for part in (middle, corner):
+        colour = kept[part].reshape(-1, 3).mean(axis=0)
+        assert colour.max() - colour.min() < 6                     # no tint
+    assert process.sky_for("M31") == 0 and process.sky_for("M27") == 2 and process.sky_for("no such thing") == 2
+
+
+def test_frames_arriving_faster_than_their_exposure_are_noticed():
+    """A camera cannot deliver 15 s exposures every 11.6 s. One that does is
+    exposing for less than it was asked, and the run says so."""
+    every = lambda gap, n=12: [1000.0 + gap * i for i in range(n)]
+    assert shoot.short_changed(every(11.6), 15) == pytest.approx(11.6)
+    assert shoot.short_changed(every(16.5), 15) is None         # exposure and download: as it should be
+    assert shoot.short_changed(every(11.6, n=4), 15) is None    # too few to say
+    assert shoot.short_changed([None, None], 15) is None

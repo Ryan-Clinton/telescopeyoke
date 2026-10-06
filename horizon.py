@@ -106,6 +106,21 @@ def limit(skyline, az, margin=0.0):
     return np.interp(az % 360, [p["az"] for p in points], tops, period=360)
 
 
+def in_the_way(settings, az, margin=None):
+    """How high the view is blocked at one bearing, in degrees, from the
+    settings' [horizon]: the blocked list and the measured skyline together.
+    0 where nothing is known to be in the way."""
+    top = 0.0
+    for block in settings.get("blocked", []):
+        lo, hi = block["from"] % 360, block["to"] % 360
+        if (lo <= az % 360 <= hi) if lo <= hi else (az % 360 >= lo or az % 360 <= hi):
+            top = max(top, float(block["altitude"]))
+    if settings.get("skyline"):
+        margin = settings.get("margin", 0) if margin is None else margin
+        top = max(top, float(limit(settings["skyline"], np.array([az]), margin)[0]))
+    return top
+
+
 def keep(skyline, source, **more):
     """Save a skyline for the planner. The looks and warnings that led to it
     go in with it."""

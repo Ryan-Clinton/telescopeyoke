@@ -259,6 +259,7 @@ def field(site, skyline, west=None, placed=None):
     on (`west`) is taken first if it is high enough, so that the tube need
     not swing over the pole and back. `skyline` is config's [horizon];
     `placed` stands in for mount.plan_goto in the tests."""
+    import horizon
     import mount
     placed = placed or mount.plan_goto
     choices = []
@@ -271,7 +272,7 @@ def field(site, skyline, west=None, placed=None):
             continue
         altitude = plan["altitude_deg"]
         hour_angle, dec = plan["hour_angle_hours"] * 15, plan["dec_deg"]
-        if altitude < HIGH_ENOUGH or altitude < in_the_way(skyline, bearing(hour_angle, dec, site)) + ROOM:
+        if altitude < HIGH_ENOUGH or altitude < horizon.in_the_way(skyline, bearing(hour_angle, dec, site)) + ROOM:
             continue
         same_side = west is not None and (plan["pier_side"] == "west") == west
         choices.append((same_side, altitude, name, plan))
@@ -285,19 +286,6 @@ def bearing(hour_angle, dec, site):
     """Compass bearing in degrees of a place in the sky, from the garden."""
     import polaralign
     return polaralign.to_altaz(polaralign.vector(hour_angle, dec), site["latitude"])[1] % 360
-
-
-def in_the_way(skyline, az):
-    """How high the view is blocked at a bearing, from config's [horizon]."""
-    top = 0.0
-    for block in skyline.get("blocked", []):
-        lo, hi = block["from"] % 360, block["to"] % 360
-        if (lo <= az <= hi) if lo <= hi else (az >= lo or az <= hi):
-            top = max(top, block["altitude"])
-    if skyline.get("skyline"):
-        import horizon
-        top = max(top, float(horizon.limit(skyline["skyline"], np.array([az]), skyline.get("margin", 0))[0]))
-    return top
 
 
 def go_to_field(dry_run=False):
