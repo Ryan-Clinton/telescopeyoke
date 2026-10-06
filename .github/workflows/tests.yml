@@ -38,6 +38,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: python -m pip install ".[test]"
+      # The installer is not run here (it would open the demo's window); this
+      # only shows that PowerShell can read it.
+      - run: powershell -NoProfile -Command "[scriptblock]::Create((Get-Content -Raw install.ps1)) | Out-Null"
       - run: python -m pytest -q
       - run: python tonight.py --demo --top 5
       - run: python mount.py --demo zenith

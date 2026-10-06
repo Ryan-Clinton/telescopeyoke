@@ -119,6 +119,8 @@ def test_reading_starts_nothing(desk):
                  "focus", "horizon", "report", "system", "gallery", "target/M27"):
         status, answer = desk.json(f"/api/{name}")
         assert status == 200 and answer["ok"], name
+    report = desk.json("/api/hardware")[1]["data"]["text"]
+    assert "hardware report" in report and "as the handset names it: EQ3" in report and "Ready for mount" in report
     assert desk.jobs.current is None and not desk.jobs.history and not desk.jobs.plans
     assert desk.json("/api/state")[1]["data"]["demo"] is True
 

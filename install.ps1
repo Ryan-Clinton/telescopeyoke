@@ -1,6 +1,8 @@
 # Set up telescopeyoke on Windows 10 or 11.
 #
 #   .\install.ps1
+#   .\install.ps1 -Demo     the same, then opens TelescopeYoke (demo); it is
+#                           what try-demo.cmd runs when it is double-clicked
 #
 # If Windows says running scripts is disabled, run it this once as:
 #   powershell -ExecutionPolicy Bypass -File .\install.ps1
@@ -9,6 +11,7 @@
 # config.toml. It needs no administrator rights and changes no system setting.
 # The camera driver, the plate solver and ffmpeg are installed by hand; it
 # lists them at the end.
+param([switch]$Demo)
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 
@@ -57,6 +60,15 @@ python app.py --install-launcher
 
 # Where Altair's SDK files go; they are not part of this project.
 New-Item -ItemType Directory -Force vendor\altair | Out-Null
+
+if ($Demo) {
+    Write-Host ""
+    Write-Host "Opening TelescopeYoke (demo): a pretend mount, camera and sky."
+    Write-Host "Nothing real is connected or moved. Close its window to finish."
+    Write-Host "It is in the Start Menu from now on, as TelescopeYoke (demo)."
+    python app.py --demo
+    exit $LASTEXITCODE
+}
 
 Write-Host @"
 

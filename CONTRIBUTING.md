@@ -6,14 +6,26 @@ works.
 
 ## The most useful thing: a hardware report
 
-If you try telescopeyoke on your own mount or camera, open a "Hardware
-compatibility report" issue saying what you tried and what happened, working
-or not. That is how the compatibility table in the README grows.
+If you try telescopeyoke on your own mount or camera, say what happened,
+working or not. That is how the table of what has been tried, in the README,
+grows; your GitHub name goes beside your row if you want it there.
+
+1. Run `./doctor.py --report` (or press "Write a hardware report" on the
+   application's Doctor screen). It writes out what the computer is, what the
+   handset says the mount is, and every check. It leaves out your location
+   and moves nothing.
+2. Paste it into a "Hardware compatibility report" issue and tick what you
+   tried.
+
+A report from someone who only ran the doctor, and moved nothing, is still
+worth having. A question such as "will it work with my HEQ5?" does not need
+an issue: ask in
+[Discussions](https://github.com/Ryan-Clinton/telescopeyoke/discussions).
 
 ## Running it without hardware
 
 ```bash
-./install.sh --planner
+./install.sh --demo           # the libraries, then TelescopeYoke (demo) in its window
 ./tonight.py --demo
 ./mount.py --demo goto M27
 pytest

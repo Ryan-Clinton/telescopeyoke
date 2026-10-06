@@ -1,6 +1,6 @@
 # telescopeyoke
 
-> Lightweight SynScan telescope automation for Linux: night planning, GoTo with plate-solve centring, focusing, imaging and stacking, with a read-only interface for agents.
+> Lightweight SynScan telescope automation for Linux, with a Windows port: night planning, GoTo with plate-solve centring, focusing, imaging and stacking, with a read-only interface for agents.
 
 ## Agent documentation
 
@@ -14,3 +14,4 @@
 ## User documentation
 
 - [README.md](README.md)
+- [Changes](CHANGELOG.md): what each release added and what it has been proven on

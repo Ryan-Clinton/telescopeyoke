@@ -11,6 +11,7 @@
 | `ty capabilities` | what is available, motion limits, each component's state | |
 | `ty status` | mount / camera / imaging / solver states | |
 | `ty doctor` | readiness and every check | same as `doctor.py --skip-handset` |
+| `doctor.py --report --skip-handset` | the check as text to post as a hardware report: the system, every check, the site's name left out | no `--json`; without `--skip-handset` it also asks the handset its firmware version and the mount's model, so it then belongs in the next table |
 | `ty night` | verdict, clear window, darkness, Moon, best three now | *demo*; fetches weather |
 | `ty targets --limit N [--kind K] [--now]` | ranked targets | *demo* |
 | `ty target NAME` | where it is now; whether a GoTo is allowed | |

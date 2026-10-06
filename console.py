@@ -776,6 +776,11 @@ class Handler(BaseHTTPRequestHandler):
             name = path[len("/api/"):].strip("/")
             if name == "job":
                 return self.answer(interface.envelope("job", self.jobs.snapshot()))
+            if name == "hardware":
+                # The handset is asked what it is only while no job has the mount.
+                import doctor
+                busy = self.jobs.current is not None
+                return self.answer(interface.run("hardware", lambda: {"text": doctor.hardware_report(skip_handset=busy)}))
             result = self.reader.read(name, {})
             if result is not None:
                 return self.answer(result, 200 if result["ok"] else 409)

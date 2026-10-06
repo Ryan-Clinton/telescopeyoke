@@ -5,6 +5,7 @@
     ./doctor.py --offline        skip the network check
     ./doctor.py --skip-handset   do not open the mount's serial port
     ./doctor.py --json           the same as data, for programs
+    ./doctor.py --report         the check written out to post as a hardware report
 
 It only looks; nothing is changed and the mount is never moved. The handset
 check sends two status questions, so skip it while another command is using
@@ -54,7 +55,8 @@ def check_catalogue():
     return OK, f"target catalogue ({sum(1 for _ in path.open(encoding='utf-8')) - 1} objects)"
 
 
-def check_config():
+def check_config(name_site=True):
+    """`name_site` False leaves the site's name out: for a report that is posted in public."""
     if _demo():
         return OK, "the example site (demo)"
     import config
@@ -67,7 +69,7 @@ def check_config():
     example = config.example()["site"]
     if (site["latitude"], site["longitude"]) == (example["latitude"], example["longitude"]):
         return WARN, "config.toml still has the example location"
-    return OK, f"config.toml, site \"{site['name']}\""
+    return OK, f"config.toml, site \"{site['name']}\"" if name_site else "config.toml, with a location set"
 
 
 def check_network():
@@ -275,11 +277,11 @@ def check_tones():
     return WARN, "ffplay not found; the focusing aid will speak but cannot play tones"
 
 
-def run(offline=False, skip_handset=False):
+def run(offline=False, skip_handset=False, name_site=True):
     """All the checks, as {section: [(status, message), ...]}."""
     import config
     driver = config.hardware()["camera"]["driver"]
-    planner = [check_python(), check_libraries(), check_catalogue(), check_config()]
+    planner = [check_python(), check_libraries(), check_catalogue(), check_config(name_site)]
     if not offline:
         planner.append(check_network())
     mount = [check_serial_access(), check_serial_lead()]
@@ -320,30 +322,128 @@ def report(offline=False, skip_handset=False):
     }
 
 
+def words(results):
+    """The checks as the lines a person reads."""
+    lines = []
+    for section, checks in results.items():
+        lines.append(section.capitalize())
+        lines += [f"  {MARK[status]} {message}" for status, message in checks]
+        lines.append("")
+    verdict = ready(results)
+    return "\n".join(lines + [f"Ready for {section + ':':9} {'YES' if verdict[section] else 'NO'}"
+                              for section in results])
+
+
+# --- the hardware report --------------------------------------------------------
+
+REPORTS = "https://github.com/Ryan-Clinton/telescopeyoke/issues/new?template=hardware-report.md"
+# The mount's model as the handset numbers it, from Sky-Watcher's published
+# serial protocol for the SynScan handset.
+MODELS = {0: "EQ6", 1: "HEQ5", 2: "EQ5", 3: "EQ3", 4: "EQ8", 5: "AZ-EQ6", 6: "AZ-EQ5"}
+
+
+def identity(link):
+    """(mount model, handset firmware) as the handset gives them, each None
+    if it did not say. Two questions from the published protocol; both only
+    read, and neither is one the mount acts on."""
+    link.write(b"V")
+    raw = link.read_until(b"#", 8)
+    if len(raw) == 2:
+        # An older handset answers in two bytes and then "#". The second byte
+        # of version x.35 is itself "#", so the real end is still to come.
+        raw += link.read_until(b"#", 1)
+    body, firmware = raw[:-1], None
+    if len(body) == 6:              # newer: six hexadecimal digits, "042507" for 4.37.07
+        try:
+            firmware = "{}.{:02d}.{:02d}".format(*(int(body[i:i + 2], 16) for i in (0, 2, 4)))
+        except ValueError:
+            pass
+    elif len(body) == 2:
+        firmware = f"{body[0]}.{body[1]:02d}"
+    link.write(b"m")
+    code = link.read_until(b"#", 2)[:-1]
+    model = None
+    if len(code) == 1:
+        model = MODELS.get(code[0], f"model number {code[0]} (not one this project knows)")
+    return model, firmware
+
+
+def handset_identity():
+    """Ask the handset, or the demo's pretend one, what it is; (None, None)
+    if there is no handset to ask or it does not answer."""
+    try:
+        if _demo():
+            import simulator
+            return identity(simulator.SimulatedHandset())
+        port = find_serial_port() if mount_link() == "handset" else None
+        if not port:
+            return None, None
+        import serial
+        with serial.Serial(port, 9600, timeout=2) as link:
+            return identity(link)
+    except Exception:       # a report with a gap in it is better than no report
+        return None, None
+
+
+def system():
+    """The operating system in words, with nothing that names the computer or its owner."""
+    import platform
+    if host.WINDOWS:
+        return f"Windows {platform.release()} ({platform.version()})"
+    try:
+        name = platform.freedesktop_os_release()["PRETTY_NAME"]
+    except (OSError, KeyError, AttributeError):
+        name = platform.system()
+    return f"{name} ({platform.system()} {platform.release()}, {platform.machine()})"
+
+
+def hardware_report(offline=False, skip_handset=False):
+    """The check written out for someone else to read: what the computer is,
+    what the mount says it is, and every check. It only looks, as the check
+    does, and nothing is moved. The site's name and the home folder are left
+    out, since it is for posting in public."""
+    import agent
+    link = {"handset": "a serial lead to the SynScan handset", "wifi": "the SynScan Wi-Fi adapter (no handset)",
+            "eqdir": "an EQDIR lead (no handset)"}.get(mount_link(), mount_link())
+    lines = ["### telescopeyoke hardware report", "",
+             f"- telescopeyoke {agent.VERSION}, Python {'.'.join(str(v) for v in sys.version_info[:3])}",
+             f"- System: {system()}",
+             f"- Mount reached by: {'the demo (a pretend mount)' if _demo() else link}"]
+    if not skip_handset and (_demo() or mount_link() == "handset"):
+        model, firmware = handset_identity()
+        lines += [f"- Mount, as the handset names it: {model or 'not given'}",
+                  f"- Handset firmware: {firmware or 'not given'}"]
+    if not _demo():
+        ports = ", ".join(f"{name} ({device})" if host.WINDOWS else name for device, name in host.serial_ports())
+        lines.append(f"- Serial ports seen: {ports or 'none'}")
+    lines += ["", "```", words(run(offline, skip_handset, name_site=False)), "```", "",
+              "Nothing was moved to make this report, and it leaves out where you are. Add what you",
+              f"tried and what happened, then post it: {REPORTS}"]
+    return "\n".join(lines).replace(str(Path.home()), "~")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--offline", action="store_true", help="skip the network check")
     ap.add_argument("--skip-handset", action="store_true",
                     help="do not open the mount's serial port")
     ap.add_argument("--json", action="store_true", help="answer in JSON (see schemas/)")
+    ap.add_argument("--report", action="store_true",
+                    help="write the check out to post as a hardware report; your location is left out")
     args = ap.parse_args()
 
     if args.json:
         import interface
         result = interface.run("doctor", lambda: report(args.offline, args.skip_handset))
         sys.exit(interface.emit(result) or (0 if result["data"]["ready"]["planner"] else 1))
+    if args.report:
+        print(hardware_report(args.offline, args.skip_handset))
+        return
     results = run(args.offline, args.skip_handset)
     print("telescopeyoke system check\n")
-    for section, checks in results.items():
-        print(section.capitalize())
-        for status, message in checks:
-            print(f"  {MARK[status]} {message}")
-        print()
-    verdict = ready(results)
-    for section in results:
-        print(f"Ready for {section + ':':9} {'YES' if verdict[section] else 'NO'}")
+    print(words(results))
     print("\nNo telescope? Everything can be tried with --demo: ./tonight.py --demo")
-    sys.exit(0 if verdict["planner"] else 1)
+    sys.exit(0 if ready(results)["planner"] else 1)
 
 
 if __name__ == "__main__":

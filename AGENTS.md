@@ -12,6 +12,7 @@ agents. Deeper notes are in `docs/agents/`.
 ./ty context            # a short briefing: tonight, hardware, imaging run, the motion rules
 ./ty capabilities --json
 ./doctor.py --json      # what is installed and connected
+./doctor.py --report    # the same as text to post as a hardware report; the site's name is left out
 pytest -q               # about three minutes; needs no hardware
 ```
 
@@ -36,6 +37,8 @@ them and every file kept under `demo/`.
 | `camera.py`, `indi.py`, `altair.py`, `snap.py`, `liveview.py`, `focus.py` | Camera (through INDI, or Altair's own library) and focusing |
 | `host.py` | Everything that differs between Linux and Windows, in one place |
 | `shoot.py`, `stacking.py`, `restack.py`, `process.py`, `calibrate.py` | Imaging pipeline |
+| `tour.py` | Records the demo being used, for the README: `docs/tour.gif` and `docs/screens/` (Ubuntu) |
+| `docs/index.html` | The project's home page, served by GitHub Pages from `docs/` |
 | `schemas/`, `tests/`, `evals/` | Output schemas, tests, agent scenarios |
 
 ## Safe without hardware
@@ -95,6 +98,10 @@ a motor's creep rate. `mount.py stop` is always allowed.
 - Keep `--demo` and the tests working with every change.
 - The README's "Current status" must stay true about what is proven on real
   hardware.
+- The table of tried hardware is in the README ("Hardware") and again on
+  the home page (`docs/index.html`); change both together. The version is in
+  `pyproject.toml` and `agent.VERSION`, and each release has a section in
+  `CHANGELOG.md`.
 
 ## More
 

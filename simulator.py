@@ -89,6 +89,8 @@ class SimulatedHandset:
             return c[1:2] + b"#"
         if kind == b"V":
             return bytes([2, 2]) + b"#"
+        if kind == b"m":                 # the mount's model: 3 is an EQ3
+            return bytes([3]) + b"#"
         if kind == b"J":
             return bytes([1]) + b"#"
         if kind == b"h":

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TelescopeYoke: smart-telescope features for ordinary Sky-Watcher SynScan mounts</title>
+<meta name="description" content="Free, open-source software that plans the night, slews a Sky-Watcher SynScan mount (EQ3, EQ5, HEQ5, EQ6), plate-solves and centres the target, helps you focus and stacks the pictures. Linux, with a Windows port. Try the demo with no telescope.">
+<meta property="og:title" content="TelescopeYoke">
+<meta property="og:description" content="Smart-telescope features for ordinary SynScan gear: planning, GoTo centring by plate solving, focusing and stacking, run from a laptop beside the telescope.">
+<meta property="og:image" content="https://ryan-clinton.github.io/telescopeyoke/social-preview.png">
+<link rel="icon" href="logo.svg">
+<style>
+  :root { --ground: #0c0e14; --panel: #151924; --rule: #2a3040; --ink: #e6e8ee; --quiet: #9aa3b5; --go: #6fcf97; --warn: #f2c14e; --link: #8ab4ff; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground); color: var(--ink); font: 17px/1.55 system-ui, "Segoe UI", Ubuntu, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 0 16px 60px; }
+  header { padding: 44px 0 8px; }
+  h1 { font-size: 2.3rem; margin: 0 0 6px; letter-spacing: .01em; }
+  h2 { font-size: 1.4rem; margin: 52px 0 10px; }
+  p { margin: 10px 0; }
+  a { color: var(--link); }
+  .lead { font-size: 1.3rem; margin: 0; }
+  .quiet { color: var(--quiet); }
+  .buttons { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 26px; }
+  .buttons a { text-decoration: none; padding: 10px 18px; border-radius: 8px; border: 1px solid var(--rule); color: var(--ink); background: var(--panel); font-weight: 600; }
+  .buttons a.main { background: var(--go); border-color: var(--go); color: #06210f; }
+  img { max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--rule); display: block; }
+  figure { margin: 0; }
+  figcaption { color: var(--quiet); font-size: .92rem; margin-top: 6px; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin: 14px 0; }
+  ul { padding-left: 22px; }
+  li { margin: 5px 0; }
+  .note { border-left: 3px solid var(--warn); background: var(--panel); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 18px 0; }
+  pre { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-size: .92rem; }
+  code { font-family: ui-monospace, "Cascadia Mono", "Ubuntu Mono", monospace; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: .95rem; min-width: 640px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { color: var(--quiet); font-weight: 600; }
+  .wanted td { color: var(--quiet); }
+  footer { margin-top: 60px; color: var(--quiet); font-size: .92rem; border-top: 1px solid var(--rule); padding-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+
+<header>
+  <h1>TelescopeYoke</h1>
+  <p class="lead">Smart-telescope features for ordinary Sky-Watcher SynScan gear.</p>
+  <p class="quiet">Free and open source. Runs on a laptop beside the telescope: Linux, with a Windows port.</p>
+  <div class="buttons">
+    <a class="main" href="#try">Try the demo</a>
+    <a href="https://github.com/Ryan-Clinton/telescopeyoke/archive/refs/heads/main.zip">Download the zip</a>
+    <a href="#hardware">Supported hardware</a>
+    <a href="https://github.com/Ryan-Clinton/telescopeyoke">Source on GitHub</a>
+  </div>
+</header>
+
+<figure>
+  <img src="tour.gif" width="960" height="644" alt="A minute and a half of the demo: tonight's report, a target picked, a GoTo shown as a plan and then centred by plate solving, focusing, and an imaging run with cloud coming over">
+  <figcaption>The demo: a pretend mount, camera and sky, with the real centring, focusing and stacking code running on them.</figcaption>
+</figure>
+
+<h2>What it does</h2>
+<p>You already own the mount, the handset and a camera. TelescopeYoke is the part a smart telescope has and yours does not: it works out where the telescope is really pointing and puts the target in the middle of the frame.</p>
+<ul>
+  <li><b>Plans the night</b>: darkness, Moon, cloud, and a GO / MARGINAL / NO-GO verdict, with targets ranked for your own sky and your own blocked horizons.</li>
+  <li><b>Controls Sky-Watcher SynScan mounts</b> through the handset's serial lead, correcting for a handset clock that is wrong.</li>
+  <li><b>Plate-solves and centres every GoTo</b>, so a home position set by eye and a rough polar alignment still land the target on the sensor.</li>
+  <li><b>Talks you onto focus</b>: turn the focuser and listen for "Best focus. Hold".</li>
+  <li><b>Takes and stacks the pictures</b>: short exposures, each one checked, poor ones rejected, the rest lined up and added.</li>
+  <li><b>Keeps the mount inside its limits</b>. Every move is checked first and shown as a plan; nothing turns until you confirm it.</li>
+</ul>
+<p>It runs on your own computer. No account, no cloud service, no ASCOM.</p>
+
+<h2>A real result</h2>
+<div class="pair">
+  <figure>
+    <img src="m27-result.jpg" alt="The Dumbbell Nebula, M27">
+    <figcaption>The Dumbbell Nebula (M27): 48 two-second exposures through a 150 mm Newtonian on an EQ3 Pro that was polar aligned by eye. The home position was about ten degrees out; plate solving found the target anyway.</figcaption>
+  </figure>
+  <figure>
+    <img src="screens/plan.png" alt="A move shown as a plan, waiting to be confirmed">
+    <figcaption>Every move is a plan first: where the tube will end up, which side of the mount, and the limits it was checked against.</figcaption>
+  </figure>
+</div>
+
+<h2 id="try">Try the demo: no telescope needed</h2>
+<p>The demo is the whole application on a pretend telescope. Nothing is connected to your mount and nothing can move, so it is safe to try on the computer that sits beside real equipment.</p>
+<p><b>Ubuntu or Debian</b></p>
+<pre><code>git clone https://github.com/Ryan-Clinton/telescopeyoke
+cd telescopeyoke
+./install.sh --demo</code></pre>
+<p><b>Windows 10 or 11</b></p>
+<ul>
+  <li>Install 64-bit Python 3.11 or newer from python.org, ticking "Add python.exe to PATH".</li>
+  <li><a href="https://github.com/Ryan-Clinton/telescopeyoke/archive/refs/heads/main.zip">Download the zip</a> and unpack it.</li>
+  <li>Double-click <code>try-demo.cmd</code>.</li>
+</ul>
+<p>A window opens with tonight's report. Pick a target, press "Centre with plate solve", and watch it find and correct its own pointing error. Then try Focus and Imaging; "The pretend sky" lets you bring cloud over or pull the camera's lead out, to see what it does when a night goes wrong.</p>
+<div class="pair">
+  <figure><img src="screens/tonight.png" alt="The Tonight screen"><figcaption>Tonight: the verdict and the best targets.</figcaption></figure>
+  <figure><img src="screens/focus.png" alt="The Focus screen"><figcaption>Focus: one number, and which way it is going.</figcaption></figure>
+</div>
+
+<h2 id="hardware">Supported hardware</h2>
+<p>It is new, and it says plainly what it has and has not been proven on. So far it has run on one telescope, the author's:</p>
+<div class="scroll">
+<table>
+  <tr><th>Mount</th><th>Handset</th><th>Camera</th><th>System</th><th>What has worked</th><th>Tried by</th></tr>
+  <tr><td>Sky-Watcher EQ3 Pro</td><td>SynScan, firmware 3.35</td><td>Altair Hypercam 183C</td><td>Ubuntu 26.04</td><td>Planner, mount moves, camera, focusing, plate solving and GoTo with centring, under real stars</td><td>the author</td></tr>
+  <tr><td>the same EQ3 Pro</td><td>the same</td><td>the same</td><td>Windows 11</td><td>The demo, and camera frames indoors. No mount driven yet</td><td>the author</td></tr>
+  <tr class="wanted"><td>EQ5</td><td>SynScan</td><td>any</td><td>Linux or Windows</td><td>wanted</td><td>could be you</td></tr>
+  <tr class="wanted"><td>HEQ5</td><td>SynScan</td><td>any</td><td>Linux or Windows</td><td>wanted</td><td>could be you</td></tr>
+  <tr class="wanted"><td>EQ6, EQ6-R</td><td>SynScan</td><td>any</td><td>Linux or Windows</td><td>wanted</td><td>could be you</td></tr>
+</table>
+</div>
+<p>EQ5, HEQ5 and EQ6 mounts with a SynScan handset speak the same serial protocol, so they are likely to work, but nobody has tried. On Linux the camera is read through INDI; on Windows only Altair cameras are supported. ASCOM is not used.</p>
+
+<div class="note">
+  <b>Looking for testers.</b> If you have one of these mounts, a report from you is worth more than any new feature, and you do not have to let it move your mount. <code>./doctor.py --report</code> only looks at what is connected: it writes out what the handset says the mount is, its firmware, and what was found, with your location left out. Paste that into a
+  <a href="https://github.com/Ryan-Clinton/telescopeyoke/issues/new?template=hardware-report.md">hardware report</a>, or ask first in
+  <a href="https://github.com/Ryan-Clinton/telescopeyoke/discussions">Discussions</a>. Your name goes beside your row if you want it there.
+</div>
+
+<h2>Find out more</h2>
+<ul>
+  <li><a href="https://github.com/Ryan-Clinton/telescopeyoke#readme">The README</a>: everything it does, and exactly what has been proven on real hardware.</li>
+  <li><a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/setup.md">Setup</a>: installing it for a real telescope, on Ubuntu and on Windows.</li>
+  <li><a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/CHANGELOG.md">Changes</a> in each release.</li>
+  <li><a href="https://github.com/Ryan-Clinton/telescopeyoke/discussions">Discussions</a>: questions, ideas, and pictures you have taken.</li>
+</ul>
+
+<footer>TelescopeYoke is MIT licensed. It is not made or endorsed by Sky-Watcher; SynScan is their name for their handset and its protocol.</footer>
+
+</main>
+</body>
+</html>

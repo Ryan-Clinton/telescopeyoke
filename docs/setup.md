@@ -63,6 +63,12 @@ Close the SynScan app and anything else talking to the mount first.
 in. On Windows, `install.ps1` puts the same two in the Start Menu. From a
 terminal it is `./app.py` (or `python app.py` on Windows).
 
+To go straight to the demo on a computer with nothing set up:
+`./install.sh --demo` installs only what the planner and the demo need and
+then opens TelescopeYoke (demo). On Windows, double-clicking `try-demo.cmd`
+does the same (it runs `install.ps1 -Demo`); Python has to be installed
+first.
+
 It opens in a window of its own. The first time, or whenever something the
 telescope needs is missing, it opens on a Welcome screen that lists what is
 ready and what is not, with a button to the screen that deals with each:
@@ -104,6 +110,9 @@ goto M27` is typed `python mount.py goto M27`, and `./ty status` is
    Python libraries and creates `config.toml`; it needs no administrator
    rights and changes no system setting. `python doctor.py` then says what
    is still missing, and how to fix each thing.
+   To try the demo and nothing else, double-click `try-demo.cmd` instead:
+   it runs the same installer and then opens TelescopeYoke (demo). Windows
+   may ask whether to run a file that came from the internet.
 2. **Paths in `config.toml`** are written with forward slashes:
    `"C:/Program Files/astap"`. Inside double quotes a backslash starts an
    escape, so `"C:\Program Files\astap"` is an error. Single quotes also

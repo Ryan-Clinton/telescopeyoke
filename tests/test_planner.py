@@ -1,5 +1,6 @@
 """The night report end to end in demo mode, the INDI client's message
 handling, and small lookups."""
+from pathlib import Path
 from xml.etree.ElementTree import XMLPullParser
 
 import pytest
@@ -91,6 +92,64 @@ def test_doctor_runs_with_nothing_attached():
                    for status, message in checks)
     assert doctor.check_python()[0] == doctor.OK
     assert doctor.check_catalogue()[0] == doctor.OK
+
+
+class Wire:
+    """A handset that gives fixed answers, read the way a serial port is read:
+    up to the first "#", or so many bytes, whichever comes first."""
+
+    def __init__(self, answers):
+        self.answers, self.waiting, self.asked = answers, b"", []
+
+    def write(self, question):
+        self.asked.append(question)
+        self.waiting += self.answers.get(question, b"")
+
+    def read_until(self, end, size):
+        cut = self.waiting.find(end)
+        taken = min(size, cut + 1 if cut >= 0 else len(self.waiting))
+        out, self.waiting = self.waiting[:taken], self.waiting[taken:]
+        return out
+
+
+def test_the_handset_says_what_it_is_and_what_it_drives():
+    import doctor
+    # Firmware 3.35 in two bytes: the second byte is itself the "#" that ends an answer.
+    old = Wire({b"V": bytes([3, 35]) + b"#", b"m": bytes([3]) + b"#"})
+    assert doctor.identity(old) == ("EQ3", "3.35") and old.waiting == b""
+    new = Wire({b"V": b"042507#", b"m": bytes([1]) + b"#"})
+    assert doctor.identity(new) == ("HEQ5", "4.37.07")
+    assert doctor.identity(Wire({b"V": bytes([4, 12]) + b"#", b"m": bytes([2]) + b"#"})) == ("EQ5", "4.12")
+    assert doctor.identity(Wire({b"V": b"042507#", b"m": bytes([144]) + b"#"}))[0].startswith("model number 144")
+    # Only questions that read, and a handset that says nothing leaves gaps, not a crash.
+    silent = Wire({})
+    assert doctor.identity(silent) == (None, None) and silent.asked == [b"V", b"m"]
+    from simulator import SimulatedHandset
+    assert doctor.identity(SimulatedHandset())[0] == "EQ3"
+
+
+def test_a_hardware_report_leaves_out_who_and_where(monkeypatch, tmp_path):
+    import config
+    import doctor
+    settings = tmp_path / "config.toml"
+    settings.write_text(config.EXAMPLE.read_text(encoding="utf-8")
+                        .replace("My back garden", "Number 9 Secret Street").replace("51.4779", "12.3456"), encoding="utf-8")
+    monkeypatch.setattr(config, "FILE", settings)
+    monkeypatch.setattr(config, "DEMO", False)
+    assert "Number 9 Secret Street" in doctor.check_config()[1]
+    monkeypatch.setattr(doctor, "check_solver", lambda: (doctor.FAIL, f"not found in {Path.home() / 'astap'}"))
+    # No test opens the real handset's lead, plugged in or not.
+    monkeypatch.setattr(doctor, "check_handset", lambda: (doctor.OK, "a handset made up for the test"))
+    asked = []
+    monkeypatch.setattr(doctor, "handset_identity", lambda: asked.append(1) or ("EQ5", "4.39.05"))
+    text = doctor.hardware_report(offline=True, skip_handset=True)
+    assert "hardware report" in text and "Ready for planner" in text and "Serial ports seen" in text
+    assert "Secret Street" not in text and "12.3456" not in text and str(Path.home()) not in text
+    assert "with a location set" in text and "~" in text
+    assert not asked and "Handset firmware" not in text         # told to leave the handset alone
+    if doctor.mount_link() == "handset":
+        text = doctor.hardware_report(offline=True)
+        assert "as the handset names it: EQ5" in text and "Handset firmware: 4.39.05" in text
 
 
 def test_doctor_verdict_needs_the_planner_basics_for_everything():

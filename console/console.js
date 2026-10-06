@@ -938,6 +938,14 @@ $("search").addEventListener("input", drawTargets);
 $("focus-start").addEventListener("click", () => { trail = []; act("focus", { sound: $("focus-sound").value }); });
 $("focus-finish").addEventListener("click", finish);
 $("recheck").addEventListener("click", async () => { seen.doctor = null; await refresh(); notice("Checked again"); });
+$("hardware-report").addEventListener("click", async () => {
+  const reply = await ask("/api/hardware");
+  $("hardware-text").hidden = false;
+  $("hardware-text").textContent = reply.ok ? reply.data.text : reply.errors[0].message;
+  // Selected ready to copy: the page may not write to the clipboard itself.
+  getSelection().selectAllChildren($("hardware-text"));
+  if (reply.ok) notice("Selected. Copy it (Ctrl+C) and paste it into a hardware report on GitHub.");
+});
 $("horizon-run").addEventListener("click", () => makePlan("horizon", { trace: $("horizon-trace").checked, daylight: $("horizon-daylight").checked }));
 $("restack-run").addEventListener("click", () => act("restack", { target: seen.session.name }));
 $("restack-all").addEventListener("click", () => act("restack", { target: seen.session.name, all: true }));

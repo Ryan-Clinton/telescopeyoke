@@ -44,6 +44,8 @@ def test_the_demo_keeps_its_files_to_itself(demo):
     assert all(str(demo.folder) in path for path in seen[:4])
     assert seen[4] == "My back garden" and seen[5] is True          # the example site, never the real one
     assert "Ready for imaging:  YES" in demo("doctor.py", "--skip-handset").stdout
+    report = demo("doctor.py", "--report").stdout
+    assert "the demo (a pretend mount)" in report and "as the handset names it: EQ3" in report
 
 
 def test_a_goto_with_centring_has_something_real_to_correct(demo):

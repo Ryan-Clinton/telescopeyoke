@@ -1,6 +1,6 @@
 [project]
 name = "telescopeyoke"
-version = "0.1.0"
+version = "0.2.0"
 description = "Turn a SynScan telescope into a smart telescope: night planning, GoTo, plate solving, auto-centring, focusing and stacking, from a laptop beside the telescope: Ubuntu, with a Windows port."
 readme = "README.md"
 license = { file = "LICENSE" }

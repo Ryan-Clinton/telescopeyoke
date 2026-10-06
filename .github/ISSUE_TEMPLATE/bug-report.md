@@ -17,7 +17,7 @@ paste here
 
 **Does it happen with `--demo`?** (yes / no / not applicable)
 
-**Output of `./doctor.py`**
+**Output of `./doctor.py --report`** (it leaves out your location)
 
 ```
 paste here

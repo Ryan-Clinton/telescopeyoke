@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: A question, or "will it work with my mount?"
+    url: https://github.com/Ryan-Clinton/telescopeyoke/discussions
+    about: Ask in Discussions. No form to fill in, and nothing has to be broken first.
+  - name: Show a picture you took
+    url: https://github.com/Ryan-Clinton/telescopeyoke/discussions/categories/show-and-tell
+    about: Pictures and results go in Discussions, under Show and tell.

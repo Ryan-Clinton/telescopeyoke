@@ -3,6 +3,7 @@
 #
 #   ./install.sh            everything that can be installed from packages
 #   ./install.sh --planner  only what the night planner and demo need
+#   ./install.sh --demo     the same as --planner, then opens TelescopeYoke (demo)
 #   ./install.sh --check    install nothing; report what is present and connected
 #
 # Python libraries come from the distribution's packages (python3-astropy and
@@ -20,7 +21,11 @@ if [ "${1:-}" = "--check" ]; then
 fi
 
 planner_only=false
-[ "${1:-}" = "--planner" ] && planner_only=true
+open_demo=false
+case "${1:-}" in
+    --planner) planner_only=true ;;
+    --demo) planner_only=true; open_demo=true ;;
+esac
 
 packages=(python3-astropy python3-scipy python3-numpy python3-pil python3-requests python3-serial)
 # The application's own window: GTK with a WebKit view.
@@ -46,6 +51,11 @@ if $planner_only; then
     echo "Done. Start TelescopeYoke (demo) from the applications menu, or try:  ./tonight.py --demo"
     echo "Then, with your location set:  ./tonight.py"
     echo "Check the setup at any time with:  ./doctor.py"
+    if $open_demo; then
+        echo
+        echo "Opening TelescopeYoke (demo): a pretend mount, camera and sky. Nothing real is connected or moved."
+        exec ./app.py --demo
+    fi
     exit 0
 fi
 
