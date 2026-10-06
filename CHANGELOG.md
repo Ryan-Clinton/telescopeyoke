@@ -3,9 +3,11 @@
 What each release added, and what it has and has not been proven on. The
 README's "Current status" is the full account.
 
-## Since 0.2.0
+## 0.2.1: two telescopes, and asking a controller what it is
 
-In the newest code, not yet in a release.
+For someone who already has a working setup, perhaps with two telescopes and
+EQMOD: it fits beside what they have, and can find out safely whether it can
+talk to their mount.
 
 - **Rigs**: more than one telescope on one computer, each with its own
   settings (`rigs/NAME.toml`) and its own frames, pictures and measurements.
@@ -23,8 +25,14 @@ In the newest code, not yet in a release.
 - Fixed: the doctor stopped dead, instead of reporting it, when a mount
   reached without its handset did not answer.
 
-None of the first four has met the equipment it was written for; the
-README's "Current status" says so.
+**Proven on, and not**
+
+Nothing has changed in what has run on real equipment since 0.2.0. Rigs have
+been run only as tests, never with two real telescopes. `--probe` has never
+met a real controller: finding out whether an EQStar or another EQMOD-style
+controller answers is what it is for. The ASCOM and EQMOD notice has not run
+on a computer that has them. `landmark.py` has not been run on the real
+mount. The README's "Current status" has the rest.
 
 ## 0.2.0: the application and the demo
 

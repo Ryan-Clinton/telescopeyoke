@@ -12,7 +12,7 @@
 the real centring, focusing and stacking code running on them.*
 
 **[Home page](https://ryan-clinton.github.io/telescopeyoke/) ·
-[Download 0.2.0](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.2.0/TelescopeYoke-v0.2.0.zip) ·
+[Download 0.2.1](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.2.1/TelescopeYoke-v0.2.1.zip) ·
 [Try the demo, no telescope needed](#quick-start) ·
 [What it has been tried on](#hardware) ·
 [Ask a question](https://github.com/Ryan-Clinton/telescopeyoke/discussions)**
@@ -83,18 +83,18 @@ by eye.
 On Ubuntu or Debian:
 
 ```bash
-wget https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.2.0/TelescopeYoke-v0.2.0.zip
-unzip TelescopeYoke-v0.2.0.zip
-cd TelescopeYoke-v0.2.0
+wget https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.2.1/TelescopeYoke-v0.2.1.zip
+unzip TelescopeYoke-v0.2.1.zip
+cd TelescopeYoke-v0.2.1
 ./install.sh --demo           # the Python libraries, then TelescopeYoke (demo) opens
 ```
 
 On Windows 10 or 11: install 64-bit Python 3.11 or newer from python.org
 (tick "Add python.exe to PATH"),
-[download TelescopeYoke-v0.2.0.zip](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.2.0/TelescopeYoke-v0.2.0.zip),
+[download TelescopeYoke-v0.2.1.zip](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.2.1/TelescopeYoke-v0.2.1.zip),
 unpack it, and double-click **`try-demo.cmd`**.
 
-That zip is release 0.2.0, which stays as it is; a hardware report says
+That zip is release 0.2.1, which stays as it is; a hardware report says
 which release made it. `git clone https://github.com/Ryan-Clinton/telescopeyoke`
 gets the newest code instead, which changes from day to day.
 
@@ -224,9 +224,6 @@ measurements under `rigs/heq5/`, so two nights' work never mix. The
 application's Rigs screen shows what every rig is doing. With no rig named
 everything is as before: `config.toml` and the folders beside it. The motion
 lock (`MOTION_LOCKED`) stops every rig at once.
-
-Rigs, `--probe` and the EQMOD notice are newer than release 0.2.0: until the
-next release they need `git clone`, not the zip.
 
 **What to expect of other equipment:**
 
