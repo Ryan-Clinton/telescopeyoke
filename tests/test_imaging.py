@@ -180,3 +180,26 @@ def test_the_stretch_is_chosen_so_faint_glow_shows():
     shown = np.arcsinh(hard * 0.002) / np.arcsinh(hard)
     assert shown == pytest.approx(process.FAINT_SHOWN, abs=0.01)
     assert process.auto_stretch(0.5) == 10.0      # already bright: no more than the gentlest
+
+
+def test_polar_alignment_checks_all_three_positions_before_moving(tmp_path, monkeypatch):
+    import interface
+    import mount
+    site = {"latitude": 55.0}
+    # Near the meridian and high: the three positions step 25° away from it.
+    assert polaralign.positions(-15.0, 30.0, False, site) == [(-15.0, 30.0), (-40.0, 30.0), (-65.0, 30.0)]
+    assert polaralign.positions(15.0, 30.0, True, site)[2] == (65.0, 30.0)
+    for start, dec, code in ((-50.0, 30.0, "TARGET_BEYOND_HOUR_ANGLE_LIMIT"),     # would end 6.7 h out
+                             (-20.0, -10.0, "TARGET_BELOW_ALTITUDE_LIMIT"),       # ends too low
+                             (-15.0, 85.0, "INVALID_REQUEST")):                   # at the pole: nothing to see
+        with pytest.raises(interface.Refusal) as refusal:
+            polaralign.positions(start, dec, False, site)
+        assert refusal.value.code_name == code
+    # The lock stops it before the mount is opened.
+    monkeypatch.setattr(mount, "LOCK_FILE", tmp_path / "MOTION_LOCKED")
+    mount.LOCK_FILE.write_text("testing", encoding="utf-8")
+    monkeypatch.setattr(mount, "Mount", lambda *a, **k: pytest.fail("the mount was opened"))
+    for dry in (True, False):
+        with pytest.raises(interface.Refusal) as refusal:
+            polaralign.run(type("Args", (), {"dry_run": dry, "json": False})())
+        assert refusal.value.code_name == "MOTION_LOCKED"

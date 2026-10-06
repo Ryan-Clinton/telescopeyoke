@@ -221,6 +221,7 @@ class SimulatedBoard:
 SHAPE = (1100, 1300)              # half-size frame, in pixels: rows, columns
 BEST_FOCUS = 1.5                  # star width in pixels at best focus
 HOME_ERROR = (1.5, -1.0)          # how far a home position set by eye leaves the aim off: hour angle, Dec (degrees)
+POLAR_ERROR = (1.4, 0.8)          # the pretend mount's polar axis: degrees east of north, degrees too high
 SKY = {"focus": 4, "cloud": False, "unplugged": False, "drift": True, "offset": [0.0, 0.0], "frames": 0}
 DEMO_SCOPE = None                 # the simulated mount in this program, if one has been opened
 
@@ -329,6 +330,29 @@ class SimulatedCamera:
         return np.clip(mosaic, 0, 4095).astype(np.uint16), header
 
 
+def tilted(hour_angle, dec, latitude):
+    """Where a mount whose polar axis is out by POLAR_ERROR really points
+    when its axes say (hour angle, Dec): the whole sky as the mount sees it,
+    turned so that its pole lands where its axis actually aims."""
+    import math
+
+    import numpy as np
+    h, d, lat = math.radians(hour_angle), math.radians(dec), math.radians(latitude)
+    believed = np.array([math.cos(d) * math.cos(h), math.cos(d) * math.sin(h), math.sin(d)])
+    # The axis as a vector, pole-and-meridian axes: from its height and bearing.
+    alt, az = math.radians(latitude + POLAR_ERROR[1]), math.radians(POLAR_ERROR[0])
+    up, north, east = math.sin(alt), math.cos(alt) * math.cos(az), math.cos(alt) * math.sin(az)
+    axis = np.array([up * math.cos(lat) - north * math.sin(lat), -east, up * math.sin(lat) + north * math.cos(lat)])
+    pole = np.array([0.0, 0.0, 1.0])
+    about = np.cross(pole, axis)
+    sine, cosine = np.linalg.norm(about), float(pole @ axis)
+    if sine < 1e-12:
+        return hour_angle, dec
+    k = about / sine
+    real = believed * cosine + np.cross(k, believed) * sine + k * (k @ believed) * (1 - cosine)
+    return math.degrees(math.atan2(real[1], real[0])), math.degrees(math.asin(max(-1.0, min(1.0, real[2]))))
+
+
 def solve(image, ra_hint=None, dec_hint=None, radius=30, **_):
     """A pretend plate solve: where the simulated mount is really aimed,
     which is where its handset believes plus the error a home position set by
@@ -355,6 +379,7 @@ def solve(image, ra_hint=None, dec_hint=None, radius=30, **_):
     offset = json.loads(mount.CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"] if mount.CLOCK_FILE.exists() else 0.0
     ra_handset, dec_handset = scope.radec()
     hour_angle = mount.wrap(mount.true_sidereal(site) + offset - ra_handset) + HOME_ERROR[0]
-    spot = SkyCoord(HADec(ha=hour_angle * u.deg, dec=(mount.wrap(dec_handset) + HOME_ERROR[1]) * u.deg,
+    hour_angle, dec = tilted(hour_angle, mount.wrap(dec_handset) + HOME_ERROR[1], site["latitude"])
+    spot = SkyCoord(HADec(ha=hour_angle * u.deg, dec=dec * u.deg,
                           obstime=Time.now(), location=mount.location(site))).transform_to(ICRS())
     return dict(answer, ra=spot.ra.deg, dec=spot.dec.deg)

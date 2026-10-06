@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 """Measure how far the mount's polar axis is from the pole, by plate solving.
 
-    sudo -u $USER -g dialout ./polaralign.py
+    ./polaralign.py              measure, and say which way to move the mount
+    ./polaralign.py --dry-run    say what it would do; nothing moves
+    ./polaralign.py --json       the answer as data
+
+Start with the mount tracking a target well away from the pole, such as
+after ./mount.py goto NAME --solve.
 
 Photographs the sky at three positions that differ only by turning the RA
 axis. The three aim points lie on a circle around wherever that axis really
@@ -10,7 +15,9 @@ gives the correction, reported as how far to move the mount's azimuth
 (left-right) and altitude (up-down) adjusters. Adjust, then run it again.
 
 It slews the mount about 25° twice, staying on the side of the meridian it
-is already on, and ends back where it started.
+is already on, and ends back where it started. Before anything moves, all
+three positions are checked against the same limits as any other move, and
+the motion lock is respected.
 """
 import argparse
 import json
@@ -20,6 +27,7 @@ import time
 import numpy as np
 
 import config
+import interface
 import mount
 
 STEP = 25.0  # degrees of RA-axis rotation between the three photographs
@@ -50,6 +58,31 @@ def to_altaz(v, latitude):
     return math.degrees(math.asin(up)), math.degrees(math.atan2(east, north))
 
 
+def positions(start_ha, dec, west, site):
+    """The three (hour angle, Dec) positions to photograph, checked against
+    the limits every aimed move must pass. Raises a Refusal, before anything
+    has moved, if any of them is out of bounds."""
+    if dec > 75:
+        raise interface.Refusal("INVALID_REQUEST",
+                                "The telescope is pointing too near the pole for this: turning the RA "
+                                "axis hardly moves the view. Go to a target lower down first, such as "
+                                "./mount.py goto NAME --solve.")
+    direction = 1 if west else -1
+    spots = [(start_ha + direction * STEP * i, dec) for i in range(3)]
+    for hour_angle, _ in spots:
+        if abs(hour_angle) > mount.MAX_HOUR_ANGLE * 15:
+            raise interface.Refusal("TARGET_BEYOND_HOUR_ANGLE_LIMIT",
+                                    f"Turning {2 * STEP:.0f}° from here would reach {abs(hour_angle) / 15:.1f} h "
+                                    f"from the meridian, beyond the {mount.MAX_HOUR_ANGLE} h limit. Start "
+                                    "from a target nearer the meridian.")
+        altitude = to_altaz(vector(hour_angle, dec), site["latitude"])[0]
+        if altitude < mount.MIN_ALTITUDE:
+            raise interface.Refusal("TARGET_BELOW_ALTITUDE_LIMIT",
+                                    f"One of the three positions would be only {altitude:.0f}° up. Start "
+                                    "from a higher target.")
+    return spots
+
+
 def measure(scope, site):
     """Photograph the sky at three RA-axis positions and return the polar
     axis's error as (degrees east of north, degrees too high). Slews about
@@ -61,12 +94,12 @@ def measure(scope, site):
 
     start_ha = believed_hour_angle()
     dec_handset = mount.wrap(scope.radec()[1])
-    # Step away from the meridian, on the side the tube is already on.
-    direction = 1 if scope.axes()[1] > 90 else -1
+    # Step away from the meridian, on the side the tube is already on. All
+    # three positions are checked before the first move.
+    planned = positions(start_ha, dec_handset, scope.axes()[1] > 90, site)
     points = []
     try:
-        for i in range(3):
-            target_ha = start_ha + direction * STEP * i
+        for i, (target_ha, _) in enumerate(planned):
             if i:
                 scope.goto((mount.true_sidereal(site) + offset - target_ha) % 360, dec_handset)
                 scope.tracking(True)
@@ -103,15 +136,37 @@ def describe(azimuth, altitude):
 
 
 def main():
-    argparse.ArgumentParser(description=__doc__.splitlines()[0]).parse_args()
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--dry-run", action="store_true", help="say what it would do; no camera, no mount")
+    ap.add_argument("--json", action="store_true", help="answer in JSON at the end")
+    args = ap.parse_args()
+    return interface.main("polaralign.dry_run" if args.dry_run else "polaralign", lambda: run(args), args.json)
+
+
+def run(args):
+    if mount.LOCK_FILE.exists():
+        raise interface.Refusal("MOTION_LOCKED",
+                                f"Motion is locked: {mount.LOCK_FILE.read_text(encoding='utf-8').strip()}")
+    if args.dry_run:
+        note = (f"Photographs the sky where the telescope is, slews {STEP:.0f}° away from the meridian and "
+                f"photographs again, then another {STEP:.0f}°, and returns to where it started. The three "
+                "positions are checked against the altitude and meridian limits before the first move.")
+        print(f"Would move the mount. {note}")
+        return {"would_move": True, "safe": True, "step_deg": STEP}, [note]
     site = config.load()["site"]
     scope = mount.Mount()
+    if not mount.CLOCK_FILE.exists():
+        scope.save_clock(site)      # reading the handset's clock moves nothing
     azimuth, altitude = measure(scope, site)
     # Keep it: the drift it causes can now be predicted anywhere in the sky.
     scope.drift_model(site).set_polar(azimuth, altitude)
-    print("\n" + describe(azimuth, altitude))
+    words = describe(azimuth, altitude)
+    print("\n" + words)
     print("Adjust and run this again, or leave it and run './mount.py drift' to "
           "cancel the drift it causes.")
+    total = math.hypot(azimuth * math.cos(math.radians(site["latitude"])), altitude)
+    return {"azimuth_deg": round(azimuth, 2), "altitude_deg": round(altitude, 2), "total_deg": round(total, 2),
+            "east_of_north": azimuth > 0, "too_high": altitude > 0, "advice": words, "measured": time.time()}
 
 
 if __name__ == "__main__":

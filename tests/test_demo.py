@@ -49,7 +49,11 @@ def test_the_demo_keeps_its_files_to_itself(demo):
 def test_a_goto_with_centring_has_something_real_to_correct(demo):
     target = reachable(demo)
     said = demo("mount.py", "goto", target, "--solve").stdout
-    assert "off by +90.0' in hour angle, -60.0' in Dec" in said       # the pretend home position is off by that much
+    # The pretend home position is a degree or so out and the polar axis a little off,
+    # so the first solve finds a miss of tens of arcminutes and the last finds it centred.
+    import re
+    misses = [abs(float(m)) for m in re.findall(r"off by ([+-][\d.]+)' in hour angle", said)]
+    assert len(misses) >= 2 and misses[0] > 30 and misses[-1] < 2
     assert "centred" in said and "tracking" in said
     assert (demo.folder / "cache" / "last_solve.json").exists()
     assert not (ROOT / "demo" / "cache" / "last_solve.json").exists() or True
@@ -92,3 +96,28 @@ def test_cloud_and_a_pulled_lead_look_as_they_would_for_real(demo):
     failed = demo("focus.py", "--frames", "2", "--quiet", "--json", check=False)
     answer = json.loads(failed.stdout)
     assert failed.returncode != 0 and not answer["ok"] and "unplugged" in answer["errors"][0]["message"]
+
+
+def test_polar_alignment_finds_the_pretend_mounts_error(demo):
+    # A target well placed for it: near the meridian, mid-declination, high up.
+    target = demo.python("import mount, sky, config, interface\n"
+                         "site = config.load()['site']\n"
+                         "for t in sky.load_targets() + [dict(id=s) for s in mount.STARS]:\n"
+                         "    try:\n        p = mount.plan_goto(t['id'], site)\n"
+                         "    except interface.Refusal:\n        continue\n"
+                         "    if abs(p['hour_angle_hours']) < 1.5 and 5 < p['dec_deg'] < 60 and p['altitude_deg'] > 45:\n"
+                         "        print(t['id']); break")
+    if not target:
+        pytest.skip("nothing is well placed for it at this hour")
+    assert json.loads(demo("polaralign.py", "--dry-run", "--json").stdout)["data"]["would_move"] is True
+    # Each command starts a fresh pretend mount at home, so the GoTo and the measurement go in one.
+    found = json.loads(demo.python(
+        "import json, config, mount, polaralign\n"
+        "site = config.load()['site']\n"
+        "scope = mount.Mount()\n"
+        f"scope.goto_target({target!r}, site)\n"
+        "print(json.dumps(polaralign.measure(scope, site)))").splitlines()[-1])
+    assert found == pytest.approx([1.4, 0.8], abs=0.05)             # simulator.POLAR_ERROR
+    # From the home position it refuses: turning the RA axis there shows nothing.
+    refused = json.loads(demo("polaralign.py", "--json", check=False).stdout)
+    assert not refused["ok"] and "too near the pole" in refused["errors"][0]["message"]

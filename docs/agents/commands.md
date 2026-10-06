@@ -36,7 +36,9 @@
 Without a handset only: `ty mount directions` tips the tube 5° and back and
 asks a person which way it went; `ty mount sethome` records the home position
 and moves nothing.
-`ty mount drift` changes the Dec motor's creep. `ty mount stop` halts
+`polaralign.py` slews about 25° twice and back to measure the polar axis's
+error; it checks all three positions against the limits first, and takes
+`--dry-run` and `--json`. `ty mount drift` changes the Dec motor's creep. `ty mount stop` halts
 everything and is always allowed. `shoot.py` re-centres the target as it
 drifts unless given `--no-recentre`.
 

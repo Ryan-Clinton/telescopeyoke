@@ -15,7 +15,8 @@ const SVG = "http://www.w3.org/2000/svg";
 const STALE = 600;   // seconds after which an old measurement is taken off the bar
 
 const seen = { state: null, night: null, targets: null, observing: null, session: null, job: null,
-               doctor: null, focus: null, catalogue: null, horizon: null, report: null, system: null, gallery: null };
+               doctor: null, focus: null, catalogue: null, horizon: null, report: null, system: null, gallery: null,
+               polar: null };
 let task = "home", chosen = null, filter = null, plan = null, trail = [], lastJobId = null;
 let unread = 0, logged = new Set();
 
@@ -652,6 +653,35 @@ function drawTelescope() {
   gateAll();
 }
 
+function drawPolar() {
+  const found = seen.polar, plot = $("polar-plot");
+  gateAll();
+  if (!found || found.measured == null) {
+    fill(plot); fill($("polar-facts"));
+    $("polar-total").textContent = "";
+    $("polar-note").textContent = "Not measured yet.";
+    return;
+  }
+  // Looking north at the pole: east is to the right, higher is up.
+  const east = found.azimuth_deg, high = found.altitude_deg, latitude = 55;
+  const across = east * Math.cos(latitude * Math.PI / 180), total = Math.hypot(across, high);
+  const reach = Math.max(1, Math.ceil(total)), px = 120 / reach, x = 150 + across * px, y = 150 - high * px, parts = [];
+  for (let ring = 1; ring <= reach; ring += Math.max(1, Math.round(reach / 4))) {
+    parts.push(el("circle", { class: "ring", cx: 150, cy: 150, r: ring * px }), el("text", { x: 152 + ring * px, y: 148, text: `${ring}°` }));
+  }
+  parts.push(el("line", { class: "to", x1: 150, y1: 150, x2: x, y2: y }), el("circle", { class: "pole", cx: 150, cy: 150, r: 6 }),
+             el("text", { x: 120, y: 172, text: "the pole" }), el("circle", { class: "axis-dot", cx: x, cy: y, r: 5 }),
+             el("text", { x: x + 8, y: y - 6, text: "the mount's axis" }), el("text", { x: 4, y: 12, text: "looking north" }),
+             el("text", { x: 272, y: 168, text: "east" }), el("text", { x: 4, y: 168, text: "west" }));
+  fill(plot, parts);
+  $("polar-total").textContent = `${total.toFixed(1)}° out`;
+  facts($("polar-facts"), [
+    ["Left and right", `${Math.abs(east).toFixed(1)}° too far ${east > 0 ? "east" : "west"}: swing the mount's north end ${Math.abs(east).toFixed(1)}° to the ${east > 0 ? "west" : "east"}`],
+    ["Up and down", `${Math.abs(high).toFixed(1)}° too ${high > 0 ? "high" : "low"}: ${high > 0 ? "lower" : "raise"} the axis by ${Math.abs(high).toFixed(1)}°`]]);
+  $("polar-note").textContent = `Measured ${found.measured ? age(Date.now() / 1000 - found.measured) : "earlier"}. Adjust the mount and measure again. `
+    + "If it is left as it is, the drift it causes can be cancelled from the Mount screen, but the picture will still slowly turn.";
+}
+
 function drawSolver() { checkLines($("solver-checks"), ["plate_solver", "star_database"]); }
 
 function drawWebcam() {
@@ -838,7 +868,7 @@ function show(name) {
 
 const SCREENS = { home: drawHome, targets: drawTargets, mount: drawMount, focus: drawFocus, imaging: drawImaging,
                   status: () => statusRows($("status-rows")), welcome: drawWelcome, camera: drawCamera, telescope: drawTelescope,
-                  solver: drawSolver, webcam: drawWebcam, horizon: drawHorizon, calibration: gateAll, testing: gateAll,
+                  solver: drawSolver, webcam: drawWebcam, horizon: drawHorizon, polar: drawPolar, calibration: gateAll, testing: gateAll,
                   processing: drawProcessing, doctor: drawDoctor, settings: drawSettings, logs: () => {}, about: drawAbout,
                   "demo-sky": drawDemoSky };
 
@@ -876,6 +906,7 @@ async function refresh() {
   if (!seen.catalogue) wanted.push("catalogue");
   if (task === "doctor" || !seen.doctor) wanted.push("doctor");
   if (task === "horizon") wanted.push("horizon");
+  if (task === "polar") wanted.push("polar");
   slow += 1;
   await Promise.all(wanted.map(load));
   busy = false;

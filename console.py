@@ -172,6 +172,10 @@ ACTIONS = {
     # what says why there is no camera yet.
     "camera-setup": {"label": "Set up the camera", "uses": "camera", "moves": False,
                      "command": lambda p: ["camera_setup.py", "--open"]},
+    "polar":      {"label": "Polar alignment", "command": lambda p: ["polaralign.py"], "uses": "mount", "moves": True,
+                   "says": "This photographs the sky where the telescope is, slews 25° away from the "
+                           "meridian twice, photographing each time, and returns. Start from a target "
+                           "well away from the pole."},
     "camera-capabilities": {"label": "What the camera is", "uses": "camera", "moves": False,
                             "command": lambda p: ["camera_test.py", "--capabilities"]},
     "camera-throughput":   {"label": "Throughput test", "uses": "camera", "moves": False,
@@ -193,7 +197,7 @@ NOT_IN_DEMO = ("camera-setup", "camera-capabilities", "camera-throughput", "came
 # Setting up and testing the equipment belongs to the application's own
 # window. The companion page in a browser is for observing, and is refused these.
 WORKSTATION = ("camera-setup", "camera-capabilities", "camera-throughput", "camera-gain-sweep",
-               "calibrate", "horizon", "restack", "drift", "compensate", "sync", "open-settings")
+               "calibrate", "horizon", "polar", "restack", "drift", "compensate", "sync", "open-settings")
 # Orders that have a run move the mount or change its motors.
 MOVING_ORDERS = ("run-recentre", "run-assist-on", "run-assist-off")
 
@@ -618,6 +622,18 @@ class Reader:
         import serve
         return {"pictures": serve.pictures()}
 
+    def polar(self):
+        """The last polar alignment measurement, if there is one."""
+        import mount
+        if not mount.DRIFT_FILE.exists():
+            return {"measured": None}
+        saved = json.loads(mount.DRIFT_FILE.read_text(encoding="utf-8"))
+        found = saved.get("polar")
+        if not found:
+            return {"measured": None}
+        return {"measured": saved.get("saved"), "azimuth_deg": round(found["azimuth"], 2),
+                "altitude_deg": round(found["altitude"], 2)}
+
     def framing(self, name):
         """How a target fits the camera: the field of view from the sensor
         and focal length in the settings, and the target's size from the
@@ -681,6 +697,7 @@ class Reader:
             "focus": (self.focus, 1),
             "horizon": (self.horizon, 30),
             "report": (self.report, 300),
+            "polar": (self.polar, 2),
             "settings": (self.settings, 0),
             "system": (self.system, 10),
             "gallery": (self.gallery, 10),

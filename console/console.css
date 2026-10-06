@@ -61,6 +61,11 @@ body:not(.is-demo) [data-demo] { display: none !important; }
   border: 1px solid var(--rule); border-radius: 6px; padding: 6px 10px; font: inherit; }
 .settings input:focus, .settings select:focus { border-color: var(--act); outline: none; }
 .settings .help { color: var(--dim); font-size: 12.5px; }
+.columns.polar { grid-template-columns: 300px 1fr; align-items: start; margin-top: 10px; }
+.huge.small { font-size: 44px; margin-bottom: 8px; }
+#polar-plot { max-width: 300px; margin-top: 0; }
+#polar-plot .ring { fill: none; stroke: var(--rule); } #polar-plot .pole { fill: none; stroke: var(--text); stroke-width: 1.5; }
+#polar-plot .axis-dot { fill: var(--warn); } #polar-plot .to { stroke: var(--warn); stroke-width: 1.5; }
 .step { display: flex; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--rule); align-items: baseline; }
 .step .mark { width: 14px; font-weight: 700; } .step .name { min-width: 130px; font-weight: 600; }
 .step .what { flex: 1; color: var(--dim); }

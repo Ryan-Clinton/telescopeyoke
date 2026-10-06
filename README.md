@@ -294,8 +294,11 @@ new spoken guidance), `mount.py drift` (line-fitted, with the drift model),
 `mount.py compensate` and `shoot.py --assist`. An earlier, cruder
 `mount.py drift` did cancel most of the drift on the real mount.
 
-Written but never run on the real mount: `polaralign.py` (its geometry is
-checked by the tests against a simulated misaligned mount).
+Written but never run on the real mount: `polaralign.py`, also offered in
+the application under Tools. Its geometry is checked by the tests, and in the
+demo it finds the pretend mount's polar error (1.4° east, 0.8° high) through
+the real plate-solve path. It checks its three positions against the
+altitude and meridian limits, and the motion lock, before anything moves.
 
 Written but never moved a real mount: control without the handset, through
 the SynScan Wi-Fi adapter or an EQDIR lead (`direct.py`). The adapter has

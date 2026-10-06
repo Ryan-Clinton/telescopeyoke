@@ -745,8 +745,11 @@ workspace with Home and System (3), Targets and Mount with the move plan
 technical controls, the horizon survey with its plot of blocked directions,
 the camera tests, calibration and restacking.
 
+Built since: polar alignment in Tools, with its diagram, now that
+`polaralign.py` has a dry run, a JSON answer and limit checks.
+
 Not built, because the scripts do not yet report what they need (see "Small
-changes the scripts need first"): polar alignment in Tools; a target's
+changes the scripts need first"): a target's
 height through the night against the skyline; distance from the Sun and the
 bearing on a move plan; distance from the Moon; the last throughput figures
 on System; the estimate of how long a run will take.

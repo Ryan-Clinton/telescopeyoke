@@ -241,6 +241,7 @@ def test_every_action_builds_exactly_its_command():
     assert tail("focus", {"sound": "silent"}) == ["focus.py", "--quiet"]
     assert tail("horizon", {"trace": True, "daylight": True}) == ["horizon.py", "--trace", "--daylight"]
     assert tail("camera-setup") == ["camera_setup.py", "--open"]
+    assert tail("polar") == ["polaralign.py"] and console.moves("polar", {})
     assert tail("camera-capabilities") == ["camera_test.py", "--capabilities"]
     assert tail("camera-throughput") == ["camera_test.py", "--throughput"]
     assert tail("camera-gain-sweep") == ["camera_test.py", "--gain-sweep"]
@@ -578,7 +579,7 @@ def test_opening_the_settings_makes_them_from_the_example_first(tmp_path, monkey
 
 def test_the_page_keeps_the_equipment_screens_to_the_application():
     page = (PAGE / "index.html").read_text(encoding="utf-8")
-    for screen in ("camera", "telescope", "solver", "webcam", "horizon", "calibration", "testing",
+    for screen in ("camera", "telescope", "solver", "webcam", "polar", "horizon", "calibration", "testing",
                    "processing", "doctor", "settings", "logs", "about", "welcome"):
         assert re.search(rf'<section id="{screen}" class="task" data-only="app"', page), screen
     for screen in ("home", "targets", "imaging", "focus", "mount"):

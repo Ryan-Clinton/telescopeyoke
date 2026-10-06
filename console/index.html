@@ -36,6 +36,7 @@
   <a href="#solver" data-task="solver" data-only="app"><svg><use href="/icons.svg#targets"/></svg><span>Plate solver</span></a>
   <a href="#webcam" data-task="webcam" data-only="app"><svg><use href="/icons.svg#focus"/></svg><span>Webcam</span></a>
   <div class="group" data-only="app">Tools</div>
+  <a href="#polar" data-task="polar" data-only="app"><svg><use href="/icons.svg#mount"/></svg><span>Polar alignment</span></a>
   <a href="#horizon" data-task="horizon" data-only="app"><svg><use href="/icons.svg#tools"/></svg><span>Horizon</span></a>
   <a href="#calibration" data-task="calibration" data-only="app"><svg><use href="/icons.svg#tools"/></svg><span>Calibration</span></a>
   <a href="#testing" data-task="testing" data-only="app"><svg><use href="/icons.svg#tools"/></svg><span>Camera testing</span></a>
@@ -198,6 +199,20 @@
     <p class="quiet">A webcam pointed at the telescope photographs it during every move, so you can look before agreeing to one.</p>
     <div id="webcam-checks"></div>
     <div id="webcam-part"><img id="webcam-picture" class="wide-picture" alt="The telescope, from the webcam"></div>
+  </section>
+
+  <section id="polar" class="task" data-only="app" hidden>
+    <h1>Polar alignment</h1>
+    <p class="quiet">Measures how far the mount's polar axis is from the pole, by plate solving at three positions, and says which way to move the mount. Start with the telescope tracking a target well away from the pole: use Go to with centring first.</p>
+    <div class="buttons"><button type="button" data-plan="polar" data-needs="imaging">Measure</button></div>
+    <div class="columns polar">
+      <svg id="polar-plot" class="plot" viewBox="0 0 300 300"></svg>
+      <div>
+        <div id="polar-total" class="huge small"></div>
+        <dl id="polar-facts" class="facts"></dl>
+        <p id="polar-note" class="quiet"></p>
+      </div>
+    </div>
   </section>
 
   <section id="horizon" class="task" data-only="app" hidden>
