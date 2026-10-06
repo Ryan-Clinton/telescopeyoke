@@ -25,6 +25,24 @@
 | `ty mount status` | `slewing` / `tracking` / `stopped`, position, pier side |
 | `doctor.py --report --probe PORT` | the hardware report, plus what answers on that one port: a handset, a motor board, or nothing. Questions that only read; no `--json`. Only for a port a person has named |
 
+## The skyline (nothing moves, except `horizon.py` without `--show`, `--forget` or `--dry-run`)
+
+| Command | Returns |
+|---|---|
+| `horizon.py --show` | the measured skyline as points (`az`, `alt`), the same with the margin on (`usable`), where it came from and when |
+| `horizon.py --forget` | throws the measured skyline away |
+| `horizon.py --trace --dry-run` | how many bearings, how many are within the limits now, minutes, and whether it would start from a known skyline |
+| `panorama.py use PICTURE` | finds the skyline in a phone panorama; writes `horizon/skyline.jpg` to look at |
+| `panorama.py move ACROSS,DOWN ...` | puts points of that line right |
+| `panorama.py mark ACROSS DOWN BEARING HEIGHT` | ties a place in the picture to the compass; `--landmark NAME` takes a remembered landmark's, `--telescope` asks the mount where it points (opens the serial port) |
+| `panorama.py also PICTURE`, `unmark N`, `show`, `clear` | a panorama from another height; housekeeping |
+| `panorama.py save` | the skyline, kept for the planner; warnings for what the picture did not show |
+
+Places in a picture are shares of it, 0 to 1 across and down, or pixels of
+the picture as given. A panorama shows the garden: it is copied to
+`horizon/` under the data folder, which git ignores, and never goes in the
+repository.
+
 ## Planning a move (no hardware needed, nothing moves)
 
 | Command | Returns |
@@ -39,6 +57,8 @@
 Without a handset only: `ty mount directions` tips the tube 5° and back and
 asks a person which way it went; `ty mount sethome` records the home position
 and moves nothing.
+`horizon.py` (with `--trace`, `--daylight`, `--fresh`) slews all over the sky for up to an hour,
+looking at each bearing; `--dry-run` says what it would do.
 `landmark.py check NAME` turns the mount to the axis readings a landmark was
 remembered at and photographs it (`--watch N` keeps looking); `landmark.py
 remember NAME` and `list` move nothing. `polaris.py check` takes ten frames where the telescope is and says whether Polaris is likely to show

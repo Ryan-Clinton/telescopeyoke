@@ -116,6 +116,8 @@ class Night:
             height=site.get("elevation_m", 0) * u.m)
         self.min_alt = cfg["horizon"]["min_altitude"]
         self.blocked = cfg["horizon"].get("blocked", [])
+        self.skyline = cfg["horizon"].get("skyline", [])
+        self.margin = cfg["horizon"].get("margin", 0)
         self.sqm = site.get("sqm", 21.0)
 
         now = now or datetime.now(timezone.utc)
@@ -211,6 +213,10 @@ class Night:
             lo, hi = block["from"] % 360, block["to"] % 360
             inside = (az >= lo) & (az <= hi) if lo <= hi else (az >= lo) | (az <= hi)
             limit[inside] = np.maximum(limit[inside], block["altitude"])
+        if self.skyline:
+            # The skyline measured from the garden, with its margin on.
+            from horizon import limit as measured
+            limit = np.maximum(limit, measured(self.skyline, az, self.margin))
         return limit
 
     # --- assessment ---------------------------------------------------------

@@ -580,7 +580,9 @@ what it does and a button.
 | | Before dark, from Polaris: is it worth trying | `polaris.py check` | no |
 | | Before dark, from Polaris: find it | `polaris.py find --record` | yes |
 | | Before dark, from Polaris: measure and adjust | `polaris.py align --watch 60` | yes |
-| | Horizon survey (grid, or follow the skyline; by night or by day) | `horizon.py`, with `--trace`, `--daylight` | yes |
+| | Horizon survey (grid, or follow the skyline; by night or by day; from the known skyline or from nothing) | `horizon.py`, with `--trace`, `--daylight`, `--fresh` | yes |
+| | Skyline from a phone panorama: find, correct, mark, keep | `panorama.py use\|move\|mark\|also\|unmark\|save\|clear` | no |
+| | Forget the measured skyline | `horizon.py --forget` | no |
 | Camera | Set up the camera | `camera_setup.py --open` | no |
 | | What the camera is | `camera_test.py --capabilities` | no |
 | | Throughput | `camera_test.py --throughput` | no |
@@ -602,13 +604,27 @@ Two of these get a picture for a result:
   Beneath it, what happens if it is left alone: the Dec drift the model in
   `tracking.py` predicts near the current target, and that the project can
   cancel most of that drift but not the slow turning of the field.
-- **Horizon survey:** the skyline as a plot, height against bearing round
-  from north, with what is blocked filled in. It is drawn from
-  `cache/horizon.json` and from the `blocked` list in `config.toml`. On the
-  Targets screen the chosen target's height through the night is drawn
-  against it, with the altitude limit as a line and the moment it "clears
-  the roof" marked: when it can really be seen from this garden, which
-  height alone does not tell.
+- **Horizon:** the skyline as a plot, height against bearing round from
+  north: what was measured filled in, the line targets are kept above (the
+  measured skyline with the margin on), the `blocked` list from
+  `config.toml`, and the altitude limit. It says where the skyline came
+  from and when, repeats the survey's warnings, and can forget it.
+  **From a phone panorama** is first, because it is the quick way: the
+  picture's path, then the picture itself with the line found in it drawn
+  on. With "Correct the line" chosen, drawing over the picture moves the
+  line to the pointer wherever it passes. With "Mark a place" chosen, a
+  click picks a place and three buttons say what is there: typed bearing
+  and height, "The telescope is pointing at it" (reads the mount; nothing
+  moves), or a remembered landmark. Two marks and it can be kept. Up to two
+  more pictures from other heights, each with its own marks, add doubt
+  where they differ.
+  **By the telescope** is the survey, planned and confirmed like any move:
+  follow the skyline or the grid, by night or by day, from the skyline
+  already measured or from nothing.
+  On the Targets screen the chosen target's height through the night is
+  drawn against it, with the altitude limit as a line and the moment it
+  "clears the roof" marked: when it can really be seen from this garden,
+  which height alone does not tell.
 
 ### System
 

@@ -41,7 +41,7 @@ position set by eye, a rough polar alignment.
 
 - 🌙 **Plans tonight's observing**: darkness, Moon, and a GO / MARGINAL / NO-GO verdict
 - ☁️ **Checks cloud, rain, wind, dew and seeing**, plus a live satellite cloud picture
-- 🎯 **Ranks targets for your actual sky**: altitude, moonlight, light pollution, blocked horizons
+- 🎯 **Ranks targets for your actual sky**: altitude, moonlight, light pollution, and your own skyline, measured from a phone panorama or by the telescope
 - 🔭 **Controls SynScan mounts** through the handset, with the handset's clock errors corrected
 - 🧭 **Plate-solves and centres GoTos automatically** (`goto M27 --solve`)
 - 🔊 **Talks you through focusing**, eyes on the focuser not the screen: "Improving. 4.8" … "Minimum passed. Reverse slightly" … "Best focus. Hold"
@@ -252,7 +252,8 @@ lock (`MOTION_LOCKED`) stops every rig at once.
 | `polaralign.py` | Measures how far the polar axis is from the pole by plate solving at three positions, and says which way to turn each adjuster. |
 | `polaris.py` | Polar alignment before dark, from Polaris alone, which shows in daylight when nothing else near the pole does. `check` says whether it is worth trying (sky, Sun, focus); `find` looks around the home position until the star is in the picture, proves it by tipping the tube, and can keep every look (`--record`); `align` turns the RA axis with it in view, says roughly which way to move each adjuster, and with `--watch` keeps saying how far is left while the bolts are turned. |
 | `landmark.py` | Sets the azimuth by day: remembers a distant fixed thing with the telescope's axis readings, and next time turns back to it and shows how far it has moved. |
-| `horizon.py` | Sweeps the sky and reports which directions are blocked by houses, hedges and trees, as lines for `config.toml`. `--trace` follows the top of whatever is in the way right round and checks its own answer; `--daylight` works by day, going by brightness instead of stars. |
+| `panorama.py` | The skyline from a phone panorama, with no motors: finds the line between sky and everything else in the picture, lets you put it right where it is wrong, ties the picture to the compass from two marks (something the telescope is pointing at, a remembered landmark, or typed bearings), and keeps the result for the planner. Panoramas from other heights add doubt where things close by sit differently. |
+| `horizon.py` | The telescope measuring its own skyline, or checking a panorama's. `--trace` starts 30° apart, adds bearings only where the skyline bends, starts each from the skyline already measured, and checks its own answer; `--daylight` works by day, judging each small square of the frame by brightness, smoothness and colour; a frame that shows the top itself gives the height at once. `--show` prints the skyline in use, `--forget` throws it away. Without `--trace` it looks on a fixed grid, as it first did. |
 | `snap.py` | Takes one camera frame, saves the FITS in `frames/`, publishes a preview. |
 | `shoot.py` | Takes a picture: many short exposures, each checked, lined up and stacked live, with the raw frames kept. `--exposure auto` picks the longest exposure the tracking allows. `--frames 0` carries on until cloud stops it. While it runs, `./ty run stop` ends it cleanly with its final picture; `recentre`, `assist-on` and `assist-off` are also understood. |
 | `restack.py` | The quality pass: goes back over a session's raw frames, keeps the best, weights and clips them, and writes the finished picture. `shoot.py` runs it at the end. `--all`, or several session folders, stacks sessions from one night or many into one picture. |
@@ -476,9 +477,26 @@ on the simulated mount. Daytime frames have never been taken with the real
 camera, so its choice of exposure is untried.
 
 Written but never run on the real mount or camera: `horizon.py --trace` and
-`horizon.py --daylight`. The following and its checks are tested against the
-simulated mount; the brightness levels that tell daytime sky from a wall are
-first guesses and have not seen a real frame.
+`horizon.py --daylight`. The following, the adding of bearings and the checks
+are tested against the simulated mount and made-up skylines. The scores that
+tell daytime sky from a wall, the wait for the tube to steady by day and the
+reading of a top from where the stars stop are first guesses and have not
+seen a real frame; every look keeps its picture in `horizon/looks/` so that
+the first real run can be checked. A frame is about two thirds of a degree
+tall, so "the top is in this frame" only saves looks when the start is
+already close: from a panorama or an earlier survey, not from nothing. The
+camera is read at full size: a smaller or binned mode is not used because
+nobody has yet recorded which of this camera's modes keeps its colour
+pattern (`./camera_test.py --throughput` shows it).
+
+`panorama.py` has found the skyline in three real phone panoramas of one
+garden, two of them well and one (taken low, mostly walls and ground) badly;
+a pale rendered wall is what it most often takes for sky, which is why the
+line can be redrawn. No panorama has yet been tied to the compass with real
+marks and compared with what the telescope sees, so how true the bearings
+and heights come out is not known. The Horizon screen's drawing and marking
+have been run through the console's own interface in the demo but not yet
+used with a mouse.
 
 Covered by automated tests (`pytest`, run on every push on Python 3.11 to 3.14): the astronomy, the
 mount logic against the simulated handset, frame alignment and hot-pixel

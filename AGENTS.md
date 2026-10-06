@@ -33,6 +33,7 @@ them and every file kept under `demo/`.
 | `app.py` | TelescopeYoke, the application: a window of its own over `console.py`'s server, with every screen |
 | `console.py`, `console/` | The server and the page behind the application; run by itself, the companion page in a browser (observing only). This computer only; runs the other scripts |
 | `mount.py`, `tracking.py`, `polaralign.py`, `polaris.py`, `landmark.py`, `simulator.py` | Mount control, drift model, polar alignment by the stars, the same by day from Polaris alone, azimuth by a remembered landmark, simulated handset and motor board |
+| `horizon.py`, `panorama.py` | The skyline from where the telescope stands: measured by the telescope, or taken from a phone panorama. Kept in `cache/horizon.json`; the planner keeps targets above it |
 | `direct.py` | The mount without its handset (Wi-Fi adapter or EQDIR lead): stands in for the handset so `mount.py` is unchanged |
 | `camera.py`, `indi.py`, `altair.py`, `snap.py`, `liveview.py`, `focus.py` | Camera (through INDI, or Altair's own library) and focusing |
 | `host.py` | Everything that differs between Linux and Windows, in one place |
@@ -79,8 +80,9 @@ a motor's creep rate. `mount.py stop` is always allowed.
 4. **Anything that changes how the mount moves needs a test against
    `simulator.py`.**
 5. **The user's location never goes in the repository:** `config.toml`, `rigs/`,
-   `web/`, `frames/`, `cache/`, `calibration/` are ignored. Do not publish
-   photos of the garden.
+   `web/`, `frames/`, `cache/`, `calibration/`, `horizon/` are ignored. Do not publish
+   photos of the garden: a panorama for `panorama.py` is one, and so is
+   anything named `*.PANO.jpg`.
 
 ## Design principles
 

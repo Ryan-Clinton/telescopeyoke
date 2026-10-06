@@ -5,6 +5,25 @@ README's "Current status" is the full account.
 
 ## Not yet released
 
+- **The skyline from a phone panorama** (`./panorama.py`, and the Horizon
+  screen): the line between sky and everything else is found in the picture
+  and can be redrawn, two marks tie it to the compass, and panoramas from
+  other heights add doubt where near things sit differently. No motors, a
+  few minutes. Found well in two real panoramas and badly in a third; not
+  yet tied to the compass for real.
+- **The planner uses a measured skyline directly**, from `cache/horizon.json`,
+  raised by `margin` under `[horizon]` (2° unless changed). There is nothing
+  to copy into `config.toml` any more; `use_survey = false` leaves it out.
+- **`horizon.py --trace` looks less and says more.** It starts 30° apart and
+  adds bearings only where the skyline bends; it starts from the skyline
+  already measured and looks further only where that is wrong; by day each
+  small square of a frame is judged by brightness, smoothness and colour
+  against the day's own sky; a frame showing the top itself, by day or among
+  stars, ends the search there; by day it waits only until two frames agree
+  and reports how long that took; and every look's picture is kept, marked
+  with what was not taken for sky. `--show` and `--forget` are new. On a
+  made-up garden it takes about 60 looks from nothing and about 22 from a
+  known skyline. None of this has been run on the real mount.
 - The camera on a USB 3 lead, timed indoors: a full frame at a 1 s exposure
   in 1.54 s, against 9.3 s on USB 2. Figures in `docs/validation.md`. No
   night has been run on it yet.

@@ -22,6 +22,10 @@ core functions ───┼── --json (interface.py envelope)
 - `agent.py` gathers read-only facts for programs; `interface.py` defines the
   envelope, error codes and states.
 
+- `horizon.py` and `panorama.py` each produce the skyline as one list of
+  points; `horizon.keep()` saves it, `config.load()` hands it to the planner,
+  and `horizon.limit()` is the one place it is turned into a height at a bearing.
+
 State on disk: `cache/` (feeds, handset clock, pointing error, drift model,
-last plate solve), `frames/NAME/<date-time>/` (raw frames, logs, stacks),
+last plate solve, the measured skyline), `horizon/` (panoramas, each survey look's picture), `frames/NAME/<date-time>/` (raw frames, logs, stacks),
 `web/` (the page, pictures, `status.json`), `calibration/` (master frames).

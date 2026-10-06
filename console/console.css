@@ -205,6 +205,17 @@ progress { width: 100%; height: 8px; accent-color: var(--good); }
 .plot { width: 100%; max-width: 760px; margin-top: 10px; }
 .plot .axis { stroke: var(--rule); } .plot text { fill: var(--dim); font-size: 10px; }
 .plot .blocked { fill: var(--dim); opacity: .45; } .plot .limit { stroke: var(--warn); stroke-dasharray: 4 3; }
+.plot .skyline { fill: var(--dim); opacity: .6; stroke: none; } .plot .usable { fill: none; stroke: var(--warn); stroke-width: 1.2; }
+.plot .unseen { fill: var(--rule); opacity: .5; }
+.pano { position: relative; max-width: 100%; margin: 10px 0; touch-action: none; user-select: none; }
+.pano img { display: block; width: 100%; opacity: var(--picture); }
+.pano svg { position: absolute; left: 0; top: 0; width: 100%; height: 100%; cursor: crosshair; }
+.pano polyline { fill: none; stroke: #ff285a; stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+.pano circle { fill: none; stroke: #ffbe3c; stroke-width: 2.5; vector-effect: non-scaling-stroke; }
+.pano circle.pending { stroke-dasharray: 4 3; }
+.pano text { fill: #ffbe3c; font-size: 13px; paint-order: stroke; stroke: #000; stroke-width: 3px; }
+input.wide { flex: 2; min-width: 280px; color: var(--text); background: var(--bg); border: 1px solid var(--rule); border-radius: 6px; padding: 6px 8px; }
+button.chosen { border-color: var(--warn); }
 .result { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px; white-space: pre-wrap;
           font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
 .check { display: flex; gap: 10px; padding: 5px 0; }

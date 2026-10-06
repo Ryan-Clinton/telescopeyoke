@@ -249,11 +249,46 @@
 
   <section id="horizon" class="task" data-only="app" hidden>
     <h1>Horizon</h1>
-    <div class="tool"><div><b>Horizon survey</b><span>Find what blocks the sky from where the telescope stands.</span></div>
+    <p class="quiet" id="horizon-status">What blocks the sky from where the telescope stands. The planner keeps targets above it.</p>
+    <svg id="horizon-plot" class="plot" viewBox="0 0 720 200"></svg>
+    <div id="horizon-warnings"></div>
+    <div class="buttons"><button type="button" id="horizon-forget">Forget the measured skyline</button></div>
+
+    <h2>From a phone panorama</h2>
+    <p class="quiet">The quick way: no motors, a few minutes. Stand where the telescope stands, hold the phone at the height of the tube, tilted up so the sky is above everything, and take a panorama of the skyline. Copy it to this computer.</p>
+    <div class="tool"><div><b>1. The picture</b><span>Its full path on this computer. It stays here: it is never put in the repository.</span></div>
+      <input type="text" id="pano-file" class="wide" placeholder="/home/you/Pictures/panorama.jpg" spellcheck="false">
+      <button type="button" id="pano-use">Find the skyline</button>
+      <button type="button" id="pano-also">Add it as another height</button></div>
+    <div id="pano-work" hidden>
+      <div class="buttons" id="pano-pictures"></div>
+      <div class="pano" id="pano-stage"><img id="pano-picture" alt="The panorama"><svg id="pano-over"></svg></div>
+      <div class="buttons">
+        <label class="switch"><input type="radio" name="pano-mode" value="draw" checked> 2. Correct the line: draw over it where it is wrong</label>
+        <label class="switch"><input type="radio" name="pano-mode" value="mark"> 3. Mark a place: click something whose bearing is known</label>
+      </div>
+      <div class="buttons" id="pano-mark" hidden>
+        <span id="pano-at" class="quiet"></span>
+        <label>Bearing <input id="pano-bearing" type="number" min="0" max="360" step="0.1"></label>
+        <label>Height <input id="pano-height" type="number" min="-10" max="89" step="0.1"></label>
+        <button type="button" id="pano-mark-typed">Mark it</button>
+        <button type="button" id="pano-mark-telescope" data-needs="mount" data-gate="panorama-mark">The telescope is pointing at it</button>
+        <select id="pano-landmark"></select>
+        <button type="button" id="pano-mark-landmark">It is this landmark</button>
+      </div>
+      <p class="quiet">Two marks tie the picture to the compass: less than half a turn apart, and the further apart the better. The surest mark is something the telescope is pointing at. A picture from another height needs its own two.</p>
+      <div id="pano-marks"></div>
+      <p id="pano-fit" class="quiet"></p>
+      <div class="buttons"><button type="button" id="pano-save">4. Keep this skyline</button>
+        <button type="button" id="pano-clear">Clear the panoramas</button></div>
+    </div>
+
+    <h2>By the telescope</h2>
+    <div class="tool"><div><b>Horizon survey</b><span>The telescope looks for itself. With a skyline already measured it starts from that and only checks it; from nothing it takes most of an hour.</span></div>
       <label class="switch"><input type="checkbox" id="horizon-trace" checked> Follow the skyline</label>
       <label class="switch"><input type="checkbox" id="horizon-daylight"> By day</label>
+      <label class="switch"><input type="checkbox" id="horizon-fresh"> Start from nothing</label>
       <button type="button" id="horizon-run" data-needs="imaging">Plan</button></div>
-    <svg id="horizon-plot" class="plot" viewBox="0 0 720 200"></svg>
   </section>
 
   <section id="calibration" class="task" data-only="app" hidden>

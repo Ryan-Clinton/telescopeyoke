@@ -726,22 +726,98 @@ function drawWebcam() {
   picture($("webcam-picture"), "scope.jpg");
 }
 
+// The Horizon screen: the skyline in use, and a phone panorama being turned into one.
+let panoShown = 1, panoPending = null, panoDrawing = null;
+
 function drawHorizon() {
   const h = seen.horizon;
   if (h) {
-    const plot = $("horizon-plot"), x = (az) => 30 + (az / 360) * 680, y = (alt) => 180 - (alt / 90) * 170, parts = [];
+    const plot = $("horizon-plot"), x = (az) => 30 + (az / 360) * 680, y = (alt) => 180 - (Math.max(alt, 0) / 90) * 170, parts = [];
     for (const alt of [0, 30, 60, 90]) parts.push(el("line", { class: "axis", x1: 30, x2: 710, y1: y(alt), y2: y(alt) }), el("text", { x: 4, y: y(alt) + 3, text: `${alt}°` }));
     ["N", "NE", "E", "SE", "S", "SW", "W", "NW", "N"].forEach((name, i) => parts.push(el("text", { x: x(i * 45) - 4, y: 196, text: name })));
     for (const b of h.blocked || []) {
       const spans = b.from <= b.to ? [[b.from, b.to]] : [[b.from, 360], [0, b.to]];
       for (const [from, to] of spans) parts.push(el("rect", { class: "blocked", x: x(from), y: y(b.altitude), width: x(to) - x(from), height: y(0) - y(b.altitude) }));
     }
+    if (h.skyline) {
+      // What was measured, filled; and the line targets are kept above, with the margin on.
+      const round = (points) => [{ az: 0, alt: points[points.length - 1].alt }, ...points, { az: 360, alt: points[0].alt }];
+      const line = (points) => round(points).map((p) => `${x(p.az).toFixed(1)},${y(p.alt).toFixed(1)}`);
+      parts.push(el("path", { class: "skyline", d: `M${x(0)},${y(0)} L${line(h.skyline).join(" L")} L${x(360)},${y(0)} Z` }),
+                 el("path", { class: "usable", d: `M${line(h.usable).join(" L")}` }));
+    }
     parts.push(el("line", { class: "limit", x1: 30, x2: 710, y1: y(h.min_altitude), y2: y(h.min_altitude) }),
                el("text", { x: 600, y: y(h.min_altitude) - 4, text: `${h.min_altitude}° altitude limit` }));
-    if (!(h.blocked || []).length) parts.push(el("text", { x: 250, y: 90, text: "No blocked directions recorded in config.toml yet." }));
+    if (!(h.blocked || []).length && !h.skyline) parts.push(el("text", { x: 230, y: 90, text: "No skyline measured and no blocked directions written yet." }));
     fill(plot, parts);
+    const from = { panorama: "a phone panorama", telescope: "the telescope's own survey", "panorama+telescope": "a phone panorama, checked by the telescope" };
+    $("horizon-status").textContent = h.skyline
+      ? `Measured ${new Date(h.surveyed * 1000).toLocaleDateString()} from ${from[h.source] || h.source}. ` +
+        (h.in_use ? `The planner keeps targets ${h.margin}° above it (the line); change the margin in Settings.` : "The planner is not using it: that is switched off in Settings.")
+      : "No skyline has been measured yet. The planner keeps targets above the altitude limit and whatever is blocked in config.toml.";
+    fill($("horizon-warnings"), (h.warnings || []).map((text) => el("p", { class: "warn", text: `Check: ${text}` })));
+    $("horizon-forget").hidden = !h.skyline;
+    drawPanorama(h.panorama);
   }
   gateAll();
+}
+
+function drawPanorama(pano) {
+  const pictures = (pano && pano.pictures) || [];
+  $("pano-work").hidden = !pictures.length;
+  $("pano-also").hidden = !pictures.length || pictures.length >= 3;
+  if (!pictures.length || panoDrawing) return;
+  const shown = pictures[Math.min(panoShown, pictures.length) - 1], image = $("pano-picture"), over = $("pano-over");
+  panoShown = shown.number;
+  fill($("pano-pictures"), pictures.map((p) => el("button", { type: "button", class: p.number === panoShown ? "chosen" : "",
+    text: p.number === 1 ? "Picture 1: the one that counts" : `Picture ${p.number}: another height`,
+    on: { click: () => { panoShown = p.number; panoPending = null; drawHorizon(); } } })));
+  const src = `/horizon/${shown.file}?v=${Math.floor(shown.taken)}`;
+  if (image.getAttribute("src") !== src) image.setAttribute("src", src);
+  if (!image.naturalWidth) return image.addEventListener("load", drawHorizon, { once: true });
+  // The overlay is 1000 units across whatever the picture's shape.
+  const tall = 1000 * image.naturalHeight / image.naturalWidth, parts = [];
+  over.setAttribute("viewBox", `0 0 1000 ${tall}`);
+  parts.push(el("polyline", { points: shown.line.map(([px, py]) => `${(px * 1000).toFixed(1)},${(py * tall).toFixed(1)}`).join(" ") }));
+  shown.marks.forEach((mark, i) => parts.push(el("circle", { cx: mark.x * 1000, cy: mark.y * tall, r: 6 }),
+    el("text", { x: mark.x * 1000 + 10, y: mark.y * tall + 4, text: `${i + 1}: ${mark.az}° / ${mark.alt}°` })));
+  if (panoPending) parts.push(el("circle", { class: "pending", cx: panoPending[0] * 1000, cy: panoPending[1] * tall, r: 8 }));
+  fill(over, parts);
+  $("pano-mark").hidden = !panoPending;
+  if (panoPending) $("pano-at").textContent = `The place clicked, ${(panoPending[0] * 100).toFixed(0)}% across:`;
+  const marks = (seen.landmarks && seen.landmarks.landmarks) || [];
+  $("pano-landmark").hidden = $("pano-mark-landmark").hidden = !marks.length;
+  if ($("pano-landmark").options.length !== marks.length) fill($("pano-landmark"), marks.map((m) => el("option", { value: m.name, text: `${m.name} (${m.bearing_deg}° / ${m.height_deg}°)` })));
+  fill($("pano-marks"), shown.marks.map((mark, i) => el("div", { class: "check" },
+    el("span", { text: `Mark ${i + 1}: bearing ${mark.az}°, ${mark.alt}° up (${mark.from})` }),
+    el("button", { type: "button", text: "Remove", on: { click: () => act("panorama-unmark", { mark: i + 1, picture: panoShown }) } }))));
+  const fit = shown.fit;
+  $("pano-fit").textContent = [
+    !fit ? `This picture needs ${2 - shown.marks.length} more mark${shown.marks.length ? "" : "s"}.`
+      : fit.problem ? fit.problem
+      : `By its marks the picture is ${fit.degrees_wide}° wide` + (shown.marks.length > 2 ? `, and the marks agree on height to within ${fit.worst_deg}°.` : "."),
+    shown.changed ? `${shown.changed} points of the line put right by hand.` : "",
+    shown.above_picture ? `In ${shown.above_picture} places the top is above the picture: there it can only say "at least this high".` : "",
+  ].filter(Boolean).join(" ");
+  $("pano-save").disabled = !pano.ready;
+}
+
+function panoPlace(event) {
+  const box = $("pano-over").getBoundingClientRect();
+  return [Math.min(Math.max((event.clientX - box.left) / box.width, 0), 1), Math.min(Math.max((event.clientY - box.top) / box.height, 0), 1)];
+}
+
+function panoLine() { return seen.horizon.panorama.pictures[panoShown - 1].line; }
+
+function panoDrag(event) {
+  // Every point of the line the pointer passes over goes to the pointer's height.
+  const [px, py] = panoPlace(event), line = panoLine(), from = Math.min(panoDrawing.last, px), to = Math.max(panoDrawing.last, px);
+  let nearest = 0;
+  line.forEach((point, i) => { if (Math.abs(point[0] - px) < Math.abs(line[nearest][0] - px)) nearest = i; });
+  line.forEach((point, i) => { if (i === nearest || (point[0] >= from && point[0] <= to)) { point[1] = py; panoDrawing.moved.add(i); } });
+  panoDrawing.last = px;
+  const tall = Number($("pano-over").getAttribute("viewBox").split(" ")[3]);
+  $("pano-over").querySelector("polyline").setAttribute("points", line.map(([lx, ly]) => `${(lx * 1000).toFixed(1)},${(ly * tall).toFixed(1)}`).join(" "));
 }
 
 function drawProcessing() {
@@ -942,7 +1018,7 @@ async function refresh() {
   if (task === "imaging" && slow % 5 === 0 || !seen.gallery) wanted.push("gallery");
   if (!seen.catalogue) wanted.push("catalogue");
   if (task === "doctor" || !seen.doctor) wanted.push("doctor");
-  if (task === "horizon") wanted.push("horizon");
+  if (task === "horizon") wanted.push("horizon", "landmarks");
   if (task === "rigs") wanted.push("rigs");
   if (task === "polar") wanted.push("polar");
   if (task === "landmark") wanted.push("landmarks");
@@ -986,7 +1062,36 @@ $("hardware-report").addEventListener("click", async () => {
   getSelection().selectAllChildren($("hardware-text"));
   if (reply.ok) notice("Selected. Copy it (Ctrl+C) and paste it into a hardware report on GitHub.");
 });
-$("horizon-run").addEventListener("click", () => makePlan("horizon", { trace: $("horizon-trace").checked, daylight: $("horizon-daylight").checked }));
+$("horizon-run").addEventListener("click", () => makePlan("horizon", { trace: $("horizon-trace").checked, daylight: $("horizon-daylight").checked, fresh: $("horizon-fresh").checked }));
+$("horizon-forget").addEventListener("click", () => act("horizon-forget"));
+$("pano-use").addEventListener("click", () => { panoShown = 1; panoPending = null; act("panorama-use", { file: $("pano-file").value }); });
+$("pano-also").addEventListener("click", () => act("panorama-also", { file: $("pano-file").value }));
+$("pano-save").addEventListener("click", () => act("panorama-save"));
+$("pano-clear").addEventListener("click", () => { panoPending = null; act("panorama-clear"); });
+$("pano-mark-typed").addEventListener("click", () => panoMark({ bearing: $("pano-bearing").value, height: $("pano-height").value }));
+$("pano-mark-telescope").addEventListener("click", () => panoMark({ telescope: true }));
+$("pano-mark-landmark").addEventListener("click", () => panoMark({ landmark: $("pano-landmark").value }));
+function panoMark(what) {
+  if (!panoPending) return;
+  act("panorama-mark", { x: panoPending[0], y: panoPending[1], picture: panoShown, ...what });
+  panoPending = null;
+}
+$("pano-over").addEventListener("pointerdown", (event) => {
+  if (document.querySelector("input[name=pano-mode]:checked").value === "mark") {
+    panoPending = panoPlace(event);
+    return drawHorizon();
+  }
+  panoDrawing = { last: panoPlace(event)[0], moved: new Set() };
+  $("pano-over").setPointerCapture(event.pointerId);
+  panoDrag(event);
+});
+$("pano-over").addEventListener("pointermove", (event) => { if (panoDrawing) panoDrag(event); });
+$("pano-over").addEventListener("pointerup", () => {
+  if (!panoDrawing) return;
+  const line = panoLine(), points = [...panoDrawing.moved].map((i) => [Number(line[i][0].toFixed(4)), Number(line[i][1].toFixed(4))]);
+  panoDrawing = null;
+  act("panorama-move", { points, picture: panoShown });
+});
 $("restack-run").addEventListener("click", () => act("restack", { target: seen.session.name }));
 $("restack-all").addEventListener("click", () => act("restack", { target: seen.session.name, all: true }));
 $("sheet-cancel").addEventListener("click", closeCard);

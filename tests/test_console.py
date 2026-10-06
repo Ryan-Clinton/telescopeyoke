@@ -242,6 +242,37 @@ def test_every_action_builds_exactly_its_command():
     assert tail("focus") == ["focus.py"] and tail("focus", {"sound": "tones"}) == ["focus.py", "--tones"]
     assert tail("focus", {"sound": "silent"}) == ["focus.py", "--quiet"]
     assert tail("horizon", {"trace": True, "daylight": True}) == ["horizon.py", "--trace", "--daylight"]
+    assert tail("horizon", {"trace": True, "fresh": True}) == ["horizon.py", "--trace", "--fresh"]
+    assert tail("horizon-forget") == ["horizon.py", "--forget"]
+    # The skyline from a phone panorama: none of it moves the mount or needs a plan.
+    assert tail("panorama-use", {"file": " /home/me/My Pictures/garden.jpg "}) == \
+        ["panorama.py", "use", "/home/me/My Pictures/garden.jpg"]
+    assert tail("panorama-also", {"file": "C:/Users/me/high.jpg"}) == ["panorama.py", "also", "C:/Users/me/high.jpg"]
+    assert tail("panorama-mark", {"x": 0.25, "y": "0.4", "bearing": 137, "height": 24.5}) == \
+        ["panorama.py", "mark", "0.25", "0.4", "137", "24.5", "--picture", "1"]
+    assert tail("panorama-mark", {"x": 0.25, "y": 0.4, "telescope": True, "picture": 2}) == \
+        ["panorama.py", "mark", "0.25", "0.4", "--telescope", "--picture", "2"]
+    assert tail("panorama-mark", {"x": 0.25, "y": 0.4, "landmark": "Old Chimney"}) == \
+        ["panorama.py", "mark", "0.25", "0.4", "--landmark", "old-chimney", "--picture", "1"]
+    assert tail("panorama-move", {"points": [[0.5, 0.25], [0.51, 0.3]], "picture": 3}) == \
+        ["panorama.py", "move", "0.5000,0.2500", "0.5100,0.3000", "--picture", "3"]
+    assert tail("panorama-unmark", {"mark": 2}) == ["panorama.py", "unmark", "2", "--picture", "1"]
+    assert tail("panorama-save") == ["panorama.py", "save"] and tail("panorama-clear") == ["panorama.py", "clear"]
+    for action in ("panorama-use", "panorama-also", "panorama-mark", "panorama-unmark", "panorama-move",
+                   "panorama-save", "panorama-clear", "horizon-forget"):
+        assert action in console.WORKSTATION and not console.moves(action, {})
+    # Asking the mount where it points holds the mount; a mark typed in holds nothing.
+    assert console.uses("panorama-mark", {"telescope": True}) == "mount" and console.uses("panorama-mark", {}) is None
+    for action, bad in (("panorama-use", {"file": "--help"}), ("panorama-use", {"file": ""}), ("panorama-use", {}),
+                        ("panorama-use", {"file": "a\nb.jpg"}), ("panorama-use", {"file": "x" * 500}),
+                        ("panorama-mark", {"x": 2, "y": 0.5, "bearing": 10, "height": 10}),
+                        ("panorama-mark", {"x": 0.5, "y": 0.5, "bearing": 400, "height": 10}),
+                        ("panorama-mark", {"x": 0.5, "y": 0.5}), ("panorama-mark", {"x": 0.5, "y": 0.5, "landmark": "../x"}),
+                        ("panorama-move", {"points": []}), ("panorama-move", {"points": [[0.5, "0.5; ls"]]}),
+                        ("panorama-move", {"points": [[0.5]]}), ("panorama-move", {"points": [[0.5, 0.5]], "picture": 9}),
+                        ("panorama-unmark", {})):
+        with pytest.raises(console.Refused):
+            console.command(action, bad)
     assert tail("camera-setup") == ["camera_setup.py", "--open"]
     assert tail("polar") == ["polaralign.py"] and console.moves("polar", {})
     assert tail("point", {"bearing": "112.5", "height": 8}) == ["mount.py", "point", "112.5", "8"]
@@ -266,7 +297,8 @@ def test_every_action_builds_exactly_its_command():
     assert tail("run-assist-on") == ["ty", "run", "assist-on"] and tail("run-assist-off") == ["ty", "run", "assist-off"]
     # Every script the table names exists, and every moving one can be planned.
     for name, spec in console.ACTIONS.items():
-        assert (ROOT / spec["command"]({"target": "M27", "name": "mast", "bearing": 90, "height": 10})[0]).exists(), name
+        assert (ROOT / spec["command"]({"target": "M27", "name": "mast", "bearing": 90, "height": 10, "file": "/a.jpg",
+                                        "x": 0.5, "y": 0.5, "mark": 1, "points": [[0.5, 0.5]]})[0]).exists(), name
 
 
 def test_nothing_from_the_browser_reaches_a_command_line(desk, monkeypatch):

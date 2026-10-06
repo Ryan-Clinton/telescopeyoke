@@ -42,8 +42,8 @@ been run with a model in the loop.
   snapshot, with a note naming the likely cause when quality falls: wider
   stars with a steady count point at focus, fewer stars at cloud or dew,
   less round stars at tracking or wind.
-- `--json` on `shoot.py`, `focus.py`, `solve.py`, `restack.py` and
-  `horizon.py` too. Progress goes to stderr; stdout carries one envelope at
+- `--json` on `shoot.py`, `focus.py`, `solve.py`, `restack.py`,
+  `horizon.py` and `panorama.py` too. Progress goes to stderr; stdout carries one envelope at
   the end.
 - `shoot.py NAME --dry-run` and `horizon.py --dry-run` say what would happen
   without touching camera or mount.

@@ -20,17 +20,24 @@ from snap import publish, save
 ENOUGH_STARS = 8  # in two frames running; a plate solve needs about this many
 
 
-def count_stars(lum):
-    """Number of star-like spots standing clear of the sky background."""
+def star_places(lum):
+    """Where the star-like spots standing clear of the sky background are:
+    an array of (row, column), one line per star."""
     lum = ndimage.median_filter(lum, 3)  # drop hot pixels
     flat = lum - ndimage.uniform_filter(lum, 64)  # drop the sky gradient
     noise = 1.4826 * float(np.median(np.abs(flat - np.median(flat))))
     spots, count = ndimage.label(flat > 6 * max(noise, 1.0))
     if not count:
-        return 0
+        return np.zeros((0, 2))
     sizes = ndimage.sum(np.ones_like(spots), spots, range(1, count + 1))
     # Stars cover a few pixels; anything huge is cloud edge or glare.
-    return int(np.sum((sizes >= 3) & (sizes < 5000)))
+    stars = np.flatnonzero((sizes >= 3) & (sizes < 5000)) + 1
+    return np.array(ndimage.center_of_mass(flat, spots, stars)).reshape(-1, 2)
+
+
+def count_stars(lum):
+    """Number of star-like spots standing clear of the sky background."""
+    return len(star_places(lum))
 
 
 def main():

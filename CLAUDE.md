@@ -58,7 +58,7 @@ that may have set.
   `conftest.py` sets `TY_DATA` and `TY_CALIBRATION` before anything is
   imported, so a test cannot write into a real night's files even if its
   fixture forgets to redirect something. Never build a path to `frames/`,
-  `web/` or `cache/` from `ROOT`.
+  `web/`, `cache/` or `horizon/` from `ROOT`.
 - A change to any `--json` output touches three places together: the
   function, its file in `schemas/`, and `tests/test_interface.py`, which
   checks the envelope, the MCP tools' `outputSchema` and the scenarios in
@@ -68,6 +68,11 @@ that may have set.
   `console.py` alone serves the same page in "companion" mode, where the
   actions in `console.WORKSTATION` are refused. A screen for the application
   only is marked `data-only="app"` in the page.
+- The measured skyline is one list of points in `cache/horizon.json`,
+  written by `horizon.keep()` from either `horizon.py --trace` or
+  `panorama.py save`. `config.load()` puts it in `cfg["horizon"]["skyline"]`
+  (never `config.example()`), `sky.Night.horizon()` adds the margin with
+  `horizon.limit()`, and the Horizon screen draws the same list.
 - A setting the application can change is one row in `config.SETTINGS`
   (label, kind, help, limits); the Settings form, the checking and the
   writing all follow from that row.

@@ -20,6 +20,12 @@ min_altitude = 20
 # 180 = south, 270 = west. Example: the house blocks the south up to 40°:
 #   blocked = [ { from = 150, to = 210, altitude = 40 } ]
 blocked = []
+# A skyline measured from where the telescope stands (./panorama.py from a
+# phone panorama, or ./horizon.py --trace) is used as well, raised by this
+# many degrees: one branch is enough to spoil a frame.
+margin = 2
+# false: leave the measured skyline out and go by `blocked` alone.
+use_survey = true
 
 [scope]
 aperture_mm = 150

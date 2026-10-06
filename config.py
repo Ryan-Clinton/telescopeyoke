@@ -58,7 +58,9 @@ def new_rig(name):
 # Used for anything config.toml leaves out. These describe the hardware the
 # project was built with, so an older config.toml keeps working.
 DEFAULTS = {
-    "horizon": {"min_altitude": 20, "blocked": []},
+    # margin: degrees the measured skyline is raised by before the planner
+    # uses it. use_survey: whether the planner uses the measured skyline at all.
+    "horizon": {"min_altitude": 20, "blocked": [], "margin": 2, "use_survey": True},
     "scope": {"aperture_mm": 150, "focal_length_mm": 750},
     "camera": {"driver": "indi_altair_ccd", "bit_depth": 12, "pixel_size_um": 2.4,
                "width": 5440, "height": 3648, "setup": "default",
@@ -98,7 +100,13 @@ def load():
     if not FILE.exists():
         raise SystemExit("No config.toml. Copy config.example.toml to config.toml "
                          "and put your own location in it.")
-    return _merged(_read(FILE))
+    cfg = _merged(_read(FILE))
+    if cfg["horizon"]["use_survey"]:
+        # The skyline measured from where this telescope stands (horizon.py,
+        # panorama.py). The example site has none: it is not that garden.
+        import horizon
+        cfg["horizon"]["skyline"] = horizon.measured().get("skyline", [])
+    return cfg
 
 
 def hardware():
@@ -157,6 +165,12 @@ SETTINGS = (
      {"min": 15, "max": 23, "optional": True}),
     ("horizon", "min_altitude", "Lowest height worth pointing at", "number", "Degrees above the horizon.",
      {"min": 0, "max": 80}),
+    ("horizon", "use_survey", "Use the measured skyline", "yesno",
+     "The skyline from a phone panorama or the telescope's own survey, on the Horizon screen. Off leaves "
+     "only the blocked list written in config.toml.", {}),
+    ("horizon", "margin", "Margin above the measured skyline", "number",
+     "Degrees. One branch is enough to spoil a frame, so targets are kept this far above what was measured.",
+     {"min": 0, "max": 20}),
     ("scope", "aperture_mm", "Aperture", "number", "Millimetres.", {"min": 10, "max": 2000}),
     ("scope", "focal_length_mm", "Focal length", "number",
      "Millimetres. The plate solver works out the field of view from this and the sensor.", {"min": 50, "max": 20000}),

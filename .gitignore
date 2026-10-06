@@ -9,6 +9,9 @@ web/
 MOTION_LOCKED
 recordings/
 polaris-runs/
+# Panoramas of the garden, and each survey look's picture
+horizon/
+*.PANO.jpg
 calibration/
 .claude/
 

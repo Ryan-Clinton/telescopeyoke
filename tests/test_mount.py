@@ -260,7 +260,8 @@ def test_a_daylight_skyline_survey_on_the_simulated_mount(scope, monkeypatch, tm
     monkeypatch.setattr(camera, "Camera", Camera)
     monkeypatch.setattr(mount, "Mount", lambda *a, **k: scope)
     monkeypatch.setattr(snap, "publish", lambda *a, **k: None)
-    monkeypatch.setattr(horizon, "STEADY", 0)
+    monkeypatch.setattr(horizon, "STEADY_DAY", 0)      # the first frame after each slew will do
+    monkeypatch.setattr(horizon, "LOOKS", tmp_path / "looks")
 
     with horizon.eye(SITE, 0.002, 100, daylight=True) as look:
         found, warnings = horizon.trace(look, sorted(range(0, 360, 45), key=horizon.side), low=20)
@@ -283,6 +284,10 @@ def test_a_daylight_skyline_survey_on_the_simulated_mount(scope, monkeypatch, tm
     for (az, alt), (got_az, got_alt) in zip(asked, Camera.aimed[-len(asked):]):
         assert abs(mount.wrap(az - got_az)) < 0.5 and abs(alt - got_alt) < 0.5
     assert not scope.s.tracking    # by day it holds still on the rooftop
+    # Every look left its picture, marked with what was not taken for sky.
+    assert len(list((tmp_path / "looks").glob("*.jpg"))) == len(asked)
+    skyline = horizon.skyline_from(found, 20)
+    assert all(38.5 < p["alt"] or p.get("open") for p in skyline)
 
     # Locked: it refuses before the mount is asked for anything.
     mount.LOCK_FILE.write_text("testing", encoding="utf-8")

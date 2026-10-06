@@ -133,7 +133,45 @@ def survey(params):
         cmd.append("--trace")
     if params.get("daylight"):
         cmd.append("--daylight")
+    if params.get("fresh"):
+        cmd.append("--fresh")
     return cmd
+
+
+def picture_file(params):
+    """A picture on this computer, by its path. It is only ever read."""
+    path = params.get("file")
+    if not isinstance(path, str) or not path.strip() or len(path) > 400 or path.strip().startswith("-") \
+            or any(ord(c) < 32 for c in path):
+        raise Refused("Give the panorama's file: its full path on this computer.")
+    return path.strip().strip('"')
+
+
+def which_picture(params):
+    return ["--picture", str(number(params, "picture", 1, 3, 1, True))]
+
+
+def panorama_mark(params):
+    cmd = ["panorama.py", "mark", f"{number(params, 'x', 0, 1):g}", f"{number(params, 'y', 0, 1):g}"]
+    if params.get("telescope"):
+        cmd.append("--telescope")
+    elif params.get("landmark"):
+        cmd += ["--landmark", landmark_name({"name": params["landmark"]})]
+    else:
+        cmd += [f"{number(params, 'bearing', 0, 360):g}", f"{number(params, 'height', -10, 89):g}"]
+    return cmd + which_picture(params)
+
+
+def panorama_move(params):
+    points = params.get("points")
+    if not isinstance(points, list) or not 1 <= len(points) <= 150:
+        raise Refused("No points of the skyline were sent.")
+    pairs = []
+    for point in points:
+        if not isinstance(point, list) or len(point) != 2:
+            raise Refused("A point of the skyline is how far across and how far down.")
+        pairs.append(",".join(f"{number({'v': v}, 'v', 0, 1):.4f}" for v in point))
+    return ["panorama.py", "move"] + pairs + which_picture(params)
 
 
 def landmark_name(params):
@@ -180,6 +218,23 @@ ACTIONS = {
     "horizon":    {"label": "Horizon survey", "command": survey, "uses": "mount", "moves": True,
                    "says": "This moves the mount all over the sky, over the pole and back, for "
                            "about a minute per look. Keep clear of it while it runs."},
+    "horizon-forget": {"label": "Forget the measured skyline", "uses": None, "moves": False,
+                       "command": lambda p: ["horizon.py", "--forget"]},
+    # The skyline from a phone panorama (panorama.py). None of it moves the
+    # mount; a mark taken from the telescope reads where it points.
+    "panorama-use":    {"label": "Find the skyline in a panorama", "uses": None, "moves": False,
+                        "command": lambda p: ["panorama.py", "use", picture_file(p)]},
+    "panorama-also":   {"label": "Add a panorama from another height", "uses": None, "moves": False,
+                        "command": lambda p: ["panorama.py", "also", picture_file(p)]},
+    "panorama-mark":   {"label": "Mark the panorama", "uses": None, "moves": False, "command": panorama_mark},
+    "panorama-unmark": {"label": "Remove a mark", "uses": None, "moves": False,
+                        "command": lambda p: ["panorama.py", "unmark", str(number(p, "mark", 1, 20, whole=True))]
+                        + which_picture(p)},
+    "panorama-move":   {"label": "Correct the skyline", "uses": None, "moves": False, "command": panorama_move},
+    "panorama-save":   {"label": "Keep the panorama's skyline", "uses": None, "moves": False,
+                        "command": lambda p: ["panorama.py", "save"]},
+    "panorama-clear":  {"label": "Clear the panoramas", "uses": None, "moves": False,
+                        "command": lambda p: ["panorama.py", "clear"]},
     # Fetches nothing from the network and needs no camera to start: it is
     # what says why there is no camera yet.
     "camera-setup": {"label": "Set up the camera", "uses": "camera", "moves": False,
@@ -238,7 +293,9 @@ NOT_IN_DEMO = ("camera-setup", "camera-capabilities", "camera-throughput", "came
 # Setting up and testing the equipment belongs to the application's own
 # window. The companion page in a browser is for observing, and is refused these.
 WORKSTATION = ("camera-setup", "camera-capabilities", "camera-throughput", "camera-gain-sweep",
-               "calibrate", "horizon", "polar", "point", "landmark-remember", "landmark-check", "restack",
+               "calibrate", "horizon", "horizon-forget", "panorama-use", "panorama-also", "panorama-mark",
+               "panorama-unmark", "panorama-move", "panorama-save", "panorama-clear",
+               "polar", "point", "landmark-remember", "landmark-check", "restack",
                "polaris-check", "polaris-find", "polaris-align",
                "drift", "compensate", "sync", "open-settings")
 # Orders that have a run move the mount or change its motors.
@@ -258,6 +315,8 @@ def uses(action, params):
     "camera", or None."""
     if action == "run" and not params.get("recentre", True):
         return "camera"
+    if action == "panorama-mark" and params.get("telescope"):
+        return "mount"      # it asks the mount where it points, so nothing else may have it
     return ACTIONS[action]["uses"]
 
 
@@ -720,11 +779,18 @@ class Reader:
     def horizon(self):
         import config
         import horizon
+        import panorama
         cfg = config.load() if config.FILE.exists() and not self.demo else config.example()
-        saved = json.loads(horizon.RESULTS.read_text(encoding="utf-8")) \
-            if horizon.RESULTS.exists() and not self.demo else {}
-        return {"min_altitude": cfg["horizon"]["min_altitude"], "blocked": cfg["horizon"].get("blocked", []),
-                "skyline": saved.get("skyline"), "surveyed": saved.get("saved")}
+        low, margin = cfg["horizon"]["min_altitude"], cfg["horizon"]["margin"]
+        # A demo keeps its own files (demo/) and may show them; a demo page
+        # over the real ones shows the example's empty horizon instead.
+        ours = config.DEMO or not self.demo
+        kept = horizon.measured() if ours else {}
+        return {"min_altitude": low, "margin": margin, "blocked": cfg["horizon"].get("blocked", []),
+                "skyline": kept.get("skyline"), "source": kept.get("source"), "surveyed": kept.get("saved"),
+                "usable": horizon.usable(kept["skyline"], low, margin) if kept else None,
+                "warnings": kept.get("warnings", []), "in_use": cfg["horizon"]["use_survey"],
+                "panorama": panorama.describe(panorama.state() if ours else {"pictures": []})}
 
     def read(self, name, query):
         import agent
@@ -742,7 +808,7 @@ class Reader:
             "doctor": (lambda: doctor.report(skip_handset=True), 15),
             "catalogue": (self.catalogue, 3600),
             "focus": (self.focus, 1),
-            "horizon": (self.horizon, 30),
+            "horizon": (self.horizon, 1),
             "report": (self.report, 300),
             "polar": (self.polar, 2),
             "landmarks": (self.landmarks, 2),
@@ -820,6 +886,13 @@ class Handler(BaseHTTPRequestHandler):
             wanted = path[len("/landmarks/"):]
             if wanted in [f"{note['name']}.jpg" for note in landmark.listed()]:
                 return self.send(200, (landmark.FOLDER / wanted).read_bytes(), "image/jpeg")
+            return self.send(404, b"", "text/plain")
+        if path.startswith("/horizon/"):
+            # The panoramas the skyline is taken from, by their own names only.
+            import panorama
+            wanted = path[len("/horizon/"):]
+            if wanted in [p["file"] for p in panorama.state()["pictures"]] and (panorama.FOLDER / wanted).exists():
+                return self.send(200, (panorama.FOLDER / wanted).read_bytes(), "image/jpeg")
             return self.send(404, b"", "text/plain")
         if path.startswith("/pictures/"):
             name = path[len("/pictures/"):]
