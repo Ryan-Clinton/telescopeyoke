@@ -280,6 +280,48 @@ def read_night(places, shape):
     return seen
 
 
+LIT = 1.5        # times the dark sky's level at which a frame counts as lit by the torch
+BURNT = 0.01     # share of a frame burnt out that says a lit wall whatever else
+
+
+def read_torch(seen, level, burnt, dark):
+    """What a night frame shows with a torch fixed along the tube. A wall or
+    a tree a few metres off is lit by it and cloud is not, which stars alone
+    cannot tell apart: a frame with no stars in it was a house once on the
+    first night out, and cloud the next time. `seen` is read_night()'s answer,
+    `level` the frame's middle brightness, `burnt` the share of it burnt out,
+    `dark` the level of the darkest frame of stars so far (None before one).
+
+    Burnt out is blocked, whatever the star finder says: on the real camera
+    a house wall three metres off read 2186 at 1 s against a sky of 51, and
+    burnt out at 3 s, where 6780 "stars" were counted. Bright with no stars
+    is blocked: a tree read 312 at 3 s against 61. Bright with stars is sky
+    all the same, since stars do not shine through a wall: that is thin
+    cloud. Dark with no stars is cloud, and is taken for open sky: the
+    survey is of what stands in the garden.
+
+    None of this holds once cloud is over. Lit from below by the town, it
+    read 418 at 3 s, as bright as the tree, and the first survey called the
+    whole southern sky blocked to 75°. overcast() is the check for that."""
+    seen = dict(seen, level=round(float(level), 1))
+    if burnt >= BURNT:
+        return dict(seen, view="blocked", share=0.0, lit=True)
+    if seen["view"] == "blocked":
+        if dark and level >= LIT * dark:
+            return dict(seen, share=0.0, lit=True)
+        return dict(seen, view="sky", share=1.0, cloud=True)
+    return seen
+
+
+HIGH = 70.0      # degrees up above which nothing in a garden is expected to stand
+
+
+def overcast(alt, seen):
+    """Whether a look says the sky has clouded over: lit, not burnt out, and
+    too high up to be a tree or a roof."""
+    return bool(alt >= HIGH and seen.get("lit") and seen.get("view") == "blocked" and seen.get("level", 0) < 1500)
+
+
 def marked(mosaic, mask, note):
     """A small picture of a look with what was not taken for sky shaded, to
     check a wrong answer by."""
@@ -312,7 +354,7 @@ def daylight_exposure(cam, exposure=0.002):
 
 
 @contextmanager
-def eye(site, exposure, gain, daylight=False):
+def eye(site, exposure, gain, daylight=False, torch=False):
     """The mount and camera as one function: look(az, alt) aims there, takes a
     frame and returns True for open sky, False for something in the way, None
     where the mount may not go, or, when the frame shows the top itself, the
@@ -373,6 +415,22 @@ def eye(site, exposure, gain, daylight=False):
             lum = luminance(mosaic)
             seen = read_night(skywatch.star_places(lum), lum.shape)
             detail = f"{seen['stars']} stars"
+            if torch:
+                from camera import WHITE
+                level = float(np.median(mosaic))
+                starry = seen["view"] != "blocked"
+                seen = read_torch(seen, level, float((mosaic >= 0.98 * WHITE).mean()), state.get("dark"))
+                if starry and not seen.get("lit"):
+                    state["dark"] = min(state.get("dark") or level, level)
+                if overcast(alt, seen):
+                    raise interface.Refusal(
+                        "PLATE_SOLVE_FAILED",
+                        f"At bearing {az:g}°, {alt:g}° up the sky is bright and has no stars: cloud has come "
+                        "over, and by its light cloud cannot be told from a lit tree. Nothing has been kept; "
+                        "try again when the sky is clear.")
+                detail += (f", level {level:.0f}: lit by the torch" if seen.get("lit")
+                           else f", level {level:.0f}: dark, so cloud" if seen.get("cloud")
+                           else f", level {level:.0f}")
         mask = seen.pop("mask", None)
         answer = seen["view"] == "sky"
         if seen["view"] == "edge":
@@ -690,6 +748,9 @@ def main():
     ap.add_argument("--step", type=int, help="degrees of bearing between the first looks (default 30)")
     ap.add_argument("--trace", action="store_true", help="follow the top of what is in the way")
     ap.add_argument("--daylight", action="store_true", help="tell sky from wall by the look of it, not by stars")
+    ap.add_argument("--torch", action="store_true",
+                    help="by night, with a torch fixed along the tube: what it lights is in the way, "
+                         "and a dark frame with no stars is cloud")
     ap.add_argument("--fresh", action="store_true", help="with --trace: do not start from the skyline already measured")
     ap.add_argument("--show", action="store_true", help="print the skyline in use; nothing moves")
     ap.add_argument("--forget", action="store_true", help="throw the measured skyline away; nothing moves")
@@ -778,7 +839,7 @@ def run(args):
     exposure = args.exposure or (0.002 if args.daylight else 1.0)
     gain = args.gain or (100 if args.daylight else 2000)
     warnings = []
-    with eye(site, exposure, gain, args.daylight) as look:
+    with eye(site, exposure, gain, args.daylight, args.torch and not args.daylight) as look:
         if args.trace:
             found, warnings = trace(look, bearings, low, known=known)
         else:

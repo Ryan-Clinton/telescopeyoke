@@ -31,6 +31,10 @@ README's "Current status" is the full account.
   back to where it started when a photograph will not solve.
 - **A run says so when frames arrive faster than their exposure.** The 183C
   here exposes for about 0.63 of what it is asked; see the README.
+- **`horizon.py --trace --torch`**: by night, with a torch fixed along the
+  tube, what it lights is in the way and a dark frame with no stars is
+  cloud. Tried on the real mount; the first survey was spoiled by cloud
+  arriving, which it now notices.
 - **`solve.py` tries again on a frame averaged in blocks** when stars too
   soft to be taken for stars leave the first try with nothing.
 - **The skyline from a phone panorama** (`./panorama.py`, and the Horizon

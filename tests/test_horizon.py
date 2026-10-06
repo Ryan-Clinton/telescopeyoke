@@ -365,3 +365,28 @@ def test_another_height_adds_doubt_where_its_skyline_differs():
     assert all(p.get("extra") == 4 for p in first if 100 < p["az"] < 140)
     assert not any("extra" in p for p in first if not 100 < p["az"] < 140)
     assert float(horizon.limit(first, [120], 2)[0]) == 36
+
+
+def test_a_torch_along_the_tube_tells_a_wall_from_cloud():
+    """Stars alone cannot: no stars is a house or it is cloud. Lit by the
+    torch it is in the way, however many "stars" a burnt-out frame claims;
+    dark with no stars it is cloud, and the garden is open that way."""
+    sky = {"view": "sky", "stars": 40, "share": 1.0}
+    none = {"view": "blocked", "stars": 0, "share": 0.0}
+    assert horizon.read_torch(sky, 51, 0.0, None) == dict(sky, level=51.0)
+    wall = horizon.read_torch(none, 2186, 0.0, 51)
+    assert wall["view"] == "blocked" and wall["lit"]
+    thin = horizon.read_torch(sky, 138, 0.0, 51)                            # bright, but stars show: thin cloud
+    assert thin["view"] == "sky" and not thin.get("lit")
+    # Bright with no stars high overhead is no tree: cloud has come over,
+    # and the survey must stop, not call the sky blocked.
+    assert horizon.overcast(75, horizon.read_torch(none, 420, 0.0, 55))
+    assert not horizon.overcast(31, horizon.read_torch(none, 312, 0.0, 61))   # a tree, low down
+    assert not horizon.overcast(75, horizon.read_torch(sky, 60, 0.0, 55))
+    burnt = horizon.read_torch(dict(sky, stars=6780), 4094, 0.9, None)      # a 3 s frame of the same wall
+    assert burnt["view"] == "blocked" and burnt["lit"]
+    cloud = horizon.read_torch(none, 60, 0.0, 51)
+    assert cloud["view"] == "sky" and cloud["cloud"]
+    # Before any frame of stars has said how dark the sky is, only a burnt
+    # frame can be called lit.
+    assert horizon.read_torch(none, 400, 0.0, None)["view"] == "sky"
