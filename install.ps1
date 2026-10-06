@@ -81,7 +81,7 @@ Done. Still to do by hand:
       camera in and run:  python camera_setup.py
   [ ] Plate solver: ASTAP's command-line program (astap_cli.exe) and the D20
       star database, both in C:\Program Files\astap.
-  [ ] ffmpeg, with ffplay, on PATH: for the webcam and the focusing tones.
+  [ ] ffmpeg on PATH: for the webcam.
       Name the webcam under [webcam] in config.toml.
 
 Then try, with nothing plugged in:

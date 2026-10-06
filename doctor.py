@@ -287,9 +287,7 @@ def check_speech():
 
 
 def check_tones():
-    if shutil.which("ffplay"):
-        return OK, "ffplay (focusing tones)"
-    return WARN, "ffplay not found; the focusing aid will speak but cannot play tones"
+    return host.has_sound()
 
 
 def run(offline=False, skip_handset=False, name_site=True):

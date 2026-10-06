@@ -109,6 +109,8 @@ class AltairCamera:
         self._failure = None      # or the camera said why it will not
         self._shifted = None      # whether the 12 bits arrive at the top of the 16, once certain
         self.exposures = 0        # how many have been triggered
+        self.binning = 1          # what the frames now arriving are binned by
+        self.refuses_binning = False     # asked once and it failed: not asked again
         self._forget_clock()
         self._open()
 
@@ -143,10 +145,11 @@ class AltairCamera:
             handle.put_Option(lib.ALTAIRCAM_OPTION_BITDEPTH, 1)
             handle.put_eSize(0)                                   # the first size listed is the full sensor
             handle.put_Option(lib.ALTAIRCAM_OPTION_BINNING, 1)
+            self.binning = 1
             if camera.get("readout_speed") is not None:
                 handle.put_Speed(int(camera["readout_speed"]))
             handle.put_Option(lib.ALTAIRCAM_OPTION_TRIGGER, 1)    # one exposure per request
-            self.width, self.height = handle.get_Size()
+            self.width, self.height = self._size()
             fourcc, self.bits = handle.get_RawFormat()
             self.pattern = struct.pack("<I", fourcc).decode("ascii", "replace")
             handle.put_ExpoAGain(self.gain)
@@ -157,6 +160,35 @@ class AltairCamera:
         except lib.HRESULTException as problem:
             self.close()
             raise CameraError(f"the camera would not be set up: {_reason(problem)}")
+
+    def _size(self):
+        """(width, height) of the frames the camera will now send. With
+        binning on, that is the library's "final" size, not the sensor's."""
+        return getattr(self.handle, "get_FinalSize", self.handle.get_Size)()
+
+    def use(self, profile):
+        """Set the camera up for what its frames are for (a name in
+        camera.PROFILES) and return the binning now in effect. A camera that
+        will not bin stays on the full sensor and the answer is 1."""
+        from camera import PROFILES
+        lib, handle, wanted = self.lib, self.handle, PROFILES[profile]
+        if wanted == self.binning or (wanted > 1 and self.refuses_binning):
+            return self.binning
+        try:
+            # The frame's size changes, so the stream is stopped around it.
+            handle.Stop()
+            handle.put_Option(lib.ALTAIRCAM_OPTION_BINNING, wanted)   # 2: each 2x2 block added up
+            size = self._size()
+            if wanted > 1 and size == (self.width, self.height):
+                raise CameraError("the frame's size did not change")
+            self.width, self.height = size
+            self.binning = wanted
+            handle.StartPullModeWithCallback(self._callback, self)
+        except (CameraError, lib.HRESULTException):
+            self.refuses_binning = True
+            self.close()
+            self._open()      # on the full sensor, as it always was
+        return self.binning
 
     def close(self):
         handle, self.handle = self.handle, None

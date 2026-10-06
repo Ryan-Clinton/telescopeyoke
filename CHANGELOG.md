@@ -5,6 +5,25 @@ README's "Current status" is the full account.
 
 ## Not yet released
 
+- **Focusing by ear, reworked for quick frames** (`docs/focus.md`). A click
+  and a tone for every frame measured, the tone higher as focus improves,
+  with the camera already exposing the next frame. Three levels it moves
+  between by itself: quick binned frames judged one at a time, then many
+  stars on binned frames, then the full sensor with the readings steadied.
+  Words only at the turning points: "Level two", "Level three. Fine focus",
+  "Minimum passed. Reverse slightly", "Best focus", "Focus good. Hold".
+  Sizes are also given in arcseconds, the levels are set in them, and each
+  run that ends on "Focus good" teaches the next what good focus comes to.
+  Every frame's capture, measuring and feedback times are printed and kept.
+  Proven on made-up star fields only: no real camera has run it.
+- Changed: `focus.py` no longer speaks every reading, and `--tones` has gone,
+  the click and tone being what it does unless `--quiet`. The Focus screen's
+  sound choice is "Clicks and tones" or "Silent".
+- The camera layer takes a purpose, `cam.use("focus_fast")`,
+  `cam.use("focus_fine")` or `cam.use("imaging")`, and sets the binning
+  itself on either route. A camera that will not bin carries on unbinned.
+- The focusing sounds no longer need `ffplay`: Linux plays them with
+  `pw-play`, `paplay`, `aplay` or `ffplay`, Windows by itself.
 - **The skyline from a phone panorama** (`./panorama.py`, and the Horizon
   screen): the line between sky and everything else is found in the picture
   and can be redrawn, two marks tie it to the compass, and panoramas from

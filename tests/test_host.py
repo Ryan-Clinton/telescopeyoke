@@ -251,6 +251,24 @@ def test_speech_starts_again_if_the_speaking_program_died(tmp_path):
     assert log.read_text(encoding="utf-8").split() == ["first", "second"]
 
 
+def test_a_sound_is_played_by_the_first_player_installed(monkeypatch, tmp_path):
+    started = []
+    monkeypatch.setattr(host, "WINDOWS", False)
+    monkeypatch.setattr(host.shutil, "which", lambda name: "/usr/bin/aplay" if name == "aplay" else None)
+    monkeypatch.setattr(host.subprocess, "Popen", lambda command, **options: started.append(command))
+    assert host.play(tmp_path / "tone.wav")
+    assert started == [["aplay", "-q", str(tmp_path / "tone.wav")]]
+    assert host.has_sound()[0] == host.OK
+
+
+def test_no_sound_player_is_a_warning_and_nothing_breaks(monkeypatch, tmp_path):
+    monkeypatch.setattr(host, "WINDOWS", False)
+    monkeypatch.setattr(host.shutil, "which", lambda name: None)
+    assert host.play(tmp_path / "tone.wav") is False
+    status, message = host.has_sound()
+    assert status == host.WARN and "aplay" in message and "no click or tone" in message
+
+
 # --- the doctor and the status page ----------------------------------------------------------------------
 
 @pytest.mark.skipif(not host.WINDOWS, reason="what the doctor says on Windows")

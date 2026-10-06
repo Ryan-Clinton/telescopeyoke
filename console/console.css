@@ -175,6 +175,7 @@ tr.pick { cursor: pointer; } tr.pick:hover td { color: var(--act-text); }
 .trend { font-size: 18px; font-weight: 600; letter-spacing: .06em; margin-top: 12px; min-height: 26px; }
 .advice { font-size: 16px; margin-top: 8px; min-height: 24px; }
 .focus + .buttons { justify-content: center; }
+.focus .meter { display: block; max-width: 420px; height: 12px; margin: 14px auto 0; }
 
 /* --- imaging ------------------------------------------------------------------ */
 .viewer { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }

@@ -283,7 +283,7 @@ The same place, a different purpose in each state:
 |---|---|---|
 | Idle | "No run". The best target now, its height and direction | Go to it, Start imaging |
 | Moving | where it is going, height now and at the end, seconds so far | Stop |
-| Focusing | the HFR, large; improving or worsening; tonight's best | Finish |
+| Focusing | the HFR, large; improving or worsening; the best on this level | Finish |
 | Imaging | target, frames of those planned, a bar, seconds kept, share kept | Finish run, Re-centre |
 
 ### Restraint
@@ -529,20 +529,38 @@ reason. The console never creates or removes the lock.
 
 ### Focus
 
-A mode of its own, with almost nothing on it: the star, the HFR as a very
-large number, whether it is improving or getting worse, tonight's best, a
-short trail of the last readings, and the advice in the script's words
-("minimum passed: turn back slightly", "best focus"). The readings come
-from the file `focus.py` already writes; the trail is the readings the page
-has seen since the aid started.
+A mode of its own, with almost nothing on it, and nothing on it that has to
+be looked at: the sounds carry everything (`docs/focus.md`).
+
+```
+LEVEL 3 · FINE
+
+    2.31
+HFR, pixels · 3.05″
+██████████████████░░░░
+STEADY                       (or ✓ FOCUS GOOD)
+Best 2.24 · 34 stars · scatter ±0.09
+Minimum passed. Reverse slightly.
+Heard 0.78 s after each exposure begins: 0.70 s for the frame, 0.08 s to measure it
+```
+
+The level, the size as a very large number, a bar that follows the tone's
+pitch, whether it is improving or getting worse, the best on this level, the
+stars measured, the readings' scatter, a short trail of the last readings,
+the last words the aid said, and how long a turn of the knob takes to be
+heard. While the aid runs the page shows every frame's reading, from
+`cache/focus_live.json` (`live` in `/api/focus`), a ring or a single star
+included; afterwards it shows the last reading taken on many stars, from
+`cache/focus.json` (`reading`). The trail is the readings the page has seen
+since the aid started.
 
 | Control | Runs | Moves |
 |---|---|---|
-| Start focusing (speech, tones or silent, chosen here) | `focus.py`, with `--tones` or `--quiet` | no |
+| Start focusing (clicks and tones, or silent, chosen here) | `focus.py`, or `focus.py --quiet` | no |
 | Finish focusing | ends the job | no |
 
-Speech and tones are options the script is started with, so changing the
-choice restarts the aid.
+The sound is an option the script is started with, so changing the choice
+restarts the aid.
 
 ### Imaging
 

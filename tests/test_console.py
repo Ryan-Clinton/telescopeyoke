@@ -42,7 +42,9 @@ def desk(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DEMO", True)
     monkeypatch.setattr(config, "DATA", tmp_path)
     for module, name, where in ((agent, "WEB", "web"), (console, "WEB", "web"), (serve, "WEB", "web"),
-                                (focus, "FOCUS_FILE", "cache/focus.json"), (horizon, "RESULTS", "cache/horizon.json"),
+                                (focus, "FOCUS_FILE", "cache/focus.json"), (focus, "LIVE_FILE", "cache/focus_live.json"),
+                                (focus, "FRAMES_FILE", "cache/focus_frames.jsonl"),
+                                (focus, "RUNS_FILE", "cache/focus_runs.jsonl"), (horizon, "RESULTS", "cache/horizon.json"),
                                 (mount, "LAST_SOLVE", "cache/last_solve.json")):
         monkeypatch.setattr(module, name, tmp_path / where)
     server, key = console.serve(port=0, demo=True, mode="app")
@@ -239,7 +241,7 @@ def test_every_action_builds_exactly_its_command():
                         "recentre": False}) == \
         ["shoot.py", "M27", "--frames", "300", "--exposure", "auto", "--gain", "300", "--no-recentre"]
     assert tail("run", {"target": "M27"}) == ["shoot.py", "M27", "--frames", "60", "--exposure", "2", "--gain", "1500"]
-    assert tail("focus") == ["focus.py"] and tail("focus", {"sound": "tones"}) == ["focus.py", "--tones"]
+    assert tail("focus") == ["focus.py"] and tail("focus", {"sound": "sound"}) == ["focus.py"]
     assert tail("focus", {"sound": "silent"}) == ["focus.py", "--quiet"]
     assert tail("horizon", {"trace": True, "daylight": True}) == ["horizon.py", "--trace", "--daylight"]
     assert tail("horizon", {"trace": True, "fresh": True}) == ["horizon.py", "--trace", "--fresh"]

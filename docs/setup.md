@@ -241,10 +241,9 @@ goto M27` is typed `python mount.py goto M27`, and `./ty status` is
 5. **Plate solver.** Install ASTAP's command-line program, `astap_cli.exe`,
    and the D20 star database, both into `C:\Program Files\astap`. To keep
    them elsewhere, name them under `[solver]` in `config.toml`.
-6. **Webcam and sound.** Install ffmpeg, including `ffplay`, and put it on
-   PATH. List the cameras with `ffmpeg -list_devices true -f dshow -i dummy`
+6. **Webcam.** Install ffmpeg and put it on PATH. List the cameras with `ffmpeg -list_devices true -f dshow -i dummy`
    and put the one that watches the telescope under `[webcam] device` in
-   `config.toml`. Without `ffplay` the focusing aid speaks but has no tones.
+   `config.toml`. The focusing aid's sounds need nothing installed: Windows plays them itself.
 7. **Sending `--json` to a file.** The output is UTF-8. Windows PowerShell
    5.1 re-encodes what a program prints before `>` writes it; to keep it
    exact use `cmd /c "python doctor.py --json > result.json"`, or PowerShell

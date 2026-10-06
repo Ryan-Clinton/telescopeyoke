@@ -61,6 +61,9 @@ class FakeCamera:
 
     close = __exit__
 
+    def use(self, profile):
+        return 1
+
     def frame(self, seconds):
         time.sleep(Sky.pause)
         Sky.taken += 1
@@ -155,7 +158,7 @@ def test_a_whole_night(night, monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["focus", "--frames", "15", "--quiet"])
     reading = focus.main()
     heard = capsys.readouterr().out
-    assert "Improving" in heard and ("Minimum passed" in heard or "Worse" in heard)
+    assert "improving" in heard and ("Minimum passed" in heard or "worse" in heard)
     assert reading["best_hfr"] < reading["hfr"]          # it ended a little past focus
     assert agent.observing(demo=True)["optics"]["focus_state"] == "soft"
     Sky.blur = 1.6                                         # turned back to the best point

@@ -1,25 +1,39 @@
 #!/usr/bin/env python3
 """Focusing aid you can use without looking at a screen.
 
-    ./focus.py                 on stars: it speaks as you turn the focuser
-    ./focus.py --tones         a rising pitch instead of speech
+    ./focus.py                 on stars: a click and a tone for every frame measured
+    ./focus.py --quiet         no sound; the readings are printed and shown
     ./focus.py --scene         on rooftops or trees, in daylight
 
-On stars it measures many at once and reports their half-flux radius (HFR):
-the radius holding half of a star's light, in pixels. Smaller is sharper;
-about 2 is good focus on this telescope. It says things like "Improving.
-4.8", "No change", "Worse. Go back", and, once the numbers turn round,
-"Minimum passed. Reverse slightly". Readings are steadied over three frames
-and small changes are ignored, so it does not chase the air's shimmering.
+Turn the focuser and listen. Each frame, once it has been measured, gives a
+click and then a tone: the click says "that turn has been seen", and the
+tone is higher the better the focus. Two clicks and no tone is a reading
+too uncertain to judge; a low buzz is no star at all. Words are kept for
+changes: "Level two", "Level three. Fine focus", "Minimum passed. Reverse
+slightly", "Best focus", "Focus good. Hold", "Stars lost".
 
-With the star badly out of focus it falls back to measuring the one big ring.
+It works in three levels and moves between them by itself:
+
+    1 coarse   quick binned frames, each judged alone; a star far out of
+               focus is measured as the one big ring it makes
+    2 stars    quick binned frames, many stars at once, two readings averaged
+    3 fine     the full sensor, many stars at once, steadied over three
+               readings, changes judged against the air's own shimmering
+
+The size it measures is the half-flux radius (HFR): the radius holding half
+of a star's light, in pixels of the full-size picture, whatever the camera
+was binned by. Smaller is sharper; about 2 is good focus on a 150P with the
+183C. "Focus good" is said only on level 3, after the readings have gone
+through their lowest and come back to stay on it.
+
 Runs for 15 minutes (Ctrl+C to stop sooner); the web page shows the picture.
 """
 import argparse
 import json
-import shutil
-import subprocess
+import queue
+import threading
 import time
+import wave
 from pathlib import Path
 
 import config
@@ -36,10 +50,50 @@ from camera import PORT, WHITE, Camera, luminance
 
 ROOT = Path(__file__).parent
 PREVIEW = config.DATA / "web" / "latest.jpg"
-# The newest reading, kept so the status tools can say how good focus was.
+# The newest reading taken on many stars, kept so the status tools can say
+# how good focus was.
 FOCUS_FILE = config.DATA / "cache" / "focus.json"
+# The newest frame's reading whatever it was (a ring, one star, nothing),
+# for the Focus screen; every frame of the last run, with its timing; and
+# one line for each run that reached "Focus good".
+LIVE_FILE = config.DATA / "cache" / "focus_live.json"
+FRAMES_FILE = config.DATA / "cache" / "focus_frames.jsonl"
+RUNS_FILE = config.DATA / "cache" / "focus_runs.jsonl"
+SOUNDS = config.DATA / "cache" / "sounds"
 CROP = 300          # half-width in pixels of the box shown around the star
 MIN_EXPOSURE, MAX_EXPOSURE = 0.001, 2.0
+
+LEVELS = {1: "coarse", 2: "stars", 3: "fine"}
+SMOOTH = {1: 1, 2: 2, 3: 3}             # readings each level steadies over
+PERCENT = {1: 10.0, 2: 6.0, 3: 4.0}     # the smallest change each level calls a change
+ENOUGH = 10         # stars in the middle of a full-size frame that make the rest not worth measuring
+SURE = 3            # readings in a row that settle a change of level
+HOLD = 5            # readings that must stay on the best before "Focus good"
+# Half-flux radius at good focus, in arcseconds: HFR 2 on the 150P with the
+# 183C. A starting figure only. Once runs have ended on "Focus good", what
+# they reached is used instead (usual_best()).
+USUAL_BEST = 2.6
+
+
+def arcsec_per_pixel():
+    """Arcseconds of sky across one pixel of the full-size brightness
+    picture, the pixel every HFR here is given in: two of the sensor's."""
+    equipment = config.hardware()
+    return 2 * 206.265 * equipment["camera"]["pixel_size_um"] / equipment["scope"]["focal_length_mm"]
+
+
+def usual_best():
+    """The HFR, in arcseconds, that focusing on this telescope ends at: the
+    middle one of the last five runs that reached "Focus good", or the
+    starting figure when there has been none."""
+    reached = []
+    if RUNS_FILE.exists():
+        for line in RUNS_FILE.read_text(encoding="utf-8").splitlines():
+            try:
+                reached.append(float(json.loads(line)["best_arcsec"]))
+            except (ValueError, KeyError, TypeError):
+                pass
+    return float(np.median(reached[-5:])) if reached else USUAL_BEST
 
 
 def measure(lum):
@@ -118,70 +172,209 @@ def measure_stars(lum, most=40):
     return float(np.median(radii)), len(radii)
 
 
-class FocusTracker:
-    """Turns a stream of focus readings into what to tell the person at the
-    focuser. Readings are steadied over the last three, and a change only
-    counts if it beats both a percentage and the readings' own scatter."""
+def middle(lum):
+    """The middle of the frame, half its width and height: a quarter of the
+    work to measure, and on the full sensor still plenty of stars."""
+    h, w = lum.shape
+    return lum[h // 4:h - h // 4, w // 4:w - w // 4]
 
-    def __init__(self, percent=4.0):
-        self.percent = percent
-        self.raw, self.steady = [], None   # steady: last value announced as a change
-        self.best = None
+
+class FocusTracker:
+    """Turns a stream of focus readings into what the person at the focuser
+    should hear. It holds the level (1 coarse, 2 stars, 3 fine), steadies
+    the readings as that level asks, and calls a change a change only if it
+    beats both a percentage and the readings' own scatter.
+
+    Sizes are in pixels of the full-size picture. `usual` is the HFR good
+    focus comes to on this telescope; level 3 begins at twice it."""
+
+    def __init__(self, usual=2.0):
+        self.usual, self.fine = usual, 2 * usual
+        self.bests = {}                    # the best steadied reading of each level
+        self.unsure = 0                    # readings in a row that could not be judged
+        self._enter(1)
+
+    def _enter(self, level, single=False):
+        self.level = level
+        self.single = single               # level 3 on one star: the field has no more
+        self.raw, self.now, self.steady = [], None, None   # steady: the value at the last change
         self.falling = 0                   # improvements in a row
         self.passed = False                # gone through the minimum and out the far side
+        self.bracketed = False             # ...at some time on this level, so the best is a real minimum
+        self.good = False                  # "Focus good" has been said and still holds
+        self.top = None                    # the size the lowest tone stands for
+        self.multi = self.near = self.far = 0
+
+    @property
+    def best(self):
+        return self.bests.get(self.level)
+
+    @property
+    def state(self):
+        if self.unsure >= SURE:
+            return "lost"
+        return "good" if self.good else "passed" if self.passed else "seeking"
 
     def scatter(self):
         """How much single readings jitter with nothing being changed. Taken
         from how far each reading sits from the line between its neighbours,
-        so a steady rise or fall while the focuser is turned does not count."""
+        so a steady rise or fall while the focuser is turned does not count.
+        A focuser turned a little at a time bends that line at every turn,
+        so when the usual step from one reading to the next says far less,
+        it is believed instead: a turn made now and then does not add to it."""
         if len(self.raw) < 5:
             return 0.0
         recent = np.array(self.raw[-11:])
-        bends = np.abs(recent[:-2] - 2 * recent[1:-1] + recent[2:])
-        return 1.4826 * float(np.median(bends)) / np.sqrt(6)
+        bends = float(np.median(np.abs(recent[:-2] - 2 * recent[1:-1] + recent[2:]))) / np.sqrt(6)
+        steps = float(np.median(np.abs(np.diff(recent)))) / np.sqrt(2)
+        return 1.4826 * (steps if steps < bends / 2 else bends)
 
-    def feed(self, value):
-        """Take a new reading; return the words to say."""
+    def meter(self):
+        """How far along this level the focus is, 0 to 1: what the tone's
+        pitch and the screen's bar show. Each level has its own span, fixed
+        when the level begins, so the same size always gives the same pitch
+        and the ear has the whole range to work with at every stage."""
+        if self.now is None:
+            return None
+        floor = min({1: self.top / 6, 2: self.fine, 3: 0.4 * self.fine}[self.level], 0.6 * self.top)
+        return float(np.clip(np.log(self.top / self.now) / np.log(self.top / floor), 0, 1))
+
+    def _threshold(self, around):
+        return max(PERCENT[self.level] / 100 * around, 3 * self.scatter())
+
+    def feed(self, value, stars=0):
+        """Take a frame's reading: `value` is the size measured (None for
+        nothing measurable), `stars` how many it was taken over (0: the one
+        brightest star, or its ring). Returns what to do about it:
+        {"sound": "tone", "double" or "buzz"; "meter": 0 to 1 for a tone's
+        pitch; "say": words, or None; "trend": "settling", "improving",
+        "worse", "steady", "uncertain" or "lost"}."""
+        out = {"sound": "tone", "meter": None, "say": None, "trend": "steady"}
+        wants_stars = self.level == 2 or (self.level == 3 and not self.single)
+        if value is None or (wants_stars and not stars):
+            # Nothing to judge. Three in a row and the search starts again.
+            self.unsure += 1
+            out.update(sound="buzz" if value is None else "double",
+                       trend="lost" if value is None else "uncertain")
+            if self.unsure == SURE:
+                out["say"] = "Star lost." if self.level == 1 else "Stars lost. Level one."
+                if self.level > 1:
+                    self._enter(1)
+            return out
+        self.unsure = 0
         self.raw.append(value)
-        now = float(np.median(self.raw[-3:]))
-        if len(self.raw) <= 3:
+        now = self.now = float(np.median(self.raw[-SMOOTH[self.level]:]))
+        if self.top is None:
+            # Room above the first reading, for a turn made the wrong way.
+            self.top = 1.5 * self.fine if self.level == 3 else 1.5 * now
+        if len(self.raw) <= SMOOTH[self.level]:
             # Settle on a starting value before judging any change.
-            self.steady = self.best = now
-            return f"{now:.1f}"
-        threshold = max(self.percent / 100 * self.steady, 3 * self.scatter())
-        if now < self.steady - threshold:
-            self.steady, self.falling = now, self.falling + 1
-            if now <= self.best:
-                self.best = now
-                if self.passed:
+            self.steady = now
+            self.bests[self.level] = min(now, self.best or now)
+            out["trend"] = "settling"
+        else:
+            threshold = self._threshold(self.steady)
+            if now < self.steady - threshold:
+                self.steady, self.falling = now, self.falling + 1
+                out["trend"] = "improving"
+                if self.passed and now <= self.best + threshold:
                     self.passed = False
-                    return f"Best focus. {now:.1f}. Hold."
-                return f"Improving. {now:.1f}. Best."
-            if self.passed and now <= self.best + threshold:
-                self.passed = False
-                return f"Best focus. {now:.1f}. Hold."
-            return f"Improving. {now:.1f}."
-        if now > self.steady + threshold:
-            came_down = self.falling >= 2
-            self.steady, self.falling = now, 0
-            if came_down and not self.passed and now > self.best + threshold:
-                self.passed = True
-                return f"Minimum passed. Reverse slightly. Best was {self.best:.1f}."
-            return f"Worse. {now:.1f}. Go back."
-        return "No change."
+                    out["say"] = "Best focus."
+                self.bests[self.level] = min(now, self.best)
+            elif now > self.steady + threshold:
+                came_down = self.falling >= 2
+                self.steady, self.falling = now, 0
+                out["trend"] = "worse"
+                if self.good:
+                    self.good = False
+                    out["say"] = "Worse. Go back."
+                if came_down and not self.passed and now > self.best + threshold:
+                    self.passed = self.bracketed = True
+                    out["say"] = "Minimum passed. Reverse slightly."
+            if (self.level == 3 and self.bracketed and not self.good and len(self.raw) >= HOLD
+                    and max(self.raw[-HOLD:]) <= self.best + self._threshold(self.best)):
+                # Through the minimum, back, and the readings have stayed on it.
+                self.good, self.passed, self.falling = True, False, 0
+                out["say"] = "Focus good. Hold."
+        out["meter"] = self.meter()
+        return self._move(stars, out)
+
+    def _move(self, stars, out):
+        """Change level when three readings in a row call for it."""
+        self.multi = self.multi + 1 if stars else 0
+        self.near = self.near + 1 if self.now <= self.fine else 0
+        self.far = self.far + 1 if self.now > 1.5 * self.fine else 0
+        if self.level < 3 and self.near >= SURE:
+            self._enter(3, single=self.multi < SURE)
+            out["say"] = "Level three. Fine focus."
+        elif self.level == 1 and self.multi >= SURE:
+            self._enter(2)
+            out["say"] = "Level two."
+        elif self.level == 3 and self.far >= SURE:
+            self._enter(1 if self.single else 2)
+            out["say"] = f"Level {'one' if self.level == 1 else 'two'}."
+        return out
 
 
-def tone(value, worst, floor=1.5):
-    """A short tone whose pitch rises as focus improves: 300 Hz at the first
-    reading, 1200 Hz at a perfect star."""
-    span = max(worst - floor, 1e-6)
-    pitch = 300 + 900 * float(np.clip((worst - value) / span, 0, 1))
-    try:
-        subprocess.Popen(["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", "-f", "lavfi",
-                          "-i", f"sine=frequency={pitch:.0f}:duration=0.25"],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **host.QUIET)
-    except FileNotFoundError:
-        pass   # no ffplay: main() has already said so
+# --- sounds ---------------------------------------------------------------------
+#
+# One short sound for each frame measured, at the same loudness whatever it
+# says: loudness that changed with the reading would be heard as a change of
+# pitch. The pitch runs from LOW to HIGH in equal musical steps, because the
+# ear hears pitch by ratio: a semitone is the same step at 300 Hz as at 1200.
+
+RATE = 22050                       # samples a second
+LOW, HIGH, STEPS = 250.0, 1600.0, 32     # hertz; 32 semitones between them
+
+
+def pitch(fraction):
+    """The tone, in hertz, for a meter reading from 0 (poor) to 1 (good)."""
+    return LOW * (HIGH / LOW) ** (round(STEPS * float(np.clip(fraction, 0, 1))) / STEPS)
+
+
+def _click():
+    t = np.arange(int(0.006 * RATE)) / RATE
+    return np.sin(2 * np.pi * 2500 * t) * np.exp(-t / 0.0012)
+
+
+def _note(hertz, seconds, square=False):
+    t = np.arange(int(seconds * RATE)) / RATE
+    wave_ = np.sin(2 * np.pi * hertz * t)
+    if square:
+        wave_ = np.clip(3 * wave_, -1, 1)
+    ramp = np.minimum(1, np.minimum(t, seconds - t) / 0.008)    # no thump at either end
+    return wave_ * ramp
+
+
+def waveform(kind, hertz=None):
+    """The samples, -1 to 1, of one of the aid's sounds: "tone" (a click,
+    then the pitch), "double" (two clicks) or "buzz"."""
+    quiet = lambda seconds: np.zeros(int(seconds * RATE))
+    if kind == "tone":
+        parts = [_click(), quiet(0.03), _note(hertz, 0.16)]
+    elif kind == "double":
+        parts = [_click(), quiet(0.09), _click()]
+    else:
+        parts = [_note(110, 0.25, square=True)]
+    return np.concatenate([quiet(0.01)] + parts)
+
+
+def sound(kind, fraction=None):
+    """Play one of the aid's sounds without waiting for it. Each is written
+    once as a small WAV file and played from there after that."""
+    hertz = pitch(fraction) if kind == "tone" else None
+    path = SOUNDS / (f"tone-{hertz:.0f}.wav" if hertz else f"{kind}.wav")
+    if not path.exists():
+        SOUNDS.mkdir(parents=True, exist_ok=True)
+        samples = (0.5 * 32767 * waveform(kind, hertz)).astype("<i2")
+        partial = path.with_suffix(".part")
+        with wave.open(str(partial), "wb") as out:
+            out.setnchannels(1)
+            out.setsampwidth(2)
+            out.setframerate(RATE)
+            out.writeframes(samples.tobytes())
+        partial.replace(path)
+    return host.play(path)
 
 
 def sharpness(lum):
@@ -203,6 +396,46 @@ def annotate(image, text, colour=(255, 220, 90)):
     return image
 
 
+def keep(path, data):
+    """Write a small JSON file whole, so nothing reads half of one."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    partial, text = path.with_suffix(".part"), json.dumps(data)
+    partial.write_text(text, encoding="utf-8")
+    try:
+        partial.replace(path)
+    except OSError:
+        # Windows, while something has the old one open to read.
+        path.write_text(text, encoding="utf-8")
+        partial.unlink(missing_ok=True)
+
+
+def ahead(cam, exposure):
+    """Start an exposure on a thread of its own and return where its result
+    will be put: (mosaic, binning, when it began, when it landed), or the
+    exception that stopped it. The camera is then exposing the next frame
+    while this one is measured, sounded and drawn."""
+    result = queue.Queue(1)
+
+    def take():
+        try:
+            began = time.perf_counter()
+            mosaic, _ = cam.frame(exposure)
+            result.put((mosaic, getattr(cam, "binning", 1), began, time.perf_counter()))
+        except BaseException as problem:    # a refusal or SystemExit too: main() must hear of it
+            result.put(problem)
+    threading.Thread(target=take, daemon=True).start()
+    return result
+
+
+def collect(result):
+    """Wait for what ahead() puts there. In short waits, so Ctrl+C is not held up."""
+    while True:
+        try:
+            return result.get(timeout=0.2)
+        except queue.Empty:
+            pass
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--minutes", type=float, default=15)
@@ -210,9 +443,7 @@ def main():
                     help="focus on a daytime view instead of a star")
     ap.add_argument("--exposure", type=float, default=0.05, help="starting exposure, seconds")
     ap.add_argument("--gain", type=int, default=300)
-    ap.add_argument("--quiet", action="store_true", help="no speech from the laptop")
-    ap.add_argument("--tones", action="store_true",
-                    help="a tone that rises in pitch as focus improves, instead of speech")
+    ap.add_argument("--quiet", action="store_true", help="no sound from the laptop")
     ap.add_argument("--port", type=int, default=PORT)
     ap.add_argument("--frames", type=int, help="stop after this many frames")
     ap.add_argument("--json", action="store_true", help="the last reading as JSON at the end")
@@ -222,19 +453,30 @@ def main():
 
 def run(args):
     """The focusing loop. Returns the last reading."""
-    if args.tones and not shutil.which("ffplay"):
-        print("ffplay is not installed, so there are no tones; speaking instead.", flush=True)
-        args.tones = False
+    if not args.quiet and not host.has_sound()[0] == host.OK:
+        print("No program to play sounds with (pw-play, paplay, aplay or ffplay), so there is no "
+              "click or tone: only the changes of state are spoken.", flush=True)
     cam = Camera(args.port, args.gain)
-    reading = {}
+    reading, live = {}, {}
+    scale = arcsec_per_pixel()
+    tracker = FocusTracker(usual_best() / scale)
+    if not args.scene:
+        cam.use("focus_fast")
 
     exposure, best = args.exposure, None
-    frame, previous = 0, None
-    tracker, first = FocusTracker(), None
+    frame, previous, seen = 0, None, []
+    heard, rising, timings = None, False, []
+    FRAMES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    FRAMES_FILE.write_text("", encoding="utf-8")
     end = time.monotonic() + args.minutes * 60
+    pending = ahead(cam, exposure)
     try:
-        while time.monotonic() < end and not (args.frames and frame >= args.frames):
-            mosaic, _ = cam.frame(exposure)
+        while True:
+            got, pending = collect(pending), None
+            if isinstance(got, BaseException):
+                raise got
+            mosaic, binning, began, landed = got
+            shot = exposure
             lum = luminance(mosaic)
             # Brightness on a 0-255 scale, whatever the sensor's bit depth.
             level = 255 / (4 * WHITE)
@@ -246,10 +488,12 @@ def run(args):
             low, high = np.percentile(lum[::4, ::4], (1, 99.7))
             shown = np.clip((lum - low) / max(high - low, 1e-6), 0, 1) * 255
             frame += 1
-            words = None
+            crop = CROP // binning
+            words, noise, fraction = None, None, None
             if args.scene:
                 value = sharpness(lum)
                 best = value if best is None else max(best, value)
+                seen.append(value)
                 picture = shown
                 text = f"sharpness {value:.1f}   best {best:.1f}"
                 if lum.mean() * level < 30 and exposure >= MAX_EXPOSURE:
@@ -258,77 +502,137 @@ def run(args):
                 top = float(np.percentile(lum, 99)) * level * 1.6
                 if previous is not None:
                     change = (value - previous) / max(abs(previous), 1e-6)
-                    words = "better" if change > 0.04 else "worse" if change < -0.04 else "same"
-                    text += f"  {words.upper() if words != 'same' else words}"
+                    trend = "better" if change > 0.04 else "worse" if change < -0.04 else "same"
+                    text += f"  {trend.upper() if trend != 'same' else trend}"
                 previous = value
+                # The pitch runs from the dullest view seen to the sharpest.
+                dullest = max(min(seen), 1e-9)
+                spread = np.log(max(best / dullest, 1.0))
+                fraction = float(np.log(max(value, dullest) / dullest) / spread) if spread > 0.05 else 0.5
+                noise = "tone"
             else:
-                value, count = measure_stars(lum)
-                ring = None if value else measure(lum)
+                # A full-size frame is measured on its middle alone, unless
+                # that holds too few stars to trust.
+                value, count = measure_stars(middle(lum)) if binning == 1 else (None, 0)
+                if count < ENOUGH:
+                    value, count = measure_stars(lum)
+                # One star, or the ring of one far out of focus: where there
+                # are not three stars to measure, and on a field that never
+                # had them.
+                ring = measure(lum) if not value or tracker.single else None
                 picture = shown
-                if value:
-                    text = f"HFR {value:.1f}   {count} stars"
+                if value and not tracker.single:
+                    value *= binning
+                    text = f"HFR {value:.1f} ({value * scale:.1f}\")   {count} stars"
                     # Show the middle of the frame, where stars are big
                     # enough to see on a phone.
                     h, w = shown.shape[0] // 2, shown.shape[1] // 2
-                    picture = shown[h - CROP:h + CROP, w - CROP:w + CROP]
+                    picture = shown[h - crop:h + crop, w - crop:w + crop]
                     # Many stars are wanted, so let the few brightest burn
                     # out: set the exposure by about the 30th brightest spot.
                     top = float(np.partition(blocks.ravel(), -30)[-30]) * level * 2
                 elif ring:
-                    # Too far out for separate stars: one big ring. Its radius
-                    # stands in for the HFR until stars appear.
+                    # Its radius stands in for the HFR until stars appear.
                     x, y, diameter = ring
-                    value = diameter / 2
-                    x0, y0 = int(max(x - CROP, 0)), int(max(y - CROP, 0))
-                    picture = shown[y0:y0 + 2 * CROP, x0:x0 + 2 * CROP]
-                    text = f"ring radius {value:.0f}   (far from focus)"
+                    value, count = binning * diameter / 2, 0
+                    x0, y0 = int(max(x - crop, 0)), int(max(y - crop, 0))
+                    picture = shown[y0:y0 + 2 * crop, x0:x0 + 2 * crop]
+                    text = (f"one star, radius {value:.1f}" if tracker.single else
+                            f"ring radius {value:.0f}   (far from focus)")
                 else:
+                    value, count = None, 0
                     text = "no star in view"
-                    words = "no star"
-                if value:
-                    first = first or value
-                    words = tracker.feed(value)
-                    text += f"   best {tracker.best:.1f}   {words.split('.')[0]}"
-                    if not ring:
-                        reading = {"hfr": round(value, 2), "stars": count,
-                                   "best_hfr": round(tracker.best, 2), "advice": words,
-                                   "exposure_s": exposure, "saved": time.time()}
-                        FOCUS_FILE.parent.mkdir(exist_ok=True)
-                        FOCUS_FILE.write_text(json.dumps(reading), encoding="utf-8")
+                was = tracker.level
+                told = tracker.feed(value, count)
+                words, noise, fraction = told["say"], told["sound"], told["meter"]
+                text = f"L{was} {LEVELS[was]}   {text}"
+                if value and tracker.best:
+                    text += f"   best {tracker.best:.1f}"
+                text += f"   {told['trend']}" + (f"   {words}" if words else "")
+                live = {"level": tracker.level, "level_name": LEVELS[tracker.level], "kind": "stars" if count else "ring" if value else "none",
+                        "hfr": value and round(value, 2), "hfr_arcsec": value and round(value * scale, 2),
+                        "stars": count, "best_hfr": tracker.best and round(tracker.best, 2),
+                        "scatter": round(tracker.scatter(), 2), "trend": told["trend"], "state": tracker.state,
+                        "meter": fraction and round(fraction, 3), "advice": words or live.get("advice"),
+                        "binning": binning, "exposure_s": shot, "frame": frame, "saved": time.time()}
+            # The next frame's exposure: keep the star bright but not burnt out.
+            if top >= 250:
+                exposure = max(MIN_EXPOSURE, exposure / 2)
+            elif top < 40 and exposure < MAX_EXPOSURE:
+                exposure = min(MAX_EXPOSURE, exposure * 2)
+                if not rising and not words:
+                    words = "Exposure increasing."
+            rising = exposure > shot
+            # The camera starts on the next frame before this one is heard.
+            more = time.monotonic() < end and not (args.frames and frame >= args.frames)
+            if more:
+                if not args.scene:
+                    cam.use("focus_fine" if tracker.level == 3 else "focus_fast")
+                pending = ahead(cam, exposure)
+            if not args.quiet:
+                sound(noise, fraction)
+                if words:
+                    say(words)
+            now = time.perf_counter()
+            timing = {"capture_s": round(landed - began, 3), "process_s": round(now - landed, 3),
+                      "feedback_s": round(now - began, 3), "cycle_s": heard and round(now - heard, 3)}
+            heard = now
+            timings.append(timing)
+            if not args.scene:
+                live["timing"] = timing
+                keep(LIVE_FILE, live)
+                with FRAMES_FILE.open("a", encoding="utf-8") as log:
+                    log.write(json.dumps(live) + "\n")
+                if live["kind"] == "stars":
+                    reading = {"hfr": live["hfr"], "stars": count, "best_hfr": live["best_hfr"],
+                               "hfr_arcsec": live["hfr_arcsec"], "level": live["level"], "state": live["state"],
+                               "advice": live["advice"] or told["trend"], "exposure_s": shot,
+                               "feedback_s": timing["feedback_s"], "saved": live["saved"]}
+                    keep(FOCUS_FILE, reading)
             image = Image.fromarray(picture.astype(np.uint8)).convert("RGB")
             image = image.resize((900, round(900 * image.height / image.width)))
             text = f"#{frame} {time.strftime('%H:%M:%S')}  {text}"
             PREVIEW.parent.mkdir(exist_ok=True)    # the first thing run on a new machine may be this
             annotate(image, text).save(PREVIEW, quality=85)
-            snap.label("focus view", f"{exposure:g} s", PREVIEW.parent)
-            if words and not args.quiet:
-                if args.tones and not args.scene and value:
-                    tone(value, first)
-                else:
-                    say(words)
-            print(f"{time.strftime('%H:%M:%S')}  {text}   (exposure {exposure:g}s, peak {top:.0f})",
-                  flush=True)
-            # Keep the star bright but not burnt out.
-            if top >= 250:
-                exposure = max(MIN_EXPOSURE, exposure / 2)
-            elif top < 40:
-                exposure = min(MAX_EXPOSURE, exposure * 2)
+            snap.label("focus view", f"{shot:g} s", PREVIEW.parent)
+            print(f"{text}   (exposure {shot:g}s, peak {top:.0f}; frame in {timing['capture_s']:.2f} s, "
+                  f"heard {timing['feedback_s']:.2f} s after it began)", flush=True)
+            if not more:
+                break
     except KeyboardInterrupt:
         pass
     finally:
+        if pending is not None:
+            # Let the exposure under way finish before the camera is closed.
+            try:
+                pending.get(timeout=exposure + 3)
+            except queue.Empty:
+                pass
+        try:
+            cam.use("imaging")      # leave it as every other script expects to find it
+        except Exception:
+            pass
         cam.close()
+    # The middle figure of each timing over the run.
+    timing = {}
+    for key in ("capture_s", "process_s", "feedback_s", "cycle_s"):
+        found = [t[key] for t in timings if t[key] is not None]
+        timing[key] = round(float(np.median(found)), 3) if found else None
     if not reading:
         if args.scene:
             # A note that the focus was looked at by day: ./polaris.py will
             # not search on a focus nobody has checked.
             if best is not None:
-                scene = FOCUS_FILE.with_name("focus_scene.json")
-                scene.parent.mkdir(exist_ok=True)
-                scene.write_text(json.dumps({"sharpness": round(float(best), 2), "frames": frame,
-                                             "saved": time.time()}), encoding="utf-8")
-            return {"sharpness": best, "frames": frame}
+                keep(FOCUS_FILE.with_name("focus_scene.json"),
+                     {"sharpness": round(float(best), 2), "frames": frame, "saved": time.time()})
+            return {"sharpness": best, "frames": frame, "timing": timing}
         raise interface.Refusal("NO_STARS", "No stars were measured.")
-    return dict(reading, frames=frame)
+    if tracker.good:
+        # What this run reached, for the next one to set its levels by.
+        with RUNS_FILE.open("a", encoding="utf-8") as log:
+            log.write(json.dumps({"saved": time.time(), "frames": frame, "best_hfr": round(tracker.best, 2),
+                                  "best_arcsec": round(tracker.best * scale, 2), "timing": timing}) + "\n")
+    return dict(reading, frames=frame, timing=timing)
 
 
 if __name__ == "__main__":
