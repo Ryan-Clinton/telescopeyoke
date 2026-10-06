@@ -89,6 +89,18 @@ the pole, about two hours before sunset, for `polaris.py`:
   to 1.2.
 - **False stars:** none in blank sky, in single frames or one divided by
   another.
+- **The search, 18:22 to 19:06 (sunset 18:50), recorded:** 266 looks in 35
+  minutes, 6 to 9 seconds a look, with three frames added up for each. The
+  quick aiming left the Dec axis within 0.05° of what was asked and the RA
+  axis within 0.5°. Exposure rose from 22 ms to 144 ms as the light went;
+  blue over red stayed between 1.55 and 1.86. In blank sky the brightest
+  point of a look stood out 3.5 to 6.2 (a star needs 12). One look (194)
+  reached 8.8 on a faint smear at the very edge of the frame that no
+  neighbouring look showed. The last two looks reached 10.9 and 10.6 on a
+  small round point that moved 990 pixels for a 0.366° step of the Dec
+  axis, as a star should (1003 expected): a faint star showing at dusk. No
+  Polaris within 3.3° of where the mount's axis pointed. A plate solve at
+  19:07 failed: the sky still burnt out a 2 s frame.
 - **Binning 2x2 over INDI, tried once and not adopted:** setting
   `CCD_BINNING` to 2 on the open camera ended with the connection to the
   INDI server broken (the server was restarted for the next command and the

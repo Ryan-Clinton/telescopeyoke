@@ -456,9 +456,16 @@ some cloud, the focus had been disturbed and not checked, and no frames were
 kept, so there is no telling which it was. That is why the search now asks
 for a focus check and can record every look. Daytime frames from the real
 camera expose at about 16 ms with the Sun 14° up, take about a second each,
-and show no false stars in blank sky. Still untried on real hardware: the
-reordered search, the tipping of the tube to prove a candidate, `align`, and
-the watching while the bolts are turned. Guesses still to be set from real
+and show no false stars in blank sky. The reordered search then ran on the
+real mount from 18:22 to 19:06 the same evening, across sunset: 266 looks in
+35 minutes, about 8 seconds each, the tube stopping within 0.05° of where it
+was sent, out to 3.3° from home, every look kept. It did not find Polaris,
+and nothing stood out further than 8.8 until faint stars began to show at
+dusk and it stopped itself. The likeliest reason is that the mount's axis
+was more than 3° from the pole (it had been set by a phone compass); that
+was not confirmed. Still untried on real hardware: the tipping of the tube
+to prove a candidate, the bringing to the middle, `align`, and the watching
+while the bolts are turned. Guesses still to be set from real
 runs: the level of blue that counts as clear sky (from three frames), the
 steps from "poor" to "very good" by the Sun's height, and how far a point
 must stand out to count.

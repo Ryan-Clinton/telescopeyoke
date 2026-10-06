@@ -419,7 +419,8 @@ def plan(site, radius=RADIUS):
     # to spare for where the tube really stops.
     step = 0.55 * config.field_height()
     looks = spots(radius, step)
-    near = sum(1 for spot in looks if abs(90 - spot[1]) <= min(NEAR, radius) + 1e-9)
+    reach = min(math.ceil(min(NEAR, radius) / step - 1e-9) * step, radius)       # as spots() rounds it
+    near = sum(1 for spot in looks if abs(90 - spot[1]) <= reach + 1e-9)
     return {"would_move": True, "safe": True, "looks": len(looks), "looks_near": near, "radius_deg": radius,
             "step_deg": round(step, 3),
             "warnings": [f"The RA axis turns from {REACH:.0f}° one side of home to {REACH:.0f}° the other, once "
