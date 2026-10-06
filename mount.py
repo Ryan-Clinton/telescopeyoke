@@ -701,6 +701,12 @@ STARS = {
     "Regulus": (10.1395, 11.9672), "Mizar": (13.3987, 54.9253),
     "Dubhe": (11.0621, 61.7508), "Alpheratz": (0.1398, 29.0906),
     "Mirfak": (3.4054, 49.8611),
+    # Autumn's, added the night the user could name what showed through a
+    # gap in the cloud and the telescope could not be sent to it.
+    "Markab": (23.0794, 15.2053), "Scheat": (23.0629, 28.0828),
+    "Algenib": (0.2206, 15.1836), "Mirach": (1.1622, 35.6206),
+    "Hamal": (2.1196, 23.4625), "Enif": (21.7364, 9.8750),
+    "Sadr": (20.3705, 40.2567), "Albireo": (19.5120, 27.9597),
 }
 
 

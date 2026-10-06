@@ -300,9 +300,12 @@ def read_torch(seen, level, burnt, dark):
     cloud. Dark with no stars is cloud, and is taken for open sky: the
     survey is of what stands in the garden.
 
-    None of this holds once cloud is over. Lit from below by the town, it
-    read 418 at 3 s, as bright as the tree, and the first survey called the
-    whole southern sky blocked to 75°. overcast() is the check for that."""
+    The first survey on the real mount called the whole southern sky blocked
+    to 75°, every look reading the same 420. The motors had stopped being
+    driven part-way through, while the handset went on reporting each move
+    as made: the telescope sat on one lit tree throughout. With the torch
+    off the same view read 51, so the sky, cloud and all, was dark.
+    overcast() is the check that stops a survey reading like that."""
     seen = dict(seen, level=round(float(level), 1))
     if burnt >= BURNT:
         return dict(seen, view="blocked", share=0.0, lit=True)
@@ -317,8 +320,9 @@ HIGH = 70.0      # degrees up above which nothing in a garden is expected to sta
 
 
 def overcast(alt, seen):
-    """Whether a look says the sky has clouded over: lit, not burnt out, and
-    too high up to be a tree or a roof."""
+    """Whether a look cannot be believed: lit, not burnt out, and too high up
+    to be a tree or a roof. Mist in the beam would do it, and so would a
+    mount that is no longer going where it is sent."""
     return bool(alt >= HIGH and seen.get("lit") and seen.get("view") == "blocked" and seen.get("level", 0) < 1500)
 
 
@@ -425,9 +429,10 @@ def eye(site, exposure, gain, daylight=False, torch=False):
                 if overcast(alt, seen):
                     raise interface.Refusal(
                         "PLATE_SOLVE_FAILED",
-                        f"At bearing {az:g}°, {alt:g}° up the sky is bright and has no stars: cloud has come "
-                        "over, and by its light cloud cannot be told from a lit tree. Nothing has been kept; "
-                        "try again when the sky is clear.")
+                        f"At bearing {az:g}°, {alt:g}° up the torch lights something and there are no stars, "
+                        "which is too high for a tree or a roof: mist in the beam, or the telescope is not "
+                        "where the mount says it is. Nothing has been kept. Watch one move to see that the "
+                        "tube turns, and try again when the sky is clear.")
                 detail += (f", level {level:.0f}: lit by the torch" if seen.get("lit")
                            else f", level {level:.0f}: dark, so cloud" if seen.get("cloud")
                            else f", level {level:.0f}")

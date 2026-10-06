@@ -526,12 +526,19 @@ camera, so its choice of exposure is untried.
 with a torch in the finder's bracket. The idea holds: at 1 s a house wall
 read 2186 and a tree 134 against a sky of 51, and the camera's reading, not
 where the beam was seen to fall, is what tells them apart (the two do not
-point at quite the same spot). The survey itself got 27 looks in before
-cloud came over; cloud lit by the town read as bright as the tree, and it
-called the whole southern sky blocked to 75°. It was stopped and nothing was
-kept. It now takes a bright frame with stars in it for thin cloud, and stops
-when a bright frame with none is too high up to be a tree. No skyline has
-yet been measured on the real mount.
+point at quite the same spot). The survey itself made 27 looks and was
+stopped with nothing kept: from about the fifteenth every look read the same
+bright 420 with no stars, up to 75° in the south. The motors had stopped
+being driven, with no sound from them, while the handset went on reporting
+each move as made, so the telescope sat on one lit tree for half an hour and
+every bearing given in that time was wrong; the user, standing beside it,
+said so before the readings were believed. Switching the mount off and on
+put it right. The cause is not known: a USB lead may have caught, and a
+status query sent while the survey was driving the mount garbled a reply at
+about that time. The survey now takes a bright frame with stars in it for
+thin cloud, and stops when a bright frame with none is too high up to be a
+tree. Nothing checks that the tube turns when the mount says it has. No
+skyline has yet been measured on the real mount.
 
 Written but never run on the real mount or camera: `horizon.py --trace` and
 `horizon.py --daylight`. The following, the adding of bearings and the checks
