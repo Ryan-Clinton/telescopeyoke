@@ -41,7 +41,11 @@ asks a person which way it went; `ty mount sethome` records the home position
 and moves nothing.
 `landmark.py check NAME` turns the mount to the axis readings a landmark was
 remembered at and photographs it (`--watch N` keeps looking); `landmark.py
-remember NAME` and `list` move nothing. `polaralign.py` slews about 25° twice and back to measure the polar axis's
+remember NAME` and `list` move nothing. `polaris.py find` looks in rings around the home position, by day, until
+Polaris is in view: the RA axis turns up to 88° either side of home on every ring. It waits at a place while the
+sky there is not blue, gives up if cloud stays, and brings the star to the middle once found. `polaris.py align` then tips
+the tube a tenth of a degree, turns the RA axis to three readings and back, and gives the polar axis's error
+roughly. Both take `--dry-run` and `--json`. `polaralign.py` slews about 25° twice and back to measure the polar axis's
 error; it checks all three positions against the limits first, and takes
 `--dry-run` and `--json`. `ty mount drift` changes the Dec motor's creep. `ty mount stop` halts
 everything and is always allowed. `shoot.py` re-centres the target as it
