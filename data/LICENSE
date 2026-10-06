@@ -1,0 +1,7 @@
+targets.csv in this folder is derived from OpenNGC
+(https://github.com/mattiaverga/OpenNGC) by build_catalogue.py, and is
+licensed under Creative Commons Attribution-ShareAlike 4.0 International
+(CC-BY-SA-4.0): https://creativecommons.org/licenses/by-sa/4.0/legalcode
+
+Everything else in the project is under the MIT licence in the LICENSE file
+at the top of the repository.

@@ -269,7 +269,10 @@ def test_a_daylight_skyline_survey_on_the_simulated_mount(scope, monkeypatch, tm
     assert len(measured) >= 3      # the Sun and the meridian limit rule some out, whatever the hour
     for f in measured:
         if wall(f["az"]) and f["state"] == "edge":
-            assert 38.5 < f["clear"] <= 38.5 + horizon.FINE
+            # The wall's top is between the highest blocked look and the lowest
+            # clear one. They close to within FINE of each other unless, at this
+            # hour, the limits rule out the heights between them.
+            assert f["shut"] < 38.5 < f["clear"]
         elif wall(f["az"]):
             # The limits stopped it looking low enough to meet the wall.
             assert f["state"] == "open" and f["clear"] > 38.5

@@ -16,3 +16,4 @@ calibration/
 *.egg-info/
 vendor/
 demo/
+dist/

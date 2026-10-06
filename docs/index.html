@@ -50,7 +50,7 @@
   <p class="quiet">Free and open source. Runs on a laptop beside the telescope: Linux, with a Windows port.</p>
   <div class="buttons">
     <a class="main" href="#try">Try the demo</a>
-    <a href="https://github.com/Ryan-Clinton/telescopeyoke/archive/refs/heads/main.zip">Download the zip</a>
+    <a href="https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.2.0/TelescopeYoke-v0.2.0.zip">Download 0.2.0</a>
     <a href="#hardware">Supported hardware</a>
     <a href="https://github.com/Ryan-Clinton/telescopeyoke">Source on GitHub</a>
   </div>
@@ -88,13 +88,14 @@
 <h2 id="try">Try the demo: no telescope needed</h2>
 <p>The demo is the whole application on a pretend telescope. Nothing is connected to your mount and nothing can move, so it is safe to try on the computer that sits beside real equipment.</p>
 <p><b>Ubuntu or Debian</b></p>
-<pre><code>git clone https://github.com/Ryan-Clinton/telescopeyoke
-cd telescopeyoke
+<pre><code>wget https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.2.0/TelescopeYoke-v0.2.0.zip
+unzip TelescopeYoke-v0.2.0.zip
+cd TelescopeYoke-v0.2.0
 ./install.sh --demo</code></pre>
 <p><b>Windows 10 or 11</b></p>
 <ul>
   <li>Install 64-bit Python 3.11 or newer from python.org, ticking "Add python.exe to PATH".</li>
-  <li><a href="https://github.com/Ryan-Clinton/telescopeyoke/archive/refs/heads/main.zip">Download the zip</a> and unpack it.</li>
+  <li><a href="https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.2.0/TelescopeYoke-v0.2.0.zip">Download TelescopeYoke-v0.2.0.zip</a> and unpack it.</li>
   <li>Double-click <code>try-demo.cmd</code>.</li>
 </ul>
 <p>A window opens with tonight's report. Pick a target, press "Centre with plate solve", and watch it find and correct its own pointing error. Then try Focus and Imaging; "The pretend sky" lets you bring cloud over or pull the camera's lead out, to see what it does when a night goes wrong.</p>

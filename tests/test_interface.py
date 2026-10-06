@@ -280,3 +280,16 @@ def test_scripts_asked_for_json_print_nothing_else(capsys):
     assert stop.value.code == 0 and json.loads(out)["data"] == {"answer": 42}
     assert "progress" in err and "progress" not in out
     assert interface.main("chatty", chatty) == {"answer": 42}
+
+
+def test_a_release_agrees_with_itself():
+    """The version, the changelog and every download link name the same release."""
+    import agent
+    import release
+    assert release.disagreements() == []
+    title, text = release.changes()
+    assert title and "Proven on" in text
+    tag, name, address = release.names()
+    assert tag == f"v{agent.VERSION}" and address.endswith(f"/{tag}/{name}")
+    assert address in release.notes() and "doctor.py --report" in release.notes()
+    assert any("pyproject" in line for line in release.disagreements("9.9.9"))

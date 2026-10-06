@@ -397,6 +397,19 @@ def system():
     return f"{name} ({platform.system()} {platform.release()}, {platform.machine()})"
 
 
+def source():
+    """Which copy of the code this is: a release's zip, or a git checkout and its commit."""
+    import subprocess
+    if not (ROOT / ".git").exists():
+        return "from a release zip"
+    try:
+        commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True,
+                                text=True, timeout=10, **host.QUIET).stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        commit = ""
+    return f"a git checkout at {commit}" if commit else "a git checkout"
+
+
 def hardware_report(offline=False, skip_handset=False):
     """The check written out for someone else to read: what the computer is,
     what the mount says it is, and every check. It only looks, as the check
@@ -406,7 +419,7 @@ def hardware_report(offline=False, skip_handset=False):
     link = {"handset": "a serial lead to the SynScan handset", "wifi": "the SynScan Wi-Fi adapter (no handset)",
             "eqdir": "an EQDIR lead (no handset)"}.get(mount_link(), mount_link())
     lines = ["### telescopeyoke hardware report", "",
-             f"- telescopeyoke {agent.VERSION}, Python {'.'.join(str(v) for v in sys.version_info[:3])}",
+             f"- telescopeyoke {agent.VERSION} ({source()}), Python {'.'.join(str(v) for v in sys.version_info[:3])}",
              f"- System: {system()}",
              f"- Mount reached by: {'the demo (a pretend mount)' if _demo() else link}"]
     if not skip_handset and (_demo() or mount_link() == "handset"):

@@ -14,9 +14,9 @@ in one step with no telescope.
   pretend mount, camera and sky, with the real centring, focusing and
   stacking code running on them. Nothing real is connected or moved, and its
   files are kept in a folder of their own.
-- One step to start it. Ubuntu: `./install.sh --demo`. Windows: unpack the
-  zip and double-click `try-demo.cmd` (Python 3.11 or newer must be installed
-  first).
+- One step to start it, from the release's zip. Ubuntu: `./install.sh
+  --demo`. Windows: double-click `try-demo.cmd` (Python 3.11 or newer must
+  be installed first).
 - `./tour.py` records the demo being used; the animation in the README is
   what it wrote.
 
@@ -32,7 +32,8 @@ in one step with no telescope.
 - **A hardware report in one command**: `./doctor.py --report`, or "Write a
   hardware report" on the application's Doctor screen. It says what the
   computer is, what the handset says the mount is, and every check, with
-  your location left out. Nothing is moved to make it.
+  your location left out, and which release or commit it was run from.
+  Nothing is moved to make it.
 - **The mount without its handset**, through the SynScan Wi-Fi adapter or an
   EQDIR lead (`direct.py`).
 - **A rewritten imaging pipeline**: every raw frame kept, poor frames
@@ -54,8 +55,8 @@ in one step with no telescope.
   (handset firmware 3.35), an Explorer 150P and an Altair Hypercam 183C.
   The planner, mount moves, plate solving, `goto --solve`, `sync`, camera
   frames and focusing have all run there.
-- On Windows 11 the tests and the demo pass and the camera has taken frames
-  indoors. **No mount has been driven from Windows**, and `try-demo.cmd` has
+- On Windows 11 the tests and the demo pass and the camera, a Hypercam
+  183C, has taken frames indoors. **No mount has been driven from Windows**, and `try-demo.cmd` has
   not yet been run on a real Windows machine.
 - The application has been used in the demo only, not with a real mount or
   camera. The stacking pipeline, the drift correction, polar alignment and

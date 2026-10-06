@@ -12,7 +12,7 @@
 the real centring, focusing and stacking code running on them.*
 
 **[Home page](https://ryan-clinton.github.io/telescopeyoke/) ·
-[Download the zip](https://github.com/Ryan-Clinton/telescopeyoke/archive/refs/heads/main.zip) ·
+[Download 0.2.0](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.2.0/TelescopeYoke-v0.2.0.zip) ·
 [Try the demo, no telescope needed](#quick-start) ·
 [What it has been tried on](#hardware) ·
 [Ask a question](https://github.com/Ryan-Clinton/telescopeyoke/discussions)**
@@ -83,16 +83,20 @@ by eye.
 On Ubuntu or Debian:
 
 ```bash
-git clone https://github.com/Ryan-Clinton/telescopeyoke
-cd telescopeyoke
+wget https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.2.0/TelescopeYoke-v0.2.0.zip
+unzip TelescopeYoke-v0.2.0.zip
+cd TelescopeYoke-v0.2.0
 ./install.sh --demo           # the Python libraries, then TelescopeYoke (demo) opens
 ```
 
 On Windows 10 or 11: install 64-bit Python 3.11 or newer from python.org
 (tick "Add python.exe to PATH"),
-[download the zip](https://github.com/Ryan-Clinton/telescopeyoke/archive/refs/heads/main.zip),
-unpack it, and double-click **`try-demo.cmd`**. No git needed; the same zip
-works on Ubuntu if you would sooner not clone.
+[download TelescopeYoke-v0.2.0.zip](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.2.0/TelescopeYoke-v0.2.0.zip),
+unpack it, and double-click **`try-demo.cmd`**.
+
+That zip is release 0.2.0, which stays as it is; a hardware report says
+which release made it. `git clone https://github.com/Ryan-Clinton/telescopeyoke`
+gets the newest code instead, which changes from day to day.
 
 Either way a window opens on a pretend mount, camera and sky. It is in the
 applications menu (or Start Menu) from then on as **TelescopeYoke (demo)**.
@@ -216,6 +220,7 @@ it. For a question first ("will it work with my HEQ5?"), ask in
 | `tour.py` | Records the demo being used, pressing the same buttons a person would: the animation at the top of this page, and a still of each screen. Ubuntu only. |
 | `replay.py` | Turns a centring run recorded with `mount.py goto --solve --record` into a GIF. |
 | `watch.py` | Photographs the telescope itself with the webcam. |
+| `release.py` | Makes a release: the zip people download, its notes from `CHANGELOG.md`, and with `--publish` the tag and the release on GitHub. |
 | `build_catalogue.py` | Regenerates `data/targets.csv` from OpenNGC. |
 | `ty` | One front door for programs and AI agents: `capabilities`, `status`, `context`, `night`, `targets`, `target NAME`, `session`, `observing`, `doctor`. Add `--json` for a fixed machine-readable shape. |
 | `mcp_server.py` | Read-only MCP server offering the same information to MCP-aware assistants. |
@@ -456,7 +461,8 @@ Reports from other hardware are the most useful contribution: run
 issue, as [Hardware](#hardware) describes. Questions, ideas and pictures you
 have taken go in
 [Discussions](https://github.com/Ryan-Clinton/telescopeyoke/discussions).
-What each release added is in [CHANGELOG.md](CHANGELOG.md). For code, see
+What each release added is in [CHANGELOG.md](CHANGELOG.md); `./release.py`
+makes one. For code, see
 [CONTRIBUTING.md](CONTRIBUTING.md):
 run `pytest`, and anything that changes how the mount moves comes with a test
 against `simulator.py`.
@@ -470,6 +476,6 @@ Cloud imagery: [EUMETSAT](https://view.eumetsat.int).
 
 ## Licence
 
-MIT; see `LICENSE`. `data/targets.csv` is derived from
-[OpenNGC](https://github.com/mattiaverga/OpenNGC) and is licensed
-CC-BY-SA-4.0.
+MIT; see [`LICENSE`](LICENSE). The one exception is `data/targets.csv`,
+which is derived from [OpenNGC](https://github.com/mattiaverga/OpenNGC) and
+is licensed CC-BY-SA-4.0; see [`data/LICENSE`](data/LICENSE).

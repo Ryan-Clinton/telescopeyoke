@@ -100,8 +100,10 @@ a motor's creep rate. `mount.py stop` is always allowed.
   hardware.
 - The table of tried hardware is in the README ("Hardware") and again on
   the home page (`docs/index.html`); change both together. The version is in
-  `pyproject.toml` and `agent.VERSION`, and each release has a section in
-  `CHANGELOG.md`.
+  `pyproject.toml` and `agent.VERSION`, each release has a section in
+  `CHANGELOG.md`, and the download links in the README and the home page
+  name the release's zip. `./release.py` checks that all of these agree and
+  builds the zip; only a person runs `./release.py --publish`.
 
 ## More
 

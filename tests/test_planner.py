@@ -144,6 +144,7 @@ def test_a_hardware_report_leaves_out_who_and_where(monkeypatch, tmp_path):
     monkeypatch.setattr(doctor, "handset_identity", lambda: asked.append(1) or ("EQ5", "4.39.05"))
     text = doctor.hardware_report(offline=True, skip_handset=True)
     assert "hardware report" in text and "Ready for planner" in text and "Serial ports seen" in text
+    assert "(a git checkout" in text or "(from a release zip)" in text       # which code made it
     assert "Secret Street" not in text and "12.3456" not in text and str(Path.home()) not in text
     assert "with a location set" in text and "~" in text
     assert not asked and "Handset firmware" not in text         # told to leave the handset alone
