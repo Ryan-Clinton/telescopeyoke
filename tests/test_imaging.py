@@ -8,6 +8,7 @@ from scipy import ndimage
 
 import camera
 import focus
+import interface
 import polaralign
 import skywatch
 
@@ -205,3 +206,35 @@ def test_polar_alignment_checks_all_three_positions_before_moving(tmp_path, monk
         with pytest.raises(interface.Refusal) as refusal:
             polaralign.run(type("Args", (), {"dry_run": dry, "json": False})())
         assert refusal.value.code_name == "MOTION_LOCKED"
+
+
+def test_the_focus_field_is_the_highest_star_clear_of_what_is_in_the_way():
+    """--field goes to a bright star with many round it: the highest that is
+    well up and clear, but one on the tube's own side first."""
+    site = {"latitude": 52.0, "longitude": 0.0}
+    sky = {"Deneb": (78, 0.5, 45), "Vega": (60, 3.0, 39), "Mirfak": (45, -4.0, 50), "Altair": (30, 1.0, 9)}
+
+    def placed(name, site):
+        if name not in sky:
+            raise interface.Refusal("TARGET_BELOW_ALTITUDE_LIMIT", "down")
+        altitude, hours, dec = sky[name]
+        return {"altitude_deg": altitude, "hour_angle_hours": hours, "dec_deg": dec,
+                "pier_side": "west" if hours > 0 else "east", "side_note": ""}
+
+    assert focus.field(site, {}, None, placed)[0] == "Deneb"
+    # Already on the east side: Mirfak is lower but needs no swing over the pole.
+    assert focus.field(site, {}, False, placed)[0] == "Mirfak"
+    # Altair is too low to focus on, so with the rest hidden there is nothing.
+    everything = {"blocked": [{"from": 0, "to": 359.9, "altitude": 80}]}
+    name, why = focus.field(site, everything, None, placed)
+    assert name is None and "well up" in why
+    # Something in the way of Deneb alone sends it to the next.
+    az = focus.bearing(0.5 * 15, 45, site)
+    hidden = {"blocked": [{"from": az - 5, "to": az + 5, "altitude": 75}]}
+    assert focus.field(site, hidden, None, placed)[0] == "Vega"
+    # The motion lock is not something to choose round.
+
+    def locked(name, site):
+        raise interface.Refusal("MOTION_LOCKED", "locked")
+    with pytest.raises(interface.Refusal):
+        focus.field(site, {}, None, locked)

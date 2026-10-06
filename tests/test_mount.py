@@ -114,6 +114,25 @@ def test_the_stored_pointing_error_reverses_in_dec_across_the_pole(scope):
     assert mount.load_pointing_error(west=False) == [-10.0, 12.0]
 
 
+def test_each_side_of_the_meridian_keeps_its_own_pointing_error(scope):
+    """The real mount's error did not simply reverse across the pole, so what
+    was measured on a side is what is used there, however often the other
+    side is measured afterwards."""
+    mount.CLOCK_FILE.write_text(json.dumps({"offset_deg": 0, "saved": 1}), encoding="utf-8")
+    mount.save_pointing_error([0.8, -5.8], west=False)
+    mount.save_pointing_error([1.5, -0.2], west=True)
+    assert mount.load_pointing_error(west=False) == [0.8, -5.8]
+    assert mount.load_pointing_error(west=True) == [1.5, -0.2]
+    mount.save_pointing_error([1.6, -0.3], west=True)
+    assert mount.load_pointing_error(west=False) == [0.8, -5.8]
+    # A side measured before the handset was last set up is forgotten, and
+    # borrows from the other again.
+    saved = json.loads(mount.POINTING_FILE.read_text(encoding="utf-8"))
+    saved["sides"]["east"]["saved"] = 0
+    mount.POINTING_FILE.write_text(json.dumps(saved), encoding="utf-8")
+    assert mount.load_pointing_error(west=False) == [1.6, 0.3]
+
+
 def test_an_old_pointing_error_is_ignored_after_the_handset_is_restarted(scope):
     mount.save_pointing_error([-10.0, -12.0], west=True)
     saved = json.loads(mount.POINTING_FILE.read_text(encoding="utf-8"))["saved"]

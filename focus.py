@@ -4,6 +4,9 @@
     ./focus.py                 on stars: it speaks as you turn the focuser
     ./focus.py --tones         a rising pitch instead of speech
     ./focus.py --numbers       each reading spoken as a number, nothing else
+    ./focus.py --field         first slew to a bright star in a rich part of
+                               the sky (this MOVES the telescope)
+    ./focus.py --field --dry-run   say which star; nothing moves
     ./focus.py --scene         on rooftops or trees, in daylight
 
 On stars it measures many at once and reports their half-flux radius (HFR):
@@ -101,6 +104,14 @@ def half_flux_radius(lum, x, y, reach):
     return float(distance[inside][order][np.searchsorted(light, light[-1] / 2)])
 
 
+# How far a star's light must stand above the grain of the sky to count. With
+# the focuser far out there are no stars to find, only specks of grain, and
+# they have radii too: on 6 October 2026 forty of them read 2.2 while every
+# star was a ring a hundred pixels across. Those specks stood out by 2 at
+# most; the faintest stars that measured truly stood out by 8.
+STANDS_OUT = 8.0
+
+
 def measure_stars(lum, most=40):
     """(median half-flux radius, number of stars used) over the field's best
     stars, leaving out burnt-out ones; (None, 0) with fewer than two.
@@ -111,11 +122,17 @@ def measure_stars(lum, most=40):
     the two real stars in the field went from 7 to 11. A hot pixel, which
     has no radius at all, is left out too."""
     stars = stacking.find_stars(lum, limit=120)
+    sky = float(np.median(lum))
+    grain = 1.4826 * float(np.median(np.abs(lum[::4, ::4] - sky))) or 1.0
     found = []
     for x, y, flux, fwhm, _ in stars:
         if lum[int(y), int(x)] >= 0.9 * 4 * WHITE:   # burnt out: its shape lies
             continue
-        radius = half_flux_radius(lum, x, y, reach=int(np.clip(3 * fwhm, 8, 40)))
+        reach = int(np.clip(3 * fwhm, 8, 40))
+        # A star's light against the grain of the sky it was measured in.
+        if flux < STANDS_OUT * grain * np.sqrt(np.pi) * reach:
+            continue
+        radius = half_flux_radius(lum, x, y, reach=reach)
         if radius and radius >= 0.3:
             found.append((flux, radius))
     if len(found) < 2:
@@ -226,6 +243,83 @@ def annotate(image, text, colour=(255, 220, 90)):
     return image
 
 
+# Bright stars with many fainter ones round them, in or beside the Milky Way
+# and spread round the sky so that one is always well up: the meter is steady
+# on thirty stars and jumps about on four. On 6 October 2026 it was used on
+# the field of M31, which has few, and read anything from 5 to 15 with the
+# focuser still; beside Vega and Deneb it had held to a tenth or two.
+FIELDS = ("Deneb", "Vega", "Altair", "Mirfak", "Capella", "Betelgeuse", "Procyon")
+HIGH_ENOUGH = 40.0   # degrees up: lower down the air blurs the stars itself
+ROOM = 5.0           # degrees to keep above anything known to be in the way
+
+
+def field(site, skyline, west=None, placed=None):
+    """The best placed of FIELDS to focus on, as (name, plan), or (None, why).
+    Highest wins, but a star on the side of the meridian the tube is already
+    on (`west`) is taken first if it is high enough, so that the tube need
+    not swing over the pole and back. `skyline` is config's [horizon];
+    `placed` stands in for mount.plan_goto in the tests."""
+    import mount
+    placed = placed or mount.plan_goto
+    choices = []
+    for name in FIELDS:
+        try:
+            plan = placed(name, site)
+        except interface.Refusal as refusal:
+            if refusal.code_name == "MOTION_LOCKED":
+                raise
+            continue
+        altitude = plan["altitude_deg"]
+        hour_angle, dec = plan["hour_angle_hours"] * 15, plan["dec_deg"]
+        if altitude < HIGH_ENOUGH or altitude < in_the_way(skyline, bearing(hour_angle, dec, site)) + ROOM:
+            continue
+        same_side = west is not None and (plan["pier_side"] == "west") == west
+        choices.append((same_side, altitude, name, plan))
+    if not choices:
+        return None, "None of the stars it focuses on is well up and clear just now."
+    _, _, name, plan = max(choices)
+    return name, plan
+
+
+def bearing(hour_angle, dec, site):
+    """Compass bearing in degrees of a place in the sky, from the garden."""
+    import polaralign
+    return polaralign.to_altaz(polaralign.vector(hour_angle, dec), site["latitude"])[1] % 360
+
+
+def in_the_way(skyline, az):
+    """How high the view is blocked at a bearing, from config's [horizon]."""
+    top = 0.0
+    for block in skyline.get("blocked", []):
+        lo, hi = block["from"] % 360, block["to"] % 360
+        if (lo <= az <= hi) if lo <= hi else (az >= lo or az <= hi):
+            top = max(top, block["altitude"])
+    if skyline.get("skyline"):
+        import horizon
+        top = max(top, float(horizon.limit(skyline["skyline"], np.array([az]), skyline.get("margin", 0))[0]))
+    return top
+
+
+def go_to_field(dry_run=False):
+    """Slew to the star field() chooses. Returns its name."""
+    import mount
+    cfg = config.load()
+    site = cfg["site"]
+    scope = None if dry_run else mount.Mount()
+    west = scope.west() if scope else None
+    name, plan = field(site, cfg.get("horizon", {}), west)
+    if not name:
+        raise interface.Refusal("INVALID_REQUEST", plan)
+    note = f"{name}, {plan['altitude_deg']:.0f}° up ({plan['side_note']})"
+    if dry_run:
+        print(f"Would move the mount: to {note}, to focus on.")
+        return name
+    print(f"Going to {note} to focus on.", flush=True)
+    scope.goto_target(name, site)
+    time.sleep(min(mount.SETTLE, 5))
+    return name
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--minutes", type=float, default=15)
@@ -238,6 +332,10 @@ def main():
                     help="say each reading as a number and nothing else")
     ap.add_argument("--tones", action="store_true",
                     help="a tone that rises in pitch as focus improves, instead of speech")
+    ap.add_argument("--field", action="store_true",
+                    help="first slew to a bright star in a rich part of the sky: MOVES the telescope")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="with --field: say which star it would go to; no camera, no mount")
     ap.add_argument("--port", type=int, default=PORT)
     ap.add_argument("--frames", type=int, help="stop after this many frames")
     ap.add_argument("--json", action="store_true", help="the last reading as JSON at the end")
@@ -250,6 +348,10 @@ def run(args):
     if args.tones and not shutil.which("ffplay"):
         print("ffplay is not installed, so there are no tones; speaking instead.", flush=True)
         args.tones = False
+    if getattr(args, "field", False):
+        name = go_to_field(getattr(args, "dry_run", False))
+        if args.dry_run:
+            return {"would_move": True, "field": name}
     cam = Camera(args.port, args.gain)
     reading = {}
 

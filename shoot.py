@@ -29,6 +29,8 @@ which needs serial access:
 """
 import argparse
 import json
+import subprocess
+import sys
 import time
 from collections import deque
 from datetime import datetime
@@ -41,6 +43,7 @@ from PIL import Image
 
 import host
 import interface
+import process
 import restack
 import snap
 import stacking
@@ -60,6 +63,7 @@ ORDERS = config.DATA / "cache" / "run_order.txt"
 KNOWN_ORDERS = ("stop", "recentre", "assist-on", "assist-off")
 CLOUD_STOP = 20     # with --frames 0, stop after this many rejected frames in a row
 PREVIEW_EVERY = 3.0  # seconds between updates of the picture on the web page
+FINISH_FROM = 5      # accepted frames before the live picture is finished like the final one
 BACKLOG = 8         # frames allowed to wait for the live stack before it skips some
 
 
@@ -133,7 +137,7 @@ class Session:
         if not force and time.monotonic() - self.published < self.preview_every:
             return
         with self.timings.phase("update the web page"):
-            image = Image.fromarray(stretch(self.stack.result()))
+            image = Image.fromarray(self.picture())
             WEB.mkdir(exist_ok=True)
             # The stack has its own picture; web/latest.jpg stays the newest
             # single frame, so the page shows both.
@@ -145,6 +149,24 @@ class Session:
             snap.label(f"live stack of {self.name}", f"{len(self.accepted)} accepted frames · "
                        f"{seconds:.0f} s integration", WEB, name="stack")
         self.published = time.monotonic()
+
+    def picture(self):
+        """The stack so far as a picture to show. With enough frames in it,
+        it is finished the way the final picture will be (the sky's glow and
+        slope taken out, the colours balanced), so that what is watched looks
+        like what will be kept; before that, or if that fails, plainly
+        brightened. Finishing takes a few seconds, so the page is then
+        updated less often: no more than a fifth of the time goes on it."""
+        stacked = self.stack.result()
+        if len(self.accepted) >= FINISH_FROM:
+            began = time.monotonic()
+            try:
+                shown = process.process(stacked, background=process.sky_for(self.name))
+                self.preview_every = max(self.preview_every, 5 * (time.monotonic() - began))
+                return shown
+            except Exception as problem:     # never lose a run to its preview
+                print(f"  (live picture left plain: {problem})", flush=True)
+        return stretch(stacked)
 
     def finish(self):
         (self.folder / "frames.json").write_text(json.dumps(self.log, indent=1), encoding="utf-8")
@@ -252,6 +274,24 @@ def pick_exposure(gain, calibration_for):
     return float(chosen)
 
 
+LIVE_MINUTES = 120  # how long the live view carries on after cloud has stopped a run
+
+
+def watch_on():
+    """Leave the live view running after cloud has stopped the run, so the
+    page shows the sky as it is and not the last spoiled frame. It uses the
+    camera only, ends by itself, and gives way to the next run."""
+    command = [sys.executable, str(ROOT / "liveview.py"), "--after-run", "--exposure", "5",
+               "--minutes", str(LIVE_MINUTES)]
+    try:
+        subprocess.Popen(command, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=not host.WINDOWS, **host.QUIET)
+        print(f"Live view left running for up to {LIVE_MINUTES} minutes: the page shows the sky now.",
+              flush=True)
+    except OSError as problem:
+        print(f"  (the live view would not start: {problem})", flush=True)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("name", help="what it is a picture of; a catalogue name allows re-centring")
@@ -267,6 +307,8 @@ def main():
                     help="trim the Dec motor's creep from the drift the frames show")
     ap.add_argument("--no-save", action="store_true", help="do not keep the raw frames")
     ap.add_argument("--no-restack", action="store_true", help="skip the final quality pass")
+    ap.add_argument("--no-live", action="store_true",
+                    help="when cloud stops the run, do not leave the live view running")
     ap.add_argument("--profile", action="store_true", help="report where the time went")
     ap.add_argument("--dry-run", action="store_true",
                     help="say what would be done; no camera, no mount")
@@ -313,7 +355,7 @@ def run(args):
           f"calibration: {session.calibration.describe()}; {workers} workers", flush=True)
     index, since_centre, started = 0, 0, time.monotonic()
     ORDERS.unlink(missing_ok=True)   # an order left for an earlier run is not for this one
-    told = {"stop": False, "recentre": False}
+    told = {"stop": False, "recentre": False, "cloud": False}
     shown = 0.0   # when the newest raw frame was last put on the web page
     waiting = deque()   # (future, time taken) for frames being processed, oldest first
 
@@ -328,6 +370,7 @@ def run(args):
         latest = session.log[-CLOUD_STOP:]
         if len(latest) == CLOUD_STOP and not any(f["accepted"] for f in latest):
             print(f"  the last {CLOUD_STOP} frames were all rejected; stopping", flush=True)
+            told["cloud"] = True
             return False
         return True
 
@@ -403,6 +446,8 @@ def run(args):
     if args.profile:
         print("Where the processing time went (summed over the workers):")
         print(session.timings.report(time.monotonic() - started))
+    if told["cloud"] and not args.no_live and not config.DEMO:
+        watch_on()
     if session.save and not args.no_restack:
         print("\nQuality pass over the raw frames:")
         restack.run(session.folder, profile=args.profile)

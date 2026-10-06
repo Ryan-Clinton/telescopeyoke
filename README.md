@@ -262,7 +262,7 @@ lock (`MOTION_LOCKED`) stops every rig at once.
 | `camera_test.py` | `--capabilities` lists what the camera offers; `--throughput` times every way of getting frames off it; `--gain-sweep` tries a range of gains on tonight's sky and suggests one. |
 | `compare.py` | Shows the same patch of sky from several stacks side by side at full size, with star measurements for each. |
 | `process.py` | Turns a finished stack into a cleaner picture: level sky, white stars, smoothed colour noise. |
-| `focus.py` | Hands-free focusing aid: measures many stars at once and speaks the result. `--tones` for a rising pitch instead of speech, `--numbers` for each reading as a number and nothing else, `--scene` for a daytime view. |
+| `focus.py` | Hands-free focusing aid: measures many stars at once and speaks the result. `--tones` for a rising pitch instead of speech, `--numbers` for each reading as a number and nothing else, `--field` to go first to a bright star with many round it (this moves the telescope), `--scene` for a daytime view. |
 | `solve.py` | Plate-solves a frame: where is the telescope really pointing? |
 | `polaralign.py` | Measures how far the polar axis is from the pole, from three plate solves. |
 | `skywatch.py` | Photographs the sky every minute and stops when stars appear. |
@@ -430,7 +430,18 @@ brightest, and with that the reading fell from 11 to about 2 as the focuser
 was turned and the stars became points. The tone was too quiet and came in
 beeps; it is now louder and unbroken. `--numbers` is new. The plate solver
 would not take the soft stars at dusk either, and now tries again on a frame
-averaged in blocks.
+averaged in blocks. Later the same night, with the focuser far out and no
+star left to find, it read 2.2 from specks of the sky's grain; a star must
+now stand out from the grain by 8 to count, and the rings are measured in
+their place. On a field of four or five stars it still jumps about, most of
+all between 8 and 20 where rings become stars: `--field`, written that
+night and not yet used on the real mount, goes to a richer field first.
+
+The pointing error is now kept for each side of the meridian. With the
+polar axis 0.2° from the pole the real mount was 5.8° out in Dec on the east
+side and 0.2° on the west, where one figure reversed across the pole had
+been assumed; the next two GoTos on the east side landed 5' and 14' out in
+Dec. The cause of the difference is not known.
 
 Written but never moved a real mount: control without the handset, through
 the SynScan Wi-Fi adapter or an EQDIR lead (`direct.py`). The adapter has

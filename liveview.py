@@ -7,7 +7,8 @@ seconds, with nothing stacked or saved.
 
 Use it between imaging runs: while slewing by hand, checking cloud, or just
 to watch. It stops by itself when shoot.py starts a run, since the two cannot
-share the camera.
+share the camera. A run that cloud has stopped starts it as it goes, so that
+the page carries on showing the sky and the cloud can be seen to clear.
 """
 import argparse
 import time
@@ -22,10 +23,12 @@ import config
 ROOT = Path(__file__).parent
 
 
-def run_active(seconds=45):
-    """True if an imaging run has logged a frame in the last while."""
+def run_active(since=0.0, seconds=45):
+    """True if an imaging run has logged a frame in the last while, and
+    since `since`: a run that cloud has just ended, and that started this
+    live view as it went, is not one to give way to."""
     logs = list((config.DATA / "frames").glob("*/*/frames.jsonl"))
-    return any(time.time() - p.stat().st_mtime < seconds for p in logs)
+    return any(p.stat().st_mtime > since and time.time() - p.stat().st_mtime < seconds for p in logs)
 
 
 def main():
@@ -34,12 +37,15 @@ def main():
     ap.add_argument("--exposure", type=float, default=1.0)
     ap.add_argument("--gain", type=int, default=2000)
     ap.add_argument("--minutes", type=float, default=60)
+    ap.add_argument("--after-run", action="store_true",
+                    help="started by a run as it ended: give way only to a run that logs a frame from now on")
     args = ap.parse_args()
 
     end = time.monotonic() + args.minutes * 60
+    began_at = time.time() if args.after_run else 0.0
     with Camera(gain=args.gain) as cam:
         while time.monotonic() < end:
-            if run_active():
+            if run_active(began_at):
                 print("An imaging run has started; live view stopping.")
                 return
             began = time.monotonic()

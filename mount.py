@@ -642,20 +642,39 @@ def use_demo_cache():
 def load_pointing_error(west):
     """(hour angle, Dec) error in degrees from the last plate solve, if it was
     measured since the handset's clock was. `west` says which side of the
-    meridian the target is on: the error comes mostly from the home position
-    being set by eye, and a Dec-axis offset reverses when the tube swings
-    over the pole for the other side."""
+    meridian the target is on. Each side keeps what was last measured on it.
+    A side not yet measured borrows the other's with Dec reversed: the error
+    comes mostly from the home position being set by eye, and a Dec-axis
+    offset reverses when the tube swings over the pole. That is only a first
+    guess. On 6 October 2026, with the polar axis 0.2° from the pole, the
+    real mount was 5.8° out in Dec on the east side and 0.2° on the west,
+    and every first GoTo across the meridian missed by 6°."""
     if POINTING_FILE.exists() and CLOCK_FILE.exists():
         saved = json.loads(POINTING_FILE.read_text(encoding="utf-8"))
-        if saved["saved"] > json.loads(CLOCK_FILE.read_text(encoding="utf-8"))["saved"]:
+        since = json.loads(CLOCK_FILE.read_text(encoding="utf-8"))["saved"]
+        here = saved.get("sides", {}).get(side_name(west))
+        if here and here["saved"] > since:
+            return list(here["error_deg"])
+        if saved["saved"] > since:
             ha, dec = saved["error_deg"]
             return [ha, dec if saved["west"] == west else -dec]
     return [0.0, 0.0]
 
 
+def side_name(west):
+    return "west" if west else "east"
+
+
 def save_pointing_error(error, west):
+    """Keep the error for this side, and leave the other side's as it was."""
+    sides = {}
+    if POINTING_FILE.exists():
+        sides = json.loads(POINTING_FILE.read_text(encoding="utf-8")).get("sides", {})
+    now = time.time()
+    sides[side_name(west)] = {"error_deg": list(error), "saved": now}
+    # The newest is also kept at the top, as it always was.
     POINTING_FILE.write_text(json.dumps(
-        {"error_deg": list(error), "west": bool(west), "saved": time.time()}), encoding="utf-8")
+        {"error_deg": list(error), "west": bool(west), "saved": now, "sides": sides}), encoding="utf-8")
 
 
 def location(site):

@@ -72,11 +72,14 @@ more times without moving while the bolts are turned. All take `--dry-run` and `
 error; it checks all three positions against the limits first, and takes
 `--dry-run` and `--json`. `ty mount drift` changes the Dec motor's creep. `ty mount stop` halts
 everything and is always allowed. `shoot.py` re-centres the target as it
-drifts unless given `--no-recentre`.
+drifts unless given `--no-recentre`. `focus.py --field` first slews to the
+best placed of a short list of bright stars with many round them, keeping
+to the side of the meridian the tube is on when one there is high enough,
+and clear of the directions listed as blocked; `--dry-run` names the star.
 
 ## Uses the camera, not the mount
 
-`snap.py`, `liveview.py`, `focus.py`, `solve.py`, `skywatch.py`,
+`snap.py`, `liveview.py`, `focus.py` (without `--field`), `solve.py`, `skywatch.py`,
 `calibrate.py`, `camera_test.py`, `shoot.py --no-recentre`.
 
 `camera_setup.py` gets the camera ready and is safe to run at any time: it

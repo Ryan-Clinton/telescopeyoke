@@ -13,6 +13,12 @@ README's "Current status" is the full account.
 - **`focus.py` measures only the bright stars.** Far out of focus it had been
   reading the sky's grain. The tone is louder and unbroken, and `--numbers`
   speaks each reading and nothing else.
+- **The pointing error is kept for each side of the meridian**, not as one
+  figure reversed across the pole, which sent every first GoTo across the
+  meridian 6° wide on the real mount.
+- **`focus.py --field`** goes first to a bright star with many round it
+  (it moves the telescope), and the meter no longer takes specks of grain
+  for stars when the focuser is far out.
 - **`solve.py` tries again on a frame averaged in blocks** when stars too
   soft to be taken for stars leave the first try with nothing.
 - **The skyline from a phone panorama** (`./panorama.py`, and the Horizon

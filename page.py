@@ -244,7 +244,10 @@ PAGE = Template(r"""<!doctype html>
   .pill { border: 1px solid var(--line); border-radius: 999px; padding: 1px 9px; font-size: 12px;
           color: var(--dim); white-space: nowrap; }
   figure { margin: 0; }
-  figcaption { color: var(--dim); font-size: 13px; margin-bottom: 6px; }
+  /* One line, whatever it says: "9 s ago" becoming "10 s ago" must not wrap
+     the caption and push the picture down. */
+  figcaption { color: var(--dim); font-size: 13px; margin-bottom: 6px; white-space: nowrap;
+               overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
   figcaption b { color: var(--text); letter-spacing: .06em; }
   img { max-width: 100%; border-radius: 8px; border: 1px solid var(--line); display: block; }
 

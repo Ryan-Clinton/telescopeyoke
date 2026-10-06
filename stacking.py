@@ -30,6 +30,7 @@ ROOT = Path(__file__).parent
 CALIBRATION = Path(os.environ.get("TY_CALIBRATION") or config.DATA / "calibration")
 REGISTER = 1024     # side of the central square used for the first rough line-up
 MIN_MATCHES = 6     # stars needed to trust a star-by-star alignment
+SPOTS = 40          # brightest stars kept from the quick look at a frame, to place it by
 
 
 # --- names that become folders ---------------------------------------------------
@@ -284,6 +285,9 @@ def quick_quality(mosaic, calibration):
     small = ndimage.median_filter(small, 3)   # hot pixels are not stars
     stars = find_stars(small)
     q = quality(small, stars)
+    # Where the brightest stars are, in the pixels of the full treatment's
+    # picture: enough to tell how far this frame sits from another.
+    q["spots"] = [[2 * float(x), 2 * float(y)] for x, y in stars[:SPOTS, :2]]
     if q["fwhm"] is not None:
         q["fwhm"] *= 2
     q["flux"] *= 4
@@ -455,6 +459,39 @@ def align(stars, reference_stars, rough, centre=None):
     return found if found[2] else (r, t, 0, None)
 
 
+def apart(spots, reference_spots):
+    """How far a frame sits from another, as the (x, y) shift that takes its
+    brightest stars onto the other's, or None if too few agree. Every pair of
+    stars proposes a shift and the true one is the one many pairs agree on,
+    so no starting guess is needed and no shift is too far."""
+    a, b = np.asarray(spots, dtype=float), np.asarray(reference_spots, dtype=float)
+    if len(a) < MIN_MATCHES or len(b) < MIN_MATCHES:
+        return None
+    proposals = (b[:, None, :] - a[None, :, :]).reshape(-1, 2)
+    cells, counts = np.unique(np.round(proposals / 8.0).astype(int), axis=0, return_counts=True)
+    top = counts.argmax()
+    if counts[top] < MIN_MATCHES:
+        return None
+    agreed = proposals[np.all(np.abs(proposals - cells[top] * 8.0) <= 8.0, axis=1)]
+    return np.median(agreed, axis=0)
+
+
+def framing(spots, reference_spots):
+    """Where most of a session's frames sat, as an (x, y) shift from the
+    reference frame, or None when that is not known or is nowhere else.
+
+    Everything is lined up on the sharpest frame, and the picture used to
+    take its framing from that frame too. On 6 October 2026 the sharpest of
+    207 frames of M31 was the one that had drifted furthest, 19 arcminutes
+    off, and the galaxy's core came out in a corner of a picture the run had
+    kept centred for all but a few minutes."""
+    shifts = [s for s in (apart(reference_spots, own) for own in spots) if s is not None]
+    if len(shifts) < 3:
+        return None
+    middle = np.median(shifts, axis=0)
+    return None if np.hypot(*middle) < 2 else middle
+
+
 def warp(rgb, r, t):
     """Move a frame onto the reference: rotate by R and shift by t, with
     smooth (cubic) resampling. Pixels with no data come back as NaN."""
@@ -474,7 +511,13 @@ def register(rgb, lum, stars, reference):
     """Line a frame up with the reference frame. `reference` is a dict with
     the reference's "square" and "stars". Returns (registered frame, info)."""
     rough = offset(reference["square"], centre_square(lum))
-    r, t, matched, residual = align(stars, reference["stars"], rough)
+    # The rough line-up cannot see a shift of more than half its square, and
+    # reports some smaller one in its place; with the frame's middle given,
+    # the stars are then asked directly. Without it a drifted frame matched
+    # no stars, went into the stack out of place, and the run, told it had
+    # drifted 8 arcminutes when it was 19, did not re-centre.
+    centre = (lum.shape[1] / 2, lum.shape[0] / 2)
+    r, t, matched, residual = align(stars, reference["stars"], rough, centre)
     rotation = float(np.degrees(np.arctan2(r[1, 0], r[0, 0])))
     return warp(rgb, r, t), {"shift": [float(t[0]), float(t[1])], "rotation": rotation,
                              "matched": matched, "residual": residual}
@@ -556,6 +599,11 @@ def register_file(path, exposure, gain, reference, store, slot, shape, scale=1.0
         stars = find_stars(lum)
     with timings.phase("line up"):
         rough = offset(reference["square"], centre_square(lum))
+        # The picture is framed where most frames sat (see framing()): the
+        # reference's stars have been moved there already, and the rough
+        # line-up, which knows only the reference as it was taken, follows.
+        moved = reference.get("moved", (0.0, 0.0))
+        rough = (rough[0] + moved[1], rough[1] + moved[0])
         centre = (lum.shape[1] / 2, lum.shape[0] / 2)
         r, t, matched, residual = align(stars, reference["stars"], rough, centre)
         flipped = False

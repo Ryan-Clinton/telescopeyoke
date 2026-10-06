@@ -61,6 +61,19 @@ def test_a_goto_with_centring_has_something_real_to_correct(demo):
     assert not (ROOT / "demo" / "cache" / "last_solve.json").exists() or True
 
 
+def test_the_focusing_aid_goes_to_a_field_of_stars_first(demo):
+    """--field slews the pretend mount to a bright star before focusing, or
+    says that none is well placed; --dry-run names the star and moves nothing."""
+    dry = json.loads(demo("focus.py", "--field", "--dry-run", "--json", check=False).stdout)
+    if not dry["ok"]:
+        assert "well up" in dry["errors"][0]["message"]
+        pytest.skip("none of the focus stars is well placed at this hour")
+    assert dry["data"]["would_move"] is True and dry["data"]["field"]
+    answer = json.loads(demo("focus.py", "--field", "--frames", "2", "--quiet", "--json").stdout)
+    assert answer["ok"], answer
+    assert answer["data"]["hfr"] > 0
+
+
 def test_the_focusing_aid_follows_the_pretend_focuser(demo):
     readings = []
     for turns in (5, 2, 0):

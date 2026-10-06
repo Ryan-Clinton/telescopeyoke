@@ -168,6 +168,9 @@ tr.pick { cursor: pointer; } tr.pick:hover td { color: var(--act-text); }
 .gallery img { width: 100%; opacity: var(--picture); } .gallery img:hover { opacity: 1; }
 .gallery figcaption, .viewer figcaption { color: var(--dim); font-size: 12.5px; margin-bottom: 4px; }
 .viewer figcaption b { color: var(--text); letter-spacing: .06em; }
+/* One line, whatever it says: "9 s ago" becoming "10 s ago" must not wrap the
+   caption and push the picture down. Figures of equal width keep still too. */
+.viewer figcaption { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-variant-numeric: tabular-nums; }
 
 /* --- focus ------------------------------------------------------------------ */
 .focus { text-align: center; padding: 10px 0 4px; }

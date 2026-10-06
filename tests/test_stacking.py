@@ -413,3 +413,47 @@ def test_a_field_that_has_turned_a_few_degrees_is_still_lined_up():
     r, t, matched, residual = stacking.align(stars, reference_stars, rough, centre)
     assert matched > 60 and matched > 2 * plain[2] and residual < 0.3
     assert np.degrees(np.arctan2(r[1, 0], r[0, 0])) == pytest.approx(-4.0, abs=0.05)
+
+
+def test_a_frame_that_has_drifted_past_the_rough_line_up_is_still_matched():
+    """The rough line-up sees no further than half its 1024-pixel square. A
+    live frame that had drifted further used to match no stars and go into
+    the stack out of place, with the drift under-read."""
+    xy, flux = field()
+    reference = reference_for(render(xy, flux))
+    lum = render(moved(xy, -600.0, 30.0), flux, seed=3)
+    _, info = stacking.register(as_rgb(lum), lum, stacking.find_stars(lum), reference)
+    assert info["matched"] >= 15
+    assert info["shift"] == pytest.approx([600.0, -30.0], abs=0.5)
+
+
+def test_the_picture_is_framed_where_most_frames_sat_not_where_the_sharpest_did():
+    xy, _ = field(40)
+    sharpest = xy + [300.0, -200.0]                    # the one frame that had drifted
+    others = [xy + [dx, 0.0] for dx in (-4.0, 0.0, 3.0, 5.0)]
+    middle = stacking.framing(others + [sharpest], sharpest)
+    assert middle == pytest.approx([-300.0, 200.0], abs=4.1)
+    # Frames all in one place leave the picture where it is, and stars that
+    # agree on nothing say nothing.
+    assert stacking.framing([xy, xy, xy], xy) is None
+    assert stacking.apart(xy[:3], xy) is None
+    assert stacking.apart(xy + [50.0, 7.0], xy) == pytest.approx([-50.0, -7.0])
+
+
+def test_cloud_stopping_a_run_leaves_the_live_view_running(monkeypatch, tmp_path):
+    """The run starts the live view as it goes, and the live view does not
+    take that run's last frame for a run it must give way to."""
+    import liveview
+    started = []
+    monkeypatch.setattr(shoot.subprocess, "Popen", lambda command, **options: started.append((command, options)))
+    shoot.watch_on()
+    command, options = started[0]
+    assert command[1].endswith("liveview.py") and "--after-run" in command
+    assert options["stdout"] == shoot.subprocess.DEVNULL       # nothing left holding the run's output open
+
+    monkeypatch.setattr(liveview.config, "DATA", tmp_path)
+    log = tmp_path / "frames" / "M31" / "20261006-214958" / "frames.jsonl"
+    log.parent.mkdir(parents=True)
+    log.write_text("{}\n", encoding="utf-8")
+    assert liveview.run_active()                                 # a frame just logged: a run is going
+    assert not liveview.run_active(since=log.stat().st_mtime + 1)   # ...but it was before this live view began

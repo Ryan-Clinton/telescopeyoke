@@ -55,7 +55,7 @@ anything with `--dry-run`; `pytest`; `doctor.py`.
 ## Commands that move the telescope
 
 `mount.py goto | point | zenith | home | compensate | directions`, and `shoot.py` (which
-re-centres), `polaralign.py`, `polaris.py find` and `align`, `landmark.py check`, `horizon.py`. `mount.py drift` and `shoot.py --assist` change
+re-centres), `focus.py --field` (which goes to a bright star to focus on), `polaralign.py`, `polaris.py find` and `align`, `landmark.py check`, `horizon.py`. `mount.py drift` and `shoot.py --assist` change
 a motor's creep rate. `mount.py stop` is always allowed.
 
 ## Safety invariants (do not weaken these)

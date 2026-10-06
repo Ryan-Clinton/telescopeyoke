@@ -135,6 +135,16 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
             rgb = stacking.prepare(mosaic, stacking.Calibration(best["exposure"], gain))
             lum = rgb.sum(axis=2)
         reference = {"square": stacking.centre_square(lum), "stars": stacking.find_stars(lum)}
+        # Line up on the sharpest frame, but frame the picture where most of
+        # the frames sat: the sharpest may be one that had drifted.
+        moved = stacking.framing([f.get("spots", []) for f in chosen], best.get("spots", []))
+        if moved is not None:
+            reference["stars"] = reference["stars"].copy()
+            reference["stars"][:, :2] += moved
+            reference["moved"] = (float(moved[0]), float(moved[1]))
+            say(f"framed where most frames sat, {np.hypot(*moved):.0f} pixels from the sharpest")
+        for f in frames:
+            f.pop("spots", None)    # not worth keeping in the session's record
         shape = (len(chosen), *rgb.shape)
         np.memmap(work, dtype=np.float16, mode="w+", shape=shape).flush()
         try:
@@ -190,7 +200,7 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
         stacking.write_stack(session / "final.fits", stacked,
                              {"EXPTIME": total, "NFRAMES": len(chosen), "GAIN": gain})
         name = session.parent.name
-        image = Image.fromarray(process.process(stacked))
+        image = Image.fromarray(process.process(stacked, background=process.sky_for(name)))
         (config.DATA / "web").mkdir(exist_ok=True)
         image.save(session / "final.jpg", quality=93)
         image.save(config.DATA / "web" / f"{name}-final.jpg", quality=93)
