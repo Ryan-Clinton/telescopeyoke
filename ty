@@ -13,6 +13,8 @@
     ./ty run stop            tell the imaging run that is going to finish now and make its
                              picture (also: recentre, assist-on, assist-off)
     ./ty console             the control console in the browser, on this computer only
+    ./ty rigs                every rig in one view: what each is and what it is doing
+    ./ty --rig heq5 ...      any of these for one rig (its settings are rigs/heq5.toml)
     ./ty mount ...           everything mount.py does, e.g. ./ty mount goto M27 --dry-run
     ./ty tonight ...         the full report, as tonight.py
 
@@ -50,6 +52,11 @@ def show(value, indent=0):
 
 
 def main():
+    if len(sys.argv) > 2 and sys.argv[1] == "--rig":
+        # Before anything is imported: which telescope's settings and files this is about.
+        import os
+        os.environ["TY_RIG"] = sys.argv[2]
+        del sys.argv[1:3]
     if len(sys.argv) > 1 and sys.argv[1] in PASS_THROUGH:
         # The individual scripts keep their own options; this just finds them.
         import importlib
@@ -60,7 +67,7 @@ def main():
 
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["capabilities", "status", "context", "doctor", "night",
-                                        "targets", "target", "session", "observing", "run"])
+                                        "targets", "target", "session", "observing", "run", "rigs"])
     ap.add_argument("name", nargs="?", help="object name, for 'target'; the order, for 'run'")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--demo", action="store_true", help="made-up weather at the example site")
@@ -89,6 +96,7 @@ def main():
         "target": lambda: agent.target(args.name, args.demo),
         "session": lambda: agent.session(bool(args.frames), args.frames or 50),
         "observing": lambda: agent.observing(args.demo),
+        "rigs": agent.rigs,
         "run": lambda: __import__("shoot").tell(args.name or ""),
     }[args.command]
     result = interface.run(args.command, work)

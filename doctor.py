@@ -6,6 +6,7 @@
     ./doctor.py --skip-handset   do not open the mount's serial port
     ./doctor.py --json           the same as data, for programs
     ./doctor.py --report         the check written out to post as a hardware report
+    ./doctor.py --report --probe COM7    also ask whatever is on that port what it is
 
 It only looks; nothing is changed and the mount is never moved. The handset
 check sends two status questions, so skip it while another command is using
@@ -21,6 +22,7 @@ import sys
 from pathlib import Path
 
 import host
+from interface import Refusal
 
 ROOT = Path(__file__).parent
 OK, WARN, FAIL = "ok", "warn", "fail"
@@ -123,7 +125,7 @@ def check_direct():
             seen = direct.describe(link)
         finally:
             link.close()
-    except Exception as error:
+    except (Exception, Refusal) as error:      # a Refusal is a SystemExit: it would end the whole check
         return FAIL, f"motor board not answering: {getattr(error, 'message', error)}"
     state = json.loads(direct.STATE_FILE.read_text(encoding="utf-8")) if direct.STATE_FILE.exists() else {}
     board = f"{seen['model']} motor board, firmware {seen['firmware']}"
@@ -179,6 +181,19 @@ def check_handset():
         return FAIL, ("handset not set up since power-on: press ENTER through its "
                       "start-up screens, entering today's date")
     return OK, "SynScan handset answering and set up"
+
+
+def check_other_mount_software():
+    """On Windows, say so if ASCOM or a mount driver such as EQMOD is
+    installed: nothing is wrong, but only one program can have the mount's
+    COM port at a time. None if there is none, or in the demo."""
+    if _demo():
+        return None
+    found = host.ascom_drivers()
+    if not found:
+        return None
+    return OK, (f"{', '.join(found)} installed. telescopeyoke does not use ASCOM and leaves it alone; it talks "
+                "to the mount's COM port itself, so close EQMOD or whatever else has that port first")
 
 
 def check_program(name, purpose):
@@ -288,6 +303,9 @@ def run(offline=False, skip_handset=False, name_site=True):
     if not skip_handset:
         mount.append(check_handset())
     mount.append(check_webcam())
+    others = check_other_mount_software()
+    if others:
+        mount.append(others)
     imaging = [check_solver(), check_star_database()]
     if config.DEMO:
         # The pretend camera is the same on every system: no driver, no library.
@@ -368,21 +386,70 @@ def identity(link):
     return model, firmware
 
 
+def gives_position(link):
+    """Whether the handset answers "where are you pointing?" in the shape
+    expected. Only whether: the answer itself would say roughly where on
+    Earth the mount is, so it is not kept."""
+    import re
+    link.write(b"e")
+    return bool(re.fullmatch(rb"[0-9A-F]{8},[0-9A-F]{8}#", link.read_until(b"#", 18)))
+
+
 def handset_identity():
-    """Ask the handset, or the demo's pretend one, what it is; (None, None)
+    """Ask the handset, or the demo's pretend one, what it is and whether it
+    gives its position: (model, firmware, True or False). (None, None, None)
     if there is no handset to ask or it does not answer."""
     try:
         if _demo():
             import simulator
-            return identity(simulator.SimulatedHandset())
+            link = simulator.SimulatedHandset()
+            return (*identity(link), gives_position(link))
         port = find_serial_port() if mount_link() == "handset" else None
         if not port:
-            return None, None
+            return None, None, None
         import serial
         with serial.Serial(port, 9600, timeout=2) as link:
-            return identity(link)
+            return (*identity(link), gives_position(link))
     except Exception:       # a report with a gap in it is better than no report
-        return None, None
+        return None, None, None
+
+
+BAUDS = (9600, 115200)      # a motor board on an EQDIR lead; one with a USB socket of its own
+
+
+def probe(port):
+    """Ask whatever is on one serial port what it is, in the two languages
+    this project speaks: the SynScan handset's, then the motor board's (the
+    one EQMOD speaks, at each usual speed). Every question only reads, and
+    the first answer ends it, so a handset is never sent the motor board's
+    words. It is only ever done to a port a person has named. Returns lines
+    for the report."""
+    import serial
+    try:
+        with serial.Serial(port, 9600, timeout=2) as link:
+            link.write(b"Kx")
+            if link.read_until(b"#", 8) == b"x#":
+                model, firmware = identity(link)
+                return [f"a SynScan handset answered at 9600 baud: mount {model or 'not given'}, "
+                        f"firmware {firmware or 'not given'}, position {'given' if gives_position(link) else 'not given'}"]
+    except Exception as problem:
+        return [f"the port could not be opened: {getattr(problem, 'message', problem)}"]
+    import direct
+    lines = ["no SynScan handset answered at 9600 baud"]
+    for baud in BAUDS:
+        try:
+            link = direct.Serial(port, baud)
+            try:
+                seen = direct.describe(link)
+            finally:
+                link.close()
+        except (Exception, Refusal) as problem:
+            lines.append(f"no motor board answered at {baud} baud ({getattr(problem, 'message', problem)})")
+            continue
+        return lines + [f"a motor board answered at {baud} baud in the language EQMOD speaks: model {seen['model']}, "
+                        f"firmware {seen['firmware']}, {seen['counts_per_turn']} counts per turn, "
+                        f"{'moving' if any(seen['moving']) else 'not moving'}"]
+    return lines + ["nothing on this port answered in either language"]
 
 
 def system():
@@ -410,7 +477,12 @@ def source():
     return f"a git checkout at {commit}" if commit else "a git checkout"
 
 
-def hardware_report(offline=False, skip_handset=False):
+def config_rig():
+    import config
+    return config.RIG
+
+
+def hardware_report(offline=False, skip_handset=False, probe_port=None):
     """The check written out for someone else to read: what the computer is,
     what the mount says it is, and every check. It only looks, as the check
     does, and nothing is moved. The site's name and the home folder are left
@@ -422,13 +494,22 @@ def hardware_report(offline=False, skip_handset=False):
              f"- telescopeyoke {agent.VERSION} ({source()}), Python {'.'.join(str(v) for v in sys.version_info[:3])}",
              f"- System: {system()}",
              f"- Mount reached by: {'the demo (a pretend mount)' if _demo() else link}"]
+    if config_rig():
+        lines.append("- One of several rigs on this computer")
     if not skip_handset and (_demo() or mount_link() == "handset"):
-        model, firmware = handset_identity()
+        model, firmware, position = handset_identity()
         lines += [f"- Mount, as the handset names it: {model or 'not given'}",
-                  f"- Handset firmware: {firmware or 'not given'}"]
+                  f"- Handset firmware: {firmware or 'not given'}",
+                  f"- Position: {'the handset gives it (left out of this report)' if position else 'not given'}"]
     if not _demo():
-        ports = ", ".join(f"{name} ({device})" if host.WINDOWS else name for device, name in host.serial_ports())
-        lines.append(f"- Serial ports seen: {ports or 'none'}")
+        ports = host.serial_details()
+        lines.append(f"- Serial ports seen: {len(ports) or 'none'}")
+        lines += ["  - " + ", ".join(filter(None, (p["device"].rsplit("/", 1)[-1], p["description"],
+                                                  p["maker"] and f"made by {p['maker']}", p["usb"] and f"USB {p['usb']}")))
+                  for p in ports]
+    if probe_port:
+        lines.append(f"- Asked {probe_port} directly what it is (questions that only read):")
+        lines += [f"  - {line}" for line in probe(probe_port)]
     lines += ["", "```", words(run(offline, skip_handset, name_site=False)), "```", "",
               "Nothing was moved to make this report, and it leaves out where you are. Add what you",
               f"tried and what happened, then post it: {REPORTS}"]
@@ -443,14 +524,19 @@ def main():
     ap.add_argument("--json", action="store_true", help="answer in JSON (see schemas/)")
     ap.add_argument("--report", action="store_true",
                     help="write the check out to post as a hardware report; your location is left out")
+    ap.add_argument("--probe", metavar="PORT",
+                    help="with --report: ask whatever is on this serial port (COM7, /dev/ttyUSB0) what it "
+                         "is, as a handset and then as a motor board. Only reads; close EQMOD first")
     args = ap.parse_args()
 
     if args.json:
         import interface
         result = interface.run("doctor", lambda: report(args.offline, args.skip_handset))
         sys.exit(interface.emit(result) or (0 if result["data"]["ready"]["planner"] else 1))
+    if args.probe and not args.report:
+        ap.error("--probe goes with --report")
     if args.report:
-        print(hardware_report(args.offline, args.skip_handset))
+        print(hardware_report(args.offline, args.skip_handset, args.probe))
         return
     results = run(args.offline, args.skip_handset)
     print("telescopeyoke system check\n")

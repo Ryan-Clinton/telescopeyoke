@@ -587,7 +587,7 @@ class Reader:
         import config
         import doctor
         hardware = config.hardware()
-        return {"mode": self.mode, "version": agent.VERSION, "configured": config.FILE.exists(),
+        return {"mode": self.mode, "version": agent.VERSION, "configured": config.FILE.exists(), "rig": config.RIG,
                 "settings_file": str(config.FILE), "camera_backend": hardware["camera"]["backend"],
                 "mount_link": doctor.mount_link(), "system": sys.platform}
 
@@ -730,6 +730,7 @@ class Reader:
             "settings": (self.settings, 0),
             "system": (self.system, 10),
             "gallery": (self.gallery, 10),
+            "rigs": (agent.rigs, 5),
         }
         if name not in routes:
             return None

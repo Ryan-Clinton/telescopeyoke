@@ -15,7 +15,7 @@ const SVG = "http://www.w3.org/2000/svg";
 const STALE = 600;   // seconds after which an old measurement is taken off the bar
 
 const seen = { state: null, night: null, targets: null, observing: null, session: null, job: null,
-               doctor: null, focus: null, catalogue: null, horizon: null, report: null, system: null, gallery: null,
+               doctor: null, focus: null, catalogue: null, horizon: null, report: null, system: null, gallery: null, rigs: null,
                polar: null, landmarks: null };
 let task = "home", chosen = null, filter = null, plan = null, trail = [], lastJobId = null;
 let unread = 0, logged = new Set();
@@ -240,7 +240,7 @@ function mode() {
 function drawTop() {
   const state = seen.state, night = seen.night;
   if (!state) return;
-  $("site").textContent = state.site || "";
+  $("site").textContent = [state.rig, state.site].filter(Boolean).join(" · ");
   $("demo").hidden = $("demo-mount").hidden = !state.demo;
   if (night) {
     // The same words as the Clear window card, when the report has arrived.
@@ -644,6 +644,7 @@ function drawTelescope() {
   const limits = state.capabilities.motion.limits;
   facts($("telescope-facts"), [["Reached by", link], ["State", state.mount.state],
         ["Position", position ? `RA ${position.ra_hours} h, Dec ${position.dec_deg}°, read ${age(Date.now() / 1000 - position.read)}` : "not read yet"],
+        ["Rig", state.rig],
         ["Limits", `at least ${limits.min_altitude_deg}° up, within ${limits.max_hour_angle_hours} h of the meridian, ${limits.sun_exclusion_deg}° from the Sun`],
         ["Motion lock", state.capabilities.motion.locked ? `locked: ${state.capabilities.motion.lock_reason}` : "not locked"]]);
   checkLines($("telescope-checks"), ["serial_access", "mount_lead"]);
@@ -702,6 +703,19 @@ function drawLandmark() {
     picture($("landmark-now"), "landmark.jpg");
   }
   gateAll();
+}
+
+function drawRigs() {
+  const found = (seen.rigs && seen.rigs.rigs) || [];
+  const links = { handset: "SynScan handset", wifi: "SynScan Wi-Fi adapter", eqdir: "EQDIR lead" };
+  fill($("rig-cards"), found.length ? found.map((rig) => {
+    const run = rig.imaging, kept = run && run.acceptance_rate != null ? ` · ${Math.round(100 * run.acceptance_rate)}% kept` : "";
+    return el("div", {}, el("div", { class: "title", text: rig.name + (rig.current ? " (this window)" : "") }),
+              rig.problem ? el("div", { class: "warn", text: rig.problem })
+                          : el("div", { class: "quiet", text: `${links[rig.mount_link] || rig.mount_link} · ${rig.focal_length_mm} mm · camera through ${rig.camera_backend}` }),
+              el("div", { class: `big ${run && run.state === "capturing" ? "good" : ""}`, text: run ? `${run.name} ${(run.state || "").toUpperCase()}` : "NO RUN YET" }),
+              run ? el("div", { class: "quiet", text: `${run.captured}${run.planned ? " / " + run.planned : ""} frames${kept}${run.median_fwhm ? " · FWHM " + run.median_fwhm : ""} · ${age(run.age)}` }) : null);
+  }) : el("p", { class: "quiet", text: "No rigs yet: this is the only telescope." }));
 }
 
 function drawSolver() { checkLines($("solver-checks"), ["plate_solver", "star_database"]); }
@@ -891,7 +905,7 @@ function show(name) {
 const SCREENS = { home: drawHome, targets: drawTargets, mount: drawMount, focus: drawFocus, imaging: drawImaging,
                   status: () => statusRows($("status-rows")), welcome: drawWelcome, camera: drawCamera, telescope: drawTelescope,
                   solver: drawSolver, webcam: drawWebcam, horizon: drawHorizon, polar: drawPolar, landmark: drawLandmark, calibration: gateAll, testing: gateAll,
-                  processing: drawProcessing, doctor: drawDoctor, settings: drawSettings, logs: () => {}, about: drawAbout,
+                  processing: drawProcessing, rigs: drawRigs, doctor: drawDoctor, settings: drawSettings, logs: () => {}, about: drawAbout,
                   "demo-sky": drawDemoSky };
 
 function draw() {
@@ -928,6 +942,7 @@ async function refresh() {
   if (!seen.catalogue) wanted.push("catalogue");
   if (task === "doctor" || !seen.doctor) wanted.push("doctor");
   if (task === "horizon") wanted.push("horizon");
+  if (task === "rigs") wanted.push("rigs");
   if (task === "polar") wanted.push("polar");
   if (task === "landmark") wanted.push("landmarks");
   slow += 1;

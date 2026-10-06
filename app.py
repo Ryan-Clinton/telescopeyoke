@@ -3,6 +3,8 @@
 
     ./app.py            the application
     ./app.py --demo     the same with a simulated mount and a made-up run
+    ./app.py --rig heq5       the same for one of several telescopes: its own settings and files
+    ./app.py --new-rig heq5   make that rig's settings and put it in the applications menu
 
 It is what the launcher in the applications menu starts (install.sh puts it
 there; on Windows, install.ps1 makes the Start Menu shortcut). It starts the
@@ -20,6 +22,8 @@ import sys
 
 if "--demo" in sys.argv[1:]:
     os.environ["TY_DEMO"] = "1"      # before anything is imported: the demo keeps its own files
+if "--rig" in sys.argv[1:-1]:        # likewise: which telescope's settings and files this is
+    os.environ["TY_RIG"] = sys.argv[sys.argv.index("--rig") + 1]
 
 import argparse
 import shutil
@@ -149,7 +153,8 @@ def run(demo=False, self_test=False, ways=(gtk_window, webview_window, browser_w
     url = f"http://127.0.0.1:{server.server_address[1]}/?key={key}"
     busy = lambda: jobs.current["label"] if jobs.current else None
     try:
-        shown = any(way(url, TITLE + (" (demo)" if demo else ""), busy, self_test) for way in ways)
+        named = " (demo)" if demo else f" ({config.RIG})" if config.RIG else ""
+        shown = any(way(url, TITLE + named, busy, self_test) for way in ways)
     finally:
         # Closing the application ends its job and always tells the mount to stop.
         if not self_test:
@@ -167,9 +172,20 @@ def main():
                     help="open the window, say how it was made, and close it again")
     ap.add_argument("--install-launcher", action="store_true",
                     help="put TelescopeYoke in the applications menu (the Start Menu on Windows)")
+    ap.add_argument("--rig", metavar="NAME",
+                    help="one of several telescopes: its settings are rigs/NAME.toml and its files rigs/NAME/")
+    ap.add_argument("--new-rig", metavar="NAME",
+                    help="make a rig's settings (from config.toml, or the example) and its menu entry")
     args = ap.parse_args()
+    if args.new_rig:
+        print(f"settings for the rig: {config.new_rig(args.new_rig)}")
+        for written in host.install_launcher(ROOT, rig=args.new_rig):
+            print(f"added {written}")
+        print(f"Start it from the applications menu as TelescopeYoke ({args.new_rig}), or with "
+              f"./app.py --rig {args.new_rig}, and set it up on its Settings screen.")
+        return
     if args.install_launcher:
-        for written in host.install_launcher(ROOT):
+        for written in host.install_launcher(ROOT, rig=args.rig):
             print(f"added {written}")
         return
     shown = run(args.demo or config.DEMO, args.self_test)

@@ -160,6 +160,7 @@ There is one, and it is the author's:
 | HEQ5 | SynScan | any | Linux or Windows | ❔ wanted | could be you |
 | EQ6, EQ6-R | SynScan | any | Linux or Windows | ❔ wanted | could be you |
 | any of them | SynScan | another INDI camera | Linux | ❔ wanted | could be you |
+| a mount converted with an EQStar or other EQMOD-style controller | none | any | Linux or Windows | ❔ wanted: whether it answers at all | could be you |
 
 **To add a row**, working or not:
 
@@ -179,6 +180,54 @@ checks a move against the limits and says what it would do, without making
 it. For a question first ("will it work with my HEQ5?"), ask in
 [Discussions](https://github.com/Ryan-Clinton/telescopeyoke/discussions).
 
+**A controller that is not a SynScan handset** (an EQDIR lead, an
+Astro-Gadget EQStar, anything normally driven through EQMOD): nobody knows
+yet whether telescopeyoke can talk to yours, and it does not guess. Name the
+port and it will ask:
+
+```bash
+./doctor.py --report --probe COM7        # Linux: --probe /dev/ttyUSB0
+```
+
+It asks that one port what it is, first as a SynScan handset and then as a
+Sky-Watcher motor board (the language EQMOD speaks), at 9600 and at 115200
+baud, and writes what answered into the report along with the adapter's
+make and USB numbers. Every question only reads; nothing is told to move.
+Close EQMOD first, since only one program can have the port.
+
+### Already using EQMOD or ASCOM?
+
+Keep them. telescopeyoke does not use ASCOM and changes nothing about an
+ASCOM or EQMOD installation: it talks to the mount's COM port itself. The
+one rule is that two programs cannot hold the same port at once, so close
+EQMOD (or NINA, or the SynScan app) before starting telescopeyoke on that
+mount, and the other way round. On Windows the doctor says so when it sees
+ASCOM or EQMOD installed. What it adds to a setup that already works is the
+part in between: targets ranked for your own horizon, a GoTo that
+plate-solves and centres itself, focusing by ear, and short exposures
+checked and stacked as they arrive.
+
+### More than one telescope
+
+A **rig** is one telescope with its own settings and its own files. With two
+out on a good night, each runs in a window of its own:
+
+```bash
+./app.py --new-rig heq5       # its settings (rigs/heq5.toml) and "TelescopeYoke (heq5)" in the menu
+./app.py --rig heq5           # open it; set it up on its Settings screen
+./ty --rig heq5 mount status  # any command, for that rig
+./ty rigs                     # every rig in one view: what each is and what it is imaging
+```
+
+Each rig keeps its own frames, pictures, calibration frames and remembered
+measurements under `rigs/heq5/`, so two nights' work never mix. The
+application's Rigs screen shows what every rig is doing. With no rig named
+everything is as before: `config.toml` and the folders beside it. The motion
+lock (`MOTION_LOCKED`) stops every rig at once.
+
+Rigs, `--probe` and the EQMOD notice are newer than release 0.2.0: until the
+next release they need `git clone`, not the zip.
+
 **What to expect of other equipment:**
 
 | Hardware | Status |
@@ -190,7 +239,7 @@ it. For a question first ("will it work with my HEQ5?"), ask in
 | EQ5, HEQ5, EQ6 with a SynScan handset | ⚠️ Untested. Likely: same serial protocol. |
 | Other INDI cameras | ⚠️ Untested. Likely for mono or RGGB colour sensors: set the driver and sensor size in `config.toml`. |
 | Other telescopes | Set the focal length in `config.toml`. |
-| ASCOM, Alpaca | ❌ Not supported. |
+| ASCOM, Alpaca | ❌ Not used. An ASCOM or EQMOD installation is noticed and left alone; see below. |
 
 ## Commands
 
@@ -218,13 +267,13 @@ it. For a question first ("will it work with my HEQ5?"), ask in
 | `solve.py` | Plate-solves a frame: where is the telescope really pointing? |
 | `polaralign.py` | Measures how far the polar axis is from the pole, from three plate solves. |
 | `skywatch.py` | Photographs the sky every minute and stops when stars appear. |
-| `doctor.py` | Checks what is installed and connected, and says what is ready: planner, mount, imaging. `--report` writes the same out to post as a hardware report, with the mount's model and the handset's firmware as the handset gives them, and your location left out. |
+| `doctor.py` | Checks what is installed and connected, and says what is ready: planner, mount, imaging. `--report` writes the same out to post as a hardware report, with the mount's model and the handset's firmware as the handset gives them, and your location left out; `--probe PORT` adds what answers on a serial port you name. |
 | `tour.py` | Records the demo being used, pressing the same buttons a person would: the animation at the top of this page, and a still of each screen. Ubuntu only. |
 | `replay.py` | Turns a centring run recorded with `mount.py goto --solve --record` into a GIF. |
 | `watch.py` | Photographs the telescope itself with the webcam. |
 | `release.py` | Makes a release: the zip people download, its notes from `CHANGELOG.md`, and with `--publish` the tag and the release on GitHub. |
 | `build_catalogue.py` | Regenerates `data/targets.csv` from OpenNGC. |
-| `ty` | One front door for programs and AI agents: `capabilities`, `status`, `context`, `night`, `targets`, `target NAME`, `session`, `observing`, `doctor`. Add `--json` for a fixed machine-readable shape. |
+| `ty` | One front door for programs and AI agents: `capabilities`, `status`, `context`, `night`, `targets`, `target NAME`, `session`, `observing`, `doctor`, `rigs`. `--rig NAME` first runs any of them for one of several telescopes. Add `--json` for a fixed machine-readable shape. |
 | `mcp_server.py` | Read-only MCP server offering the same information to MCP-aware assistants. |
 
 `tonight.py`, `serve.py` and `mount.py` accept `--demo`.
@@ -389,6 +438,17 @@ version and the mount's model. Both are in Sky-Watcher's published protocol
 and both only read, but they are tested against the simulated handset alone.
 `try-demo.cmd` and `install.ps1 -Demo` have not been run on a real Windows
 machine; `./install.sh --demo` and `./tour.py` have been, on Ubuntu.
+
+Written for a second person's equipment and not yet tried on it: rigs have
+been run only as tests, never with two real telescopes at once. `--probe`
+has never met a real controller: the handset's part and the motor board's
+part are each tested against stand-ins, and whether an EQStar answers either
+is exactly what it is there to find out. The notice about ASCOM and EQMOD
+reads the Windows registry where ASCOM is documented to keep its list, and
+has not been run on a computer that has them. The report also now asks the
+handset whether it gives a position (it keeps only yes or no, because the
+answer would say roughly where the mount is); that too is from the published
+protocol and tested on the simulated handset.
 
 Written but never run on the real mount or camera: `landmark.py`. Finding
 how far a view has moved is tested on made-up rooftops, and the turning back

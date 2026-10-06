@@ -112,6 +112,29 @@ the same computer, without the equipment and tools. The status page
 (`serve.py`) is separate and stays read-only for watching from elsewhere in
 the house.
 
+## More than one telescope
+
+A rig is one telescope with its own settings and files; use rigs when two
+are set up at once. With one telescope, ignore them.
+
+1. `./app.py --new-rig heq5` makes `rigs/heq5.toml`, starting from your
+   `config.toml` (the site is the same garden) or from the example, and puts
+   **TelescopeYoke (heq5)** in the applications menu or Start Menu. Names
+   are letters, digits, `-` and `_`.
+2. Open it and change what differs on its Settings screen: how the mount is
+   reached, the serial lead's name, the telescope's focal length, the camera.
+   Two leads with the same adapter name cannot be told apart by
+   `serial_match`; give each rig a different one, or start its commands with
+   `--port`.
+3. Each rig's frames, pictures, calibration frames and remembered
+   measurements are in `rigs/heq5/`. From a terminal, `./ty --rig heq5 ...`
+   runs any command for it, and so does setting `TY_RIG=heq5`.
+4. `./ty rigs`, or the Rigs screen, shows every rig and what its newest
+   imaging run is doing. It reads files; it asks no mount anything.
+
+One window runs one rig. The motion lock stops all of them. On Linux two
+cameras through INDI need a different `[indi] port` each.
+
 ## Windows
 
 telescopeyoke runs natively on Windows 10 and 11: no WSL and no ASCOM. What
@@ -134,6 +157,12 @@ goto M27` is typed `python mount.py goto M27`, and `./ty status` is
    To try the demo and nothing else, double-click `try-demo.cmd` instead:
    it runs the same installer and then opens TelescopeYoke (demo). Windows
    may ask whether to run a file that came from the internet.
+   If EQMOD or another ASCOM mount driver is installed, the doctor says so.
+   Nothing is wrong and nothing of theirs is touched; telescopeyoke opens
+   the mount's COM port itself, so close EQMOD (or NINA, or the SynScan app)
+   while it has that mount, and the other way round. For a controller that
+   is not a SynScan handset, `python doctor.py --report --probe COM7` asks
+   that port what it is without moving anything.
 2. **Paths in `config.toml`** are written with forward slashes:
    `"C:/Program Files/astap"`. Inside double quotes a backslash starts an
    escape, so `"C:\Program Files\astap"` is an error. Single quotes also

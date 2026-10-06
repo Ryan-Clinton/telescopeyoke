@@ -48,6 +48,54 @@ def serial_ports():
     return sorted((p.device, p.description or "") for p in list_ports.comports())
 
 
+def serial_details():
+    """Every serial port with what its USB adapter says of itself: for a
+    hardware report, where the adapter's make is how a controller is told
+    from a handset's lead. Each is {"device", "description", "maker", "usb"}."""
+    try:
+        from serial.tools import list_ports
+        ports = sorted(list_ports.comports(), key=lambda p: p.device)
+    except Exception:       # pyserial missing or the system will not list them: the names alone
+        return [{"device": device, "description": name, "maker": "", "usb": ""} for device, name in serial_ports()]
+    return [{"device": p.device, "description": p.description or "", "maker": p.manufacturer or "",
+             "usb": f"{p.vid:04X}:{p.pid:04X}" if p.vid is not None and p.pid is not None else ""}
+            for p in ports if WINDOWS or p.vid is not None]      # Linux lists sixteen ttyS that are nothing
+
+
+# The mount drivers someone with a working Windows setup is likely to have:
+# EQMOD, Green Swamp Server and Sky-Watcher's own, as ASCOM registers them.
+ASCOM_MOUNT_DRIVERS = {"EQMOD.Telescope": "EQMOD", "ASCOM.GS.Sky.Telescope": "Green Swamp Server",
+                       "ASCOM.SkyWatcher.Telescope": "Sky-Watcher's SynScan driver"}
+
+
+def ascom_drivers(registered=None):
+    """Which other mount software is installed (Windows): [] if none, or
+    ["ASCOM Platform", "EQMOD", ...]. It reads the registry and changes
+    nothing; telescopeyoke does not use ASCOM, and only says what it sees so
+    that two programs are not left fighting over one COM port. `registered`
+    stands in for the registry in the tests."""
+    if registered is None:
+        if not WINDOWS:
+            return []
+        import winreg
+        registered = set()
+        # ASCOM keeps its list in the 32-bit part of the registry; look in both.
+        for view in (winreg.KEY_WOW64_32KEY, winreg.KEY_WOW64_64KEY):
+            try:
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\ASCOM", 0, winreg.KEY_READ | view):
+                    registered.add("")
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\ASCOM\Telescope Drivers", 0,
+                                    winreg.KEY_READ | view) as drivers:
+                    for i in range(winreg.QueryInfoKey(drivers)[0]):
+                        registered.add(winreg.EnumKey(drivers, i))
+            except OSError:
+                pass
+    if not registered:
+        return []
+    return ["ASCOM Platform"] + [name for key, name in ASCOM_MOUNT_DRIVERS.items()
+                                 if any(key.lower() == found.lower() for found in registered)]
+
+
 def serial_port(match):
     """The port of the lead whose USB adapter's name contains `match`, or None."""
     if not WINDOWS:
@@ -277,12 +325,15 @@ SHORTCUT = ("$s = (New-Object -ComObject WScript.Shell).CreateShortcut($env:TY_L
             "$s.Description = 'Plan the night and run the telescope'; $s.Save()")
 
 
-def install_launcher(root, python=None):
+def install_launcher(root, python=None, rig=None):
     """Put TelescopeYoke, and its demo, in the applications menu (Linux) or
     the Start Menu (Windows), so it is started like any other program: no
-    terminal, its own icon. Returns the files written."""
+    terminal, its own icon. With `rig`, the one entry that opens that rig.
+    Returns the files written."""
     root, python = Path(root), python or sys.executable
     entries = (("TelescopeYoke", ""), ("TelescopeYoke (demo)", " --demo"))
+    if rig:
+        entries = ((f"TelescopeYoke ({rig})", f" --rig {rig}"),)
     written = []
     if WINDOWS:
         # pythonw runs a program with no console window behind it.
@@ -303,7 +354,8 @@ def install_launcher(root, python=None):
     menu = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "applications"
     menu.mkdir(parents=True, exist_ok=True)
     for name, arguments in entries:
-        entry = menu / ("telescopeyoke.desktop" if not arguments else "telescopeyoke-demo.desktop")
+        entry = menu / ("telescopeyoke.desktop" if not arguments else
+                        f"telescopeyoke-{rig}.desktop" if rig else "telescopeyoke-demo.desktop")
         entry.write_text(DESKTOP_ENTRY.format(name=name, python=python, script=root / "app.py",
                                               arguments=arguments, icon=root / "console" / "telescopeyoke.png"),
                          encoding="utf-8")

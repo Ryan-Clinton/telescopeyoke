@@ -116,7 +116,7 @@ def test_requests_without_the_key_or_from_elsewhere_are_refused(desk):
 
 def test_reading_starts_nothing(desk):
     for name in ("state", "job", "night", "targets", "observing", "session", "doctor", "catalogue",
-                 "focus", "horizon", "report", "system", "gallery", "target/M27"):
+                 "focus", "horizon", "report", "system", "gallery", "rigs", "target/M27"):
         status, answer = desk.json(f"/api/{name}")
         assert status == 200 and answer["ok"], name
     report = desk.json("/api/hardware")[1]["data"]["text"]
@@ -588,7 +588,7 @@ def test_opening_the_settings_makes_them_from_the_example_first(tmp_path, monkey
 def test_the_page_keeps_the_equipment_screens_to_the_application():
     page = (PAGE / "index.html").read_text(encoding="utf-8")
     for screen in ("camera", "telescope", "solver", "webcam", "polar", "landmark", "horizon", "calibration", "testing",
-                   "processing", "doctor", "settings", "logs", "about", "welcome"):
+                   "processing", "rigs", "doctor", "settings", "logs", "about", "welcome"):
         assert re.search(rf'<section id="{screen}" class="task" data-only="app"', page), screen
     for screen in ("home", "targets", "imaging", "focus", "mount"):
         assert re.search(rf'<section id="{screen}" class="task"(?! data-only)', page), screen

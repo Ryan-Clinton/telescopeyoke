@@ -114,9 +114,10 @@ cd TelescopeYoke-v0.2.0
   <tr class="wanted"><td>EQ5</td><td>SynScan</td><td>any</td><td>Linux or Windows</td><td>wanted</td><td>could be you</td></tr>
   <tr class="wanted"><td>HEQ5</td><td>SynScan</td><td>any</td><td>Linux or Windows</td><td>wanted</td><td>could be you</td></tr>
   <tr class="wanted"><td>EQ6, EQ6-R</td><td>SynScan</td><td>any</td><td>Linux or Windows</td><td>wanted</td><td>could be you</td></tr>
+  <tr class="wanted"><td>a mount with an EQStar or other EQMOD-style controller</td><td>none</td><td>any</td><td>Linux or Windows</td><td>wanted: whether it answers at all</td><td>could be you</td></tr>
 </table>
 </div>
-<p>EQ5, HEQ5 and EQ6 mounts with a SynScan handset speak the same serial protocol, so they are likely to work, but nobody has tried. On Linux the camera is read through INDI; on Windows only Altair cameras are supported. ASCOM is not used.</p>
+<p>EQ5, HEQ5 and EQ6 mounts with a SynScan handset speak the same serial protocol, so they are likely to work, but nobody has tried. On Linux the camera is read through INDI; on Windows only Altair cameras are supported. ASCOM is not used, and an EQMOD or ASCOM setup you already have is left alone: close EQMOD while TelescopeYoke has the mount's port, and the other way round.</p>
 
 <div class="note">
   <b>Looking for testers.</b> If you have one of these mounts, a report from you is worth more than any new feature, and you do not have to let it move your mount. <code>./doctor.py --report</code> only looks at what is connected: it writes out what the handset says the mount is, its firmware, and what was found, with your location left out. Paste that into a

@@ -16,12 +16,14 @@
 | `ty targets --limit N [--kind K] [--now]` | ranked targets | *demo* |
 | `ty target NAME` | where it is now; whether a GoTo is allowed | |
 | `ty session [--frames N]` | newest imaging run; frame detail only on request | |
+| `ty rigs` | every rig (a telescope with its own settings and files): how its mount is reached, and its newest imaging run | `schemas/rigs.schema.json`. Reads files only. `ty --rig NAME <command>` runs any command for one rig |
 
 ## Asks the handset (opens the serial port; do not run while another command is driving the mount)
 
 | Command | Returns |
 |---|---|
 | `ty mount status` | `slewing` / `tracking` / `stopped`, position, pier side |
+| `doctor.py --report --probe PORT` | the hardware report, plus what answers on that one port: a handset, a motor board, or nothing. Questions that only read; no `--json`. Only for a port a person has named |
 
 ## Planning a move (no hardware needed, nothing moves)
 

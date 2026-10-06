@@ -75,18 +75,48 @@ def capabilities():
     }
 
 
-def session(include_frames=False, limit=50, include_series=False):
+def rigs():
+    """Every rig in one view: what it is, from its settings, and what its
+    newest imaging run is doing, from its own files. It reads; it asks no
+    mount or camera anything. The telescope run with no rig named is listed
+    first, as "default", when it has settings."""
+    listed = [("default", config.ROOT / "config.toml", config.ROOT)] if (config.ROOT / "config.toml").exists() else []
+    listed += [(name, config.RIGS / f"{name}.toml", config.RIGS / name) for name in config.rigs()]
+    found = []
+    for name, file, data in listed:
+        entry = {"name": name, "current": name == (config.RIG or "default") and not config.DEMO}
+        try:
+            settings = config._merged(config._read(file))
+            entry.update(mount_link=settings["mount"].get("link", "handset"),
+                         serial_match=settings["mount"].get("serial_match"),
+                         camera_backend=settings["camera"]["backend"],
+                         focal_length_mm=settings["scope"]["focal_length_mm"])
+        except Exception as problem:      # one rig's bad file must not hide the others
+            entry["problem"] = f"its settings cannot be read: {problem}"
+        try:
+            run = session(data=data)
+            entry["imaging"] = {k: run.get(k) for k in ("name", "state", "captured", "planned", "accepted",
+                                                        "acceptance_rate", "median_fwhm", "age")}
+        except interface.Refusal:
+            entry["imaging"] = None
+        found.append(entry)
+    return {"rigs": found, "current": "demo" if config.DEMO else config.RIG or "default"}
+
+
+def session(include_frames=False, limit=50, include_series=False, data=None):
     """The newest imaging run: counts, the latest frame's quality, and why
     frames were dropped. Frame-by-frame detail only on request; so is the
-    series of recent measurements, for drawing."""
-    folders = {p.parent for p in (config.DATA / "frames").glob("*/*/frames.json*")}
+    series of recent measurements, for drawing. `data` is another rig's
+    folder, to read its run instead of this one's."""
+    base = data or config.DATA
+    folders = {p.parent for p in (base / "frames").glob("*/*/frames.json*")}
     if not folders:
         raise interface.Refusal("NO_SESSION", "No imaging run has been recorded yet.")
     newest = max(folders, key=lambda d: max(q.stat().st_mtime for q in d.glob("*.json*")))
     status = stacking.run_status(newest)
     series = status.pop("series", None)
     status["state"] = imaging_state(status)
-    status["folder"] = str(newest.relative_to(config.DATA))
+    status["folder"] = str(newest.relative_to(base))
     if status["captured"]:
         status["acceptance_rate"] = round(status["accepted"] / status["captured"], 3)
     if include_frames:

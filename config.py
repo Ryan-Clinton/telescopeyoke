@@ -1,6 +1,7 @@
 """Site and equipment settings, read from config.toml."""
 import copy
 import os
+import re
 import shutil
 import sys
 import tomllib
@@ -18,10 +19,41 @@ EXAMPLE = ROOT / "config.example.toml"
 DEMO = os.environ.get("TY_DEMO") == "1"
 # Where frames, pictures and remembered measurements are kept. The demo keeps
 # its own, so that nothing made up is ever mixed with a real night's files.
-DATA = Path(os.environ.get("TY_DATA") or (ROOT / "demo" if DEMO else ROOT))
+# A rig is one telescope: its own settings (rigs/NAME.toml) and its own
+# frames, pictures and remembered measurements (rigs/NAME/). Someone with two
+# telescopes out runs the program once for each, with TY_RIG, "ty --rig NAME"
+# or "app.py --rig NAME" saying which. With no rig named it is as it always
+# was: config.toml and the folders beside it.
+RIGS = ROOT / "rigs"
+RIG = os.environ.get("TY_RIG") or None
+if RIG and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,30}", RIG):
+    sys.exit(f"A rig's name is letters, digits, - and _ (it names a file): not {RIG!r}")
+DATA = Path(os.environ.get("TY_DATA") or (ROOT / "demo" if DEMO else RIGS / RIG if RIG else ROOT))
+FILE = RIGS / f"{RIG}.toml" if RIG else ROOT / "config.toml"
+if RIG and not DEMO and not FILE.exists():
+    # A mistyped name must not quietly become a new, empty telescope.
+    sys.exit(f"There is no rig called {RIG}. Make it with:  ./app.py --new-rig {RIG}\n"
+             f"Rigs so far: {', '.join(sorted(p.stem for p in RIGS.glob('*.toml'))) or 'none'}")
 if DATA != ROOT:
     DATA.mkdir(parents=True, exist_ok=True)     # the scripts make their own folders inside it
-FILE = ROOT / "config.toml"
+
+
+def rigs():
+    """The names of the rigs that have settings, in order."""
+    return sorted(p.stem for p in RIGS.glob("*.toml"))
+
+
+def new_rig(name):
+    """Make a rig's settings file, starting from config.toml if there is one
+    (the site is the same garden) and from the example if not. Returns the
+    file; an existing rig is left as it is."""
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,30}", name):
+        raise ValueError(f"A rig's name is letters, digits, - and _: not {name!r}")
+    RIGS.mkdir(exist_ok=True)
+    made = RIGS / f"{name}.toml"
+    if not made.exists():
+        shutil.copy(ROOT / "config.toml" if (ROOT / "config.toml").exists() else EXAMPLE, made)
+    return made
 
 # Used for anything config.toml leaves out. These describe the hardware the
 # project was built with, so an older config.toml keeps working.

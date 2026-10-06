@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/rigs.schema.json",
+  "title": "Rigs",
+  "description": "data of: ty rigs --json. Every rig (one telescope with its own settings and files) and what its newest imaging run is doing. Read from files; no mount or camera is asked anything.",
+  "type": "object",
+  "required": ["rigs", "current"],
+  "properties": {
+    "current": {"type": "string", "description": "The rig this command was run for: a rig's name, \"default\" (config.toml, no rig named) or \"demo\"."},
+    "rigs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "current", "imaging"],
+        "properties": {
+          "name": {"type": "string"},
+          "current": {"type": "boolean"},
+          "mount_link": {"enum": ["handset", "wifi", "eqdir"]},
+          "serial_match": {"type": ["string", "null"]},
+          "camera_backend": {"enum": ["indi", "altair"]},
+          "focal_length_mm": {"type": "number"},
+          "problem": {"type": "string", "description": "Present when the rig's settings could not be read."},
+          "imaging": {
+            "type": ["object", "null"],
+            "description": "The rig's newest imaging run, or null if it has none.",
+            "properties": {
+              "name": {"type": ["string", "null"]},
+              "state": {"type": ["string", "null"]},
+              "captured": {"type": ["integer", "null"]},
+              "planned": {"type": ["integer", "null"]},
+              "accepted": {"type": ["integer", "null"]},
+              "acceptance_rate": {"type": ["number", "null"]},
+              "median_fwhm": {"type": ["number", "null"]},
+              "age": {"type": ["number", "null"]}
+            }
+          }
+        }
+      }
+    }
+  }
+}

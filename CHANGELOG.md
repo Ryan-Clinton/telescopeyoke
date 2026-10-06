@@ -3,6 +3,29 @@
 What each release added, and what it has and has not been proven on. The
 README's "Current status" is the full account.
 
+## Since 0.2.0
+
+In the newest code, not yet in a release.
+
+- **Rigs**: more than one telescope on one computer, each with its own
+  settings (`rigs/NAME.toml`) and its own frames, pictures and measurements.
+  `./app.py --new-rig NAME`, `./app.py --rig NAME`, `./ty --rig NAME ...`,
+  and `./ty rigs` or the application's Rigs screen to see them all.
+- **`./doctor.py --report --probe PORT`** asks whatever is on a serial port
+  you name what it is, as a SynScan handset and then as a motor board, with
+  questions that only read. For controllers such as an EQStar, where nobody
+  yet knows whether telescopeyoke can talk to them.
+- The hardware report lists each serial port's adapter, maker and USB
+  numbers, and whether the handset gives a position (never the position).
+- On Windows the doctor says when ASCOM or EQMOD is installed, and that only
+  one program can have the mount's port. Neither is used or changed.
+- Azimuth by day from a remembered landmark (`landmark.py`).
+- Fixed: the doctor stopped dead, instead of reporting it, when a mount
+  reached without its handset did not answer.
+
+None of the first four has met the equipment it was written for; the
+README's "Current status" says so.
+
 ## 0.2.0: the application and the demo
 
 Everything since the first night, and the first release someone else can try

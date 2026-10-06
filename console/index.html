@@ -43,6 +43,7 @@
   <a href="#testing" data-task="testing" data-only="app"><svg><use href="/icons.svg#tools"/></svg><span>Camera testing</span></a>
   <a href="#processing" data-task="processing" data-only="app"><svg><use href="/icons.svg#tools"/></svg><span>Processing</span></a>
   <div class="group" data-only="app">System</div>
+  <a href="#rigs" data-task="rigs" data-only="app"><svg><use href="/icons.svg#mount"/></svg><span>Rigs</span></a>
   <a href="#doctor" data-task="doctor" data-only="app"><svg><use href="/icons.svg#system"/></svg><span>Doctor</span></a>
   <a href="#settings" data-task="settings" data-only="app"><svg><use href="/icons.svg#tools"/></svg><span>Settings</span></a>
   <a href="#logs" data-task="logs" data-only="app"><svg><use href="/icons.svg#home"/></svg><span>Logs</span></a>
@@ -265,6 +266,13 @@
     <h1>Processing</h1>
     <div class="tool"><div><b>Restack the last session</b><span id="restack-name"></span></div><button type="button" id="restack-run">Run</button></div>
     <div class="tool"><div><b>Combine sessions</b><span>Every saved session of the same target, as one picture.</span></div><button type="button" id="restack-all">Run</button></div>
+  </section>
+
+  <section id="rigs" class="task" data-only="app" hidden>
+    <h1>Rigs</h1>
+    <p class="quiet">A rig is one telescope, with its own settings and its own pictures. With two telescopes out, each runs in a TelescopeYoke window of its own, and this shows what both are doing. Nothing here asks a mount or a camera anything: it reads what each rig last wrote.</p>
+    <div id="rig-cards" class="cards"></div>
+    <p class="quiet">To add one, in a terminal: ./app.py --new-rig NAME (on Windows, python app.py --new-rig NAME). It makes the rig's settings and puts "TelescopeYoke (NAME)" in the applications menu. The motion lock stops every rig at once.</p>
   </section>
 
   <section id="doctor" class="task" data-only="app" hidden>

@@ -61,6 +61,12 @@ def test_the_launcher_goes_in_the_menu(tmp_path, monkeypatch):
         assert f'"{ROOT / "app.py"}"\n' in entry and f'"{ROOT / "app.py"}" --demo' in demo
         assert f"Icon={ROOT / 'console' / 'telescopeyoke.png'}" in entry
     assert (ROOT / "console" / "telescopeyoke.png").exists() and (ROOT / "console" / "telescopeyoke.ico").exists()
+    # A rig gets an entry of its own, which opens that rig.
+    (rig,) = host.install_launcher(ROOT, rig="heq5")
+    assert rig.exists() and rig not in written
+    if not host.WINDOWS:
+        assert "Name=TelescopeYoke (heq5)\n" in rig.read_text(encoding="utf-8")
+        assert f'"{ROOT / "app.py"}" --rig heq5' in rig.read_text(encoding="utf-8")
 
 
 # --- settings changed from the application ------------------------------------------

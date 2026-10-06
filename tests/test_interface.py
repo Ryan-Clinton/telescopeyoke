@@ -282,6 +282,14 @@ def test_scripts_asked_for_json_print_nothing_else(capsys):
     assert interface.main("chatty", chatty) == {"answer": 42}
 
 
+def test_the_rigs_view_matches_its_schema(tmp_path, monkeypatch):
+    import config
+    monkeypatch.setattr(config, "RIGS", tmp_path)
+    config.new_rig("heq5")
+    answer = valid(interface.run("rigs", agent.rigs), "rigs")
+    assert answer["ok"] and "heq5" in [rig["name"] for rig in answer["data"]["rigs"]]
+
+
 def test_a_release_agrees_with_itself():
     """The version, the changelog and every download link name the same release."""
     import agent

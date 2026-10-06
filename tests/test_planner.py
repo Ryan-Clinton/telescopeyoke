@@ -141,7 +141,7 @@ def test_a_hardware_report_leaves_out_who_and_where(monkeypatch, tmp_path):
     # No test opens the real handset's lead, plugged in or not.
     monkeypatch.setattr(doctor, "check_handset", lambda: (doctor.OK, "a handset made up for the test"))
     asked = []
-    monkeypatch.setattr(doctor, "handset_identity", lambda: asked.append(1) or ("EQ5", "4.39.05"))
+    monkeypatch.setattr(doctor, "handset_identity", lambda: asked.append(1) or ("EQ5", "4.39.05", True))
     text = doctor.hardware_report(offline=True, skip_handset=True)
     assert "hardware report" in text and "Ready for planner" in text and "Serial ports seen" in text
     assert "(a git checkout" in text or "(from a release zip)" in text       # which code made it
@@ -151,6 +151,129 @@ def test_a_hardware_report_leaves_out_who_and_where(monkeypatch, tmp_path):
     if doctor.mount_link() == "handset":
         text = doctor.hardware_report(offline=True)
         assert "as the handset names it: EQ5" in text and "Handset firmware: 4.39.05" in text
+        assert "Position: the handset gives it (left out of this report)" in text
+
+
+def test_the_handset_is_asked_whether_it_gives_a_position_and_the_answer_is_not_kept():
+    import doctor
+    from simulator import SimulatedHandset
+    assert doctor.gives_position(SimulatedHandset()) is True
+    assert doctor.gives_position(Wire({b"e": b"34AB0500,12CE0500#"})) is True
+    assert doctor.gives_position(Wire({})) is False and doctor.gives_position(Wire({b"e": b"#"})) is False
+    assert doctor.handset_identity.__doc__ and len(doctor.handset_identity()) == 3
+
+
+class Port(Wire):
+    """Wire, opened the way a serial port is."""
+    opened = []
+
+    def __init__(self, answers, port, baud):
+        super().__init__(answers)
+        Port.opened.append((port, baud))
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        pass
+
+
+def test_a_named_port_is_asked_what_it_is_and_a_handset_is_never_sent_motor_board_words(monkeypatch):
+    import serial
+
+    import direct
+    import doctor
+    Port.opened = []
+    monkeypatch.setattr(serial, "Serial", lambda port, baud, timeout=2: Port(
+        {b"Kx": b"x#", b"V": b"042507#", b"m": bytes([1]) + b"#", b"e": b"34AB0500,12CE0500#"}, port, baud))
+    monkeypatch.setattr(direct, "Serial", lambda *a: pytest.fail("the motor board's words were sent to a handset"))
+    lines = doctor.probe("COM4")
+    assert len(lines) == 1 and "SynScan handset answered" in lines[0] and "HEQ5" in lines[0] and "4.37.07" in lines[0]
+    assert "34AB" not in lines[0]                 # that it gives a position, never the position
+    assert Port.opened == [("COM4", 9600)]
+
+
+def test_a_controller_that_speaks_the_motor_boards_language_is_recognised(monkeypatch):
+    import serial
+
+    import direct
+    import doctor
+    from interface import Refusal
+    tried = []
+
+    class Lead:
+        def __init__(self, port, baud):
+            tried.append(baud)
+            self.baud = baud
+
+        def close(self):
+            pass
+
+    def describe(link):
+        if link.baud != 115200:
+            raise Refusal("HANDSET_NOT_ANSWERING", "not answering")
+        return {"model": "HEQ5", "firmware": "2.04", "counts_per_turn": 9024000, "moving": [False, False],
+                "position_counts": [8388608, 8388608], "link": "x"}
+    monkeypatch.setattr(serial, "Serial", lambda port, baud, timeout=2: Port({}, port, baud))
+    monkeypatch.setattr(direct, "Serial", Lead)
+    monkeypatch.setattr(direct, "describe", describe)
+    lines = doctor.probe("COM7")
+    assert "no SynScan handset" in lines[0] and "no motor board answered at 9600" in lines[1]
+    assert "motor board answered at 115200" in lines[2] and "HEQ5" in lines[2] and "not moving" in lines[2]
+    assert tried == [9600, 115200]
+    monkeypatch.setattr(direct, "describe", lambda link: (_ for _ in ()).throw(Refusal("HANDSET_NOT_ANSWERING", "silent")))
+    assert doctor.probe("COM7")[-1] == "nothing on this port answered in either language"
+    text = doctor.hardware_report(offline=True, skip_handset=True, probe_port="COM7")
+    assert "Asked COM7 directly" in text and "nothing on this port answered" in text
+
+
+def test_other_mount_software_is_noticed_and_left_alone(monkeypatch):
+    import doctor
+    import host
+    assert host.ascom_drivers(set()) == []
+    assert host.ascom_drivers({"", "ScopeSim.Telescope"}) == ["ASCOM Platform"]
+    assert host.ascom_drivers({"", "eqmod.telescope", "ASCOM.GS.Sky.Telescope"}) == ["ASCOM Platform", "EQMOD", "Green Swamp Server"]
+    monkeypatch.setattr(config, "DEMO", False)
+    monkeypatch.setattr(host, "ascom_drivers", lambda: ["ASCOM Platform", "EQMOD"])
+    status, message = doctor.check_other_mount_software()
+    assert status == doctor.OK and "EQMOD installed" in message and "close EQMOD" in message
+    assert (status, message) in doctor.run(offline=True, skip_handset=True)["mount"]
+    monkeypatch.setattr(host, "ascom_drivers", lambda: [])
+    assert doctor.check_other_mount_software() is None
+    assert all("ASCOM" not in m for _, m in doctor.run(offline=True, skip_handset=True)["mount"])
+
+
+def test_each_rig_has_its_own_settings_and_its_own_files(tmp_path, monkeypatch):
+    import subprocess
+    import sys
+
+    import agent
+    monkeypatch.setattr(config, "RIGS", tmp_path)
+    assert config.rigs() == []
+    made = config.new_rig("heq5")
+    assert made == tmp_path / "heq5.toml" and made.exists() and config.rigs() == ["heq5"]
+    made.write_text(made.read_text(encoding="utf-8").replace('serial_match = "FTDI"', 'serial_match = "FTDI"\nlink = "eqdir"'),
+                    encoding="utf-8")
+    assert 'link = "eqdir"' in config.new_rig("heq5").read_text(encoding="utf-8")      # an existing rig is left as it is
+    config.new_rig("eqstar")
+    with pytest.raises(ValueError):
+        config.new_rig("../elsewhere")
+    seen = {rig["name"]: rig for rig in agent.rigs()["rigs"]}
+    assert {"heq5", "eqstar"} <= set(seen)
+    assert seen["heq5"]["mount_link"] == "eqdir" and seen["eqstar"]["mount_link"] == "handset"
+    assert seen["heq5"]["imaging"] is None and not seen["heq5"]["current"]
+    (tmp_path / "broken.toml").write_text("this is not toml = = =", encoding="utf-8")
+    assert "cannot be read" in next(r for r in agent.rigs()["rigs"] if r["name"] == "broken")["problem"]
+
+    # Started for a rig, a program reads that rig's file and keeps its files in that rig's folder.
+    root = Path(config.__file__).parent
+    run = lambda rig: subprocess.run([sys.executable, "-c", "import config; print(config.FILE.name, config.DATA.name)"],
+                                     cwd=root, capture_output=True, text=True,
+                                     env={k: v for k, v in __import__("os").environ.items() if k != "TY_DATA"} | {"TY_RIG": rig})
+    assert run("../x").returncode != 0 and "letters, digits" in run("../x").stderr
+    missing = run("no-such-rig-here")
+    assert missing.returncode != 0 and "There is no rig called no-such-rig-here" in missing.stderr
+    assert not (root / "rigs" / "no-such-rig-here").exists()        # a mistyped name makes nothing
 
 
 def test_doctor_verdict_needs_the_planner_basics_for_everything():

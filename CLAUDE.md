@@ -51,8 +51,10 @@ that may have set.
   needs it; `config.hardware()` works without it and `config.example()`
   never reads it. Tests and `--demo` take their site from `config.example()`.
 - Every file a script keeps (frames, pictures, remembered measurements) is
-  under `config.DATA`: the repository root for real, `demo/` in the demo
-  (`config.DEMO`, from `TY_DEMO=1`), and a scratch folder in the tests.
+  under `config.DATA`: the repository root for real, `rigs/NAME/` for a
+  named rig (`config.RIG`, from `TY_RIG`, whose settings are
+  `rigs/NAME.toml`), `demo/` in the demo (`config.DEMO`, from `TY_DEMO=1`),
+  and a scratch folder in the tests.
   `conftest.py` sets `TY_DATA` and `TY_CALIBRATION` before anything is
   imported, so a test cannot write into a real night's files even if its
   fixture forgets to redirect something. Never build a path to `frames/`,

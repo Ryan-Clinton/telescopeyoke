@@ -19,6 +19,11 @@ mount is, and every check. It leaves out your location and moves nothing.
 paste here
 ```
 
+If the mount is not driven by a SynScan handset (an EQDIR lead, an EQStar,
+anything you normally use through EQMOD), close EQMOD and add the port:
+`python doctor.py --report --probe COM7`. It asks that port what it is and
+tells it to do nothing.
+
 **Equipment it cannot see for itself**
 
 - Mount (as sold, for example "HEQ5 Pro"):

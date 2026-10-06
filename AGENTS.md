@@ -41,6 +41,11 @@ them and every file kept under `demo/`.
 | `docs/index.html` | The project's home page, served by GitHub Pages from `docs/` |
 | `schemas/`, `tests/`, `evals/` | Output schemas, tests, agent scenarios |
 
+A **rig** is one telescope: `TY_RIG=name`, `ty --rig name` or `app.py --rig
+name` makes `config.FILE` `rigs/name.toml` and `config.DATA` `rigs/name/`.
+With none named it is `config.toml` and the repository root, as before.
+`rigs/` is ignored by git: it holds the user's location.
+
 ## Safe without hardware
 
 All of `ty` except `ty mount` with a motion command; anything with `--demo`;
@@ -69,9 +74,11 @@ a motor's creep rate. `mount.py stop` is always allowed.
    Without a handset (`direct.py`) the same refusals stand in for it: no
    movement until home has been recorded, and no GoTo until a person has
    watched which way the Dec motor turns. Never record either for the user.
+   `doctor.py --probe` sends a port only questions that read, and only a
+   port a person named: never try ports in turn to see what is there.
 4. **Anything that changes how the mount moves needs a test against
    `simulator.py`.**
-5. **The user's location never goes in the repository:** `config.toml`,
+5. **The user's location never goes in the repository:** `config.toml`, `rigs/`,
    `web/`, `frames/`, `cache/`, `calibration/` are ignored. Do not publish
    photos of the garden.
 
