@@ -11,7 +11,8 @@
 *The demo, recorded by `./tour.py`: a pretend mount, camera and sky, with
 the real centring, focusing and stacking code running on them.*
 
-**[Download the zip](https://github.com/Ryan-Clinton/telescopeyoke/archive/refs/heads/main.zip) ·
+**[Home page](https://ryan-clinton.github.io/telescopeyoke/) ·
+[Download the zip](https://github.com/Ryan-Clinton/telescopeyoke/archive/refs/heads/main.zip) ·
 [Try the demo, no telescope needed](#quick-start) ·
 [What it has been tried on](#hardware) ·
 [Ask a question](https://github.com/Ryan-Clinton/telescopeyoke/discussions)**
