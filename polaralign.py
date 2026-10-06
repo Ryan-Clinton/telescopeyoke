@@ -3,6 +3,7 @@
 
     ./polaralign.py              measure, and say which way to move the mount
     ./polaralign.py --dry-run    say what it would do; nothing moves
+    ./polaralign.py --step 10    smaller turns, to stay between a house and a tree
     ./polaralign.py --json       the answer as data
 
 Start with the mount tracking a target well away from the pole, such as
@@ -31,6 +32,15 @@ import interface
 import mount
 
 STEP = 25.0  # degrees of RA-axis rotation between the three photographs
+# The least a person may ask for. The solves are good to arcseconds, so a
+# small turn still finds the axis; it is never more than STEP, which is as
+# far as the positions have been tried on the real mount.
+LEAST = 5.0
+# Seconds to wait after each turn before photographing. A GoTo elsewhere
+# waits mount.SETTLE for the stars to stop creeping, so that they land where
+# they were sent; here it does not matter where on its circle a photograph
+# lands, only that it is on it, and a one-second frame does not streak.
+SETTLE = 5
 
 
 def vector(hour_angle, dec):
@@ -58,7 +68,7 @@ def to_altaz(v, latitude):
     return math.degrees(math.asin(up)), math.degrees(math.atan2(east, north))
 
 
-def positions(start_ha, dec, west, site):
+def positions(start_ha, dec, west, site, step=STEP):
     """The three (hour angle, Dec) positions to photograph, checked against
     the limits every aimed move must pass. Raises a Refusal, before anything
     has moved, if any of them is out of bounds."""
@@ -68,11 +78,11 @@ def positions(start_ha, dec, west, site):
                                 "axis hardly moves the view. Go to a target lower down first, such as "
                                 "./mount.py goto NAME --solve.")
     direction = 1 if west else -1
-    spots = [(start_ha + direction * STEP * i, dec) for i in range(3)]
+    spots = [(start_ha + direction * step * i, dec) for i in range(3)]
     for hour_angle, _ in spots:
         if abs(hour_angle) > mount.MAX_HOUR_ANGLE * 15:
             raise interface.Refusal("TARGET_BEYOND_HOUR_ANGLE_LIMIT",
-                                    f"Turning {2 * STEP:.0f}° from here would reach {abs(hour_angle) / 15:.1f} h "
+                                    f"Turning {2 * step:.0f}° from here would reach {abs(hour_angle) / 15:.1f} h "
                                     f"from the meridian, beyond the {mount.MAX_HOUR_ANGLE} h limit. Start "
                                     "from a target nearer the meridian.")
         altitude = to_altaz(vector(hour_angle, dec), site["latitude"])[0]
@@ -83,10 +93,10 @@ def positions(start_ha, dec, west, site):
     return spots
 
 
-def measure(scope, site):
+def measure(scope, site, step=STEP):
     """Photograph the sky at three RA-axis positions and return the polar
     axis's error as (degrees east of north, degrees too high). Slews about
-    STEP degrees twice, away from the meridian, and returns to where it was."""
+    step degrees twice, away from the meridian, and returns to where it was."""
     offset = json.loads(mount.CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
 
     def believed_hour_angle():
@@ -96,14 +106,14 @@ def measure(scope, site):
     dec_handset = mount.wrap(scope.radec()[1])
     # Step away from the meridian, on the side the tube is already on. All
     # three positions are checked before the first move.
-    planned = positions(start_ha, dec_handset, scope.axes()[1] > 90, site)
+    planned = positions(start_ha, dec_handset, scope.axes()[1] > 90, site, step)
     points = []
     try:
         for i, (target_ha, _) in enumerate(planned):
             if i:
                 scope.goto((mount.true_sidereal(site) + offset - target_ha) % 360, dec_handset)
                 scope.tracking(True)
-                time.sleep(mount.SETTLE)
+                time.sleep(min(mount.SETTLE, SETTLE))
             # Tell the solver roughly where to look, then widen if needed.
             hint_ra = mount.true_sidereal(site) - target_ha
             found = (scope.where_really(hint_ra, dec_handset, radius=40)
@@ -139,6 +149,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--dry-run", action="store_true", help="say what it would do; no camera, no mount")
     ap.add_argument("--json", action="store_true", help="answer in JSON at the end")
+    ap.add_argument("--step", type=float, default=STEP, metavar="DEG",
+                    help=f"degrees to turn between photographs, {LEAST:.0f} to {STEP:.0f} (default {STEP:.0f}): "
+                         "less when a house or a tree is in the way of the third")
     args = ap.parse_args()
     return interface.main("polaralign.dry_run" if args.dry_run else "polaralign", lambda: run(args), args.json)
 
@@ -147,17 +160,20 @@ def run(args):
     if mount.LOCK_FILE.exists():
         raise interface.Refusal("MOTION_LOCKED",
                                 f"Motion is locked: {mount.LOCK_FILE.read_text(encoding='utf-8').strip()}")
+    step = getattr(args, "step", STEP)
+    if not LEAST <= step <= STEP:
+        raise interface.Refusal("INVALID_REQUEST", f"--step is from {LEAST:.0f} to {STEP:.0f} degrees.")
     if args.dry_run:
-        note = (f"Photographs the sky where the telescope is, slews {STEP:.0f}° away from the meridian and "
-                f"photographs again, then another {STEP:.0f}°, and returns to where it started. The three "
+        note = (f"Photographs the sky where the telescope is, slews {step:.0f}° away from the meridian and "
+                f"photographs again, then another {step:.0f}°, and returns to where it started. The three "
                 "positions are checked against the altitude and meridian limits before the first move.")
         print(f"Would move the mount. {note}")
-        return {"would_move": True, "safe": True, "step_deg": STEP}, [note]
+        return {"would_move": True, "safe": True, "step_deg": step}, [note]
     site = config.load()["site"]
     scope = mount.Mount()
     if not mount.CLOCK_FILE.exists():
         scope.save_clock(site)      # reading the handset's clock moves nothing
-    azimuth, altitude = measure(scope, site)
+    azimuth, altitude = measure(scope, site, step)
     # Keep it: the drift it causes can now be predicted anywhere in the sky.
     scope.drift_model(site).set_polar(azimuth, altitude)
     words = describe(azimuth, altitude)

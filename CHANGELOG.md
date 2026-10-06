@@ -5,6 +5,16 @@ README's "Current status" is the full account.
 
 ## Not yet released
 
+- **First night of polar alignment by plate solving on the real mount**
+  (6 October 2026): from about 6° to 0.2° from the pole in five rounds.
+  `./polaralign.py --step DEG` turns less between photographs, for a garden
+  where the third would be of a house or a tree, and a round waits 5 s after
+  each turn, not 30.
+- **`focus.py` measures only the bright stars.** Far out of focus it had been
+  reading the sky's grain. The tone is louder and unbroken, and `--numbers`
+  speaks each reading and nothing else.
+- **`solve.py` tries again on a frame averaged in blocks** when stars too
+  soft to be taken for stars leave the first try with nothing.
 - **The skyline from a phone panorama** (`./panorama.py`, and the Horizon
   screen): the line between sky and everything else is found in the picture
   and can be redrawn, two marks tie it to the compass, and panoramas from

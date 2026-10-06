@@ -3,12 +3,13 @@
 
     ./focus.py                 on stars: it speaks as you turn the focuser
     ./focus.py --tones         a rising pitch instead of speech
+    ./focus.py --numbers       each reading spoken as a number, nothing else
     ./focus.py --scene         on rooftops or trees, in daylight
 
 On stars it measures many at once and reports their half-flux radius (HFR):
 the radius holding half of a star's light, in pixels. Smaller is sharper;
 about 2 is good focus on this telescope. It says things like "Improving.
-4.8", "No change", "Worse. Go back", and, once the numbers turn round,
+4.8", "No change. 4.8", "Worse. Go back", and, once the numbers turn round,
 "Minimum passed. Reverse slightly". Readings are steadied over three frames
 and small changes are ignored, so it does not chase the air's shimmering.
 
@@ -102,19 +103,25 @@ def half_flux_radius(lum, x, y, reach):
 
 def measure_stars(lum, most=40):
     """(median half-flux radius, number of stars used) over the field's best
-    stars, leaving out burnt-out ones; (None, 0) with fewer than three."""
+    stars, leaving out burnt-out ones; (None, 0) with fewer than two.
+
+    Only stars within a third of the second brightest count. Out of focus
+    the faint ones are rings sunk in the sky's grain, and their radii are
+    the grain's: on 6 October 2026 forty of them read 3.2 and wandered while
+    the two real stars in the field went from 7 to 11. A hot pixel, which
+    has no radius at all, is left out too."""
     stars = stacking.find_stars(lum, limit=120)
-    radii = []
-    for x, y, _, fwhm, _ in stars:
+    found = []
+    for x, y, flux, fwhm, _ in stars:
         if lum[int(y), int(x)] >= 0.9 * 4 * WHITE:   # burnt out: its shape lies
             continue
         radius = half_flux_radius(lum, x, y, reach=int(np.clip(3 * fwhm, 8, 40)))
-        if radius:
-            radii.append(radius)
-        if len(radii) >= most:
-            break
-    if len(radii) < 3:
-        return None, len(radii)
+        if radius and radius >= 0.3:
+            found.append((flux, radius))
+    if len(found) < 2:
+        return None, len(found)
+    least = sorted(flux for flux, _ in found)[-2] / 3
+    radii = [radius for flux, radius in found if flux >= least][:most]
     return float(np.median(radii)), len(radii)
 
 
@@ -168,20 +175,36 @@ class FocusTracker:
                 self.passed = True
                 return f"Minimum passed. Reverse slightly. Best was {self.best:.1f}."
             return f"Worse. {now:.1f}. Go back."
-        return "No change."
+        return f"No change. {now:.1f}."
 
 
-def tone(value, worst, floor=1.5):
-    """A short tone whose pitch rises as focus improves: 300 Hz at the first
-    reading, 1200 Hz at a perfect star."""
+PLAYING = []   # the tone now sounding, stopped when the next one starts
+
+
+def tone(value, worst, floor=1.5, seconds=0.25):
+    """A tone whose pitch rises as focus improves: 300 Hz at the first
+    reading, 1200 Hz at a perfect star. It lasts the given time, or until
+    the next tone starts: given the time a frame takes, the sound is
+    unbroken and only its pitch steps."""
     span = max(worst - floor, 1e-6)
     pitch = 300 + 900 * float(np.clip((worst - value) / span, 0, 1))
     try:
-        subprocess.Popen(["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", "-f", "lavfi",
-                          "-i", f"sine=frequency={pitch:.0f}:duration=0.25"],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **host.QUIET)
+        new = subprocess.Popen(["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", "-f", "lavfi",
+                                "-i", f"sine=frequency={pitch:.0f}:duration={seconds:.2f}",
+                                # ffmpeg's sine is an eighth of full volume: too
+                                # quiet to hear outdoors beside the telescope.
+                                "-af", "volume=8"],
+                               stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, **host.QUIET)
+        hush()
+        PLAYING.append(new)
     except FileNotFoundError:
         pass   # no ffplay: main() has already said so
+
+
+def hush():
+    """Stop the tone that is sounding."""
+    while PLAYING:
+        PLAYING.pop().terminate()
 
 
 def sharpness(lum):
@@ -211,6 +234,8 @@ def main():
     ap.add_argument("--exposure", type=float, default=0.05, help="starting exposure, seconds")
     ap.add_argument("--gain", type=int, default=300)
     ap.add_argument("--quiet", action="store_true", help="no speech from the laptop")
+    ap.add_argument("--numbers", action="store_true",
+                    help="say each reading as a number and nothing else")
     ap.add_argument("--tones", action="store_true",
                     help="a tone that rises in pitch as focus improves, instead of speech")
     ap.add_argument("--port", type=int, default=PORT)
@@ -234,6 +259,7 @@ def run(args):
     end = time.monotonic() + args.minutes * 60
     try:
         while time.monotonic() < end and not (args.frames and frame >= args.frames):
+            began = time.monotonic()
             mosaic, _ = cam.frame(exposure)
             lum = luminance(mosaic)
             # Brightness on a 0-255 scale, whatever the sensor's bit depth.
@@ -303,8 +329,13 @@ def run(args):
             snap.label("focus view", f"{exposure:g} s", PREVIEW.parent)
             if words and not args.quiet:
                 if args.tones and not args.scene and value:
-                    tone(value, first)
+                    # Long enough to reach the next reading, however long
+                    # this frame took.
+                    tone(value, first, seconds=min(3 * (time.monotonic() - began) + 1, 30))
+                elif args.numbers and not args.scene and value:
+                    say(f"{value:.1f}")
                 else:
+                    hush()
                     say(words)
             print(f"{time.strftime('%H:%M:%S')}  {text}   (exposure {exposure:g}s, peak {top:.0f})",
                   flush=True)
@@ -316,6 +347,7 @@ def run(args):
     except KeyboardInterrupt:
         pass
     finally:
+        hush()
         cam.close()
     if not reading:
         if args.scene:

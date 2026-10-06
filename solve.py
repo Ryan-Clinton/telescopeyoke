@@ -32,14 +32,43 @@ ASTAP, DATABASE = SOLVER["program"], SOLVER["database"]
 FIELD_HEIGHT = round(config.field_height(), 3)
 
 
+# Stars a little out of focus are discs tens of pixels wide, which ASTAP does
+# not take for stars. Averaged in blocks of this many pixels they are points
+# again: the first frames at dusk on 6 October 2026 solved only this way.
+COARSE = 4
+
+
+def coarse(image, block=COARSE):
+    """The image averaged in blocks, with the sky's level taken off."""
+    image = np.asarray(image, dtype=float)
+    h, w = (image.shape[0] // block) * block, (image.shape[1] // block) * block
+    small = image[:h, :w].reshape(h // block, block, w // block, block).mean((1, 3))
+    return np.clip((small - np.median(small)) * block * block + 1000, 0, 65535)
+
+
 def solve(image, ra_hint=None, dec_hint=None, radius=30, field=FIELD_HEIGHT, timeout=180):
     """Plate-solve a 2-D brightness image. Hints are in degrees; with none,
     the whole sky is searched, which is slow. Returns a dict with ra, dec
     (degrees, J2000), rotation (degrees), scale (arcsec per pixel of the
-    image given) and seconds, or None if no match was found."""
+    image given) and seconds, or None if no match was found. A frame that
+    does not solve as it is gets a second try averaged in blocks, when a
+    hint keeps that search short."""
     if config.DEMO:
         import simulator
         return simulator.solve(image, ra_hint, dec_hint, radius)
+    found = astap(image, ra_hint, dec_hint, radius, field, timeout)
+    if found is None and ra_hint is not None and min(np.shape(image)) >= 400 * COARSE:
+        found = astap(coarse(image), ra_hint, dec_hint, radius, field, timeout)
+        if found:
+            found["scale"] /= COARSE
+            found["coarse"] = COARSE
+            if "cd" in found:
+                found["cd"] = [[v / COARSE for v in row] for row in found["cd"]]
+    return found
+
+
+def astap(image, ra_hint, dec_hint, radius, field, timeout):
+    """One run of ASTAP on the image as given."""
     with tempfile.TemporaryDirectory() as tmp:
         path = Path(tmp) / "frame.fits"
         fits.PrimaryHDU(np.clip(image, 0, 65535).astype(np.uint16)).writeto(path)

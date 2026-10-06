@@ -120,6 +120,14 @@ def test_polar_alignment_finds_the_pretend_mounts_error(demo):
         f"scope.goto_target({target!r}, site)\n"
         "print(json.dumps(polaralign.measure(scope, site)))").splitlines()[-1])
     assert found == pytest.approx([1.4, 0.8], abs=0.05)             # simulator.POLAR_ERROR
+    # The same answer from turns of 10°, for a garden with little clear sky.
+    found = json.loads(demo.python(
+        "import json, config, mount, polaralign\n"
+        "site = config.load()['site']\n"
+        "scope = mount.Mount()\n"
+        f"scope.goto_target({target!r}, site)\n"
+        "print(json.dumps(polaralign.measure(scope, site, step=10)))").splitlines()[-1])
+    assert found == pytest.approx([1.4, 0.8], abs=0.1)
     # From the home position it refuses: turning the RA axis there shows nothing.
     refused = json.loads(demo("polaralign.py", "--json", check=False).stdout)
     assert not refused["ok"] and "too near the pole" in refused["errors"][0]["message"]

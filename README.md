@@ -262,7 +262,7 @@ lock (`MOTION_LOCKED`) stops every rig at once.
 | `camera_test.py` | `--capabilities` lists what the camera offers; `--throughput` times every way of getting frames off it; `--gain-sweep` tries a range of gains on tonight's sky and suggests one. |
 | `compare.py` | Shows the same patch of sky from several stacks side by side at full size, with star measurements for each. |
 | `process.py` | Turns a finished stack into a cleaner picture: level sky, white stars, smoothed colour noise. |
-| `focus.py` | Hands-free focusing aid: measures many stars at once and speaks the result. `--tones` for a rising pitch instead of speech, `--scene` for a daytime view. |
+| `focus.py` | Hands-free focusing aid: measures many stars at once and speaks the result. `--tones` for a rising pitch instead of speech, `--numbers` for each reading as a number and nothing else, `--scene` for a daytime view. |
 | `solve.py` | Plate-solves a frame: where is the telescope really pointing? |
 | `polaralign.py` | Measures how far the polar axis is from the pole, from three plate solves. |
 | `skywatch.py` | Photographs the sky every minute and stops when stars appear. |
@@ -404,16 +404,33 @@ Written but not yet run for real: `calibrate.py` (no dark or flat frames have
 been taken yet) and `camera_test.py --gain-sweep`.
 
 Rewritten since they were last used on real hardware, and so far proven only
-against the simulator and made-up data: `focus.py` (multi-star HFR and the
-new spoken guidance), `mount.py drift` (line-fitted, with the drift model),
+against the simulator and made-up data: `mount.py drift` (line-fitted, with the drift model),
 `mount.py compensate` and `shoot.py --assist`. An earlier, cruder
 `mount.py drift` did cancel most of the drift on the real mount.
 
-Written but never run on the real mount: `polaralign.py`, also offered in
-the application under Tools. Its geometry is checked by the tests, and in the
+`polaralign.py` was first run on the real mount on 6 October 2026, on a
+night of broken cloud. With the full 25° turns its third photograph was of a
+house, and then of a tree, so `--step` was added; with 12° turns it gave
+5.2°, 1.1°, 0.4°, 0.6° and 0.2° from the pole over five rounds while the
+adjusters were turned between them, the first of those agreeing with the
+mount's latitude scale. A round takes one to two minutes. Two measurements
+with nothing changed have not been compared, so how well it repeats is not
+known. It is also offered in the application under Tools, which has not been
+tried on the real mount. Its geometry is checked by the tests, and in the
 demo it finds the pretend mount's polar error (1.4° east, 0.8° high) through
 the real plate-solve path. It checks its three positions against the
-altitude and meridian limits, and the motion lock, before anything moves.
+altitude and meridian limits, and the motion lock, before anything moves. It
+does not yet keep clear of the directions listed as blocked.
+
+`focus.py` on many stars was first used on the real telescope on 6 October
+2026 and at first misled: far out of focus it measured forty specks of grain
+and hot pixels, read 3.2 whatever was done, and the focuser was turned the
+wrong way by it. It now measures only stars within a third of the second
+brightest, and with that the reading fell from 11 to about 2 as the focuser
+was turned and the stars became points. The tone was too quiet and came in
+beeps; it is now louder and unbroken. `--numbers` is new. The plate solver
+would not take the soft stars at dusk either, and now tries again on a frame
+averaged in blocks.
 
 Written but never moved a real mount: control without the handset, through
 the SynScan Wi-Fi adapter or an EQDIR lead (`direct.py`). The adapter has

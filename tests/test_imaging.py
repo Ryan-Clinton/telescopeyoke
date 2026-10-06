@@ -136,7 +136,7 @@ def test_focus_does_not_chase_the_seeing():
     tracker = focus.FocusTracker()
     jitter = np.random.default_rng(8).normal(4.0, 0.12, 30)
     said = [tracker.feed(float(v)) for v in jitter]
-    assert set(said[3:]) == {"No change."}
+    assert all(words.startswith("No change. ") for words in said[3:])
 
 
 def test_a_real_worsening_is_reported_once_not_every_frame():
@@ -189,6 +189,8 @@ def test_polar_alignment_checks_all_three_positions_before_moving(tmp_path, monk
     # Near the meridian and high: the three positions step 25° away from it.
     assert polaralign.positions(-15.0, 30.0, False, site) == [(-15.0, 30.0), (-40.0, 30.0), (-65.0, 30.0)]
     assert polaralign.positions(15.0, 30.0, True, site)[2] == (65.0, 30.0)
+    # Smaller turns, for a clear patch between a house and a tree.
+    assert polaralign.positions(-15.0, 30.0, False, site, step=10)[2] == (-35.0, 30.0)
     for start, dec, code in ((-50.0, 30.0, "TARGET_BEYOND_HOUR_ANGLE_LIMIT"),     # would end 6.7 h out
                              (-20.0, -10.0, "TARGET_BELOW_ALTITUDE_LIMIT"),       # ends too low
                              (-15.0, 85.0, "INVALID_REQUEST")):                   # at the pole: nothing to see

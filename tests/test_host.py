@@ -285,3 +285,28 @@ def test_the_computers_own_figures_are_numbers_or_nothing():
     for value in (host.processor_load(), host.temperature()):
         assert value is None or value >= 0
     assert host.QUIET == ({"creationflags": subprocess.CREATE_NO_WINDOW} if host.WINDOWS else {})
+
+
+def test_a_soft_frame_gets_a_second_try_averaged_in_blocks(monkeypatch):
+    """Discs that ASTAP will not take for stars are points again once the
+    frame is averaged in blocks; the answer is given back in the pixels of
+    the frame as it was."""
+    import numpy as np
+    monkeypatch.setattr(config, "DEMO", False)
+    seen = []
+
+    def astap(image, *rest):
+        seen.append(image.shape)
+        if len(seen) == 1:
+            return None
+        return {"ra": 10.0, "dec": 20.0, "rotation": 0.0, "scale": 8.0, "seconds": 0.1,
+                "cd": [[0.004, 0.0], [0.0, 0.004]]}
+
+    monkeypatch.setattr(solve, "astap", astap)
+    found = solve.solve(np.ones((1600, 2000)), 10.0, 20.0)
+    assert seen == [(1600, 2000), (400, 500)]
+    assert found["scale"] == 2.0 and found["cd"][0][0] == 0.001 and found["coarse"] == 4
+    # With no hint the whole sky would be searched twice: it is not tried.
+    seen.clear()
+    monkeypatch.setattr(solve, "astap", lambda *a: seen.append(1))
+    assert solve.solve(np.ones((1600, 2000))) is None and seen == [1]
