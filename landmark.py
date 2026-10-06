@@ -255,15 +255,16 @@ def run(args):
         if not found:
             print("No landmarks remembered yet.")
         return {"landmarks": found}
-    site = config.load()["site"]
     if args.command == "remember":
         if args.dry_run:
             print("Would not move the mount: takes a picture where the telescope is and keeps it.")
             return {"would_move": False, "safe": True}
-        return remember(args.name, mount.Mount(watch=False), site)
+        return remember(args.name, mount.Mount(watch=False), config.load()["site"])
+    # The lock comes first: before the settings are read or the mount opened.
     if mount.LOCK_FILE.exists():
         raise interface.Refusal("MOTION_LOCKED",
                                 f"Motion is locked: {mount.LOCK_FILE.read_text(encoding='utf-8').strip()}")
+    site = config.load()["site"]
     if args.dry_run:
         found = plan(args.name, site)
         print(f"Would turn to {found['landmark']}: bearing {found['bearing_deg']:.1f}°, "
