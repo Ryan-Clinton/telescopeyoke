@@ -39,7 +39,27 @@ the Hypercam 183C over a USB 2 lead:
 | 1824 x 1216 mode | timed out | |
 | Fast exposure, native transfer | timed out | |
 
-The 2736 x 1824 mode collects nearly four times the light per hour. Not yet
+The same test on a USB 3 lead, 6 October 2026, indoors, 1 s exposures:
+
+| Mode | Seconds per frame | Shutter open |
+|---|---|---|
+| Full frame 5440 x 3648, readout speed 2 | 1.54 | 65% |
+| Readout speed 1 | 1.84 | 54% |
+| Readout speed 0 | 2.41 | 42% |
+| Binned 2x2 (2720 x 1824) | 1.12 | 89% |
+| 2736 x 1824 and 1824 x 1216 modes | not measured: see below | |
+| Fast exposure, native transfer | timed out | |
+
+At 0.1 s exposures a full frame took 1.02 s (3.5 s on USB 2) and a binned
+one 0.70 s. So the lead was most of it: about six times the frames at 1 s,
+with the full sensor. The two smaller modes' rows cannot be trusted: the
+frames came back full size and, at 1 s, faster than the exposure (0.91 s
+and 0.77 s), so the test is not selecting the mode or is counting old
+frames. That fault in `camera_test.py` is still to be found. The sensor was
+in room light and burnt out for the 1 s run, so the colour pattern of the
+binned frames is still unjudged. No night has been run on this lead.
+
+On USB 2, the 2736 x 1824 mode collects nearly four times the light per hour. Not yet
 adopted, for two reasons. Whether it keeps the colour pattern could not be
 judged with the cap on (the driver still labels it RGGB); that needs one
 frame of something coloured. And it halves the detail: after the colour

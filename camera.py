@@ -6,7 +6,8 @@ with [camera] backend = "altair" in config.toml, through Altair's own library
         data, header = cam.frame(2.0)      # raw 12-bit Bayer mosaic
 
 Frames are slow on this driver over USB 2: about 4 s plus five times the
-exposure length, so a 2 s exposure takes roughly 14 s to arrive.
+exposure length, so a 2 s exposure takes roughly 14 s to arrive. On USB 3 a
+1 s exposure arrives in about 1.5 s.
 """
 import io
 import subprocess
@@ -90,6 +91,10 @@ class Camera:
             c.set(self.name, "CCD_RESOLUTION", **{next(iter(modes)): "On"})
         c.set(self.name, "CCD_BINNING", HOR_BIN=1, VER_BIN=1)
         c.set(self.name, "CCD_CAPTURE_FORMAT", INDI_RAW="On")
+        if (c.get(self.name, "CCD_TRANSFER_FORMAT") or {}).get("FORMAT_FITS", "On") != "On":
+            # Left on native transfer (camera_test.py did, when its trial of
+            # it timed out), every frame arrives as something that is not FITS.
+            c.set(self.name, "CCD_TRANSFER_FORMAT", FORMAT_FITS="On")
         c.set(self.name, "CCD_CONTROLS", Gain=self.gain)
         c.pump(1)
 

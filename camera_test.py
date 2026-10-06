@@ -138,6 +138,10 @@ def timed_native(cam, exposure, frames):
             fmt, data = c.expose(name, exposure, timeout=12 + 6 * exposure)
         cycle = (time.monotonic() - began) / frames
     finally:
+        # After a time-out the exposure is still running, and the driver
+        # ignores a change of format until it is stopped.
+        c.set(name, "CCD_ABORT_EXPOSURE", ABORT="On")
+        c.pump(1)
         c.set(name, "CCD_TRANSFER_FORMAT", FORMAT_FITS="On")
     return {"cycle_s": round(cycle, 2), "duty_percent": duty(exposure, cycle),
             "format": fmt, "megabytes": round(len(data) / 1e6, 1)}

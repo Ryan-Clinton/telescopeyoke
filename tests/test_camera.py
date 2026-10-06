@@ -37,6 +37,7 @@ class World:
         self.stamps = True        # frames carry the camera's clock; False: always 0
         self.clock_rate = 1.0     # how fast that clock runs against the real one
         self.triggers = 0
+        self.native = False       # INDI only: left sending frames that are not FITS
 
 
 def frame_of(level):
@@ -161,11 +162,15 @@ def fake_indi(world):
             return [name for name, _ in world.cameras]
 
         def get(self, device, name):
+            if name == "CCD_TRANSFER_FORMAT":
+                return {"FORMAT_FITS": "Off" if world.native else "On", "FORMAT_NATIVE": "On" if world.native else "Off"}
             return {"CCD_EXPOSURE_VALUE": "0"} if name == "CCD_EXPOSURE" else None
 
         def set(self, device, name, **values):
             if name == "CCD_CONTROLS":
                 self.gain = values["Gain"]
+            if name == "CCD_TRANSFER_FORMAT":
+                world.native = values.get("FORMAT_FITS") != "On"
 
         def connect(self, device): pass
         def pump(self, seconds): pass
@@ -175,6 +180,8 @@ def fake_indi(world):
             world.triggers += 1
             if world.silent:
                 raise IndiError("no frame")
+            if world.native:
+                return ".raw", b"not FITS"
             started = datetime.now(timezone.utc)
             time.sleep(world.delay)
             header = fits.Header({"EXPTIME": seconds, "GAIN": float(self.gain), "BAYERPAT": "RGGB",
@@ -261,6 +268,18 @@ def test_closing_twice_does_no_harm(route, world):
     cam.frame(0.01)
     cam.close()
     cam.close()
+
+
+def test_a_camera_left_on_native_transfer_is_put_back_to_fits(world, monkeypatch):
+    # camera_test.py's trial of native transfer timed out and left it so;
+    # every frame after that was unreadable until the driver was restarted.
+    monkeypatch.setattr(camera, "BACKEND", "indi")
+    monkeypatch.setattr(camera, "MANAGE_SERVER", False)
+    monkeypatch.setattr(camera, "Indi", fake_indi(world))
+    world.native = True
+    with camera.Camera(gain=100) as cam:
+        mosaic, _ = cam.frame(0.01)
+    assert not world.native and mosaic.shape == (HEIGHT, WIDTH)
 
 
 # --- the SDK route's own hazards -----------------------------------------------------------

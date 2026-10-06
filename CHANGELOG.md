@@ -3,6 +3,16 @@
 What each release added, and what it has and has not been proven on. The
 README's "Current status" is the full account.
 
+## Not yet released
+
+- The camera on a USB 3 lead, timed indoors: a full frame at a 1 s exposure
+  in 1.54 s, against 9.3 s on USB 2. Figures in `docs/validation.md`. No
+  night has been run on it yet.
+- Fixed: `./camera_test.py --throughput` could leave the camera on native
+  transfer, after which no frame could be read by anything. It now stops the
+  exposure before changing back, and the camera is put back on FITS
+  whenever it is opened.
+
 ## 0.2.1: two telescopes, and asking a controller what it is
 
 For someone who already has a working setup, perhaps with two telescopes and

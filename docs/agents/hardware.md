@@ -1,8 +1,8 @@
 # Hardware notes
 
 Tested setup: Sky-Watcher EQ3 Pro SynScan (handset firmware 3.35) on an FTDI
-serial lead, Explorer 150P (750 mm), Altair Hypercam 183C on USB 2, a USB
-webcam, Ubuntu 26.04.
+serial lead, Explorer 150P (750 mm), Altair Hypercam 183C on USB 2 (USB 3
+since 2026-10-06, indoors only so far), a USB webcam, Ubuntu 26.04.
 
 Quirks worth knowing before changing code:
 
@@ -20,6 +20,12 @@ Quirks worth knowing before changing code:
   command-line tools cannot address; hence `indi.py`.
 - **Frames take about 4 s plus five times the exposure** with this driver on
   USB 2, and the driver needs `TIMEOUT_FACTOR` raised or long exposures fail.
+  On USB 3 (measured indoors, 2026-10-06) a frame takes about 0.9 s plus
+  0.6 of the exposure: 1.02 s at 0.1 s, 1.54 s at 1 s.
+- **A trial of native transfer that times out leaves the camera sending
+  frames that are not FITS,** and the driver ignores the change back while
+  the exposure is still running. `camera_test.py` stops the exposure first,
+  and `Camera` puts the format back whenever it opens.
 - **The camera reports no temperature;** darks are scaled to each frame's hot
   pixels instead.
 - **The web server never opens the mount's serial port.**
@@ -74,7 +80,8 @@ Still to do on real hardware:
   been compared. A flipped frame would send plate-solved corrections the
   wrong way, so do that before `goto --solve` is trusted with this route.
 - **Gain:** that the numbers mean the same as the INDI driver's.
-- **A USB 3 lead**, which the camera supports and has never had.
+- **A USB 3 lead** through this route: it has had one only through INDI on
+  Linux (above).
 - **Linux**, with `backend = "altair"`.
 
 How it works, for whoever changes it:
