@@ -528,8 +528,9 @@ Done when, on real hardware:
   stops it, if the suite has no such test already.
 - CI has no camera. The contract tests in step 7 over the fake SDK are what
   runs there, on both systems.
-- `README.md`: a Windows row in the hardware table, and a paragraph in
-  "Current status". The row says which of three levels has been reached,
+- `README.md`: a Windows row in the hardware table and in the "Current
+  status" table, and a paragraph in `docs/validation.md` ("What has and has
+  not been proven, in full"). The row says which of three levels has been reached,
   and no more: tests pass in CI with no hardware; the camera has taken
   frames on Windows; mount and camera have been used together on Windows
   under the sky. Passing CI is the first level only. `docs/setup.md`: a Windows section. `docs/agents/

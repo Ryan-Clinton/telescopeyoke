@@ -182,7 +182,8 @@ cameras through INDI need a different `[indi] port` each.
 ## Windows
 
 telescopeyoke runs natively on Windows 10 and 11: no WSL and no ASCOM. What
-has and has not been proven there is in the README's "Current status".
+has and has not been proven there is in the README's "Current status" and, in full, in
+[validation.md](validation.md#what-has-and-has-not-been-proven-in-full).
 
 Commands in these documents are written for Linux. On Windows `./mount.py
 goto M27` is typed `python mount.py goto M27`, and `./ty status` is

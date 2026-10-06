@@ -105,8 +105,11 @@ a motor's creep rate. `mount.py stop` is always allowed.
   live in `interface.py` and are stable. Bump `SCHEMA_VERSION` for any
   breaking change.
 - Keep `--demo` and the tests working with every change.
-- The README's "Current status" must stay true about what is proven on real
-  hardware.
+- The README's "Current status" table must stay true about what is proven on
+  real hardware, and the account behind it is in `docs/validation.md` ("What
+  has and has not been proven, in full"): a change to what is proven goes in
+  both. The README's "What makes it different" states how far each thing is
+  proven too.
 - The table of tried hardware is in the README ("Hardware") and again on
   the home page (`docs/index.html`); change both together. The version is in
   `pyproject.toml` and `agent.VERSION`, each release has a section in

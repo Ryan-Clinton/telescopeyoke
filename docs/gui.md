@@ -727,7 +727,8 @@ the navigation, not shown empty.
    the garden), `docs/setup.md`, `AGENTS.md` (layout table, and safety
    invariant 2 reworded to name the console and its limits),
    `docs/agents/safety.md` ("What enforces them today"), `CONTRIBUTING.md`.
-   The README's "Current status" says what has been run on real equipment.
+   The README's "Current status" says what has been run on real equipment,
+   and `docs/validation.md` gives the account in full.
 
 ## Tests (no hardware)
 

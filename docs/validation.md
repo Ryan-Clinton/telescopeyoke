@@ -5,6 +5,8 @@
 Much of the newer work is proven on made-up star fields and a simulated
 mount, not yet on real sky. These are the experiments that will settle it.
 Results go here as they are obtained; until then each one says "not yet run".
+The account of everything tried so far, feature by feature, is at the end:
+[What has and has not been proven, in full](#what-has-and-has-not-been-proven-in-full).
 
 | # | Question | How | Result |
 |---|---|---|---|
@@ -146,3 +148,192 @@ M31 from a back garden, polar axis about 9 degrees out, USB 2 lead.
   between one reading and the next, and the smaller figure believed when the
   two disagree by half. A step at every second frame can still pass for
   jitter; a pause of two frames or more after each turn does not.
+
+## What has and has not been proven, in full
+
+The README's "Current status" has the table. This is the account behind it.
+
+Working on real hardware and real stars: the night report and web page,
+mount moves through the handset, camera frames, focusing, plate solving,
+`goto --solve` (centres a target to a fraction of an arcminute) and `sync`.
+The pictures on this page came from an earlier, simpler version of
+`shoot.py`.
+
+Rewritten since those pictures, tested on simulated star fields, and being
+proven on real sky: the stacking pipeline (frame scoring and rejection,
+sub-pixel and rotation alignment, clipped and weighted stacking, saved raw
+frames, the quality pass).
+
+Windows: the tests and every `--demo` command pass with nothing plugged in,
+and the camera has taken frames there: a Hypercam 183C on Windows 11, read
+through Altair's own library (`altair.py`) instead of INDI, set up from
+nothing by `camera_setup.py`. That was indoors with no telescope, so no star
+has been through that route, and its picture has not been compared with the
+INDI route's for which way up it is. The mount has not been driven from
+Windows: the handset's lead has been found by name among the COM ports and
+nothing more. The plate solver's Windows paths, the DirectShow webcam and the
+spoken focusing aid are untried on real equipment. Camera and mount have not
+been used together on Windows.
+
+Written but not yet run for real: `calibrate.py` (no dark or flat frames have
+been taken yet) and `camera_test.py --gain-sweep`.
+
+Rewritten since they were last used on real hardware, and so far proven only
+against the simulator and made-up data: `focus.py` (multi-star HFR, the
+three levels, binned frames and the click and tone), `mount.py drift` (line-fitted, with the drift model),
+`mount.py compensate` and `shoot.py --assist`. An earlier, cruder
+`mount.py drift` did cancel most of the drift on the real mount.
+
+`polaralign.py` was first run on the real mount on 6 October 2026, on a
+night of broken cloud. With the full 25° turns its third photograph was of a
+house, and then of a tree, so `--step` was added; with 12° turns it gave
+5.2°, 1.1°, 0.4°, 0.6° and 0.2° from the pole over five rounds while the
+adjusters were turned between them, the first of those agreeing with the
+mount's latitude scale. A round takes one to two minutes. Two measurements
+with nothing changed have not been compared, so how well it repeats is not
+known. It is also offered in the application under Tools, which has not been
+tried on the real mount. Its geometry is checked by the tests, and in the
+demo it finds the pretend mount's polar error (1.4° east, 0.8° high) through
+the real plate-solve path. It checks its three positions against the
+altitude and meridian limits, and the motion lock, before anything moves. It
+now keeps clear of the directions listed as blocked and goes back to where
+it started when a photograph will not solve; both are tested on the
+simulated mount and neither has happened on the real one since.
+
+The way `focus.py` measures stars was used on the real telescope on 6 October
+2026, before the click and tone were written, and at first misled: far out
+of focus it measured forty specks of grain and hot pixels, read 3.2 whatever
+was done, and the focuser was turned the wrong way by it. It now measures
+only stars within a third of the second brightest, and with that the reading
+fell from 11 to about 2 as the focuser was turned and the stars became
+points. The user asked for the numbers spoken and nothing else, which is
+`--numbers`. The plate solver would not take the soft stars at dusk either,
+and now tries again on a frame averaged in blocks. Later the same night, with the focuser far out and no
+star left to find, it read 2.2 from specks of the sky's grain; a star must
+now stand out from the grain by 8 to count, and the rings are measured in
+their place. On a field of four or five stars it still jumps about, most of
+all between 8 and 20 where rings become stars: `--field`, written that
+night and not yet used on the real mount, goes to a richer field first.
+
+The pointing error is now kept for each side of the meridian. With the
+polar axis 0.2° from the pole the real mount was 5.8° out in Dec on the east
+side and 0.2° on the west, where one figure reversed across the pole had
+been assumed; the next two GoTos on the east side landed 5' and 14' out in
+Dec. The cause of the difference is not known.
+
+The first imaging run after that alignment (207 frames of M31, cloud ending
+it after 41 minutes) showed four faults. The camera exposes for less than it
+is asked: frames meant to take 15 s arrived every 11.6 s, and timed alone,
+each second asked for added 0.63 s. telescopeyoke and the INDI driver both
+pass the time straight on, so the fault is in or below Altair's library
+(1.53 of September 2022 here); a like fault is on record for another ToupTek
+camera, but it is not confirmed to be the same, and no star-trail test has
+been made. Every integration time reported is overstated by about a third
+until it is fixed; a run now says so when it sees it. The mount drifted 19
+arcminutes in 26 minutes with the polar axis 0.2° out, which that does not
+explain; `mount.py drift` was not run. The live run under-read that drift
+and re-centred late, and the final picture was framed on the most drifted
+frame, with most of the galaxy's glow taken for sky. Those last are fixed
+and the picture remade from the same frames; the fixes have not yet been
+through a run on the real mount.
+
+Written but never moved a real mount: control without the handset, through
+the SynScan Wi-Fi adapter or an EQDIR lead (`direct.py`). The adapter has
+been found on the network and asked for its firmware, gearing, position and
+status, on a real EQ3. Every movement is tested only against a simulated
+motor board, and which way the Dec motor turns has to be checked on each
+mount, with someone watching, before a GoTo is allowed.
+
+Written but never used with a real mount or camera: the application
+(`app.py`) and its companion page (`console.py`). The server, its refusals,
+the plan-then-confirm step and Stop are tested against the simulated mount
+and stand-in jobs; the screens have been looked at in demo mode only. The
+window itself has been opened on Ubuntu (GTK with WebKit). On Windows the
+window (WebView2 through pywebview, or Edge's application mode) and the Start
+Menu shortcuts have not been tried on a real machine. How long Stop takes during a real slew, on
+Linux and on Windows, has not been measured.
+
+Written but not yet tried where they are meant for: `./doctor.py --report`
+asks the handset two things it has not been asked before, its firmware
+version and the mount's model. Both are in Sky-Watcher's published protocol
+and both only read, but they are tested against the simulated handset alone.
+`try-demo.cmd` and `install.ps1 -Demo` have not been run on a real Windows
+machine; `./install.sh --demo` and `./tour.py` have been, on Ubuntu.
+
+Written for a second person's equipment and not yet tried on it: rigs have
+been run only as tests, never with two real telescopes at once. `--probe`
+has never met a real controller: the handset's part and the motor board's
+part are each tested against stand-ins, and whether an EQStar answers either
+is exactly what it is there to find out. The notice about ASCOM and EQMOD
+reads the Windows registry where ASCOM is documented to keep its list, and
+has not been run on a computer that has them. The report also now asks the
+handset whether it gives a position (it keeps only yes or no, because the
+answer would say roughly where the mount is); that too is from the published
+protocol and tested on the simulated handset.
+
+Not yet proven on the real sky: `polaris.py`. Its geometry is tested in
+three dimensions on the simulated mount with a made-up daytime sky. On the
+real mount (6 October 2026) the first version of the search turned as
+intended for 23 minutes, out to 1.6° from home, and found nothing: there was
+some cloud, the focus had been disturbed and not checked, and no frames were
+kept, so there is no telling which it was. That is why the search now asks
+for a focus check and can record every look. Daytime frames from the real
+camera expose at about 16 ms with the Sun 14° up, take about a second each,
+and show no false stars in blank sky. The reordered search then ran on the
+real mount from 18:22 to 19:06 the same evening, across sunset: 266 looks in
+35 minutes, about 8 seconds each, the tube stopping within 0.05° of where it
+was sent, out to 3.3° from home, every look kept. It did not find Polaris,
+and nothing stood out further than 8.8 until faint stars began to show at
+dusk and it stopped itself. The likeliest reason is that the mount's axis
+was more than 3° from the pole (it had been set by a phone compass); that
+was not confirmed. Still untried on real hardware: the tipping of the tube
+to prove a candidate, the bringing to the middle, `align`, and the watching
+while the bolts are turned. Guesses still to be set from real
+runs: the level of blue that counts as clear sky (from three frames), the
+steps from "poor" to "very good" by the Sun's height, and how far a point
+must stand out to count.
+
+Written but never run on the real mount or camera: `landmark.py`. Finding
+how far a view has moved is tested on made-up rooftops, and the turning back
+on the simulated mount. Daytime frames have never been taken with the real
+camera, so its choice of exposure is untried.
+
+`horizon.py --trace --torch` was tried on the real mount on 6 October 2026,
+with a torch in the finder's bracket. The idea holds: at 1 s a house wall
+read 2186 and a tree 134 against a sky of 51, and the camera's reading, not
+where the beam was seen to fall, is what tells them apart (the two do not
+point at quite the same spot). The survey itself made 27 looks and was
+stopped with nothing kept: from about the fifteenth every look read the same
+bright 420 with no stars, up to 75° in the south. The motors had stopped
+being driven, with no sound from them, while the handset went on reporting
+each move as made, so the telescope sat on one lit tree for half an hour and
+every bearing given in that time was wrong; the user, standing beside it,
+said so before the readings were believed. Switching the mount off and on
+put it right. The cause is not known: a USB lead may have caught, and a
+status query sent while the survey was driving the mount garbled a reply at
+about that time. The survey now takes a bright frame with stars in it for
+thin cloud, and stops when a bright frame with none is too high up to be a
+tree. Nothing checks that the tube turns when the mount says it has. No
+skyline has yet been measured on the real mount.
+
+Written but never run on the real mount or camera: `horizon.py --trace` and
+`horizon.py --daylight`. The following, the adding of bearings and the checks
+are tested against the simulated mount and made-up skylines. The scores that
+tell daytime sky from a wall, the wait for the tube to steady by day and the
+reading of a top from where the stars stop are first guesses and have not
+seen a real frame; every look keeps its picture in `horizon/looks/` so that
+the first real run can be checked. A frame is about two thirds of a degree
+tall, so "the top is in this frame" only saves looks when the start is
+already close: from a panorama or an earlier survey, not from nothing. The
+camera is read at full size: a smaller or binned mode is not used because
+nobody has yet recorded which of this camera's modes keeps its colour
+pattern (`./camera_test.py --throughput` shows it).
+
+`panorama.py` has found the skyline in three real phone panoramas of one
+garden, two of them well and one (taken low, mostly walls and ground) badly;
+a pale rendered wall is what it most often takes for sky, which is why the
+line can be redrawn. No panorama has yet been tied to the compass with real
+marks and compared with what the telescope sees, so how true the bearings
+and heights come out is not known. The Horizon screen's drawing and marking
+have been run through the console's own interface in the demo but not yet
+used with a mouse.

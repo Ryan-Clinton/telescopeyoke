@@ -1,10 +1,16 @@
 # Changes
 
 What each release added, and what it has and has not been proven on. The
-README's "Current status" is the full account.
+README's "Current status" is the table, and `docs/validation.md` the full account.
 
 ## Not yet released
 
+- The README now opens with what makes telescopeyoke different (a home
+  position set by eye, a manual focuser, a garden skyline, setting up before
+  dark, a rough polar alignment, short exposures rebuilt from the raw
+  frames), each marked with how far it is proven. "Current status" is a
+  table; the night-by-night account has moved, whole, to
+  `docs/validation.md`. "Three parts" has become "The scripts underneath".
 - **Focusing by ear, reworked for quick frames** (`docs/focus.md`). A click
   and a tone for every frame measured, the tone higher as focus improves,
   with the camera already exposing the next frame. Three levels it moves
