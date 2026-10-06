@@ -69,6 +69,36 @@ is a real change to the pipeline, the darks and the plate-solve scale. The
 2x2 binning rows of the benchmark were taken after the failed mode left the
 camera at the smallest size, so they say nothing.
 
+## Daytime frames and a binning trial, 6 October 2026
+
+Taken outdoors on the USB 3 lead with the telescope at the zenith and near
+the pole, about two hours before sunset, for `polaris.py`:
+
+- **Exposure:** the sky reached 70% of full scale at 16 ms, gain 300. The
+  first frame after opening the camera took 45 s (the exposure being found
+  from 2 ms up); each frame after that about 1 s.
+- **Colour of clear sky:** raw medians red 1734, green 3584, blue 3353, so
+  blue over red 1.93, the same to within 0.05 across the frame. No cloudy
+  frame was measured that afternoon (see the next item).
+- **Colour of cloud:** at 18:13, with the Sun 4° up and cloud over the pole
+  lit from below, `polaris.py check` read blue over red 0.55 at 2 ms and
+  called it grey. That is sunset-lit cloud, redder than white; flat grey
+  cloud at midday has still not been measured. Six minutes later the cloud
+  had gone and the same patch read 1.61 at 19 ms: clear sky is less blue as
+  the Sun goes down, so the line between clear and cloud was moved from 1.6
+  to 1.2.
+- **False stars:** none in blank sky, in single frames or one divided by
+  another.
+- **Binning 2x2 over INDI, tried once and not adopted:** setting
+  `CCD_BINNING` to 2 on the open camera ended with the connection to the
+  INDI server broken (the server was restarted for the next command and the
+  camera then worked as before). Whether the binning caused it was not run
+  down. With the indoor timings above (0.70 s against 1.02 s a frame at
+  short exposures) the gain would be a third of a second a look, and whether
+  binned frames keep their colour pattern, which the cloud check needs, is
+  still unjudged. `polaris.py` therefore reads full frames and reduces them
+  itself.
+
 ## First real results, night of 3-4 October 2026
 
 M31 from a back garden, polar axis about 9 degrees out, USB 2 lead.

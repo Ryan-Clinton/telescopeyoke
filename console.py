@@ -52,7 +52,7 @@ FILES = {"/": ("index.html", "text/html; charset=utf-8"),
          "/console.css": ("console.css", "text/css; charset=utf-8"),
          "/console.js": ("console.js", "text/javascript; charset=utf-8"),
          "/icons.svg": ("icons.svg", "image/svg+xml")}
-PICTURES = ("latest.jpg", "stack.jpg", "scope.jpg", "clouds.jpg", "landmark.jpg")
+PICTURES = ("latest.jpg", "stack.jpg", "scope.jpg", "clouds.jpg", "landmark.jpg", "polaris.jpg")
 
 HEADERS = {
     "Content-Security-Policy": "default-src 'self'; img-src 'self' data:; style-src 'self'; "
@@ -196,6 +196,22 @@ ACTIONS = {
                    "says": "This photographs the sky where the telescope is, slews 25° away from the "
                            "meridian twice, photographing each time, and returns. Start from a target "
                            "well away from the pole."},
+    # Polar alignment before dark, from Polaris alone (polaris.py).
+    "polaris-check": {"label": "Is it worth trying by day", "uses": "camera", "moves": False,
+                      "command": lambda p: ["polaris.py", "check"]},
+    "polaris-find":  {"label": "Find Polaris by day", "uses": "mount", "moves": True,
+                      "command": lambda p: ["polaris.py", "find", "--record"] + (["--anyway"] if p.get("anyway") else []),
+                      "says": "From the home position the RA axis turns 88° to one side and across to the "
+                              "other, and back again if the star is further out: the counterweight bar "
+                              "swings level both ways. The tube tips a few degrees either side of the pole. "
+                              "It stops at the first look that shows Polaris. It will not start on a focus "
+                              "nobody has checked today."},
+    "polaris-align": {"label": "Measure from Polaris", "uses": "mount", "moves": True,
+                      "command": lambda p: ["polaris.py", "align", "--watch", "60"],
+                      "says": "With Polaris in view, the tube tips a tenth of a degree and the RA axis turns "
+                              "to five readings up to 12° apart, then goes back. It then photographs Polaris "
+                              "every few seconds for about four minutes and says how far there is to go "
+                              "while you turn the bolts. Press Finish when it says close enough."},
     "camera-capabilities": {"label": "What the camera is", "uses": "camera", "moves": False,
                             "command": lambda p: ["camera_test.py", "--capabilities"]},
     "camera-throughput":   {"label": "Throughput test", "uses": "camera", "moves": False,
@@ -216,11 +232,14 @@ NOT_IN_DEMO = ("camera-setup", "camera-capabilities", "camera-throughput", "came
                "calibrate", "sync", "drift", "compensate",
                # Each demo command starts a fresh pretend mount at home, so there
                # is no "where it was pointing" for a landmark to be remembered at.
-               "landmark-remember", "landmark-check")
+               "landmark-remember", "landmark-check",
+               # The pretend sky is a night sky: there is no daylight Polaris in it.
+               "polaris-check", "polaris-find", "polaris-align")
 # Setting up and testing the equipment belongs to the application's own
 # window. The companion page in a browser is for observing, and is refused these.
 WORKSTATION = ("camera-setup", "camera-capabilities", "camera-throughput", "camera-gain-sweep",
                "calibrate", "horizon", "polar", "point", "landmark-remember", "landmark-check", "restack",
+               "polaris-check", "polaris-find", "polaris-align",
                "drift", "compensate", "sync", "open-settings")
 # Orders that have a run move the mount or change its motors.
 MOVING_ORDERS = ("run-recentre", "run-assist-on", "run-assist-off")

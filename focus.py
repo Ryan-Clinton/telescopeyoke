@@ -319,6 +319,13 @@ def run(args):
         cam.close()
     if not reading:
         if args.scene:
+            # A note that the focus was looked at by day: ./polaris.py will
+            # not search on a focus nobody has checked.
+            if best is not None:
+                scene = FOCUS_FILE.with_name("focus_scene.json")
+                scene.parent.mkdir(exist_ok=True)
+                scene.write_text(json.dumps({"sharpness": round(float(best), 2), "frames": frame,
+                                             "saved": time.time()}), encoding="utf-8")
             return {"sharpness": best, "frames": frame}
         raise interface.Refusal("NO_STARS", "No stars were measured.")
     return dict(reading, frames=frame)

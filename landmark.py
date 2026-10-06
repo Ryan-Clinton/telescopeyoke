@@ -115,7 +115,7 @@ def place(name):
 def saved(name):
     path = place(name)
     if not path.exists():
-        known = ", ".join(p.stem for p in sorted(FOLDER.glob("*.json"))) if FOLDER.exists() else ""
+        known = ", ".join(note["name"] for note in listed())
         raise interface.Refusal("INVALID_REQUEST", f"No landmark called {name} has been remembered"
                                 + (f". Known: {known}." if known else " yet."))
     return json.loads(path.read_text(encoding="utf-8"))
@@ -226,11 +226,16 @@ def check(name, scope, site, watch=0, cam_class=None, pause=3.0):
     else:
         print("Compare the remembered picture with this one by eye, and turn the azimuth bolts until the "
               "landmark is in the same place.")
+    # Kept so that ./polaris.py knows the mount faces the right way and can
+    # look over a small patch only.
+    (FOLDER / "last check.json").write_text(json.dumps(dict(last, name=name, checked=time.time())), encoding="utf-8")
     return dict(last, landmark=name, looks=len(seen), picture=str(VIEW))
 
 
 def listed():
-    return [json.loads(p.read_text(encoding="utf-8")) for p in sorted(FOLDER.glob("*.json"))] if FOLDER.exists() else []
+    if not FOLDER.exists():
+        return []
+    return [json.loads(p.read_text(encoding="utf-8")) for p in sorted(FOLDER.glob("*.json")) if p.name != "last check.json"]
 
 
 def main():

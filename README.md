@@ -250,7 +250,7 @@ lock (`MOTION_LOCKED`) stops every rig at once.
 | `app.py` | TelescopeYoke, the application: one window with everything in it, started from the applications menu. `./app.py --demo` tries it with nothing plugged in. |
 | `console.py` | The same observing screens as a page in a browser, without the equipment set-up and tools: the companion to the application. This computer only. |
 | `polaralign.py` | Measures how far the polar axis is from the pole by plate solving at three positions, and says which way to turn each adjuster. |
-| `polaris.py` | Before dark: `find` looks around the home position until Polaris is in the picture (it shows in daylight; nothing else near the pole does), and `align` turns the RA axis a little with it in view and says roughly which way to move each adjuster. |
+| `polaris.py` | Polar alignment before dark, from Polaris alone, which shows in daylight when nothing else near the pole does. `check` says whether it is worth trying (sky, Sun, focus); `find` looks around the home position until the star is in the picture, proves it by tipping the tube, and can keep every look (`--record`); `align` turns the RA axis with it in view, says roughly which way to move each adjuster, and with `--watch` keeps saying how far is left while the bolts are turned. |
 | `landmark.py` | Sets the azimuth by day: remembers a distant fixed thing with the telescope's axis readings, and next time turns back to it and shows how far it has moved. |
 | `horizon.py` | Sweeps the sky and reports which directions are blocked by houses, hedges and trees, as lines for `config.toml`. `--trace` follows the top of whatever is in the way right round and checks its own answer; `--daylight` works by day, going by brightness instead of stars. |
 | `snap.py` | Takes one camera frame, saves the FITS in `frames/`, publishes a preview. |
@@ -450,13 +450,18 @@ protocol and tested on the simulated handset.
 
 Not yet proven on the real sky: `polaris.py`. Its geometry is tested in
 three dimensions on the simulated mount with a made-up daytime sky. On the
-real mount (6 October 2026) an earlier, slower version of the search turned
-as intended for 23 minutes, out to 1.6° from home, and found nothing: there
-was some cloud and the focus had not been checked. Daytime frames from the
-real camera expose at about 16 ms and show no false stars in blank sky.
-Whether it shows Polaris before sunset is still untried, the level of blue
-that counts as clear sky is a guess from one clear frame, and `align` has
-never run on real hardware.
+real mount (6 October 2026) the first version of the search turned as
+intended for 23 minutes, out to 1.6° from home, and found nothing: there was
+some cloud, the focus had been disturbed and not checked, and no frames were
+kept, so there is no telling which it was. That is why the search now asks
+for a focus check and can record every look. Daytime frames from the real
+camera expose at about 16 ms with the Sun 14° up, take about a second each,
+and show no false stars in blank sky. Still untried on real hardware: the
+reordered search, the tipping of the tube to prove a candidate, `align`, and
+the watching while the bolts are turned. Guesses still to be set from real
+runs: the level of blue that counts as clear sky (from three frames), the
+steps from "poor" to "very good" by the Sun's height, and how far a point
+must stand out to count.
 
 Written but never run on the real mount or camera: `landmark.py`. Finding
 how far a view has moved is tested on made-up rooftops, and the turning back

@@ -656,6 +656,7 @@ function drawTelescope() {
 
 function drawPolar() {
   const found = seen.polar, plot = $("polar-plot");
+  picture($("polaris-now"), "polaris.jpg");
   gateAll();
   if (!found || found.measured == null) {
     fill(plot); fill($("polar-facts"));
@@ -970,6 +971,7 @@ for (const figure of document.querySelectorAll("#viewer figure")) {
 }
 showOnlyIfThere($("clouds"), $("clouds-part"));
 showOnlyIfThere($("scope-picture"), $("scope-part"));
+showOnlyIfThere($("polaris-now"), $("polaris-view"));
 
 $("stop").addEventListener("click", stop);
 $("search").addEventListener("input", drawTargets);

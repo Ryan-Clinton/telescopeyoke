@@ -8,6 +8,7 @@ frames/
 web/
 MOTION_LOCKED
 recordings/
+polaris-runs/
 calibration/
 .claude/
 

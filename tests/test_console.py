@@ -247,6 +247,13 @@ def test_every_action_builds_exactly_its_command():
     assert tail("point", {"bearing": "112.5", "height": 8}) == ["mount.py", "point", "112.5", "8"]
     assert tail("landmark-remember", {"name": "Old Chimney"}) == ["landmark.py", "remember", "old-chimney"]
     assert tail("landmark-check", {"name": "mast"}) == ["landmark.py", "check", "mast", "--watch", "40"]
+    # Polar alignment by day: the check moves nothing, the other two say what they will do first.
+    assert tail("polaris-check") == ["polaris.py", "check"] and not console.moves("polaris-check", {})
+    assert tail("polaris-find") == ["polaris.py", "find", "--record"] and console.moves("polaris-find", {})
+    assert tail("polaris-find", {"anyway": True})[-1] == "--anyway"
+    assert tail("polaris-align") == ["polaris.py", "align", "--watch", "60"] and console.moves("polaris-align", {})
+    for action in ("polaris-check", "polaris-find", "polaris-align"):
+        assert action in console.WORKSTATION and action in console.NOT_IN_DEMO
     for bad in ({"name": "../x"}, {"name": ""}, {"bearing": 400, "height": 5}, {"bearing": 10, "height": 0}):
         with pytest.raises(console.Refused):
             console.command("landmark-check" if "name" in bad else "point", bad)

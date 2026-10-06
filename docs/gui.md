@@ -577,6 +577,9 @@ what it does and a button.
 | Group | Control | Runs | Moves |
 |---|---|---|---|
 | Alignment | Polar alignment measurement | `polaralign.py` | yes |
+| | Before dark, from Polaris: is it worth trying | `polaris.py check` | no |
+| | Before dark, from Polaris: find it | `polaris.py find --record` | yes |
+| | Before dark, from Polaris: measure and adjust | `polaris.py align --watch 60` | yes |
 | | Horizon survey (grid, or follow the skyline; by night or by day) | `horizon.py`, with `--trace`, `--daylight` | yes |
 | Camera | Set up the camera | `camera_setup.py --open` | no |
 | | What the camera is | `camera_test.py --capabilities` | no |
@@ -588,6 +591,10 @@ what it does and a button.
 
 Two of these get a picture for a result:
 
+- **Polar alignment before dark:** the frame Polaris was found or last seen
+  in, with a cross on the star and, while the bolts are being turned, a ring
+  where the star belongs. What is left to do is in the command's own lines
+  and is spoken.
 - **Polar alignment:** a small diagram of the pole and where the mount's
   axis really points, the total error, and for each of the two adjustments
   which way it is off and which way to turn the mount ("1.4° west: move the

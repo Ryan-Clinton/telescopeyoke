@@ -77,6 +77,50 @@ wherever the mount was when it was switched on. A miss left to right is what
 the azimuth bolts correct; a miss up or down means home was set a little
 differently.
 
+## Polar alignment before dark
+
+Polaris shows in a short exposure by day; the plate solver has nothing to go
+by until well after sunset. `polaris.py` (Tools, Polar alignment, "Before
+dark") finds that one star and measures the polar axis from it. It is rough,
+a few tenths of a degree, and `polaralign.py` after dark is the fine
+measurement. The order matters:
+
+1. **Home by the spirit level.** With the mount switched on at about its home
+   position, `./mount.py zenith`, then loosen the clutches and set the
+   counterweight bar level and the tube upright with a spirit level. The
+   readings then match where the mount really is.
+2. **Focus.** `./focus.py --scene` on the most distant thing in view. A star
+   out of focus does not show against a bright sky, and the search refuses
+   to start on a focus nobody has checked that day (`--anyway` overrides).
+   Something a kilometre off still focuses half a millimetre from where
+   stars do on a 750 mm telescope, so the further the better.
+3. **`./polaris.py check`.** Ten frames where the telescope is, nothing
+   moved: how bright, blue, even and steady the sky is, where the Sun is,
+   and how the chances change over the next hour and a half. The lower the
+   Sun, the better.
+4. **A landmark, if one is remembered.** `./landmark.py check NAME` first:
+   with the mount facing the right way the search covers 0.8° and not 3°.
+5. **`./polaris.py find`.** It looks over the part within 1.2° of home first
+   and the rest after, one sweep of the RA axis for each. A point of light
+   must be there twice and must move with the tube when it is tipped; then
+   it is brought to the middle. `--record` keeps every look under
+   `polaris-runs/` (pictures, numbers and every point considered), which is
+   what a search that found nothing is learnt from.
+6. **`./polaris.py align --watch 60`.** Five sightings as the RA axis turns,
+   the answer, and then a look every few seconds, spoken, while the bolts
+   are turned. Turning the bolts moves the star as far as the mount moves,
+   so an error of more than a few tenths of a degree takes it out of the
+   picture: do it in stages, with `find` and `align` again in between.
+
+Things to try with it, none of them built in because none has been tried: a
+red or infra-red pass filter (the daytime sky is blue, Polaris is not), and
+a polarising filter (the sky a right angle from the Sun, where the pole is
+late in the day, is strongly polarised). Compare them with `find --record`
+on the same afternoon, and refocus for each. In software the red pixels
+alone were considered and left: on this sensor they see the sky half as
+bright as the green and the star a little under half, so they gain almost
+nothing in contrast and lose most of the light.
+
 ## The application
 
 `./install.sh` puts **TelescopeYoke** in the applications menu, with
