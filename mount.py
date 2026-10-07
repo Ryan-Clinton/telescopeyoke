@@ -5,6 +5,10 @@
     ./mount.py nudge      from home, tip the tube 5° and bring it back: the
                           smallest move there is, for someone standing beside
                           the mount to see that it really turns
+    ./mount.py settime    give the handset this computer's date, time and the
+                          site's position, so they need not be typed on its
+                          keypad: press ENTER through its start-up screens to
+                          the main menu first. Moves nothing.
     ./mount.py zenith     point straight up and hold there (tracking off)
     ./mount.py goto M81   point at a catalogue object and track it
     ./mount.py goto M81 --solve   ...then photograph the sky, work out the real
@@ -580,6 +584,41 @@ class Mount:
         self.tracking(False)
         self.save_clock(site)
 
+    def set_clock(self, site):
+        """Give the handset this computer's date and time (as UTC, with no
+        zone and no summer time, so there is nothing to get wrong) and the
+        site's position, then measure its clock afresh. The handset must be
+        at its main menu: this cannot press its keys. Moves nothing. Returns
+        what the handset says its date and time are afterwards."""
+        now = time.gmtime()
+        if self.ask(bytes([ord("H"), now.tm_hour, now.tm_min, now.tm_sec, now.tm_mon, now.tm_mday,
+                           now.tm_year % 100, 0, 0])) != b"#":
+            raise Refusal("INVALID_REQUEST", "The handset did not take the date and time. Is it at its main menu?")
+
+        def parts(angle):
+            whole = round(abs(angle) * 3600)
+            return [whole // 3600, whole // 60 % 60, whole % 60, 1 if angle < 0 else 0]     # south and west are 1
+        if self.ask(b"W" + bytes(parts(site["latitude"]) + parts(site["longitude"]))) != b"#":
+            raise Refusal("INVALID_REQUEST", "The handset took the time but not the position.")
+        for _ in range(4):
+            # A reply is read up to its closing "#", which is also the byte
+            # for 35: at 35 minutes or seconds past, it comes back cut short.
+            clock = self.ask(b"h")
+            if len(clock) == 9:
+                break
+            time.sleep(1.1)
+        else:
+            raise Refusal("HANDSET_NOT_ANSWERING", "The handset took the time but would not read it back.")
+        before = json.loads(CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"] if CLOCK_FILE.exists() else None
+        self.save_clock(site)
+        after = json.loads(CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
+        said = f"20{clock[5]:02d}-{clock[3]:02d}-{clock[4]:02d} {clock[0]:02d}:{clock[1]:02d}:{clock[2]:02d} UTC"
+        self.say(f"The handset now says {said}. Its sidereal clock is {after:+.2f}° from the true one"
+                 + (f" (it was {before:+.2f}°)." if before is not None else ".")
+                 + " Pointing errors measured before this no longer apply and will be measured again.")
+        return {"handset_time": said, "clock_offset_deg": round(after, 3),
+                "clock_offset_before_deg": None if before is None else round(before, 3)}
+
     def save_clock(self, site):
         offset = wrap(self.handset_sidereal() - true_sidereal(site))
         CLOCK_FILE.parent.mkdir(exist_ok=True)
@@ -971,7 +1010,7 @@ def report(mount):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("command", choices=["status", "nudge", "zenith", "home", "stop", "goto", "point",
+    ap.add_argument("command", choices=["status", "settime", "nudge", "zenith", "home", "stop", "goto", "point",
                                        "sync", "drift", "compensate", "response", "pointing",
                                        "sethome", "directions"])
     ap.add_argument("target", nargs="*",
@@ -1036,6 +1075,10 @@ def dry_run(args, site):
             return plan_point(float(args.target[0]), float(args.target[1]), site)
         if args.command in ("status", "sync", "drift", "stop"):
             return {"would_move": False, "safe": True, "warnings": []}
+        if args.command == "settime":
+            return {"would_move": False, "safe": True,
+                    "warnings": ["Sets the handset's date, time and position from this computer. The handset "
+                                 "must be at its main menu. Nothing moves."]}
         if args.command == "response":
             minutes = len(args.rates) * (1 + args.repeats * 2)
             return {"would_move": False, "safe": True,
@@ -1096,7 +1139,9 @@ def act(args, site):
         if args.command == "stop":
             mount.stop()
         elif args.command != "status":
-            if args.command == "nudge":
+            if args.command == "settime":
+                mount.set_clock(site)
+            elif args.command == "nudge":
                 mount.nudge()
             elif args.command == "zenith":
                 mount.zenith(site)

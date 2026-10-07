@@ -5,6 +5,10 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
 
 ## Not yet released
 
+- `./mount.py settime` gives the handset this computer's date and time and
+  the site's position, so they need not be typed on its keypad: press ENTER
+  through its start-up screens and run it. Moves nothing. Tested on the
+  simulated handset.
 - `./mount.py nudge`: from home, tips the tube 5° on the Dec axis and brings
   it back, with the same dry run, lock and limits as any move. The smallest
   move there is, for a person beside the mount to see that it really turns.

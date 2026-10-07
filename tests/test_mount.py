@@ -45,6 +45,18 @@ def test_a_handset_left_on_its_version_screen_is_refused():
         mount.Mount(handset=SimulatedHandset(year=22))
 
 
+def test_the_handset_is_given_the_computers_time_and_the_sites_position(scope, monkeypatch):
+    import time as clock
+    monkeypatch.setattr(mount.time, "gmtime", lambda: clock.struct_time((2026, 10, 7, 10, 15, 30, 2, 280, 0)))
+    scope.say = lambda *words: None
+    found = scope.set_clock({"latitude": 55.07, "longitude": -6.51, "elevation": 40})
+    assert scope.s.set_time == [10, 15, 30, 10, 7, 26, 0, 0]              # UTC: no zone, no summer time
+    assert scope.s.set_place == [55, 4, 12, 0, 6, 30, 36, 1]              # north, and west
+    assert found["handset_time"] == "2026-10-07 10:15:30 UTC" and found["clock_offset_before_deg"] is None
+    assert json.loads(mount.CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"] == pytest.approx(found["clock_offset_deg"], abs=0.001)
+    assert scope.at_home()                                                # nothing moved
+
+
 def test_a_nudge_tips_the_tube_five_degrees_and_brings_it_home(scope, monkeypatch, capsys):
     monkeypatch.setattr(mount.time, "sleep", lambda seconds: None)
     scope.say = lambda *words: print(*words)

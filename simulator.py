@@ -93,8 +93,15 @@ class SimulatedHandset:
             return bytes([3]) + b"#"
         if kind == b"J":
             return bytes([1]) + b"#"
+        if kind == b"H":                 # set the date and time
+            self.set_time = list(c[1:9])
+            self.year = c[6]
+            return b"#"
+        if kind == b"W":                 # set where it is
+            self.set_place = list(c[1:9])
+            return b"#"
         if kind == b"h":
-            return bytes([20, 0, 0, 10, 3, self.year, 0, 0]) + b"#"
+            return bytes(getattr(self, "set_time", [20, 0, 0, 10, 3, self.year, 0, 0])) + b"#"
         if kind == b"L":
             return (b"1" if self.clock() < self.busy_until else b"0") + b"#"
         if kind == b"e":
