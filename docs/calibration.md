@@ -38,6 +38,46 @@ five rounds took the axis from 5.2° to 0.2° (6 October 2026). `--repeat 5`,
 with the bolts left alone, gives the scatter of the measurement itself,
 which says what a reading of 0.2° is worth. That has not been run yet.
 
+### What to do with your hands
+
+A measurement in degrees leaves the question of which bolt, which way and
+how far. After each measurement `polaralign.py`, and the application's Polar
+alignment screen with a drawing of each bolt as a clock face, says:
+
+- **Centre the azimuth bolts before the first measurement**, with the same
+  length of thread showing on each. On the first real night they were found
+  already most of the way to one side, with little left to give, only after
+  being told to go further that way.
+- **More than 2° out in azimuth: turn the whole tripod.** The screen draws
+  the tripod from above as a clock face, north at the top, with where the
+  axis points now and the turn to make; west is anticlockwise seen from
+  above. With the distance between two tripod feet in the settings
+  (`feet_apart_cm` under `[mount]`, or the Settings screen) it also says how
+  far each foot moves: the feet stand on a circle whose radius is that
+  distance over √3, and a turn of θ moves each one radius × θ along it.
+  Feet 87 cm apart and a turn of 10° is 8.8 cm.
+- **Otherwise: which bolt to turn in, which to ease out first, and about how
+  many turns**, once this mount's bolts have been learned. The two bolts of
+  each pair are called left and right (azimuth) and rear and front
+  (altitude), as seen standing behind the mount, on its south side, facing
+  north. In is clockwise.
+- **Nothing is assumed about the bolts.** Which one moves the axis which
+  way, and how far a turn moves it, differ between mounts, so until it has
+  been seen on this one the advice is to turn the left (or rear) bolt in a
+  quarter of a turn and measure again.
+- **It learns from what you tell it.** `./polaralign.py --turned 0.5 0` says
+  that since the last measurement the left azimuth bolt went in half a turn
+  and the altitude bolts were not touched (the right or the front bolt is a
+  minus); on the screen there are two boxes for the same. The change in the
+  axis divided by the turns is kept (`cache/polar_bolts.json`, the last
+  twelve for each pair), the middle figure is used, and the advice says how
+  far apart the figures have been: bolts have slack, and bind under load, so
+  "about" is meant.
+
+None of this has been used on the real mount yet. The size of the 2° limit,
+and whether a turn does the same thing at each end of a bolt's travel, are
+for the first real nights to say.
+
 ## 3. The true home position
 
 The handset takes wherever the mount stood at switch-on for home: RA axis

@@ -53,6 +53,10 @@ setup = "default"
 # readout_speed = 1       the camera's readout speed level; unset leaves it as it is
 
 [mount]
+# The distance from one tripod foot to the next, in centimetres. With it, the
+# polar alignment says how far each foot moves when the whole tripod has to
+# be turned. Leave it out and it gives the turn in degrees only.
+# feet_apart_cm = 87
 # Part of the name of the USB adapter on the handset's serial lead, as it
 # appears under /dev/serial/by-id/, or on Windows against the COM port in
 # Device Manager. A handset plugged in by its own USB socket is "Prolific".

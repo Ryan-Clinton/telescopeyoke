@@ -644,6 +644,21 @@ Two of these get a picture for a result:
   "clears the roof" marked: when it can really be seen from this garden,
   which height alone does not tell.
 
+### Polar alignment: what to do with your hands
+
+Under the measurement, two drawings, from `guidance` in `/api/polar`
+(`polaralign.guidance()`): one for left and right, one for up and down.
+Each bolt of a pair is a clock face seen end on, with an arc from twelve
+o'clock for how far to turn it: clockwise in, and a short anticlockwise arc
+on the one to ease out first. The words under each say the same. An azimuth
+error over 2° draws the tripod from above instead, north at the top, with
+the axis as it is, the turn to make, and the centimetres at each foot when
+the feet's spacing is in the settings. Above the Measure button is the
+advice to centre the azimuth bolts first. Below the drawings, two boxes take
+the turns made since the last measurement and "Measure again" sends them
+with it (`polaralign.py --turned`), which is how a turn's effect is learned.
+Drawn in a test window against made-up figures; not yet used at the mount.
+
 ### System
 
 **Rig knowledge** is what this telescope has had measured about itself

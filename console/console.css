@@ -178,6 +178,13 @@ tr.pick { cursor: pointer; } tr.pick:hover td { color: var(--act-text); }
 .trend { font-size: 18px; font-weight: 600; letter-spacing: .06em; margin-top: 12px; min-height: 26px; }
 .advice { font-size: 16px; margin-top: 8px; min-height: 24px; }
 .focus + .buttons { justify-content: center; }
+.columns.hands { grid-template-columns: 1fr 1fr; }
+.hands figure { margin: 0; } .hands p { margin-top: 6px; }
+.plot .bolt { fill: none; stroke: var(--dim); stroke-width: 2; }
+.plot .turn { fill: none; stroke: var(--act-text); stroke-width: 4; stroke-linecap: round; }
+.plot .head { fill: var(--act-text); }
+.plot .body { fill: none; stroke: var(--dim); stroke-width: 1.5; }
+.plot .was { stroke: var(--warn); stroke-width: 2; } .plot .wanted { stroke: var(--good); stroke-width: 2; }
 .focus .meter { display: block; max-width: 420px; height: 12px; margin: 14px auto 0; }
 
 /* --- imaging ------------------------------------------------------------------ */

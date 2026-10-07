@@ -95,7 +95,11 @@ on the simulated mount.*
 
 **Polar alignment still rough?** By night, three plate solves measure how
 far the axis is from the pole and say which way to turn each adjuster: on
-the real mount, five rounds took it from 5.2° to 0.2°. Or leave it rough:
+the real mount, five rounds took it from 5.2° to 0.2°. It says what to do
+with your hands, with a drawing of each bolt: which to turn in, about how
+far, or to turn the whole tripod and by how many centimetres at the feet;
+and it learns what a turn of your mount's bolts does from what you tell it
+you turned. Or leave it rough:
 telescopeyoke works out the declination drift that error causes, predicts it
 for any other part of the sky, and creeps the Dec motor against it as a
 guider would, correcting part of the error at a time and never reversing the
@@ -345,7 +349,7 @@ lock (`MOTION_LOCKED`) stops every rig at once.
 | `liveview.py` | Takes a frame every few seconds so the status page shows what the telescope sees now. Steps aside while `shoot.py` runs. |
 | `app.py` | TelescopeYoke, the application: one window with everything in it, started from the applications menu. `./app.py --demo` tries it with nothing plugged in. |
 | `console.py` | The same observing screens as a page in a browser, without the equipment set-up and tools: the companion to the application. This computer only. |
-| `polaralign.py` | Measures how far the polar axis is from the pole by plate solving at three positions, and says which way to turn each adjuster. `--repeat 5` measures five times with the bolts left alone and gives the scatter. |
+| `polaralign.py` | Measures how far the polar axis is from the pole by plate solving at three positions, and says which way to turn each adjuster. `--repeat 5` measures five times with the bolts left alone and gives the scatter. After each measurement it says which bolt to turn and about how far, or to turn the whole tripod; `--turned AZ ALT` tells it what you turned since the last one, and it learns what a turn does on this mount. |
 | `polaris.py` | Polar alignment before dark, from Polaris alone, which shows in daylight when nothing else near the pole does. `check` says whether it is worth trying (sky, Sun, focus); `find` looks around the home position until the star is in the picture, proves it by tipping the tube, and can keep every look (`--record`); `align` turns the RA axis with it in view, says roughly which way to move each adjuster, and with `--watch` keeps saying how far is left while the bolts are turned. |
 | `landmark.py` | Sets the azimuth by day: remembers a distant fixed thing with the telescope's axis readings, and next time turns back to it and shows how far it has moved. |
 | `panorama.py` | The skyline from a phone panorama, with no motors: finds the line between sky and everything else in the picture, lets you put it right where it is wrong, ties the picture to the compass from two marks (something the telescope is pointing at, a remembered landmark, or typed bearings), and keeps the result for the planner. Panoramas from other heights add doubt where things close by sit differently. |

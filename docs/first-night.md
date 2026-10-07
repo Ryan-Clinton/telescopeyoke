@@ -132,11 +132,20 @@ Then:
 
     ./polaralign.py --step 12
 
+Before the first measurement, **centre the two azimuth bolts** (the pair
+that swings the mount head left and right): the same length of thread
+showing on each, so there is room to go either way.
+
 It takes three pictures of the sky, turning a little between them, and
 answers in plain words: "it points 3.1° too far east of north; swing the
 mount's north end 3.1° to the west", and the same for up and down. Turn the
 two pairs of bolts on the mount's base by about that much, and run it again,
-until it is under half a degree, which is plenty for tonight.
+until it is under half a degree, which is plenty for tonight. If it is more
+than a couple of degrees out to one side, it tells you to turn the whole
+tripod instead, and by how much. Tell it what you turned each time
+(`--turned 0.5 0`, or the two boxes on the application's Polar alignment
+screen, which also draws each bolt) and it learns what a turn does on your
+mount, and from then on says "left bolt in, about half a turn".
 
 A first answer of five degrees is not a failure. It is the software telling
 you exactly what to change.

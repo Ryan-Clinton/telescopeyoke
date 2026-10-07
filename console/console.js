@@ -677,6 +677,7 @@ function drawPolar() {
   const found = seen.polar, plot = $("polar-plot");
   picture($("polaris-now"), "polaris.jpg");
   gateAll();
+  drawHands(found);
   if (!found || found.measured == null) {
     fill(plot); fill($("polar-facts"));
     $("polar-total").textContent = "";
@@ -701,6 +702,92 @@ function drawPolar() {
     ["Up and down", `${Math.abs(high).toFixed(1)}° too ${high > 0 ? "high" : "low"}: ${high > 0 ? "lower" : "raise"} the axis by ${Math.abs(high).toFixed(1)}°`]]);
   $("polar-note").textContent = `Measured ${found.measured ? age(Date.now() / 1000 - found.measured) : "earlier"}. Adjust the mount and measure again. `
     + "If it is left as it is, the drift it causes can be cancelled from the Mount screen, but the picture will still slowly turn.";
+}
+
+// --- what to do with your hands -------------------------------------------------------
+//
+// Each bolt is drawn as a clock face seen end on. The arc is how far to turn
+// it, starting at twelve o'clock: clockwise is in, as a screw tightens.
+
+function arcTo(cx, cy, r, turns, clockwise) {
+  // An arc of `turns` of a circle from twelve o'clock; more than a turn is drawn as nearly a full ring.
+  const sweep = Math.min(Math.abs(turns), 0.97) * 2 * Math.PI * (clockwise ? 1 : -1);
+  const x = cx + r * Math.sin(sweep), y = cy - r * Math.cos(sweep);
+  const tip = sweep + (clockwise ? 0.001 : -0.001), a = 9;
+  // The arrow's head, along the way it is turning.
+  const dx = Math.cos(tip) * (clockwise ? 1 : -1), dy = Math.sin(tip) * (clockwise ? 1 : -1);
+  const head = `M ${x + dx * a} ${y + dy * a} L ${x - dy * a * 0.6} ${y + dx * a * 0.6} L ${x + dy * a * 0.6} ${y - dx * a * 0.6} Z`;
+  return [el("path", { class: "turn", d: `M ${cx} ${cy - r} A ${r} ${r} 0 ${Math.abs(sweep) > Math.PI ? 1 : 0} ${clockwise ? 1 : 0} ${x} ${y}` }),
+          el("path", { class: "head", d: head })];
+}
+
+function drawBolts(svg, advice) {
+  // The two bolts of a pair, side by side as the person sees them from behind the mount.
+  const parts = [], names = advice.bolts;
+  names.forEach((name, i) => {
+    const cx = 80 + 140 * i, cy = 100;
+    parts.push(el("circle", { class: "bolt", cx, cy, r: 46 }), el("line", { class: "body", x1: cx, y1: cy - 52, x2: cx, y2: cy - 40 }),
+               el("text", { x: cx - 46, y: 24, text: `${name.toUpperCase()} BOLT` }));
+    if (!advice.known) {
+      // Not learned yet: a quarter turn in on the first, to see which way the axis goes.
+      parts.push(...arcTo(cx, cy, 46, i === 0 ? 0.25 : 0.12, i === 0),
+                 el("text", { x: cx - 46, y: 190, text: i === 0 ? "try: in ¼ turn" : "ease out first" }),
+                 el("text", { x: cx - 46, y: 208, text: i === 0 ? "clockwise" : "anticlockwise" }));
+    }
+    else if (name === advice.tighten) {
+      parts.push(...arcTo(cx, cy, 46, advice.turns, true), el("text", { x: cx - 46, y: 190, text: `in ${advice.turns} turn${advice.turns === 1 ? "" : "s"}` }),
+                 el("text", { x: cx - 46, y: 208, text: "clockwise" }));
+    } else {
+      parts.push(...arcTo(cx, cy, 46, Math.min(advice.turns, 0.25), false), el("text", { x: cx - 46, y: 190, text: "ease out first" }),
+                 el("text", { x: cx - 46, y: 208, text: "anticlockwise" }));
+    }
+  });
+  fill(svg, parts);
+}
+
+function drawTripod(svg, advice) {
+  // The tripod from above, north at the top, as a clock face: where the axis points now, and where it should.
+  const cx = 150, cy = 110, r = 80, parts = [el("circle", { class: "bolt", cx, cy, r })];
+  for (let hour = 0; hour < 12; hour += 1) {
+    const a = hour * Math.PI / 6;
+    parts.push(el("line", { class: "body", x1: cx + (r - 6) * Math.sin(a), y1: cy - (r - 6) * Math.cos(a), x2: cx + r * Math.sin(a), y2: cy - r * Math.cos(a) }));
+  }
+  for (let foot = 0; foot < 3; foot += 1) {
+    const a = foot * 2 * Math.PI / 3;
+    parts.push(el("circle", { class: "head", cx: cx + r * Math.sin(a), cy: cy - r * Math.cos(a), r: 6 }));
+  }
+  const now = advice.error_deg * Math.PI / 180;      // east of north: clockwise from the top
+  parts.push(el("line", { class: "wanted", x1: cx, y1: cy, x2: cx, y2: cy - r + 8 }),
+             el("line", { class: "was", x1: cx, y1: cy, x2: cx + (r - 8) * Math.sin(now), y2: cy - (r - 8) * Math.cos(now) }),
+             el("text", { x: cx - 4, y: 22, text: "N" }), el("text", { x: 4, y: 14, text: "from above" }),
+             el("text", { x: 4, y: 210, text: `turn the whole tripod ${advice.tripod.turn_deg}° ${advice.tripod.way}` }));
+  if (advice.tripod.cm_at_each_foot != null) parts.push(el("text", { x: 190, y: 14, text: `${advice.tripod.cm_at_each_foot} cm at each foot` }));
+  // The turn itself, as an arc from where it points to north.
+  const start = { x: cx + 56 * Math.sin(now), y: cy - 56 * Math.cos(now) }, way = advice.error_deg > 0 ? -1 : 1;
+  parts.push(el("path", { class: "turn", d: `M ${start.x} ${start.y} A 56 56 0 0 ${advice.error_deg > 0 ? 0 : 1} ${cx} ${cy - 56}` }),
+             el("path", { class: "head", d: `M ${cx + way * 10} ${cy - 56} L ${cx} ${cy - 62} L ${cx} ${cy - 50} Z` }),
+             el("text", { x: cx + 86 * Math.sin(now) - 8, y: cy - 86 * Math.cos(now) + 12, text: "now" }));
+  fill(svg, parts);
+}
+
+function drawHands(found) {
+  const advice = found && found.guidance;
+  $("polar-hands").hidden = !advice;
+  $("polar-first").textContent = (found && found.first) || (advice && advice.first) || "";
+  if (!advice) return;
+  $("polar-view").textContent = `Left and right, rear and front: ${advice.view}. In is clockwise, as a screw tightens.`;
+  for (const axis of ["azimuth", "altitude"]) {
+    const part = advice[axis], svg = $(`hands-${axis}`);
+    if (part.whole_tripod) drawTripod(svg, part); else drawBolts(svg, part);
+    $(`hands-${axis}-words`).textContent = `Move the axis ${part.move} ${part.by_deg}°. ${part.words}`;
+    $(`turned-${axis}-label`).textContent = `${axis === "azimuth" ? "Azimuth" : "Altitude"}: ${part.bolts[0]} bolt in`;
+  }
+}
+
+function measurePolar(again) {
+  const turns = (id) => (again ? Number($(id).value) || 0 : 0);
+  makePlan("polar", { azimuth_turns: turns("turned-azimuth"), altitude_turns: turns("turned-altitude") });
+  $("turned-azimuth").value = 0; $("turned-altitude").value = 0;
 }
 
 let shownLandmark = null;
@@ -1098,6 +1185,8 @@ $("stop").addEventListener("click", stop);
 $("search").addEventListener("input", drawTargets);
 $("focus-start").addEventListener("click", () => { trail = []; act("focus", { sound: $("focus-sound").value }); });
 $("focus-finish").addEventListener("click", finish);
+$("polar-measure").addEventListener("click", () => measurePolar(false));
+$("polar-again").addEventListener("click", () => measurePolar(true));
 $("recheck").addEventListener("click", async () => { seen.doctor = null; await refresh(); notice("Checked again"); });
 $("hardware-report").addEventListener("click", async () => {
   const reply = await ask("/api/hardware");

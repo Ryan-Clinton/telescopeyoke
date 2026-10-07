@@ -171,6 +171,9 @@ SETTINGS = (
     ("horizon", "margin", "Margin above the measured skyline", "number",
      "Degrees. One branch is enough to spoil a frame, so targets are kept this far above what was measured.",
      {"min": 0, "max": 20}),
+    ("mount", "feet_apart_cm", "Distance between two tripod feet", "number",
+     "Centimetres, from one foot to the next. With it, a turn of the whole tripod is also given as how far "
+     "each foot moves. Blank leaves that out.", {"min": 20, "max": 400, "optional": True}),
     ("scope", "aperture_mm", "Aperture", "number", "Millimetres.", {"min": 10, "max": 2000}),
     ("scope", "focal_length_mm", "Focal length", "number",
      "Millimetres. The plate solver works out the field of view from this and the sensor.", {"min": 50, "max": 20000}),

@@ -186,6 +186,13 @@ def pointing(params):
     return ["mount.py", "point", f"{number(params, 'bearing', 0, 360):g}", f"{number(params, 'height', 2, 89):g}"]
 
 
+def polar_measure(params):
+    """A polar measurement, with the turns made on each pair of bolts since
+    the last one if the person says what they were, to be learned from."""
+    turned = [number(params, key, -30, 30, 0) for key in ("azimuth_turns", "altitude_turns")]
+    return ["polaralign.py"] + (["--turned", f"{turned[0]:g}", f"{turned[1]:g}"] if any(turned) else [])
+
+
 def calibration(params):
     kind = choice(params, "kind", ("dark", "bias", "flat"), "dark")
     return ["calibrate.py", kind, "--frames", str(number(params, "frames", 1, 200, 20, True)),
@@ -247,7 +254,7 @@ ACTIONS = {
                           "says": "The mount turns to where it was when the landmark was remembered, holds "
                                   "there, and photographs it every few seconds for two minutes while you "
                                   "turn the azimuth bolts. Press Finish when it is on the cross."},
-    "polar":      {"label": "Polar alignment", "command": lambda p: ["polaralign.py"], "uses": "mount", "moves": True,
+    "polar":      {"label": "Polar alignment", "command": lambda p: polar_measure(p), "uses": "mount", "moves": True,
                    "says": "This photographs the sky where the telescope is, slews 25° away from the "
                            "meridian twice, photographing each time, and returns. Start from a target "
                            "well away from the pole."},
@@ -765,14 +772,21 @@ class Reader:
     def polar(self):
         """The last polar alignment measurement, if there is one."""
         import mount
+        import polaralign
+        nothing = {"measured": None, "first": polaralign.guidance(0.0, 0.0)["first"]}
         if not mount.DRIFT_FILE.exists():
-            return {"measured": None}
+            return nothing
         saved = json.loads(mount.DRIFT_FILE.read_text(encoding="utf-8"))
         found = saved.get("polar")
         if not found:
-            return {"measured": None}
+            return nothing
+        import config
+        import polaralign
+        feet = (config.load() if config.FILE.exists() and not self.demo else config.example()).get("mount", {})
         return {"measured": saved.get("saved"), "azimuth_deg": round(found["azimuth"], 2),
-                "altitude_deg": round(found["altitude"], 2)}
+                "altitude_deg": round(found["altitude"], 2),
+                # What to do with your hands about it: which bolt, about how far.
+                "guidance": polaralign.guidance(found["azimuth"], found["altitude"], feet.get("feet_apart_cm"))}
 
     def framing(self, name):
         """How a target fits the camera: the field of view from the sensor

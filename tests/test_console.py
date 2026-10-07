@@ -290,6 +290,8 @@ def test_every_action_builds_exactly_its_command():
             console.command(action, bad)
     assert tail("camera-setup") == ["camera_setup.py", "--open"]
     assert tail("polar") == ["polaralign.py"] and console.moves("polar", {})
+    assert tail("polar", {"azimuth_turns": 0.5, "altitude_turns": -0.25}) == ["polaralign.py", "--turned", "0.5", "-0.25"]
+    assert tail("polar", {"azimuth_turns": 0, "altitude_turns": 0}) == ["polaralign.py"]
     assert tail("point", {"bearing": "112.5", "height": 8}) == ["mount.py", "point", "112.5", "8"]
     assert tail("landmark-remember", {"name": "Old Chimney"}) == ["landmark.py", "remember", "old-chimney"]
     assert tail("landmark-check", {"name": "mast"}) == ["landmark.py", "check", "mast", "--watch", "40"]

@@ -607,3 +607,80 @@ def test_every_places_own_miss_is_given_and_one_bad_place_is_left_out_not_hidden
     six[-1]["dec_error_deg"] += 0.6
     doubted = mount.home_fit(six, 40.0)
     assert not doubted["fits"] and (doubted["sway_deg"] is None or doubted["sway_deg"] > mount.HOME_SWAY)
+
+
+# --- what to do with your hands about a polar error ------------------------------------------------------
+
+@pytest.fixture
+def bolts(tmp_path, monkeypatch):
+    monkeypatch.setattr(polaralign, "BOLTS_FILE", tmp_path / "polar_bolts.json")
+    monkeypatch.setattr(polaralign, "POLAR_FILE", tmp_path / "polar.json")
+
+
+def test_a_big_azimuth_error_is_for_turning_the_whole_tripod_with_centimetres_at_the_feet(bolts):
+    west = polaralign.guidance(10.0, 0.3, feet_apart_cm=87)["azimuth"]
+    assert west["move"] == "west" and west["whole_tripod"] and west["tripod"]["way"] == "anticlockwise"
+    # Feet 87 cm apart stand 50.2 cm from the middle; 10 degrees of that circle is 8.8 cm.
+    assert west["tripod"]["cm_at_each_foot"] == pytest.approx(8.8, abs=0.05)
+    assert "Centre the azimuth bolts, then turn the whole tripod 10° anticlockwise, seen from above" in west["words"]
+    east = polaralign.guidance(-4.0, 0.3)["azimuth"]
+    assert east["move"] == "east" and east["tripod"]["way"] == "clockwise" and "cm_at_each_foot" not in east["tripod"]
+    assert not polaralign.guidance(1.2, 0.3)["azimuth"]["whole_tripod"]          # within the bolts' reach
+
+
+def test_until_a_mount_has_been_learned_nothing_is_claimed_about_its_bolts(bolts):
+    found = polaralign.guidance(0.9, -0.4)
+    assert "centre the azimuth bolts" in found["first"] and "same length of thread" in found["first"]
+    for axis, first, second in (("azimuth", "left", "right"), ("altitude", "rear", "front")):
+        part = found[axis]
+        assert not part["known"] and part["bolts"] == [first, second] and "turns" not in part
+        assert "is not known yet" in part["words"] and f"turn the {first} bolt in (clockwise) a quarter" in part["words"]
+    assert found["altitude"]["move"] == "up" and "facing north" in found["view"]
+
+
+def test_what_a_turn_does_is_learned_from_what_was_turned_and_then_used(bolts):
+    assert polaralign.learned("azimuth") is None
+    # The left bolt went in half a turn and the axis moved 0.5° west; the rear altitude bolt was not touched.
+    noted = polaralign.learn({"azimuth_deg": 1.4, "altitude_deg": -0.6}, {"azimuth_deg": 0.9, "altitude_deg": -0.6}, (0.5, 0.0))
+    assert [axis for axis, _ in noted] == ["azimuth"] and noted[0][1] == pytest.approx(-1.0)
+    part = polaralign.guidance(0.9, -0.6)["azimuth"]
+    assert part["known"] and part["tighten"] == "left" and part["loosen"] == "right"
+    assert part["turns"] == pytest.approx(0.9) and "turn the left bolt in (clockwise) about one turn" in part["words"]
+    assert not polaralign.guidance(0.9, -0.6)["altitude"]["known"]
+    # An axis too far west is put right with the other bolt.
+    other = polaralign.guidance(-0.5, 0.0)["azimuth"]
+    assert other["tighten"] == "right" and "about half a turn" in other["words"]
+    # A second time it moved less: the advice gives the middle and says how far apart the two were.
+    polaralign.learn({"azimuth_deg": 0.9, "altitude_deg": 0.0}, {"azimuth_deg": 0.5, "altitude_deg": 0.0}, (0.5, 0.0))
+    know = polaralign.learned("azimuth")
+    assert know["times"] == 2 and know["low"] == pytest.approx(0.8) and know["high"] == pytest.approx(1.0)
+    again = polaralign.guidance(0.9, 0.0)["azimuth"]
+    assert again["turns_least"] == pytest.approx(0.9) and again["turns_most"] == pytest.approx(1.12, abs=0.01)
+    assert "between 0.8° and 1°" in again["words"]
+    assert polaralign.learn({"azimuth_deg": 1.0, "altitude_deg": 0}, {"azimuth_deg": 0.9, "altitude_deg": 0}, (0.05, 0)) == []
+
+
+def test_turns_are_said_as_a_person_would():
+    said = [polaralign.turns_in_words(t) for t in (0.1, 0.25, 0.5, 0.8, 1.0, 1.25, 1.5, 2.75)]
+    assert said == ["a quarter of a turn", "a quarter of a turn", "half a turn", "three quarters of a turn", "one turn",
+                    "one turn and a quarter", "one turn and a half", "2 turns and three quarters"]
+
+
+def test_a_measurement_given_the_turns_made_learns_from_them(scope, bolts, monkeypatch, capsys):
+    answers = iter([(1.4, -0.6), (0.9, -0.2)])
+    monkeypatch.setattr(polaralign, "measure", lambda *a, **k: next(answers))
+    monkeypatch.setattr(mount, "Mount", lambda *a, **k: scope)
+    monkeypatch.setattr(config, "load", lambda: dict(config.example(), mount=dict(config.example()["mount"], feet_apart_cm=87)))
+    scope.save_clock(SITE)
+    args = type("Args", (), {"dry_run": False, "json": False, "step": 12.0, "repeat": 1, "turned": None})()
+    first = polaralign.run(args)
+    assert not first["guidance"]["azimuth"]["known"] and "is not known yet" in capsys.readouterr().out
+    args.turned = [0.5, -0.5]                      # left azimuth bolt in half a turn; front altitude bolt in half a turn
+    second = polaralign.run(args)
+    said = capsys.readouterr().out
+    assert "Learned: a turn of the azimuth bolts moved the axis 1.00°" in said and "altitude bolts moved the axis 0.80°" in said
+    assert second["guidance"]["azimuth"]["tighten"] == "left" and second["guidance"]["altitude"]["tighten"] == "front"
+    assert "facing north" in said and "guidance" not in json.loads(polaralign.POLAR_FILE.read_text(encoding="utf-8"))
+    args.dry_run, args.turned = True, None
+    plan, notes = polaralign.run(args)
+    assert "centre the azimuth bolts" in notes[1]
