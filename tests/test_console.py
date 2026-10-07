@@ -149,6 +149,17 @@ def test_the_night_is_reported_as_the_status_page_shows_it(desk):
     assert desk.json("/api/system")[1]["data"]["rows"][0].keys() == {"label", "text", "level"}
 
 
+def test_rig_knowledge_says_how_each_measurement_is_started(desk):
+    found = desk.json("/api/characterise")[1]["data"]
+    by_action = {item["action"]: item for item in found["items"] if item["action"]}
+    assert found["of"] == len(found["items"]) == 12
+    # Anything that moves the mount, or stops it following the sky, is a plan first.
+    assert all(by_action[name]["plan"] for name in ("polar", "polar-repeat", "pointing-survey", "creep-response", "camera-trail"))
+    assert not by_action["camera-timing"]["plan"] and not by_action["focus"]["plan"]
+    page = (PAGE / "index.html").read_text(encoding="utf-8")
+    assert 'id="knowledge"' in page and 'data-task="knowledge" data-only="app"' in page
+
+
 def test_the_demo_keeps_its_own_pictures_and_tells_the_pretend_sky(desk, tmp_path):
     # Nothing the real camera, webcam or satellite left in web/ is shown in the demo.
     assert desk("/pictures/stack.jpg?v=123")[0] == 404 and desk("/pictures/clouds.jpg")[0] == 404
@@ -297,6 +308,11 @@ def test_every_action_builds_exactly_its_command():
     assert tail("restack", {"target": "M27", "all": True}) == ["restack.py", "M27", "--all"]
     assert tail("run-finish") == ["ty", "run", "stop"] and tail("run-recentre") == ["ty", "run", "recentre"]
     assert tail("run-assist-on") == ["ty", "run", "assist-on"] and tail("run-assist-off") == ["ty", "run", "assist-off"]
+    assert tail("polar-repeat") == ["polaralign.py", "--repeat", "5", "--step", "12"]
+    assert tail("polar-repeat", {"step": 20}, dry_run=True) == ["polaralign.py", "--repeat", "5", "--step", "20", "--dry-run"]
+    assert tail("pointing-survey") == ["mount.py", "pointing"] and tail("creep-response") == ["mount.py", "response"]
+    assert tail("camera-timing") == ["camera_test.py", "--timing"]
+    assert tail("camera-trail", dry_run=True) == ["camera_test.py", "--trail", "--dry-run"]
     # Every script the table names exists, and every moving one can be planned.
     for name, spec in console.ACTIONS.items():
         assert (ROOT / spec["command"]({"target": "M27", "name": "mast", "bearing": 90, "height": 10, "file": "/a.jpg",

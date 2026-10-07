@@ -126,7 +126,15 @@ def characterise():
         when = when if when is not None else (found or {}).get("saved") if isinstance(found, dict) else None
         return {"what": what, "measured": value is not None, "value": value,
                 "age_days": round((time.time() - when) / 86400, 1) if value is not None and when else None,
-                "how": how}
+                "how": how, "action": ACTION.get(how)}
+
+    # The application's action that makes each measurement, where it has one
+    # (console.ACTIONS); the skyline has a screen of its own.
+    ACTION = {"./camera_test.py --timing": "camera-timing", "./camera_test.py --trail (stars needed)": "camera-trail",
+              "./focus.py, then ./focus.py --report": "focus", "a ./focus.py run that ends on \"Focus good\"": "focus",
+              "./mount.py sync on that side, or ./mount.py pointing": "sync", "./mount.py pointing": "pointing-survey",
+              "./polaralign.py": "polar", "./polaralign.py --repeat 5": "polar-repeat",
+              "./mount.py response": "creep-response"}
 
     items = []
     timing = read(camera_test.TIMING_FILE) or {}
@@ -171,9 +179,11 @@ def characterise():
     items.append(line("The skyline of the place it stands", "./panorama.py, or ./horizon.py --trace", skyline,
                       f"{len(skyline['skyline'])} points, from {skyline.get('source', 'a survey')}" if skyline else None))
     seen = read(moved.MOVED_FILE)
+    judged = moved.checked()
     items.append(line("That the telescope turns when the mount says it has",
                       "any ./mount.py goto NAME --solve that needs a correction, or ./horizon.py --trace", seen,
-                      seen and seen["how"]))
+                      seen and f"{seen['how']}; {judged['changed']} moves seen to be real so far, "
+                               f"{judged['same']} not, {judged['undecided']} undecided"))
     done = sum(item["measured"] for item in items)
     return {"measured": done, "of": len(items), "summary": f"{done} of {len(items)} measured", "items": items}
 

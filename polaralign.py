@@ -155,8 +155,8 @@ def measure(scope, site, step=STEP, skyline=None):
                                         "way. Nothing was measured"
                                         + ("; the telescope is back where it started." if i else "."))
             ha, dec, alt = mount.where(found, site, found["when"])
-            if points and abs(mount.wrap(ha - points[-1][0])) < step / 4:
-                import moved
+            import moved
+            if points and moved.solved(step, abs(mount.wrap(ha - points[-1][0])), f"polar alignment, position {i + 1}"):
                 raise moved.refusal(f"After a turn of {step:.0f}° the sky is where it was: hour angle "
                                     f"{points[-1][0] / 15:+.3f} h before, {ha / 15:+.3f} h now.")
             points.append((ha, dec))

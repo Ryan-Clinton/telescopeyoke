@@ -13,13 +13,14 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["what", "measured", "value", "age_days", "how"],
+        "required": ["what", "measured", "value", "age_days", "how", "action"],
         "properties": {
           "what": {"type": "string", "description": "The thing measured, in plain words."},
           "measured": {"type": "boolean"},
           "value": {"type": ["string", "null"], "description": "What was found, in words; null if not measured."},
           "age_days": {"type": ["number", "null"], "description": "How long ago, where the measurement says."},
-          "how": {"type": "string", "description": "The command that makes the measurement."}
+          "how": {"type": "string", "description": "The command that makes the measurement."},
+          "action": {"type": ["string", "null"], "description": "The application's action that makes it (a name in console.ACTIONS), or null where there is none."}
         }
       }
     }

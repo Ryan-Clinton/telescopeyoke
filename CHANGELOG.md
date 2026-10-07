@@ -18,9 +18,14 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
   the Dec motor in proportion?), `./mount.py pointing` (is one pointing
   correction for each side enough?), `./focus.py --report` (how quickly was
   a turn of the knob heard?).
-- **`./ty characterise`**, and the application's Doctor screen: what this
-  rig has had measured about itself, and the command for each thing it has
-  not.
+- **`./ty characterise`**, and the application's **Rig knowledge** screen:
+  what this rig has had measured about itself, and for each thing it has not,
+  the command, or on the screen a "Measure this" button. A measurement that
+  moves the mount is shown as a plan first.
+- The check that the telescope turned keeps every judgement with its
+  figures (`cache/moved_log.jsonl`: how far the mount was turned, how far
+  the view was seen to move) and the two pictures behind every "same view"
+  (`cache/moved/`), so its first thresholds can be set from real frames.
 - `./polaris.py find` looks within 1.6° instead of 3° when `polaralign.py`
   put the axis close to the pole in the last fortnight.
 - The README now opens with what makes telescopeyoke different (a home

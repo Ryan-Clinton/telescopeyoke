@@ -60,33 +60,67 @@ def test_a_lit_tree_with_no_stars_is_known_again_by_its_detail():
     assert moved.compare(wall(1), wall(2)) is None                       # nothing in common: no verdict
 
 
-def test_the_same_view_twice_after_turns_that_should_have_changed_it_stops_the_survey(tmp_path, monkeypatch):
+@pytest.fixture
+def evidence(tmp_path, monkeypatch):
+    """Where the movement check keeps what it judged, in a folder of the test's own."""
     monkeypatch.setattr(moved, "MOVED_FILE", tmp_path / "moved.json")
+    monkeypatch.setattr(moved, "LOG_FILE", tmp_path / "moved_log.jsonl")
+    monkeypatch.setattr(moved, "PAIRS", tmp_path / "moved")
     monkeypatch.setattr(config, "DEMO", False)
+    return lambda: [json.loads(line) for line in moved.LOG_FILE.read_text(encoding="utf-8").splitlines()]
+
+
+def test_the_same_view_twice_after_turns_that_should_have_changed_it_stops_the_survey(evidence):
     watch = moved.Watch()
     assert watch.check(wall(1), 0.0) is None                       # the first look: nothing to compare
     assert watch.check(wall(1), 30.0) == "same"                    # once could be chance
     with pytest.raises(interface.Refusal) as stop:
         watch.check(wall(1), 30.0, "bearing 150°, 40° up")
     assert stop.value.code_name == "MOUNT_NOT_MOVING" and "bearing 150°" in stop.value.message
+    # It says how far the view moved beside how far the mount was turned.
+    assert "it moved 0° where the mount was turned 30.0°" in stop.value.message
     assert not moved.MOVED_FILE.exists()
+    # Both judgements are kept with their figures, and both pairs of pictures, to set the thresholds from.
+    kept = evidence()
+    assert [k["verdict"] for k in kept] == ["same", "same"] and kept[1]["where"] == "bearing 150°, 40° up"
+    assert kept[0]["by"] == "detail" and kept[0]["sure"] >= moved.SURE
+    assert kept[0]["expected_deg"] == 30.0 and kept[0]["observed_deg"] == 0
+    assert len(list(moved.PAIRS.glob("*.jpg"))) >= 1
+    assert moved.checked() == {"same": 2, "changed": 0, "undecided": 0}
 
 
-def test_a_view_that_changes_is_remembered_as_proof_and_small_turns_are_not_judged(tmp_path, monkeypatch):
-    monkeypatch.setattr(moved, "MOVED_FILE", tmp_path / "moved.json")
-    monkeypatch.setattr(config, "DEMO", False)
+def test_a_view_that_changes_is_remembered_as_proof_and_small_turns_are_not_judged(evidence):
     watch = moved.Watch()
     watch.check(stars("M27"), 0.0)
     assert watch.check(stars("M27", seed=1), 0.2) is None          # too small a turn to expect a new view
     assert watch.check(stars("M31", seed=2), 20.0) == "changed"
     assert "view changed" in json.loads(moved.MOVED_FILE.read_text(encoding="utf-8"))["how"]
     assert moved.separation(0, 40, 90, 40) == pytest.approx(65.6, abs=0.2)
+    kept = evidence()
+    assert len(kept) == 1 and kept[0]["by"] == "stars" and kept[0]["share_in_place"] < moved.SHARE
+    assert kept[0]["observed_deg"] is None            # two different fields: nothing to measure a shift by
 
 
-def test_a_correction_that_changes_nothing_is_proof_from_the_plate_solve():
-    assert moved.unchanged((-1.78, 1.57), (-1.77, 1.58))           # 107' out, corrected, still 107' out
-    assert not moved.unchanged((-1.78, 1.57), (-0.10, -0.19))      # the real first night
-    assert not moved.unchanged((0.05, 0.03), (0.05, 0.03))         # too small to judge
+def test_the_figures_behind_a_verdict_are_given():
+    same = moved.judge(stars("M27"), stars("M27", (1.5, -0.8), seed=1))
+    assert same["verdict"] == "same" and same["by"] == "stars" and same["share_in_place"] >= moved.SHARE
+    assert same["shift_px"] == pytest.approx(1.7, abs=0.4) and same["stars_before"] >= moved.STARS
+    blank = moved.judge(300 + rng.normal(0, 5, (1100, 1300)), 300 + rng.normal(0, 5, (1100, 1300)))
+    assert blank["verdict"] is None and blank["sure"] < moved.SURE
+
+
+def test_a_correction_that_changes_nothing_is_proof_from_the_plate_solve(evidence):
+    assert moved.unchanged((-1.78, 1.57), (-1.77, 1.58), "GoTo M27")     # 142' out, corrected, still 142' out
+    assert not moved.MOVED_FILE.exists()
+    assert not moved.unchanged((-1.78, 1.57), (-0.10, -0.19))            # the real first night
+    assert "plate solve" in json.loads(moved.MOVED_FILE.read_text(encoding="utf-8"))["how"]
+    assert not moved.unchanged((0.05, 0.03), (0.05, 0.03))               # too small to judge, and not kept
+    kept = evidence()
+    assert [(k["by"], k["verdict"]) for k in kept] == [("plate solve", "same"), ("plate solve", "changed")]
+    assert kept[0]["expected_deg"] == pytest.approx(2.37, abs=0.01) and kept[0]["observed_deg"] < 0.02
+    assert kept[1]["observed_deg"] == pytest.approx(2.43, abs=0.02) and kept[0]["where"] == "GoTo M27"
+    # A turn of 12 degrees that shows as 12, and one that shows as nothing.
+    assert not moved.solved(12.0, 11.8) and moved.solved(12.0, 0.4)
 
 
 @pytest.fixture
@@ -96,6 +130,7 @@ def scope(tmp_path, monkeypatch):
     monkeypatch.setattr(mount, "LOCK_FILE", tmp_path / "MOTION_LOCKED")
     monkeypatch.setattr(mount, "SETTLE", 0)
     monkeypatch.setattr(moved, "MOVED_FILE", tmp_path / "moved.json")
+    monkeypatch.setattr(moved, "LOG_FILE", tmp_path / "moved_log.jsonl")
     monkeypatch.setattr(polaralign, "POLAR_FILE", tmp_path / "polar.json")
     monkeypatch.setattr(polaralign, "SETTLE", 0)
     monkeypatch.setattr(time, "sleep", lambda seconds: None)
@@ -359,7 +394,8 @@ def rig(tmp_path, monkeypatch):
     import horizon
     for module, name in ((camera_test, "TIMING_FILE"), (focus, "FRAMES_FILE"), (focus, "RUNS_FILE"),
                          (mount, "POINTING_FILE"), (mount, "SURVEY_FILE"), (mount, "RESPONSE_FILE"),
-                         (polaralign, "POLAR_FILE"), (horizon, "RESULTS"), (moved, "MOVED_FILE")):
+                         (polaralign, "POLAR_FILE"), (horizon, "RESULTS"), (moved, "MOVED_FILE"),
+                         (moved, "LOG_FILE")):
         monkeypatch.setattr(module, name, tmp_path / f"{name}.json")
     return tmp_path
 
@@ -370,6 +406,13 @@ def test_a_rig_nothing_is_known_about_says_how_to_measure_each_thing(rig):
     assert all(not item["measured"] and item["value"] is None and item["how"] for item in answer["items"])
     assert {"./camera_test.py --timing", "./polaralign.py --repeat 5", "./mount.py response",
             "./mount.py pointing"} <= {item["how"] for item in answer["items"]}
+    # Each names the application's action that measures it, where there is one.
+    import console
+    named = {item["action"] for item in answer["items"]} - {None}
+    assert named <= set(console.ACTIONS) and {"polar-repeat", "creep-response", "pointing-survey",
+                                              "camera-timing", "camera-trail"} <= named
+    assert [item["what"] for item in answer["items"] if item["action"] is None] == [
+        "The skyline of the place it stands", "That the telescope turns when the mount says it has"]
 
 
 def test_what_has_been_measured_is_reported_with_its_value_and_age(rig):
@@ -389,4 +432,14 @@ def test_what_has_been_measured_is_reported_with_its_value_and_age(rig):
     assert found["How well that measurement repeats"]["value"] == "±0.02° over 5 measurements"
     assert "0.63 s for each second asked" in found["How long a frame takes for the exposure asked"]["value"]
     assert "+5.80° in Dec" in found["Pointing error on the east side"]["value"]
+    assert "0 moves seen to be real so far" in found["That the telescope turns when the mount says it has"]["value"]
     assert "Pointing error on the west side" not in found
+
+
+def test_the_trail_test_can_be_shown_as_a_plan_first(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["camera_test", "--trail", "--dry-run", "--json"])
+    with pytest.raises(SystemExit) as done:
+        camera_test.main()
+    answer = json.loads(capsys.readouterr().out)
+    assert done.value.code == 0 and answer["ok"] and answer["data"]["tracking_interrupted"]
+    assert answer["data"]["would_move"] is False and "starts it following again" in answer["warnings"][0]

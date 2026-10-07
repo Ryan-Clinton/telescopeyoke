@@ -43,6 +43,7 @@
   <a href="#testing" data-task="testing" data-only="app"><svg><use href="/icons.svg#tools"/></svg><span>Camera testing</span></a>
   <a href="#processing" data-task="processing" data-only="app"><svg><use href="/icons.svg#tools"/></svg><span>Processing</span></a>
   <div class="group" data-only="app">System</div>
+  <a href="#knowledge" data-task="knowledge" data-only="app"><svg><use href="/icons.svg#system"/></svg><span>Rig knowledge</span></a>
   <a href="#rigs" data-task="rigs" data-only="app"><svg><use href="/icons.svg#mount"/></svg><span>Rigs</span></a>
   <a href="#doctor" data-task="doctor" data-only="app"><svg><use href="/icons.svg#system"/></svg><span>Doctor</span></a>
   <a href="#settings" data-task="settings" data-only="app"><svg><use href="/icons.svg#tools"/></svg><span>Settings</span></a>
@@ -314,6 +315,13 @@
     <div class="tool"><div><b>Combine sessions</b><span>Every saved session of the same target, as one picture.</span></div><button type="button" id="restack-all">Run</button></div>
   </section>
 
+  <section id="knowledge" class="task" data-only="app" hidden>
+    <h1>Rig knowledge</h1>
+    <p class="quiet">What this telescope has had measured about itself. Each line is something that would otherwise be assumed: how long the shutter is really open, how far out the pointing is on each side, whether the mount turns when it says it has. A measurement that moves the mount is shown as a plan first.</p>
+    <div id="rig-count" class="big"></div>
+    <div id="rig-measured" class="knowledge"></div>
+  </section>
+
   <section id="rigs" class="task" data-only="app" hidden>
     <h1>Rigs</h1>
     <p class="quiet">A rig is one telescope, with its own settings and its own pictures. With two telescopes out, each runs in a TelescopeYoke window of its own, and this shows what both are doing. Nothing here asks a mount or a camera anything: it reads what each rig last wrote.</p>
@@ -325,9 +333,6 @@
     <h1>Doctor</h1>
     <dl id="system-rows" class="facts"></dl>
     <div id="doctor-checks"></div>
-    <h2>What has been measured about this rig</h2>
-    <p id="rig-measured-summary" class="quiet"></p>
-    <div id="rig-measured"></div>
     <div class="buttons">
       <button type="button" id="recheck">Check again</button>
       <button type="button" id="hardware-report">Write a hardware report</button>

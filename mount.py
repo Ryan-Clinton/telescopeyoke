@@ -385,8 +385,9 @@ class Mount:
                 self.say(f"hour angle {hours_out:+g} h: no plate solve; left out")
                 continue
             actual = where(found, site, found["when"])
-            if last and abs(wrap(actual[0] - last[1])) < 0.25 * abs(hours_out * 15 - last[0]):
-                import moved
+            import moved
+            if last and moved.solved(abs(hours_out * 15 - last[0]), abs(wrap(actual[0] - last[1])),
+                                     f"pointing survey, hour angle {hours_out:+g} h"):
                 self.stop()
                 raise moved.refusal(f"After a move of {abs(hours_out * 15 - last[0]):.0f}° the sky is "
                                     "where it was.")
@@ -614,12 +615,10 @@ class Mount:
             self.say(f"  off by {miss[0] * 60:+.1f}' in hour angle, {miss[1] * 60:+.1f}' in Dec")
             if last is not None:
                 import moved
-                if moved.unchanged(last, miss):
+                if moved.unchanged(last, miss, f"GoTo {target['id']}"):
                     self.stop()
                     raise moved.refusal(f"A correction of {math.hypot(*last) * 60:.0f}' left the target "
                                         "exactly as far off as before.")
-                if math.hypot(*last) >= 0.25:
-                    moved.confirm("a plate solve after a correction")
             last = miss
             if max(abs(miss[0]), abs(miss[1])) < CENTRED:
                 self.say("  centred")

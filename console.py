@@ -267,6 +267,27 @@ ACTIONS = {
                               "to five readings up to 12° apart, then goes back. It then photographs Polaris "
                               "every few seconds for about four minutes and says how far there is to go "
                               "while you turn the bolts. Press Finish when it says close enough."},
+    # The rig measuring itself (ty characterise says which have been made).
+    "polar-repeat": {"label": "Polar alignment, five times over", "uses": "mount", "moves": True,
+                     "command": lambda p: ["polaralign.py", "--repeat", "5", "--step", f"{number(p, 'step', 5, 25, 12):g}"],
+                     "says": "Five polar measurements one after another, to see how well they agree: each "
+                             "slews 12° away from the meridian twice and returns. Leave the bolts alone until "
+                             "it has finished. About ten minutes."},
+    "pointing-survey": {"label": "Pointing survey", "uses": "mount", "moves": True,
+                        "command": lambda p: ["mount.py", "pointing"],
+                        "says": "The mount goes to six places, three each side of the meridian, and plate-solves "
+                                "at each. The tube swings over the pole once. Watch it the first time."},
+    "creep-response": {"label": "Dec motor response", "uses": "mount", "moves": True,
+                       "command": lambda p: ["mount.py", "response"],
+                       "says": "Nothing slews. The Dec motor creeps at five rates in turn for about 35 minutes "
+                               "while the drift is measured, and is put back as it was."},
+    "camera-timing": {"label": "Camera timing", "uses": "camera", "moves": False,
+                      "command": lambda p: ["camera_test.py", "--timing"]},
+    "camera-trail":  {"label": "Real exposure from star trails", "uses": "mount", "moves": True,
+                      "command": lambda p: ["camera_test.py", "--trail"],
+                      "says": "The mount stops following the sky for one ten-second frame, so the stars "
+                              "trail, and starts following again. Point at a field with bright stars, away "
+                              "from the pole, first."},
     "camera-capabilities": {"label": "What the camera is", "uses": "camera", "moves": False,
                             "command": lambda p: ["camera_test.py", "--capabilities"]},
     "camera-throughput":   {"label": "Throughput test", "uses": "camera", "moves": False,
@@ -284,6 +305,8 @@ ACTIONS = {
 # The demo has a pretend mount, camera and sky, so nearly everything runs in
 # it. These do not: they test or set up real equipment.
 NOT_IN_DEMO = ("camera-setup", "camera-capabilities", "camera-throughput", "camera-gain-sweep",
+               # The pretend sky does not turn and the pretend camera keeps perfect time.
+               "camera-timing", "camera-trail", "creep-response", "pointing-survey",
                "calibrate", "sync", "drift", "compensate",
                # Each demo command starts a fresh pretend mount at home, so there
                # is no "where it was pointing" for a landmark to be remembered at.
@@ -297,7 +320,8 @@ WORKSTATION = ("camera-setup", "camera-capabilities", "camera-throughput", "came
                "panorama-unmark", "panorama-move", "panorama-save", "panorama-clear",
                "polar", "point", "landmark-remember", "landmark-check", "restack",
                "polaris-check", "polaris-find", "polaris-align",
-               "drift", "compensate", "sync", "open-settings")
+               "drift", "compensate", "sync", "open-settings",
+               "polar-repeat", "pointing-survey", "creep-response", "camera-timing", "camera-trail")
 # Orders that have a run move the mount or change its motors.
 MOVING_ORDERS = ("run-recentre", "run-assist-on", "run-assist-off")
 
@@ -769,6 +793,15 @@ class Reader:
                                 **limits)
                            for section, key, label, kind, text, limits in config.SETTINGS]}
 
+    def knowledge(self):
+        """agent.characterise(), with whether each item's action is planned
+        and confirmed first (`plan`) or simply started."""
+        import agent
+        found = agent.characterise()
+        for item in found["items"]:
+            item["plan"] = bool(item["action"] and moves(item["action"], {}))
+        return found
+
     def focus(self):
         """The newest reading on many stars, and `live`: the newest frame's
         reading whatever it was (a ring, one star, nothing at all), with its
@@ -823,7 +856,7 @@ class Reader:
             "system": (self.system, 10),
             "gallery": (self.gallery, 10),
             "rigs": (agent.rigs, 5),
-            "characterise": (agent.characterise, 15),
+            "characterise": (self.knowledge, 15),
         }
         if name not in routes:
             return None

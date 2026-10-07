@@ -850,22 +850,31 @@ function statusRows(node) {
   fill(node, rows.flatMap((row) => [el("dt", { text: row.label }), el("dd", { class: row.level === "fair" ? "warn" : row.level, text: row.text })]));
 }
 
-function drawMeasured() {
-  // What the rig has had measured about itself, and the command for each thing it has not.
+function drawKnowledge() {
+  // What the rig has had measured about itself, and a way to measure each thing it has not.
   const rig = seen.characterise;
   if (!rig) return;
-  $("rig-measured-summary").textContent = `${rig.summary}. Each of these is something that would otherwise be assumed.`;
-  fill($("rig-measured"), rig.items.map((item) => el("div", { class: "check" },
-    el("span", { class: `mark ${item.measured ? "good" : "quiet"}`, text: item.measured ? "✓" : "·" }),
-    el("span", { text: item.measured
-      ? `${item.what}: ${item.value}` + (item.age_days != null ? ` (${item.age_days} days ago)` : "")
-      : `${item.what}: not measured. ${item.how}` }))));
+  $("rig-count").textContent = `${rig.measured} of ${rig.of} characterised`;
+  fill($("rig-measured"), rig.items.map((item) => {
+    const start = item.action
+      ? el("button", Object.assign({ type: "button", text: item.measured ? "Measure again" : "Measure this" },
+                                   { [item.plan ? "data-plan" : "data-action"]: item.action,
+                                     "data-needs": ["camera-timing", "focus"].includes(item.action) ? "camera" : "mount" }))
+      : el("span", { class: "quiet", text: item.what.startsWith("The skyline") ? "On the Horizon screen" : "Checked as it goes" });
+    return el("div", { class: "check" },
+      el("span", { class: `mark ${item.measured ? "good" : "quiet"}`, text: item.measured ? "✓" : "?" }),
+      el("span", {}, item.what,
+         el("span", { class: "value", text: item.measured
+           ? item.value + (item.age_days != null ? ` · ${item.age_days} days ago` : "")
+           : `Not measured. In a terminal: ${item.how}` })),
+      start);
+  }));
+  gateAll();
 }
 
 function drawDoctor() {
   const report = seen.doctor;
   statusRows($("system-rows"));
-  drawMeasured();
   if (!report) return;
   fill($("doctor-checks"), Object.entries(report.components).flatMap(([section, checks]) => [
     el("h2", { text: `${section} ${report.ready && report.ready[section.toLowerCase()] === false ? "· not ready" : ""}` }),
@@ -1014,7 +1023,7 @@ function show(name) {
 const SCREENS = { home: drawHome, targets: drawTargets, mount: drawMount, focus: drawFocus, imaging: drawImaging,
                   status: () => statusRows($("status-rows")), welcome: drawWelcome, camera: drawCamera, telescope: drawTelescope,
                   solver: drawSolver, webcam: drawWebcam, horizon: drawHorizon, polar: drawPolar, landmark: drawLandmark, calibration: gateAll, testing: gateAll,
-                  processing: drawProcessing, rigs: drawRigs, doctor: drawDoctor, settings: drawSettings, logs: () => {}, about: drawAbout,
+                  processing: drawProcessing, rigs: drawRigs, knowledge: drawKnowledge, doctor: drawDoctor, settings: drawSettings, logs: () => {}, about: drawAbout,
                   "demo-sky": drawDemoSky };
 
 function draw() {
@@ -1050,7 +1059,7 @@ async function refresh() {
   if (task === "imaging" && slow % 5 === 0 || !seen.gallery) wanted.push("gallery");
   if (!seen.catalogue) wanted.push("catalogue");
   if (task === "doctor" || !seen.doctor) wanted.push("doctor");
-  if (task === "doctor") wanted.push("characterise");
+  if (task === "knowledge") wanted.push("characterise");
   if (task === "horizon") wanted.push("horizon", "landmarks");
   if (task === "rigs") wanted.push("rigs");
   if (task === "polar") wanted.push("polar");

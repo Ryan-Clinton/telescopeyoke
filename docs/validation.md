@@ -150,6 +150,58 @@ M31 from a back garden, polar axis about 9 degrees out, USB 2 lead.
 - **Meridian:** the mount was already on the tube-over-pole side for both
   runs, so the upside-down handling in the combiner was not exercised.
 
+## The next clear night
+
+The six measurements that put real figures into `./ty characterise`, in an
+order that wastes no setting-up. None has been made yet. About two hours.
+
+| Order | What | Command | Takes | Needs |
+|---|---|---|---|---|
+| 1 | Camera timing | `./camera_test.py --timing` | 3 minutes | Nothing: the cap can be on. Do it at dusk. |
+| 2 | Focus response on the USB 3 lead | `./focus.py --field`, then `./focus.py --report` | 10 minutes | A rich field. Turn through focus and back until "Focus good". |
+| 3 | Polar repeatability | `./mount.py goto NAME --solve` on a star east of south, then `./polaralign.py --step 12 --repeat 5` | 10 minutes | The bolts left alone throughout. |
+| 4 | Real exposure from star trails | `./camera_test.py --trail` | 1 minute | Where step 3 left it: bright stars, away from the pole. |
+| 5 | Pointing each side of the meridian | `./mount.py pointing --dry-run`, then `./mount.py pointing` | 15 minutes | Someone watching: the tube swings over the pole once. |
+| 6 | Dec motor response | `./mount.py goto NAME --solve`, then `./mount.py response` | 35 minutes | One target, left alone. |
+
+Movement checking needs no step of its own: steps 3 and 5 are judged by
+their plate solves as they run, and each judgement goes into
+`cache/moved_log.jsonl`. Afterwards `./ty characterise` should read 9 or 10
+of 12, and the results go in the table above.
+
+## What to look for in the movement check's first real records
+
+`moved.py` can stop a command with a refusal, and its thresholds
+(`LEAST` 0.5°, `MATCH` 4 pixels, `SHARE` 0.6, `SURE` 12, `PATIENCE` 2) come
+from made-up frames. Every judgement is kept in `cache/moved_log.jsonl` with
+how far the mount was turned (`expected_deg`), how far the view was seen to
+move where that could be measured (`observed_deg`), and the figures behind
+the verdict; the two pictures behind every "same view" are in `cache/moved/`.
+After the first real survey, look there for:
+
+- **Two blank or cloudy places taken for one.** Expected: no verdict
+  (`"verdict": null`), because neither picture has anything to go by. A
+  "same" here would be a false stop.
+- **A rich star field after a small move.** A move between 0.5° and about
+  1° leaves part of the old field in the new frame, shifted. Expected:
+  "changed", because the stars are not where they were.
+- **Detail that repeats**: a fence, roof tiles, a brick wall. Two different
+  parts of it could match. Expected to be rare, and `PATIENCE` asks for two
+  matches running; the kept pairs will show whether it happens.
+- **Cloud moving over a mount that is stuck.** The detail changes though
+  the telescope has not, so the check says "changed" and misses the fault.
+  It fails towards carrying on, not towards a false stop.
+- **Near the pole**, where a large turn of the RA axis moves the view
+  little. The survey judges by the angle between the two directions on the
+  sky, not by the axis readings, so a small move there is simply not judged
+  (under `LEAST`). `polaralign.py` refuses above Dec 75°.
+
+Where plate solves do the judging (`goto --solve`, `polaralign.py`,
+`mount.py pointing`) the comparison is already a quantity: the move asked
+against the move seen, with less than a quarter of it counting as stuck.
+For pictures it is a quantity only when the two views overlap; two different
+views share nothing to measure a shift by.
+
 ## Known weaknesses found by the tests
 
 - The focus tracker judges change against the readings' own jitter. With the

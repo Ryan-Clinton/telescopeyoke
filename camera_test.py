@@ -424,12 +424,19 @@ def main():
                     help="seconds (default 2 for gains, 1 for throughput, 10 for --trail)")
     ap.add_argument("--frames", type=int, default=4, help="frames per mode, for --throughput")
     ap.add_argument("--gain", type=int, default=1500)
+    ap.add_argument("--dry-run", action="store_true", help="say what it would do; no camera, no mount")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
-    return interface.main("camera_test", lambda: run(args), args.json)
+    return interface.main("camera_test.dry_run" if args.dry_run else "camera_test", lambda: run(args), args.json)
 
 
 def run(args):
+    if getattr(args, "dry_run", False):
+        note = ("Stops the mount following the sky for one frame of "
+                f"{args.exposure or 10.0:g} s, so the stars trail, and starts it following again. Nothing is slewed."
+                if args.trail else "Takes frames; the mount is not touched.")
+        print(("Would stop the mount's tracking for one frame. " if args.trail else "Would not move the mount. ") + note)
+        return {"would_move": False, "safe": True, "tracking_interrupted": bool(args.trail)}, [note]
     if args.capabilities:
         with Camera(gain=args.gain) as cam:
             found = cam.details() if SDK else capabilities(cam)

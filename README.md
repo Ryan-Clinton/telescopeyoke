@@ -42,7 +42,8 @@ This assumes it has not, and measures what is actually there.
 `./ty characterise` lists what a rig has had measured about itself so far
 (the camera's real exposure, the pointing error on each side, the polar
 error and how well it repeats, how the drift answers the motor, the skyline)
-and the command for each thing it has not. Each of these
+and the command for each thing it has not; in the application that is the
+Rig knowledge screen, with a "Measure this" button on each line. Each of these
 says how far it has been proven; [Current status](#current-status) has the
 table and [docs/validation.md](docs/validation.md) the full account.
 

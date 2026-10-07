@@ -12,9 +12,7 @@ Ubuntu or anywhere else. So:
 - **Its screens are grouped by what they are for:** Observe (Tonight,
   Targets, Imaging, Focus, Mount), Equipment (Camera, Telescope, Plate
   solver, Webcam), Tools (Horizon, Calibration, Camera testing, Processing)
-  and System (Doctor, Settings, Logs, About). The Doctor screen also lists what
-  has been measured about this rig (`ty characterise`), with the command for
-  each thing that has not. When something the telescope
+  and System (Rig knowledge, Rigs, Doctor, Settings, Logs, About). When something the telescope
   needs is missing it opens on a Welcome screen that says what, with a
   button to the screen that deals with it.
 - **Settings are changed in the application,** on a form with every value
@@ -647,6 +645,29 @@ Two of these get a picture for a result:
   which height alone does not tell.
 
 ### System
+
+**Rig knowledge** is what this telescope has had measured about itself
+(`ty characterise`, `/api/characterise`): "7 of 12 characterised", then a
+line for each thing that would otherwise be assumed, marked ✓ with its value
+and age, or ? with the terminal command. Each has a button, "Measure this"
+or "Measure again", that starts the application's action for it:
+
+| Line | Button starts | Planned and confirmed first |
+|---|---|---|
+| How long a frame takes for the exposure asked | `camera_test.py --timing` | no |
+| How long the shutter is really open | `camera_test.py --trail` | yes: tracking stops for one frame |
+| How quickly focusing answers; the star size good focus comes to | `focus.py` | no |
+| Pointing error on each side | `mount.py sync` | no |
+| Whether one correction for each side is enough | `mount.py pointing` | yes |
+| How far the polar axis is from the pole | `polaralign.py` | yes |
+| How well that measurement repeats | `polaralign.py --repeat 5 --step 12` | yes |
+| How the drift answers the Dec motor | `mount.py response` | yes |
+| The skyline | none: the Horizon screen | |
+| That the telescope turns when the mount says it has | none: checked as other things run | |
+
+None of the five that test real equipment runs in the demo. The screen has
+been drawn against the demo's data in a test window; its buttons have not
+been pressed with a real mount.
 
 The status page's rows first (mount lead, last plate solve, camera, plate
 solver, how old the forecast and the satellite picture are, disk space),

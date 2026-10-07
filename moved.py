@@ -18,7 +18,10 @@ plate solve already says where the telescope is, that is the better proof,
 and `unchanged()` judges it.
 
 The thresholds here are first figures. They have been tried on made-up star
-fields and textures, not yet on frames from the night it happened.
+fields and textures, not yet on frames from the night it happened. So every
+judgement is kept, with how far the mount was turned and how far the view
+was seen to move (cache/moved_log.jsonl), and the two pictures behind every
+"same" are kept side by side (cache/moved/), to set the figures from.
 """
 import json
 import math
@@ -31,6 +34,8 @@ import config
 import interface
 
 MOVED_FILE = config.DATA / "cache" / "mount_moved.json"    # when the camera last showed a move was real
+LOG_FILE = config.DATA / "cache" / "moved_log.jsonl"       # every judgement made, with its figures
+PAIRS = config.DATA / "cache" / "moved"                    # the two pictures behind each "same"
 LEAST = 0.5         # degrees: a smaller turn may leave the same things in view, and is not judged
 STARS = 5           # stars a picture needs before its stars are gone by
 MATCH = 4.0         # pixels within which a star is the same star
@@ -78,30 +83,81 @@ def _texture(before, after):
     return 4 * math.hypot(dx, dy), float((match[y, x] - match.mean()) / (match.std() + 1e-12))
 
 
-def compare(before, after):
-    """"same" if two brightness pictures show the same view, "changed" if
-    they show different ones, None if neither has anything to go by (blank
-    sky by day, cloud by night)."""
+def scale():
+    """Degrees of sky across one pixel of the brightness pictures compared here."""
+    equipment = config.hardware()
+    return math.degrees(2 * equipment["camera"]["pixel_size_um"] / 1000 / equipment["scope"]["focal_length_mm"])
+
+
+def judge(before, after):
+    """Compare two brightness pictures. Returns {"verdict": "same" if they
+    show the same view, "changed" if they show different ones, None if
+    neither has anything to go by (blank sky by day, cloud by night); "by":
+    "stars" or "detail"; and the figures the verdict rests on, among them
+    "shift_px", how far the view moved, where that could be measured."""
     if before.shape != after.shape:
-        return None
+        return {"verdict": None, "by": None}
     a, b = _stars(before), _stars(after)
+    found = {"by": "stars", "stars_before": len(a), "stars_after": len(b)}
     if len(a) >= STARS:
         if not len(b):
-            return "changed"
-        nearest = np.sqrt(((a[:, None, :] - b[None, :, :]) ** 2).sum(axis=2)).min(axis=1)
-        return "same" if (nearest <= MATCH).mean() >= SHARE else "changed"
+            return dict(found, verdict="changed", share_in_place=0.0)
+        apart = np.sqrt(((a[:, None, :] - b[None, :, :]) ** 2).sum(axis=2))
+        nearest = apart.min(axis=1)
+        share = float((nearest <= MATCH).mean())
+        found["share_in_place"] = round(share, 2)
+        if share >= SHARE:
+            return dict(found, verdict="same", shift_px=round(float(np.median(nearest[nearest <= MATCH])), 1))
+        return dict(found, verdict="changed")
     if len(b) >= STARS:
-        return "changed"
+        return dict(found, verdict="changed")
     shift, sure = _texture(before, after)
+    found.update(by="detail", sure=round(sure, 1))
     if sure >= SURE:
-        return "same" if shift <= 2 * MATCH else "changed"
-    return None
+        return dict(found, verdict="same" if shift <= 2 * MATCH else "changed", shift_px=round(shift, 1))
+    return dict(found, verdict=None, by=None)
+
+
+def compare(before, after):
+    """judge()'s verdict alone: "same", "changed" or None."""
+    return judge(before, after)["verdict"]
 
 
 def confirm(how):
     """Note that the camera has just shown a move to be real."""
     MOVED_FILE.parent.mkdir(parents=True, exist_ok=True)
     MOVED_FILE.write_text(json.dumps({"how": how, "saved": time.time()}), encoding="utf-8")
+
+
+def log(entry):
+    """Keep every judgement, with its figures: the thresholds above are
+    first figures, and this is what they will be set from."""
+    LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with LOG_FILE.open("a", encoding="utf-8") as kept:
+        kept.write(json.dumps(dict(entry, saved=time.time())) + "\n")
+
+
+def checked():
+    """How many moves have been judged so far, by verdict: {"same": n,
+    "changed": n, "undecided": n}."""
+    counts = {"same": 0, "changed": 0, "undecided": 0}
+    if LOG_FILE.exists():
+        for line in LOG_FILE.read_text(encoding="utf-8").splitlines():
+            try:
+                counts[json.loads(line).get("verdict") or "undecided"] += 1
+            except (ValueError, KeyError):
+                pass
+    return counts
+
+
+def _keep_pair(before, after, name):
+    """The two pictures behind a "same", side by side, for a person to look at."""
+    from PIL import Image
+    def small(lum):
+        lo, hi = np.percentile(lum[::4, ::4], (1, 99.7))
+        return (np.clip((lum[::2, ::2] - lo) / max(hi - lo, 1e-6), 0, 1) * 255).astype(np.uint8)
+    PAIRS.mkdir(parents=True, exist_ok=True)
+    Image.fromarray(np.hstack([small(before), small(after)])).save(PAIRS / f"{name}.jpg", quality=80)
 
 
 def refusal(what):
@@ -126,25 +182,45 @@ class Watch:
         before, self.before = self.before, lum
         if before is None or turned_deg < LEAST or config.DEMO:
             return None
-        verdict = compare(before, lum)
+        found = judge(before, lum)
+        verdict = found["verdict"]
         self.verdicts.append(verdict)
+        # How far the view moved, beside how far the mount was turned. Two
+        # different views share nothing to measure a shift by: all that is
+        # known then is that it moved more than they overlap.
+        seen = round(found["shift_px"] * scale(), 3) if "shift_px" in found else None
+        log(dict(found, where=where, expected_deg=round(turned_deg, 2), observed_deg=seen))
         if verdict == "changed":
             self.stuck = 0
             confirm("the view changed after a move")
         elif verdict == "same":
             self.stuck += 1
+            _keep_pair(before, lum, time.strftime("%Y%m%d-%H%M%S"))
             if self.stuck >= self.patience:
-                raise refusal(f"The last {self.stuck + 1} pictures show the same view{' (' + where + ')' if where else ''}, "
-                              f"though the mount was turned {turned_deg:.1f}° before this one.")
+                raise refusal(f"The last {self.stuck + 1} pictures show the same view{' (' + where + ')' if where else ''}: "
+                              f"it moved {seen:g}° where the mount was turned {turned_deg:.1f}°.")
         return verdict
 
 
-def unchanged(miss_before, miss_after, least=0.25):
-    """True when a correction that should have taken out `miss_before` (hour
-    angle, Dec, in degrees) left the miss as it was: a plate solve's proof
-    that the telescope did not turn. A miss under `least` degrees is not
-    judged; a turn that small can be lost in the gears' slack."""
-    size = math.hypot(*miss_before)
-    if size < least:
+def solved(expected_deg, observed_deg, where=""):
+    """Judge a move by plate solves: the mount was turned `expected_deg`
+    and the sky is `observed_deg` from where it was. True when the telescope
+    did not turn: less than a quarter of the move shows. A move under a
+    quarter of a degree is not judged; a turn that small can be lost in the
+    gears' slack. Every judgement is kept, and a move that shows is noted
+    as proof."""
+    if expected_deg < 0.25:
         return False
-    return math.hypot(miss_after[0] - miss_before[0], miss_after[1] - miss_before[1]) < 0.25 * size
+    stuck = observed_deg < 0.25 * expected_deg
+    log({"by": "plate solve", "verdict": "same" if stuck else "changed", "where": where,
+         "expected_deg": round(expected_deg, 3), "observed_deg": round(observed_deg, 3)})
+    if not stuck:
+        confirm("a plate solve after a move")
+    return stuck
+
+
+def unchanged(miss_before, miss_after, where=""):
+    """True when a correction that should have taken out `miss_before` (hour
+    angle, Dec, in degrees) left the miss as it was."""
+    return solved(math.hypot(*miss_before),
+                  math.hypot(miss_after[0] - miss_before[0], miss_after[1] - miss_before[1]), where)

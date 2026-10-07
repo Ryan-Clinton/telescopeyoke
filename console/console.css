@@ -223,6 +223,9 @@ button.chosen { border-color: var(--warn); }
 .result { background: var(--panel); border: 1px solid var(--rule); border-radius: 6px; padding: 10px; white-space: pre-wrap;
           font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; }
 .check { display: flex; gap: 10px; padding: 5px 0; }
+.knowledge .check { align-items: baseline; border-bottom: 1px solid var(--line, rgba(128, 128, 128, .25)); padding: 9px 0; }
+.knowledge .check > span:nth-child(2) { flex: 1; }
+.knowledge .check .value { display: block; color: var(--dim); font-size: 13px; margin-top: 2px; }
 .check .mark { width: 14px; font-weight: 700; }
 
 /* --- the move plan, the start sheet, notices -------------------------------- */
