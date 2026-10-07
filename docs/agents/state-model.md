@@ -45,6 +45,7 @@ Defined in `interface.py`; `schemas/errors.schema.json` lists them.
 | `ALTITUDE_OUT_OF_RANGE` | no | `point` needs 2° to 89°. |
 | `SLEW_TIMED_OUT` | yes | The mount was stopped. |
 | `GOTO_REFUSED` | yes | The handset would not accept the GoTo. |
+| `MOUNT_NOT_MOVING` | no | The mount reported its moves as made, but the camera's view did not change (or a plate solve came back the same). The mount has been stopped. A person must watch one small move; if the tube does not turn, switch the mount off and on. |
 | `PLATE_SOLVE_FAILED` | yes | Cloud, focus, or too few stars. Take a frame and look. |
 | `NO_SESSION` | no | No imaging run recorded yet. |
 | `NO_SKY` | yes | The horizon survey saw no open sky high up: cap, cloud or exposure. |

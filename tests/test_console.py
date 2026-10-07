@@ -118,7 +118,7 @@ def test_requests_without_the_key_or_from_elsewhere_are_refused(desk):
 
 def test_reading_starts_nothing(desk):
     for name in ("state", "job", "night", "targets", "observing", "session", "doctor", "catalogue",
-                 "focus", "horizon", "report", "system", "gallery", "rigs", "target/M27"):
+                 "focus", "horizon", "report", "system", "gallery", "rigs", "characterise", "target/M27"):
         status, answer = desk.json(f"/api/{name}")
         assert status == 200 and answer["ok"], name
     report = desk.json("/api/hardware")[1]["data"]["text"]

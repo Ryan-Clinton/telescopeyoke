@@ -12,7 +12,9 @@ Ubuntu or anywhere else. So:
 - **Its screens are grouped by what they are for:** Observe (Tonight,
   Targets, Imaging, Focus, Mount), Equipment (Camera, Telescope, Plate
   solver, Webcam), Tools (Horizon, Calibration, Camera testing, Processing)
-  and System (Doctor, Settings, Logs, About). When something the telescope
+  and System (Doctor, Settings, Logs, About). The Doctor screen also lists what
+  has been measured about this rig (`ty characterise`), with the command for
+  each thing that has not. When something the telescope
   needs is missing it opens on a Welcome screen that says what, with a
   button to the screen that deals with it.
 - **Settings are changed in the application,** on a form with every value

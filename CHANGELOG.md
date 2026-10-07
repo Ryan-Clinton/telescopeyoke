@@ -5,6 +5,24 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
 
 ## Not yet released
 
+- **The mount's word is checked.** After the night the motors stopped while
+  the handset reported every move as made: a GoTo with centring whose
+  correction changes nothing, a polar measurement or pointing survey whose
+  plate solves come back the same, and a skyline survey whose pictures do
+  not change now stop the mount and refuse with `MOUNT_NOT_MOVING`
+  (`moved.py`). Tried on made-up frames only.
+- **Measurements in place of assumptions**, each one command, none yet run
+  on the real mount: `./polaralign.py --repeat 5` (does the polar
+  measurement repeat?), `./camera_test.py --timing` and `--trail` (how long
+  is the shutter really open?), `./mount.py response` (does the drift answer
+  the Dec motor in proportion?), `./mount.py pointing` (is one pointing
+  correction for each side enough?), `./focus.py --report` (how quickly was
+  a turn of the knob heard?).
+- **`./ty characterise`**, and the application's Doctor screen: what this
+  rig has had measured about itself, and the command for each thing it has
+  not.
+- `./polaris.py find` looks within 1.6° instead of 3° when `polaralign.py`
+  put the axis close to the pole in the last fortnight.
 - The README now opens with what makes telescopeyoke different (a home
   position set by eye, a manual focuser, a garden skyline, setting up before
   dark, a rough polar alignment, short exposures rebuilt from the raw

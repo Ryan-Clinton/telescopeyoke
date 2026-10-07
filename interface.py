@@ -29,6 +29,8 @@ ERRORS = {
     "ALTITUDE_OUT_OF_RANGE": (False, "Altitude must be between 2 and 89 degrees."),
     "SLEW_TIMED_OUT": (True, "The mount was stopped; check it is free to move."),
     "GOTO_REFUSED": (True, "The handset would not accept the GoTo."),
+    "MOUNT_NOT_MOVING": (False, "The mount says it moved and the camera says it did not. Watch one small "
+                                "move; if the tube does not turn, switch the mount off and on."),
     "PLATE_SOLVE_FAILED": (True, "Usual causes: cloud, focus, too few stars. Take a frame and look."),
     "CAMERA_NOT_CONNECTED": (False, "Plug in the camera. Through INDI, start its driver; on Windows, "
                                     "see what doctor.py says about the camera."),

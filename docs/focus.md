@@ -104,6 +104,10 @@ one frame a line), carries:
 | `feedback_s` | the two together: the soonest a turn of the knob can be heard |
 | `cycle_s` | from one sound to the next |
 
+`./focus.py --report` gives the middle figure of each for every level of the
+last run, and says whether a turn was heard within 1.2 s on the two quick
+levels, which is the aim. It takes no frames.
+
 A turn is heard in full once the level's steadying has caught up: one
 reading on level 1, two on level 2, three on level 3. `--json` gives the
 middle figure of each over the run, and the Focus screen shows the newest.

@@ -82,6 +82,9 @@ REACH = 88.0        # the RA axis is kept within this of home: the bar never pas
 RADIUS = 3.0        # how far from the home position to look, in degrees
 NEAR = 1.2          # the part looked over first, in degrees from home
 NARROW = 0.8        # how far to look when a landmark says the mount faces the right way
+ALIGNED_FRESH = 14  # days a night-time polar alignment is taken to hold, if the tripod has stood since
+FROM_POLE = 0.75    # degrees: Polaris's distance from the pole, rounded up
+HOME_SLACK = 0.5    # degrees allowed for a home position set by eye
 STANDS_OUT = 12.0   # how far a point must stand above the unevenness of the sky to count
 SAME_PLACE = 0.02   # degrees: a second look must show it this close to the first
 DITHER = 0.05       # degrees the tube is tipped, twice, to see a candidate move with the sky
@@ -316,6 +319,23 @@ def focus_checked():
                 found.append({"how": how, "hours_ago": round((time.time() - saved) / 3600, 1)})
     found = [f for f in found if f["hours_ago"] <= FOCUS_FRESH]
     return min(found, key=lambda f: f["hours_ago"]) if found else None
+
+
+def aligned_says():
+    """How far to look when ./polaralign.py measured the axis in the last
+    fortnight: {"radius", "total_deg", "days_ago"}, or None. The star is then
+    its own distance from the pole, plus twice what the axis was out, plus
+    something for a home position set by eye, from where the tube lies."""
+    import polaralign
+    try:
+        last = json.loads(polaralign.POLAR_FILE.read_text(encoding="utf-8"))
+        days = (time.time() - last["measured"]) / 86400
+        radius = round(FROM_POLE + 2 * last["total_deg"] + HOME_SLACK, 1)
+    except (OSError, ValueError, KeyError, TypeError):
+        return None
+    if days > ALIGNED_FRESH or radius >= RADIUS:
+        return None
+    return {"radius": radius, "total_deg": last["total_deg"], "days_ago": round(days, 1)}
 
 
 def landmark_says():
@@ -948,8 +968,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("command", choices=["check", "find", "align"])
     ap.add_argument("--radius", type=float, metavar="DEG",
-                    help=f"with find: how far from the home position to look (default {RADIUS:g}°, or "
-                         f"{NARROW:g}° when a landmark check says the mount faces the right way)")
+                    help=f"with find: how far from the home position to look (default {RADIUS:g}°; less "
+                         f"when ./polaralign.py measured the axis in the last fortnight, and {NARROW:g}° when "
+                         "a landmark check says the mount faces the right way)")
     ap.add_argument("--anyway", action="store_true", help="with find: start though the focus has not been checked")
     ap.add_argument("--record", action="store_true", help="with find: keep every look and measurement")
     ap.add_argument("--watch", type=int, default=0, metavar="N",
@@ -975,11 +996,15 @@ def run(args):
     site = config.load()["site"]
     radius = args.radius
     if args.command == "find" and radius is None:
-        marked = landmark_says()
-        radius = NARROW if marked else RADIUS
+        marked, aligned = landmark_says(), aligned_says()
+        radius = NARROW if marked else aligned["radius"] if aligned else RADIUS
         if marked:
             print(f"The landmark {marked['name']} was where it belongs a little while ago, so the mount faces "
                   f"the right way: looking within {NARROW:g}° only.")
+        elif aligned:
+            print(f"./polaralign.py put the axis {aligned['total_deg']:g}° from the pole {aligned['days_ago']:g} "
+                  f"days ago. If the tripod has not been moved since, Polaris is close: looking within "
+                  f"{radius:g}° only (--radius {RADIUS:g} for the full search).")
     if args.dry_run:
         if args.command == "align":
             note = ("Tips the tube about a tenth of a degree, then turns the RA axis to five readings up to "

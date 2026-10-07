@@ -14,6 +14,7 @@
                              picture (also: recentre, assist-on, assist-off)
     ./ty console             the control console in the browser, on this computer only
     ./ty rigs                every rig in one view: what each is and what it is doing
+    ./ty characterise        what this rig has had measured about itself, and what it has not
     ./ty --rig heq5 ...      any of these for one rig (its settings are rigs/heq5.toml)
     ./ty mount ...           everything mount.py does, e.g. ./ty mount goto M27 --dry-run
     ./ty tonight ...         the full report, as tonight.py
@@ -67,7 +68,8 @@ def main():
 
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["capabilities", "status", "context", "doctor", "night",
-                                        "targets", "target", "session", "observing", "run", "rigs"])
+                                        "targets", "target", "session", "observing", "run", "rigs",
+                                        "characterise"])
     ap.add_argument("name", nargs="?", help="object name, for 'target'; the order, for 'run'")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--demo", action="store_true", help="made-up weather at the example site")
@@ -97,6 +99,7 @@ def main():
         "session": lambda: agent.session(bool(args.frames), args.frames or 50),
         "observing": lambda: agent.observing(args.demo),
         "rigs": agent.rigs,
+        "characterise": agent.characterise,
         "run": lambda: __import__("shoot").tell(args.name or ""),
     }[args.command]
     result = interface.run(args.command, work)
@@ -105,6 +108,16 @@ def main():
     if not result["ok"]:
         print(result["errors"][0]["message"], file=sys.stderr)
         return 1
+    if args.command == "characterise":
+        data = result["data"]
+        print(f"This rig: {data['summary']}.\n")
+        for item in data["items"]:
+            if item["measured"]:
+                age = "" if item["age_days"] is None else f"  ({item['age_days']:g} days ago)"
+                print(f"  ✓ {item['what']}: {item['value']}{age}")
+            else:
+                print(f"  · {item['what']}: not measured. {item['how']}")
+        return 0
     show(json.loads(json.dumps(result["data"], default=interface.jsonable)))
     return 0
 

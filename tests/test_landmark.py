@@ -148,4 +148,5 @@ def test_a_landmark_beyond_the_meridian_limit_is_refused(scope):
     kept("gable", ra_axis=0.0, dec_axis=12.0)
     with pytest.raises(interface.Refusal) as refusal:
         landmark.check("gable", scope, SITE, cam_class=Camera)
-    assert refusal.value.code_name == "TARGET_BEYOND_HOUR_ANGLE_LIMIT" and scope.at_home()
+    # In the morning the Sun is low in the east too, and is refused first.
+    assert refusal.value.code_name in ("TARGET_BEYOND_HOUR_ANGLE_LIMIT", "TARGET_NEAR_SUN") and scope.at_home()

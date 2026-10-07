@@ -3,6 +3,7 @@
 
     ./focus.py                 on stars: a click and a tone for every frame measured
     ./focus.py --quiet         no sound; the readings are printed and shown
+    ./focus.py --report        how quickly the last run answered a turn of the knob, level by level
     ./focus.py --numbers       each reading spoken as a number, in place of the sounds
     ./focus.py --field         first slew to a bright star in a rich part of
                                the sky (this MOVES the telescope)
@@ -525,6 +526,50 @@ def go_to_field(dry_run=False):
     return name
 
 
+LIVE = 1.2      # seconds: a turn heard within this, on the quick levels, feels live
+
+
+def report():
+    """How quickly the last focusing run answered a turn of the knob, from
+    the timing kept for each of its frames: the middle figure on each level
+    for the frame's arrival, its measuring, the two together (`feedback_s`)
+    and the time from one sound to the next. Takes no frames."""
+    frames = []
+    if FRAMES_FILE.exists():
+        for line in FRAMES_FILE.read_text(encoding="utf-8").splitlines():
+            try:
+                frames.append(json.loads(line))
+            except ValueError:
+                pass
+    if not frames:
+        raise interface.Refusal("NO_SESSION", "No focusing run has been recorded yet: run ./focus.py first.")
+    levels = []
+    for level in sorted({f["level"] for f in frames}):
+        here = [f for f in frames if f["level"] == level]
+        row = {"level": level, "name": LEVELS[level], "frames": len(here),
+               "binning": int(np.median([f.get("binning", 1) for f in here]))}
+        for key in ("capture_s", "process_s", "feedback_s", "cycle_s"):
+            found = [f["timing"][key] for f in here if f.get("timing", {}).get(key) is not None]
+            row[key] = round(float(np.median(found)), 3) if found else None
+        levels.append(row)
+    quick = [row["feedback_s"] for row in levels if row["level"] < 3 and row["feedback_s"] is not None]
+    last = frames[-1]
+    out = {"frames": len(frames), "levels": levels, "ended": last.get("state"), "ended_on_level": last["level"],
+           "best_hfr": last.get("best_hfr"), "saved": last.get("saved"),
+           "quick_levels_feel_live": bool(quick and max(quick) <= LIVE) if quick else None}
+    print(f"{'level':<10} {'frames':>6} {'binned':>6} {'frame':>7} {'measuring':>9} {'heard after':>11} {'sound to sound':>14}")
+    seconds = lambda value: "" if value is None else f"{value:.2f} s"
+    for row in levels:
+        print(f"{row['level']} {row['name']:<8} {row['frames']:>6} {row['binning']:>5}x {seconds(row['capture_s']):>7} "
+              f"{seconds(row['process_s']):>9} {seconds(row['feedback_s']):>11} {seconds(row['cycle_s']):>14}")
+    if quick:
+        print(f"On the quick levels a turn of the knob was heard within {max(quick):.2f} s"
+              + (f", inside the {LIVE:g} s that feels live." if out["quick_levels_feel_live"]
+                 else f", over the {LIVE:g} s that feels live."))
+    print(f"The run ended on level {last['level']}" + (f", {last['state']}." if last.get("state") else "."))
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--minutes", type=float, default=15)
@@ -540,9 +585,13 @@ def main():
     ap.add_argument("--dry-run", action="store_true",
                     help="with --field: say which star it would go to; no camera, no mount")
     ap.add_argument("--port", type=int, default=PORT)
+    ap.add_argument("--report", action="store_true",
+                    help="how quickly the last run answered a turn of the knob; takes no frames")
     ap.add_argument("--frames", type=int, help="stop after this many frames")
     ap.add_argument("--json", action="store_true", help="the last reading as JSON at the end")
     args = ap.parse_args()
+    if args.report:
+        return interface.main("focus.report", report, args.json)
     return interface.main("focus", lambda: run(args), args.json)
 
 

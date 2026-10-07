@@ -823,6 +823,7 @@ class Reader:
             "system": (self.system, 10),
             "gallery": (self.gallery, 10),
             "rigs": (agent.rigs, 5),
+            "characterise": (agent.characterise, 15),
         }
         if name not in routes:
             return None

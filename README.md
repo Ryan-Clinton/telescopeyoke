@@ -38,7 +38,11 @@ been driven yet.
 ## What makes it different
 
 Most telescope software assumes a mount that has been set up carefully.
-This assumes it has not, and measures what is actually there. Each of these
+This assumes it has not, and measures what is actually there.
+`./ty characterise` lists what a rig has had measured about itself so far
+(the camera's real exposure, the pointing error on each side, the polar
+error and how well it repeats, how the drift answers the motor, the skyline)
+and the command for each thing it has not. Each of these
 says how far it has been proven; [Current status](#current-status) has the
 table and [docs/validation.md](docs/validation.md) the full account.
 
@@ -88,6 +92,14 @@ motor for a small overshoot ([how](docs/tracking.md)). *The measuring is
 proven on the real mount. An earlier, cruder drift correction cancelled most
 of the drift there; the model that predicts it across the sky has run only
 on the simulated mount.*
+
+**Mount says it moved?** That is not proof. On one real night the motors
+stopped with no sound while the handset went on reporting every move as
+made, and a survey stared at one tree for half an hour. Now a GoTo whose
+correction changes nothing, a polar measurement whose plate solves come back
+the same, and a survey whose pictures do not change all stop with "the mount
+is not moving" instead of carrying on. *Written because it happened; tried
+on made-up frames only.*
 
 **Tracking not good enough for long exposures?** It works out the longest
 exposure the mount can hold, takes many short ones, checks each as it
@@ -317,11 +329,11 @@ lock (`MOTION_LOCKED`) stops every rig at once.
 | `tonight.py` | Report for the night: darkness, Moon, weather verdict, ranked targets. `--html` writes the web page. |
 | `serve.py` | Serves the status page on port 8080: the night's report rebuilt every 10 minutes, and the imaging run, pictures and system panel refreshed every two seconds. |
 | `clouds.py` | Fetches the latest infrared satellite image with the site marked on it. |
-| `mount.py` | Moves the mount: `status`, `home`, `zenith`, `goto NAME [--solve]`, `point AZ ALT`, `sync`, `drift`, `compensate`, `stop`. |
+| `mount.py` | Moves the mount: `status`, `home`, `zenith`, `goto NAME [--solve]`, `point AZ ALT`, `sync`, `drift`, `compensate`, `stop`. `response` sets the Dec motor creeping at five rates and measures the drift at each, to see whether the sky answers in proportion; `pointing` plate-solves at six hour angles, three each side of the meridian, to see whether one correction for each side is enough. |
 | `liveview.py` | Takes a frame every few seconds so the status page shows what the telescope sees now. Steps aside while `shoot.py` runs. |
 | `app.py` | TelescopeYoke, the application: one window with everything in it, started from the applications menu. `./app.py --demo` tries it with nothing plugged in. |
 | `console.py` | The same observing screens as a page in a browser, without the equipment set-up and tools: the companion to the application. This computer only. |
-| `polaralign.py` | Measures how far the polar axis is from the pole by plate solving at three positions, and says which way to turn each adjuster. |
+| `polaralign.py` | Measures how far the polar axis is from the pole by plate solving at three positions, and says which way to turn each adjuster. `--repeat 5` measures five times with the bolts left alone and gives the scatter. |
 | `polaris.py` | Polar alignment before dark, from Polaris alone, which shows in daylight when nothing else near the pole does. `check` says whether it is worth trying (sky, Sun, focus); `find` looks around the home position until the star is in the picture, proves it by tipping the tube, and can keep every look (`--record`); `align` turns the RA axis with it in view, says roughly which way to move each adjuster, and with `--watch` keeps saying how far is left while the bolts are turned. |
 | `landmark.py` | Sets the azimuth by day: remembers a distant fixed thing with the telescope's axis readings, and next time turns back to it and shows how far it has moved. |
 | `panorama.py` | The skyline from a phone panorama, with no motors: finds the line between sky and everything else in the picture, lets you put it right where it is wrong, ties the picture to the compass from two marks (something the telescope is pointing at, a remembered landmark, or typed bearings), and keeps the result for the planner. Panoramas from other heights add doubt where things close by sit differently. |
@@ -331,10 +343,10 @@ lock (`MOTION_LOCKED`) stops every rig at once.
 | `restack.py` | The quality pass: goes back over a session's raw frames, keeps the best, weights and clips them, and writes the finished picture. `shoot.py` runs it at the end. `--all`, or several session folders, stacks sessions from one night or many into one picture. |
 | `calibrate.py` | Makes master dark, bias and flat frames, which `shoot.py` and `restack.py` then apply automatically. |
 | `camera_setup.py` | Gets the camera ready: checks it is plugged in and has a driver, takes Altair's library files out of their SDK zip if they are missing, and takes a test frame. `--check` only looks. Also the "Set up the camera" button in the console. |
-| `camera_test.py` | `--capabilities` lists what the camera offers; `--throughput` times every way of getting frames off it; `--gain-sweep` tries a range of gains on tonight's sky and suggests one. |
+| `camera_test.py` | `--capabilities` lists what the camera offers; `--throughput` times every way of getting frames off it; `--gain-sweep` tries a range of gains on tonight's sky and suggests one. `--timing` shows whether frames arrive sooner than their exposures could have ended; `--trail` stops the mount following the sky for one frame and reads the real exposure from the stars' trails. |
 | `compare.py` | Shows the same patch of sky from several stacks side by side at full size, with star measurements for each. |
 | `process.py` | Turns a finished stack into a cleaner picture: level sky, white stars, smoothed colour noise. |
-| `focus.py` | Hands-free focusing aid: a click and a tone for every frame measured, higher as focus improves, in three levels from quick binned frames to many stars on the full sensor. `--quiet` for no sound, `--numbers` for each reading spoken as a number, `--field` to go first to a bright star with many round it (this moves the telescope), `--scene` for a daytime view. |
+| `focus.py` | Hands-free focusing aid: a click and a tone for every frame measured, higher as focus improves, in three levels from quick binned frames to many stars on the full sensor. `--quiet` for no sound, `--numbers` for each reading spoken as a number, `--field` to go first to a bright star with many round it (this moves the telescope), `--scene` for a daytime view. `--report` says how quickly the last run answered a turn of the knob, level by level. |
 | `solve.py` | Plate-solves a frame: where is the telescope really pointing? |
 | `skywatch.py` | Photographs the sky every minute and stops when stars appear. |
 | `doctor.py` | Checks what is installed and connected, and says what is ready: planner, mount, imaging. `--report` writes the same out to post as a hardware report, with the mount's model and the handset's firmware as the handset gives them, and your location left out; `--probe PORT` adds what answers on a serial port you name. |
@@ -343,7 +355,7 @@ lock (`MOTION_LOCKED`) stops every rig at once.
 | `watch.py` | Photographs the telescope itself with the webcam. |
 | `release.py` | Makes a release: the zip people download, its notes from `CHANGELOG.md`, and with `--publish` the tag and the release on GitHub. |
 | `build_catalogue.py` | Regenerates `data/targets.csv` from OpenNGC. |
-| `ty` | One front door for programs and AI agents: `capabilities`, `status`, `context`, `night`, `targets`, `target NAME`, `session`, `observing`, `doctor`, `rigs`. `--rig NAME` first runs any of them for one of several telescopes. Add `--json` for a fixed machine-readable shape. |
+| `ty` | One front door for programs and AI agents: `capabilities`, `status`, `context`, `night`, `targets`, `target NAME`, `session`, `observing`, `doctor`, `rigs`, `characterise` (what this rig has had measured about itself). `--rig NAME` first runs any of them for one of several telescopes. Add `--json` for a fixed machine-readable shape. |
 | `mcp_server.py` | Read-only MCP server offering the same information to MCP-aware assistants. |
 
 `tonight.py`, `serve.py` and `mount.py` accept `--demo`.
@@ -381,6 +393,8 @@ plan the night → GoTo → photograph → plate-solve (ASTAP) → correct → p
   `shoot.py` and again afterwards by `restack.py`.
 - **`tracking.py`** predicts the drift a misaligned polar axis causes and
   decides how to trim the Dec motor against it.
+- **`moved.py`** judges whether the telescope really turned, from two
+  pictures or two plate solves, for anything that makes many moves unattended.
 - **`page.py`** lays the report out as the status page. It is plain HTML
   with a little JavaScript reading `status.json`: no framework, no controls.
 - **`simulator.py`** is a pretend handset and mount behind `--demo` and the
@@ -432,6 +446,11 @@ The laptop cannot see what the telescope is about to hit.
   its swing, tube on top, pointing at the pole.
 - **Keep the tripod legs clear** and leave slack in the cables. Targets west
   of the meridian swing the tube over the pole.
+- **The mount's word is checked where a camera can check it.** If a
+  correction changes nothing, or picture after picture is the same though
+  the mount was turned, the command stops the mount and refuses with
+  `MOUNT_NOT_MOVING`. Then watch one small move yourself: if the tube does
+  not turn, switch the mount off and on.
 - **Never point near the Sun.** `mount.py point` refuses within 40° of it
   while it is up; `goto` only knows night-sky objects.
 - Creating a file called `MOTION_LOCKED` in this folder blocks all movement.
@@ -468,6 +487,8 @@ against the simulated rig and the tests.
 | Control without the handset (Wi-Fi, EQDIR) | not yet | ⚠️ the Wi-Fi adapter read; nothing moved | ✅ |
 | The application window | not yet | ⚠️ opened on Ubuntu, in the demo only | ✅ |
 | Windows | not yet | ⚠️ camera frames indoors; no mount driven | ✅ |
+| Checking that the telescope really turned | not yet | not yet | ✅ |
+| Polar repeatability, creep response, pointing survey, star-trail exposure | not yet | not yet | ✅ |
 | Several rigs, `--probe` | not yet | not yet | ✅ |
 | Dark and flat frames, gain sweep | not yet | not yet | ✅ |
 
@@ -478,7 +499,9 @@ showed, and what is still a guess. Two things from it that anyone using the
 software should know: the camera exposes for about two thirds of the time it
 is asked, so integration times are overstated until that is fixed; and on
 one night the motors stopped while the handset went on reporting every move
-as made, and nothing yet checks that the tube turns.
+as made. A GoTo with centring, a polar measurement and the skyline survey now
+check that the view changed, and stop if it did not; a plain GoTo with no
+plate solve still takes the handset's word.
 
 Covered by automated tests (`pytest`, run on every push on Python 3.11 to 3.14): the astronomy, the
 mount logic against the simulated handset, frame alignment and hot-pixel
@@ -506,7 +529,23 @@ Known limits:
 
 ## Roadmap
 
-Near term:
+Near term, the measurements the first nights showed are needed, each now
+one command (`./ty characterise` shows which have been made):
+
+- The click-and-tone focusing under real stars on the USB 3 lead, and how
+  quickly a turn is heard (`./focus.py`, then `./focus.py --report`).
+- Whether the polar measurement repeats (`./polaralign.py --repeat 5`).
+- How long the shutter is really open (`./camera_test.py --timing`, then
+  `--trail`).
+- How the drift answers the Dec motor (`./mount.py response`), before
+  anything about the drift assist is changed.
+- Whether one pointing correction for each side is enough (`./mount.py pointing`).
+- A phone panorama tied to the compass and compared with what the telescope sees.
+- Daytime Polaris again, now the axis is 0.2° from the pole: the search looks
+  within 1.6° by itself after a recent night alignment.
+- A night with mount and camera together on Windows.
+
+Then:
 
 - Someone other than the author running it. Reports from other SynScan
   mounts come before any new feature.

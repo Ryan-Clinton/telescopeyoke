@@ -15,7 +15,7 @@ const SVG = "http://www.w3.org/2000/svg";
 const STALE = 600;   // seconds after which an old measurement is taken off the bar
 
 const seen = { state: null, night: null, targets: null, observing: null, session: null, job: null,
-               doctor: null, focus: null, catalogue: null, horizon: null, report: null, system: null, gallery: null, rigs: null,
+               doctor: null, focus: null, catalogue: null, horizon: null, report: null, system: null, gallery: null, rigs: null, characterise: null,
                polar: null, landmarks: null };
 let task = "home", chosen = null, filter = null, plan = null, trail = [], lastJobId = null;
 let unread = 0, logged = new Set();
@@ -850,9 +850,22 @@ function statusRows(node) {
   fill(node, rows.flatMap((row) => [el("dt", { text: row.label }), el("dd", { class: row.level === "fair" ? "warn" : row.level, text: row.text })]));
 }
 
+function drawMeasured() {
+  // What the rig has had measured about itself, and the command for each thing it has not.
+  const rig = seen.characterise;
+  if (!rig) return;
+  $("rig-measured-summary").textContent = `${rig.summary}. Each of these is something that would otherwise be assumed.`;
+  fill($("rig-measured"), rig.items.map((item) => el("div", { class: "check" },
+    el("span", { class: `mark ${item.measured ? "good" : "quiet"}`, text: item.measured ? "✓" : "·" }),
+    el("span", { text: item.measured
+      ? `${item.what}: ${item.value}` + (item.age_days != null ? ` (${item.age_days} days ago)` : "")
+      : `${item.what}: not measured. ${item.how}` }))));
+}
+
 function drawDoctor() {
   const report = seen.doctor;
   statusRows($("system-rows"));
+  drawMeasured();
   if (!report) return;
   fill($("doctor-checks"), Object.entries(report.components).flatMap(([section, checks]) => [
     el("h2", { text: `${section} ${report.ready && report.ready[section.toLowerCase()] === false ? "· not ready" : ""}` }),
@@ -1037,6 +1050,7 @@ async function refresh() {
   if (task === "imaging" && slow % 5 === 0 || !seen.gallery) wanted.push("gallery");
   if (!seen.catalogue) wanted.push("catalogue");
   if (task === "doctor" || !seen.doctor) wanted.push("doctor");
+  if (task === "doctor") wanted.push("characterise");
   if (task === "horizon") wanted.push("horizon", "landmarks");
   if (task === "rigs") wanted.push("rigs");
   if (task === "polar") wanted.push("polar");

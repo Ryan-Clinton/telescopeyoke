@@ -15,6 +15,15 @@ The account of everything tried so far, feature by feature, is at the end:
 | 3 | Does the quality pass beat the live stack and a plain stack? | `./compare.py` on the same 200 to 300 raw frames stacked three ways: star width, roundness, background noise, faint detail. | Partly: on 200 frames of M27, star width went from 8.4 to 6.9 px and roundness from 0.67 to 0.92 against the first-night stacker. |
 | 4 | Does `--exposure auto` pick the exposure that gathers most usable light? | Run the same target at 1, 2, 3 and 4 s; compare accepted integration time and star shape with what auto chose. | It chose 1 s twice, on roundness. Whether 2 s would have given a better picture despite the stretch is untested. |
 | 5 | Do four worker processes give the expected speed-up? | `./restack.py SESSION --profile` on 200 to 500 frames, with `--workers 1` and `--workers 4`. | 200 frames: 23.5 minutes before the rewrite, 3.9 minutes with four workers. |
+| 6 | Does the polar measurement repeat? | `./polaralign.py --repeat 5` with the bolts left alone. It prints each answer and their scatter. | Not yet run. Five rounds on 6 October gave 5.2°, 1.1°, 0.4°, 0.6°, 0.2°, but the bolts were turned between them. |
+| 7 | How quickly is a turn of the focuser heard on the USB 3 lead? | `./focus.py` on a rich field, then `./focus.py --report`: `feedback_s` on each level. Under about 1.2 s on levels 1 and 2 is the aim. | Not yet run. |
+| 8 | How long is the shutter really open? | `./camera_test.py --timing` (cap on, any time), then `./camera_test.py --trail` on a field of bright stars away from the pole. | Timing by hand on 6 October: each second asked added 0.63 s to a frame. No trail yet. |
+| 9 | Does the sky's drift answer the Dec motor in proportion? | `./mount.py response`: five creeps, three measurements at each, about 35 minutes on one target. | Not yet run. The three readings of 5 October (below) fit no one explanation. |
+| 10 | Is one pointing correction for each side of the meridian enough? | `./mount.py pointing`: plate solves at -4, -2, -1, +1, +2 and +4 hours. | Not yet run. On 6 October the east side was 5.8° out in Dec and the west 0.2°, from one place each. |
+| 11 | Does a stalled mount get caught, with no false alarms on a working one? | Run `./horizon.py --trace` and a `goto --solve` on a working mount and see that neither stops; the verdict of each comparison is in the survey's log. | Not yet run. The check has seen made-up frames only. |
+| 12 | How true is a panorama's skyline? | Tie a panorama to the compass with two marks (`./panorama.py`), then `./horizon.py --trace` to check it at the bearings where it bends. | Not yet run. |
+| 13 | Does the daytime search find Polaris once the axis is close? | `./polaris.py find` on a clear afternoon after a night alignment, the tripod not moved. It looks within 1.6° by itself. | Not yet run. Two searches on 6 October, with the axis several degrees out, found nothing. |
+| 14 | Does a whole night work on Windows? | Mount and camera together: GoTo with centring, focus, a run. | Not yet run. |
 
 ## Why frames are slow: what has been checked
 
@@ -134,6 +143,8 @@ M31 from a back garden, polar axis about 9 degrees out, USB 2 lead.
   -0.25. The Dec motor seems to respond about twice as strongly as assumed,
   but three readings do not fit one explanation. Not fixed; needs a
   controlled test (set a creep, measure, repeat) before the logic is changed.
+  That test is now `./mount.py response` (experiment 9); the logic is
+  unchanged until it has been run.
 - **Home after a drift correction:** went the wrong way twice because the
   direction test did not wait for the gears to take up. Fixed.
 - **Meridian:** the mount was already on the tube-over-pole side for both
@@ -313,8 +324,16 @@ put it right. The cause is not known: a USB lead may have caught, and a
 status query sent while the survey was driving the mount garbled a reply at
 about that time. The survey now takes a bright frame with stars in it for
 thin cloud, and stops when a bright frame with none is too high up to be a
-tree. Nothing checks that the tube turns when the mount says it has. No
-skyline has yet been measured on the real mount.
+tree. Since then the survey compares each picture with the one before it
+(`moved.py`): two running that match, after turns that should have changed
+the view, stop it with `MOUNT_NOT_MOVING`. A GoTo with centring stops the
+same way when a correction leaves the miss as it was, and so do
+`polaralign.py` and `mount.py pointing` when their plate solves come back
+the same. That has been tried on made-up star fields and textures only: how
+alike two real frames of a lit tree are, and whether anything about the real
+sensor makes two different views look alike, is not known. A plain GoTo with
+no plate solve still takes the handset's word. No skyline has yet been
+measured on the real mount.
 
 Written but never run on the real mount or camera: `horizon.py --trace` and
 `horizon.py --daylight`. The following, the adding of bearings and the checks
@@ -337,3 +356,16 @@ marks and compared with what the telescope sees, so how true the bearings
 and heights come out is not known. The Horizon screen's drawing and marking
 have been run through the console's own interface in the demo but not yet
 used with a mouse.
+
+Written on 7 October 2026 to turn the first nights' surprises into
+measurements, and none of it yet run on the real mount or camera:
+`polaralign.py --repeat`, `camera_test.py --timing` and `--trail`,
+`mount.py response`, `mount.py pointing`, `focus.py --report` and
+`ty characterise`. The arithmetic of each is tested on made-up figures and
+on the simulated mount. `--trail` reads made-up trails about 4% short. The
+trail measure, the movement check and the pointing survey each have
+thresholds that are first figures. `mount.py pointing` swings the tube over
+the pole once and must be watched the first time. `polaris.py find` now
+looks within 1.6° when `polaralign.py` put the axis 0.2° from the pole in
+the last fortnight; that assumes the tripod has not been moved, which
+nothing checks.

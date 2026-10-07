@@ -16,6 +16,7 @@
 | `ty targets --limit N [--kind K] [--now]` | ranked targets | *demo* |
 | `ty target NAME` | where it is now; whether a GoTo is allowed | |
 | `ty session [--frames N]` | newest imaging run; frame detail only on request | |
+| `ty characterise` | what this rig has had measured about itself and what it has not: frame timing, real exposure, focus response, pointing error on each side, polar error and its repeatability, drift response, skyline, and whether a move has been confirmed by the camera | `schemas/characterise.schema.json`. Reads files only. Each item names the command that measures it |
 | `ty rigs` | every rig (a telescope with its own settings and files): how its mount is reached, and its newest imaging run | `schemas/rigs.schema.json`. Reads files only. `ty --rig NAME <command>` runs any command for one rig |
 
 ## Asks the handset (opens the serial port; do not run while another command is driving the mount)
@@ -70,7 +71,13 @@ the tube a twentieth of a degree twice to see a candidate move with the sky, and
 turns the RA axis to five readings and back, and gives the polar axis's error roughly; `--watch N` then looks N
 more times without moving while the bolts are turned. All take `--dry-run` and `--json`. `polaralign.py` slews about 25° twice and back to measure the polar axis's
 error; it checks all three positions against the limits first, and takes
-`--dry-run` and `--json`. `ty mount drift` changes the Dec motor's creep. `ty mount stop` halts
+`--dry-run` and `--json`; `--repeat N` does it N times over to find the scatter. `ty mount pointing` slews
+to six hour angles, three each side of the meridian, plate-solving at each, and swings the tube over the pole
+once; check it with `--dry-run` first. `ty mount response` slews nothing but creeps the Dec motor at up to
+1 arcsecond a second for about 35 minutes. `camera_test.py --trail` stops the mount following the sky for one
+frame and starts it again. Any of these, and `goto --solve` and `horizon.py --trace`, can refuse with
+`MOUNT_NOT_MOVING`: the camera's view did not change though the mount said it moved. Do not retry; a person must
+look at the mount. `ty mount drift` changes the Dec motor's creep. `ty mount stop` halts
 everything and is always allowed. `shoot.py` re-centres the target as it
 drifts unless given `--no-recentre`. `focus.py --field` first slews to the
 best placed of a short list of bright stars with many round them, keeping

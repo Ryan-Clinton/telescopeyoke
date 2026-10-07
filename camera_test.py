@@ -5,6 +5,8 @@
     ./camera_test.py --throughput       time every way of getting frames off the camera
     ./camera_test.py --gain-sweep       try a range of gains on tonight's sky
     ./camera_test.py --gain-sweep --gains 300 900 1500 2500 --exposure 2
+    ./camera_test.py --timing           does a frame take as long as the exposure asked for?
+    ./camera_test.py --trail            how long is the shutter really open? From a star's trail
 
 With [camera] backend = "altair" the camera is read through Altair's own
 library: --capabilities then shows the model, versions and how it is
@@ -22,13 +24,27 @@ strongly they stand out. High gain lowers the camera's own noise but burns
 out bright stars sooner; the best setting finds the most stars without
 burning many pixels. The gain numbers are this camera's own and do not match
 other makes'.
+
+--timing asks for exposures from 0.1 s to 15 s and times how long each frame
+takes to arrive. A frame cannot arrive before its shutter has closed, so if
+each second asked for adds less than a second to the frame, the camera is
+exposing for less than it was asked. The cap can be on.
+
+--trail measures the exposure itself, which timing cannot. It stops the
+mount following the sky for one frame, so every star draws a line whose
+length is the sky's rate times the time the shutter was open, and starts it
+following again. It needs stars, and the mount tracking a field well away
+from the pole.
 """
 import argparse
+import json
+import math
 import time
 from xml.sax.saxutils import quoteattr
 
 import numpy as np
 
+import config
 import interface
 import stacking
 from camera import BACKEND, WHITE, Camera, luminance
@@ -36,6 +52,10 @@ from camera import BACKEND, WHITE, Camera, luminance
 SDK = BACKEND == "altair"   # frames come through Altair's library, not INDI
 
 GAINS = (300, 600, 900, 1200, 1500, 1800)
+ASKED = (0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0)     # seconds, for --timing
+# What --timing and --trail found, for `ty characterise` and for whoever fixes it.
+TIMING_FILE = config.DATA / "cache" / "camera_timing.json"
+SIDEREAL = 15.041       # arcseconds of sky a second, at the celestial equator
 
 
 def measure(mosaic):
@@ -204,6 +224,149 @@ def throughput(exposure, frames, gain):
     return results
 
 
+def timing_fit(rows):
+    """What a run of {"asked_s", "cycle_s"} shows: the fixed time a frame
+    costs (`overhead_s`) and what each second asked for adds
+    (`seconds_per_second_asked`). That should be 1. Under 1, frames are
+    arriving sooner than their exposures could have ended."""
+    asked, cycle = np.array([r["asked_s"] for r in rows]), np.array([r["cycle_s"] for r in rows])
+    per_second, overhead = np.polyfit(asked, cycle, 1)
+    short = bool(per_second < 0.9)
+    return {"seconds_per_second_asked": round(float(per_second), 3), "overhead_s": round(float(overhead), 2),
+            "exposes_short": short,
+            "verdict": (f"Each second asked for adds {per_second:.2f} s to a frame, and a frame cannot arrive "
+                        f"before its shutter closes: the camera is exposing for about {per_second:.0%} of the "
+                        "time asked, or less. Integration times are overstated by that much. --trail measures "
+                        "the exposure itself." if short else
+                        f"Each second asked for adds {per_second:.2f} s to a frame, as it should. That does "
+                        "not prove the shutter is open that long; --trail measures the exposure itself.")}
+
+
+def timing(gain, asked=ASKED, frames=3):
+    """Time frames at each exposure asked for. Returns timing_fit()'s account
+    with the rows, and keeps it."""
+    rows = []
+    print(f"{'asked':>7} {'frame took':>11} {'more than asked':>16}")
+    with Camera(gain=gain) as cam:
+        for seconds in asked:
+            cam.frame(seconds)       # the first frame after a change is often slow
+            began = time.monotonic()
+            for _ in range(frames):
+                cam.frame(seconds)
+            cycle = (time.monotonic() - began) / frames
+            rows.append({"asked_s": seconds, "cycle_s": round(cycle, 3)})
+            print(f"{seconds:>6g}s {cycle:>10.2f}s {cycle - seconds:>+15.2f}s", flush=True)
+    found = dict(timing_fit(rows), rows=rows, saved=time.time())
+    print("\n" + found["verdict"])
+    remember("timing", found)
+    return found
+
+
+def remember(key, found):
+    kept = {}
+    if TIMING_FILE.exists():
+        try:
+            kept = json.loads(TIMING_FILE.read_text(encoding="utf-8"))
+        except ValueError:
+            pass
+    kept[key] = found
+    TIMING_FILE.parent.mkdir(parents=True, exist_ok=True)
+    TIMING_FILE.write_text(json.dumps(kept, indent=1), encoding="utf-8")
+
+
+def trail_length(lum, most=12):
+    """(length in pixels, how many trails) of the lines the brightest stars
+    drew in a frame taken with the mount not following the sky. A line of
+    length L spreads its light along itself with variance L²/12, on top of
+    the star's own width, which is read from the line's breadth."""
+    from scipy import ndimage
+    work = ndimage.gaussian_filter(lum.astype(np.float32), 1.0)
+    work -= ndimage.median_filter(work[::4, ::4], 25).repeat(4, axis=0).repeat(4, axis=1)[:work.shape[0], :work.shape[1]]
+    noise = 1.4826 * float(np.median(np.abs(work[::4, ::4] - np.median(work[::4, ::4])))) + 1e-6
+    mask = work > 6 * noise
+    labels, count = ndimage.label(mask)
+    if not count:
+        return None, 0
+    index = np.arange(1, count + 1)
+    value = np.where(mask, work, 0)
+    flux = ndimage.sum_labels(value, labels, index)
+    area = ndimage.sum_labels(mask, labels, index)
+    yy, xx = np.indices(lum.shape, dtype=np.float32)
+    lengths, boxes, looked_at = [], ndimage.find_objects(labels), 0
+    for label in index[np.argsort(-flux)][:3 * most]:
+        if area[label - 1] < 12:
+            continue
+        rows, cols = boxes[label - 1]
+        if rows.start == 0 or cols.start == 0 or rows.stop == lum.shape[0] or cols.stop == lum.shape[1]:
+            continue     # cut off by the edge of the frame
+        looked_at += 1
+        weight = np.where(labels[rows, cols] == label, value[rows, cols], 0).astype(np.float64)
+        total = weight.sum()
+        x, y = (weight * xx[rows, cols]).sum() / total, (weight * yy[rows, cols]).sum() / total
+        dx, dy = xx[rows, cols] - x, yy[rows, cols] - y
+        a, b, c = (weight * dx * dx).sum() / total, (weight * dy * dy).sum() / total, (weight * dx * dy).sum() / total
+        half = math.hypot((a - b) / 2, c)
+        along, across = (a + b) / 2 + half, max((a + b) / 2 - half, 0.0)
+        if along > 4 * max(across, 0.25):       # a line, not a blob
+            lengths.append((math.sqrt(12 * (along - across)), 0.5 * math.atan2(2 * c, a - b)))
+        if len(lengths) >= most:
+            break
+    if len(lengths) < 3:
+        return None, len(lengths)
+    # Every star trails the same way and as far. Two stars run together make
+    # a line too, but in a direction and of a length of their own.
+    turned = np.array([np.exp(2j * angle) for _, angle in lengths])
+    usual = np.angle(np.median(turned.real) + 1j * np.median(turned.imag))
+    along_it = [length for (length, _), t in zip(lengths, turned) if abs(np.angle(t / np.exp(1j * usual))) < math.radians(30)]
+    # ...and in a frame taken with the mount stopped, most stars are lines.
+    if len(along_it) < max(3, looked_at / 2):
+        return None, len(along_it)
+    middle = float(np.median(along_it))
+    if float(np.median(np.abs(np.array(along_it) - middle))) > 0.15 * middle:
+        return None, len(along_it)
+    return middle, len(along_it)
+
+
+def trail(asked, gain):
+    """Stop the mount following the sky for one frame and measure the
+    exposure from the stars' trails. The mount is set following again
+    whatever happens."""
+    import mount
+    if config.DEMO:
+        raise interface.Refusal("DEMO_UNSUPPORTED", "This needs real stars; the demo's sky does not turn.")
+    equipment = config.hardware()
+    per_pixel = 2 * 206.265 * equipment["camera"]["pixel_size_um"] / equipment["scope"]["focal_length_mm"]
+    scope = mount.Mount()
+    dec = mount.wrap(scope.radec()[1]) + mount.load_pointing_error(scope.axes()[1] > 90)[1]
+    if abs(dec) > 70:
+        raise interface.Refusal("INVALID_REQUEST", f"The telescope is at Dec {dec:+.0f}°, where the sky barely "
+                                "moves. Go to a field nearer the equator first.")
+    rate = SIDEREAL * math.cos(math.radians(dec))
+    with Camera(gain=gain) as cam:
+        try:
+            scope.tracking(False)
+            time.sleep(2)             # let the motor stop
+            began = time.monotonic()
+            mosaic, _ = cam.frame(asked)
+            took = time.monotonic() - began
+        finally:
+            scope.tracking(True)
+    length, count = trail_length(luminance(mosaic))
+    if length is None:
+        raise interface.Refusal("NO_STARS", f"Only {count} star trails could be measured; it needs three. "
+                                "Go to a field with a few bright stars, or ask for a longer --exposure.")
+    actual = length * per_pixel / rate
+    found = {"asked_s": asked, "open_s": round(actual, 2), "share_of_asked": round(actual / asked, 3),
+             "frame_took_s": round(took, 2), "trails": count, "trail_pixels": round(length, 1),
+             "dec_deg": round(dec, 1), "saved": time.time()}
+    print(f"Asked for {asked:g} s at Dec {dec:+.0f}°, where the sky moves {rate:.1f} arcseconds a second. "
+          f"{count} stars drew lines {length:.0f} pixels long ({length * per_pixel:.0f} arcseconds): the "
+          f"shutter was open {actual:.1f} s, {actual / asked:.0%} of what was asked. The mount is following "
+          "the sky again.")
+    remember("trail", found)
+    return found
+
+
 def show_details(found):
     """What Altair's library says about the camera and how it is connected."""
     for label, key in (("Camera", "model"), ("Serial number", "serial"), ("SDK version", "sdk_version"),
@@ -254,8 +417,11 @@ def main():
     what.add_argument("--capabilities", action="store_true")
     what.add_argument("--throughput", action="store_true")
     what.add_argument("--gain-sweep", action="store_true")
+    what.add_argument("--timing", action="store_true")
+    what.add_argument("--trail", action="store_true")
     ap.add_argument("--gains", type=int, nargs="+", default=list(GAINS))
-    ap.add_argument("--exposure", type=float, help="seconds (default 2 for gains, 1 for throughput)")
+    ap.add_argument("--exposure", type=float,
+                    help="seconds (default 2 for gains, 1 for throughput, 10 for --trail)")
     ap.add_argument("--frames", type=int, default=4, help="frames per mode, for --throughput")
     ap.add_argument("--gain", type=int, default=1500)
     ap.add_argument("--json", action="store_true")
@@ -269,6 +435,10 @@ def run(args):
             found = cam.details() if SDK else capabilities(cam)
         (show_details if SDK else show_capabilities)(found)
         return found
+    if args.timing:
+        return timing(args.gain, frames=min(args.frames, 3))
+    if args.trail:
+        return trail(args.exposure or 10.0, args.gain)
     if args.throughput:
         results = (throughput_sdk if SDK else throughput)(args.exposure or 1.0, args.frames, args.gain)
         good = [r for r in results if "failed" not in r]

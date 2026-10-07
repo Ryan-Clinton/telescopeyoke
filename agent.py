@@ -5,6 +5,8 @@ serial port, so it is always safe to call.
 One implementation, several ways in: the `ty` command, the read-only web API
 that serve.py offers, and the MCP server in mcp_server.py all call these.
 """
+import contextlib
+import io
 import json
 import socket
 import time
@@ -101,6 +103,79 @@ def rigs():
             entry["imaging"] = None
         found.append(entry)
     return {"rigs": found, "current": "demo" if config.DEMO else config.RIG or "default"}
+
+
+def characterise():
+    """What this rig has had measured about itself, and what it has not: one
+    line for each thing telescopeyoke would otherwise have to assume. Read
+    from the files the measuring commands keep; no mount or camera is asked
+    anything. Each line says how to make the measurement."""
+    import camera_test
+    import focus
+    import horizon
+    import moved
+    import polaralign
+
+    def read(path):
+        try:
+            return json.loads(Path(path).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return None
+
+    def line(what, how, found=None, value=None, when=None):
+        when = when if when is not None else (found or {}).get("saved") if isinstance(found, dict) else None
+        return {"what": what, "measured": value is not None, "value": value,
+                "age_days": round((time.time() - when) / 86400, 1) if value is not None and when else None,
+                "how": how}
+
+    items = []
+    timing = read(camera_test.TIMING_FILE) or {}
+    frames, trail = timing.get("timing"), timing.get("trail")
+    items.append(line("How long a frame takes for the exposure asked", "./camera_test.py --timing", frames,
+                      frames and f"{frames['overhead_s']:g} s, plus {frames['seconds_per_second_asked']:g} s for "
+                                 "each second asked"))
+    items.append(line("How long the shutter is really open", "./camera_test.py --trail (stars needed)", trail,
+                      trail and f"{trail['share_of_asked']:.0%} of the time asked"))
+    try:
+        with contextlib.redirect_stdout(io.StringIO()):
+            answered = focus.report()
+    except interface.Refusal:
+        answered = None
+    quick = [row["feedback_s"] for row in (answered or {}).get("levels", []) if row["level"] < 3 and row["feedback_s"]]
+    items.append(line("How quickly focusing answers a turn of the knob", "./focus.py, then ./focus.py --report",
+                      answered, f"heard within {max(quick):g} s on the quick levels" if quick else None))
+    reached = focus.RUNS_FILE.exists() and focus.RUNS_FILE.stat().st_size > 0
+    items.append(line("The star size good focus comes to", "a ./focus.py run that ends on \"Focus good\"",
+                      value=f"{focus.usual_best():.2f} arcseconds" if reached else None,
+                      when=focus.RUNS_FILE.stat().st_mtime if reached else None))
+    sides = (read(mount.POINTING_FILE) or {}).get("sides", {})
+    for side in ("east", "west"):
+        here = sides.get(side)
+        items.append(line(f"Pointing error on the {side} side", "./mount.py sync on that side, or ./mount.py pointing",
+                          here, here and f"{here['error_deg'][0]:+.2f}° in hour angle, {here['error_deg'][1]:+.2f}° in Dec"))
+    survey = read(mount.SURVEY_FILE)
+    items.append(line("Whether one pointing correction for each side is enough", "./mount.py pointing", survey,
+                      survey and ("yes" if survey["one_correction_per_side_is_enough"] else "no: it changes with hour angle")))
+    polar = read(polaralign.POLAR_FILE) or {}
+    items.append(line("How far the polar axis is from the pole", "./polaralign.py",
+                      value=f"{polar['total_deg']:g}°" if "total_deg" in polar else None, when=polar.get("measured")))
+    items.append(line("How well that measurement repeats", "./polaralign.py --repeat 5",
+                      value=f"±{polar['spread_deg']:g}° over {polar['repeats']} measurements" if "spread_deg" in polar else None,
+                      when=polar.get("measured")))
+    answer = read(mount.RESPONSE_FILE)
+    items.append(line("How the sky's drift answers the Dec motor's creep", "./mount.py response", answer,
+                      answer and f"{answer['per_unit']:+.2f} for each arcsecond a second (it should be "
+                                 f"{answer['expected_per_unit']:+.0f}); "
+                                 + ("in proportion" if answer["straight"] else "not in proportion")))
+    skyline = horizon.measured()
+    items.append(line("The skyline of the place it stands", "./panorama.py, or ./horizon.py --trace", skyline,
+                      f"{len(skyline['skyline'])} points, from {skyline.get('source', 'a survey')}" if skyline else None))
+    seen = read(moved.MOVED_FILE)
+    items.append(line("That the telescope turns when the mount says it has",
+                      "any ./mount.py goto NAME --solve that needs a correction, or ./horizon.py --trace", seen,
+                      seen and seen["how"]))
+    done = sum(item["measured"] for item in items)
+    return {"measured": done, "of": len(items), "summary": f"{done} of {len(items)} measured", "items": items}
 
 
 def session(include_frames=False, limit=50, include_series=False, data=None):

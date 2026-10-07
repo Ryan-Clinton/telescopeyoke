@@ -120,6 +120,39 @@ def next_creep(current, residual, sigma, west):
     return wanted, "adjusted"
 
 
+def response(rows, west):
+    """What a sweep of the Dec motor's creep showed. `rows` are
+    {"creep", "drift"} in arcseconds per second: the creep set, and the Dec
+    drift then measured, several times at each creep. A straight line is
+    put through them:
+
+        drift = natural + per_unit x creep
+
+    `per_unit` should be creep_effect(1, west): +1 or -1. `repeat_scatter`
+    is how far repeats at one creep sit from each other, and `off_line` how
+    far the worst creep's average sits from the line. Where that is more
+    than the repeats can explain, the motor is not answering in proportion
+    (slack in the gears, a dead zone, a rate the handset rounds away), and
+    `straight` is False. Nothing here changes how the creep is chosen: it
+    is a measurement to be looked at first."""
+    creeps, drifts = np.array([r["creep"] for r in rows], float), np.array([r["drift"] for r in rows], float)
+    if len(set(creeps)) < 2:
+        return None
+    per_unit, natural = np.polyfit(creeps, drifts, 1)
+    groups = {c: drifts[creeps == c] for c in sorted(set(creeps))}
+    within = [g - g.mean() for g in groups.values() if len(g) > 1]
+    freedom = sum(len(g) - 1 for g in within)
+    scatter = float(np.sqrt(sum((g ** 2).sum() for g in within) / freedom)) if freedom else None
+    off = max(abs(float(g.mean()) - (natural + per_unit * c)) for c, g in groups.items())
+    fewest = min(len(g) for g in groups.values())
+    allowed = max(DEADBAND, 3 * scatter / np.sqrt(fewest)) if scatter is not None else DEADBAND
+    return {"natural_arcsec_s": round(float(natural), 3), "per_unit": round(float(per_unit), 3),
+            "expected_per_unit": creep_effect(1.0, west), "repeat_scatter_arcsec_s": scatter and round(scatter, 3),
+            "off_line_arcsec_s": round(off, 3), "straight": bool(off <= allowed),
+            "by_creep": [{"creep": float(c), "drift": round(float(g.mean()), 3), "measurements": len(g)}
+                         for c, g in groups.items()]}
+
+
 def exposure_limit(residual, blur=2.0, ceiling=10.0):
     """Longest exposure, in seconds, before leftover drift smears a star by
     `blur` arcseconds. Capped, because the gears' periodic error takes over."""

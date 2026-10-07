@@ -13,6 +13,13 @@
                           meanwhile cancel the drift it causes. After this,
                           every GoTo starts with the creep its part of the sky
                           needs. It slews about 25° twice to take its measure.
+    ./mount.py response   set the Dec motor creeping at five rates in turn and
+                          measure the drift at each, three times: does the sky
+                          answer in proportion? About 35 minutes; no slews.
+    ./mount.py pointing   go to six hour angles, three each side of the
+                          meridian, plate-solve at each and say how far out
+                          the aim is: is one correction for each side enough?
+                          The tube swings over the pole once.
     ./mount.py sync       photograph the sky where it is now, work out the real
                           aim, and remember the error for later GoTos. Do this
                           once after setting up, on any patch of stars.
@@ -63,6 +70,15 @@ CENTRED = 2 / 60  # degrees; close enough to stop correcting
 LAST_SOLVE = config.DATA / "cache" / "last_solve.json"
 # What has been learned about the drift, and the Dec creep now running.
 DRIFT_FILE = config.DATA / "cache" / "drift_model.json"
+# What `response` and `pointing` found, for looking at afterwards.
+RESPONSE_FILE = config.DATA / "cache" / "creep_response.json"
+SURVEY_FILE = config.DATA / "cache" / "pointing_survey.json"
+CREEPS = (0.0, -0.25, -0.5, -0.75, -1.0)    # arcseconds a second, for `response`
+SURVEY_HOURS = (-4.0, -2.0, -1.0, 1.0, 2.0, 4.0)   # hours from the meridian, for `pointing`
+SURVEY_DEC = 40.0
+# A first GoTo that misses by less than this still has the target in the
+# frame, which is two thirds of a degree tall on the 150P with the 183C.
+ENOUGH = 0.25
 SETTLE = 30       # seconds to wait after a slew before photographing
 if config.DEMO:
     import os
@@ -301,6 +317,94 @@ class Mount:
                 time.sleep(60)
         return residual, sigma
 
+    def creep_response(self, site, rates=CREEPS, repeats=3, bite=60):
+        """Set the Dec motor creeping at each rate in turn and measure the
+        Dec drift there `repeats` times. Returns tracking.response()'s
+        account with every measurement under "rows". The creep is put back
+        as it was. Nothing is slewed, and how the creep is chosen is not
+        changed by the answer."""
+        west, model = self.west(), self.drift_model(site)
+        before = model.creep or 0.0
+        rows = []
+        try:
+            for rate in rates:
+                actual = self.dec_creep(rate)
+                # The Dec gears have slack, so a new rate takes a while to bite.
+                self.say(f"Creep {actual:+.2f} arcsec/s: waiting {bite} s for the gears to take it up")
+                time.sleep(bite)
+                for n in range(repeats):
+                    drift = self.measure_drift(site)
+                    if drift is None:
+                        self.say("  no plate solve; left out")
+                        continue
+                    _, dec, sigma = drift
+                    rows.append({"creep": actual, "drift": round(dec, 3), "sigma": sigma and round(sigma, 3)})
+                    self.say(f"  {n + 1} of {repeats}: Dec drift {dec:+.2f}"
+                             + ("" if sigma is None else f" ±{sigma:.2f}") + " arcsec/s")
+        finally:
+            self.dec_creep(before)
+        found = tracking.response(rows, west)
+        if found is None:
+            raise Refusal("PLATE_SOLVE_FAILED", "Too few measurements to say anything: the sky would not "
+                          "solve at two different creeps.")
+        found.update(rows=rows, side=side_name(west), saved=time.time())
+        RESPONSE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        RESPONSE_FILE.write_text(json.dumps(found, indent=1), encoding="utf-8")
+        self.say(f"With no creep the aim drifts {found['natural_arcsec_s']:+.2f} arcsec/s in Dec. Each "
+                 f"arcsec/s of creep changes that by {found['per_unit']:+.2f} (it should be "
+                 f"{found['expected_per_unit']:+.0f}). "
+                 + ("The points lie on a straight line."
+                    if found["straight"] else
+                    f"The points do not lie on a straight line: one creep's average is "
+                    f"{found['off_line_arcsec_s']:.2f} arcsec/s off it, more than the repeats explain. "
+                    "The motor is not answering in proportion."))
+        return found
+
+    def pointing_survey(self, site, hours=SURVEY_HOURS, dec=SURVEY_DEC, skyline=None):
+        """Go to each hour angle at one declination, as the handset believes
+        them (no correction applied), plate-solve, and record how far out
+        the aim really is. Returns pointing_summary()'s account, and keeps
+        each side's average as that side's pointing error."""
+        spots, _ = plan_survey(site, hours, dec, skyline)     # refuses here, before anything moves
+        if not CLOCK_FILE.exists():
+            self.save_clock(site)
+        offset = json.loads(CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
+        rows, last = [], None
+        for hours_out in spots:
+            self.goto((true_sidereal(site) + offset - hours_out * 15) % 360, dec)
+            self.tracking(True)
+            time.sleep(SETTLE)
+            west = self.axes()[1] > 90
+            guess = load_pointing_error(west)
+            sidereal = true_sidereal(site)
+            ra_handset, dec_handset = self.radec()
+            believed = wrap(sidereal + offset - ra_handset)
+            hint = (sidereal - (believed + guess[0]), wrap(dec_handset) + guess[1])
+            found = self.where_really(*hint, radius=40) or self.where_really(*hint, radius=90)
+            if not found:
+                self.say(f"hour angle {hours_out:+g} h: no plate solve; left out")
+                continue
+            actual = where(found, site, found["when"])
+            if last and abs(wrap(actual[0] - last[1])) < 0.25 * abs(hours_out * 15 - last[0]):
+                import moved
+                self.stop()
+                raise moved.refusal(f"After a move of {abs(hours_out * 15 - last[0]):.0f}° the sky is "
+                                    "where it was.")
+            last = (hours_out * 15, actual[0])
+            rows.append({"hour_angle_h": hours_out, "side": side_name(west),
+                         "ha_error_deg": round(wrap(actual[0] - believed), 3),
+                         "dec_error_deg": round(actual[1] - wrap(dec_handset), 3)})
+            self.say(f"hour angle {hours_out:+g} h ({rows[-1]['side']}): out by "
+                     f"{rows[-1]['ha_error_deg']:+.2f}° in hour angle, {rows[-1]['dec_error_deg']:+.2f}° in Dec")
+        found = pointing_summary(rows)
+        for name, side in found["sides"].items():
+            save_pointing_error([side["ha_error_deg"], side["dec_error_deg"]], west=name == "west")
+        found.update(rows=rows, dec_deg=dec, saved=time.time())
+        SURVEY_FILE.parent.mkdir(parents=True, exist_ok=True)
+        SURVEY_FILE.write_text(json.dumps(found, indent=1), encoding="utf-8")
+        self.say(found["verdict"])
+        return found
+
     def compensate(self, site):
         """Wonky alignment mode: measure how far the polar axis is out, say
         how to fix it mechanically, then make the best of it as it stands by
@@ -486,6 +590,7 @@ class Mount:
         # pointing error measured by earlier plate solves.
         west = hour_angle > 0
         error = load_pointing_error(west)
+        last = None      # the miss before the last correction
         for attempt in range(4 if solve else 1):
             hour_angle, dec, _ = where(target, site)
             self.goto((true_sidereal(site) + offset - (hour_angle - error[0])) % 360,
@@ -507,6 +612,15 @@ class Mount:
                 self.say("Could not plate-solve the frame; aim left uncorrected.")
                 return
             self.say(f"  off by {miss[0] * 60:+.1f}' in hour angle, {miss[1] * 60:+.1f}' in Dec")
+            if last is not None:
+                import moved
+                if moved.unchanged(last, miss):
+                    self.stop()
+                    raise moved.refusal(f"A correction of {math.hypot(*last) * 60:.0f}' left the target "
+                                        "exactly as far off as before.")
+                if math.hypot(*last) >= 0.25:
+                    moved.confirm("a plate solve after a correction")
+            last = miss
             if max(abs(miss[0]), abs(miss[1])) < CENTRED:
                 self.say("  centred")
                 return
@@ -629,6 +743,73 @@ def plan_point(azimuth, altitude, site):
     hour_angle, dec = direction(azimuth, altitude, site)
     plan = _plan(hour_angle, dec, altitude, "That")
     return dict(plan, azimuth_deg=azimuth)
+
+
+def plan_survey(site, hours=SURVEY_HOURS, dec=SURVEY_DEC, skyline=None):
+    """The hour angles `pointing` would go to, east side first so that the
+    tube swings over the pole only once, checked against the limits and
+    against what is known to be in the way. Returns (hours, notes); raises a
+    Refusal if fewer than two are left on either side. Needs no hardware."""
+    import polaralign
+    spots, notes = [], []
+    for hours_out in sorted(hours):
+        altitude, azimuth = polaralign.to_altaz(polaralign.vector(hours_out * 15, dec), site["latitude"])
+        _plan(hours_out * 15, dec, altitude, f"Hour angle {hours_out:+g} h")     # the lock and the hour-angle limit
+        if altitude < MIN_ALTITUDE:
+            notes.append(f"Hour angle {hours_out:+g} h is only {altitude:.0f}° up there; left out.")
+            continue
+        if skyline:
+            import horizon
+            top = horizon.in_the_way(skyline, azimuth % 360)
+            if altitude < top + polaralign.CLEAR:
+                notes.append(f"Hour angle {hours_out:+g} h (bearing {azimuth % 360:.0f}°, {altitude:.0f}° up) is "
+                             f"behind something that reaches {top:.0f}°; left out.")
+                continue
+        spots.append(hours_out)
+    for name, side in (("east", [h for h in spots if h < 0]), ("west", [h for h in spots if h > 0])):
+        if len(side) < 2:
+            raise Refusal("INVALID_REQUEST", f"Fewer than two places are left to look at on the {name} side, "
+                          "which is too few to say anything: " + " ".join(notes) + " Try another --dec or "
+                          "other --hours.")
+    if any(h > 0 for h in spots):
+        notes.append("The tube will swing over the pole once, between the east side and the west.")
+    return spots, notes
+
+
+def pointing_summary(rows, enough=ENOUGH):
+    """What a pointing survey showed, for each side of the meridian: the
+    average error, how far any one place sits from that average (`spread`),
+    and how the error changes with hour angle. One correction for a side is
+    enough when its spread is under `enough` degrees."""
+    import numpy as np
+    sides = {}
+    for name in ("east", "west"):
+        here = [r for r in rows if r["side"] == name]
+        if not here:
+            continue
+        ha, dec = np.array([r["ha_error_deg"] for r in here]), np.array([r["dec_error_deg"] for r in here])
+        hours = np.array([r["hour_angle_h"] for r in here])
+        spread = float(max(np.abs(ha - ha.mean()).max(), np.abs(dec - dec.mean()).max()))
+        side = {"places": len(here), "ha_error_deg": round(float(ha.mean()), 3),
+                "dec_error_deg": round(float(dec.mean()), 3), "spread_deg": round(spread, 3),
+                "enough": bool(len(here) >= 2 and spread <= enough)}
+        if len(here) >= 3:
+            side["ha_error_per_hour"] = round(float(np.polyfit(hours, ha, 1)[0]), 3)
+            side["dec_error_per_hour"] = round(float(np.polyfit(hours, dec, 1)[0]), 3)
+        sides[name] = side
+    judged = [s for s in sides.values() if s["places"] >= 2]
+    if not judged:
+        verdict = "Too few places solved to say whether one correction for each side is enough."
+    elif all(s["enough"] for s in judged):
+        verdict = (f"One correction for each side is enough: no place is more than {enough:g}° from its "
+                   "side's average. Each side's average has been kept as its pointing error.")
+    else:
+        worst = max(judged, key=lambda s: s["spread_deg"])
+        verdict = (f"One correction for each side is not enough: on one side the error changes by up to "
+                   f"{worst['spread_deg']:.2f}° from place to place. Each side's average has been kept, "
+                   "which is the best one figure can do; a correction that changes with hour angle would do better.")
+    return {"sides": sides, "one_correction_per_side_is_enough": bool(judged and all(s["enough"] for s in judged)),
+            "verdict": verdict}
 
 
 def use_demo_cache():
@@ -768,7 +949,8 @@ def report(mount):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("command", choices=["status", "zenith", "home", "stop", "goto", "point",
-                                       "sync", "drift", "compensate", "sethome", "directions"])
+                                       "sync", "drift", "compensate", "response", "pointing",
+                                       "sethome", "directions"])
     ap.add_argument("target", nargs="*",
                     help="object for goto (e.g. M81), or bearing and height for point")
     ap.add_argument("--port", help="serial port (default: found by the adapter name "
@@ -783,6 +965,12 @@ def main():
     ap.add_argument("--dry-run", action="store_true",
                     help="check the move against the limits and say what it would do; "
                          "nothing moves and no hardware is needed")
+    ap.add_argument("--rates", type=float, nargs="+", default=list(CREEPS), metavar="RATE",
+                    help="with response: the creeps to try, in arcseconds a second")
+    ap.add_argument("--repeats", type=int, default=3, help="with response: measurements at each creep")
+    ap.add_argument("--hours", type=float, nargs="+", default=list(SURVEY_HOURS), metavar="H",
+                    help="with pointing: the hour angles to visit, in hours from the meridian (east is negative)")
+    ap.add_argument("--dec", type=float, default=SURVEY_DEC, help="with pointing: the declination to visit them at")
     ap.add_argument("--record", metavar="FOLDER",
                     help="with goto --solve: keep each solve frame and message there, "
                          "for replay.py to animate")
@@ -790,7 +978,7 @@ def main():
 
     args.demo = args.demo or config.DEMO
     if args.demo and not config.DEMO:
-        if args.command in ("sync", "drift", "compensate"):
+        if args.command in ("sync", "drift", "compensate", "response", "pointing") and not args.dry_run:
             ap.error(f"{args.command} needs the real camera; there is no demo of it")
         if args.command in ("sethome", "directions"):
             ap.error(f"{args.command} is for a real mount reached without its handset")
@@ -825,6 +1013,16 @@ def dry_run(args, site):
             return plan_point(float(args.target[0]), float(args.target[1]), site)
         if args.command in ("status", "sync", "drift", "stop"):
             return {"would_move": False, "safe": True, "warnings": []}
+        if args.command == "response":
+            minutes = len(args.rates) * (1 + args.repeats * 2)
+            return {"would_move": False, "safe": True,
+                    "warnings": [f"No slews. The Dec motor creeps at up to {max(abs(r) for r in args.rates):g} "
+                                 f"arcseconds a second for about {minutes} minutes, so the target slides a "
+                                 "little in the frame; the creep is put back as it was at the end."]}
+        if args.command == "pointing":
+            spots, notes = plan_survey(site, args.hours, args.dec, config.load().get("horizon") if not args.demo else None)
+            return {"would_move": True, "safe": True, "hour_angles_h": spots, "dec_deg": args.dec,
+                    "warnings": [f"Slews to {len(spots)} places at Dec {args.dec:+g}°, plate-solving at each."] + notes}
         if args.command == "sethome":
             return {"would_move": False, "safe": True,
                     "warnings": ["Records where the motors are now as the home position. Only "
@@ -863,7 +1061,7 @@ def act(args, site):
     """Carry a command out on the mount (or the simulated one). Returns the
     mount's state afterwards."""
 
-    if args.command in ("zenith", "home", "goto", "point", "compensate", "directions") and LOCK_FILE.exists():
+    if args.command in ("zenith", "home", "goto", "point", "compensate", "pointing", "directions") and LOCK_FILE.exists():
         raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text(encoding='utf-8').strip()}")
 
     mount = Mount(args.port, watch=not args.no_watch, demo=args.demo)
@@ -887,6 +1085,10 @@ def act(args, site):
                 mount.cancel_drift(site)
             elif args.command == "compensate":
                 mount.compensate(site)
+            elif args.command == "response":
+                mount.creep_response(site, args.rates, args.repeats)
+            elif args.command == "pointing":
+                mount.pointing_survey(site, args.hours, args.dec, config.load().get("horizon"))
             elif args.command == "sethome":
                 mount.set_home()
             elif args.command == "directions":

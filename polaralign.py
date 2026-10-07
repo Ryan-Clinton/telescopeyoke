@@ -4,6 +4,7 @@
     ./polaralign.py              measure, and say which way to move the mount
     ./polaralign.py --dry-run    say what it would do; nothing moves
     ./polaralign.py --step 10    smaller turns, to stay between a house and a tree
+    ./polaralign.py --repeat 5   measure five times with the bolts left alone: how well does it repeat?
     ./polaralign.py --json       the answer as data
 
 Start with the mount tracking a target well away from the pole, such as
@@ -42,6 +43,11 @@ LEAST = 5.0
 # lands, only that it is on it, and a one-second frame does not streak.
 SETTLE = 5
 CLEAR = 3.0   # degrees a photograph must be above anything known to be in the way
+# The newest measurement, kept through a power cycle (the drift model is not):
+# the bolts do not move when the handset is switched off. ./polaris.py looks
+# less far when this says the axis is close, and `ty characterise` reports it.
+POLAR_FILE = config.DATA / "cache" / "polar.json"
+MOST_REPEATS = 10
 
 
 def vector(hour_angle, dec):
@@ -149,6 +155,10 @@ def measure(scope, site, step=STEP, skyline=None):
                                         "way. Nothing was measured"
                                         + ("; the telescope is back where it started." if i else "."))
             ha, dec, alt = mount.where(found, site, found["when"])
+            if points and abs(mount.wrap(ha - points[-1][0])) < step / 4:
+                import moved
+                raise moved.refusal(f"After a turn of {step:.0f}° the sky is where it was: hour angle "
+                                    f"{points[-1][0] / 15:+.3f} h before, {ha / 15:+.3f} h now.")
             points.append((ha, dec))
             scope.say(f"position {i + 1}: hour angle {ha / 15:+.3f} h, Dec {dec:+.2f}°, "
                       f"altitude {alt:.0f}°")
@@ -160,6 +170,17 @@ def measure(scope, site, step=STEP, skyline=None):
         raise
     altitude, azimuth = to_altaz(axis_of(points), site["latitude"])
     return azimuth, altitude - site["latitude"]
+
+
+def spread(runs, latitude):
+    """How well measurements made with nothing changed agree: their middle
+    as (azimuth, altitude) and their scatter about it, in degrees on the sky
+    (one standard deviation; the azimuth shrunk by the cosine of the
+    latitude, as a turn of the mount's base moves the axis that much)."""
+    az, alt = np.array([r[0] for r in runs]), np.array([r[1] for r in runs])
+    shrink = math.cos(math.radians(latitude))
+    scatter = math.hypot(float(np.std(az * shrink, ddof=1)), float(np.std(alt, ddof=1)))
+    return float(az.mean()), float(alt.mean()), scatter
 
 
 def describe(azimuth, altitude):
@@ -180,6 +201,9 @@ def main():
     ap.add_argument("--step", type=float, default=STEP, metavar="DEG",
                     help=f"degrees to turn between photographs, {LEAST:.0f} to {STEP:.0f} (default {STEP:.0f}): "
                          "less when a house or a tree is in the way of the third")
+    ap.add_argument("--repeat", type=int, default=1, metavar="N",
+                    help=f"measure N times (2 to {MOST_REPEATS}) without touching the bolts, and say how well "
+                         "the answers agree")
     args = ap.parse_args()
     return interface.main("polaralign.dry_run" if args.dry_run else "polaralign", lambda: run(args), args.json)
 
@@ -191,27 +215,60 @@ def run(args):
     step = getattr(args, "step", STEP)
     if not LEAST <= step <= STEP:
         raise interface.Refusal("INVALID_REQUEST", f"--step is from {LEAST:.0f} to {STEP:.0f} degrees.")
+    repeat = getattr(args, "repeat", 1)
+    if not 1 <= repeat <= MOST_REPEATS:
+        raise interface.Refusal("INVALID_REQUEST", f"--repeat is from 2 to {MOST_REPEATS}.")
     if args.dry_run:
         note = (f"Photographs the sky where the telescope is, slews {step:.0f}° away from the meridian and "
                 f"photographs again, then another {step:.0f}°, and returns to where it started. The three "
-                "positions are checked against the altitude and meridian limits before the first move.")
+                "positions are checked against the altitude and meridian limits before the first move."
+                + (f" It does that {repeat} times over. Leave the bolts alone throughout." if repeat > 1 else ""))
         print(f"Would move the mount. {note}")
-        return {"would_move": True, "safe": True, "step_deg": step}, [note]
+        return {"would_move": True, "safe": True, "step_deg": step, "repeat": repeat}, [note]
     settings = config.load()
     site = settings["site"]
     scope = mount.Mount()
     if not mount.CLOCK_FILE.exists():
         scope.save_clock(site)      # reading the handset's clock moves nothing
-    azimuth, altitude = measure(scope, site, step, settings.get("horizon"))
+    runs, scatter = [], None
+    for n in range(repeat):
+        if repeat > 1:
+            print(f"Measurement {n + 1} of {repeat}. Leave the bolts alone.", flush=True)
+        runs.append(measure(scope, site, step, settings.get("horizon")))
+        if repeat > 1:
+            az, alt = runs[-1]
+            print(f"  {abs(az):.2f}° {'east' if az > 0 else 'west'} of north, {abs(alt):.2f}° too "
+                  f"{'high' if alt > 0 else 'low'}", flush=True)
+    azimuth, altitude = runs[0]
+    if repeat > 1:
+        azimuth, altitude, scatter = spread(runs, site["latitude"])
     # Keep it: the drift it causes can now be predicted anywhere in the sky.
     scope.drift_model(site).set_polar(azimuth, altitude)
     words = describe(azimuth, altitude)
     print("\n" + words)
+    total = math.hypot(azimuth * math.cos(math.radians(site["latitude"])), altitude)
+    result = {"azimuth_deg": round(azimuth, 2), "altitude_deg": round(altitude, 2), "total_deg": round(total, 2),
+              "east_of_north": azimuth > 0, "too_high": altitude > 0, "advice": words, "measured": time.time()}
+    kept = dict(result)
+    if repeat > 1:
+        result["runs"] = [{"azimuth_deg": round(az, 3), "altitude_deg": round(alt, 3)} for az, alt in runs]
+        result["spread_deg"] = kept["spread_deg"] = round(scatter, 3)
+        kept["repeats"] = repeat
+        print(f"\nOver {repeat} measurements with nothing changed, the answers scatter by {scatter:.2f}° "
+              "(one standard deviation). "
+              + ("A turn of the bolts smaller than that cannot be told from the scatter."
+                 if scatter < total else
+                 "That is as large as the error itself: the axis is as close as this can measure."))
+    elif POLAR_FILE.exists():
+        # One measurement says nothing about how well it repeats; keep what an earlier --repeat found.
+        before = json.loads(POLAR_FILE.read_text(encoding="utf-8"))
+        kept.update({k: before[k] for k in ("spread_deg", "repeats") if k in before})
+    kept.pop("advice")
+    POLAR_FILE.parent.mkdir(parents=True, exist_ok=True)
+    POLAR_FILE.write_text(json.dumps(kept), encoding="utf-8")
     print("Adjust and run this again, or leave it and run './mount.py drift' to "
           "cancel the drift it causes.")
-    total = math.hypot(azimuth * math.cos(math.radians(site["latitude"])), altitude)
-    return {"azimuth_deg": round(azimuth, 2), "altitude_deg": round(altitude, 2), "total_deg": round(total, 2),
-            "east_of_north": azimuth > 0, "too_high": altitude > 0, "advice": words, "measured": time.time()}
+    return result
 
 
 if __name__ == "__main__":

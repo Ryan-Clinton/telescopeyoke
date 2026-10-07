@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/characterise.schema.json",
+  "title": "Characterise",
+  "description": "data of: ty characterise --json. What this rig has had measured about itself and what it has not, one item for each thing that would otherwise be assumed. Read from the files the measuring commands keep; no mount or camera is asked anything.",
+  "type": "object",
+  "required": ["measured", "of", "summary", "items"],
+  "properties": {
+    "measured": {"type": "integer", "description": "How many of the items have been measured."},
+    "of": {"type": "integer", "description": "How many items there are."},
+    "summary": {"type": "string"},
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["what", "measured", "value", "age_days", "how"],
+        "properties": {
+          "what": {"type": "string", "description": "The thing measured, in plain words."},
+          "measured": {"type": "boolean"},
+          "value": {"type": ["string", "null"], "description": "What was found, in words; null if not measured."},
+          "age_days": {"type": ["number", "null"], "description": "How long ago, where the measurement says."},
+          "how": {"type": "string", "description": "The command that makes the measurement."}
+        }
+      }
+    }
+  }
+}

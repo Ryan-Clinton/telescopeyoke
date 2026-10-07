@@ -374,6 +374,8 @@ def eye(site, exposure, gain, daylight=False, torch=False):
     offset = json.loads(mount.CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
     state = {"exposure": exposure, "reference": None}
     log = []
+    import moved
+    watch, last = moved.Watch(), []      # what the last look saw, and where it was
     field = config.field_height(config.hardware())    # degrees from the bottom of a frame to the top
 
     def by_day():
@@ -436,6 +438,10 @@ def eye(site, exposure, gain, daylight=False, torch=False):
                 detail += (f", level {level:.0f}: lit by the torch" if seen.get("lit")
                            else f", level {level:.0f}: dark, so cloud" if seen.get("cloud")
                            else f", level {level:.0f}")
+        # The handset saying it went there is not proof: the picture must change.
+        turned = moved.separation(*last, az, alt) if last else 0.0
+        last[:] = [az, alt]
+        watch.check(luminance(mosaic), turned, f"bearing {az:g}°, {alt:g}° up")
         mask = seen.pop("mask", None)
         answer = seen["view"] == "sky"
         if seen["view"] == "edge":
