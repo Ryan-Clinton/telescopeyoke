@@ -12,6 +12,8 @@ polaris-runs/
 # Panoramas of the garden, and each survey look's picture
 horizon/
 *.PANO.jpg
+# Phone photographs of the telescope and the garden, kept for reference
+docs/pictures/
 calibration/
 .claude/
 

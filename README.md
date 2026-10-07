@@ -338,7 +338,6 @@ lock (`MOTION_LOCKED`) stops every rig at once.
 | `process.py` | Turns a finished stack into a cleaner picture: level sky, white stars, smoothed colour noise. |
 | `focus.py` | Hands-free focusing aid: a click and a tone for every frame measured, higher as focus improves, in three levels from quick binned frames to many stars on the full sensor. `--quiet` for no sound, `--numbers` for each reading spoken as a number, `--field` to go first to a bright star with many round it (this moves the telescope), `--scene` for a daytime view. |
 | `solve.py` | Plate-solves a frame: where is the telescope really pointing? |
-| `polaralign.py` | Measures how far the polar axis is from the pole, from three plate solves. |
 | `skywatch.py` | Photographs the sky every minute and stops when stars appear. |
 | `doctor.py` | Checks what is installed and connected, and says what is ready: planner, mount, imaging. `--report` writes the same out to post as a hardware report, with the mount's model and the handset's firmware as the handset gives them, and your location left out; `--probe PORT` adds what answers on a serial port you name. |
 | `tour.py` | Records the demo being used, pressing the same buttons a person would: the animation at the top of this page, and a still of each screen. Ubuntu only. |
