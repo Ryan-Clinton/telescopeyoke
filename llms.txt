@@ -1,6 +1,6 @@
 # telescopeyoke
 
-> Lightweight SynScan telescope automation for Linux, with a Windows port: night planning, GoTo with plate-solve centring, focusing, imaging and stacking, with a read-only interface for agents.
+> Makes an ordinary Sky-Watcher SynScan telescope smarter by measuring and correcting the things that normally have to be set up perfectly by hand: self-centring GoTos, focusing by ear, a skyline from a phone panorama, polar alignment and stacking, with a read-only interface for agents. Ubuntu, with a Windows port.
 
 ## Agent documentation
 

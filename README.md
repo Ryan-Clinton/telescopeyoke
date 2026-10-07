@@ -1,8 +1,6 @@
 # telescopeyoke 🔭
 
-**Turn an ordinary SynScan telescope into a locally controlled smart telescope.**
-
-*It measures and corrects the things that normally have to be set up perfectly by hand.*
+**Makes an ordinary Sky-Watcher SynScan telescope smarter by measuring and correcting the things that normally have to be set up perfectly by hand.**
 
 [![tests](https://github.com/Ryan-Clinton/telescopeyoke/actions/workflows/tests.yml/badge.svg)](https://github.com/Ryan-Clinton/telescopeyoke/actions/workflows/tests.yml)
 

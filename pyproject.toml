@@ -1,7 +1,7 @@
 [project]
 name = "telescopeyoke"
 version = "0.2.1"
-description = "Turn a SynScan telescope into a smart telescope: night planning, GoTo, plate solving, auto-centring, focusing and stacking, from a laptop beside the telescope: Ubuntu, with a Windows port."
+description = "Makes an ordinary Sky-Watcher SynScan telescope smarter by measuring and correcting the things that normally have to be set up perfectly by hand: self-centring GoTos, focusing by ear, a skyline from a phone panorama, polar alignment and stacking. Ubuntu, with a Windows port."
 readme = "README.md"
 license = { file = "LICENSE" }
 requires-python = ">=3.11"

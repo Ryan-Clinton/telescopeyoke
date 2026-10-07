@@ -1,9 +1,10 @@
 # telescopeyoke: notes for coding and operating agents
 
-A lightweight telescope automation system for Linux, and for Windows where
-the tests pass but no hardware has been run yet: night planning, SynScan
-mount control, plate solving, focusing and stacking, on a laptop left beside
-the telescope. `README.md` is the user's guide; this file is the map for
+It makes an ordinary Sky-Watcher SynScan telescope smarter by measuring and
+correcting the things that normally have to be set up perfectly by hand:
+night planning, SynScan mount control, plate solving, focusing and stacking,
+on a laptop left beside the telescope. An Ubuntu application, with a Windows
+port on which the camera has taken frames but no mount has been driven. `README.md` is the user's guide; this file is the map for
 agents. Deeper notes are in `docs/agents/`.
 
 ## Start here
