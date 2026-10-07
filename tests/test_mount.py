@@ -45,6 +45,32 @@ def test_a_handset_left_on_its_version_screen_is_refused():
         mount.Mount(handset=SimulatedHandset(year=22))
 
 
+def test_a_nudge_tips_the_tube_five_degrees_and_brings_it_home(scope, monkeypatch, capsys):
+    monkeypatch.setattr(mount.time, "sleep", lambda seconds: None)
+    scope.say = lambda *words: print(*words)
+    scope.nudge()
+    said = capsys.readouterr().out
+    assert "the Dec axis reads 85.0°" in said and "Back at home" in said and scope.at_home()
+    assert scope.axes()[0] == pytest.approx(0, abs=0.01)           # the bar never moved
+    scope.zenith(SITE)
+    with pytest.raises(SystemExit, match="starts from the home position"):
+        scope.nudge()
+
+
+def test_a_nudge_is_planned_and_locked_like_any_other_move(tmp_path, monkeypatch, capsys):
+    import sys
+    monkeypatch.setattr(mount, "LOCK_FILE", tmp_path / "MOTION_LOCKED")
+    monkeypatch.setattr(sys, "argv", ["mount", "--demo", "nudge", "--dry-run", "--json"])
+    with pytest.raises(SystemExit) as done:
+        mount.main()
+    answer = json.loads(capsys.readouterr().out)
+    assert done.value.code == 0 and answer["data"]["would_move"] and "bar does not move" in answer["warnings"][0]
+    mount.LOCK_FILE.write_text("testing")
+    with pytest.raises(SystemExit):
+        mount.main()
+    assert json.loads(capsys.readouterr().out)["errors"][0]["code"] == "MOTION_LOCKED"
+
+
 def test_zenith_puts_the_tube_on_the_meridian_at_the_sites_latitude(scope):
     scope.zenith(SITE)
     ra_axis, dec_axis = scope.axes()

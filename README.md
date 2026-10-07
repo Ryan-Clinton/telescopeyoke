@@ -330,7 +330,7 @@ lock (`MOTION_LOCKED`) stops every rig at once.
 | `tonight.py` | Report for the night: darkness, Moon, weather verdict, ranked targets. `--html` writes the web page. |
 | `serve.py` | Serves the status page on port 8080: the night's report rebuilt every 10 minutes, and the imaging run, pictures and system panel refreshed every two seconds. |
 | `clouds.py` | Fetches the latest infrared satellite image with the site marked on it. |
-| `mount.py` | Moves the mount: `status`, `home`, `zenith`, `goto NAME [--solve]`, `point AZ ALT`, `sync`, `drift`, `compensate`, `stop`. `response` sets the Dec motor creeping at five rates and measures the drift at each, to see whether the sky answers in proportion; `pointing` plate-solves at six hour angles, three each side of the meridian, to see whether one correction for each side is enough. |
+| `mount.py` | Moves the mount: `status`, `nudge` (from home, tips the tube 5° and back, for someone beside it to see that it turns), `home`, `zenith`, `goto NAME [--solve]`, `point AZ ALT`, `sync`, `drift`, `compensate`, `stop`. `response` sets the Dec motor creeping at five rates and measures the drift at each, to see whether the sky answers in proportion; `pointing` plate-solves at six hour angles, three each side of the meridian, to see whether one correction for each side is enough. |
 | `liveview.py` | Takes a frame every few seconds so the status page shows what the telescope sees now. Steps aside while `shoot.py` runs. |
 | `app.py` | TelescopeYoke, the application: one window with everything in it, started from the applications menu. `./app.py --demo` tries it with nothing plugged in. |
 | `console.py` | The same observing screens as a page in a browser, without the equipment set-up and tools: the companion to the application. This computer only. |
@@ -421,8 +421,8 @@ and a read-only web API and MCP server offer the same information. Start with
 
 1. Set the mount in the home position, power on, and take the handset to its
    main menu.
-2. `./mount.py zenith` to measure the handset's clock and check the mount
-   moves correctly.
+2. `./mount.py nudge` while you stand beside it: the tube tips 5° and comes
+   back. Then `./mount.py zenith` to measure the handset's clock.
 3. Focus: `./focus.py --scene` on something distant in daylight, then
    `./focus.py` on stars. Turn the focuser and listen for the tone to rise: go on
    until "Minimum passed", come back, and stop at "Focus good. Hold".

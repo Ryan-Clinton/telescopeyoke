@@ -2,6 +2,9 @@
 """Drive the mount through the SynScan handset's serial port.
 
     ./mount.py status     where it is pointing, and whether it is moving
+    ./mount.py nudge      from home, tip the tube 5° and bring it back: the
+                          smallest move there is, for someone standing beside
+                          the mount to see that it really turns
     ./mount.py zenith     point straight up and hold there (tracking off)
     ./mount.py goto M81   point at a catalogue object and track it
     ./mount.py goto M81 --solve   ...then photograph the sky, work out the real
@@ -87,6 +90,7 @@ if config.DEMO:
 # Raw axis angles, in degrees, as the handset's "z" query reports them.
 HOME_RA_AXIS = 0.0
 HOME_DEC_AXIS = 90.0
+NUDGE = 5.0       # degrees the tube is tipped by `nudge`
 # RA axis angle at which the tube is on the meridian.
 MERIDIAN_RA_AXIS = 90.0
 
@@ -547,6 +551,26 @@ class Mount:
         hand.set_dec_sign(-1 if said == "e" else 1)
         print("Recorded. GoTo is now allowed on this link.")
 
+    def nudge(self, degrees=NUDGE, hold=3):
+        """From home, tip the tube `degrees` away from the pole on the Dec
+        axis, hold, and bring it back. The counterweight bar does not move.
+        For a person beside the mount to see and hear that it turns: the
+        readout alone proves nothing (6 October 2026)."""
+        if not self.at_home():
+            raise Refusal("GOTO_REFUSED", "The nudge starts from the home position. Run ./mount.py home first.")
+        with self.watching():
+            self.seek(DEC, HOME_DEC_AXIS - degrees)
+            reached = self.axes()[1]
+            self.say(f"Tipped: the Dec axis reads {reached:.1f}°. Holding {hold} s, then back.")
+            time.sleep(hold)
+            self.seek(DEC, HOME_DEC_AXIS)
+        if abs(reached - (HOME_DEC_AXIS - degrees)) > 0.5 or not self.at_home():
+            raise Refusal("SLEW_TIMED_OUT", f"The Dec axis read {reached:.1f}° when tipped and "
+                          f"{self.axes()[1]:.1f}° afterwards; it should have read "
+                          f"{HOME_DEC_AXIS - degrees:.0f}° and {HOME_DEC_AXIS:.0f}°.")
+        self.say(f"Back at home. The mount says the tube tipped {degrees:g}° and returned: did it, and did "
+                 "the motor sound? If not, switch the mount off and on.")
+
     def zenith(self, site):
         # The handset's GoTo picks the correct side of the mount, but only
         # behaves predictably from the home position.
@@ -947,7 +971,7 @@ def report(mount):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("command", choices=["status", "zenith", "home", "stop", "goto", "point",
+    ap.add_argument("command", choices=["status", "nudge", "zenith", "home", "stop", "goto", "point",
                                        "sync", "drift", "compensate", "response", "pointing",
                                        "sethome", "directions"])
     ap.add_argument("target", nargs="*",
@@ -1028,7 +1052,9 @@ def dry_run(args, site):
                                  "right if the mount really is at home."]}
         if LOCK_FILE.exists():
             raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text(encoding='utf-8').strip()}")
-        notes = {"home": "Returns to the home position, by the axis readouts.",
+        notes = {"nudge": f"From home, tips the tube {NUDGE:g}° away from the pole on the Dec axis, holds "
+                          "three seconds and brings it back. The counterweight bar does not move.",
+                 "home": "Returns to the home position, by the axis readouts.",
                  "zenith": "Goes home if not there, then slews to straight up.",
                  "compensate": "Slews about 25° twice on the side of the meridian it is on, "
                                "then returns.",
@@ -1060,7 +1086,7 @@ def act(args, site):
     """Carry a command out on the mount (or the simulated one). Returns the
     mount's state afterwards."""
 
-    if args.command in ("zenith", "home", "goto", "point", "compensate", "pointing", "directions") and LOCK_FILE.exists():
+    if args.command in ("nudge", "zenith", "home", "goto", "point", "compensate", "pointing", "directions") and LOCK_FILE.exists():
         raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text(encoding='utf-8').strip()}")
 
     mount = Mount(args.port, watch=not args.no_watch, demo=args.demo)
@@ -1070,7 +1096,9 @@ def act(args, site):
         if args.command == "stop":
             mount.stop()
         elif args.command != "status":
-            if args.command == "zenith":
+            if args.command == "nudge":
+                mount.nudge()
+            elif args.command == "zenith":
                 mount.zenith(site)
             elif args.command == "goto":
                 mount.goto_target(" ".join(args.target), site, solve=args.solve)

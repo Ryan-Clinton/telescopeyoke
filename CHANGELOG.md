@@ -5,6 +5,9 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
 
 ## Not yet released
 
+- `./mount.py nudge`: from home, tips the tube 5° on the Dec axis and brings
+  it back, with the same dry run, lock and limits as any move. The smallest
+  move there is, for a person beside the mount to see that it really turns.
 - **The mount's word is checked.** After the night the motors stopped while
   the handset reported every move as made: a GoTo with centring whose
   correction changes nothing, a polar measurement or pointing survey whose
