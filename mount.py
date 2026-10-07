@@ -23,12 +23,12 @@
     ./mount.py response   set the Dec motor creeping at five rates in turn and
                           measure the drift at each, three times: does the sky
                           answer in proportion? About 35 minutes; no slews.
-    ./mount.py pointing   go to six hour angles, three each side of the
+    ./mount.py pointing   go to eight hour angles, four each side of the
                           meridian, plate-solve at each and say how far out
                           the aim is: is one correction for each side enough?
                           The tube swings over the pole once.
-    ./mount.py findhome   after polar alignment: plate-solve at six hour angles,
-                          three each side of the meridian, in one run, and work
+    ./mount.py findhome   after polar alignment: plate-solve at eight hour angles,
+                          four each side of the meridian, in one run, and work
                           out from them where the home position really is.
                           The tube swings over the pole once.
     ./mount.py truehome   drive to the home position findhome has just found,
@@ -91,9 +91,16 @@ SURVEY_FILE = config.DATA / "cache" / "pointing_survey.json"
 HOME_FILE = config.DATA / "cache" / "home_fit.json"      # what `findhome` found, for `truehome`
 HOME_FRESH = 2 * 3600     # seconds a home measurement may be acted on
 HOME_MOST = 10.0          # degrees: a home further out than this is not believed
-HOME_FITS = 0.15          # degrees: the model fits when the places sit this close to it
+# Degrees: the model fits when the places sit this close to it. A first
+# figure, from made-up solves; to be set from the first real run's residuals.
+HOME_FITS = 0.15
+# Degrees: leaving any one place out must not move the answer by more than
+# this, or it rests on that one place.
+HOME_SWAY = 0.1
 CREEPS = (0.0, -0.25, -0.5, -0.75, -1.0)    # arcseconds a second, for `response`
-SURVEY_HOURS = (-4.0, -2.0, -1.0, 1.0, 2.0, 4.0)   # hours from the meridian, for `pointing`
+# Hours from the meridian, for `pointing` and `findhome`: four each side, so
+# that one place can be doubted and the answer still checked against the rest.
+SURVEY_HOURS = (-4.0, -3.0, -2.0, -1.0, 1.0, 2.0, 3.0, 4.0)
 SURVEY_DEC = 40.0
 # A first GoTo that misses by less than this still has the target in the
 # frame, which is two thirds of a degree tall on the 150P with the 183C.
@@ -452,9 +459,19 @@ class Mount:
         self.say(f"Home is out by {found['ra_home_error_deg']:+.2f}° on the RA axis and "
                  f"{found['dec_home_error_deg']:+.2f}° on the Dec axis. The {found['places']} places sit "
                  f"{found['rms_deg']:.2f}° from that account of them"
+                 + ("" if found["sway_deg"] is None else
+                    f", and leaving any one out moves home by at most {found['sway_deg']:.2f}°")
                  + (", which fits." if found["fits"] else
-                    f", which is more than {HOME_FITS:g}°: something else is going on, and the mount will "
-                    "not be driven to a home worked out from this."))
+                    f". That does not hold up (it needs {HOME_FITS:g}° and {HOME_SWAY:g}°, with places enough "
+                    "to check): something else is going on, and the mount will not be driven to a home "
+                    "worked out from this."))
+        for place in found["residuals"]:
+            self.say(f"  hour angle {place['hour_angle_h']:+g} h ({place['side']}): {place['miss_deg']:.2f}° from it "
+                     f"({place['ha_deg']:+.2f}° in hour angle, {place['dec_deg']:+.2f}° in Dec)")
+        if found["left_out"]:
+            gone = found["left_out"]
+            self.say(f"  hour angle {gone['hour_angle_h']:+g} h was left out: it sits {gone['miss_deg']:.2f}° from "
+                     "what the other places agree on. Look at that frame before trusting the rest.")
         if found["fits"]:
             size = math.hypot(found["ra_home_error_deg"], found["dec_home_error_deg"])
             self.say("That is close enough to mark as it stands." if size < 0.1 else
@@ -960,26 +977,76 @@ def home_fit(rows, dec):
     The answer is only as good as `rms_deg`, how far the places sit from it."""
     import numpy as np
     shrink, slope = math.cos(math.radians(dec)), math.tan(math.radians(dec))
-    model, seen = [], []
-    for row in rows:
-        s = 1.0 if row["side"] == "east" else -1.0
-        h = math.radians(row["hour_angle_h"] * 15)
-        model.append([1, 0, s / shrink, -slope * math.cos(h), -slope * math.sin(h)])
-        seen.append(row["ha_error_deg"])
-        model.append([0, s, 0, math.sin(h), -math.cos(h)])
-        seen.append(row["dec_error_deg"])
-    sides = {name: sum(r["side"] == name for r in rows) for name in ("east", "west")}
-    if min(sides.values()) < 2 or len(rows) < 5:
+
+    def fit(rows):
+        """(the five answers, each place's miss from them, rms) for some of the rows."""
+        model, seen = [], []
+        for row in rows:
+            s = 1.0 if row["side"] == "east" else -1.0
+            h = math.radians(row["hour_angle_h"] * 15)
+            model.append([1, 0, s / shrink, -slope * math.cos(h), -slope * math.sin(h)])
+            seen.append(row["ha_error_deg"])
+            model.append([0, s, 0, math.sin(h), -math.cos(h)])
+            seen.append(row["dec_error_deg"])
+        model, seen = np.array(model), np.array(seen)
+        answer = np.linalg.lstsq(model, seen, rcond=None)[0]
+        return answer, float(np.sqrt(np.mean((model @ answer - seen) ** 2)))
+
+    def miss(row, answer):
+        """How far one place sits from the account: in hour angle, in Dec, and on the sky."""
+        ra, dec_error, cone, p, q = answer
+        s, h = (1.0 if row["side"] == "east" else -1.0), math.radians(row["hour_angle_h"] * 15)
+        in_ha = row["ha_error_deg"] - (ra + s * cone / shrink - slope * (p * math.cos(h) + q * math.sin(h)))
+        in_dec = row["dec_error_deg"] - (s * dec_error + p * math.sin(h) - q * math.cos(h))
+        return {"hour_angle_h": row["hour_angle_h"], "side": row["side"], "ha_deg": round(float(in_ha), 3),
+                "dec_deg": round(float(in_dec), 3), "miss_deg": round(float(math.hypot(in_ha * shrink, in_dec)), 3)}
+
+    def enough(rows):
+        sides = {name: sum(r["side"] == name for r in rows) for name in ("east", "west")}
+        return min(sides.values()) >= 2 and len(rows) >= 5, sides
+
+    ok, sides = enough(rows)
+    if not ok:
         raise Refusal("PLATE_SOLVE_FAILED", f"Too few places solved to find home: {sides['east']} on the east "
                       f"side and {sides['west']} on the west. It needs two on each and five in all.")
-    model, seen = np.array(model), np.array(seen)
-    answer = np.linalg.lstsq(model, seen, rcond=None)[0]
-    rms = float(np.sqrt(np.mean((model @ answer - seen) ** 2)))
+    answer, rms = fit(rows)
+    used, left_out = rows, None
+    # One bad place (a solve on the wrong stars, a gust) can spoil an account
+    # the rest agree on, and with only a few places the fit bends towards it,
+    # so the rms alone may not show it. Try leaving each out in turn; take
+    # the best, but only if the others then fit and that one place sits far
+    # from what they say. Never more than one.
+    def without_each(rows):
+        """The fit with each place left out in turn: [(rms, which, answer, the rest)]."""
+        trials = []
+        for i in range(len(rows)):
+            rest = rows[:i] + rows[i + 1:]
+            if enough(rest)[0]:
+                trial, trial_rms = fit(rest)
+                trials.append((trial_rms, i, trial, rest))
+        return trials
+
+    trials = without_each(rows)
+    if trials:
+        trial_rms, i, trial, rest = min(trials, key=lambda t: t[0])
+        apart = miss(rows[i], trial)
+        if trial_rms <= HOME_FITS and apart["miss_deg"] > max(2 * HOME_FITS, 4 * trial_rms):
+            answer, rms, used, left_out = trial, trial_rms, rest, apart
     ra, dec_error, cone, p, q = (float(v) for v in answer)
-    believable = rms <= HOME_FITS and abs(ra) <= HOME_MOST and abs(dec_error) <= HOME_MOST
+    # Does the answer stand on all the places, or on one? Leave each out and
+    # see how far home moves. With too few places to try that, it cannot be
+    # told, and the answer is not acted on.
+    again = without_each(used)
+    sway = (max(max(abs(float(t[2][0]) - ra), abs(float(t[2][1]) - dec_error)) for t in again)
+            if len(again) == len(used) else None)
+    believable = (rms <= HOME_FITS and sway is not None and sway <= HOME_SWAY
+                  and abs(ra) <= HOME_MOST and abs(dec_error) <= HOME_MOST)
     return {"ra_home_error_deg": round(ra, 3), "dec_home_error_deg": round(dec_error, 3),
             "tube_not_square_deg": round(cone, 3), "polar_error_left_deg": round(math.hypot(p, q), 3),
-            "rms_deg": round(rms, 3), "places": len(rows), "fits": bool(believable)}
+            "rms_deg": round(rms, 3), "sway_deg": None if sway is None else round(sway, 3),
+            "places": len(used), "fits": bool(believable),
+            # An rms can hide one bad place among good ones: each place's own miss, for looking at.
+            "residuals": [miss(row, answer) for row in used], "left_out": left_out}
 
 
 def plan_true_home():
@@ -1000,7 +1067,8 @@ def plan_true_home():
                       "more than two hours old. Run ./mount.py findhome again; nothing is moved on an old one.")
     if not found["fits"]:
         raise Refusal("INVALID_REQUEST", f"The last home measurement did not fit ({found['rms_deg']:.2f}° from "
-                      "its own account of the places). Run ./mount.py findhome again on a steadier sky.")
+                      "its own account of the places, or resting on one of them). Run ./mount.py findhome "
+                      "again on a steadier sky.")
     goes = found["goes_to"]
     return {"would_move": True, "safe": True, "ra_axis_deg": goes["ra_axis_deg"], "dec_axis_deg": goes["dec_axis_deg"],
             "measured_minutes_ago": round(age / 60),

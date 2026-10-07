@@ -5,6 +5,12 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
 
 ## Not yet released
 
+- **From box to first galaxy** (`docs/first-night.md`): a first night for
+  someone who knows none of the words, with the explanations folded away and
+  each step marked as proven on a real mount or not yet. Its companion,
+  `docs/how-it-all-works.md`, explains afterwards what each step was.
+- `./mount.py findhome` gives each place's own miss from the fit, and leaves
+  out one place, never more, that sits far from what the rest agree on.
 - Fixed: a handset lead that comes out, or was never in, is a refusal that
   says what to do (`MOUNT_NOT_CONNECTED`), where it was a traceback.
 - **`./mount.py findhome` and `truehome`** (`docs/calibration.md`): after a

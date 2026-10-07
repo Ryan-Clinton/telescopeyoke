@@ -28,6 +28,12 @@ It is an Ubuntu application. It also runs natively on Windows, where the
 tests and the demo pass and the camera has taken frames, but no mount has
 been driven yet.
 
+> **New to motorised telescopes?** Start with
+> **[From box to first galaxy](docs/first-night.md)**: a first night, step by
+> step, with no knowledge of polar alignment, RA and Dec, plate solving or
+> astrophotography assumed. Then
+> [What telescopeyoke just did for you](docs/how-it-all-works.md) explains it.
+
 > **Looking for testers.** So far it has run on one telescope: the author's
 > EQ3 Pro. If you have an EQ3, EQ5, HEQ5 or EQ6 with a SynScan handset, on
 > Linux or Windows, a report from you is worth more than any new feature.
@@ -335,7 +341,7 @@ lock (`MOTION_LOCKED`) stops every rig at once.
 | `tonight.py` | Report for the night: darkness, Moon, weather verdict, ranked targets. `--html` writes the web page. |
 | `serve.py` | Serves the status page on port 8080: the night's report rebuilt every 10 minutes, and the imaging run, pictures and system panel refreshed every two seconds. |
 | `clouds.py` | Fetches the latest infrared satellite image with the site marked on it. |
-| `mount.py` | Moves the mount: `status`, `settime` (gives the handset this computer's date, time and the site's position, once you have pressed ENTER through its start-up screens), `nudge` (from home, tips the tube 5° and back, for someone beside it to see that it turns), `home`, `zenith`, `goto NAME [--solve]`, `point AZ ALT`, `sync`, `drift`, `compensate`, `stop`. `response` sets the Dec motor creeping at five rates and measures the drift at each, to see whether the sky answers in proportion; `pointing` plate-solves at six hour angles, three each side of the meridian, to see whether one correction for each side is enough. `findhome` works out from one run of plate solves where the home position really is, and `truehome` drives there for the joints to be marked. |
+| `mount.py` | Moves the mount: `status`, `settime` (gives the handset this computer's date, time and the site's position, once you have pressed ENTER through its start-up screens), `nudge` (from home, tips the tube 5° and back, for someone beside it to see that it turns), `home`, `zenith`, `goto NAME [--solve]`, `point AZ ALT`, `sync`, `drift`, `compensate`, `stop`. `response` sets the Dec motor creeping at five rates and measures the drift at each, to see whether the sky answers in proportion; `pointing` plate-solves at eight hour angles, four each side of the meridian, to see whether one correction for each side is enough. `findhome` works out from one run of plate solves where the home position really is, and `truehome` drives there for the joints to be marked. |
 | `liveview.py` | Takes a frame every few seconds so the status page shows what the telescope sees now. Steps aside while `shoot.py` runs. |
 | `app.py` | TelescopeYoke, the application: one window with everything in it, started from the applications menu. `./app.py --demo` tries it with nothing plugged in. |
 | `console.py` | The same observing screens as a page in a browser, without the equipment set-up and tools: the companion to the application. This computer only. |
@@ -410,6 +416,8 @@ plan the night → GoTo → photograph → plate-solve (ASTAP) → correct → p
 
 | Page | What is in it |
 |---|---|
+| [From box to first galaxy](docs/first-night.md) | A first night for someone who knows none of the words: assemble, point north, switch on, align, focus, GoTo, picture. Says which steps are proven on a real mount. |
+| [What telescopeyoke just did for you](docs/how-it-all-works.md) | The astronomy and the engineering behind each of those steps, for afterwards. |
 | [Calibrating a mount, in order](docs/calibration.md) | Level roughly, polar-align, find the true home and mark it, measure the pointing each side, and check that the mount really turns. |
 | [How a picture is made](docs/imaging.md) | Calibration, frame checks, lining up, stacking, the quality pass. |
 | [Focusing by ear](docs/focus.md) | Turn the knob and the laptop talks you onto focus. |

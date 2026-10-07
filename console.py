@@ -275,7 +275,7 @@ ACTIONS = {
                              "it has finished. About ten minutes."},
     "find-home": {"label": "Find the true home position", "uses": "mount", "moves": True,
                   "command": lambda p: ["mount.py", "findhome"],
-                  "says": "After polar alignment. The mount goes to six places, three each side of the "
+                  "says": "After polar alignment. The mount goes to eight places, four each side of the "
                           "meridian, and plate-solves at each, to work out where home really is. The tube "
                           "swings over the pole once. Nothing is changed by it."},
     "true-home": {"label": "Go to the true home position", "uses": "mount", "moves": True,
@@ -284,7 +284,7 @@ ACTIONS = {
                           "joints, then switch the handset off and on with the mount on its marks."},
     "pointing-survey": {"label": "Pointing survey", "uses": "mount", "moves": True,
                         "command": lambda p: ["mount.py", "pointing"],
-                        "says": "The mount goes to six places, three each side of the meridian, and plate-solves "
+                        "says": "The mount goes to eight places, four each side of the meridian, and plate-solves "
                                 "at each. The tube swings over the pole once. Watch it the first time."},
     "creep-response": {"label": "Dec motor response", "uses": "mount", "moves": True,
                        "command": lambda p: ["mount.py", "response"],

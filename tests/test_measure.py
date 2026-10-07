@@ -346,7 +346,7 @@ def test_the_survey_measures_each_side_and_keeps_its_average(scope, monkeypatch)
     monkeypatch.setattr(scope, "where_really", sky_as_solved(scope, lambda west: (0.1, 0.2) if west else (0.1, 5.8)))
     found = scope.pointing_survey(SITE)
     assert [r["hour_angle_h"] for r in found["rows"]] == sorted(mount.SURVEY_HOURS)
-    assert [r["side"] for r in found["rows"]] == ["east"] * 3 + ["west"] * 3
+    assert [r["side"] for r in found["rows"]] == ["east"] * 4 + ["west"] * 4
     assert found["sides"]["east"]["dec_error_deg"] == pytest.approx(5.8, abs=0.05)
     assert found["sides"]["west"]["dec_error_deg"] == pytest.approx(0.2, abs=0.05)
     assert found["one_correction_per_side_is_enough"]
@@ -492,7 +492,7 @@ def test_home_is_recovered_from_places_either_side_of_the_meridian():
     found = mount.home_fit(survey_of(0.4, -2.95), 40.0)
     assert found["ra_home_error_deg"] == pytest.approx(0.4, abs=0.01)
     assert found["dec_home_error_deg"] == pytest.approx(-2.95, abs=0.01)
-    assert found["fits"] and found["rms_deg"] < 0.01 and found["places"] == 6
+    assert found["fits"] and found["rms_deg"] < 0.01 and found["places"] == 8 and found["sway_deg"] < 0.01
 
 
 def test_home_is_told_apart_from_a_tube_out_of_square_and_a_polar_axis_still_a_little_out():
@@ -527,7 +527,7 @@ def test_findhome_measures_afresh_in_one_run_and_truehome_goes_there(scope, monk
     monkeypatch.setattr(scope, "where_really", sky_as_solved(scope, lambda west: (0.4, 2.95) if west else (0.4, -2.95)))
     found = scope.find_home(SITE)
     assert found["dec_home_error_deg"] == pytest.approx(-2.95, abs=0.05) and found["fits"]
-    assert found["ra_home_error_deg"] == pytest.approx(0.4, abs=0.05) and len(found["rows"]) == 6
+    assert found["ra_home_error_deg"] == pytest.approx(0.4, abs=0.05) and len(found["rows"]) == 8
     assert "truehome --dry-run" in capsys.readouterr().out
     plan = mount.plan_true_home()
     assert plan["would_move"] and plan["dec_axis_deg"] == pytest.approx(92.95, abs=0.05)
@@ -540,7 +540,7 @@ def test_findhome_measures_afresh_in_one_run_and_truehome_goes_there(scope, monk
 
 def test_truehome_moves_only_on_a_measurement_from_this_session(scope):
     scope.save_clock(SITE)
-    fit = {"ra_home_error_deg": 0.4, "dec_home_error_deg": -2.95, "rms_deg": 0.02, "fits": True,
+    fit = {"ra_home_error_deg": 0.4, "dec_home_error_deg": -2.95, "rms_deg": 0.02, "sway_deg": 0.01, "fits": True,
            "goes_to": {"ra_axis_deg": -0.4, "dec_axis_deg": 92.95}}
     for change, words in (({"saved": time.time() - 3 * 3600}, "two hours old"),
                           ({"saved": json.loads(mount.CLOCK_FILE.read_text())["saved"] - 60}, "before the handset"),
@@ -583,3 +583,27 @@ def test_a_lead_that_comes_out_is_a_refusal_that_says_what_to_do(scope, monkeypa
     with pytest.raises(interface.Refusal) as refused:
         scope.axes()
     assert refused.value.code_name == "MOUNT_NOT_CONNECTED" and "switch the mount off at the mount" in refused.value.message
+
+
+def test_every_places_own_miss_is_given_and_one_bad_place_is_left_out_not_hidden():
+    clean = mount.home_fit(survey_of(0.4, -2.95, noise=0.01), 40.0)
+    assert len(clean["residuals"]) == 8 and clean["left_out"] is None
+    assert max(place["miss_deg"] for place in clean["residuals"]) < 0.05
+    assert {"hour_angle_h", "side", "ha_deg", "dec_deg", "miss_deg"} <= set(clean["residuals"][0])
+    # One solve on the wrong stars: 0.6° out in Dec at +4 h.
+    rows = survey_of(0.4, -2.95, noise=0.01)
+    rows[-1]["dec_error_deg"] += 0.6
+    found = mount.home_fit(rows, 40.0)
+    assert found["left_out"]["hour_angle_h"] == 4.0 and found["left_out"]["miss_deg"] > 0.4
+    assert found["places"] == 7 and found["fits"] and len(found["residuals"]) == 7 and found["sway_deg"] <= mount.HOME_SWAY
+    assert found["dec_home_error_deg"] == pytest.approx(-2.95, abs=0.06)
+    # Two bad places are not explained away: it does not fit, and nothing is left out.
+    rows[1]["ha_error_deg"] += 0.7
+    worse = mount.home_fit(rows, 40.0)
+    assert not worse["fits"]
+    # With six places a doubted one leaves too few to check the rest, so nothing is acted on.
+    six = survey_of(0.4, -2.95, noise=0.01, hours=(-4, -2, -1, 1, 2, 4))
+    assert mount.home_fit(six, 40.0)["fits"]
+    six[-1]["dec_error_deg"] += 0.6
+    doubted = mount.home_fit(six, 40.0)
+    assert not doubted["fits"] and (doubted["sway_deg"] is None or doubted["sway_deg"] > mount.HOME_SWAY)

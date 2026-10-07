@@ -48,8 +48,8 @@ rest of the night.
 
 `./mount.py findhome` measures it:
 
-- It makes **one uninterrupted run** of plate solves at six hour angles,
-  three on each side of the meridian, at one declination, with no correction
+- It makes **one uninterrupted run** of plate solves at eight hour angles,
+  four on each side of the meridian, at one declination, with no correction
   applied. Nothing remembered from another night, or from earlier the same
   night, goes into it.
 - A Dec axis that reads wrong moves the aim one way on the east side and the
@@ -63,11 +63,25 @@ rest of the night.
       Dec error        =  s e               +  p sin h  -  q cos h
 
   The five unknowns (`a` and `e`, the home errors; `c`, the tube out of
-  square; `p` and `q`, the polar error left) are found from the twelve
+  square; `p` and `q`, the polar error left) are found from the sixteen
   figures by least squares.
 - It reports the two home errors, and how far the places sit from that
-  account of them (`rms_deg`). Over 0.15°, or a home more than 10° out, and
-  the answer is marked as not fitting: nothing will be moved on it.
+  account of them: all together (`rms_deg`) and each by itself
+  (`residuals`), because an rms can hide one bad place among five good ones.
+  Over 0.15°, or a home more than 10° out, and the answer is marked as not
+  fitting: nothing will be moved on it.
+- One place may be left out, never more: if the other places then fit and
+  that one sits more than 0.3° from what they say, it is named, with how
+  far out it is, and the answer comes from the rest. Look at its frame.
+- The answer must also stand on all the places and not on one: each is
+  left out in turn, and if home moves by more than 0.1° for any of them
+  (`sway_deg`), it does not fit. That is why there are eight places and not
+  six. With six, a single solve 0.6° out was absorbed by the fit and the rms
+  stayed under 0.15°; with one place doubted there were then too few left to
+  check the rest, and a second bad place went unseen.
+- Sixteen figures for five unknowns is still not a great deal to spare, and
+  0.15° and 0.1° are first figures from made-up solves. The first real
+  run's residuals are what they will be set from.
 
 `./mount.py truehome` then drives to the home just measured: home by the
 axis readouts first, as `./mount.py home` goes, then the small step to the

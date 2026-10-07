@@ -36,7 +36,7 @@ Before any of that is trusted, measure how the mount answers:
   one target; nothing is slewed, and the creep is put back afterwards. It
   changes nothing about how the creep is chosen. `--rates` and `--repeats`
   alter the sweep; the result is kept in `cache/creep_response.json`.
-- `./mount.py pointing` goes to six hour angles at Dec +40°, three each side
+- `./mount.py pointing` goes to eight hour angles at Dec +40°, four each side
   of the meridian, with no correction applied, plate-solves at each and
   records how far out the aim is. It says, for each side, the average error,
   how far any one place is from that average and how the error changes with
