@@ -134,9 +134,42 @@ def characterise():
               "./focus.py, then ./focus.py --report": "focus", "a ./focus.py run that ends on \"Focus good\"": "focus",
               "./mount.py sync on that side, or ./mount.py pointing": "sync", "./mount.py pointing": "pointing-survey",
               "./polaralign.py": "polar", "./polaralign.py --repeat 5": "polar-repeat",
-              "./mount.py response": "creep-response"}
+              "./mount.py response": "creep-response", "./mount.py findhome": "find-home"}
 
+    # In the order the work is done on a mount: align it, find its home,
+    # see how it points and that it turns, then how it tracks, then the
+    # camera, the focus and the place it stands.
     items = []
+    polar = read(polaralign.POLAR_FILE) or {}
+    items.append(line("How far the polar axis is from the pole", "./polaralign.py",
+                      value=f"{polar['total_deg']:g}°" if "total_deg" in polar else None, when=polar.get("measured")))
+    items.append(line("How well that measurement repeats", "./polaralign.py --repeat 5",
+                      value=f"±{polar['spread_deg']:g}° over {polar['repeats']} measurements" if "spread_deg" in polar else None,
+                      when=polar.get("measured")))
+    home = read(mount.HOME_FILE)
+    items.append(line("Where the home position really is", "./mount.py findhome", home,
+                      home and (f"out by {home['ra_home_error_deg']:+.2f}° on the RA axis and "
+                                f"{home['dec_home_error_deg']:+.2f}° on the Dec axis"
+                                + ("" if home["fits"] else "; the measurement did not fit and is not to be used"))))
+    sides = (read(mount.POINTING_FILE) or {}).get("sides", {})
+    for side in ("east", "west"):
+        here = sides.get(side)
+        items.append(line(f"Pointing error on the {side} side", "./mount.py sync on that side, or ./mount.py pointing",
+                          here, here and f"{here['error_deg'][0]:+.2f}° in hour angle, {here['error_deg'][1]:+.2f}° in Dec"))
+    survey = read(mount.SURVEY_FILE)
+    items.append(line("Whether one pointing correction for each side is enough", "./mount.py pointing", survey,
+                      survey and ("yes" if survey["one_correction_per_side_is_enough"] else "no: it changes with hour angle")))
+    seen = read(moved.MOVED_FILE)
+    judged = moved.checked()
+    items.append(line("That the telescope turns when the mount says it has",
+                      "any ./mount.py goto NAME --solve that needs a correction, or ./horizon.py --trace", seen,
+                      seen and f"{seen['how']}; {judged['changed']} moves seen to be real so far, "
+                               f"{judged['same']} not, {judged['undecided']} undecided"))
+    answer = read(mount.RESPONSE_FILE)
+    items.append(line("How the sky's drift answers the Dec motor's creep", "./mount.py response", answer,
+                      answer and f"{answer['per_unit']:+.2f} for each arcsecond a second (it should be "
+                                 f"{answer['expected_per_unit']:+.0f}); "
+                                 + ("in proportion" if answer["straight"] else "not in proportion")))
     timing = read(camera_test.TIMING_FILE) or {}
     frames, trail = timing.get("timing"), timing.get("trail")
     items.append(line("How long a frame takes for the exposure asked", "./camera_test.py --timing", frames,
@@ -156,34 +189,9 @@ def characterise():
     items.append(line("The star size good focus comes to", "a ./focus.py run that ends on \"Focus good\"",
                       value=f"{focus.usual_best():.2f} arcseconds" if reached else None,
                       when=focus.RUNS_FILE.stat().st_mtime if reached else None))
-    sides = (read(mount.POINTING_FILE) or {}).get("sides", {})
-    for side in ("east", "west"):
-        here = sides.get(side)
-        items.append(line(f"Pointing error on the {side} side", "./mount.py sync on that side, or ./mount.py pointing",
-                          here, here and f"{here['error_deg'][0]:+.2f}° in hour angle, {here['error_deg'][1]:+.2f}° in Dec"))
-    survey = read(mount.SURVEY_FILE)
-    items.append(line("Whether one pointing correction for each side is enough", "./mount.py pointing", survey,
-                      survey and ("yes" if survey["one_correction_per_side_is_enough"] else "no: it changes with hour angle")))
-    polar = read(polaralign.POLAR_FILE) or {}
-    items.append(line("How far the polar axis is from the pole", "./polaralign.py",
-                      value=f"{polar['total_deg']:g}°" if "total_deg" in polar else None, when=polar.get("measured")))
-    items.append(line("How well that measurement repeats", "./polaralign.py --repeat 5",
-                      value=f"±{polar['spread_deg']:g}° over {polar['repeats']} measurements" if "spread_deg" in polar else None,
-                      when=polar.get("measured")))
-    answer = read(mount.RESPONSE_FILE)
-    items.append(line("How the sky's drift answers the Dec motor's creep", "./mount.py response", answer,
-                      answer and f"{answer['per_unit']:+.2f} for each arcsecond a second (it should be "
-                                 f"{answer['expected_per_unit']:+.0f}); "
-                                 + ("in proportion" if answer["straight"] else "not in proportion")))
     skyline = horizon.measured()
     items.append(line("The skyline of the place it stands", "./panorama.py, or ./horizon.py --trace", skyline,
                       f"{len(skyline['skyline'])} points, from {skyline.get('source', 'a survey')}" if skyline else None))
-    seen = read(moved.MOVED_FILE)
-    judged = moved.checked()
-    items.append(line("That the telescope turns when the mount says it has",
-                      "any ./mount.py goto NAME --solve that needs a correction, or ./horizon.py --trace", seen,
-                      seen and f"{seen['how']}; {judged['changed']} moves seen to be real so far, "
-                               f"{judged['same']} not, {judged['undecided']} undecided"))
     done = sum(item["measured"] for item in items)
     return {"measured": done, "of": len(items), "summary": f"{done} of {len(items)} measured", "items": items}
 

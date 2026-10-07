@@ -125,7 +125,7 @@ def test_a_correction_that_changes_nothing_is_proof_from_the_plate_solve(evidenc
 
 @pytest.fixture
 def scope(tmp_path, monkeypatch):
-    for name in ("CLOCK_FILE", "POINTING_FILE", "DRIFT_FILE", "RESPONSE_FILE", "SURVEY_FILE", "LAST_SOLVE"):
+    for name in ("CLOCK_FILE", "POINTING_FILE", "DRIFT_FILE", "RESPONSE_FILE", "SURVEY_FILE", "LAST_SOLVE", "HOME_FILE"):
         monkeypatch.setattr(mount, name, tmp_path / f"{name}.json")
     monkeypatch.setattr(mount, "LOCK_FILE", tmp_path / "MOTION_LOCKED")
     monkeypatch.setattr(mount, "SETTLE", 0)
@@ -139,11 +139,22 @@ def scope(tmp_path, monkeypatch):
     return made
 
 
+def reachable():
+    """A named star the mount may go to at whatever hour the tests are run."""
+    for star in mount.STARS:
+        try:
+            mount.plan_goto(star, SITE)
+            return star
+        except interface.Refusal:
+            pass
+    pytest.skip("no named star is within the limits just now")
+
+
 def test_a_goto_whose_corrections_do_nothing_is_stopped(scope, monkeypatch):
     scope.can_solve = True
     monkeypatch.setattr(scope, "measure_miss", lambda target, site: (-1.78, 1.57))     # the same miss every time
     with pytest.raises(interface.Refusal) as stop:
-        scope.goto_target("Vega" if mount.where(mount.find_target("Vega"), SITE)[2] > 25 else "Capella", SITE, solve=True)
+        scope.goto_target(reachable(), SITE, solve=True)
     assert stop.value.code_name == "MOUNT_NOT_MOVING" and "142'" in stop.value.message
 
 
@@ -393,7 +404,7 @@ def test_the_focus_report_gives_each_levels_timing(tmp_path, monkeypatch, capsys
 def rig(tmp_path, monkeypatch):
     import horizon
     for module, name in ((camera_test, "TIMING_FILE"), (focus, "FRAMES_FILE"), (focus, "RUNS_FILE"),
-                         (mount, "POINTING_FILE"), (mount, "SURVEY_FILE"), (mount, "RESPONSE_FILE"),
+                         (mount, "POINTING_FILE"), (mount, "SURVEY_FILE"), (mount, "RESPONSE_FILE"), (mount, "HOME_FILE"),
                          (polaralign, "POLAR_FILE"), (horizon, "RESULTS"), (moved, "MOVED_FILE"),
                          (moved, "LOG_FILE")):
         monkeypatch.setattr(module, name, tmp_path / f"{name}.json")
@@ -402,7 +413,10 @@ def rig(tmp_path, monkeypatch):
 
 def test_a_rig_nothing_is_known_about_says_how_to_measure_each_thing(rig):
     answer = valid(interface.run("characterise", agent.characterise), "characterise")["data"]
-    assert answer["measured"] == 0 and answer["of"] == len(answer["items"]) == 12
+    assert answer["measured"] == 0 and answer["of"] == len(answer["items"]) == 13
+    # In the order the work is done: align, find home, point, then the rest.
+    assert [item["action"] for item in answer["items"]][:6] == ["polar", "polar-repeat", "find-home", "sync", "sync",
+                                                                 "pointing-survey"]
     assert all(not item["measured"] and item["value"] is None and item["how"] for item in answer["items"])
     assert {"./camera_test.py --timing", "./polaralign.py --repeat 5", "./mount.py response",
             "./mount.py pointing"} <= {item["how"] for item in answer["items"]}
@@ -412,7 +426,7 @@ def test_a_rig_nothing_is_known_about_says_how_to_measure_each_thing(rig):
     assert named <= set(console.ACTIONS) and {"polar-repeat", "creep-response", "pointing-survey",
                                               "camera-timing", "camera-trail"} <= named
     assert [item["what"] for item in answer["items"] if item["action"] is None] == [
-        "The skyline of the place it stands", "That the telescope turns when the mount says it has"]
+        "That the telescope turns when the mount says it has", "The skyline of the place it stands"]
 
 
 def test_what_has_been_measured_is_reported_with_its_value_and_age(rig):
@@ -424,9 +438,12 @@ def test_what_has_been_measured_is_reported_with_its_value_and_age(rig):
     mount.POINTING_FILE.write_text(json.dumps({"error_deg": [0.1, 5.8], "west": False, "saved": now,
                                                "sides": {"east": {"error_deg": [0.1, 5.8], "saved": now}}}))
     moved.MOVED_FILE.write_text(json.dumps({"how": "a plate solve after a correction", "saved": now}))
+    mount.HOME_FILE.write_text(json.dumps({"ra_home_error_deg": 0.4, "dec_home_error_deg": -2.95, "fits": True,
+                                           "saved": now}))
     answer = valid(interface.run("characterise", agent.characterise), "characterise")["data"]
     found = {item["what"]: item for item in answer["items"] if item["measured"]}
-    assert answer["measured"] == len(found) == 5 and answer["summary"] == "5 of 12 measured"
+    assert answer["measured"] == len(found) == 6 and answer["summary"] == "6 of 13 measured"
+    assert found["Where the home position really is"]["value"] == "out by +0.40° on the RA axis and -2.95° on the Dec axis"
     assert found["How far the polar axis is from the pole"]["value"] == "0.2°"
     assert found["How far the polar axis is from the pole"]["age_days"] == pytest.approx(2.0, abs=0.1)
     assert found["How well that measurement repeats"]["value"] == "±0.02° over 5 measurements"
@@ -443,3 +460,126 @@ def test_the_trail_test_can_be_shown_as_a_plan_first(monkeypatch, capsys):
     answer = json.loads(capsys.readouterr().out)
     assert done.value.code == 0 and answer["ok"] and answer["data"]["tracking_interrupted"]
     assert answer["data"]["would_move"] is False and "starts it following again" in answer["warnings"][0]
+
+
+# --- where home really is -------------------------------------------------------------------------------
+
+def survey_of(ra_home, dec_home, cone=0.0, polar=(0.0, 0.0), dec=40.0, hours=mount.SURVEY_HOURS, noise=0.0):
+    """What a pointing survey would find on a mount switched on `ra_home` and
+    `dec_home` degrees from its true home, with a tube `cone` degrees out of
+    square and a polar axis `polar` degrees (east of north, too high) out:
+    each place's error worked out exactly, from where a tilted axis really points."""
+    simulator_error = simulator.POLAR_ERROR
+    simulator.POLAR_ERROR = polar
+    rows = []
+    try:
+        for h in hours:
+            s = -1 if h > 0 else 1                               # west: the tube over the pole
+            # The mount's own coordinates, with every axis reading out by the home error...
+            ha_mount = h * 15 + ra_home + s * cone / math.cos(math.radians(dec))
+            dec_mount = dec + s * dec_home
+            # ...and then the sky as a polar axis off the pole shows it.
+            ha_real, dec_real = simulator.tilted(ha_mount, dec_mount, SITE["latitude"]) if any(polar) else (ha_mount, dec_mount)
+            rows.append({"hour_angle_h": h, "side": "west" if h > 0 else "east",
+                         "ha_error_deg": mount.wrap(ha_real - h * 15) + rng.normal(0, noise),
+                         "dec_error_deg": dec_real - dec + rng.normal(0, noise)})
+    finally:
+        simulator.POLAR_ERROR = simulator_error
+    return rows
+
+
+def test_home_is_recovered_from_places_either_side_of_the_meridian():
+    found = mount.home_fit(survey_of(0.4, -2.95), 40.0)
+    assert found["ra_home_error_deg"] == pytest.approx(0.4, abs=0.01)
+    assert found["dec_home_error_deg"] == pytest.approx(-2.95, abs=0.01)
+    assert found["fits"] and found["rms_deg"] < 0.01 and found["places"] == 6
+
+
+def test_home_is_told_apart_from_a_tube_out_of_square_and_a_polar_axis_still_a_little_out():
+    # All four at once, and the plate solves a little uncertain: home still comes out to a few hundredths.
+    found = mount.home_fit(survey_of(-0.8, 1.6, cone=0.3, polar=(0.25, -0.15), noise=0.01), 40.0)
+    assert found["ra_home_error_deg"] == pytest.approx(-0.8, abs=0.06)
+    assert found["dec_home_error_deg"] == pytest.approx(1.6, abs=0.06)
+    assert found["tube_not_square_deg"] == pytest.approx(0.3, abs=0.05)
+    assert found["polar_error_left_deg"] == pytest.approx(0.27, abs=0.08) and found["fits"]
+    # A polar axis alone, with home exact, is not taken for a home error.
+    alone = mount.home_fit(survey_of(0.0, 0.0, polar=(0.5, 0.3)), 40.0)
+    assert abs(alone["dec_home_error_deg"]) < 0.03 and abs(alone["ra_home_error_deg"]) < 0.03
+
+
+def test_places_that_fit_no_account_are_not_acted_on_and_too_few_are_refused():
+    wild = survey_of(0.4, -2.95, noise=0.8)
+    assert not mount.home_fit(wild, 40.0)["fits"]
+    with pytest.raises(interface.Refusal) as refused:
+        mount.home_fit(survey_of(0.4, -2.95, hours=(-4, -2, -1, 1)), 40.0)
+    assert "two on each" in refused.value.message
+    assert not mount.home_fit(survey_of(0.4, -14.0), 40.0)["fits"]             # too far out to be believed
+
+
+def test_findhome_measures_afresh_in_one_run_and_truehome_goes_there(scope, monkeypatch, capsys):
+    scope.save_clock(SITE)
+    # Something stale in the cache from another night must not come into it.
+    mount.POINTING_FILE.write_text(json.dumps({"error_deg": [9, 9], "west": False, "saved": 1.0,
+                                               "sides": {"east": {"error_deg": [9, 9], "saved": 1.0}}}))
+    with pytest.raises(interface.Refusal) as refused:
+        mount.plan_true_home()                                     # nothing measured yet: nothing to go to
+    assert "findhome first" in refused.value.message and scope.at_home()
+    monkeypatch.setattr(scope, "where_really", sky_as_solved(scope, lambda west: (0.4, 2.95) if west else (0.4, -2.95)))
+    found = scope.find_home(SITE)
+    assert found["dec_home_error_deg"] == pytest.approx(-2.95, abs=0.05) and found["fits"]
+    assert found["ra_home_error_deg"] == pytest.approx(0.4, abs=0.05) and len(found["rows"]) == 6
+    assert "truehome --dry-run" in capsys.readouterr().out
+    plan = mount.plan_true_home()
+    assert plan["would_move"] and plan["dec_axis_deg"] == pytest.approx(92.95, abs=0.05)
+    assert plan["ra_axis_deg"] == pytest.approx(-0.4, abs=0.05) and "tracking off" in plan["warnings"][0]
+    scope.true_home()
+    ra_axis, dec_axis = scope.axes()
+    assert mount.wrap(ra_axis) == pytest.approx(-0.4, abs=0.1) and dec_axis == pytest.approx(92.95, abs=0.1)
+    assert "Mark both joints now" in capsys.readouterr().out
+
+
+def test_truehome_moves_only_on_a_measurement_from_this_session(scope):
+    scope.save_clock(SITE)
+    fit = {"ra_home_error_deg": 0.4, "dec_home_error_deg": -2.95, "rms_deg": 0.02, "fits": True,
+           "goes_to": {"ra_axis_deg": -0.4, "dec_axis_deg": 92.95}}
+    for change, words in (({"saved": time.time() - 3 * 3600}, "two hours old"),
+                          ({"saved": json.loads(mount.CLOCK_FILE.read_text())["saved"] - 60}, "before the handset"),
+                          ({"saved": time.time(), "fits": False, "rms_deg": 0.6}, "did not fit")):
+        mount.HOME_FILE.write_text(json.dumps(dict(fit, **change)))
+        with pytest.raises(interface.Refusal) as refused:
+            scope.true_home()
+        assert words in refused.value.message and scope.at_home(), words
+    mount.HOME_FILE.write_text(json.dumps(dict(fit, saved=time.time())))
+    mount.LOCK_FILE.write_text("testing")
+    with pytest.raises(interface.Refusal) as refused:
+        scope.true_home()
+    assert refused.value.code_name == "MOTION_LOCKED" and scope.at_home()
+
+
+def test_by_day_the_sensors_own_specks_are_not_taken_for_stars(evidence):
+    # As on the first real frames: a bright sky with the same specks in every frame.
+    specks = np.zeros((1100, 1300))
+    ys, xs = rng.integers(20, 1080, 80), rng.integers(20, 1280, 80)
+    for dy in range(3):
+        for dx in range(3):
+            specks[ys + dy, xs + dx] = 400
+    sky = lambda seed: 9000 + np.random.default_rng(seed).normal(0, 12, (1100, 1300)) + specks
+    assert moved.judge(sky(1), sky(2))["verdict"] == "same"            # gone by its stars, it would stop a working mount
+    assert moved.judge(sky(1), sky(2), by_stars=False)["by"] != "stars"
+    # By day nothing is stopped on the pictures' say-so, however alike they are: it is recorded, with the pair.
+    watch = moved.Watch(daylight=True)
+    for seed in (1, 2, 3, 4, 5):
+        watch.check(sky(seed), 3.0)
+    kept = evidence()
+    assert len(kept) == 4 and all(k["recorded_only"] and k["by"] != "stars" for k in kept)
+    assert len(list(moved.PAIRS.glob("*.jpg"))) >= 1 or all(k["verdict"] != "same" for k in kept)
+
+
+def test_a_lead_that_comes_out_is_a_refusal_that_says_what_to_do(scope, monkeypatch):
+    def gone(command):
+        raise OSError(5, "Input/output error")
+    monkeypatch.setattr(scope.s, "write", gone, raising=False)
+    monkeypatch.setattr(scope.s, "reset_input_buffer", lambda: None, raising=False)
+    with pytest.raises(interface.Refusal) as refused:
+        scope.axes()
+    assert refused.value.code_name == "MOUNT_NOT_CONNECTED" and "switch the mount off at the mount" in refused.value.message

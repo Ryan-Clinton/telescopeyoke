@@ -20,10 +20,12 @@ The account of everything tried so far, feature by feature, is at the end:
 | 8 | How long is the shutter really open? | `./camera_test.py --timing` (cap on, any time), then `./camera_test.py --trail` on a field of bright stars away from the pole. | Timing by hand on 6 October: each second asked added 0.63 s to a frame. No trail yet. |
 | 9 | Does the sky's drift answer the Dec motor in proportion? | `./mount.py response`: five creeps, three measurements at each, about 35 minutes on one target. | Not yet run. The three readings of 5 October (below) fit no one explanation. |
 | 10 | Is one pointing correction for each side of the meridian enough? | `./mount.py pointing`: plate solves at -4, -2, -1, +1, +2 and +4 hours. | Not yet run. On 6 October the east side was 5.8° out in Dec and the west 0.2°, from one place each. |
-| 11 | Does a stalled mount get caught, with no false alarms on a working one? | Run `./horizon.py --trace` and a `goto --solve` on a working mount and see that neither stops; the verdict of each comparison is in the survey's log. | Not yet run. The check has seen made-up frames only. |
+| 11 | Does a stalled mount get caught, with no false alarms on a working one? | Run `./horizon.py --trace` and a `goto --solve` on a working mount and see that neither stops; the verdict of each comparison is in the survey's log. | One real record, by day, and it showed a fault: see 7 October 2026 below. By night, not yet run. |
 | 12 | How true is a panorama's skyline? | Tie a panorama to the compass with two marks (`./panorama.py`), then `./horizon.py --trace` to check it at the bearings where it bends. | Not yet run. |
 | 13 | Does the daytime search find Polaris once the axis is close? | `./polaris.py find` on a clear afternoon after a night alignment, the tripod not moved. It looks within 1.6° by itself. | Not yet run. Two searches on 6 October, with the axis several degrees out, found nothing. |
 | 14 | Does a whole night work on Windows? | Mount and camera together: GoTo with centring, focus, a run. | Not yet run. |
+| 15 | Does `findhome` find the home position, and does marking it hold? | After polar alignment: `./mount.py findhome`, `./mount.py truehome`, mark, restart on the marks, `./mount.py findhome` again. The second should read under 0.1°. | Not yet run. Two pointing errors from 6 October (Dec -6.1° east, -0.2° west) hint at a home about 3° out, but they were taken 75 minutes apart with the bolts turned between, so they prove nothing. |
+| 16 | Does the handset take its clock from the computer? | `./mount.py settime` with the handset at its main menu, then read its date on its own screen. | Yes, once: 7 October 2026, at the main menu, it read back the computer's time to the second and its sidereal clock came to 0.01° from true. The date on its own screen was not looked at. |
 
 ## Why frames are slow: what has been checked
 
@@ -153,7 +155,7 @@ M31 from a back garden, polar axis about 9 degrees out, USB 2 lead.
 ## The next clear night
 
 The six measurements that put real figures into `./ty characterise`, in an
-order that wastes no setting-up. None has been made yet. About two hours.
+order that wastes no setting-up ([why this order](calibration.md)). None has been made yet. About two and a half hours.
 
 | Order | What | Command | Takes | Needs |
 |---|---|---|---|---|
@@ -161,13 +163,13 @@ order that wastes no setting-up. None has been made yet. About two hours.
 | 2 | Focus response on the USB 3 lead | `./focus.py --field`, then `./focus.py --report` | 10 minutes | A rich field. Turn through focus and back until "Focus good". |
 | 3 | Polar repeatability | `./mount.py goto NAME --solve` on a star east of south, then `./polaralign.py --step 12 --repeat 5` | 10 minutes | The bolts left alone throughout. |
 | 4 | Real exposure from star trails | `./camera_test.py --trail` | 1 minute | Where step 3 left it: bright stars, away from the pole. |
-| 5 | Pointing each side of the meridian | `./mount.py pointing --dry-run`, then `./mount.py pointing` | 15 minutes | Someone watching: the tube swings over the pole once. |
+| 5 | The true home, which measures the pointing each side as it goes | `./mount.py findhome --dry-run`, then `./mount.py findhome`, `./mount.py truehome`, mark, restart, `./mount.py findhome` | 40 minutes | Someone watching: the tube swings over the pole once each time. A marker for the joints. |
 | 6 | Dec motor response | `./mount.py goto NAME --solve`, then `./mount.py response` | 35 minutes | One target, left alone. |
 
 Movement checking needs no step of its own: steps 3 and 5 are judged by
 their plate solves as they run, and each judgement goes into
-`cache/moved_log.jsonl`. Afterwards `./ty characterise` should read 9 or 10
-of 12, and the results go in the table above.
+`cache/moved_log.jsonl`. Afterwards `./ty characterise` should read 10 or 11
+of 13, and the results go in the table above.
 
 ## What to look for in the movement check's first real records
 
@@ -421,3 +423,46 @@ the pole once and must be watched the first time. `polaris.py find` now
 looks within 1.6° when `polaralign.py` put the axis 0.2° from the pole in
 the last fortnight; that assumes the tripod has not been moved, which
 nothing checks.
+
+### By day, 7 October 2026
+
+Two hours of blue sky and then cloud and rain, with the mount set down on
+the marks made on the ground the night before, home set by eye, and the
+focuser not touched since the stars.
+
+- **`mount.py nudge`** was written that morning because there was no small
+  move among the checked commands. Its first run on the real mount tipped
+  the tube 5° and brought it back; the person beside it saw it turn.
+- **`mount.py settime`** was run once with the handset at its main menu. The
+  handset took the date, time and position, read the time back to the
+  second, and its sidereal clock then stood 0.01° from the true one.
+- **A third daytime search for Polaris**: 246 looks in 40 minutes, about
+  seven seconds each, under clear sky (blue over red about 2.4, exposures of
+  13 ms), out to nearly 3° from the home position, ended by cloud over the
+  pole. No star. Twenty-one points crossed the threshold, and every one was
+  one of three blemishes that sit at the same place in the frame wherever
+  the tube points (near pixels 2704, 545; 2675, 1408; and 1930, 1810 of the
+  half-size picture); each was thrown out, either for not being there twice
+  or because it did not move when the tube was tipped. That was the first
+  use of the tipping on the real mount, and it rejected what it should.
+  Nothing else in any frame stood out more than 9, and nothing was narrower
+  than 24 pixels, where a focused star would be about 5. So either Polaris
+  lay outside 3° of where the tube pointed at home, or the focus is out; the
+  frames cannot say which. The search spends about a quarter of its looks
+  re-testing those three blemishes, which it could learn to leave alone.
+- **`horizon.py --trace --daylight`** made three looks, all at bearing 0°,
+  72° to 75° up, all read as open sky under cloud, before rain stopped it.
+  No skyline was kept.
+- **The movement check's first real record** came from those looks, and it
+  was nearly wrong. Going by "stars", it found 60 specks in each of two
+  bright frames 3° apart, and 47% of them were in the same place: the
+  sensor's and the optics' own marks, not the sky's. At 60% it would have
+  called a working mount stuck. So by day the check no longer goes by stars
+  at all, and what it makes of the detail is recorded
+  (`cache/moved_log.jsonl`, `cache/moved/`) and never stops anything, until
+  real frames have shown how to tell dust shadows from a view that has not
+  changed. By night it is as it was, and still untried.
+- **A lead was knocked out during a move home.** The command died with a
+  traceback. It is now a refusal, `MOUNT_NOT_CONNECTED`, that says nothing
+  more can be sent, a stop included, and to switch the mount off at the
+  mount if a motor is still turning.

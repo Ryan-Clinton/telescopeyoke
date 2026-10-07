@@ -71,7 +71,10 @@ the tube a twentieth of a degree twice to see a candidate move with the sky, and
 turns the RA axis to five readings and back, and gives the polar axis's error roughly; `--watch N` then looks N
 more times without moving while the bolts are turned. All take `--dry-run` and `--json`. `polaralign.py` slews about 25° twice and back to measure the polar axis's
 error; it checks all three positions against the limits first, and takes
-`--dry-run` and `--json`; `--repeat N` does it N times over to find the scatter. `ty mount pointing` slews
+`--dry-run` and `--json`; `--repeat N` does it N times over to find the scatter. `ty mount findhome` makes the same
+slews as `pointing` and works out where home really is; `ty mount truehome` then goes there, only on a
+measurement made in the same session, and holds. `ty mount settime` sets the handset's clock and position and
+moves nothing. `ty mount nudge` tips the tube 5° from home and back. `ty mount pointing` slews
 to six hour angles, three each side of the meridian, plate-solving at each, and swings the tube over the pole
 once; check it with `--dry-run` first. `ty mount response` slews nothing but creeps the Dec motor at up to
 1 arcsecond a second for about 35 minutes. `camera_test.py --trail` stops the mount following the sky for one

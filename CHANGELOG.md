@@ -5,10 +5,21 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
 
 ## Not yet released
 
+- Fixed: a handset lead that comes out, or was never in, is a refusal that
+  says what to do (`MOUNT_NOT_CONNECTED`), where it was a traceback.
+- **`./mount.py findhome` and `truehome`** (`docs/calibration.md`): after a
+  polar alignment, one run of plate solves either side of the meridian
+  gives where the home position really is, apart from a tube out of square
+  and what is left of the polar error; the mount is then driven there for
+  the joints to be marked, and a second run after a restart shows what is
+  left. Nothing remembered from earlier is used, and nothing moves except on
+  a measurement from the same session that fitted. Simulated mount only.
+- `docs/calibration.md`: setting a mount up in order, from a rough level to
+  a marked home, and why `settime` is not automatic.
 - `./mount.py settime` gives the handset this computer's date and time and
   the site's position, so they need not be typed on its keypad: press ENTER
-  through its start-up screens and run it. Moves nothing. Tested on the
-  simulated handset.
+  through its start-up screens and run it. Moves nothing. Run once on the
+  real handset, where it worked.
 - `./mount.py nudge`: from home, tips the tube 5° on the Dec axis and brings
   it back, with the same dry run, lock and limits as any move. The smallest
   move there is, for a person beside the mount to see that it really turns.
@@ -17,7 +28,8 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
   correction changes nothing, a polar measurement or pointing survey whose
   plate solves come back the same, and a skyline survey whose pictures do
   not change now stop the mount and refuse with `MOUNT_NOT_MOVING`
-  (`moved.py`). Tried on made-up frames only.
+  (`moved.py`). By day it only records what it sees: its first real frames
+  showed the optics' own marks passing for an unchanged view.
 - **Measurements in place of assumptions**, each one command, none yet run
   on the real mount: `./polaralign.py --repeat 5` (does the polar
   measurement repeat?), `./camera_test.py --timing` and `--trail` (how long

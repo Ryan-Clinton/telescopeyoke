@@ -273,6 +273,15 @@ ACTIONS = {
                      "says": "Five polar measurements one after another, to see how well they agree: each "
                              "slews 12° away from the meridian twice and returns. Leave the bolts alone until "
                              "it has finished. About ten minutes."},
+    "find-home": {"label": "Find the true home position", "uses": "mount", "moves": True,
+                  "command": lambda p: ["mount.py", "findhome"],
+                  "says": "After polar alignment. The mount goes to six places, three each side of the "
+                          "meridian, and plate-solves at each, to work out where home really is. The tube "
+                          "swings over the pole once. Nothing is changed by it."},
+    "true-home": {"label": "Go to the true home position", "uses": "mount", "moves": True,
+                  "command": lambda p: ["mount.py", "truehome"],
+                  "says": "The mount goes to the home position just measured and holds there. Mark both "
+                          "joints, then switch the handset off and on with the mount on its marks."},
     "pointing-survey": {"label": "Pointing survey", "uses": "mount", "moves": True,
                         "command": lambda p: ["mount.py", "pointing"],
                         "says": "The mount goes to six places, three each side of the meridian, and plate-solves "
@@ -306,7 +315,7 @@ ACTIONS = {
 # it. These do not: they test or set up real equipment.
 NOT_IN_DEMO = ("camera-setup", "camera-capabilities", "camera-throughput", "camera-gain-sweep",
                # The pretend sky does not turn and the pretend camera keeps perfect time.
-               "camera-timing", "camera-trail", "creep-response", "pointing-survey",
+               "camera-timing", "camera-trail", "creep-response", "pointing-survey", "find-home", "true-home",
                "calibrate", "sync", "drift", "compensate",
                # Each demo command starts a fresh pretend mount at home, so there
                # is no "where it was pointing" for a landmark to be remembered at.
@@ -321,7 +330,8 @@ WORKSTATION = ("camera-setup", "camera-capabilities", "camera-throughput", "came
                "polar", "point", "landmark-remember", "landmark-check", "restack",
                "polaris-check", "polaris-find", "polaris-align",
                "drift", "compensate", "sync", "open-settings",
-               "polar-repeat", "pointing-survey", "creep-response", "camera-timing", "camera-trail")
+               "polar-repeat", "pointing-survey", "creep-response", "camera-timing", "camera-trail",
+               "find-home", "true-home")
 # Orders that have a run move the mount or change its motors.
 MOVING_ORDERS = ("run-recentre", "run-assist-on", "run-assist-off")
 

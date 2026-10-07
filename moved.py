@@ -89,7 +89,7 @@ def scale():
     return math.degrees(2 * equipment["camera"]["pixel_size_um"] / 1000 / equipment["scope"]["focal_length_mm"])
 
 
-def judge(before, after):
+def judge(before, after, by_stars=True):
     """Compare two brightness pictures. Returns {"verdict": "same" if they
     show the same view, "changed" if they show different ones, None if
     neither has anything to go by (blank sky by day, cloud by night); "by":
@@ -97,7 +97,13 @@ def judge(before, after):
     "shift_px", how far the view moved, where that could be measured."""
     if before.shape != after.shape:
         return {"verdict": None, "by": None}
-    a, b = _stars(before), _stars(after)
+    # By day there are no stars, and what the star finder picks out of a
+    # bright sky is the sensor's own specks, which stay put whatever the
+    # telescope does: on the first real frames, under cloud on 7 October
+    # 2026, it "found" 60 in each of two frames 3° apart and 47% of them
+    # were in the same place. So by day only the detail is gone by, and
+    # (see Watch) even that is only recorded.
+    a, b = (_stars(before), _stars(after)) if by_stars else (np.zeros((0, 2)), np.zeros((0, 2)))
     found = {"by": "stars", "stars_before": len(a), "stars_after": len(b)}
     if len(a) >= STARS:
         if not len(b):
@@ -172,8 +178,14 @@ def refusal(what):
 class Watch:
     """Holds the last picture and judges each new one against it."""
 
-    def __init__(self, patience=PATIENCE):
+    def __init__(self, patience=PATIENCE, daylight=False):
         self.patience, self.before, self.stuck, self.verdicts = patience, None, 0, []
+        # By day there are no stars to go by, and the detail in a bright sky
+        # is partly the telescope's own: dust on the optics throws shadows
+        # that sit in the same place in every frame. Until real frames have
+        # shown how to tell those from a view that has not changed, a "same"
+        # by day is recorded and never stops anything.
+        self.daylight = daylight
 
     def check(self, lum, turned_deg, where=""):
         """Call with the picture taken after a move of `turned_deg` since
@@ -182,17 +194,20 @@ class Watch:
         before, self.before = self.before, lum
         if before is None or turned_deg < LEAST or config.DEMO:
             return None
-        found = judge(before, lum)
+        found = judge(before, lum, by_stars=not self.daylight)
         verdict = found["verdict"]
         self.verdicts.append(verdict)
         # How far the view moved, beside how far the mount was turned. Two
         # different views share nothing to measure a shift by: all that is
         # known then is that it moved more than they overlap.
         seen = round(found["shift_px"] * scale(), 3) if "shift_px" in found else None
-        log(dict(found, where=where, expected_deg=round(turned_deg, 2), observed_deg=seen))
+        log(dict(found, where=where, expected_deg=round(turned_deg, 2), observed_deg=seen,
+                 recorded_only=self.daylight))
         if verdict == "changed":
             self.stuck = 0
             confirm("the view changed after a move")
+        elif verdict == "same" and self.daylight:
+            _keep_pair(before, lum, time.strftime("%Y%m%d-%H%M%S"))
         elif verdict == "same":
             self.stuck += 1
             _keep_pair(before, lum, time.strftime("%Y%m%d-%H%M%S"))

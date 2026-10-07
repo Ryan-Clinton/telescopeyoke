@@ -861,13 +861,16 @@ function drawKnowledge() {
                                    { [item.plan ? "data-plan" : "data-action"]: item.action,
                                      "data-needs": ["camera-timing", "focus"].includes(item.action) ? "camera" : "mount" }))
       : el("span", { class: "quiet", text: item.what.startsWith("The skyline") ? "On the Horizon screen" : "Checked as it goes" });
+    // A home that has been measured can be driven to, to be marked.
+    const mark = item.action === "find-home" && item.measured
+      ? el("button", { type: "button", text: "Go there, to mark it", "data-plan": "true-home", "data-needs": "mount" }) : null;
     return el("div", { class: "check" },
       el("span", { class: `mark ${item.measured ? "good" : "quiet"}`, text: item.measured ? "✓" : "?" }),
       el("span", {}, item.what,
          el("span", { class: "value", text: item.measured
            ? item.value + (item.age_days != null ? ` · ${item.age_days} days ago` : "")
            : `Not measured. In a terminal: ${item.how}` })),
-      start);
+      start, mark);
   }));
   gateAll();
 }

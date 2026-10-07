@@ -658,6 +658,7 @@ or "Measure again", that starts the application's action for it:
 | How long the shutter is really open | `camera_test.py --trail` | yes: tracking stops for one frame |
 | How quickly focusing answers; the star size good focus comes to | `focus.py` | no |
 | Pointing error on each side | `mount.py sync` | no |
+| Where the home position really is | `mount.py findhome`; once measured, a second button, "Go there, to mark it", starts `mount.py truehome` | yes, both |
 | Whether one correction for each side is enough | `mount.py pointing` | yes |
 | How far the polar axis is from the pole | `polaralign.py` | yes |
 | How well that measurement repeats | `polaralign.py --repeat 5 --step 12` | yes |
@@ -665,7 +666,9 @@ or "Measure again", that starts the application's action for it:
 | The skyline | none: the Horizon screen | |
 | That the telescope turns when the mount says it has | none: checked as other things run | |
 
-None of the five that test real equipment runs in the demo. The screen has
+The lines are in the order the work is done (`docs/calibration.md`): polar
+alignment, home, pointing, then the drift, the camera, the focus and the
+skyline. None of those that test real equipment runs in the demo. The screen has
 been drawn against the demo's data in a test window; its buttons have not
 been pressed with a real mount.
 

@@ -27,6 +27,14 @@
                           meridian, plate-solve at each and say how far out
                           the aim is: is one correction for each side enough?
                           The tube swings over the pole once.
+    ./mount.py findhome   after polar alignment: plate-solve at six hour angles,
+                          three each side of the meridian, in one run, and work
+                          out from them where the home position really is.
+                          The tube swings over the pole once.
+    ./mount.py truehome   drive to the home position findhome has just found,
+                          for the two joints to be marked there. Then switch
+                          the handset off and on with the mount on its marks,
+                          and run findhome again to see what is left.
     ./mount.py sync       photograph the sky where it is now, work out the real
                           aim, and remember the error for later GoTos. Do this
                           once after setting up, on any patch of stars.
@@ -80,6 +88,10 @@ DRIFT_FILE = config.DATA / "cache" / "drift_model.json"
 # What `response` and `pointing` found, for looking at afterwards.
 RESPONSE_FILE = config.DATA / "cache" / "creep_response.json"
 SURVEY_FILE = config.DATA / "cache" / "pointing_survey.json"
+HOME_FILE = config.DATA / "cache" / "home_fit.json"      # what `findhome` found, for `truehome`
+HOME_FRESH = 2 * 3600     # seconds a home measurement may be acted on
+HOME_MOST = 10.0          # degrees: a home further out than this is not believed
+HOME_FITS = 0.15          # degrees: the model fits when the places sit this close to it
 CREEPS = (0.0, -0.25, -0.5, -0.75, -1.0)    # arcseconds a second, for `response`
 SURVEY_HOURS = (-4.0, -2.0, -1.0, 1.0, 2.0, 4.0)   # hours from the meridian, for `pointing`
 SURVEY_DEC = 40.0
@@ -142,7 +154,11 @@ class Mount:
                               f"No serial port matches \"{match}\" (serial_match under "
                               f"[mount] in config.toml). Ports seen: {seen or 'none'}. "
                               "Plug in the handset's lead, or name the port with --port.")
-            self.s = serial.Serial(port, 9600, timeout=2)
+            try:
+                self.s = serial.Serial(port, 9600, timeout=2)
+            except serial.SerialException:
+                raise Refusal("MOUNT_NOT_CONNECTED", f"The handset's lead is not there ({port} cannot be "
+                              "opened). Plug it in at both ends.")
         if self.ask(b"Kx") != b"x#":
             raise Refusal("HANDSET_NOT_ANSWERING", "The handset is not answering. Is it on "
                           "and past its start-up screens?")
@@ -173,9 +189,16 @@ class Mount:
             (self.recording / "steps.json").write_text(json.dumps(steps, indent=1), encoding="utf-8")
 
     def ask(self, command):
-        self.s.reset_input_buffer()
-        self.s.write(command)
-        return self.s.read_until(b"#", 64)
+        try:
+            self.s.reset_input_buffer()
+            self.s.write(command)
+            return self.s.read_until(b"#", 64)
+        except (OSError, serial.SerialException):
+            # 7 October 2026: a lead knocked out in the middle of a move home.
+            # Nothing more can be sent, a stop included.
+            raise Refusal("MOUNT_NOT_CONNECTED", "The handset's lead has come out in the middle of a command. "
+                          "Nothing can be sent to the mount, not even a stop: if a motor is still turning, "
+                          "switch the mount off at the mount. Then plug the lead back in.")
 
     def _pair(self, command):
         # The handset occasionally drops a reply while it is busy; ask again.
@@ -413,6 +436,49 @@ class Mount:
         SURVEY_FILE.write_text(json.dumps(found, indent=1), encoding="utf-8")
         self.say(found["verdict"])
         return found
+
+    def find_home(self, site, hours=SURVEY_HOURS, dec=SURVEY_DEC, skyline=None):
+        """Measure where the home position really is. One uninterrupted run
+        of plate solves either side of the meridian (pointing_survey), and a
+        fit of home_fit()'s model to them. Nothing remembered from earlier is
+        used. Returns the fit and keeps it for true_home()."""
+        survey = self.pointing_survey(site, hours, dec, skyline)
+        found = home_fit(survey["rows"], dec)
+        found.update(saved=time.time(), dec_deg=dec, rows=survey["rows"],
+                     goes_to={"ra_axis_deg": round(wrap(HOME_RA_AXIS - found["ra_home_error_deg"]), 3),
+                              "dec_axis_deg": round(HOME_DEC_AXIS - found["dec_home_error_deg"], 3)})
+        HOME_FILE.parent.mkdir(parents=True, exist_ok=True)
+        HOME_FILE.write_text(json.dumps(found, indent=1), encoding="utf-8")
+        self.say(f"Home is out by {found['ra_home_error_deg']:+.2f}° on the RA axis and "
+                 f"{found['dec_home_error_deg']:+.2f}° on the Dec axis. The {found['places']} places sit "
+                 f"{found['rms_deg']:.2f}° from that account of them"
+                 + (", which fits." if found["fits"] else
+                    f", which is more than {HOME_FITS:g}°: something else is going on, and the mount will "
+                    "not be driven to a home worked out from this."))
+        if found["fits"]:
+            size = math.hypot(found["ra_home_error_deg"], found["dec_home_error_deg"])
+            self.say("That is close enough to mark as it stands." if size < 0.1 else
+                     "Next: ./mount.py truehome --dry-run, then ./mount.py truehome, and mark both joints there.")
+        return found
+
+    def true_home(self):
+        """Drive to the home position find_home() has just measured, by the
+        axis readouts, and hold there with tracking off, for the joints to
+        be marked. The handset still believes its old home until it is
+        switched off and on with the mount on those marks."""
+        plan = plan_true_home()          # refuses here, before anything moves
+        # Home first, as ./mount.py home goes, then the small step from there:
+        # every later setting of home by the marks is then approached the same way.
+        self.home()
+        with self.watching():
+            self.seek(DEC, plan["dec_axis_deg"])
+            self.seek(RA, plan["ra_axis_deg"])
+        self.tracking(False)
+        ra_axis, dec_axis = self.axes()
+        self.say(f"At the measured home: the axes read RA {wrap(ra_axis):+.2f}°, Dec {dec_axis:.2f}°. Mark both "
+                 "joints now. Then switch the handset off and on with the mount on its marks, press ENTER "
+                 "through to the main menu, run ./mount.py settime, polar-align if the tripod was moved, and "
+                 "run ./mount.py findhome again: it should find home within a tenth of a degree.")
 
     def compensate(self, site):
         """Wonky alignment mode: measure how far the polar axis is out, say
@@ -874,6 +940,78 @@ def pointing_summary(rows, enough=ENOUGH):
             "verdict": verdict}
 
 
+def home_fit(rows, dec):
+    """Where the home position really is, from a pointing survey's rows
+    ({"hour_angle_h", "side", "ha_error_deg", "dec_error_deg"}) at one
+    declination. The handset takes the place it was switched on at for home:
+    RA axis 0°, Dec axis 90°. If the mount was really `a` and `e` degrees
+    from there, every axis reading is out by that much ever after, and a
+    plate solve at a place of hour angle h shows, in degrees,
+
+        hour angle error =  a  +  s c / cos(dec)  -  tan(dec) (p cos h + q sin h)
+        Dec error        =  s e               +  p sin h  -  q cos h
+
+    where s is +1 on the east side and -1 on the west, with the tube swung
+    over the pole: a Dec axis that reads wrong moves the aim one way on one
+    side and the other way on the other. c is the tube not being square to
+    the Dec axis, which also changes sides; p and q are what is left of the
+    polar axis's error, which changes smoothly with hour angle. Places at
+    several hour angles on both sides tell the five apart, by least squares.
+    The answer is only as good as `rms_deg`, how far the places sit from it."""
+    import numpy as np
+    shrink, slope = math.cos(math.radians(dec)), math.tan(math.radians(dec))
+    model, seen = [], []
+    for row in rows:
+        s = 1.0 if row["side"] == "east" else -1.0
+        h = math.radians(row["hour_angle_h"] * 15)
+        model.append([1, 0, s / shrink, -slope * math.cos(h), -slope * math.sin(h)])
+        seen.append(row["ha_error_deg"])
+        model.append([0, s, 0, math.sin(h), -math.cos(h)])
+        seen.append(row["dec_error_deg"])
+    sides = {name: sum(r["side"] == name for r in rows) for name in ("east", "west")}
+    if min(sides.values()) < 2 or len(rows) < 5:
+        raise Refusal("PLATE_SOLVE_FAILED", f"Too few places solved to find home: {sides['east']} on the east "
+                      f"side and {sides['west']} on the west. It needs two on each and five in all.")
+    model, seen = np.array(model), np.array(seen)
+    answer = np.linalg.lstsq(model, seen, rcond=None)[0]
+    rms = float(np.sqrt(np.mean((model @ answer - seen) ** 2)))
+    ra, dec_error, cone, p, q = (float(v) for v in answer)
+    believable = rms <= HOME_FITS and abs(ra) <= HOME_MOST and abs(dec_error) <= HOME_MOST
+    return {"ra_home_error_deg": round(ra, 3), "dec_home_error_deg": round(dec_error, 3),
+            "tube_not_square_deg": round(cone, 3), "polar_error_left_deg": round(math.hypot(p, q), 3),
+            "rms_deg": round(rms, 3), "places": len(rows), "fits": bool(believable)}
+
+
+def plan_true_home():
+    """What `truehome` would do, from the home measurement in hand. Raises a
+    Refusal if there is none, if it was made before the handset was last set
+    up or more than two hours ago, or if its model did not fit: a move is
+    only ever made on a measurement from this session. Needs no hardware."""
+    if LOCK_FILE.exists():
+        raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text(encoding='utf-8').strip()}")
+    try:
+        found = json.loads(HOME_FILE.read_text(encoding="utf-8"))
+        since = json.loads(CLOCK_FILE.read_text(encoding="utf-8"))["saved"]
+    except (OSError, ValueError, KeyError):
+        raise Refusal("INVALID_REQUEST", "Home has not been measured this session. Run ./mount.py findhome first.")
+    age = time.time() - found["saved"]
+    if found["saved"] < since or age > HOME_FRESH:
+        raise Refusal("INVALID_REQUEST", "The home measurement is from before the handset was last set up, or "
+                      "more than two hours old. Run ./mount.py findhome again; nothing is moved on an old one.")
+    if not found["fits"]:
+        raise Refusal("INVALID_REQUEST", f"The last home measurement did not fit ({found['rms_deg']:.2f}° from "
+                      "its own account of the places). Run ./mount.py findhome again on a steadier sky.")
+    goes = found["goes_to"]
+    return {"would_move": True, "safe": True, "ra_axis_deg": goes["ra_axis_deg"], "dec_axis_deg": goes["dec_axis_deg"],
+            "measured_minutes_ago": round(age / 60),
+            "warnings": [f"Goes home by the axis readouts, then {abs(found['dec_home_error_deg']):.2f}° on the Dec "
+                         f"axis and {abs(found['ra_home_error_deg']):.2f}° on the RA axis, to where home was "
+                         "measured to be, and holds there with tracking off. If the tube is on the west side "
+                         "it comes back over the pole on the way, as for ./mount.py home.",
+                         "The readings are the motors' own, so the gears' slack (a few arcminutes) is not in "
+                         "them; findhome after the restart shows what is left."]}
+
+
 def use_demo_cache():
     """Keep the simulated mount's measurements apart from the real one's."""
     global CLOCK_FILE, POINTING_FILE, DRIFT_FILE
@@ -1012,6 +1150,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("command", choices=["status", "settime", "nudge", "zenith", "home", "stop", "goto", "point",
                                        "sync", "drift", "compensate", "response", "pointing",
+                                       "findhome", "truehome",
                                        "sethome", "directions"])
     ap.add_argument("target", nargs="*",
                     help="object for goto (e.g. M81), or bearing and height for point")
@@ -1031,7 +1170,7 @@ def main():
                     help="with response: the creeps to try, in arcseconds a second")
     ap.add_argument("--repeats", type=int, default=3, help="with response: measurements at each creep")
     ap.add_argument("--hours", type=float, nargs="+", default=list(SURVEY_HOURS), metavar="H",
-                    help="with pointing: the hour angles to visit, in hours from the meridian (east is negative)")
+                    help="with pointing and findhome: the hour angles to visit, in hours from the meridian (east is negative)")
     ap.add_argument("--dec", type=float, default=SURVEY_DEC, help="with pointing: the declination to visit them at")
     ap.add_argument("--record", metavar="FOLDER",
                     help="with goto --solve: keep each solve frame and message there, "
@@ -1040,7 +1179,7 @@ def main():
 
     args.demo = args.demo or config.DEMO
     if args.demo and not config.DEMO:
-        if args.command in ("sync", "drift", "compensate", "response", "pointing") and not args.dry_run:
+        if args.command in ("sync", "drift", "compensate", "response", "pointing", "findhome") and not args.dry_run:
             ap.error(f"{args.command} needs the real camera; there is no demo of it")
         if args.command in ("sethome", "directions"):
             ap.error(f"{args.command} is for a real mount reached without its handset")
@@ -1085,7 +1224,9 @@ def dry_run(args, site):
                     "warnings": [f"No slews. The Dec motor creeps at up to {max(abs(r) for r in args.rates):g} "
                                  f"arcseconds a second for about {minutes} minutes, so the target slides a "
                                  "little in the frame; the creep is put back as it was at the end."]}
-        if args.command == "pointing":
+        if args.command == "truehome":
+            return plan_true_home()
+        if args.command in ("pointing", "findhome"):
             spots, notes = plan_survey(site, args.hours, args.dec, config.load().get("horizon") if not args.demo else None)
             return {"would_move": True, "safe": True, "hour_angles_h": spots, "dec_deg": args.dec,
                     "warnings": [f"Slews to {len(spots)} places at Dec {args.dec:+g}°, plate-solving at each."] + notes}
@@ -1129,7 +1270,8 @@ def act(args, site):
     """Carry a command out on the mount (or the simulated one). Returns the
     mount's state afterwards."""
 
-    if args.command in ("nudge", "zenith", "home", "goto", "point", "compensate", "pointing", "directions") and LOCK_FILE.exists():
+    if args.command in ("nudge", "zenith", "home", "goto", "point", "compensate", "pointing", "findhome",
+                        "truehome", "directions") and LOCK_FILE.exists():
         raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text(encoding='utf-8').strip()}")
 
     mount = Mount(args.port, watch=not args.no_watch, demo=args.demo)
@@ -1161,6 +1303,10 @@ def act(args, site):
                 mount.creep_response(site, args.rates, args.repeats)
             elif args.command == "pointing":
                 mount.pointing_survey(site, args.hours, args.dec, config.load().get("horizon"))
+            elif args.command == "findhome":
+                mount.find_home(site, args.hours, args.dec, config.load().get("horizon"))
+            elif args.command == "truehome":
+                mount.true_home()
             elif args.command == "sethome":
                 mount.set_home()
             elif args.command == "directions":

@@ -51,7 +51,11 @@ table and [docs/validation.md](docs/validation.md) the full account.
 telescope really ended up, corrects, and repeats until the target is in the
 middle. On its first real night an EQ3 that started about ten degrees out
 centred M27 in three corrections: 107′ off, then 6′, then 1′
-([the run is below](#see-it-working)). *Proven under real stars.*
+([the run is below](#see-it-working)). And after a polar alignment it can
+measure where home really is, from plate solves either side of the meridian,
+drive there, and have you mark the joints, so that home is two marks lined
+up from then on ([Calibrating a mount](docs/calibration.md)). *The centring
+is proven under real stars; finding home has run only on the simulated mount.*
 
 **Manual focuser?** Keep your hand on it and listen. Every frame, once it
 has been measured, gives a click: your last turn has been seen. A tone
@@ -80,7 +84,7 @@ should, then turns the RA axis with the star in view to find where the axis
 really points and which way to move each bolt. `landmark.py` remembers a
 distant chimney or aerial from a night when the mount was aligned, and by day
 turns back to it to recover the azimuth. *Experimental: the search has run
-on the real mount twice and has not yet found Polaris; the rest has run only
+on the real mount three times and has not yet found Polaris; the rest has run only
 on the simulated mount.*
 
 **Polar alignment still rough?** By night, three plate solves measure how
@@ -100,7 +104,8 @@ made, and a survey stared at one tree for half an hour. Now a GoTo whose
 correction changes nothing, a polar measurement whose plate solves come back
 the same, and a survey whose pictures do not change all stop with "the mount
 is not moving" instead of carrying on. *Written because it happened; tried
-on made-up frames only.*
+on made-up frames, and by day it only records what it sees, after its first
+real frames nearly fooled it.*
 
 **Tracking not good enough for long exposures?** It works out the longest
 exposure the mount can hold, takes many short ones, checks each as it
@@ -330,7 +335,7 @@ lock (`MOTION_LOCKED`) stops every rig at once.
 | `tonight.py` | Report for the night: darkness, Moon, weather verdict, ranked targets. `--html` writes the web page. |
 | `serve.py` | Serves the status page on port 8080: the night's report rebuilt every 10 minutes, and the imaging run, pictures and system panel refreshed every two seconds. |
 | `clouds.py` | Fetches the latest infrared satellite image with the site marked on it. |
-| `mount.py` | Moves the mount: `status`, `settime` (gives the handset this computer's date, time and the site's position, once you have pressed ENTER through its start-up screens), `nudge` (from home, tips the tube 5° and back, for someone beside it to see that it turns), `home`, `zenith`, `goto NAME [--solve]`, `point AZ ALT`, `sync`, `drift`, `compensate`, `stop`. `response` sets the Dec motor creeping at five rates and measures the drift at each, to see whether the sky answers in proportion; `pointing` plate-solves at six hour angles, three each side of the meridian, to see whether one correction for each side is enough. |
+| `mount.py` | Moves the mount: `status`, `settime` (gives the handset this computer's date, time and the site's position, once you have pressed ENTER through its start-up screens), `nudge` (from home, tips the tube 5° and back, for someone beside it to see that it turns), `home`, `zenith`, `goto NAME [--solve]`, `point AZ ALT`, `sync`, `drift`, `compensate`, `stop`. `response` sets the Dec motor creeping at five rates and measures the drift at each, to see whether the sky answers in proportion; `pointing` plate-solves at six hour angles, three each side of the meridian, to see whether one correction for each side is enough. `findhome` works out from one run of plate solves where the home position really is, and `truehome` drives there for the joints to be marked. |
 | `liveview.py` | Takes a frame every few seconds so the status page shows what the telescope sees now. Steps aside while `shoot.py` runs. |
 | `app.py` | TelescopeYoke, the application: one window with everything in it, started from the applications menu. `./app.py --demo` tries it with nothing plugged in. |
 | `console.py` | The same observing screens as a page in a browser, without the equipment set-up and tools: the companion to the application. This computer only. |
@@ -405,6 +410,7 @@ plan the night → GoTo → photograph → plate-solve (ASTAP) → correct → p
 
 | Page | What is in it |
 |---|---|
+| [Calibrating a mount, in order](docs/calibration.md) | Level roughly, polar-align, find the true home and mark it, measure the pointing each side, and check that the mount really turns. |
 | [How a picture is made](docs/imaging.md) | Calibration, frame checks, lining up, stacking, the quality pass. |
 | [Focusing by ear](docs/focus.md) | Turn the knob and the laptop talks you onto focus. |
 | [The mount is wonky; measure how wonky](docs/tracking.md) | Drift from a rough polar alignment, and how it is cancelled. |
@@ -481,7 +487,7 @@ against the simulated rig and the tests.
 | Focusing: measuring the stars | ✅ the reading fell from 11 to about 2 as focus was reached | ✅ | ✅ |
 | Focusing: click, tone and three levels | not yet | not yet | ✅ |
 | Drift model and Dec correction | ⚠️ an earlier, cruder version only | ⚠️ the same | ✅ |
-| Daytime Polaris | ⚠️ searched twice, Polaris not found | ⚠️ the search only | ✅ |
+| Daytime Polaris | ⚠️ searched three times, Polaris not found | ⚠️ the search only | ✅ |
 | Skyline from a phone panorama | does not need them | ⚠️ three real panoramas; not yet tied to the compass | ✅ |
 | The telescope's own skyline survey | ⚠️ torch trial only; no skyline measured | ⚠️ the same | ✅ |
 | Azimuth from a landmark | not yet | not yet | ✅ |

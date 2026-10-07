@@ -375,7 +375,7 @@ def eye(site, exposure, gain, daylight=False, torch=False):
     state = {"exposure": exposure, "reference": None}
     log = []
     import moved
-    watch, last = moved.Watch(), []      # what the last look saw, and where it was
+    watch, last = moved.Watch(daylight=daylight), []      # what the last look saw, and where it was
     field = config.field_height(config.hardware())    # degrees from the bottom of a frame to the top
 
     def by_day():
