@@ -227,13 +227,17 @@
         <figure><figcaption><b>LEFT AND RIGHT</b></figcaption><svg id="hands-azimuth" class="plot" viewBox="0 0 300 220"></svg><p id="hands-azimuth-words"></p></figure>
         <figure><figcaption><b>UP AND DOWN</b></figcaption><svg id="hands-altitude" class="plot" viewBox="0 0 300 220"></svg><p id="hands-altitude-words"></p></figure>
       </div>
-      <p class="quiet">After turning the bolts, say what you turned and measure again: that is how it learns what a turn does on this mount. Count the bolt you turned in (clockwise); leave a pair at 0 if you did not touch it.</p>
+      <h2>What did you turn?</h2>
+      <p class="quiet">After turning the bolts, say which one you turned in (clockwise) and how far, then measure again: that is how it learns what a turn does on this mount. The bolt you eased out to make room does not count.</p>
       <div class="buttons">
-        <label><span id="turned-azimuth-label">Azimuth: left bolt in</span> <input id="turned-azimuth" type="number" step="0.25" min="-30" max="30" value="0"> turns</label>
-        <label><span id="turned-altitude-label">Altitude: rear bolt in</span> <input id="turned-altitude" type="number" step="0.25" min="-30" max="30" value="0"> turns</label>
-        <button type="button" id="polar-again" data-needs="imaging" data-gate="polar">Measure again</button>
+        <label>Left and right: <select id="turned-azimuth-bolt"><option value="neither">neither bolt</option></select></label>
+        <label>by <select id="turned-azimuth-turns" class="turns"></select></label>
       </div>
-      <p class="quiet">Give the other bolt of a pair as a minus: the right bolt in half a turn is -0.5.</p>
+      <div class="buttons">
+        <label>Up and down: <select id="turned-altitude-bolt"><option value="neither">neither bolt</option></select></label>
+        <label>by <select id="turned-altitude-turns" class="turns"></select></label>
+      </div>
+      <div class="buttons"><button type="button" id="polar-again" data-needs="imaging" data-gate="polar">Measure again</button></div>
     </div>
     <h2>Before dark, from Polaris alone</h2>
     <p class="quiet">Polaris shows in a short exposure by day, when the plate solver has nothing to go by. Get the focus near first (Focus, on the most distant thing in view): a star out of focus will not show against a bright sky. Then see whether the sky is good enough, find the star from the home position, and measure. The measurement stays on the star and says how far there is still to go while you turn the bolts.</p>

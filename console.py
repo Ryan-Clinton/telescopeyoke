@@ -189,7 +189,18 @@ def pointing(params):
 def polar_measure(params):
     """A polar measurement, with the turns made on each pair of bolts since
     the last one if the person says what they were, to be learned from."""
-    turned = [number(params, key, -30, 30, 0) for key in ("azimuth_turns", "altitude_turns")]
+    import polaralign
+    turned = []
+    for axis in ("azimuth", "altitude"):
+        # The person says which bolt of the pair went in and how far; the
+        # sign polaralign.py wants (the first of the pair is plus) is made here.
+        said = params.get(axis) or {}
+        if not isinstance(said, dict):
+            raise Refused(f"{axis} is which bolt was turned in, and how far.")
+        first, second = polaralign.PAIRS[axis]
+        bolt = choice(said, "bolt", ("neither", first, second), "neither")
+        turns = number(said, "turns", 0, 30, 0)
+        turned.append(0 if bolt == "neither" else turns if bolt == first else -turns)
     return ["polaralign.py"] + (["--turned", f"{turned[0]:g}", f"{turned[1]:g}"] if any(turned) else [])
 
 

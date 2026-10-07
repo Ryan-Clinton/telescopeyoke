@@ -295,7 +295,8 @@ def guidance(azimuth, altitude, feet_apart_cm=None):
         if feet_apart_cm:
             # Three feet at the corners of a triangle: each is this far from the middle.
             tripod["cm_at_each_foot"] = round(feet_apart_cm / math.sqrt(3) * math.radians(abs(azimuth)), 1)
-            words += f": each foot moves about {tripod['cm_at_each_foot']:g} cm round the circle they stand on"
+            words += (f": all three feet go the same way round the circle they stand on, each about "
+                      f"{tripod['cm_at_each_foot']:g} cm along it (not one foot moved and the others left)")
         az.update(tripod=tripod, words=words + ". Then measure again.")
     alt = pair("altitude", altitude, "down" if altitude > 0 else "up")
     return {"azimuth": az, "altitude": alt, "view": VIEW,

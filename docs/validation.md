@@ -26,6 +26,7 @@ The account of everything tried so far, feature by feature, is at the end:
 | 14 | Does a whole night work on Windows? | Mount and camera together: GoTo with centring, focus, a run. | Not yet run. |
 | 15 | Does `findhome` find the home position, and does marking it hold? | After polar alignment: `./mount.py findhome`, `./mount.py truehome`, mark, restart on the marks, `./mount.py findhome` again. The second should read under 0.1°. | Not yet run. Two pointing errors from 6 October (Dec -6.1° east, -0.2° west) hint at a home about 3° out, but they were taken 75 minutes apart with the bolts turned between, so they prove nothing. |
 | 16 | Does the handset take its clock from the computer? | `./mount.py settime` with the handset at its main menu, then read its date on its own screen. | Yes, once: 7 October 2026, at the main menu, it read back the computer's time to the second and its sidereal clock came to 0.01° from true. The date on its own screen was not looked at. |
+| 17 | Can it predict what a turn of a bolt does? | During polar alignment: measure; turn the left azimuth bolt in exactly half a turn; measure again saying so (`--turned 0.5 0`, or the screen); then another half turn the same way and measure again. | Not yet run. If the second half turn moves the axis about as far as the first, the advice in turns can be believed. |
 
 ## Why frames are slow: what has been checked
 
@@ -162,6 +163,7 @@ order that wastes no setting-up ([why this order](calibration.md)). None has bee
 | 1 | Camera timing | `./camera_test.py --timing` | 3 minutes | Nothing: the cap can be on. Do it at dusk. |
 | 2 | Focus response on the USB 3 lead | `./focus.py --field`, then `./focus.py --report` | 10 minutes | A rich field. Turn through focus and back until "Focus good". |
 | 3 | Polar repeatability | `./mount.py goto NAME --solve` on a star east of south, then `./polaralign.py --step 12 --repeat 5` | 10 minutes | The bolts left alone throughout. |
+| 3a | What a turn of the azimuth bolts does (experiment 17) | Two half turns of one bolt, the same way, a measurement after each: `./polaralign.py --step 12 --turned 0.5 0` | 6 minutes | The bolts centred before the first measurement. |
 | 4 | Real exposure from star trails | `./camera_test.py --trail` | 1 minute | Where step 3 left it: bright stars, away from the pole. |
 | 5 | The true home, measured | `./mount.py findhome --dry-run`, then `./mount.py findhome` | 15 minutes | Someone watching: the tube swings over the pole once. Read each place's own miss, not only the rms, and look at the frame of any place it left out. |
 | 6 | Go there and mark it | `./mount.py truehome --dry-run`; if the readings are sane, `./mount.py truehome`; mark both joints | 5 minutes | A marker. |

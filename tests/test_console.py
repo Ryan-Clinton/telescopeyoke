@@ -290,8 +290,17 @@ def test_every_action_builds_exactly_its_command():
             console.command(action, bad)
     assert tail("camera-setup") == ["camera_setup.py", "--open"]
     assert tail("polar") == ["polaralign.py"] and console.moves("polar", {})
-    assert tail("polar", {"azimuth_turns": 0.5, "altitude_turns": -0.25}) == ["polaralign.py", "--turned", "0.5", "-0.25"]
-    assert tail("polar", {"azimuth_turns": 0, "altitude_turns": 0}) == ["polaralign.py"]
+    # The person says which bolt went in and how far; the plus and minus are made here, not asked for.
+    assert tail("polar", {"azimuth": {"bolt": "left", "turns": 0.5}, "altitude": {"bolt": "front", "turns": 0.25}}) == \
+        ["polaralign.py", "--turned", "0.5", "-0.25"]
+    assert tail("polar", {"azimuth": {"bolt": "right", "turns": 1}, "altitude": {"bolt": "neither", "turns": 2}}) == \
+        ["polaralign.py", "--turned", "-1", "0"]
+    assert tail("polar", {"azimuth": {"bolt": "neither", "turns": 0}}) == ["polaralign.py"]
+    for bad in ({"azimuth": {"bolt": "top", "turns": 1}}, {"azimuth": {"bolt": "left", "turns": -1}}, {"azimuth": "left"}):
+        with pytest.raises(console.Refused):
+            console.command("polar", bad)
+    page = (PAGE / "index.html").read_text(encoding="utf-8")
+    assert 'id="turned-azimuth-bolt"' in page and 'type="number" step="0.25"' not in page
     assert tail("point", {"bearing": "112.5", "height": 8}) == ["mount.py", "point", "112.5", "8"]
     assert tail("landmark-remember", {"name": "Old Chimney"}) == ["landmark.py", "remember", "old-chimney"]
     assert tail("landmark-check", {"name": "mast"}) == ["landmark.py", "check", "mast", "--watch", "40"]

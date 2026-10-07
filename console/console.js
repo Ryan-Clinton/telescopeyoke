@@ -761,7 +761,15 @@ function drawTripod(svg, advice) {
              el("line", { class: "was", x1: cx, y1: cy, x2: cx + (r - 8) * Math.sin(now), y2: cy - (r - 8) * Math.cos(now) }),
              el("text", { x: cx - 4, y: 22, text: "N" }), el("text", { x: 4, y: 14, text: "from above" }),
              el("text", { x: 4, y: 210, text: `turn the whole tripod ${advice.tripod.turn_deg}° ${advice.tripod.way}` }));
-  if (advice.tripod.cm_at_each_foot != null) parts.push(el("text", { x: 190, y: 14, text: `${advice.tripod.cm_at_each_foot} cm at each foot` }));
+  if (advice.tripod.cm_at_each_foot != null) {
+    // Every foot goes the same way round the circle, not one foot alone.
+    parts.push(el("text", { x: 176, y: 14, text: `all three feet: ${advice.tripod.cm_at_each_foot} cm` }),
+               el("text", { x: 176, y: 26, text: "each, round the circle" }));
+    for (let foot = 0; foot < 3; foot += 1) {
+      const a = foot * 2 * Math.PI / 3, way = advice.error_deg > 0 ? -1 : 1, b = a + way * 0.22;
+      parts.push(el("path", { class: "turn", d: `M ${cx + (r + 10) * Math.sin(a)} ${cy - (r + 10) * Math.cos(a)} A ${r + 10} ${r + 10} 0 0 ${way > 0 ? 1 : 0} ${cx + (r + 10) * Math.sin(b)} ${cy - (r + 10) * Math.cos(b)}` }));
+    }
+  }
   // The turn itself, as an arc from where it points to north.
   const start = { x: cx + 56 * Math.sin(now), y: cy - 56 * Math.cos(now) }, way = advice.error_deg > 0 ? -1 : 1;
   parts.push(el("path", { class: "turn", d: `M ${start.x} ${start.y} A 56 56 0 0 ${advice.error_deg > 0 ? 0 : 1} ${cx} ${cy - 56}` }),
@@ -780,14 +788,23 @@ function drawHands(found) {
     const part = advice[axis], svg = $(`hands-${axis}`);
     if (part.whole_tripod) drawTripod(svg, part); else drawBolts(svg, part);
     $(`hands-${axis}-words`).textContent = `Move the axis ${part.move} ${part.by_deg}°. ${part.words}`;
-    $(`turned-${axis}-label`).textContent = `${axis === "azimuth" ? "Azimuth" : "Altitude"}: ${part.bolts[0]} bolt in`;
+    // "Which bolt did you turn in?" in the pair's own names; no plus or minus for the person to get right.
+    const which = $(`turned-${axis}-bolt`);
+    if (which.options.length === 1) for (const name of part.bolts) which.append(el("option", { value: name, text: `the ${name} bolt, in` }));
+    const far = $(`turned-${axis}-turns`);
+    if (!far.options.length) for (const [turns, words] of TURNS) far.append(el("option", { value: turns, text: words }));
   }
 }
 
+const TURNS = [[0.25, "a quarter of a turn"], [0.5, "half a turn"], [0.75, "three quarters of a turn"], [1, "one turn"],
+               [1.5, "one and a half turns"], [2, "two turns"], [3, "three turns"], [4, "four turns"]];
+
 function measurePolar(again) {
-  const turns = (id) => (again ? Number($(id).value) || 0 : 0);
-  makePlan("polar", { azimuth_turns: turns("turned-azimuth"), altitude_turns: turns("turned-altitude") });
-  $("turned-azimuth").value = 0; $("turned-altitude").value = 0;
+  // What was turned since the last measurement, as the person would say it: which bolt went in, and how far.
+  const said = (axis) => (again ? { bolt: $(`turned-${axis}-bolt`).value, turns: Number($(`turned-${axis}-turns`).value) || 0 }
+                                : { bolt: "neither", turns: 0 });
+  makePlan("polar", { azimuth: said("azimuth"), altitude: said("altitude") });
+  $("turned-azimuth-bolt").value = "neither"; $("turned-altitude-bolt").value = "neither";
 }
 
 let shownLandmark = null;

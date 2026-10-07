@@ -55,7 +55,9 @@ alignment screen with a drawing of each bolt as a clock face, says:
   (`feet_apart_cm` under `[mount]`, or the Settings screen) it also says how
   far each foot moves: the feet stand on a circle whose radius is that
   distance over √3, and a turn of θ moves each one radius × θ along it.
-  Feet 87 cm apart and a turn of 10° is 8.8 cm.
+  Feet 87 cm apart and a turn of 10° is 8.8 cm. That is all three feet, the
+  same way round the circle, each by that much: not one foot moved 8.8 cm
+  and the others left where they were.
 - **Otherwise: which bolt to turn in, which to ease out first, and about how
   many turns**, once this mount's bolts have been learned. The two bolts of
   each pair are called left and right (azimuth) and rear and front
@@ -68,15 +70,31 @@ alignment screen with a drawing of each bolt as a clock face, says:
 - **It learns from what you tell it.** `./polaralign.py --turned 0.5 0` says
   that since the last measurement the left azimuth bolt went in half a turn
   and the altitude bolts were not touched (the right or the front bolt is a
-  minus); on the screen there are two boxes for the same. The change in the
+  minus). The screen never asks for a plus or a minus: for each pair it asks
+  which bolt you turned in, by name, and how far, from a quarter of a turn
+  to four turns. The change in the
   axis divided by the turns is kept (`cache/polar_bolts.json`, the last
   twelve for each pair), the middle figure is used, and the advice says how
   far apart the figures have been: bolts have slack, and bind under load, so
   "about" is meant.
 
-None of this has been used on the real mount yet. The size of the 2° limit,
-and whether a turn does the same thing at each end of a bolt's travel, are
-for the first real nights to say.
+None of this has been used on the real mount yet. Left for when real
+figures exist, and not built:
+
+- **Slack on reversing.** A bolt turned back the other way may do nothing
+  for the first part of a turn. If the kept figures show it (turns made
+  after a reversal moving the axis less than turns continued the same way),
+  the slack can be learned by itself and the advice can say "take up a
+  quarter turn, then half a turn more".
+- **The 2° limit.** It is a fixed first figure. With the bolts' travel
+  known, the choice between the bolts and the whole tripod could go by how
+  much travel is left on that side.
+- **Other mounts' bolts.** The drawings name bolts by where you stand, which
+  holds for any mount; drawings of a particular mount head would need a
+  description of each kind of mount, and there is one mount so far.
+
+The first test on a clear night is in [validation.md](validation.md),
+experiment 17.
 
 ## 3. The true home position
 

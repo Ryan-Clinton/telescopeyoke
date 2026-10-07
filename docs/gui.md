@@ -654,9 +654,12 @@ on the one to ease out first. The words under each say the same. An azimuth
 error over 2° draws the tripod from above instead, north at the top, with
 the axis as it is, the turn to make, and the centimetres at each foot when
 the feet's spacing is in the settings. Above the Measure button is the
-advice to centre the azimuth bolts first. Below the drawings, two boxes take
-the turns made since the last measurement and "Measure again" sends them
-with it (`polaralign.py --turned`), which is how a turn's effect is learned.
+advice to centre the azimuth bolts first. Below the drawings, "What did you
+turn?" asks, for each pair, which bolt was turned in (by name, or neither)
+and how far (a quarter of a turn to four turns), and "Measure again" sends
+that with the measurement (`polaralign.py --turned`), which is how a turn's
+effect is learned. The plus and minus the command takes are worked out by
+the console; the person is never asked for them.
 Drawn in a test window against made-up figures; not yet used at the mount.
 
 ### System

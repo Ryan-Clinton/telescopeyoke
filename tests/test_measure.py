@@ -623,6 +623,7 @@ def test_a_big_azimuth_error_is_for_turning_the_whole_tripod_with_centimetres_at
     # Feet 87 cm apart stand 50.2 cm from the middle; 10 degrees of that circle is 8.8 cm.
     assert west["tripod"]["cm_at_each_foot"] == pytest.approx(8.8, abs=0.05)
     assert "Centre the azimuth bolts, then turn the whole tripod 10° anticlockwise, seen from above" in west["words"]
+    assert "all three feet go the same way round" in west["words"] and "not one foot moved" in west["words"]
     east = polaralign.guidance(-4.0, 0.3)["azimuth"]
     assert east["move"] == "east" and east["tripod"]["way"] == "clockwise" and "cm_at_each_foot" not in east["tripod"]
     assert not polaralign.guidance(1.2, 0.3)["azimuth"]["whole_tripod"]          # within the bolts' reach

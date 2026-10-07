@@ -13,7 +13,8 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
   face, once the mount's bolts have been learned: `./polaralign.py --turned`,
   or two boxes on the screen, say what was turned, and the effect of a turn
   is worked out from the next measurement. Nothing is assumed about which
-  bolt does what. Not yet used on the real mount.
+  bolt does what. The screen asks which bolt was turned in and how far, by
+  name, never for a plus or a minus. Not yet used on the real mount.
 - **From box to first galaxy** (`docs/first-night.md`): a first night for
   someone who knows none of the words, with the explanations folded away and
   each step marked as proven on a real mount or not yet. Its companion,
