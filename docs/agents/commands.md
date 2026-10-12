@@ -92,6 +92,9 @@ and clear of the directions listed as blocked; `--dry-run` names the star.
 `snap.py`, `liveview.py`, `focus.py` (without `--field`), `solve.py`, `skywatch.py`,
 `calibrate.py`, `camera_test.py`, `shoot.py --no-recentre`.
 
+`focuser.py test` and `move` turn the focuser's motor, never the mount; `flash`
+loads the Nano's firmware. See `docs/focuser.md`.
+
 `camera_setup.py` gets the camera ready and is safe to run at any time: it
 checks the camera is plugged in and has a driver, copies Altair's library
 files out of their SDK zip into `vendor/altair/` if they are missing, and

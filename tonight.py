@@ -3,6 +3,7 @@
 
     ./tonight.py                 report for tonight (or the night in progress)
     ./tonight.py --date 2026-10-10
+    ./tonight.py --week          the weather verdict for each of the next seven nights
     ./tonight.py --json          machine-readable, for driving the mount
     ./tonight.py --html web/index.html
     ./tonight.py --offline       skip weather, seeing and comets
@@ -92,6 +93,28 @@ def weather_report(night, lat, lon, source=feeds):
         "clear_to": best[-1]["time"] if best else None,
         "clear_hours": len(best), "notes": notes, "hours": hours,
     }
+
+
+def week(cfg, demo=False, nights=7):
+    """The weather verdict for tonight and the nights after it, as (date,
+    report) pairs. The forecast reaches about a week; the far end of it is
+    a guide and no more."""
+    source = feeds
+    if demo:
+        import demo as source
+    site = cfg["site"]
+    first = sky.Night(cfg).date
+    out = []
+    for n in range(nights):
+        night = sky.Night(cfg, first + timedelta(days=n))
+        out.append((night.date, weather_report(night, site["latitude"], site["longitude"], source)))
+    return out
+
+
+def render_week(site, days):
+    out = [f"{site} - the week's nights", ""]
+    out += [f"{date:%a %d %b}  {weather_line(w)}" for date, w in days]
+    return "\n".join(out + ["", "The last few nights of a week's forecast often change: look again nearer the time."])
 
 
 def comet_results(night, lat, lon, elevation, source=feeds):
@@ -312,6 +335,8 @@ def main():
                     help="evening date of the night to plan (default: tonight)")
     ap.add_argument("--top", type=int, default=25, help="targets to list")
     ap.add_argument("--kind", help="only this type, e.g. galaxy, planet, globular")
+    ap.add_argument("--week", action="store_true",
+                    help="the weather verdict for each of the next seven nights, and nothing else")
     ap.add_argument("--offline", action="store_true")
     ap.add_argument("--demo", action="store_true",
                     help="made-up weather at the example site; needs no setup")
@@ -320,6 +345,11 @@ def main():
     args = ap.parse_args()
 
     cfg = config.example() if args.demo else config.load()
+    if args.week:
+        if args.json or args.html or args.date or args.offline:
+            ap.error("--week prints its own short text: it does not go with --json, --html, --date or --offline")
+        print(render_week(cfg["site"]["name"], week(cfg, args.demo)))
+        return
     rep = build(cfg, args.date, args.offline, args.demo)
     if args.kind:
         rep["targets"] = [t for t in rep["targets"] if args.kind == t["kind"]

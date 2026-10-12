@@ -410,3 +410,10 @@ def test_tracing_leaves_out_what_the_mount_may_not_reach():
     assert 270 not in [p["az"] for p in horizon.skyline_from(found, 20)]
 
 
+def test_the_week_is_seven_nights_running_each_with_a_verdict_or_none():
+    days = tonight.week(config.example(), demo=True)
+    dates = [date for date, _ in days]
+    assert len(days) == 7 and all((b - a).days == 1 for a, b in zip(dates, dates[1:]))
+    assert days[1][1]["verdict"] in ("GO", "MARGINAL", "NO-GO")       # the demo's weather reaches tomorrow
+    text = tonight.render_week("Example", days)
+    assert text.count("\n") >= 8 and "no forecast available" in text   # and stops short of the week's end

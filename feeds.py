@@ -55,9 +55,9 @@ def weather(lat, lon):
         return _get(
             "https://api.open-meteo.com/v1/forecast",
             latitude=lat, longitude=lon, hourly=WEATHER_VARS,
-            forecast_days=3, past_days=1, timeformat="unixtime", timezone="UTC",
+            forecast_days=8, past_days=1, timeformat="unixtime", timezone="UTC",
         ).json()["hourly"]
-    return _cached(f"weather_{lat:.3f}_{lon:.3f}", 0.5, fetch)
+    return _cached(f"weather8_{lat:.3f}_{lon:.3f}", 0.5, fetch)
 
 
 # --- Seeing and transparency: 7Timer ASTRO (https://www.7timer.info) --------
