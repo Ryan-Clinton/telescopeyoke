@@ -51,6 +51,8 @@ def weather_report(night, lat, lon, source=feeds):
             "temp": w["temperature_2m"][i], "dew_point": w["dew_point_2m"][i],
             "humidity": w["relative_humidity_2m"][i],
             "wind": w["wind_speed_10m"][i], "gust": w["wind_gusts_10m"][i],
+            # Where it blows from, in degrees: shelter on one side is no help from another.
+            "wind_from": (w.get("wind_direction_10m") or [None] * len(t))[i],
             "seeing": near and near["seeing"],
             "transparency": near and near["transparency"],
         })
@@ -281,14 +283,15 @@ def target_row(i, t):
 TARGET_HEAD = ["#", "Object", "Name", "Type", "Mag", "Size", "Best", "Alt",
                "Window", "Moon", "Sky", "Score"]
 WEATHER_HEAD = ["Time", "Cloud", "Low/Mid/High", "Rain", "Temp", "Dew gap",
-                "Wind/gust", "Seeing", "Transp."]
+                "Wind/gust from", "Seeing", "Transp."]
 
 
 def weather_row(h):
     see, transp = seeing_text(h)
     return [hm(h["time"]), f"{h['cloud']}%", f"{h['low']}/{h['mid']}/{h['high']}",
             f"{h['rain_chance']}%", f"{h['temp']:.0f}°C",
-            f"{h['temp'] - h['dew_point']:.1f}°", f"{h['wind']:.0f}/{h['gust']:.0f}",
+            f"{h['temp'] - h['dew_point']:.1f}°",
+            f"{h['wind']:.0f}/{h['gust']:.0f}" + (f" {sky.compass(h['wind_from'])}" if h.get("wind_from") is not None else ""),
             see, transp]
 
 

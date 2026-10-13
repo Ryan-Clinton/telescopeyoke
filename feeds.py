@@ -45,7 +45,7 @@ def _get(url, **params):
 WEATHER_VARS = (
     "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,"
     "precipitation,precipitation_probability,temperature_2m,dew_point_2m,"
-    "relative_humidity_2m,wind_speed_10m,wind_gusts_10m"
+    "relative_humidity_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m"
 )
 
 
@@ -57,7 +57,7 @@ def weather(lat, lon):
             latitude=lat, longitude=lon, hourly=WEATHER_VARS,
             forecast_days=8, past_days=1, timeformat="unixtime", timezone="UTC",
         ).json()["hourly"]
-    return _cached(f"weather8_{lat:.3f}_{lon:.3f}", 0.5, fetch)
+    return _cached(f"weather8w_{lat:.3f}_{lon:.3f}", 0.5, fetch)
 
 
 # --- Seeing and transparency: 7Timer ASTRO (https://www.7timer.info) --------

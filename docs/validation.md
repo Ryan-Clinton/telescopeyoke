@@ -17,7 +17,7 @@ The account of everything tried so far, feature by feature, is at the end:
 | 5 | Do four worker processes give the expected speed-up? | `./restack.py SESSION --profile` on 200 to 500 frames, with `--workers 1` and `--workers 4`. | 200 frames: 23.5 minutes before the rewrite, 3.9 minutes with four workers. |
 | 6 | Does the polar measurement repeat? | `./polaralign.py --repeat 5` with the bolts left alone. It prints each answer and their scatter. | Not yet run. Five rounds on 6 October gave 5.2°, 1.1°, 0.4°, 0.6°, 0.2°, but the bolts were turned between them. |
 | 7 | How quickly is a turn of the focuser heard on the USB 3 lead? | `./focus.py` on a rich field, then `./focus.py --report`: `feedback_s` on each level. Under about 1.2 s on levels 1 and 2 is the aim. | Not yet run. |
-| 8 | How long is the shutter really open? | `./camera_test.py --timing` (cap on, any time), then `./camera_test.py --trail` on a field of bright stars away from the pole. | Timing by hand on 6 October: each second asked added 0.63 s to a frame. No trail yet. |
+| 8 | How long is the shutter really open? | `./camera_test.py --timing` (cap on, any time), then `./camera_test.py --trail` on a field of bright stars away from the pole. | Run 13 October. Each second asked for added 0.63 s; a 10 s frame's trails showed the shutter open 6.4 s. It changes with the driver's Speed control (1.25, 0.86 and 0.63 s at Speed 0, 1 and 2). `camera.py` now asks for more by the measured share, and a 10 s frame's trails then showed 9.6 s. |
 | 9 | Does the sky's drift answer the Dec motor in proportion? | `./mount.py response`: five creeps, three measurements at each, about 35 minutes on one target. | Not yet run. The three readings of 5 October (below) fit no one explanation. |
 | 10 | Is one pointing correction for each side of the meridian enough? | `./mount.py pointing`: plate solves at -4, -3, -2, -1, +1, +2, +3 and +4 hours. | Not yet run. On 6 October the east side was 5.8° out in Dec and the west 0.2°, from one place each. |
 | 11 | Does a stalled mount get caught, with no false alarms on a working one? | Run `./horizon.py --trace` and a `goto --solve` on a working mount and see that neither stops; the verdict of each comparison is in the survey's log. | One real record, by day, and it showed a fault: see 7 October 2026 below. By night, not yet run. |
@@ -488,3 +488,52 @@ focuser not touched since the stars.
   traceback. It is now a refusal, `MOUNT_NOT_CONNECTED`, that says nothing
   more can be sent, a stop included, and to switch the mount off at the
   mount if a motor is still turning.
+
+### Night of 13 October 2026
+
+**The polar measurement was wrong, and why.** `polaralign.py` turns the RA
+axis to three places and fits the circle the three plate solves lie on. It
+took it that only the RA axis turned. The handset does not keep to that: a
+GoTo to the Dec it has just reported moved the Dec axis 0.10° with the tube
+west of the mount and 0.15° east, about the size of precession since 2000.
+The fit is touchy (0.01° on one picture's Dec moves the answer a third of a
+degree), so the same axis read 1.2° west and 0.5° low from the east side and
+4.8° east and 0.2° high from the west, each repeating to 0.03°. With the Dec
+axis's own movement taken out of each picture, the four measurements gave
+2.2° to 2.6° east and 2.7° to 3.0° high: one axis, about 3° from the pole.
+A drift test that uses none of this (the mount tracking, four plate solves
+over six and a half minutes) had said 3.2°.
+
+So every polar figure before this night was out by degrees: the 0.2° of
+6 October, and the drift then and on 3 October that the figure could not
+explain. `polaralign.py` now reads the Dec axis at each picture and takes its
+movement out. With that, six rounds of bolt turning went from 3.3° to 0.1°,
+and the picture's drift across the sensor fell from 0.30 pixels a second to
+0.07.
+
+What is not done: nothing checks one side of the mount against the other by
+itself, and nothing says why the handset moves the Dec axis.
+
+**Longer frames.** With the axis at 0.1°, three frames at each length on M31:
+stars 2.8 pixels wide at 2 s, 3.4 at 4 s, 3.7 at 8 s, 4.0 at 12 s and 4.2 at
+16 s, as round at 16 s as at 2 s. `shoot.py --exposure auto` still tries
+only 1 to 4 seconds and judges widening against the shortest, so it picked
+3 s; the run was given 12 s and then 16 s by hand.
+
+**The camera's short exposures** are measured and corrected: row 8 above.
+
+**The mount's altitude bolts**, standing south of it and facing north: the
+rear one going in lowers the axis, about 2.2° a turn once it is pushing; the
+front one raises it. On this mount the rear bolt stuck part way, after which
+the axis was lowered on the bolt and raised by hand.
+
+**A motor on the focuser** (`focuser.py`) found focus from far out by
+stepping inward and stopping at the smallest stars, 15 pixels to 2.2. It
+would not drive outward reliably and has well over a quarter turn of slack.
+
+**A satellite** crossed the first frame of a run; by hand it was matched to
+ONEWEB-0331 (`docs/satellites.md`).
+
+Two warnings were added to `mount.py`: a target behind something noted in
+`[horizon]`, and a target within 20 minutes of the meridian, where the
+handset chose the other side of the mount from the one predicted.

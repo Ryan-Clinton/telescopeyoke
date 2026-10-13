@@ -13,6 +13,7 @@ exposure length, so a 2 s exposure takes roughly 14 s to arrive. On USB 3 a
     cam.use("imaging")                     # the full sensor again
 """
 import io
+import json
 import subprocess
 import time
 
@@ -45,6 +46,31 @@ BACKEND = SETTINGS["camera"]["backend"]   # "indi", or "altair" for Altair's own
 # pattern. Imaging is never binned: the darks, the colour and the plate
 # scale all assume the full sensor.
 PROFILES = {"imaging": 1, "focus_fine": 1, "focus_fast": 2}
+
+
+# What camera_test.py --trail measured: how long the shutter was really open.
+TIMING_FILE = config.DATA / "cache" / "camera_timing.json"
+
+
+def shutter_share(speed):
+    """The share of the time asked for which the shutter is really open at
+    this readout speed, as camera_test.py --trail measured it from star
+    trails; 1 when it has not been measured at this speed, or the figure
+    is not to be believed.
+
+    The 183C through Altair's library 1.53 times its exposures by a clock
+    that changes with the driver's Speed control and is right at none of
+    its settings: on 13 October 2026 each second asked for added 1.25 s to
+    a frame at Speed 0, 0.86 s at Speed 1 and 0.63 s at Speed 2, the
+    driver's own choice, where a 10 s frame's trails showed 6.4 s."""
+    try:
+        found = json.loads(TIMING_FILE.read_text(encoding="utf-8"))["trail"]
+        share = float(found["share_of_asked"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return 1.0
+    if found.get("speed") != speed or not 0.3 <= share <= 1.5 or abs(share - 1) < 0.05:
+        return 1.0
+    return share
 
 
 class Camera:
@@ -111,6 +137,13 @@ class Camera:
             c.set(self.name, "CCD_TRANSFER_FORMAT", FORMAT_FITS="On")
         c.set(self.name, "CCD_CONTROLS", Gain=self.gain)
         c.pump(1)
+        # The readout speed the driver is using, and so how much longer to
+        # ask for than is wanted: see shutter_share().
+        try:
+            self.speed = int(float((c.get(self.name, "CCD_CONTROLS") or {})["Speed"]))
+        except (KeyError, TypeError, ValueError):
+            self.speed = None
+        self.shutter = shutter_share(self.speed)
 
     def use(self, profile):
         """Set the camera up for what its frames are for (a name in PROFILES)
@@ -135,13 +168,21 @@ class Camera:
     def frame(self, seconds):
         """One exposure as (uint16 Bayer mosaic, FITS header). If the driver
         stops delivering and manage_server is on, it is restarted once and
-        the exposure retried."""
-        wait = 12 + 6 * seconds
+        the exposure retried.
+
+        `seconds` is how long the shutter is to be open. The driver is asked
+        for more or less than that where the camera is known to keep its
+        own time (shutter_share), and the frame's EXPTIME says `seconds`."""
+        ask = seconds / self.shutter
+        wait = 12 + 6 * ask
         for attempt in range(2):
             try:
-                _, raw = self.client.expose(self.name, seconds, timeout=wait, attempts=2)
+                _, raw = self.client.expose(self.name, ask, timeout=wait, attempts=2)
                 with fits.open(io.BytesIO(raw)) as hdul:
                     data, header = hdul[0].data, hdul[0].header
+                if ask != seconds:
+                    header["EXPTIME"] = (seconds, "shutter open, s (trail-measured share applied)")
+                    header["TY_ASKED"] = (round(ask, 4), "exposure asked of the driver, s")
                 # The frame itself says how it was binned, whatever was asked for.
                 self.binning = int(header.get("XBINNING", self.binning))
                 return data, header

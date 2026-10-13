@@ -54,7 +54,7 @@ SDK = BACKEND == "altair"   # frames come through Altair's library, not INDI
 GAINS = (300, 600, 900, 1200, 1500, 1800)
 ASKED = (0.1, 0.5, 1.0, 2.0, 5.0, 10.0, 15.0)     # seconds, for --timing
 # What --timing and --trail found, for `ty characterise` and for whoever fixes it.
-TIMING_FILE = config.DATA / "cache" / "camera_timing.json"
+from camera import TIMING_FILE
 SIDEREAL = 15.041       # arcseconds of sky a second, at the celestial equator
 
 
@@ -248,6 +248,7 @@ def timing(gain, asked=ASKED, frames=3):
     rows = []
     print(f"{'asked':>7} {'frame took':>11} {'more than asked':>16}")
     with Camera(gain=gain) as cam:
+        cam.shutter = 1.0            # time what the camera does with exactly what it is asked
         for seconds in asked:
             cam.frame(seconds)       # the first frame after a change is often slow
             began = time.monotonic()
@@ -327,7 +328,7 @@ def trail_length(lum, most=12):
     return middle, len(along_it)
 
 
-def trail(asked, gain):
+def trail(asked, gain, corrected=False):
     """Stop the mount following the sky for one frame and measure the
     exposure from the stars' trails. The mount is set following again
     whatever happens."""
@@ -343,6 +344,9 @@ def trail(asked, gain):
                                 "moves. Go to a field nearer the equator first.")
     rate = SIDEREAL * math.cos(math.radians(dec))
     with Camera(gain=gain) as cam:
+        if not corrected:
+            cam.shutter = 1.0         # measure the camera unhelped: camera.py corrects by what is found
+        speed = getattr(cam, "speed", None)
         try:
             scope.tracking(False)
             time.sleep(2)             # let the motor stop
@@ -358,11 +362,16 @@ def trail(asked, gain):
     actual = length * per_pixel / rate
     found = {"asked_s": asked, "open_s": round(actual, 2), "share_of_asked": round(actual / asked, 3),
              "frame_took_s": round(took, 2), "trails": count, "trail_pixels": round(length, 1),
-             "dec_deg": round(dec, 1), "saved": time.time()}
+             "dec_deg": round(dec, 1), "speed": speed, "saved": time.time()}
     print(f"Asked for {asked:g} s at Dec {dec:+.0f}°, where the sky moves {rate:.1f} arcseconds a second. "
           f"{count} stars drew lines {length:.0f} pixels long ({length * per_pixel:.0f} arcseconds): the "
           f"shutter was open {actual:.1f} s, {actual / asked:.0%} of what was asked. The mount is following "
           "the sky again.")
+    if corrected:
+        return found                  # a check of the correction; the measurement it rests on is kept
+    if abs(actual / asked - 1) >= 0.05:
+        print(f"From now on the camera is asked for {asked / actual:.2f} times the exposure wanted, so the "
+              "shutter is open for the time wanted.")
     remember("trail", found)
     return found
 
@@ -419,6 +428,8 @@ def main():
     what.add_argument("--gain-sweep", action="store_true")
     what.add_argument("--timing", action="store_true")
     what.add_argument("--trail", action="store_true")
+    ap.add_argument("--corrected", action="store_true",
+                    help="with --trail: leave camera.py's correction on, to check it; nothing is remembered")
     ap.add_argument("--gains", type=int, nargs="+", default=list(GAINS))
     ap.add_argument("--exposure", type=float,
                     help="seconds (default 2 for gains, 1 for throughput, 10 for --trail)")
@@ -445,7 +456,7 @@ def run(args):
     if args.timing:
         return timing(args.gain, frames=min(args.frames, 3))
     if args.trail:
-        return trail(args.exposure or 10.0, args.gain)
+        return trail(args.exposure or 10.0, args.gain, args.corrected)
     if args.throughput:
         results = (throughput_sdk if SDK else throughput)(args.exposure or 1.0, args.frames, args.gain)
         good = [r for r in results if "failed" not in r]

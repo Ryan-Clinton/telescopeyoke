@@ -417,3 +417,10 @@ def test_the_week_is_seven_nights_running_each_with_a_verdict_or_none():
     assert days[1][1]["verdict"] in ("GO", "MARGINAL", "NO-GO")       # the demo's weather reaches tomorrow
     text = tonight.render_week("Example", days)
     assert text.count("\n") >= 8 and "no forecast available" in text   # and stops short of the week's end
+
+
+def test_each_hour_says_where_the_wind_is_from_and_does_without_when_the_feed_has_none():
+    report = tonight.build(config.example(), demo=True)
+    hour = report["weather"]["hours"][0]
+    assert hour["wind_from"] == 225.0 and tonight.weather_row(hour)[6].endswith(" SW")
+    assert " " not in tonight.weather_row({**hour, "wind_from": None})[6]

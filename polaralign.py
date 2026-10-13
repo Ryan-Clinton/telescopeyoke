@@ -177,9 +177,24 @@ def measure(scope, site, step=STEP, skyline=None):
             if points and moved.solved(step, abs(mount.wrap(ha - points[-1][0])), f"polar alignment, position {i + 1}"):
                 raise moved.refusal(f"After a turn of {step:.0f}° the sky is where it was: hour angle "
                                     f"{points[-1][0] / 15:+.3f} h before, {ha / 15:+.3f} h now.")
-            points.append((ha, dec))
+            # The fit takes it that only the RA axis turned between the three,
+            # and it is touchy: 0.01° on one picture's Dec moves the answer by
+            # a third of a degree. The handset does not keep to that. A GoTo
+            # to the Dec it has just reported moves the Dec axis by a tenth
+            # of a degree or more (13 October 2026: 0.10° with the tube west
+            # of the mount, 0.15° east, the size of precession since 2000),
+            # which read as an axis 0.3° out on one side and 2.7° on the
+            # other when it was 3° out on both. So the Dec axis's own
+            # movement since the first picture is taken out of each Dec. With
+            # the tube swung over the pole the sky's Dec falls as the axis
+            # reading rises.
+            dec_axis = scope.axes()[1]
+            if not points:
+                first_axis = dec_axis
+            moved_by = (dec_axis - first_axis) * (-1 if dec_axis > 90 else 1)
+            points.append((ha, dec - moved_by))
             scope.say(f"position {i + 1}: hour angle {ha / 15:+.3f} h, Dec {dec:+.2f}°, "
-                      f"altitude {alt:.0f}°")
+                      f"altitude {alt:.0f}°" + (f" (the Dec axis had moved {moved_by:+.3f}°, taken out)" if moved_by else ""))
         # Back to where it started.
         scope.goto((mount.true_sidereal(site) + offset - start_ha) % 360, dec_handset)
         scope.tracking(True)

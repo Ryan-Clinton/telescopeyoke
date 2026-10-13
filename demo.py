@@ -47,6 +47,7 @@ def weather(lat, lon):
         "relative_humidity_2m": [80] * 96,
         "wind_speed_10m": [8.0] * 96,
         "wind_gusts_10m": [16.0] * 96,
+        "wind_direction_10m": [225.0] * 96,
     }
 
 

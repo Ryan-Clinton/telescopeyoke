@@ -53,6 +53,7 @@ plugged in:  ./mount.py --demo goto M27
 """
 import argparse
 import contextlib
+import os
 import json
 import math
 import sys
@@ -134,11 +135,12 @@ class Mount:
         # which has a pretend camera and sky to solve.
         self.can_solve = not self.demo or (config.DEMO and handset is None)
         # The webcam photographs the scope during every real move unless told
-        # not to.
+        # not to: its light comes on for each picture, which is no help beside
+        # a telescope in the dark, so TY_NO_WATCH=1 stops it for any script.
+        watch = watch and not os.environ.get("TY_NO_WATCH")
         self.watching = Watching if watch and not self.demo else contextlib.nullcontext
         if self.demo:
             import simulator
-            import os
             quick = os.environ.get("TY_DEMO_FAST") == "1"
             self.s = handset or simulator.SimulatedHandset(slew_seconds=0.0 if quick else 2.0)
             if handset is None:
@@ -848,6 +850,9 @@ def direction(azimuth, altitude, site):
     return hadec.ha.deg, hadec.dec.deg
 
 
+NEAR_MERIDIAN = 0.33     # hours from the meridian inside which the handset's choice of side is not to be relied on
+
+
 def _plan(hour_angle, dec, altitude, label):
     """The checks every aimed move must pass, and what the move would involve.
     Raises a Refusal if it must not be made; needs no hardware."""
@@ -859,6 +864,12 @@ def _plan(hour_angle, dec, altitude, label):
                       f"{MAX_HOUR_ANGLE} h limit; not slewing.")
     west = hour_angle > 0
     warnings = ["The tube will swing over the pole."] if west else []
+    # The handset chooses the side by its own clock and pointing, which can be
+    # a couple of degrees from the truth: on 13 October 2026 a target 0.14 h
+    # east of the meridian was reached with the tube swung over the pole.
+    if abs(hour_angle) < NEAR_MERIDIAN * 15 and not west:
+        warnings = ["This is within 20 minutes of the meridian, where the handset may choose either "
+                    "side: the tube may swing over the pole."]
     return {
         "would_move": True, "safe": True,
         "altitude_deg": round(float(altitude), 1), "dec_deg": round(float(dec), 2),
@@ -878,7 +889,27 @@ def plan_goto(name, site):
         raise Refusal("TARGET_BELOW_ALTITUDE_LIMIT",
                       f"{target['id']} is only {altitude:.0f}° up; not slewing.")
     plan = _plan(hour_angle, dec, altitude, target["id"])
+    hidden = behind(hour_angle, dec, altitude, site)
+    if hidden:
+        plan = dict(plan, warnings=plan.get("warnings", []) + [f"{target['id']} is {hidden}"])
     return dict(plan, target=target["id"], name=target.get("name", ""))
+
+
+def behind(hour_angle, dec, altitude, site):
+    """What the settings say stands in front of a place in the sky, as words,
+    or None. The house and the tree are noted in [horizon]; a GoTo behind one
+    is allowed, since the note may be rough, but it is said first."""
+    if config.DEMO or not config.FILE.exists():
+        return None
+    import horizon
+    lat, ha, d = math.radians(site["latitude"]), math.radians(hour_angle), math.radians(dec)
+    az = math.degrees(math.atan2(-math.cos(d) * math.sin(ha),
+                                 math.sin(d) * math.cos(lat) - math.cos(d) * math.cos(ha) * math.sin(lat))) % 360
+    top = horizon.in_the_way(config.load().get("horizon", {}), az)
+    if altitude <= top:
+        return (f"at bearing {az:.0f}°, {altitude:.0f}° up, where the view is noted as blocked "
+                f"up to {top:.0f}°: expect no stars there.")
+    return None
 
 
 def plan_point(azimuth, altitude, site):
