@@ -196,6 +196,10 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
     stacked = final.result()
     chosen = [f for f, w in zip(chosen, weights) if w]
     total = sum(f["exposure"] for f in chosen)
+    # Trim the edges that only some of the frames reached.
+    rows, cols = final.covered()
+    trimmed = stacked.shape[0] - (rows.stop - rows.start), stacked.shape[1] - (cols.stop - cols.start)
+    stacked = stacked[rows, cols]
     with timings.phase("finish the picture"):
         stacking.write_stack(session / "final.fits", stacked,
                              {"EXPTIME": total, "NFRAMES": len(chosen), "GAIN": gain})
@@ -220,6 +224,8 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
         # enough and the alignment needs to allow for scale or distortion.
         say(f"alignment: stars matched to {np.median(residuals):.2f} pixel (worst frame "
             f"{max(residuals):.2f})")
+    if any(trimmed):
+        say(f"edges only some frames reached were trimmed off: {trimmed[0]} rows and {trimmed[1]} columns")
     say(f"saved {session / 'final.fits'}, final.jpg and web/{name}-final.jpg")
     if profile:
         say("Where the time went (work is summed over the workers):")

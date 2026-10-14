@@ -525,6 +525,9 @@ def register(rgb, lum, stars, reference):
 
 # --- stacking ------------------------------------------------------------------
 
+TRIM_SHARE = 0.9   # an edge row or column reached by fewer of the frames than this is trimmed off
+TRIM_MOST = 0.15   # but never more than this share of a side
+
 class Stack:
     """A running average that leaves out anything that does not belong: a
     satellite or aircraft trail, a cosmic ray, the empty edge of a shifted
@@ -567,6 +570,24 @@ class Stack:
         """The stack so far; pixels nothing contributed to are NaN-free zeros."""
         return np.where(self.weights > 0, self.mean(), 0).astype(np.float32)
 
+    def covered(self, share=TRIM_SHARE, most=TRIM_MOST):
+        """The rows and columns (two slices) to keep so that the picture's
+        edges are where nearly every frame reached. Frames framed a little
+        differently, or two sessions put together, leave a band along the
+        edges that fewer frames covered: noisier, and after the sky is
+        levelled a lighter strip. On 14 October 2026 the two M31 sessions
+        left one 130 pixels deep along the bottom. Never more than `most` of
+        a side is taken off."""
+        weights = self.weights.mean(axis=2) if self.weights.ndim == 3 else self.weights
+        keep = []
+        for along in (np.median(weights, axis=1), np.median(weights, axis=0)):
+            enough = np.flatnonzero(along >= share * along.max())
+            limit = int(most * len(along))
+            start = min(int(enough[0]), limit) if len(enough) else 0
+            stop = max(int(enough[-1]) + 1, len(along) - limit) if len(enough) else len(along)
+            keep.append(slice(start, stop))
+        return tuple(keep)
+
 
 # --- work done in the worker processes -----------------------------------------
 
@@ -585,6 +606,8 @@ def measure_file(path, exposure, gain):
     q["file"] = Path(path).name
     return q, timings.seconds
 
+
+FLIP_RESIDUAL = 2.0      # pixels: a fit worse than this is tried the other way up
 
 def register_file(path, exposure, gain, reference, store, slot, shape, scale=1.0, try_flip=False):
     """Worker: prepare one raw frame in full, line it up on the reference and
@@ -607,15 +630,19 @@ def register_file(path, exposure, gain, reference, store, slot, shape, scale=1.0
         centre = (lum.shape[1] / 2, lum.shape[0] / 2)
         r, t, matched, residual = align(stars, reference["stars"], rough, centre)
         flipped = False
-        if try_flip and matched < 8:
+        if try_flip and (matched < 8 or residual is None or residual > FLIP_RESIDUAL):
             # Taken on the other side of the meridian, the picture is upside
             # down: the tube swung over the pole in between. Turn it and retry.
+            # A dense field gives eight or more chance matches to an upside-down
+            # frame, so a poor fit is enough to try: on 14 October 2026 all but
+            # 8 of 226 frames from the far side of M31 were stacked unturned,
+            # 7.7 pixels out, and the galaxy came out twice.
             turned = np.ascontiguousarray(rgb[::-1, ::-1])
             turned_lum = turned.sum(axis=2)
             turned_stars = find_stars(turned_lum)
             again = align(turned_stars, reference["stars"],
                           offset(reference["square"], centre_square(turned_lum)), centre)
-            if again[2] > matched:
+            if again[2] >= 8 and (again[2] > matched or (again[3] is not None and (residual is None or again[3] < residual))):
                 rgb, flipped = turned, True
                 r, t, matched, residual = again
     with timings.phase("resample"):

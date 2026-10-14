@@ -142,6 +142,30 @@ def test_the_empty_edges_of_a_shifted_frame_do_not_dilute_the_stack():
     assert np.allclose(stack.result(), 100)
 
 
+def test_edges_that_only_some_frames_reached_are_trimmed():
+    stack = stacking.Stack((100, 120, 3))
+    full = np.full((100, 120, 3), 100, np.float32)
+    for i in range(10):
+        part = full.copy()
+        if i < 4:                   # a second session framed lower and to the left
+            part[:8] = np.nan
+            part[:, -5:] = np.nan
+        stack.add(part)
+    rows, cols = stack.covered()
+    assert (rows.start, rows.stop, cols.start, cols.stop) == (8, 100, 0, 115)
+
+
+def test_the_trim_never_takes_more_than_a_little_of_a_side():
+    stack = stacking.Stack((100, 100, 3))
+    full = np.full((100, 100, 3), 100, np.float32)
+    half = full.copy()
+    half[50:] = np.nan
+    stack.add(full)
+    stack.add(half)
+    rows, cols = stack.covered()
+    assert (rows.start, rows.stop) == (0, 85) and (cols.start, cols.stop) == (0, 100)
+
+
 def good(**changes):
     return dict({"fwhm": 4.0, "roundness": 0.9, "stars": 100, "flux": 5e4, "background": 300,
                  "noise": 5.0}, **changes)
