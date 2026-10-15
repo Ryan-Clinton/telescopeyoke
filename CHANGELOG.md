@@ -5,6 +5,9 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
 
 ## Not yet released
 
+- `./camera_setup.py` restarts an INDI server that has lost the camera, as
+  one left running while the camera was unplugged and plugged back in does;
+  `--check` still only looks.
 - **Mosaics** (`docs/imaging.md`): `./mosaic.py M31 3x1` lays overlapping
   panels along the camera's sides, turned as the last plate solve found it,
   and keeps their centres; `M31-P1` is then a target for `mount.py goto`,

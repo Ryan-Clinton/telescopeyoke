@@ -149,3 +149,30 @@ def test_a_camera_that_gives_no_frame_is_not_called_ready(setup):
     altair.wait_for = lambda seconds: 0.2
     result = camera_setup.run(Args())
     assert not result["ready"] and statuses(result)["frame"] == "fail"
+
+
+def test_an_indi_server_that_lost_the_camera_is_restarted(setup, monkeypatch):
+    import doctor
+    restarts = []
+    seen = iter([(doctor.FAIL, "no camera on the INDI server (is it plugged in?)"),
+                 (doctor.OK, "camera: Altair ALTAIRH183C")])
+    monkeypatch.setattr(camera_setup.config, "hardware", lambda: {"camera": {"backend": "indi"}})
+    monkeypatch.setattr(doctor, "check_indi_server", lambda: (doctor.OK, "INDI server on port 7624"))
+    monkeypatch.setattr(doctor, "check_camera", lambda: next(seen))
+    monkeypatch.setattr(camera, "start_driver", lambda: restarts.append(1))
+    monkeypatch.setattr(camera_setup, "test_frame", lambda steps, *a: steps.add("frame", "ok", "frame"))
+    result = camera_setup.run(Args())
+    assert restarts == [1] and result["ready"], result
+    assert [s["status"] for s in result["steps"] if s["step"] == "indi"] == ["ok", "fixed"]
+
+
+def test_checking_only_never_restarts_the_indi_server(setup, monkeypatch):
+    import doctor
+    monkeypatch.setattr(camera_setup.config, "hardware", lambda: {"camera": {"backend": "indi"}})
+    monkeypatch.setattr(doctor, "check_indi_server", lambda: (doctor.OK, "INDI server on port 7624"))
+    monkeypatch.setattr(doctor, "check_camera", lambda: (doctor.FAIL, "no camera on the INDI server"))
+    monkeypatch.setattr(camera, "start_driver", lambda: pytest.fail("restarted while only checking"))
+
+    class Check(Args):
+        check = True
+    assert not camera_setup.run(Check())["ready"]

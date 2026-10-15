@@ -227,9 +227,22 @@ def run(args):
             return finish(steps, backend)
     else:
         import doctor
+        server, found = doctor.check_indi_server(), doctor.check_camera()
+        if server[0] == doctor.OK and found[0] == doctor.FAIL and not args.check:
+            # The camera is on USB but the server has lost it: an INDI server
+            # left running while the camera was unplugged and plugged back in
+            # keeps a driver that never sees it again (15 October 2026). With
+            # no camera on the server nothing can be using it, so restart it.
+            import camera
+            print("  the INDI server has lost the camera; restarting it", flush=True)
+            camera.start_driver()
+            server, found = doctor.check_indi_server(), doctor.check_camera()
+            if found[0] == doctor.OK:
+                found = (FIXED, found[1] + " (after restarting the INDI server)")
         good = True
-        for status, message in (doctor.check_indi_server(), doctor.check_camera()):
-            good = steps.add("indi", FAIL if status == doctor.FAIL else OK, message) and good
+        for status, message in (server, found):
+            status = FAIL if status == doctor.FAIL else FIXED if status == FIXED else OK
+            good = steps.add("indi", status, message) and good
         if not good:
             return finish(steps, backend)
 

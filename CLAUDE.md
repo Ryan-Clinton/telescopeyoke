@@ -17,6 +17,10 @@ what is specific to Claude and to this particular user.
   asking: `lsusb`, `./doctor.py --offline` (handset lead, handset set up,
   camera, INDI) and `./mount.py status`, which only reads. Then advise from
   that, and from what the user has already said.
+- If the user talks about alignment and the mount or camera shows on USB,
+  they are outside at the telescope in the cold. Give the next command to
+  run, short; no questions they have already answered, no advice on getting
+  the telescope outside, and no testing that makes them wait.
 - Slew the real mount only when the user has asked for that move. Say first
   if the tube will swing over the pole.
 
