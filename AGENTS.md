@@ -128,4 +128,5 @@ a motor's creep rate. `mount.py stop` is always allowed.
 - `docs/agents/safety.md`: why the rules above exist, and the planned approval design
 - `docs/agents/mcp.md`: the MCP server and the web API
 - `docs/agents/examples.md`: worked examples of answering common requests
+- `docs/agents/setup-routine.md`: the order to run things in while a person is at the telescope
 - `docs/agents/architecture.md`, `testing.md`, `hardware.md`

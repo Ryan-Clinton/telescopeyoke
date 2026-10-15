@@ -9,6 +9,8 @@ what is specific to Claude and to this particular user.
 
 ## Working with this user
 
+- At the telescope, follow `docs/agents/setup-routine.md` step by step:
+  set the handset first, then ask the user where the sky is clear.
 - Run anything expected to take more than a minute in the background and
   carry on with the next task.
 - Turn each procedure that works into a command in the project as soon as it
