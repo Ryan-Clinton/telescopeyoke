@@ -5,6 +5,12 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
 
 ## Not yet released
 
+- **Mosaics** (`docs/imaging.md`): `./mosaic.py M31 3x1` lays overlapping
+  panels along the camera's sides, turned as the last plate solve found it,
+  and keeps their centres; `M31-P1` is then a target for `mount.py goto`,
+  `shoot.py` and `restack.py`. With no grid it suggests one from the
+  object's size. The catalogue's North America Nebula is 120' x 100', where
+  it had 30' across. Not yet tried on the real mount.
 - **Polar alignment says what to do with your hands**
   (`docs/calibration.md`). Centre the azimuth bolts first. More than 2° out
   to one side: turn the whole tripod, drawn from above as a clock face, with

@@ -64,6 +64,25 @@ Things worth knowing:
   Delete a session's `light-*.fits` once you are happy with `final.fits`, or
   use `--no-save`.
 
+## Mosaics: an object bigger than the frame
+
+The frame is 1.0° x 0.67°; M31 and the North America Nebula are two or
+three times that. `./mosaic.py M31 3x1` lays three panels along the
+camera's long side, overlapping by 15%, turned as the last plate solve found
+the camera, and keeps their centres in `mosaics/m31.json`. With no grid,
+`./mosaic.py NGC7000` suggests the smallest one that covers the catalogue
+size. Each panel is then a target like any other: `./mount.py goto M31-P1
+--dry-run`, `./shoot.py M31-P1`, `./restack.py M31-P1 --all`, with its
+frames under `frames/M31-P1/`.
+
+- The centres are worked out once, so a panel shot on a later night lands
+  where it did before, even if the camera has been turned since. Keep the
+  camera's turn the same for the panels to tile neatly; `--replace` starts a
+  new plan.
+- Stitching the finished panels into one picture is not done here: join
+  them in Siril or PixInsight.
+- Not yet tried on the real mount.
+
 ## One picture from several sessions
 
 Faint detail needs more light than one run usually collects. `./restack.py

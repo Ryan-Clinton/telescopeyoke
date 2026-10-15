@@ -241,7 +241,7 @@ telescope at all.
 | **Measuring the site** | `panorama.py`, `horizon.py` | A phone panorama; for the telescope's own survey, the mount and camera. |
 | **Moving the mount** | `mount.py`, `watch.py` | A SynScan mount and its serial lead. |
 | **Focusing** | `focus.py` | A supported camera. |
-| **Imaging** | `snap.py`, `solve.py`, `shoot.py`, `liveview.py`, `skywatch.py` | A supported camera and ASTAP. On Linux the camera is read through INDI; on Windows through Altair's own library, which is the only camera route there. |
+| **Imaging** | `snap.py`, `solve.py`, `shoot.py`, `mosaic.py`, `liveview.py`, `skywatch.py` | A supported camera and ASTAP. On Linux the camera is read through INDI; on Windows through Altair's own library, which is the only camera route there. |
 | **Processing** | `restack.py`, `calibrate.py`, `process.py`, `compare.py` | The raw frames a run kept. |
 
 Start with the planner; add hardware when you have it. [Commands](#commands)
@@ -356,6 +356,7 @@ lock (`MOTION_LOCKED`) stops every rig at once.
 | `horizon.py` | The telescope measuring its own skyline, or checking a panorama's. `--trace` starts 30° apart, adds bearings only where the skyline bends, starts each from the skyline already measured, and checks its own answer; `--daylight` works by day, judging each small square of the frame by brightness, smoothness and colour; a frame that shows the top itself gives the height at once. `--show` prints the skyline in use, `--forget` throws it away. Without `--trace` it looks on a fixed grid, as it first did. |
 | `snap.py` | Takes one camera frame, saves the FITS in `frames/`, publishes a preview. |
 | `shoot.py` | Takes a picture: many short exposures, each checked, lined up and stacked live, with the raw frames kept. `--exposure auto` picks the longest exposure the tracking allows. `--frames 0` carries on until cloud stops it. While it runs, `./ty run stop` ends it cleanly with its final picture; `recentre`, `assist-on` and `assist-off` are also understood. |
+| `mosaic.py` | Splits an object bigger than the frame into overlapping panels along the camera's sides, and keeps their centres; each panel is then a target, `M31-P1`, for `mount.py goto` and `shoot.py`. With no grid it suggests one from the object's size. |
 | `restack.py` | The quality pass: goes back over a session's raw frames, keeps the best, weights and clips them, and writes the finished picture. `shoot.py` runs it at the end. `--all`, or several session folders, stacks sessions from one night or many into one picture. |
 | `calibrate.py` | Makes master dark, bias and flat frames, which `shoot.py` and `restack.py` then apply automatically. |
 | `camera_setup.py` | Gets the camera ready: checks it is plugged in and has a driver, takes Altair's library files out of their SDK zip if they are missing, and takes a test frame. `--check` only looks. Also the "Set up the camera" button in the console. |

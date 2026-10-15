@@ -41,6 +41,7 @@ them and every file kept under `demo/`.
 | `host.py` | Everything that differs between Linux and Windows, in one place |
 | `focuser.py`, `firmware/focuser/` | The focuser's motor: an Arduino Nano driving a small stepper, and the firmware it runs. Turns the motor only; `focus.py` does not use it yet |
 | `shoot.py`, `stacking.py`, `restack.py`, `process.py`, `calibrate.py` | Imaging pipeline |
+| `mosaic.py` | Panels for an object bigger than the frame, kept in `mosaics/`; `mount.find_target` turns a panel name (`M31-P2`) into its centre |
 | `tour.py` | Records the demo being used, for the README: `docs/tour.gif` and `docs/screens/` (Ubuntu) |
 | `docs/index.html` | The project's home page, served by GitHub Pages from `docs/` |
 | `schemas/`, `tests/`, `evals/` | Output schemas, tests, agent scenarios |

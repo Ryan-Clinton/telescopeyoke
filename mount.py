@@ -1191,7 +1191,11 @@ STARS = {
 
 
 def find_target(name):
+    import mosaic
     import sky
+    panel = mosaic.find_panel(name)
+    if panel:
+        return panel
     wanted = name.replace(" ", "").lower()
     for star, (ra_hours, dec) in STARS.items():
         if star.lower() == wanted:
