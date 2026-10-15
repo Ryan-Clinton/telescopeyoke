@@ -52,7 +52,17 @@ The tube tips 5° and comes back. Ask whether they saw it. If the screen
 says it moved and they say it did not, the motors have stalled (6 October
 2026): power-cycle and go back to step 1.
 
-## 4. Polar alignment
+## 4. Focus
+
+    ./focus.py --field
+
+It moves to a rich star field (say so first), then they turn the focuser
+by the tones until "Focus good. Hold." Their hands; the agent listens to the
+numbers. Focus comes before anything that plate-solves: the polar alignment
+and every `--solve` work from the stars in a picture, and blurred stars give
+no answer. A failed plate solve before this step says nothing about cloud.
+
+## 5. Polar alignment
 
 Only needed when the tripod has been moved or its foot marks are lost;
 otherwise the last alignment stands. First a GoTo with plate solving to a
@@ -66,14 +76,6 @@ Before the first measurement, they centre the two azimuth bolts. After each
 measurement, tell them which bolt, which way and how far, in its own words;
 once they have turned it, run it again with `--turned`, until under half a
 degree. A house or tree in the way of the third picture: a smaller `--step`.
-
-## 5. Focus
-
-    ./focus.py --field
-
-It moves to a rich star field (say so first), then they turn the focuser
-by the tones until "Focus good. Hold." Their hands; the agent listens to the
-numbers. A failed plate solve before this step may be focus, not cloud.
 
 ## 6. GoTo and image
 

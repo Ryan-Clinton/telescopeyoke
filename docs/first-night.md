@@ -14,9 +14,9 @@ explains all of it afterwards, when you have a picture to show for it.
 
 **How much of this has been done for real.** This project is young and says
 so. On the author's EQ3, 150 mm Newtonian and Hypercam, under real stars:
-the polar alignment (step 5), focusing by the star measurement (step 7), the
+the polar alignment (step 6), focusing by the star measurement (step 5), the
 GoTo that corrects itself (step 9) and the picture (step 10) have all
-worked. Finding and marking the true home (step 6) and the click-and-tone
+worked. Finding and marking the true home (step 7) and the click-and-tone
 focusing sounds have so far run only on a simulated mount and made-up
 stars. Each step says which it is. [The full account](validation.md) is kept
 up to date.
@@ -76,7 +76,7 @@ bolts behave more simply.
 
 Turn the whole mount so that its main axis, the one the counterweight bar
 turns about, points north and up at the sky, towards the Pole Star if you
-can find it. A phone compass is good enough. Do not fuss: step 5 measures
+can find it. A phone compass is good enough. Do not fuss: step 6 measures
 how far out it is and tells you which bolt to turn.
 
 ## 3. Switch on, at the home position
@@ -104,7 +104,7 @@ the tube did not, switch the mount off and on and start this step again.
 The mount has no way of knowing which way it is facing when it wakes up. It
 simply assumes it is in the home position, and counts every later turn of
 its motors from there. So how well you set home decides how close its first
-aim lands. By eye it is usually a few degrees out. Step 6 measures and
+aim lands. By eye it is usually a few degrees out. Step 7 measures and
 fixes that; step 9 copes with it meanwhile.
 </details>
 
@@ -120,9 +120,47 @@ each. On a first night nearly every line reads "not measured". That is the
 point: each step from here turns one of them into a number, and you can
 watch the count go up. None of it has to be finished tonight.
 
-## 5. Get the mount pointing at the pole
+## 5. Focus by ear
 
-Wait until it is dark enough to see stars. Send the telescope to a bright
+Focus before anything that plate-solves: the polar alignment and every
+GoTo that corrects itself work from the stars in a picture, and blurred
+stars give no answer. Wait until it is dark enough to see stars.
+
+Start the focusing aid. With `--field` it first moves the telescope to a
+bright star with plenty of others round it, so keep clear as it starts:
+
+    ./focus.py --field
+
+Put a hand on the focuser and turn it slowly. You do not need to look at
+the laptop.
+
+- Every **click** means a picture has just been measured: your last turn
+  has been seen.
+- The **tone** after it is higher the sharper the stars. Turn the way that
+  makes it rise.
+- It will say "Level two", then "Level three. Fine focus" as you get
+  closer. Turn less each time.
+- Keep going until it says **"Minimum passed. Reverse slightly."** You have
+  gone through the sharpest point. Come back gently.
+- Stop at **"Focus good. Hold."**
+
+<details>
+<summary>What it is measuring</summary>
+
+How wide the stars are in the picture. A star in focus is a tiny dot; out
+of focus it is a blob, and far out, a ring. The number it works with is the
+half-flux radius, HFR: the radius that holds half of a star's light.
+Smaller is sharper. It measures many stars at once so that the air's
+shimmer, which makes any one star dance, averages out.
+</details>
+
+*Partly proven: the star measurement brought the real telescope to focus on
+6 October 2026, with the readings spoken as numbers (`--numbers` still does
+that). The clicks, tones and levels have so far run only on made-up stars.*
+
+## 6. Get the mount pointing at the pole
+
+Send the telescope to a bright
 star well away from the pole, and let it correct its own aim (step 9
 explains what it is doing). Vega is high on autumn evenings; `./tonight.py`
 lists what is up at other times:
@@ -166,7 +204,7 @@ about it.
 If a house or a tree is in the way of the third picture it says so; a
 smaller `--step` usually clears it.*
 
-## 6. Find the true home, and mark it
+## 7. Find the true home, and mark it
 
 Home was set by eye in step 3. Now that the mount points at the pole, the
 stars can say where home really is:
@@ -194,40 +232,6 @@ it on the second or third night, when the rest is familiar.
 
 *Not yet proven: this has run only on a simulated mount. The first real run
 is still to come. If its answer looks wrong, it says so and moves nothing.*
-
-## 7. Focus by ear
-
-Start the focusing aid. With `--field` it first moves the telescope to a
-bright star with plenty of others round it, so keep clear as it starts:
-
-    ./focus.py --field
-
-Put a hand on the focuser and turn it slowly. You do not need to look at
-the laptop.
-
-- Every **click** means a picture has just been measured: your last turn
-  has been seen.
-- The **tone** after it is higher the sharper the stars. Turn the way that
-  makes it rise.
-- It will say "Level two", then "Level three. Fine focus" as you get
-  closer. Turn less each time.
-- Keep going until it says **"Minimum passed. Reverse slightly."** You have
-  gone through the sharpest point. Come back gently.
-- Stop at **"Focus good. Hold."**
-
-<details>
-<summary>What it is measuring</summary>
-
-How wide the stars are in the picture. A star in focus is a tiny dot; out
-of focus it is a blob, and far out, a ring. The number it works with is the
-half-flux radius, HFR: the radius that holds half of a star's light.
-Smaller is sharper. It measures many stars at once so that the air's
-shimmer, which makes any one star dance, averages out.
-</details>
-
-*Partly proven: the star measurement brought the real telescope to focus on
-6 October 2026, with the readings spoken as numbers (`--numbers` still does
-that). The clicks, tones and levels have so far run only on made-up stars.*
 
 ## 8. Ask what you can see tonight
 
