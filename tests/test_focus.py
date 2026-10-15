@@ -310,30 +310,36 @@ def test_a_camera_failure_ends_the_run_with_its_reason(aid, monkeypatch, capsys)
 
 class Drawtube:
     """A motor focuser on a pretend telescope: stars of HFR 2 at `best`,
-    growing by one for every 60 half-steps away, and no stars at all past
-    1000. Remembers every move."""
+    growing by one for every 60 half-steps away, none past 1000, and gears
+    with `slack` half-steps of play: after a reversal the drawtube stays put
+    until that much has been turned."""
 
-    def __init__(self, best, start=0):
-        self.at, self.best, self.moves = start, best, []
+    def __init__(self, best, slack=0):
+        self.at, self.tube, self.best, self.slack, self.moves, self.going = 0, 0, best, slack, [], 0
 
     def move(self, steps):
         assert steps and abs(steps) <= 4096 * 10
         self.at += steps
         self.moves.append(steps)
+        way = 1 if steps > 0 else -1
+        lost = self.slack if way != self.going and self.going else 0
+        self.going = way
+        self.tube += way * max(abs(steps) - lost, 0)
 
     def read(self, frames):
-        off = abs(self.at - self.best)
+        off = abs(self.tube - self.best)
         return None if off > 1000 else 2.0 + off / 60
 
 
-@pytest.mark.parametrize("best", [-300, 200, 700, -900])
-def test_the_motor_brings_the_stars_to_focus_from_either_side(best):
-    tube = Drawtube(best)
+@pytest.mark.parametrize("best", [-300, 200, 700, -900, -500])
+@pytest.mark.parametrize("slack", [0, 150])
+def test_the_motor_brings_the_stars_to_focus_from_either_side(best, slack):
+    tube = Drawtube(best, slack)
     result = focus.motor_focus(tube, tube.read, usual=2.0, say=lambda *a: None)
-    assert result["found"]
-    assert abs(tube.at - tube.best) <= 16           # within one small step
-    assert result["hfr"] < 2.5 and result["moved"] == tube.at
-    assert tube.moves[-1] < 0                       # the last move is inward: the slack is taken up one way
+    assert result["found"], result["readings"]
+    assert abs(tube.tube - tube.best) <= 32          # within one small step of the sharpest
+    assert result["hfr"] < 2.6
+    assert tube.moves[-1] < 0                         # the last move is inward: the slack is taken up one way
 
 
 def test_with_no_focus_in_reach_the_focuser_goes_back_where_it_started():

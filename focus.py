@@ -572,14 +572,16 @@ def report():
     return out
 
 
-# Motor focusing, as it first found focus on 13 October 2026 from far out:
-# out in big steps until the stars have gone through sharp and grown again,
-# then back in by small ones, stopping at the first that is no better than
-# the one before. Coming in last means the gears' slack is always taken up
-# the same way. Sizes are HFR in pixels of the full-size picture.
-MOTOR_OUT = 96          # half-steps a big step out (4096 to a turn of the motor)
-MOTOR_IN = 16           # half-steps a small step in
-MOTOR_REACH = 14        # big steps tried each way before giving up
+# Motor focusing. The focuser's gears have slack bigger than a focusing step:
+# on 15 October a reversal left the stars at 7.4 where they had been 17.1 at
+# the same count, and 3.6 where they had been 2.6. So only readings taken
+# while moving in are trusted: out past focus, in by small steps measuring
+# each, then out beyond the slack and in once to the sharpest. Sizes are HFR
+# in pixels of the full-size picture.
+MOTOR_OUT = 96          # half-steps a step out while looking for the far side (4096 to a turn)
+MOTOR_IN = 32           # half-steps a step in while measuring
+MOTOR_SLACK = 300       # half-steps beyond the gears' slack, before the last move in
+MOTOR_REACH = 14        # steps out before giving up
 MOTOR_EXPOSURE, MOTOR_GAIN = 1.0, 1500
 
 
@@ -589,53 +591,43 @@ def motor_focus(motor, read, usual, say=print):
     with no stars. `usual` is the HFR good focus comes to. Returns
     {"hfr", "moved", "found", "readings"}; with "found" false the focuser has
     been put back where it started."""
-    sharp, grown = 1.75 * usual, 3.0 * usual      # 3.5 and 6 on 13 October
+    sharp = 1.75 * usual
     readings, place = [], [0]
 
     def step(n, frames=2):
         if n:
             motor.move(n)
-        place[0] += n
+            place[0] += n
         value = read(frames)
         readings.append({"at": place[0], "hfr": value and round(value, 2)})
         say(f"  {place[0]:+6d}  HFR {'none' if value is None else f'{value:.2f}'}")
         return value
 
-    def through(direction):
-        """Big steps one way until the stars pass through sharp and grow again."""
-        seen = False
-        for _ in range(MOTOR_REACH):
-            value = step(direction * MOTOR_OUT)
-            seen = seen or bool(value and value < sharp)
-            if seen and value and value > grown:
-                return True
-        return False
-
-    start = read(2)
-    say(f"  start   HFR {'none' if start is None else f'{start:.2f}'}")
-    passed = through(+1)
-    if not passed:
-        # Focus lies inward: go back past the start and look there. Found,
-        # the stars are then inside focus, so out through it again.
-        say("  not found going out; looking inward")
-        step(-place[0], 1)
-        passed = through(-1) and through(+1)
-    if not passed:
-        step(-place[0], 1)
-        return {"hfr": start, "moved": 0, "found": False, "readings": readings}
-    last, best = read(3), None
-    for _ in range(40):
-        value = step(-MOTOR_IN, 3)
+    # Out until clearly past focus: the stars grown well beyond the best seen
+    # on the way, or lost, after at least two steps.
+    least = step(0)
+    for count in range(MOTOR_REACH):
+        value = step(MOTOR_OUT)
+        if value and (least is None or value < least):
+            least = value
+        if count >= 1 and (value is None or (least and value > max(1.5 * least, 2.5 * usual))):
+            break
+    # In by small steps, trusting these readings only, until the stars have
+    # been sharp and grown again or been lost.
+    best = None
+    for _ in range(2 * MOTOR_REACH * MOTOR_OUT // MOTOR_IN):
+        value = step(-MOTOR_IN)
         if value and (best is None or value < best[1]):
             best = (place[0], value)
-        if value and last and value < 1.5 * usual and value >= last - 0.02:
+        if best and best[1] < sharp and (value is None or value > 1.4 * best[1]):
             break
-        last = value or last
-    if best and place[0] != best[0]:
-        # One step past the sharpest: back out beyond the gears' slack and
-        # come in to it, so the last move is still inward.
-        step(MOTOR_OUT, 1)
-        value = step(best[0] - place[0], 3)
+    if not best or best[1] >= sharp:
+        say("  no sharp stars found")
+        step(-place[0], 1)
+        return {"hfr": None, "moved": 0, "found": False, "readings": readings}
+    # Out beyond the slack, then in once to the sharpest.
+    step(MOTOR_SLACK + (best[0] - place[0]) if best[0] > place[0] else MOTOR_SLACK, 1)
+    value = step(best[0] - place[0], 3)
     return {"hfr": value, "moved": place[0], "found": True, "readings": readings}
 
 
