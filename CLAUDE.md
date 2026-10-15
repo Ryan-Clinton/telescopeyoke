@@ -13,6 +13,10 @@ what is specific to Claude and to this particular user.
   carry on with the next task.
 - Turn each procedure that works into a command in the project as soon as it
   works.
+- Before advising on the telescope, look at what is plugged in rather than
+  asking: `lsusb`, `./doctor.py --offline` (handset lead, handset set up,
+  camera, INDI) and `./mount.py status`, which only reads. Then advise from
+  that, and from what the user has already said.
 - Slew the real mount only when the user has asked for that move. Say first
   if the tube will swing over the pole.
 
