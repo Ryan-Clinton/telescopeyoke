@@ -54,7 +54,8 @@ Do this in daylight, in the warm. Nothing here needs the sky.
 ## 1. Put the telescope together safely
 
 - Tripod on firm ground, legs spread fully, roughly level. Mark where the
-  feet stand: next time they go back on the same marks.
+  feet stand, with something rain will not wash away: next time they go
+  back on the same marks.
 - Mount head on the tripod. **Counterweights on before the telescope**, and
   off after it, always: a tube with no weight opposite it swings down hard.
 - Telescope on, camera in the focuser. Loosen each clutch in turn and slide
@@ -181,7 +182,7 @@ over the top of the mount once: stand clear. Then
 
 The first line shows where it would go; the second goes there and holds.
 **Mark both joints of the mount now**, a paint dot or a scratch across each
-gap. Switch the mount off and on with the marks lined up, press ENTER
+gap. Not wax crayon or chalk: a night of rain takes them off. Switch the mount off and on with the marks lined up, press ENTER
 through the handset's screens, run `./mount.py settime`, and run
 `./mount.py findhome` once more to see what is left.
 

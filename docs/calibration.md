@@ -147,7 +147,9 @@ readings where true home lies, and holds with tracking off. `--dry-run`
 shows those readings first. It refuses unless the measurement was made in
 this session of the handset, within the last two hours, and fitted. Then:
 
-1. Mark both joints, across the gap, where they stand.
+1. Mark both joints, across the gap, where they stand, with something that
+   lasts a night of rain: a paint pen, nail varnish or a scratch. Wax crayon
+   and chalk wash off, and then home has to be found again.
 2. Switch the handset off and on with the mount on its marks, and press
    ENTER through to its main menu (`./mount.py settime` saves typing the date).
 3. Run `./mount.py findhome` again. It should now find home within a tenth
