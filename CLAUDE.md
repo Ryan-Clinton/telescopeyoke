@@ -34,6 +34,10 @@ what is specific to Claude and to this particular user.
   dry-run it and, if the dry run passes, send it at once. No warnings about
   the mount moving, cables or standing clear; they know. A pole swing is
   said in the same message as the move goes, as a fact, not a question.
+- When the user says what they can see ("it's clear to the north, can see
+  Polaris"), they are outside at the telescope and that is the go for the
+  next step of the routine that fits it. Dry-run it and start it at once:
+  no plan to approve, no "say go", no extra steps.
 
 ## Commands
 

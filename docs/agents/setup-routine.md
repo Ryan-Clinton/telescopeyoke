@@ -9,7 +9,9 @@ their hands on the mount. Never hand them a command to type. Tell them only
 what needs their hands or their eyes, in a line, and say before anything
 moves. A move they ask for is the go (`AGENTS.md`, safety rule 1): dry-run
 it, and if it passes, send it at once, with no warnings about cables,
-standing clear or the tube swinging; they know.
+standing clear or the tube swinging; they know. So is telling you what they
+can see: "it's clear to the north, can see Polaris" means they are outside,
+and the next step that fits that sky starts now, without asking.
 
 **Look before asking.** `lsusb`, `./doctor.py --offline` and `./mount.py
 status` (which only reads) say what is plugged in, whether the handset is
