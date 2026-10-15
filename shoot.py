@@ -5,6 +5,8 @@
     ./shoot.py M27 --frames 300 --exposure auto
     ./shoot.py M27 --no-recentre            never move the mount
     ./shoot.py M27 --assist                 also trim the Dec motor's creep as it goes
+    ./shoot.py M27 --frames 0 --through-cloud   cloud pauses it; it ends at dawn or
+                                            when the target is too far past the meridian
 
 Short exposures keep the stars round on a mount that drifts; averaging many
 of them brings out faint detail and smooths the grain. For each frame it:
@@ -305,6 +307,31 @@ def watch_on():
         print(f"  (the live view would not start: {problem})", flush=True)
 
 
+DAWN_SUN = -15.0    # degrees: the Sun higher than this ends a --through-cloud run
+LIMIT_MARGIN = 0.25  # hours inside the mount's hour-angle limit at which it ends
+NIGHT_CHECK = 300   # seconds between checks of the Sun and the target
+
+
+def night_over(name, site, when=None):
+    """Why a --through-cloud run must end now, or None: the Sun nearly up,
+    or the target too far past the meridian for the mount to follow."""
+    import mount
+    from astropy import units as u
+    from astropy.coordinates import AltAz, get_sun
+    from astropy.time import Time
+    when = when or Time.now()
+    sun = get_sun(when).transform_to(AltAz(obstime=when, location=mount.location(site))).alt.deg
+    if sun > DAWN_SUN:
+        return f"the Sun is {sun:.0f}° up"
+    try:
+        hour_angle, _, _ = mount.where(mount.find_target(name), site, when)
+    except interface.Refusal:
+        return None                      # not a catalogue name: only dawn ends it
+    if hour_angle / 15 > mount.MAX_HOUR_ANGLE - LIMIT_MARGIN:
+        return f"{name} is {hour_angle / 15:.1f} h past the meridian, near the mount's limit"
+    return None
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("name", help="what it is a picture of; a catalogue name allows re-centring")
@@ -316,6 +343,9 @@ def main():
     ap.add_argument("--recentre", type=int, metavar="N", default=0,
                     help="also re-centre every N frames, whatever the drift")
     ap.add_argument("--no-recentre", action="store_true", help="never move the mount")
+    ap.add_argument("--through-cloud", action="store_true",
+                    help="with --frames 0: cloud pauses the run instead of ending it; it re-centres when "
+                         "the stars come back, and ends at dawn or when the target nears the mount's limit")
     ap.add_argument("--assist", action="store_true",
                     help="trim the Dec motor's creep from the drift the frames show")
     ap.add_argument("--no-save", action="store_true", help="do not keep the raw frames")
@@ -368,7 +398,11 @@ def run(args):
           f"calibration: {session.calibration.describe()}; {workers} workers", flush=True)
     index, since_centre, started = 0, 0, time.monotonic()
     ORDERS.unlink(missing_ok=True)   # an order left for an earlier run is not for this one
-    told = {"stop": False, "recentre": False, "cloud": False}
+    told = {"stop": False, "recentre": False, "cloud": False, "cloudy": False}
+    checked = [0.0]   # when the Sun and the target were last checked
+    site = None
+    if args.through_cloud:
+        site = (config.load() if config.FILE.exists() else config.example())["site"]
     shown = 0.0   # when the newest raw frame was last put on the web page
     waiting = deque()   # (future, time taken) for frames being processed, oldest first
 
@@ -380,11 +414,26 @@ def run(args):
             return False
         if args.frames:
             return index < args.frames
+        if args.through_cloud and time.monotonic() - checked[0] >= NIGHT_CHECK:
+            checked[0] = time.monotonic()
+            why = night_over(args.name, site)
+            if why:
+                print(f"  {why}; stopping", flush=True)
+                return False
         latest = session.log[-CLOUD_STOP:]
         if len(latest) == CLOUD_STOP and not any(f["accepted"] for f in latest):
-            print(f"  the last {CLOUD_STOP} frames were all rejected; stopping", flush=True)
-            told["cloud"] = True
-            return False
+            if not args.through_cloud:
+                print(f"  the last {CLOUD_STOP} frames were all rejected; stopping", flush=True)
+                told["cloud"] = True
+                return False
+            if not told["cloudy"]:
+                print(f"  the last {CLOUD_STOP} frames were all rejected: cloud; carrying on until it clears",
+                      flush=True)
+                told["cloudy"] = True
+        elif told["cloudy"] and session.log and session.log[-1]["accepted"]:
+            # The mount kept tracking, but drift went unmeasured: centre again.
+            print("  stars again; re-centring", flush=True)
+            told["cloudy"], told["recentre"] = False, True
         return True
 
     def collect(everything=False):

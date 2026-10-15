@@ -226,3 +226,32 @@ def test_a_running_run_can_be_told_to_stop(night, monkeypatch, capsys):
     assert not shoot.ORDERS.exists()
     with pytest.raises(SystemExit, match="Unknown order"):
         shoot.tell("explode")
+
+
+def test_through_cloud_a_run_waits_for_the_stars_and_ends_at_dawn(night, monkeypatch, capsys):
+    _, folder = night
+    monkeypatch.setattr(shoot, "CLOUD_STOP", 5)
+    monkeypatch.setattr(shoot, "NIGHT_CHECK", 0)
+    Sky.pause, Sky.cloudy = 0.6, range(5, 13)     # clear, eight frames of cloud, clear again
+    monkeypatch.setattr(shoot, "night_over", lambda name, site: "the Sun is -14° up" if Sky.taken >= 20 else None)
+    monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "0", "--exposure", "2",
+                                      "--no-recentre", "--no-restack", "--through-cloud"])
+    summary = shoot.main()
+    said = capsys.readouterr().out
+    assert "carrying on until it clears" in said and "stars again" in said
+    assert "the Sun is -14° up; stopping" in said
+    assert summary["accepted"] >= 10                  # frames after the cloud were kept too
+
+
+def test_the_night_is_over_at_dawn_or_at_the_mounts_limit():
+    from astropy.time import Time
+    site = config.example()["site"]
+    assert "Sun" in shoot.night_over("Vega", site, Time("2026-07-01T12:00:00"))
+    import mount
+    for hour in range(24):
+        when = Time(f"2026-01-15T{hour:02d}:00:00")
+        hour_angle = mount.where(mount.find_target("Vega"), site, when)[0] / 15
+        why = shoot.night_over("Vega", site, when)
+        if why and "Sun" not in why:
+            assert hour_angle > mount.MAX_HOUR_ANGLE - shoot.LIMIT_MARGIN
+    assert shoot.night_over("Not A Catalogue Name", site, Time("2026-01-15T23:00:00")) is None
