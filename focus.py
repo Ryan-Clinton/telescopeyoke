@@ -9,6 +9,8 @@
                                the sky (this MOVES the telescope)
     ./focus.py --field --dry-run   say which star; nothing moves
     ./focus.py --scene         on rooftops or trees, in daylight
+    ./focus.py --motor         the motor focuser does it: no hand on the knob
+                               (turns the focuser; the mount stays still)
 
 Turn the focuser and listen. Each frame, once it has been measured, gives a
 click and then a tone: the click says "that turn has been seen", and the
@@ -570,6 +572,106 @@ def report():
     return out
 
 
+# Motor focusing, as it first found focus on 13 October 2026 from far out:
+# out in big steps until the stars have gone through sharp and grown again,
+# then back in by small ones, stopping at the first that is no better than
+# the one before. Coming in last means the gears' slack is always taken up
+# the same way. Sizes are HFR in pixels of the full-size picture.
+MOTOR_OUT = 96          # half-steps a big step out (4096 to a turn of the motor)
+MOTOR_IN = 16           # half-steps a small step in
+MOTOR_REACH = 14        # big steps tried each way before giving up
+MOTOR_EXPOSURE, MOTOR_GAIN = 1.0, 1500
+
+
+def motor_focus(motor, read, usual, say=print):
+    """Bring the stars to focus with the motor. `motor.move(n)` turns it (plus
+    is out); `read(frames)` is the median HFR over that many frames, or None
+    with no stars. `usual` is the HFR good focus comes to. Returns
+    {"hfr", "moved", "found", "readings"}; with "found" false the focuser has
+    been put back where it started."""
+    sharp, grown = 1.75 * usual, 3.0 * usual      # 3.5 and 6 on 13 October
+    readings, place = [], [0]
+
+    def step(n, frames=2):
+        if n:
+            motor.move(n)
+        place[0] += n
+        value = read(frames)
+        readings.append({"at": place[0], "hfr": value and round(value, 2)})
+        say(f"  {place[0]:+6d}  HFR {'none' if value is None else f'{value:.2f}'}")
+        return value
+
+    def through(direction):
+        """Big steps one way until the stars pass through sharp and grow again."""
+        seen = False
+        for _ in range(MOTOR_REACH):
+            value = step(direction * MOTOR_OUT)
+            seen = seen or bool(value and value < sharp)
+            if seen and value and value > grown:
+                return True
+        return False
+
+    start = read(2)
+    say(f"  start   HFR {'none' if start is None else f'{start:.2f}'}")
+    passed = through(+1)
+    if not passed:
+        # Focus lies inward: go back past the start and look there. Found,
+        # the stars are then inside focus, so out through it again.
+        say("  not found going out; looking inward")
+        step(-place[0], 1)
+        passed = through(-1) and through(+1)
+    if not passed:
+        step(-place[0], 1)
+        return {"hfr": start, "moved": 0, "found": False, "readings": readings}
+    last, best = read(3), None
+    for _ in range(40):
+        value = step(-MOTOR_IN, 3)
+        if value and (best is None or value < best[1]):
+            best = (place[0], value)
+        if value and last and value < 1.5 * usual and value >= last - 0.02:
+            break
+        last = value or last
+    if best and place[0] != best[0]:
+        # One step past the sharpest: back out beyond the gears' slack and
+        # come in to it, so the last move is still inward.
+        step(MOTOR_OUT, 1)
+        value = step(best[0] - place[0], 3)
+    return {"hfr": value, "moved": place[0], "found": True, "readings": readings}
+
+
+def run_motor(args):
+    """./focus.py --motor: focus with the motor, on the stars in view now."""
+    import focuser
+    scale = arcsec_per_pixel()
+    usual = usual_best() / scale
+    motor = focuser.Focuser.open()
+    try:
+        with Camera(args.port, MOTOR_GAIN) as cam:
+            cam.frame(MOTOR_EXPOSURE)               # the first frame after opening can be stale
+
+            def read(frames):
+                values = []
+                for _ in range(frames):
+                    mosaic, _ = cam.frame(MOTOR_EXPOSURE)
+                    value, _ = measure_stars(luminance(mosaic))
+                    if value:
+                        values.append(value)
+                return float(np.median(values)) if values else None
+            print(f"Motor focusing: HFR {usual:.1f} is good focus here.", flush=True)
+            result = motor_focus(motor, read, usual)
+    finally:
+        motor.close()
+    hfr = result["hfr"]
+    if result["found"] and hfr:
+        print(f"Focused: HFR {hfr:.2f} ({hfr * scale:.1f}\"), {result['moved']:+d} half-steps from the start.")
+        with RUNS_FILE.open("a", encoding="utf-8") as log:
+            log.write(json.dumps({"saved": time.time(), "best_hfr": round(hfr, 2),
+                                  "best_arcsec": round(hfr * scale, 2), "motor": True}) + "\n")
+    else:
+        print("No focus found within reach either way; the focuser is back where it started.")
+    return dict(result, hfr_arcsec=hfr and round(hfr * scale, 2))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--minutes", type=float, default=15)
@@ -589,7 +691,11 @@ def main():
                     help="how quickly the last run answered a turn of the knob; takes no frames")
     ap.add_argument("--frames", type=int, help="stop after this many frames")
     ap.add_argument("--json", action="store_true", help="the last reading as JSON at the end")
+    ap.add_argument("--motor", action="store_true",
+                    help="focus with the motor focuser, no hand on the knob; turns the focuser only")
     args = ap.parse_args()
+    if args.motor:
+        return interface.main("focus.motor", lambda: run_motor(args), args.json)
     if args.report:
         return interface.main("focus.report", report, args.json)
     return interface.main("focus", lambda: run(args), args.json)

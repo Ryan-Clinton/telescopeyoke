@@ -306,3 +306,37 @@ def test_a_camera_failure_ends_the_run_with_its_reason(aid, monkeypatch, capsys)
     answer = json.loads(capsys.readouterr().out)
     assert not answer["ok"] and "unplugged" in answer["errors"][0]["message"]
     assert Scope.log[-1][0] == "closed"
+
+
+class Drawtube:
+    """A motor focuser on a pretend telescope: stars of HFR 2 at `best`,
+    growing by one for every 60 half-steps away, and no stars at all past
+    1000. Remembers every move."""
+
+    def __init__(self, best, start=0):
+        self.at, self.best, self.moves = start, best, []
+
+    def move(self, steps):
+        assert steps and abs(steps) <= 4096 * 10
+        self.at += steps
+        self.moves.append(steps)
+
+    def read(self, frames):
+        off = abs(self.at - self.best)
+        return None if off > 1000 else 2.0 + off / 60
+
+
+@pytest.mark.parametrize("best", [-300, 200, 700, -900])
+def test_the_motor_brings_the_stars_to_focus_from_either_side(best):
+    tube = Drawtube(best)
+    result = focus.motor_focus(tube, tube.read, usual=2.0, say=lambda *a: None)
+    assert result["found"]
+    assert abs(tube.at - tube.best) <= 16           # within one small step
+    assert result["hfr"] < 2.5 and result["moved"] == tube.at
+    assert tube.moves[-1] < 0                       # the last move is inward: the slack is taken up one way
+
+
+def test_with_no_focus_in_reach_the_focuser_goes_back_where_it_started():
+    tube = Drawtube(best=50000)
+    result = focus.motor_focus(tube, tube.read, usual=2.0, say=lambda *a: None)
+    assert not result["found"] and tube.at == 0
