@@ -23,8 +23,11 @@ what is specific to Claude and to this particular user.
   they are outside at the telescope in the cold. Give the next command to
   run, short; no questions they have already answered, no advice on getting
   the telescope outside, and no testing that makes them wait.
-- Slew the real mount only when the user has asked for that move. Say first
-  if the tube will swing over the pole.
+- Slew the real mount only when the user has asked for that move. When they
+  ask for it from beside the telescope ("swing to Vega"), that is the go:
+  dry-run it and, if the dry run passes, send it at once. No warnings about
+  the mount moving, cables or standing clear; they know. A pole swing is
+  said in the same message as the move goes, as a fact, not a question.
 
 ## Commands
 

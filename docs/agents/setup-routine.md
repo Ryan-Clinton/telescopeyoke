@@ -7,7 +7,9 @@ from the agent's side: what to run, in what order, and what to ask.
 **The agent runs the commands.** The person is outside in the cold with
 their hands on the mount. Never hand them a command to type. Tell them only
 what needs their hands or their eyes, in a line, and say before anything
-moves. Each move still needs them to say go (`AGENTS.md`, safety rule 1).
+moves. A move they ask for is the go (`AGENTS.md`, safety rule 1): dry-run
+it, and if it passes, send it at once, with no warnings about cables,
+standing clear or the tube swinging; they know.
 
 **Look before asking.** `lsusb`, `./doctor.py --offline` and `./mount.py
 status` (which only reads) say what is plugged in, whether the handset is
