@@ -245,6 +245,19 @@ def test_a_point_that_does_not_move_with_the_sky_is_not_a_star(scope):
         Sky.polaris = real
 
 
+def test_polaris_at_the_edge_with_the_ra_axis_at_its_reach_is_still_centred(scope, monkeypatch):
+    """At 22:10 UTC on 16 October 2026, with the axis 1.6° east and 0.9° low,
+    Polaris turned up at the very edge of the picture with the RA axis at
+    the end of its reach: every probe the mount was allowed made carried the
+    star out of the picture, and centring gave up 0.9° off."""
+    from astropy.time import Time
+    fixed = Time("2026-10-16T22:10:00")
+    monkeypatch.setattr(Time, "now", classmethod(lambda cls: fixed))
+    Sky.east, Sky.high = 1.6, -0.9
+    found = polaris.find(scope, SITE, radius=3.0, cam_class=Camera, aim=jump, exact=jump)
+    assert found["found"] and found["off_centre_deg"] < 0.1
+
+
 @pytest.mark.parametrize("east, high", [(0.0, 0.0), (1.6, -0.9), (-2.2, 1.1)])
 def test_polaris_is_found_and_the_axis_measured(scope, east, high):
     Sky.east, Sky.high = east, high

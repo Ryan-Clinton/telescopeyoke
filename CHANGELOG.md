@@ -5,6 +5,12 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
 
 ## Not yet released
 
+- **Polaris at the edge of the picture is centred again**: with the RA axis
+  at the end of its reach the mount can probe one way only, and even a
+  quarter step carried an edge star out of the picture, so centring gave up
+  and `polaris.py find` reported Polaris 0.9° off. The probes now go down to
+  a twentieth of a step. Found by the tests failing only at 22:10 UTC;
+  checked at every hour of the day.
 - **A run that fell behind no longer crashes or stops under cloud**: a frame
   the live stack had no time for is logged without figures, and the cloud
   report read them anyway (`KeyError: 'flux'`; the Windows tests, which

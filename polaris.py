@@ -579,7 +579,12 @@ def centred(scope, cam, exposure, sighting, flat, aim=aim):
         for axis, size in ((1, 0.1), (0, min(20.0, math.degrees(0.1 / lever)))):
             # Either way, and by less if it leaves the picture: a star found
             # at the very edge has little room, and may have it one way only.
-            for share in (1, -1, 0.5, -0.5, 0.25, -0.25):
+            # With the RA axis at the end of its reach only one way is
+            # allowed, and near the pole even a quarter step can carry an edge
+            # star out of the picture: the smallest steps move it tens of
+            # pixels, enough to see which way it went (22:10 UTC on 16
+            # October 2026, the RA axis at -88°, centring failed without them).
+            for share in (1, -1, 0.5, -0.5, 0.25, -0.25, 0.1, -0.1, 0.05, -0.05):
                 target = list(here)
                 target[axis] += share * size
                 if abs(target[0]) > REACH + 0.5:      # the half degree is for a reading a hair past the reach
