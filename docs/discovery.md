@@ -2,36 +2,53 @@
 
 [Back to the README](../README.md)
 
-Not built. This says how telescopeyoke would become a small discovery
-station. Each night it would choose the science worth doing, take the
-pictures, look for change, look up everything it finds, and ask for another
-look when that would settle a question. It would hand the person evidence,
-not guesses. Written 16 October 2026 from the sources at the end.
+Not built. This says how telescopeyoke would become an always-on
+discovery station with a telescope attached. On a clear night it hunts with
+the telescope; on a cloudy night or by day it hunts spacecraft pictures and
+public data; when a survey sees something, it decides whether this rig can
+confirm or report it first; and when its methods improve, it searches its
+old pictures again. It looks for change, looks up everything it finds, and
+asks for another look when that would settle a question. It hands the
+person evidence, not guesses. Written 16 October 2026 from the sources at
+the end.
 
 ## The short answer
 
 A discovery is possible, but only where the big surveys leave gaps. A
 150 mm telescope cannot out-search Rubin, ZTF or ATLAS across the sky.
-It can compete on cadence, persistence, place and speed of follow-up. The
-first programme, and the test of the whole system, is a nightly patrol of
-the Andromeda Galaxy (M31) for novae:
+It can compete on cadence, persistence, crowded-field work, place and
+speed of reporting. The first telescope programme, and the test of the
+whole system, is a nightly patrol of the Andromeda Galaxy (M31) for novae,
+with the Triangulum Galaxy (M33) added once M31 works:
 
 - M31 has about 65 classical novae a year (Darnley and others, 2006: a
   range of 50 to 81). Many peak at magnitude 17 to 19, and amateurs still
   find some. Koichi Itagaki found AT 2025abao there at 17.8 on 17 October
   2025.
-- M31 is at +41°, outside Rubin's survey of the southern sky, and stands
-  high over Ballymoney from October to February. It is 3° across, so it is
-  a mosaic, which suits this rig.
+- M31 is at +41°, outside Rubin's southern survey, but it is not
+  unwatched: ZTF covers the northern sky every two nights with public
+  alerts in real time. Our edge is looking several times a night, every
+  clear night, and reporting fast. A 200 mm amateur telescope has done it:
+  George Carey found a nova in M31 at about magnitude 17 in 2015 with a
+  four-position patrol against a reference from an earlier night.
+- M31 stands high over Ballymoney from October to February. It is 3°
+  across, so it is a mosaic, which suits this rig.
+- M33 is a second, independent population within reach: its 2025 novae
+  were found at magnitude 17.3 to 18.4, some by amateurs.
 
-Two more programmes use the same machinery:
+Programmes that need no clear sky run alongside, so something is always
+hunting:
 
 - **Comets in SOHO pictures (the Sungrazer Project)** for cloudy nights.
   No telescope is needed, and volunteers have found most of the project's
   5,204 comets.
-- **Variable stars** from the measurements the patrol keeps anyway. A new
+- **Public alerts** from the surveys, searched for transients nobody has
+  reported yet, and checked with the telescope when the rig can reach them.
+- **Our own old pictures,** searched again whenever the methods improve.
+- **Variable stars** from the measurements the patrols keep anyway. A new
   one is likely over a season, but how likely is unknown until we know how
-  precise our photometry is in M31's crowded field.
+  precise our photometry is in M31's crowded field. Useful, but not the
+  "new object tonight" kind of find.
 
 The rig's depth, estimated at magnitude 17.5 to 18 in 5 minutes, stays an
 estimate until planted fake stars measure it (phase 0).
@@ -61,6 +78,7 @@ The surveys we are up against, and where they stop:
 | Survey | Depth | Sky | What it leaves |
 |---|---|---|---|
 | ASAS-SN | g ≈ 18.5, nightly | whole sky | complete only to about 16.7 at peak; crowded galaxy centres are hard for its 8″ pixels |
+| ZTF | deeper than ours | northern sky every 2 nights; real-time public alerts | nights between its visits, crowded centres; its current run (ZTF 3) is scheduled to 31 December 2026 |
 | Rubin (LSST), started 30 June 2026 | far deeper | **southern sky only** | M31 and the far north; it saturates near magnitude 16 |
 | Professional M31 nova patrols (Ondřejov and others) | deeper than ours | M31 | weather and gaps; a clear Ulster night when Europe is cloudy |
 
@@ -68,12 +86,134 @@ The surveys we are up against, and where they stop:
 
 | Hunt | Odds of a first | When |
 |---|---|---|
-| Supernovae in bright galaxies | low: ASAS-SN finds most bright ones within a day, and amateurs who still win image hundreds of galaxies a night with 0.35 to 0.6 m telescopes | through serendipitous scanning, below; no dedicated patrol |
-| Galactic novae | low: found with DSLRs and 50 to 300 mm lenses covering the Milky Way (John Seach, Tadashi Kojima, 2025) | if a camera lens is ever mounted |
+| Novae in M81 | low for this rig: they are found near magnitude 20, one in 2025 at 19.8 in a 3000 s stack on a 0.65 m telescope | not yet |
+| Supernovae in bright galaxies | low per field: ASAS-SN finds most bright ones within a day, and amateurs who still win image hundreds of galaxies a night with 0.35 to 0.6 m telescopes. But they can be bright: Koichi Itagaki found SN 2023ixf in M101 at 14.9 | through every session searched, below; no dedicated patrol |
+| Galactic novae | low with the 150P's 1° field; they are found with DSLRs and 50 to 300 mm lenses covering the Milky Way (John Seach, Tadashi Kojima, 2025) | a wide-field lens node, below |
+| Exoplanets in TESS data | open to volunteers: Planet Hunters TESS invites it, and NASA's open-source ExoMiner++ flagged 7,000 TESS candidates on its first run | a later cloudy-night programme |
 | Asteroids and comets through the telescope | very low for discovery; good for recovering known ones | a later programme, `moving.py`, below |
 
 The EQ3 has caught on the mount before, so a patrol of 100 galaxies a
 night is the wrong job for it.
+
+## Making a discovery as likely as possible
+
+The odds come less from any one algorithm than from hunting on many
+channels at once and answering faster than a person could alone.
+
+| Channel | When it hunts | Telescope |
+|---|---|---|
+| M31 and M33 novae | clear nights, October to February | yes |
+| Sungrazer comets | all the time | no |
+| Public alerts, for unreported transients | all the time; confirmed on clear nights | sometimes |
+| Every science picture taken | after every session | yes, already |
+| Our old pictures, searched again | whenever a method improves | no |
+| Galactic novae | clear nights, with a lens | a second camera |
+| Variable stars, TESS transits | from data already held | no |
+
+### A discovery scheduler, not a target list
+
+`tonight.py` ranks what is nice to look at. Discovery needs a different
+score: the chance of a first find per minute of telescope time.
+
+```math
+P_{\text{first}} = P_{\text{event}} \times P_{\text{detect}} \times P_{\text{not yet found}} \times P_{\text{first report}}
+```
+
+For a patrol field the working form is
+
+```math
+\text{priority} \propto \frac{\text{event rate} \times \text{completeness} \times \text{cadence debt}}{\text{minutes needed}}
+```
+
+- **Event rate** for each M31 panel comes from where novae have been
+  found: the bulge has the higher rate (38 a year against 27 for the disc,
+  Darnley and others), so the map of past nova positions is the prior.
+- **Completeness** is the injection-and-recovery figure for that panel
+  and that night's conditions. The crowded bulge may have the most novae
+  and the worst completeness, so multiplying the two gives a map of
+  *detectable* novae. The best panel may not be the nucleus, and on a poor
+  night four panels may beat eight.
+- **Cadence debt** is the time since each field's last good frame. The
+  longer a field goes unwatched, the more may have happened in it.
+- A public alert that is setting soon, or a candidate needing a second
+  look, can outrank the patrol. The scheduler says why: "M31 is due, but
+  an unreported 16.8 transient sets in 45 minutes; observe it first."
+
+The plan it makes is a proposal; the person approves it before anything
+moves.
+
+### Cadence before depth
+
+The exposure for each panel is not fixed at 5 minutes. Injection and
+recovery run at 60, 120, 180, 300 and 600 s, to find where more depth
+stops paying for fewer visits. Novae rise fast: M31N 2026-04c was 16.2 when
+found and fainter than 18.4 two days before. Looking often may matter more
+than going half a magnitude deeper.
+
+### From candidate to report in under five minutes
+
+Priority on TNS goes to the first report made public, and a report needs
+discovery photometry and, where there is one, the last non-detection. So
+everything a report needs is kept ready before anything is found:
+
+    position and its uncertainty
+    UTC time of discovery
+    magnitude, uncertainty and passband
+    the 5-sigma limit of the frame
+    the last non-detection and its limit
+    the reference's date
+    science, reference and difference FITS
+    a finding chart
+    the asteroid, VSX, SIMBAD, TNS and Gaia checks
+    the number of independent frames it is in
+
+The target: from a confirmed candidate to a packet a person can review in
+under five minutes, timed on planted fakes. The person still presses send.
+
+### Public alerts, for unreported transients
+
+Fink enriches the public ZTF alerts with TNS, SIMBAD and other catalogues
+and offers filtered streams. `brokers.py` would watch for alerts that are
+likely real, bright enough for this rig, have no TNS entry, no SIMBAD,
+asteroid or variable-star explanation, are observable from here now, and
+are brightening. Then:
+
+    Unreported transient candidate
+    ZTF detection 17.2; no TNS object within 5"
+    58° high now; the rig should reach it in about 3 minutes
+    Recommended: confirm now.  [approve]
+
+Credit is honest about where the pixels came from. TNS reports carry a
+reporting group and a source group, and the discoverer is whoever's report
+is made public first. A transient first seen in ZTF data and reported by us
+is reported with ZTF as the source; it is not "my telescope discovered
+it". Our own confirmation picture is then follow-up.
+
+### Old pictures, searched again
+
+Every time the subtraction, the star fitting, the classifier, the depth
+measurement or the forced photometry improves, every stored frame is
+searched again (`./difference.py --all-history`). Professionals do find
+things this way: M31N 2022-10c, a possible symbiotic nova, was found in a
+search of 2022 archive frames, with earlier detections back to 2020.
+
+### A wide-field lens for Galactic novae, later
+
+The 150P sees 1° × 0.67°: too little to patrol the Milky Way. A camera
+with a 50 to 135 mm lens covers tens to hundreds of square degrees, and
+recent Galactic novae have been found that way. It would be a second rig
+(`TY_RIG`, `rigs/NAME.toml`), needing far less pointing accuracy than the
+EQ3, running a Milky Way programme while the 150P works on galaxies.
+
+### Several rigs together, in the long run
+
+GOTO's many telescopes reported 6,703 transients in 2025 and were first to
+find 2,557; volunteers found 48 of those. The principle scales down. If
+other people run telescopeyoke, a shared list of fields and when each was
+last observed would let a clear site take the next M31 pass when Ulster is
+cloudy, and a candidate here could ask another rig to confirm it. This
+needs other users first, and an agreed way to share; it is the furthest-off
+part of this plan.
 
 ## How it is built: seven layers
 
@@ -109,13 +249,15 @@ Who does what:
 M31 is the first programme, not the architecture. Each programme is a file:
 
     programmes/m31-novae.toml
+    programmes/m33-novae.toml
     programmes/variable-stars.toml
     programmes/sungrazer.toml
+    programmes/public-alerts.toml
 
 Each names its fields (for M31, `mosaic.py`'s panels), cadence, exposure,
 reference, detection settings, catalogues to check, and follow-up policy.
-No code says `if target == "M31"`, so M33, M81 and M82 later need only a
-new file.
+No code says `if target == "M31"`, so M33 now and others later need only
+a new file.
 
 ### Observe: `patrol.py`
 
@@ -265,17 +407,17 @@ last night's 4 fields" or "one unexplained candidate near NGC 7331". This
 is how supernovae in bright galaxies get looked for without a dedicated
 patrol.
 
-### Public alerts
+### Public alerts: `brokers.py`
 
 Alert brokers such as Fink and ANTARES sort the surveys' alerts and pick
-out ones worth following. `brokers.py` would read a filtered feed and ask,
-for each: is it above our skyline tonight, bright enough for this rig,
-better value than tonight's planned target, and do we have a reference?
-Then: "AT xxxx is 54° high at 22:15 at about 16.7; the rig should reach
-it. Take a confirmation picture?" With the person's yes, the patrol pauses,
-the transient is imaged, and the patrol resumes. RTS2 shows the
-observatory side of this (scheduling, weather, targets of opportunity),
-and its complexity is not needed here.
+out ones worth following. Besides the search for unreported transients
+above, `brokers.py` asks of each alert: is it above our skyline tonight,
+bright enough for this rig, better value than tonight's planned target,
+and do we have a reference? Then: "AT xxxx is 54° high at 22:15 at about
+16.7; the rig should reach it. Take a confirmation picture?" With the
+person's yes, the patrol pauses, the transient is imaged, and the patrol
+resumes. RTS2 shows the observatory side of this (scheduling, weather,
+targets of opportunity), and its complexity is not needed here.
 
 ### Moving objects, later: `moving.py`
 
@@ -292,14 +434,18 @@ long shot.
     ./sungrazer.py fetch            the latest LASCO C3 and C2 pictures
     ./sungrazer.py look             candidates, as a movie and a list
 
-Background removed; moving points found; tracklets scored for steady,
-near-straight motion; stars and cosmic rays rejected; each candidate
+It runs all the time, day and night, whatever the weather. Background
+removed; moving points found; tracklets scored for steady, near-straight
+motion and steady brightness; checked against comets already reported; stars and cosmic rays rejected; each candidate
 shown as a short movie for a person to watch. The project's guide asks
 reporters to view frames in sequence, confirm the object is a comet, and
 report its pixel positions and times through the project's form under
 their own name. Before fetching automatically, ask the project, and keep
-the rate low. This is a good thing for the rig to do when it is cloudy,
-but the headline stays "the telescope found a new source in the sky".
+the rate low. A candidate reaches the person as: "possible unreported
+comet, 91% track consistency, in 6 consecutive C3 frames, straight
+motion, not in the reported list [watch] [dismiss] [open the report
+form]". It may well be the likeliest credited discovery, but the headline
+stays "the telescope found a new source in the sky".
 
 ### The candidate page
 
@@ -370,24 +516,25 @@ In the morning:
 
 ## Phases
 
-Each phase ends with a scientific proof, not just working code.
+Ordered by what most raises the chance of a discovery soonest. Each phase
+ends with a scientific proof, not just working code.
 
 | Phase | Build | Proof |
 |---|---|---|
-| 0 | Depth and completeness: `measure.py`, planted fake stars | a recovery curve for each region of M31 |
-| 1 | References and photometric calibration | the same star measures the same across nights |
-| 2 | Proper image subtraction | planted fakes recovered reliably |
-| 3 | Candidate database and forced photometry | a planted rising fake gets the right light curve |
-| 4 | Vetting and catalogue checks | a known asteroid and a known variable correctly set aside |
-| 5 | The M31 patrol | a known nova, past or current, recovered from our data |
-| 6 | Real-or-bogus classifier | a measured fall in false candidates |
-| 7 | Proposed follow-up | a candidate leads to a useful repeat observation |
-| 8 | Public alerts | a real public transient observed |
-| 9 | Sungrazer | a known comet recovered in archived pictures |
-| 10 | Every session searched | every science picture checked automatically |
+| 0 | Depth and completeness: `measure.py`, planted fake stars, at 60 to 600 s | a recovery curve for each M31 region and exposure |
+| 1 | References, calibration, proper subtraction, the candidate database, vetting and forced photometry for M31 | planted fakes recovered; a planted rising fake gets the right light curve; a known asteroid and a known variable set aside |
+| 2 | The M31 patrol, scheduled by priority | a known nova, past or current, recovered from our data |
+| 3 | M33 | a first M33 night with its completeness measured |
+| 4 | Sungrazer, running all the time | a known comet recovered in archived pictures |
+| 5 | The report packet | under five minutes from a confirmed planted fake to a packet |
+| 6 | Public alerts (`brokers.py`) | a real public transient observed; an unreported-transient search run over a past month of alerts |
+| 7 | Every session searched; old frames searched again on each improvement | every science picture checked automatically; a rerun finds fakes planted in old frames |
+| 8 | Real-or-bogus classifier; proposed follow-up | a measured fall in false candidates; a candidate leads to a useful repeat |
+| 9 | Variable stars; TESS transits | a first VSX submission |
+| 10 | A wide-field lens rig; several rigs together | a Milky Way field patrolled; a candidate confirmed by a second rig |
 
-Phases 0 to 5 run through the 2026 to 2027 M31 season if the weather
-allows. Sungrazer (9) needs no sky and can be built any cloudy week.
+Phases 0 to 2 run through the 2026 to 2027 M31 season if the weather
+allows. Sungrazer needs no sky and can be built any cloudy week.
 
 ## How a find is reported and credited
 
@@ -421,7 +568,18 @@ allows. Sungrazer (9) needs no sky and can be built any cloudy week.
 
 ## Sources
 
-- [Classical novae from the POINT-AGAPE microlensing survey of M31, II](https://arxiv.org/abs/astro-ph/0509493), Darnley and others: 65 (+16/−15) novae a year
+- [ZTF public releases](https://www.ztf.caltech.edu/ztf-public-releases.html): the 2-night northern survey, real-time alerts, ZTF 3 to 31 December 2026
+- [TNS: getting started](https://www.wis-tns.org/content/tns-getting-started): the discoverer is the first report made public; discovery photometry and the last non-detection
+- [Nova in M31 discovered by Bromsgrove amateur](https://britastro.org/journal_contents_ite/nova-in-m31-discovered-by-bromsgrove-amateur), BAA: George Carey, 2015
+- [Rochester list of 2025 novae](https://rochesterastronomy.org/sn2025/novae.html): M33 novae at 17.3 to 18.4
+- [ATel 17011](https://www.astronomerstelegram.org/?read=17011): a nova in M81 at 19.8
+- [ATel 17764](https://www.astronomerstelegram.org/?read=17764): M31N 2026-04c, 16.2, fainter than 18.4 two days before
+- [ATel 17810](https://www.astronomerstelegram.org/?read=17810): M31N 2022-10c found in archive frames
+- [SN 2023ixf in M101](https://britastro.org/2023/m101-sn2023ixf), BAA: Koichi Itagaki, 14.9
+- [GOTO's 2025 transient discoveries](https://goto-observatory.org/2025-summary-of-goto-transient-discoveries/)
+- [Planet Hunters TESS](https://science.nasa.gov/citizen-science/planet-hunters-tess/) and [ExoMiner++](https://science.nasa.gov/open-science/deep-learning-exoplanets-tess/), NASA
+
+- [Classical novae from the POINT-AGAPE microlensing survey of M31, II](https://arxiv.org/abs/astro-ph/0509493), Darnley and others: 65 (+16/−15) novae a year, 38 in the bulge and 27 in the disc
 - [AT 2025abao in M31, discovered by Koichi Itagaki](https://www.rochesterastronomy.org/sn2025/sn2025abao.html), Rochester list of supernovae and novae
 - [Dedicated amateur discovers supernova in remote galaxy](https://www.universetoday.com/articles/dedicated-amateur-discovers-supernova-in-remote-galaxy), Universe Today: Filipp Romanov, AT 2025umq
 - [Vera C. Rubin Observatory begins its Legacy Survey of Space and Time](https://www.astronomy.com/science/vera-c-rubin-observatory-begins-its-legacy-survey-of-space-and-time/), Astronomy
