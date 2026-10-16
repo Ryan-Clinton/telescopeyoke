@@ -96,3 +96,10 @@ port = 7624
 # stops any INDI server already running, so leave it false if other equipment
 # shares one, and start "indiserver <driver>" yourself.
 manage_server = false
+
+# Telling the house when cloud or rain arrives (./alert.py, docs/alerts.md):
+# a Hue light by its name on the bridge, and a Google Home or Chromecast
+# speaker by its name. Either may be left out.
+# [alerts]
+# light = "Living room lamp"
+# speaker = "Kitchen speaker"

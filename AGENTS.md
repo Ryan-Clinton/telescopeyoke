@@ -39,6 +39,7 @@ them and every file kept under `demo/`.
 | `direct.py` | The mount without its handset (Wi-Fi adapter or EQDIR lead): stands in for the handset so `mount.py` is unchanged |
 | `camera.py`, `indi.py`, `altair.py`, `snap.py`, `liveview.py`, `focus.py` | Camera (through INDI, or Altair's own library) and focusing |
 | `host.py` | Everything that differs between Linux and Windows, in one place |
+| `alert.py` | Tells the house when cloud or rain arrives: a Hue light changes colour and a Google Home speaker says so. Reads the run's frames and the forecast; moves nothing |
 | `focuser.py`, `firmware/focuser/` | The focuser's motor: an Arduino Nano driving a small stepper, and the firmware it runs. Turns the motor only; `focus.py` does not use it yet |
 | `shoot.py`, `stacking.py`, `restack.py`, `process.py`, `calibrate.py` | Imaging pipeline |
 | `depth.py` | How faint a stack reaches, measured: zero point against Gaia, 5-sigma limit, planted stars found again (`docs/discovery.md`, phase 0) |

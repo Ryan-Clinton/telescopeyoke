@@ -353,3 +353,10 @@ def test_a_daylight_skyline_survey_on_the_simulated_mount(scope, monkeypatch, tm
         with horizon.eye(SITE, 0.002, 100, daylight=True) as look:
             horizon.trace(look, [0, 90], low=20)
     assert refusal.value.code_name == "MOTION_LOCKED" and scope.axes() == before
+
+
+def test_a_planet_is_found_where_it_is_tonight_and_the_sun_never():
+    saturn = mount.find_target("Saturn")
+    assert saturn["id"] == "Saturn" and -30 < saturn["dec"] < 30
+    with pytest.raises(mount.Refusal):
+        mount.find_target("sun")

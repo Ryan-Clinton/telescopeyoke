@@ -1190,6 +1190,9 @@ STARS = {
 }
 
 
+PLANETS = ("mercury", "venus", "mars", "jupiter", "saturn", "uranus", "neptune", "moon")
+
+
 def find_target(name):
     import mosaic
     import sky
@@ -1204,6 +1207,15 @@ def find_target(name):
         if wanted in (t["id"].replace(" ", "").lower(), t["alt_id"].replace(" ", "").lower(),
                       t["name"].replace(" ", "").lower()):
             return t
+    if wanted in PLANETS:
+        # A planet is where it is tonight, not where a catalogue put it. Never
+        # the Sun: nothing here is to point a telescope at it.
+        from astropy.coordinates import get_body
+        from astropy.time import Time
+        site = (config.load() if config.FILE.exists() and not config.DEMO else config.example())["site"]
+        body = get_body(wanted, Time.now(), location(site))
+        return {"id": wanted.capitalize(), "alt_id": "", "name": "planet",
+                "ra": float(body.ra.deg), "dec": float(body.dec.deg)}
     raise Refusal("TARGET_UNKNOWN", f"'{name}' is not in the catalogue.")
 
 
