@@ -34,7 +34,8 @@ with the Triangulum Galaxy (M33) added once M31 works:
 - M31 stands high over Ballymoney from October to February. It is 3°
   across, so it is a mosaic, which suits this rig.
 - M33 is a second, independent population within reach: its 2025 novae
-  were found at magnitude 17.3 to 18.4, some by amateurs.
+  were found at magnitude 17.3 to 18.4, by surveys (ATLAS, XOSS) and by
+  named individual observers.
 
 Programmes that need no clear sky run alongside, so something is always
 hunting:
@@ -78,7 +79,7 @@ The surveys we are up against, and where they stop:
 | Survey | Depth | Sky | What it leaves |
 |---|---|---|---|
 | ASAS-SN | g ≈ 18.5, nightly | whole sky | complete only to about 16.7 at peak; crowded galaxy centres are hard for its 8″ pixels |
-| ZTF | deeper than ours | northern sky every 2 nights; real-time public alerts | nights between its visits, crowded centres; its current run (ZTF 3) is scheduled to 31 December 2026 |
+| ZTF | deeper than ours | northern sky every 2 nights; real-time public alerts. Its Bright Transient Survey takes spectra of almost every non-Galactic transient brighter than 18.5 | nights between its visits, crowded centres; its current run (ZTF 3) is scheduled to 31 December 2026 |
 | Rubin (LSST), started 30 June 2026 | far deeper | **southern sky only** | M31 and the far north; it saturates near magnitude 16 |
 | Professional M31 nova patrols (Ondřejov and others) | deeper than ours | M31 | weather and gaps; a clear Ulster night when Europe is cloudy |
 
@@ -87,7 +88,7 @@ The surveys we are up against, and where they stop:
 | Hunt | Odds of a first | When |
 |---|---|---|
 | Novae in M81 | low for this rig: they are found near magnitude 20, one in 2025 at 19.8 in a 3000 s stack on a 0.65 m telescope | not yet |
-| Supernovae in bright galaxies | low per field: ASAS-SN finds most bright ones within a day, and amateurs who still win image hundreds of galaxies a night with 0.35 to 0.6 m telescopes. But they can be bright: Koichi Itagaki found SN 2023ixf in M101 at 14.9 | through every session searched, below; no dedicated patrol |
+| Supernovae in bright galaxies | low per field: ASAS-SN finds most bright ones within a day, and amateurs who still win image hundreds of galaxies a night with 0.35 to 0.6 m telescopes. ZTF's Bright Transient Survey covers the northern sky every 2 to 3 nights to 18.5, so bright northern supernovae are a crowded race. They can be bright: Koichi Itagaki found SN 2023ixf in M101 at 14.9 | through every session searched, below; no dedicated patrol |
 | Galactic novae | low with the 150P's 1° field; they are found with DSLRs and 50 to 300 mm lenses covering the Milky Way (John Seach, Tadashi Kojima, 2025) | a wide-field lens node, below |
 | Exoplanets in TESS data | open to volunteers: Planet Hunters TESS invites it, and NASA's open-source ExoMiner++ flagged 7,000 TESS candidates on its first run | a later cloudy-night programme |
 | Asteroids and comets through the telescope | very low for discovery; good for recovering known ones | a later programme, `moving.py`, below |
@@ -152,8 +153,9 @@ than going half a magnitude deeper.
 
 ### From candidate to report in under five minutes
 
-Priority on TNS goes to the first report made public, and a report needs
-discovery photometry and, where there is one, the last non-detection. So
+TNS names as the formal discoverer "the reporter/s whose discovery report
+first turns to public", and a report needs discovery photometry (mandatory)
+and the last non-detection, or archival information in its place. So
 everything a report needs is kept ready before anything is found:
 
     position and its uncertainty
@@ -166,6 +168,20 @@ everything a report needs is kept ready before anything is found:
     a finding chart
     the asteroid, VSX, SIMBAD, TNS and Gaia checks
     the number of independent frames it is in
+
+Every figure in the packet says what kind of figure it is:
+
+| Label | Meaning | Example |
+|---|---|---|
+| measured | from our own frames | magnitude 17.42 ± 0.08 |
+| inferred | worked out from measurements | rising 0.7 mag an hour |
+| estimated | a model or a guess, not yet measured | the rig's depth before phase 0 |
+| simulated | from planted fakes | 90% recovery at 17.8 |
+| reported | from someone else | a ZTF detection, a VSX entry |
+| not known | asked and not answered | no spectrum yet |
+
+The same labels go on the candidate page and in `ty candidates --json`,
+so nobody reading a packet mistakes a guess for a measurement.
 
 The target: from a confirmed candidate to a packet a person can review in
 under five minutes, timed on planted fakes. The person still presses send.
@@ -183,11 +199,11 @@ are brightening. Then:
     58° high now; the rig should reach it in about 3 minutes
     Recommended: confirm now.  [approve]
 
-Credit is honest about where the pixels came from. TNS reports carry a
-reporting group and a source group, and the discoverer is whoever's report
-is made public first. A transient first seen in ZTF data and reported by us
-is reported with ZTF as the source; it is not "my telescope discovered
-it". Our own confirmation picture is then follow-up.
+Credit is honest about where the pixels came from. A TNS discovery
+certificate shows a Reporting Group and a Discovery Data Source separately
+(for AT 2026acrv both are ZTF). A transient first seen in ZTF data and
+reported by us is reported with ZTF as the data source; it is not "my
+telescope discovered it". Our own confirmation picture is then follow-up.
 
 ### Old pictures, searched again
 
@@ -569,9 +585,11 @@ allows. Sungrazer needs no sky and can be built any cloudy week.
 ## Sources
 
 - [ZTF public releases](https://www.ztf.caltech.edu/ztf-public-releases.html): the 2-night northern survey, real-time alerts, ZTF 3 to 31 December 2026
-- [TNS: getting started](https://www.wis-tns.org/content/tns-getting-started): the discoverer is the first report made public; discovery photometry and the last non-detection
+- [TNS: getting started](https://www.wis-tns.org/content/tns-getting-started): the formal discoverer is the first report made public; discovery photometry and the last non-detection
+- [TNS discovery certificate for AT 2026acrv](https://www.wis-tns.org/object/2026acrv/discovery-cert): Reporting Group and Discovery Data Source shown separately
+- [ZTF Bright Transient Survey](https://www.ztf.caltech.edu/ztf-bts.html): spectra of almost every non-Galactic transient brighter than 18.5, sky every 2 to 3 nights
 - [Nova in M31 discovered by Bromsgrove amateur](https://britastro.org/journal_contents_ite/nova-in-m31-discovered-by-bromsgrove-amateur), BAA: George Carey, 2015
-- [Rochester list of 2025 novae](https://rochesterastronomy.org/sn2025/novae.html): M33 novae at 17.3 to 18.4
+- [Rochester list of 2025 novae](https://rochesterastronomy.org/sn2025/novae.html): M33 novae at 17.3 (ATLAS) to 18.4 (Zhijian Xu and Xing Gao)
 - [ATel 17011](https://www.astronomerstelegram.org/?read=17011): a nova in M81 at 19.8
 - [ATel 17764](https://www.astronomerstelegram.org/?read=17764): M31N 2026-04c, 16.2, fainter than 18.4 two days before
 - [ATel 17810](https://www.astronomerstelegram.org/?read=17810): M31N 2022-10c found in archive frames
