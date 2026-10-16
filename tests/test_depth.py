@@ -259,3 +259,23 @@ def test_too_few_measurements_are_refused():
 def test_each_stack_keeps_its_own_record():
     assert depth.record_path("frames/M31/x/final.fits").name == "depth.json"
     assert depth.record_path("frames/M31/x/discovery.fits").name == "discovery-depth.json"
+
+
+def test_every_term_is_fitted_only_from_enough_independent_nights():
+    truth = {"constant": 6.0, "time": 0.6, "fwhm": -2.1, "sky": 0.43}
+    rng = np.random.default_rng(3)
+    rows = []
+    for n in range(depth.FREE_AFTER):
+        seconds, width, sky = rng.choice([120, 300, 900, 3000]), rng.uniform(3.5, 8), rng.uniform(18.3, 19.8)
+        rows.append({"stack": f"s{n}", "session": f"s{n}", "seconds": float(seconds), "fwhm_arcsec": width,
+                     "sky": sky, "mag_50": depth.predict(truth, width, sky, seconds)})
+    with pytest.raises(interface.Refusal):
+        depth.fit(rows[:-1], free=True)
+    model, _ = depth.fit(rows, free=True)
+    assert model["fwhm"] == pytest.approx(-2.1, abs=0.01) and model["sky"] == pytest.approx(0.43, abs=0.01)
+    held, _ = depth.fit(rows)
+    assert (held["fwhm"], held["sky"], held["free"]) == (-2.5, 0.5, False)
+    # Twenty steps of one sweep are one night, not twenty.
+    one_night = [dict(r, session="one") for r in rows]
+    with pytest.raises(interface.Refusal):
+        depth.fit(one_night, free=True)

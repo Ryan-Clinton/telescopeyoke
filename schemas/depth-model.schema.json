@@ -2,19 +2,21 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/depth-model.schema.json",
   "title": "Depth model",
-  "description": "data of: depth.py --model [--predict --fwhm F --sky S --minutes M] --json. How the magnitude at which half of planted stars are found follows star width, sky brightness and time: mag_50 = constant + time x log10(seconds) - 2.5 log10(FWHM arcsec) + 0.5 sky, fitted to every depth.json kept. The width and sky terms are fixed; the constant and time term are fitted.",
+  "description": "data of: depth.py --model [--free] [--predict --fwhm F --sky S --minutes M] --json. How the magnitude at which half of planted stars are found follows star width, sky brightness and time: mag_50 = constant + time x log10(seconds) - 2.5 log10(FWHM arcsec) + 0.5 sky, fitted to every depth.json kept. The width and sky terms are fixed; the constant and time term are fitted.",
   "type": "object",
   "required": ["model", "measurements"],
   "properties": {
     "model": {
       "type": "object",
-      "required": ["constant", "time", "fwhm", "sky", "measurements", "scatter"],
+      "required": ["constant", "time", "fwhm", "sky", "measurements", "independent", "free", "scatter"],
       "properties": {
         "constant": {"type": "number"},
         "time": {"type": "number", "description": "Magnitudes gained per factor of ten in time."},
         "fwhm": {"type": "number"},
         "sky": {"type": "number"},
         "measurements": {"type": "integer"},
+        "independent": {"type": "integer", "description": "Distinct stacks; the steps of one sweep count once."},
+        "free": {"type": "boolean", "description": "Whether the width and sky terms were fitted (--free) or held at -2.5 and +0.5."},
         "scatter": {"type": "number", "description": "Spread of the measurements about the model, magnitudes."}
       }
     },
@@ -25,6 +27,7 @@
         "required": ["stack", "seconds", "fwhm_arcsec", "sky", "mag_50", "predicted", "off_by"],
         "properties": {
           "stack": {"type": "string"},
+          "session": {"type": "string"},
           "seconds": {"type": "number"},
           "fwhm_arcsec": {"type": "number"},
           "sky": {"type": "number"},

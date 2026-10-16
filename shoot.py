@@ -337,12 +337,21 @@ ALL_GONE = 0.05     # stars below this share of their kept brightness: gone, not
 PAUSED_NOTE = 900   # seconds between reminders that a --through-cloud run is still paused
 
 
+def judged(log):
+    """The frames that were measured. A frame the live stack had no time for
+    is logged with no figures and no verdict: it says nothing about cloud,
+    and counting it as rejected would stop a clear night's run whenever the
+    laptop fell behind."""
+    return [f for f in log if f.get("flux") is not None]
+
+
 def what_dimmed(log, last=CLOUD_STOP):
     """What the last rejected frames say about why, against the frames kept:
     the stars' brightness and the sky's, in words, with what to look at.
     The frames cannot tell high haze from dew on the mirrors (both dim the
     stars and leave the sky no brighter); the person outside can, by
     looking up. On 15 October 2026 it was haze, not dew."""
+    log = judged(log)
     kept = [f for f in log if f["accepted"]]
     recent = log[-last:]
     if len(kept) < 3 or not recent:
@@ -447,7 +456,7 @@ def run(args):
             if why:
                 print(f"  {why}; stopping", flush=True)
                 return False
-        latest = session.log[-CLOUD_STOP:]
+        latest = judged(session.log)[-CLOUD_STOP:]
         if len(latest) == CLOUD_STOP and not any(f["accepted"] for f in latest):
             if not args.through_cloud:
                 print(f"  the last {CLOUD_STOP} frames were all rejected ({what_dimmed(session.log)}); stopping",

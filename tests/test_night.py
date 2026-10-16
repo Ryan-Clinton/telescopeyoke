@@ -270,3 +270,16 @@ def test_a_pause_says_what_the_frames_show_about_the_cloud():
     gone = shoot.what_dimmed(kept + [frame(0, 80, False)] * 20)
     assert "thick cloud" in gone
     assert shoot.what_dimmed([frame(0, 80, False)] * 20) == "cloud?"       # nothing kept to compare with
+
+
+def test_frames_the_live_stack_had_no_time_for_say_nothing_about_cloud():
+    """On a slow computer some frames are only kept for later, with no
+    figures: Windows CI ran with one worker and the cloud report crashed on
+    them (16 October 2026)."""
+    def frame(flux, background, accepted):
+        return {"flux": flux, "background": background, "accepted": accepted}
+    later = {"index": 0, "accepted": False, "fwhm": None, "stars": 0, "reason": "live stack behind"}
+    log = [frame(56000, 83, True)] * 10 + [later, frame(900, 250, False), later] * 10
+    assert "lit by the town" in shoot.what_dimmed(log)
+    # Twenty frames kept for later on a clear night are not twenty rejections.
+    assert shoot.judged([frame(56000, 83, True)] + [later] * 20) == [frame(56000, 83, True)]

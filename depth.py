@@ -581,28 +581,49 @@ def measurements(folder=None):
         width, sky = r.get("fwhm_arcsec"), r.get("sky_mag_per_arcsec2")
         whole = r.get("completeness", {}).get("all", {}).get("mag_50")
         if width and sky is not None and whole is not None and r.get("exposure_s"):
-            rows.append({"stack": r.get("stack", str(path.parent)), "seconds": float(r["exposure_s"]),
+            rows.append({"stack": r.get("stack", str(path.parent)), "session": str(path.parent),
+                         "seconds": float(r["exposure_s"]),
                          "fwhm_arcsec": width, "sky": sky, "mag_50": whole})
         for step in r.get("sweep", []):
             if width and sky is not None and step.get("mag_50", {}).get("all") is not None:
                 rows.append({"stack": f"{r.get('stack', path.parent)} first {step['exposure_s']:g} s",
+                             "session": str(path.parent),
                              "seconds": float(step["exposure_s"]), "fwhm_arcsec": width, "sky": sky,
                              "mag_50": step["mag_50"]["all"]})
     return rows
 
 
-def fit(rows):
-    """The constant and the time term of
-    mag_50 = constant + time x log10(seconds) - 2.5 log10(FWHM") + 0.5 sky,
-    with how far each measurement sits from it."""
+FREE_AFTER = 20      # independent stacks needed before the width and sky terms are fitted too
+
+
+def fit(rows, free=False):
+    """The model mag_50 = constant + time x log10(seconds) + fwhm x log10(FWHM")
+    + sky x sky, with how far each measurement sits from it. Normally only
+    the constant and the time term are fitted, and the width and sky terms
+    are held at what a perfect detector against the sky would give (-2.5
+    and 0.5). With `free`, all four are fitted, which needs FREE_AFTER
+    independent stacks: the steps of one sweep share their night's star
+    width and sky, so they count as one."""
     if len(rows) < 3 or len({r["seconds"] for r in rows}) < 2:
         raise interface.Refusal("INVALID_REQUEST", "Too few depth measurements to fit: run "
                                 "depth.py --plant on a few stacks, or --sweep on one.")
+    independent = len({r.get("session", r["stack"]) for r in rows})
     t = np.log10([r["seconds"] for r in rows])
-    y = np.array([r["mag_50"] + 2.5 * math.log10(r["fwhm_arcsec"]) - 0.5 * r["sky"] for r in rows])
-    slope, constant = np.polyfit(t, y, 1)
+    w = np.log10([r["fwhm_arcsec"] for r in rows])
+    sky = np.array([r["sky"] for r in rows])
+    m = np.array([r["mag_50"] for r in rows])
+    if free:
+        if independent < FREE_AFTER:
+            raise interface.Refusal("INVALID_REQUEST", f"Fitting every term needs {FREE_AFTER} independent "
+                                    f"stacks, nights of different focus and sky; there are {independent}.")
+        terms, *_ = np.linalg.lstsq(np.column_stack([np.ones(len(m)), t, w, sky]), m, rcond=None)
+        constant, slope, width, darkness = (float(v) for v in terms)
+    else:
+        slope, constant = np.polyfit(t, m + 2.5 * w - 0.5 * sky, 1)
+        width, darkness = -2.5, 0.5
     model = {"constant": round(float(constant), 3), "time": round(float(slope), 3),
-             "fwhm": -2.5, "sky": 0.5, "measurements": len(rows)}
+             "fwhm": round(width, 3), "sky": round(darkness, 3), "measurements": len(rows),
+             "independent": independent, "free": bool(free)}
     for r in rows:
         r["predicted"] = round(predict(model, r["fwhm_arcsec"], r["sky"], r["seconds"]), 2)
         r["off_by"] = round(r["mag_50"] - r["predicted"], 2)
@@ -613,14 +634,15 @@ def fit(rows):
 def predict(model, fwhm_arcsec, sky, seconds):
     """The magnitude at which half of faint stars would be found."""
     return (model["constant"] + model["time"] * math.log10(seconds)
-            - 2.5 * math.log10(fwhm_arcsec) + 0.5 * sky)
+            + model["fwhm"] * math.log10(fwhm_arcsec) + model["sky"] * sky)
 
 
 def run_model(args, say=print):
-    model, rows = fit(measurements())
-    say(f"from {model['measurements']} measurements: half found at "
-        f"{model['constant']:.2f} + {model['time']:.2f} log10(seconds) "
-        f"- 2.5 log10(FWHM\") + 0.5 sky; scatter {model['scatter']:.2f} mag")
+    model, rows = fit(measurements(), free=getattr(args, "free", False))
+    say(f"from {model['measurements']} measurements of {model['independent']} independent stacks: "
+        f"half found at {model['constant']:.2f} + {model['time']:.2f} log10(seconds) "
+        f"{model['fwhm']:+.2f} log10(FWHM\") {model['sky']:+.2f} sky; scatter {model['scatter']:.2f} mag"
+        + ("" if model["free"] else " (width and sky terms held at -2.5 and +0.5)"))
     say(f"each doubling of time buys {model['time'] * math.log10(2):.2f} mag "
         f"(0.38 if only the sky's noise mattered)")
     for r in rows:
@@ -633,7 +655,8 @@ def run_model(args, say=print):
         seconds = 60 * args.minutes
         m = predict(model, args.fwhm, args.sky, seconds)
         say(f"stars {args.fwhm}\" across under a {args.sky} sky, {args.minutes:g} minutes: "
-            f"half found at about G {m:.1f} (inferred, ± {model['scatter']:.1f})")
+            f"half found at about G {m:.1f} (inferred, ± {model['scatter']:.1f}; good enough to "
+            "decide whether to refocus or patrol, not an exact limit)")
         answer["prediction"] = {"fwhm_arcsec": args.fwhm, "sky": args.sky, "seconds": seconds,
                                 "mag_50": round(m, 2), "kind": "inferred"}
     return answer
@@ -670,6 +693,8 @@ def main():
     ap.add_argument("--near", help="the object to plate-solve near, if the folder does not say")
     ap.add_argument("--model", action="store_true",
                     help="fit how depth follows star size, sky and time, from every depth.json kept")
+    ap.add_argument("--free", action="store_true",
+                    help=f"with --model: fit the width and sky terms too (needs {FREE_AFTER} independent stacks)")
     ap.add_argument("--predict", action="store_true",
                     help="with --fwhm, --sky and --minutes: how deep a stack would reach")
     ap.add_argument("--fwhm", type=float, help="star width in arcseconds, for --predict")

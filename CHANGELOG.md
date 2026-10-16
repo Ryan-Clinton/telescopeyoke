@@ -5,6 +5,14 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
 
 ## Not yet released
 
+- **A run that fell behind no longer crashes or stops under cloud**: a frame
+  the live stack had no time for is logged without figures, and the cloud
+  report read them anyway (`KeyError: 'flux'`; the Windows tests, which
+  run with one worker, failed on it). Such frames now say nothing about
+  cloud either way, so twenty of them on a clear night no longer count as
+  twenty rejections.
+- `./depth.py --model --free` fits the star-width and sky terms too, once
+  there are 20 independent stacks; a sweep counts as one night.
 - **A stack for finding faint stars**: `./restack.py M31 --discovery` writes
   `discovery.fits` beside the picture, every frame that passes the checks
   weighted for a faint star's signal-to-noise and the poorest left out where

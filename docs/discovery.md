@@ -574,7 +574,7 @@ October 2026 with the same code throughout:
 |---|---|---|---|---|---|---|
 | M31, 13 Oct, 54 min | 202 × 16 s | 6.4″ | 19.1 | 17.91 | 17.02 | 17.59 |
 | M31, 13 and 14 Oct, 95 min | 358 × 16 s | 6.4″ | 19.0 | 17.92 | 17.01 | 17.61 |
-| M31, 14 Oct, 44 min | 164 × 16 s | 6.7″ | 18.7 | 17.45 | 16.69 | 17.19 |
+| M31, 14 Oct, 44 min | 164 × 16 s | 6.6″ | 18.7 | 17.71 | 16.83 | 17.30 |
 | M31, 13 Oct, 8 min | 40 × 12 s | 6.2″ | 19.1 | 17.19 | 16.61 | 17.14 |
 | M31, 6 Oct, 30 min | 120 × 15 s | 7.9″ | 18.8 | 17.22 | 16.50 | 17.10 |
 | M33, 16 Oct, 24 min | 145 × 10 s | 6.1″ | 18.6 | 17.28 | 16.92 | 17.24 |
@@ -626,7 +626,13 @@ What it says:
   minutes at 4.5″ under a 19.1 sky reaching about 17.3, against 17.0 at
   today's 6.4″: **sharp focus is worth more than doubling the time.**
   `depth.py --predict --fwhm F --sky S --minutes M` gives the figure before
-  a patrol: the check that says "refocus first".
+  a patrol: the check that says "refocus first", or "the sky is too
+  bright; wait". It is planning-grade, good to the model's 0.3 mag, not an
+  exact limit. The width and sky terms are held at what a perfect detector
+  against the sky would give; once there are 20 independent stacks, from
+  nights of different focus and sky, `depth.py --model --free` fits them
+  too, and this camera and pipeline may well differ from the ideal (a sweep
+  counts as one night, since its steps share its stars and sky).
 - **The figures agree with each other.** The formula's 5-sigma limit and
   the planted stars' 50% point are within 0.35 mag on every stack.
 - **The galaxy's glow costs little away from the core.** On M31's fainter
@@ -648,6 +654,25 @@ brighter than each limit: the scheduler should choose the length that
 finds the most eruptions an hour, from these completeness curves, the
 distribution of M31 novae's peak brightness and their rise and fall, and
 the cadence. Five minutes is the starting point, not the answer.
+
+**The next experiment: is the floor the camera's pattern?** Two sessions
+on M31, as alike as the sky allows (same exposure, gain and time of
+night, similar sky):
+
+| | Session A | Session B |
+|---|---|---|
+| Calibration | bias only, as now | darks at the session's exposure and gain, and flats |
+| Between frames | the mount's own drift | dithered a few pixels every few frames |
+
+Both are measured with `depth.py --plant --sweep` and stacked to 5, 10,
+30 and 60 minutes. If B keeps gaining depth past 30 minutes (17.5, 17.8)
+where A flattens near 17.6, the floor was the pattern, and darks, flats
+and dithering are a free gain. If B flattens too, the floor is elsewhere:
+the residual galaxy glow, the stars' own crowding, or the stacking.
+What it needs first: darks at 16 s and gain 1500 and a flat
+(`calibrate.py`, both possible now), and **dithering, which `shoot.py`
+does not do yet**. Dithering moves the mount between frames, so it is
+built with a simulator test before it is used, like every other move.
 
 **What to improve, for discovery, in order:** sharp focus from the motor
 focuser; tracking and round stars; dark frames, flats and dithering;
