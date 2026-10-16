@@ -58,7 +58,7 @@ WEB = config.DATA / "web"
 # as a fraction of the frame's height. The drift up to then is welcome: it
 # spreads the sensor's fixed pattern around, which averaging then removes.
 DRIFT_LIMIT = 0.2
-TRIAL_EXPOSURES = (1, 2, 3, 4)
+TRIAL_EXPOSURES = (2, 4, 8, 16, 30)   # the tracking test's lengths, in seconds
 ASSIST_EVERY = 15   # accepted frames between trims of the Dec creep
 # A running run looks here after every frame for an order from "ty run ...".
 ORDERS = config.DATA / "cache" / "run_order.txt"

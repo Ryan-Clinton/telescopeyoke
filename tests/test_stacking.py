@@ -292,6 +292,15 @@ def test_the_longest_exposure_with_round_stars_is_chosen():
     assert stacking.choose_exposure([(1, good(stars=0))]) is None
 
 
+def test_longer_frames_are_not_held_to_the_shortest_frames_frozen_seeing():
+    # 13 October 2026: round stars to 16 s, a little wider at each length.
+    trials = [(s, good(fwhm=w, roundness=0.87)) for s, w in
+              ((2, 2.87), (4, 3.43), (8, 3.77), (16, 4.17))]
+    assert stacking.choose_exposure(trials) == 16
+    trials.append((30, good(fwhm=4.5, roundness=0.62)))     # trailing at last
+    assert stacking.choose_exposure(trials) == 16
+
+
 def test_the_gain_with_most_stars_and_few_burnt_pixels_is_suggested():
     results = [(300, dict(good(stars=40), burnt=0.0)), (1500, dict(good(stars=90), burnt=0.0001)),
                (3000, dict(good(stars=120), burnt=0.01))]

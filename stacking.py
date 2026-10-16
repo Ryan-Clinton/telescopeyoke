@@ -824,17 +824,25 @@ def run_status(session, now=None):
 # --- choosing the exposure -----------------------------------------------------
 
 def choose_exposure(trials, keep_round=0.85, allow_bloat=1.25):
-    """The longest exposure whose stars are still nearly as round and tight
-    as the shortest one's. `trials` is a list of (seconds, quality) pairs."""
+    """The longest exposure whose stars are still round, and no more than a
+    little wider than at the length before. `trials` is a list of (seconds,
+    quality) pairs.
+
+    Each length is judged against the one before it, not against the
+    shortest: a 1 or 2 s frame freezes the seeing, and every longer frame
+    is wider for that alone. On 13 October 2026 the stars were round to
+    16 s, FWHM 2.8 at 2 s and 4.2 at 16, but judged against the 2 s frame
+    nothing past 4 s could be chosen. Trailing shows as stars losing their
+    roundness, or a sudden jump in width."""
     usable = sorted((s, q) for s, q in trials if q["stars"] >= 8)
     if not usable:
         return None
-    _, shortest = usable[0]
-    best = usable[0][0]
-    for seconds, q in usable:
-        if (q["roundness"] >= keep_round * shortest["roundness"]
-                and q["fwhm"] <= allow_bloat * shortest["fwhm"]):
-            best = seconds
+    best, before = usable[0]
+    roundest = before["roundness"]
+    for seconds, q in usable[1:]:
+        roundest = max(roundest, q["roundness"])
+        if q["roundness"] >= keep_round * roundest and q["fwhm"] <= allow_bloat * before["fwhm"]:
+            best, before = seconds, q
         else:
             break
     return best
