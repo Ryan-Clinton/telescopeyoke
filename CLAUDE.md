@@ -45,7 +45,7 @@ There is no build step and no linter; the scripts run from the checkout.
 
 ```bash
 pip install ".[test]"                       # what CI installs; ./install.sh uses distro packages
-pytest -q                                   # about three minutes on this laptop: background it
+pytest -q                                   # about fifteen minutes on this laptop: run it on the desktop (ssh desktop), in the background
 pytest -q tests/test_interface.py           # one file; this one takes seconds
 pytest -q tests/test_mount.py::test_name    # one test
 pytest -q -k meridian                       # tests matching a word

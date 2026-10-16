@@ -357,6 +357,48 @@ def test_the_quality_pass_rebuilds_the_picture_from_the_raw_frames(session):
     assert not (run.folder / "registered").exists()   # working files tidied away
 
 
+def test_the_discovery_stack_is_written_beside_the_picture_and_leaves_it_alone(session):
+    run, _ = session
+    restack.run(run.folder, say=lambda *_: None)
+    before = (run.folder / "final.fits").read_bytes(), (run.folder / "restack.json").read_text(encoding="utf-8")
+    said = []
+    made = restack.run(run.folder, say=said.append, discovery=True)
+    assert made == run.folder / "discovery.fits" and made.exists()
+    after = (run.folder / "final.fits").read_bytes(), (run.folder / "restack.json").read_text(encoding="utf-8")
+    assert after == before
+    summary = json.loads((run.folder / "discovery.json").read_text(encoding="utf-8"))["summary"]
+    assert summary["picture"] is None and summary["stack"].endswith("discovery.fits")
+    assert any("discovery stack:" in line for line in said)
+    # The cloudy frame failed the checks and is in neither stack.
+    assert "light-0007.fits" not in json.loads((run.folder / "discovery.json").read_text(encoding="utf-8"))["kept"]
+
+
+def frame(fwhm=4.0, noise=10.0, flux=1000.0):
+    return {"fwhm": fwhm, "noise": noise, "flux": flux}
+
+
+def test_frames_of_one_quality_count_the_same_in_the_discovery_stack():
+    assert stacking.point_weights([frame() for _ in range(5)]) == [1.0] * 5
+
+
+def test_for_faint_stars_a_soft_or_grainy_frame_counts_for_less():
+    sharp, soft, grainy, dim = stacking.point_weights(
+        [frame(), frame(fwhm=5.0), frame(noise=12.0), frame(flux=800.0)] + [frame()] * 8)[:4]
+    assert sharp == 1.0
+    assert soft == pytest.approx((4 / 5) ** 2, abs=0.01)
+    assert grainy == pytest.approx((10 / 12) ** 2, abs=0.01)
+    assert dim == pytest.approx(0.8, abs=0.01)
+
+
+def test_frames_that_would_lower_a_faint_stars_signal_to_noise_are_left_out():
+    good = [frame() for _ in range(10)]
+    # Hazy, bright-skied and soft: worth so little that the wider stars
+    # they bring cost more than their light gives.
+    poor = [frame(fwhm=9.0, noise=25.0, flux=400.0) for _ in range(3)]
+    weights = stacking.point_weights(good + poor)
+    assert all(w == 1.0 for w in weights[:10]) and all(w == 0.0 for w in weights[10:])
+
+
 def test_the_web_page_can_be_told_how_far_a_run_has_got(session):
     run, _ = session
     status = stacking.run_status(run.folder)

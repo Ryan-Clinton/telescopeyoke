@@ -6,6 +6,8 @@
     ./depth.py M31 --plant              also plant fake stars and count how many are found
     ./depth.py M31 --sweep              the same on 60, 120, 180, 300 and 600 s of its frames
     ./depth.py M31 --json
+    ./depth.py --model                  how depth follows star size, sky and time, from every measurement kept
+    ./depth.py --predict --fwhm 4.7 --sky 19.2 --minutes 5
 
 The stack is plate-solved and its stars are matched to Gaia DR3, which gives
 the zero point: the magnitude a star of one unit of brightness would have.
@@ -17,9 +19,19 @@ finds at each magnitude is the completeness, given separately for open sky
 and for the parts of a galaxy of each brightness, since a star is harder to
 see on a bright background. --sweep asks how much depth longer stacks buy.
 
+--model fits one line to every depth.json kept so far: for a faint star
+against the sky, the magnitude at which half are found goes up with the
+log of the time the light is gathered for, down by 2.5 log of the star's
+width, and up by half the sky's darkness in magnitudes per square
+arcsecond. The width and sky terms are fixed by that physics; the
+constant and the time term are fitted, since frame quality changes how much
+time is worth. --predict uses it to say how deep a stack would reach
+before it is taken: whether to refocus first, or whether tonight's sky is
+worth a patrol.
+
 Magnitudes are Gaia G: the camera has no filter, and G is the nearest of
-Gaia's bands to what it sees. The record is kept as depth.json beside the
-stack. Nothing here moves the mount or uses the camera; it needs the
+Gaia's bands to what it sees. The record is kept as depth.json beside a
+final.fits, or NAME-depth.json beside any other stack. Nothing here moves the mount or uses the camera; it needs the
 internet once per field, for Gaia.
 """
 import argparse
@@ -44,7 +56,9 @@ CALIBRATORS = (11.0, 17.5)  # G range of the stars the zero point is taken from
 MATCH = 2.0               # pixels: a detected star this close to a Gaia star is that star
 SIGMA = 5.0               # the detection limit is quoted at 5 sigma
 PSF_HALF = 15             # the stars' shape is kept in a square 31 pixels across
-MAGNITUDES = tuple(np.arange(15.0, 19.51, 0.5))   # planted stars, from bright to faint
+MAGNITUDES = tuple(np.arange(13.0, 19.51, 0.5))   # planted stars, from bright to faint: the
+# brightest are well above any stack's limit, so what is missing among them is crowding
+BRIGHT_BELOW = 15.0       # planted stars brighter than this are planted on their own
 SPACING = 25              # pixels kept between planted stars, so they never blend with each other
 SWEEP = (60, 120, 180, 300, 600)    # seconds of frames for --sweep
 # Surface brightness of the smooth glow under a point, magnitudes per square
@@ -383,9 +397,15 @@ def completeness(lum, shape, zp, kinds, trials=6, per_trial=400, seed=7, finder=
     rng = np.random.default_rng(seed)
     before = finder(lum)
     planted, recovered, kind_of = [], [], []
-    for _ in range(trials):
-        xy = places(lum.shape, per_trial, rng)
-        mags = rng.choice(MAGNITUDES, len(xy))
+    # The brightest planted stars go in a round of their own: their light
+    # spreads far enough to raise the star finder's idea of the background
+    # round a faint one planted near them, and hide it.
+    bright = [m for m in MAGNITUDES if m < BRIGHT_BELOW]
+    faint = [m for m in MAGNITUDES if m >= BRIGHT_BELOW]
+    rounds = [(faint, per_trial)] * trials + [(bright, per_trial // 2)] * trials
+    for choices, count in rounds:
+        xy = places(lum.shape, count, rng)
+        mags = rng.choice(choices, len(xy))
         flux = 10 ** (-0.4 * (mags - zp))
         hit = found_again(before, finder(plant(lum, shape, xy, flux)), xy)
         planted.append(mags)
@@ -517,7 +537,7 @@ def run(args, say=print):
     wcs = plate(lum, name)
     catalogue = gaia(*field(wcs, lum.shape))
     say(f"{len(catalogue)} Gaia stars in the field")
-    record = measure(lum, wcs, catalogue, plant_stars=args.plant, trials=args.trials)
+    record = measure(lum, wcs, catalogue, plant_stars=args.plant or args.sweep, trials=args.trials)
     record.update(stack=str(stack), object=name, exposure_s=header.get("EXPTIME"),
                   frames=header.get("NFRAMES"))
     report(record, say)
@@ -542,9 +562,88 @@ def run(args, say=print):
             say(f"  {used:5.0f} s: 5-sigma {one['limit_5sigma'].get('sky')}, "
                 f"50% found at {one['completeness'].get('all', {}).get('mag_50')}")
         record["sweep"] = rows
-    (stack.parent / "depth.json").write_text(json.dumps(record, indent=1), encoding="utf-8")
-    say(f"kept as {stack.parent / 'depth.json'}")
+    kept = record_path(stack)
+    kept.write_text(json.dumps(record, indent=1), encoding="utf-8")
+    say(f"kept as {kept}")
     return record
+
+
+# --- how depth follows the conditions ---------------------------------------
+
+def measurements(folder=None):
+    """Every kept measurement of a stack's depth, as rows of (seconds, star
+    width in arcseconds, sky in mag per square arcsecond, magnitude at which
+    half the planted stars were found), from each depth.json under frames/:
+    the whole stack and each step of a sweep."""
+    rows = []
+    for path in sorted((folder or config.DATA / "frames").glob("**/*depth.json")):
+        r = json.loads(path.read_text(encoding="utf-8"))
+        width, sky = r.get("fwhm_arcsec"), r.get("sky_mag_per_arcsec2")
+        whole = r.get("completeness", {}).get("all", {}).get("mag_50")
+        if width and sky is not None and whole is not None and r.get("exposure_s"):
+            rows.append({"stack": r.get("stack", str(path.parent)), "seconds": float(r["exposure_s"]),
+                         "fwhm_arcsec": width, "sky": sky, "mag_50": whole})
+        for step in r.get("sweep", []):
+            if width and sky is not None and step.get("mag_50", {}).get("all") is not None:
+                rows.append({"stack": f"{r.get('stack', path.parent)} first {step['exposure_s']:g} s",
+                             "seconds": float(step["exposure_s"]), "fwhm_arcsec": width, "sky": sky,
+                             "mag_50": step["mag_50"]["all"]})
+    return rows
+
+
+def fit(rows):
+    """The constant and the time term of
+    mag_50 = constant + time x log10(seconds) - 2.5 log10(FWHM") + 0.5 sky,
+    with how far each measurement sits from it."""
+    if len(rows) < 3 or len({r["seconds"] for r in rows}) < 2:
+        raise interface.Refusal("INVALID_REQUEST", "Too few depth measurements to fit: run "
+                                "depth.py --plant on a few stacks, or --sweep on one.")
+    t = np.log10([r["seconds"] for r in rows])
+    y = np.array([r["mag_50"] + 2.5 * math.log10(r["fwhm_arcsec"]) - 0.5 * r["sky"] for r in rows])
+    slope, constant = np.polyfit(t, y, 1)
+    model = {"constant": round(float(constant), 3), "time": round(float(slope), 3),
+             "fwhm": -2.5, "sky": 0.5, "measurements": len(rows)}
+    for r in rows:
+        r["predicted"] = round(predict(model, r["fwhm_arcsec"], r["sky"], r["seconds"]), 2)
+        r["off_by"] = round(r["mag_50"] - r["predicted"], 2)
+    model["scatter"] = round(float(np.std([r["off_by"] for r in rows])), 3)
+    return model, rows
+
+
+def predict(model, fwhm_arcsec, sky, seconds):
+    """The magnitude at which half of faint stars would be found."""
+    return (model["constant"] + model["time"] * math.log10(seconds)
+            - 2.5 * math.log10(fwhm_arcsec) + 0.5 * sky)
+
+
+def run_model(args, say=print):
+    model, rows = fit(measurements())
+    say(f"from {model['measurements']} measurements: half found at "
+        f"{model['constant']:.2f} + {model['time']:.2f} log10(seconds) "
+        f"- 2.5 log10(FWHM\") + 0.5 sky; scatter {model['scatter']:.2f} mag")
+    say(f"each doubling of time buys {model['time'] * math.log10(2):.2f} mag "
+        f"(0.38 if only the sky's noise mattered)")
+    for r in rows:
+        say(f"  {r['mag_50']:5.2f} measured, {r['predicted']:5.2f} predicted  {r['stack']}")
+    answer = {"model": model, "measurements": rows}
+    if args.predict:
+        if args.fwhm is None or args.sky is None:
+            raise interface.Refusal("INVALID_REQUEST", "--predict needs --fwhm (arcseconds) and --sky "
+                                    "(mag per square arcsecond).")
+        seconds = 60 * args.minutes
+        m = predict(model, args.fwhm, args.sky, seconds)
+        say(f"stars {args.fwhm}\" across under a {args.sky} sky, {args.minutes:g} minutes: "
+            f"half found at about G {m:.1f} (inferred, ± {model['scatter']:.1f})")
+        answer["prediction"] = {"fwhm_arcsec": args.fwhm, "sky": args.sky, "seconds": seconds,
+                                "mag_50": round(m, 2), "kind": "inferred"}
+    return answer
+
+
+def record_path(stack):
+    """Where a stack's measurement is kept: depth.json beside the picture's
+    final.fits, NAME-depth.json beside any other stack (discovery.fits)."""
+    stack = Path(stack)
+    return stack.parent / ("depth.json" if stack.name == "final.fits" else f"{stack.stem}-depth.json")
 
 
 def report(r, say=print):
@@ -562,14 +661,27 @@ def report(r, say=print):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("target", help="an object (its newest session), a session folder, or a FITS stack")
+    ap.add_argument("target", nargs="?",
+                    help="an object (its newest session), a session folder, or a FITS stack")
     ap.add_argument("--plant", action="store_true", help="plant fake stars and count how many are found")
-    ap.add_argument("--trials", type=int, default=6, help="rounds of 400 planted stars (default 6)")
+    ap.add_argument("--trials", type=int, default=10, help="rounds of 400 planted stars (default 10)")
     ap.add_argument("--sweep", action="store_true",
                     help="also measure stacks of 60, 120, 180, 300 and 600 s of the session's frames")
     ap.add_argument("--near", help="the object to plate-solve near, if the folder does not say")
+    ap.add_argument("--model", action="store_true",
+                    help="fit how depth follows star size, sky and time, from every depth.json kept")
+    ap.add_argument("--predict", action="store_true",
+                    help="with --fwhm, --sky and --minutes: how deep a stack would reach")
+    ap.add_argument("--fwhm", type=float, help="star width in arcseconds, for --predict")
+    ap.add_argument("--sky", type=float, help="sky in mag per square arcsecond, for --predict")
+    ap.add_argument("--minutes", type=float, default=5.0, help="length of the stack, for --predict (default 5)")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
+    if args.model or args.predict:
+        interface.main("depth-model", lambda: run_model(args), args.json)
+        return
+    if not args.target:
+        ap.error("name a stack, or use --model or --predict")
     interface.main("depth", lambda: run(args), args.json)
 
 

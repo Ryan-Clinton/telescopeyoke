@@ -83,6 +83,17 @@ frames under `frames/M31-P1/`.
   them in Siril or PixInsight.
 - Not yet tried on the real mount.
 
+## A stack for finding faint stars
+
+`./restack.py M31 --discovery` makes a second stack beside the picture,
+`discovery.fits`, built to show the faintest point of light rather than to
+look its best. Every frame that passes the checks is considered; each counts
+by transparency / (noise² x star width²), with no floor and no ceiling, and
+the poorest are left out wherever their wider stars would cost a faint star
+more than their light gives. The picture, `final.fits` and `restack.json`
+are left as they were; its record is `discovery.json`. `./depth.py` measures
+either stack, so the two can be compared (`docs/discovery.md`).
+
 ## One picture from several sessions
 
 Faint detail needs more light than one run usually collects. `./restack.py

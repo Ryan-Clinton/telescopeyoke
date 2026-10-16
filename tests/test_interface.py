@@ -291,6 +291,16 @@ def test_the_depth_of_a_stack_matches_its_schema():
     assert answer["ok"] and "all" in answer["data"]["completeness"]
 
 
+def test_the_depth_model_matches_its_schema(monkeypatch, tmp_path):
+    import depth
+    rows = [{"stack": "x", "seconds": t, "fwhm_arcsec": 6.0, "sky": 19.0, "mag_50": 16 + 0.3 * n}
+            for n, t in enumerate((60, 120, 300))]
+    monkeypatch.setattr(depth, "measurements", lambda folder=None: [dict(r) for r in rows])
+    args = type("Args", (), {"predict": True, "fwhm": 4.5, "sky": 19.2, "minutes": 5.0})()
+    answer = valid(interface.run("depth-model", lambda: depth.run_model(args, say=lambda *_: None)), "depth-model")
+    assert answer["data"]["prediction"]["kind"] == "inferred"
+
+
 def test_the_rigs_view_matches_its_schema(tmp_path, monkeypatch):
     import config
     monkeypatch.setattr(config, "RIGS", tmp_path)

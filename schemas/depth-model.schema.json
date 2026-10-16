@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/depth-model.schema.json",
+  "title": "Depth model",
+  "description": "data of: depth.py --model [--predict --fwhm F --sky S --minutes M] --json. How the magnitude at which half of planted stars are found follows star width, sky brightness and time: mag_50 = constant + time x log10(seconds) - 2.5 log10(FWHM arcsec) + 0.5 sky, fitted to every depth.json kept. The width and sky terms are fixed; the constant and time term are fitted.",
+  "type": "object",
+  "required": ["model", "measurements"],
+  "properties": {
+    "model": {
+      "type": "object",
+      "required": ["constant", "time", "fwhm", "sky", "measurements", "scatter"],
+      "properties": {
+        "constant": {"type": "number"},
+        "time": {"type": "number", "description": "Magnitudes gained per factor of ten in time."},
+        "fwhm": {"type": "number"},
+        "sky": {"type": "number"},
+        "measurements": {"type": "integer"},
+        "scatter": {"type": "number", "description": "Spread of the measurements about the model, magnitudes."}
+      }
+    },
+    "measurements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["stack", "seconds", "fwhm_arcsec", "sky", "mag_50", "predicted", "off_by"],
+        "properties": {
+          "stack": {"type": "string"},
+          "seconds": {"type": "number"},
+          "fwhm_arcsec": {"type": "number"},
+          "sky": {"type": "number"},
+          "mag_50": {"type": "number"},
+          "predicted": {"type": "number"},
+          "off_by": {"type": "number"}
+        }
+      }
+    },
+    "prediction": {
+      "type": "object",
+      "required": ["fwhm_arcsec", "sky", "seconds", "mag_50", "kind"],
+      "properties": {
+        "fwhm_arcsec": {"type": "number"},
+        "sky": {"type": "number"},
+        "seconds": {"type": "number"},
+        "mag_50": {"type": "number"},
+        "kind": {"const": "inferred"}
+      }
+    }
+  }
+}

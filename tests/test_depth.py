@@ -2,6 +2,7 @@
 5-sigma limit from empty sky, and planted stars found again. A star field
 is made here with every star's magnitude known, so the answers can be
 checked against the truth. Nothing here touches the network."""
+import json
 import math
 
 import numpy as np
@@ -221,3 +222,40 @@ def test_the_sweep_stacks_the_first_frames_onto_one_grid(tmp_path):
     all_three = stacking.find_stars(three)[:20, :2]
     d = np.min(np.hypot(*(first[:, None] - all_three[None]).transpose(2, 0, 1)), axis=1)
     assert np.median(d) < 0.5
+
+
+def test_depth_is_modelled_from_star_size_sky_and_time(tmp_path):
+    """Measurements made to follow the model exactly give back its terms,
+    and the prediction for new conditions follows."""
+    truth = {"constant": 5.0, "time": 0.8, "fwhm": -2.5, "sky": 0.5}
+    rows = []
+    for seconds, width, sky in [(60, 6.0, 19.0), (300, 6.0, 19.0), (600, 5.0, 18.5), (3000, 7.0, 19.2)]:
+        rows.append({"stack": "x", "seconds": seconds, "fwhm_arcsec": width, "sky": sky,
+                     "mag_50": depth.predict(truth, width, sky, seconds)})
+    model, rows = depth.fit(rows)
+    assert model["constant"] == pytest.approx(5.0, abs=1e-3) and model["time"] == pytest.approx(0.8, abs=1e-3)
+    assert model["scatter"] < 1e-3 and all(abs(r["off_by"]) < 0.01 for r in rows)
+    # Sharper stars go deeper: half the width is 2.5 log10(2) = 0.75 mag.
+    assert depth.predict(model, 3.0, 19.0, 300) - depth.predict(model, 6.0, 19.0, 300) == pytest.approx(0.753, abs=0.01)
+
+
+def test_the_model_reads_every_kept_measurement_and_each_step_of_a_sweep(tmp_path):
+    folder = tmp_path / "frames" / "M31" / "20261013-232632"
+    folder.mkdir(parents=True)
+    (folder / "depth.json").write_text(json.dumps({
+        "stack": "s", "exposure_s": 3232.0, "fwhm_arcsec": 6.4, "sky_mag_per_arcsec2": 19.1,
+        "completeness": {"all": {"mag_50": 17.6}},
+        "sweep": [{"exposure_s": 64.0, "mag_50": {"all": 16.34}}, {"exposure_s": 608.0, "mag_50": {"all": None}}]}))
+    rows = depth.measurements(tmp_path / "frames")
+    assert [(r["seconds"], r["mag_50"]) for r in rows] == [(3232.0, 17.6), (64.0, 16.34)]
+
+
+def test_too_few_measurements_are_refused():
+    with pytest.raises(interface.Refusal) as refused:
+        depth.fit([{"stack": "x", "seconds": 60, "fwhm_arcsec": 6, "sky": 19, "mag_50": 16}])
+    assert refused.value.code_name == "INVALID_REQUEST"
+
+
+def test_each_stack_keeps_its_own_record():
+    assert depth.record_path("frames/M31/x/final.fits").name == "depth.json"
+    assert depth.record_path("frames/M31/x/discovery.fits").name == "discovery-depth.json"

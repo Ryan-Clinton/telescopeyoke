@@ -5,6 +5,19 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
 
 ## Not yet released
 
+- **A stack for finding faint stars**: `./restack.py M31 --discovery` writes
+  `discovery.fits` beside the picture, every frame that passes the checks
+  weighted for a faint star's signal-to-noise and the poorest left out where
+  they would lower it; the picture is untouched. Measured on M31: no deeper
+  than the picture's stack (17.59 against 17.61), and two nights no deeper
+  than one, which points at a noise floor (no darks or flats) rather than
+  poor frames.
+- **Depth from the conditions**: `./depth.py --model` fits how deep a stack
+  reaches from star width, sky and time to every measurement kept (0.3 mag
+  scatter); `--predict --fwhm 4.5 --sky 19.1 --minutes 5` says how deep a
+  patrol would go before it is taken. Planted stars now start at G 13, the
+  brightest in rounds of their own, and a stack other than final.fits keeps
+  its own record (`discovery-depth.json`).
 - **How faint a stack reaches, measured**: `./depth.py M31` plate-solves a
   stack, sets its zero point against Gaia DR3, gives the 5-sigma limit on
   open sky and on each brightness of galaxy glow, and with `--plant` plants

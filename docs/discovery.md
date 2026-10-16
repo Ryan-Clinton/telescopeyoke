@@ -54,7 +54,7 @@ hunting:
 The rig's depth is now measured, not estimated (phase 0, `depth.py`, 16
 October 2026), and it is shallower than first guessed: the best M31 stack
 so far, 54 minutes of 16 s frames, finds half of the stars planted in it
-at G 17.6 and 90% at 16.9. A first guess of 17.5 to 18 in 5 minutes was
+at G 17.6 and 90% at 17.0. A first guess of 17.5 to 18 in 5 minutes was
 too hopeful. Novae near their peak (16 to 18) are still within reach;
 the fainter half of them are not.
 
@@ -559,36 +559,27 @@ allows. Sungrazer needs no sky and can be built any cloudy week.
 ## What phase 0 measured
 
 `depth.py` plate-solves a stack, matches its stars to Gaia DR3 for the zero
-point (G; the camera has no filter), works out the 5-sigma limit from
-apertures dropped on empty sky, and plants copies of the stack's own stars
-at G 15 to 19.5, 400 at a time, to count how many the star finder gets
-back. The 90% and 50% figures are of the stars not lost by landing on a
-real one; that loss, 4 to 10% in these fields, is crowding, and is given
-separately. Measured 16 October 2026 on the stacks already taken:
+point, works out the 5-sigma limit from apertures dropped on empty sky, and
+plants copies of the stack's own stars at G 13 to 19.5 to count how many the
+star finder gets back (the brightest in rounds of their own, so their light
+does not hide faint ones beside them). The 90% and 50% figures are of the
+stars not lost by landing on a real one; that loss, 2 to 5% in these
+fields, is crowding, given separately. Magnitudes are **unfiltered,
+calibrated approximately to Gaia G**: the camera's colour response is not
+G's, so a red or blue star can be off by a few tenths; a colour term from
+Gaia's BP-RP is for later, before anything is reported. Measured on 16
+October 2026 with the same code throughout:
 
 | Stack | Frames | Stars | Sky (mag/″²) | 5σ on sky | 90% found | 50% found |
 |---|---|---|---|---|---|---|
-| M31, 13 Oct, 54 min | 202 × 16 s | 6.4″ | 19.1 | 17.85 | 16.87 | 17.60 |
-| M31, 13 and 14 Oct combined, 95 min | 358 | 6.4″ | 19.0 | 17.92 | 17.05 | 17.61 |
-| M31, 14 Oct, 44 min | 164 × 16 s | 6.7″ | 18.7 | 17.45 | 17.01 | 17.29 |
-| M31, 6 Oct, 30 min | 120 × 15 s | 7.9″ | 18.8 | 17.22 | 16.54 | 17.11 |
-| M33, 16 Oct, 24 min | 145 × 10 s | 6.1″ | 18.6 | 17.28 | 17.00 | 17.25 |
+| M31, 13 Oct, 54 min | 202 × 16 s | 6.4″ | 19.1 | 17.91 | 17.02 | 17.59 |
+| M31, 13 and 14 Oct, 95 min | 358 × 16 s | 6.4″ | 19.0 | 17.92 | 17.01 | 17.61 |
+| M31, 14 Oct, 44 min | 164 × 16 s | 6.7″ | 18.7 | 17.45 | 16.69 | 17.19 |
+| M31, 13 Oct, 8 min | 40 × 12 s | 6.2″ | 19.1 | 17.19 | 16.61 | 17.14 |
+| M31, 6 Oct, 30 min | 120 × 15 s | 7.9″ | 18.8 | 17.22 | 16.50 | 17.10 |
+| M33, 16 Oct, 24 min | 145 × 10 s | 6.1″ | 18.6 | 17.28 | 16.92 | 17.24 |
 
 (The first night's M31 stack, 165 frames of 1 s, would not plate-solve.)
-
-What it says:
-
-- **The sky and the star size set the depth more than the time does.**
-  Doubling 54 minutes to 95 bought nothing (17.60 to 17.61): the sky here
-  is bright (about 19 mag per square arcsecond) and the stars are 6 to 8″
-  across.
-- **The figures agree with each other.** The formula's 5-sigma limit and
-  the planted stars' 50% point are within 0.3 mag on every stack.
-- **The galaxy's glow costs little away from the core.** On M31's fainter
-  and brighter glow the 50% point is within 0.1 to 0.2 mag of open sky.
-- **For the patrol**, a nova must be about 17 or brighter to be found
-  reliably; the brighter half of M31's novae near their peak qualify.
-  Sharper stars and a darker sky are worth more than longer stacks.
 
 **How much a longer visit buys** (`depth.py --sweep`: the first 60 to 600 s
 of the 13 October session, each stacked and measured the same way):
@@ -600,14 +591,69 @@ of the 13 October session, each stacked and measured the same way):
 | 176 s (11) | 16.88 | 16.54 | 16.76 |
 | 304 s (19) | 17.08 | 16.59 | 16.97 |
 | 608 s (38) | 17.29 | 16.80 | 17.20 |
-| 3232 s (202) | 17.85 | 16.87 | 17.60 |
+| 3232 s (202) | 17.91 | 17.02 | 17.59 |
 
-Each doubling buys about 0.2 to 0.3 mag, less than the 0.38 that pure
-sky noise would give, and the last fivefold (10 to 54 minutes) buys 0.4.
-So a patrol visit of **5 minutes a panel reaches about 17.0**, and 2
-minutes about 16.7: eight panels of M31 at 5 minutes is a 40-minute pass,
-which can be repeated through the night. That is the trade the scheduler
-makes, now with figures behind it.
+**A stack made for faint stars** (`restack.py --discovery`): every frame
+that passes the checks, each weighted for a faint star's signal-to-noise,
+transparency / (noise² x star width²), the poorest left out wherever they
+would lower it (`stacking.point_weights`):
+
+| Frames | Picture's stack, 50% found | Discovery stack, 50% found |
+|---|---|---|
+| 13 Oct | 17.59 (202 frames) | 17.55 (238) |
+| 13 and 14 Oct | 17.61 (358) | 17.59 (421) |
+
+What it says:
+
+- **Within a night, time buys depth**, about 0.2 to 0.3 mag a doubling:
+  17.0 in 5 minutes, 17.2 in 10, 17.6 in 54.
+- **A second night bought nothing**, and neither weighting nor choosing the
+  frames won it back: the 14 October frames had a brighter sky (18.7
+  against 19.1) and slightly wider stars, but even the frames chosen and
+  weighted for faint stars left the stack at 17.6. The noise in empty sky
+  did not fall either (17.91 for 54 minutes, 17.92 for 95), which random
+  noise would: something that does not average away sets a floor. The
+  likeliest cause is the camera's own pattern. These frames had a bias
+  frame only, no darks or flats, the frames drift only a few pixels in a
+  session, and the difference images (phase 1) show vertical striping.
+  **Dark frames, flats and dithering come before more hours.** That is a
+  hypothesis until a session with them is measured the same way.
+- **Star size matters as much as time.** `depth.py --model` fits every
+  measurement kept to the magnitude half are found at:
+  7.91 + 0.59 log10(seconds) − 2.5 log10(FWHM″) + 0.5 x sky, to about 0.3
+  mag (the first night's 1 and 3 s frames are the outliers). The width and
+  sky terms are fixed by physics; the other two are fitted. It predicts 5
+  minutes at 4.5″ under a 19.1 sky reaching about 17.3, against 17.0 at
+  today's 6.4″: **sharp focus is worth more than doubling the time.**
+  `depth.py --predict --fwhm F --sky S --minutes M` gives the figure before
+  a patrol: the check that says "refocus first".
+- **The figures agree with each other.** The formula's 5-sigma limit and
+  the planted stars' 50% point are within 0.35 mag on every stack.
+- **The galaxy's glow costs little away from the core.** On M31's fainter
+  and brighter glow the 50% point is within 0.1 to 0.2 mag of open sky,
+  and crowding takes only 2 to 5% of planted stars: the discovery map
+  (nova rate x completeness per panel) is worth making.
+
+**Not yet a discovery completeness.** The stars are planted into the
+finished stack, so this measures the star finder on that picture. It does
+not test whether a nova in the raw frames survives calibration, lining up,
+frame rejection, stacking, subtraction and vetting. Phase 1 plants
+transients into the raw frames and runs the whole pipeline; that figure is
+the real one, and may differ.
+
+**How long a patrol visit should be is not settled by this.** Five
+minutes a panel (about 17.0) against ten (17.2) trades 0.2 mag for half
+the visits. Which wins depends on how many M31 novae spend how long
+brighter than each limit: the scheduler should choose the length that
+finds the most eruptions an hour, from these completeness curves, the
+distribution of M31 novae's peak brightness and their rise and fall, and
+the cadence. Five minutes is the starting point, not the answer.
+
+**What to improve, for discovery, in order:** sharp focus from the motor
+focuser; tracking and round stars; dark frames, flats and dithering;
+then a darker site or less stray light; a filter only if a test shows it
+helps the star size or sky more than it costs light; a larger telescope
+last.
 
 ## How a find is reported and credited
 
@@ -636,9 +682,10 @@ makes, now with figures behind it.
 - **Weather.** Northern Ireland might give a handful of clear nights a
   month in winter. Sungrazer and the analysis of earlier frames are the
   work for the other nights.
-- **Depth.** If the 150P reaches only 17 in 5 minutes, M31 novae near
-  their peak are still within reach, but fewer of them. Phase 0 found it
-  reaches about 17.6 in 54 minutes: see "What phase 0 measured".
+- **Depth.** The 150P reaches about 17.0 in 5 minutes and 17.6 in 54,
+  with a floor that more nights did not lower: see "What phase 0
+  measured". M31 novae near their peak are within reach, but not the
+  fainter half.
 
 ## Sources
 

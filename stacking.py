@@ -331,6 +331,35 @@ def weight(q, best):
     return float(np.clip(sharpness * shape * transparency * cleanness, 0.25, 1.0))
 
 
+def point_weights(frames):
+    """Weights for a stack made to show faint stars, not to look its best:
+    the discovery stack. A faint star's signal goes with the frame's
+    transparency, and the noise it must beat with the sky's grain over the
+    area of the star, so a frame's worth is transparency² / (noise² x FWHM²)
+    and the best weight for it transparency / (noise² x FWHM²), with no
+    floor and no ceiling. Mixing soft frames with sharp ones also widens the
+    stack's stars, so the frames are taken best first and the poorest left
+    out wherever the predicted signal-to-noise of a faint star is higher
+    without them. Returns one weight per frame, 0 for those left out."""
+    if not frames:
+        return []
+    best_flux = max(f["flux"] for f in frames) or 1.0
+    t = np.array([f["flux"] / best_flux for f in frames])
+    noise = np.array([f["noise"] for f in frames])
+    fwhm = np.array([f["fwhm"] for f in frames])
+    w = t / (noise ** 2 * fwhm ** 2)
+    order = np.argsort(-(t ** 2 / (noise ** 2 * fwhm ** 2)))
+    signal = np.cumsum((w * t)[order])
+    spread = np.sqrt(np.cumsum((w * noise)[order] ** 2))
+    # The stack's star is the signal-weighted mix of the frames' stars.
+    width = np.sqrt(np.cumsum((w * t * fwhm ** 2)[order]) / signal)
+    snr = signal / (spread * width)
+    keep = order[:int(np.argmax(snr)) + 1]
+    out = np.zeros(len(frames))
+    out[keep] = w[keep] / w[keep].max()
+    return out.tolist()
+
+
 def baseline(frames):
     """The frames to judge the rest of a session against: the better half.
     If much of the session was under cloud, the session's own average would

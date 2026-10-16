@@ -14,7 +14,7 @@ agents. Deeper notes are in `docs/agents/`.
 ./ty capabilities --json
 ./doctor.py --json      # what is installed and connected
 ./doctor.py --report    # the same as text to post as a hardware report; the site's name is left out
-pytest -q               # about three minutes; needs no hardware
+pytest -q               # about fifteen minutes on a laptop; needs no hardware
 ```
 
 Everything runs without a telescope: `./tonight.py --demo`, `./serve.py --demo`,

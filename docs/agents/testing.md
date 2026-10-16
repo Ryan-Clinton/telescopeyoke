@@ -1,7 +1,7 @@
 # Testing
 
 ```bash
-pytest -q                         # everything, about three minutes, no hardware
+pytest -q                         # everything, about fifteen minutes on a laptop, no hardware
 pytest -q tests/test_mount.py     # mount logic against the simulated handset
 ```
 
