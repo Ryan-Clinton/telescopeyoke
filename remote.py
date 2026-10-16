@@ -42,7 +42,7 @@ def rsync(sources, target, *options):
 
 def there(path):
     """Where a file under config.DATA goes on HOST, relative to its home."""
-    return f"{PLACE}/data/{Path(path).resolve().relative_to(config.DATA.resolve())}"
+    return f"{PLACE}/data/{Path(path).resolve().relative_to(config.DATA.resolve()).as_posix()}"   # HOST runs Linux
 
 
 def python_on(host):
