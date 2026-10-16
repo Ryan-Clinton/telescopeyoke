@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/difference.schema.json",
+  "title": "Difference",
+  "description": "data of: difference.py NEW --reference REF --json. What is brighter in NEW than in REF, by proper image subtraction (ZOGY), with each candidate's score in units of the noise at its place. Candidates are not vetted: hot pixels, asteroids, variable stars and known transients are not yet ruled out. Also kept as candidates.json beside the new stack.",
+  "type": "object",
+  "required": ["candidates", "matched_stars", "alignment_residual_px", "flux_ratio", "fwhm_px",
+               "noise_new", "noise_ref", "usable_share", "threshold", "fading_peaks", "dipoles_left_out"],
+  "properties": {
+    "candidates": {
+      "type": "array",
+      "description": "Strongest first.",
+      "items": {
+        "type": "object",
+        "required": ["x", "y", "score", "as_strong_fading"],
+        "properties": {
+          "x": {"type": "integer", "description": "Column on the reference's pixels."},
+          "y": {"type": "integer"},
+          "ra": {"type": "number"},
+          "dec": {"type": "number"},
+          "score": {"type": "number", "description": "How many times the local noise."},
+          "as_strong_fading": {"type": "integer", "description": "How many peaks on the fading side score at least this much: what noise and imperfect subtraction alone produce. Near 0 for a real new star."},
+          "mag": {"type": "number", "description": "Brightness of what is new, unfiltered, calibrated approximately to Gaia G; only when the new stack has a depth.json."}
+        }
+      }
+    },
+    "matched_stars": {"type": "integer"},
+    "alignment_residual_px": {"type": "number"},
+    "flux_ratio": {"type": "number", "description": "New stack's brightness over the reference's, from the stars they share."},
+    "fwhm_px": {"type": "number"},
+    "noise_new": {"type": "number"},
+    "noise_ref": {"type": "number"},
+    "usable_share": {"type": "number", "description": "Share of the reference's pixels where candidates are trusted: covered by both, away from edges and bright stars."},
+    "threshold": {"type": "number"},
+    "fading_peaks": {"type": "integer"},
+    "dipoles_left_out": {"type": "integer", "description": "Peaks with a dark partner beside them: misplaced stars, not new ones."},
+    "planted": {
+      "type": "object",
+      "description": "With --plant: fake transients added to the new stack, and how many were found.",
+      "required": ["curve", "mag_50", "mag_90"],
+      "properties": {
+        "curve": {"type": "array", "items": {"type": "object", "required": ["mag", "planted", "found", "share"]}},
+        "mag_50": {"type": ["number", "null"]},
+        "mag_90": {"type": ["number", "null"]}
+      }
+    },
+    "false_candidates": {"type": "integer"},
+    "new": {"type": "string"},
+    "reference": {"type": "string"},
+    "object": {"type": "string"},
+    "band": {"type": ["string", "null"]}
+  }
+}

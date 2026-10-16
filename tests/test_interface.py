@@ -301,6 +301,20 @@ def test_the_depth_model_matches_its_schema(monkeypatch, tmp_path):
     assert answer["data"]["prediction"]["kind"] == "inferred"
 
 
+def test_a_difference_matches_its_schema():
+    import difference
+    import numpy as np
+    from test_difference import night
+    rng = np.random.default_rng(4)
+    xy = rng.uniform(30, (770, 570), (400, 2))
+    flux = 10 ** rng.uniform(2.5, 4.5, 400)
+    new = night(xy, flux, fwhm=4.5, seed=2, extra=(np.array([[400.0, 300.0]]), np.array([900.0])))
+    answer = valid(interface.run("difference", lambda: difference.subtract(new, night(xy, flux, fwhm=4.0, seed=1),
+                                                                             zeropoint=22.0, plant_count=40)[0]),
+                   "difference")
+    assert answer["ok"] and answer["data"]["candidates"]
+
+
 def test_the_rigs_view_matches_its_schema(tmp_path, monkeypatch):
     import config
     monkeypatch.setattr(config, "RIGS", tmp_path)

@@ -45,6 +45,7 @@ them and every file kept under `demo/`.
 | `depth.py` | How faint a stack reaches, measured: zero point against Gaia, 5-sigma limit, planted stars found again (`docs/discovery.md`, phase 0) |
 | `remote.py` | `restack.py --on HOST`: sends the frames, calibration and code to another computer by SSH and rsync, stacks there under `~/telescopeyoke-remote`, and brings the picture back |
 | `planet.py` | A planet: thousands of a second per frame, a square round it kept from each, the sharpest stacked. Uses the camera only |
+| `difference.py` | Proper image subtraction (ZOGY) of a reference stack from a new one: what is brighter now (`docs/discovery.md`, phase 1) |
 | `mosaic.py` | Panels for an object bigger than the frame, kept in `mosaics/`; `mount.find_target` turns a panel name (`M31-P2`) into its centre |
 | `tour.py` | Records the demo being used, for the README: `docs/tour.gif` and `docs/screens/` (Ubuntu) |
 | `docs/index.html` | The project's home page, served by GitHub Pages from `docs/` |
