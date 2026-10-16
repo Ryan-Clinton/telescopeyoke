@@ -51,8 +51,12 @@ hunting:
   precise our photometry is in M31's crowded field. Useful, but not the
   "new object tonight" kind of find.
 
-The rig's depth, estimated at magnitude 17.5 to 18 in 5 minutes, stays an
-estimate until planted fake stars measure it (phase 0).
+The rig's depth is now measured, not estimated (phase 0, `depth.py`, 16
+October 2026), and it is shallower than first guessed: the best M31 stack
+so far, 54 minutes of 16 s frames, finds half of the stars planted in it
+at G 17.6 and 90% at 16.9. A first guess of 17.5 to 18 in 5 minutes was
+too hopeful. Novae near their peak (16 to 18) are still within reach;
+the fainter half of them are not.
 
 The project has an objective finish line. Can telescopeyoke:
 
@@ -71,7 +75,7 @@ marketing. The discovery still belongs to the person who reports it.
 | Telescope | Sky-Watcher 150P, 750 mm, f/5 |
 | Camera | 183C, 2.4 µm pixels: 0.66″ a pixel, 1.0° × 0.67° field |
 | Mount | EQ3 Pro GoTo, tracking unguided |
-| Depth | **Not measured.** Estimated magnitude 17.5 to 18 in 5 minutes of stacked frames |
+| Depth | **Measured** on the stacks of 6 to 16 October 2026 (below) |
 | Sky | Ballymoney, 55° N. M31 passes 14° from the zenith |
 
 The surveys we are up against, and where they stop:
@@ -175,7 +179,7 @@ Every figure in the packet says what kind of figure it is:
 |---|---|---|
 | measured | from our own frames | magnitude 17.42 ± 0.08 |
 | inferred | worked out from measurements | rising 0.7 mag an hour |
-| estimated | a model or a guess, not yet measured | the rig's depth before phase 0 |
+| estimated | a model or a guess, not yet measured | the rig's depth before phase 0 measured it |
 | simulated | from planted fakes | 90% recovery at 17.8 |
 | reported | from someone else | a ZTF detection, a VSX entry |
 | not known | asked and not answered | no spectrum yet |
@@ -241,7 +245,7 @@ telescopeyoke takes the same shape, much smaller.
 | Layer | Job | Where |
 |---|---|---|
 | Observe | choose and take the night's science frames | `programmes/`, `patrol.py`, existing `shoot.py` and `mosaic.py` |
-| Measure | astrometry, photometry, depth, star size, sky for every frame | `measure.py`, existing `solve.py` and `stacking.py` |
+| Measure | astrometry, photometry, depth, star size, sky for every frame | `depth.py` (built), existing `solve.py` and `stacking.py` |
 | Detect | proper image subtraction; moving sources | `reference.py`, `difference.py`, later `moving.py` |
 | Vet | drop artefacts and known objects | `vet.py` |
 | Enrich | catalogues, TNS, VSX, SkyBoT, our own earlier frames | `vet.py`, `forced.py` |
@@ -537,7 +541,7 @@ ends with a scientific proof, not just working code.
 
 | Phase | Build | Proof |
 |---|---|---|
-| 0 | Depth and completeness: `measure.py`, planted fake stars, at 60 to 600 s | a recovery curve for each M31 region and exposure |
+| 0 | Depth and completeness: `depth.py`, planted fake stars, at 60 to 600 s | a recovery curve for each M31 region and exposure. **Built 16 October 2026;** results below |
 | 1 | References, calibration, proper subtraction, the candidate database, vetting and forced photometry for M31 | planted fakes recovered; a planted rising fake gets the right light curve; a known asteroid and a known variable set aside |
 | 2 | The M31 patrol, scheduled by priority | a known nova, past or current, recovered from our data |
 | 3 | M33 | a first M33 night with its completeness measured |
@@ -551,6 +555,59 @@ ends with a scientific proof, not just working code.
 
 Phases 0 to 2 run through the 2026 to 2027 M31 season if the weather
 allows. Sungrazer needs no sky and can be built any cloudy week.
+
+## What phase 0 measured
+
+`depth.py` plate-solves a stack, matches its stars to Gaia DR3 for the zero
+point (G; the camera has no filter), works out the 5-sigma limit from
+apertures dropped on empty sky, and plants copies of the stack's own stars
+at G 15 to 19.5, 400 at a time, to count how many the star finder gets
+back. The 90% and 50% figures are of the stars not lost by landing on a
+real one; that loss, 4 to 10% in these fields, is crowding, and is given
+separately. Measured 16 October 2026 on the stacks already taken:
+
+| Stack | Frames | Stars | Sky (mag/″²) | 5σ on sky | 90% found | 50% found |
+|---|---|---|---|---|---|---|
+| M31, 13 Oct, 54 min | 202 × 16 s | 6.4″ | 19.1 | 17.85 | 16.87 | 17.60 |
+| M31, 13 and 14 Oct combined, 95 min | 358 | 6.4″ | 19.0 | 17.92 | 17.05 | 17.61 |
+| M31, 14 Oct, 44 min | 164 × 16 s | 6.7″ | 18.7 | 17.45 | 17.01 | 17.29 |
+| M31, 6 Oct, 30 min | 120 × 15 s | 7.9″ | 18.8 | 17.22 | 16.54 | 17.11 |
+| M33, 16 Oct, 24 min | 145 × 10 s | 6.1″ | 18.6 | 17.28 | 17.00 | 17.25 |
+
+(The first night's M31 stack, 165 frames of 1 s, would not plate-solve.)
+
+What it says:
+
+- **The sky and the star size set the depth more than the time does.**
+  Doubling 54 minutes to 95 bought nothing (17.60 to 17.61): the sky here
+  is bright (about 19 mag per square arcsecond) and the stars are 6 to 8″
+  across.
+- **The figures agree with each other.** The formula's 5-sigma limit and
+  the planted stars' 50% point are within 0.3 mag on every stack.
+- **The galaxy's glow costs little away from the core.** On M31's fainter
+  and brighter glow the 50% point is within 0.1 to 0.2 mag of open sky.
+- **For the patrol**, a nova must be about 17 or brighter to be found
+  reliably; the brighter half of M31's novae near their peak qualify.
+  Sharper stars and a darker sky are worth more than longer stacks.
+
+**How much a longer visit buys** (`depth.py --sweep`: the first 60 to 600 s
+of the 13 October session, each stacked and measured the same way):
+
+| Stack | 5σ on sky | 90% found | 50% found |
+|---|---|---|---|
+| 64 s (4 frames) | 16.46 | 16.06 | 16.34 |
+| 128 s (8) | 16.77 | 16.40 | 16.72 |
+| 176 s (11) | 16.88 | 16.54 | 16.76 |
+| 304 s (19) | 17.08 | 16.59 | 16.97 |
+| 608 s (38) | 17.29 | 16.80 | 17.20 |
+| 3232 s (202) | 17.85 | 16.87 | 17.60 |
+
+Each doubling buys about 0.2 to 0.3 mag, less than the 0.38 that pure
+sky noise would give, and the last fivefold (10 to 54 minutes) buys 0.4.
+So a patrol visit of **5 minutes a panel reaches about 17.0**, and 2
+minutes about 16.7: eight panels of M31 at 5 minutes is a 40-minute pass,
+which can be repeated through the night. That is the trade the scheduler
+makes, now with figures behind it.
 
 ## How a find is reported and credited
 
@@ -580,7 +637,8 @@ allows. Sungrazer needs no sky and can be built any cloudy week.
   month in winter. Sungrazer and the analysis of earlier frames are the
   work for the other nights.
 - **Depth.** If the 150P reaches only 17 in 5 minutes, M31 novae near
-  their peak are still within reach, but fewer of them. Phase 0 finds out.
+  their peak are still within reach, but fewer of them. Phase 0 found it
+  reaches about 17.6 in 54 minutes: see "What phase 0 measured".
 
 ## Sources
 

@@ -5,6 +5,14 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
 
 ## Not yet released
 
+- **How faint a stack reaches, measured**: `./depth.py M31` plate-solves a
+  stack, sets its zero point against Gaia DR3, gives the 5-sigma limit on
+  open sky and on each brightness of galaxy glow, and with `--plant` plants
+  copies of the stack's own stars to count how many are found again;
+  `--sweep` does the same for 60 to 600 s of a session's frames. The first
+  piece of the discovery plan (`docs/discovery.md`, phase 0). Measured on
+  the M31 and M33 stacks of 6 to 16 October 2026: half the planted stars
+  found at G 17.6 in 54 minutes of M31, 17.0 in 5 minutes.
 - **Focusing with the motor**: `./focus.py --motor` brings the stars to
   focus with the motor focuser and nobody touching the telescope: out past
   focus, in by small steps through the sharpest point, then out beyond the

@@ -282,6 +282,15 @@ def test_scripts_asked_for_json_print_nothing_else(capsys):
     assert interface.main("chatty", chatty) == {"answer": 42}
 
 
+def test_the_depth_of_a_stack_matches_its_schema():
+    import depth
+    from test_depth import star_field
+    image, wcs, catalogue = star_field()
+    answer = valid(interface.run("depth", lambda: depth.measure(image, wcs, catalogue, plant_stars=True,
+                                                                  trials=1)), "depth")
+    assert answer["ok"] and "all" in answer["data"]["completeness"]
+
+
 def test_the_rigs_view_matches_its_schema(tmp_path, monkeypatch):
     import config
     monkeypatch.setattr(config, "RIGS", tmp_path)

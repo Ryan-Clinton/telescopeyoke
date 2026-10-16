@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/depth.schema.json",
+  "title": "Depth",
+  "description": "data of: depth.py TARGET --json. How faint one stack reaches: its zero point against Gaia DR3, the 5-sigma limit worked out from the noise in empty sky, and, with --plant, the share of planted stars the star finder gets back at each magnitude. Magnitudes are Gaia G; the camera is unfiltered. Also kept as depth.json beside the stack.",
+  "type": "object",
+  "required": ["zeropoint", "zeropoint_error", "calibration_scatter", "calibration_stars",
+               "fwhm_px", "fwhm_arcsec", "scale_arcsec_per_px", "aperture_px", "sky_level",
+               "sky_mag_per_arcsec2", "stars_detected", "limit_5sigma", "share_of_image", "band", "kinds"],
+  "$defs": {
+    "byRegion": {
+      "type": "object",
+      "description": "One value per kind of background: sky, faint glow, bright glow, core (by the surface brightness of the glow above the sky). A kind with too few samples is left out.",
+      "additionalProperties": {"type": ["number", "null"]}
+    },
+    "completeness": {
+      "type": "object",
+      "required": ["curve", "bright_end", "mag_90", "mag_50", "planted"],
+      "properties": {
+        "curve": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["mag", "planted", "found", "share"],
+            "properties": {
+              "mag": {"type": "number"},
+              "planted": {"type": "integer"},
+              "found": {"type": "integer"},
+              "share": {"type": ["number", "null"], "description": "Found over planted; null with fewer than 5 planted."}
+            }
+          }
+        },
+        "bright_end": {"type": ["number", "null"], "description": "Share found among the brightest planted stars. What is missing landed on a real star: the cost of crowding."},
+        "mag_90": {"type": ["number", "null"], "description": "Faintest magnitude at which 90% of the bright-end share is still found."},
+        "mag_50": {"type": ["number", "null"], "description": "The same at 50%."},
+        "planted": {"type": "integer"}
+      }
+    }
+  },
+  "properties": {
+    "zeropoint": {"type": "number", "description": "G magnitude of one unit of aperture flux in this stack."},
+    "zeropoint_error": {"type": "number"},
+    "calibration_scatter": {"type": "number", "description": "Spread of the calibration stars about the zero point, magnitudes."},
+    "calibration_stars": {"type": "integer"},
+    "fwhm_px": {"type": "number"},
+    "fwhm_arcsec": {"type": "number"},
+    "scale_arcsec_per_px": {"type": "number"},
+    "aperture_px": {"type": "number", "description": "Radius of the photometry aperture."},
+    "sky_level": {"type": "number"},
+    "sky_mag_per_arcsec2": {"type": "number"},
+    "stars_detected": {"type": "integer"},
+    "limit_5sigma": {"$ref": "#/$defs/byRegion"},
+    "share_of_image": {"$ref": "#/$defs/byRegion"},
+    "band": {"type": "string"},
+    "kinds": {
+      "type": "object",
+      "description": "What kind of figure each is: measured, inferred, estimated, simulated, reported or not known.",
+      "additionalProperties": {"enum": ["measured", "inferred", "estimated", "simulated", "reported", "not known"]}
+    },
+    "completeness": {
+      "type": "object",
+      "description": "With --plant: for the whole image (all) and each kind of background.",
+      "additionalProperties": {"$ref": "#/$defs/completeness"}
+    },
+    "planted_per_trial": {"type": "integer"},
+    "trials": {"type": "integer"},
+    "stack": {"type": "string"},
+    "object": {"type": "string"},
+    "exposure_s": {"type": ["number", "null"]},
+    "frames": {"type": ["integer", "null"]},
+    "sweep": {
+      "type": "array",
+      "description": "With --sweep: the same measured on the first 60, 120, 180, 300 and 600 s of the session's frames.",
+      "items": {
+        "type": "object",
+        "required": ["asked_s", "exposure_s", "zeropoint", "limit_5sigma", "mag_90", "mag_50"],
+        "properties": {
+          "asked_s": {"type": "number"},
+          "exposure_s": {"type": "number"},
+          "zeropoint": {"type": "number"},
+          "limit_5sigma": {"$ref": "#/$defs/byRegion"},
+          "mag_90": {"$ref": "#/$defs/byRegion"},
+          "mag_50": {"$ref": "#/$defs/byRegion"}
+        }
+      }
+    }
+  }
+}
