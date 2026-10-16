@@ -73,7 +73,7 @@ the tube a twentieth of a degree twice to see a candidate move with the sky, and
 turns the RA axis to five readings and back, and gives the polar axis's error roughly; `--watch N` then looks N
 more times without moving while the bolts are turned. All take `--dry-run` and `--json`. `polaralign.py` slews about 25° twice and back to measure the polar axis's
 error; it checks all three positions against the limits first, and takes
-`--dry-run` and `--json`; `--repeat N` does it N times over to find the scatter. `ty mount findhome` makes the same
+`--dry-run` and `--json`; `--repeat N` does it N times over to find the scatter; `--cross-check` compares it with the last measurement from the other side of the meridian and withholds advice when they disagree by more than 1°. `ty mount findhome` makes the same
 slews as `pointing` and works out where home really is; `ty mount truehome` then goes there, only on a
 measurement made in the same session, and holds. `ty mount settime` sets the handset's clock and position and
 moves nothing. `ty mount nudge` tips the tube 5° from home and back. `ty mount pointing` slews

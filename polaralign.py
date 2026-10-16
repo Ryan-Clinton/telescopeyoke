@@ -11,6 +11,8 @@
 Centre the azimuth bolts before the first measurement, with the same length
 of thread showing on each, so that there is room to go either way.
     ./polaralign.py --json       the answer as data
+    ./polaralign.py --cross-check   measure, and compare with the last measurement made on the
+                                 other side of the meridian: no advice if the two disagree
 
 Start with the mount tracking a target well away from the pole, such as
 after ./mount.py goto NAME --solve.
@@ -60,6 +62,13 @@ BOLTS_FILE = config.DATA / "cache" / "polar_bolts.json"
 # Degrees: further out in azimuth than this and the whole tripod is turned
 # on the ground; the bolts have only a few degrees of travel. A first figure.
 WHOLE_TRIPOD = 2.0
+# The newest measurement on each side of the meridian, for --cross-check.
+SIDES_FILE = config.DATA / "cache" / "polar_sides.json"
+# Degrees on the sky: two sides further apart than this are not measuring
+# the same axis. On 13 October 2026 they were 3.8° apart (1.2° west and 0.5°
+# low with the tube one way, 4.8° east and 0.2° high the other) because the
+# handset was moving the Dec axis unseen; the axis was really about 3° out.
+CROSS_LIMIT = 1.0
 LEARN_WITHIN = 2 * 3600     # seconds: turns are matched to a measurement no older than this
 # How the two bolts of each pair are told apart, and what a positive number
 # of turns means. Both are named as seen standing behind the mount, on its
@@ -203,6 +212,17 @@ def measure(scope, site, step=STEP, skyline=None):
         raise
     altitude, azimuth = to_altaz(axis_of(points), site["latitude"])
     return azimuth, altitude - site["latitude"]
+
+
+def cross_check(here, there, latitude):
+    """Whether two measurements, (azimuth, altitude) from opposite sides of
+    the meridian with the bolts left alone, agree: (agree, how far apart in
+    degrees on the sky, the azimuth and altitude between them). An error in
+    the method shows up as a disagreement between the sides, which one side
+    measured over and over never reveals."""
+    shrink = math.cos(math.radians(latitude))
+    gap = math.hypot((here[0] - there[0]) * shrink, here[1] - there[1])
+    return gap <= CROSS_LIMIT, gap, (here[0] + there[0]) / 2, (here[1] + there[1]) / 2
 
 
 def spread(runs, latitude):
@@ -374,6 +394,9 @@ def main():
                     help="the turns made since the last measurement, to learn what a turn does on this mount: "
                          "the azimuth pair then the altitude pair, positive for the left bolt and the rear bolt "
                          f"going in (clockwise), {VIEW}; 0 for a pair not touched")
+    ap.add_argument("--cross-check", action="store_true",
+                    help="compare with the last measurement from the other side of the meridian (in the last "
+                         "two hours, bolts untouched since) and give no advice if the two disagree")
     ap.add_argument("--repeat", type=int, default=1, metavar="N",
                     help=f"measure N times (2 to {MOST_REPEATS}) without touching the bolts, and say how well "
                          "the answers agree")
@@ -416,6 +439,43 @@ def run(args):
     azimuth, altitude = runs[0]
     if repeat > 1:
         azimuth, altitude, scatter = spread(runs, site["latitude"])
+    turned = getattr(args, "turned", None)
+    # Kept for each side, for a --cross-check from the other.
+    side = "flipped" if scope.axes()[1] > 90 else "normal"
+    try:
+        sides = json.loads(SIDES_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        sides = {}
+    other = sides.get("normal" if side == "flipped" else "flipped")
+    if turned and any(turned):
+        other = None        # measured before the turns: it is a different axis now
+    sides[side] = {"azimuth_deg": azimuth, "altitude_deg": altitude, "measured": time.time()}
+    if turned and any(turned):
+        sides = {side: sides[side]}
+    SIDES_FILE.parent.mkdir(parents=True, exist_ok=True)
+    SIDES_FILE.write_text(json.dumps(sides), encoding="utf-8")
+    checked = None
+    if getattr(args, "cross_check", False):
+        if not other or time.time() - other["measured"] > LEARN_WITHIN:
+            print("\nNo measurement from the other side of the meridian in the last two hours with the bolts "
+                  "untouched since, so nothing to check this one against. Leave the bolts alone, go to a "
+                  "target on the other side (the tube swings over the pole) and run --cross-check there.")
+        else:
+            agree, gap, mid_az, mid_alt = cross_check((azimuth, altitude),
+                                                      (other["azimuth_deg"], other["altitude_deg"]),
+                                                      site["latitude"])
+            checked = {"agree": agree, "apart_deg": round(gap, 2),
+                       "other_side": {k: round(other[k], 2) for k in ("azimuth_deg", "altitude_deg")}}
+            print(f"\nThe other side of the meridian measured {describe(other['azimuth_deg'], other['altitude_deg'])}"
+                  f"\nThe two are {gap:.2f}° apart.")
+            if not agree:
+                print(f"That is more than {CROSS_LIMIT:.0f}°: they are not measuring the same axis, so something "
+                      "in the measurement is wrong. No adjustment is advised. Check that nothing touched the "
+                      "mount between them, and measure both sides again.")
+                return {"azimuth_deg": round(azimuth, 2), "altitude_deg": round(altitude, 2),
+                        "cross_check": checked, "advice": None, "measured": time.time()}
+            azimuth, altitude = mid_az, mid_alt
+            print("They agree; the advice below is for the axis between them.")
     # Keep it: the drift it causes can now be predicted anywhere in the sky.
     scope.drift_model(site).set_polar(azimuth, altitude)
     words = describe(azimuth, altitude)
@@ -423,8 +483,9 @@ def run(args):
     total = math.hypot(azimuth * math.cos(math.radians(site["latitude"])), altitude)
     result = {"azimuth_deg": round(azimuth, 2), "altitude_deg": round(altitude, 2), "total_deg": round(total, 2),
               "east_of_north": azimuth > 0, "too_high": altitude > 0, "advice": words, "measured": time.time()}
+    if checked:
+        result["cross_check"] = checked
     # What the turns made since the last measurement did, if they were given.
-    turned = getattr(args, "turned", None)
     if turned and any(turned):
         try:
             before = json.loads(POLAR_FILE.read_text(encoding="utf-8"))
