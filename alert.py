@@ -308,13 +308,16 @@ def connect(name, address=None):
     finding speakers by name fails on some networks, and by searching if not."""
     import uuid
     pychromecast = cast()
-    if address:
+    # Tried three times: from the garden the laptop's Wi-Fi is weak, and on
+    # 14 October one try in two failed there, while from the house on the
+    # 16th every one of three found it in under three seconds.
+    for _ in range(3 if address else 0):
         try:
             speaker = pychromecast.get_chromecast_from_host((address, 8009, uuid.UUID(int=0), "", name), timeout=8)
             speaker.wait(timeout=15)
             return speaker
-        except Exception:       # the address may have changed; look for it by name
-            pass
+        except Exception:       # the address may have changed; look for it by name after
+            time.sleep(2)
     found, browser = pychromecast.get_chromecasts(timeout=10)
     try:
         for speaker in found:
