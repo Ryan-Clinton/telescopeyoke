@@ -30,6 +30,7 @@
         "NO_STARS",
         "NO_USABLE_FRAMES",
         "PLATE_SOLVE_FAILED",
+        "REMOTE_FAILED",
         "SLEW_TIMED_OUT",
         "TARGET_BELOW_ALTITUDE_LIMIT",
         "TARGET_BEYOND_HOUR_ANGLE_LIMIT",

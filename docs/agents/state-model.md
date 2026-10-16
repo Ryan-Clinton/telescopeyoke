@@ -49,6 +49,7 @@ Defined in `interface.py`; `schemas/errors.schema.json` lists them.
 | `PLATE_SOLVE_FAILED` | yes | Cloud, focus, or too few stars. Take a frame and look. |
 | `NO_SESSION` | no | No imaging run recorded yet. |
 | `NO_SKY` | yes | The horizon survey saw no open sky high up: cap, cloud or exposure. |
+| `REMOTE_FAILED` | yes | The other computer given to `--on` could not be reached, or the work failed there. |
 | `INVALID_REQUEST`, `INTERNAL_ERROR` | no | Bad arguments; unexpected failure. |
 
 ## Sizes

@@ -8,6 +8,7 @@
     ./restack.py M27 --all              every M27 session as one picture
     ./restack.py frames/M27/A frames/M27/B    these sessions as one picture
     ./restack.py M31 --discovery        the stack that shows the faintest stars
+    ./restack.py M31 --all --on desktop do the work on the desktop and bring the picture back
 
 shoot.py stacks as it goes so there is something to watch. This goes back
 over every raw frame with the whole session known: it measures them all
@@ -266,6 +267,9 @@ def main():
     ap.add_argument("--profile", action="store_true", help="report where the time went")
     ap.add_argument("--discovery", action="store_true",
                     help="the stack that shows the faintest stars, as discovery.fits (picture untouched)")
+    ap.add_argument("--on", metavar="HOST",
+                    help="do the work on another computer, named in ~/.ssh/config (remote.py), and bring the "
+                         "picture back here")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
 
@@ -276,6 +280,13 @@ def main():
                 raise interface.Refusal("NO_SESSION", f"No saved session for {args.session[0]}.")
         else:
             sessions = [find_session(name) for name in args.session]
+        if args.on:
+            import remote
+            options = [f"--keep={args.keep}"] + (["--profile"] if args.profile else []) \
+                + (["--discovery"] if args.discovery else [])
+            folder = remote.restack(args.on, sessions, options)
+            log = "discovery.json" if args.discovery else "restack.json"
+            return json.loads((folder / log).read_text(encoding="utf-8"))["summary"]
         picture = run(sessions if len(sessions) > 1 else sessions[0], args.keep,
                       workers=args.workers, profile=args.profile, discovery=args.discovery)
         log = "discovery.json" if args.discovery else "restack.json"

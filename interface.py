@@ -42,6 +42,8 @@ ERRORS = {
     "NO_SESSION": (False, "No imaging run has been recorded yet."),
     "NO_CONFIG": (False, "Copy config.example.toml to config.toml and set the location."),
     "DEMO_UNSUPPORTED": (False, "This needs the real camera; there is no demo of it."),
+    "REMOTE_FAILED": (True, "The other computer could not be reached or the work failed there; "
+                             "check it is on and that ssh to it works."),
     "INVALID_REQUEST": (False, "Check the command's arguments."),
     "INTERNAL_ERROR": (False, "Unexpected failure; see the message."),
 }
