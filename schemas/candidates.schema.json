@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/candidates.schema.json",
+  "title": "Candidates",
+  "description": "data of: candidates.py NAME [--all] --json. A field's candidates followed as objects from night to night: each night it was found, and each night its place was measured and it was not, with how faint it must have been.",
+  "type": "object",
+  "required": ["name", "candidates"],
+  "properties": {
+    "name": {"type": "string"},
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "ra", "dec", "first", "open", "nights"],
+        "properties": {
+          "id": {"type": "string"},
+          "ra": {"type": "number"},
+          "dec": {"type": "number"},
+          "first": {"type": "string"},
+          "open": {"type": "boolean"},
+          "closed_because": {"type": "string"},
+          "nights": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["night", "seen", "kind"],
+              "properties": {
+                "night": {"type": "string"},
+                "seen": {"type": "boolean"},
+                "score": {"type": ["number", "null"]},
+                "mag": {"type": ["number", "null"]},
+                "error": {"type": ["number", "null"]},
+                "limit": {"type": ["number", "null"], "description": "Fainter than this, on a night it was not seen."},
+                "verdict": {"type": "string"},
+                "forced": {"type": "boolean", "description": "Measured at its place, not found by the search."},
+                "kind": {"const": "measured"}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

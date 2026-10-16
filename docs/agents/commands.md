@@ -20,6 +20,13 @@
 | `depth.py TARGET [--plant] [--sweep]` | how faint a stack reaches: its zero point against Gaia DR3, the 5-sigma limit on open sky and on each brightness of galaxy glow, and with `--plant` the share of planted stars found at each magnitude; `--sweep` does the same on the first 60 to 600 s of the session's frames | `schemas/depth.schema.json`. Reads the stack and keeps `depth.json` beside a `final.fits` (`NAME-depth.json` beside another stack); fetches Gaia once per field. Not through `ty` |
 | `depth.py --model [--predict --fwhm F --sky S --minutes M]` | how depth follows star width, sky and time, fitted to every kept measurement; with `--predict`, how deep a stack under those conditions would reach | `schemas/depth-model.schema.json`. Reads files only |
 | `difference.py NEW --reference REF [--plant N]` | what is brighter in NEW than in REF, by proper image subtraction: candidates with a score in units of the local noise and how many fading peaks are as strong; `--plant` adds fake transients and counts those found | `schemas/difference.schema.json`. Reads two stacks, plate-solves both, keeps `candidates.json` and `difference.fits` beside the new one. Candidates are not vetted. Not through `ty` |
+| `patrol.py PROGRAMME --plan` | a discovery patrol's readiness (motion lock, reference, focus age, expected depth) and the commands it would run | `schemas/patrol.schema.json`. Moves nothing |
+| `patrol.py --analyse SESSION` | depth, subtraction from the reference, vetting, and a short answer with cut-outs of anything unexplained | Reads the session; keeps `patrol.json` and `patrol-N.png`; asks SkyBoT, VizieR and the Rochester pages |
+| `reference.py NAME [--make [--from STACK]] \| --list` | a field's kept references, each a numbered version with where it came from and how deep it reaches; `--make` keeps the deepest measured stack as the next version | `schemas/reference.schema.json`. Writes `reference/NAME/vN.fits` and its record only with `--make`; never replaces a version. `difference.py` uses the newest when not given `--reference` |
+| `candidates.py NAME [--all]` | a field's candidates followed from night to night: each night found, and each night measured at its place and not found | `schemas/candidates.schema.json`. Reads `candidates/NAME.json`, which `patrol.py` keeps |
+| `forced.py NAME RA DEC` | one place measured in every measured stack of an object: a magnitude, or how faint it must have been | `schemas/forced.schema.json`. Reads files and plate-solves; keeps `forced-RA-DEC.json` |
+| `vet.py SESSION [--offline] [--no-halves]` | every candidate `difference.py` left, with the evidence for what it is (in both halves of the night, a known asteroid from SkyBoT, a VSX variable, a nova or supernova on the Rochester lists, a Gaia star, light in the reference) and a verdict; only the "unexplained" are worth a person's eyes | `schemas/vet.schema.json`. Keeps `vetted.json`. Asks SkyBoT, VizieR and the Rochester pages unless `--offline`; not the Transient Name Server (needs an account). Not through `ty` |
+| `plant.py NEW --reference REF [--count N]` | fake novae planted in every raw frame of a session and taken through the whole pipeline; the share found at each magnitude is the discovery completeness | `schemas/plant.schema.json`. Writes a planted copy under `frames/NAME-planted/`, deletes its raw frames afterwards, keeps the stack and `plant.json`. A plate solve per frame and a full restack: run it on the desktop. Not through `ty` |
 | `ty rigs` | every rig (a telescope with its own settings and files): how its mount is reached, and its newest imaging run | `schemas/rigs.schema.json`. Reads files only. `ty --rig NAME <command>` runs any command for one rig |
 
 ## Asks the handset (opens the serial port; do not run while another command is driving the mount)
@@ -61,6 +68,9 @@ repository.
 Without a handset only: `ty mount directions` tips the tube 5° and back and
 asks a person which way it went; `ty mount sethome` records the home position
 and moves nothing.
+`patrol.py PROGRAMME` points at the field with `mount.py goto` and images it with `shoot.py`, then
+analyses the night; a `MOTION_LOCKED` file stops it before anything moves, and `--dry-run` runs both
+commands with their own `--dry-run`.
 `horizon.py` (with `--trace`, `--daylight`, `--fresh`) slews all over the sky for up to an hour,
 looking at each bearing; `--dry-run` says what it would do.
 `landmark.py check NAME` turns the mount to the axis readings a landmark was

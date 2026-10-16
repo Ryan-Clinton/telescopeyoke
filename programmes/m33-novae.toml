@@ -1,0 +1,12 @@
+# A patrol of the Triangulum Galaxy (M33) for novae (docs/discovery.md).
+# Its 2025 novae were found at G 17.3 to 18.4; this rig reaches about 17.2
+# in 24 minutes on M33, so only the brighter ones near their peak.
+# ./patrol.py m33-novae --plan, then ./patrol.py m33-novae
+
+target = "M33"
+
+# As on 16 October 2026, the session its first reference came from.
+exposure = 10
+gain = 1500
+
+minutes = 30

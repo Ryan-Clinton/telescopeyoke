@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """What is new in a stack: proper image subtraction against a reference.
 
+    ./difference.py M31                       the newest M31 night against M31's kept reference
     ./difference.py NEW --reference REF       candidates brighter in NEW than in REF
     ./difference.py frames/M31/20261014-021118 --reference frames/M31/20261013-232632
     ./difference.py NEW --reference REF --plant 200   also plant fake transients and count those found
@@ -416,13 +417,24 @@ def curve(mags, found):
 def run(args, say=print):
     if config.DEMO:
         raise interface.Refusal("DEMO_UNSUPPORTED", "A difference needs two real stacks.")
-    new_path, ref_path = depth.find_stack(args.new), depth.find_stack(args.reference)
+    import reference
+    new_path = depth.find_stack(args.new)
     name = args.near or depth.object_name(new_path)
+    if args.reference:
+        ref_path = depth.find_stack(args.reference)
+    else:
+        ref_path = reference.newest(name)
+        if ref_path is None:
+            raise interface.Refusal("NO_SESSION", f"No reference kept for {name}: ./reference.py {name} --make, "
+                                    "or name one with --reference.")
+        if new_path.parent.resolve() in reference.sessions_used(name):
+            raise interface.Refusal("INVALID_REQUEST", f"{new_path.parent} made {name}'s reference: a night "
+                                    "is never compared with itself.")
     new = depth.brightness(fits.getdata(new_path))
     ref = depth.brightness(fits.getdata(ref_path))
     say(f"new {new_path}, reference {ref_path}")
     new_wcs, ref_wcs = depth.plate(new, name), depth.plate(ref, name)
-    kept = depth.record_path(new_path) if hasattr(depth, "record_path") else new_path.parent / "depth.json"
+    kept = depth.record_path(new_path)
     zeropoint = json.loads(kept.read_text(encoding="utf-8"))["zeropoint"] if kept.exists() else None
     record, significance = subtract(new, ref, new_wcs, ref_wcs, zeropoint, args.plant)
     record.update(new=str(new_path), reference=str(ref_path), object=name,
@@ -448,7 +460,8 @@ def run(args, say=print):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("new", help="the new stack: an object, a session folder or a FITS file")
-    ap.add_argument("--reference", required=True, help="the reference stack, given the same ways")
+    ap.add_argument("--reference", help="the reference stack, given the same ways (default: the field's "
+                                         "newest kept reference, reference.py)")
     ap.add_argument("--plant", type=int, default=0, metavar="N",
                     help="plant N fake transients in the new stack and count how many are found")
     ap.add_argument("--near", help="the object to plate-solve near, if the folder does not say")

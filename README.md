@@ -425,6 +425,7 @@ plan the night → GoTo → photograph → plate-solve (ASTAP) → correct → p
 | [From box to first galaxy](docs/first-night.md) | A first night for someone who knows none of the words: assemble, point north, switch on, align, focus, GoTo, picture. Says which steps are proven on a real mount. |
 | [What telescopeyoke just did for you](docs/how-it-all-works.md) | The astronomy and the engineering behind each of those steps, for afterwards. |
 | [Calibrating a mount, in order](docs/calibration.md) | Level roughly, polar-align, find the true home and mark it, measure the pointing each side, and check that the mount really turns. |
+| [Looking for something new](docs/discovery.md) | Novae in M31 and M33: how deep the rig reaches, proper image subtraction, vetting, and `patrol.py`. A plan with measurements; a patrol is one command, nothing found yet. |
 | [How a picture is made](docs/imaging.md) | Calibration, frame checks, lining up, stacking, the quality pass. |
 | [Focusing by ear](docs/focus.md) | Turn the knob and the laptop talks you onto focus. |
 | [The mount is wonky; measure how wonky](docs/tracking.md) | Drift from a rough polar alignment, and how it is cancelled. |

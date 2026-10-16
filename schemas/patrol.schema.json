@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/patrol.schema.json",
+  "title": "Patrol",
+  "description": "data of: patrol.py PROGRAMME [--plan | --dry-run] --json, or patrol.py --analyse SESSION --json. A discovery patrol of one field: whether it is ready, the commands it runs to point and image, and after the night the depth, the subtraction, the vetting and a short answer. Also kept as patrol.json in the session.",
+  "type": "object",
+  "$defs": {
+    "analysis": {
+      "type": "object",
+      "required": ["session", "object", "summary"],
+      "properties": {
+        "session": {"type": "string"},
+        "object": {"type": "string"},
+        "depth": {"type": "object"},
+        "difference": {"type": "object"},
+        "vet": {"type": "object"},
+        "summary": {"type": "array", "items": {"type": "string"}, "description": "The answer, a line at a time."},
+        "pictures": {"type": "array", "items": {"type": "string"}, "description": "For each unexplained candidate: the night, the reference and the difference."}
+      }
+    }
+  },
+  "properties": {
+    "programme": {
+      "type": "object",
+      "required": ["name", "target", "exposure", "gain", "minutes"],
+      "properties": {
+        "name": {"type": "string"}, "target": {"type": "string"}, "exposure": {"type": "number"},
+        "gain": {"type": "number"}, "minutes": {"type": "number"}
+      }
+    },
+    "readiness": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["what", "ok", "stops", "detail"],
+        "properties": {
+          "what": {"type": "string"},
+          "ok": {"type": "boolean"},
+          "stops": {"type": "boolean", "description": "Whether it keeps the patrol from moving anything."},
+          "detail": {"type": "string"},
+          "kind": {"enum": ["measured", "inferred", "estimated", "simulated", "reported", "not known"]}
+        }
+      }
+    },
+    "steps": {"type": "array", "items": {"type": "string"}},
+    "analysis": {"$ref": "#/$defs/analysis"},
+    "session": {"type": "string"},
+    "object": {"type": "string"},
+    "summary": {"type": "array", "items": {"type": "string"}}
+  }
+}

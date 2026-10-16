@@ -6,6 +6,9 @@ __pycache__/
 cache/
 frames/
 web/
+# Each field's kept reference stack (reference.py): pictures of the sky from here
+reference/
+candidates/
 MOTION_LOCKED
 recordings/
 polaris-runs/

@@ -542,8 +542,8 @@ ends with a scientific proof, not just working code.
 | Phase | Build | Proof |
 |---|---|---|
 | 0 | Depth and completeness: `depth.py`, planted fake stars, at 60 to 600 s | a recovery curve for each M31 region and exposure. **Built 16 October 2026;** results below |
-| 1 | References, calibration, proper subtraction, the candidate database, vetting and forced photometry for M31 | planted fakes recovered; a planted rising fake gets the right light curve; a known asteroid and a known variable set aside |
-| 2 | The M31 patrol, scheduled by priority | a known nova, past or current, recovered from our data |
+| 1 | References, calibration, proper subtraction, the candidate database, vetting and forced photometry for M31. **Subtraction, raw-frame planting and vetting built 16 October 2026; references, the database and forced photometry to come** | planted fakes recovered; a planted rising fake gets the right light curve; a known asteroid and a known variable set aside |
+| 2 | The M31 patrol, scheduled by priority. **`patrol.py` built for one field (16 October 2026): readiness, point, image, then depth, subtraction, vetting and an answer; the mosaic panels and the scheduler to come** | a known nova, past or current, recovered from our data |
 | 3 | M33 | a first M33 night with its completeness measured |
 | 4 | Sungrazer, running all the time | a known comet recovered in archived pictures |
 | 5 | The report packet | under five minutes from a confirmed planted fake to a packet |
@@ -679,6 +679,87 @@ focuser; tracking and round stars; dark frames, flats and dithering;
 then a darker site or less stray light; a filter only if a test shows it
 helps the star size or sky more than it costs light; a larger telescope
 last.
+
+## What phase 1 has measured so far
+
+Three commands, each measured on the two M31 nights (14 October as the
+new night, 13 October as the reference):
+
+- **`difference.py`: proper image subtraction.** The new stack is laid on
+  the reference by the two plate solves and lined up on their shared stars
+  (1,654 stars, to 0.18 pixel). The subtraction is ZOGY (Zackay, Ofek and
+  Gal-Yam), done in 512-pixel squares, each with its own star shapes
+  and brightness scale, because the 150P has no coma corrector and its
+  stars change shape towards the corners. The score allows for the stars'
+  own photon noise, the 0.18-pixel lining-up error and a 3% brightness
+  error. A bright peak with a dark partner beside it is a misplaced star
+  and is dropped. Each candidate is labelled with how many *fading* peaks
+  are as strong: what noise and imperfect subtraction alone produce.
+  Getting there took four rounds against the real frames: 335 false
+  candidates with one star shape for the whole picture, 169 in squares,
+  then 132, 47 and 40 as the photon and lining-up noise, the zero rows at
+  a stack's edge, M32's steep glow and the pairs were dealt with.
+  On those stacks it left about 40 candidates, none above 7 sigma, each
+  matched by 8 or more fading peaks as strong. Most of them came from the
+  stack, not the subtraction: the laptop's 14 October stack was made before
+  restack.py learned to turn frames from the far side of the meridian
+  whenever they line up poorly (`9c4edb2`). **Restacked with today's code,
+  the same two nights leave one candidate, at 5.4 sigma: about one false
+  candidate a night, before vetting, and nothing new between 13 and 14
+  October.**
+  Fakes planted in the finished stack are found to G 18.2 (half) and 17.6
+  (90%)**, 0.9 mag deeper than phase 0's star finder on the same stack:
+  the subtraction's matched filter is a better detector of a single point.
+- **`plant.py`: the discovery completeness.** Fakes planted in every raw
+  frame, then the whole pipeline. 300 fakes at G 15 to 19.5 were planted
+  in the 226 raw frames of 14 October (225 plate-solved; one went in
+  unchanged); the copy went through the quality checks (164 frames kept),
+  lining up, stacking and subtraction from 13 October:
+
+  | Planted at G | Found |
+  |---|---|
+  | 15.0 to 16.5 | 117 of 122 (96%) |
+  | 17.0 | 22 of 25 |
+  | 17.5 | 25 of 30 |
+  | 18.0 | 11 of 27 |
+  | 18.5 to 19.5 | 0 of 96 |
+
+  **The discovery completeness: half found at G 17.9, 90% at G 16.9.**
+  Planting into the finished stack had said 18.2 and 17.6: the whole
+  pipeline costs 0.3 mag at half and 0.7 at 90%, as the audit expected.
+  For the patrol: a nova at G 17 or brighter is caught nine times in ten
+  on a night like 14 October; at 18, about four in ten. It took 10
+  minutes on the desktop's 12 workers, and the same run left one
+  candidate that was not a fake.
+- **`vet.py`: the evidence for each candidate.** On the clean 14 October
+  stack the one candidate (5.4 sigma, about G 18.2, 26′ north-east of
+  M31's centre along its long axis) passed every check: in both halves of
+  the night (4.8 and 4.0 sigma), no known asteroid (SkyBoT), no VSX
+  variable, not on the Rochester lists, no Gaia star within 2″. Pan-STARRS
+  has nothing there brighter than about 20.8. But **`forced.py`**, which
+  measures the place in every stack, does not see it in the 14 October
+  stack itself (fainter than G 18.0, while the difference put it at 18.2),
+  nor in any other; and noise makes two peaks that strong a night. So it is
+  unconfirmed and most likely noise: a clean example of what the pipeline
+  hands a person, and of why a real one has to be seen again on another
+  night.
+- **`reference.py`** keeps each field's reference as a numbered version
+  that is never replaced, with the nights it was made from; M31's v1 is the
+  13 and 14 October stacks together (half found at G 17.61), and a night in
+  it is never compared with it. **`forced.py`** gives a place's brightness
+  or upper limit in every stack of a field.
+
+**`patrol.py` puts it together** for one field: `./patrol.py m31-novae
+--plan` says whether it is ready and what it would run, `./patrol.py
+m31-novae` points, images and analyses, and `--analyse SESSION` does the
+analysis on a night already taken. **`candidates.py`** keeps every
+candidate as an object followed from night to night, and each patrol
+measures the open ones again at their places whether or not the search
+found them, so a real one is seen again and a noise peak closes itself
+after three deep misses. The 14 October candidate is on file as the first.
+
+The Transient Name Server is not asked yet: its search needs an account
+(a TNS bot key), which would be the person's own.
 
 ## How a find is reported and credited
 

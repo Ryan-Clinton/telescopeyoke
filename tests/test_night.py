@@ -204,7 +204,9 @@ def test_an_open_ended_run_stops_when_cloud_arrives(night, monkeypatch, capsys):
     summary = shoot.main()
     said = capsys.readouterr().out
     assert "the last 5 frames were all rejected (" in said and "); stopping" in said
-    assert 6 <= summary["accepted"] <= 8 and 13 <= summary["captured"] <= 22
+    # A slow computer leaves some frames for later, unjudged, and needs more
+    # frames before five judged ones in a row are rejected (Windows CI).
+    assert 4 <= summary["accepted"] <= 8 and 13 <= summary["captured"] <= 40
 
 
 def test_a_running_run_can_be_told_to_stop(night, monkeypatch, capsys):
@@ -233,15 +235,18 @@ def test_through_cloud_a_run_waits_for_the_stars_and_ends_at_dawn(night, monkeyp
     _, folder = night
     monkeypatch.setattr(shoot, "CLOUD_STOP", 5)
     monkeypatch.setattr(shoot, "NIGHT_CHECK", 0)
-    Sky.pause, Sky.cloudy = 0.6, range(5, 13)     # clear, eight frames of cloud, clear again
-    monkeypatch.setattr(shoot, "night_over", lambda name, site: "the Sun is -14° up" if Sky.taken >= 20 else None)
+    # Clear, sixteen frames of cloud, clear again. Long enough that five
+    # judged rejections in a row come even when a slow computer leaves some
+    # cloudy frames for later, unjudged (Windows CI, 16 October 2026).
+    Sky.pause, Sky.cloudy = 0.6, range(5, 21)
+    monkeypatch.setattr(shoot, "night_over", lambda name, site: "the Sun is -14° up" if Sky.taken >= 36 else None)
     monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "0", "--exposure", "2",
                                       "--no-recentre", "--no-restack", "--through-cloud"])
     summary = shoot.main()
     said = capsys.readouterr().out
     assert "carrying on until it clears" in said and "stars again" in said
     assert "the Sun is -14° up; stopping" in said
-    assert summary["accepted"] >= 10                  # frames after the cloud were kept too
+    assert summary["accepted"] >= 8                   # frames after the cloud were kept too
 
 
 def test_the_night_is_over_at_dawn_or_at_the_mounts_limit():

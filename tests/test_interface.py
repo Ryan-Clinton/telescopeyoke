@@ -315,6 +315,79 @@ def test_a_difference_matches_its_schema():
     assert answer["ok"] and answer["data"]["candidates"]
 
 
+def test_vetting_matches_its_schema():
+    import vet
+    from test_vet import candidate
+    nothing = {"asteroids": [], "variables": [], "reported": [], "gaia": []}
+    answer = valid(interface.run("vet", lambda: {
+        "session": "s", "candidates": vet.vet({"candidates": [candidate()]}, nothing, half_scores=[[6.0, 6.2]]),
+        "unexplained": 1, "asked": sorted(nothing), "halves_checked": True, "band": None}), "vet")
+    assert answer["data"]["candidates"][0]["verdict"].startswith("unexplained")
+
+
+def test_a_planting_matches_its_schema():
+    import numpy as np
+    import plant
+    from astropy.wcs import WCS
+    w = WCS(naxis=2)
+    w.wcs.ctype, w.wcs.crval, w.wcs.crpix = ["RA---TAN", "DEC--TAN"], [10.0, 41.0], [300.0, 200.0]
+    w.wcs.cd = np.array([[-1.32 / 3600, 0], [0, 1.32 / 3600]])
+    ra, dec = w.pixel_to_world_values(np.array([100.0, 300.0]), np.array([100.0, 150.0]))
+    fakes = np.column_stack([ra, dec, [15.0, 18.0]])
+    result = plant.score(fakes, w, [{"x": 100, "y": 100}])
+    found = result.pop("found")
+    answer = valid(interface.run("plant", lambda: dict(
+        result, new="n", reference="r", frames=3, unsolved=[], zeropoint=23.1,
+        fakes=[{"ra": float(a), "dec": float(d), "mag": float(m), "found": f} for (a, d, m), f in zip(fakes, found)])),
+        "plant")
+    assert answer["data"]["false_candidates"] == 0
+
+
+def test_a_reference_matches_its_schema(tmp_path, monkeypatch):
+    import reference
+    from test_reference import measured
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    measured(tmp_path, "20261013-232632", 17.6)
+    args = type("Args", (), {"list": False, "name": "M31", "make": True, "source": None})()
+    made = valid(interface.run("reference", lambda: reference.run(args, say=lambda *_: None)), "reference")
+    assert made["data"]["made"]["version"] == 1
+    args.list = True
+    valid(interface.run("reference", lambda: reference.run(args, say=lambda *_: None)), "reference")
+
+
+def test_a_patrol_plan_and_answer_match_their_schema(tmp_path, monkeypatch):
+    import argparse
+    import patrol
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    monkeypatch.setattr(mount, "LOCK_FILE", tmp_path / "MOTION_LOCKED")
+    args = argparse.Namespace(programme="m31-novae", analyse=None, minutes=None, plan=True, dry_run=False)
+    valid(interface.run("patrol", lambda: patrol.run(args, say=lambda *_: None)), "patrol")
+    chain = {"depth": lambda: {}, "difference": lambda: {"candidates": []}, "vet": lambda: {"candidates": []}}
+    (tmp_path / "s").mkdir()
+    valid(interface.run("patrol", lambda: patrol.analyse(tmp_path / "s", say=lambda *_: None, chain=chain)), "patrol")
+
+
+def test_a_places_history_matches_its_schema():
+    valid(interface.run("forced", lambda: {
+        "name": "M31", "ra": 11.1, "dec": 41.5, "band": "unfiltered, calibrated approximately to Gaia G",
+        "measurements": [{"session": "s", "stack": "f", "exposure_s": 3232.0, "x": 10.0, "y": 20.0,
+                          "in_picture": True, "mag": None, "error": None, "limit": 18.0, "kind": "measured"}]}),
+          "forced")
+
+
+def test_the_candidates_on_file_match_their_schema(tmp_path, monkeypatch):
+    import argparse
+    import candidates
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    book = candidates.load("M31")
+    candidates.add_night(book, "20261014", [{"ra": 11.1, "dec": 41.5, "score": 5.4, "mag": 18.2,
+                                             "verdict": "unexplained: worth a person's eyes"}])
+    candidates.follow_up(book, "20261015", lambda ra, dec: (None, None, 18.4), None)
+    candidates.save(book)
+    args = argparse.Namespace(name="M31", all=True)
+    valid(interface.run("candidates", lambda: candidates.run(args, say=lambda *_: None)), "candidates")
+
+
 def test_the_rigs_view_matches_its_schema(tmp_path, monkeypatch):
     import config
     monkeypatch.setattr(config, "RIGS", tmp_path)

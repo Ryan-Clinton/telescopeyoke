@@ -46,6 +46,8 @@ them and every file kept under `demo/`.
 | `remote.py` | `restack.py --on HOST`: sends the frames, calibration and code to another computer by SSH and rsync, stacks there under `~/telescopeyoke-remote`, and brings the picture back |
 | `planet.py` | A planet: thousands of a second per frame, a square round it kept from each, the sharpest stacked. Uses the camera only |
 | `difference.py` | Proper image subtraction (ZOGY) of a reference stack from a new one: what is brighter now (`docs/discovery.md`, phase 1) |
+| `patrol.py`, `programmes/` | A discovery patrol of one field: readiness, point and image (through `mount.py` and `shoot.py`), then depth, subtraction, vetting and a short answer |
+| `reference.py`, `vet.py`, `plant.py` | Each field's kept reference; the evidence for each candidate and its verdict; fake novae through the whole pipeline for the discovery completeness (`docs/discovery.md`, phase 1) |
 | `mosaic.py` | Panels for an object bigger than the frame, kept in `mosaics/`; `mount.find_target` turns a panel name (`M31-P2`) into its centre |
 | `tour.py` | Records the demo being used, for the README: `docs/tour.gif` and `docs/screens/` (Ubuntu) |
 | `docs/index.html` | The project's home page, served by GitHub Pages from `docs/` |
@@ -64,7 +66,7 @@ anything with `--dry-run`; `pytest`; `doctor.py`.
 ## Commands that move the telescope
 
 `mount.py goto | point | zenith | home | compensate | directions`, and `shoot.py` (which
-re-centres), `focus.py --field` (which goes to a bright star to focus on), `polaralign.py`, `polaris.py find` and `align`, `landmark.py check`, `horizon.py`. `mount.py drift` and `shoot.py --assist` change
+re-centres), `patrol.py` (through those two; not with `--plan`, `--analyse` or `--dry-run`), `focus.py --field` (which goes to a bright star to focus on), `polaralign.py`, `polaris.py find` and `align`, `landmark.py check`, `horizon.py`. `mount.py drift` and `shoot.py --assist` change
 a motor's creep rate. `mount.py stop` is always allowed.
 
 ## Safety invariants (do not weaken these)

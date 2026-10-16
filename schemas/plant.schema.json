@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/plant.schema.json",
+  "title": "Plant",
+  "description": "data of: plant.py NEW --reference REF --json. Fake novae planted in every raw frame of a session and taken through the whole pipeline (calibration, checks, lining up, stacking, proper subtraction): the share found at each magnitude is the discovery completeness. Also kept as plant.json beside the planted copy's stack.",
+  "type": "object",
+  "required": ["new", "reference", "fakes", "frames", "unsolved", "zeropoint", "curve", "mag_50", "mag_90", "false_candidates"],
+  "properties": {
+    "new": {"type": "string"},
+    "reference": {"type": "string"},
+    "planted_copy": {"type": "string"},
+    "fakes": {"type": "array", "items": {"type": "object", "required": ["ra", "dec", "mag", "found"]}},
+    "frames": {"type": "integer"},
+    "unsolved": {"type": "array", "items": {"type": "string"}, "description": "Frames that would not plate-solve and went in without fakes."},
+    "zeropoint": {"type": "number"},
+    "band": {"type": "string"},
+    "curve": {"type": "array", "items": {"type": "object", "required": ["mag", "planted", "found", "share"]}},
+    "mag_50": {"type": ["number", "null"]},
+    "mag_90": {"type": ["number", "null"]},
+    "false_candidates": {"type": "integer", "description": "Candidates that were not fakes: what a real night of the same kind would bring before vetting."},
+    "candidates": {"type": "integer"},
+    "fading_peaks": {"type": "integer"},
+    "seconds": {"type": "number"}
+  }
+}

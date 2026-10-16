@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/forced.schema.json",
+  "title": "Forced",
+  "description": "data of: forced.py NAME RA DEC --json. One place on the sky measured in every stack of an object that depth.py has measured: a magnitude where something stands out, otherwise the 3-sigma upper limit. Unfiltered, calibrated approximately to Gaia G.",
+  "type": "object",
+  "required": ["name", "ra", "dec", "measurements", "band"],
+  "properties": {
+    "name": {"type": "string"},
+    "ra": {"type": "number"},
+    "dec": {"type": "number"},
+    "band": {"type": "string"},
+    "measurements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["session", "stack", "x", "y", "in_picture"],
+        "properties": {
+          "session": {"type": "string"},
+          "stack": {"type": "string"},
+          "exposure_s": {"type": ["number", "null"]},
+          "x": {"type": "number"},
+          "y": {"type": "number"},
+          "in_picture": {"type": "boolean"},
+          "mag": {"type": ["number", "null"]},
+          "error": {"type": ["number", "null"]},
+          "limit": {"type": ["number", "null"], "description": "Fainter than this, if not seen."},
+          "kind": {"const": "measured"}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/reference.schema.json",
+  "title": "Reference",
+  "description": "data of: reference.py NAME [--make] --json, or reference.py --list --json. The stacks kept as a field's references, each a numbered version that is never replaced, with where it came from and how deep it reaches; and, without --make, the measured stacks that could become the next one.",
+  "type": "object",
+  "$defs": {
+    "version": {
+      "type": "object",
+      "required": ["version", "file", "source", "mag_50", "sessions", "made"],
+      "properties": {
+        "version": {"type": "integer"},
+        "file": {"type": "string"},
+        "source": {"type": "string"},
+        "mag_50": {"type": "number", "description": "Where half the planted stars were found in it (depth.py)."},
+        "fwhm_arcsec": {"type": ["number", "null"]},
+        "sky": {"type": ["number", "null"]},
+        "zeropoint": {"type": ["number", "null"]},
+        "exposure_s": {"type": ["number", "null"]},
+        "frames": {"type": ["integer", "null"]},
+        "sessions": {"type": "array", "items": {"type": "string"}},
+        "made": {"type": "number"}
+      }
+    }
+  },
+  "properties": {
+    "name": {"type": "string"},
+    "versions": {"type": "array", "items": {"$ref": "#/$defs/version"}},
+    "made": {"$ref": "#/$defs/version"},
+    "measured": {"type": "array", "items": {"type": "object", "required": ["stack", "mag_50"]}},
+    "fields": {"type": "array", "items": {"type": "object", "required": ["name", "versions", "newest"]}}
+  }
+}

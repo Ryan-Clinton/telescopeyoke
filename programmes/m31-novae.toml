@@ -1,0 +1,17 @@
+# A patrol of the Andromeda Galaxy for novae (docs/discovery.md).
+# ./patrol.py m31-novae --plan, then ./patrol.py m31-novae
+
+# What to point at: a catalogue name, or a mosaic panel (M31-P3).
+target = "M31"
+
+# Frames as on 13 and 14 October 2026, which the first reference came from:
+# the same length and gain keep each night comparable with it.
+exposure = 16
+gain = 1500
+
+# How long to look. depth.py measured 5 minutes reaching about G 17.0 and
+# 54 minutes about 17.6 on M31; longer gains little.
+minutes = 30
+
+# Reach of the search: candidates are what is brighter now than in the
+# field's kept reference (reference.py M31 --make).

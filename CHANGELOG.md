@@ -5,6 +5,28 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
 
 ## Not yet released
 
+- **A discovery patrol in one command**: `./patrol.py m31-novae` checks it is
+  ready (the motion lock, a kept reference, how old the focus is, how deep
+  the night should reach), points with `mount.py goto` and images with
+  `shoot.py`, then measures the depth, subtracts the field's reference,
+  vets every candidate and answers in a few lines, with cut-outs of
+  anything unexplained. `--plan` and `--dry-run` move nothing; a
+  `MOTION_LOCKED` file stops it before anything moves. Programmes are files
+  in `programmes/`. `./reference.py M31 --make` keeps a field's deepest
+  measured stack as a numbered reference, `./forced.py M31 RA DEC` gives a
+  place's brightness or upper limit in every stack, and
+  `./candidates.py M31` follows each candidate from night to night: every
+  patrol measures the open ones again, seen or not.
+- **What is new between two nights**: `./difference.py NEW --reference REF`
+  lays one stack on another by their plate solves and subtracts them
+  properly (ZOGY, in squares, allowing for photon noise and lining-up
+  error), listing what is brighter now with how many fading peaks are as
+  strong. `./vet.py SESSION` checks each candidate against both halves of
+  the night, SkyBoT's asteroids, VSX, the Rochester lists of novae and
+  supernovae, Gaia and the reference, and gives it a verdict.
+  `./plant.py NEW --reference REF` plants fake novae in every raw frame and
+  takes them through the whole pipeline, for the discovery completeness.
+  Phase 1 of `docs/discovery.md`; measured on M31, 13 and 14 October 2026.
 - **Polaris at the edge of the picture is centred again**: with the RA axis
   at the end of its reach the mount can probe one way only, and even a
   quarter step carried an edge star out of the picture, so centring gave up

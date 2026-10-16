@@ -94,6 +94,20 @@ From `./tonight.py` and what they said is clear:
 Tell them when it is running and they can go in. While they are inside
 nobody is watching the mount: make no move they did not ask for.
 
+## 6b. Or a discovery patrol, when they ask for one
+
+    ./patrol.py m31-novae --plan     readiness: lock, field, darkness, reference, focus, expected depth
+    ./patrol.py m31-novae            point, image, then depth, subtraction, vetting and the answer
+
+Run `--plan` first and read it out: anything marked NO is said once, and
+the focus line comes before going on. The patrol moves the mount only
+through `mount.py goto` and `shoot.py`, so it is the same move as step 6
+and needs the same go-ahead. When it ends, its last lines are the answer:
+say how deep it reached and how many candidates were unexplained, and
+show each `patrol-N.png` before calling anything a find. A candidate is
+only interesting once `candidates.py` shows it seen on more than one
+night (`docs/discovery.md`).
+
 ## Not tonight unless asked
 
 Finding the true home (`findhome`, `truehome`, then marking the joints with
