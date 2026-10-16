@@ -5,7 +5,9 @@ battery; a desktop in the house may have sixteen. This sends the sessions'
 raw frames, the calibration masters and the code to HOST over SSH, runs
 restack.py there, and brings the picture back to where it would have been
 written here. HOST is a name from ~/.ssh/config (which says the address,
-port and user), and needs Python with the project's packages: its
+port and user). The SSH login there must be a Unix-like shell with rsync:
+on the Windows desktop it is Ubuntu under WSL, reached through a port
+forwarded from Windows. It needs Python with the project's packages: its
 ~/telescopeyoke/.venv, or python3.
 
 Everything goes under ~/telescopeyoke-remote on HOST, apart from any
@@ -42,7 +44,7 @@ def rsync(sources, target, *options):
 
 def there(path):
     """Where a file under config.DATA goes on HOST, relative to its home."""
-    return f"{PLACE}/data/{Path(path).resolve().relative_to(config.DATA.resolve()).as_posix()}"   # HOST runs Linux
+    return f"{PLACE}/data/{Path(path).resolve().relative_to(config.DATA.resolve()).as_posix()}"   # HOST's shell is Unix-like
 
 
 def python_on(host):
