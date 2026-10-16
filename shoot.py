@@ -332,6 +332,32 @@ def night_over(name, site, when=None):
     return None
 
 
+SKY_LIT = 1.3       # the sky this much brighter than in the kept frames: cloud lit by the town, or a light
+ALL_GONE = 0.05     # stars below this share of their kept brightness: gone, not dimmed
+PAUSED_NOTE = 900   # seconds between reminders that a --through-cloud run is still paused
+
+
+def what_dimmed(log, last=CLOUD_STOP):
+    """What the last rejected frames say about why, against the frames kept:
+    the stars' brightness and the sky's, in words, with what to look at.
+    The frames cannot tell high haze from dew on the mirrors (both dim the
+    stars and leave the sky no brighter); the person outside can, by
+    looking up. On 15 October 2026 it was haze, not dew."""
+    kept = [f for f in log if f["accepted"]]
+    recent = log[-last:]
+    if len(kept) < 3 or not recent:
+        return "cloud?"
+    stars = float(np.median([f["flux"] for f in recent])) / max(float(np.median([f["flux"] for f in kept])), 1e-6)
+    sky = float(np.median([f["background"] for f in recent])) / max(float(np.median([f["background"] for f in kept])), 1e-6)
+    levels = f"stars at {100 * stars:.0f}% of their kept brightness, sky at {100 * sky:.0f}%"
+    if sky > SKY_LIT:
+        return f"{levels}: cloud lit by the town, or a light shining in"
+    if stars < ALL_GONE:
+        return f"{levels}: thick cloud, or something in front of the telescope"
+    return (f"{levels}: haze or thin cloud, or dew on the mirrors. Look up: if the sky is clear, "
+            "look down the tube for dew")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("name", help="what it is a picture of; a catalogue name allows re-centring")
@@ -400,6 +426,7 @@ def run(args):
     ORDERS.unlink(missing_ok=True)   # an order left for an earlier run is not for this one
     told = {"stop": False, "recentre": False, "cloud": False, "cloudy": False}
     checked = [0.0]   # when the Sun and the target were last checked
+    paused = [0.0]    # when the run last said it was paused for cloud
     site = None
     if args.through_cloud:
         site = (config.load() if config.FILE.exists() else config.example())["site"]
@@ -423,13 +450,19 @@ def run(args):
         latest = session.log[-CLOUD_STOP:]
         if len(latest) == CLOUD_STOP and not any(f["accepted"] for f in latest):
             if not args.through_cloud:
-                print(f"  the last {CLOUD_STOP} frames were all rejected; stopping", flush=True)
+                print(f"  the last {CLOUD_STOP} frames were all rejected ({what_dimmed(session.log)}); stopping",
+                      flush=True)
                 told["cloud"] = True
                 return False
             if not told["cloudy"]:
-                print(f"  the last {CLOUD_STOP} frames were all rejected: cloud; carrying on until it clears",
-                      flush=True)
-                told["cloudy"] = True
+                print(f"  the last {CLOUD_STOP} frames were all rejected ({what_dimmed(session.log)}); "
+                      "carrying on until it clears", flush=True)
+                told["cloudy"], paused[0] = True, time.monotonic()
+            elif time.monotonic() - paused[0] >= PAUSED_NOTE:
+                # A pause nobody hears about looks like a run that is working.
+                kept = sum(f["accepted"] for f in session.log)
+                print(f"  still paused, {kept} frames kept so far ({what_dimmed(session.log)})", flush=True)
+                paused[0] = time.monotonic()
         elif told["cloudy"] and session.log and session.log[-1]["accepted"]:
             # The mount kept tracking, but drift went unmeasured: centre again.
             print("  stars again; re-centring", flush=True)

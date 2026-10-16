@@ -126,7 +126,9 @@ Focus before anything that plate-solves: the polar alignment and every
 GoTo that corrects itself work from the stars in a picture, and blurred
 stars give no answer. Wait until it is dark enough to see stars.
 
-Start the focusing aid. With `--field` it first moves the telescope to a
+With the motor focuser (`docs/focuser.md`), point at a rich star field and
+run `./focus.py --motor`: it focuses with nobody touching the telescope.
+Without one, start the focusing aid. With `--field` it first moves the telescope to a
 bright star with plenty of others round it, so keep clear as it starts:
 
     ./focus.py --field

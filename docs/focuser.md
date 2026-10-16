@@ -3,10 +3,9 @@
 [Back to the README](../README.md)
 
 A 28BYJ-48 stepper motor on the focuser's shaft, driven by an Arduino Nano
-on a USB lead. `./focuser.py` loads the Nano and turns the motor. That is as
-far as it goes yet: fitted to the 150P it has driven the drawtube in by a
-turn of the motor, but nothing about it has been measured and `focus.py`
-does not use it.
+on a USB lead. `./focuser.py` loads the Nano and turns the motor;
+`./focus.py --motor` focuses with it, measuring the stars as it goes, with
+nobody's hand on the telescope.
 
 ## Parts
 
@@ -65,6 +64,26 @@ Then:
 On the 150P, with the motor in place of the knob on the bracket's side, a
 plus move takes the drawtube out and a minus move brings it in. The motor
 is too weak to harm anything at the end of the travel: it stalls and ticks.
+
+## Focusing with it
+
+    ./focus.py --motor
+
+Point at a field with plenty of stars first (near Deneb or Vega; `--motor`
+focuses wherever the telescope is). It takes 1 s pictures at gain 1500 and:
+
+1. steps the drawtube out by 96 half-steps until the stars are clearly
+   past focus (or gone);
+2. creeps back in by 32 at a time, measuring each time, through the
+   sharpest point until the stars grow again;
+3. goes back out 300 half-steps, beyond the gears' slack, and comes in once
+   to the sharpest position, so the last move is always inward.
+
+Only readings taken moving in are trusted: the gears' slack is bigger than
+a step, so a move out and a move in by the same count do not land in the
+same place. Each run is kept in `cache/focus_runs.jsonl`. On 15 October
+2026 it took the 150P to HFR 2.47 (3.3"), 128
+half-steps out from where it started.
 
 The two shafts have to be in line. With the motor's ear screws done up
 where they happened to sit, the printed coupler bound and the motor fell

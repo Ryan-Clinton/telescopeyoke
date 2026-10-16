@@ -227,6 +227,25 @@ def turns_in_words(turns):
     return count + (f" and {'a half' if part == 2 else bit}" if part else "")
 
 
+def marks_in_words(marks):
+    """A distance on the latitude scale as a person would read it: to the
+    nearest quarter of a mark."""
+    quarters = max(1, round(marks * 4))
+    whole, part = divmod(quarters, 4)
+    bit = {1: "a quarter", 2: "a half", 3: "three quarters"}.get(part)
+    if not whole:
+        return f"{bit} of a mark"
+    return f"{whole} mark{'s' if whole > 1 else ''}" + (f" and {bit}" if bit else "")
+
+
+def for_mount(azimuth, altitude, settings):
+    """guidance() with what is known about this tripod and mount from the
+    [mount] settings."""
+    mount_cfg = settings.get("mount", {})
+    return guidance(azimuth, altitude, mount_cfg.get("feet_apart_cm"), mount_cfg.get("tripod_cm_per_degree"),
+                    mount_cfg.get("latitude_degrees_per_mark"))
+
+
 def bolts():
     try:
         return json.loads(BOLTS_FILE.read_text(encoding="utf-8"))
@@ -268,13 +287,16 @@ def learn(before, now, turned):
     return noted
 
 
-def guidance(azimuth, altitude, feet_apart_cm=None):
+def guidance(azimuth, altitude, feet_apart_cm=None, cm_per_degree=None, degrees_per_mark=None):
     """What to do with your hands about a polar error (degrees east of north,
     degrees too high): for each of the two directions, which way the axis
     has to go, and either the bolts to turn and by about how much, if this
     mount's bolts have been learned, or how to find out. An azimuth error
     over WHOLE_TRIPOD is for turning the whole tripod on the ground, with
-    how far that moves each foot when the feet's spacing is known."""
+    how far that moves each foot: by `cm_per_degree` when it has been
+    measured on this tripod, otherwise worked out from the feet's spacing.
+    With `degrees_per_mark`, what a mark on the latitude scale is worth, an
+    altitude error is also given in marks on that scale."""
     def pair(axis, error, towards):
         first, second = PAIRS[axis]
         out = {"error_deg": round(error, 2), "move": towards, "by_deg": round(abs(error), 2),
@@ -307,13 +329,24 @@ def guidance(azimuth, altitude, feet_apart_cm=None):
         tripod = {"turn_deg": round(abs(azimuth), 1), "way": way}
         words = (f"That is more than the bolts have room for. Centre the azimuth bolts, then turn the whole tripod "
                  f"{abs(azimuth):.0f}° {way}, seen from above")
-        if feet_apart_cm:
+        if cm_per_degree:
+            # Measured on this tripod, which beats the geometry: the feet slide and twist as they go.
+            tripod["cm_at_each_foot"] = round(cm_per_degree * abs(azimuth), 1)
+        elif feet_apart_cm:
             # Three feet at the corners of a triangle: each is this far from the middle.
             tripod["cm_at_each_foot"] = round(feet_apart_cm / math.sqrt(3) * math.radians(abs(azimuth)), 1)
+        if "cm_at_each_foot" in tripod:
             words += (f": all three feet go the same way round the circle they stand on, each about "
                       f"{tripod['cm_at_each_foot']:g} cm along it (not one foot moved and the others left)")
         az.update(tripod=tripod, words=words + ". Then measure again.")
     alt = pair("altitude", altitude, "down" if altitude > 0 else "up")
+    if degrees_per_mark:
+        # The scale says the same thing whichever bolt does the work, which the
+        # bolts cannot until they have been learned.
+        alt["scale_marks"] = round(abs(altitude) / degrees_per_mark, 1)
+        scale = (f"Move the axis {alt['move']} {abs(altitude):.1f}°: about {marks_in_words(alt['scale_marks'])} "
+                 f"on the latitude scale, where a mark is about {degrees_per_mark:g}°.")
+        alt["words"] = scale if not alt["known"] else scale + " " + alt["words"]
     return {"azimuth": az, "altitude": alt, "view": VIEW,
             "first": "Before the first measurement, centre the azimuth bolts: the same length of thread showing on "
                      "each, so there is room to go either way."}
@@ -405,7 +438,7 @@ def run(args):
                       f"{('east' if axis == 'azimuth' else 'up')}).")
         else:
             print("Nothing learned from --turned: there is no measurement from the last two hours to compare with.")
-    result["guidance"] = guidance(azimuth, altitude, settings.get("mount", {}).get("feet_apart_cm"))
+    result["guidance"] = for_mount(azimuth, altitude, settings)
     print("  " + result["guidance"]["azimuth"]["words"])
     print("  " + result["guidance"]["altitude"]["words"])
     print(f"  (Left and right, rear and front: {VIEW}.)")

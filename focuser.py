@@ -6,8 +6,8 @@
     ./focuser.py move 200      that many half-steps (4096 to a turn): plus takes the
                                drawtube out on the 150P, minus brings it in
 
-Building and wiring it: docs/focuser.md. It only turns the motor so far:
-focus.py does not use it yet.
+Building and wiring it: docs/focuser.md. `./focus.py --motor` uses it to
+bring the stars to focus with nobody touching the telescope.
 """
 import argparse
 import shutil

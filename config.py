@@ -174,6 +174,12 @@ SETTINGS = (
     ("mount", "feet_apart_cm", "Distance between two tripod feet", "number",
      "Centimetres, from one foot to the next. With it, a turn of the whole tripod is also given as how far "
      "each foot moves. Blank leaves that out.", {"min": 20, "max": 400, "optional": True}),
+    ("mount", "tripod_cm_per_degree", "Tripod: centimetres per degree", "number",
+     "How far a foot moved for each degree the whole tripod turned, measured during polar alignment. "
+     "Used in place of the feet's spacing when given.", {"min": 0.1, "max": 20, "optional": True}),
+    ("mount", "latitude_degrees_per_mark", "Latitude scale: degrees per mark", "number",
+     "What one mark on the mount's latitude scale is worth, measured during polar alignment. With it, "
+     "raising or lowering the axis is also said in marks.", {"min": 0.2, "max": 10, "optional": True}),
     ("scope", "aperture_mm", "Aperture", "number", "Millimetres.", {"min": 10, "max": 2000}),
     ("scope", "focal_length_mm", "Focal length", "number",
      "Millimetres. The plate solver works out the field of view from this and the sensor.", {"min": 50, "max": 20000}),

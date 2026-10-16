@@ -685,3 +685,20 @@ def test_a_measurement_given_the_turns_made_learns_from_them(scope, bolts, monke
     args.dry_run, args.turned = True, None
     plan, notes = polaralign.run(args)
     assert "centre the azimuth bolts" in notes[1]
+
+
+def test_measured_figures_for_the_tripod_and_the_latitude_scale_are_used(bolts):
+    # 2.3 cm a degree was measured turning this tripod, and beats the geometry of the feet.
+    west = polaralign.guidance(3.7, 2.8, feet_apart_cm=87, cm_per_degree=2.3, degrees_per_mark=1.9)
+    assert west["azimuth"]["tripod"]["cm_at_each_foot"] == pytest.approx(8.5)
+    assert "each about 8.5 cm along it" in west["azimuth"]["words"]
+    # Up and down are said in marks on the scale, which do not depend on knowing the bolts.
+    down = west["altitude"]
+    assert down["scale_marks"] == pytest.approx(1.5) and down["words"].startswith("Move the axis down 2.8°: about 1 mark and a half")
+    up = polaralign.guidance(0.3, -0.4, degrees_per_mark=1.9)["altitude"]
+    assert up["words"].startswith("Move the axis up 0.4°: about a quarter of a mark") and "not known yet" not in up["words"]
+    assert polaralign.marks_in_words(2.0) == "2 marks" and polaralign.marks_in_words(0.05) == "a quarter of a mark"
+    # Read from the [mount] settings.
+    found = polaralign.for_mount(3.7, -0.4, {"mount": {"tripod_cm_per_degree": 2.3, "latitude_degrees_per_mark": 1.9}})
+    assert found["azimuth"]["tripod"]["cm_at_each_foot"] == pytest.approx(8.5) and "scale_marks" in found["altitude"]
+    assert "scale_marks" not in polaralign.for_mount(3.7, -0.4, {})["altitude"]

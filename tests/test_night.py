@@ -202,7 +202,8 @@ def test_an_open_ended_run_stops_when_cloud_arrives(night, monkeypatch, capsys):
     monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "0", "--exposure", "2",
                                       "--no-recentre", "--no-restack"])
     summary = shoot.main()
-    assert "the last 5 frames were all rejected; stopping" in capsys.readouterr().out
+    said = capsys.readouterr().out
+    assert "the last 5 frames were all rejected (" in said and "); stopping" in said
     assert 6 <= summary["accepted"] <= 8 and 13 <= summary["captured"] <= 22
 
 
@@ -255,3 +256,17 @@ def test_the_night_is_over_at_dawn_or_at_the_mounts_limit():
         if why and "Sun" not in why:
             assert hour_angle > mount.MAX_HOUR_ANGLE - shoot.LIMIT_MARGIN
     assert shoot.night_over("Not A Catalogue Name", site, Time("2026-01-15T23:00:00")) is None
+
+
+def test_a_pause_says_what_the_frames_show_about_the_cloud():
+    def frame(flux, background, accepted):
+        return {"flux": flux, "background": background, "accepted": accepted}
+    kept = [frame(56000, 83, True)] * 10
+    # 15 October 2026: stars at a fifth and the sky no brighter was high haze; dew looks the same.
+    hazy = shoot.what_dimmed(kept + [frame(11000, 45, False)] * 20)
+    assert hazy.startswith("stars at 20% of their kept brightness, sky at 54%") and "haze" in hazy and "dew" in hazy
+    lit = shoot.what_dimmed(kept + [frame(900, 250, False)] * 20)
+    assert "lit by the town" in lit and "dew" not in lit
+    gone = shoot.what_dimmed(kept + [frame(0, 80, False)] * 20)
+    assert "thick cloud" in gone
+    assert shoot.what_dimmed([frame(0, 80, False)] * 20) == "cloud?"       # nothing kept to compare with

@@ -58,6 +58,16 @@ alignment screen with a drawing of each bolt as a clock face, says:
   Feet 87 cm apart and a turn of 10° is 8.8 cm. That is all three feet, the
   same way round the circle, each by that much: not one foot moved 8.8 cm
   and the others left where they were.
+  Better than the geometry is what was measured on the tripod itself:
+  `tripod_cm_per_degree` under `[mount]`. On the 150P's tripod on 15
+  October 2026 a foot moved about 2.3 cm for each degree (6 cm gave 3.7°,
+  7.5 cm gave 2.1°), far more than its spacing predicts, because the feet
+  slide and twist on grass rather than rolling round a circle.
+- **Up and down on the latitude scale.** With `latitude_degrees_per_mark`
+  under `[mount]`, an altitude error is also given in marks on the mount's
+  latitude scale, to the nearest quarter of a mark, which holds whichever
+  bolt does the work. On the EQ3 Pro a mark is nearly 2°: one and a half
+  marks moved the axis 2.8°.
 - **Otherwise: which bolt to turn in, which to ease out first, and about how
   many turns**, once this mount's bolts have been learned. The two bolts of
   each pair are called left and right (azimuth) and rear and front

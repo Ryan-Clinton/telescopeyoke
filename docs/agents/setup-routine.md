@@ -58,11 +58,14 @@ says it moved and they say it did not, the motors have stalled (6 October
 
 ## 4. Focus
 
-    ./focus.py --field
+    ./mount.py goto Deneb      (or any rich star field in clear sky)
+    ./focus.py --motor
 
-It moves to a rich star field (say so first), then they turn the focuser
-by the tones until "Focus good. Hold." Their hands; the agent listens to the
-numbers. Focus comes before anything that plate-solves: the polar alignment
+The motor focuser does it: nobody touches the telescope, so never ask for a
+hand on the knob. `--motor` focuses wherever the telescope points, so point
+at a rich field first. Run it in the background and report the result (HFR
+about 2 to 2.5 is good on the 150P). `./focus.py --field`, the hand-turned
+aid with tones, is only for a telescope without the motor. Focus comes before anything that plate-solves: the polar alignment
 and every `--solve` work from the stars in a picture, and blurred stars give
 no answer. A failed plate solve before this step says nothing about cloud.
 

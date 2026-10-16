@@ -5,6 +5,21 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
 
 ## Not yet released
 
+- **Focusing with the motor**: `./focus.py --motor` brings the stars to
+  focus with the motor focuser and nobody touching the telescope: out past
+  focus, in by small steps through the sharpest point, then out beyond the
+  gears' slack and in once to the best (`docs/focuser.md`). Proven on the
+  150P on 15 October 2026: HFR 2.47.
+- **A paused run says why**: `shoot.py --through-cloud` says, when cloud
+  pauses it, how bright the stars and the sky are against the kept frames,
+  and so whether it looks like cloud lit by the town, thick cloud, or haze
+  or dew (which the frames cannot tell apart: look up). While paused it
+  says so again every 15 minutes, with the frames kept so far.
+- **Polar alignment in centimetres and scale marks**: `tripod_cm_per_degree`
+  and `latitude_degrees_per_mark` under `[mount]` (or the Settings screen),
+  measured while aligning, make it say how far each foot moves for a tripod
+  turn and how many marks on the latitude scale to raise or lower the axis.
+  Measured on 15 October 2026: 2.3 cm a degree and about 1.9° a mark.
 - `./camera_setup.py` restarts an INDI server that has lost the camera, as
   one left running while the camera was unplugged and plugged back in does;
   `--check` still only looks.

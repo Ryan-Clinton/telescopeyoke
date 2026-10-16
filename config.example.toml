@@ -57,6 +57,11 @@ setup = "default"
 # polar alignment says how far each foot moves when the whole tripod has to
 # be turned. Leave it out and it gives the turn in degrees only.
 # feet_apart_cm = 87
+# Better still, what was measured while aligning: how far a foot moved for
+# each degree the tripod turned, and what one mark on the latitude scale is
+# worth. With the second, raising or lowering the axis is said in marks.
+# tripod_cm_per_degree = 2.3
+# latitude_degrees_per_mark = 1.9
 # Part of the name of the USB adapter on the handset's serial lead, as it
 # appears under /dev/serial/by-id/, or on Windows against the COM port in
 # Device Manager. A handset plugged in by its own USB socket is "Prolific".

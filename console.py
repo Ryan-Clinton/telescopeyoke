@@ -793,11 +793,11 @@ class Reader:
             return nothing
         import config
         import polaralign
-        feet = (config.load() if config.FILE.exists() and not self.demo else config.example()).get("mount", {})
+        settings = config.load() if config.FILE.exists() and not self.demo else config.example()
         return {"measured": saved.get("saved"), "azimuth_deg": round(found["azimuth"], 2),
                 "altitude_deg": round(found["altitude"], 2),
                 # What to do with your hands about it: which bolt, about how far.
-                "guidance": polaralign.guidance(found["azimuth"], found["altitude"], feet.get("feet_apart_cm"))}
+                "guidance": polaralign.for_mount(found["azimuth"], found["altitude"], settings)}
 
     def framing(self, name):
         """How a target fits the camera: the field of view from the sensor
