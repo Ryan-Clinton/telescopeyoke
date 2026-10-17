@@ -621,6 +621,7 @@ def moment(text):
 
 def run(args, say=print):
     until = moment(args.until) if args.until else None
+    args.camera = args.camera or ("ccor1" if args.action == "hunt" else "c3")
     if args.action == "hunt":
         if args.install:
             return install(args.camera, say)
@@ -635,8 +636,8 @@ def run(args, say=print):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("action", choices=("fetch", "look", "hunt"))
-    ap.add_argument("--camera", choices=("c3", "c2", "ccor1"), default="c3",
-                    help="LASCO C3 (wide) or C2 (close in), or GOES-19's CCOR-1")
+    ap.add_argument("--camera", choices=("c3", "c2", "ccor1"),
+                    help="LASCO C3 (wide) or C2 (close in), or GOES-19's CCOR-1 (default: c3; ccor1 for hunt)")
     ap.add_argument("--hours", type=float, default=12.0, help="how far back (default 12)")
     ap.add_argument("--until", help="the end of the time looked at, UTC (YYYY-MM-DDTHH:MM; default now, or "
                     "the newest picture kept)")
