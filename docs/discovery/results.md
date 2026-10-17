@@ -360,3 +360,48 @@ sag and recover with the same shape: something on the picture that
 night, not the stars. So no new variable yet, and the honest state is
 that one session's drift can still pass for a dip; more nights will
 show which flags repeat.
+
+## Real or bogus
+
+**First trained 17 October 2026** (`./realbogus.py train`), on the five M31
+nights that have been subtracted, each subtracted again twice with 300
+fake stars planted in the night's own stack (G 13 to 19.5, the night's own
+star shape and noise). Real examples: the planted stars found, 1774.
+Bogus: every other peak above 4 sigma, brightening or fading, 1374; the
+candidates still waiting for a person's eyes were left out of both. No
+person's dismissals yet. Eight measurements of each peak's patch (its
+score, its width against the stars, how round, how sharp, a dark lobe
+beside it, light in a ring round it, light in the reference under it, how
+far its centre sits from its peak) go into a logistic regression.
+
+Tested night by night, each night held out and the model trained on the
+other four, at candidate strength (5 sigma or more), with the cut set to
+keep 95% of the planted stars in training:
+
+| Night held out | False candidates set aside | Planted stars kept |
+|---|---|---|
+| 4 October (a poor night, 197 candidates) | 124 of 399 | 173 of 198 |
+| 6 October | 32 of 34 | 325 of 334 |
+| 13 October 23:12 | 6 of 6 | 401 of 402 |
+| 14 October 02:05 | 1 of 1 | 332 of 334 |
+| 14 October 02:11 | 12 of 12 | 413 of 416 |
+| All | 175 of 452 (39%) | 1644 of 1684 (98%) |
+
+On the four ordinary nights it sets aside 51 of 53 false candidates; on
+the poor night, a third. The heaviest weight is on the score, so part of
+what it learnt is that stronger is likelier real; tested again with the
+score left out, the shape alone sets aside 148 of the 452 with the same
+planted stars kept, so most of it is the shape. The rest of the weights:
+light in a ring round the peak and a wide or sharp spot count against it,
+a shallow dark lobe for it.
+
+Of the seven candidates on file from those nights, all between 5.1 and
+5.4 sigma, it rates five likely bogus (0.03 to 0.16, below its cut of
+0.22) and two not (0.38 and 0.34). That is advice: `vet.py` puts the
+probability in each candidate's evidence and a clue when it is low, and
+dismisses nothing. Two things it does not know: a real transient sitting
+right on a bright star or a galaxy's core, as the planted stars are spread
+evenly over the usable area; and anything unlike these five nights, until
+it is trained on more of them. A person's dismissals join the training as
+they come; train it again after new nights.
+

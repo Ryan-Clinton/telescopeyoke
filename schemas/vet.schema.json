@@ -4,36 +4,164 @@
   "title": "Vet",
   "description": "data of: vet.py SESSION --json. Every candidate difference.py left in a session, with the evidence for what it is and a verdict. Each piece of evidence says whether it was measured here or reported by a catalogue, or is not known because the check was not made. Also kept as vetted.json beside the candidates.",
   "type": "object",
-  "required": ["session", "candidates", "unexplained", "asked", "halves_checked"],
+  "required": [
+    "session",
+    "candidates",
+    "unexplained",
+    "asked",
+    "halves_checked"
+  ],
   "properties": {
-    "session": {"type": "string"},
-    "unexplained": {"type": "integer", "description": "Candidates no check explains: the ones worth a person's eyes."},
-    "asked": {"type": "array", "items": {"enum": ["asteroids", "variables", "reported", "gaia"]}, "description": "The catalogues that answered."},
-    "halves_checked": {"type": "boolean"},
-    "band": {"type": ["string", "null"]},
+    "session": {
+      "type": "string"
+    },
+    "unexplained": {
+      "type": "integer",
+      "description": "Candidates no check explains: the ones worth a person's eyes."
+    },
+    "asked": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "asteroids",
+          "variables",
+          "reported",
+          "gaia"
+        ]
+      },
+      "description": "The catalogues that answered."
+    },
+    "halves_checked": {
+      "type": "boolean"
+    },
+    "band": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "candidates": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["x", "y", "score", "kinds", "verdict"],
+        "required": [
+          "x",
+          "y",
+          "score",
+          "kinds",
+          "verdict"
+        ],
         "properties": {
-          "x": {"type": "integer"},
-          "y": {"type": "integer"},
-          "ra": {"type": ["number", "null"]},
-          "dec": {"type": ["number", "null"]},
-          "score": {"type": "number"},
-          "as_strong_fading": {"type": ["integer", "null"]},
-          "mag": {"type": ["number", "null"]},
-          "halves": {"type": "array", "items": {"type": "number"}, "description": "The score in each half of the night, subtracted separately."},
-          "asteroid": {"type": ["object", "null"], "description": "A known asteroid or comet there at mid-session (SkyBoT), with its distance in arcsec."},
-          "variable": {"type": ["object", "null"]},
-          "reported": {"type": ["object", "null"]},
-          "gaia": {"type": ["object", "null"]},
-          "in_reference": {"type": ["number", "null"], "description": "Magnitude of light already at the place in the reference, or null if none to speak of."},
-          "kinds": {"type": "object", "additionalProperties": {"enum": ["measured", "inferred", "estimated", "simulated", "reported", "not known"]}},
-          "verdict": {"type": "string"}
+          "x": {
+            "type": "integer"
+          },
+          "y": {
+            "type": "integer"
+          },
+          "ra": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "dec": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "score": {
+            "type": "number"
+          },
+          "as_strong_fading": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "mag": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "halves": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "description": "The score in each half of the night, subtracted separately."
+          },
+          "asteroid": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "A known asteroid or comet there at mid-session (SkyBoT), with its distance in arcsec."
+          },
+          "variable": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "reported": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "gaia": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "in_reference": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "Magnitude of light already at the place in the reference, or null if none to speak of."
+          },
+          "kinds": {
+            "type": "object",
+            "additionalProperties": {
+              "enum": [
+                "measured",
+                "inferred",
+                "estimated",
+                "simulated",
+                "reported",
+                "not known"
+              ]
+            }
+          },
+          "verdict": {
+            "type": "string"
+          },
+          "real_bogus": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "realbogus.py's probability that it is a new point of light, not something the subtraction left (inferred: a model trained on stars planted in this rig's own nights). Advice only: nothing is dismissed by it."
+          },
+          "clues": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
         }
       }
+    },
+    "real_bogus_cut": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Below this the classifier calls a candidate likely bogus: the level that keeps 95% of planted stars."
     }
   }
 }

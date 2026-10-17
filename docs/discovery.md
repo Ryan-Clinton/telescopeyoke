@@ -27,7 +27,7 @@ Where it stands on 17 October 2026, phase by phase:
 | 5 Report packet | built | the packet, yes (95 s); a claim filled in on the Transient Name Server and stopped before sending, not yet |
 | 6 Public alerts | built | the month's search, yes; a public transient observed with the 150P, not yet |
 | 7 Search everything again | built | not yet run as a rerun that finds fakes planted in old frames |
-| 8 Real-or-bogus classifier | labels kept only | no: too few labelled candidates to train on |
+| 8 Real-or-bogus classifier | built (`realbogus.py`) | the fall in false candidates, yes, on planted stars: night by night 175 of 452 set aside, 98% of planted stars kept; a candidate leading to a useful repeat, not yet |
 | 9 Variables, dippers, transits | built | no: no VSX submission, no transit timed yet |
 | 10 Several telescopes | not built | needs other users |
 
@@ -143,7 +143,7 @@ ends with a scientific proof, not just working code.
 | 5 | The report packet. **`report.py` built 17 October 2026: 95 s for a real candidate. Since then: made at once for every unexplained candidate and sent to the person's phone (`notify.py`, Telegram), a second look at the field taken while the telescope is there, and the form filled in the browser by an agent for the person to send (`docs/agents/claiming.md`)** | under five minutes from a confirmed planted fake to a packet |
 | 6 | Public alerts (`brokers.py`). **Built 17 October 2026: ALeRCE's new transients, bright enough and up here tonight; the month's search run (its one real find was AT 2026aexm, already on the Transient Name Server)** | a real public transient observed; an unreported-transient search run over a past month of alerts |
 | 7 | Every session searched; old frames searched again on each improvement. **Built 17 October 2026: each new stack of a field with a reference is searched in the background; `patrol.py --sweep [--all-history]` for the rest** | every science picture checked automatically; a rerun finds fakes planted in old frames |
-| 8 | Real-or-bogus classifier; proposed follow-up. **Dismissal labels kept from 17 October 2026 (`candidates.py --dismiss`)** | a measured fall in false candidates; a candidate leads to a useful repeat |
+| 8 | Real-or-bogus classifier; proposed follow-up. **Dismissal labels kept from 17 October 2026 (`candidates.py --dismiss`). `realbogus.py` built 17 October 2026: trained on stars planted in five M31 nights and on the peaks the subtraction left, tested night by night; its probability is in each vetted candidate's evidence, as advice ([results](discovery/results.md#real-or-bogus))** | a measured fall in false candidates; a candidate leads to a useful repeat |
 | 9 | Variable stars, dippers like Tabby's star, and known exoplanet transits timed with the 150P. **Built 17 October 2026: `variables.py` (light curves from batches of each night's frames, against VSX, with any dip flagged), `starwatch.py tabby` (a nightly look at KIC 8462852, warning of a dip) and `transits.py` (tonight's whole transits from NASA's Exoplanet Archive; the depth and timing fitted from a night's frames)** | a first VSX submission; a transit timed against its prediction |
 | 10 | Several telescopes together: other people's telescopeyoke rigs sharing fields and confirming each other's candidates. **Needs other users first** | a candidate confirmed by another telescope |
 

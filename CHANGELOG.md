@@ -6,6 +6,21 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+- **Real or bogus** (`realbogus.py`, phase 8): a logistic model of what a
+  new star looks like after this pipeline against what the subtraction
+  leaves, trained on stars planted in five M31 nights and on every other
+  peak, tested night by night: 175 of 452 false candidates above 5 sigma
+  set aside, 1644 of 1684 planted stars kept, most of it from the shape
+  rather than the score. `vet.py` adds its probability to each candidate's
+  evidence as advice; the candidate book keeps it each night.
+  `difference.subtract` can hand back its working images for training.
+- **The decision record says how a skill went**: per skill, the turns
+  that ended on a question to the person, the messages that stopped or
+  corrected it (only that it did; the words are not kept) and the times
+  the person interrupted Claude, from two more hooks (UserPromptSubmit,
+  Stop). An interruption is no longer read as the person's words for a
+  move.
+
 - **The rest of the skills and agents** (`docs/skills-and-agents.md`):
   skills `claim`, `report-comet` (both only when typed), `discovery-night`,
   `end-of-night`, `morning-summary`, `new-command`, `release` (stops

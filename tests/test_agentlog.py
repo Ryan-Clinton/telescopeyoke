@@ -94,7 +94,7 @@ def test_the_report_counts_skills_agents_refusals_and_unasked_moves(data, tmp_pa
     agentlog.write(agentlog.refusal("no-motion", payload("./shoot.py M31", agent="candidate-vetter"), "no"))
     answer = agentlog.report(agentlog.read())
     assert answer["hardware_commands"] == 2 and answer["hardware_without_the_person_speaking_first"] == 1
-    assert answer["skills"]["focus"] == {"loaded": 1, "ran": 2, "refused": 0}
+    assert {k: answer["skills"]["focus"][k] for k in ("loaded", "ran", "refused")} == {"loaded": 1, "ran": 2, "refused": 0}
     assert answer["agents"]["candidate-vetter"]["refused"] == 1 and answer["refused"] == {"no-motion": 1}
 
 
@@ -104,3 +104,55 @@ def test_the_logging_hook_never_stops_the_work(tmp_path):
                               capture_output=True, text=True, timeout=60,
                               env={"TY_DATA": str(tmp_path), "PATH": "", "SYSTEMROOT": ""})
         assert done.returncode == 0
+
+
+def chat(tmp_path, *turns):
+    t = tmp_path / "chat.jsonl"
+    rows = []
+    for who, text in turns:
+        kind = "assistant" if who == "claude" else "user"
+        rows.append({"type": kind, "message": {"content": [{"type": "text", "text": text}]}})
+    t.write_text("\n".join(json.dumps(r) for r in rows), encoding="utf-8")
+    return str(t)
+
+
+@pytest.mark.parametrize("said, corrected", [
+    ("no, not that one", True), ("stop", True), ("don't move it", True), ("why did you slew?", True),
+    ("I said Vega", True), ("wait", True), ("swing to Vega", False), ("now Deneb", False),
+    ("nothing wrong, carry on", False),
+])
+def test_a_message_that_corrects_or_stops_is_noted_without_its_words(data, tmp_path, said, corrected):
+    row = agentlog.person({"session_id": "s1", "prompt": said, "transcript_path": chat(tmp_path)})
+    assert row["correction"] is corrected and said not in json.dumps(row)
+
+
+def test_an_interruption_before_the_message_is_noted(data, tmp_path):
+    t = chat(tmp_path, ("claude", "Focusing now."), ("person", "[Request interrupted by user]"))
+    assert agentlog.person({"session_id": "s1", "prompt": "stop", "transcript_path": t})["interrupted"]
+    t = chat(tmp_path, ("claude", "Focusing now."))
+    assert not agentlog.person({"session_id": "s1", "prompt": "ok", "transcript_path": t})["interrupted"]
+
+
+@pytest.mark.parametrize("reply, question", [
+    ("Focus now?", True), ("Which part of the sky is clear?\nThen I'll pick a star.", True),
+    ("Focused: HFR 2.3.", False), ("It printed `ready?` and stopped.", False),
+    ('The handset says "continue?" on its screen.', False),
+])
+def test_a_turn_ending_on_a_question_is_noted(data, tmp_path, reply, question):
+    t = chat(tmp_path, ("person", "focus"), ("claude", reply))
+    assert agentlog.turn_end({"session_id": "s1", "transcript_path": t})["asked"] is question
+
+
+def test_an_interruption_is_not_taken_as_the_persons_words_for_a_move(tmp_path):
+    t = chat(tmp_path, ("person", "swing to Vega"), ("claude", "Going."), ("person", "[Request interrupted by user]"))
+    assert agentlog.last_words(t)[0] == "swing to Vega"
+
+
+def test_the_report_says_per_skill_how_often_it_asked_was_corrected_or_stopped(data, tmp_path):
+    agentlog.write(agentlog.event({"tool_name": "Skill", "tool_input": {"skill": "focus"}, "session_id": "s1"}))
+    agentlog.write(agentlog.turn_end({"session_id": "s1", "transcript_path": chat(tmp_path, ("claude", "Now?"))}))
+    agentlog.write(agentlog.turn_end({"session_id": "s1", "transcript_path": chat(tmp_path, ("claude", "Done."))}))
+    agentlog.write(agentlog.person({"session_id": "s1", "prompt": "no, stop",
+                                    "transcript_path": chat(tmp_path, ("person", "[Request interrupted by user]"))}))
+    s = agentlog.report(agentlog.read())["skills"]["focus"]
+    assert (s["turns"], s["questions"], s["corrected"], s["interrupted"]) == (2, 1, 1, 1)

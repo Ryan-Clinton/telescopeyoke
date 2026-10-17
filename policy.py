@@ -82,6 +82,7 @@ COMMANDS = {
     "policy.py": ("read_only", {}, {}),
     "process.py": ("local_write", {}, {}),
     "recover.py": ("local_write", {}, {}),
+    "realbogus.py": ("local_write", {"show": "read_only", "score": "read_only"}, {}),
     "reference.py": ("read_only", {"--make": "local_write"}, {}),
     "release.py": ("local_write", {"--publish": "external"}, {}),
     "remote.py": ("local_write", {}, {}),

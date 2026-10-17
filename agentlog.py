@@ -7,7 +7,8 @@ the safety hooks refused.
     ./ty agent-report --json
 
 Claude Code's hooks write it (.claude/hooks/log.py after each shell command,
-skill and agent; .claude/hooks/guard.py on each refusal), one line per event
+skill and agent, on each message from the person and at the end of each
+turn; .claude/hooks/guard.py on each refusal), one line per event
 in cache/agent-log.jsonl, which git ignores. Each line has when, the session,
 the agent (none for the main session), the skill last loaded in that session,
 the tool, the command as policy.py read it after redaction, its class, and
@@ -31,6 +32,9 @@ import config
 import interface
 import policy
 
+INTERRUPTED = "[Request interrupted by user"
+CORRECTION = re.compile(r"^\s*(no\b|nope|stop|don'?t|do not|wrong|not that|that'?s (wrong|not)|why (did|are|have) "
+                        r"you|wtf|what the (hell|fuck)|i (said|told you|asked)|undo|cancel|hang on|wait\b)", re.I)
 WORDS = 120          # characters of the person's last words kept with a hardware command
 SECRET_FLAGS = r"--?(token|key|api[-_]?key|password|passwd|secret|auth|bearer|chat)"
 REDACTIONS = [
@@ -94,9 +98,55 @@ def last_words(transcript):
         content = (entry.get("message") or {}).get("content")
         if isinstance(content, list):
             content = " ".join(c.get("text", "") for c in content if isinstance(c, dict) and c.get("type") == "text")
-        if isinstance(content, str) and content.strip() and not content.lstrip().startswith("<"):
+        if isinstance(content, str) and content.strip() and not content.lstrip().startswith(("<", INTERRUPTED)):
             return content.strip(), entry.get("timestamp")
     return None, None
+
+
+def entries(transcript):
+    try:
+        lines = Path(transcript).read_text(encoding="utf-8").splitlines()
+    except (OSError, TypeError, ValueError):
+        return []
+    out = []
+    for line in lines:
+        try:
+            out.append(json.loads(line))
+        except ValueError:
+            pass
+    return out
+
+
+def texts(entry):
+    content = (entry.get("message") or {}).get("content")
+    if isinstance(content, str):
+        return content
+    return " ".join(c.get("text", "") for c in content or [] if isinstance(c, dict) and c.get("type") == "text")
+
+
+def interrupted_before(transcript):
+    """Whether the person stopped Claude mid-turn just before their message."""
+    for entry in reversed(entries(transcript)):
+        if entry.get("type") == "user" and not entry.get("isMeta"):
+            text = texts(entry)
+            if INTERRUPTED in text:
+                return True
+            if text.strip() and not text.lstrip().startswith("<"):
+                return False
+        elif entry.get("type") == "assistant":
+            return False
+    return False
+
+
+def asked(transcript):
+    """Whether Claude's last reply put a question to the person: a sentence
+    of its own ending in a question mark, outside quotes and code."""
+    for entry in reversed(entries(transcript)):
+        if entry.get("type") == "assistant" and not entry.get("isSidechain"):
+            text = re.sub(r"```.*?```|`[^`]*`|\"[^\"]*\"", "", texts(entry), flags=re.S)
+            if text.strip():
+                return bool(re.search(r"\?\s*($|\n)", text))
+    return False
 
 
 def scope_of(command):
@@ -145,6 +195,31 @@ def event(payload, now=None):
     return row
 
 
+def person(payload, now=None):
+    """The record's line for a message from the person (UserPromptSubmit):
+    whether it stopped or corrected what was going on, and whether they had
+    interrupted Claude first. Their words are not kept, only these."""
+    now = now or time.time()
+    session = payload.get("session_id")
+    earlier = [r for r in read(days=2, now=now) if r.get("session") == session]
+    words = payload.get("prompt") or ""
+    return {"time": now, "session": session, "agent": None, "tool": None, "event": "person",
+            "skill": next((r["skill"] for r in reversed(earlier) if r.get("event") == "skill"), None),
+            "correction": bool(CORRECTION.search(words)),
+            "interrupted": interrupted_before(payload.get("transcript_path"))}
+
+
+def turn_end(payload, now=None):
+    """The record's line at the end of Claude's turn (Stop): whether it
+    ended on a question to the person."""
+    now = now or time.time()
+    session = payload.get("session_id")
+    earlier = [r for r in read(days=2, now=now) if r.get("session") == session]
+    return {"time": now, "session": session, "agent": None, "tool": None, "event": "turn",
+            "skill": next((r["skill"] for r in reversed(earlier) if r.get("event") == "skill"), None),
+            "asked": asked(payload.get("transcript_path"))}
+
+
 def refusal(rule, payload, reason, now=None):
     """The record's line for a call a safety hook refused (PreToolUse)."""
     data = payload.get("tool_input") or {}
@@ -156,13 +231,22 @@ def refusal(rule, payload, reason, now=None):
 def report(rows):
     """The record summed up."""
     by_skill, by_agent, refused = {}, {}, {}
+
+    def skill(name):
+        return by_skill.setdefault(name, {"loaded": 0, "ran": 0, "refused": 0, "turns": 0, "questions": 0,
+                                          "corrected": 0, "interrupted": 0})
     moves = [r for r in rows if r.get("cls") == "hardware"]
     for r in rows:
         if r.get("event") == "skill":
-            by_skill.setdefault(r["skill"], {"loaded": 0, "ran": 0, "refused": 0})["loaded"] += 1
+            skill(r["skill"])["loaded"] += 1
         if r.get("event") in ("ran", "refused") and r.get("skill"):
-            by_skill.setdefault(r["skill"], {"loaded": 0, "ran": 0, "refused": 0})[
-                "ran" if r["event"] == "ran" else "refused"] += 1
+            skill(r["skill"])["ran" if r["event"] == "ran" else "refused"] += 1
+        if r.get("event") == "turn" and r.get("skill"):
+            skill(r["skill"])["turns"] += 1
+            skill(r["skill"])["questions"] += int(bool(r.get("asked")))
+        if r.get("event") == "person" and r.get("skill"):
+            skill(r["skill"])["corrected"] += int(bool(r.get("correction")))
+            skill(r["skill"])["interrupted"] += int(bool(r.get("interrupted")))
         if r.get("agent"):
             by_agent.setdefault(r["agent"], {"ran": 0, "refused": 0})[
                 "refused" if r.get("event") == "refused" else "ran"] += 1
@@ -182,7 +266,8 @@ def run(args, say=print):
     say(f"{answer['events']} events; {answer['hardware_commands']} hardware commands, "
         f"{answer['hardware_without_the_person_speaking_first']} without the person speaking first")
     for name, s in sorted(answer["skills"].items()):
-        say(f"  skill {name}: loaded {s['loaded']}, ran {s['ran']}, refused {s['refused']}")
+        say(f"  skill {name}: loaded {s['loaded']}, ran {s['ran']}, refused {s['refused']}; {s['turns']} turns, "
+            f"{s['questions']} ending on a question, corrected {s['corrected']}, interrupted {s['interrupted']}")
     for name, s in sorted(answer["agents"].items()):
         say(f"  agent {name}: ran {s['ran']}, refused {s['refused']}")
     for rule, n in sorted(answer["refused"].items()):

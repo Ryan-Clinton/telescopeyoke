@@ -463,10 +463,11 @@ build them all at once. So the first clear nights are the real use of all
 of them together, and what they show goes into this page and
 `docs/validation.md`.
 
-What the decision record cannot yet say: whether the person stopped or
-corrected a skill, or how many questions it asked. It records skills
-loaded, commands run and refused, and moves made without the person
-speaking first; the rest needs their word.
+The decision record also says, per skill, how many of Claude's turns
+ended on a question, how many of the person's messages stopped or
+corrected it (only that they did: "no", "stop", "don't", "I said"...; the
+words are not kept), and how often they interrupted it. Whether a skill
+finished what it set out to do still needs the person's word.
 
 ## Sources
 

@@ -18,7 +18,12 @@ def main():
     try:
         import agentlog
         payload = json.loads(sys.stdin.read())
-        if payload.get("tool_name") in ("Bash", "PowerShell", "Skill", "Agent", "Task"):
+        hook = payload.get("hook_event_name")
+        if hook == "UserPromptSubmit":
+            agentlog.write(agentlog.person(payload))
+        elif hook == "Stop" and not payload.get("stop_hook_active"):
+            agentlog.write(agentlog.turn_end(payload))
+        elif payload.get("tool_name") in ("Bash", "PowerShell", "Skill", "Agent", "Task"):
             agentlog.write(agentlog.event(payload))
     except Exception:   # a record lost is better than work stopped
         pass

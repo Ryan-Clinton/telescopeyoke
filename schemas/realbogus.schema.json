@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/realbogus.schema.json",
+  "title": "Real or bogus",
+  "description": "data of: realbogus.py train|show --json (the model, what it was trained on and how it did night by night; also kept as cache/realbogus.json) and realbogus.py score SESSION --json (each candidate's probability).",
+  "anyOf": [
+    {"type": "object", "required": ["features", "model", "trained_on", "tested", "summary"],
+     "properties": {
+       "features": {"type": "array", "items": {"type": "string"}},
+       "model": {"type": "object", "required": ["intercept", "weights", "centre", "scale", "cut"],
+                 "properties": {"intercept": {"type": "number"}, "weights": {"type": "object", "additionalProperties": {"type": "number"}},
+                                "centre": {"type": "array", "items": {"type": "number"}}, "scale": {"type": "array", "items": {"type": "number"}},
+                                "cut": {"type": "number", "description": "Below this probability a candidate is likely bogus: the level keeping 95% of planted stars."}}},
+       "trained_on": {"type": "object", "required": ["nights", "planted", "bogus", "dismissed_by_a_person"]},
+       "tested": {"type": "array", "description": "Each night held out in turn: trained on the others, how it did on this one above 5 sigma.",
+                  "items": {"type": "object", "required": ["night", "planted", "planted_kept", "bogus", "bogus_set_aside"]}},
+       "summary": {"type": "object", "required": ["bogus_above_5_sigma", "set_aside", "share_set_aside", "planted_above_5_sigma", "planted_kept", "share_kept"],
+                   "description": "The proof phase 8 asks for: the fall in false candidates, with the planted stars kept."},
+       "kind": {"const": "measured"}}},
+    {"type": "object", "required": ["session", "cut", "candidates"],
+     "properties": {"session": {"type": "string"}, "cut": {"type": "number"},
+                    "candidates": {"type": "array", "items": {"type": "object", "required": ["x", "y", "score", "real_bogus", "likely_bogus"],
+                                                              "properties": {"real_bogus": {"type": ["number", "null"]}, "likely_bogus": {"type": "boolean"}}}}}}
+  ]
+}

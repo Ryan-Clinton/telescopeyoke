@@ -18,7 +18,7 @@ asked to believe it.
 | `reports/ID/` | A candidate's report packet: `report.json`, `report.txt`, `finding.png` |
 | `sungrazer/` | The coronagraph pictures fetched (deleted after 3 days), each look's tracks and movies, and `hunt-CAMERA.json`, the newest hunt's finds |
 | `calibration/` | Dark and flat frames, by exposure and gain |
-| `cache/` | Things fetched or worked out that can be fetched or worked out again: catalogue stars, ZTF images, public alerts, the skyline, the mount's remembered measurements |
+| `cache/` | Things fetched or worked out that can be fetched or worked out again (`realbogus.json`, the real-or-bogus model, is made again with `./realbogus.py train`; `agent-log.jsonl`, the decision record of what Claude ran, is not: keep it if it matters): catalogue stars, ZTF images, public alerts, the skyline, the mount's remembered measurements |
 | `mosaics/`, `landmarks/`, `web/` | Mosaic panels, remembered landmarks, the status page |
 
 ## Which code made it

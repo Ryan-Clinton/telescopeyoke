@@ -52,6 +52,7 @@ them and every file kept under `demo/`.
 | `planet.py` | A planet: thousands of a second per frame, a square round it kept from each, the sharpest stacked. Uses the camera only |
 | `difference.py` | Proper image subtraction (ZOGY) of a reference stack from a new one: what is brighter now (`docs/discovery.md`, phase 1) |
 | `patrol.py`, `programmes/` | A discovery patrol of one field: readiness, point and image (through `mount.py` and `shoot.py`), then depth, subtraction, vetting and a short answer |
+| `realbogus.py` | Real or bogus: a logistic model trained on stars planted in this rig's own subtractions and on the peaks the subtraction leaves, tested night by night; its probability goes into each vetted candidate's evidence, as advice (`docs/discovery.md`, phase 8) |
 | `reference.py`, `vet.py`, `plant.py`, `recover.py` | Each field's kept reference; the evidence for each candidate and its verdict; fake novae through the whole pipeline for the discovery completeness; a known nova rediscovered from ZTF images (`docs/discovery.md`, phase 1) |
 | `sungrazer.py` | Comets near the Sun in SOHO's LASCO pictures, for cloudy nights: fetches them politely, finds what moves other than as the stars do, and makes a movie of each for a person (`docs/discovery.md`, phase 4) |
 | `brokers.py` | Public alerts: ALeRCE's new supernova-like transients, bright enough and up here tonight, not on the Rochester lists; `--unreported` searches the last month for bright ones on neither list (`docs/discovery.md`, phase 6) |

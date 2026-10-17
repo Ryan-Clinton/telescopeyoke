@@ -85,7 +85,8 @@ def add_night(book, night, vetted, both_halves=True):
         where = (c["ra"], c["dec"])
         match = next((k for k in book["candidates"] if k["open"] and arcsec(where, (k["ra"], k["dec"])) <= JOIN), None)
         seen = {"night": night, "seen": True, "score": c["score"], "mag": c.get("mag"),
-                "verdict": c["verdict"], "kind": "measured", "code": records.code()}
+                "verdict": c["verdict"], "kind": "measured", "code": records.code(),
+                "real_bogus": c.get("real_bogus")}
         if match is None:
             match = {"id": f"{book['name']}-{night}-{len(book['candidates']) + 1:03d}", "ra": c["ra"],
                      "dec": c["dec"], "first": night, "open": True, "nights": []}

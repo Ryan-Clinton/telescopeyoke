@@ -297,10 +297,13 @@ def usable_area(new, ref, edge=EDGE, bright=BRIGHT, fwhm=4.8):
 
 # --- putting it together ---------------------------------------------------------
 
-def subtract(new, ref, new_wcs=None, ref_wcs=None, zeropoint=None, plant_count=0, seed=3, finder=None):
+def subtract(new, ref, new_wcs=None, ref_wcs=None, zeropoint=None, plant_count=0, seed=3, finder=None,
+             workings=None):
     """Lay the new image on the reference, subtract properly, and list what
     is brighter now. With plant_count, fake new stars of known brightness
-    are added to the new image first and counted when found."""
+    are added to the new image first and counted when found. A dict as
+    `workings` is given the working images and where the fakes went, for
+    realbogus.py to learn from."""
     finder = finder or (lambda image: stacking.find_stars(np.nan_to_num(image), limit=10 ** 6))
     # A stack is exactly zero where no frame reached: that is not sky.
     new = np.where(new == 0, np.nan, new).astype(np.float32)
@@ -382,6 +385,9 @@ def subtract(new, ref, new_wcs=None, ref_wcs=None, zeropoint=None, plant_count=0
               "fwhm_px": round(fwhm, 2), "noise_new": round(noise_new, 3), "noise_ref": round(noise_ref, 3),
               "usable_share": round(float(usable.mean()), 3), "threshold": THRESHOLD,
               "fading_peaks": int(len(fading)), "dipoles_left_out": dipoles}
+    if workings is not None:
+        workings.update(significance=significance, usable=usable, ref=ref_flat, fwhm=fwhm,
+                    planted=planted, wcs=ref_wcs)
     if planted is not None:
         spots, mags = planted
         found = np.zeros(len(spots), bool)

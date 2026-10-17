@@ -278,6 +278,26 @@ def vet(record, checks, half_scores=None, ref=None, zeropoint=None, radius=4.0):
     return out
 
 
+def classify(evidence, session, ref, fwhm):
+    """Each candidate's probability of being real, from realbogus.py's model
+    if one has been trained, as advice in its evidence and clues: a low one
+    is said, never acted on. Returns the model's cut, or None."""
+    import realbogus
+    kept = realbogus.load()
+    if kept is None or not evidence or not (session / "difference.fits").exists():
+        return None
+    significance = fits.getdata(session / "difference.fits").astype(float)
+    cut = kept["model"]["cut"]
+    for e, p in zip(evidence, realbogus.score_candidates(evidence, significance, ref, fwhm, kept)):
+        e["real_bogus"] = p
+        e["kinds"]["real_bogus"] = "inferred"
+        if p is not None and p < cut:
+            e.setdefault("clues", []).append(
+                f"the real-or-bogus classifier rates it {p:.2f}, below {cut:.2f} (where it keeps 95% of planted "
+                f"stars): most like what the subtraction leaves behind")
+    return cut
+
+
 def run(args, say=print):
     if config.DEMO:
         raise interface.Refusal("DEMO_UNSUPPORTED", "Vetting needs real candidates.")
@@ -322,10 +342,11 @@ def run(args, say=print):
             say(f"stacking each half of {len(paths)} frames")
             half_scores = each_half(record, ref, ref_wcs, paths, name, say)
     evidence = vet(record, checks, half_scores, ref, zeropoint, radius=max(record.get("fwhm_px", 4.0), 2.0))
+    cut = classify(evidence, session, ref, record.get("fwhm_px", 4.8))
     left = [e for e in evidence if e["verdict"] == UNEXPLAINED]
     summary = {"session": str(session), "candidates": evidence, "unexplained": len(left),
                "asked": sorted(checks), "halves_checked": half_scores is not None,
-               "band": record.get("band")}
+               "band": record.get("band"), "real_bogus_cut": cut}
     records.write(session / "vetted.json", summary, schema="vet", stamp=True)
     counts = {}
     for e in evidence:

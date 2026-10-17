@@ -566,3 +566,20 @@ def test_a_test_run_matches_its_schema():
     runner, _ = test_testrun.fake([test_testrun.OUTPUT])
     valid(interface.run("test-run", lambda: testrun.run(argparse.Namespace(tests=[], k=None, here=True),
                                                         say=lambda s: None, runner=runner)), "test-run")
+
+
+def test_a_trained_classifier_matches_its_schema(tmp_path, monkeypatch):
+    import realbogus
+    import test_realbogus
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    rng = np.random.default_rng(5)
+    folders = [(tmp_path / f"n{i}", {"candidates": [], "new": "n", "reference": "r"}) for i in range(2)]
+    for f, _ in folders:
+        f.mkdir()
+    monkeypatch.setattr(realbogus, "nights", lambda: folders)
+
+    def subtraction_of(folder, record, count, seed):
+        s, u, r, p = test_realbogus.night(rng)
+        return {"significance": s, "usable": u, "ref": r, "fwhm": 4.8, "planted": p}
+    monkeypatch.setattr(realbogus, "subtraction_of", subtraction_of)
+    valid(interface.run("realbogus", lambda: realbogus.train(40, 1, say=lambda s: None)), "realbogus")
