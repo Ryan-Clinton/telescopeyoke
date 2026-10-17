@@ -513,7 +513,8 @@ def test_places_that_fit_no_account_are_not_acted_on_and_too_few_are_refused():
     with pytest.raises(interface.Refusal) as refused:
         mount.home_fit(survey_of(0.4, -2.95, hours=(-4, -2, -1, 1)), 40.0)
     assert "two on each" in refused.value.message
-    assert not mount.home_fit(survey_of(0.4, -14.0), 40.0)["fits"]             # too far out to be believed
+    # How far out home is does not decide (17 October 2026): places that agree are acted on.
+    assert mount.home_fit(survey_of(0.4, -14.0), 40.0)["fits"]
 
 
 def test_findhome_measures_afresh_in_one_run_and_truehome_goes_there(scope, monkeypatch, capsys):

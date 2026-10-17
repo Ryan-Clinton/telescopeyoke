@@ -14,7 +14,10 @@ the agent (none for the main session), the skill last loaded in that session,
 the tool, the command as policy.py read it after redaction, its class, and
 for anything that uses the hardware, the authorisation as data: its scope
 (mount.goto), its target (Vega), whether the person had spoken since the
-last such command (`present`), and their last few words.
+last such command (`present`), and their last few words. `present` is an
+observation for the record, not a permission: "looks cloudy now" counts as
+speaking. Nothing reads it to allow a move; what allows a move is the
+person's asking, and the checks in the commands themselves.
 
 Never prompts, never secrets: tokens, keys and passwords, the Telegram
 bot's token wherever it appears, environment values (NAME=value) and URL

@@ -387,7 +387,9 @@ refused it, and why; for a `hardware` command, the authorisation as data
 (`{"present": true, "scope": "mount.goto", "target": "Vega"}`) with the
 person's few words beside it; and the outcome. So it can be counted, not
 only read: a test over the record checks that every `hardware` command
-that ran has `authorisation.present`.
+that ran has `authorisation.present`. That flag only says the person spoke
+since the last move ("looks cloudy now" counts): it is an observation for
+auditing, never a permission, and nothing reads it to allow a move.
 
 Never prompts, never secrets. The logger writes the command as
 `policy.py` read it, after redaction, never the raw tool input: values of
