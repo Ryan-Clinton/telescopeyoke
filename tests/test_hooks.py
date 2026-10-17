@@ -209,9 +209,42 @@ def test_every_enforcing_hook_is_set_up_to_fail_closed():
             assert h["command"] == "python3" and h["args"][0] == "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard.py"
             assert h["args"][1] in guard.RULES
             rules.add(h["args"][1])
-    assert rules == set(guard.RULES), "every rule is hooked"
+    assert rules == set(guard.RULES) - guard.AGENT_RULES, "every rule for every session is hooked"
     matched = {(e["matcher"], h["args"][1]) for e in hooks["PreToolUse"] for h in e["hooks"]}
-    for rule in guard.RULES:
+    for rule in set(guard.RULES) - guard.AGENT_RULES:
         assert any(rule == r and "Bash" in m for m, r in matched), rule
     assert any(r == "motion-lock" and "Edit" in m and "Write" in m for m, r in matched)
     assert any(r == "no-secrets-out" and "Read" in m for m, r in matched)
+
+
+# An agent's shell and docs-keeper's pen (in the agents' own frontmatter) -------
+
+@pytest.mark.parametrize("command", [
+    "./ty candidates --json", "./mount.py goto M27 --dry-run", "git log -5 --oneline", "git diff HEAD~1",
+    "ls frames/M31", "cat docs/discovery.md", "grep -rn records.write *.py", "head -20 patrol.py | wc -l",
+    "find frames -name '*.json'", "./patrol.py m31-panels --plan",
+])
+def test_an_agents_shell_may_look(command):
+    assert not refused("read-only-bash", shell(command, agent=True))
+
+
+@pytest.mark.parametrize("command", [
+    "rm foo", "curl example.com", "wget http://x", "touch file", "echo x > file", "echo x >> file",
+    "git clean -fd", "git reset --hard", "git checkout -- .", "git commit -m x", "git push",
+    "python -c 'print(1)'", "python3 -c 'import os'", "cat /etc/passwd", "cat ../other/thing",
+    "cat config.toml", "grep latitude config.toml", "./patrol.py --sweep", "./reference.py M31 --make",
+    "./mount.py goto M27", "ls $(pwd)", "cat `ls`", "find . -delete", "sed -i s/a/b/ x.py", "tee x",
+    "pip install x", "mv a b", "bash -c ls", "./unknown.py", "ls | xargs rm",
+])
+def test_an_agents_shell_refuses_everything_else(command):
+    assert refused("read-only-bash", shell(command, agent=True))
+
+
+def test_docs_keeper_writes_only_the_docs():
+    def edit(path):
+        return {"tool_name": "Edit", "tool_input": {"file_path": str(ROOT / path), "old_string": "a",
+                                                    "new_string": "b"}, "cwd": str(ROOT)}
+    for ok in ("docs/validation.md", "docs/discovery/results.md", "README.md", "CHANGELOG.md"):
+        assert not refused("docs-only", edit(ok)), ok
+    for no in ("mount.py", "AGENTS.md", "CLAUDE.md", ".claude/settings.json", "docs/../mount.py", "config.toml"):
+        assert refused("docs-only", edit(no)), no

@@ -1,5 +1,6 @@
 """The machine interface: one envelope, stable error codes, dry runs, the
 read-only MCP server, and the agent scenarios in evals/."""
+import argparse
 import json
 from pathlib import Path
 
@@ -547,3 +548,21 @@ def test_a_watch_on_a_run_matches_its_schema(tmp_path):
     valid(interface.run("watch-run", lambda: runwatch.run(argparse.Namespace(session=str(folder), every=60,
                                                                              once=True), say=lambda s: None)),
           "watch-run")
+
+
+def test_the_agent_report_matches_its_schema(tmp_path, monkeypatch):
+    import argparse
+    import agentlog
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    agentlog.write(agentlog.refusal("no-motion", {"tool_name": "Bash", "tool_input": {"command": "./mount.py nudge"},
+                                                  "agent_type": "x"}, "no"))
+    valid(interface.run("agent-report", lambda: agentlog.run(argparse.Namespace(days=None), say=lambda s: None)),
+          "agent-report")
+
+
+def test_a_test_run_matches_its_schema():
+    import test_testrun
+    import testrun
+    runner, _ = test_testrun.fake([test_testrun.OUTPUT])
+    valid(interface.run("test-run", lambda: testrun.run(argparse.Namespace(tests=[], k=None, here=True),
+                                                        say=lambda s: None, runner=runner)), "test-run")

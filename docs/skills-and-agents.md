@@ -2,11 +2,13 @@
 
 [README](../README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
-Being built. Done: the command classes (`policy.py`), the safety hooks
-(`.claude/settings.json`, `.claude/hooks/guard.py`), the run watch
-(`./ty watch-run`) and the four nightly skills (`nightly-setup`, `focus`,
-`polar-align`, `imaging-run`), with their tests. The rest is specified
-below and not built. Written 17 October 2026, revised the same day. This specifies Claude Code skills,
+Built 17 October 2026, all of it, with its tests: the command classes
+(`policy.py`), the safety hooks and the decision record (`.claude/hooks/`,
+`agentlog.py`, `./ty agent-report`), the run watch (`./ty watch-run`), the
+test run (`./ty test-run`), fourteen skills in `.claude/skills/` and eight
+agents in `.claude/agents/`. Proven so far only in the tests and in this
+session: none has yet been used at the telescope. Written 17 October 2026,
+revised the same day. This specifies Claude Code skills,
 subagents, hooks and two plain background jobs for the procedures this
 project already has, so that any session does them the same way every
 time. It adds no telescope behaviour: every step is an existing project
@@ -411,7 +413,7 @@ whether the person stopped it or corrected it, and whether it finished.
 After ten nights that answers whether `nightly-setup` saves time or asks
 what it need not, as the polar alignment and the discovery search were
 judged by what they measured, not what they were meant to do.
-`./ty agent-report` (to be written) sums it up.
+`./ty agent-report` sums it up.
 
 ## Testing
 
@@ -444,20 +446,27 @@ judged by what they measured, not what they were meant to do.
 
 1. **The hooks** and their tests, failure cases and both systems. ✅ Built
    17 October 2026 and seen to refuse in a live session (a `pgrep -f`, and
-   an inline script naming the lock). Not built yet: `log`.
+   an inline script naming the lock).
 2. **`run-watch`** (`./ty watch-run`), then `nightly-setup`, `focus`,
-   `polar-align` and `imaging-run`. ✅ Built 17 October 2026; their first
-   real use is the next clear night, before step 3 starts.
+   `polar-align` and `imaging-run`. ✅ Built 17 October 2026.
 3. **`claim`, `report-comet`**, `candidate-vetter`, `catalogue-researcher`,
-   `comet-checker`.
+   `comet-checker`. ✅
 4. **`discovery-night`, `end-of-night`, `morning-summary`**,
-   `night-analyst`, the decision record.
+   `night-analyst`, the decision record (`agentlog.py`, the `log` hook,
+   `./ty agent-report`). ✅
 5. **`code-reviewer`, `motion-reviewer`, `docs-keeper`, `debugger`,
-   `test-run`, `new-command`, `release`.**
-6. **`first-night`, `troubleshoot`, `cloudy-day`.**
+   `test-run` (`./ty test-run`), `new-command`, `release`.** ✅
+6. **`first-night`, `troubleshoot`, `cloudy-day`.** ✅
 
-Each step: its files, their tests, a line in `docs/agents/README.md`, and
-a real use before the next step starts.
+The plan was a real use of each step before the next; the person chose to
+build them all at once. So the first clear nights are the real use of all
+of them together, and what they show goes into this page and
+`docs/validation.md`.
+
+What the decision record cannot yet say: whether the person stopped or
+corrected a skill, or how many questions it asked. It records skills
+loaded, commands run and refused, and moves made without the person
+speaking first; the rest needs their word.
 
 ## Sources
 

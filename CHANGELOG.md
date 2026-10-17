@@ -6,6 +6,20 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+- **The rest of the skills and agents** (`docs/skills-and-agents.md`):
+  skills `claim`, `report-comet` (both only when typed), `discovery-night`,
+  `end-of-night`, `morning-summary`, `new-command`, `release` (stops
+  before publishing), `first-night`, `troubleshoot`, `cloudy-day`; agents
+  `candidate-vetter`, `catalogue-researcher` and `comet-checker` (the web
+  readers have no shell and read no files), `night-analyst`,
+  `code-reviewer`, `motion-reviewer`, `docs-keeper` (writes only the
+  docs) and `debugger`, each with a turn limit, and those with a shell
+  held to looking by a fail-closed hook. The decision record
+  (`agentlog.py`, `.claude/hooks/log.py`, `./ty agent-report`): each
+  command, skill and agent, each refusal, and each hardware command's
+  authorisation as data, redacted. `./ty test-run` runs the tests on the
+  desktop and brings back only the failures.
+
 - **Claude Code's safety hooks and the nightly skills.**
   `.claude/settings.json` runs `.claude/hooks/guard.py` before every shell
   command, edit and read, failing closed: nothing removes, empties or

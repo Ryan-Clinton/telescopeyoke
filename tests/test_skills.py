@@ -67,7 +67,7 @@ def named_commands(text):
             yield policy.TY_PASSES[words[1]], words[2:]
         elif words[0] == "./ty":
             yield "ty", words[1:]
-        else:
+        elif not re.search(r"[A-Z]{3,}", words[0]):    # ./NAME.py is a placeholder, not a command
             yield words[0][2:], words[1:]
 
 
@@ -113,3 +113,26 @@ def test_every_skill_has_a_scenario_and_some_say_nothing_should_happen():
         assert s["must_not"] and s["says"] and s["good_answer"]
         if s["first"]:
             assert policy.classify_text(s["first"]) in (None, "read_only"), "a skill starts by looking"
+
+
+@pytest.mark.parametrize("path", AGENTS, ids=ids(AGENTS))
+def test_an_agent_with_a_shell_has_the_read_only_hook(path):
+    import json
+    fields, _ = split(path)
+    if "Bash" not in fields["tools"]:
+        return
+    hooks = json.loads(fields["hooks"])["PreToolUse"]
+    rules = [(e["matcher"], h) for e in hooks for h in e["hooks"]]
+    assert any("Bash" in m and h["args"][-1] == "read-only-bash" and h.get("onFailure") == "block"
+               for m, h in rules), f"{path.stem} has a shell without the read-only hook"
+
+
+@pytest.mark.parametrize("path", AGENTS, ids=ids(AGENTS))
+def test_an_agent_that_writes_has_the_docs_only_hook(path):
+    import json
+    fields, _ = split(path)
+    if not set(re.findall(r"[A-Za-z]+", fields["tools"])) & {"Edit", "Write"}:
+        return
+    hooks = json.loads(fields["hooks"])["PreToolUse"]
+    assert any("Edit" in e["matcher"] and h["args"][-1] == "docs-only" and h.get("onFailure") == "block"
+               for e in hooks for h in e["hooks"])

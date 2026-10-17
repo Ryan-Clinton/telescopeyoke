@@ -21,7 +21,10 @@ horizon/
 # Phone photographs of the telescope and the garden, kept for reference
 docs/pictures/
 calibration/
-.claude/
+# Claude Code: the project's hooks, skills and agents are committed; a
+# person's own settings and any worktrees are not.
+.claude/settings.local.json
+.claude/worktrees/
 
 # Local Python environment and vendor SDK files (see docs/windows-port.md)
 .venv/

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/agent-report.schema.json",
+  "title": "Agent report",
+  "description": "data of: ty agent-report [--days N] --json (agentlog.py). The decision record summed up: what Claude and its agents ran, how many hardware commands came without the person speaking since the last, what each skill and agent did, and what the safety hooks refused.",
+  "type": "object",
+  "required": ["events", "hardware_commands", "hardware_without_the_person_speaking_first", "unasked", "skills", "agents", "refused"],
+  "properties": {
+    "events": {"type": "integer"},
+    "hardware_commands": {"type": "integer"},
+    "hardware_without_the_person_speaking_first": {"type": "integer", "description": "Hardware commands with authorisation.present false: no word from the person since the last one, or run by an agent."},
+    "unasked": {"type": "array", "items": {"type": "object", "required": ["time", "command"], "properties": {"time": {"type": "number"}, "command": {"type": ["string", "null"]}, "words": {"type": ["string", "null"]}}}},
+    "skills": {"type": "object", "additionalProperties": {"type": "object", "required": ["loaded", "ran", "refused"], "properties": {"loaded": {"type": "integer"}, "ran": {"type": "integer"}, "refused": {"type": "integer"}}}},
+    "agents": {"type": "object", "additionalProperties": {"type": "object", "required": ["ran", "refused"], "properties": {"ran": {"type": "integer"}, "refused": {"type": "integer"}}}},
+    "refused": {"type": "object", "additionalProperties": {"type": "integer"}, "description": "Refusals by the rule that made them."}
+  }
+}

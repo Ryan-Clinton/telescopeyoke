@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/test-run.schema.json",
+  "title": "Test run",
+  "description": "data of: ty test-run [TESTS] [-k EXPR] [--here] --json (testrun.py). The tests run on the desktop (or here): the counts, and each failure's name, reason and first lines.",
+  "type": "object",
+  "required": ["passed", "failed", "skipped", "errors", "seconds", "where", "failures", "ok", "wall_seconds"],
+  "properties": {
+    "passed": {"type": "integer"}, "failed": {"type": "integer"}, "skipped": {"type": "integer"}, "errors": {"type": "integer"},
+    "seconds": {"type": ["number", "null"], "description": "pytest's own time."},
+    "wall_seconds": {"type": "integer", "description": "Including the copy."},
+    "where": {"type": "string"},
+    "ok": {"type": "boolean"},
+    "failures": {"type": "array", "items": {"type": "object", "required": ["test", "why", "first_lines"],
+                 "properties": {"test": {"type": "string"}, "why": {"type": "string"}, "first_lines": {"type": "array", "items": {"type": "string"}}}}}
+  }
+}

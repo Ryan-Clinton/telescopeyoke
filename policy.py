@@ -45,6 +45,7 @@ DRY = {"--dry-run": "read_only"}
 # A word is a subcommand or a flag.
 COMMANDS = {
     "agent.py": ("read_only", {}, {}),
+    "agentlog.py": ("read_only", {}, {}),
     "alert.py": ("external", {"--test": "external"}, DRY),
     "app.py": ("hardware", {}, {}),                 # the application drives the rig on request
     # it fetches the alerts first, plan or not
@@ -93,6 +94,7 @@ COMMANDS = {
     "skywatch.py": ("hardware", {}, {}),
     "snap.py": ("hardware", {}, {}),
     "solve.py": ("local_write", {}, {}),
+    "testrun.py": ("local_write", {}, {}),
     "starwatch.py": ("hardware", {"--measure": "local_write", "--history": "read_only"},
                      {"--plan": "read_only", "--dry-run": "read_only"}),
     "sungrazer.py": ("local_write", {}, {}),
@@ -108,7 +110,8 @@ COMMANDS = {
 # as that script.
 TY = {"run": "hardware"}
 TY_PASSES = {"mount": "mount.py", "tonight": "tonight.py", "shoot": "shoot.py", "focus": "focus.py",
-             "solve": "solve.py", "restack": "restack.py", "console": "console.py", "watch-run": "runwatch.py"}
+             "solve": "solve.py", "restack": "restack.py", "console": "console.py", "watch-run": "runwatch.py",
+             "agent-report": "agentlog.py", "test-run": "testrun.py"}
 
 
 def script_of(word):
@@ -181,26 +184,32 @@ def classify(argv):
     return max(changed, key=CLASSES.index) if changed else default
 
 
-def classify_text(command):
-    """The worst class among the project commands in a shell line, split at
-    ;, &&, || and |; None if it runs none of them. A line that cannot be
-    read is hardware."""
+def parts_of(command):
+    """A shell line as its commands, each a list of words, split at ;, &&,
+    || and | and at line breaks. Raises ValueError if it cannot be read."""
     command = command.replace("\\", "/")   # a Windows path: C:\telescopeyoke\mount.py
     command = command.replace("\n", " ;\n")   # each line is a command of its own
-    try:
-        lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|")
-        lexer.whitespace_split = True
-        words = list(lexer)
-    except ValueError:
-        return "hardware"
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|")
+    lexer.whitespace_split = True
     parts, part = [], []
-    for w in words:
+    for w in lexer:
         if w and set(w) <= set(";&|"):
             parts.append(part)
             part = []
         else:
             part.append(w)
     parts.append(part)
+    return [p for p in parts if p]
+
+
+def classify_text(command):
+    """The worst class among the project commands in a shell line, split at
+    ;, &&, || and |; None if it runs none of them. A line that cannot be
+    read is hardware."""
+    try:
+        parts = parts_of(command)
+    except ValueError:
+        return "hardware"
     found = [classify(p) for p in parts if unwrapped(p) and script_of(unwrapped(p)[0])]
     # Launched by something whose options are not all known here, and one
     # of ours named further on: the worst it could be.
