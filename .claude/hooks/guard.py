@@ -301,10 +301,16 @@ RULES = {"motion-lock": motion_lock, "no-inline-hardware": no_inline_hardware, "
 AGENT_RULES = {"read-only-bash", "docs-only"}
 
 
+EVERY_SESSION = ("motion-lock", "no-inline-hardware", "no-motion", "no-self-kill", "no-secrets-out")
+
+
 def check(rule, payload):
-    """None if the call may go ahead, else the reason it may not."""
+    """None if the call may go ahead, else the reason it may not. "all" is
+    every rule for every session in one hook, so one quiet check runs before
+    each tool call rather than five."""
     try:
-        RULES[rule](payload)
+        for name in (EVERY_SESSION if rule == "all" else (rule,)):
+            RULES[name](payload)
     except Refused as refusal:
         return str(refusal)
     return None
@@ -313,7 +319,7 @@ def check(rule, payload):
 def main():
     try:
         rule = sys.argv[1]
-        if rule not in RULES:
+        if rule not in RULES and rule != "all":
             raise KeyError(rule)
         payload = json.loads(sys.stdin.read())
         reason = check(rule, payload)

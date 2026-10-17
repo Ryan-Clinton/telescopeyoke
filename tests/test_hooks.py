@@ -201,21 +201,28 @@ def test_anything_it_cannot_read_is_refused(rule, text):
     assert run(rule, text).returncode == 2
 
 
-def test_every_enforcing_hook_is_set_up_to_fail_closed():
+def test_one_quiet_hook_runs_every_rule_and_fails_closed():
+    # One hook before each tool call, not one a rule: five a command made the console noisy.
     hooks = json.loads(SETTINGS.read_text(encoding="utf-8"))["hooks"]
-    rules = set()
-    for entry in hooks["PreToolUse"]:
-        for h in entry["hooks"]:
-            assert h["type"] == "command" and h.get("onFailure") == "block", h
-            assert h["command"] == "python3" and h["args"][0] == "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard.py"
-            assert h["args"][1] in guard.RULES
-            rules.add(h["args"][1])
-    assert rules == set(guard.RULES) - guard.AGENT_RULES, "every rule for every session is hooked"
-    matched = {(e["matcher"], h["args"][1]) for e in hooks["PreToolUse"] for h in e["hooks"]}
-    for rule in set(guard.RULES) - guard.AGENT_RULES:
-        assert any(rule == r and "Bash" in m for m, r in matched), rule
-    assert any(r == "motion-lock" and "Edit" in m and "Write" in m for m, r in matched)
-    assert any(r == "no-secrets-out" and "Read" in m for m, r in matched)
+    assert set(hooks) == {"PreToolUse", "PostToolUse", "UserPromptSubmit", "Stop"}
+    for event in ("PostToolUse", "UserPromptSubmit", "Stop"):   # the record: quiet, and never blocking
+        assert all(h["args"] == ["${CLAUDE_PROJECT_DIR}/.claude/hooks/log.py"] and "onFailure" not in h
+                   for e in hooks[event] for h in e["hooks"])
+    [entry] = hooks["PreToolUse"]
+    [h] = entry["hooks"]
+    assert h["type"] == "command" and h.get("onFailure") == "block"
+    assert h["command"] == "python3" and h["args"] == ["${CLAUDE_PROJECT_DIR}/.claude/hooks/guard.py", "all"]
+    assert set(entry["matcher"].split("|")) >= {"Bash", "PowerShell", "Edit", "Write", "Read"}
+    assert set(guard.EVERY_SESSION) == set(guard.RULES) - guard.AGENT_RULES
+
+
+@pytest.mark.parametrize("payload", [
+    shell("rm MOTION_LOCKED"), shell("pkill -f shoot"), shell("cat config.toml"),
+    shell("python3 -c 'import mount'"), shell("./mount.py nudge", agent=True),
+])
+def test_all_refuses_what_any_one_rule_refuses(payload):
+    assert refused("all", payload)
+    assert not refused("all", shell("ls -la"))
 
 
 # An agent's shell and docs-keeper's pen (in the agents' own frontmatter) -------
