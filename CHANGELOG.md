@@ -6,6 +6,17 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+- **What each command may do** (`policy.py`): every runnable script is
+  classed `read_only`, `local_write`, `hardware` or `external`, with the
+  words that change it (`--dry-run` and `--plan` make anything read-only),
+  and a test fails while a script has no class. `./policy.py COMMAND`
+  answers for one command line, taking the worst of several and counting
+  anything unknown or hidden in `bash -c` or `$(...)` as `hardware`. It is
+  the base for the Claude Code hooks specified in
+  `docs/skills-and-agents.md`, which also gains the safety layers, the
+  decision record, least-privilege agents and the tests where nothing
+  should happen.
+
 - **Records kept safely, and saying what made them** (`records.py`): every
   JSON file is written to a `.part` file and renamed over the old one, so a
   crash never leaves half a record; a field's candidate book is changed

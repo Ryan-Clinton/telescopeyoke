@@ -1,7 +1,9 @@
 # Commands
 
 `./ty` is the single way in. Every line below accepts `--json`; those marked
-*demo* accept `--demo`.
+*demo* accept `--demo`. What each command may do is classed in `policy.py`
+(`./policy.py COMMAND`), and the sections here follow it: a test keeps them
+in step.
 
 ## Read-only (never touch the mount's serial port)
 
@@ -27,8 +29,6 @@
 | `reference.py NAME [--make [--from STACK]] \| --list` | a field's kept references, each a numbered version with where it came from and how deep it reaches; `--make` keeps the deepest measured stack as the next version | `schemas/reference.schema.json`. Writes `reference/NAME/vN.fits` and its record only with `--make`; never replaces a version. `difference.py` uses the newest when not given `--reference` |
 | `recover.py NAME RA DEC --before DATE --after DATE [--band zr]` | whether the subtraction finds a known transient in public ZTF images from before and while it was there: how close, how strong, its rank | `schemas/recover.schema.json`. Fetches ZTF cut-outs from IRSA into `cache/ztf/`. Tests the software, not the rig's depth |
 | `sungrazer.py fetch\|look\|hunt [--camera c3\|c2\|ccor1] [--hours H] [--until TIME] [--raw] [--plant N] [--install]` | hunt: fetch the last day, look, keep what heads for the Sun in `sungrazer/hunt-CAMERA.json`, delete pictures over 3 days old; `hunt --install` runs it every 6 hours as the user timer `ty-sungrazer` (CCOR-1 only); fetch: SOHO LASCO pictures (with `--raw`, the raw FITS ones, about 2 MB each, for fainter comets), each once, a second apart; look: points that move other than as the stars drift, each with a movie under `sungrazer/DATE/` | `schemas/sungrazer.schema.json`. Needs no sky. Never reports: a person watches the movie and reports through the Sungrazer Project's form |
-| `notify.py --test` or `notify.py TEXT` | a message to the person's phone by their Telegram bot (`[telegram]` token and chat in config.toml, or TY_TELEGRAM_TOKEN and TY_TELEGRAM_CHAT); the patrol and the comet hunt call it themselves | `schemas/notify.schema.json`. Nothing is sent without a bot set up, from the tests, or in the demo |
-| `starwatch.py STAR [--plan] [--minutes M]`, `--measure SESSION`, `--history` | a watched star (`tabby`: KIC 8462852) kept by name, imaged through the patrol and measured against the stars round it; each night kept in `frames/NAME/starwatch.json`, and a night 0.03 mag or more fainter than the usual level, beyond its scatter, called a dip | `schemas/starwatch.schema.json`. Moves the mount only through the patrol and its checks; reporting a dip is a person's |
 | `transits.py [tonight] [--deeper PCT]` and `transits.py measure SESSION --planet NAME` | tonight: known transits whole in the dark here, deepest first, each star kept by name for `mount.py goto`; measure: the star's light curve from the night's frames and the fitted depth and timing | `schemas/transits.schema.json`. Planets from NASA's Exoplanet Archive, kept a week. Never moves the mount; an ExoClock submission is a person's |
 | `variables.py FIELD [--session NAME ...] [--bin N] [--offline]` | light curves of the field's Gaia stars from batches of each night's kept frames; the ones that scatter more than stars as bright, and every star VSX knows, each with a picture of its curve, kept in `frames/FIELD/variables.json` | `schemas/variables.schema.json`. Stacks every frame again in batches: minutes per night. One not in VSX is a candidate for a person, never reported |
 | `brokers.py [--days N] [--brighter MAG] [--unreported] [--demo]` | new transients from the public alert broker ALeRCE that are bright enough for the rig and up in the dark here tonight, each with its height, brightening or not, and whether the Rochester lists have it; with `--unreported`, the last 30 days' bright ones on neither list, up here or not | `schemas/brokers.schema.json`. The Transient Name Server needs a key, so it is not asked: its search link is given. Never moves the mount |
@@ -111,6 +111,12 @@ drifts unless given `--no-recentre`. `focus.py --field` first slews to the
 best placed of a short list of bright stars with many round them, keeping
 to the side of the meridian the tube is on when one there is high enough,
 and clear of the directions listed as blocked; `--dry-run` names the star.
+`starwatch.py STAR` (`tabby`: KIC 8462852) images a watched star through the
+patrol and its checks, measures it against the stars round it, keeps each
+night in `frames/NAME/starwatch.json` and calls a night 0.03 mag or more
+fainter than usual, beyond its scatter, a dip (`schemas/starwatch.schema.json`);
+`--plan` moves nothing, `--measure SESSION` and `--history` only read frames
+already taken. Reporting a dip is a person's.
 
 ## Uses the camera, not the mount
 
@@ -129,6 +135,12 @@ files out of their SDK zip into `vendor/altair/` if they are missing, and
 takes one short test frame. `--check` copies nothing and takes no frame.
 `--json` gives each step as `{step, status, message}` with `ready` and, when
 not ready, `next`: the one thing the person has to do.
+
+## Reaches outside (a person must have asked, or set it up to)
+
+| Command | Returns | Notes |
+|---|---|---|
+| `notify.py --test` or `notify.py TEXT` | a message to the person's phone by their Telegram bot (`[telegram]` token and chat in config.toml, or TY_TELEGRAM_TOKEN and TY_TELEGRAM_CHAT); the patrol and the comet hunt call it themselves | `schemas/notify.schema.json`. Nothing is sent without a bot set up, from the tests, or in the demo |
 
 ## Output rules
 
