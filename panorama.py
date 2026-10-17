@@ -54,6 +54,7 @@ from PIL import Image, ImageDraw
 import config
 import horizon
 import interface
+import records
 
 FOLDER = config.DATA / "horizon"
 STATE = FOLDER / "panorama.json"
@@ -236,7 +237,7 @@ def state():
 
 def keep(now):
     FOLDER.mkdir(parents=True, exist_ok=True)
-    STATE.write_text(json.dumps(now, indent=1), encoding="utf-8")
+    records.write(STATE, now)
     return now
 
 

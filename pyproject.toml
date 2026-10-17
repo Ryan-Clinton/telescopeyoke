@@ -14,12 +14,14 @@ dependencies = [
     "pillow>=10.1",
     "requests>=2.31",
     "pyserial>=3.5",
+    # Every kept record is checked against its schema before it is written.
+    "jsonschema>=4.10",
     # Windows has no time zone database of its own.
     "tzdata; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=8", "jsonschema>=4"]
+test = ["pytest>=8"]
 
 [project.urls]
 Homepage = "https://ryan-clinton.github.io/telescopeyoke/"
@@ -32,3 +34,23 @@ py-modules = []
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+# Checked in CI: mistakes, not style. E9 is code that cannot run, F is
+# pyflakes (names never defined or never used, a name hiding another).
+[tool.ruff]
+line-length = 120
+extend-exclude = ["demo", "rigs", "frames"]
+
+[tool.ruff.lint]
+select = ["E9", "F"]
+
+[tool.coverage.run]
+branch = true
+source = ["."]
+omit = ["tests/*", "demo/*", "rigs/*"]
+
+[tool.coverage.report]
+skip_empty = true
+# Measured at 72% (branch) on 17 October 2026: a change that drops it below
+# this has left something untested.
+fail_under = 70

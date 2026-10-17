@@ -82,20 +82,24 @@ itself, looking only where the line bends. *The skyline has been found in
 real panoramas; tying one to the compass, and the telescope's own survey,
 are not yet proven.*
 
-**Setting up before dark?** Polaris shows in a short exposure by day, when
-nothing else near the pole does. `polaris.py` checks whether the sky, the Sun
+**Setting up before dark?** An experimental mode looks for Polaris by day,
+when nothing else near the pole would show. `polaris.py` checks whether the sky, the Sun
 and the focus make it worth trying, searches round the home position, proves
 a candidate is a star by tipping the tube and seeing it move as the sky
 should, then turns the RA axis with the star in view to find where the axis
 really points and which way to move each bolt. `landmark.py` remembers a
 distant chimney or aerial from a night when the mount was aligned, and by day
 turns back to it to recover the azimuth. *Experimental: the search has run
-on the real mount three times and has not yet found Polaris; the rest has run only
-on the simulated mount.*
+on the real mount three times and has not yet found Polaris, though it did
+tell sensor blemishes from stars; the rest has run only on the simulated
+mount.*
 
 **Polar alignment still rough?** By night, three plate solves measure how
 far the axis is from the pole and say which way to turn each adjuster: on
-the real mount, five rounds took it from 5.2° to 0.2°. It says what to do
+the real mount, six rounds took it from 3.3° to 0.1° (13 October 2026).
+That is with the measurement corrected for the handset moving the Dec axis
+during it; the figures from 6 October were wrong for that reason
+([validation](docs/validation.md#night-of-13-october-2026)). It says what to do
 with your hands, with a drawing of each bolt: which to turn in, about how
 far, or to turn the whole tripod and by how many centimetres at the feet;
 and it learns what a turn of your mount's bolts does from what you tell it
@@ -384,10 +388,10 @@ far.
 
 ## How it works
 
-It is deliberately small: a dozen short scripts with plain names
-(`mount.py`, `focus.py`, `solve.py`, `shoot.py`, `tonight.py`). One person
-can read it and understand how the whole telescope works, and it means to
-stay that way.
+It is built from plain, focused Python files rather than a framework, each
+named for what it does (`mount.py`, `focus.py`, `solve.py`, `shoot.py`,
+`patrol.py`). Most things have one obvious file, so a person can follow a
+command from the screen to the hardware, and it means to stay that way.
 
 ```
 plan the night → GoTo → photograph → plate-solve (ASTAP) → correct → photograph … → stack
@@ -498,10 +502,12 @@ against the simulated rig and the tests.
 | Night report and status page | ✅ | ✅ | ✅ |
 | Mount moves through the handset, `sync` | ✅ | ✅ | ✅ |
 | GoTo centred by plate solving | ✅ to about an arcminute, from 10° out | ✅ | ✅ |
-| Polar alignment from three plate solves | ✅ 5.2° to 0.2° over five rounds; how well it repeats is not known | ✅ | ✅ |
+| Polar alignment from three plate solves | ✅ 3.3° to 0.1° over six rounds, with the corrected measurement; how well it repeats is not known | ✅ | ✅ |
 | Imaging and stacking | ⚠️ runs of 48 and 207 frames; the newest fixes not yet rerun | ✅ | ✅ |
 | Focusing: measuring the stars | ✅ the reading fell from 11 to about 2 as focus was reached | ✅ | ✅ |
 | Focusing: click, tone and three levels | not yet | not yet | ✅ |
+| Motor focuser (`focus.py --motor`) | ✅ focused the 150P to HFR 2.47 (15 October 2026), always finishing inward because of the gears' slack | ✅ | ✅ |
+| Shutter time corrected (`camera.py`) | ✅ a 10 s frame's trails show 9.6 s open, from 6.4 s | ✅ | ✅ |
 | Drift model and Dec correction | ⚠️ an earlier, cruder version only | ⚠️ the same | ✅ |
 | Daytime Polaris | ⚠️ searched three times, Polaris not found | ⚠️ the search only | ✅ |
 | Skyline from a phone panorama | does not need them | ⚠️ three real panoramas; not yet tied to the compass | ✅ |
@@ -511,22 +517,25 @@ against the simulated rig and the tests.
 | The application window | not yet | ⚠️ opened on Ubuntu, in the demo only | ✅ |
 | Windows | not yet | ⚠️ camera frames indoors; no mount driven | ✅ |
 | Checking that the telescope really turned | not yet | not yet | ✅ |
-| Polar repeatability, creep response, pointing survey, star-trail exposure | not yet | not yet | ✅ |
+| Polar repeatability, creep response, pointing survey | not yet | not yet | ✅ |
+| Discovery: subtraction, candidates, vetting | ⚠️ on real M31 stacks, with planted fakes; no find of our own yet | ✅ | ✅ a known nova found again in ZTF's archive images |
+| Comets in spacecraft pictures (`sungrazer.py`) | does not need them | does not need them | ✅ known comets found in archived LASCO pictures |
 | Several rigs, `--probe` | not yet | not yet | ✅ |
 | Dark and flat frames, gain sweep | not yet | not yet | ✅ |
 
-**Exactly what has and has not been proven, night by night, is in
-[docs/validation.md](docs/validation.md#what-has-and-has-not-been-proven-in-full).**
-That account is kept as carefully as this table: what was tried, what it
-showed, and what is still a guess. Two things from it that anyone using the
-software should know: the camera exposes for about two thirds of the time it
-is asked, so integration times are overstated until that is fixed; and on
-one night the motors stopped while the handset went on reporting every move
+**[docs/validation.md](docs/validation.md#current-conclusions) is the one
+record of what has been proven**: this table follows its "Current
+conclusions", and the account under them says, night by night, what was
+tried, what it showed, and what is still a guess. Two things from it that
+anyone using the software should know: the camera exposed for less time
+than it was asked (about two thirds at 10 s) until `camera.py` learnt to ask
+for more, so stacks from before 13 October 2026 overstate their integration;
+and on one night the motors stopped while the handset went on reporting every move
 as made. A GoTo with centring, a polar measurement and the skyline survey now
 check that the view changed, and stop if it did not; a plain GoTo with no
 plate solve still takes the handset's word.
 
-Covered by automated tests (`pytest`, run on every push on Python 3.11 to 3.14): the astronomy, the
+Covered by automated tests (`pytest`, run on every push on Python 3.11 to 3.14, on Ubuntu and on Windows; the badge at the top shows how the latest run went): the astronomy, the
 mount logic against the simulated handset, frame alignment and hot-pixel
 removal, star measurement and frame rejection, sub-pixel and rotation
 registration, clipped stacking, calibration arithmetic, a whole simulated
@@ -558,13 +567,11 @@ one command (`./ty characterise` shows which have been made):
 - The click-and-tone focusing under real stars on the USB 3 lead, and how
   quickly a turn is heard (`./focus.py`, then `./focus.py --report`).
 - Whether the polar measurement repeats (`./polaralign.py --repeat 5`).
-- How long the shutter is really open (`./camera_test.py --timing`, then
-  `--trail`).
 - How the drift answers the Dec motor (`./mount.py response`), before
   anything about the drift assist is changed.
 - Whether one pointing correction for each side is enough (`./mount.py pointing`).
 - A phone panorama tied to the compass and compared with what the telescope sees.
-- Daytime Polaris again, now the axis is 0.2° from the pole: the search looks
+- Daytime Polaris again, now the axis is 0.1° from the pole: the search looks
   within 1.6° by itself after a recent night alignment.
 - A night with mount and camera together on Windows.
 
@@ -597,7 +604,7 @@ Later, if people ask for them:
 - The MCP server moved onto the official MCP Python SDK, once MCP is a feature people
   rely on. Today's hand-written one speaks the protocol directly to avoid a dependency;
   the telescope logic stays in `agent.py` either way.
-- Guiding and focuser support.
+- Guiding; focusers other than this project's own motor (`docs/focuser.md`).
 
 Not planned: ASCOM, mobile apps, a React front end, cloud services, AI target
 selection, Docker images, plugin systems, a sequencing language. Bigger

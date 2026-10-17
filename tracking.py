@@ -22,6 +22,7 @@ import time
 from pathlib import Path
 
 import config
+import records
 
 import numpy as np
 
@@ -175,8 +176,8 @@ class Model:
 
     def save(self):
         self.path.parent.mkdir(exist_ok=True)
-        self.path.write_text(json.dumps({"polar": self.polar, "observations": self.observations,
-                                         "creep": self.creep, "saved": time.time()}, indent=1), encoding="utf-8")
+        records.write(self.path, {"polar": self.polar, "observations": self.observations,
+                                  "creep": self.creep, "saved": time.time()})
 
     def forget(self):
         """Start again: the mount has been moved or re-aligned."""

@@ -70,6 +70,7 @@ from scipy import ndimage
 
 import config
 import interface
+import records
 import mount
 
 FOUND = config.DATA / "cache" / "polaris.json"    # where it was last seen, for "align"
@@ -497,8 +498,8 @@ class Record:
     def write(self, **more):
         if not self.folder:
             return
-        (self.folder / "search.json").write_text(json.dumps(dict(more, looks=self.looks), indent=1), encoding="utf-8")
-        (self.folder / "candidates.json").write_text(json.dumps(self.candidates, indent=1), encoding="utf-8")
+        records.write((self.folder / "search.json"), dict(more, looks=self.looks))
+        records.write((self.folder / "candidates.json"), self.candidates)
 
 
 def verified(scope, cam, first, flat, exposure, aim=aim):
@@ -699,7 +700,7 @@ def find(scope, site, radius=RADIUS, cam_class=None, aim=aim_roughly, patience=P
                     "from_home_deg": round(abs(90 - dec_axis), 2), "off_centre_deg": round(off, 3),
                     "exposure_s": exposure, "looks": i + 1, "found": time.time()}
             FOUND.parent.mkdir(parents=True, exist_ok=True)
-            FOUND.write_text(json.dumps(note, indent=1), encoding="utf-8")
+            records.write(FOUND, note)
             kept.write(result=note)
             picture(lum, x, y, f"Polaris: {off:.2f} deg from the middle")
             print(f"Polaris is in view after {i + 1} look{'s' if i else ''} ({found['confidence']} confidence: "
@@ -1035,7 +1036,7 @@ def run(args):
             if folder:
                 folder.mkdir(parents=True, exist_ok=True)
                 before = check(site)
-                (folder / "preflight.json").write_text(json.dumps(before, indent=1), encoding="utf-8")
+                records.write((folder / "preflight.json"), before)
                 print(f"Keeping every look in {folder}")
             return find(scope, site, radius, record=folder)
         import polaralign

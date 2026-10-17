@@ -1,7 +1,6 @@
 """A place measured in a stack: a star there gets its magnitude back, an
 empty place an upper limit, and a stack's record finds its stack wherever
 depth.py was run from."""
-import json
 import math
 
 import numpy as np

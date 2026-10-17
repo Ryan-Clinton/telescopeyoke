@@ -1,6 +1,6 @@
 # Naming the satellite in a frame: a specification
 
-[Back to the README](../README.md)
+[README](../README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
 Not built. This says what it should do and how, from one worked example on
 13 October 2026.

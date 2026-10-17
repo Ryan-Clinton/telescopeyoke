@@ -13,6 +13,8 @@ from pathlib import Path
 import numpy as np
 import requests
 
+import records
+
 CACHE = Path(__file__).parent / "cache"
 TIMEOUT = 25
 HEADERS = {"User-Agent": "telescopeyoke/0.1 (personal observing planner)"}
@@ -30,7 +32,7 @@ def _cached(key, max_age_h, fetch):
         return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
     if value is not None:
         CACHE.mkdir(exist_ok=True)
-        path.write_text(json.dumps(value), encoding="utf-8")
+        records.write(path, value, indent=None)
     return value
 
 

@@ -1,6 +1,6 @@
 # From box to first galaxy
 
-[Back to the README](../README.md)
+[README](../README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
 *A first night with a motorised telescope, for someone who does not know
 what any of this means yet.*
@@ -156,9 +156,9 @@ Smaller is sharper. It measures many stars at once so that the air's
 shimmer, which makes any one star dance, averages out.
 </details>
 
-*Partly proven: the star measurement brought the real telescope to focus on
-6 October 2026, with the readings spoken as numbers (`--numbers` still does
-that). The clicks, tones and levels have so far run only on made-up stars.*
+*⚠️ Partly proven: the star measurement and the motor focuser have focused
+the real telescope; the clicks, tones and levels have run only on made-up
+stars ([results](validation.md#current-conclusions)).*
 
 ## 6. Get the mount pointing at the pole
 
@@ -202,7 +202,7 @@ axis really points, because the middle of each picture travels on a circle
 about it.
 </details>
 
-*Proven on the real mount: five rounds took the author's from 5.2° to 0.2°.
+*✅ Proven on the real mount ([results](validation.md#current-conclusions)).
 If a house or a tree is in the way of the third picture it says so; a
 smaller `--step` usually clears it.*
 

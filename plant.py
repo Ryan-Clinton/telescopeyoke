@@ -33,7 +33,6 @@ on the desktop. Nothing here moves the mount or uses the camera.
 """
 import argparse
 import json
-import math
 import shutil
 import time
 from pathlib import Path
@@ -46,6 +45,7 @@ import config
 import depth
 import difference
 import interface
+import records
 import stacking
 from camera import luminance
 
@@ -276,7 +276,7 @@ def run(args, say=print):
                "band": "unfiltered, calibrated approximately to Gaia G",
                "candidates": len(record["candidates"]), "fading_peaks": record["fading_peaks"],
                "seconds": round(time.monotonic() - started), **result}
-    (copy / "plant.json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
+    records.write(copy / "plant.json", summary, schema="plant", stamp=True)
     say(f"found through the whole pipeline: half to G {result['mag_50']}, 90% to G {result['mag_90']}; "
         f"{result['false_candidates']} candidates that were not planted")
     for row in result["curve"]:

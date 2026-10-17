@@ -73,8 +73,6 @@ or uses the camera.
 """
 import argparse
 import datetime
-import io
-import json
 import math
 import os
 import re
@@ -90,6 +88,7 @@ from scipy.spatial import cKDTree
 
 import config
 import interface
+import records
 
 BASE = "https://soho.nascom.nasa.gov/data/REPROCESSING/Completed"
 NAME = re.compile(r"(\d{8})_(\d{4})_(c2|c3)_1024\.jpg")
@@ -517,7 +516,7 @@ def look(camera, hours=None, say=print, paths=None, until=None, raw=False, plant
                  "found": sum(h for f, h in zip(fakes, hits) if f["strength"] == st)} for st in STRENGTHS]
         answer = {"camera": camera, "raw": raw, "pictures": len(paths), "from": paths[0].name, "to": paths[-1].name,
                   "planted": rows, "folder": str(out)}
-        (out / "plant.json").write_text(json.dumps(answer, indent=1), encoding="utf-8")
+        records.write(out / "plant.json", answer, schema="sungrazer", stamp=True)
         say(f"{len(fakes)} fake comets planted in {len(paths)} {camera.upper()}{' raw' if raw else ''} pictures:")
         for r in rows:
             say(f"  {r['strength']:>3} times the noise: {r['found']} of {r['planted']} found")
@@ -530,7 +529,7 @@ def look(camera, hours=None, say=print, paths=None, until=None, raw=False, plant
               "points": len(found), "tracks": len(linked),
               "star_drift": None if drift is None else [round(float(v), 2) for v in drift],
               "candidates": candidates[:20], "folder": str(out)}
-    (out / "look.json").write_text(json.dumps(answer, indent=1), encoding="utf-8")
+    records.write(out / "look.json", answer, schema="sungrazer", stamp=True)
     say(f"{len(paths)} pictures, {len(found)} points, {len(linked)} tracks; the stars drift "
         f"{answer['star_drift']} pixels in 12 minutes")
     if not candidates:
@@ -582,7 +581,7 @@ def hunt(camera, hours=HUNT_HOURS, say=print, now=None, get=requests.get, looker
     answer = {"camera": camera, "pictures": seen["pictures"], "when": now.strftime("%Y-%m-%d %H:%M"),
               "towards_sun": towards, "moving": len(seen.get("candidates", [])), "folder": seen.get("folder"),
               "deleted": prune(camera, KEEP_DAYS, now)}
-    (folder() / f"hunt-{camera}.json").write_text(json.dumps(answer, indent=1), encoding="utf-8")
+    records.write(folder() / f"hunt-{camera}.json", answer, schema="sungrazer", stamp=True)
     with (folder() / "hunt.log").open("a", encoding="utf-8") as log:
         log.write(f"{answer['when']} {camera} {answer['pictures']} pictures, {len(towards)} heading for the Sun\n")
     say(f"{answer['pictures']} {camera.upper()} pictures to {answer['when']} UTC: {len(towards)} heading in towards "

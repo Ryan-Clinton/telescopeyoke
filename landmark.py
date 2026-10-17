@@ -36,6 +36,7 @@ from PIL import Image, ImageDraw
 
 import config
 import interface
+import records
 import mount
 
 FOLDER = config.DATA / "landmarks"
@@ -153,7 +154,7 @@ def remember(name, scope, site, cam_class=None):
             # been made: a landmark is only as true as the alignment it was
             # remembered under.
             "polar_when_remembered": polar}
-    place(name).write_text(json.dumps(note, indent=1), encoding="utf-8")
+    records.write(place(name), note)
     print(f"Remembered {name}: bearing {azimuth:.1f}°, {altitude:.1f}° up "
           f"(axes: RA {ra_axis:.2f}°, Dec {dec_axis:.2f}°).")
     if not polar:
@@ -228,7 +229,7 @@ def check(name, scope, site, watch=0, cam_class=None, pause=3.0):
               "landmark is in the same place.")
     # Kept so that ./polaris.py knows the mount faces the right way and can
     # look over a small patch only.
-    (FOLDER / "last check.json").write_text(json.dumps(dict(last, name=name, checked=time.time())), encoding="utf-8")
+    records.write((FOLDER / "last check.json"), dict(last, name=name, checked=time.time()), indent=None)
     return dict(last, landmark=name, looks=len(seen), picture=str(VIEW))
 
 

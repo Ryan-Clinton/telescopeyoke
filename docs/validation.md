@@ -1,6 +1,38 @@
 # Checking it under real sky
 
-[Back to the README](../README.md)
+[README](../README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
+
+This page is the one record of what has been proven on real hardware.
+The README's "Current status", the guides and the home page follow these
+conclusions; where they differ, this page is right and they are out of
+date. The account underneath, night by night, keeps everything that was
+tried, including figures later found to be wrong.
+
+## Current conclusions
+
+As of 17 October 2026, on the author's EQ3 Pro, 150P and Hypercam 183C on
+Ubuntu. ✅ proven on real equipment, ⚠️ partly, 🧪 simulator and tests
+only, ❌ tried and not yet working.
+
+| What | Where it stands |
+|---|---|
+| GoTo centred by plate solving | ✅ to about an arcminute, from 10° out |
+| Polar alignment | ✅ 3.3° to 0.1° over six rounds (13 October), with the handset's own Dec movement taken out; an earlier 5.2° to 0.2° was wrong for that reason. ⚠️ How well a reading repeats is not measured |
+| Focusing by star measurement | ✅ |
+| Motor focuser | ✅ the 150P to HFR 2.47 (15 October); the gears' slack is large, so it always finishes moving inward |
+| Click, tone and focus levels | 🧪 |
+| Shutter time | ✅ measured and corrected: a 10 s frame was open 6.4 s, now 9.6 s |
+| Imaging and stacking | ⚠️ runs of 48 and 207 frames, and M31 runs since; long stacks reach a noise floor not yet explained (darks, flats and dithering untried) |
+| Drift model and Dec correction | ⚠️ an earlier, cruder version only |
+| Daytime Polaris | ❌ searched three times, not found; sensor blemishes were told from stars |
+| `findhome`, landmark azimuth, pointing survey, creep response | 🧪 |
+| Checking the telescope really turned | ⚠️ one real record, and it caught a real fault |
+| Skyline | ⚠️ found in real panoramas; not tied to the compass; the telescope's own survey only tried with a torch |
+| Control without the handset | ⚠️ the Wi-Fi adapter read; nothing moved |
+| Windows | ⚠️ camera frames indoors; no mount driven; no whole night 🧪 |
+| Dark and flat frames, gain sweep | 🧪 |
+| Discovery pipeline | ⚠️ subtraction, vetting and planted fakes on real M31 stacks; a known nova found again in ZTF archive images; no transient of our own yet (`docs/discovery.md`) |
+| Comets in spacecraft pictures | ✅ known comets found in archived LASCO pictures |
 
 Much of the newer work is proven on made-up star fields and a simulated
 mount, not yet on real sky. These are the experiments that will settle it.

@@ -47,6 +47,7 @@ from PIL import Image
 
 import host
 import interface
+import records
 import process
 import restack
 import snap
@@ -79,8 +80,8 @@ class Session:
         self.folder = config.DATA / "frames" / self.name / f"{datetime.now():%Y%m%d-%H%M%S}"
         self.folder.mkdir(parents=True, exist_ok=True)
         # What was asked for, so the web page can say "frame 31 of 200".
-        (self.folder / "session.json").write_text(json.dumps(
-            {"name": self.name, "frames": frames, "exposure": exposure, "gain": gain}), encoding="utf-8")
+        records.write(self.folder / "session.json",
+                      {"name": self.name, "frames": frames, "exposure": exposure, "gain": gain}, indent=None)
         self.exposure, self.gain, self.save = exposure, gain, save
         self.calibration = stacking.Calibration(exposure, gain)
         self.reference, self.stack = None, None
@@ -173,7 +174,7 @@ class Session:
         return stretch(stacked)
 
     def finish(self):
-        (self.folder / "frames.json").write_text(json.dumps(self.log, indent=1), encoding="utf-8")
+        records.write((self.folder / "frames.json"), self.log)
         if not self.accepted:
             return
         self.publish(force=True)
@@ -319,7 +320,6 @@ def night_over(name, site, when=None):
     """Why a --through-cloud run must end now, or None: the Sun nearly up,
     or the target too far past the meridian for the mount to follow."""
     import mount
-    from astropy import units as u
     from astropy.coordinates import AltAz, get_sun
     from astropy.time import Time
     when = when or Time.now()

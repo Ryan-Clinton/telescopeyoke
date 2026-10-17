@@ -1,6 +1,6 @@
 # The mount is wonky; measure how wonky
 
-[Back to the README](../README.md)
+[README](../README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
 telescopeyoke does not assume a careful polar alignment, and it does not
 trust the handset's own alignment model. It measures what the stars actually

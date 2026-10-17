@@ -37,10 +37,10 @@ from pathlib import Path
 
 import numpy as np
 import requests
-from astropy.time import Time
 
 import config
 import interface
+import records
 
 ARCHIVE = "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
 QUERY = ("select pl_name,hostname,ra,dec,sy_vmag,pl_orbper,pl_tranmid,pl_trandur,pl_trandep "
@@ -128,7 +128,7 @@ def keep(transits):
         kept[t["star"]] = {"ra": round(t["ra"], 6), "dec": round(t["dec"], 6), "kept_by": "transits.py",
                            "planet": t["planet"]}
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(kept, indent=1), encoding="utf-8")
+    records.write(path, kept)
 
 
 # --- after the night -----------------------------------------------------------
@@ -196,8 +196,7 @@ def measure(session, planet, size=BIN, say=print, rows=None, night=None):
               "predicted_middle": predicted, "expected_depth": p["depth"], "hours": p["hours"],
               "fit": result, "jd": [round(t, 5) for t in jd], "mag": [None if not np.isfinite(m) else round(float(m), 4)
                                                                      for m in mag], "kind": "measured"}
-    (session / f"transit-{p['planet'].replace(' ', '')}.json").write_text(json.dumps(answer, indent=1),
-                                                                         encoding="utf-8")
+    records.write(session / f"transit-{p['planet'].replace(' ', '')}.json", answer, schema="transits", stamp=True)
     if result:
         say(f"{p['planet']}: {result['depth']:.2f} ± {result['depth_error']:.2f}% deep (expected {p['depth']:.2f}%), "
             f"middle {result['early_late_min']:+.1f} min against the prediction; "

@@ -1,6 +1,6 @@
 # What telescopeyoke just did for you
 
-[Back to the README](../README.md) · [From box to first galaxy](first-night.md)
+[README](../README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md) · [From box to first galaxy](first-night.md)
 
 You followed the first-night guide and have a picture. This page explains
 what each step was, in the order you met it, and where to read more. Nothing

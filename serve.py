@@ -19,6 +19,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 
 import clouds
 import config
+import records
 import agent
 import demo
 import host
@@ -248,7 +249,7 @@ def main():
                      daemon=True).start()
     if args.demo:
         # A made-up imaging run, so the live parts of the page have something to show.
-        (WEB / "status.json").write_text(json.dumps(demo.status()), encoding="utf-8")
+        records.write((WEB / "status.json"), demo.status(), indent=None)
     else:
         threading.Thread(target=status_forever, daemon=True).start()
     # The page is read-only, so it is served to the whole home network without

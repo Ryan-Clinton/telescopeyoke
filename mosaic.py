@@ -28,6 +28,7 @@ import re
 import sys
 
 import config
+import records
 
 OVERLAP = 0.15          # of the frame's width and height, shared with the next panel
 PANEL = re.compile(r"^(.+?)-?p(\d+)$")
@@ -195,7 +196,7 @@ def main():
         print(describe(kept))
         return 0
     folder().mkdir(parents=True, exist_ok=True)
-    path(target["id"]).write_text(json.dumps(fresh, indent=1), encoding="utf-8")
+    records.write(path(target["id"]), fresh)
     print(describe(fresh))
     print(f"\nKept in {path(target['id'])}. Aim at a panel with ./mount.py goto {fresh['panels'][0]['id']}")
     return 0

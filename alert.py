@@ -29,11 +29,11 @@ import threading
 import time
 import urllib.error
 import urllib.request
-from pathlib import Path
 
 import numpy as np
 
 import config
+import records
 
 CACHE = config.DATA / "cache"
 PAIRING = CACHE / "hue.json"            # the bridge's address and the key it issued
@@ -210,7 +210,7 @@ def pair(address=None):
         raise AlertError(f"The bridge at {address} said: {reply['error'].get('description', reply['error'])}. "
                          "Press the round button on top of it and run this again within half a minute.")
     PAIRING.parent.mkdir(parents=True, exist_ok=True)
-    PAIRING.write_text(json.dumps({"hue_address": address, "hue_key": reply["success"]["username"]}), encoding="utf-8")
+    records.write(PAIRING, {"hue_address": address, "hue_key": reply["success"]["username"]}, indent=None)
     return address
 
 
@@ -485,7 +485,7 @@ def check(dry_run=False, say_it=print):
         tell(event, dry_run, say_it)
     if not dry_run:
         STATE.parent.mkdir(parents=True, exist_ok=True)
-        STATE.write_text(json.dumps(now), encoding="utf-8")
+        records.write(STATE, now, indent=None)
     return events
 
 

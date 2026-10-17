@@ -1,5 +1,7 @@
 # Running on Windows: specification
 
+[README](../README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
+
 This is a work order for an agent (or a person) working on a Windows machine.
 The aim is that someone with the tested gear (SynScan handset, Altair
 Hypercam 183C, a webcam) can run telescopeyoke natively on Windows 10 or 11,

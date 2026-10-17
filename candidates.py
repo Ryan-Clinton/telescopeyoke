@@ -27,14 +27,13 @@ the reason should be the true one, not the nearest. --reopen undoes it.
 Kept as candidates/NAME.json. Nothing here moves the mount or uses the camera.
 """
 import argparse
-import json
 import time
-from pathlib import Path
 
 import numpy as np
 
 import config
 import interface
+import records
 import stacking
 
 JOIN = 5.0         # arcsec: a detection this close to a candidate on file is the same object
@@ -49,14 +48,18 @@ def path(name):
 
 
 def load(name):
-    p = path(name)
-    return json.loads(p.read_text(encoding="utf-8")) if p.exists() else {"name": name, "candidates": []}
+    return records.read(path(name), {"name": name, "candidates": []})
 
 
 def save(book):
-    p = path(book["name"])
-    p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(book, indent=1), encoding="utf-8")
+    records.write(path(book["name"]), book, schema="candidates", stamp=True)
+
+
+def change(name, how):
+    """Change a field's book under its lock: how(book) changes it in place,
+    and whatever it returns is returned. The patrol and a person dismissing
+    a candidate can both be at it at once without losing either's change."""
+    return records.change(path(name), how, {"name": name, "candidates": []}, schema="candidates", stamp=True)[1]
 
 
 def arcsec(a, b):
@@ -82,7 +85,7 @@ def add_night(book, night, vetted, both_halves=True):
         where = (c["ra"], c["dec"])
         match = next((k for k in book["candidates"] if k["open"] and arcsec(where, (k["ra"], k["dec"])) <= JOIN), None)
         seen = {"night": night, "seen": True, "score": c["score"], "mag": c.get("mag"),
-                "verdict": c["verdict"], "kind": "measured"}
+                "verdict": c["verdict"], "kind": "measured", "code": records.code()}
         if match is None:
             match = {"id": f"{book['name']}-{night}-{len(book['candidates']) + 1:03d}", "ra": c["ra"],
                      "dec": c["dec"], "first": night, "open": True, "nights": []}
@@ -103,7 +106,7 @@ def follow_up(book, night, measure, depth_here):
             continue
         mag, err, limit = measure(k["ra"], k["dec"])
         k["nights"].append({"night": night, "seen": mag is not None, "mag": mag, "error": err, "limit": limit,
-                            "kind": "measured", "forced": True})
+                            "kind": "measured", "forced": True, "code": records.code()})
         misses = 0
         for n in reversed(k["nights"]):
             if n["seen"]:
@@ -174,16 +177,15 @@ def reopen(book, wanted):
 
 
 def run(args, say=print):
-    book = load(args.name)
     if getattr(args, "dismiss", None) or getattr(args, "reopen", None):
         if args.dismiss:
-            k = dismiss(book, args.dismiss, args.reason, args.note)
+            k = change(args.name, lambda book: dismiss(book, args.dismiss, args.reason, args.note))
             say(f"{k['id']} dismissed: {args.reason}")
         else:
-            k = reopen(book, args.reopen)
+            k = change(args.name, lambda book: reopen(book, args.reopen))
             say(f"{k['id']} open again")
-        save(book)
         return {"name": args.name, "candidates": [k]}
+    book = load(args.name)
     shown = [k for k in book["candidates"] if args.all or k["open"]]
     if not shown:
         say(f"No {'' if args.all else 'open '}candidates for {args.name}.")

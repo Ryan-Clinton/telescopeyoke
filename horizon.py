@@ -50,6 +50,7 @@ import numpy as np
 
 import config
 import interface
+import records
 
 ROOT = Path(__file__).parent
 RESULTS = config.DATA / "cache" / "horizon.json"
@@ -127,7 +128,7 @@ def keep(skyline, source, **more):
     saved = dict({"saved": time.time(), "source": source,
                   "skyline": sorted(skyline, key=lambda p: p["az"])}, **more)
     RESULTS.parent.mkdir(parents=True, exist_ok=True)
-    RESULTS.write_text(json.dumps(saved, indent=1), encoding="utf-8")
+    records.write(RESULTS, saved)
     return saved
 
 
@@ -882,7 +883,7 @@ def run(args):
                  looks=results, blocked=found, warnings=warnings)
     saved.setdefault("saved", time.time())
     RESULTS.parent.mkdir(parents=True, exist_ok=True)
-    RESULTS.write_text(json.dumps(saved, indent=1), encoding="utf-8")
+    records.write(RESULTS, saved)
     print("\n" + chart(results))
     if found:
         print("\nPut this under [horizon] in config.toml:\nblocked = [")

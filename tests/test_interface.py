@@ -63,9 +63,11 @@ def test_a_refusal_is_still_an_ordinary_exit_on_the_command_line():
         raise interface.Refusal("TARGET_BELOW_ALTITUDE_LIMIT", "M31 is only 14° up; not slewing.")
 
 
-def test_unexpected_failures_still_come_back_in_an_envelope():
+def test_unexpected_failures_still_come_back_in_an_envelope(capsys):
     result = valid(interface.run("anything", lambda: 1 / 0))
     assert not result["ok"] and result["errors"][0]["code"] == "INTERNAL_ERROR"
+    out = capsys.readouterr()
+    assert "Traceback" in out.err and "1 / 0" in out.err and not out.out
 
 
 def test_status_and_capabilities_match_their_schemas(quiet):
@@ -430,7 +432,7 @@ def test_a_follow_matches_the_brokers_schema(tmp_path, monkeypatch):
 def test_a_sungrazer_look_matches_its_schema(tmp_path, monkeypatch):
     import config
     import sungrazer
-    from test_sungrazer import SHAPE, sequence
+    from test_sungrazer import sequence
     from PIL import Image
     monkeypatch.setattr(config, "DATA", tmp_path)
     images, _, _ = sequence()

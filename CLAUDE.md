@@ -38,6 +38,9 @@ what is specific to Claude and to this particular user.
   Polaris"), they are outside at the telescope and that is the go for the
   next step of the routine that fits it. Dry-run it and start it at once:
   no plan to approve, no "say go", no extra steps.
+- Both of these sit inside AGENTS.md's rule that a person asks for each
+  move: what the user asks for, or the one routine step their sky report
+  fits, is the move. Neither ever stretches to a move they did not ask for.
 
 ## Commands
 

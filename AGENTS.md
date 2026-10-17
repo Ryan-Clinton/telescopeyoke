@@ -33,14 +33,15 @@ them and every file kept under `demo/`.
 | `tonight.py`, `sky.py`, `feeds.py`, `page.py`, `serve.py` | Planner, status page, read-only web API |
 | `app.py` | TelescopeYoke, the application: a window of its own over `console.py`'s server, with every screen |
 | `console.py`, `console/` | The server and the page behind the application; run by itself, the companion page in a browser (observing only). This computer only; runs the other scripts |
-| `mount.py`, `tracking.py`, `polaralign.py`, `polaris.py`, `landmark.py`, `simulator.py` | Mount control, drift model, polar alignment by the stars, the same by day from Polaris alone, azimuth by a remembered landmark, simulated handset and motor board |
+| `mount.py`, `tracking.py`, `polaralign.py`, `polaris.py`, `landmark.py`, `simulator.py` | Mount control, drift model, polar alignment by the stars, the same by day from Polaris alone (experimental: not yet found on the real sky), azimuth by a remembered landmark, simulated handset and motor board |
 | `moved.py` | Whether the telescope really turned, judged from two pictures or two plate solves; raises `MOUNT_NOT_MOVING` |
 | `horizon.py`, `panorama.py` | The skyline from where the telescope stands: measured by the telescope, or taken from a phone panorama. Kept in `cache/horizon.json`; the planner keeps targets above it |
 | `direct.py` | The mount without its handset (Wi-Fi adapter or EQDIR lead): stands in for the handset so `mount.py` is unchanged |
 | `camera.py`, `indi.py`, `altair.py`, `snap.py`, `liveview.py`, `focus.py` | Camera (through INDI, or Altair's own library) and focusing |
 | `host.py` | Everything that differs between Linux and Windows, in one place |
+| `records.py` | Every kept JSON file: written whole or not at all, changed under a lock (`records.change`), checked against its schema before it replaces anything, and each scientific result stamped with the code that made it (`schemas/provenance.schema.json`) |
 | `alert.py` | Tells the house when cloud or rain arrives: a Hue light changes colour and a Google Home speaker says so. Reads the run's frames and the forecast; moves nothing |
-| `focuser.py`, `firmware/focuser/` | The focuser's motor: an Arduino Nano driving a small stepper, and the firmware it runs. Turns the motor only; `focus.py` does not use it yet |
+| `focuser.py`, `firmware/focuser/` | The focuser's motor: an Arduino Nano driving a small stepper, and the firmware it runs. `focuser.py` turns the motor; `focus.py --motor` uses it to focus on the stars in view |
 | `shoot.py`, `stacking.py`, `restack.py`, `process.py`, `calibrate.py` | Imaging pipeline |
 | `depth.py` | How faint a stack reaches, measured: zero point against Gaia, 5-sigma limit, planted stars found again (`docs/discovery.md`, phase 0) |
 | `remote.py` | `restack.py --on HOST`: sends the frames, calibration and code to another computer by SSH and rsync, stacks there under `~/telescopeyoke-remote`, and brings the picture back |
@@ -122,6 +123,13 @@ a motor's creep rate. `mount.py stop` is always allowed.
   live in `interface.py` and are stable. Bump `SCHEMA_VERSION` for any
   breaking change.
 - Keep `--demo` and the tests working with every change.
+- Keep every JSON file through `records.write` (never `write_text`): a
+  scientific result with `stamp=True` and its schema, a file two processes
+  may change (a field's candidate book) through `records.change`. Change a
+  kept record's shape and its schema together, or the write is refused.
+- CI runs `ruff check .` (mistakes, not style) and measures branch coverage
+  with a floor in `pyproject.toml`; `constraints-tested.txt` is a set of
+  versions the tests passed with.
 - The README's "Current status" table must stay true about what is proven on
   real hardware, and the account behind it is in `docs/validation.md` ("What
   has and has not been proven, in full"): a change to what is proven goes in
@@ -135,6 +143,10 @@ a motor's creep rate. `mount.py stop` is always allowed.
   builds the zip; only a person runs `./release.py --publish`.
 
 ## More
+
+- What has really been proven on hardware is `docs/validation.md`
+  ("Current conclusions"). Never take it from the README's prose, a guide
+  or the changelog: they follow it and can lag.
 
 - `docs/agents/commands.md`: every command, what it returns, whether it moves anything
 - `docs/agents/state-model.md`: states, error codes, the envelope

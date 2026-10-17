@@ -4,12 +4,12 @@
     ./snap.py --exposure 2 --gain 300
 """
 import argparse
-import json
 import time
 from datetime import datetime
 from pathlib import Path
 
 import config
+import records
 
 import numpy as np
 from astropy.io import fits
@@ -28,7 +28,7 @@ def label(kind, detail="", folder=None, name="latest"):
     """Note beside a picture in web/ saying what it is a picture of."""
     folder = folder or PREVIEW.parent
     folder.mkdir(exist_ok=True)
-    (folder / f"{name}.json").write_text(json.dumps({"kind": kind, "detail": detail}), encoding="utf-8")
+    records.write((folder / f"{name}.json"), {"kind": kind, "detail": detail}, indent=None)
 
 
 def publish(mosaic, path=PREVIEW, kind="single frame", detail="", quick=False):

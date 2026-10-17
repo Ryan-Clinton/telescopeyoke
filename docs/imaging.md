@@ -1,6 +1,6 @@
 # How a picture is made
 
-[Back to the README](../README.md)
+[README](../README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
 `shoot.py` works on many short exposures, because a modest mount cannot hold
 a star still for long. Each frame goes through:

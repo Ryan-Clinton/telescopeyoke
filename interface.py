@@ -9,6 +9,7 @@ changes with SCHEMA_VERSION.
 import contextlib
 import json
 import sys
+import traceback
 from datetime import datetime, timezone
 
 import host  # noqa: F401  (makes --json output UTF-8 on every system)
@@ -110,6 +111,9 @@ def run(command, work):
     except SystemExit as stop:   # an older-style refusal with no code yet
         return envelope(command, errors=[error("INTERNAL_ERROR", str(stop))])
     except Exception as problem:   # the envelope must always come back
+        # ...and where it went wrong must not be lost with it: the whole
+        # traceback goes to stderr, never to stdout, which holds only JSON.
+        traceback.print_exc(file=sys.stderr)
         return envelope(command, errors=[error("INTERNAL_ERROR", f"{type(problem).__name__}: {problem}")])
     data, warnings = result if isinstance(result, tuple) else (result, ())
     return envelope(command, data, warnings)

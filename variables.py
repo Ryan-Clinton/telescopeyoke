@@ -34,16 +34,15 @@ uses the camera; reporting a new variable to VSX is a person's decision.
 import argparse
 import json
 import math
-from pathlib import Path
 
 import numpy as np
 import requests
-from astropy.io import fits
 from astropy.time import Time
 from scipy.spatial import cKDTree
 
 import config
 import interface
+import records
 
 BIN = 10             # frames in each point of a light curve
 BRIGHTEST = 10.5     # G: brighter stars are not even measured
@@ -235,7 +234,7 @@ def measured(session, name, size, say=print, stack=None, solve=None, gaia=None):
               "stars": [plain(row) + [None] * (4 - len(row)) for row in stars], "xy": [plain(p) for p in xy],
               "alone": [bool(a) for a in alone], "glow": plain(under),
               "flux": [plain(measure(image, xy, fwhm)) for image in images]}
-    kept.write_text(json.dumps(record), encoding="utf-8")
+    records.write(kept, record, stamp=True, record_version=VERSION, indent=None)
     return record
 
 
@@ -475,7 +474,6 @@ def draw(star, path, size=(640, 320)):
 def run(args, say=print):
     if config.DEMO:
         raise interface.Refusal("DEMO_UNSUPPORTED", "Light curves need real frames.")
-    import depth
     import stacking
     import vet
     folder = config.DATA / "frames" / stacking.folder_name(args.name)
@@ -514,7 +512,7 @@ def run(args, say=print):
               "stars": measured, "vsx_asked": not args.offline,
               "known_found": len(found), "known_quiet": len(quiet), "candidates": len(new),
               "stars_listed": listed, "kind": "measured"}
-    (folder / "variables.json").write_text(json.dumps(answer, indent=1), encoding="utf-8")
+    records.write(folder / "variables.json", answer, schema="variables", stamp=True)
     say(f"{measured} stars measured over {len(nights)} nights in batches of {args.bin} frames")
     for s in found:
         say(f"  known, and seen to vary: {s['vsx']['name']} ({s['vsx']['type']}), G {s['median']:.2f}, "

@@ -21,9 +21,6 @@ zero point (MAGZP) in its filter. Cut-outs are kept under cache/ztf/.
 Nothing here moves the mount or uses the camera.
 """
 import argparse
-import json
-import math
-from pathlib import Path
 
 import numpy as np
 import requests
@@ -33,6 +30,7 @@ from astropy.wcs import WCS
 
 import config
 import interface
+import records
 
 SEARCH = "https://irsa.ipac.caltech.edu/ibe/search/ztf/products/sci"
 DATA = "https://irsa.ipac.caltech.edu/ibe/data/ztf/products/sci"
@@ -134,7 +132,7 @@ def recover(name, ra, dec, before, after, band, say=print, get=requests.get, sub
 def run(args, say=print):
     answer = recover(args.name, args.ra, args.dec, args.before, args.after, args.band, say)
     kept = config.DATA / "cache" / "ztf" / f"recover-{args.name}.json"
-    kept.write_text(json.dumps(answer, indent=1), encoding="utf-8")
+    records.write(kept, answer, schema="recover", stamp=True)
     return answer
 
 

@@ -31,3 +31,9 @@ demo/
 dist/
 rigs/
 mosaics/
+
+# Coverage data, and records.py's working files beside a kept record
+.coverage
+*.part
+*.lock
+*.rejected.json

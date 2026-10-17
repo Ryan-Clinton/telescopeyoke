@@ -52,6 +52,7 @@ import numpy as np
 
 import config
 import interface
+import records
 
 ROOT = Path(__file__).parent
 PROGRAMMES = ROOT / "programmes"
@@ -203,7 +204,7 @@ def analyse(session, say=print, chain=None, both_halves=True, alerting=True):
         answer["depth"] = {"refused": "INVALID_REQUEST", "message": message}
         say(f"  {message}")
         answer["summary"] = summary(answer)
-        (session / "patrol.json").write_text(json.dumps(answer, indent=1, default=str), encoding="utf-8")
+        records.write(session / "patrol.json", answer, schema="patrol", stamp=True, default=str)
         return answer
     run = chain or {
         "depth": lambda: depth.run(argparse.Namespace(target=str(session), near=name, plant=True, sweep=False,
@@ -232,7 +233,7 @@ def analyse(session, say=print, chain=None, both_halves=True, alerting=True):
     answer["summary"] = summary(answer)
     if chain is None and "vet" in answer and "candidates" in answer["vet"]:
         answer["pictures"] = cutouts(session, answer["vet"])
-    (session / "patrol.json").write_text(json.dumps(answer, indent=1, default=str), encoding="utf-8")
+    records.write(session / "patrol.json", answer, schema="patrol", stamp=True, default=str)
     for line in answer["summary"]:
         say(line)
     if chain is None and alerting:
@@ -341,11 +342,13 @@ def follow(name, night, vetted, measure, both_halves=True):
     """Add tonight's candidates to the field's book, and measure every open
     one in tonight's stack. Returns the open candidates as they now stand."""
     import candidates
-    book = candidates.load(name)
-    candidates.add_night(book, night, vetted, both_halves)
-    if any(k["open"] and not any(n["night"] == night for n in k["nights"]) for k in book["candidates"]):
-        candidates.follow_up(book, night, measure(), None)
-    candidates.save(book)
+
+    def tonight_too(book):
+        candidates.add_night(book, night, vetted, both_halves)
+        if any(k["open"] and not any(n["night"] == night for n in k["nights"]) for k in book["candidates"]):
+            candidates.follow_up(book, night, measure(), None)
+        return book
+    book = candidates.change(name, tonight_too)
     return [{"id": k["id"], "ra": k["ra"], "dec": k["dec"], "seen_on": candidates.nights_seen(k),
              "of": len(k["nights"]), "tonight": next((n for n in k["nights"] if n["night"] == night), None)}
             for k in book["candidates"] if k["open"]]
@@ -456,7 +459,7 @@ def fields(p, keep=True):
         kept = mosaic.plan(target, columns, rows)
         if keep:
             mosaic.folder().mkdir(parents=True, exist_ok=True)
-            mosaic.path(target["id"]).write_text(json.dumps(kept, indent=1), encoding="utf-8")
+            records.write(mosaic.path(target["id"]), kept)
     return [panel["id"] for panel in kept["panels"]]
 
 
@@ -476,7 +479,7 @@ def known_novae(ra, dec, within=2.0):
             rows = []
         if rows:
             cache.parent.mkdir(parents=True, exist_ok=True)
-            cache.write_text(json.dumps(rows), encoding="utf-8")
+            records.write(cache, rows, indent=None)
     return [(a, d) for a, d in rows if vet.separation(ra, dec, a, d) <= within * 3600]
 
 

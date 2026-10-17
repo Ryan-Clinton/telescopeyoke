@@ -37,6 +37,7 @@ import numpy as np
 
 import config
 import interface
+import records
 import mount
 
 STEP = 25.0  # degrees of RA-axis rotation between the three photographs
@@ -303,7 +304,7 @@ def learn(before, now, turned):
         noted.append((axis, per_turn))
     if noted:
         BOLTS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        BOLTS_FILE.write_text(json.dumps(kept, indent=1), encoding="utf-8")
+        records.write(BOLTS_FILE, kept)
     return noted
 
 
@@ -453,7 +454,7 @@ def run(args):
     if turned and any(turned):
         sides = {side: sides[side]}
     SIDES_FILE.parent.mkdir(parents=True, exist_ok=True)
-    SIDES_FILE.write_text(json.dumps(sides), encoding="utf-8")
+    records.write(SIDES_FILE, sides, indent=None)
     checked = None
     if getattr(args, "cross_check", False):
         if not other or time.time() - other["measured"] > LEARN_WITHIN:
@@ -520,7 +521,7 @@ def run(args):
         kept.update({k: before[k] for k in ("spread_deg", "repeats") if k in before})
     kept.pop("advice")
     POLAR_FILE.parent.mkdir(parents=True, exist_ok=True)
-    POLAR_FILE.write_text(json.dumps(kept), encoding="utf-8")
+    records.write(POLAR_FILE, kept, indent=None)
     print("Adjust and run this again, or leave it and run './mount.py drift' to "
           "cancel the drift it causes.")
     return result

@@ -31,7 +31,6 @@ here moves the mount or uses the camera.
 import argparse
 import json
 import math
-from pathlib import Path
 
 import numpy as np
 from astropy.io import fits
@@ -41,6 +40,7 @@ from scipy.spatial import cKDTree
 import config
 import depth
 import interface
+import records
 import stacking
 
 THRESHOLD = 5.0       # a candidate scores at least this many times the local spread
@@ -447,7 +447,7 @@ def run(args, say=print):
     record.update(new=str(new_path), reference=str(ref_path), object=name,
                   band="unfiltered, calibrated approximately to Gaia G" if zeropoint else None)
     folder = new_path.parent
-    (folder / "candidates.json").write_text(json.dumps(record, indent=1), encoding="utf-8")
+    records.write(folder / "candidates.json", record, schema="difference", stamp=True)
     fits.PrimaryHDU(significance, ref_wcs.to_header()).writeto(folder / "difference.fits", overwrite=True)
     say(f"lined up on {record['matched_stars']} stars to {record['alignment_residual_px']:.2f} px; "
         f"new is {record['flux_ratio']:.3f} x the reference's brightness")

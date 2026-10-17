@@ -4,7 +4,6 @@ import json
 
 import numpy as np
 import pytest
-from scipy import ndimage
 
 import calibrate
 import camera_test

@@ -26,6 +26,7 @@ from pathlib import Path
 import config
 import depth
 import interface
+import records
 import stacking
 
 
@@ -143,7 +144,7 @@ def make(name, source=None, force=False):
     shutil.copyfile(chosen["stack"], target)
     record = dict(chosen, version=number, file=str(target), source=chosen["stack"],
                   sessions=sessions, made=time.time(), held_back=held)
-    (where / f"v{number}.json").write_text(json.dumps(record, indent=1), encoding="utf-8")
+    records.write(where / f"v{number}.json", record, schema="reference#/$defs/version", stamp=True)
     # Its depth goes with it, so difference.py finds the zero point.
     shutil.copyfile(chosen["record"], depth.record_path(target))
     return record

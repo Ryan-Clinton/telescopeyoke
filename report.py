@@ -34,6 +34,7 @@ import numpy as np
 
 import config
 import interface
+import records
 
 BAND = "Clear (unfiltered CMOS), calibrated approximately to Gaia G"
 CHART = 150        # pixels each side of the candidate in the finding chart (about 3.3′ at 1.32″)
@@ -49,7 +50,7 @@ def night_folder(name, night):
     return config.DATA / "frames" / name / night
 
 
-def records(folder):
+def night_records(folder):
     """The night's own records, each or None."""
     out = {}
     for key, file in (("depth", "depth.json"), ("candidates", "candidates.json"), ("vetted", "vetted.json")):
@@ -228,7 +229,7 @@ def run(args, say=print):
         raise interface.Refusal("INVALID_REQUEST", f"No candidate {args.id} on file: ./candidates.py {name} --all")
     first = next(n for n in k["nights"] if n["seen"])
     folder = night_folder(name, first["night"])
-    rec = records(folder)
+    rec = night_records(folder)
     earlier = None
     if last_miss(k, first["night"]) is None and not args.quick:
         earlier = forced.history(name, k["ra"], k["dec"], say=lambda *_: None)
@@ -238,7 +239,7 @@ def run(args, say=print):
     if not args.quick and packet["science"] and Path(packet["science"]).exists():
         packet["finding_chart"] = chart(packet["science"], k["ra"], k["dec"], name, out / "finding.png")
     packet["seconds"] = round(time.monotonic() - began, 1)
-    (out / "report.json").write_text(json.dumps(packet, indent=1), encoding="utf-8")
+    records.write(out / "report.json", packet, schema="report", stamp=True)
     (out / "report.txt").write_text(text(packet), encoding="utf-8")
     say(text(packet).rstrip())
     say(f"gathered in {packet['seconds']} s; kept under {out}")

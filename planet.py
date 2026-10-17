@@ -34,6 +34,7 @@ from scipy import ndimage
 
 import config
 import interface
+import records
 
 HALF = 128          # half the side of the square kept round the planet, in sensor pixels
 FULL = 4095         # the 183C's brightest reading (12 bits)
@@ -160,9 +161,9 @@ def finish(rgb, name="", sharpen=1.5, enlarge=4):
 def save(folder, name, squares, exposure_ms, gain):
     folder.mkdir(parents=True, exist_ok=True)
     np.save(folder / "squares.npy", squares.astype(np.uint16))
-    (folder / "planet.json").write_text(json.dumps(
-        {"name": name, "frames": len(squares), "exposure_ms": round(exposure_ms, 2), "gain": gain}),
-        encoding="utf-8")
+    records.write(folder / "planet.json",
+                  {"name": name, "frames": len(squares), "exposure_ms": round(exposure_ms, 2), "gain": gain},
+                  indent=None)
 
 
 def process(folder, keep, say=print):

@@ -5,6 +5,7 @@ them is started."""
 import argparse
 import json
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -248,7 +249,7 @@ def test_one_session_failing_does_not_stop_the_sweep(tmp_path, monkeypatch):
     measured(tmp_path, "20261001-220000", 17.6)
     reference.make("M31")
     bad = measured(tmp_path, "20261019-220000", 17.2)
-    good = measured(tmp_path, "20261020-221500", 17.4)
+    measured(tmp_path, "20261020-221500", 17.4)
 
     def search(session):
         if session == bad:
@@ -318,5 +319,5 @@ def test_a_second_look_takes_more_frames_without_a_goto_and_searches_them(tmp_pa
                                 run_command=lambda c: ran.append(c) or types.SimpleNamespace(returncode=0),
                                 search=lambda s: {"session": str(s)})
     assert result == {"session": str(tmp_path)}
-    assert [c.rsplit("/", 1)[-1] for c in ran[0][1:3]] == ["shoot.py", "M31"] and "goto" not in ran[0]
+    assert [Path(c).name for c in ran[0][1:3]] == ["shoot.py", "M31"] and "goto" not in ran[0]
     assert ran[0][ran[0].index("--frames") + 1] == str(round(60 * patrol.CONFIRM_MINUTES / 16))

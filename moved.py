@@ -32,6 +32,7 @@ from scipy import ndimage
 
 import config
 import interface
+import records
 
 MOVED_FILE = config.DATA / "cache" / "mount_moved.json"    # when the camera last showed a move was real
 LOG_FILE = config.DATA / "cache" / "moved_log.jsonl"       # every judgement made, with its figures
@@ -132,7 +133,7 @@ def compare(before, after):
 def confirm(how):
     """Note that the camera has just shown a move to be real."""
     MOVED_FILE.parent.mkdir(parents=True, exist_ok=True)
-    MOVED_FILE.write_text(json.dumps({"how": how, "saved": time.time()}), encoding="utf-8")
+    records.write(MOVED_FILE, {"how": how, "saved": time.time()}, indent=None)
 
 
 def log(entry):

@@ -1,9 +1,29 @@
 # Changes
 
-What each release added, and what it has and has not been proven on. The
-README's "Current status" is the table, and `docs/validation.md` the full account.
+What each release changed, in short, with a link to where it is explained.
+This is history: how to use a feature is in the guides, and what has been
+proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
+
+- **Records kept safely, and saying what made them** (`records.py`): every
+  JSON file is written to a `.part` file and renamed over the old one, so a
+  crash never leaves half a record; a field's candidate book is changed
+  under a lock, so the background search and a person dismissing a
+  candidate cannot lose each other's change; each scientific result is
+  checked against its schema before it replaces the old one (one that does
+  not match is kept as `NAME.rejected.json` and the old one stays), and
+  carries `provenance`: the version, the git commit and whether it had
+  uncommitted changes, the libraries, and a fingerprint of the settings
+  with the site and the Telegram bot left out. Each night in a candidate's
+  history says the same in short (`0.2.1+6bb014d`). `jsonschema` is now
+  needed to run, not only to test.
+- **Checks**: CI runs `ruff check .` and measures branch coverage with a
+  floor; a job installs exactly `constraints-tested.txt`, and another
+  reports known vulnerabilities in the libraries (`pip-audit`). An
+  unexpected failure in a `--json` command still answers in its envelope,
+  and now prints its traceback on stderr. A test that only passed on Linux
+  (a path compared as text) passes on Windows.
 
 - **Alerts and claiming**: when a vetted candidate is unexplained, the
   patrol makes its report packet and sends it, with the night, the

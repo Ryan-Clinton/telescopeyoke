@@ -43,6 +43,7 @@ import numpy as np
 from PIL import Image
 
 import interface
+import records
 import process
 import stacking
 
@@ -225,7 +226,7 @@ def run(session, keep=0.85, say=print, workers=None, profile=False, discovery=Fa
             (config.DATA / "web").mkdir(exist_ok=True)
             image.save(session / "final.jpg", quality=93)
             image.save(config.DATA / "web" / f"{name}-final.jpg", quality=93)
-    (session / ("discovery.json" if discovery else "restack.json")).write_text(json.dumps(
+    records.write(session / ("discovery.json" if discovery else "restack.json"),
         {"kept": [f["file"] for f in chosen], "frames": frames,
          "summary": {"captured": len(frames), "stacked": len(chosen),
                      "left_out": len(frames) - len(chosen), "total_exposure_s": total,
@@ -234,7 +235,7 @@ def run(session, keep=0.85, say=print, workers=None, profile=False, discovery=Fa
                      "seconds": round(time.perf_counter() - began, 1),
                      "picture": None if discovery else str(session / "final.jpg"),
                      "stack": str(stack_file)}},
-        indent=1), encoding="utf-8")
+        stamp=True)
     say(f"{len(frames)} captured, {len(chosen)} stacked, {len(frames) - len(chosen)} left out; "
         f"total exposure {total:.0f} s")
     if residuals:

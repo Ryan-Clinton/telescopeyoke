@@ -31,6 +31,7 @@ import config
 import depth
 import difference
 import interface
+import records
 import stacking
 
 SEEN = 3.0       # a measurement this many times its noise is a detection; below it, an upper limit
@@ -170,7 +171,7 @@ def run(args, say=print):
               "above_reference": bool(args.difference),
               "band": "unfiltered, calibrated approximately to Gaia G"}
     kept = config.DATA / "frames" / stacking.folder_name(args.name) / f"forced-{args.ra:.5f}{args.dec:+.5f}.json"
-    kept.write_text(json.dumps(answer, indent=1), encoding="utf-8")
+    records.write(kept, answer, schema="forced", stamp=True)
     say(f"kept as {kept}")
     return answer
 

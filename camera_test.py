@@ -46,6 +46,7 @@ import numpy as np
 
 import config
 import interface
+import records
 import stacking
 from camera import BACKEND, WHITE, Camera, luminance
 
@@ -272,7 +273,7 @@ def remember(key, found):
             pass
     kept[key] = found
     TIMING_FILE.parent.mkdir(parents=True, exist_ok=True)
-    TIMING_FILE.write_text(json.dumps(kept, indent=1), encoding="utf-8")
+    records.write(TIMING_FILE, kept)
 
 
 def trail_length(lum, most=12):

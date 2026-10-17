@@ -63,9 +63,10 @@ from pathlib import Path
 import serial
 
 import config
+import records
 import host
 import tracking
-from interface import Refusal, emit, envelope, run as answer
+from interface import Refusal, emit, run as answer
 from watch import Watching
 
 ROOT = Path(__file__).parent
@@ -195,7 +196,7 @@ class Mount:
             steps = json.loads((self.recording / "steps.json").read_text(encoding="utf-8"))
             frames = len(list(self.recording.glob("frame-*.jpg")))
             steps.append({"text": text, "frame": frames, "time": time.time()})
-            (self.recording / "steps.json").write_text(json.dumps(steps, indent=1), encoding="utf-8")
+            records.write((self.recording / "steps.json"), steps)
 
     def ask(self, command):
         try:
@@ -389,7 +390,7 @@ class Mount:
                           "solve at two different creeps.")
         found.update(rows=rows, side=side_name(west), saved=time.time())
         RESPONSE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        RESPONSE_FILE.write_text(json.dumps(found, indent=1), encoding="utf-8")
+        records.write(RESPONSE_FILE, found)
         self.say(f"With no creep the aim drifts {found['natural_arcsec_s']:+.2f} arcsec/s in Dec. Each "
                  f"arcsec/s of creep changes that by {found['per_unit']:+.2f} (it should be "
                  f"{found['expected_per_unit']:+.0f}). "
@@ -442,7 +443,7 @@ class Mount:
             save_pointing_error([side["ha_error_deg"], side["dec_error_deg"]], west=name == "west")
         found.update(rows=rows, dec_deg=dec, saved=time.time())
         SURVEY_FILE.parent.mkdir(parents=True, exist_ok=True)
-        SURVEY_FILE.write_text(json.dumps(found, indent=1), encoding="utf-8")
+        records.write(SURVEY_FILE, found)
         self.say(found["verdict"])
         return found
 
@@ -457,7 +458,7 @@ class Mount:
                      goes_to={"ra_axis_deg": round(wrap(HOME_RA_AXIS - found["ra_home_error_deg"]), 3),
                               "dec_axis_deg": round(HOME_DEC_AXIS - found["dec_home_error_deg"], 3)})
         HOME_FILE.parent.mkdir(parents=True, exist_ok=True)
-        HOME_FILE.write_text(json.dumps(found, indent=1), encoding="utf-8")
+        records.write(HOME_FILE, found)
         self.say(f"Home is out by {found['ra_home_error_deg']:+.2f}° on the RA axis and "
                  f"{found['dec_home_error_deg']:+.2f}° on the Dec axis. The {found['places']} places sit "
                  f"{found['rms_deg']:.2f}° from that account of them"
@@ -707,7 +708,7 @@ class Mount:
     def save_clock(self, site):
         offset = wrap(self.handset_sidereal() - true_sidereal(site))
         CLOCK_FILE.parent.mkdir(exist_ok=True)
-        CLOCK_FILE.write_text(json.dumps({"offset_deg": offset, "saved": time.time()}), encoding="utf-8")
+        records.write(CLOCK_FILE, {"offset_deg": offset, "saved": time.time()}, indent=None)
 
     def point(self, azimuth, altitude, site):
         """Aim at a fixed direction, e.g. a distant rooftop, and hold there."""
@@ -806,9 +807,8 @@ class Mount:
             # Kept for shoot.py's drift assist, which needs to know which way
             # up the camera is.
             (config.DATA / "cache").mkdir(exist_ok=True)
-            LAST_SOLVE.write_text(json.dumps(
-                {k: found[k] for k in ("ra", "dec", "rotation", "scale", "cd") if k in found}
-                | {"saved": time.time()}), encoding="utf-8")
+            records.write(LAST_SOLVE, {k: found[k] for k in ("ra", "dec", "rotation", "scale", "cd") if k in found}
+                          | {"saved": time.time()}, indent=None)
         return found
 
     def sync(self, site):
@@ -1159,8 +1159,8 @@ def save_pointing_error(error, west):
     now = time.time()
     sides[side_name(west)] = {"error_deg": list(error), "saved": now}
     # The newest is also kept at the top, as it always was.
-    POINTING_FILE.write_text(json.dumps(
-        {"error_deg": list(error), "west": bool(west), "saved": now, "sides": sides}), encoding="utf-8")
+    records.write(POINTING_FILE, {"error_deg": list(error), "west": bool(west), "saved": now, "sides": sides},
+                  indent=None)
 
 
 def location(site):
@@ -1329,7 +1329,6 @@ def main():
     if args.dry_run:
         sys.exit(dry_run(args, site))
     if args.json:
-        import io
         from contextlib import redirect_stdout
         # The progress messages people read go to stderr, so stdout holds
         # exactly one JSON document.

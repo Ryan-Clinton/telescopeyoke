@@ -8,7 +8,6 @@ that serve.py offers, and the MCP server in mcp_server.py all call these.
 import contextlib
 import io
 import json
-import socket
 import time
 from pathlib import Path
 

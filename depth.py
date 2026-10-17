@@ -48,6 +48,7 @@ from scipy.spatial import cKDTree
 
 import config
 import interface
+import records
 import stacking
 
 GAIA_URL = "https://vizier.cds.unistra.fr/viz-bin/asu-tsv"
@@ -598,7 +599,7 @@ def run(args, say=print):
                 record.setdefault("carried_over", []).append(key)
         if record.get("carried_over"):
             say(f"kept from the earlier measurement: {', '.join(record['carried_over'])}")
-    kept.write_text(json.dumps(record, indent=1), encoding="utf-8")
+    records.write(kept, record, schema="depth", stamp=True)
     say(f"kept as {kept}")
     return record
 

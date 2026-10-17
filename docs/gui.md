@@ -1,5 +1,7 @@
 # The application and its companion page: specification
 
+[README](../README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
+
 **Since this was first written the shape has changed.** A page that is
 started from a terminal and opens in a browser is not an application, on
 Ubuntu or anywhere else. So:

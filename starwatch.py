@@ -38,6 +38,7 @@ import numpy as np
 
 import config
 import interface
+import records
 
 STARS = {
     "tabby": {"name": "Tabby", "programme": "tabby", "id": "KIC 8462852", "aka": "Tabby's star, Boyajian's star",
@@ -113,7 +114,7 @@ def measure(key, session, size=BIN, say=print, night=None):
     record["nights"].sort(key=lambda x: x["session"])
     path = record_path(s)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(record, indent=1), encoding="utf-8")
+    records.write(path, record, stamp=True)
     verdict = judge_night(record["nights"], latest)
     answer = {"star": s["id"], "name": s["name"], "night": latest, "nights_measured": len(record["nights"]),
               **verdict, "kind": "measured"}

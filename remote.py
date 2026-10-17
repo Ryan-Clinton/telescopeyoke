@@ -15,7 +15,6 @@ checkout of the project there, so nothing being worked on is touched. Raw
 frames already sent are not sent again (rsync), so a second stack of the
 same sessions starts at once.
 """
-import json
 import shlex
 import subprocess
 import sys
@@ -23,6 +22,7 @@ from pathlib import Path
 
 import config
 import interface
+import records
 import stacking
 
 ROOT = Path(__file__).parent
@@ -84,7 +84,11 @@ def restack(host, sessions, options, say=print):
     if stacking.CALIBRATION.is_dir():
         rsync([f"{stacking.CALIBRATION}/"], f"{host}:{PLACE}/data/calibration/")
     runner = python if python == "python3" else f"~/{python}"
-    command = (f"cd ~/{PLACE}/code && TY_DATA=~/{PLACE}/data TY_NO_WATCH=1 {runner} restack.py "
+    # The copy there has no git history: say which commit it is, so its
+    # records' provenance names the code that really ran.
+    sha, changed = records.commit()
+    code = f"TY_CODE_COMMIT={sha}{'+changed' if changed else ''} " if sha else ""
+    command = (f"cd ~/{PLACE}/code && TY_DATA=~/{PLACE}/data TY_NO_WATCH=1 {code}{runner} restack.py "
                + " ".join(shlex.quote(f"../{there(s)[len(PLACE) + 1:]}") for s in sessions)
                + "".join(f" {shlex.quote(o)}" for o in options))
     say(f"stacking on {host}")

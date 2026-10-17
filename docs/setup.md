@@ -1,6 +1,6 @@
 # Setup
 
-[Back to the README](../README.md)
+[README](../README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
 1. `./install.sh` installs the packaged software and creates `config.toml`
    from the example. Put in your location, and your camera's INDI driver and
@@ -9,18 +9,12 @@
 2. Install the ASTAP D20 star database (about 400 MB) from
    <https://sourceforge.net/projects/astap-program/files/star_databases/>;
    it installs into `/opt/astap`.
-3. If your camera's INDI driver is not packaged, build it. For the Altair
-   driver on Ubuntu 26.04, from the
+3. If your camera's INDI driver is not packaged, build it from the
    [indi-3rdparty](https://github.com/indilib/indi-3rdparty) repository at
-   the tag matching the installed INDI (`v1.9.9`):
-
-       sudo apt install cmake libindi-dev libcfitsio-dev libnova-dev libusb-1.0-0-dev zlib1g-dev
-       cd libaltaircam && cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_POLICY_VERSION_MINIMUM=3.5 . \
-           && make && sudo make install
-       cd ../indi-toupbase     # first trim CMakeLists.txt to the indi_altair_ccd target only
-       cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_POLICY_VERSION_MINIMUM=3.5 . \
-           && make && sudo make install
-
+   the tag matching your installed INDI (`indiserver --version`). How it was
+   done for the Altair driver on one machine is under
+   [Building the Altair driver](#building-the-altair-driver-one-machines-notes):
+   a record, not a recipe that is tested.
 4. INDI server: by default the scripts connect to one you have started
    (`indiserver indi_altair_ccd`). If nothing else uses INDI on the machine,
    set `manage_server = true` under `[indi]` in `config.toml` and they will
@@ -79,8 +73,9 @@ differently.
 
 ## Polar alignment before dark
 
-Polaris shows in a short exposure by day; the plate solver has nothing to go
-by until well after sunset. `polaris.py` (Tools, Polar alignment, "Before
+*Experimental: the search has not yet found Polaris on the real telescope.*
+Polaris should show in a short exposure by day, and the plate solver has
+nothing to go by until well after sunset. `polaris.py` (Tools, Polar alignment, "Before
 dark") finds that one star and measures the polar axis from it. It is rough,
 a few tenths of a degree, and `polaralign.py` after dark is the fine
 measurement. The order matters:
@@ -258,3 +253,18 @@ and the webcam must stay on the machine the hardware is plugged into. The
 quality pass only needs a session's folder of raw frames, so it can be run on
 a faster machine later if sessions grow into thousands of frames; the
 telescope never depends on a second computer or on Wi-Fi to keep working.
+
+## Building the Altair driver: one machine's notes
+
+Not part of the ordinary install, and not tested by anything: this is what
+built `indi_altair_ccd` on the author's laptop (Ubuntu 26.04, INDI 1.9.9,
+October 2026). Tags and build files change; check the repository's own
+instructions first.
+
+    sudo apt install cmake libindi-dev libcfitsio-dev libnova-dev libusb-1.0-0-dev zlib1g-dev
+    git clone --branch v1.9.9 https://github.com/indilib/indi-3rdparty
+    cd indi-3rdparty/libaltaircam && cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_POLICY_VERSION_MINIMUM=3.5 . \
+        && make && sudo make install
+    cd ../indi-toupbase     # CMakeLists.txt was first trimmed to the indi_altair_ccd target only
+    cmake -DCMAKE_INSTALL_PREFIX=/usr -DCMAKE_POLICY_VERSION_MINIMUM=3.5 . \
+        && make && sudo make install

@@ -241,7 +241,7 @@ def check_indi_server():
         socket.create_connection(("localhost", port), timeout=2).close()
     except OSError:
         if settings["indi"]["manage_server"]:
-            return OK, f"INDI server not running; it will be started when needed"
+            return OK, "INDI server not running; it will be started when needed"
         return FAIL, (f"no INDI server on port {port}: start "
                       f"'indiserver {settings['camera']['driver']}'")
     return OK, f"INDI server on port {port}"

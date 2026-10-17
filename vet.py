@@ -43,6 +43,7 @@ import config
 import depth
 import difference
 import interface
+import records
 import stacking
 
 SKYBOT_URL = "https://ssp.imcce.fr/webservices/skybot/api/conesearch.php"
@@ -325,7 +326,7 @@ def run(args, say=print):
     summary = {"session": str(session), "candidates": evidence, "unexplained": len(left),
                "asked": sorted(checks), "halves_checked": half_scores is not None,
                "band": record.get("band")}
-    (session / "vetted.json").write_text(json.dumps(summary, indent=1), encoding="utf-8")
+    records.write(session / "vetted.json", summary, schema="vet", stamp=True)
     counts = {}
     for e in evidence:
         key = e["verdict"].split(":")[0].split(" (")[0]

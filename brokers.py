@@ -65,6 +65,7 @@ from astropy.time import Time
 
 import config
 import interface
+import records
 
 ALERCE = "https://api.alerce.online/ztf/v1/objects"
 EXPLORER = "https://alerce.online/object/{oid}"
@@ -159,7 +160,7 @@ def keep_target(oid, ra, dec, note):
     kept = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     kept[oid] = {"ra": round(float(ra), 6), "dec": round(float(dec), 6), **note}
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(kept, indent=1), encoding="utf-8")
+    records.write(path, kept)
 
 
 def follow(oid, minutes, plan=False, dry_run=False, say=print, get=requests.get, patrol_run=None, measure=None):

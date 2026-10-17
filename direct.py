@@ -38,6 +38,7 @@ from pathlib import Path
 from interface import Refusal
 
 import config
+import records
 
 ROOT = Path(__file__).parent
 STATE_FILE = config.DATA / "cache" / "direct_mount.json"
@@ -296,7 +297,7 @@ class DirectHandset:
 
     def _save(self, state=None):
         self.state_file.parent.mkdir(exist_ok=True)
-        self.state_file.write_text(json.dumps(state or self.state), encoding="utf-8")
+        records.write(self.state_file, state or self.state, indent=None)
 
     def set_home(self):
         """Record that the mount is at its home position now. Moves nothing."""

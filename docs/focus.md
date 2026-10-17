@@ -1,6 +1,6 @@
 # Focusing by ear
 
-[Back to the README](../README.md)
+[README](../README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
 `./focus.py` is built for a manual focuser in the dark: one hand on the knob,
 eyes on the telescope, the laptop making the sounds.

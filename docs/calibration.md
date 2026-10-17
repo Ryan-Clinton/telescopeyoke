@@ -1,6 +1,6 @@
 # Calibrating a mount, in order
 
-[Back to the README](../README.md)
+[README](../README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
 A modest mount is set up by eye: the tripod about level, the polar axis
 about north, the tube about along it. Each "about" can be measured from the
@@ -34,9 +34,11 @@ a degree is plenty. There is no software for this and none is planned.
 
 `./polaralign.py` measures where the RA axis points from three plate solves
 and says which way to turn each bolt ([how](tracking.md)). On the real mount
-five rounds took the axis from 5.2° to 0.2° (6 October 2026). `--repeat 5`,
+six rounds took the axis from 3.3° to 0.1° (13 October 2026), once the
+measurement took out the handset's own movement of the Dec axis
+([validation](validation.md#night-of-13-october-2026)). `--repeat 5`,
 with the bolts left alone, gives the scatter of the measurement itself,
-which says what a reading of 0.2° is worth. That has not been run yet.
+which says what a reading of 0.1° is worth. That has not been run yet.
 
 ### What to do with your hands
 
