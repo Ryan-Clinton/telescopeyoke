@@ -508,12 +508,46 @@ the archive has gaps. Two tests on archived C3 pictures: the bright
 C/2024 G3 (ATLAS) on 13 and 14 January 2025 was found, its head and tail
 the strongest candidates, alongside the bleed line from its saturated
 head; the faint Kreutz comet SOHO-5175 on 25 January 2025 was not, on a
-day crowded with outward-moving coronal material. The public 1024-pixel
-pictures are JPEGs, which hide the faintest comets, so finding the faint
-ones may need the FITS files: the last weeks' are public
-(umbra.nascom.nasa.gov/pub/lasco/lastimage/level_05/DATE/c3/, about 105
-a day), which is the next step. It is not run all the time yet:
-the project is to be asked first.
+day crowded with outward-moving coronal material.
+
+**Raw pictures, GOES-19, and planted comets, 17 October 2026.**
+`--raw` takes LASCO's level-0.5 FITS files instead of the JPEGs (the
+archive at umbra.nascom.nasa.gov/pub/lasco_level05/, or the last
+fortnight's while it catches up), and `--camera ccor1` the Compact
+Coronagraph on GOES-19 from NOAA's open archive on Amazon's S3. The
+Cambridge list of SOHO comets shows why CCOR-1 matters: in 2026 nearly
+every new comet has been found in it (G1), a handful in LASCO. The noise
+is now measured in each 64-pixel square, as the inner corona is far
+noisier than the edge. `look --plant 120` puts fake comets heading in
+towards the Sun into the real pictures, with their real noise and
+outflows, and counts them back:
+
+| Pictures | Found at 3, 4, 6, 8 and 12 times the noise (of 20 each) |
+|---|---|
+| LASCO C3 JPEGs, 15 September 2026, 161 | 8, 17, 20, 20, 20 |
+| LASCO C3 raw, the same hours, 161 | 1, 15, 20, 20, 20 |
+| CCOR-1, 11 and 12 October 2026, 116 | 3, 8, 15, 18, 20 |
+
+"Times the noise" is each picture's own noise, so the rows say how well
+the search works on each kind of picture, not which kind goes fainter:
+that needs the same comet measured in both. CCOR-1's first try found its
+occulter's arm instead (blanked to 0, its edges flickering), now left
+out. The raw pictures of 25 January 2025 give nothing heading for the
+Sun either: SOHO-5175 is a Meyer-group comet (Y on the Cambridge list),
+small and faint, and without its positions a miss cannot be told from
+a comet not moving that way. In CCOR-1, after the arm, nothing heading for the Sun was found in the 30 hours
+that held the 12 October CCOR-1 comet, and the project's own pages, with
+its positions, would not answer from here to say where it was.
+
+**A real faint comet found, 17 October 2026.** On 15 September 2026, the
+day a Kreutz comet was found in C3, both the JPEGs and the raw pictures
+give one object moving steadily in towards the Sun, about 2.3 pixels in
+12 minutes, from 07:30 to after 20:00 UTC (in the JPEGs from (933, 759)
+at 10:30 to (806, 672) at 23:54), the strongest candidate in both. No
+planet was in the field that day. It is very likely that comet; until
+the project's positions say so, it is not proven. It is not run all the
+time yet: the project is to be asked first (for LASCO; NOAA's S3
+archive is meant for such use).
 
 ### The candidate page
 
@@ -593,7 +627,7 @@ ends with a scientific proof, not just working code.
 | 1 | References, calibration, proper subtraction, the candidate database, vetting and forced photometry for M31. **Software complete, 16 and 17 October 2026: all of it built and tested. Scientific validation under way: realistic fakes measured, a real nova recovered from archive images (AT2024koe); a find of our own still to come** | planted fakes recovered; a planted rising fake gets the right light curve; a known asteroid and a known variable set aside |
 | 2 | The M31 patrol, scheduled by priority. **Built 16 and 17 October 2026: `patrol.py` for one field or M31's 4 x 2 panels, ordered by novae reported x share caught x days unwatched, fitted to the night; each panel's first night becomes its reference. Proof to come: a known nova recovered** | a known nova, past or current, recovered from our data |
 | 3 | M33 | a first M33 night with its completeness measured |
-| 4 | Sungrazer, running all the time. **`sungrazer.py` built 17 October 2026: fetch and look, by hand, not yet all the time. A bright comet (C/2024 G3) found in archived pictures; a faint Kreutz one (SOHO-5175) not yet** | a known comet recovered in archived pictures |
+| 4 | Sungrazer, running all the time. **`sungrazer.py` built 17 October 2026: fetch and look, by hand, not yet all the time. A bright comet (C/2024 G3) found in archived pictures; raw LASCO and GOES-19's CCOR-1 added, fakes planted to measure the search; the 15 September 2026 Kreutz comet very likely found** | a known comet recovered in archived pictures |
 | 5 | The report packet. **`report.py` built 17 October 2026: 95 s for a real candidate** | under five minutes from a confirmed planted fake to a packet |
 | 6 | Public alerts (`brokers.py`). **Built 17 October 2026: ALeRCE's new transients, bright enough and up here tonight; the month's search run (its one real find was AT 2026aexm, already on the Transient Name Server)** | a real public transient observed; an unreported-transient search run over a past month of alerts |
 | 7 | Every session searched; old frames searched again on each improvement. **Built 17 October 2026: each new stack of a field with a reference is searched in the background; `patrol.py --sweep [--all-history]` for the rest** | every science picture checked automatically; a rerun finds fakes planted in old frames |
