@@ -36,7 +36,7 @@ def test_tonight_keeps_a_whole_transit_in_the_dark_and_leaves_out_the_rest():
     answer = transits.tonight(config.example(), rows, now=NOW, say=lambda *_: None)
     assert [t["planet"] for t in answer["transits"]] == ["TEST-1 b"]
     t = answer["transits"][0]
-    assert t["middle"] == pytest.approx(MIDNIGHT, abs=1e-4) and t["altitude"] > 40
+    assert t["middle"] == pytest.approx(MIDNIGHT, abs=1e-4) and t["altitude"] > 40 and t["exposure"] == 4   # V 11
     assert answer["bright_and_deep"] == 2
 
 

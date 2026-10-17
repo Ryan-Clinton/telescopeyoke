@@ -51,6 +51,7 @@ BASELINE = 30        # minutes either side of the transit, to measure the star o
 BRIGHTEST = 10.5     # V: brighter fills the camera's wells in a 16 s frame (variables.BRIGHTEST)
 FAINTEST = 13.0      # V: fainter is too noisy for a 1% dip
 DEEPER = 1.0         # percent: the shallowest transit listed by default
+FULL_WELL = 12.7     # V: brighter fills the camera's wells in a 16 s frame on a sharp night: take 4 s frames
 SEARCH = 60          # minutes either side of the predicted middle the fit looks
 BIN = 10
 
@@ -112,7 +113,8 @@ def tonight(cfg, rows, deeper=DEEPER, now=None, say=print):
                                     start=night.local(int(np.argmax(inside))).strftime("%H:%M"),
                                     mid=night.local(i).strftime("%H:%M"),
                                     end=night.local(len(jd) - 1 - int(np.argmax(inside[::-1]))).strftime("%H:%M"),
-                                    altitude=round(float(alt[k][i]), 1)))
+                                    altitude=round(float(alt[k][i]), 1),
+                                    exposure=4 if p["v"] < FULL_WELL else 16))
     out.sort(key=lambda t: -t["depth"])
     return {"night": str(night.date), "deeper": deeper, "planets": len(rows), "bright_and_deep": len(usable),
             "transits": out, "kind": "inferred"}
@@ -218,7 +220,8 @@ def run(args, say=print):
         f"{FAINTEST:g} are {args.deeper:g}% deep or more; {len(answer['transits'])} transit whole in the dark here tonight")
     for t in answer["transits"]:
         say(f"  {t['planet']:<14} {t['depth']:.2f}% deep, V {t['v']:.1f}, {t['start']} to {t['end']} "
-            f"(middle {t['mid']}, {t['altitude']:.0f}° high): ./mount.py goto {t['star'].replace(' ', '')}")
+            f"(middle {t['mid']}, {t['altitude']:.0f}° high), {t['exposure']} s frames: ./mount.py goto "
+            f"{t['star'].replace(' ', '')}")
     return answer
 
 
