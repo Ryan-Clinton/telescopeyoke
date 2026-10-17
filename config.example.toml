@@ -103,3 +103,11 @@ manage_server = false
 # [alerts]
 # light = "Living room lamp"
 # speaker = "Kitchen speaker"
+
+# Alerts to your phone by your own Telegram bot (notify.py): the token
+# @BotFather gives, and your chat's number. The patrol's unexplained
+# candidates and the comet hunt's finds are sent here. Keep this file
+# private: the token lets anyone send as the bot.
+# [telegram]
+# token = "123456:ABC..."
+# chat = "123456789"

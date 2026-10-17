@@ -54,3 +54,8 @@ def test_an_earlier_stack_without_it_is_the_last_non_detection():
 def test_sexagesimal_positions():
     assert report.hms(11.105545 / 15) == "00:44:25.33"
     assert report.dms(-0.5) == "-00:30:00.0"
+
+
+def test_a_panels_candidate_is_looked_for_in_the_panels_book():
+    assert report.field_of("M31-20261014-021118-001") == "M31"
+    assert report.field_of("M31-P3-20261020-213000-002") == "M31-P3"

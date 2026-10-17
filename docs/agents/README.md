@@ -49,6 +49,10 @@ been run with a model in the loop.
   without touching camera or mount.
 - Every MCP tool publishes an `outputSchema` built from the files in
   `schemas/`.
+- Claiming a find: [claiming.md](claiming.md). The software alerts the
+  person and fills the report; an agent fills the Transient Name Server's
+  or the Sungrazer Project's form in the browser and stops for the person
+  to press send.
 
 ## The schemas are a public interface
 

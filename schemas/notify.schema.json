@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/notify.schema.json",
+  "title": "Notify",
+  "description": "data of: notify.py --test|TEXT --json. How many messages the person's Telegram bot took.",
+  "type": "object",
+  "required": ["sent"],
+  "properties": {"sent": {"type": "integer"}}
+}

@@ -39,6 +39,12 @@ BAND = "Clear (unfiltered CMOS), calibrated approximately to Gaia G"
 CHART = 150        # pixels each side of the candidate in the finding chart (about 3.3′ at 1.32″)
 
 
+def field_of(wanted):
+    """The field a candidate's ID names: NAME-YYYYMMDD-HHMMSS-NNN, where a
+    mosaic panel's NAME has a hyphen of its own (M31-P3)."""
+    return wanted.rsplit("-", 3)[0]
+
+
 def night_folder(name, night):
     return config.DATA / "frames" / name / night
 
@@ -215,7 +221,7 @@ def run(args, say=print):
     import candidates
     import forced
     began = time.monotonic()
-    name = args.id.split("-")[0]
+    name = field_of(args.id)
     book = candidates.load(name)
     k = next((c for c in book["candidates"] if c["id"] == args.id), None)
     if k is None:

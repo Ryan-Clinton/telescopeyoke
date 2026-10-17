@@ -235,12 +235,17 @@ def test_the_hunt_keeps_what_heads_for_the_sun_and_tidies_old_pictures(tmp_path,
     (store / "CCOR1_3_20261016T000025_V00_NC.fits").write_bytes(b"new")
     now = datetime.datetime(2026, 10, 16, 12, 0, tzinfo=datetime.timezone.utc)
     seen = {"pictures": 40, "folder": "f", "candidates": [
-        {"pictures": [1, 2, 3, 4, 5], "towards_sun": 0.9, "times": ["2026-10-16 01:00"], "pixels_per_12_min": 3.0,
+        {"pictures": [1, 2, 3, 4, 5], "towards_sun": 0.9, "times": ["2026-10-16 01:00", "2026-10-16 01:15"],
+         "files": ["a.fits", "b.fits"], "track": [[100.0, 200.0], [103.0, 198.0]], "pixels_per_12_min": 3.0,
          "strength": 9.0, "movie": "m1.gif"},
         {"pictures": [1, 2, 3, 4, 5], "towards_sun": -0.8, "times": ["2026-10-16 02:00"], "pixels_per_12_min": 6.0,
          "strength": 12.0, "movie": "m2.gif"}]}
+    sent = []
     answer = sungrazer.hunt("ccor1", 24, say=lambda *_: None, now=now, get=lambda *a, **k: Reply("", status_code=200),
-                            looker=lambda: seen)
+                            looker=lambda: seen, send=lambda text, animations, say: sent.append((text, animations)))
+    text, animations = sent[0]
+    assert "GOES-19 CCOR-1" in text and "2026-10-16 01:15  103.0  198.0  (b.fits)" in text
+    assert animations == [("m1.gif", "comet candidate 1")]
     assert [c["movie"] for c in answer["towards_sun"]] == ["m1.gif"] and answer["moving"] == 2
     assert answer["deleted"] == 1 and [p.name for p in store.iterdir()] == ["CCOR1_3_20261016T000025_V00_NC.fits"]
     assert json.loads((tmp_path / "sungrazer" / "hunt-ccor1.json").read_text())["towards_sun"][0]["movie"] == "m1.gif"

@@ -184,7 +184,7 @@ def newest_session(target, after):
     return sessions[-1] if sessions else None
 
 
-def analyse(session, say=print, chain=None, both_halves=True):
+def analyse(session, say=print, chain=None, both_halves=True, alerting=True):
     """Depth, difference and vetting on a session, and the answer. `chain`
     replaces the three steps (for the tests)."""
     import depth
@@ -235,7 +235,68 @@ def analyse(session, say=print, chain=None, both_halves=True):
     (session / "patrol.json").write_text(json.dumps(answer, indent=1, default=str), encoding="utf-8")
     for line in answer["summary"]:
         say(line)
+    if chain is None and alerting:
+        answer["alerted"] = alert(name, session, answer, say)
     return answer
+
+
+def unexplained(result):
+    """The vetted candidates nothing explained."""
+    return [c for c in (result.get("vet") or {}).get("candidates", []) if c["verdict"].startswith("unexplained")]
+
+
+def alert(name, session, result, say=print, packet=None, send=None):
+    """The person told at once of the unexplained candidates: each one's
+    report packet made (report.py), and the text and pictures sent
+    (notify.py). Returns the book's IDs alerted. `packet` and `send` stand
+    in for report.py and notify.py (for the tests)."""
+    import notify
+    vetted = unexplained(result)
+    if not vetted:
+        return []
+    followed = result.get("followed") or []
+    ids = [f["id"] for f in followed
+           if any(abs(f["ra"] - c["ra"]) < 1e-3 and abs(f["dec"] - c["dec"]) < 1e-3 for c in vetted)]
+    if packet is None:
+        import report
+        packet = lambda wanted: report.run(argparse.Namespace(id=wanted, quick=False, json=False), say=lambda *_: None)
+    made = []
+    for wanted in ids:
+        try:
+            packet(wanted)
+            made.append(wanted)
+        except Exception as error:      # a packet is a help; the alert still goes
+            say(f"  no report packet for {wanted}: {error}")
+    text = notify.candidate_alert(name, session, vetted, followed, result.get("pictures", []), made)
+    pictures = [(path, f"{name} candidate {n}: the night, the reference, the difference")
+                for n, path in enumerate(result.get("pictures", []), 1)]
+    sent = (send or notify.send)(text, pictures=pictures, say=say)
+    if sent:
+        say(f"  alert sent: {len(vetted)} unexplained")
+    return ids
+
+
+CONFIRM_MINUTES = 10   # a second look at a field with an unexplained candidate, while the telescope is there
+
+
+def second_look(p, name, say=print, dry_run=False, run_command=None, search=None):
+    """More frames of the same field, at once, searched as the first were:
+    a real object is there again, most false ones are not. No GoTo: the
+    telescope is already there."""
+    frames = max(1, round(60 * CONFIRM_MINUTES / p["exposure"]))
+    cmd = [sys.executable, str(ROOT / "shoot.py"), name, "--frames", str(frames), "--exposure", str(p["exposure"]),
+           "--gain", str(p["gain"]), *(["--dry-run"] if dry_run else [])]
+    say(f"== a second look at {name}: {CONFIRM_MINUTES:g} minutes more")
+    say("$ " + " ".join(Path(c).name if c.endswith(".py") else c for c in cmd[1:]))
+    began = time.time()
+    run_command = run_command or (lambda c: subprocess.run(c, stdout=sys.stdout, env=dict(os.environ, TY_PATROL="1")))
+    done = run_command(cmd)
+    if done.returncode != 0 or dry_run:
+        return {"stopped": f"shoot.py stopped (exit {done.returncode})"} if done.returncode else {"dry_run": True}
+    session = newest_session(name, began)
+    if session is None:
+        return {"stopped": "no frames kept"}
+    return (search or (lambda s: analyse(s, say, both_halves=p.get("both_halves", True))))(session)
 
 
 SEARCH_FLOOR = 16.0   # G: a stack whose half-found depth is brighter than this is not searched
@@ -592,7 +653,10 @@ def run(args, say=print):
             continue
         result = analyse(session, say, both_halves=p.get("both_halves", True))
         made = first_reference(name, session, say)
-        answer["fields"].append({"field": name, "analysis": result, "reference_made": made})
+        entry = {"field": name, "analysis": result, "reference_made": made}
+        if unexplained(result):
+            entry["second_look"] = second_look(p, name, say)
+        answer["fields"].append(entry)
     if len(chosen) == 1 and answer["fields"] and "analysis" in answer["fields"][0]:
         answer["analysis"] = answer["fields"][0]["analysis"]
     return answer
@@ -671,7 +735,7 @@ def taken(session):
 
 def sweep(all_history=False, days=SWEEP_DAYS, say=print, search=None, now=None):
     """Search every session not yet searched: the last `days`, or all."""
-    search = search or (lambda session: analyse(session, say))
+    search = search or (lambda session: analyse(session, say, alerting=not all_history))   # old nights: no alerts
     now = now or datetime.datetime.now()
     found = []
     for session in sorted((config.DATA / "frames").glob("*/*")):

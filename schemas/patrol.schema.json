@@ -15,7 +15,8 @@
         "difference": {"type": "object"},
         "vet": {"type": "object"},
         "summary": {"type": "array", "items": {"type": "string"}, "description": "The answer, a line at a time."},
-        "pictures": {"type": "array", "items": {"type": "string"}, "description": "For each unexplained candidate: the night, the reference and the difference."}
+        "pictures": {"type": "array", "items": {"type": "string"}, "description": "For each unexplained candidate: the night, the reference and the difference."},
+        "alerted": {"type": "array", "items": {"type": "string"}, "description": "The candidate book's IDs the person was told of (notify.py), each with its report packet made."}
       }
     }
   },
@@ -43,6 +44,10 @@
       }
     },
     "steps": {"type": "array", "items": {"type": "string"}},
+    "fields": {"type": "array", "description": "Each field imaged: its analysis, and with an unexplained candidate, a second look (more frames at once, searched the same way).",
+               "items": {"type": "object", "required": ["field"],
+                         "properties": {"field": {"type": "string"}, "analysis": {"$ref": "#/$defs/analysis"},
+                                        "second_look": {"type": "object"}, "stopped": {"type": "string"}}}},
     "analysis": {"$ref": "#/$defs/analysis"},
     "session": {"type": "string"},
     "object": {"type": "string"},

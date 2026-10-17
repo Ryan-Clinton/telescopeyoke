@@ -285,3 +285,38 @@ def test_a_session_of_a_few_frames_is_not_searched(tmp_path):
     answer = patrol.analyse(session, say=lambda *_: None, chain=chain)
     assert ran == [] and "too few frames to search: 4" in answer["summary"][-1]
     assert (session / "patrol.json").exists()
+
+
+UNEXPLAINED = {"ra": 10.6, "dec": 41.2, "score": 6.1, "mag": 17.4, "halves": [4.4, 4.6], "clues": [],
+               "verdict": "unexplained"}
+
+
+def test_an_unexplained_candidate_is_alerted_with_its_packet():
+    made, sent = [], []
+    result = {"vet": {"candidates": [UNEXPLAINED, dict(UNEXPLAINED, ra=10.0, verdict="asteroid")]},
+              "followed": [{"id": "M31-20261020-213000-001", "ra": 10.6, "dec": 41.2, "seen_on": 1, "of": 1}],
+              "pictures": ["patrol-1.png"]}
+    ids = patrol.alert("M31", "frames/M31/20261020-213000", result, say=lambda *_: None, packet=made.append,
+                       send=lambda text, pictures, say: sent.append((text, pictures)) or 1)
+    assert ids == made == ["M31-20261020-213000-001"]
+    text, pictures = sent[0]
+    assert "1 unexplained candidate in 20261020-213000" in text and "M31-20261020-213000-001" in text
+    assert "claim" in text and pictures == [("patrol-1.png", "M31 candidate 1: the night, the reference, the difference")]
+
+
+def test_nothing_unexplained_sends_nothing():
+    assert patrol.alert("M31", "s", {"vet": {"candidates": []}}, say=lambda *_: None,
+                        send=lambda *a, **k: pytest.fail("sent")) == []
+
+
+def test_a_second_look_takes_more_frames_without_a_goto_and_searches_them(tmp_path, monkeypatch):
+    import types
+    ran = []
+    monkeypatch.setattr(patrol, "newest_session", lambda name, after: tmp_path)
+    p = {"exposure": 16, "gain": 1500, "both_halves": True}
+    result = patrol.second_look(p, "M31", say=lambda *_: None,
+                                run_command=lambda c: ran.append(c) or types.SimpleNamespace(returncode=0),
+                                search=lambda s: {"session": str(s)})
+    assert result == {"session": str(tmp_path)}
+    assert [c.rsplit("/", 1)[-1] for c in ran[0][1:3]] == ["shoot.py", "M31"] and "goto" not in ran[0]
+    assert ran[0][ran[0].index("--frames") + 1] == str(round(60 * patrol.CONFIRM_MINUTES / 16))

@@ -5,6 +5,17 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
 
 ## Not yet released
 
+- **Alerts and claiming**: when a vetted candidate is unexplained, the
+  patrol makes its report packet and sends it, with the night, the
+  reference and the difference side by side, to the person's phone by
+  their own Telegram bot (`notify.py`, `[telegram]` in config.toml); then,
+  in a run the person started, it takes 10 more minutes of the same field
+  and searches them, so the second alert says whether it was seen again.
+  The comet hunt sends its tracks heading for the Sun with the movie and
+  the Sungrazer form's fields. `docs/agents/claiming.md` is how an agent
+  fills the Transient Name Server's or the Sungrazer Project's form in the
+  browser and stops for the person to press send. `report.py` finds a
+  mosaic panel's candidates in the panel's own book.
 - **Dips**: `./variables.py` also lists any star that dips, three points
   or more in a row clearly fainter than usual, however quiet it is
   otherwise. `./starwatch.py tabby` watches Tabby's star (KIC 8462852): a

@@ -559,7 +559,19 @@ def prune(camera, days=KEEP_DAYS, now=None):
     return gone
 
 
-def hunt(camera, hours=HUNT_HOURS, say=print, now=None, get=requests.get, looker=None):
+def report_text(c, camera):
+    """What the Sungrazer Project's report form asks, filled from a
+    candidate: the camera, and each picture's time with the point's place in
+    it (pixels of the 1024-pixel picture, from the top left)."""
+    instrument = {"c3": "LASCO C3", "c2": "LASCO C2", "ccor1": "GOES-19 CCOR-1"}.get(camera, camera)
+    lines = [f"Instrument: {instrument}", f"Motion: {c['pixels_per_12_min']} pixels in 12 minutes, "
+             f"{'towards' if c['towards_sun'] > 0.5 else 'not towards'} the Sun", "Positions (UTC, x, y):"]
+    for t, f, (x, y) in zip(c.get("times", []), c.get("files", []), c["track"]):
+        lines.append(f"  {t}  {x:.1f}  {y:.1f}  ({f})")
+    return "\n".join(lines)
+
+
+def hunt(camera, hours=HUNT_HOURS, say=print, now=None, get=requests.get, looker=None, send=None):
     """Fetch the last `hours`, look, keep what heads in towards the Sun,
     and tidy away old pictures. `looker` stands in for look (for the tests)."""
     now = now or datetime.datetime.now(datetime.timezone.utc)
@@ -578,6 +590,14 @@ def hunt(camera, hours=HUNT_HOURS, say=print, now=None, get=requests.get, looker
     for c in towards:
         say(f"  {len(c['pictures'])} pictures from {c['times'][0]}, {c['pixels_per_12_min']} px in 12 min, "
             f"strength {c['strength']}: {c['movie']}")
+    if towards:
+        import notify
+        text = (f"Comet hunt, {camera.upper()} to {answer['when']} UTC: {len(towards)} heading in towards the Sun. "
+                f"Watch each movie, check the project's recent finds, and to report one tell Claude "
+                f"\"report comet N\": it fills the Sungrazer form and you press send.\n\n"
+                + "\n\n".join(f"{n}. " + report_text(c, camera) for n, c in enumerate(towards, 1)))
+        (send or notify.send)(text, animations=[(c["movie"], f"comet candidate {n}") for n, c in enumerate(towards, 1)],
+                              say=say)
     return answer
 
 
