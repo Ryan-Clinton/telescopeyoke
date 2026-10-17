@@ -418,6 +418,15 @@ def test_a_brokers_answer_matches_its_schema():
                                                           reported=REPORTED, now=NOW)), "brokers")
 
 
+def test_a_follow_matches_the_brokers_schema(tmp_path, monkeypatch):
+    import brokers
+    from test_brokers import follow_get
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    valid(interface.run("brokers", lambda: brokers.follow(
+        "ZTF26acaznbf", 20, say=lambda *_: None, get=follow_get, patrol_run=lambda a: {"programme": {}},
+        measure=lambda: [{"session": "s", "in_picture": True, "mag": None, "error": None, "limit": 18.2}])), "brokers")
+
+
 def test_a_sungrazer_look_matches_its_schema(tmp_path, monkeypatch):
     import config
     import sungrazer
@@ -432,6 +441,21 @@ def test_a_sungrazer_look_matches_its_schema(tmp_path, monkeypatch):
     answer = valid(interface.run("sungrazer", lambda: sungrazer.look("c3", say=lambda *_: None, paths=paths)),
                    "sungrazer")
     assert answer["data"]["pictures"] == len(images)
+
+
+def test_a_variables_answer_matches_its_schema(tmp_path, monkeypatch):
+    import argparse
+    import variables
+    from test_variables import BATCHES, made_up_night, session_with_frames
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    images, wcs, catalogue, _ = made_up_night()
+    session_with_frames(tmp_path / "frames" / "M31" / "20261014-021118", BATCHES * 10)
+    real = variables.night
+    monkeypatch.setattr(variables, "night", lambda s, name, size, say: real(
+        s, name, size, say, stack=lambda groups: images, solve=lambda lum: wcs, gaia=lambda ra, dec, r: catalogue))
+    args = argparse.Namespace(name="M31", session=None, bin=10, offline=True)
+    answer = valid(interface.run("variables", lambda: variables.run(args, say=lambda *_: None)), "variables")
+    assert answer["data"]["candidates"] == 1 and (tmp_path / "frames" / "M31" / "variables.json").exists()
 
 
 def test_the_rigs_view_matches_its_schema(tmp_path, monkeypatch):

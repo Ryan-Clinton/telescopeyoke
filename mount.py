@@ -1229,6 +1229,12 @@ def find_target(name):
         body = get_body(wanted, Time.now(), location(site))
         return {"id": wanted.capitalize(), "alt_id": "", "name": "planet",
                 "ra": float(body.ra.deg), "dec": float(body.dec.deg)}
+    # A transient a person chose to follow (brokers.py --follow), by its name.
+    kept = config.DATA / "cache" / "transients.json"
+    if kept.exists():
+        for key, t in json.loads(kept.read_text(encoding="utf-8")).items():
+            if key.replace(" ", "").lower() == wanted:
+                return {"id": key, "alt_id": t.get("alt_id", ""), "name": "transient", "ra": t["ra"], "dec": t["dec"]}
     raise Refusal("TARGET_UNKNOWN", f"'{name}' is not in the catalogue.")
 
 

@@ -450,9 +450,27 @@ search link for a person. Its first run, on 17 October, was given 66
 objects from ten days: 35 were not up here and the other 31 fainter than
 17.5, so nothing to point at. ALeRCE's newest ZTF detection near M31
 was on 27 June 2026 (asked on 17 October), so ZTF says nothing about M31
-this autumn, for or against a candidate of ours. Not yet built: the confirmation picture on
-a person's yes, pausing the patrol, and the month's search for
-unreported ones.
+this autumn, for or against a candidate of ours.
+
+**The month's search, 17 October 2026.** `./brokers.py --unreported`
+looks back 30 days, keeps what is bright enough whether it is up here or
+not, and lists what is on neither Rochester list. It also leaves out what
+ZTF's own deep-learning real-or-bogus score (drb) calls bogus on every
+detection, as the stamp classifier calls some ghosts beside bright stars a
+supernova. Its first run: 292 objects, 290 fainter than 17.5, 2 left. One
+was a ghost 3.8" from a G 12.4 star (drb 0.0; ALeRCE's newer classifier:
+bogus, 0.99), which the score now removes. The other, ZTF26acaznbf, was
+real: r 16.7 twice, 6.6 minutes apart on 9 October without moving, 12.6"
+from the middle of the galaxy NGC 3441, with nothing in Gaia within 36".
+The Transient Name Server's page, read by a person's browser, has it as
+**AT 2026aexm**, reported by ALeRCE's bot the same day as a possible
+supernova and not yet classified. So the search works, and the lesson is
+the expected one: the Rochester lists leave out most transients nobody
+has classified, and only the Server can say a thing is unreported. From
+the garden it is too low before dawn for now (about 18° when full dark
+ends at 06:00, behind the eastern skyline), better each week into
+November: the first real public transient to point at. Not yet built:
+the confirmation picture on a person's yes, and pausing the patrol for it.
 
 ### Moving objects, later: `moving.py`
 
@@ -577,7 +595,7 @@ ends with a scientific proof, not just working code.
 | 3 | M33 | a first M33 night with its completeness measured |
 | 4 | Sungrazer, running all the time. **`sungrazer.py` built 17 October 2026: fetch and look, by hand, not yet all the time. A bright comet (C/2024 G3) found in archived pictures; a faint Kreutz one (SOHO-5175) not yet** | a known comet recovered in archived pictures |
 | 5 | The report packet. **`report.py` built 17 October 2026: 95 s for a real candidate** | under five minutes from a confirmed planted fake to a packet |
-| 6 | Public alerts (`brokers.py`). **First part built 17 October 2026: ALeRCE's new transients, bright enough and up here tonight** | a real public transient observed; an unreported-transient search run over a past month of alerts |
+| 6 | Public alerts (`brokers.py`). **Built 17 October 2026: ALeRCE's new transients, bright enough and up here tonight; the month's search run (its one real find was AT 2026aexm, already on the Transient Name Server)** | a real public transient observed; an unreported-transient search run over a past month of alerts |
 | 7 | Every session searched; old frames searched again on each improvement. **Built 17 October 2026: each new stack of a field with a reference is searched in the background; `patrol.py --sweep [--all-history]` for the rest** | every science picture checked automatically; a rerun finds fakes planted in old frames |
 | 8 | Real-or-bogus classifier; proposed follow-up. **Dismissal labels kept from 17 October 2026 (`candidates.py --dismiss`)** | a measured fall in false candidates; a candidate leads to a useful repeat |
 | 9 | Variable stars; TESS transits | a first VSX submission |

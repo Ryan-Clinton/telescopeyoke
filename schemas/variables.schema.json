@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/variables.schema.json",
+  "title": "Variables",
+  "description": "data of: variables.py FIELD --json. Light curves of the field's stars from batches of each night's frames: the ones that scatter more than stars as bright as them, and every star VSX knows. One not in VSX is a candidate for a person to look at, not a discovery. Nothing moves.",
+  "type": "object",
+  "required": ["field", "bin", "sessions", "skipped", "stars", "vsx_asked", "known_found", "known_quiet", "candidates", "stars_listed", "kind"],
+  "properties": {
+    "field": {"type": "string"},
+    "bin": {"type": "integer", "description": "Frames in each point of a light curve."},
+    "sessions": {"type": "array", "items": {"type": "string"}},
+    "skipped": {"type": "array", "items": {"type": "object", "required": ["session", "why"],
+                                            "properties": {"session": {"type": "string"}, "why": {"type": "string"}}}},
+    "stars": {"type": "integer", "description": "Stars with light curves long enough to judge."},
+    "vsx_asked": {"type": "boolean"},
+    "known_found": {"type": "integer", "description": "VSX stars seen to vary."},
+    "known_quiet": {"type": "integer", "description": "VSX stars flat here: too small a swing, or out of step with these nights."},
+    "candidates": {"type": "integer", "description": "Stars seen to vary that VSX does not have."},
+    "kind": {"const": "measured"},
+    "stars_listed": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["ra", "dec", "g", "points", "median", "scatter", "usual", "loudness", "range", "variable", "vsx", "jd", "mag", "session"],
+        "properties": {
+          "ra": {"type": "number"},
+          "dec": {"type": "number"},
+          "g": {"type": "number", "description": "Gaia G."},
+          "colour": {"type": ["number", "null"], "description": "Gaia BP-RP."},
+          "points": {"type": "integer"},
+          "median": {"type": "number", "description": "On Gaia's G scale."},
+          "scatter": {"type": "number", "description": "Magnitudes, robust."},
+          "usual": {"type": "number", "description": "The median scatter of stars as bright."},
+          "loudness": {"type": "number", "description": "scatter / usual."},
+          "range": {"type": "number", "description": "5th to 95th percentile, magnitudes."},
+          "variable": {"type": "boolean"},
+          "vsx": {"type": ["object", "null"], "properties": {"name": {"type": "string"}, "type": {"type": "string"}}},
+          "jd": {"type": "array", "items": {"type": "number"}},
+          "mag": {"type": "array", "items": {"type": "number"}},
+          "session": {"type": "array", "items": {"type": "string"}},
+          "picture": {"type": "string"}
+        }
+      }
+    }
+  }
+}

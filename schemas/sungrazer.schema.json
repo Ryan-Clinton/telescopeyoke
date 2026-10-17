@@ -6,8 +6,9 @@
   "type": "object",
   "required": ["camera", "pictures"],
   "properties": {
-    "camera": {"enum": ["c2", "c3"]},
+    "camera": {"enum": ["c2", "c3", "ccor1"]},
     "pictures": {"type": "integer"},
+    "raw": {"type": "boolean", "description": "The raw FITS pictures (--raw) rather than the 1024-pixel JPEGs."},
     "kept": {"type": "string", "description": "fetch: the folder the pictures are kept in."},
     "from": {"type": "string"},
     "to": {"type": "string"},
@@ -15,6 +16,9 @@
     "tracks": {"type": "integer"},
     "star_drift": {"type": ["array", "null"], "items": {"type": "number"}, "description": "Pixels in 12 minutes, x and y."},
     "folder": {"type": "string"},
+    "planted": {"type": "array", "description": "look --plant: fake comets planted in the real pictures and found, by strength (times the noise).",
+                "items": {"type": "object", "required": ["strength", "planted", "found"],
+                          "properties": {"strength": {"type": "number"}, "planted": {"type": "integer"}, "found": {"type": "integer"}}}},
     "candidates": {
       "type": "array",
       "items": {

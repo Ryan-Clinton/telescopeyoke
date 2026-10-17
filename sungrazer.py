@@ -7,6 +7,10 @@
     ./sungrazer.py look --json
     ./sungrazer.py fetch --until 2025-01-25T18:00 --hours 24    a day in the past
     ./sungrazer.py look --until 2025-01-25T18:00 --hours 24     a known comet, to see it is found
+    ./sungrazer.py fetch --raw          the raw pictures instead, for fainter comets
+    ./sungrazer.py look --raw
+    ./sungrazer.py fetch --camera ccor1 GOES-19's coronagraph, where most comets are found now
+    ./sungrazer.py look --plant 120     how faint a comet is found: fakes planted in the real pictures
 
 SOHO's LASCO coronagraphs photograph the sky round the Sun every 12 minutes
 or so, and volunteers have found most of the 5,000 and more comets in them
@@ -15,7 +19,22 @@ no clear sky: this is what to do on a cloudy night.
 
 `fetch` takes the project's public pictures (1024 pixels, from
 soho.nascom.nasa.gov), one at a time with a pause between, each only once:
-the project asks hunters not to load its servers.
+the project asks hunters not to load its servers. With --raw it takes the
+raw pictures instead (level 0.5 FITS, from umbra.nascom.nasa.gov: the
+archive, or the last fortnight's while the archive catches up), about 2 MB
+each against the JPEG's 100 kB, but with the faint end the JPEG's
+brightness curve throws away: the full-size, unpolarised ones in the
+day's usual filter only. Each is taken less its camera's offset, per
+second of exposure, and its square root kept, so the noise is about the
+same over the bright inner corona and the dark sky outside it; the blocks
+lost in transmission are filled from the pictures either side.
+
+`--camera ccor1` is the Compact Coronagraph on GOES-19 (NOAA, since
+2025), whose pictures most new Sungrazer comets have been found in since
+then: its level-3 pictures, every 15 minutes, from NOAA's open archive
+(noaa-nesdis-swfo-ccor-1-pds on Amazon's S3), FITS with the corona's slow
+background already taken off, about 1.7 MB each; the 5-minute bursts
+in between are left out.
 
 `look` takes each picture less the median of the pictures either side of
 it, so the corona and its slow streamers go and what moves stays; leaves
@@ -27,6 +46,13 @@ is measured from the tracks themselves, and a track moving with it is a
 star. What is left is listed with an animation of each, kept under
 sungrazer/DATE/, for a person to watch. A comet is usually faint, moves
 steadily, and in C3 most often heads in towards the Sun.
+
+`look --plant N` measures how faint a comet can be and still be found,
+as depth.py does for the telescope: N fake comets, each a point heading
+in towards the Sun at 2 to 6 pixels in 12 minutes for PLANT_LEN pictures,
+are put into the real pictures at a strength of each of STRENGTHS times
+the noise there, and the share of each strength found is the answer
+(kept in the look folder as plant.json); nothing else is listed.
 
 Nothing is reported for you: a comet is reported through the project's
 own form (sungrazer.nrl.navy.mil/report), with your name, the pictures'
@@ -53,6 +79,9 @@ import interface
 
 BASE = "https://soho.nascom.nasa.gov/data/REPROCESSING/Completed"
 NAME = re.compile(r"(\d{8})_(\d{4})_(c2|c3)_1024\.jpg")
+RAW = ("https://umbra.nascom.nasa.gov/pub/lasco_level05",                 # the archive
+       "https://umbra.nascom.nasa.gov/pub/lasco/lastimage/level_05")      # the last fortnight
+RAW_NAME = re.compile(r"(\d{8})_(\d{6})_(c2|c3)\.fts")                # as kept here
 PAUSE = 1.0          # seconds between pictures fetched
 WINDOW = 3           # pictures either side making the background a picture is taken less
 SIGMA = 5.0          # a point stands this many times the noise above its background
@@ -66,7 +95,14 @@ MOST_GAP = 3.0       # a track bridges a gap of at most this many times CADENCE
 STRAIGHT = 1.0       # pixels a track's points may sit off its straight line
 STAR_LIKE = 0.6      # pixels in CADENCE minutes: a track this close to the stars' common drift is a star
 EDGE = 30            # pixels round the edge left out
-OCCULTER = {"c3": 80, "c2": 150}   # pixels round the middle left out (the occulter and its pylon)
+OCCULTER = {"c3": 80, "c2": 150, "ccor1": 110}   # pixels round the middle left out (the occulter and its pylon)
+CCOR = "https://noaa-nesdis-swfo-ccor-1-pds.s3.amazonaws.com"
+CCOR_LEVEL = "SWFO/GOES-19/CCOR-1/ccor1-l3"
+CCOR_NAME = re.compile(r"CCOR1_3_(\d{8})T(\d{6})_V\d+_NC\.fits")
+CCOR_SCALE = 1e12    # CCOR-1's mean solar brightness units are about 1e-12: brought nearer 1
+STRENGTHS = (3, 4, 6, 8, 12, 16)   # fake comets' peak, times the noise of a picture less its neighbours
+PLANT_LEN = 12       # pictures a fake comet runs through
+BLOCK = 64           # pixels square in which the noise is measured on its own
 CAPTION = 60         # pixels along the bottom left out: the date and time written there
 
 
@@ -85,41 +121,109 @@ def day_list(day, camera, get=requests.get):
     return sorted(set(m.group(0) for m in NAME.finditer(reply.text) if m.group(3) == camera))
 
 
+def raw_day_list(day, camera, get=requests.get):
+    """The raw pictures for one day (UTC) worth looking at, as (address,
+    name kept here): the full-size, unpolarised ones in the day's usual
+    filter, read from the day's list of headers."""
+    for base in RAW:
+        folder_url = f"{base}/{day[2:]}/{camera}/"
+        reply = get(folder_url + "img_hdr.txt", timeout=60)
+        if reply.status_code == 200 and ".fts" in reply.text:
+            break
+    else:
+        return []
+    rows = [r.split() for r in reply.text.splitlines()]
+    rows = [r for r in rows if len(r) >= 11 and r[0].endswith(".fts") and r[5] == r[6] == "1024" and r[10] == "Clear"]
+    if not rows:
+        return []
+    usual = max({r[9] for r in rows}, key=lambda f: sum(r[9] == f for r in rows))
+    return sorted((folder_url + r[0], f"{r[1].replace('/', '')}_{r[2][:8].replace(':', '')}_{camera}.fts")
+                  for r in rows if r[9] == usual)
+
+
+def ccor_day_list(day, get=requests.get):
+    """CCOR-1's level-3 pictures for one day (UTC), every 15 minutes, as
+    (address, name)."""
+    reply = get(f"{CCOR}/", timeout=60, params={"list-type": "2", "prefix": f"{CCOR_LEVEL}/{day[:4]}/{day[4:6]}/{day[6:]}/"})
+    if reply.status_code == 404:
+        return []
+    reply.raise_for_status()
+    keys = re.findall(r"<Key>([^<]+)</Key>", reply.text)
+    return sorted((f"{CCOR}/{k}", k.rsplit("/", 1)[-1]) for k in keys if CCOR_NAME.match(k.rsplit("/", 1)[-1]))
+
+
 def stamp(name):
     """When a picture was taken, UTC, from its name."""
+    m = RAW_NAME.match(name) or CCOR_NAME.match(name)
+    if m:
+        return datetime.datetime.strptime(m.group(1) + m.group(2), "%Y%m%d%H%M%S").replace(tzinfo=datetime.timezone.utc)
     m = NAME.match(name)
     return datetime.datetime.strptime(m.group(1) + m.group(2), "%Y%m%d%H%M").replace(tzinfo=datetime.timezone.utc)
 
 
-def fetch(hours, camera, say=print, get=requests.get, now=None, pause=PAUSE):
+def fetch(hours, camera, say=print, get=requests.get, now=None, pause=PAUSE, raw=False):
     """Fetch the last `hours` of pictures not already kept. Returns the paths."""
     now = now or datetime.datetime.now(datetime.timezone.utc)
     since = now - datetime.timedelta(hours=hours)
     days = sorted({(since + datetime.timedelta(days=d)).strftime("%Y%m%d")
                    for d in range((now.date() - since.date()).days + 1)})
-    wanted = [n for d in days for n in day_list(d, camera, get) if since <= stamp(n) <= now]
+    if camera == "ccor1":
+        wanted = [(url, n) for d in days for url, n in ccor_day_list(d, get) if since <= stamp(n) <= now]
+    elif raw:
+        wanted = [(url, n) for d in days for url, n in raw_day_list(d, camera, get) if since <= stamp(n) <= now]
+    else:
+        wanted = [(f"{BASE}/{n[:4]}/{camera}/{n[:8]}/{n}", n) for d in days for n in day_list(d, camera, get)
+                  if since <= stamp(n) <= now]
     kept = []
     store = folder() / "pictures" / camera
     store.mkdir(parents=True, exist_ok=True)
     fresh = 0
-    for name in wanted:
+    for url, name in wanted:
         path = store / name
         if not path.exists():
-            reply = get(f"{BASE}/{name[:4]}/{camera}/{name[:8]}/{name}", timeout=60)
+            reply = get(url, timeout=60)
             reply.raise_for_status()
             path.write_bytes(reply.content)
             fresh += 1
             time.sleep(pause)
         kept.append(path)
-    say(f"{len(kept)} {camera.upper()} pictures from the {hours:g} h to {now:%Y-%m-%d %H:%M} ({fresh} fetched, the rest already kept)")
+    say(f"{len(kept)} {'raw ' if raw else ''}{camera.upper()} pictures from the {hours:g} h to {now:%Y-%m-%d %H:%M} "
+        f"({fresh} fetched, the rest already kept)")
     return kept
 
 
 # --- looking -------------------------------------------------------------------
 
 def load(path):
+    """A picture as brightness: a JPEG as it is; a raw picture less its
+    offset, per second, square-rooted, with what was lost as NaN; a CCOR-1
+    picture as it is, its background already gone."""
+    if Path(path).name.startswith("CCOR1_"):
+        from astropy.io import fits
+        with fits.open(path) as f:
+            hdu = next(h for h in f if h.data is not None)
+            return np.asarray(hdu.data, dtype=np.float32) * CCOR_SCALE
+    if str(path).endswith(".fts"):
+        from astropy.io import fits
+        with fits.open(path) as f:
+            data, head = f[0].data.astype(np.float32), f[0].header
+        lost = data <= 0
+        data = np.sqrt(np.clip(data - float(head.get("OFFSET", 0)), 0, None) / float(head.get("EXPTIME") or 1))
+        data[lost] = np.nan
+        return data
     from PIL import Image
     return np.asarray(Image.open(path).convert("L"), dtype=np.float32)
+
+
+def fill(images):
+    """The blocks a raw picture lost in transmission, filled from the
+    middle of all the pictures, so they neither show nor hide a point."""
+    stack = np.array(images)
+    if not np.isnan(stack).any():
+        return images
+    middle = np.nanmedian(stack, axis=0)
+    middle = np.where(np.isfinite(middle), middle, 0)
+    return [np.where(np.isfinite(i), i, middle).astype(np.float32) for i in images]
 
 
 def usable(shape, camera, images=None):
@@ -133,7 +237,9 @@ def usable(shape, camera, images=None):
     ok &= np.hypot(xx - w / 2, yy - h / 2) > OCCULTER.get(camera, 80)
     if images is not None and len(images) >= 3:
         middle = np.median(np.array(images), axis=0)
-        dark = middle <= np.percentile(middle[ok], 3)
+        # CCOR-1 blanks its occulter's arm and the corners outside its view
+        # to exactly 0; in LASCO's pictures they are the darkest part.
+        dark = middle == 0 if camera == "ccor1" else middle <= np.percentile(middle[ok], 3)
         ok &= ~ndimage.binary_dilation(dark, iterations=10)
     return ok
 
@@ -151,13 +257,36 @@ def points(images, mask, sigma=SIGMA, window=WINDOW):
             continue
         diff = stack[i] - np.median(others, axis=0)
         diff = ndimage.gaussian_filter(diff, 1.0)
-        spread = 1.4826 * float(np.median(np.abs(diff[mask] - np.median(diff[mask])))) + 1e-6
+        spread = local_spread(diff, mask)
         peak = (diff == ndimage.maximum_filter(diff, size=5)) & (diff > sigma * spread) & mask
         ys, xs = np.nonzero(peak)
         strongest = np.argsort(-diff[ys, xs])[:MOST]
         for x, y in zip(xs[strongest], ys[strongest]):
-            out.append((i, float(x), float(y), float(diff[y, x] / spread)))
+            out.append((i, float(x), float(y), float(diff[y, x] / spread[y, x])))
     return out
+
+
+def local_spread(diff, mask, block=BLOCK):
+    """The noise at each pixel, measured in each BLOCK-pixel square on its
+    own: the inner corona is far noisier than the sky at the edge, and one
+    figure for the whole picture would bury the faint points there or
+    flood the inner part with false ones."""
+    h, w = diff.shape
+    rows, cols = -(-h // block), -(-w // block)
+    grid = np.full((rows, cols), np.nan)
+    for r in range(rows):
+        for c in range(cols):
+            cut = diff[r * block:(r + 1) * block, c * block:(c + 1) * block]
+            ok = mask[r * block:(r + 1) * block, c * block:(c + 1) * block]
+            if ok.sum() >= block * block // 8:
+                v = cut[ok]
+                grid[r, c] = 1.4826 * float(np.median(np.abs(v - np.median(v))))
+    if np.isnan(grid).all():
+        v = diff[mask] if mask.any() else diff.ravel()
+        return np.full(diff.shape, 1.4826 * float(np.median(np.abs(v - np.median(v)))) + 1e-12, np.float32)
+    grid = np.where(np.isnan(grid), np.nanmedian(grid), grid)
+    full = np.kron(grid, np.ones((block, block)))[:h, :w]
+    return (ndimage.uniform_filter(full, block) + 1e-12).astype(np.float32)
 
 
 def tracks(found, frames, reach=REACH, length=TRACK_LEN, straight=STRAIGHT, minutes=None):
@@ -254,11 +383,10 @@ def judge(all_tracks, drift, shape):
     return sorted(out, key=lambda c: (-c["towards_sun"], -c["strength"]))
 
 
-def movie(paths, candidate, out, half=40):
+def movie(images, candidate, out, half=40):
     """A small animation of the pictures round a track, the track's points
-    marked, each picture less its neighbours' median so it stands out."""
+    marked."""
     from PIL import Image, ImageDraw
-    images = [load(p) for p in paths]
     xs, ys = zip(*candidate["track"])
     cx, cy = int(np.mean(xs)), int(np.mean(ys))
     frames = []
@@ -278,11 +406,67 @@ def movie(paths, candidate, out, half=40):
     return str(out)
 
 
-def look(camera, hours=None, say=print, paths=None, until=None):
+def plant(images, mask, count, seed=0, strengths=STRENGTHS, window=WINDOW):
+    """Fake comets put into the pictures (in place): points heading in
+    towards the middle, each at one of `strengths` times the noise where it
+    is. Returns each fake's strength and place in each picture."""
+    rng = np.random.default_rng(seed)
+    h, w = images[0].shape
+    middle = len(images) // 2
+    lo, hi = max(0, middle - window), min(len(images), middle + window + 1)
+    near = np.median(np.array(images[lo:middle] + images[middle + 1:hi]), axis=0)
+    noise = local_spread(images[middle] - near, mask)
+    yy, xx = np.indices((h, w))
+    centre = np.array([w / 2, h / 2])
+    fakes = []
+    tries = 0
+    while len(fakes) < count and tries < 100 * count:
+        tries += 1
+        strength = strengths[len(fakes) % len(strengths)]
+        first = int(rng.integers(0, max(1, len(images) - PLANT_LEN)))
+        angle = rng.uniform(0, 2 * np.pi)
+        radius = rng.uniform(0.3, 0.85) * min(h, w) / 2
+        start = centre + radius * np.array([np.cos(angle), np.sin(angle)])
+        step = -(start - centre) / np.linalg.norm(start - centre) * rng.uniform(2, 6)
+        places = [start + k * step for k in range(PLANT_LEN)]
+        if not all(0 <= x < w and 0 <= y < h and mask[int(y), int(x)] for x, y in places):
+            continue
+        peak = strength * float(noise[int(start[1]), int(start[0])])
+        s = 2.5 / 2.355
+        for k, (x, y) in enumerate(places):
+            i = first + k
+            if i >= len(images):
+                break
+            r = 6
+            ys, xs = slice(int(y) - r, int(y) + r + 1), slice(int(x) - r, int(x) + r + 1)
+            images[i][ys, xs] += peak * np.exp(-((xx[ys, xs] - x) ** 2 + (yy[ys, xs] - y) ** 2) / (2 * s * s))
+        fakes.append({"strength": strength, "at": {first + k: (float(x), float(y)) for k, (x, y) in enumerate(places)
+                                                   if first + k < len(images)}})
+    return fakes
+
+
+def recovered(fakes, candidates, within=3.0):
+    """For each fake, whether a candidate's track passes through it."""
+    out = []
+    for f in fakes:
+        hit = False
+        for c in candidates:
+            for i, (x, y) in zip(c["pictures"], c["track"]):
+                if i in f["at"] and math.hypot(x - f["at"][i][0], y - f["at"][i][1]) <= within:
+                    hit = True
+                    break
+            if hit:
+                break
+        out.append(hit)
+    return out
+
+
+def look(camera, hours=None, say=print, paths=None, until=None, raw=False, planted=0):
     """Look through the kept pictures for moving points that are not stars:
     the `hours` before `until`, or before the newest picture kept."""
     if paths is None:
-        paths = sorted((folder() / "pictures" / camera).glob(f"*_{camera}_1024.jpg"))
+        pattern = "CCOR1_3_*_NC.fits" if camera == "ccor1" else f"*_{camera}.fts" if raw else f"*_{camera}_1024.jpg"
+        paths = sorted((folder() / "pictures" / camera).glob(pattern))
         if until:
             paths = [p for p in paths if stamp(p.name) <= until]
         if hours and paths:
@@ -290,28 +474,41 @@ def look(camera, hours=None, say=print, paths=None, until=None):
             paths = [p for p in paths if newest - stamp(p.name) <= datetime.timedelta(hours=hours)]
     if len(paths) < TRACK_LEN + 2:
         raise interface.Refusal("NO_SESSION", f"Too few {camera.upper()} pictures kept ({len(paths)}): "
-                                f"./sungrazer.py fetch first.")
+                                f"./sungrazer.py fetch{' --raw' if raw else ''} first.")
     images = [load(p) for p in paths]
     shape = images[0].shape
     if any(i.shape != shape for i in images):
         keep = [p for p, i in zip(paths, images) if i.shape == shape]
         images = [i for i in images if i.shape == shape]
         paths = keep
+    images = fill(images)
     mask = usable(shape, camera, images)
+    fakes = plant(images, mask, planted) if planted else None
     found = points(images, mask)
     start = stamp(paths[0].name)
     minutes = [(stamp(p.name) - start).total_seconds() / 60 for p in paths]
     linked = tracks(found, len(images), minutes=minutes)
     drift = star_drift(linked)
     candidates = judge(linked, drift, shape)
-    day = stamp(paths[-1].name).strftime("%Y%m%d-%H%M")
+    day = stamp(paths[-1].name).strftime("%Y%m%d-%H%M") + ("-raw" if raw else "")
     out = folder() / day
     out.mkdir(parents=True, exist_ok=True)
+    if fakes is not None:
+        hits = recovered(fakes, candidates)
+        rows = [{"strength": st, "planted": sum(f["strength"] == st for f in fakes),
+                 "found": sum(h for f, h in zip(fakes, hits) if f["strength"] == st)} for st in STRENGTHS]
+        answer = {"camera": camera, "raw": raw, "pictures": len(paths), "from": paths[0].name, "to": paths[-1].name,
+                  "planted": rows, "folder": str(out)}
+        (out / "plant.json").write_text(json.dumps(answer, indent=1), encoding="utf-8")
+        say(f"{len(fakes)} fake comets planted in {len(paths)} {camera.upper()}{' raw' if raw else ''} pictures:")
+        for r in rows:
+            say(f"  {r['strength']:>3} times the noise: {r['found']} of {r['planted']} found")
+        return answer
     for n, c in enumerate(candidates[:20], 1):
         c["times"] = [stamp(paths[i].name).strftime("%Y-%m-%d %H:%M") for i in c["pictures"]]
         c["files"] = [paths[i].name for i in c["pictures"]]
-        c["movie"] = movie(paths, c, out / f"candidate-{n}.gif")
-    answer = {"camera": camera, "pictures": len(paths), "from": paths[0].name, "to": paths[-1].name,
+        c["movie"] = movie(images, c, out / f"candidate-{n}.gif")
+    answer = {"camera": camera, "raw": raw, "pictures": len(paths), "from": paths[0].name, "to": paths[-1].name,
               "points": len(found), "tracks": len(linked),
               "star_drift": None if drift is None else [round(float(v), 2) for v in drift],
               "candidates": candidates[:20], "folder": str(out)}
@@ -338,18 +535,23 @@ def moment(text):
 def run(args, say=print):
     until = moment(args.until) if args.until else None
     if args.action == "fetch":
-        paths = fetch(args.hours, args.camera, say, now=until)
-        return {"camera": args.camera, "pictures": len(paths), "kept": str(folder() / "pictures" / args.camera)}
-    return look(args.camera, args.hours, say, until=until)
+        paths = fetch(args.hours, args.camera, say, now=until, raw=args.raw)
+        return {"camera": args.camera, "raw": args.raw, "pictures": len(paths),
+                "kept": str(folder() / "pictures" / args.camera)}
+    return look(args.camera, args.hours, say, until=until, raw=args.raw, planted=args.plant)
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("action", choices=("fetch", "look"))
-    ap.add_argument("--camera", choices=("c3", "c2"), default="c3", help="LASCO C3 (wide) or C2 (close in)")
+    ap.add_argument("--camera", choices=("c3", "c2", "ccor1"), default="c3",
+                    help="LASCO C3 (wide) or C2 (close in), or GOES-19's CCOR-1")
     ap.add_argument("--hours", type=float, default=12.0, help="how far back (default 12)")
     ap.add_argument("--until", help="the end of the time looked at, UTC (YYYY-MM-DDTHH:MM; default now, or "
                     "the newest picture kept)")
+    ap.add_argument("--raw", action="store_true", help="the raw FITS pictures, for fainter comets (about 2 MB each)")
+    ap.add_argument("--plant", type=int, default=0, metavar="N",
+                    help="look: plant N fake comets and count how many are found, instead of listing candidates")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
     interface.main("sungrazer", lambda: run(args), args.json)

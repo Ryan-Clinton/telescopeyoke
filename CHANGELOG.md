@@ -5,6 +5,28 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
 
 ## Not yet released
 
+- **Variable stars**: `./variables.py M31` stacks each night's kept frames
+  in batches (10 by default), measures every Gaia star between G 10.5 and
+  16 with no close neighbour in each batch, puts each batch on Gaia's
+  scale by the median of all of them, and lists the stars that scatter
+  more than stars as bright as them, with a picture of each light curve;
+  VSX says which are known. One VSX does not have is a candidate for a
+  person, not a discovery.
+- **Following a public transient**: `./brokers.py --follow OID` keeps the
+  object's place under its name (so `mount.py goto OID` and `shoot.py`
+  know it), runs the patrol on it with all its checks, and measures it in
+  the new stack beside ZTF's last magnitude; `--plan` moves nothing.
+  `./brokers.py --unreported` searches the last 30 days for bright
+  transients on neither Rochester list, up here or not; every search now
+  leaves out what ZTF's real-or-bogus score calls bogus. Its first run
+  found AT 2026aexm in NGC 3441 (r 16.7), which the Transient Name Server
+  already has.
+- **Comets: raw pictures and GOES-19**: `./sungrazer.py fetch --raw` takes
+  LASCO's raw FITS pictures (the archive, or the last fortnight's) instead
+  of the JPEGs, for fainter comets; `--camera ccor1` takes GOES-19's CCOR-1
+  coronagraph from NOAA's open archive, where most new comets have been
+  found since 2025. The noise is now measured in each part of the picture
+  on its own.
 - **Comets in SOHO's pictures, for cloudy nights**: `./sungrazer.py fetch`
   takes LASCO C3 (or C2) pictures from the public archive, each once and a
   second apart; `./sungrazer.py look` finds what moves other than as the

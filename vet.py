@@ -156,14 +156,20 @@ def nearest(c, rows, within):
 def halves(paths, say=print):
     """Two stacks, of the first and second half of the frames, lined up on
     the first frame so they share pixels."""
-    mosaic, header = stacking.load_light(paths[0])
+    middle = len(paths) // 2
+    return stacked([paths[:middle], paths[middle:]], lambda part: say(f"  a half of {len(part)} frames stacked"))
+
+
+def stacked(groups, done=lambda part: None):
+    """A brightness stack of each group of frames, all lined up on the first
+    frame of the first group so they share pixels."""
+    mosaic, header = stacking.load_light(groups[0][0])
     calibration = stacking.Calibration(float(header.get("EXPTIME", 0)), int(float(header.get("GAIN", 0))))
     rgb = stacking.prepare(mosaic, calibration)
     lum = rgb.sum(axis=2)
     reference = {"square": stacking.centre_square(lum), "stars": stacking.find_stars(lum)}
     out = []
-    middle = len(paths) // 2
-    for part in (paths[:middle], paths[middle:]):
+    for part in groups:
         stack = stacking.Stack(rgb.shape)
         for path in part:
             frame = stacking.prepare(stacking.load_light(path)[0], calibration)
@@ -171,7 +177,7 @@ def halves(paths, say=print):
                                          reference)
             stack.add(frame)
         out.append(stack.result().sum(axis=2))
-        say(f"  a half of {len(part)} frames stacked")
+        done(part)
     return out
 
 
