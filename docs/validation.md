@@ -52,7 +52,7 @@ The account of everything tried so far, feature by feature, is at the end:
 | 8 | How long is the shutter really open? | `./camera_test.py --timing` (cap on, any time), then `./camera_test.py --trail` on a field of bright stars away from the pole. | Run 13 October. Each second asked for added 0.63 s; a 10 s frame's trails showed the shutter open 6.4 s. It changes with the driver's Speed control (1.25, 0.86 and 0.63 s at Speed 0, 1 and 2). `camera.py` now asks for more by the measured share, and a 10 s frame's trails then showed 9.6 s. |
 | 9 | Does the sky's drift answer the Dec motor in proportion? | `./mount.py response`: five creeps, three measurements at each, about 35 minutes on one target. | Not yet run. The three readings of 5 October (below) fit no one explanation. |
 | 10 | Is one pointing correction for each side of the meridian enough? | `./mount.py pointing`: plate solves at -4, -3, -2, -1, +1, +2, +3 and +4 hours. | Not yet run. On 6 October the east side was 5.8° out in Dec and the west 0.2°, from one place each. |
-| 11 | Does a stalled mount get caught, with no false alarms on a working one? | Run `./horizon.py --trace` and a `goto --solve` on a working mount and see that neither stops; the verdict of each comparison is in the survey's log. | One real record, by day, and it showed a fault: see 7 October 2026 below. By night, not yet run. |
+| 11 | Does a stalled mount get caught, with no false alarms on a working one? | Run `./horizon.py --trace` and a `goto --solve` on a working mount and see that neither stops; the verdict of each comparison is in the survey's log. | One real record, by day, and it showed a fault: see 7 October 2026 below. By day on a working mount, 17 October 2026: the skyline survey's 109 looks, each checked, and none stopped it. By night, not yet run. |
 | 12 | How true is a panorama's skyline? | Tie a panorama to the compass with two marks (`./panorama.py`), then `./horizon.py --trace` to check it at the bearings where it bends. | Not yet run. |
 | 13 | Does the daytime search find Polaris once the axis is close? | `./polaris.py find` on a clear afternoon after a night alignment, the tripod not moved. It looks within 1.6° by itself. | Not yet run. Two searches on 6 October, with the axis several degrees out, found nothing. |
 | 14 | Does a whole night work on Windows? | Mount and camera together: GoTo with centring, focus, a run. | Not yet run. |
@@ -443,8 +443,17 @@ sensor makes two different views look alike, is not known. A plain GoTo with
 no plate solve still takes the handset's word. No skyline has yet been
 measured on the real mount.
 
-Written but never run on the real mount or camera: `horizon.py --trace` and
-`horizon.py --daylight`. The following, the adding of bearings and the checks
+`horizon.py --trace --daylight` was first run on the real mount on 17
+October 2026, before dusk: 109 looks (9 refused by the mount's limits or the
+Sun) over 28 bearings in 34 minutes, the tube steady 2 s after a slew half
+the time and 25.7 s at the longest. The person outside saw it looking at the
+hedge at 120°, 39° up, when it said "blocked". The house closes the west
+(55° at 240° up to more than 75° from 270° to 330°), the hedge the east and
+south-east to 39-48°; the low gap is the south-south-west, 22° at 195°. Not
+measured: the north and north-east below 48-66°, beyond the mount's hour-angle
+limit, and the low south-west, within 40° of the setting Sun. It kept the
+skyline and then failed printing its summary, now fixed. The pictures of
+every look are in `horizon/looks/`. Before that run, the following, the adding of bearings and the checks
 are tested against the simulated mount and made-up skylines. The scores that
 tell daytime sky from a wall, the wait for the tube to steady by day and the
 reading of a top from where the stars stop are first guesses and have not

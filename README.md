@@ -78,9 +78,10 @@ phone panorama and it finds the line between sky and everything else, lets
 you redraw the line where it is wrong, and ties the picture to the compass
 from two known bearings. The planner then stops recommending targets you
 cannot see from that spot. The telescope can check and refine that skyline
-itself, looking only where the line bends. *The skyline has been found in
-real panoramas; tying one to the compass, and the telescope's own survey,
-are not yet proven.*
+itself, looking only where the line bends. *Proven by day: on 17 October 2026 the
+telescope's own survey measured the author's garden in 34 minutes, one look
+checked by eye. The skyline has been found in real panoramas too; tying one
+to the compass is not yet proven.*
 
 **Setting up before dark?** An experimental mode looks for Polaris by day,
 when nothing else near the pole would show. `polaris.py` checks whether the sky, the Sun
@@ -511,7 +512,7 @@ against the simulated rig and the tests.
 | Drift model and Dec correction | ⚠️ an earlier, cruder version only | ⚠️ the same | ✅ |
 | Daytime Polaris | ⚠️ searched three times, Polaris not found | ⚠️ the search only | ✅ |
 | Skyline from a phone panorama | does not need them | ⚠️ three real panoramas; not yet tied to the compass | ✅ |
-| The telescope's own skyline survey | ⚠️ torch trial only; no skyline measured | ⚠️ the same | ✅ |
+| The telescope's own skyline survey | ⚠️ by night, a torch trial only | ✅ by day, 17 October 2026: 28 bearings in 34 minutes, a look at the hedge checked by eye | ✅ |
 | Azimuth from a landmark | not yet | not yet | ✅ |
 | Control without the handset (Wi-Fi, EQDIR) | not yet | ⚠️ the Wi-Fi adapter read; nothing moved | ✅ |
 | The application window | not yet | ⚠️ opened on Ubuntu, in the demo only | ✅ |
