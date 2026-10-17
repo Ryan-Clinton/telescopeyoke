@@ -421,3 +421,17 @@ def test_the_check_measures_and_turns_nothing(monkeypatch, capsys):
             focus.main()
         data = json.loads(capsys.readouterr().out)["data"]
         assert data["hfr"] == hfr and data["good"] is good
+
+
+def test_focus_counts_as_done_from_a_motor_run_or_a_good_check(tmp_path, monkeypatch):
+    # 17 October 2026: the patrol said "last focused 48.6 h ago" an hour after a
+    # motor run, as it read only the hand aid's record.
+    monkeypatch.setattr(focus, "FOCUS_FILE", tmp_path / "focus.json")
+    monkeypatch.setattr(focus, "RUNS_FILE", tmp_path / "runs.jsonl")
+    assert focus.last_focused() is None
+    (tmp_path / "focus.json").write_text(json.dumps({"saved": 100.0}))
+    (tmp_path / "runs.jsonl").write_text(json.dumps({"saved": 500.0, "best_hfr": 2.1, "best_arcsec": 2.8}) + "\n")
+    assert focus.last_focused() == 500.0
+    focus.seen_good(1.9, 1.32)
+    assert focus.last_focused() > 500.0
+    assert focus.usual_best() == 2.8      # a check does not move what good focus is

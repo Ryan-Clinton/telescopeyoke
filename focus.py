@@ -92,6 +92,25 @@ def arcsec_per_pixel():
     return 2 * 206.265 * equipment["camera"]["pixel_size_um"] / equipment["scope"]["focal_length_mm"]
 
 
+def last_focused():
+    """When focus was last set or measured good, from either way of doing
+    it: the hand aid's reading (FOCUS_FILE) or a motor run or check
+    (RUNS_FILE). None if never."""
+    times = []
+    if FOCUS_FILE.exists():
+        try:
+            times.append(float(json.loads(FOCUS_FILE.read_text(encoding="utf-8")).get("saved", 0)))
+        except (ValueError, OSError):
+            pass
+    if RUNS_FILE.exists():
+        for line in RUNS_FILE.read_text(encoding="utf-8").splitlines():
+            try:
+                times.append(float(json.loads(line)["saved"]))
+            except (ValueError, KeyError):
+                pass
+    return max(times) if times else None
+
+
 def usual_best():
     """The HFR, in arcseconds, that focusing on this telescope ends at: the
     middle one of the last five runs that reached "Focus good", or the
@@ -646,6 +665,19 @@ def verdict(hfr, usual):
     return f"soft: HFR {hfr:.2f}, against {usual:.2f} usually ({hfr / usual:.1f} times): worth focusing"
 
 
+def seen_good(hfr, scale):
+    """Note that focus was measured good just now, without being changed,
+    so the patrol's readiness counts it. Kept apart from the runs' best, so
+    it does not move what usual_best() says good focus is."""
+    try:
+        RUNS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with RUNS_FILE.open("a", encoding="utf-8") as log:
+            log.write(json.dumps({"saved": time.time(), "checked_hfr": round(hfr, 2),
+                                  "checked_arcsec": round(hfr * scale, 2)}) + "\n")
+    except OSError:     # a note lost is not worth a check failing over
+        pass
+
+
 def run_check(args):
     """./focus.py --check: three frames of the stars in view, their size
     against the usual best. Nothing turns."""
@@ -657,6 +689,8 @@ def run_check(args):
     hfr = float(np.median(values)) if values else None
     good = hfr is not None and hfr <= GOOD_ENOUGH * usual
     print(f"Focus now: {verdict(hfr, usual)}.", flush=True)
+    if good:
+        seen_good(hfr, scale)
     return {"hfr": hfr and round(hfr, 2), "hfr_arcsec": hfr and round(hfr * scale, 2),
             "usual_hfr": round(usual, 2), "good": good}
 
@@ -692,6 +726,7 @@ def run_motor(args):
             if now is not None and now <= GOOD_ENOUGH * usual and not getattr(args, "anyway", False):
                 print("Left as it is: it is already as good as focusing usually gets (--anyway to focus "
                       "regardless).", flush=True)
+                seen_good(now, scale)
                 return {"hfr": round(now, 2), "moved": 0, "found": True, "readings": [], "left_alone": True,
                         "hfr_arcsec": round(now * scale, 2)}
             print(f"Motor focusing: HFR {usual:.1f} is good focus here.", flush=True)

@@ -518,7 +518,9 @@ against the simulated rig and the tests.
 | The application window | not yet | ⚠️ opened on Ubuntu, in the demo only | ✅ |
 | Windows | not yet | ⚠️ camera frames indoors; no mount driven | ✅ |
 | Checking that the telescope really turned | not yet | not yet | ✅ |
-| Polar repeatability, creep response, pointing survey | not yet | not yet | ✅ |
+| Finding and marking the true home (`findhome`, `truehome`) | ✅ 17 October 2026: from 10.66° out by eye to 0.19° on the marks | ✅ | ✅ |
+| Pointing survey: one correction for each side | ✅ 17 October 2026 | ✅ | ✅ |
+| Polar repeatability, creep response | not yet | not yet | ✅ |
 | Discovery: subtraction, candidates, vetting | ⚠️ on real M31 stacks, with planted fakes; no find of our own yet | ✅ | ✅ a known nova found again in ZTF's archive images |
 | Comets in spacecraft pictures (`sungrazer.py`) | does not need them | does not need them | ✅ known comets found in archived LASCO pictures |
 | Several rigs, `--probe` | not yet | not yet | ✅ |

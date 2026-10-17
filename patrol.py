@@ -89,9 +89,9 @@ def readiness(p):
                              f"{owner}'s ({ref}) where it overlaps; tonight's stack becomes the panel's own"
                              if ref else f"none kept: tonight's stack can become one "
                                          f"(./reference.py {p['target']} --make)")})
-    if focus.FOCUS_FILE.exists():
-        f = json.loads(focus.FOCUS_FILE.read_text(encoding="utf-8"))
-        hours = (time.time() - f.get("saved", 0)) / 3600
+    when = focus.last_focused()
+    if when is not None:
+        hours = (time.time() - when) / 3600
         stale = hours > FOCUS_STALE
         items.append({"what": "focus", "ok": not stale, "stops": False,
                       "detail": f"last focused {hours:.1f} h ago" + ("; focus first (focus.py --motor)" if stale else "")})
