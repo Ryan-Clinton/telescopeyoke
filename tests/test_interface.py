@@ -583,3 +583,9 @@ def test_a_trained_classifier_matches_its_schema(tmp_path, monkeypatch):
         return {"significance": s, "usable": u, "ref": r, "fwhm": 4.8, "planted": p}
     monkeypatch.setattr(realbogus, "subtraction_of", subtraction_of)
     valid(interface.run("realbogus", lambda: realbogus.train(40, 1, say=lambda s: None)), "realbogus")
+
+
+def test_tonights_discovery_matches_its_schema(tmp_path):
+    import test_discovery_view
+    test_discovery_view.session(tmp_path, "M31-P6", "20991017-233312")
+    valid(interface.run("discovery", lambda: agent.discovery(now=4.1e9, hours=1e6, data=tmp_path)), "discovery")

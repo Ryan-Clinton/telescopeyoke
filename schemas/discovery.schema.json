@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/discovery.schema.json",
+  "title": "Discovery tonight",
+  "description": "data of: ty discovery --json (agent.discovery), also the status page's \"discovery\": every session started in the last 14 hours with its patrol answer, the mosaic being patrolled panel by panel, Tabby's star, the comet hunt and the candidates open.",
+  "type": "object",
+  "required": ["sessions", "mosaics", "tabby", "comets", "open_candidates"],
+  "properties": {
+    "sessions": {"type": "array", "items": {"type": "object", "required": ["field", "session", "started", "frames", "kept", "finished", "summary", "unexplained", "pictures"],
+      "properties": {"field": {"type": "string"}, "session": {"type": "string"}, "started": {"type": "number"},
+                     "frames": {"type": "integer"}, "kept": {"type": "integer"}, "planned": {"type": ["integer", "null"]},
+                     "finished": {"type": "boolean"}, "summary": {"type": ["array", "null"], "items": {"type": "string"}, "description": "The patrol's answer; null while not searched."},
+                     "unexplained": {"type": ["integer", "null"]}, "pictures": {"type": "array", "items": {"type": "string"}}}}},
+    "mosaics": {"type": "array", "items": {"type": "object", "required": ["name", "columns", "rows", "panels"],
+      "properties": {"panels": {"type": "array", "items": {"type": "object", "required": ["panel", "state"],
+        "properties": {"panel": {"type": "integer"}, "state": {"enum": ["done", "now", "waiting"]}}}}}}},
+    "tabby": {"type": ["object", "null"]},
+    "comets": {"type": ["object", "null"]},
+    "open_candidates": {"type": "integer"}
+  }
+}

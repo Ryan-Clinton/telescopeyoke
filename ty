@@ -17,6 +17,7 @@
                              the stars dim or come back, or the run ends (runwatch.py)
     ./ty rigs                every rig in one view: what each is and what it is doing
     ./ty characterise        what this rig has had measured about itself, and what it has not
+    ./ty discovery           tonight's discovery work: the mosaic's panels, each session's answer, Tabby, comets
     ./ty candidates          every field's open candidates, the most nights seen first, and the comet hunt's
     ./ty --rig heq5 ...      any of these for one rig (its settings are rigs/heq5.toml)
     ./ty mount ...           everything mount.py does, e.g. ./ty mount goto M27 --dry-run
@@ -73,7 +74,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["capabilities", "status", "context", "doctor", "night",
                                         "targets", "target", "session", "observing", "run", "rigs",
-                                        "characterise", "candidates"])
+                                        "characterise", "candidates", "discovery"])
     ap.add_argument("name", nargs="?", help="object name, for 'target'; the order, for 'run'")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--demo", action="store_true", help="made-up weather at the example site")
@@ -105,6 +106,7 @@ def main():
         "rigs": agent.rigs,
         "characterise": agent.characterise,
         "candidates": agent.candidates,
+        "discovery": agent.discovery,
         "run": lambda: __import__("shoot").tell(args.name or ""),
     }[args.command]
     result = interface.run(args.command, work)
