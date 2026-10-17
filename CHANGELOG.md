@@ -24,6 +24,11 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
   the background at low priority (its lines in the session's
   `patrol.log`). `./patrol.py --sweep` searches what that missed in the
   last three days, `--sweep --all-history` every session kept.
+  A stack whose half-found depth is brighter than G 16 is not searched
+  (the 46 s session of 4 October reached G 15.7 and its stars came up as
+  197 candidates), and one session's fault no longer stops the sweep. The
+  first sweep also found vet.py reading Gaia's answer without its new
+  colour column, fixed with a test of a whole vetting.
 - **Dismissal labels**: `./candidates.py M31 --dismiss ID --reason "hot
   pixel"` closes a candidate on a person's word and keeps the label, for
   the classifier to learn from later; `--reopen ID` undoes it.

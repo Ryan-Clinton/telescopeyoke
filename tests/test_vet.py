@@ -70,3 +70,33 @@ def test_a_check_not_made_is_said_to_be_unknown_not_clear():
 def test_distances_on_the_sky():
     assert vet.separation(10.0, 41.0, 10.0, 41.0 + 1 / 3600) == pytest.approx(1.0, abs=1e-6)
     assert vet.separation(10.0, 60.0, 10.0 + 2 / 3600, 60.0) == pytest.approx(1.0, abs=1e-3)
+
+
+def test_a_whole_vetting_reads_gaia_with_its_colour_column(tmp_path, monkeypatch):
+    import argparse
+    import json
+
+    import numpy as np
+    from astropy.io import fits
+    from astropy.wcs import WCS
+
+    import config
+    import depth
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    monkeypatch.setattr(config, "DEMO", False)
+    session = tmp_path / "frames" / "M31" / "20261020-221500"
+    session.mkdir(parents=True)
+    wcs = WCS(naxis=2)
+    wcs.wcs.ctype, wcs.wcs.crval = ["RA---TAN", "DEC--TAN"], [10.7, 41.3]
+    wcs.wcs.crpix, wcs.wcs.cdelt = [50, 50], [-1 / 3600, 1 / 3600]
+    fits.writeto(session / "difference.fits", np.zeros((100, 100), np.float32), wcs.to_header())
+    fits.writeto(tmp_path / "ref.fits", np.ones((100, 100), np.float32))
+    (session / "candidates.json").write_text(json.dumps({"object": "M31", "reference": str(tmp_path / "ref.fits"),
+                                                         "candidates": [candidate()]}))
+    monkeypatch.setattr(vet, "asteroids", lambda *a: [])
+    monkeypatch.setattr(vet, "variables", lambda *a: [])
+    monkeypatch.setattr(vet, "reported", lambda *a: [])
+    # depth.gaia gives ra, dec, G and BP-RP since the colour term.
+    monkeypatch.setattr(depth, "gaia", lambda *a: np.array([[10.7, 41.3 + 0.5 / 3600, 18.2, 0.9]]))
+    answer = vet.run(argparse.Namespace(session=str(session), offline=False, no_halves=True), say=lambda *_: None)
+    assert "gaia" in answer["asked"] and "Gaia star G 18.2" in answer["candidates"][0]["clues"][0]

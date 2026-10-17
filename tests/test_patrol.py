@@ -238,3 +238,33 @@ def test_a_sweep_searches_what_was_missed_and_all_history_reaches_back(tmp_path,
     searched.clear()
     patrol.sweep(True, say=lambda *_: None, search=search, now=now)
     assert searched == [old, new]
+
+
+def test_one_session_failing_does_not_stop_the_sweep(tmp_path, monkeypatch):
+    import datetime
+    import reference
+    from test_reference import measured
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    measured(tmp_path, "20261001-220000", 17.6)
+    reference.make("M31")
+    bad = measured(tmp_path, "20261019-220000", 17.2)
+    good = measured(tmp_path, "20261020-221500", 17.4)
+
+    def search(session):
+        if session == bad:
+            raise ValueError("too many values to unpack")
+        return {"summary": ["nothing new"]}
+    answer = patrol.sweep(True, say=lambda *_: None, search=search, now=datetime.datetime(2026, 10, 21))
+    assert [s["summary"] for s in answer["searched"]] == [["stopped: ValueError: too many values to unpack"],
+                                                          ["nothing new"]]
+
+
+def test_a_stack_too_shallow_is_not_searched(tmp_path):
+    session = tmp_path / "frames" / "M31" / "20261004-015524"
+    session.mkdir(parents=True)
+    ran = []
+    chain = {"depth": lambda: {"zeropoint": 21.6, "completeness": {"all": {"mag_50": 15.72}}},
+             "difference": lambda: ran.append("difference"), "vet": lambda: ran.append("vet")}
+    answer = patrol.analyse(session, say=lambda *_: None, chain=chain)
+    assert ran == [] and answer["difference"]["message"].startswith("too shallow to search: half")
+    assert any(line.startswith("Stopped at difference: too shallow") for line in answer["summary"])

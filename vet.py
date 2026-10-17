@@ -301,7 +301,7 @@ def run(args, say=print):
                            ("variables", lambda: variables(centre_ra, centre_dec, reach)),
                            ("reported", lambda: reported((year - 1, year))),
                            ("gaia", lambda: [{"ra": a, "dec": d, "g": g}
-                                             for a, d, g in depth.gaia(centre_ra, centre_dec, reach)])):
+                                             for a, d, g, *_ in depth.gaia(centre_ra, centre_dec, reach)])):
             try:
                 checks[key] = fetch()
                 say(f"  {key}: {len(checks[key])} in the field")

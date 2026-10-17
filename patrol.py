@@ -209,6 +209,11 @@ def analyse(session, say=print, chain=None, both_halves=True):
             answer[step] = {"refused": stopped.code_name, "message": stopped.message}
             say(f"  {step} stopped: {stopped.message}")
             break
+        shallow = too_shallow(answer[step]) if step == "depth" else None
+        if shallow:
+            answer["difference"] = {"refused": "INVALID_REQUEST", "message": shallow}
+            say(f"  difference stopped: {shallow}")
+            break
     if "candidates" in answer.get("vet", {}):
         measure = (chain or {}).get("measure") or (lambda: tonight(session, answer.get("depth", {})))
         answer["followed"] = follow(name, session.name, answer["vet"]["candidates"], measure, both_halves)
@@ -219,6 +224,21 @@ def analyse(session, say=print, chain=None, both_halves=True):
     for line in answer["summary"]:
         say(line)
     return answer
+
+
+SEARCH_FLOOR = 16.0   # G: a stack whose half-found depth is brighter than this is not searched
+
+
+def too_shallow(measured):
+    """Why a stack is too shallow to search, or None. Such a stack could
+    not show a nova in M31 (they peak near G 17.5), and its soft, faint
+    stars do not subtract cleanly from a deep reference: the stars
+    themselves come up as candidates."""
+    half = (measured or {}).get("completeness", {}).get("all", {}).get("mag_50")
+    if half is None or half >= SEARCH_FLOOR:
+        return None
+    return (f"too shallow to search: half of planted stars found at G {half}, brighter than G {SEARCH_FLOOR:g}; "
+            f"a nova in M31 peaks near G {NOVA_PEAK[0]:g}")
 
 
 def tonight(session, measured):
@@ -652,7 +672,11 @@ def sweep(all_history=False, days=SWEEP_DAYS, say=print, search=None, now=None):
     searched = []
     for session in found:
         say(f"== {session.parent.name} {session.name}")
-        result = search(session)
+        try:
+            result = search(session)
+        except Exception as problem:       # one session's fault must not stop the rest
+            say(f"  stopped: {problem.__class__.__name__}: {problem}")
+            result = {"summary": [f"stopped: {problem.__class__.__name__}: {problem}"]}
         searched.append({"session": str(session), "summary": (result or {}).get("summary")})
     return {"sweep": "all" if all_history else f"{days:g} days", "searched": searched}
 
