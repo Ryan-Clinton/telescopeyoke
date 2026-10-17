@@ -536,3 +536,14 @@ def test_a_release_agrees_with_itself():
     assert tag == f"v{agent.VERSION}" and address.endswith(f"/{tag}/{name}")
     assert address in release.notes() and "doctor.py --report" in release.notes()
     assert any("pyproject" in line for line in release.disagreements("9.9.9"))
+
+
+def test_a_watch_on_a_run_matches_its_schema(tmp_path):
+    import argparse
+    import runwatch
+    folder = tmp_path / "frames" / "M31" / "s"
+    folder.mkdir(parents=True)
+    (folder / "frames.jsonl").write_text('{"index": 1, "taken": 1.0, "accepted": true, "flux": 1.0, "reason": "ok"}\n')
+    valid(interface.run("watch-run", lambda: runwatch.run(argparse.Namespace(session=str(folder), every=60,
+                                                                             once=True), say=lambda s: None)),
+          "watch-run")

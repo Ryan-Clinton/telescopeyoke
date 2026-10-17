@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/watch-run.schema.json",
+  "title": "Watch run",
+  "description": "data of: ty watch-run --once --json (runwatch.py). What was worth saying about the imaging run, and whether it has ended. Without --once the command runs until the run ends and prints its lines as they come.",
+  "type": "object",
+  "required": ["session", "said", "ended"],
+  "properties": {
+    "session": {"type": "string", "description": "The run's folder."},
+    "said": {"type": "array", "items": {"type": "string"}, "description": "Each change worth acting on: frames stopped, none kept, the share kept halved, the stars dimmed or came back, the run ended. Empty while all is well."},
+    "ended": {"type": "boolean"}
+  }
+}

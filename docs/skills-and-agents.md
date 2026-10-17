@@ -2,8 +2,11 @@
 
 [README](../README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
-Not built, except the command classes it rests on (`policy.py`). Written
-17 October 2026, revised the same day. This specifies Claude Code skills,
+Being built. Done: the command classes (`policy.py`), the safety hooks
+(`.claude/settings.json`, `.claude/hooks/guard.py`), the run watch
+(`./ty watch-run`) and the four nightly skills (`nightly-setup`, `focus`,
+`polar-align`, `imaging-run`), with their tests. The rest is specified
+below and not built. Written 17 October 2026, revised the same day. This specifies Claude Code skills,
 subagents, hooks and two plain background jobs for the procedures this
 project already has, so that any session does them the same way every
 time. It adds no telescope behaviour: every step is an existing project
@@ -334,8 +337,14 @@ any `hardware` or `external` command from a subagent, whatever its tools.
 
 ## The hooks
 
-All in `.claude/settings.json` (committed), all Python scripts in
-`.claude/hooks/` run in exec form, each with tests. Every hook that
+All in `.claude/settings.json` (committed), one Python script
+(`.claude/hooks/guard.py`, a rule name as its argument) run in exec form as
+`python3`, each rule with tests (`tests/test_hooks.py`). On Windows
+`python3` must be on the PATH (the Microsoft Store's Python provides it;
+python.org's gives `python` and `py`): where it is not, every hook fails to
+start and so, failing closed, every shell command is refused until it is.
+A line the shell's rules cannot split (an unmatched quote) is split more
+loosely and still checked word by word. Every hook that
 enforces is `PreToolUse` with `onFailure: "block"`; the `log` hook is
 `PostToolUse`, and as it enforces nothing, its failing never blocks. They fire for subagents too (Claude Code passes the
 subagent's `agent_type`, so a hook can treat the main session and agents
@@ -433,10 +442,12 @@ judged by what they measured, not what they were meant to do.
 
 ## Building it, in order
 
-1. **The hooks** and their tests, failure cases and both systems. ✅ Their
-   base, `policy.py`, is built.
+1. **The hooks** and their tests, failure cases and both systems. ✅ Built
+   17 October 2026 and seen to refuse in a live session (a `pgrep -f`, and
+   an inline script naming the lock). Not built yet: `log`.
 2. **`run-watch`** (`./ty watch-run`), then `nightly-setup`, `focus`,
-   `polar-align` and `imaging-run`.
+   `polar-align` and `imaging-run`. ✅ Built 17 October 2026; their first
+   real use is the next clear night, before step 3 starts.
 3. **`claim`, `report-comet`**, `candidate-vetter`, `catalogue-researcher`,
    `comet-checker`.
 4. **`discovery-night`, `end-of-night`, `morning-summary`**,

@@ -87,6 +87,7 @@ COMMANDS = {
     "replay.py": ("local_write", {}, {}),
     "report.py": ("local_write", {}, {}),
     "restack.py": ("local_write", {}, {}),
+    "runwatch.py": ("read_only", {}, {}),
     "serve.py": ("local_write", {}, {}),            # the status page: read-only to its visitors
     "shoot.py": ("hardware", {}, DRY),
     "skywatch.py": ("hardware", {}, {}),
@@ -107,7 +108,7 @@ COMMANDS = {
 # as that script.
 TY = {"run": "hardware"}
 TY_PASSES = {"mount": "mount.py", "tonight": "tonight.py", "shoot": "shoot.py", "focus": "focus.py",
-             "solve": "solve.py", "restack": "restack.py", "console": "console.py"}
+             "solve": "solve.py", "restack": "restack.py", "console": "console.py", "watch-run": "runwatch.py"}
 
 
 def script_of(word):
@@ -119,22 +120,38 @@ def script_of(word):
     return name if name.endswith(".py") else None
 
 
-LAUNCHERS = {"python", "python3", "python.exe", "python3.exe", "py", "py.exe", "systemd-inhibit", "nohup",
-             "timeout", "env", "exec"}
+PYTHON = {"-m", "-W", "-X"}
 
+# What starts another command, with the options of each that take a value
+# (sudo -u facepipe -g dialout python3 mount.py: the command is mount.py).
+LAUNCHERS = {
+    **dict.fromkeys(("python", "python3", "python.exe", "python3.exe", "py", "py.exe"), PYTHON),
+    "sudo": {"-u", "-g", "-U", "-C", "-D", "-h", "-p", "-r", "-t", "-T", "-R"}, "doas": {"-u", "-C"},
+    "runuser": {"-u", "-g", "-G"}, "systemd-inhibit": {"--what", "--who", "--why", "--mode"},
+    "systemd-run": {"-p", "--unit", "--property", "--uid", "--gid"}, "nice": {"-n"}, "ionice": {"-c", "-n", "-p"},
+    "timeout": {"-s", "-k", "--signal", "--kill-after"}, "chrt": set(), "taskset": set(), "stdbuf": set(),
+    "nohup": set(), "setsid": set(), "env": {"-u", "-C", "-S"}, "exec": {"-a"}, "time": set(),
+    "command": set(), "builtin": set(), "flock": {"-w", "-E", "-c"}, "xvfb-run": {"-a", "-s", "-n"},
+}
 
 SHELLS = {"bash", "sh", "zsh", "dash", "powershell", "powershell.exe", "pwsh", "pwsh.exe", "cmd", "cmd.exe",
           "xargs", "eval", "source", "."}
 
 
 def unwrapped(words):
-    """The command without what launches it: python3 -u, systemd-inhibit
-    --what=sleep, timeout 900 and the like."""
+    """The command without what launches it: python3 -u, sudo -u facepipe
+    -g dialout, systemd-inhibit --what=sleep, timeout 900 and the like."""
     words = list(words)
-    while words and Path(words[0]).name.lower() in LAUNCHERS:
+    while words and Path(words[0].replace("\\", "/")).name.lower() in LAUNCHERS:
+        takes_value = LAUNCHERS[Path(words[0].replace("\\", "/")).name.lower()]
         words = words[1:]
-        while words and (words[0].startswith("-") or words[0].replace(".", "").isdigit() or "=" in words[0]):
-            words = words[1:]
+        while words and (words[0].startswith("-") or words[0].replace(".", "").isdigit() or "=" in words[0]
+                         or (words[0] and words[0][0].isdigit())):    # timeout 15m, taskset 0x3, chrt 10
+            option = words.pop(0)
+            if option == "-m" and takes_value is PYTHON and words:
+                words[0] = words[0] + ".py"    # python3 -m mount goto M27 runs mount.py
+            elif option in takes_value and words:
+                words.pop(0)
     return words
 
 
@@ -169,6 +186,7 @@ def classify_text(command):
     ;, &&, || and |; None if it runs none of them. A line that cannot be
     read is hardware."""
     command = command.replace("\\", "/")   # a Windows path: C:\telescopeyoke\mount.py
+    command = command.replace("\n", " ;\n")   # each line is a command of its own
     try:
         lexer = shlex.shlex(command, posix=True, punctuation_chars=";&|")
         lexer.whitespace_split = True
@@ -184,6 +202,13 @@ def classify_text(command):
             part.append(w)
     parts.append(part)
     found = [classify(p) for p in parts if unwrapped(p) and script_of(unwrapped(p)[0])]
+    # Launched by something whose options are not all known here, and one
+    # of ours named further on: the worst it could be.
+    for p in parts:
+        bare = unwrapped(p)
+        if p and bare != p and bare and not script_of(bare[0]) and any(script_of(w) in COMMANDS or
+                                                                         script_of(w) == "ty" for w in bare):
+            found.append("hardware")
     # A command run inside another (bash -c "...", $(...), xargs, eval)
     # cannot be read word by word here: if one of ours might be in it, it
     # is taken to be the worst it could be.

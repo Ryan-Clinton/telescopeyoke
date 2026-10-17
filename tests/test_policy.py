@@ -87,6 +87,14 @@ def test_ty_passes_the_same_scripts_as_ty_does():
     ("./brokers.py --follow ZTF1 --plan", "local_write"),   # it fetches first
     ("./brokers.py --follow ZTF1", "hardware"),
     ("./unknown_new_thing.py", "hardware"),
+    ("sudo -n -u facepipe -g dialout python3 mount.py goto Vega", "hardware"),
+    ("sudo -n -u facepipe -g dialout python3 mount.py status", "read_only"),
+    ("nice -n 10 ionice -c 3 ./restack.py frames/M31/a", "local_write"),
+    ("timeout 15m ./shoot.py M31", "hardware"),
+    ("python3 -m mount goto M27", "hardware"),
+    ("python3 -m mount status", "read_only"),
+    ("env TY_RIG=gary ./mount.py nudge", "hardware"),
+    ("sudo --some-new-option x ./mount.py nudge", "hardware"),
 ])
 def test_commands_are_classed(line, kind):
     assert policy.classify_text(line) == kind
@@ -101,6 +109,8 @@ def test_commands_are_classed(line, kind):
     'bash -c "./mount.py nudge"',
     "powershell -Command \"python mount.py goto Vega\"",
     "echo goto | xargs ./mount.py",
+    "ls\n./mount.py nudge",
+    "git status\n  python3 shoot.py M31",
 ])
 def test_the_worst_command_in_a_line_decides_and_hidden_ones_count_as_moving(line):
     assert policy.classify_text(line) == "hardware"

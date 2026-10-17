@@ -6,6 +6,21 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+- **Claude Code's safety hooks and the nightly skills.**
+  `.claude/settings.json` runs `.claude/hooks/guard.py` before every shell
+  command, edit and read, failing closed: nothing removes, empties or
+  replaces `MOTION_LOCKED` or takes its checks out of the code; no inline
+  Python touches the mount, focuser, camera or serial port; no subagent
+  runs anything `policy.py` calls hardware or external; no `pkill -f`; no
+  printing `config.toml`'s Telegram token. Tested against a long list of
+  ways round each (`tests/test_hooks.py`). `./ty watch-run`
+  (`runwatch.py`) watches a run and says something only when it changes.
+  The skills `nightly-setup`, `focus`, `polar-align` and `imaging-run` are
+  in `.claude/skills/`, tested to name only real commands and options and
+  to pre-approve nothing that moves (`tests/test_skills.py`), with
+  scenarios in `evals/skills.json`. `policy.py` now reads `sudo -u USER`,
+  `nice`, `timeout`, `env` and `python -m` in front of a command.
+
 - **What each command may do** (`policy.py`): every runnable script is
   classed `read_only`, `local_write`, `hardware` or `external`, with the
   words that change it: `--help` makes any command read-only, and
