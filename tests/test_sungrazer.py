@@ -223,3 +223,36 @@ def test_planted_comets_are_found_when_strong_and_counted_by_strength():
     strong = [h for f, h in zip(fakes, hits) if f["strength"] == 30]
     weak = [h for f, h in zip(fakes, hits) if f["strength"] == 2]
     assert len(strong) == 3 and all(strong) and sum(weak) <= 1
+
+
+def test_the_hunt_keeps_what_heads_for_the_sun_and_tidies_old_pictures(tmp_path, monkeypatch):
+    import config
+    import json
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    store = tmp_path / "sungrazer" / "pictures" / "ccor1"
+    store.mkdir(parents=True)
+    (store / "CCOR1_3_20261010T000025_V00_NC.fits").write_bytes(b"old")
+    (store / "CCOR1_3_20261016T000025_V00_NC.fits").write_bytes(b"new")
+    now = datetime.datetime(2026, 10, 16, 12, 0, tzinfo=datetime.timezone.utc)
+    seen = {"pictures": 40, "folder": "f", "candidates": [
+        {"pictures": [1, 2, 3, 4, 5], "towards_sun": 0.9, "times": ["2026-10-16 01:00"], "pixels_per_12_min": 3.0,
+         "strength": 9.0, "movie": "m1.gif"},
+        {"pictures": [1, 2, 3, 4, 5], "towards_sun": -0.8, "times": ["2026-10-16 02:00"], "pixels_per_12_min": 6.0,
+         "strength": 12.0, "movie": "m2.gif"}]}
+    answer = sungrazer.hunt("ccor1", 24, say=lambda *_: None, now=now, get=lambda *a, **k: Reply("", status_code=200),
+                            looker=lambda: seen)
+    assert [c["movie"] for c in answer["towards_sun"]] == ["m1.gif"] and answer["moving"] == 2
+    assert answer["deleted"] == 1 and [p.name for p in store.iterdir()] == ["CCOR1_3_20261016T000025_V00_NC.fits"]
+    assert json.loads((tmp_path / "sungrazer" / "hunt-ccor1.json").read_text())["towards_sun"][0]["movie"] == "m1.gif"
+
+
+def test_the_timer_runs_the_ccor1_hunt_every_6_hours_and_lasco_is_refused(tmp_path):
+    ran = []
+    answer = sungrazer.install("ccor1", say=lambda *_: None, run=lambda cmd, check: ran.append(cmd), home=tmp_path)
+    place = tmp_path / ".config" / "systemd" / "user"
+    service = (place / "ty-sungrazer.service").read_text()
+    assert "sungrazer.py hunt --camera ccor1" in service and "Nice=19" in service
+    assert "OnUnitActiveSec=6h" in (place / "ty-sungrazer.timer").read_text()
+    assert ran[-1] == ["systemctl", "--user", "enable", "--now", "ty-sungrazer.timer"] and answer["installed"]
+    with pytest.raises(sungrazer.interface.Refusal):
+        sungrazer.install("c3", say=lambda *_: None, run=lambda cmd, check: None, home=tmp_path)

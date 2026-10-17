@@ -26,7 +26,10 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
   of the JPEGs, for fainter comets; `--camera ccor1` takes GOES-19's CCOR-1
   coronagraph from NOAA's open archive, where most new comets have been
   found since 2025. The noise is now measured in each part of the picture
-  on its own.
+  on its own. `look --plant N` counts fake comets found by strength.
+  `./sungrazer.py hunt --camera ccor1` fetches the last day, keeps only
+  what heads in towards the Sun and deletes old pictures; `--install`
+  runs it every 6 hours as a systemd user timer.
 - **Comets in SOHO's pictures, for cloudy nights**: `./sungrazer.py fetch`
   takes LASCO C3 (or C2) pictures from the public archive, each once and a
   second apart; `./sungrazer.py look` finds what moves other than as the

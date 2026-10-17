@@ -11,6 +11,8 @@
     ./sungrazer.py look --raw
     ./sungrazer.py fetch --camera ccor1 GOES-19's coronagraph, where most comets are found now
     ./sungrazer.py look --plant 120     how faint a comet is found: fakes planted in the real pictures
+    ./sungrazer.py hunt --camera ccor1  fetch the last day, look, keep only what heads for the Sun, tidy up
+    ./sungrazer.py hunt --install       run that every 6 hours (a systemd user timer)
 
 SOHO's LASCO coronagraphs photograph the sky round the Sun every 12 minutes
 or so, and volunteers have found most of the 5,000 and more comets in them
@@ -54,6 +56,15 @@ are put into the real pictures at a strength of each of STRENGTHS times
 the noise there, and the share of each strength found is the answer
 (kept in the look folder as plant.json); nothing else is listed.
 
+`hunt` is the hunt left running: it fetches the last HUNT_HOURS, looks,
+keeps the candidates heading in towards the Sun (the rest are mostly the
+corona blowing outwards) in sungrazer/hunt-CAMERA.json, and deletes
+pictures older than KEEP_DAYS. `hunt --install` runs it every 6 hours as
+a systemd user timer, from the checkout it is installed from; only for
+CCOR-1, whose archive is NOAA's open one, until the Sungrazer Project has
+been asked about LASCO. `systemctl --user disable --now
+ty-sungrazer.timer` stops it.
+
 Nothing is reported for you: a comet is reported through the project's
 own form (sungrazer.nrl.navy.mil/report), with your name, the pictures'
 times and the comet's positions in them, once you have watched it and
@@ -65,7 +76,10 @@ import datetime
 import io
 import json
 import math
+import os
 import re
+import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -102,6 +116,9 @@ CCOR_NAME = re.compile(r"CCOR1_3_(\d{8})T(\d{6})_V\d+_NC\.fits")
 CCOR_SCALE = 1e12    # CCOR-1's mean solar brightness units are about 1e-12: brought nearer 1
 STRENGTHS = (3, 4, 6, 8, 12, 16)   # fake comets' peak, times the noise of a picture less its neighbours
 PLANT_LEN = 12       # pictures a fake comet runs through
+HUNT_HOURS = 24      # hunt: the last this many hours
+KEEP_DAYS = 3        # hunt: pictures older than this are deleted
+TOWARDS = 0.5        # hunt: a candidate heading in towards the Sun at least this squarely
 BLOCK = 64           # pixels square in which the noise is measured on its own
 CAPTION = 60         # pixels along the bottom left out: the date and time written there
 
@@ -526,6 +543,75 @@ def look(camera, hours=None, say=print, paths=None, until=None, raw=False, plant
     return answer
 
 
+def prune(camera, days=KEEP_DAYS, now=None):
+    """Delete the kept pictures older than `days`. Returns how many."""
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    gone = 0
+    for path in (folder() / "pictures" / camera).glob("*"):
+        try:
+            old = now - stamp(path.name) > datetime.timedelta(days=days)
+        except (AttributeError, ValueError):
+            continue
+        if old:
+            path.unlink()
+            gone += 1
+    return gone
+
+
+def hunt(camera, hours=HUNT_HOURS, say=print, now=None, get=requests.get, looker=None):
+    """Fetch the last `hours`, look, keep what heads in towards the Sun,
+    and tidy away old pictures. `looker` stands in for look (for the tests)."""
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    fetch(hours, camera, say, get=get, now=now)
+    looker = looker or (lambda: look(camera, hours, say=lambda *_: None, until=now))
+    seen = looker()
+    towards = [c for c in seen.get("candidates", []) if c["towards_sun"] >= TOWARDS]
+    answer = {"camera": camera, "pictures": seen["pictures"], "when": now.strftime("%Y-%m-%d %H:%M"),
+              "towards_sun": towards, "moving": len(seen.get("candidates", [])), "folder": seen.get("folder"),
+              "deleted": prune(camera, KEEP_DAYS, now)}
+    (folder() / f"hunt-{camera}.json").write_text(json.dumps(answer, indent=1), encoding="utf-8")
+    with (folder() / "hunt.log").open("a", encoding="utf-8") as log:
+        log.write(f"{answer['when']} {camera} {answer['pictures']} pictures, {len(towards)} heading for the Sun\n")
+    say(f"{answer['pictures']} {camera.upper()} pictures to {answer['when']} UTC: {len(towards)} heading in towards "
+        f"the Sun, of {answer['moving']} moving other than the stars")
+    for c in towards:
+        say(f"  {len(c['pictures'])} pictures from {c['times'][0]}, {c['pixels_per_12_min']} px in 12 min, "
+            f"strength {c['strength']}: {c['movie']}")
+    return answer
+
+
+def units(camera="ccor1", root=None, python=None, data=None):
+    """The systemd user service and timer that run the hunt every 6 hours."""
+    root = Path(root or Path(__file__).resolve().parent)
+    python = python or sys.executable
+    env = f"Environment=TY_DATA={data}\n" if data else ""
+    service = (f"[Unit]\nDescription=telescopeyoke: comets in {camera.upper()} pictures\n\n"
+               f"[Service]\nType=oneshot\nWorkingDirectory={root}\n{env}"
+               f"ExecStart={python} {root / 'sungrazer.py'} hunt --camera {camera}\nNice=19\n")
+    timer = ("[Unit]\nDescription=telescopeyoke: the comet hunt every 6 hours\n\n"
+             "[Timer]\nOnBootSec=15min\nOnUnitActiveSec=6h\nPersistent=true\n\n"
+             "[Install]\nWantedBy=timers.target\n")
+    return service, timer
+
+
+def install(camera="ccor1", say=print, run=subprocess.run, home=None):
+    """Write the service and timer, and start the timer."""
+    if camera != "ccor1":
+        raise interface.Refusal("INVALID_REQUEST", "Only CCOR-1 is hunted all the time: the Sungrazer Project is "
+                                "to be asked before LASCO's servers are.")
+    place = Path(home or Path.home()) / ".config" / "systemd" / "user"
+    place.mkdir(parents=True, exist_ok=True)
+    data = os.environ.get("TY_DATA")
+    service, timer = units(camera, data=data)
+    (place / "ty-sungrazer.service").write_text(service, encoding="utf-8")
+    (place / "ty-sungrazer.timer").write_text(timer, encoding="utf-8")
+    run(["systemctl", "--user", "daemon-reload"], check=True)
+    run(["systemctl", "--user", "enable", "--now", "ty-sungrazer.timer"], check=True)
+    say(f"The {camera.upper()} hunt runs every 6 hours ({place / 'ty-sungrazer.timer'}); its answer is "
+        f"{folder() / f'hunt-{camera}.json'}. Stop it: systemctl --user disable --now ty-sungrazer.timer")
+    return {"camera": camera, "pictures": 0, "installed": str(place / "ty-sungrazer.timer")}
+
+
 def moment(text):
     """A time given on the command line, taken as UTC."""
     when = datetime.datetime.fromisoformat(text)
@@ -534,6 +620,10 @@ def moment(text):
 
 def run(args, say=print):
     until = moment(args.until) if args.until else None
+    if args.action == "hunt":
+        if args.install:
+            return install(args.camera, say)
+        return hunt(args.camera, args.hours if args.hours != 12.0 else HUNT_HOURS, say, now=until)
     if args.action == "fetch":
         paths = fetch(args.hours, args.camera, say, now=until, raw=args.raw)
         return {"camera": args.camera, "raw": args.raw, "pictures": len(paths),
@@ -543,7 +633,7 @@ def run(args, say=print):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("action", choices=("fetch", "look"))
+    ap.add_argument("action", choices=("fetch", "look", "hunt"))
     ap.add_argument("--camera", choices=("c3", "c2", "ccor1"), default="c3",
                     help="LASCO C3 (wide) or C2 (close in), or GOES-19's CCOR-1")
     ap.add_argument("--hours", type=float, default=12.0, help="how far back (default 12)")
@@ -552,6 +642,7 @@ def main():
     ap.add_argument("--raw", action="store_true", help="the raw FITS pictures, for fainter comets (about 2 MB each)")
     ap.add_argument("--plant", type=int, default=0, metavar="N",
                     help="look: plant N fake comets and count how many are found, instead of listing candidates")
+    ap.add_argument("--install", action="store_true", help="hunt: run it every 6 hours as a systemd user timer")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
     interface.main("sungrazer", lambda: run(args), args.json)

@@ -458,6 +458,20 @@ def test_a_variables_answer_matches_its_schema(tmp_path, monkeypatch):
     assert answer["data"]["candidates"] == 1 and (tmp_path / "frames" / "M31" / "variables.json").exists()
 
 
+def test_a_hunt_matches_the_sungrazer_schema(tmp_path, monkeypatch):
+    import datetime
+    import sungrazer
+    from test_sungrazer import Reply
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    seen = {"pictures": 40, "folder": "f", "candidates": [
+        {"pictures": [1, 2, 3, 4, 5], "track": [[1, 2]], "towards_sun": 0.9, "times": ["t"], "pixels_per_12_min": 3.0,
+         "strength": 9.0, "movie": "m.gif"}]}
+    now = datetime.datetime(2026, 10, 16, 12, tzinfo=datetime.timezone.utc)
+    valid(interface.run("sungrazer", lambda: sungrazer.hunt("ccor1", 24, say=lambda *_: None, now=now,
+                                                            get=lambda *a, **k: Reply(""), looker=lambda: seen)),
+          "sungrazer")
+
+
 def test_the_rigs_view_matches_its_schema(tmp_path, monkeypatch):
     import config
     monkeypatch.setattr(config, "RIGS", tmp_path)
