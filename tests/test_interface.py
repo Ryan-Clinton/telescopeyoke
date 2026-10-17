@@ -502,6 +502,18 @@ def test_transits_tonight_and_measured_match_their_schema(tmp_path):
                                                              night=night)), "transits")
 
 
+def test_a_starwatch_night_matches_its_schema(tmp_path, monkeypatch):
+    import starwatch
+    from test_starwatch import night
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    session = tmp_path / "frames" / "Tabby" / "20261018-193000"
+    session.mkdir(parents=True)
+    valid(interface.run("starwatch", lambda: starwatch.measure("tabby", session, say=lambda *_: None,
+                                                               night=night(11.6, session.name))), "starwatch")
+    valid(interface.run("starwatch", lambda: starwatch.look("tabby", plan=True, say=lambda *_: None,
+                                                            patrol_run=lambda a: {})), "starwatch")
+
+
 def test_the_rigs_view_matches_its_schema(tmp_path, monkeypatch):
     import config
     monkeypatch.setattr(config, "RIGS", tmp_path)

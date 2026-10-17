@@ -5,6 +5,11 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
 
 ## Not yet released
 
+- **Dips**: `./variables.py` also lists any star that dips, three points
+  or more in a row clearly fainter than usual, however quiet it is
+  otherwise. `./starwatch.py tabby` watches Tabby's star (KIC 8462852): a
+  10-minute look through the patrol, measured against the stars round it,
+  each night kept, and a warning when it is 3% or more fainter than usual.
 - **Exoplanet transits**: `./transits.py` lists the known transits that can
   be taken whole in the dark here tonight, deepest first, from NASA's
   Exoplanet Archive, and keeps each star by name for `mount.py goto`;

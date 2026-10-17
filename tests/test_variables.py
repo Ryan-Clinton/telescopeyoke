@@ -103,3 +103,30 @@ def test_a_nights_measurements_are_kept_and_read_back(tmp_path):
     again = variables.night(session, "M31", 10, say=lambda *_: None, stack=lambda g: stacked.append(1) or images,
                             solve=lambda lum: wcs, gaia=lambda ra, dec, r: catalogue)
     assert stacked == [1] and np.allclose(first["mags"], again["mags"], equal_nan=True)
+
+
+def test_a_dip_in_an_otherwise_quiet_star_is_found_and_noise_is_not():
+    rng = np.random.default_rng(3)
+    jd = np.arange(60) / 24.0
+    quiet = 13.0 + rng.normal(0, 0.01, 60)
+    dipped = quiet.copy()
+    dipped[30:34] += 0.15                                              # four points, 15% fainter
+    found = variables.dips(jd, dipped, 0.01)
+    assert len(found) == 1 and found[0]["points"] == 4 and found[0]["depth"] == pytest.approx(0.15, abs=0.03)
+    assert variables.dips(jd, quiet, 0.01) == []
+    one = quiet.copy()
+    one[10] += 0.3                                                     # one bad point is not a dip
+    assert variables.dips(jd, one, 0.01) == []
+
+
+def test_a_dipper_is_listed_though_its_scatter_is_ordinary():
+    rng = np.random.default_rng(4)
+    curves = {}
+    for k in range(40):
+        mag = 13.0 + rng.normal(0, 0.01, 60)
+        if k == 7:
+            mag[20:24] += 0.12
+        curves[str(k)] = {"ra": 10.0 + k / 100, "dec": 41.0, "g": 13.0, "colour": None, "jd": list(np.arange(60) / 24),
+                          "mag": list(mag), "session": ["s"] * 60}
+    listed = variables.judge(curves)
+    assert [s["ra"] for s in listed] == [10.07] and not listed[0]["variable"] and listed[0]["dips"]

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/starwatch.schema.json",
+  "title": "Starwatch",
+  "description": "data of: starwatch.py STAR [--plan | --measure SESSION | --history] --json. A watched star (Tabby's star) imaged through the patrol and measured against the stars round it: the night's brightness on Gaia's G scale beside its usual level, and whether it is dipping. With --plan, the patrol's plan only; with --history, every night measured. Nothing is reported for you.",
+  "type": "object",
+  "required": ["star", "name", "kind"],
+  "properties": {
+    "star": {"type": "string"},
+    "name": {"type": "string", "description": "The name mount.py and shoot.py know it by."},
+    "patrol": {"type": "object", "description": "patrol.py's answer (schemas/patrol.schema.json)."},
+    "night": {"type": "object", "required": ["session", "mag", "points", "scatter"],
+              "properties": {"session": {"type": "string"}, "jd": {"type": ["number", "null"]}, "mag": {"type": "number"},
+                             "points": {"type": "integer"}, "scatter": {"type": "number"},
+                             "batches": {"type": "array", "items": {"type": "number"}}}},
+    "nights": {"type": "array", "items": {"type": "object"}},
+    "nights_measured": {"type": "integer"},
+    "baseline": {"type": ["number", "null"], "description": "The median of the other nights, once there are BASELINE_NIGHTS."},
+    "dimmer": {"type": ["number", "null"], "description": "Magnitudes fainter than the baseline (negative: brighter)."},
+    "dipping": {"type": "boolean"},
+    "why": {"type": "string"},
+    "kind": {"enum": ["inferred", "measured"]}
+  }
+}

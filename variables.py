@@ -19,7 +19,11 @@ flats) all cancel. Each night's measurements are kept in its session
 (variables-BIN.json), so judging them again does not stack again.
 A star's scatter is then set beside the scatter of the stars as bright as
 it: one that scatters LOUD times more than they do, over LEAST points or
-more, is listed. VSX is asked which stars are known variables: a known one
+more, is listed; so is one that dips, however quiet it is otherwise:
+DIP_RUN points or more in a row, in time order, each fainter than its
+usual level by DIP_SIGMA times the scatter of stars as bright and by
+DIP_DEPTH magnitudes at least (a star like KIC 8462852, Tabby's star, is
+quiet for months between dips). VSX is asked which stars are known variables: a known one
 found is the proof that this works, and one that VSX does not have is a
 candidate new variable for a person to look at, not a discovery yet.
 
@@ -54,6 +58,9 @@ GLOW = 1.5           # a star on light this many times the picture's median sky 
 SURFACE = 30         # stars a batch needs before its zero point is a surface rather than one number
 VERSION = 1          # of the kept measurements: a change in what is measured makes them again
 STEP = 0.5           # magnitudes in each bin of the usual scatter
+DIP_RUN = 3          # points in a row that make a dip
+DIP_SIGMA = 3.0      # each that many times the usual scatter fainter than the star's median
+DIP_DEPTH = 0.02     # and at least this many magnitudes fainter
 
 
 # --- measuring ---------------------------------------------------------------
@@ -266,6 +273,29 @@ def usual(curves, step=STEP):
     return lambda m: float(np.interp(m, centres, levels))
 
 
+def dips(jd, mag, noise, run=DIP_RUN, sigma=DIP_SIGMA, depth=DIP_DEPTH):
+    """The dips in a light curve: runs of `run` points or more in time
+    order, each fainter than the median by `sigma` times `noise` and by
+    `depth`. Each as {start, end (JD), points, depth (mag)}."""
+    order = np.argsort(jd)
+    jd, mag = np.asarray(jd, float)[order], np.asarray(mag, float)[order]
+    middle = float(np.median(mag))
+    low = (mag - middle >= sigma * noise) & (mag - middle >= depth)
+    out, i = [], 0
+    while i < len(mag):
+        if not low[i]:
+            i += 1
+            continue
+        j = i
+        while j + 1 < len(mag) and low[j + 1]:
+            j += 1
+        if j - i + 1 >= run:
+            out.append({"start": round(float(jd[i]), 5), "end": round(float(jd[j]), 5), "points": j - i + 1,
+                        "depth": round(float(np.max(mag[i:j + 1]) - middle), 3)})
+        i = j + 1
+    return out
+
+
 def judge(curves, known=(), loud=LOUD, least=LEAST):
     """Each star's scatter beside the usual for its brightness; the loud
     ones and every VSX star, with their light curves."""
@@ -285,17 +315,18 @@ def judge(curves, known=(), loud=LOUD, least=LEAST):
             d, i = tree.query((c["ra"] * cosd * 3600, c["dec"] * 3600))
             if d <= MATCH:
                 vsx = known[i]
-        if ratio >= loud or vsx:
+        dipped = dips(c["jd"], c["mag"], expected(mag)) if expected(mag) > 0 else []
+        if ratio >= loud or vsx or dipped:
             lo, hi = np.percentile(c["mag"], [5, 95])
             out.append({"ra": round(c["ra"], 5), "dec": round(c["dec"], 5), "g": round(c["g"], 2),
                         "colour": None if c["colour"] is None else round(c["colour"], 2),
                         "points": len(c["mag"]), "median": round(mag, 3), "scatter": round(spread, 3),
                         "usual": round(expected(mag), 3), "loudness": round(ratio, 1),
-                        "range": round(float(hi - lo), 3), "variable": bool(ratio >= loud),
+                        "range": round(float(hi - lo), 3), "variable": bool(ratio >= loud), "dips": dipped,
                         "vsx": None if vsx is None else {"name": vsx["name"], "type": vsx["type"]},
                         "jd": [round(t, 5) for t in c["jd"]], "mag": [round(m, 3) for m in c["mag"]],
                         "session": c["session"]})
-    return sorted(out, key=lambda s: (s["vsx"] is not None, -s["loudness"]))
+    return sorted(out, key=lambda s: (s["vsx"] is not None, not s["dips"], -s["loudness"]))
 
 
 # --- showing -----------------------------------------------------------------
@@ -364,9 +395,9 @@ def run(args, say=print):
     for s in listed:
         s["picture"] = draw(s, out / f"{key(s['ra'], s['dec'])}.png")
     measured = sum(len(c["mag"]) >= LEAST for c in curves.values())
-    new = [s for s in listed if s["variable"] and not s["vsx"]]
-    found = [s for s in listed if s["variable"] and s["vsx"]]
-    quiet = [s for s in listed if not s["variable"]]
+    new = [s for s in listed if (s["variable"] or s["dips"]) and not s["vsx"]]
+    found = [s for s in listed if (s["variable"] or s["dips"]) and s["vsx"]]
+    quiet = [s for s in listed if s["vsx"] and not s["variable"] and not s["dips"]]
     answer = {"field": args.name, "bin": args.bin, "sessions": [n["session"] for n in nights], "skipped": skipped,
               "stars": measured, "vsx_asked": not args.offline,
               "known_found": len(found), "known_quiet": len(quiet), "candidates": len(new),
@@ -380,10 +411,13 @@ def run(args, say=print):
         say(f"  known, flat here: {s['vsx']['name']} ({s['vsx']['type']}), G {s['median']:.2f}, "
             f"scatter {s['scatter']:.3f} = {s['loudness']}x usual")
     for s in new:
+        dipped = "".join(f"; dipped {d['depth']:.2f} mag over {d['points']} points from JD {d['start']:.3f}"
+                         for d in s["dips"])
         say(f"  NOT IN VSX: RA {s['ra']:.5f} Dec {s['dec']:+.5f}, G {s['median']:.2f}, scatter {s['scatter']:.3f} = "
-            f"{s['loudness']}x usual, range {s['range']:.2f}: {s['picture']}")
+            f"{s['loudness']}x usual, range {s['range']:.2f}{dipped}: {s['picture']}")
     if new:
-        say("Look at each curve. A real variable repeats on another night; a blend or an edge does not.")
+        say("Look at each curve. A real variable repeats on another night, and a real dip shows on the star alone, "
+            "not on its neighbours; a blend, an edge or a satellite does not.")
     say(f"kept as {folder / 'variables.json'}")
     return answer
 
