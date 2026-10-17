@@ -702,3 +702,11 @@ def test_measured_figures_for_the_tripod_and_the_latitude_scale_are_used(bolts):
     found = polaralign.for_mount(3.7, -0.4, {"mount": {"tripod_cm_per_degree": 2.3, "latitude_degrees_per_mark": 1.9}})
     assert found["azimuth"]["tripod"]["cm_at_each_foot"] == pytest.approx(8.5) and "scale_marks" in found["altitude"]
     assert "scale_marks" not in polaralign.for_mount(3.7, -0.4, {})["altitude"]
+
+
+def test_how_far_out_home_is_does_not_stop_a_sound_measurement():
+    # 17 October 2026: home 10.66° out, the places 0.02° from the fit, was
+    # refused by a 10° limit. Home is where it is; only the fit decides.
+    for ra, dec in ((10.66, -5.12), (25.0, 12.0)):
+        found = mount.home_fit(survey_of(ra, dec), 40.0)
+        assert found["fits"] and found["why_not"] is None

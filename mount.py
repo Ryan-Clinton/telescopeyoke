@@ -92,7 +92,6 @@ RESPONSE_FILE = config.DATA / "cache" / "creep_response.json"
 SURVEY_FILE = config.DATA / "cache" / "pointing_survey.json"
 HOME_FILE = config.DATA / "cache" / "home_fit.json"      # what `findhome` found, for `truehome`
 HOME_FRESH = 2 * 3600     # seconds a home measurement may be acted on
-HOME_MOST = 10.0          # degrees: a home further out than this is not believed
 # Degrees: the model fits when the places sit this close to it. A first
 # figure, from made-up solves; to be set from the first real run's residuals.
 HOME_FITS = 0.15
@@ -465,8 +464,7 @@ class Mount:
                  + ("" if found["sway_deg"] is None else
                     f", and leaving any one out moves home by at most {found['sway_deg']:.2f}°")
                  + (", which fits." if found["fits"] else
-                    f". That does not hold up (it needs {HOME_FITS:g}° and {HOME_SWAY:g}°, with places enough "
-                    "to check): something else is going on, and the mount will not be driven to a home "
+                    f". It is not acted on: {found['why_not']}. The mount will not be driven to a home "
                     "worked out from this."))
         for place in found["residuals"]:
             self.say(f"  hour angle {place['hour_angle_h']:+g} h ({place['side']}): {place['miss_deg']:.2f}° from it "
@@ -1076,12 +1074,18 @@ def home_fit(rows, dec):
     again = without_each(used)
     sway = (max(max(abs(float(t[2][0]) - ra), abs(float(t[2][1]) - dec_error)) for t in again)
             if len(again) == len(used) else None)
-    believable = (rms <= HOME_FITS and sway is not None and sway <= HOME_SWAY
-                  and abs(ra) <= HOME_MOST and abs(dec_error) <= HOME_MOST)
+    # How far out home is says nothing about whether the measurement is
+    # sound: home is where it is (17 October 2026, 10.7° out by eye). Only
+    # the places' agreement decides.
+    believable = rms <= HOME_FITS and sway is not None and sway <= HOME_SWAY
     return {"ra_home_error_deg": round(ra, 3), "dec_home_error_deg": round(dec_error, 3),
             "tube_not_square_deg": round(cone, 3), "polar_error_left_deg": round(math.hypot(p, q), 3),
             "rms_deg": round(rms, 3), "sway_deg": None if sway is None else round(sway, 3),
             "places": len(used), "fits": bool(believable),
+            "why_not": None if believable else (
+                f"the places sit {rms:.2f}° from it, and it needs {HOME_FITS:g}°" if rms > HOME_FITS else
+                "too few places to check it by leaving each out" if sway is None else
+                f"leaving one place out moves it {sway:.2f}°, and it needs {HOME_SWAY:g}°"),
             # An rms can hide one bad place among good ones: each place's own miss, for looking at.
             "residuals": [miss(row, answer) for row in used], "left_out": left_out}
 
@@ -1102,10 +1106,11 @@ def plan_true_home():
     if found["saved"] < since or age > HOME_FRESH:
         raise Refusal("INVALID_REQUEST", "The home measurement is from before the handset was last set up, or "
                       "more than two hours old. Run ./mount.py findhome again; nothing is moved on an old one.")
-    if not found["fits"]:
-        raise Refusal("INVALID_REQUEST", f"The last home measurement did not fit ({found['rms_deg']:.2f}° from "
-                      "its own account of the places, or resting on one of them). Run ./mount.py findhome "
-                      "again on a steadier sky.")
+    # Judged again from its own places, so a measurement is held to the rules as they are now.
+    refit = home_fit(found["rows"], found["dec_deg"]) if found.get("rows") else found
+    if not refit["fits"]:
+        raise Refusal("INVALID_REQUEST", f"The last home measurement is not acted on: "
+                      f"{refit.get('why_not') or 'it did not fit'}. Run ./mount.py findhome again.")
     goes = found["goes_to"]
     return {"would_move": True, "safe": True, "ra_axis_deg": goes["ra_axis_deg"], "dec_axis_deg": goes["dec_axis_deg"],
             "measured_minutes_ago": round(age / 60),
