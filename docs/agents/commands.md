@@ -5,7 +5,7 @@
 (`./policy.py COMMAND`), and the sections here follow it: a test keeps them
 in step.
 
-## Read-only (never touch the mount's serial port)
+## No hardware: reading, planning and files on this computer (never touches the mount's serial port)
 
 | Command | Returns | Notes |
 |---|---|---|

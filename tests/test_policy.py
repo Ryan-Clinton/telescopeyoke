@@ -16,10 +16,41 @@ def test_every_runnable_script_has_a_class():
 
 
 def test_every_class_is_one_of_the_four():
-    for script, (default, instead) in policy.COMMANDS.items():
-        assert default in policy.CLASSES and set(instead.values()) <= set(policy.CLASSES), script
+    for script, (default, instead, safe) in policy.COMMANDS.items():
+        assert default in policy.CLASSES and set(instead.values()) | set(safe.values()) <= set(policy.CLASSES), script
     assert set(policy.TY.values()) <= set(policy.CLASSES)
     assert all(s in policy.COMMANDS for s in policy.TY_PASSES.values())
+
+
+def test_a_safe_word_is_one_its_script_really_takes():
+    # A script is only trusted with --dry-run or --plan when it has them.
+    for script, (_, _, safe) in policy.COMMANDS.items():
+        text = (ROOT / script).read_text(encoding="utf-8")
+        for word in safe:
+            assert f'add_argument("{word}"' in text, f"{script} has no {word}"
+
+
+def test_a_dry_run_is_trusted_only_where_it_is_promised():
+    assert policy.classify_text("./doctor.py --dry-run") == "read_only"     # read_only anyway
+    assert policy.classify_text("./notify.py --test --dry-run") == "external"
+    assert policy.classify_text("./sungrazer.py hunt --dry-run") == "local_write"
+    assert policy.classify_text("./brokers.py --dry-run") == "local_write"
+
+
+@pytest.mark.parametrize("line, kind", [
+    ("./release.py --publish --help", "read_only"),
+    ("./brokers.py --follow X --plan", "local_write"),
+    ("./brokers.py --plan --follow X", "local_write"),
+    ("./reference.py --make --help", "read_only"),
+    ("./starwatch.py tabby --measure S --history", "local_write"),
+    ("./starwatch.py tabby --history --measure S", "local_write"),
+    ("./candidates.py M31 --reopen A --dismiss B --reason noise", "local_write"),
+    ("./patrol.py m31-novae --sweep --plan", "read_only"),
+    ("./mount.py --dry-run goto M27", "read_only"),
+    ("./mount.py status --dry-run", "read_only"),
+])
+def test_combinations_resolve_the_same_whatever_their_order(line, kind):
+    assert policy.classify_text(line) == kind
 
 
 def test_ty_passes_the_same_scripts_as_ty_does():
@@ -53,7 +84,7 @@ def test_ty_passes_the_same_scripts_as_ty_does():
     ("./release.py --publish", "external"),
     ("./release.py", "local_write"),
     ("./candidates.py M31 --dismiss M31-1 --reason noise", "local_write"),
-    ("./brokers.py --follow ZTF1 --plan", "read_only"),
+    ("./brokers.py --follow ZTF1 --plan", "local_write"),   # it fetches first
     ("./brokers.py --follow ZTF1", "hardware"),
     ("./unknown_new_thing.py", "hardware"),
 ])
@@ -101,7 +132,7 @@ def page_rows():
 
 
 def test_the_commands_page_files_each_command_under_what_it_may_do():
-    allowed = {"Read-only": {"read_only", "local_write"}, "Planning a move": {"read_only"},
+    allowed = {"No hardware": {"read_only", "local_write"}, "Planning a move": {"read_only"},
                "Moves the mount": {"hardware"}, "Uses the camera": {"hardware"}, "Reaches outside": {"external"}}
     for section, words in page_rows():
         kinds = next((v for k, v in allowed.items() if section.startswith(k)), None)

@@ -78,14 +78,26 @@ Each layer holds even if the ones above it fail:
 Built. Every runnable script is in `policy.COMMANDS` with one of four
 classes, and a test fails while any script is not:
 
-- `read_only`: looks, plans, dry-runs (`./mount.py status`, any `--dry-run`
-  or `--plan`);
+- `read_only`: looks, plans, dry-runs (`./mount.py status`, a `--dry-run`
+  or `--plan` where that script promises it);
 - `local_write`: files on this computer or the person's own desktop
   (stacks, records, `restack.py --on desktop`);
 - `hardware`: moves the mount or the focuser, takes frames, or changes the
   handset or motor board;
 - `external`: reaches outside (`notify.py`, `alert.py`'s lights and
   speaker, `release.py --publish`).
+
+`--help` makes any command `read_only`; `--dry-run` and `--plan` do so only
+for the scripts that declare them (`brokers.py`'s leave it `local_write`,
+as it fetches first), and a test checks each declared word is a real
+option of its script. Of the other words that change a class, the worst
+present decides, whatever their order (`--measure S --history` and
+`--history --measure S` are both `local_write`).
+
+The classes are what a command may do, not tiers of permission. A
+subagent is not allowed `local_write` because the classes have that
+class: each agent gets only the writing its own job needs, from its own
+`tools` and hooks (`docs-keeper` edits docs; no other agent writes at all).
 
 `policy.classify_text(line)` gives the worst class in a shell line, through
 `python3 -u`, `systemd-inhibit`, `timeout`, `;`, `&&`, `|` and Windows
@@ -140,6 +152,11 @@ cannot be forgotten by a blacklist.
 Each: when it loads, what it needs (`compatibility`), what it does, when it
 is finished.
 
+Skills go through `./ty` where `ty` passes the command on (`./ty mount`,
+`./ty shoot`, `./ty focus`, `./ty solve`, `./ty restack`, `./ty tonight`):
+one front door, the same checks. The rest (`patrol.py`, `polaralign.py`,
+`report.py` and others) are named as scripts until `ty` passes them too.
+
 ### `nightly-setup`
 
 - **Loads:** "I'm going out", "I'm at the telescope", a report of the sky,
@@ -147,10 +164,10 @@ is finished.
 - **Needs:** the telescopeyoke checkout on the laptop at the telescope, the
   rig plugged in.
 - **Does:** `docs/agents/setup-routine.md` in order: what is plugged in
-  (`./doctor.py --offline`, `./mount.py status`; `lsusb` on Ubuntu, the
+  (`./doctor.py --offline`, `./ty mount status`; `lsusb` on Ubuntu, the
   device list `doctor.py` prints on Windows); the night's dry runs indoors;
   `settime`; where it is clear; `nudge`, and whether they saw it; GoTo a
-  rich field and `focus.py --motor`; polar alignment only if the tripod
+  rich field and `./ty focus --motor`; polar alignment only if the tripod
   moved; the first target. One short line at a time, only what needs their
   hands or eyes. Each `hardware` step under rule 2.
 - **Finished:** the first target centred, or the person stopping.
@@ -169,7 +186,7 @@ is finished.
 
 - **Loads:** "focus", "the stars look soft", or from `nightly-setup`.
 - **Does:** checks the telescope points at a rich field in clear sky;
-  `./focus.py --motor` in the background when asked; the HFR (2 to 2.5 is
+  `./ty focus --motor` in the background when asked; the HFR (2 to 2.5 is
   good on the 150P). Never asks for a hand on the knob when the motor is
   plugged in.
 
@@ -183,7 +200,7 @@ is finished.
 ### `imaging-run`
 
 - **Loads:** "image M31", "start a run", "switch to M33".
-- **Does:** the GoTo with `--solve` after its dry run, `./shoot.py TARGET
+- **Does:** the GoTo with `--solve` after its dry run, `./ty shoot TARGET
   --frames 0 --recentre 8` in the background, and the `run-watch` job.
   Switching: stop, GoTo at once, restack later.
 
@@ -275,7 +292,7 @@ any `hardware` or `external` command from a subagent, whatever its tools.
 |---|---|---|---|---|
 | `candidate-vetter` | opus | Read, Grep, Glob | 10 | real / bogus / unsure with reasons, from the local evidence: the pictures, `vetted.json`, the candidate's history, the depth, and `catalogue-researcher`'s facts |
 | `catalogue-researcher` | sonnet | WebSearch, WebFetch | 12 | Facts with their sources: TNS objects near a place, VSX, SkyBoT, ATels. No shell, writes nothing |
-| `comet-checker` | sonnet | WebFetch, Read | 8 | new / already found / cannot tell, against the Sungrazer and Cambridge lists |
+| `comet-checker` | sonnet | WebFetch | 8 | new / already found / cannot tell, against the Sungrazer and Cambridge lists, from the track it is given in its prompt (camera, times, places) and no local files |
 | `night-analyst` | sonnet | Read, Grep, Glob, Bash (read-only, below) | 6 | The night in five lines |
 | `code-reviewer` | opus | Read, Grep, Glob, Bash (read-only, below) | 10 | Findings against this project's own rules |
 | `motion-reviewer` | opus | Read, Grep, Glob | 10 | Any change to `mount.py`, `direct.py`, `simulator.py`, `polaralign.py`, `focuser.py` or `policy.py` checked against AGENTS.md's safety invariants |
@@ -283,13 +300,18 @@ any `hardware` or `external` command from a subagent, whatever its tools.
 | `debugger` | opus | Read, Grep, Glob, Bash (read-only, below) | 12 | Given a failing test from `test-run`, the cause and the fix proposed (not made) |
 
 - **Web content is untrusted, and kept apart.** Only `catalogue-researcher`
-  and `comet-checker` read the web, and neither has a shell. The vetter
+  and `comet-checker` read the web; neither has a shell, and neither reads
+  the checkout: what they need is put in their prompt. The vetter
   works on local files and the researcher's facts, so nothing fetched
   shares a context with a shell or the telescope's files.
 - **"Bash (read-only)"** means a frontmatter hook that lets through only
   commands `policy.classify_text` calls `read_only`, plus `git log`, `git
   diff`, `git show`, `ls` and `cat` inside the checkout. Everything else
-  is refused, and `onFailure: "block"`.
+  is refused, and `onFailure: "block"`. It is an allowlist, so its tests
+  are mostly what it must refuse that is not ours at all: `rm foo`, `curl`,
+  `wget`, `touch`, `echo x > file`, `git clean`, `git reset --hard`, `git
+  checkout -- .`, `python -c ...`, `cat` of a path outside the checkout or
+  of `config.toml`, and a read-only command with `>` or `|` into another.
 - **`docs-keeper`** may edit only `docs/`, `README.md` and `CHANGELOG.md`
   (a hook refuses any other path).
 - **`code-reviewer`** knows what a general review does not: every kept
@@ -312,9 +334,10 @@ any `hardware` or `external` command from a subagent, whatever its tools.
 
 ## The hooks
 
-All in `.claude/settings.json` (committed), all `PreToolUse`, all Python
-scripts in `.claude/hooks/` run in exec form, all `onFailure: "block"`,
-each with tests. They fire for subagents too (Claude Code passes the
+All in `.claude/settings.json` (committed), all Python scripts in
+`.claude/hooks/` run in exec form, each with tests. Every hook that
+enforces is `PreToolUse` with `onFailure: "block"`; the `log` hook is
+`PostToolUse`, and as it enforces nothing, its failing never blocks. They fire for subagents too (Claude Code passes the
 subagent's `agent_type`, so a hook can treat the main session and agents
 differently).
 
@@ -349,17 +372,37 @@ Windows.
 `cache/agent-log.jsonl` (ignored by git), one line per event, written by
 the `log` hook and the skills: when; which session or agent; which skill
 was active; the command and its class; whether a hook let it through or
-refused it, and why; for a `hardware` command, the person's words that
-asked for it; and the outcome. Never prompts, never secrets. So afterwards
-it can be read exactly what moved, who asked, and what was refused:
+refused it, and why; for a `hardware` command, the authorisation as data
+(`{"present": true, "scope": "mount.goto", "target": "Vega"}`) with the
+person's few words beside it; and the outcome. So it can be counted, not
+only read: a test over the record checks that every `hardware` command
+that ran has `authorisation.present`.
+
+Never prompts, never secrets. The logger writes the command as
+`policy.py` read it, after redaction, never the raw tool input: values of
+`--token`, `--key`, `--password` and the like, anything after `token =`,
+the Telegram bot's token wherever it appears, environment assignments
+(`NAME=value`), and query strings in URLs are replaced by `***`, with a
+test for each. So afterwards it can be read exactly what moved, who
+asked, and what was refused:
 
 ```
 21:10  nightly-setup  ./doctor.py --offline  read_only  ok
-21:11  nightly-setup  ./mount.py goto Vega --dry-run  read_only  ok
-21:11  nightly-setup  ./mount.py goto Vega  hardware  asked: "swing to Vega"  ok
+21:11  nightly-setup  ./ty mount goto Vega --dry-run  read_only  ok
+21:11  nightly-setup  ./ty mount goto Vega  hardware  mount.goto Vega ("swing to Vega")  ok
 21:27  candidate-vetter  ./shoot.py M31  hardware  refused by no-motion
 22:03  candidate-vetter  result: unsure  M31-P3-20261017-221500-004
 ```
+
+### Whether the skills help
+
+Each skill's use is recorded in the same file: when it loaded and from what
+words, the commands it tried, those a hook refused, the questions it asked,
+whether the person stopped it or corrected it, and whether it finished.
+After ten nights that answers whether `nightly-setup` saves time or asks
+what it need not, as the polar alignment and the discovery search were
+judged by what they measured, not what they were meant to do.
+`./ty agent-report` (to be written) sums it up.
 
 ## Testing
 
@@ -368,7 +411,8 @@ it can be read exactly what moved, who asked, and what was refused:
   exists and every flag it uses is in that command's `--help`; every
   command in an `allowed-tools` is `read_only` by `policy.py`; the four
   manual skills have `disable-model-invocation: true`; every agent has
-  `maxTurns`, and none has both a web tool and Bash.
+  `maxTurns`; none has both a web tool and Bash, and none that reads the
+  web has Read; no agent but `docs-keeper` has Edit or Write.
 - `tests/test_hooks.py`: the cases above, the failure cases, on both
   systems.
 - **The standard's own validator**, `skills-ref validate`, on every skill,

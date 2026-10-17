@@ -8,8 +8,12 @@ proven is `docs/validation.md` ("Current conclusions").
 
 - **What each command may do** (`policy.py`): every runnable script is
   classed `read_only`, `local_write`, `hardware` or `external`, with the
-  words that change it (`--dry-run` and `--plan` make anything read-only),
-  and a test fails while a script has no class. `./policy.py COMMAND`
+  words that change it: `--help` makes any command read-only, and
+  `--dry-run` and `--plan` only where that script declares them (a test
+  checks they are its real options); of the rest the worst present
+  decides, in any order. A test fails while a script has no class, and
+  another keeps `docs/agents/commands.md` filed by it (its first section is
+  now "No hardware", since much there writes files). `./policy.py COMMAND`
   answers for one command line, taking the worst of several and counting
   anything unknown or hidden in `bash -c` or `$(...)` as `hardware`. It is
   the base for the Claude Code hooks specified in

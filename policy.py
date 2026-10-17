@@ -21,9 +21,12 @@ class, so nothing is left out by being new.
 - external: reaches someone or something outside: a message to the
   person's phone, lights and a speaker in the house, a published release.
 
-A command is its script's class unless one of its words says otherwise;
---dry-run, --plan and --help make any command read_only, since every
-script that takes them promises nothing is touched. Anything not known is
+A command is its script's class unless its words say otherwise. --help
+makes any command read_only. Each script names its own safe words
+(--dry-run, --plan) and what they leave it as: they are that script's
+promise, checked by a test to be its real options, never assumed of a
+script that has not made it. Of the other words that change a class, the
+worst present decides, whatever their order. Anything not known is
 hardware: an unknown command is treated as the worst it could be.
 Nothing here moves the mount or uses the camera.
 """
@@ -34,64 +37,70 @@ import sys
 from pathlib import Path
 
 CLASSES = ("read_only", "local_write", "hardware", "external")
-SAFE = ("--dry-run", "--plan", "--help", "-h")
+HELP = ("--help", "-h")
+DRY = {"--dry-run": "read_only"}
 
-# script: (its class, {a word in the command: the class it gives instead}).
-# A word is a subcommand or a flag; the first that matches decides.
+# script: (its class, {a word in the command: the class it gives instead},
+#          {a safe word: the class it leaves the command, whatever else is said}).
+# A word is a subcommand or a flag.
 COMMANDS = {
-    "agent.py": ("read_only", {}),
-    "alert.py": ("external", {"--test": "external"}),
-    "app.py": ("hardware", {}),                 # the application drives the rig on request
-    "brokers.py": ("local_write", {"--follow": "hardware"}),
-    "build_catalogue.py": ("local_write", {}),
-    "calibrate.py": ("hardware", {}),
-    "camera_setup.py": ("local_write", {"--check": "read_only"}),
-    "camera_test.py": ("hardware", {}),
-    "candidates.py": ("read_only", {"--dismiss": "local_write", "--reopen": "local_write"}),
-    "clouds.py": ("read_only", {}),
-    "compare.py": ("local_write", {}),
-    "console.py": ("hardware", {}),             # its server runs the other scripts on request
-    "depth.py": ("local_write", {}),
-    "difference.py": ("local_write", {}),
-    "doctor.py": ("read_only", {}),
-    "focus.py": ("hardware", {"--report": "read_only"}),
-    "focuser.py": ("hardware", {}),
-    "forced.py": ("local_write", {}),
-    "horizon.py": ("hardware", {"--show": "read_only", "--forget": "local_write"}),
-    "landmark.py": ("hardware", {"list": "read_only"}),
-    "liveview.py": ("hardware", {}),
-    "mcp_server.py": ("read_only", {}),
-    "mosaic.py": ("local_write", {}),
-    "mount.py": ("hardware", {"status": "read_only"}),
-    "notify.py": ("external", {}),
-    "panorama.py": ("local_write", {"show": "read_only"}),
-    "patrol.py": ("hardware", {"--analyse": "local_write", "--sweep": "local_write"}),
-    "planet.py": ("hardware", {"--restack": "local_write"}),
-    "plant.py": ("local_write", {}),
-    "polaralign.py": ("hardware", {}),
-    "polaris.py": ("hardware", {}),
-    "policy.py": ("read_only", {}),
-    "process.py": ("local_write", {}),
-    "recover.py": ("local_write", {}),
-    "reference.py": ("read_only", {"--make": "local_write"}),
-    "release.py": ("local_write", {"--publish": "external"}),
-    "remote.py": ("local_write", {}),
-    "replay.py": ("local_write", {}),
-    "report.py": ("local_write", {}),
-    "restack.py": ("local_write", {}),
-    "serve.py": ("local_write", {}),            # the status page: read-only to its visitors
-    "shoot.py": ("hardware", {}),
-    "skywatch.py": ("hardware", {}),
-    "snap.py": ("hardware", {}),
-    "solve.py": ("local_write", {}),
-    "starwatch.py": ("hardware", {"--measure": "local_write", "--history": "read_only"}),
-    "sungrazer.py": ("local_write", {}),
-    "tonight.py": ("read_only", {}),
-    "tour.py": ("local_write", {}),
-    "transits.py": ("local_write", {}),
-    "variables.py": ("local_write", {}),
-    "vet.py": ("local_write", {}),
-    "watch.py": ("hardware", {}),
+    "agent.py": ("read_only", {}, {}),
+    "alert.py": ("external", {"--test": "external"}, DRY),
+    "app.py": ("hardware", {}, {}),                 # the application drives the rig on request
+    # it fetches the alerts first, plan or not
+    "brokers.py": ("local_write", {"--follow": "hardware"},
+                   {"--plan": "local_write", "--dry-run": "local_write"}),
+    "build_catalogue.py": ("local_write", {}, {}),
+    "calibrate.py": ("hardware", {}, {}),
+    "camera_setup.py": ("local_write", {"--check": "read_only"}, {}),
+    "camera_test.py": ("hardware", {}, DRY),
+    "candidates.py": ("read_only", {"--dismiss": "local_write", "--reopen": "local_write"}, {}),
+    "clouds.py": ("read_only", {}, {}),
+    "compare.py": ("local_write", {}, {}),
+    "console.py": ("hardware", {}, {}),             # its server runs the other scripts on request
+    "depth.py": ("local_write", {}, {}),
+    "difference.py": ("local_write", {}, {}),
+    "doctor.py": ("read_only", {}, {}),
+    "focus.py": ("hardware", {"--report": "read_only"}, DRY),
+    "focuser.py": ("hardware", {}, {}),
+    "forced.py": ("local_write", {}, {}),
+    "horizon.py": ("hardware", {"--show": "read_only", "--forget": "local_write"}, DRY),
+    "landmark.py": ("hardware", {"list": "read_only"}, DRY),
+    "liveview.py": ("hardware", {}, {}),
+    "mcp_server.py": ("read_only", {}, {}),
+    "mosaic.py": ("local_write", {}, {}),
+    "mount.py": ("hardware", {"status": "read_only"}, DRY),
+    "notify.py": ("external", {}, {}),
+    "panorama.py": ("local_write", {"show": "read_only"}, DRY),
+    "patrol.py": ("hardware", {"--analyse": "local_write", "--sweep": "local_write"},
+                  {"--plan": "read_only", "--dry-run": "read_only"}),
+    "planet.py": ("hardware", {"--restack": "local_write"}, DRY),
+    "plant.py": ("local_write", {}, {}),
+    "polaralign.py": ("hardware", {}, DRY),
+    "polaris.py": ("hardware", {}, DRY),
+    "policy.py": ("read_only", {}, {}),
+    "process.py": ("local_write", {}, {}),
+    "recover.py": ("local_write", {}, {}),
+    "reference.py": ("read_only", {"--make": "local_write"}, {}),
+    "release.py": ("local_write", {"--publish": "external"}, {}),
+    "remote.py": ("local_write", {}, {}),
+    "replay.py": ("local_write", {}, {}),
+    "report.py": ("local_write", {}, {}),
+    "restack.py": ("local_write", {}, {}),
+    "serve.py": ("local_write", {}, {}),            # the status page: read-only to its visitors
+    "shoot.py": ("hardware", {}, DRY),
+    "skywatch.py": ("hardware", {}, {}),
+    "snap.py": ("hardware", {}, {}),
+    "solve.py": ("local_write", {}, {}),
+    "starwatch.py": ("hardware", {"--measure": "local_write", "--history": "read_only"},
+                     {"--plan": "read_only", "--dry-run": "read_only"}),
+    "sungrazer.py": ("local_write", {}, {}),
+    "tonight.py": ("read_only", {}, {}),
+    "tour.py": ("local_write", {}, {}),
+    "transits.py": ("local_write", {}, {}),
+    "variables.py": ("local_write", {}, {}),
+    "vet.py": ("local_write", {}, {}),
+    "watch.py": ("hardware", {}, {}),
 }
 
 # ty's own subcommands; the ones it passes straight to a script are classed
@@ -144,13 +153,15 @@ def classify(argv):
             return "read_only"
     if script not in COMMANDS:
         return "hardware"
-    if any(w in SAFE for w in rest):
+    keys = [w.split("=", 1)[0] for w in rest]
+    if any(k in HELP for k in keys):
         return "read_only"
-    default, instead = COMMANDS[script]
-    for w in rest:
-        if w.split("=", 1)[0] in instead:
-            return instead[w.split("=", 1)[0]]
-    return default
+    default, instead, safe = COMMANDS[script]
+    said = [safe[k] for k in keys if k in safe]
+    if said:
+        return max(said, key=CLASSES.index)
+    changed = [instead[k] for k in keys if k in instead]
+    return max(changed, key=CLASSES.index) if changed else default
 
 
 def classify_text(command):
