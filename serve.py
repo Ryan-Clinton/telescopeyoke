@@ -140,11 +140,25 @@ def image_status(name):
     return info
 
 
+def share_pictures(discovery):
+    """Copy tonight's candidate pictures where the page can show them, as
+    web/discovery/FIELD-SESSION-patrol-N.png, once each."""
+    import shutil
+    out = WEB / "discovery"
+    for row in discovery["sessions"]:
+        for name in row["pictures"]:
+            target = out / f"{row['field']}-{row['session']}-{name}"
+            if not target.exists():
+                out.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(config.DATA / "frames" / row["field"] / row["session"] / name, target)
+            row.setdefault("shared", []).append(f"discovery/{target.name}")
+
+
 def status_forever(seconds=2):
     """Keep web/status.json describing the newest imaging run, so the page can
     show how far it has got without being rebuilt."""
     target = WEB / "status.json"
-    system, checked, notes = None, 0.0, []
+    system, checked, notes, discovery = None, 0.0, [], None
     names = {t["id"]: t["name"] for t in sky.load_targets()}
     while True:
         try:
@@ -166,8 +180,14 @@ def status_forever(seconds=2):
                     notes = agent.observing()["notes"]
                 except Exception:
                     notes = []
+                try:
+                    discovery = agent.discovery()
+                    share_pictures(discovery)
+                except Exception:
+                    discovery = None
             status["system"] = system
             status["notes"] = notes
+            status["discovery"] = discovery
             partial = target.with_suffix(".part")
             partial.write_text(json.dumps(status), encoding="utf-8")
             host.replace_preview(partial, target)

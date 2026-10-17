@@ -392,6 +392,71 @@ def _explain(trend):
     return notes
 
 
+def discovery(hours=14, now=None, data=None):
+    """Tonight's discovery work, for the status page: every session started
+    in the last `hours`, with how far it got and the patrol's answer when
+    there is one; the mosaic being patrolled, panel by panel; Tabby's star;
+    the comet hunt; and the candidates still open. Reads files only."""
+    import datetime
+    import re
+    import mosaic
+    base = data or config.DATA
+    now = now or time.time()
+    sessions = []
+    for folder in (base / "frames").glob("*/*"):
+        try:
+            started = datetime.datetime.strptime(folder.name, "%Y%m%d-%H%M%S").timestamp()
+        except ValueError:
+            continue
+        if not folder.is_dir() or now - started > hours * 3600 or started > now + 60:
+            continue
+        run = stacking.run_status(folder) if any(folder.glob("frames.json*")) else {}
+        row = {"field": folder.parent.name, "session": folder.name, "started": started,
+               "frames": run.get("captured", 0), "kept": run.get("accepted", 0), "planned": run.get("planned"),
+               "finished": bool(run.get("finished")) or (folder / "frames.json").exists(),
+               "summary": None, "unexplained": None, "pictures": []}
+        patrolled = folder / "patrol.json"
+        if patrolled.exists():
+            p = json.loads(patrolled.read_text(encoding="utf-8"))
+            row["summary"] = p.get("summary") or []
+            row["unexplained"] = (p.get("vet") or {}).get("unexplained")
+            row["pictures"] = sorted(q.name for q in folder.glob("patrol-*.png"))
+        sessions.append(row)
+    sessions.sort(key=lambda r: r["started"])
+    mosaics = {}
+    for row in sessions:
+        found = re.match(r"(.+)-P(\d+)$", row["field"])
+        if not found:
+            continue
+        kept = mosaic.load(found.group(1))
+        if not kept:
+            continue
+        m = mosaics.setdefault(found.group(1), {"name": found.group(1), "columns": kept["columns"],
+                                                "rows": kept["rows"], "panels": {}})
+        m["panels"][int(found.group(2))] = {"state": "done" if row["summary"] is not None else "now",
+                                            "unexplained": row["unexplained"], "session": row["session"]}
+    for m in mosaics.values():
+        m["panels"] = [dict({"panel": n}, **m["panels"].get(n, {"state": "waiting"}))
+                       for n in range(1, m["columns"] * m["rows"] + 1)]
+    tabby = None
+    watched = base / "frames" / "Tabby" / "starwatch.json"
+    if watched.exists():
+        nights = json.loads(watched.read_text(encoding="utf-8")).get("nights") or []
+        if nights:
+            tabby = {"nights": len(nights), "last": nights[-1].get("session"),
+                     "mag": round(nights[-1]["mag"], 3) if nights[-1].get("mag") is not None else None,
+                     "error": nights[-1].get("scatter")}
+    comets = None
+    for hunt in sorted((base / "sungrazer").glob("hunt-*.json")):
+        h = json.loads(hunt.read_text(encoding="utf-8"))
+        comets = {"camera": h.get("camera"), "when": h.get("when"), "towards_sun": len(h.get("towards_sun") or [])}
+    open_ = 0
+    for book in (base / "candidates").glob("*.json"):
+        open_ += sum(k.get("open", False) for k in json.loads(book.read_text(encoding="utf-8")).get("candidates", []))
+    return {"sessions": sessions, "mosaics": list(mosaics.values()), "tabby": tabby, "comets": comets,
+            "open_candidates": open_}
+
+
 def observing(demo=False):
     """One read-only snapshot of everything that bears on the picture: the
     sky, the focus, the tracking and the imaging run, with a plain-words note

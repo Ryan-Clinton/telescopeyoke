@@ -331,6 +331,15 @@ PAGE = Template(r"""<!doctype html>
   </div>
 </div>
 
+<div id="discovery" hidden>
+  <h2>Tonight's discovery</h2>
+  <div class="panel">
+    <div id="mosaics"></div>
+    <div id="discovery-sessions"></div>
+    <div class="dim" id="discovery-more" style="margin-top:8px"></div>
+  </div>
+</div>
+
 <div id="pictures" hidden>
   <h2>Pictures</h2>
   <div class="gallery" id="gallery"></div>
@@ -490,6 +499,38 @@ atlas. Comets: COBS and JPL Horizons. Cloud imagery: EUMETSAT. Catalogue: OpenNG
     }));
   }
 
+  function esc(text) {
+    return String(text).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"})[c]);
+  }
+
+  function showDiscovery(d) {
+    const box = $$("discovery");
+    if (!d || !(d.sessions.length || d.tabby || d.comets)) { box.hidden = true; return; }
+    box.hidden = false;
+    const colour = {done: "#2e7d32", now: "#f9a825", waiting: "#555"};
+    $$("mosaics").innerHTML = d.mosaics.map(m => `<div style="margin-bottom:10px"><b>$${esc(m.name)}</b>
+      <div style="display:grid;grid-template-columns:repeat($${m.columns},1fr);gap:4px;max-width:360px;margin-top:4px">` +
+      m.panels.map(p => `<div style="background:$${colour[p.state]};padding:6px;border-radius:4px;text-align:center"
+        title="$${esc(p.state)}">P$${p.panel}$${p.unexplained ? " ⚠ " + p.unexplained : ""}<br>
+        <small>$${p.state === "now" ? "imaging" : p.state === "done" ? "searched" : "to come"}</small></div>`).join("") +
+      `</div></div>`).join("");
+    $$("discovery-sessions").innerHTML = d.sessions.slice().reverse().map(s => {
+      const time = new Date(s.started * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
+      const frames = s.planned ? `$${s.kept} of $${s.planned} frames kept` : `$${s.kept} of $${s.frames} frames kept`;
+      const answer = s.summary !== null ? s.summary.map(esc).join("<br>") :
+        s.finished ? "imaged; not searched" : "<i>under way</i>";
+      const flag = s.unexplained ? ` <b style="color:#e53935">$${s.unexplained} unexplained</b>` : "";
+      const pics = (s.shared || []).map(p => `<a href="$${p}"><img src="$${p}" style="height:90px;margin:4px 4px 0 0"></a>`).join("");
+      return `<div style="border-top:1px solid #333;padding:6px 0"><b>$${esc(s.field)}</b> $${time} · $${frames}$${flag}
+        <div class="dim" style="margin-top:2px">$${answer}</div>$${pics}</div>`;
+    }).join("");
+    const more = [];
+    if (d.tabby) more.push(`Tabby's star: G $${d.tabby.mag} ± $${d.tabby.error} on $${d.tabby.nights} night$${d.tabby.nights === 1 ? "" : "s"}`);
+    if (d.comets) more.push(`comet hunt ($${esc(d.comets.camera)}, $${esc(d.comets.when)}): $${d.comets.towards_sun} heading for the Sun`);
+    more.push(`$${d.open_candidates} candidate$${d.open_candidates === 1 ? "" : "s"} open`);
+    $$("discovery-more").textContent = more.join(" · ");
+  }
+
   async function refresh() {
     $$("clock").textContent = new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"});
     let status;
@@ -502,6 +543,7 @@ atlas. Comets: COBS and JPL Horizons. Cloud imagery: EUMETSAT. Catalogue: OpenNG
     const now = showImage("now", status.now), stack = showImage("stack", status.stack, "stack-kind");
     $$("live-section").hidden = !(run || now || stack);
     showPictures(status.pictures || []);
+    showDiscovery(status.discovery);
     showSystem(status.system);
     // The webcam comes to the top while the mount is slewing.
     $$("moving").hidden = !(status.scope_age != null && status.scope_age < 20);
