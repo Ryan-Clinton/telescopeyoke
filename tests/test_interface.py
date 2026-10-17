@@ -472,6 +472,21 @@ def test_a_hunt_matches_the_sungrazer_schema(tmp_path, monkeypatch):
           "sungrazer")
 
 
+def test_every_fields_candidates_and_the_hunts_comets_in_one_view(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    (tmp_path / "candidates").mkdir()
+    (tmp_path / "candidates" / "M31.json").write_text(json.dumps({"name": "M31", "candidates": [
+        {"id": "M31-1", "ra": 10.6, "dec": 41.2, "first": "20261014", "open": True, "nights": []},
+        {"id": "M31-2", "ra": 10.7, "dec": 41.3, "first": "20261006", "open": False, "nights": []}]}))
+    (tmp_path / "sungrazer").mkdir()
+    (tmp_path / "sungrazer" / "hunt-ccor1.json").write_text(json.dumps({"camera": "ccor1", "when": "2026-10-17 12:00",
+        "towards_sun": [{"pictures": [1, 2, 3, 4, 5], "towards_sun": 0.9, "movie": "m.gif"}]}))
+    answer = valid(interface.run("candidates", agent.candidates), "candidates")["data"]
+    assert [k["id"] for k in answer["candidates"]] == ["M31-1"] and answer["candidates"][0]["field"] == "M31"
+    assert answer["comets"] == [{"pictures": [1, 2, 3, 4, 5], "towards_sun": 0.9, "movie": "m.gif",
+                                 "camera": "ccor1", "hunted": "2026-10-17 12:00"}]
+
+
 def test_the_rigs_view_matches_its_schema(tmp_path, monkeypatch):
     import config
     monkeypatch.setattr(config, "RIGS", tmp_path)

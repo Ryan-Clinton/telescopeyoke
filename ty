@@ -15,7 +15,7 @@
     ./ty console             the control console in the browser, on this computer only
     ./ty rigs                every rig in one view: what each is and what it is doing
     ./ty characterise        what this rig has had measured about itself, and what it has not
-    ./ty candidates          every field's open candidates, the most nights seen first
+    ./ty candidates          every field's open candidates, the most nights seen first, and the comet hunt's
     ./ty --rig heq5 ...      any of these for one rig (its settings are rigs/heq5.toml)
     ./ty mount ...           everything mount.py does, e.g. ./ty mount goto M27 --dry-run
     ./ty tonight ...         the full report, as tonight.py

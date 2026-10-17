@@ -6,6 +6,9 @@
   "type": "object",
   "required": ["name", "candidates"],
   "properties": {
+    "comets": {"type": "array", "description": "ty candidates only: the comet hunt's newest tracks heading in towards the Sun (sungrazer.py hunt), each with its camera and when it was hunted.",
+               "items": {"type": "object", "required": ["camera", "hunted", "movie"],
+                         "properties": {"camera": {"type": "string"}, "hunted": {"type": "string"}, "movie": {"type": "string"}}}},
     "name": {"type": "string"},
     "candidates": {
       "type": "array",

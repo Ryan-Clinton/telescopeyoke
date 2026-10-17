@@ -79,8 +79,9 @@ def capabilities():
 
 def candidates():
     """Every field's open candidates in one view, in the same shape as
-    candidates.py's, each with its field; the most nights seen first. It
-    reads the candidate books and nothing else."""
+    candidates.py's, each with its field; the most nights seen first; and
+    the comet hunt's newest tracks heading in towards the Sun. It reads the
+    candidate books and the hunt's answers and nothing else."""
     import candidates as book
     found = []
     for file in sorted((config.DATA / "candidates").glob("*.json")):
@@ -90,7 +91,15 @@ def candidates():
             continue
         found += [dict(k, field=kept.get("name", file.stem)) for k in kept.get("candidates", []) if k.get("open")]
     found.sort(key=lambda k: (-book.nights_seen(k), k["id"]))
-    return {"name": "every field", "candidates": found}
+    # The comet hunt's newest answer from each camera: what heads in towards the Sun.
+    comets = []
+    for file in sorted((config.DATA / "sungrazer").glob("hunt-*.json")):
+        try:
+            hunt = json.loads(file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        comets += [dict(c, camera=hunt.get("camera"), hunted=hunt.get("when")) for c in hunt.get("towards_sun", [])]
+    return {"name": "every field", "candidates": found, "comets": comets}
 
 
 def rigs():
