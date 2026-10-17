@@ -428,6 +428,7 @@ plan the night → GoTo → photograph → plate-solve (ASTAP) → correct → p
 | [Looking for something new](docs/discovery.md) | Novae in M31 and M33: how deep the rig reaches, proper image subtraction, vetting, and `patrol.py`. A plan with measurements; a patrol is one command, nothing found yet. |
 | [How a picture is made](docs/imaging.md) | Calibration, frame checks, lining up, stacking, the quality pass. |
 | [Focusing by ear](docs/focus.md) | Turn the knob and the laptop talks you onto focus. |
+| [The cloud sensor](docs/cloudsensor.md) | A plan for a £40 box on the wall that says whether the sky above the garden is clear, cloudy or raining, all night. Not yet built. |
 | [The mount is wonky; measure how wonky](docs/tracking.md) | Drift from a rough polar alignment, and how it is cancelled. |
 | [Setup](docs/setup.md) | Installing, the camera driver, the plate solver, what the computer needs. |
 | [For programs and AI agents](docs/agents/README.md) | `--json`, `--dry-run`, the `ty` command, the web API and the MCP server. |
