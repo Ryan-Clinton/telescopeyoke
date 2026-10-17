@@ -487,6 +487,21 @@ def test_every_fields_candidates_and_the_hunts_comets_in_one_view(tmp_path, monk
                                  "camera": "ccor1", "hunted": "2026-10-17 12:00"}]
 
 
+def test_transits_tonight_and_measured_match_their_schema(tmp_path):
+    import numpy as np
+    import transits
+    from test_transits import NOW, light_curve, planet
+    valid(interface.run("transits", lambda: transits.tonight(config.example(), [planet()], now=NOW,
+                                                             say=lambda *_: None)), "transits")
+    jd, mag = light_curve()
+    p = planet()
+    night = {"jd": list(jd), "stars": np.array([[p["ra"], p["dec"], 11.0, 0.9]]), "mags": mag[:, None]}
+    session = tmp_path / "TEST-1" / "20261016-220000"
+    session.mkdir(parents=True)
+    valid(interface.run("transits", lambda: transits.measure(session, "TEST-1 b", say=lambda *_: None, rows=[p],
+                                                             night=night)), "transits")
+
+
 def test_the_rigs_view_matches_its_schema(tmp_path, monkeypatch):
     import config
     monkeypatch.setattr(config, "RIGS", tmp_path)

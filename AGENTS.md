@@ -50,6 +50,7 @@ them and every file kept under `demo/`.
 | `reference.py`, `vet.py`, `plant.py`, `recover.py` | Each field's kept reference; the evidence for each candidate and its verdict; fake novae through the whole pipeline for the discovery completeness; a known nova rediscovered from ZTF images (`docs/discovery.md`, phase 1) |
 | `sungrazer.py` | Comets near the Sun in SOHO's LASCO pictures, for cloudy nights: fetches them politely, finds what moves other than as the stars do, and makes a movie of each for a person (`docs/discovery.md`, phase 4) |
 | `brokers.py` | Public alerts: ALeRCE's new supernova-like transients, bright enough and up here tonight, not on the Rochester lists; `--unreported` searches the last month for bright ones on neither list (`docs/discovery.md`, phase 6) |
+| `transits.py` | Known exoplanet transits: which can be taken whole from here tonight (NASA's Exoplanet Archive), and the depth and timing fitted from a night's frames (`docs/discovery.md`, phase 9) |
 | `variables.py` | Variable stars in frames already taken: light curves from batches of each night's frames, the stars that scatter more than their brightness allows, checked against VSX (`docs/discovery.md`, phase 9) |
 | `mosaic.py` | Panels for an object bigger than the frame, kept in `mosaics/`; `mount.find_target` turns a panel name (`M31-P2`) into its centre |
 | `tour.py` | Records the demo being used, for the README: `docs/tour.gif` and `docs/screens/` (Ubuntu) |

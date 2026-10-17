@@ -5,6 +5,12 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
 
 ## Not yet released
 
+- **Exoplanet transits**: `./transits.py` lists the known transits that can
+  be taken whole in the dark here tonight, deepest first, from NASA's
+  Exoplanet Archive, and keeps each star by name for `mount.py goto`;
+  `./transits.py measure SESSION --planet NAME` makes the star's light
+  curve from the night's frames and fits the depth and how early or late
+  the transit came.
 - **Variable stars**: `./variables.py M31` stacks each night's kept frames
   in batches (10 by default), measures every Gaia star between G 10.5 and
   16 with no close neighbour in each batch, puts each batch on Gaia's
