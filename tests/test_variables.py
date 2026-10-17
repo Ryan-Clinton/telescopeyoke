@@ -68,7 +68,7 @@ def test_the_varying_star_is_found_and_a_flat_known_one_is_named(tmp_path):
     images, wcs, catalogue, swinger = made_up_night()
     session = session_with_frames(tmp_path / "M31" / "20261014-021118", BATCHES * 10)
     night = variables.night(session, "M31", 10, say=lambda *_: None, stack=lambda groups: images,
-                            solve=lambda lum: wcs, gaia=lambda ra, dec, r: catalogue)
+                            solve=lambda lum: wcs, gaia=lambda ra, dec, r: catalogue, brightest=variables.BRIGHTEST)
     assert len(night["jd"]) == BATCHES and night["mags"].shape[0] == BATCHES
     assert len(night["stars"]) >= 20
     steady = next(row for row in night["stars"] if abs(row[0] - catalogue[swinger, 0]) > 1e-6)
@@ -130,3 +130,19 @@ def test_a_dipper_is_listed_though_its_scatter_is_ordinary():
                           "mag": list(mag), "session": ["s"] * 60}
     listed = variables.judge(curves)
     assert [s["ra"] for s in listed] == [10.07] and not listed[0]["variable"] and listed[0]["dips"]
+
+
+def test_a_dip_its_neighbours_share_is_the_skys_not_the_stars():
+    rng = np.random.default_rng(5)
+    jd = list(np.arange(60) / 24)
+    curves = {}
+    for k in range(30):
+        mag = 13.0 + rng.normal(0, 0.01, 60)
+        if k < 10:
+            mag[20:24] += 0.12                                         # a cloud over one corner
+        if k == 25:
+            mag[40:44] += 0.12                                         # one star alone
+        curves[str(k)] = {"ra": 10.0 + (k // 10) * 0.5 + (k % 10) / 200, "dec": 41.0, "g": 13.0, "colour": None,
+                          "jd": jd, "mag": list(mag), "noise": [0.01] * 60, "session": ["s"] * 60}
+    listed = [s for s in variables.judge(curves) if s["dips"]]
+    assert [s["ra"] for s in listed] == [pytest.approx(11.025)]

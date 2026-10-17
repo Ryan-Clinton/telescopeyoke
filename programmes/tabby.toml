@@ -1,0 +1,15 @@
+# A nightly look at Tabby's star, KIC 8462852 (starwatch.py tabby).
+# ./starwatch.py tabby --plan, then ./starwatch.py tabby
+
+target = "Tabby"
+
+# Short frames: at G 11.8 the star fills the camera's wells in 16 s on a
+# sharp night (variables.TRUSTED); 4 s leaves it about 1.5 mag of room.
+exposure = 4
+gain = 1500
+
+# Ten minutes is 150 frames: 15 points of 10, enough for the night's level.
+minutes = 10
+
+# A dip lasts days; the patrol's halves-of-the-night check is not the test.
+both_halves = false

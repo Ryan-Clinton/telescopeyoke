@@ -19,7 +19,8 @@ Angkor were caught.
 `starwatch.py NAME` keeps the star by name (cache/transients.json, so
 ./mount.py goto Tabby knows it), runs the patrol on it (patrol.py, with
 every check it makes: the motion lock first) for --minutes, then measures
-it as variables.py measures every star: batches of --bin frames, each put
+it (in programmes/NAME.toml's 4 s frames, short enough not to fill the
+camera's wells on a star of G 11.8) as variables.py measures every star: batches of --bin frames, each put
 on Gaia's scale by the other stars in the picture. The night's median goes
 into frames/FIELD/starwatch.json beside the nights before; once there are
 BASELINE_NIGHTS of them, a night WARN magnitudes or more fainter than
@@ -39,11 +40,12 @@ import config
 import interface
 
 STARS = {
-    "tabby": {"name": "Tabby", "id": "KIC 8462852", "aka": "Tabby's star, Boyajian's star",
+    "tabby": {"name": "Tabby", "programme": "tabby", "id": "KIC 8462852", "aka": "Tabby's star, Boyajian's star",
               "ra": 301.564392, "dec": 44.456839, "v": 11.7},
 }
 MINUTES = 10.0
 BIN = 10
+BRIGHTEST = 10.5         # G: trusted in its programme's 4 s frames (16 s ones fill the wells near G 13)
 WARN = 0.03              # magnitudes fainter than usual that make a dip
 BASELINE_NIGHTS = 3      # nights measured before a usual level is trusted
 WITHIN = 5.0             # arcseconds from the star's place to a measured star
@@ -88,7 +90,7 @@ def measure(key, session, size=BIN, say=print, night=None):
     import vet
     s = star(key)
     session = Path(session)
-    n = night or variables.night(session, s["name"], size, say)
+    n = night or variables.night(session, s["name"], size, say, brightest=BRIGHTEST)
     stars = np.asarray(n["stars"])
     if not len(stars):
         raise interface.Refusal("NO_SESSION", f"No star measured in {session.name}.")
@@ -132,7 +134,7 @@ def look(key, minutes=MINUTES, plan=False, dry_run=False, say=print, patrol_run=
     brokers.keep_target(s["name"], s["ra"], s["dec"], {"kept_by": "starwatch.py", "id": s["id"]})
     patrol_run = patrol_run or (lambda a: patrol.run(a, say))
     began = __import__("time").time()
-    done = patrol_run(_argparse.Namespace(programme=s["name"], plan=plan, minutes=minutes, analyse=None, sweep=False,
+    done = patrol_run(_argparse.Namespace(programme=s["programme"], plan=plan, minutes=minutes, analyse=None, sweep=False,
                                           all_history=False, dry_run=dry_run, json=False))
     if plan or dry_run:
         return {"star": s["id"], "name": s["name"], "patrol": done, "kind": "inferred"}

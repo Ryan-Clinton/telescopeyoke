@@ -51,7 +51,9 @@ def test_following_the_star_runs_the_patrol_on_it_and_a_plan_measures_nothing(da
     import mount
     asked = []
     answer = starwatch.look("tabby", plan=True, say=lambda *_: None, patrol_run=lambda a: asked.append(a) or {"p": 1})
-    assert asked[0].programme == "Tabby" and asked[0].minutes == starwatch.MINUTES and answer["patrol"] == {"p": 1}
+    assert asked[0].programme == "tabby" and asked[0].minutes == starwatch.MINUTES and answer["patrol"] == {"p": 1}
+    import patrol
+    assert patrol.programme("tabby")["exposure"] == 4 and patrol.programme("tabby")["target"] == "Tabby"
     target = mount.find_target("tabby")
     assert (target["ra"], target["dec"]) == (TABBY["ra"], TABBY["dec"])
 

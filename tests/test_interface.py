@@ -452,7 +452,8 @@ def test_a_variables_answer_matches_its_schema(tmp_path, monkeypatch):
     session_with_frames(tmp_path / "frames" / "M31" / "20261014-021118", BATCHES * 10)
     real = variables.night
     monkeypatch.setattr(variables, "night", lambda s, name, size, say: real(
-        s, name, size, say, stack=lambda groups: images, solve=lambda lum: wcs, gaia=lambda ra, dec, r: catalogue))
+        s, name, size, say, stack=lambda groups: images, solve=lambda lum: wcs, gaia=lambda ra, dec, r: catalogue,
+        brightest=variables.BRIGHTEST))
     args = argparse.Namespace(name="M31", session=None, bin=10, offline=True)
     answer = valid(interface.run("variables", lambda: variables.run(args, say=lambda *_: None)), "variables")
     assert answer["data"]["candidates"] == 1 and (tmp_path / "frames" / "M31" / "variables.json").exists()

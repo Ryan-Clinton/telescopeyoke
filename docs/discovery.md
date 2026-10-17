@@ -545,6 +545,51 @@ runs the CCOR-1 hunt every 6 hours as a systemd user timer: the last
 day's pictures, only what heads in towards the Sun kept in
 sungrazer/hunt-ccor1.json, pictures over 3 days old deleted.
 
+### Variable stars, dippers and transits: `variables.py`, `starwatch.py`, `transits.py`
+
+**First measured 17 October 2026, on the six M31 nights so far.**
+`variables.py` stacks each night's kept frames in batches of 10 (160 s
+of 16 s frames), measures every Gaia star alone in the picture at its
+Gaia place, and puts each batch on Gaia's scale by a fit through all of
+them: a surface over the picture (the vignetting each night's pointing
+moves, there being no flats), the glow under each star, and its
+brightness (sharp seeing measures a star on M31's disc, and a bright one
+near a full well, differently from soft). Each point's noise is the
+spread of stars as bright in its own batch, together with how far stars
+as bright wander from night to night. What that gives, per 160 s point:
+
+| G | Stars | Noise in a point | Night to night |
+|---|---|---|---|
+| 13 to 14 | 123 | 21 mmag (2%) | 16 mmag |
+| 14 to 15 | 221 | 33 mmag | 15 mmag |
+| 15 to 16 | 313 | 70 mmag | 30 mmag |
+
+Stars brighter than G 13 are left out of judging: in 16 s frames on the
+sharp 14 October night (6" stars) the G 11 to 12.7 ones lost light to
+full wells, and every one of them looked variable. On galaxy light more
+than 1.2 times the sky they are left out too. Of the 40 VSX variables in
+the field, the clearest (TSVSC1 TN-N330012310-13-67-2, a contact binary)
+is seen to vary; most of the others are rotating stars and δ Scuti
+pulsators of a few hundredths of a magnitude, below this. A dip is three
+batches or more in a row, each 3 times its noise and 2% fainter, not
+shared by a fifth or more of the stars within 10'
+(those are the sky's). Eight stars not in VSX are still flagged; every
+one dips in the 13 October 23:26 session, where two of them 15' apart
+sag and recover with the same shape: something on the picture that
+night, not the stars. So no new variable yet, and the honest state is
+that one session's drift can still pass for a dip; more nights will
+show which flags repeat.
+
+`starwatch.py tabby` is a 10-minute look at Tabby's star (KIC 8462852,
+G 11.8) in 4 s frames (programmes/tabby.toml), so it does not fill the
+wells; each night's level is kept, and once there are three, a night
+3% or more fainter, beyond its noise, is called a dip. In October it is
+74° up at 21:00, clear of the house until midnight. `transits.py` lists
+the known exoplanet transits whole in the dark here tonight, around stars
+of V 10.5 to 13, and fits a night's depth and timing; the first to try
+is a deep one, such as HAT-P-32 b (2.2%), to prove the rig on a dip of a
+known size before any ExoClock timing.
+
 ### The candidate page
 
 On the status page, one page per candidate, a small version of SkyPortal's:

@@ -46,7 +46,9 @@ import config
 import interface
 
 BIN = 10             # frames in each point of a light curve
-BRIGHTEST = 10.5     # G: brighter stars fill the camera's wells
+BRIGHTEST = 10.5     # G: brighter stars are not even measured
+TRUSTED = 13.0       # G: brighter ones fill the camera's wells in a 16 s frame on a sharp night (14 October 2026's
+                     # 6" stars: G 11 to 12.7 lost light then), so are left out of judging; 4 s frames reach 11.5
 FAINTEST = 16.0      # G: fainter ones are too noisy in one batch
 ALONE = 15.0         # arcseconds: a star with a neighbour within this, less than CROWD mag fainter, shares its light
 CROWD = 3.0
@@ -54,13 +56,16 @@ MARGIN = 60          # pixels from the edge of the picture
 LOUD = 3.0           # scatter this many times its brightness's usual scatter is variable
 LEAST = 8            # points a light curve needs before it can be called variable
 MATCH = 6.0          # arcseconds to a VSX star
-GLOW = 1.5           # a star on light this many times the picture's median sky is on a galaxy: left out
+GLOW = 1.2           # a star on light this many times the picture's median sky is on a galaxy: left out
 SURFACE = 30         # stars a batch needs before its zero point is a surface rather than one number
 VERSION = 1          # of the kept measurements: a change in what is measured makes them again
 STEP = 0.5           # magnitudes in each bin of the usual scatter
 DIP_RUN = 3          # points in a row that make a dip
 DIP_SIGMA = 3.0      # each that many times the usual scatter fainter than the star's median
 DIP_DEPTH = 0.02     # and at least this many magnitudes fainter
+NEIGHBOURS = 10.0    # arcminutes: the stars round a dip, which must not dip with it
+SHARED = 0.2         # a dip is the sky's, not the star's, when this share of its neighbours are low too
+LOW = 2.0            # a neighbour is low at this many times its own noise fainter
 
 
 # --- measuring ---------------------------------------------------------------
@@ -116,13 +121,15 @@ def chosen(stars, wcs, shape, brightest=BRIGHTEST, faintest=FAINTEST):
     return rows[alone], xy[alone]
 
 
-def surface(xy, values, rounds=3):
-    """A smooth surface (x, y and their squares and product) through the
+def surface(xy, values, extra=(), rounds=3):
+    """A smooth surface (x, y and their squares and product, and any
+    `extra` columns: the glow under each star, its brightness) through the
     values at the places, refitted with the far-off ones left out."""
     xy = np.asarray(xy, float)
     scale = np.maximum(np.abs(xy).max(axis=0), 1.0)
     u, v = (xy / scale).T
-    design = np.column_stack([np.ones_like(u), u, v, u * u, v * v, u * v])
+    more = [np.asarray(e, float) - np.nanmedian(e) for e in extra]
+    design = np.column_stack([np.ones_like(u), u, v, u * u, v * v, u * v, *more])
     use = np.isfinite(values)
     fit = None
     for _ in range(rounds):
@@ -137,11 +144,13 @@ def surface(xy, values, rounds=3):
     return design @ fit
 
 
-def on_gaia(fluxes, g, xy=None):
+def on_gaia(fluxes, g, xy=None, glow=None):
     """Each batch's measured light put on Gaia's G scale: by a smooth
     surface over the picture through all its stars where they are many
-    (with `xy`), else by their median. Rows of batches, columns of stars,
-    NaN where unmeasured."""
+    (with `xy`), also following the glow under each star (with `glow`) and
+    its brightness, as sharp seeing measures a star on a galaxy and a
+    nearly full well differently from soft; else by their median. Rows of
+    batches, columns of stars, NaN where unmeasured."""
     fluxes = np.asarray(fluxes, float)
     with np.errstate(invalid="ignore", divide="ignore"):
         inst = np.where(fluxes > 0, -2.5 * np.log10(fluxes), np.nan)
@@ -149,9 +158,30 @@ def on_gaia(fluxes, g, xy=None):
     out = np.empty_like(inst)
     for b in range(len(inst)):
         if xy is not None and np.isfinite(offsets[b]).sum() >= SURFACE:
-            out[b] = inst[b] + surface(xy, offsets[b])
+            extra = () if glow is None else (np.nan_to_num(glow, nan=1.0), g, (g - np.nanmedian(g)) ** 2)
+            out[b] = inst[b] + surface(xy, offsets[b], extra)
         else:
             out[b] = inst[b] + np.nanmedian(offsets[b])
+    return out
+
+
+def noise_of(mags, g, step=STEP, floor=0.003):
+    """Each point's noise: the spread, in its own batch, of the stars as
+    bright as it about their own medians for the night. A hazy or shallow
+    batch is noisier for every star in it, and counts for less."""
+    mags = np.asarray(mags, float)
+    left = mags - np.nanmedian(mags, axis=0)[None, :]
+    out = np.full(mags.shape, np.nan)
+    bins = np.floor(np.asarray(g, float) / step)
+    for b in range(len(mags)):
+        row = left[b]
+        whole = row[np.isfinite(row)]
+        overall = 1.4826 * float(np.median(np.abs(whole - np.median(whole)))) if len(whole) >= 5 else np.nan
+        for k in np.unique(bins):
+            inside = (bins == k) & np.isfinite(row)
+            v = row[inside]
+            spread = 1.4826 * float(np.median(np.abs(v - np.median(v)))) if len(v) >= 5 else overall
+            out[b, bins == k] = max(spread, floor) if np.isfinite(spread) else np.nan
     return out
 
 
@@ -209,17 +239,19 @@ def measured(session, name, size, say=print, stack=None, solve=None, gaia=None):
     return record
 
 
-def night(session, name, size, say=print, stack=None, solve=None, gaia=None):
+def night(session, name, size, say=print, stack=None, solve=None, gaia=None, brightest=TRUSTED):
     """One night's light curves: the batches' times, and their magnitudes
-    for the stars alone and off any galaxy's glow."""
+    for the stars alone, off any galaxy's glow, and no brighter than
+    `brightest`."""
     r = measured(session, name, size, say, stack, solve, gaia)
     stars = np.array([[np.nan if v is None else v for v in row] for row in r["stars"]], float).reshape(-1, 4)
     flux = np.array([[np.nan if v is None else v for v in row] for row in r["flux"]], float)
     xy = np.array(r["xy"], float).reshape(-1, 2)
     glow = np.array([np.inf if v is None else v for v in r["glow"]], float)
-    keep = np.array(r["alone"], bool) & (glow <= GLOW)
-    mags = on_gaia(flux[:, keep], stars[keep, 2], xy[keep])
-    return {"session": r["session"], "jd": r["jd"], "stars": stars[keep], "mags": mags, "fwhm_px": r["fwhm_px"]}
+    keep = np.array(r["alone"], bool) & (glow <= GLOW) & (stars[:, 2] >= brightest)
+    mags = on_gaia(flux[:, keep], stars[keep, 2], xy[keep], glow[keep])
+    return {"session": r["session"], "jd": r["jd"], "stars": stars[keep], "mags": mags,
+            "noise": noise_of(mags, stars[keep, 2]), "fwhm_px": r["fwhm_px"]}
 
 
 # --- judging -----------------------------------------------------------------
@@ -238,11 +270,13 @@ def gather(nights):
                                                         "g": float(row[2]),
                                                         "colour": None if len(row) < 4 or not np.isfinite(row[3])
                                                         else float(row[3]),
-                                                        "jd": [], "mag": [], "session": []})
-            for t, m in zip(n["jd"], n["mags"][:, j]):
+                                                        "jd": [], "mag": [], "noise": [], "session": []})
+            noise = n.get("noise")
+            for b, (t, m) in enumerate(zip(n["jd"], n["mags"][:, j])):
                 if np.isfinite(m) and t is not None:
                     c["jd"].append(float(t))
                     c["mag"].append(float(m))
+                    c["noise"].append(float(noise[b, j]) if noise is not None and np.isfinite(noise[b, j]) else None)
                     c["session"].append(n["session"])
     return curves
 
@@ -279,6 +313,7 @@ def dips(jd, mag, noise, run=DIP_RUN, sigma=DIP_SIGMA, depth=DIP_DEPTH):
     `depth`. Each as {start, end (JD), points, depth (mag)}."""
     order = np.argsort(jd)
     jd, mag = np.asarray(jd, float)[order], np.asarray(mag, float)[order]
+    noise = np.broadcast_to(np.asarray(noise, float), mag.shape)[order]
     middle = float(np.median(mag))
     low = (mag - middle >= sigma * noise) & (mag - middle >= depth)
     out, i = [], 0
@@ -296,10 +331,77 @@ def dips(jd, mag, noise, run=DIP_RUN, sigma=DIP_SIGMA, depth=DIP_DEPTH):
     return out
 
 
+def night_to_night(curves, step=STEP):
+    """How far a steady star's nights wander from each other, at each
+    brightness: the median, over the stars as bright, of the spread of
+    each one's nightly medians. What one night's correction leaves."""
+    rows = []
+    for c in curves.values():
+        nights = {}
+        for m, n in zip(c["mag"], c["session"]):
+            nights.setdefault(n, []).append(m)
+        if len(nights) >= 3:
+            medians = np.array([np.median(v) for v in nights.values()])
+            rows.append((float(np.median(c["mag"])), 1.4826 * float(np.median(np.abs(medians - np.median(medians))))))
+    if len(rows) < 5:
+        return lambda m: 0.0
+    mags, spreads = np.array(rows).T
+    centres, levels = [], []
+    for lo in np.arange(math.floor(mags.min()), math.ceil(mags.max()) + step, step):
+        inside = (mags >= lo) & (mags < lo + step)
+        if inside.sum() >= 5:
+            centres.append(lo + step / 2)
+            levels.append(float(np.median(spreads[inside])))
+    if not centres:
+        return lambda m: float(np.median(spreads))
+    return lambda m: float(np.interp(m, centres, levels))
+
+
+def with_nights(curves):
+    """Each point's whole noise: its own batch's, and the night-to-night
+    wander of stars as bright, together (as `total`)."""
+    wander = night_to_night(curves)
+    for c in curves.values():
+        noise = c.get("noise") or []
+        if len(noise) == len(c["mag"]) and all(v is not None for v in noise):
+            extra = wander(float(np.median(c["mag"])))
+            c["total"] = [math.hypot(v, extra) for v in noise]
+    return curves
+
+
+def lows(curves):
+    """For each batch's time, the stars measured then and whether each was
+    low (LOW times its own noise fainter than its median)."""
+    out = {}
+    for c in curves.values():
+        noise = c.get("total") or c.get("noise") or []
+        if len(noise) != len(c["mag"]) or any(v is None for v in noise):
+            continue
+        middle = float(np.median(c["mag"]))
+        for t, m, n in zip(c["jd"], c["mag"], noise):
+            out.setdefault(round(t, 5), []).append((c["ra"], c["dec"], (m - middle) / n >= LOW))
+    return out
+
+
+def shared(dip, ra, dec, low_at, jd):
+    """Whether a dip is the sky's: in its batches, SHARED or more of the
+    stars within NEIGHBOURS arcminutes were low too."""
+    for t in jd:
+        if not dip["start"] - 1e-6 <= t <= dip["end"] + 1e-6:
+            continue
+        near = [lo for r, d, lo in low_at.get(round(t, 5), [])
+                if (r, d) != (ra, dec) and 0 < 60 * math.hypot((r - ra) * math.cos(math.radians(dec)), d - dec) <= NEIGHBOURS]
+        if len(near) >= 5 and sum(near) / len(near) >= SHARED:
+            return True
+    return False
+
+
 def judge(curves, known=(), loud=LOUD, least=LEAST):
     """Each star's scatter beside the usual for its brightness; the loud
     ones and every VSX star, with their light curves."""
     expected = usual(curves)
+    with_nights(curves)
+    low_at = lows(curves)
     tree = None
     if known:
         cosd = math.cos(math.radians(float(np.median([k["dec"] for k in known]))))
@@ -309,19 +411,29 @@ def judge(curves, known=(), loud=LOUD, least=LEAST):
         if len(c["mag"]) < least:
             continue
         mag, spread = float(np.median(c["mag"])), scatter(c["mag"])
-        ratio = spread / expected(mag) if expected(mag) > 0 else float("nan")
+        noise = np.array([np.nan if v is None else v
+                          for v in c.get("total") or c.get("noise") or [None] * len(c["mag"])], float)
+        if np.isfinite(noise).all():
+            # In units of each point's own noise: about 1 for a steady star on any night.
+            ratio = scatter((np.array(c["mag"]) - mag) / noise)
+            typical = float(np.median(noise))
+        else:
+            noise = np.full(len(c["mag"]), expected(mag))
+            ratio = spread / expected(mag) if expected(mag) > 0 else float("nan")
+            typical = expected(mag)
         vsx = None
         if tree is not None:
             d, i = tree.query((c["ra"] * cosd * 3600, c["dec"] * 3600))
             if d <= MATCH:
                 vsx = known[i]
-        dipped = dips(c["jd"], c["mag"], expected(mag)) if expected(mag) > 0 else []
+        dipped = dips(c["jd"], c["mag"], noise) if np.isfinite(noise).all() else []
+        dipped = [d for d in dipped if not shared(d, c["ra"], c["dec"], low_at, c["jd"])]
         if ratio >= loud or vsx or dipped:
             lo, hi = np.percentile(c["mag"], [5, 95])
             out.append({"ra": round(c["ra"], 5), "dec": round(c["dec"], 5), "g": round(c["g"], 2),
                         "colour": None if c["colour"] is None else round(c["colour"], 2),
                         "points": len(c["mag"]), "median": round(mag, 3), "scatter": round(spread, 3),
-                        "usual": round(expected(mag), 3), "loudness": round(ratio, 1),
+                        "usual": round(typical, 3), "loudness": round(ratio, 1),
                         "range": round(float(hi - lo), 3), "variable": bool(ratio >= loud), "dips": dipped,
                         "vsx": None if vsx is None else {"name": vsx["name"], "type": vsx["type"]},
                         "jd": [round(t, 5) for t in c["jd"]], "mag": [round(m, 3) for m in c["mag"]],
