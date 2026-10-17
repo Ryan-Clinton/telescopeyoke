@@ -93,7 +93,7 @@ The surveys we are up against, and where they stop:
 |---|---|---|
 | Novae in M81 | low for this rig: they are found near magnitude 20, one in 2025 at 19.8 in a 3000 s stack on a 0.65 m telescope | not yet |
 | Supernovae in bright galaxies | low per field: ASAS-SN finds most bright ones within a day, and amateurs who still win image hundreds of galaxies a night with 0.35 to 0.6 m telescopes. ZTF's Bright Transient Survey covers the northern sky every 2 to 3 nights to 18.5, so bright northern supernovae are a crowded race. They can be bright: Koichi Itagaki found SN 2023ixf in M101 at 14.9 | through every session searched, below; no dedicated patrol |
-| Galactic novae | low with the 150P's 1° field; they are found with DSLRs and 50 to 300 mm lenses covering the Milky Way (John Seach, Tadashi Kojima, 2025) | a wide-field lens node, below |
+| Galactic novae | low with the 150P's 1° field; they are found with camera lenses covering the Milky Way (John Seach, Tadashi Kojima, 2025) | no: not a telescope's job |
 | Exoplanets in TESS data | open to volunteers: Planet Hunters TESS invites it, and NASA's open-source ExoMiner++ flagged 7,000 TESS candidates on its first run | a later cloudy-night programme |
 | Asteroids and comets through the telescope | very low for discovery; good for recovering known ones | a later programme, `moving.py`, below |
 
@@ -112,7 +112,6 @@ channels at once and answering faster than a person could alone.
 | Public alerts, for unreported transients | all the time; confirmed on clear nights | sometimes |
 | Every science picture taken | after every session | yes, already |
 | Our old pictures, searched again | whenever a method improves | no |
-| Galactic novae | clear nights, with a lens | a second camera |
 | Variable stars, TESS transits | from data already held | no |
 
 ### A discovery scheduler, not a target list
@@ -216,17 +215,6 @@ measurement or the forced photometry improves, every stored frame is
 searched again (`./difference.py --all-history`). Professionals do find
 things this way: M31N 2022-10c, a possible symbiotic nova, was found in a
 search of 2022 archive frames, with earlier detections back to 2020.
-
-### A wide-field lens for Galactic novae, parked
-
-Parked: it needs a second camera and a mount of its own, which this rig
-does not have. Kept here only in case that changes.
-
-The 150P sees 1° × 0.67°: too little to patrol the Milky Way. A camera
-with a 50 to 135 mm lens covers tens to hundreds of square degrees, and
-recent Galactic novae have been found that way. It would be a second rig
-(`TY_RIG`, `rigs/NAME.toml`), needing far less pointing accuracy than the
-EQ3, running a Milky Way programme while the 150P works on galaxies.
 
 ### Several rigs together, in the long run
 
@@ -639,7 +627,7 @@ ends with a scientific proof, not just working code.
 | 7 | Every session searched; old frames searched again on each improvement. **Built 17 October 2026: each new stack of a field with a reference is searched in the background; `patrol.py --sweep [--all-history]` for the rest** | every science picture checked automatically; a rerun finds fakes planted in old frames |
 | 8 | Real-or-bogus classifier; proposed follow-up. **Dismissal labels kept from 17 October 2026 (`candidates.py --dismiss`)** | a measured fall in false candidates; a candidate leads to a useful repeat |
 | 9 | Variable stars; TESS transits | a first VSX submission |
-| 10 | A wide-field lens rig; several rigs together. **Parked: needs a second camera and mount, which this rig does not have; nothing else waits on it** | a Milky Way field patrolled; a candidate confirmed by a second rig |
+| 10 | Several telescopes together: other people's telescopeyoke rigs sharing fields and confirming each other's candidates. **Needs other users first** | a candidate confirmed by another telescope |
 
 Phases 0 to 2 run through the 2026 to 2027 M31 season if the weather
 allows. Sungrazer needs no sky and can be built any cloudy week.
