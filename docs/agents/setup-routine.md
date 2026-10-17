@@ -59,12 +59,22 @@ says it moved and they say it did not, the motors have stalled (6 October
 ## 4. Focus
 
     ./mount.py goto Deneb      (or any rich star field in clear sky)
-    ./focus.py --motor
+    ./focus.py --check         the level now: three frames, about 15 seconds, nothing turns
+
+**Measure first, and tell the person the number** against the usual best
+("HFR 1.86, usual 2.38: good"). Focus left untouched since it was last set
+is usually still good: then move on, and focus only if they ask
+(`./focus.py --motor --anyway`). Only when it is soft:
+
+    ./focus.py --motor         measures again, and focuses only if worse than usual
 
 The motor focuser does it: nobody touches the telescope, so never ask for a
 hand on the knob. `--motor` focuses wherever the telescope points, so point
-at a rich field first. Run it in the background and report the result (HFR
-about 2 to 2.5 is good on the 150P). `./focus.py --field`, the hand-turned
+at a rich field first. Run it in the background with its output to a log
+and a Monitor on the log, passing each reading on as it comes, never
+through `tail`, which holds every line back. Never stop a run part way: on
+17 October 2026 a run started at HFR 1.86, needlessly, and once stopped left
+the focuser at 3.52. `./focus.py --field`, the hand-turned
 aid with tones, is only for a telescope without the motor. Focus comes before anything that plate-solves: the polar alignment
 and every `--solve` work from the stars in a picture, and blurred stars give
 no answer. A failed plate solve before this step says nothing about cloud.

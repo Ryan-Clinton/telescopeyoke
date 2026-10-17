@@ -127,8 +127,12 @@ already taken. Reporting a dip is a person's.
 `snap.py`, `liveview.py`, `focus.py` (without `--field`), `solve.py`, `skywatch.py`,
 `calibrate.py`, `camera_test.py`, `shoot.py --no-recentre`.
 
-`focus.py --motor` turns the focuser and takes pictures; with `--dry-run` it only
-looks for the focuser's port and says what it would do.
+`focus.py --check` takes three frames and says the stars' size against the
+usual best; it turns nothing. `focus.py --motor` measures first the same way
+and, if focus is already within 10% of the usual best, leaves it alone
+(`--anyway` focuses regardless); otherwise it turns the focuser and takes
+pictures. With `--dry-run` it only looks for the focuser's port and says what
+it would do.
 
 `focuser.py test` and `move` turn the focuser's motor, never the mount; `flash`
 loads the Nano's firmware. See `docs/focuser.md`.

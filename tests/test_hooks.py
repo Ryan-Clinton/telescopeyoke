@@ -103,6 +103,7 @@ def test_no_inline_script_touches_the_hardware(command):
 
 @pytest.mark.parametrize("command", [
     "./mount.py status", "python3 mount.py goto M27 --dry-run", "python3 -c 'import json; print(1)'",
+    "cat >> tests/test_focus.py <<'EOF'\nimport focuser\nEOF", "tee -a tests/test_mount.py <<EOF\nimport mount\nEOF",
     "pytest -q tests/test_mount.py", "grep -n 'import mount' agent.py", "python3 -c 'import policy'",
 ])
 def test_ordinary_python_still_runs(command):

@@ -175,8 +175,10 @@ def no_inline_hardware(payload):
     if payload.get("tool_name") not in SHELL_TOOLS:
         return
     command = payload.get("tool_input", {}).get("command", "")
-    inline = re.search(r"\b(python3?|py)(\.exe)?\b[^;&|]*(\s-c\b|\s-\s|\s-$|<<|<\s*\S+\.py)", command) or \
-        re.search(r"\|\s*(python3?|py)(\.exe)?\b(\s+-\w+)*\s*(-\s*)?($|[;&|])", command)
+    # Python as the command run, not a file name ending in .py (cat >> x.py <<EOF is no script)
+    run = r"(?:^|[\s;&|(])(?:[\w./-]*/)?(?:python3?|py)(?:\.exe)?(?=\s|$)"
+    inline = re.search(run + r"[^;&|\n]*(\s-c\b|\s-\s|\s-$|<<|<\s*\S+\.py)", command, re.M) or \
+        re.search(r"\|\s*(?:[\w./-]*/)?(?:python3?|py)(?:\.exe)?(\s+-\w+)*\s*(-\s*)?($|[;&|])", command, re.M)
     imports = re.search(r"\b(import|from)\s+(" + "|".join(HARDWARE_MODULES) + r")\b|"
                         r"(__import__|import_module)\(\s*['\"](" + "|".join(HARDWARE_MODULES) + r")['\"]", command)
     if inline and imports:

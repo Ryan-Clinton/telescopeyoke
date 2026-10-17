@@ -1,31 +1,35 @@
 ---
 name: focus
-description: Focus the telescope with its motor focuser. Use when the person says to focus, that the stars look soft or bloated, or as the focus step of nightly-setup. Checks the telescope points at a rich star field in clear sky, then runs the motor focus and reports the star size.
+description: Check and, if needed, improve the telescope's focus with its motor focuser. Use when the person says to focus, that the stars look soft or bloated, or as the focus step of nightly-setup. Measures first, says the level, and only focuses when it is worse than usual or the person asks.
 compatibility: telescopeyoke at the telescope with the motor focuser (firmware/focuser) and the camera plugged in
 allowed-tools: Bash(./focus.py --motor --dry-run) Bash(./focus.py --report) Bash(./ty mount status)
 ---
 
 # Focus
 
-The project has a motor on the focuser (`docs/focuser.md`): nobody turns
-the knob. Never ask the person for a hand on it while the motor is plugged
-in; `./focus.py --field`, the hand-turned aid with tones, is only for a
-telescope without the motor.
+**Measure first, always.** Focus that was not touched since it was last
+set is usually still good, and a focus run drives the drawtube well out
+and back: minutes of sky, and a risk of leaving it worse if stopped part
+way (17 October 2026: HFR 1.86 at the start, 3.52 after a stopped run).
 
-1. `./focus.py --motor --dry-run`: is the focuser plugged in and
-   answering? If not, say so and stop.
-2. `--motor` focuses wherever the telescope points. It needs a rich star
-   field in a part of the sky the person said is clear. If it is not
-   pointing at one, the GoTo to one (Deneb, or a rich field the planner
-   suggests in clear sky) is a move: under nightly-setup's rule for moves.
-3. When they asked for focus (or the routine's step is due), run
-   `./ty focus --motor` in the background and carry on.
-   - If this skill loaded only because they said the stars look soft, ask
-     once, in a line: "Focus now?"
-4. Report the HFR it ends on: about 2 to 2.5 is good on the 150P. If it is
-   well above that, say so and suggest the cause in this order: cloud or
-   haze (ask what the sky looks like), dew on the mirror, the field too
-   sparse.
+1. The telescope must point at a rich star field in a part of the sky the
+   person said is clear. If it does not, the GoTo to one (Vega, Deneb, or a
+   field the planner suggests) is a move, under nightly-setup's rule.
+2. `./focus.py --check`: three frames, about 15 seconds, nothing turns.
+   Tell the person the number and what it is against, in one line:
+   "Focus now HFR 1.86, usual 2.38: good."
+3. **Good** (within 10% of the usual best): say so and move on. Do not
+   focus unless the person asks; then `./ty focus --motor --anyway`.
+4. **Soft**: say how soft, and focus: `./ty focus --motor` (it measures
+   again first). Run it with its output to a log and a Monitor on the log,
+   and pass each reading to the person as it comes: never through `tail`,
+   which holds every line back until the end.
+5. Report the HFR it ends on. Well above the usual: suggest the cause in
+   this order: cloud or haze (ask what the sky looks like), dew on the
+   mirror, the field too sparse.
+6. **Never stop a focus run part way.** If it must stop, say where the
+   focuser is, measure with `--check`, and focus again.
 
-Focus comes before anything that plate-solves: blurred stars give no
-solve, and a failed solve before focusing says nothing about cloud.
+Never ask for a hand on the knob while the motor is plugged in; `./focus.py
+--field`, the hand-turned aid with tones, is only for a telescope without
+it. Focus comes before anything that plate-solves.

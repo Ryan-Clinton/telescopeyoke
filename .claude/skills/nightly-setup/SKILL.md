@@ -41,7 +41,9 @@ project's commands refuse what is unsafe.
 3. `./ty mount nudge`, and ask whether they saw it tip and come back. If
    the screen says it moved and they say it did not, the motors stalled:
    power-cycle and back to 1.
-4. Focus: the `focus` skill.
+4. Focus: the `focus` skill. It measures first (`./focus.py --check`, 15
+   seconds) and says the level; it focuses only if that is soft or the
+   person asks.
 5. Polar alignment only if the tripod moved: the `polar-align` skill.
 6. The first target: the `imaging-run` skill, or `discovery-night` when
    they ask for a patrol.

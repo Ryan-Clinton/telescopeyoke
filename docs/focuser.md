@@ -80,7 +80,9 @@ focuses wherever the telescope is). It takes 1 s pictures at gain 1500 and:
 3. goes back out 300 half-steps, beyond the gears' slack, and comes in once
    to the sharpest position, so the last move is always inward.
 
-Only readings taken moving in are trusted: the gears' slack is bigger than
+A run starts with a reading, and if focus is already within 10% of the
+usual best it is left alone (`--anyway` focuses regardless); `./focus.py
+--check` takes that reading and nothing more. Only readings taken moving in are trusted: the gears' slack is bigger than
 a step, so a move out and a move in by the same count do not land in the
 same place. Each run is kept in `cache/focus_runs.jsonl`. On 15 October
 2026 it took the 150P to HFR 2.47 (3.3"), 128

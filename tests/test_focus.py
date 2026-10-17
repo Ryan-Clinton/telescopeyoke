@@ -362,3 +362,62 @@ def test_a_motor_dry_run_turns_nothing_and_takes_no_frames(monkeypatch, capsys):
     answer = json.loads(capsys.readouterr().out)
     assert end.value.code == 0
     assert answer["ok"] and answer["data"]["would_move"] and answer["data"]["port"] == "/dev/ttyUSB1"
+
+
+class StarCamera:
+    """A camera whose frames measure whatever focus.measure_stars is faked to say."""
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def frame(self, seconds):
+        return np.zeros((4, 4)), {}
+
+
+def motor_run(monkeypatch, capsys, hfr, *flags):
+    import focuser
+    tube = Drawtube(best=0)
+    monkeypatch.setattr(focuser.Focuser, "open", classmethod(lambda cls, *a, **k: type(
+        "M", (), {"move": lambda self, n: tube.move(n), "close": lambda self: None})()))
+    monkeypatch.setattr(focus, "Camera", StarCamera)
+    monkeypatch.setattr(focus, "measure_stars", lambda lum: (hfr, None))
+    monkeypatch.setattr(focus, "usual_best", lambda: 2.4 * focus.arcsec_per_pixel())
+    monkeypatch.setattr(sys, "argv", ["focus.py", *flags, "--json"])
+    with pytest.raises(SystemExit):
+        focus.main()
+    return json.loads(capsys.readouterr().out)["data"], tube
+
+
+def test_motor_focus_measures_first_and_leaves_good_focus_alone(monkeypatch, capsys):
+    # 17 October 2026: focus untouched since the night before read HFR 1.86,
+    # better than usual, and the run still drove it far out and back.
+    answer, tube = motor_run(monkeypatch, capsys, 1.86, "--motor")
+    assert answer["left_alone"] and answer["moved"] == 0 and tube.moves == []
+
+
+def test_motor_focus_anyway_turns_even_when_focus_is_good(monkeypatch, capsys, tmp_path):
+    monkeypatch.setattr(focus, "motor_focus", lambda motor, read, usual, say=print: (
+        motor.move(32), {"hfr": 1.9, "moved": 32, "found": True, "readings": []})[1])
+    monkeypatch.setattr(focus, "RUNS_FILE", tmp_path / "runs.jsonl")
+    answer, tube = motor_run(monkeypatch, capsys, 1.86, "--motor", "--anyway")
+    assert tube.moves == [32] and not answer.get("left_alone")
+
+
+def test_the_check_measures_and_turns_nothing(monkeypatch, capsys):
+    import focuser
+    monkeypatch.setattr(focuser.Focuser, "open", classmethod(lambda cls, *a, **k: pytest.fail("it turned")))
+    monkeypatch.setattr(focus, "Camera", StarCamera)
+    monkeypatch.setattr(focus, "usual_best", lambda: 2.4 * focus.arcsec_per_pixel())
+    for hfr, good in ((1.86, True), (3.52, False)):
+        monkeypatch.setattr(focus, "measure_stars", lambda lum, h=hfr: (h, None))
+        monkeypatch.setattr(sys, "argv", ["focus.py", "--check", "--json"])
+        with pytest.raises(SystemExit):
+            focus.main()
+        data = json.loads(capsys.readouterr().out)["data"]
+        assert data["hfr"] == hfr and data["good"] is good

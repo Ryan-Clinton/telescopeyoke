@@ -9,7 +9,9 @@
                                the sky (this MOVES the telescope)
     ./focus.py --field --dry-run   say which star; nothing moves
     ./focus.py --scene         on rooftops or trees, in daylight
-    ./focus.py --motor         the motor focuser does it: no hand on the knob
+    ./focus.py --check         how sharp the stars are now, against the usual best; nothing turns
+    ./focus.py --motor         the motor focuser does it, unless focus is already as good as usual
+    ./focus.py --motor --anyway   focus with the motor even so
                                (turns the focuser; the mount stays still)
     ./focus.py --motor --dry-run   whether the focuser is plugged in; nothing turns
 
@@ -632,8 +634,37 @@ def motor_focus(motor, read, usual, say=print):
     return {"hfr": value, "moved": place[0], "found": True, "readings": readings}
 
 
+GOOD_ENOUGH = 1.1    # within this of the usual best, focus is left as it is
+
+
+def verdict(hfr, usual):
+    """What a reading says about focus, against the usual best."""
+    if hfr is None:
+        return "no stars measured: cloud, the cap, or far out of focus"
+    if hfr <= GOOD_ENOUGH * usual:
+        return f"good: HFR {hfr:.2f}, against {usual:.2f} usually"
+    return f"soft: HFR {hfr:.2f}, against {usual:.2f} usually ({hfr / usual:.1f} times): worth focusing"
+
+
+def run_check(args):
+    """./focus.py --check: three frames of the stars in view, their size
+    against the usual best. Nothing turns."""
+    scale = arcsec_per_pixel()
+    usual = usual_best() / scale
+    with Camera(args.port, MOTOR_GAIN) as cam:
+        cam.frame(MOTOR_EXPOSURE)               # the first frame after opening can be stale
+        values = [v for v in (measure_stars(luminance(cam.frame(MOTOR_EXPOSURE)[0]))[0] for _ in range(3)) if v]
+    hfr = float(np.median(values)) if values else None
+    good = hfr is not None and hfr <= GOOD_ENOUGH * usual
+    print(f"Focus now: {verdict(hfr, usual)}.", flush=True)
+    return {"hfr": hfr and round(hfr, 2), "hfr_arcsec": hfr and round(hfr * scale, 2),
+            "usual_hfr": round(usual, 2), "good": good}
+
+
 def run_motor(args):
-    """./focus.py --motor: focus with the motor, on the stars in view now."""
+    """./focus.py --motor: focus with the motor, on the stars in view now;
+    first a reading, and if focus is already as good as usual it is left
+    alone (--anyway to focus regardless)."""
     import focuser
     scale = arcsec_per_pixel()
     usual = usual_best() / scale
@@ -656,6 +687,13 @@ def run_motor(args):
                     if value:
                         values.append(value)
                 return float(np.median(values)) if values else None
+            now = read(3)
+            print(f"Focus now: {verdict(now, usual)}.", flush=True)
+            if now is not None and now <= GOOD_ENOUGH * usual and not getattr(args, "anyway", False):
+                print("Left as it is: it is already as good as focusing usually gets (--anyway to focus "
+                      "regardless).", flush=True)
+                return {"hfr": round(now, 2), "moved": 0, "found": True, "readings": [], "left_alone": True,
+                        "hfr_arcsec": round(now * scale, 2)}
             print(f"Motor focusing: HFR {usual:.1f} is good focus here.", flush=True)
             result = motor_focus(motor, read, usual)
     finally:
@@ -692,8 +730,14 @@ def main():
     ap.add_argument("--frames", type=int, help="stop after this many frames")
     ap.add_argument("--json", action="store_true", help="the last reading as JSON at the end")
     ap.add_argument("--motor", action="store_true",
-                    help="focus with the motor focuser, no hand on the knob; turns the focuser only")
+                    help="focus with the motor focuser, no hand on the knob; turns the focuser only, and "
+                         "not at all if focus is already as good as usual")
+    ap.add_argument("--anyway", action="store_true", help="with --motor: focus even if it is already good")
+    ap.add_argument("--check", action="store_true",
+                    help="how sharp the stars are now against the usual best; takes three frames, turns nothing")
     args = ap.parse_args()
+    if args.check:
+        return interface.main("focus.check", lambda: run_check(args), args.json)
     if args.motor:
         return interface.main("focus.motor", lambda: run_motor(args), args.json)
     if args.report:
