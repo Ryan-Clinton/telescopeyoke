@@ -217,7 +217,10 @@ searched again (`./difference.py --all-history`). Professionals do find
 things this way: M31N 2022-10c, a possible symbiotic nova, was found in a
 search of 2022 archive frames, with earlier detections back to 2020.
 
-### A wide-field lens for Galactic novae, later
+### A wide-field lens for Galactic novae, parked
+
+Parked: it needs a second camera and a mount of its own, which this rig
+does not have. Kept here only in case that changes.
 
 The 150P sees 1° × 0.67°: too little to patrol the Milky Way. A camera
 with a 50 to 135 mm lens covers tens to hundreds of square degrees, and
@@ -636,7 +639,7 @@ ends with a scientific proof, not just working code.
 | 7 | Every session searched; old frames searched again on each improvement. **Built 17 October 2026: each new stack of a field with a reference is searched in the background; `patrol.py --sweep [--all-history]` for the rest** | every science picture checked automatically; a rerun finds fakes planted in old frames |
 | 8 | Real-or-bogus classifier; proposed follow-up. **Dismissal labels kept from 17 October 2026 (`candidates.py --dismiss`)** | a measured fall in false candidates; a candidate leads to a useful repeat |
 | 9 | Variable stars; TESS transits | a first VSX submission |
-| 10 | A wide-field lens rig; several rigs together | a Milky Way field patrolled; a candidate confirmed by a second rig |
+| 10 | A wide-field lens rig; several rigs together. **Parked: needs a second camera and mount, which this rig does not have; nothing else waits on it** | a Milky Way field patrolled; a candidate confirmed by a second rig |
 
 Phases 0 to 2 run through the 2026 to 2027 M31 season if the weather
 allows. Sungrazer needs no sky and can be built any cloudy week.
