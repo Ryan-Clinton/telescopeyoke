@@ -41,7 +41,9 @@ def located(record, r):
     """The stack a depth record is of: as written, or beside the record when
     the path was written relative to another folder."""
     stack = Path(r.get("stack", ""))
-    if stack.is_file():
+    # A relative path is the data folder's, never the folder the command runs in.
+    stack = stack if stack.is_absolute() else config.DATA / stack
+    if r.get("stack") and stack.is_file():
         return stack
     beside = record.parent / stack.name
     return beside if beside.is_file() else None
