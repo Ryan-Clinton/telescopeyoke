@@ -16,6 +16,10 @@ outliers (satellites, aircraft, cosmic rays) clipped out. Then it removes the
 sky gradient and writes a finished picture. The frame-by-frame work is shared
 between the processor's cores.
 
+It ends by saying how far the picture moved over the sensor from one frame
+to the next, and whether the sky's grain is even or runs in streaks: the
+sensor's pattern "walking" when the drift is slow, or the camera's own rows.
+
 Several sessions, from one night or many, can go into one picture, written
 to frames/NAME/combined/. They may differ in exposure length but not in
 gain, and the camera must not have been turned in the focuser between
@@ -57,6 +61,21 @@ def all_sessions(name):
     """Every saved session of an object, oldest first."""
     folder = config.DATA / "frames" / stacking.folder_name(name)
     return sorted(p for p in folder.glob("*/") if p.name != COMBINED and any(p.glob("light-*.fits")))
+
+
+def frame_number(path):
+    """The 31 of light-0031.fits; 0 for a name without a number."""
+    digits = "".join(ch for ch in Path(path).stem if ch.isdigit())
+    return int(digits) if digits else 0
+
+
+def middle(frame, shape):
+    """How far the middle of a lined-up frame was moved, (x, y). Its `shift`
+    is for the corner the turn is made about, and so has the turn in it."""
+    a = np.radians(frame["rotation"])
+    x, y = shape[1] / 2, shape[0] / 2
+    return (np.cos(a) * x - np.sin(a) * y + frame["shift"][0] - x,
+            np.sin(a) * x + np.cos(a) * y + frame["shift"][1] - y)
 
 
 def select(frames, keep=0.85):
@@ -196,6 +215,13 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
     stacked = final.result()
     chosen = [f for f, w in zip(chosen, weights) if w]
     total = sum(f["exposure"] for f in chosen)
+    # How the picture moved over the sensor, and whether the grain shows it:
+    # the first session's frames, in the order they were taken.
+    taken = sorted((f for f in chosen if Path(f["path"]).parent == sessions[0] and not f["flipped"]),
+                   key=lambda f: f["path"])
+    moved_by = stacking.drift([middle(f, stacked.shape) for f in taken],
+                              [frame_number(f["path"]) for f in taken])
+    grain = stacking.grain(stacked.mean(axis=2))
     # Trim the edges that only some of the frames reached.
     rows, cols = final.covered()
     trimmed = stacked.shape[0] - (rows.stop - rows.start), stacked.shape[1] - (cols.stop - cols.start)
@@ -214,6 +240,7 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
                      "left_out": len(frames) - len(chosen), "total_exposure_s": total,
                      "sessions": [str(s) for s in sessions],
                      "median_residual_px": round(float(np.median(residuals)), 3) if residuals else None,
+                     "drift": moved_by, "grain": grain,
                      "seconds": round(time.perf_counter() - began, 1),
                      "picture": str(session / "final.jpg"), "stack": str(session / "final.fits")}},
         indent=1), encoding="utf-8")
@@ -224,6 +251,15 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
         # enough and the alignment needs to allow for scale or distortion.
         say(f"alignment: stars matched to {np.median(residuals):.2f} pixel (worst frame "
             f"{max(residuals):.2f})")
+    if moved_by:
+        say(f"drift: the picture moved {moved_by['px_per_frame']:.1f} pixels over the sensor from one "
+            "frame to the next" + (
+                "" if moved_by["px_per_frame"] >= stacking.SLOW_DRIFT else
+                ". That is slow enough for the sensor's pattern to land where it just was, which the "
+                "clipping cannot remove: look for streaks, and see docs/imaging.md on dithering"))
+    if grain:
+        say(f"grain: {stacking.streaks(grain, moved_by) or 'even'} "
+            f"({grain['ratio']:.1f} times more alike one way than another)")
     if any(trimmed):
         say(f"edges only some frames reached were trimmed off: {trimmed[0]} rows and {trimmed[1]} columns")
     say(f"saved {session / 'final.fits'}, final.jpg and web/{name}-final.jpg")

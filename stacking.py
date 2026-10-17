@@ -274,6 +274,86 @@ def quality(lum, stars):
             "background": background, "noise": noise}
 
 
+GRAIN = 512        # side of the patch of sky the grain is judged on, in pixels
+STREAKED = 2.0     # grain this many times more alike one way than another runs in streaks
+SLOW_DRIFT = 1.0   # pixels a frame: slower, and the sensor's pattern lands where it just was
+
+
+def grain(lum):
+    """Whether the sky's grain runs in streaks. Grain that is only chance is
+    no more alike along one direction than another; the sensor's own pattern,
+    carried slowly one way under the stars for a whole session ("walking
+    noise"), or the camera's row-by-row read noise, leaves it alike along a
+    line. Returns the direction it is most alike in, in degrees from the
+    picture's rows, and how many times more alike than in the least; None
+    for a picture with no patch of sky to judge."""
+    rows, cols = lum.shape
+    side = min(GRAIN, rows // 2 * 2, cols // 2 * 2)
+    emptiest = None
+    for y in range(0, rows - side + 1, max(side // 4, 1)):
+        for x in range(0, cols - side + 1, max(side // 4, 1)):
+            patch = lum[y:y + side, x:x + side]
+            if not np.isfinite(patch).all() or (patch == 0).any():   # the empty edge of a stack
+                continue
+            stars = float(np.percentile(patch[::4, ::4], 99.5) - np.median(patch[::4, ::4]))
+            if emptiest is None or stars < emptiest[0]:
+                emptiest = (stars, y, x)
+    if emptiest is None or side < 64:
+        return None
+    _, y, x = emptiest
+    patch = lum[y:y + side, x:x + side].astype(np.float32)
+    patch = patch - ndimage.gaussian_filter(patch, 24)      # glow and gradient are not grain
+    spread = 1.4826 * float(np.median(np.abs(patch))) + 1e-9
+    patch = np.clip(patch, -4 * spread, 4 * spread)         # nor are the stars
+    alike = np.fft.fftshift(np.fft.ifft2(np.abs(np.fft.fft2(patch)) ** 2).real)
+    alike /= alike.max()
+    c = side // 2
+    reach = range(2, min(13, c))    # past the pixel next door, which resampling makes alike anyway
+    along = []
+    for degrees in range(0, 180, 5):
+        a = np.radians(degrees)
+        along.append(sum(alike[int(round(c + r * np.sin(a))), int(round(c + r * np.cos(a)))] for r in reach))
+    # A quarter is added to both so that two sums near nothing do not make a ratio.
+    ratio = (max(along) + 0.25) / (max(min(along), 0.0) + 0.25)
+    return {"direction_deg": 5 * int(np.argmax(along)), "ratio": round(float(ratio), 2)}
+
+
+def drift(shifts, numbers=None):
+    """How the picture moved over the sensor from one frame to the next:
+    pixels a frame and the direction, in degrees from the picture's rows.
+    `shifts` are the frames' (x, y) shifts in the order they were taken, and
+    `numbers` their frame numbers, so a frame left out in between is allowed
+    for. A re-centring is one step among many and does not move the middle
+    one. None with too few frames to say."""
+    shifts = np.asarray(shifts, float).reshape(-1, 2)
+    if len(shifts) < 4:
+        return None
+    gaps = np.diff(np.asarray(numbers, float)) if numbers is not None else np.ones(len(shifts) - 1)
+    steps = (np.diff(shifts, axis=0) / np.maximum(gaps, 1)[:, None])[gaps > 0]
+    if len(steps) < 3:
+        return None
+    step = np.median(steps, axis=0)
+    return {"px_per_frame": round(float(np.median(np.hypot(steps[:, 0], steps[:, 1]))), 2),
+            "direction_deg": round(float(np.degrees(np.arctan2(step[1], step[0])) % 180), 1)}
+
+
+def streaks(grain, drift=None):
+    """In words, what the grain's streaks are and what would cure them; ""
+    for even grain. Streaks along the way the picture drifted are the
+    sensor's pattern walking; along the rows or columns, the camera."""
+    if not grain or grain["ratio"] < STREAKED:
+        return ""
+    angle = grain["direction_deg"]
+    apart = lambda other: abs((angle - other + 90) % 180 - 90)
+    if drift and apart(drift["direction_deg"]) <= 20:
+        return ("the grain runs in streaks along the way the picture drifted: the sensor's own pattern, "
+                "walking. Moving the mount a few pixels at random between frames (dithering) cures it")
+    if min(apart(0), apart(90)) <= 5:
+        return (f"the grain runs in lines along the sensor's {'rows' if apart(0) <= 5 else 'columns'}: "
+                "the camera's own read noise, which more frames average away")
+    return f"the grain runs in streaks at {angle}° from the rows"
+
+
 def quick_quality(mosaic, calibration):
     """A frame's quality from a quarter-size brightness image: a fraction of
     the work of the full treatment, and enough to tell a good frame from a
@@ -605,6 +685,7 @@ def measure_file(path, exposure, gain):
         q = quick_quality(mosaic, _calibration(exposure, gain))
     q["file"] = Path(path).name
     return q, timings.seconds
+
 
 
 FLIP_RESIDUAL = 2.0      # pixels: a fit worse than this is tried the other way up

@@ -17,7 +17,7 @@ needed to answer:
 
 with an answer of this kind (the figures here are made up):
 
-    A streak 0.65° long in light-0001.fits, taken 20:53:54.
+    A streak 0.33° long in light-0001.fits, taken 20:53:54.
     ONEWEB-0331 passed 0.06° from it at 20:53:53, 1,215 km away, moving
     0.34° a second: the streak's length and direction fit.
 
@@ -27,8 +27,8 @@ does not guess which.
 
 ## What happened on 13 October 2026
 
-The first 2 s frame of a run on NGC 7000 had a streak 0.65° long, even in
-brightness, with both ends inside the frame. Done by hand:
+The first 2 s frame of a run on NGC 7000 had a streak 0.33° long, even in
+brightness, with both ends inside the frame, which is 1.0° by 0.67°. Done by hand:
 
 1. `solve.py --file` gave the frame's centre, scale and rotation.
 2. The orbits of the 15,932 active satellites came from CelesTrak.
@@ -36,9 +36,16 @@ brightness, with both ends inside the frame. Done by hand:
    50 seconds round the frame.
 
 One satellite came within 2° of the frame's centre in that time: ONEWEB-0331,
-0.65° from the centre at 20:53:53, at 1,215 km. The streak's middle is 0.59°
-from the centre, and its length in a 2 s exposure had already suggested a
-height of about 1,200 km.
+0.65° from the centre at the nearest whole second, 20:53:53, at 1,215 km and
+moving about 0.34° a second. The streak's middle is 0.29° from the centre.
+So it is the only candidate, and not yet a proven match: a path 0.65° from
+the centre would at most clip a corner of a frame this size, and placing it
+second by second leaves a sixth of a degree of doubt along the track.
+
+(As first written this said the streak was 0.65° long and 0.59° from the
+centre, and that its length agreed with the satellite's height. Those took
+the plate solver's 1.32 arcseconds a pixel, which is for the half-size colour
+picture, as the sensor's 0.66. The frame is half the size they assumed.)
 
 What that did not settle:
 

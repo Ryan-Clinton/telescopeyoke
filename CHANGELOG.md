@@ -5,6 +5,15 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
 
 ## Not yet released
 
+- **Walking noise is looked for** (`docs/imaging.md`). `restack.py` ends by
+  saying how many pixels the picture moved over the sensor from one frame to
+  the next, and whether the sky's grain is even or runs in streaks: along
+  the drift (the sensor's pattern walking, which dithering cures) or along
+  the sensor's rows (the camera's read noise, which more frames cure). Both
+  go in `restack.json`, and `compare.py` prints the figure for any stack.
+  On the four stacks from this telescope: three even, one short stack with
+  row lines, none walking, the drift being 6 to 11 pixels a frame. Not yet
+  seen to catch walking noise on a real stack, only on made-up ones.
 - **Polar alignment says what to do with your hands**
   (`docs/calibration.md`). Centre the azimuth bolts first. More than 2° out
   to one side: turn the whole tripod, drawn from above as a clock face, with

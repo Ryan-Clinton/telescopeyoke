@@ -355,6 +355,54 @@ def test_the_quality_pass_rebuilds_the_picture_from_the_raw_frames(session):
     assert "light-0007.fits" not in summary["kept"]
     assert 6 <= len(summary["kept"]) <= 9
     assert not (run.folder / "registered").exists()   # working files tidied away
+    # The fixture moves each frame 1.7 across and 0.9 up from the one before.
+    moved = summary["summary"]["drift"]
+    assert moved["px_per_frame"] == pytest.approx(1.92, abs=0.1)
+    assert moved["direction_deg"] == pytest.approx(152, abs=3)
+    assert summary["summary"]["grain"]["ratio"] < stacking.STREAKED
+
+
+def smeared(degrees, length=12, seed=3):
+    """Sky whose grain has been dragged along one direction, as the sensor's
+    pattern is by a slow steady drift, with fresh grain on top."""
+    rng = np.random.default_rng(seed)
+    pattern = rng.normal(0, 1, (700, 800)).astype(np.float32)
+    a = np.radians(degrees)
+    dragged = sum(np.roll(pattern, (round(k * np.sin(a)), round(k * np.cos(a))), axis=(0, 1))
+                  for k in range(length))
+    return 300 + dragged + rng.normal(0, 1, pattern.shape).astype(np.float32)
+
+
+def test_grain_that_is_only_chance_has_no_direction():
+    sky = 300 + np.random.default_rng(5).normal(0, 4, (700, 800)).astype(np.float32)
+    found = stacking.grain(sky)
+    assert found["ratio"] < 1.3
+    assert stacking.streaks(found, {"px_per_frame": 0.2, "direction_deg": 80.0}) == ""
+
+
+def test_a_pattern_dragged_along_the_drift_is_called_walking_noise():
+    found = stacking.grain(smeared(80))
+    assert found["ratio"] > stacking.STREAKED and abs(found["direction_deg"] - 80) <= 5
+    words = stacking.streaks(found, {"px_per_frame": 0.2, "direction_deg": 78.0})
+    assert "walking" in words and "dithering" in words
+    # The same streaks with the picture drifting another way are not blamed on it.
+    assert "walking" not in stacking.streaks(found, {"px_per_frame": 0.2, "direction_deg": 20.0})
+
+
+def test_lines_along_the_rows_are_put_down_to_the_camera():
+    found = stacking.grain(smeared(0))
+    assert "rows" in stacking.streaks(found, {"px_per_frame": 8.0, "direction_deg": 130.0})
+    assert "columns" in stacking.streaks(stacking.grain(smeared(90)))
+
+
+def test_drift_allows_for_frames_left_out_and_shrugs_off_a_re_centring():
+    shifts = [(3.0 * n, -4.0 * n) for n in (1, 2, 3, 5, 6, 7, 8)]    # frame 4 was left out
+    shifts[5:] = [(x - 200, y + 150) for x, y in shifts[5:]]         # the mount was sent back
+    moved = stacking.drift(shifts, [1, 2, 3, 5, 6, 7, 8])
+    assert moved["px_per_frame"] == pytest.approx(5.0)
+    assert moved["direction_deg"] == pytest.approx(126.9, abs=0.1)
+    assert stacking.drift(shifts[:3]) is None
+    assert stacking.grain(np.zeros((700, 800), np.float32)) is None   # no sky to judge
 
 
 def test_the_web_page_can_be_told_how_far_a_run_has_got(session):

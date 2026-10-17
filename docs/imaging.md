@@ -42,6 +42,20 @@ Things worth knowing:
 - **Drift is used, not fought.** The mount is only sent back to the target
   once it has drifted a fifth of the frame. Until then the stars wander over
   different pixels, so the sensor's fixed pattern averages away.
+- **That holds only while the drift is fast.** With a rough polar alignment
+  the picture moves several pixels between one frame and the next (6 to 11
+  in the first sessions here), so a hot pixel lands somewhere new every time
+  and the clipping throws it out. Align the mount well, or guide it, and the
+  drift slows to a fraction of a pixel a frame: the pattern then lands where
+  it just was, survives the clipping, and is dragged into streaks along the
+  drift, known as walking noise. The cure is dithering, a move of a few
+  pixels in a random direction every few frames; `shoot.py` does not do it
+  yet. `restack.py` ends by saying how far the picture moved from frame to
+  frame and whether the grain is even or streaked, and which kind of streak;
+  `./compare.py frames/M31/*/final.fits` gives the same figure for stacks
+  already made (about 1 is even, 2 and over is streaked). Lines exactly along
+  the sensor's rows are something else, the camera's read noise in a short
+  stack, and more frames cure those.
 - **Calibration frames make a visible difference** and are picked up
   automatically once made:
 

@@ -143,6 +143,11 @@ have been stacked; the newest fixes have not yet been through a real run.*
 
 ## See it working
 
+**Asked.** An AI agent in the checkout, asked a plain question, runs the
+planner and answers for your sky tonight:
+
+![An agent asked "what is the outlook for this evening?" answers with the two clear hours after midnight, the wind, the dew, the darkness and the five targets that fit the gap](docs/outlook.png)
+
 **Planned.** This is what `./serve.py` shows, to watch from indoors:
 tonight's verdict and the targets worth pointing at, ranked for your sky.
 
@@ -580,8 +585,10 @@ Then:
 Later, for image quality, in this order: colour calibration from catalogue
 stars (the plate solve already identifies them); gentle deconvolution, once
 calibration and alignment are proven; sky-gradient removal frame by frame;
-drizzle on the raw Bayer frames. None of these before a controlled
-comparison has shown what the current pipeline gains on real data.
+dithering, once `restack.py` reports the drift slower than a pixel a frame
+(until then the drift does the job); drizzle on the raw Bayer frames, which
+needs the dithering. None of these before a controlled comparison has shown
+what the current pipeline gains on real data.
 
 Later, if people ask for them:
 

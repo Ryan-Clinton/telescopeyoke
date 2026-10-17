@@ -6,7 +6,8 @@
 Finds the same patch of sky in each stack, shows it at one screen pixel per
 image pixel (doubled for visibility, with no smoothing), and prints what the
 stars measure in each: width, roundness, how many were found, and how far the
-typical star stands above the background grain. Writes web/compare.jpg.
+typical star stands above the background grain, and whether that grain is
+even (about 1) or runs in streaks (2 and over). Writes web/compare.jpg.
 """
 import argparse
 from pathlib import Path
@@ -30,6 +31,8 @@ def load(path):
     q = stacking.quality(lum, stars)
     # Grain measured on the sky between the stars, after removing its slope.
     q["signal"] = q["flux"] / q["noise"] if q["stars"] else 0.0
+    # 1 is even grain; from 2 it runs in streaks (stacking.grain).
+    q["streaks"] = (stacking.grain(rgb.mean(axis=2)) or {}).get("ratio")
     return rgb, lum, stars, q
 
 
@@ -56,7 +59,7 @@ def main():
     centre = (cols / 2, rows / 2)
     font = ImageFont.load_default(size=20)
     panels = []
-    print(f"{'stack':<14} {'FWHM':>5} {'round':>6} {'stars':>6} {'signal':>7}")
+    print(f"{'stack':<14} {'FWHM':>5} {'round':>6} {'stars':>6} {'signal':>7} {'streaks':>8}")
     for label, item in zip(labels, loaded):
         rgb, _, _, q = item
         (x, y), _ = (centre, None) if item is loaded[0] else same_patch(loaded[0], item, centre)
@@ -72,7 +75,9 @@ def main():
         draw.text((8, 34), f"FWHM {q['fwhm']:.1f}  round {q['roundness']:.2f}",
                   fill=(138, 147, 166), font=font)
         panels.append(panel)
-        print(f"{label:<14} {q['fwhm']:>5.1f} {q['roundness']:>6.2f} {q['stars']:>6} {q['signal']:>7.0f}")
+        streaks = "-" if q["streaks"] is None else f"{q['streaks']:.1f}"
+        print(f"{label:<14} {q['fwhm']:>5.1f} {q['roundness']:>6.2f} {q['stars']:>6} {q['signal']:>7.0f} "
+              f"{streaks:>8}")
     sheet = Image.new("RGB", (sum(p.width for p in panels) + 8 * (len(panels) - 1), panels[0].height),
                       (11, 13, 18))
     x = 0

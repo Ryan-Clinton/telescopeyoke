@@ -54,7 +54,9 @@ ROOT = Path(__file__).parent
 WEB = config.DATA / "web"
 # Send the mount back to the target once it has drifted this far off centre,
 # as a fraction of the frame's height. The drift up to then is welcome: it
-# spreads the sensor's fixed pattern around, which averaging then removes.
+# spreads the sensor's fixed pattern around, which averaging then removes,
+# as long as it is several pixels a frame. Slower than about one, the pattern
+# walks into streaks instead (restack.py says when; see docs/imaging.md).
 DRIFT_LIMIT = 0.2
 TRIAL_EXPOSURES = (1, 2, 3, 4)
 ASSIST_EVERY = 15   # accepted frames between trims of the Dec creep
