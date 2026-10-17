@@ -214,7 +214,10 @@ def recentre(target, aim_off=(0.0, 0.0)):
         print(f"  mount not available ({problem}); carrying on without re-centring", flush=True)
         return False
     try:
-        scope.goto_target(target, config.load()["site"], solve=True, aim_off=aim_off)
+        # A dither only has to land somewhere a little different: one GoTo,
+        # no plate solving (17 October 2026: a solved dither took 1 to 3
+        # minutes for a move of an arcminute). Centring the target solves.
+        scope.goto_target(target, config.load()["site"], solve=not any(aim_off), aim_off=aim_off)
     except SystemExit as problem:
         print(f"  could not re-centre: {problem}", flush=True)
     except BaseException:

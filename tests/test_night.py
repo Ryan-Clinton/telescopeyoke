@@ -316,3 +316,18 @@ def test_dithering_without_moving_the_mount_is_refused(monkeypatch):
     with pytest.raises(SystemExit) as stopped:
         shoot.main()
     assert stopped.value.code == 2
+
+
+def test_a_dither_is_one_goto_without_plate_solving(monkeypatch):
+    # 17 October 2026: a plate-solved dither took 1 to 3 minutes for a move of
+    # an arcminute. Centring solves; a dither only has to land a little off.
+    import mount
+    calls = []
+    monkeypatch.setattr(mount.Mount, "__init__", lambda self, watch=True: None)
+    monkeypatch.setattr(mount.Mount, "goto_target",
+                        lambda self, name, site, solve=False, aim_off=(0.0, 0.0): calls.append((solve, aim_off)))
+    monkeypatch.setattr(config, "load", lambda: config.example())
+    shoot.recentre("M31")
+    shoot.recentre("M31", (1.0, -0.5))
+    assert calls == [(True, (0.0, 0.0)), (False, (1.0, -0.5))]
+    assert mount.SETTLE <= 10 or config.DEMO

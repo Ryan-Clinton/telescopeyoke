@@ -106,7 +106,8 @@ SURVEY_DEC = 40.0
 # A first GoTo that misses by less than this still has the target in the
 # frame, which is two thirds of a degree tall on the 150P with the 183C.
 ENOUGH = 0.25
-SETTLE = 30       # seconds to wait after a slew before photographing
+SETTLE = 10       # seconds to wait after a slew before photographing: the skyline survey of
+                  # 17 October 2026 found the tube steady after 2 s half the time, 26 s at worst
 if config.DEMO:
     import os
     SETTLE = 0 if os.environ.get("TY_DEMO_FAST") == "1" else 2
