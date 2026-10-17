@@ -31,6 +31,8 @@ which needs serial access:
 """
 import argparse
 import json
+import math
+import random
 import subprocess
 import sys
 import time
@@ -199,9 +201,10 @@ def order():
     return found if found in KNOWN_ORDERS else None
 
 
-def recentre(target):
-    """Put the target back in the middle of the frame by plate solving.
-    Returns False if the mount cannot be reached."""
+def recentre(target, aim_off=(0.0, 0.0)):
+    """Put the target back in the middle of the frame by plate solving, or
+    with `aim_off` (arcminutes east and north) a little off it, for
+    dithering. Returns False if the mount cannot be reached."""
     import config
     import mount
     try:
@@ -210,7 +213,7 @@ def recentre(target):
         print(f"  mount not available ({problem}); carrying on without re-centring", flush=True)
         return False
     try:
-        scope.goto_target(target, config.load()["site"], solve=True)
+        scope.goto_target(target, config.load()["site"], solve=True, aim_off=aim_off)
     except SystemExit as problem:
         print(f"  could not re-centre: {problem}", flush=True)
     except BaseException:
@@ -332,6 +335,18 @@ def night_over(name, site, when=None):
     return None
 
 
+DITHER = 1.5        # arcminutes a dither aims off the target: tens of pixels, so the
+                    # camera's pattern lands on other stars, small enough to keep the framing
+
+
+def dither_offset(rng, size=DITHER):
+    """Arcminutes east and north to aim off the target: a random direction,
+    between half and all of `size` away, so no two dithers sit together."""
+    angle = rng.uniform(0, 2 * math.pi)
+    reach = rng.uniform(size / 2, size)
+    return reach * math.cos(angle), reach * math.sin(angle)
+
+
 SKY_LIT = 1.3       # the sky this much brighter than in the kept frames: cloud lit by the town, or a light
 ALL_GONE = 0.05     # stars below this share of their kept brightness: gone, not dimmed
 PAUSED_NOTE = 900   # seconds between reminders that a --through-cloud run is still paused
@@ -378,6 +393,9 @@ def main():
     ap.add_argument("--recentre", type=int, metavar="N", default=0,
                     help="also re-centre every N frames, whatever the drift")
     ap.add_argument("--no-recentre", action="store_true", help="never move the mount")
+    ap.add_argument("--dither", type=int, metavar="N", default=0,
+                    help="every N frames, re-centre a little off the target (about 1.5'), so the camera's "
+                         "own pattern falls on different stars and averages away")
     ap.add_argument("--through-cloud", action="store_true",
                     help="with --frames 0: cloud pauses the run instead of ending it; it re-centres when "
                          "the stars come back, and ends at dawn or when the target nears the mount's limit")
@@ -392,6 +410,8 @@ def main():
                     help="say what would be done; no camera, no mount")
     ap.add_argument("--json", action="store_true", help="answer in JSON once the run is over")
     args = ap.parse_args()
+    if args.dither and args.no_recentre:
+        ap.error("--dither moves the mount between frames; it cannot go with --no-recentre")
     work = (lambda: plan(args)) if args.dry_run else (lambda: run(args))
     return interface.main("shoot.dry_run" if args.dry_run else "shoot", work, args.json)
 
@@ -403,7 +423,8 @@ def plan(args):
     import mount
     out = {"target": args.name, "frames": args.frames, "exposure": args.exposure,
            "gain": args.gain, "keeps_raw_frames": not args.no_save,
-           "quality_pass": not (args.no_save or args.no_restack), "would_move": False}
+           "quality_pass": not (args.no_save or args.no_restack), "would_move": False,
+           "dither_every": getattr(args, "dither", 0) or None}
     if not args.no_recentre:
         site = (config.load() if config.FILE.exists() else config.example())["site"]
         try:
@@ -431,7 +452,8 @@ def run(args):
     workers = max(1, stacking.cores() - 1)   # one core stays free for the camera and the stack
     print(f"{session.name}: {args.frames or 'an open-ended run of'} frames of {exposure:g} s at gain {args.gain}; "
           f"calibration: {session.calibration.describe()}; {workers} workers", flush=True)
-    index, since_centre, started = 0, 0, time.monotonic()
+    index, since_centre, since_dither, started = 0, 0, 0, time.monotonic()
+    rng = random.Random()
     ORDERS.unlink(missing_ok=True)   # an order left for an earlier run is not for this one
     told = {"stop": False, "recentre": False, "cloud": False, "cloudy": False}
     checked = [0.0]   # when the Sun and the target were last checked
@@ -489,7 +511,16 @@ def run(args):
     with stacking.worker_pool(workers) as pool:
         while more():
             due = (args.recentre and since_centre >= args.recentre) or told["recentre"]
-            if moving and (session.drift > DRIFT_LIMIT or due):
+            if moving and args.dither and since_dither >= args.dither:
+                # A dither centres the target again too, a little off.
+                told["recentre"] = False
+                collect(everything=True)
+                aim = dither_offset(rng)
+                print(f"  dithering: re-centring {aim[0]:+.1f}' east, {aim[1]:+.1f}' north of {args.name}", flush=True)
+                recentre(args.name, aim)
+                session.drift, since_centre, since_dither = 0.0, 0, 0
+                session.track.clear()
+            elif moving and (session.drift > DRIFT_LIMIT or due):
                 told["recentre"] = False
                 collect(everything=True)
                 print(f"  drifted {session.drift * 100:.0f}% of the frame; re-centring", flush=True)
@@ -505,6 +536,7 @@ def run(args):
                     mosaic, header = cam.frame(exposure)
                     index += 1
                     since_centre += 1
+                    since_dither += 1
                     if time.monotonic() - shown >= PREVIEW_EVERY:
                         snap.publish(mosaic, kind="newest frame", quick=True,
                                      detail=f"frame {index} · {exposure:g} s")
@@ -535,6 +567,8 @@ def run(args):
                     due = (args.recentre and since_centre >= args.recentre) or told["recentre"]
                     if moving and (session.drift > DRIFT_LIMIT or due):
                         break
+                    if moving and args.dither and since_dither >= args.dither:
+                        break
                     if args.assist and moving and len(session.track) >= ASSIST_EVERY:
                         break
         collect(everything=True)
@@ -560,6 +594,8 @@ def run(args):
     if session.save and not args.no_restack:
         print("\nQuality pass over the raw frames:")
         restack.run(session.folder, profile=args.profile)
+        import patrol
+        patrol.search_later(session.folder)
     print(f"Session folder: {session.folder}")
     final = session.folder / "final.jpg"
     return {"target": session.name, "folder": str(session.folder), "exposure_s": exposure,

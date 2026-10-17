@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/brokers.schema.json",
+  "title": "Brokers",
+  "description": "data of: brokers.py --json. New transients from the public alert broker ALeRCE that are bright enough for this rig and up in the dark here tonight. The Transient Name Server is not asked: a person checks there. Nothing moves.",
+  "type": "object",
+  "required": ["broker", "days", "brighter", "asked", "not_up", "too_faint", "already_reported", "worth_a_look", "night", "kind"],
+  "properties": {
+    "broker": {"type": "string"},
+    "days": {"type": "number"},
+    "brighter": {"type": "number"},
+    "asked": {"type": "integer"},
+    "not_up": {"type": "integer"},
+    "too_faint": {"type": "integer"},
+    "already_reported": {"type": "integer"},
+    "night": {"type": "string"},
+    "kind": {"const": "measured"},
+    "worth_a_look": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["oid", "ra", "dec", "mag", "band", "brightening", "highest", "highest_at", "minutes_up", "reported", "links"],
+        "properties": {
+          "oid": {"type": "string"},
+          "ra": {"type": "number"},
+          "dec": {"type": "number"},
+          "mag": {"type": "number"},
+          "band": {"type": "string"},
+          "brightening": {"type": "boolean"},
+          "first_seen": {"type": "string"},
+          "detections": {"type": "integer"},
+          "probability": {"type": "number", "description": "The broker's classifier, not a measurement."},
+          "highest": {"type": "number"},
+          "highest_at": {"type": "string", "description": "Local time."},
+          "minutes_up": {"type": "integer"},
+          "reported": {"type": ["string", "null"], "description": "A Rochester-listed nova or supernova at the place."},
+          "tns": {"type": "string"},
+          "links": {"type": "object", "additionalProperties": {"type": "string"}}
+        }
+      }
+    }
+  }
+}

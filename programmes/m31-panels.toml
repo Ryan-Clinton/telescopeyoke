@@ -1,0 +1,23 @@
+# A patrol of the whole Andromeda Galaxy for novae, panel by panel
+# (docs/discovery.md). The panels are mosaic.py's, planned when first used;
+# each night they are taken in order of priority (novae reported in the
+# panel x the share it should catch x days since it was watched, over the
+# minutes it costs) for as long as the night allows.
+# ./patrol.py m31-panels --plan, then ./patrol.py m31-panels
+
+mosaic = "M31"
+grid = "4x2"
+
+# Minutes on each panel: depth.py measured about G 17.0 in 5 minutes, so a
+# pass of eight panels is about 50 minutes and can be repeated.
+minutes = 5
+
+exposure = 16
+gain = 1500
+
+# No dither within a five-minute visit: each panel's GoTo lands a little
+# differently every night, which moves the camera's pattern between nights.
+
+# A nova lasts the night: a candidate in one half of the night only is set
+# aside (vet.py says so either way; this is where it is decided).
+both_halves = true

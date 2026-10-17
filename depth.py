@@ -131,14 +131,14 @@ def field(wcs, shape):
 
 
 def gaia(ra, dec, radius, faintest=FAINTEST):
-    """Gaia DR3 stars in a circle, as an array of (ra, dec, G). Kept on disk:
-    a field is fetched once."""
+    """Gaia DR3 stars in a circle, as an array of (ra, dec, G, BP-RP), the
+    colour NaN where Gaia has none. Kept on disk: a field is fetched once."""
     store = config.DATA / "cache" / "gaia"
-    path = store / f"{ra:.3f}_{dec:+.3f}_{radius:.2f}_{faintest:g}.tsv"
+    path = store / f"{ra:.3f}_{dec:+.3f}_{radius:.2f}_{faintest:g}_colour.tsv"
     if not path.exists():
         reply = requests.get(GAIA_URL, timeout=120, params={
             "-source": "I/355/gaiadr3", "-c": f"{ra:.5f} {dec:+.5f}", "-c.rd": f"{radius:.3f}",
-            "-out": "RA_ICRS,DE_ICRS,Gmag", "-out.max": "200000", "Gmag": f"<{faintest:g}"})
+            "-out": "RA_ICRS,DE_ICRS,Gmag,BP-RP", "-out.max": "200000", "Gmag": f"<{faintest:g}"})
         reply.raise_for_status()
         store.mkdir(parents=True, exist_ok=True)
         path.write_text(reply.text, encoding="utf-8")
@@ -146,16 +146,22 @@ def gaia(ra, dec, radius, faintest=FAINTEST):
 
 
 def read_tsv(text):
-    """VizieR's tab-separated answer: comments, a header, units, a rule, rows."""
+    """VizieR's tab-separated answer: comments, a header, units, a rule, rows,
+    as (ra, dec, G, BP-RP); a missing colour is NaN, a row with no G is left out."""
     rows = []
     lines = [line for line in text.splitlines() if line.strip() and not line.startswith("#")]
     for line in lines[3:]:
-        parts = line.split("\t")
+        parts = line.split("\t") + ["", ""]
         try:
-            rows.append([float(p) for p in parts[:3]])
+            ra, dec, g = (float(p) for p in parts[:3])
         except ValueError:
-            continue    # a row with no G
-    return np.array(rows, dtype=float).reshape(-1, 3)
+            continue
+        try:
+            colour = float(parts[3])
+        except ValueError:
+            colour = float("nan")
+        rows.append([ra, dec, g, colour])
+    return np.array(rows, dtype=float).reshape(-1, 4)
 
 
 # --- measuring -----------------------------------------------------------------
@@ -245,10 +251,29 @@ def calibrate(flat, stars, wcs, catalogue, radius):
         return None
     zps = zp[keep]
     spread = 1.4826 * float(np.median(np.abs(zps - np.median(zps))))
-    return {"zeropoint": float(np.median(zps)),
+    term, middle_colour = colour_term(zps, catalogue, inside, use, good, keep)
+    return {"zeropoint": float(np.median(zps)), "colour_term": term, "colour_ref": middle_colour,
             "zeropoint_error": spread / math.sqrt(len(zps)),
             "scatter": spread, "stars_used": int(len(zps)),
             "psf_stars": xy[good][keep], "shift_px": [float(shift[0]), float(shift[1])]}
+
+
+COLOUR_STARS = 20    # calibration stars with a colour needed to fit the colour term
+
+
+def colour_term(zps, catalogue, inside, use, good, keep):
+    """How the zero point changes with a star's Gaia BP-RP: the camera has no
+    filter and is not Gaia's G, so a red star gives it more or less light per
+    G magnitude than a blue one. Returns (magnitudes per magnitude of BP-RP,
+    the calibrators' middle colour), or (None, None) without enough colours."""
+    if catalogue.shape[1] < 4:
+        return None, None
+    colours = catalogue[inside, 3][use][good][keep]
+    ok = np.isfinite(colours)
+    if ok.sum() < COLOUR_STARS or np.ptp(colours[ok]) < 0.5:
+        return None, None
+    slope, _ = np.polyfit(colours[ok], zps[ok], 1)
+    return round(float(slope), 3), round(float(np.median(colours[ok])), 3)
 
 
 def psf(flat, xy, radius, half=PSF_HALF, most=40):
@@ -459,6 +484,7 @@ def measure(lum, wcs, catalogue, plant_stars=False, trials=6, seed=7, finder=Non
     record = {
         "zeropoint": round(zp, 3), "zeropoint_error": round(cal["zeropoint_error"], 3),
         "calibration_scatter": round(cal["scatter"], 3), "calibration_stars": cal["stars_used"],
+        "colour_term": cal.get("colour_term"), "colour_ref": cal.get("colour_ref"),
         "fwhm_px": round(fwhm, 2), "fwhm_arcsec": round(fwhm * scale, 2),
         "scale_arcsec_per_px": round(scale, 3), "aperture_px": round(radius, 2),
         "sky_level": round(sky, 2),
@@ -467,7 +493,7 @@ def measure(lum, wcs, catalogue, plant_stars=False, trials=6, seed=7, finder=Non
         "limit_5sigma": limits,
         "share_of_image": {name: round(float((kinds == n).mean()), 3) for n, (name, _) in enumerate(REGIONS)},
         "band": "Gaia G (camera unfiltered)",
-        "kinds": {"zeropoint": "measured", "limit_5sigma": "inferred",
+        "kinds": {"zeropoint": "measured", "colour_term": "measured", "limit_5sigma": "inferred",
                   "completeness": "simulated"},
     }
     if plant_stars:
@@ -563,6 +589,15 @@ def run(args, say=print):
                 f"50% found at {one['completeness'].get('all', {}).get('mag_50')}")
         record["sweep"] = rows
     kept = record_path(stack)
+    if kept.exists():
+        # A run without --plant or --sweep keeps what an earlier one measured.
+        earlier = json.loads(kept.read_text(encoding="utf-8"))
+        for key in ("completeness", "planted_per_trial", "trials", "sweep"):
+            if key in earlier and key not in record:
+                record[key] = earlier[key]
+                record.setdefault("carried_over", []).append(key)
+        if record.get("carried_over"):
+            say(f"kept from the earlier measurement: {', '.join(record['carried_over'])}")
     kept.write_text(json.dumps(record, indent=1), encoding="utf-8")
     say(f"kept as {kept}")
     return record

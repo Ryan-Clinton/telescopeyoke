@@ -42,6 +42,8 @@
     "zeropoint_error": {"type": "number"},
     "calibration_scatter": {"type": "number", "description": "Spread of the calibration stars about the zero point, magnitudes."},
     "calibration_stars": {"type": "integer"},
+    "colour_term": {"type": ["number", "null"], "description": "Change of the zero point per magnitude of Gaia BP-RP: how much more light per G magnitude the unfiltered camera gets from a redder star. Null without enough coloured calibrators."},
+    "colour_ref": {"type": ["number", "null"], "description": "The calibrators' middle BP-RP: the zero point is for a star of this colour."},
     "fwhm_px": {"type": "number"},
     "fwhm_arcsec": {"type": "number"},
     "scale_arcsec_per_px": {"type": "number"},

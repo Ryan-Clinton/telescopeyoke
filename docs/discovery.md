@@ -439,6 +439,19 @@ person's yes, the patrol pauses, the transient is imaged, and the patrol
 resumes. RTS2 shows the observatory side of this (scheduling, weather,
 targets of opportunity), and its complexity is not needed here.
 
+**Built 17 October 2026, first part.** `./brokers.py` asks ALeRCE (Fink's
+API did not answer that week; both carry the same ZTF alerts) for the
+objects first seen in the last few days that its stamp classifier calls a
+supernova, keeps those up in the dark here tonight for half an hour or
+more and at or brighter than `--brighter` (17.5 by default), and names any
+that the Rochester lists already have. The Transient Name Server wants a
+key even to be searched, so it is not asked: each answer carries its TNS
+search link for a person. Its first run, on 17 October, was given 66
+objects from ten days: 35 were not up here and the other 31 fainter than
+17.5, so nothing to point at. Not yet built: the confirmation picture on
+a person's yes, pausing the patrol, and the month's search for
+unreported ones.
+
 ### Moving objects, later: `moving.py`
 
 Tycho Tracker shows what amateur software does for moving objects:
@@ -466,6 +479,21 @@ comet, 91% track consistency, in 6 consecutive C3 frames, straight
 motion, not in the reported list [watch] [dismiss] [open the report
 form]". It may well be the likeliest credited discovery, but the headline
 stays "the telescope found a new source in the sky".
+
+**Built 17 October 2026, by hand.** `./sungrazer.py fetch` and `look`
+(with `--until` for a day in the past) do the above except the check
+against comets already reported, which a person makes from the project's
+list. Motion is measured per 12 minutes from each picture's own time, as
+the archive has gaps. Two tests on archived C3 pictures: the bright
+C/2024 G3 (ATLAS) on 13 and 14 January 2025 was found, its head and tail
+the strongest candidates, alongside the bleed line from its saturated
+head; the faint Kreutz comet SOHO-5175 on 25 January 2025 was not, on a
+day crowded with outward-moving coronal material. The public 1024-pixel
+pictures are JPEGs, which hide the faintest comets, so finding the faint
+ones may need the FITS files: the last weeks' are public
+(umbra.nascom.nasa.gov/pub/lasco/lastimage/level_05/DATE/c3/, about 105
+a day), which is the next step. It is not run all the time yet:
+the project is to be asked first.
 
 ### The candidate page
 
@@ -542,14 +570,14 @@ ends with a scientific proof, not just working code.
 | Phase | Build | Proof |
 |---|---|---|
 | 0 | Depth and completeness: `depth.py`, planted fake stars, at 60 to 600 s | a recovery curve for each M31 region and exposure. **Built 16 October 2026;** results below |
-| 1 | References, calibration, proper subtraction, the candidate database, vetting and forced photometry for M31. **Subtraction, raw-frame planting and vetting built 16 October 2026; references, the database and forced photometry to come** | planted fakes recovered; a planted rising fake gets the right light curve; a known asteroid and a known variable set aside |
-| 2 | The M31 patrol, scheduled by priority. **`patrol.py` built for one field (16 October 2026): readiness, point, image, then depth, subtraction, vetting and an answer; the mosaic panels and the scheduler to come** | a known nova, past or current, recovered from our data |
+| 1 | References, calibration, proper subtraction, the candidate database, vetting and forced photometry for M31. **Software complete, 16 and 17 October 2026: all of it built and tested. Scientific validation under way: realistic fakes measured, a real nova recovered from archive images (AT2024koe); a find of our own still to come** | planted fakes recovered; a planted rising fake gets the right light curve; a known asteroid and a known variable set aside |
+| 2 | The M31 patrol, scheduled by priority. **Built 16 and 17 October 2026: `patrol.py` for one field or M31's 4 x 2 panels, ordered by novae reported x share caught x days unwatched, fitted to the night; each panel's first night becomes its reference. Proof to come: a known nova recovered** | a known nova, past or current, recovered from our data |
 | 3 | M33 | a first M33 night with its completeness measured |
-| 4 | Sungrazer, running all the time | a known comet recovered in archived pictures |
-| 5 | The report packet | under five minutes from a confirmed planted fake to a packet |
-| 6 | Public alerts (`brokers.py`) | a real public transient observed; an unreported-transient search run over a past month of alerts |
-| 7 | Every session searched; old frames searched again on each improvement | every science picture checked automatically; a rerun finds fakes planted in old frames |
-| 8 | Real-or-bogus classifier; proposed follow-up | a measured fall in false candidates; a candidate leads to a useful repeat |
+| 4 | Sungrazer, running all the time. **`sungrazer.py` built 17 October 2026: fetch and look, by hand, not yet all the time. A bright comet (C/2024 G3) found in archived pictures; a faint Kreutz one (SOHO-5175) not yet** | a known comet recovered in archived pictures |
+| 5 | The report packet. **`report.py` built 17 October 2026: 95 s for a real candidate** | under five minutes from a confirmed planted fake to a packet |
+| 6 | Public alerts (`brokers.py`). **First part built 17 October 2026: ALeRCE's new transients, bright enough and up here tonight** | a real public transient observed; an unreported-transient search run over a past month of alerts |
+| 7 | Every session searched; old frames searched again on each improvement. **Built 17 October 2026: each new stack of a field with a reference is searched in the background; `patrol.py --sweep [--all-history]` for the rest** | every science picture checked automatically; a rerun finds fakes planted in old frames |
+| 8 | Real-or-bogus classifier; proposed follow-up. **Dismissal labels kept from 17 October 2026 (`candidates.py --dismiss`)** | a measured fall in false candidates; a candidate leads to a useful repeat |
 | 9 | Variable stars; TESS transits | a first VSX submission |
 | 10 | A wide-field lens rig; several rigs together | a Milky Way field patrolled; a candidate confirmed by a second rig |
 
@@ -670,9 +698,8 @@ where A flattens near 17.6, the floor was the pattern, and darks, flats
 and dithering are a free gain. If B flattens too, the floor is elsewhere:
 the residual galaxy glow, the stars' own crowding, or the stacking.
 What it needs first: darks at 16 s and gain 1500 and a flat
-(`calibrate.py`, both possible now), and **dithering, which `shoot.py`
-does not do yet**. Dithering moves the mount between frames, so it is
-built with a simulator test before it is used, like every other move.
+(`calibrate.py`, both possible now), and dithering, which `shoot.py --dither N` now does (built 17 October
+2026, proven against the simulator only).
 
 **What to improve, for discovery, in order:** sharp focus from the motor
 focuser; tracking and round stars; dark frames, flats and dithering;
@@ -681,6 +708,12 @@ helps the star size or sky more than it costs light; a larger telescope
 last.
 
 ## What phase 1 has measured so far
+
+**Software complete; scientific validation under way.** Everything phase 1
+asked for is built and tested, the end-to-end completeness is measured
+with realistic fakes, and the pipeline has rediscovered a real nova it was
+not given. What it has not done yet is find something of its own on a
+night of this telescope's, which only patrols can do.
 
 Three commands, each measured on the two M31 nights (14 October as the
 new night, 13 October as the reference):
@@ -724,9 +757,31 @@ new night, 13 October as the reference):
   | 18.0 | 11 of 27 |
   | 18.5 to 19.5 | 0 of 96 |
 
-  **The discovery completeness: half found at G 17.9, 90% at G 16.9.**
-  Planting into the finished stack had said 18.2 and 17.6: the whole
-  pipeline costs 0.3 mag at half and 0.7 at 90%, as the audit expected.
+  That first run said half found at G 17.9 and 90% at 16.9, but its fakes
+  were planted with the reference's zero point (13 October, 23.10) into the
+  new night's frames (14 October, 22.89): each fake was 0.2 mag brighter
+  than its label. Since 17 October the fakes are also realistic: each
+  takes its frame's own star shape in its part of the picture (a 3 x 3
+  grid, so coma and trailing come with it), its own photon noise (from the
+  frame's counts per electron, measured from the sky's grain above the
+  bias), and the frame's clearness (a real star dims with haze); and the
+  new night's own zero point. **Measured that way, with idealised colour
+  (grey) taken out of the question by the colour term below: half found at
+  G 17.8, 90% at G 16.9.** Planting into the finished stack had said 18.2
+  and 17.6: the whole pipeline costs 0.4 mag at half and 0.7 at 90%.
+  The colour term, fitted against Gaia's BP−RP on the same night's stars,
+  is −0.34 mag per mag of colour about BP−RP 0.92: the 183C sees a red star
+  fainter in G than Gaia does. Planted at three colours through the whole
+  pipeline:
+
+  | Fakes' colour (BP−RP) | Half found | 90% found |
+  |---|---|---|
+  | blue (0.2) | G 18.1 | G 17.55 |
+  | grey (0.8) | G 17.8 | G 16.89 |
+  | red (1.4) | G 17.73 | G 16.89 |
+
+  A young nova is blue near its peak, so the blue row is the one closest
+  to what the patrol hunts; the grey row is the figure quoted.
   For the patrol: a nova at G 17 or brighter is caught nine times in ten
   on a night like 14 October; at 18, about four in ten. It took 10
   minutes on the desktop's 12 workers, and the same run left one
@@ -743,11 +798,40 @@ new night, 13 October as the reference):
   unconfirmed and most likely noise: a clean example of what the pipeline
   hands a person, and of why a real one has to be seen again on another
   night.
+
+  Since 17 October a Gaia star close by is a **clue, not an explanation**:
+  a transient can sit beside a catalogued star, and in a crowded field 2″
+  is not nothing. Only a match to something catalogued as moving, varying
+  or already reported explains a candidate; a Gaia star, light already in
+  the reference, or halves not checked are listed with it as clues. Being
+  in one half of the night only is said as it is, and whether that sets it
+  aside is the programme's rule (`both_halves = true` for the nova
+  programmes: a nova lasts the night; another kind of transient might
+  not).
 - **`reference.py`** keeps each field's reference as a numbered version
   that is never replaced, with the nights it was made from; M31's v1 is the
   13 and 14 October stacks together (half found at G 17.61), and a night in
-  it is never compared with it. **`forced.py`** gives a place's brightness
-  or upper limit in every stack of a field.
+  it is never compared with it. A stack whose nights include or follow an
+  open candidate's first night, with the candidate in its field, is
+  **refused as a reference** (`--force` overrides): a real, lasting nova
+  baked into the reference would subtract itself away from every night
+  after. **`forced.py`** gives a place's brightness or upper limit in
+  every stack of a field, and with `--difference` the light above the
+  reference there, without the galaxy or the faint stars underneath:
+  patrols follow candidates up that way.
+- **A real nova, recovered** (`recover.py`). Fakes prove the pipeline finds
+  what was put there; the test that matters is something nobody put
+  there. AT2024koe (M31N 2024-06a) erupted on 8 June 2024 in M31's outer
+  disc, peaked at 16.2 on 12 June and was 19.5 by 3 July. From ZTF's public
+  r-band images of 21 May (before) and 27 June (on the way down), cut out
+  round it, `difference.py` found it **0.27″ from its published place, at
+  10.8 sigma, the strongest of the 4 candidates, at r 19.4**. The first
+  try missed it: a fixed 20-pixel mask round bright stars, right on this
+  rig's stacks, hid it on ZTF's sharper images; the mask now goes with the
+  stars' width (2 and 4 widths), which changed nothing on this rig's
+  nights and stops a real nova near a bright star being hidden. These are
+  ZTF's images (1.2 m, 1″ pixels), so this proves the software, not this
+  telescope's depth.
 
 **`patrol.py` puts it together** for one field: `./patrol.py m31-novae
 --plan` says whether it is ready and what it would run, `./patrol.py
@@ -755,8 +839,11 @@ m31-novae` points, images and analyses, and `--analyse SESSION` does the
 analysis on a night already taken. **`candidates.py`** keeps every
 candidate as an object followed from night to night, and each patrol
 measures the open ones again at their places whether or not the search
-found them, so a real one is seen again and a noise peak closes itself
-after three deep misses. The 14 October candidate is on file as the first.
+found them, so a real one is seen again. One missed on three nights,
+each deep enough to have shown it even had it faded 0.2 mag a day (as
+fast as a quick nova near its peak), is closed as most likely noise, with
+its evidence kept; a slower miss does not count. The 14 October candidate
+is on file as the first.
 
 The Transient Name Server is not asked yet: its search needs an account
 (a TNS bot key), which would be the person's own.

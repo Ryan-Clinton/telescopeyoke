@@ -29,6 +29,7 @@
   <a href="#imaging" data-task="imaging"><svg><use href="/icons.svg#imaging"/></svg><span>Imaging</span></a>
   <a href="#focus" data-task="focus"><svg><use href="/icons.svg#focus"/></svg><span>Focus</span></a>
   <a href="#mount" data-task="mount"><svg><use href="/icons.svg#mount"/></svg><span>Mount</span></a>
+  <a href="#discovery" data-task="discovery"><svg><use href="/icons.svg#targets"/></svg><span>Discovery</span></a>
   <a href="#status" data-task="status" data-only="companion"><svg><use href="/icons.svg#system"/></svg><span>Status</span></a>
   <div class="group" data-only="app">Equipment</div>
   <a href="#camera" data-task="camera" data-only="app"><svg><use href="/icons.svg#imaging"/></svg><span>Camera</span></a>
@@ -333,6 +334,20 @@
     <h1>Processing</h1>
     <div class="tool"><div><b>Restack the last session</b><span id="restack-name"></span></div><button type="button" id="restack-run">Run</button></div>
     <div class="tool"><div><b>Combine sessions</b><span>Every saved session of the same target, as one picture.</span></div><button type="button" id="restack-all">Run</button></div>
+  </section>
+
+  <section id="discovery" class="task" hidden>
+    <h1>Discovery</h1>
+    <p class="quiet">A patrol points at a field, images it, and looks for anything brighter than in the field's reference: depth, subtraction, the checks on every candidate, and an answer. A candidate is only interesting once it has been seen on more than one night. Nothing is ever reported for you.</p>
+    <div class="form">
+      <label>Programme <select id="patrol-programme"></select></label>
+      <label>Minutes <input id="patrol-minutes" type="number" min="1" max="240" placeholder="default"></label>
+      <button type="button" id="patrol-plan" class="primary" data-needs="mount">Plan the patrol</button>
+    </div>
+    <h2>The last patrol</h2>
+    <div id="patrol-latest" class="quiet">None yet.</div>
+    <h2>Candidates still open</h2>
+    <div id="patrol-open" class="quiet">None.</div>
   </section>
 
   <section id="knowledge" class="task" data-only="app" hidden>

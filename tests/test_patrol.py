@@ -131,7 +131,110 @@ def test_a_run_that_dawn_would_cut_short_is_said_to_be(monkeypatch):
     monkeypatch.setattr(polaris, "sun_now", lambda site, when=None: (-20.0, 0.0))
     from astropy.time import Time
     start = Time("2026-10-17T05:00:00")
-    monkeypatch.setattr(shoot, "night_over", lambda name, site, when: "the Sun is -11° up" if when > start + 20 / 1440 else None)
+    from astropy import units as u
+    monkeypatch.setattr(shoot, "night_over", lambda name, site, when: "the Sun is -11° up" if when > start + 20 * u.min else None)
     items = patrol.sky_now({"target": "M31", "minutes": 60}, when=start)
     time_item = next(i for i in items if i["what"] == "time")
     assert "after about 20 of 60 minutes" in time_item["detail"] and not time_item["stops"]
+
+
+def test_a_programme_that_dithers_passes_it_to_shoot():
+    _, shoot_cmd = patrol.steps({"target": "M31", "exposure": 16, "gain": 1500, "minutes": 30, "dither": 15})
+    assert shoot_cmd[-2:] == ["--dither", "15"]
+    assert patrol.programme("m31-novae")["dither"] == 15
+
+
+def test_panels_are_ordered_by_novae_share_caught_and_time_unwatched(monkeypatch):
+    import mosaic
+    spots = {"M31-P1": (10.0, 41.0), "M31-P2": (11.0, 41.5), "M31-P3": (12.0, 42.0)}
+    monkeypatch.setattr(mount, "find_target", lambda name: {"id": name, "ra": spots[name][0], "dec": spots[name][1]})
+    monkeypatch.setattr(mosaic, "field", lambda cfg=None: (1.0, 0.67))
+    known = [(11.0, 41.5)] * 5 + [(10.0, 41.0)]
+    now = 1_800_000_000
+    last = {"M31-P1": now - 86400, "M31-P2": now - 3 * 86400, "M31-P3": None}
+    p = {"minutes": 5}
+    rows = patrol.priorities(p, list(spots), known, lambda name: 17.0, last.get, now=now)
+    assert [r["field"] for r in rows] == ["M31-P2", "M31-P3", "M31-P1"]
+    p2 = rows[0]
+    assert p2["novae_reported"] == 5 and p2["days_unwatched"] == 3.0
+    assert p2["priority"] == pytest.approx(6 * patrol.completeness(17.0) * 3.0 / (5 + patrol.OVERHEAD), abs=1e-3)
+    assert rows[1]["days_unwatched"] == patrol.DEBT_DAYS          # never watched counts as the longest
+    # Only what the night allows, highest first.
+    assert [r["field"] for r in patrol.fit(rows, 14)] == ["M31-P2", "M31-P3"]
+
+
+def test_the_share_of_novae_caught_rises_with_depth():
+    assert patrol.completeness(17.5) == pytest.approx(0.5)
+    assert patrol.completeness(16.5) < 0.2 < 0.8 < patrol.completeness(18.5)
+
+
+def test_a_mosaic_programme_plans_its_panels_once_and_keeps_them(tmp_path, monkeypatch):
+    import mosaic
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    monkeypatch.setattr(mosaic, "folder", lambda: tmp_path / "mosaics")
+    monkeypatch.setattr(mosaic, "path", lambda name: tmp_path / "mosaics" / f"{name}.json")
+    monkeypatch.setattr(mosaic, "load", lambda name: json.loads((tmp_path / "mosaics" / f"{name}.json").read_text())
+                        if (tmp_path / "mosaics" / f"{name}.json").exists() else None)
+    monkeypatch.setattr(mosaic, "camera_axes", lambda angle=None: ((1.0, 0.0), (0.0, 1.0), "test"))
+    monkeypatch.setattr(mosaic, "field", lambda cfg=None: (1.0, 0.67))
+    names = patrol.fields({"mosaic": "M31", "grid": "4x2"})
+    assert names == [f"M31-P{n}" for n in range(1, 9)]
+    assert (tmp_path / "mosaics" / "M31.json").exists()
+    assert patrol.fields({"target": "M33"}) == ["M33"]
+
+
+def test_a_panels_first_night_becomes_its_reference(tmp_path, monkeypatch):
+    import reference
+    from test_reference import measured
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    session = measured(tmp_path, "20261020-221500", 17.1)
+    (tmp_path / "frames" / "M31-P6").mkdir(parents=True)
+    panel_session = tmp_path / "frames" / "M31-P6" / "20261020-221500"
+    session.rename(panel_session)
+    record = json.loads((panel_session / "depth.json").read_text())
+    record["stack"] = str(panel_session / "final.fits")
+    (panel_session / "depth.json").write_text(json.dumps(record))
+    made = patrol.first_reference("M31-P6", panel_session, say=lambda *_: None)
+    assert made and reference.newest("M31-P6") is not None
+    assert patrol.first_reference("M31-P6", panel_session, say=lambda *_: None) is None   # only the first night
+
+
+def test_a_new_stack_of_a_field_with_a_reference_is_searched_in_the_background(tmp_path, monkeypatch):
+    import reference
+    from test_reference import measured
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    monkeypatch.delenv("TY_PATROL", raising=False)
+    monkeypatch.setattr(config, "DEMO", False)
+    first = measured(tmp_path, "20261013-232632", 17.6)
+    reference.make("M31")
+    later = measured(tmp_path, "20261020-221500", 17.4)
+    started = []
+    start = lambda cmd, **kw: started.append(cmd)
+    assert patrol.search_later(first, say=lambda *_: None, start=start) is None      # the reference's own night
+    assert patrol.search_later(later, say=lambda *_: None, start=start) == str(later / "patrol.log")
+    assert started == [[sys.executable, str(patrol.ROOT / "patrol.py"), "--analyse", str(later)]]
+    (later / "patrol.json").write_text("{}")
+    assert patrol.search_later(later, say=lambda *_: None, start=start) is None      # searched already
+    monkeypatch.setenv("TY_PATROL", "1")
+    (later / "patrol.json").unlink()
+    assert patrol.search_later(later, say=lambda *_: None, start=start) is None      # the patrol searches its own
+    assert len(started) == 1
+
+
+def test_a_sweep_searches_what_was_missed_and_all_history_reaches_back(tmp_path, monkeypatch):
+    import datetime
+    import reference
+    from test_reference import measured
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    measured(tmp_path, "20261001-220000", 17.6)
+    reference.make("M31")
+    old = measured(tmp_path, "20261005-220000", 17.2)
+    new = measured(tmp_path, "20261020-221500", 17.4)
+    now = datetime.datetime(2026, 10, 21, 9, 0)
+    searched = []
+    search = lambda session: searched.append(session) or {"summary": ["nothing new"]}
+    answer = patrol.sweep(False, say=lambda *_: None, search=search, now=now)
+    assert searched == [new] and answer["searched"] == [{"session": str(new), "summary": ["nothing new"]}]
+    searched.clear()
+    patrol.sweep(True, say=lambda *_: None, search=search, now=now)
+    assert searched == [old, new]

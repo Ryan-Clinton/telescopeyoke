@@ -4,6 +4,8 @@
     ./candidates.py M31                  the open ones, with each night's measurement
     ./candidates.py M31 --all            closed ones too
     ./candidates.py M31 --json
+    ./candidates.py M31 --dismiss M31-20261014-021118-001 --reason noise
+    ./candidates.py M31 --reopen M31-20261014-021118-001
 
 A detection is not an object. Each night's candidates (vet.py's verdicts)
 are joined to those already on file at the same place, within 5″, so one
@@ -13,8 +15,15 @@ open candidate in the new stack whether or not it was found again
 
 A candidate stays open while it is unexplained. It is closed when a check
 explains it (a known asteroid or variable, already reported), or after
-CLOSE_AFTER nights in a row without being seen at a depth that should have
-shown it. One seen on two or more nights is the one to look at hard.
+CLOSE_AFTER nights in a row without being seen, each deep enough to have
+shown it even had it faded FADE mag a day: that makes it most likely
+noise, though the evidence is kept. One seen on two or more nights is the
+one to look at hard.
+
+A person who has looked at one and found it is not real dismisses it
+with one of LABELS as the reason. The label is kept with it: the labels
+are what a classifier will one day learn from (docs/discovery.md), so
+the reason should be the true one, not the nearest. --reopen undoes it.
 Kept as candidates/NAME.json. Nothing here moves the mount or uses the camera.
 """
 import argparse
@@ -30,6 +39,9 @@ import stacking
 
 JOIN = 5.0         # arcsec: a detection this close to a candidate on file is the same object
 CLOSE_AFTER = 3    # nights in a row unseen, each deep enough to have shown it, and it is closed
+FADE = 0.2         # mag a day it may have faded since last seen: as fast as a quick nova near its peak
+LABELS = ("noise", "hot pixel", "edge", "bad subtraction", "satellite", "cosmic ray", "bright-star halo",
+          "cloud or tree", "real star", "asteroid", "variable star")
 
 
 def path(name):
@@ -57,13 +69,16 @@ def explained(verdict):
     return verdict.startswith(("known asteroid", "already reported", "known variable"))
 
 
-def add_night(book, night, vetted):
+def add_night(book, night, vetted, both_halves=True):
     """Join one night's vetted candidates to the book: each to the open
-    candidate it lies on, or as a new one. Returns the ids touched."""
+    candidate it lies on, or as a new one. With `both_halves` (the nova
+    programmes' rule) one seen in one half of the night only is not kept: a
+    nova lasts the night. Returns the ids touched."""
+    import vet
     touched = []
     for c in vetted:
-        if c.get("ra") is None or c["verdict"].startswith("not in both halves"):
-            continue    # an artefact of one night is not an object
+        if c.get("ra") is None or (both_halves and c["verdict"] == vet.ONE_HALF):
+            continue
         where = (c["ra"], c["dec"])
         match = next((k for k in book["candidates"] if k["open"] and arcsec(where, (k["ra"], k["dec"])) <= JOIN), None)
         seen = {"night": night, "seen": True, "score": c["score"], "mag": c.get("mag"),
@@ -93,10 +108,28 @@ def follow_up(book, night, measure, depth_here):
         for n in reversed(k["nights"]):
             if n["seen"]:
                 break
-            if n.get("limit") is not None and (k_peak(k) is None or n["limit"] >= k_peak(k)):
+            if n.get("limit") is not None and deep_enough(k, n):
                 misses += 1
         if misses >= CLOSE_AFTER:
-            k["open"], k["closed_because"] = False, f"not seen on {misses} nights deep enough to show it"
+            k["open"], k["closed_because"] = (False, f"not seen on {misses} nights, each deep enough to have shown "
+                                              f"it even had it faded {FADE:g} mag a day since it was seen")
+
+
+def day(night):
+    """A night's date as a day number, from its name (20261014-021118)."""
+    import datetime
+    return datetime.date(int(night[:4]), int(night[4:6]), int(night[6:8])).toordinal()
+
+
+def deep_enough(k, miss):
+    """Whether a night it was missed on was deep enough to have shown it,
+    allowing it to have faded FADE mag a day since it was last seen."""
+    seen = [n for n in k["nights"] if n["seen"] and n.get("mag") is not None and n["night"] < miss["night"]]
+    if not seen:
+        return False
+    last = max(seen, key=lambda n: n["night"])
+    expected = last["mag"] + FADE * max(0, day(miss["night"]) - day(last["night"]))
+    return miss["limit"] >= expected
 
 
 def k_peak(k):
@@ -109,8 +142,48 @@ def nights_seen(k):
     return sum(1 for n in k["nights"] if n["seen"])
 
 
+def find(book, wanted):
+    k = next((k for k in book["candidates"] if k["id"] == wanted), None)
+    if k is None:
+        raise interface.Refusal("INVALID_REQUEST", f"No candidate {wanted} for {book['name']}: "
+                                f"./candidates.py {book['name']} --all lists them.")
+    return k
+
+
+def dismiss(book, wanted, reason, note=None, now=None):
+    """A person's judgement that a candidate is not real, with its label."""
+    if reason not in LABELS:
+        raise interface.Refusal("INVALID_REQUEST", f"The reason is one of: {', '.join(LABELS)}.")
+    k = find(book, wanted)
+    k["dismissed"] = {"reason": reason, "note": note, "by": "person",
+                      "when": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now))}
+    k["open"], k["closed_because"] = False, f"dismissed by a person: {reason}"
+    return k
+
+
+def reopen(book, wanted):
+    """Undo a dismissal: the candidate is open again, the label gone."""
+    k = find(book, wanted)
+    if "dismissed" not in k:
+        raise interface.Refusal("INVALID_REQUEST", f"{wanted} was not dismissed by a person; "
+                                f"{k.get('closed_because') or 'it is open'}.")
+    k.pop("dismissed")
+    k.pop("closed_because", None)
+    k["open"] = True
+    return k
+
+
 def run(args, say=print):
     book = load(args.name)
+    if getattr(args, "dismiss", None) or getattr(args, "reopen", None):
+        if args.dismiss:
+            k = dismiss(book, args.dismiss, args.reason, args.note)
+            say(f"{k['id']} dismissed: {args.reason}")
+        else:
+            k = reopen(book, args.reopen)
+            say(f"{k['id']} open again")
+        save(book)
+        return {"name": args.name, "candidates": [k]}
     shown = [k for k in book["candidates"] if args.all or k["open"]]
     if not shown:
         say(f"No {'' if args.all else 'open '}candidates for {args.name}.")
@@ -129,8 +202,16 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("name", help="the field: an object or a mosaic panel")
     ap.add_argument("--all", action="store_true", help="closed candidates too")
+    ap.add_argument("--dismiss", metavar="ID", help="a person's judgement that this candidate is not real")
+    ap.add_argument("--reason", choices=LABELS, help="with --dismiss: what it was")
+    ap.add_argument("--note", help="with --dismiss: anything more, in words")
+    ap.add_argument("--reopen", metavar="ID", help="undo a dismissal")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
+    if args.dismiss and not args.reason:
+        ap.error("--dismiss needs --reason")
+    if args.dismiss and args.reopen:
+        ap.error("--dismiss or --reopen, not both")
     interface.main("candidates", lambda: run(args), args.json)
 
 

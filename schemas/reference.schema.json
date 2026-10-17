@@ -19,7 +19,8 @@
         "exposure_s": {"type": ["number", "null"]},
         "frames": {"type": ["integer", "null"]},
         "sessions": {"type": "array", "items": {"type": "string"}},
-        "made": {"type": "number"}
+        "made": {"type": "number"},
+        "held_back": {"type": "array", "items": {"type": "string"}, "description": "Open candidates the stack could contain, made with --force regardless."}
       }
     }
   },

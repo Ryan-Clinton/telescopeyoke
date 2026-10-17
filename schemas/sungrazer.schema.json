@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/sungrazer.schema.json",
+  "title": "Sungrazer",
+  "description": "data of: sungrazer.py fetch|look --json. fetch: how many SOHO LASCO pictures are kept. look: moving points in them that do not drift with the stars, each with a movie for a person to watch. Nothing is reported for you.",
+  "type": "object",
+  "required": ["camera", "pictures"],
+  "properties": {
+    "camera": {"enum": ["c2", "c3"]},
+    "pictures": {"type": "integer"},
+    "kept": {"type": "string", "description": "fetch: the folder the pictures are kept in."},
+    "from": {"type": "string"},
+    "to": {"type": "string"},
+    "points": {"type": "integer"},
+    "tracks": {"type": "integer"},
+    "star_drift": {"type": ["array", "null"], "items": {"type": "number"}, "description": "Pixels in 12 minutes, x and y."},
+    "folder": {"type": "string"},
+    "candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["pictures", "track", "pixels_per_12_min", "towards_sun", "strength"],
+        "properties": {
+          "pictures": {"type": "array", "items": {"type": "integer"}},
+          "track": {"type": "array", "items": {"type": "array", "items": {"type": "number"}}},
+          "pixels_per_12_min": {"type": "number"},
+          "towards_sun": {"type": "number", "description": "1 straight in towards the Sun, -1 straight out."},
+          "strength": {"type": "number"},
+          "times": {"type": "array", "items": {"type": "string"}},
+          "files": {"type": "array", "items": {"type": "string"}},
+          "movie": {"type": "string"}
+        }
+      }
+    }
+  }
+}

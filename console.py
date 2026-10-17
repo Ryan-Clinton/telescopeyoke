@@ -122,6 +122,18 @@ def run(params):
     return cmd + (["--assist"] if params.get("assist") else [])
 
 
+def programmes():
+    """The patrol programmes there are: the files in programmes/."""
+    return tuple(sorted(p.stem for p in (ROOT / "programmes").glob("*.toml")))
+
+
+def patrolling(params):
+    cmd = ["patrol.py", choice(params, "programme", programmes(), "m31-novae")]
+    if params.get("minutes") not in (None, ""):
+        cmd += ["--minutes", f"{number(params, 'minutes', 1, 240):g}"]
+    return cmd
+
+
 def focusing(params):
     sound = choice(params, "sound", ("sound", "silent"), "sound")
     return ["focus.py"] + {"sound": [], "silent": ["--quiet"]}[sound]
@@ -232,6 +244,9 @@ ACTIONS = {
     "position":   {"label": "Read position", "command": lambda p: ["mount.py", "status"],
                    "uses": "mount", "moves": False, "demo": True},
     "run":        {"label": "Image {target}", "command": run, "uses": "mount", "moves": True},
+    "patrol":     {"label": "Discovery patrol", "command": patrolling, "uses": "mount", "moves": True,
+                   "says": "It points at each field in turn, images it, and looks for anything new "
+                           "against the field's reference. A MOTION_LOCKED file stops it before anything moves."},
     "focus":      {"label": "Focusing", "command": focusing, "uses": "camera", "moves": False},
     "horizon":    {"label": "Horizon survey", "command": survey, "uses": "mount", "moves": True,
                    "says": "This moves the mount all over the sky, over the pole and back, for "
@@ -828,6 +843,29 @@ class Reader:
                                 **limits)
                            for section, key, label, kind, text, limits in config.SETTINGS]}
 
+    def discovery(self):
+        """The patrol programmes, the newest patrol's answer, and the
+        candidates still open, for the Discovery screen."""
+        import candidates
+        import patrol
+        out = {"programmes": [], "latest": None, "open": []}
+        for name in programmes():
+            p = patrol.programme(name)
+            out["programmes"].append({"name": name, "target": p.get("mosaic") or p.get("target"),
+                                      "panels": bool(p.get("mosaic")), "minutes": p.get("minutes")})
+        answers = sorted((config.DATA / "frames").glob("*/*/patrol.json"), key=lambda f: f.stat().st_mtime)
+        if answers:
+            found = json.loads(answers[-1].read_text(encoding="utf-8"))
+            out["latest"] = {"session": found.get("session"), "object": found.get("object"),
+                             "summary": found.get("summary", []), "pictures": found.get("pictures", []),
+                             "age_s": round(time.time() - answers[-1].stat().st_mtime)}
+        for book in sorted((config.DATA / "candidates").glob("*.json")):
+            for k in json.loads(book.read_text(encoding="utf-8")).get("candidates", []):
+                if k.get("open"):
+                    out["open"].append({"id": k["id"], "ra": k["ra"], "dec": k["dec"],
+                                        "seen_on": candidates.nights_seen(k), "of": len(k["nights"])})
+        return out
+
     def knowledge(self):
         """agent.characterise(), with whether each item's action is planned
         and confirmed first (`plan`) or simply started."""
@@ -892,6 +930,7 @@ class Reader:
             "gallery": (self.gallery, 10),
             "rigs": (agent.rigs, 5),
             "characterise": (self.knowledge, 15),
+            "discovery": (self.discovery, 10),
         }
         if name not in routes:
             return None

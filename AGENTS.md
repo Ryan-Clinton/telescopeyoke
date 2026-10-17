@@ -47,7 +47,9 @@ them and every file kept under `demo/`.
 | `planet.py` | A planet: thousands of a second per frame, a square round it kept from each, the sharpest stacked. Uses the camera only |
 | `difference.py` | Proper image subtraction (ZOGY) of a reference stack from a new one: what is brighter now (`docs/discovery.md`, phase 1) |
 | `patrol.py`, `programmes/` | A discovery patrol of one field: readiness, point and image (through `mount.py` and `shoot.py`), then depth, subtraction, vetting and a short answer |
-| `reference.py`, `vet.py`, `plant.py` | Each field's kept reference; the evidence for each candidate and its verdict; fake novae through the whole pipeline for the discovery completeness (`docs/discovery.md`, phase 1) |
+| `reference.py`, `vet.py`, `plant.py`, `recover.py` | Each field's kept reference; the evidence for each candidate and its verdict; fake novae through the whole pipeline for the discovery completeness; a known nova rediscovered from ZTF images (`docs/discovery.md`, phase 1) |
+| `sungrazer.py` | Comets near the Sun in SOHO's LASCO pictures, for cloudy nights: fetches them politely, finds what moves other than as the stars do, and makes a movie of each for a person (`docs/discovery.md`, phase 4) |
+| `brokers.py` | Public alerts: ALeRCE's new supernova-like transients, bright enough and up here tonight, not on the Rochester lists (`docs/discovery.md`, phase 6) |
 | `mosaic.py` | Panels for an object bigger than the frame, kept in `mosaics/`; `mount.find_target` turns a panel name (`M31-P2`) into its centre |
 | `tour.py` | Records the demo being used, for the README: `docs/tour.gif` and `docs/screens/` (Ubuntu) |
 | `docs/index.html` | The project's home page, served by GitHub Pages from `docs/` |

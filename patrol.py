@@ -7,6 +7,8 @@ morning's answer: is there anything new?
     ./patrol.py m31-novae --minutes 15  a shorter look
     ./patrol.py --analyse frames/M31/20261020-221500   the looking-for part, on a night already taken
     ./patrol.py m31-novae --dry-run     every step as it would be run, nothing moved or taken
+    ./patrol.py --sweep                 search every session of the last 3 days not yet searched
+    ./patrol.py --sweep --all-history   every session there has ever been
 
 A programme is a file in programmes/ (target, exposure, gain, minutes);
 a target name works too. The patrol:
@@ -27,10 +29,19 @@ It moves the mount only through mount.py and shoot.py, with every check
 they make: a MOTION_LOCKED file stops it before anything moves. A person
 starts it; it never decides to move by itself. Nothing is reported to
 anyone: an unexplained candidate is for a person to look at.
+
+Every session is searched, not only the patrol's: when shoot.py or
+restack.py finishes a stack of a field that has a reference (and the
+session is not one the reference was made from), it starts
+`patrol.py --analyse` on it in the background at low priority, its lines
+kept in the session's patrol.log. --sweep searches what that missed, and
+--sweep --all-history every session kept, for when the search improves.
 """
 import argparse
+import datetime
 import json
 import math
+import os
 import subprocess
 import sys
 import time
@@ -71,10 +82,12 @@ def readiness(p):
     items.append({"what": "motion lock", "ok": not locked, "stops": locked,
                   "detail": mount.LOCK_FILE.read_text(encoding="utf-8").strip() if locked else "none"})
     items += sky_now(p)
-    ref = reference.newest(p["target"])
+    ref, owner = reference.for_field(p["target"])
     items.append({"what": "reference", "ok": ref is not None, "stops": False,
-                  "detail": str(ref) if ref else f"none kept: tonight's stack can become one "
-                                                 f"(./reference.py {p['target']} --make)"})
+                  "detail": (str(ref) if owner == p["target"] else
+                             f"{owner}'s ({ref}) where it overlaps; tonight's stack becomes the panel's own"
+                             if ref else f"none kept: tonight's stack can become one "
+                                         f"(./reference.py {p['target']} --make)")})
     if focus.FOCUS_FILE.exists():
         f = json.loads(focus.FOCUS_FILE.read_text(encoding="utf-8"))
         hours = (time.time() - f.get("saved", 0)) / 3600
@@ -88,10 +101,14 @@ def readiness(p):
     # focus and sky are as good. The focus routine's own short frames do
     # not say how wide a long stack's stars will be.
     last = None
-    for record in sorted((config.DATA / "frames" / p["target"]).glob("*/depth.json"), key=lambda r: r.stat().st_mtime):
-        r = json.loads(record.read_text(encoding="utf-8"))
-        if r.get("fwhm_arcsec") and r.get("sky_mag_per_arcsec2"):
-            last = r
+    base = p["target"].rsplit("-P", 1)[0] if "-P" in p["target"] else p["target"]
+    for folder in dict.fromkeys((p["target"], base)):     # the panel's own stacks, else the object's
+        for record in sorted((config.DATA / "frames" / folder).glob("*/depth.json"), key=lambda r: r.stat().st_mtime):
+            r = json.loads(record.read_text(encoding="utf-8"))
+            if r.get("fwhm_arcsec") and r.get("sky_mag_per_arcsec2"):
+                last = r
+        if last:
+            break
     try:
         model, _ = depth.fit(depth.measurements())
     except interface.Refusal:
@@ -101,8 +118,9 @@ def readiness(p):
         whole = depth.predict(model, last["fwhm_arcsec"], last["sky_mag_per_arcsec2"], 60 * p["minutes"])
         items.append({"what": "expected depth", "ok": five >= SOFT, "stops": False, "kind": "inferred",
                       "detail": f"with stars {last['fwhm_arcsec']}\" and a {last['sky_mag_per_arcsec2']} sky as last "
-                                f"measured: half found at about G {five:.1f} in 5 minutes, {whole:.1f} in "
-                                f"{p['minutes']:g} (± {model['scatter']:.1f})"
+                                f"measured: half found at about G {five:.1f} in 5 minutes"
+                                + ("" if p["minutes"] == 5 else f", {whole:.1f} in {p['minutes']:g}")
+                                + f" (± {model['scatter']:.1f})"
                                 + ("" if five >= SOFT else "; shallow: sharper focus or a darker sky would help")})
     else:
         items.append({"what": "expected depth", "ok": True, "stops": False, "kind": "not known",
@@ -156,7 +174,8 @@ def steps(p, dry_run=False):
     extra = ["--dry-run"] if dry_run else []
     return [[sys.executable, str(ROOT / "mount.py"), "goto", p["target"], *extra],
             [sys.executable, str(ROOT / "shoot.py"), p["target"], "--frames", str(frames),
-             "--exposure", str(p["exposure"]), "--gain", str(p["gain"]), *extra]]
+             "--exposure", str(p["exposure"]), "--gain", str(p["gain"]),
+             *(["--dither", str(p["dither"])] if p.get("dither") else []), *extra]]
 
 
 def newest_session(target, after):
@@ -165,7 +184,7 @@ def newest_session(target, after):
     return sessions[-1] if sessions else None
 
 
-def analyse(session, say=print, chain=None):
+def analyse(session, say=print, chain=None, both_halves=True):
     """Depth, difference and vetting on a session, and the answer. `chain`
     replaces the three steps (for the tests)."""
     import depth
@@ -192,7 +211,7 @@ def analyse(session, say=print, chain=None):
             break
     if "candidates" in answer.get("vet", {}):
         measure = (chain or {}).get("measure") or (lambda: tonight(session, answer.get("depth", {})))
-        answer["followed"] = follow(name, session.name, answer["vet"]["candidates"], measure)
+        answer["followed"] = follow(name, session.name, answer["vet"]["candidates"], measure, both_halves)
     answer["summary"] = summary(answer)
     if chain is None and "vet" in answer and "candidates" in answer["vet"]:
         answer["pictures"] = cutouts(session, answer["vet"])
@@ -211,6 +230,11 @@ def tonight(session, measured):
     lum = depth.brightness(fits.getdata(session / "final.fits"))
     wcs = depth.plate(lum, session.parent.name)
     rng = np.random.default_rng(3)
+    # The light above the reference, where there is one: the galaxy and the
+    # faint stars under a candidate are not its light.
+    above = forced.above_reference(lum, wcs, session.parent.name, lambda image: depth.plate(image, session.parent.name))
+    if above is not None:
+        lum = np.nan_to_num(above)
 
     def at(ra, dec):
         x, y = (float(v) for v in wcs.world_to_pixel_values(ra, dec))
@@ -220,12 +244,12 @@ def tonight(session, measured):
     return at
 
 
-def follow(name, night, vetted, measure):
+def follow(name, night, vetted, measure, both_halves=True):
     """Add tonight's candidates to the field's book, and measure every open
     one in tonight's stack. Returns the open candidates as they now stand."""
     import candidates
     book = candidates.load(name)
-    candidates.add_night(book, night, vetted)
+    candidates.add_night(book, night, vetted, both_halves)
     if any(k["open"] and not any(n["night"] == night for n in k["nights"]) for k in book["candidates"]):
         candidates.follow_up(book, night, measure(), None)
     candidates.save(book)
@@ -260,13 +284,15 @@ def summary(a):
             verdicts[key] = verdicts.get(key, 0) + 1
         for key, n in sorted(verdicts.items(), key=lambda kv: -kv[1]):
             lines.append(f"  {n} {key}")
-        left = [c for c in v["candidates"] if c["verdict"] == "unexplained: worth a person's eyes"]
+        left = [c for c in v["candidates"] if c["verdict"].startswith("unexplained")]
         if left:
             lines.append(f"Unexplained: {len(left)}. Look at each before anything else; a real one is seen "
                          "again on another night.")
             for c in left:
                 lines.append(f"  {c['score']:.1f} sigma at RA {c['ra']:.5f} Dec {c['dec']:+.5f}, about "
                              f"G {c.get('mag')}, both halves {c.get('halves')}")
+                for clue in c.get("clues", []):
+                    lines.append(f"    clue: {clue}")
         else:
             lines.append("Nothing unexplained: nothing new tonight that this rig could see.")
     for k in a.get("followed", []):
@@ -313,21 +339,189 @@ def cutouts(session, vetted, half=32):
     return made
 
 
+# --- which fields, in what order ---------------------------------------------------
+
+NOVA_PEAK = (17.5, 1.0)   # G: the middle and spread of M31 novae's peaks, for the completeness (estimated)
+DEBT_DAYS = 10.0          # a field unwatched longer than this counts as this long
+OVERHEAD = 1.5            # minutes a field costs beyond its frames: the GoTo and the plate solve
+KNOWN_FRESH = 86400       # seconds the list of known novae is kept before it is fetched again
+
+
+def fields(p, keep=True):
+    """The fields a programme covers: its target, or its mosaic's panels,
+    planned (as ./mosaic.py would) and kept if none is yet."""
+    if not p.get("mosaic"):
+        return [p["target"]]
+    import mosaic
+    import mount
+    target = mount.find_target(p["mosaic"])
+    kept = mosaic.load(target["id"])
+    if kept is None:
+        columns, rows = (int(v) for v in str(p.get("grid", "4x2")).lower().split("x"))
+        kept = mosaic.plan(target, columns, rows)
+        if keep:
+            mosaic.folder().mkdir(parents=True, exist_ok=True)
+            mosaic.path(target["id"]).write_text(json.dumps(kept, indent=1), encoding="utf-8")
+    return [panel["id"] for panel in kept["panels"]]
+
+
+def known_novae(ra, dec, within=2.0):
+    """Where novae have been reported near a field, this year and last
+    (the Rochester lists, kept for a day), as (ra, dec) rows."""
+    import vet
+    cache = config.DATA / "cache" / "known-novae.json"
+    rows = None
+    if cache.exists() and time.time() - cache.stat().st_mtime < KNOWN_FRESH:
+        rows = json.loads(cache.read_text(encoding="utf-8"))
+    if rows is None:
+        year = time.gmtime().tm_year
+        try:
+            rows = [[r["ra"], r["dec"]] for r in vet.reported((year - 1, year))]
+        except Exception:
+            rows = []
+        if rows:
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            cache.write_text(json.dumps(rows), encoding="utf-8")
+    return [(a, d) for a, d in rows if vet.separation(ra, dec, a, d) <= within * 3600]
+
+
+def completeness(depth50, peak=NOVA_PEAK):
+    """The share of novae whose peak is brighter than a stack's half-found
+    magnitude (estimated, from a typical spread of peaks)."""
+    mean, spread = peak
+    return 0.5 * (1 + math.erf((depth50 - mean) / (spread * math.sqrt(2))))
+
+
+def priorities(p, names, known, expected, last_seen, now=None):
+    """Each field's priority, highest first: the novae reported in it (plus
+    one, so an empty field is not ruled out), the share of novae it should
+    catch at its expected depth, and the days since it was last watched,
+    over the minutes it costs. `expected` and `last_seen` are functions of
+    a field's name: its expected half-found magnitude, and when (seconds)
+    it was last imaged, or None."""
+    import mosaic
+    import mount
+    now = now or time.time()
+    width, height = mosaic.field()
+    reach = math.sqrt(width * height / math.pi) * 3600       # a circle of the frame's area, arcsec
+    import vet
+    rows = []
+    for name in names:
+        t = mount.find_target(name)
+        inside = sum(1 for a, d in known if vet.separation(t["ra"], t["dec"], a, d) <= reach)
+        depth50 = expected(name)
+        share = completeness(depth50)
+        seen = last_seen(name)
+        days = DEBT_DAYS if seen is None else min(DEBT_DAYS, max(0.0, (now - seen) / 86400))
+        minutes = p["minutes"] + OVERHEAD
+        rows.append({"field": name, "novae_reported": inside, "expected_mag_50": round(depth50, 2),
+                     "share_of_novae": round(share, 3), "days_unwatched": round(days, 1),
+                     "minutes": minutes, "priority": round((inside + 1) * share * days / minutes, 4),
+                     "kinds": {"novae_reported": "reported", "expected_mag_50": "inferred",
+                               "share_of_novae": "estimated", "days_unwatched": "measured"}})
+    return sorted(rows, key=lambda r: -r["priority"])
+
+
+def fit(rows, minutes_left):
+    """The fields that fit in the night, highest priority first."""
+    chosen, used = [], 0.0
+    for r in rows:
+        if minutes_left is None or used + r["minutes"] <= minutes_left:
+            chosen.append(r)
+            used += r["minutes"]
+    return chosen
+
+
+def night_left(p, site, when=None, longest=480):
+    """Minutes until dawn or the mount's limit ends imaging the programme's
+    target, up to `longest`; None if unknown."""
+    import shoot
+    from astropy import units as u
+    from astropy.time import Time
+    start = when or Time.now()
+    for minute in range(10, longest + 10, 10):
+        if shoot.night_over(p.get("mosaic") or p["target"], site, start + minute * u.min):
+            return minute - 10
+    return longest
+
+
+def expected_depth(p):
+    """A function: a field's expected half-found magnitude in the
+    programme's minutes, from its own last measured stack, else the
+    object's, through the depth model; the programme's guess if neither."""
+    import depth
+    try:
+        model, _ = depth.fit(depth.measurements())
+    except interface.Refusal:
+        model = None
+
+    def last_of(name):
+        found = None
+        for record in sorted((config.DATA / "frames" / name).glob("*/depth.json"), key=lambda r: r.stat().st_mtime):
+            r = json.loads(record.read_text(encoding="utf-8"))
+            if r.get("fwhm_arcsec") and r.get("sky_mag_per_arcsec2"):
+                found = r
+        return found
+
+    def expected(name):
+        base = name.rsplit("-P", 1)[0] if "-P" in name else name
+        last = last_of(name) or last_of(base)
+        if model and last:
+            return depth.predict(model, last["fwhm_arcsec"], last["sky_mag_per_arcsec2"], 60 * p["minutes"])
+        return 17.0
+    return expected
+
+
+def last_watched(name):
+    """When a field was last imaged (seconds), from its newest session, or None."""
+    import restack
+    sessions = restack.all_sessions(name)
+    return sessions[-1].stat().st_mtime if sessions else None
+
+
 def run(args, say=print):
+    if getattr(args, "sweep", False):
+        return sweep(args.all_history, say=say)
     if args.analyse:
         return analyse(args.analyse, say)
     p = programme(args.programme)
     if args.minutes:
         p["minutes"] = args.minutes
+    names = fields(p)
+    order = None
+    if len(names) > 1:
+        import mount
+        centre = mount.find_target(p["mosaic"])
+        rows = priorities(p, names, known_novae(centre["ra"], centre["dec"]), expected_depth(p), last_watched)
+        try:
+            left = night_left(p, config.load()["site"])
+        except (SystemExit, KeyError, OSError):
+            left = None
+        order = fit(rows, left)
+        p = dict(p, target=order[0]["field"] if order else names[0])
     items = readiness(p)
-    say(f"Patrol {p['name']}: {p['target']}, {p['minutes']} minutes of {p['exposure']} s frames at gain {p['gain']}")
+    what = (f"{len(order)} of {len(names)} panels of {p['mosaic']}, {p['minutes']:g} minutes each" if order is not None
+            else f"{p['target']}, {p['minutes']:g} minutes")
+    say(f"Patrol {p['name']}: {what}, {p['exposure']} s frames at gain {p['gain']}")
     for item in items:
         say(f"  {'ok ' if item['ok'] else 'NO '} {item['what']}: {item['detail']}")
-    plan = steps(p, dry_run=args.dry_run)
-    for cmd in plan:
-        say("  then: " + " ".join(Path(c).name if c.endswith(".py") else c for c in cmd[1:]))
+    if order is not None:
+        say(f"  order, by novae reported x share caught x days unwatched / minutes ({left} minutes of night left):")
+        for r in order:
+            say(f"    {r['field']:<8} priority {r['priority']:.3f}: {r['novae_reported']} novae reported, "
+                f"catch {100 * r['share_of_novae']:.0f}% at G {r['expected_mag_50']}, {r['days_unwatched']} days unwatched")
+    chosen = [r["field"] for r in order] if order is not None else [p["target"]]
+    plans = {name: steps(dict(p, target=name), dry_run=args.dry_run) for name in chosen}
+    for name in chosen[:1]:
+        for cmd in plans[name]:
+            say("  then: " + " ".join(Path(c).name if c.endswith(".py") else c for c in cmd[1:])
+                + ("   (and the same for each panel)" if len(chosen) > 1 and cmd is plans[name][-1] else ""))
     say("  then: depth.py --plant, difference.py against the reference, vet.py, and the answer")
-    answer = {"programme": p, "readiness": items, "steps": [" ".join(c[1:]) for c in plan]}
+    answer = {"programme": p, "readiness": items, "steps": [" ".join(c[1:]) for name in chosen for c in plans[name]]}
+    if order is not None:
+        answer["order"] = order
+    # For a person to confirm (the console's plan): what moves first, and where to.
+    answer.update(would_move=True, target=chosen[0], goto=first_goto(chosen[0]))
     if args.plan:
         return answer
     stopping = [i for i in items if i["stops"]]
@@ -336,20 +530,131 @@ def run(args, say=print):
                                 + next(i["detail"] for i in stopping if i["what"] == "motion lock"))
     if stopping:
         raise interface.Refusal("INVALID_REQUEST", "Not now: " + "; ".join(i["detail"] for i in stopping))
-    began = time.time()
-    for cmd in plan:
-        say("$ " + " ".join(Path(c).name if c.endswith(".py") else c for c in cmd[1:]))
-        done = subprocess.run(cmd)
-        if done.returncode != 0:
-            raise interface.Refusal("INVALID_REQUEST", f"{Path(cmd[1]).name} stopped (exit {done.returncode}); "
-                                    "the patrol stops with it.")
-    if args.dry_run:
-        return answer
-    session = newest_session(p["target"], began)
-    if session is None:
-        raise interface.Refusal("NO_SESSION", "shoot.py kept no frames tonight.")
-    answer["analysis"] = analyse(session, say)
+    answer["fields"] = []
+    for name in chosen:
+        say(f"== {name}")
+        began = time.time()
+        stopped = None
+        for cmd in plans[name]:
+            say("$ " + " ".join(Path(c).name if c.endswith(".py") else c for c in cmd[1:]))
+            # Through sys.stdout as it stands: with --json that is stderr, and
+            # the commands' own lines must not land in the middle of the answer.
+            # TY_PATROL: shoot.py leaves the search to the patrol, which does it next.
+            done = subprocess.run(cmd, stdout=sys.stdout, env=dict(os.environ, TY_PATROL="1"))
+            if done.returncode != 0:
+                stopped = f"{Path(cmd[1]).name} stopped (exit {done.returncode})"
+                break
+        if stopped:
+            if len(chosen) == 1:
+                raise interface.Refusal("INVALID_REQUEST", stopped + "; the patrol stops with it.")
+            say(f"  {stopped}; on to the next panel")
+            answer["fields"].append({"field": name, "stopped": stopped})
+            continue
+        if args.dry_run:
+            continue
+        session = newest_session(name, began)
+        if session is None:
+            answer["fields"].append({"field": name, "stopped": "no frames kept"})
+            continue
+        result = analyse(session, say, both_halves=p.get("both_halves", True))
+        made = first_reference(name, session, say)
+        answer["fields"].append({"field": name, "analysis": result, "reference_made": made})
+    if len(chosen) == 1 and answer["fields"] and "analysis" in answer["fields"][0]:
+        answer["analysis"] = answer["fields"][0]["analysis"]
     return answer
+
+
+def first_goto(name):
+    """mount.py's plan for the first GoTo, or why it is refused; None
+    without a site."""
+    import mount
+    try:
+        site = config.load()["site"]
+    except (SystemExit, KeyError, OSError):
+        return None
+    try:
+        plan = mount.plan_goto(name, site)
+        plan.pop("side_note", None)
+        return plan
+    except interface.Refusal as refused:
+        return {"would_move": False, "error": refused.as_error()}
+
+
+def first_reference(name, session, say=print):
+    """A panel's first night becomes its own reference, once measured."""
+    import reference
+    if reference.newest(name) is not None or not (session / "depth.json").exists():
+        return None
+    try:
+        made = reference.make(name, str(session / "final.fits"))
+    except interface.Refusal as held:
+        say(f"  {name} has no reference of its own, and tonight's stack will not become one: {held.message}")
+        return None
+    say(f"  {name} had no reference of its own: tonight's stack is now v{made['version']}")
+    return made["file"]
+
+
+SWEEP_DAYS = 3      # --sweep without --all-history: sessions this recent
+
+
+def searchable(session):
+    """Whether a session can be searched for anything new: it has a final
+    stack, its field has a reference it was not made from, and it has not
+    been searched already."""
+    import reference
+    session = Path(session)
+    if not (session / "final.fits").is_file() or (session / "patrol.json").exists():
+        return False
+    ref, owner = reference.for_field(session.parent.name)
+    return ref is not None and session.resolve() not in reference.sessions_used(owner)
+
+
+def search_later(session, say=print, start=subprocess.Popen):
+    """Search a session just stacked, in the background at low priority so
+    the next target is not kept waiting: patrol.py --analyse, its lines in
+    the session's patrol.log. Not in the demo, nor for a session the
+    patrol itself is imaging (it searches its own)."""
+    session = Path(session)
+    if config.DEMO or os.environ.get("TY_PATROL") or not searchable(session):
+        return None
+    lowly = {"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS} if os.name == "nt" else \
+        {"preexec_fn": lambda: os.nice(19), "start_new_session": True}
+    with open(session / "patrol.log", "w", encoding="utf-8") as log:
+        start([sys.executable, str(ROOT / "patrol.py"), "--analyse", str(session)], stdout=log,
+              stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, **lowly)
+    say(f"Searching {session.parent.name} {session.name} for anything new, in the background: "
+        f"{session / 'patrol.log'}")
+    return str(session / "patrol.log")
+
+
+def taken(session):
+    """When a session was taken, from its folder's name (20261014-021118)."""
+    try:
+        return datetime.datetime.strptime(session.name[:15], "%Y%m%d-%H%M%S")
+    except ValueError:
+        return None
+
+
+def sweep(all_history=False, days=SWEEP_DAYS, say=print, search=None, now=None):
+    """Search every session not yet searched: the last `days`, or all."""
+    search = search or (lambda session: analyse(session, say))
+    now = now or datetime.datetime.now()
+    found = []
+    for session in sorted((config.DATA / "frames").glob("*/*")):
+        when = taken(session)
+        if not session.is_dir() or when is None or not searchable(session):
+            continue
+        if not all_history and now - when > datetime.timedelta(days=days):
+            continue
+        found.append(session)
+    say(f"{len(found)} session{'s' if len(found) != 1 else ''} to search"
+        f"{'' if all_history else f' from the last {days:g} days'}")
+    searched = []
+    for session in found:
+        say(f"== {session.parent.name} {session.name}")
+        result = search(session)
+        searched.append({"session": str(session), "summary": (result or {}).get("summary")})
+    return {"sweep": "all" if all_history else f"{days:g} days", "searched": searched}
 
 
 def main():
@@ -358,11 +663,16 @@ def main():
     ap.add_argument("--plan", action="store_true", help="readiness and what it would do; moves nothing")
     ap.add_argument("--minutes", type=float, help="how long to image (default: the programme's)")
     ap.add_argument("--analyse", metavar="SESSION", help="only look for anything new in a session already taken")
+    ap.add_argument("--sweep", action="store_true", help=f"search every session of the last {SWEEP_DAYS} days "
+                    "not yet searched")
+    ap.add_argument("--all-history", action="store_true", help="with --sweep: every session kept")
     ap.add_argument("--dry-run", action="store_true", help="every step as it would be run; nothing moved or taken")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
-    if not args.programme and not args.analyse:
-        ap.error("name a programme, or --analyse SESSION")
+    if not args.programme and not args.analyse and not args.sweep:
+        ap.error("name a programme, or --analyse SESSION, or --sweep")
+    if args.all_history and not args.sweep:
+        ap.error("--all-history goes with --sweep")
     interface.main("patrol", lambda: run(args), args.json)
 
 

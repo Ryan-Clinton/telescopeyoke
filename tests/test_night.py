@@ -7,6 +7,7 @@ plate solver is told where the simulated mount is really aimed. Set
 TY_NIGHT_FRAMES for a longer run than the default.
 """
 import json
+import math
 import os
 import sys
 import time
@@ -288,3 +289,30 @@ def test_frames_the_live_stack_had_no_time_for_say_nothing_about_cloud():
     assert "lit by the town" in shoot.what_dimmed(log)
     # Twenty frames kept for later on a clear night are not twenty rejections.
     assert shoot.judged([frame(56000, 83, True)] + [later] * 20) == [frame(56000, 83, True)]
+
+
+def test_a_dithered_run_aims_a_little_off_the_target_between_frames(night, monkeypatch, capsys):
+    """shoot.py --dither N re-centres every N frames on a point a little off
+    the target, so the camera's own pattern lands on different stars."""
+    scope, _ = night
+    aims = []
+    real = shoot.recentre
+    monkeypatch.setattr(shoot, "recentre", lambda target, aim_off=(0.0, 0.0): aims.append(aim_off) or real(target, aim_off))
+    target = reachable_target()
+    monkeypatch.setattr(sys, "argv", ["shoot", target, "--frames", "12", "--exposure", "2",
+                                      "--dither", "4", "--no-restack"])
+    summary = shoot.main()
+    said = capsys.readouterr().out
+    assert aims[0] == (0.0, 0.0)                     # the run starts centred on the target
+    dithers = aims[1:]
+    assert len(dithers) == 2 and said.count("dithering: re-centring") == 2
+    sizes = [math.hypot(*a) for a in dithers]
+    assert all(shoot.DITHER / 2 <= r <= shoot.DITHER for r in sizes) and dithers[0] != dithers[1]
+    assert summary["captured"] == 12 and summary["accepted"] >= 10
+
+
+def test_dithering_without_moving_the_mount_is_refused(monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["shoot", "M31", "--dither", "4", "--no-recentre"])
+    with pytest.raises(SystemExit) as stopped:
+        shoot.main()
+    assert stopped.value.code == 2

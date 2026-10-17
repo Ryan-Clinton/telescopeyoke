@@ -274,10 +274,15 @@ def dipole(significance, x, y, reach=DIPOLE_REACH, share=DIPOLE_SHARE):
     return bool(near.min() < -share * significance[y, x])
 
 
-def usable_area(new, ref, edge=EDGE, bright=BRIGHT):
+HALO = (2.0, 4.0)     # star widths left out round bright stars, and round the brightest
+
+def usable_area(new, ref, edge=EDGE, bright=BRIGHT, fwhm=4.8):
     """Where a candidate can be trusted: covered by both stacks, away from
     the edge of that area and away from the brightest stars, whose cores
-    saturate and never subtract cleanly."""
+    saturate and never subtract cleanly. How far round a star is left out
+    goes with the stars' width: a fixed 20 pixels was right on this rig's
+    stacks and, on ZTF's sharper images, hid a real nova 17 pixels from a
+    bright star (AT2024koe, recover.py)."""
     covered = np.isfinite(new) & np.isfinite(ref)
     inside = ndimage.binary_erosion(covered, iterations=edge)
     flat = np.nan_to_num(ref - depth.background(np.nan_to_num(ref)))
@@ -285,8 +290,8 @@ def usable_area(new, ref, edge=EDGE, bright=BRIGHT):
     # grows with how bright it is.
     peak = np.nanpercentile(flat, 99.99)
     out = np.zeros(ref.shape, bool)
-    for level, grow in ((bright, 8), (10 * bright, 20)):
-        out |= ndimage.binary_dilation(flat > level * peak, iterations=grow)
+    for level, widths in ((bright, HALO[0]), (10 * bright, HALO[1])):
+        out |= ndimage.binary_dilation(flat > level * peak, iterations=max(2, round(widths * fwhm)))
     return inside & ~out
 
 
@@ -319,7 +324,7 @@ def subtract(new, ref, new_wcs=None, ref_wcs=None, zeropoint=None, plant_count=0
     scale = flux_ratio(new, ref, whole)
     # Both glows go: the subtraction is of points of light, and a gradient
     # that differs between nights is not news.
-    usable = usable_area(new, np.where(ref_covered, ref, np.nan))
+    usable = usable_area(new, np.where(ref_covered, ref, np.nan), fwhm=fwhm)
     filled = np.where(np.isfinite(new), new, np.nanmedian(new))
     glow_new, glow_ref = glow(filled), glow(ref)
     new_flat, ref_flat = filled - glow_new, ref - glow_ref
@@ -423,11 +428,13 @@ def run(args, say=print):
     if args.reference:
         ref_path = depth.find_stack(args.reference)
     else:
-        ref_path = reference.newest(name)
+        ref_path, owner = reference.for_field(name)
         if ref_path is None:
             raise interface.Refusal("NO_SESSION", f"No reference kept for {name}: ./reference.py {name} --make, "
                                     "or name one with --reference.")
-        if new_path.parent.resolve() in reference.sessions_used(name):
+        if owner != name:
+            say(f"no reference of {name}'s own yet: {owner}'s, where they overlap")
+        if new_path.parent.resolve() in reference.sessions_used(owner):
             raise interface.Refusal("INVALID_REQUEST", f"{new_path.parent} made {name}'s reference: a night "
                                     "is never compared with itself.")
     new = depth.brightness(fits.getdata(new_path))

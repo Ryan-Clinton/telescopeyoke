@@ -289,6 +289,9 @@ def main():
             return json.loads((folder / log).read_text(encoding="utf-8"))["summary"]
         picture = run(sessions if len(sessions) > 1 else sessions[0], args.keep,
                       workers=args.workers, profile=args.profile, discovery=args.discovery)
+        if len(sessions) == 1 and not args.discovery:
+            import patrol
+            patrol.search_later(sessions[0])
         log = "discovery.json" if args.discovery else "restack.json"
         return json.loads((picture.parent / log).read_text(encoding="utf-8"))["summary"]
 

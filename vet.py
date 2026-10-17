@@ -202,8 +202,18 @@ def in_reference(ref, c, radius, zeropoint):
 
 # --- the verdict ----------------------------------------------------------------------
 
+ONE_HALF = "in one half of the night only"
+UNEXPLAINED = "unexplained: worth a person's eyes"
+
+
 def verdict(e):
-    """One line on what a candidate most likely is, from its evidence."""
+    """One line on what a candidate most likely is, from its evidence. Only a
+    match to something catalogued as moving, varying or already reported
+    explains it. A Gaia star close by or light already in the reference are
+    clues, listed with it, not explanations: a transient can sit beside a
+    catalogued star, and in a crowded field 2 arcseconds is not nothing.
+    Being in one half of the night only is said as it is; whether that rules
+    it out is the programme's choice (patrol.py: both_halves)."""
     if e.get("asteroid"):
         return f"known asteroid {e['asteroid']['name']}"
     if e.get("reported"):
@@ -212,14 +222,21 @@ def verdict(e):
         return f"known variable {e['variable']['name']} ({e['variable']['type']})"
     halves_seen = e.get("halves")
     if halves_seen is not None and min(halves_seen) < HALF_SCORE:
-        return "not in both halves of the night: an artefact or something brief"
+        return ONE_HALF
+    return UNEXPLAINED
+
+
+def clues(e):
+    """What does not explain a candidate but bears on it."""
+    out = []
     if e.get("gaia"):
-        return f"a known star brightening (Gaia G {e['gaia']['g']:.1f}): a variable?"
+        out.append(f"Gaia star G {e['gaia']['g']:.1f} {e['gaia']['arcsec']}\" away: a star brightening, "
+                   "or a transient beside it")
     if e.get("in_reference") is not None:
-        return "light already there in the reference: a brightening, not a new star"
-    if halves_seen is None:
-        return "unexplained, but the halves were not checked"
-    return "unexplained: worth a person's eyes"
+        out.append(f"light already there in the reference (G {e['in_reference']}): a brightening?")
+    if e.get("halves") is None:
+        out.append("the halves of the night were not checked")
+    return out
 
 
 def vet(record, checks, half_scores=None, ref=None, zeropoint=None, radius=4.0):
@@ -248,6 +265,7 @@ def vet(record, checks, half_scores=None, ref=None, zeropoint=None, radius=4.0):
             kinds["in_reference"] = "measured"
         e["kinds"] = kinds
         e["verdict"] = verdict(e)
+        e["clues"] = clues(e)
         out.append(e)
     return out
 
@@ -296,7 +314,7 @@ def run(args, say=print):
             say(f"stacking each half of {len(paths)} frames")
             half_scores = each_half(record, ref, ref_wcs, paths, name, say)
     evidence = vet(record, checks, half_scores, ref, zeropoint, radius=max(record.get("fwhm_px", 4.0), 2.0))
-    left = [e for e in evidence if e["verdict"].startswith("unexplained")]
+    left = [e for e in evidence if e["verdict"] == UNEXPLAINED]
     summary = {"session": str(session), "candidates": evidence, "unexplained": len(left),
                "asked": sorted(checks), "halves_checked": half_scores is not None,
                "band": record.get("band")}
@@ -309,7 +327,8 @@ def run(args, say=print):
         say(f"  {n:4d}  {key}")
     for e in left:
         say(f"  UNEXPLAINED {e['score']:5.1f} sigma  RA {e['ra']:.5f} Dec {e['dec']:+.5f}"
-            + (f"  G~{e['mag']:.1f}" if e.get("mag") else "") + f"  halves {e.get('halves')}")
+            + (f"  G~{e['mag']:.1f}" if e.get("mag") else "") + f"  halves {e.get('halves')}"
+            + "".join(f"\n      clue: {c}" for c in e["clues"]))
     say(f"kept as {session / 'vetted.json'}")
     return summary
 

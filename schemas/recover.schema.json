@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/recover.schema.json",
+  "title": "Recover",
+  "description": "data of: recover.py NAME RA DEC --before DATE --after DATE --json. Whether the subtraction finds a known transient in public ZTF images from before and while it was there: a test of the software on something real, not of this rig's depth.",
+  "type": "object",
+  "required": ["name", "ra", "dec", "band", "reference_image", "new_image", "candidates", "recovered", "kind"],
+  "properties": {
+    "name": {"type": "string"},
+    "ra": {"type": "number"},
+    "dec": {"type": "number"},
+    "band": {"type": "string"},
+    "reference_image": {"type": "string"},
+    "new_image": {"type": "string"},
+    "candidates": {"type": "integer"},
+    "fading_peaks": {"type": ["integer", "null"]},
+    "recovered": {"type": "boolean"},
+    "arcsec_off": {"type": "number"},
+    "score": {"type": "number"},
+    "mag": {"type": ["number", "null"]},
+    "rank": {"type": "integer", "description": "Its place among the candidates by strength, 1 the strongest."},
+    "as_strong_fading": {"type": ["integer", "null"]},
+    "nearest_arcsec": {"type": ["number", "null"]},
+    "kind": {"const": "measured"}
+  }
+}

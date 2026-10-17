@@ -98,6 +98,7 @@ nobody is watching the mount: make no move they did not ask for.
 
     ./patrol.py m31-novae --plan     readiness: lock, field, darkness, reference, focus, expected depth
     ./patrol.py m31-novae            point, image, then depth, subtraction, vetting and the answer
+    ./patrol.py m31-panels           the whole galaxy, panel by panel, in order of priority
 
 Run `--plan` first and read it out: anything marked NO is said once, and
 the focus line comes before going on. The patrol moves the mount only

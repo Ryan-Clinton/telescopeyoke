@@ -48,10 +48,13 @@ def test_the_verdict_follows_the_strongest_evidence():
     (fine,) = vet.vet({"candidates": [candidate()]}, nothing, half_scores=[[6.1, 6.4]])
     assert fine["verdict"] == "unexplained: worth a person's eyes"
     (brief,) = vet.vet({"candidates": [candidate()]}, nothing, half_scores=[[8.9, 0.4]])
-    assert brief["verdict"].startswith("not in both halves")
+    assert brief["verdict"] == "in one half of the night only"
+    # A Gaia star beside it is a clue, not an explanation: a transient can
+    # sit next to a catalogued star.
     star = dict(nothing, gaia=[{"ra": 10.7, "dec": 41.3 + 0.5 / 3600, "g": 18.2}])
-    (brighter,) = vet.vet({"candidates": [candidate()]}, star, half_scores=[[6.0, 6.0]])
-    assert brighter["verdict"].startswith("a known star brightening")
+    (beside,) = vet.vet({"candidates": [candidate()]}, star, half_scores=[[6.0, 6.0]])
+    assert beside["verdict"] == "unexplained: worth a person's eyes"
+    assert beside["clues"] and "Gaia star G 18.2 0.5\" away" in beside["clues"][0]
     listed = dict(nothing, reported=[{"name": "J00424800+4118000", "ra": 10.7, "dec": 41.3}])
     (old,) = vet.vet({"candidates": [candidate()]}, listed, half_scores=[[6.0, 6.0]])
     assert old["verdict"] == "already reported: J00424800+4118000"
@@ -60,7 +63,8 @@ def test_the_verdict_follows_the_strongest_evidence():
 def test_a_check_not_made_is_said_to_be_unknown_not_clear():
     (e,) = vet.vet({"candidates": [candidate()]}, {})
     assert e["kinds"]["asteroid"] == "not known" and "asteroid" not in e
-    assert e["verdict"] == "unexplained, but the halves were not checked"
+    assert e["verdict"] == "unexplained: worth a person's eyes"
+    assert e["clues"] == ["the halves of the night were not checked"]
 
 
 def test_distances_on_the_sky():

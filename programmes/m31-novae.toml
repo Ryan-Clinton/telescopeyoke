@@ -15,3 +15,12 @@ minutes = 30
 
 # Reach of the search: candidates are what is brighter now than in the
 # field's kept reference (reference.py M31 --make).
+
+# Every this many frames, re-centre a little off the target (shoot.py
+# --dither): the camera's own pattern then falls on different stars and
+# averages away. Each dither is a plate-solved GoTo of half a minute or so.
+dither = 15
+
+# A nova lasts the night: a candidate in one half of the night only is set
+# aside (vet.py says so either way; this is where it is decided).
+both_halves = true

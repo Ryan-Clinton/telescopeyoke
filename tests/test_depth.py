@@ -83,7 +83,7 @@ def test_planted_stars_are_found_when_bright_and_missed_when_faint(measured):
 
 
 def test_each_figure_says_what_kind_of_figure_it_is(measured):
-    assert measured["kinds"] == {"zeropoint": "measured", "limit_5sigma": "inferred",
+    assert measured["kinds"] == {"zeropoint": "measured", "colour_term": "measured", "limit_5sigma": "inferred",
                                  "completeness": "simulated"}
 
 
@@ -161,7 +161,8 @@ def test_vizier_answers_are_read_and_rows_with_no_magnitude_skipped():
     text = ("#comment\n\nRA_ICRS\tDE_ICRS\tGmag\ndeg\tdeg\tmag\n---\t---\t---\n"
             "010.1\t+41.2\t15.5\n010.2\t+41.3\t\n010.3\t+41.4\t17.25\n")
     rows = depth.read_tsv(text)
-    assert rows.tolist() == [[10.1, 41.2, 15.5], [10.3, 41.4, 17.25]]
+    assert rows[:, :3].tolist() == [[10.1, 41.2, 15.5], [10.3, 41.4, 17.25]]
+    assert np.isnan(rows[:, 3]).all()        # no colour given
 
 
 def test_gaia_is_asked_once_per_field(monkeypatch, tmp_path):
@@ -175,8 +176,8 @@ def test_gaia_is_asked_once_per_field(monkeypatch, tmp_path):
             pass
 
     monkeypatch.setattr(depth.requests, "get", lambda *a, **k: asked.append(k) or Reply())
-    assert depth.gaia(10.0, 41.0, 0.6).tolist() == [[10.0, 41.0, 14.0]]
-    assert depth.gaia(10.0, 41.0, 0.6).tolist() == [[10.0, 41.0, 14.0]]
+    assert depth.gaia(10.0, 41.0, 0.6)[:, :3].tolist() == [[10.0, 41.0, 14.0]]
+    assert depth.gaia(10.0, 41.0, 0.6)[:, :3].tolist() == [[10.0, 41.0, 14.0]]
     assert len(asked) == 1
 
 
@@ -279,3 +280,22 @@ def test_every_term_is_fitted_only_from_enough_independent_nights():
     one_night = [dict(r, session="one") for r in rows]
     with pytest.raises(interface.Refusal):
         depth.fit(one_night, free=True)
+
+
+def test_the_colour_term_says_how_much_more_light_a_red_star_gives():
+    """Stars made so that the camera sees 0.15 mag more light per magnitude
+    of BP-RP: the fit finds it."""
+    image, wcs, catalogue = star_field()
+    rng = np.random.default_rng(8)
+    colours = rng.uniform(0.0, 2.0, len(catalogue))
+    shape = image.shape
+    xy = np.column_stack(wcs.world_to_pixel_values(catalogue[:, 0], catalogue[:, 1]))
+    # Rebuild the field with each star's light depending on its colour.
+    seen = catalogue[:, 2] - 0.15 * (colours - 1.0)
+    rebuilt = 100 + render(shape, xy, 10 ** (-0.4 * (seen - ZP)))
+    rebuilt += np.random.default_rng(3).normal(0, NOISE, shape)
+    found = depth.measure(rebuilt.astype(np.float32), wcs, np.column_stack([catalogue, colours]))
+    assert found["colour_term"] == pytest.approx(0.15, abs=0.04)
+    assert found["colour_ref"] == pytest.approx(1.0, abs=0.3)
+    # Without colours there is no term, and nothing breaks.
+    assert depth.measure(image, wcs, catalogue)["colour_term"] is None

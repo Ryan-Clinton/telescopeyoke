@@ -722,13 +722,19 @@ class Mount:
         self.goto((true_sidereal(site) + offset - hour_angle) % 360, dec)
         self.tracking(False)
 
-    def goto_target(self, name, site, solve=False):
+    def goto_target(self, name, site, solve=False, aim_off=(0.0, 0.0)):
+        """GoTo a catalogue object, and with `solve` centre it by plate
+        solving. `aim_off` is arcminutes east and north of the object to aim
+        at instead: shoot.py --dither aims a little off it between frames, so
+        the camera's own pattern does not stay on the same stars."""
         if not CLOCK_FILE.exists():
             # Reading the handset's clock needs no movement, so do it now.
             self.save_clock(site)
         offset = json.loads(CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
         plan = plan_goto(name, site)
         target = find_target(name)
+        if any(aim_off):
+            target = offset_target(target, *aim_off)
         if config.DEMO:
             import simulator
             simulator.set_sky(target=target["id"])     # the pretend sky shows this target's stars
@@ -1191,6 +1197,13 @@ STARS = {
 
 
 PLANETS = ("mercury", "venus", "mars", "jupiter", "saturn", "uranus", "neptune", "moon")
+
+
+def offset_target(target, east_arcmin, north_arcmin):
+    """A target moved on the sky by arcminutes east and north."""
+    dec = target["dec"] + north_arcmin / 60
+    ra = (target["ra"] + east_arcmin / 60 / max(math.cos(math.radians(target["dec"])), 1e-3)) % 360
+    return dict(target, ra=ra, dec=dec)
 
 
 def find_target(name):

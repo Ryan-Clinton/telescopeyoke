@@ -83,6 +83,17 @@ frames under `frames/M31-P1/`.
   them in Siril or PixInsight.
 - Not yet tried on the real mount.
 
+## Dithering
+
+`./shoot.py M31 --frames 0 --dither 15` re-centres every 15 frames on a point
+1.5′ or less off the target, in a different direction each time: a
+plate-solved GoTo (`mount.py goto_target` with an offset), so it keeps every
+check a re-centre has. The stars move tens of pixels across the sensor
+between groups of frames, so the camera's own pattern (hot pixels, column
+striping, and anything a dark or flat misses) falls on different stars and
+averages away instead of building up. Each dither costs half a minute or
+so. It cannot go with `--no-recentre`. Proven against the simulator only.
+
 ## A stack for finding faint stars
 
 `./restack.py M31 --discovery` makes a second stack beside the picture,

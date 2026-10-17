@@ -165,8 +165,26 @@ function closeCard() {
   $("plan").hidden = $("shade").hidden = $("sheet").hidden = true;
 }
 
+function patrolLines(p) {
+  // A patrol's plan: what was checked, the fields in order, and what it runs.
+  const lines = [el("p", { class: "quiet", text: "Ready?" })];
+  const ready = el("ul");
+  for (const item of p.readiness || []) ready.append(el("li", { class: item.ok ? "ok" : "caution", text: `${item.what}: ${item.detail}` }));
+  lines.push(ready);
+  if (p.order) {
+    lines.push(el("p", { class: "quiet", text: "Panels, in order of priority" }));
+    const order = el("ol");
+    for (const r of p.order) order.append(el("li", { text: `${r.field}: ${r.novae_reported} novae reported, catches ${Math.round(100 * r.share_of_novae)}% at G ${r.expected_mag_50}, ${r.days_unwatched} days unwatched` }));
+    lines.push(order);
+  }
+  lines.push(el("p", { class: "quiet", text: "Then" }),
+             el("p", { text: `${p.programme.minutes} minutes of ${p.programme.exposure} s frames on each field, then depth, subtraction from the reference, the checks, and the answer.` }));
+  return lines;
+}
+
 function planLines(data) {
   const p = data.plan, move = p.goto || p, limits = seen.state.capabilities.motion.limits, lines = [];
+  if (data.action === "patrol") lines.push(...patrolLines(p));
   const facts = el("dl", { class: "facts" });
   const fact = (name, value) => facts.append(el("dt", { text: name }), el("dd", { text: value }));
   if (move.altitude_deg != null) fact("Height at the end", `${move.altitude_deg}°`);
@@ -201,7 +219,7 @@ function showPlan(data) {
   picture.addEventListener("error", () => beside.remove());
   const cancel = el("button", { type: "button", text: "Cancel", on: { click: closeCard } });
   fill($("plan"),
-       el("div", { class: "kind", text: data.action === "run" ? "IMAGING PLAN" : "MOVE PLAN" }),
+       el("div", { class: "kind", text: data.action === "run" ? "IMAGING PLAN" : data.action === "patrol" ? "PATROL PLAN" : "MOVE PLAN" }),
        el("h3", { text: data.label }),
        el("div", { class: "body" }, el("div", {}, planLines(data)), beside),
        el("div", { class: "buttons" }, cancel,
@@ -954,6 +972,23 @@ function statusRows(node) {
   fill(node, rows.flatMap((row) => [el("dt", { text: row.label }), el("dd", { class: row.level === "fair" ? "warn" : row.level, text: row.text })]));
 }
 
+function drawDiscovery() {
+  // The patrol programmes, the last patrol's answer, the candidates on file.
+  const d = seen.discovery;
+  if (!d) return;
+  const pick = $("patrol-programme");
+  if (pick.options.length !== d.programmes.length) {
+    fill(pick, d.programmes.map((p) => el("option", { value: p.name, text: `${p.name} (${p.target}${p.panels ? ", panel by panel" : ""}, ${p.minutes} min)` })));
+  }
+  fill($("patrol-latest"), d.latest
+    ? [el("p", { class: "strong", text: `${d.latest.object}, ${age(d.latest.age_s)}` }), ...d.latest.summary.map((line) => el("p", { text: line }))]
+    : [el("span", { text: "None yet." })]);
+  fill($("patrol-open"), d.open.length
+    ? d.open.map((k) => el("p", { text: `${k.id}: RA ${k.ra.toFixed(5)}, Dec ${k.dec >= 0 ? "+" : ""}${k.dec.toFixed(5)}, seen on ${k.seen_on} of ${k.of} nights` + (k.seen_on >= 2 ? " (look hard)" : "") }))
+    : [el("span", { text: "None." })]);
+  gateAll();
+}
+
 function drawKnowledge() {
   // What the rig has had measured about itself, and a way to measure each thing it has not.
   const rig = seen.characterise;
@@ -1130,7 +1165,7 @@ function show(name) {
 const SCREENS = { home: drawHome, targets: drawTargets, mount: drawMount, focus: drawFocus, imaging: drawImaging,
                   status: () => statusRows($("status-rows")), welcome: drawWelcome, camera: drawCamera, telescope: drawTelescope,
                   solver: drawSolver, webcam: drawWebcam, horizon: drawHorizon, polar: drawPolar, landmark: drawLandmark, calibration: gateAll, testing: gateAll,
-                  processing: drawProcessing, rigs: drawRigs, knowledge: drawKnowledge, doctor: drawDoctor, settings: drawSettings, logs: () => {}, about: drawAbout,
+                  processing: drawProcessing, rigs: drawRigs, knowledge: drawKnowledge, discovery: drawDiscovery, doctor: drawDoctor, settings: drawSettings, logs: () => {}, about: drawAbout,
                   "demo-sky": drawDemoSky };
 
 function draw() {
@@ -1167,6 +1202,7 @@ async function refresh() {
   if (!seen.catalogue) wanted.push("catalogue");
   if (task === "doctor" || !seen.doctor) wanted.push("doctor");
   if (task === "knowledge") wanted.push("characterise");
+  if (task === "discovery") wanted.push("discovery");
   if (task === "horizon") wanted.push("horizon", "landmarks");
   if (task === "rigs") wanted.push("rigs");
   if (task === "polar") wanted.push("polar");
@@ -1245,6 +1281,10 @@ $("pano-over").addEventListener("pointerup", () => {
 });
 $("restack-run").addEventListener("click", () => act("restack", { target: seen.session.name }));
 $("restack-all").addEventListener("click", () => act("restack", { target: seen.session.name, all: true }));
+$("patrol-plan").addEventListener("click", () => {
+  const minutes = $("patrol-minutes").value;
+  makePlan("patrol", Object.assign({ programme: $("patrol-programme").value }, minutes ? { minutes: Number(minutes) } : {}));
+});
 $("sheet-cancel").addEventListener("click", closeCard);
 $("shade").addEventListener("click", closeCard);
 $("run-frames").addEventListener("input", estimate);

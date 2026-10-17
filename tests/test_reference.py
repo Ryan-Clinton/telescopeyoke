@@ -51,3 +51,39 @@ def test_a_stack_without_a_measurement_is_not_made_a_reference(data):
     with pytest.raises(interface.Refusal) as refused:
         reference.make("M31")
     assert refused.value.code_name == "NO_SESSION"
+
+
+def test_a_panel_without_its_own_reference_uses_the_whole_objects(data):
+    measured(data, "20261013-232632", 17.6)
+    reference.make("M31")
+    path, owner = reference.for_field("M31-P3")
+    assert owner == "M31" and path == reference.newest("M31")
+    assert reference.for_field("M33") == (None, None)
+
+
+def test_a_stack_that_could_hold_an_open_candidate_is_not_made_a_reference(data, monkeypatch):
+    import candidates
+    import mount
+    monkeypatch.setattr(mount, "find_target", lambda name: {"id": name, "ra": 10.68, "dec": 41.27})
+    measured(data, "20261020-221500", 17.9)
+    book = candidates.load("M31")
+    candidates.add_night(book, "20261018-220000", [{"ra": 10.80, "dec": 41.40, "score": 6.0, "mag": 17.5,
+                                                    "verdict": "unexplained: worth a person's eyes"}])
+    candidates.save(book)
+    with pytest.raises(interface.Refusal) as refused:
+        reference.make("M31")
+    assert "M31-20261018-220000-001" in refused.value.message
+    made = reference.make("M31", force=True)
+    assert made["held_back"] == ["M31-20261018-220000-001"]
+
+
+def test_a_stack_from_before_the_candidate_is_clean(data, monkeypatch):
+    import candidates
+    import mount
+    monkeypatch.setattr(mount, "find_target", lambda name: {"id": name, "ra": 10.68, "dec": 41.27})
+    measured(data, "20261013-232632", 17.6)
+    book = candidates.load("M31")
+    candidates.add_night(book, "20261018-220000", [{"ra": 10.80, "dec": 41.40, "score": 6.0, "mag": 17.5,
+                                                    "verdict": "unexplained: worth a person's eyes"}])
+    candidates.save(book)
+    assert reference.make("M31")["held_back"] == []

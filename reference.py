@@ -48,6 +48,19 @@ def newest(name):
     return Path(versions[-1]["file"]) if versions else None
 
 
+def for_field(name):
+    """(the reference to compare a field with, whose it is): the field's own
+    newest, or for a mosaic panel with none yet (M31-P3) the whole object's,
+    which difference.py uses where the two overlap. (None, None) if neither."""
+    own = newest(name)
+    if own is not None:
+        return own, name
+    whole = name.rsplit("-P", 1)[0] if "-P" in name else None
+    if whole and newest(whole) is not None:
+        return newest(whole), whole
+    return None, None
+
+
 def measured_stacks(name):
     """Every stack of a field whose depth has been measured with planted
     stars, deepest first."""
@@ -77,7 +90,32 @@ def made_from(stack):
     return [str(stack.parent)]
 
 
-def make(name, source=None):
+FIELD_REACH = 0.6    # degrees from a field's centre that its stack covers, about half the frame's diagonal
+
+
+def contaminated(name, sessions):
+    """Open candidates in the field that a reference made from these
+    sessions could contain: first seen on or before the last of its nights
+    and within the field. A reference with a real, lasting nova in it would
+    subtract the nova away from every night after."""
+    import candidates
+    import mount
+    import vet
+    try:
+        centre = mount.find_target(name)
+    except interface.Refusal:
+        return []
+    last = max(Path(s).name for s in sessions)
+    out = []
+    for book_name in dict.fromkeys((name, name.rsplit("-P", 1)[0] if "-P" in name else name)):
+        for k in candidates.load(book_name)["candidates"]:
+            near = vet.separation(centre["ra"], centre["dec"], k["ra"], k["dec"]) <= FIELD_REACH * 3600
+            if k["open"] and near and k["first"] <= last:
+                out.append(k["id"])
+    return out
+
+
+def make(name, source=None, force=False):
     """Keep a stack as the field's next reference version."""
     candidates = measured_stacks(name)
     if source:
@@ -91,6 +129,12 @@ def make(name, source=None):
                                 "on its best session first.")
     else:
         chosen = candidates[0]
+    sessions = made_from(Path(chosen["stack"]))
+    held = contaminated(name, sessions)
+    if held and not force:
+        raise interface.Refusal("INVALID_REQUEST", f"{chosen['stack']} could contain open candidates "
+                                f"({', '.join(held)}); a reference must not hold what it is looking for. "
+                                "Settle them first (candidates.py), choose another stack (--from), or --force.")
     versions = kept(name)
     number = len(versions) + 1
     where = folder(name)
@@ -98,7 +142,7 @@ def make(name, source=None):
     target = where / f"v{number}.fits"
     shutil.copyfile(chosen["stack"], target)
     record = dict(chosen, version=number, file=str(target), source=chosen["stack"],
-                  sessions=made_from(Path(chosen["stack"])), made=time.time())
+                  sessions=sessions, made=time.time(), held_back=held)
     (where / f"v{number}.json").write_text(json.dumps(record, indent=1), encoding="utf-8")
     # Its depth goes with it, so difference.py finds the zero point.
     shutil.copyfile(chosen["record"], depth.record_path(target))
@@ -126,7 +170,7 @@ def run(args, say=print):
     if not args.name:
         raise interface.Refusal("INVALID_REQUEST", "Name a field, or use --list.")
     if args.make:
-        record = make(args.name, args.source)
+        record = make(args.name, args.source, args.force)
         say(f"{args.name} v{record['version']}: {record['source']}, half of planted stars found at "
             f"G {record['mag_50']}, stars {record['fwhm_arcsec']}\"; kept as {record['file']}")
         return {"name": args.name, "made": record, "versions": kept(args.name)}
@@ -145,6 +189,8 @@ def main():
     ap.add_argument("name", nargs="?", help="the field: an object or a mosaic panel (M31-P3)")
     ap.add_argument("--make", action="store_true", help="keep the deepest measured stack as the next version")
     ap.add_argument("--from", dest="source", help="with --make: this stack instead of the deepest")
+    ap.add_argument("--force", action="store_true",
+                    help="with --make: even if the stack could contain an open candidate")
     ap.add_argument("--list", action="store_true", help="every field with a reference")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()

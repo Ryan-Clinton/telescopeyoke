@@ -10,6 +10,7 @@
     "ra": {"type": "number"},
     "dec": {"type": "number"},
     "band": {"type": "string"},
+    "above_reference": {"type": "boolean", "description": "Whether each stack was measured less the field's reference: the light above it."},
     "measurements": {
       "type": "array",
       "items": {

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/patrol.schema.json",
   "title": "Patrol",
-  "description": "data of: patrol.py PROGRAMME [--plan | --dry-run] --json, or patrol.py --analyse SESSION --json. A discovery patrol of one field: whether it is ready, the commands it runs to point and image, and after the night the depth, the subtraction, the vetting and a short answer. Also kept as patrol.json in the session.",
+  "description": "data of: patrol.py PROGRAMME [--plan | --dry-run] --json, or patrol.py --analyse SESSION --json, or patrol.py --sweep [--all-history] --json. A discovery patrol of one field: whether it is ready, the commands it runs to point and image, and after the night the depth, the subtraction, the vetting and a short answer. Also kept as patrol.json in the session.",
   "type": "object",
   "$defs": {
     "analysis": {
@@ -46,6 +46,16 @@
     "analysis": {"$ref": "#/$defs/analysis"},
     "session": {"type": "string"},
     "object": {"type": "string"},
-    "summary": {"type": "array", "items": {"type": "string"}}
+    "summary": {"type": "array", "items": {"type": "string"}},
+    "sweep": {"type": "string", "description": "--sweep: how far back it looked, \"3 days\" or \"all\"."},
+    "searched": {
+      "type": "array",
+      "description": "--sweep: each session searched, with its short answer.",
+      "items": {
+        "type": "object",
+        "required": ["session", "summary"],
+        "properties": {"session": {"type": "string"}, "summary": {"type": ["array", "null"], "items": {"type": "string"}}}
+      }
+    }
   }
 }

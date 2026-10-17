@@ -3,6 +3,7 @@
 candidate's history, including the nights it was not seen.
 
     ./forced.py M31 11.10554 41.57670          RA and Dec in degrees
+    ./forced.py M31 11.10554 41.57670 --difference   the light above the reference there
     ./forced.py M31 11.10554 41.57670 --json
 
 Each stack of the object with a depth.py measurement is plate-solved, and
@@ -97,14 +98,48 @@ def measure_at(lum, x, y, fwhm, zeropoint, rng):
     return None, None, None if limit is None else round(limit, 2)
 
 
-def history(name, ra, dec, say=print, solve_with=None):
-    """The place measured in every stack of the object, oldest first."""
+def above_reference(lum, wcs, name, solve_with):
+    """The stack with the field's reference taken off, on the stack's own
+    pixels and in its own units: what is new at each place, without the
+    galaxy or the faint stars under it. None if there is no reference."""
+    import difference
+    import reference
+    ref_path, _ = reference.for_field(name)
+    if ref_path is None:
+        return None
+    ref = depth.brightness(fits.getdata(ref_path))
+    ref = np.where(ref == 0, np.nan, ref)
+    laid = difference.onto(ref, solve_with(np.nan_to_num(ref)), lum.shape, wcs)
+    laid, _, residual = difference.refine(laid, lum)
+    if residual is None:
+        return None
+    filled = np.where(np.isfinite(laid), laid, np.nanmedian(laid))
+    stars = stacking.find_stars(lum, limit=2000)
+    radius = 2.5 * max(float(np.median(stars[:200, 3])) if len(stars) else 4.0, 2.0)
+    scale = difference.flux_ratio(lum, filled, radius)     # this stack over the reference
+    new_flat = lum - difference.glow(lum)
+    ref_flat = filled - difference.glow(filled)
+    out = new_flat - scale * ref_flat
+    out[~np.isfinite(laid)] = np.nan
+    # measure_at takes the glow off again; the difference has none to take.
+    return out + difference.glow(out)
+
+
+def history(name, ra, dec, say=print, solve_with=None, subtract=False):
+    """The place measured in every stack of the object, oldest first. With
+    `subtract`, in each stack less the field's reference: the light above it."""
     rng = np.random.default_rng(5)
     solve_with = solve_with or (lambda lum: depth.plate(lum, name))
     rows = []
     for s in stacks_of(name):
         lum = depth.brightness(fits.getdata(s["stack"]))
         wcs = solve_with(lum)
+        if subtract:
+            less = above_reference(lum, wcs, name, solve_with)
+            if less is None:
+                say(f"  {s['session']}: no reference to take off")
+                continue
+            lum = np.nan_to_num(less)
         x, y = (float(v) for v in wcs.world_to_pixel_values(ra, dec))
         inside = 40 <= x < lum.shape[1] - 40 and 40 <= y < lum.shape[0] - 40
         row = {"session": s["session"], "stack": str(s["stack"]), "exposure_s": s["exposure_s"],
@@ -126,10 +161,11 @@ def run(args, say=print):
     if config.DEMO:
         raise interface.Refusal("DEMO_UNSUPPORTED", "Forced photometry needs real stacks.")
     say(f"RA {args.ra:.5f} Dec {args.dec:+.5f} in every measured stack of {args.name}:")
-    rows = history(args.name, args.ra, args.dec, say)
+    rows = history(args.name, args.ra, args.dec, say, subtract=args.difference)
     if not rows:
         raise interface.Refusal("NO_SESSION", f"No measured stack of {args.name}: run ./depth.py on them first.")
     answer = {"name": args.name, "ra": args.ra, "dec": args.dec, "measurements": rows,
+              "above_reference": bool(args.difference),
               "band": "unfiltered, calibrated approximately to Gaia G"}
     kept = config.DATA / "frames" / stacking.folder_name(args.name) / f"forced-{args.ra:.5f}{args.dec:+.5f}.json"
     kept.write_text(json.dumps(answer, indent=1), encoding="utf-8")
@@ -142,6 +178,8 @@ def main():
     ap.add_argument("name", help="the object whose stacks to measure")
     ap.add_argument("ra", type=float, help="degrees")
     ap.add_argument("dec", type=float, help="degrees")
+    ap.add_argument("--difference", action="store_true",
+                    help="measure each stack less the field's reference: the light above it, not under it")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
     interface.main("forced", lambda: run(args), args.json)

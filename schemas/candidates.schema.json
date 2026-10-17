@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/candidates.schema.json",
   "title": "Candidates",
-  "description": "data of: candidates.py NAME [--all] --json. A field's candidates followed as objects from night to night: each night it was found, and each night its place was measured and it was not, with how faint it must have been.",
+  "description": "data of: candidates.py NAME [--all | --dismiss ID --reason LABEL | --reopen ID] --json, and of ty candidates --json (every field's open ones, name \"every field\", each with its field). A field's candidates followed as objects from night to night: each night it was found, and each night its place was measured and it was not, with how faint it must have been.",
   "type": "object",
   "required": ["name", "candidates"],
   "properties": {
@@ -14,11 +14,23 @@
         "required": ["id", "ra", "dec", "first", "open", "nights"],
         "properties": {
           "id": {"type": "string"},
+          "field": {"type": "string", "description": "ty candidates only: the field it is in."},
           "ra": {"type": "number"},
           "dec": {"type": "number"},
           "first": {"type": "string"},
           "open": {"type": "boolean"},
           "closed_because": {"type": "string"},
+          "dismissed": {
+            "type": "object",
+            "description": "A person's judgement that it is not real, labelled for a classifier to learn from.",
+            "required": ["reason", "by", "when"],
+            "properties": {
+              "reason": {"enum": ["noise", "hot pixel", "edge", "bad subtraction", "satellite", "cosmic ray", "bright-star halo", "cloud or tree", "real star", "asteroid", "variable star"]},
+              "note": {"type": ["string", "null"]},
+              "by": {"const": "person"},
+              "when": {"type": "string"}
+            }
+          },
           "nights": {
             "type": "array",
             "items": {

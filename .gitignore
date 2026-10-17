@@ -9,6 +9,9 @@ web/
 # Each field's kept reference stack (reference.py): pictures of the sky from here
 reference/
 candidates/
+reports/
+# SOHO pictures and the movies made from them (sungrazer.py)
+sungrazer/
 MOTION_LOCKED
 recordings/
 polaris-runs/

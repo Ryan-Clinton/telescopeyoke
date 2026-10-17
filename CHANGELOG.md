@@ -5,6 +5,73 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
 
 ## Not yet released
 
+- **Comets in SOHO's pictures, for cloudy nights**: `./sungrazer.py fetch`
+  takes LASCO C3 (or C2) pictures from the public archive, each once and a
+  second apart; `./sungrazer.py look` finds what moves other than as the
+  stars drift and makes a movie of each for a person to watch. Motion is
+  measured per 12 minutes from the pictures' own times, so a gap in the
+  pictures does not break a track. `--until` looks at a day in the past.
+  Tried on the bright C/2024 G3 (ATLAS) on 13 and 14 January 2025: its
+  head and tail are the strongest candidates. Not yet good enough for the
+  faint ones: SOHO-5175 on 25 January 2025 was not found. Nothing is
+  reported for you.
+- **Public alerts**: `./brokers.py` asks the ALeRCE broker for new
+  supernova-like transients and keeps those bright enough for this rig and
+  up in the dark here tonight, naming any the Rochester lists have; the
+  Transient Name Server needs a key, so its search link is given instead.
+- **Every session searched**: when `shoot.py` or `restack.py` finishes a
+  stack of a field with a reference, `patrol.py --analyse` starts on it in
+  the background at low priority (its lines in the session's
+  `patrol.log`). `./patrol.py --sweep` searches what that missed in the
+  last three days, `--sweep --all-history` every session kept.
+- **Dismissal labels**: `./candidates.py M31 --dismiss ID --reason "hot
+  pixel"` closes a candidate on a person's word and keeps the label, for
+  the classifier to learn from later; `--reopen ID` undoes it.
+  `./ty candidates` lists every field's open candidates.
+- **A real nova rediscovered**: `./recover.py AT2024koe 10.32290 40.96525
+  --before 2024-05-21 --after 2024-06-27` takes ZTF's public images from
+  before and during a known transient and runs the same subtraction: it
+  found AT2024koe 0.27″ from its published place at 10.8 sigma, the
+  strongest candidate. On the way, the mask round bright stars now goes
+  with the stars' width instead of a fixed 20 pixels, which had hidden it.
+- **Realistic fakes**: `plant.py` gives each fake its frame's own local
+  star shape, its own photon noise and the frame's clearness, and sets its
+  brightness from the new night's zero point (the reference's had made
+  them 0.2 mag too bright). Half found at G 17.8 (not 17.9), 90% at 16.9.
+  `--colour blue|neutral|red` plants coloured novae through the night's
+  colour term, which `depth.py` now measures from Gaia BP-RP (-0.34 mag a
+  magnitude of BP-RP on M31: red stars give this camera less light per G
+  magnitude).
+- **Vetting judged more carefully**: a Gaia star beside a candidate is a
+  clue, not an explanation; one half of the night only is the programme's
+  rule (`both_halves`), not vet.py's; a candidate is closed after three
+  misses only if each was deep enough even had it faded 0.2 mag a day; a
+  stack that could hold an open candidate is refused as a reference
+  (`--force` overrides); `forced.py --difference` measures the light above
+  the reference.
+- **Discovery in the application**: a Discovery screen under Observe
+  chooses a programme and minutes and plans the patrol, which a person
+  confirms like any move; it shows the last patrol's answer and the
+  candidates still open.
+- `depth.py` run without `--plant` keeps an earlier run's planted-star
+  results instead of dropping them.
+- **Dithering**: `./shoot.py NAME --dither N` re-centres every N frames on a
+  point a little off the target (up to 1.5′, a new direction each time), so
+  the camera's own pattern averages away; `mount.py`'s GoTo takes an offset
+  for it. Programmes can ask for it (`dither = 15`). Proven against the
+  simulator only.
+- **The whole of M31, panel by panel**: `./patrol.py m31-panels` plans
+  mosaic.py's 4 x 2 panels if none are kept, orders them by novae reported
+  in each x the share it should catch x days since it was watched, over
+  the minutes it costs, takes as many as the night allows, and makes each
+  panel's first night its own reference (M31's is used where they overlap
+  until then).
+- **A report packet in under five minutes**: `./report.py CANDIDATE` gathers
+  the position and its error, the UTC time, the magnitude and the night's
+  limit, the last non-detection, the reference, the checks and a finding
+  chart with north up, as the TNS form asks, with what is still wanting
+  before it is sent. It never sends anything. 95 s for the 14 October
+  candidate.
 - **A discovery patrol in one command**: `./patrol.py m31-novae` checks it is
   ready (the motion lock, a kept reference, how old the focus is, how deep
   the night should reach), points with `mount.py goto` and images with

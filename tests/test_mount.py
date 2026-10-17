@@ -1,6 +1,7 @@
 """Mount logic, run against the simulated handset: nothing here can move a
 real telescope."""
 import json
+import math
 
 import pytest
 
@@ -115,6 +116,26 @@ def test_goto_lands_on_the_target(scope):
     believed = mount.wrap(scope.s.sidereal() - scope.radec()[0])
     assert believed == pytest.approx(hour_angle, abs=0.2)
     assert mount.wrap(scope.radec()[1]) == pytest.approx(dec, abs=0.1)
+
+
+def test_a_goto_with_an_offset_aims_that_far_off_the_target(scope):
+    """shoot.py --dither aims a little off the target between frames."""
+    scope.zenith(SITE)
+    target = max(mount.STARS, key=lambda name: mount.where(
+        mount.find_target(name), SITE)[2] if abs(mount.where(
+            mount.find_target(name), SITE)[0]) < 75 else -99)
+    scope.goto_target(target, SITE, aim_off=(30.0, -24.0))
+    aimed = mount.offset_target(mount.find_target(target), 30.0, -24.0)
+    hour_angle, dec, _ = mount.where(aimed, SITE)
+    assert mount.wrap(scope.s.sidereal() - scope.radec()[0]) == pytest.approx(hour_angle, abs=0.2)
+    assert mount.wrap(scope.radec()[1]) == pytest.approx(dec, abs=0.1)
+    plain = mount.find_target(target)
+    assert aimed["dec"] - plain["dec"] == pytest.approx(-0.4)
+
+
+def test_an_offset_is_measured_on_the_sky_not_in_right_ascension():
+    near_pole = mount.offset_target({"ra": 10.0, "dec": 80.0}, 60.0, 0.0)
+    assert near_pole["ra"] - 10.0 == pytest.approx(1 / math.cos(math.radians(80)), rel=1e-6)
 
 
 def test_goto_measures_the_handset_clock_itself_if_nobody_has(scope):

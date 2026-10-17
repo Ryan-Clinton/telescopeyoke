@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import jsonschema
+import numpy as np
 import pytest
 
 import agent
@@ -348,7 +349,7 @@ def test_a_reference_matches_its_schema(tmp_path, monkeypatch):
     from test_reference import measured
     monkeypatch.setattr(config, "DATA", tmp_path)
     measured(tmp_path, "20261013-232632", 17.6)
-    args = type("Args", (), {"list": False, "name": "M31", "make": True, "source": None})()
+    args = type("Args", (), {"list": False, "name": "M31", "make": True, "source": None, "force": False})()
     made = valid(interface.run("reference", lambda: reference.run(args, say=lambda *_: None)), "reference")
     assert made["data"]["made"]["version"] == 1
     args.list = True
@@ -383,9 +384,54 @@ def test_the_candidates_on_file_match_their_schema(tmp_path, monkeypatch):
     candidates.add_night(book, "20261014", [{"ra": 11.1, "dec": 41.5, "score": 5.4, "mag": 18.2,
                                              "verdict": "unexplained: worth a person's eyes"}])
     candidates.follow_up(book, "20261015", lambda ra, dec: (None, None, 18.4), None)
+    candidates.add_night(book, "20261015", [{"ra": 11.3, "dec": 41.6, "score": 5.1, "mag": 18.4,
+                                             "verdict": "unexplained: worth a person's eyes"}])
+    candidates.dismiss(book, book["candidates"][-1]["id"], "hot pixel", "the same pixel each night")
     candidates.save(book)
     args = argparse.Namespace(name="M31", all=True)
     valid(interface.run("candidates", lambda: candidates.run(args, say=lambda *_: None)), "candidates")
+
+
+def test_a_report_packet_matches_its_schema():
+    import report
+    from test_report import RECORDS, SEEN, candidate
+    valid(interface.run("report", lambda: report.assemble("M31", candidate([SEEN]), None, RECORDS, None)), "report")
+
+
+def test_a_recovery_matches_its_schema():
+    valid(interface.run("recover", lambda: {
+        "name": "AT2024koe", "ra": 10.3229, "dec": 40.96525, "band": "ZTF zr", "reference_image": "a",
+        "new_image": "b", "candidates": 4, "fading_peaks": 11, "recovered": True, "kind": "measured",
+        "arcsec_off": 0.27, "score": 10.8, "mag": 19.42, "rank": 1, "as_strong_fading": 11}), "recover")
+
+
+def test_a_sweep_matches_the_patrol_schema(tmp_path, monkeypatch):
+    import patrol
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    valid(interface.run("patrol", lambda: patrol.sweep(True, say=lambda *_: None)), "patrol")
+
+
+def test_a_brokers_answer_matches_its_schema():
+    import brokers
+    from test_brokers import NOW, REPORTED, get
+    valid(interface.run("brokers", lambda: brokers.search(config.example(), 5, 17.5, say=lambda *_: None, get=get,
+                                                          reported=REPORTED, now=NOW)), "brokers")
+
+
+def test_a_sungrazer_look_matches_its_schema(tmp_path, monkeypatch):
+    import config
+    import sungrazer
+    from test_sungrazer import SHAPE, sequence
+    from PIL import Image
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    images, _, _ = sequence()
+    paths = []
+    for i, image in enumerate(images):
+        paths.append(tmp_path / f"20261015_{i:02d}06_c3_1024.jpg")
+        Image.fromarray(np.clip(image, 0, 255).astype(np.uint8)).save(paths[-1], quality=95)
+    answer = valid(interface.run("sungrazer", lambda: sungrazer.look("c3", say=lambda *_: None, paths=paths)),
+                   "sungrazer")
+    assert answer["data"]["pictures"] == len(images)
 
 
 def test_the_rigs_view_matches_its_schema(tmp_path, monkeypatch):

@@ -673,3 +673,35 @@ def test_a_target_comes_with_how_it_fits_the_camera(desk):
     assert framing["field_deg"] == pytest.approx([0.997, 0.669], abs=0.01) and framing["scale_arcsec_px"] == 0.66
     assert framing["size_arcmin"] > 60                      # Andromeda is far wider than the frame
     assert desk.json("/api/target/Vega")[1]["data"]["framing"]["size_arcmin"] is None
+
+
+def test_a_discovery_patrol_is_a_planned_move_built_only_from_known_programmes():
+    def tail(params):
+        cmd = console.command("patrol", params)
+        return [Path(cmd[1]).name] + cmd[2:-1]
+    assert tail({}) == ["patrol.py", "m31-novae"]
+    assert tail({"programme": "m31-panels", "minutes": 20}) == ["patrol.py", "m31-panels", "--minutes", "20"]
+    assert console.moves("patrol", {}) and console.uses("patrol", {}) == "mount"
+    assert "patrol" not in console.WORKSTATION          # the companion page may start one, as it may an imaging run
+    for bad in ({"programme": "../../etc/passwd"}, {"programme": "m31-novae; rm"}, {"programme": "m31-novae", "minutes": 0},
+                {"programme": "m31-novae", "minutes": "5 --help"}, {"programme": "nothing-of-the-kind"}):
+        with pytest.raises(console.Refused):
+            console.command("patrol", bad)
+
+
+def test_the_discovery_screen_reads_the_programmes_the_last_patrol_and_open_candidates(desk, tmp_path):
+    import candidates
+    session = tmp_path / "frames" / "M31" / "20261020-221500"
+    session.mkdir(parents=True)
+    (session / "patrol.json").write_text(json.dumps({"session": str(session), "object": "M31",
+                                                     "summary": ["Nothing unexplained: nothing new tonight."]}))
+    book = candidates.load("M31")
+    candidates.add_night(book, "20261014-021118", [{"ra": 11.1, "dec": 41.5, "score": 5.4, "mag": 18.2,
+                                                     "verdict": "unexplained: worth a person's eyes"}])
+    candidates.save(book)
+    status, answer = desk.json("/api/discovery")
+    assert status == 200 and answer["ok"]
+    found = answer["data"]
+    assert {"m31-novae", "m31-panels", "m33-novae"} <= {p["name"] for p in found["programmes"]}
+    assert found["latest"]["summary"] == ["Nothing unexplained: nothing new tonight."]
+    assert [k["id"] for k in found["open"]] == ["M31-20261014-021118-001"]
