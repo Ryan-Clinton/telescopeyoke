@@ -11,6 +11,7 @@
     ./focus.py --scene         on rooftops or trees, in daylight
     ./focus.py --motor         the motor focuser does it: no hand on the knob
                                (turns the focuser; the mount stays still)
+    ./focus.py --motor --dry-run   whether the focuser is plugged in; nothing turns
 
 Turn the focuser and listen. Each frame, once it has been measured, gives a
 click and then a tone: the click says "that turn has been seen", and the
@@ -636,6 +637,12 @@ def run_motor(args):
     import focuser
     scale = arcsec_per_pixel()
     usual = usual_best() / scale
+    if args.dry_run:
+        port = focuser.find_port()
+        print(f"Would turn the focuser on {port}: out in steps of {MOTOR_OUT} half-steps until the stars "
+              f"pass through sharp, then in by {MOTOR_IN}, aiming for HFR {usual:.1f}. "
+              "The mount does not move.")
+        return {"would_move": True, "port": port, "usual_hfr": round(usual, 2)}
     motor = focuser.Focuser.open()
     try:
         with Camera(args.port, MOTOR_GAIN) as cam:
@@ -677,7 +684,8 @@ def main():
     ap.add_argument("--field", action="store_true",
                     help="first slew to a bright star in a rich part of the sky: MOVES the telescope")
     ap.add_argument("--dry-run", action="store_true",
-                    help="with --field: say which star it would go to; no camera, no mount")
+                    help="with --field: say which star it would go to; with --motor: check the focuser "
+                    "is plugged in. No camera, no mount, nothing turns")
     ap.add_argument("--port", type=int, default=PORT)
     ap.add_argument("--report", action="store_true",
                     help="how quickly the last run answered a turn of the knob; takes no frames")

@@ -346,3 +346,19 @@ def test_with_no_focus_in_reach_the_focuser_goes_back_where_it_started():
     tube = Drawtube(best=50000)
     result = focus.motor_focus(tube, tube.read, usual=2.0, say=lambda *a: None)
     assert not result["found"] and tube.at == 0
+
+
+def test_a_motor_dry_run_turns_nothing_and_takes_no_frames(monkeypatch, capsys):
+    import focuser
+
+    def never(*args, **kwargs):
+        raise AssertionError("a dry run opened the focuser or the camera")
+    monkeypatch.setattr(focuser, "find_port", lambda port=None: "/dev/ttyUSB1")
+    monkeypatch.setattr(focuser.Focuser, "open", classmethod(never))
+    monkeypatch.setattr(focus, "Camera", never)
+    monkeypatch.setattr(sys, "argv", ["focus.py", "--motor", "--dry-run", "--json"])
+    with pytest.raises(SystemExit) as end:
+        focus.main()
+    answer = json.loads(capsys.readouterr().out)
+    assert end.value.code == 0
+    assert answer["ok"] and answer["data"]["would_move"] and answer["data"]["port"] == "/dev/ttyUSB1"

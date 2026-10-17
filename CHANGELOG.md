@@ -66,7 +66,8 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
   focus with the motor focuser and nobody touching the telescope: out past
   focus, in by small steps through the sharpest point, then out beyond the
   gears' slack and in once to the best (`docs/focuser.md`). Proven on the
-  150P on 15 October 2026: HFR 2.47.
+  150P on 15 October 2026: HFR 2.47. `--motor --dry-run` turns nothing
+  and takes no pictures: it says whether the focuser is plugged in.
 - **A paused run says why**: `shoot.py --through-cloud` says, when cloud
   pauses it, how bright the stars and the sky are against the kept frames,
   and so whether it looks like cloud lit by the town, thick cloud, or haze

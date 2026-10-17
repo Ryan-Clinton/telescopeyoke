@@ -68,6 +68,7 @@ is too weak to harm anything at the end of the travel: it stalls and ticks.
 ## Focusing with it
 
     ./focus.py --motor
+    ./focus.py --motor --dry-run    only checks the focuser is plugged in; nothing turns
 
 Point at a field with plenty of stars first (near Deneb or Vega; `--motor`
 focuses wherever the telescope is). It takes 1 s pictures at gain 1500 and:

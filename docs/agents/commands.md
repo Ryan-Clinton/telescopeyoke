@@ -105,6 +105,9 @@ and clear of the directions listed as blocked; `--dry-run` names the star.
 `snap.py`, `liveview.py`, `focus.py` (without `--field`), `solve.py`, `skywatch.py`,
 `calibrate.py`, `camera_test.py`, `shoot.py --no-recentre`.
 
+`focus.py --motor` turns the focuser and takes pictures; with `--dry-run` it only
+looks for the focuser's port and says what it would do.
+
 `focuser.py test` and `move` turn the focuser's motor, never the mount; `flash`
 loads the Nano's firmware. See `docs/focuser.md`.
 
