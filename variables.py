@@ -10,9 +10,13 @@ bright enough, and the ones that vary more than their brightness allows.
 Each night's frames (those restack.py kept) are stacked in batches of
 --bin, all lined up on the night's first frame, so each batch is one point
 of a light curve. Every Gaia star in the picture between BRIGHTEST and
-FAINTEST, with no other star near enough to share its light, is measured
-in every batch at its Gaia place; each batch is put on Gaia's G scale by
-the median of all those stars, so haze and the height of the field cancel.
+FAINTEST, with no other star near enough to share its light and not on
+a galaxy's bright glow, is measured in every batch at its Gaia place.
+Each batch is put on Gaia's G scale by a smooth surface fitted over the
+picture to all those stars, so haze, the height of the field, and the
+vignetting each night's pointing puts in a different place (there are no
+flats) all cancel. Each night's measurements are kept in its session
+(variables-BIN.json), so judging them again does not stack again.
 A star's scatter is then set beside the scatter of the stars as bright as
 it: one that scatters LOUD times more than they do, over LEAST points or
 more, is listed. VSX is asked which stars are known variables: a known one
@@ -46,6 +50,9 @@ MARGIN = 60          # pixels from the edge of the picture
 LOUD = 3.0           # scatter this many times its brightness's usual scatter is variable
 LEAST = 8            # points a light curve needs before it can be called variable
 MATCH = 6.0          # arcseconds to a VSX star
+GLOW = 1.5           # a star on light this many times the picture's median sky is on a galaxy: left out
+SURFACE = 30         # stars a batch needs before its zero point is a surface rather than one number
+VERSION = 1          # of the kept measurements: a change in what is measured makes them again
 STEP = 0.5           # magnitudes in each bin of the usual scatter
 
 
@@ -77,33 +84,68 @@ def middle_time(paths):
     return float(np.mean(stamps)) if stamps else None
 
 
-def chosen(stars, wcs, shape, brightest=BRIGHTEST, faintest=FAINTEST):
-    """The Gaia stars worth a light curve: in range, inside the picture, and
-    alone. Returns their rows and pixel places."""
+def placed(stars, wcs, shape, brightest=BRIGHTEST, faintest=FAINTEST):
+    """The Gaia stars in range and inside the picture: their rows, pixel
+    places, and whether each is alone (no neighbour within ALONE less than
+    CROWD mag fainter, among all the stars given)."""
     stars = np.asarray(stars, float)
     if not len(stars):
-        return stars, np.zeros((0, 2))
+        return stars, np.zeros((0, 2)), np.zeros(0, bool)
     x, y = wcs.world_to_pixel_values(stars[:, 0], stars[:, 1])
     inside = (x >= MARGIN) & (y >= MARGIN) & (x < shape[1] - MARGIN) & (y < shape[0] - MARGIN)
     cosd = math.cos(math.radians(float(np.median(stars[:, 1]))))
     tree = cKDTree(np.column_stack([stars[:, 0] * cosd, stars[:, 1]]) * 3600)
-    keep = []
-    for i in np.nonzero(inside & (stars[:, 2] >= brightest) & (stars[:, 2] <= faintest))[0]:
-        near = tree.query_ball_point((stars[i, 0] * cosd * 3600, stars[i, 1] * 3600), ALONE)
-        if all(j == i or stars[j, 2] > stars[i, 2] + CROWD for j in near):
-            keep.append(i)
-    keep = np.array(keep, int)
-    return stars[keep], np.column_stack([x[keep], y[keep]]) if len(keep) else np.zeros((0, 2))
+    rows = np.nonzero(inside & (stars[:, 2] >= brightest) & (stars[:, 2] <= faintest))[0]
+    alone = np.array([all(j == i or stars[j, 2] > stars[i, 2] + CROWD
+                          for j in tree.query_ball_point((stars[i, 0] * cosd * 3600, stars[i, 1] * 3600), ALONE))
+                      for i in rows], bool)
+    return stars[rows], np.column_stack([x[rows], y[rows]]) if len(rows) else np.zeros((0, 2)), alone
 
 
-def on_gaia(fluxes, g):
-    """Each batch's measured light put on Gaia's G scale by the median of
-    all its stars: rows of batches, columns of stars, NaN where unmeasured."""
+def chosen(stars, wcs, shape, brightest=BRIGHTEST, faintest=FAINTEST):
+    """The Gaia stars worth a light curve: in range, inside the picture, and
+    alone. Returns their rows and pixel places."""
+    rows, xy, alone = placed(stars, wcs, shape, brightest, faintest)
+    return rows[alone], xy[alone]
+
+
+def surface(xy, values, rounds=3):
+    """A smooth surface (x, y and their squares and product) through the
+    values at the places, refitted with the far-off ones left out."""
+    xy = np.asarray(xy, float)
+    scale = np.maximum(np.abs(xy).max(axis=0), 1.0)
+    u, v = (xy / scale).T
+    design = np.column_stack([np.ones_like(u), u, v, u * u, v * v, u * v])
+    use = np.isfinite(values)
+    fit = None
+    for _ in range(rounds):
+        if use.sum() < design.shape[1] * 3:
+            break
+        fit, *_ = np.linalg.lstsq(design[use], values[use], rcond=None)
+        left = values - design @ fit
+        spread = 1.4826 * np.nanmedian(np.abs(left[use] - np.nanmedian(left[use])))
+        use = np.isfinite(values) & (np.abs(left) <= 3 * max(spread, 1e-3))
+    if fit is None:
+        return np.full(len(values), np.nanmedian(values))
+    return design @ fit
+
+
+def on_gaia(fluxes, g, xy=None):
+    """Each batch's measured light put on Gaia's G scale: by a smooth
+    surface over the picture through all its stars where they are many
+    (with `xy`), else by their median. Rows of batches, columns of stars,
+    NaN where unmeasured."""
     fluxes = np.asarray(fluxes, float)
     with np.errstate(invalid="ignore", divide="ignore"):
         inst = np.where(fluxes > 0, -2.5 * np.log10(fluxes), np.nan)
-    zero = np.nanmedian(g[None, :] - inst, axis=1)
-    return inst + zero[:, None]
+    offsets = g[None, :] - inst
+    out = np.empty_like(inst)
+    for b in range(len(inst)):
+        if xy is not None and np.isfinite(offsets[b]).sum() >= SURFACE:
+            out[b] = inst[b] + surface(xy, offsets[b])
+        else:
+            out[b] = inst[b] + np.nanmedian(offsets[b])
+    return out
 
 
 def measure(lum, xy, fwhm):
@@ -114,12 +156,24 @@ def measure(lum, xy, fwhm):
     return forced.weighted(flat, xy, fwhm, max(fwhm, 2.0))
 
 
-def night(session, name, size, say=print, stack=None, solve=None, gaia=None):
-    """One night's light curves: the batches' times, and their magnitudes
-    for the chosen stars."""
+def plain(values):
+    """Numbers for JSON: NaN as null."""
+    return [None if v is None or not np.isfinite(v) else round(float(v), 6) for v in values]
+
+
+def measured(session, name, size, say=print, stack=None, solve=None, gaia=None):
+    """One night's measurements of every Gaia star in range in every batch,
+    kept in the session (variables-BIN.json) and read back from there."""
     import depth
+    import difference
     import stacking
     import vet
+    kept = session / f"variables-{size}.json"
+    if kept.exists():
+        record = json.loads(kept.read_text(encoding="utf-8"))
+        if record.get("version") == VERSION:
+            say(f"{session.name}: {len(record['jd'])} batches of {size} frames, as measured before")
+            return record
     stack = stack or vet.stacked
     solve = solve or (lambda lum: depth.plate(lum, name))
     gaia = gaia or depth.gaia
@@ -133,12 +187,32 @@ def night(session, name, size, say=print, stack=None, solve=None, gaia=None):
     corners = wcs.pixel_to_world_values([0, w, 0, w, w / 2], [0, 0, h, h, h / 2])
     ra, dec = float(corners[0][4]), float(corners[1][4])
     reach = float(vet.separation(ra, dec, np.array(corners[0][:4]), np.array(corners[1][:4])).max()) / 3600
-    stars, xy = chosen(gaia(ra, dec, round(reach + 0.01, 2)), wcs, (h, w))
+    stars, xy, alone = placed(gaia(ra, dec, round(reach + 0.01, 2)), wcs, (h, w))
     found = stacking.find_stars(images[0], limit=2000)
     fwhm = float(np.median(found[:200, 3])) if len(found) else 4.0
-    mags = on_gaia([measure(image, xy, fwhm) for image in images], stars[:, 2])
-    return {"session": session.name, "jd": [middle_time(g) for g in groups], "stars": stars, "mags": mags,
-            "fwhm_px": round(fwhm, 2)}
+    light = difference.glow(images[0])
+    sky = float(np.nanmedian(light))
+    under = [float(light[int(round(y)), int(round(x))]) / sky if sky > 0 else 1.0 for x, y in xy]
+    record = {"version": VERSION, "session": session.name, "bin": size, "fwhm_px": round(fwhm, 2),
+              "jd": [middle_time(g) for g in groups],
+              "stars": [plain(row) + [None] * (4 - len(row)) for row in stars], "xy": [plain(p) for p in xy],
+              "alone": [bool(a) for a in alone], "glow": plain(under),
+              "flux": [plain(measure(image, xy, fwhm)) for image in images]}
+    kept.write_text(json.dumps(record), encoding="utf-8")
+    return record
+
+
+def night(session, name, size, say=print, stack=None, solve=None, gaia=None):
+    """One night's light curves: the batches' times, and their magnitudes
+    for the stars alone and off any galaxy's glow."""
+    r = measured(session, name, size, say, stack, solve, gaia)
+    stars = np.array([[np.nan if v is None else v for v in row] for row in r["stars"]], float).reshape(-1, 4)
+    flux = np.array([[np.nan if v is None else v for v in row] for row in r["flux"]], float)
+    xy = np.array(r["xy"], float).reshape(-1, 2)
+    glow = np.array([np.inf if v is None else v for v in r["glow"]], float)
+    keep = np.array(r["alone"], bool) & (glow <= GLOW)
+    mags = on_gaia(flux[:, keep], stars[keep, 2], xy[keep])
+    return {"session": r["session"], "jd": r["jd"], "stars": stars[keep], "mags": mags, "fwhm_px": r["fwhm_px"]}
 
 
 # --- judging -----------------------------------------------------------------
@@ -241,13 +315,13 @@ def draw(star, path, size=(640, 320)):
         t = jd[pick]
         span = max(float(t.max() - t.min()), 1e-6)
         left = 50 + k * slot
-        pen.text((left + 4, size[1] - 16), n[:8], fill="grey")
+        pen.text((left + 4, size[1] - 16), f"{n[4:6]}-{n[6:8]} {n[9:11]}:{n[11:13]}", fill="grey")
         for tt, mm in zip(t, mag[pick]):
             x = left + 6 + (tt - t.min()) / span * (slot - 12)
             y = 10 + (mm - lo) / (hi - lo) * (size[1] - 40)
             pen.ellipse([x - 3, y - 3, x + 3, y + 3], fill="black")
-    pen.text((4, 4), f"{hi:.2f}", fill="grey")
-    pen.text((4, size[1] - 34), f"{lo:.2f}", fill="grey")
+    pen.text((4, 4), f"{lo:.2f}", fill="grey")                    # brighter at the top
+    pen.text((4, size[1] - 34), f"{hi:.2f}", fill="grey")
     title = star["vsx"]["name"] if star["vsx"] else f"{star['ra']:.5f} {star['dec']:+.5f}"
     pen.text((60, 4), f"{title}  G {star['g']:.2f}  scatter {star['scatter']:.3f} ({star['loudness']}x usual)",
              fill="black")

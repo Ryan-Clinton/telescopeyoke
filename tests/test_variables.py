@@ -82,3 +82,24 @@ def test_the_varying_star_is_found_and_a_flat_known_one_is_named(tmp_path):
     assert flat[0]["vsx"]["name"] == "V1 And" and not flat[0]["variable"]
     path = variables.draw(loud[0], tmp_path / "curve.png")
     assert (tmp_path / "curve.png").stat().st_size > 0 and path.endswith("curve.png")
+
+
+def test_vignetting_that_moves_from_night_to_night_cancels():
+    rng = np.random.default_rng(2)
+    xy = rng.uniform(0, 2000, (200, 2))
+    g = rng.uniform(11, 15, 200)
+    dim = 0.3 * ((xy[:, 0] - 700) / 1000) ** 2                       # darker towards one side, this night
+    flux = 10 ** (-0.4 * (g + dim - 22.0))
+    mags = variables.on_gaia([flux], g, xy)
+    assert np.abs(mags[0] - g).max() < 0.01
+
+
+def test_a_nights_measurements_are_kept_and_read_back(tmp_path):
+    images, wcs, catalogue, _ = made_up_night()
+    session = session_with_frames(tmp_path / "M31" / "20261014-021118", BATCHES * 10)
+    stacked = []
+    first = variables.night(session, "M31", 10, say=lambda *_: None, stack=lambda g: stacked.append(1) or images,
+                            solve=lambda lum: wcs, gaia=lambda ra, dec, r: catalogue)
+    again = variables.night(session, "M31", 10, say=lambda *_: None, stack=lambda g: stacked.append(1) or images,
+                            solve=lambda lum: wcs, gaia=lambda ra, dec, r: catalogue)
+    assert stacked == [1] and np.allclose(first["mags"], again["mags"], equal_nan=True)
