@@ -47,6 +47,7 @@ import stacking
 
 SKYBOT_URL = "https://ssp.imcce.fr/webservices/skybot/api/conesearch.php"
 VIZIER_URL = "https://vizier.cds.unistra.fr/viz-bin/asu-tsv"
+HALVES_FROM = 8     # frames needed to stack and check each half of the night
 ROCHESTER = ("https://www.rochesterastronomy.org/sn{year}/novae.html",
              "https://www.rochesterastronomy.org/sn{year}/index.html")
 ASTEROID_WITHIN = 30.0    # arcsec: a known asteroid this close at mid-session is the candidate
@@ -310,7 +311,7 @@ def run(args, say=print):
     half_scores = None
     if record["candidates"] and not args.no_halves:
         paths = restack_frames(session)
-        if len(paths) >= 8:
+        if len(paths) >= HALVES_FROM:
             say(f"stacking each half of {len(paths)} frames")
             half_scores = each_half(record, ref, ref_wcs, paths, name, say)
     evidence = vet(record, checks, half_scores, ref, zeropoint, radius=max(record.get("fwhm_px", 4.0), 2.0))

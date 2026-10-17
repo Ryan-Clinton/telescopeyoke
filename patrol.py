@@ -193,6 +193,18 @@ def analyse(session, say=print, chain=None, both_halves=True):
     session = Path(session)
     name = session.parent.name
     answer = {"session": str(session), "object": name}
+    count = (lambda: len(vet.restack_frames(session))) if chain is None else chain.get("frames", lambda: vet.HALVES_FROM)
+    frames = count()
+    if frames < vet.HALVES_FROM:
+        # Too few to check the halves of the night, or for the stack to throw
+        # out a cosmic ray or a satellite: what it finds is mostly those.
+        message = (f"too few frames to search: {frames}, and checking each half of the night needs "
+                   f"{vet.HALVES_FROM}")
+        answer["depth"] = {"refused": "INVALID_REQUEST", "message": message}
+        say(f"  {message}")
+        answer["summary"] = summary(answer)
+        (session / "patrol.json").write_text(json.dumps(answer, indent=1, default=str), encoding="utf-8")
+        return answer
     run = chain or {
         "depth": lambda: depth.run(argparse.Namespace(target=str(session), near=name, plant=True, sweep=False,
                                                       trials=6), say=quiet(say)),
@@ -318,7 +330,9 @@ def summary(a):
     for k in a.get("followed", []):
         t = k["tonight"] or {}
         what = ("seen again" if t.get("seen") and t.get("forced") else "found tonight" if t.get("seen")
-                else f"not seen (fainter than G {t.get('limit')})" if t else "not measured")
+                else f"not seen (fainter than G {t['limit']})" if t.get("limit") is not None
+                else "not seen, and no limit there (off the stack's edge, or too little light to measure)" if t
+                else "not measured")
         lines.append(f"On file: {k['id']}, seen on {k['seen_on']} of {k['of']} nights; tonight {what}"
                      + ("  <- seen on more than one night: look hard" if k["seen_on"] >= 2 else ""))
     for step in ("depth", "difference", "vet"):

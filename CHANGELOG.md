@@ -29,6 +29,9 @@ README's "Current status" is the table, and `docs/validation.md` the full accoun
   197 candidates), and one session's fault no longer stops the sweep. The
   first sweep also found vet.py reading Gaia's answer without its new
   colour column, fixed with a test of a whole vetting.
+  A session of fewer than 8 frames is not searched either: too few to
+  check each half of the night or to throw out a cosmic ray (the 4-frame
+  session at 02:05 on 14 October gave two such candidates).
 - **Dismissal labels**: `./candidates.py M31 --dismiss ID --reason "hot
   pixel"` closes a candidate on a person's word and keeps the label, for
   the classifier to learn from later; `--reopen ID` undoes it.

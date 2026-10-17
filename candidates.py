@@ -193,7 +193,8 @@ def run(args, say=print):
             f"nights  ({state})")
         for n in k["nights"]:
             what = (f"G {n['mag']}" if n["seen"] and n.get("mag") is not None else
-                    "seen" if n["seen"] else f"not seen, fainter than G {n.get('limit')}")
+                    "seen" if n["seen"] else f"not seen, fainter than G {n['limit']}" if n.get("limit") is not None
+                    else "not seen, no limit there")
             say(f"    {n['night']}: {what}")
     return {"name": args.name, "candidates": shown}
 

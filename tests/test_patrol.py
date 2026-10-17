@@ -268,3 +268,20 @@ def test_a_stack_too_shallow_is_not_searched(tmp_path):
     answer = patrol.analyse(session, say=lambda *_: None, chain=chain)
     assert ran == [] and answer["difference"]["message"].startswith("too shallow to search: half")
     assert any(line.startswith("Stopped at difference: too shallow") for line in answer["summary"])
+
+
+def test_a_miss_with_no_limit_says_so_rather_than_none():
+    lines = patrol.summary({"followed": [{"id": "M31-1", "seen_on": 1, "of": 2,
+                                          "tonight": {"seen": False, "limit": None}}]})
+    assert "None" not in lines[0] and "no limit there" in lines[0]
+
+
+def test_a_session_of_a_few_frames_is_not_searched(tmp_path):
+    session = tmp_path / "frames" / "M31" / "20261014-020539"
+    session.mkdir(parents=True)
+    ran = []
+    chain = {"frames": lambda: 4, "depth": lambda: ran.append("depth"), "difference": lambda: ran.append("d"),
+             "vet": lambda: ran.append("v")}
+    answer = patrol.analyse(session, say=lambda *_: None, chain=chain)
+    assert ran == [] and "too few frames to search: 4" in answer["summary"][-1]
+    assert (session / "patrol.json").exists()
