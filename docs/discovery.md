@@ -448,7 +448,9 @@ that the Rochester lists already have. The Transient Name Server wants a
 key even to be searched, so it is not asked: each answer carries its TNS
 search link for a person. Its first run, on 17 October, was given 66
 objects from ten days: 35 were not up here and the other 31 fainter than
-17.5, so nothing to point at. Not yet built: the confirmation picture on
+17.5, so nothing to point at. ALeRCE's newest ZTF detection near M31
+was on 27 June 2026 (asked on 17 October), so ZTF says nothing about M31
+this autumn, for or against a candidate of ours. Not yet built: the confirmation picture on
 a person's yes, pausing the patrol, and the month's search for
 unreported ones.
 
