@@ -59,3 +59,5 @@ been run with a model in the loop.
 Field names in `schemas/` do not change casually. New fields may be added
 under schema version 1.0. Anything that would break a reader raises the version
 to 2.0.
+
+- [Skills, agents and hooks](../skills-and-agents.md): the specification of a suite of Claude Code skills, subagents and safety hooks for these procedures (not built yet).
