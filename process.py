@@ -16,7 +16,7 @@ import config
 
 import numpy as np
 from astropy.io import fits
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
 
 import stacking
@@ -113,6 +113,73 @@ def sky_for(name):
         return 0 if across >= FILLS * config.field_height() * 60 else 2
     except Exception:      # no catalogue, no settings, no such object
         return 2
+
+
+def point_of(name):
+    """(ra, dec, label) for a target that is one star among many, so that its
+    picture needs it pointed out: a bright star, a watched star such as
+    Tabby's, an exoplanet's host or a followed transient. None for a galaxy,
+    nebula, cluster, planet or mosaic panel, which is plain to see, and for a
+    name not known."""
+    import interface
+    import mount
+    import starwatch
+    try:
+        target = mount.find_target(name)
+    except interface.Refusal:      # no such object
+        return None
+    if target.get("name") not in ("star", "transient") and target.get("kind") != "double star":
+        return None
+    watched = next((s for s in starwatch.STARS.values() if s["name"].lower() == str(name).lower()), None)
+    if watched:
+        return watched["ra"], watched["dec"], f"{watched['aka'].split(',')[0]} ({watched['id']})"
+    other = target.get("alt_id") or ""
+    return target["ra"], target["dec"], f"{target['id']} ({other})" if other else target["id"]
+
+
+def label(image, x, y, text):
+    """The picture with the star at pixel (x, y) marked by two ticks, left of
+    it and below it, that leave its light untouched, and named beside them."""
+    image = image.copy()
+    draw = ImageDraw.Draw(image)
+    unit = max(image.size) / 100        # about 26 pixels on the camera's full frame
+    gap, length, width = 1.0 * unit, 2.2 * unit, max(2, round(unit / 8))
+    colour, edge = (255, 214, 120), (0, 0, 0)
+    draw.line([(x - gap - length, y), (x - gap, y)], fill=colour, width=width)
+    draw.line([(x, y + gap), (x, y + gap + length)], fill=colour, width=width)
+    font = ImageFont.load_default(size=round(1.7 * unit))
+    box = draw.textbbox((0, 0), text, font=font)
+    w, h = box[2] - box[0], box[3] - box[1]
+    # Up and to the right of the star, unless that runs off the picture.
+    tx = x + gap if x + gap + w < image.width - unit else x - gap - w
+    ty = y - gap - h if y - gap - h > unit else y + gap
+    draw.text((tx - box[0], ty - box[1]), text, font=font, fill=colour,
+              stroke_width=max(1, width // 2), stroke_fill=edge)
+    return image
+
+
+def mark(image, rgb, name, say=print):
+    """The finished picture of a single star with that star labelled, found
+    by plate solving the stack (rows, columns, colours) it was made from.
+    Any other picture comes back as it was, and so does one whose stack
+    will not solve or whose star is outside it."""
+    point = point_of(name)
+    if point is None:
+        return image
+    import depth
+    import interface
+    ra, dec, text = point
+    try:
+        wcs = depth.plate(np.asarray(rgb, dtype=np.float32).sum(axis=-1), name)
+    except interface.Refusal:
+        say(f"the stack would not plate-solve, so {text} is not labelled")
+        return image
+    x, y = (float(v) for v in wcs.world_to_pixel_values(ra, dec))
+    if not (0 <= x < image.width and 0 <= y < image.height):
+        say(f"{text} is outside the picture, so it is not labelled")
+        return image
+    say(f"labelled {text} at pixel ({x:.0f}, {y:.0f})")
+    return label(image, x, y, text)
 
 
 FILLS = 0.6          # of the view's height: an object wider than this leaves no sky to fit

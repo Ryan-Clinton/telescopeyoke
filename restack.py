@@ -15,8 +15,11 @@ over every raw frame with the whole session known: it measures them all
 quickly, drops the poor ones, prepares the rest in full and lines them up on
 the sharpest frame, weights the better frames more, and averages with
 outliers (satellites, aircraft, cosmic rays) clipped out. Then it removes the
-sky gradient and writes a finished picture. The frame-by-frame work is shared
-between the processor's cores.
+sky gradient and writes a finished picture. A picture of one star among many
+(Tabby's star, an exoplanet's host, a followed transient) has that star
+marked and named, placed by plate solving the stack; a galaxy, nebula or
+cluster is left as it is. The frame-by-frame work is shared between the
+processor's cores.
 
 Several sessions, from one night or many, can go into one picture, written
 to frames/NAME/combined/. They may differ in exposure length but not in
@@ -223,6 +226,7 @@ def run(session, keep=0.85, say=print, workers=None, profile=False, discovery=Fa
         name = session.parent.name
         if not discovery:
             image = Image.fromarray(process.process(stacked, background=process.sky_for(name)))
+            image = process.mark(image, stacked, name, say)
             (config.DATA / "web").mkdir(exist_ok=True)
             image.save(session / "final.jpg", quality=93)
             image.save(config.DATA / "web" / f"{name}-final.jpg", quality=93)

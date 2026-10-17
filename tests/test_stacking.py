@@ -568,3 +568,43 @@ def test_frames_arriving_faster_than_their_exposure_are_noticed():
     assert shoot.short_changed(every(16.5), 15) is None         # exposure and download: as it should be
     assert shoot.short_changed(every(11.6, n=4), 15) is None    # too few to say
     assert shoot.short_changed([None, None], 15) is None
+
+
+def test_a_picture_of_one_star_among_many_is_labelled(tmp_path, monkeypatch):
+    """Tabby's star is one dot in a field of hundreds, so its finished picture
+    names it, placed by plate solving the stack; a galaxy's does not."""
+    import depth
+    import interface
+    import process
+    from PIL import Image
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    (tmp_path / "cache").mkdir()
+    (tmp_path / "cache" / "transients.json").write_text(json.dumps(
+        {"Tabby": {"ra": 301.564392, "dec": 44.456839, "kept_by": "starwatch.py", "id": "KIC 8462852"}}))
+    ra, dec, text = process.point_of("Tabby")
+    assert (ra, dec, text) == (301.564392, 44.456839, "Tabby's star (KIC 8462852)")
+    assert process.point_of("Vega")[2] == "Vega"
+    assert process.point_of("M31") is None and process.point_of("Saturn") is None
+    assert process.point_of("no such thing") is None
+
+    rgb = np.zeros((300, 450, 3), dtype=np.float32)
+    picture = Image.fromarray(np.zeros((300, 450, 3), dtype=np.uint8))
+    # A solve that puts the star at column 200, row 120.
+    found = {"ra": ra, "dec": dec, "cd": [[-1e-3, 0], [0, 1e-3]]}
+    wcs = depth.wcs_from(found, rgb.shape[:2])
+    wcs.wcs.crpix = [201, 121]
+    seen = {}
+    monkeypatch.setattr(depth, "plate", lambda lum, name: seen.update(shape=lum.shape, name=name) or wcs)
+    said = []
+    marked = np.asarray(process.mark(picture, rgb, "Tabby", said.append))
+    assert seen == {"shape": (300, 450), "name": "Tabby"} and "labelled" in said[0]
+    assert marked[120, 200].max() == 0                      # the star's own light is left alone
+    assert marked[120, 170:195].max() > 200                 # the tick to its left
+    assert marked[125:150, 200].max() > 200                 # the tick below it
+    assert marked[:115, 205:].max() > 200                   # its name, up and to the right
+
+    assert process.mark(picture, rgb, "M31", said.append) is picture
+    def fails(lum, name):
+        raise interface.Refusal("PLATE_SOLVE_FAILED", "no")
+    monkeypatch.setattr(depth, "plate", fails)
+    assert process.mark(picture, rgb, "Tabby", said.append) is picture and "not labelled" in said[-1]

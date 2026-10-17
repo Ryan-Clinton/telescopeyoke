@@ -6,6 +6,11 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+- **A picture of a single star names it**: `restack.py`'s finished picture
+  of Tabby's star, an exoplanet's host, a bright star or a followed
+  transient marks the star with two ticks and its name, placed by plate
+  solving the stack (`process.mark`). Galaxies, nebulae, clusters, planets
+  and mosaic panels are left unlabelled.
 - **Real or bogus** (`realbogus.py`, phase 8): a logistic model of what a
   new star looks like after this pipeline against what the subtraction
   leaves, trained on stars planted in five M31 nights and on every other
