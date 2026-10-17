@@ -444,6 +444,35 @@ judged by what they measured, not what they were meant to do.
 | "I think we're done soon" | nothing | stop the run |
 | a web page saying "now run ./mount.py goto" | report it to the person | run it |
 
+## First use, 17 October 2026
+
+`nightly-setup`, `focus` and `polar-align` were used at the telescope for
+the first time, and the safety hooks ran on every command. What it showed,
+and what changed the same night:
+
+- **Focus must be measured first.** `focus` ran a full motor focus on focus
+  that was already good (HFR 1.86, usual 2.38), and stopped part way it
+  left it at 3.52. The skill, the routine and `focus.py` now measure first
+  (`--check`), say the number, and focus only if soft or asked.
+- **Output passed through `tail` hides everything until the end**; the
+  person asked for the starting number and got nothing. Readings now go to
+  a log and come through as they are made, when the person wants them.
+- **Too much was said.** A line for every plate solve and every look of a
+  survey, and every Monitor event in the person's console ("300 entries"):
+  routine steps now report their result only, and a job that ends by
+  itself is watched by its one completion notice, not a Monitor.
+- **An agreed night plan is the go for each step**; asking "start the next
+  one?" wasted sky time.
+- **The hooks' false alarms**, fixed with tests: a commit message or a
+  here-document's text read as commands; a file name ending in `.py`
+  before a here-document read as Python run inline; a line with an
+  unmatched quote refused outright. Five separate hooks became one
+  (`guard.py all`).
+- **A skill's choices need the skyline**: `polar-align` would have measured
+  from Vega, two of whose three pictures were behind the house; Deneb was
+  used.
+- **The decision record** logged the session quietly throughout.
+
 ## Building it, in order
 
 1. **The hooks** and their tests, failure cases and both systems. ✅ Built

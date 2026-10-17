@@ -17,9 +17,9 @@ only, ❌ tried and not yet working.
 | What | Where it stands |
 |---|---|
 | GoTo centred by plate solving | ✅ to about an arcminute, from 10° out |
-| Polar alignment | ✅ 3.3° to 0.1° over six rounds (13 October), with the handset's own Dec movement taken out; an earlier 5.2° to 0.2° was wrong for that reason. ⚠️ How well a reading repeats is not measured |
+| Polar alignment | ✅ 3.3° to 0.1° over six rounds (13 October), with the handset's own Dec movement taken out; an earlier 5.2° to 0.2° was wrong for that reason. 17 October, the tripod not moved: 1.0° at the start, 0.5° after three adjustments. ⚠️ How well a reading repeats is not measured, nor why it moved between nights |
 | Focusing by star measurement | ✅ |
-| Motor focuser | ✅ the 150P to HFR 2.47 (15 October); the gears' slack is large, so it always finishes moving inward |
+| Motor focuser | ✅ the 150P to HFR 2.47 (15 October), 2.28, then 2.14 (17 October); the gears' slack is large, so it always finishes moving inward. Focus held from one night to the next (HFR 1.86 at the start on 17 October): it measures first now (`--check`) |
 | Click, tone and focus levels | 🧪 |
 | Shutter time | ✅ measured and corrected: a 10 s frame was open 6.4 s, now 9.6 s |
 | Imaging and stacking | ⚠️ runs of 48 and 207 frames, and M31 runs since; long stacks reach a noise floor not yet explained (darks, flats and dithering untried) |
@@ -60,7 +60,7 @@ The account of everything tried so far, feature by feature, is at the end:
 | 14 | Does a whole night work on Windows? | Mount and camera together: GoTo with centring, focus, a run. | Not yet run. |
 | 15 | Does `findhome` find the home position, and does marking it hold? | After polar alignment: `./mount.py findhome`, `./mount.py truehome`, mark, restart on the marks, `./mount.py findhome` again. The second should read under 0.1°. | Yes, 17 October 2026. Switched on at home set by eye, `findhome` (Dec +40°, hours -3, -2, -1.5, -1, +0.5, +1, +1.5) found it 10.66° out on the RA axis and 5.12° on the Dec axis, the seven places 0.02° from the fit; `truehome` drove there (after a 10° limit on how far out home may be was taken out: home is where it is), both joints were marked with tape, the handset restarted on the marks, and `findhome` again found home 0.19° and 0.05° out, the places 0.07° from the fit. A little over the 0.1° aim on the RA axis. |
 | 16 | Does the handset take its clock from the computer? | `./mount.py settime` with the handset at its main menu, then read its date on its own screen. | Yes, once: 7 October 2026, at the main menu, it read back the computer's time to the second and its sidereal clock came to 0.01° from true. The date on its own screen was not looked at. |
-| 17 | Can it predict what a turn of a bolt does? | During polar alignment: measure; turn the left azimuth bolt in exactly half a turn; measure again saying so (`--turned 0.5 0`, or the screen); then another half turn the same way and measure again. | Not yet run. If the second half turn moves the axis about as far as the first, the advice in turns can be believed. |
+| 17 | Can it predict what a turn of a bolt does? | During polar alignment: measure; turn the left azimuth bolt in exactly half a turn; measure again saying so (`--turned 0.5 0`, or the screen); then another half turn the same way and measure again. | Partly, 17 October 2026, not in exact half turns: a quarter turn moved the axis about 0.2° east (the program learnt 0.72° a turn from it), and the next adjustment, told nothing, moved it 2.9°, about 1.7° a turn if it was the advised one and three quarters. The learnt figure was too small: the advice in turns is not yet to be believed. |
 
 ## Why frames are slow: what has been checked
 
@@ -580,3 +580,44 @@ ONEWEB-0331 (`docs/satellites.md`).
 Two warnings were added to `mount.py`: a target behind something noted in
 `[horizon]`, and a target within 20 minutes of the meridian, where the
 handset chose the other side of the mount from the one predicted.
+
+### Night of 17 October 2026
+
+Clear all night. The setup was run through the Claude Code skills for the
+first time (`nightly-setup`, `focus`, `polar-align`): see
+`docs/skills-and-agents.md`, "First use".
+
+**The skyline**, by day before dark: the telescope's own survey, 100 looks
+over 28 bearings in 34 minutes, one look checked by eye (the hedge at
+120°, 39° up, "blocked"). The house closes the west to more than 75°, the
+hedge the east and south-east to 39-48°, the low gap is south-south-west
+(22° at 195°). The trace kept the skyline and then failed printing its
+summary; fixed.
+
+**Focus** held from the night before: HFR 1.86 at the start, better than
+the usual 2.38. The motor run went ahead anyway (it had no "measure first"
+then), was stopped part way, and left the focuser at HFR 3.52; a full run
+took it to 2.14 (+128 half-steps from where it started). `focus.py --check`
+and a run that leaves good focus alone came from this.
+
+**Polar alignment**, the tripod not moved since 13 October: 1.0° (1.5°
+west, 0.5° low) where it had been 0.1°. Three adjustments of the azimuth
+bolts: 0.9°, 0.9° (overshot to the east), 0.4°, 0.5°; the altitude left
+0.4° low. Measured from Deneb, as from Vega the second and third pictures
+were behind the house.
+
+**Home** was 10.66° out on the RA axis and 5.12° on the Dec axis, set by
+eye: the reason the first GoTo of a night misses by about 10°. Marked, and
+measured again on the marks: 0.19° and 0.05° (rows 10 and 15 above).
+
+**Tabby's star**, first night: G 11.655 ± 0.019 over ten batches of ten 4 s
+frames; the stack, to G 16.1, is now its reference. Two frames were
+rejected for a kitchen light.
+
+**Dithering's cost**: 80 frames of 16 s on M31 dithered every 10 frames
+took 57 minutes, where a frame alone takes about 20 s: each dither was a
+plate-solved GoTo with a 30 s wait after each slew, 1 to 3 minutes for a
+move of an arcminute. A dither is now one GoTo without solving, and the
+wait after a slew 10 s. The undithered run of the same field follows, for
+the noise-floor comparison.
+
