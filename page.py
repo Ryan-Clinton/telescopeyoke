@@ -507,18 +507,18 @@ atlas. Comets: COBS and JPL Horizons. Cloud imagery: EUMETSAT. Catalogue: OpenNG
     const box = $$("discovery");
     if (!d || !(d.sessions.length || d.tabby || d.comets)) { box.hidden = true; return; }
     box.hidden = false;
-    const colour = {done: "#2e7d32", now: "#f9a825", waiting: "#555"};
+    const colour = {done: "#2e7d32", now: "#f9a825", waiting: "#555", stopped: "#c62828"};
     $$("mosaics").innerHTML = d.mosaics.map(m => `<div style="margin-bottom:10px"><b>$${esc(m.name)}</b>
       <div style="display:grid;grid-template-columns:repeat($${m.columns},1fr);gap:4px;max-width:360px;margin-top:4px">` +
       m.panels.map(p => `<div style="background:$${colour[p.state]};padding:6px;border-radius:4px;text-align:center"
         title="$${esc(p.state)}">P$${p.panel}$${p.unexplained ? " ⚠ " + p.unexplained : ""}<br>
-        <small>$${p.state === "now" ? "imaging" : p.state === "done" ? "searched" : "to come"}</small></div>`).join("") +
+        <small>$${({now: "imaging", done: "searched", stopped: "stopped", waiting: "to come"})[p.state]}</small></div>`).join("") +
       `</div></div>`).join("");
     $$("discovery-sessions").innerHTML = d.sessions.slice().reverse().map(s => {
       const time = new Date(s.started * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"});
       const frames = s.planned ? `$${s.kept} of $${s.planned} frames kept` : `$${s.kept} of $${s.frames} frames kept`;
       const answer = s.summary !== null ? s.summary.map(esc).join("<br>") :
-        s.finished ? "imaged; not searched" : "<i>under way</i>";
+        s.finished ? "imaged; not searched" : s.stopped ? "<b>stopped</b>: no frame for 5 minutes" : "<i>under way</i>";
       const flag = s.unexplained ? ` <b style="color:#e53935">$${s.unexplained} unexplained</b>` : "";
       const pics = (s.shared || []).map(p => `<a href="$${p}"><img src="$${p}" style="height:90px;margin:4px 4px 0 0"></a>`).join("");
       return `<div style="border-top:1px solid #333;padding:6px 0"><b>$${esc(s.field)}</b> $${time} · $${frames}$${flag}

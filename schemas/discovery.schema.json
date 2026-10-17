@@ -13,7 +13,7 @@
                      "unexplained": {"type": ["integer", "null"]}, "pictures": {"type": "array", "items": {"type": "string"}}}}},
     "mosaics": {"type": "array", "items": {"type": "object", "required": ["name", "columns", "rows", "panels"],
       "properties": {"panels": {"type": "array", "items": {"type": "object", "required": ["panel", "state"],
-        "properties": {"panel": {"type": "integer"}, "state": {"enum": ["done", "now", "waiting"]}}}}}}},
+        "properties": {"panel": {"type": "integer"}, "state": {"enum": ["done", "now", "waiting", "stopped"]}}}}}}},
     "tabby": {"type": ["object", "null"]},
     "comets": {"type": ["object", "null"]},
     "open_candidates": {"type": "integer"}

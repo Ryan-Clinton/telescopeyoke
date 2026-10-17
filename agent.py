@@ -392,6 +392,9 @@ def _explain(trend):
     return notes
 
 
+STOPPED_AFTER = 300     # seconds without a frame after which an unfinished run is taken to have died
+
+
 def discovery(hours=14, now=None, data=None):
     """Tonight's discovery work, for the status page: every session started
     in the last `hours`, with how far it got and the patrol's answer when
@@ -414,6 +417,9 @@ def discovery(hours=14, now=None, data=None):
         row = {"field": folder.parent.name, "session": folder.name, "started": started,
                "frames": run.get("captured", 0), "kept": run.get("accepted", 0), "planned": run.get("planned"),
                "finished": bool(run.get("finished")) or (folder / "frames.json").exists(),
+               # A run with no frame for 5 minutes and no end record died (17 October: a camera hang).
+               "stopped": not (run.get("finished") or (folder / "frames.json").exists())
+               and run.get("age", 0) > STOPPED_AFTER,
                "summary": None, "unexplained": None, "pictures": []}
         patrolled = folder / "patrol.json"
         if patrolled.exists():
@@ -433,7 +439,8 @@ def discovery(hours=14, now=None, data=None):
             continue
         m = mosaics.setdefault(found.group(1), {"name": found.group(1), "columns": kept["columns"],
                                                 "rows": kept["rows"], "panels": {}})
-        m["panels"][int(found.group(2))] = {"state": "done" if row["summary"] is not None else "now",
+        m["panels"][int(found.group(2))] = {"state": "done" if row["summary"] is not None else
+                                            "stopped" if row["stopped"] else "now",
                                             "unexplained": row["unexplained"], "session": row["session"]}
     for m in mosaics.values():
         m["panels"] = [dict({"panel": n}, **m["panels"].get(n, {"state": "waiting"}))
