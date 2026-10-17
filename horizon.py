@@ -742,8 +742,11 @@ def profile(found, low):
     lines = []
     for f in found:
         h = height(f, low)
-        words = {"open": f"open down to {f['clear']:g}°", "edge": f"blocked up to {f['clear']:g}°",
-                 "blocked": "blocked as far up as it looked", "unreachable": "not reachable"}[f["state"]]
+        # Only the words for this bearing's state: a bearing blocked as far
+        # up as it looked has no top to print.
+        words = (f"open down to {f['clear']:g}°" if f["state"] == "open" else
+                 f"blocked up to {f['clear']:g}°" if f["state"] == "edge" else
+                 "blocked as far up as it looked" if f["state"] == "blocked" else "not reachable")
         bar = "#" * math.ceil((h - low) / 3) if h is not None else ""
         lines.append(f"{f['az']:>6g}° {bar:<24} {words}{'  (in doubt)' if f.get('doubt') else ''}")
     return "\n".join(lines)

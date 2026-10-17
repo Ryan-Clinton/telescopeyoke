@@ -27,7 +27,7 @@ only, ❌ tried and not yet working.
 | Daytime Polaris | ❌ searched three times, not found; sensor blemishes were told from stars |
 | `findhome`, landmark azimuth, pointing survey, creep response | 🧪 |
 | Checking the telescope really turned | ⚠️ one real record, and it caught a real fault |
-| Skyline | ⚠️ found in real panoramas; not tied to the compass; the telescope's own survey only tried with a torch |
+| Skyline | ✅ the telescope's own survey by day, 17 October: 28 bearings, one look checked by eye (the hedge at 120°); the north below the mount's reach and the low south-west near the setting Sun not measured. ⚠️ panoramas found, not tied to the compass |
 | Control without the handset | ⚠️ the Wi-Fi adapter read; nothing moved |
 | Windows | ⚠️ camera frames indoors; no mount driven; no whole night 🧪 |
 | Dark and flat frames, gain sweep | 🧪 |

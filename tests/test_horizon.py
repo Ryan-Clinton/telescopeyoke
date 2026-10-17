@@ -390,3 +390,13 @@ def test_a_torch_along_the_tube_tells_a_wall_from_cloud():
     # Before any frame of stars has said how dark the sky is, only a burnt
     # frame can be called lit.
     assert horizon.read_torch(none, 400, 0.0, None)["view"] == "sky"
+
+
+def test_the_profile_prints_a_bearing_blocked_as_far_up_as_it_looked():
+    # 17 October 2026: the first real trace was kept, then failed printing
+    # this, as every state's words were made, the missing top among them.
+    found = [{"az": 0, "state": "open", "clear": 66}, {"az": 90, "state": "edge", "clear": 39.0},
+             {"az": 300, "state": "blocked", "clear": None}, {"az": 330, "state": "unreachable", "clear": None}]
+    text = horizon.profile(found, 20)
+    assert "open down to 66°" in text and "blocked up to 39°" in text
+    assert "blocked as far up as it looked" in text and "not reachable" in text
