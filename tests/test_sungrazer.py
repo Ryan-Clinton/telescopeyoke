@@ -210,7 +210,7 @@ def test_ccor1s_blanked_arm_and_its_edges_are_left_out():
     for i in images:
         i[:256, 248:264] = 0                                          # the arm, blanked
     mask = sungrazer.usable((512, 512), "ccor1", images)
-    assert not mask[60, 256] and not mask[60, 245] and not mask[60, 268] and mask[60, 200]
+    assert not mask[60, 256] and not mask[60, 233] and not mask[60, 278] and mask[60, 200]
 
 
 def test_planted_comets_are_found_when_strong_and_counted_by_strength():
