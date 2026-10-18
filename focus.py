@@ -746,6 +746,19 @@ def seen_good(hfr, scale):
         pass
 
 
+def show(lum, line):
+    """The frame a focus reading was measured on, with that reading written
+    across it, as web/latest.jpg: the status page's NOW picture."""
+    from camera import stretch
+    try:
+        image = Image.fromarray(stretch(lum)).convert("RGB")
+        image = image.resize((900, round(900 * image.height / image.width)))
+        PREVIEW.parent.mkdir(parents=True, exist_ok=True)
+        annotate(image, f"{time.strftime('%H:%M:%S')} {line.strip()}").save(PREVIEW, quality=85)
+    except OSError:     # a picture not shown is not worth a focus run failing over
+        pass
+
+
 def run_check(args):
     """./focus.py --check: three frames of the stars in view, their size
     against the usual best. Nothing turns."""
@@ -753,7 +766,13 @@ def run_check(args):
     usual = usual_best() / scale
     with Camera(args.port, MOTOR_GAIN) as cam:
         cam.frame(MOTOR_EXPOSURE)               # the first frame after opening can be stale
-        values = [v for v in (measure_stars(luminance(cam.frame(MOTOR_EXPOSURE)[0]))[0] for _ in range(3)) if v]
+        values = []
+        for n in range(3):
+            lum = luminance(cam.frame(MOTOR_EXPOSURE)[0])
+            value = measure_stars(lum)[0]
+            show(lum, f"focus check {n + 1}/3: HFR {'none' if value is None else f'{value:.2f}'}")
+            if value:
+                values.append(value)
     hfr = float(np.median(values)) if values else None
     good = hfr is not None and hfr <= GOOD_ENOUGH * usual
     print(f"Focus now: {verdict(hfr, usual)}.", flush=True)
@@ -782,14 +801,22 @@ def run_motor(args):
         with Camera(args.port, MOTOR_GAIN) as cam:
             cam.frame(MOTOR_EXPOSURE)               # the first frame after opening can be stale
 
+            seen = {}
+
             def read(frames):
                 values = []
                 for _ in range(frames):
                     mosaic, _ = cam.frame(MOTOR_EXPOSURE)
-                    value, _ = measure_stars(luminance(mosaic))
+                    seen["lum"] = luminance(mosaic)
+                    value, _ = measure_stars(seen["lum"])
                     if value:
                         values.append(value)
                 return float(np.median(values)) if values else None
+
+            def say(line):
+                progress(line)
+                if "lum" in seen:
+                    show(seen["lum"], "motor focus: " + line)
             now = read(3)
             print(f"Focus now: {verdict(now, usual)}.", flush=True)
             if now is not None and now <= GOOD_ENOUGH * usual and not getattr(args, "anyway", False):
@@ -799,7 +826,7 @@ def run_motor(args):
                 return {"hfr": round(now, 2), "moved": 0, "found": True, "readings": [], "left_alone": True,
                         "hfr_arcsec": round(now * scale, 2)}
             print(f"Motor focusing: HFR {usual:.1f} is good focus here.", flush=True)
-            result = motor_focus(motor, read, usual)
+            result = motor_focus(motor, read, usual, say=say)
     finally:
         motor.close()
     hfr = result["hfr"]

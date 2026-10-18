@@ -511,3 +511,12 @@ def test_a_run_never_goes_further_than_its_travel_from_the_start():
         position += move
         furthest = max(furthest, abs(position))
     assert furthest <= focus.MOTOR_TRAVEL
+
+
+def test_a_focus_reading_puts_its_frame_and_line_on_the_status_page(monkeypatch, tmp_path):
+    monkeypatch.setattr(focus, "PREVIEW", tmp_path / "web" / "latest.jpg")
+    lum = np.random.default_rng(0).normal(100, 5, (400, 600)).astype(np.float32)
+    focus.show(lum, "  coming in   -480  HFR 6.10   best 6.10   aim 2.28")
+    from PIL import Image
+    with Image.open(tmp_path / "web" / "latest.jpg") as picture:
+        assert picture.width == 900
