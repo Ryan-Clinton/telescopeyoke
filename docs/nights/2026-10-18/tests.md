@@ -35,3 +35,16 @@ Light on 22:11:55, off 22:13:28. Same panel and session.
 
 No effect that can be measured: the sky stayed within its frame-to-frame
 scatter of about 1 while the light was on.
+
+## 3. Utility room light
+
+Light on 22:20:41, off 22:23:17. Panel M31-P7, session 20261018-221836.
+
+| Frames | Kept at | Light | Sky level | Stars | FWHM |
+|---|---|---|---|---|---|
+| 2-6 | 22:19:16-22:20:28 | off | 105.5-106.5 | 300 | 5.6-6.3 |
+| 7-12 | 22:20:47-22:23:00 | on | 104.8-107.4 | 300 | 5.4-5.8 |
+| 13-16 | 22:23:20-22:24:20 | off | 104.7-105.8 | 300 | 5.5-5.7 |
+
+No effect that can be measured: the sky stayed within its usual scatter.
+(Frame 8 came 55 s after frame 7, a pause in the camera, not the light.)
