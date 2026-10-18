@@ -177,14 +177,16 @@ def test_a_whole_night(night, monkeypatch, capsys):
     assert "Tracking assist" in said
     # On a slow machine a frame or two is set aside for the quality pass
     # instead of being stacked live; the two cloudy ones are always dropped.
-    assert summary["captured"] == FRAMES and 2 <= summary["rejected"] <= 6
+    # Each rejected frame is taken again, so the run ends with as many good ones.
+    assert 2 <= summary["rejected"] <= 6
+    assert summary["captured"] == FRAMES + min(summary["rejected"], max(2, FRAMES // 4))
     assert (folder / summary["picture"]).name == "final.jpg" and (folder / summary["picture"]).exists()
     stacked = json.loads((folder / summary["folder"] / "restack.json").read_text(encoding="utf-8"))["summary"]
     assert stacked["median_residual_px"] < 0.5
 
     # Status: every way of asking sees the same finished run.
     run = valid(interface.run("session", agent.session), "image-session")["data"]
-    assert (run["state"], run["captured"]) == ("finished", FRAMES)
+    assert (run["state"], run["captured"]) == ("finished", summary["captured"])
     assert run["reasons"]["star brightness down (cloud)"] == 2
     seen = valid(interface.run("observing", lambda: agent.observing(demo=True)), "observing")["data"]
     assert seen["tracking"]["drift_arcsec_s"] > 0 and seen["tracking"]["dec_creep_arcsec_s"] is not None
