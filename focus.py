@@ -602,9 +602,12 @@ def report():
 # in pixels of the full-size picture.
 MOTOR_OUT = 96          # half-steps a step out while looking for the far side (4096 to a turn)
 MOTOR_IN = 32           # half-steps a step in while measuring
+MOTOR_BIG = 1024        # the most one step turns, however far out the stars are
 MOTOR_SLACK = 300       # half-steps beyond the gears' slack, before the last move in
 MOTOR_REACH = 14        # steps out before giving up
 MOTOR_EXPOSURE, MOTOR_GAIN = 1.0, 1500
+FAR = 3.0               # stars this many times the usual best are far out: one frame, big steps
+NOISE = 0.4             # a "star" this many times smaller than the usual best is a hot pixel
 
 
 def progress(line):
@@ -619,15 +622,33 @@ def motor_focus(motor, read, usual, say=progress):
     is out); `read(frames)` is the median HFR over that many frames, or None
     with no stars. `usual` is the HFR good focus comes to. Returns
     {"hfr", "moved", "found", "readings"}; with "found" false the focuser has
-    been put back where it started."""
+    been put back where it started.
+
+    Star size grows in step with the distance from focus, so once two
+    readings have shown how many half-steps make a pixel of HFR, a step far
+    out of focus goes half the distance that is left: big steps and one frame
+    each while the stars are large, the small careful steps only near focus."""
     sharp = 1.75 * usual
-    readings, place, least_seen = [], [0], [None]
+    readings, place, least_seen, slopes = [], [0], [None], []
+    heading = [0, 0]        # the way it last turned, and the first reading since the gears' slack was taken up
 
     def step(n, frames=2, doing="start"):
+        last = next((r for r in reversed(readings) if r["hfr"]), None)
+        if last and last["hfr"] > FAR * usual:
+            frames = 1
         if n:
+            if (n > 0) != (heading[0] > 0) or not heading[0]:
+                heading[:] = [n, len(readings) + 1]
             motor.move(n)
             place[0] += n
         value = read(frames)
+        if value is not None and value < NOISE * usual:
+            value = None
+        # The slope only from two readings turning the same way: across a
+        # turn the gears' slack makes the distance look bigger than it was.
+        base = next((r for r in readings[heading[1]:] if r["hfr"]), None)
+        if value and base and base["at"] != place[0] and abs(value - base["hfr"]) >= 1:
+            slopes.append(abs(place[0] - base["at"]) / abs(value - base["hfr"]))
         readings.append({"at": place[0], "hfr": value and round(value, 2)})
         if value and (least_seen[0] is None or value < least_seen[0]):
             least_seen[0] = value
@@ -636,24 +657,47 @@ def motor_focus(motor, read, usual, say=progress):
             f"{best_text}   aim {usual:.2f}")
         return value
 
+    def stride(value, small):
+        """Half the distance to focus that this reading says is left, once
+        the slope is known and the stars are far out; otherwise `small`."""
+        if not value or value <= 1.75 * usual or not slopes:
+            return small
+        slope = sorted(slopes)[len(slopes) // 2]
+        return int(min(MOTOR_BIG, max(small, slope * (value - usual) / 2)))
+
     # Out until clearly past focus: the stars grown well beyond the best seen
     # on the way, or lost, after at least two steps.
-    least = step(0)
-    for count in range(MOTOR_REACH):
-        value = step(MOTOR_OUT, doing="going out")
+    least = value = step(0)
+    misses = 0
+    for count in range(4 * MOTOR_REACH):
+        value = step(stride(value, MOTOR_OUT), doing="going out")
         if value and (least is None or value < least):
             least = value
+        else:
+            misses += 1     # only steps that bring the stars no smaller count towards giving up
+        if misses >= MOTOR_REACH:
+            break
         if count >= 1 and (value is None or (least and value > max(1.5 * least, 2.5 * usual))):
             break
-    # In by small steps, trusting these readings only, until the stars have
-    # been sharp and grown again or been lost.
+        if count >= 1 and least and least > FAR * usual and value > 1.15 * least:
+            break           # far out and growing: already on the outer side, no need to go further
+        sizes = [r["hfr"] for r in readings]
+        if count == 3 and all(sizes) and max(sizes) - min(sizes) < 0.05 * min(sizes):
+            say("  HFR not changing: is the focuser gripping the knob?")
+    # In by steps that shrink as the stars do, trusting these readings only,
+    # until the stars have been sharp and grown again or been lost.
     best = None
     for _ in range(2 * MOTOR_REACH * MOTOR_OUT // MOTOR_IN):
-        value = step(-MOTOR_IN, doing="coming in")
+        value = step(-stride(value, MOTOR_IN if value or best else MOTOR_OUT), doing="coming in")
         if value and (best is None or value < best[1]):
             best = (place[0], value)
         if best and best[1] < sharp and (value is None or value > 1.4 * best[1]):
             break
+        if best and best[1] >= sharp and value and value > 1.4 * best[1] and best[0] > place[0]:
+            # A big step went past focus: back out beyond the slack, then
+            # in again from there by small steps.
+            value = step(best[0] - place[0] + MOTOR_SLACK, 1, doing="back out")
+            best = None
     if not best or best[1] >= sharp:
         say("  no sharp stars found")
         step(-place[0], 1, doing="back to start")
@@ -716,8 +760,9 @@ def run_motor(args):
     usual = usual_best() / scale
     if args.dry_run:
         port = focuser.find_port()
-        print(f"Would turn the focuser on {port}: out in steps of {MOTOR_OUT} half-steps until the stars "
-              f"pass through sharp, then in by {MOTOR_IN}, aiming for HFR {usual:.1f}. "
+        print(f"Would turn the focuser on {port}: out until the stars pass through sharp, then "
+              f"in, in steps sized from how big the stars are ({MOTOR_IN} to {MOTOR_BIG} half-steps), "
+              f"aiming for HFR {usual:.1f}. "
               "The mount does not move.")
         return {"would_move": True, "port": port, "usual_hfr": round(usual, 2)}
     motor = focuser.Focuser.open()
@@ -752,6 +797,9 @@ def run_motor(args):
         with RUNS_FILE.open("a", encoding="utf-8") as log:
             log.write(json.dumps({"saved": time.time(), "best_hfr": round(hfr, 2),
                                   "best_arcsec": round(hfr * scale, 2), "motor": True}) + "\n")
+    elif result["found"]:
+        print(f"The focuser is at the sharpest place seen, {result['moved']:+d} half-steps from the start, "
+              "but the last reading there saw no stars: cloud?", flush=True)
     else:
         print("No focus found within reach either way; the focuser is back where it started.", flush=True)
     return dict(result, hfr_arcsec=hfr and round(hfr * scale, 2))

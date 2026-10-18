@@ -458,3 +458,38 @@ def test_each_motor_reading_says_what_it_is_doing_and_goes_out_at_once(monkeypat
         assert doing in said
     assert all("aim 2.00" in line for line in lines)
     assert "best" in lines[-1]
+
+
+class ShallowDrawtube(Drawtube):
+    """A focuser like the 150P's on 18 October 2026: 300 half-steps to a pixel
+    of HFR, stars lost only beyond a turn and a half from focus."""
+
+    def read(self, frames):
+        off = abs(self.tube - self.best)
+        return None if off > 6000 else 2.0 + off / 300
+
+
+@pytest.mark.parametrize("best", [-4000, -2500, 2500, 4000])
+def test_far_out_of_focus_the_steps_grow_and_focus_is_still_found(best):
+    """Fixed small steps gave up before reaching focus from this far out;
+    steps sized from the stars get there in a few dozen readings."""
+    tube = ShallowDrawtube(best, slack=150)
+    result = focus.motor_focus(tube, tube.read, usual=2.0, say=lambda *a: None)
+    assert result["found"]
+    assert abs(tube.tube - tube.best) <= 32
+    assert len(result["readings"]) <= 50
+    assert tube.moves[-1] < 0
+
+
+def test_a_hot_pixel_is_not_taken_for_a_sharp_star():
+    readings = iter([None, 0.6, None] + [None] * 400)
+    tube = Drawtube(best=50000)
+    result = focus.motor_focus(tube, lambda frames: next(readings), usual=2.0, say=lambda *a: None)
+    assert not result["found"] and tube.at == 0
+
+
+def test_stars_that_do_not_change_as_it_turns_are_said_once():
+    said = []
+    tube = Drawtube(best=0)
+    focus.motor_focus(tube, lambda frames: 15.0, usual=2.0, say=said.append)
+    assert sum("not changing" in line for line in said) == 1
