@@ -608,6 +608,12 @@ MOTOR_REACH = 14        # steps out before giving up
 MOTOR_EXPOSURE, MOTOR_GAIN = 1.0, 1500
 FAR = 3.0               # stars this many times the usual best are far out: one frame, big steps
 NOISE = 0.4             # a "star" this many times smaller than the usual best is a hot pixel
+CEILING = 12.0          # HFR beyond this is the measuring box's size, not the star's: no guide to distance
+MOTOR_TRAVEL = 8192     # the furthest a run goes from where it started, either way (two turns)
+
+
+class OutOfReach(Exception):
+    """A focus run would go further than MOTOR_TRAVEL from where it started."""
 
 
 def progress(line):
@@ -636,6 +642,8 @@ def motor_focus(motor, read, usual, say=progress):
         last = next((r for r in reversed(readings) if r["hfr"]), None)
         if last and last["hfr"] > FAR * usual:
             frames = 1
+        if n and abs(place[0] + n) > MOTOR_TRAVEL:
+            raise OutOfReach
         if n:
             if (n > 0) != (heading[0] > 0) or not heading[0]:
                 heading[:] = [n, len(readings) + 1]
@@ -646,8 +654,8 @@ def motor_focus(motor, read, usual, say=progress):
             value = None
         # The slope only from two readings turning the same way: across a
         # turn the gears' slack makes the distance look bigger than it was.
-        base = next((r for r in readings[heading[1]:] if r["hfr"]), None)
-        if value and base and base["at"] != place[0] and abs(value - base["hfr"]) >= 1:
+        base = next((r for r in readings[heading[1]:] if r["hfr"] and r["hfr"] <= CEILING), None)
+        if value and value <= CEILING and base and base["at"] != place[0] and abs(value - base["hfr"]) >= 1:
             slopes.append(abs(place[0] - base["at"]) / abs(value - base["hfr"]))
         readings.append({"at": place[0], "hfr": value and round(value, 2)})
         if value and (least_seen[0] is None or value < least_seen[0]):
@@ -660,44 +668,48 @@ def motor_focus(motor, read, usual, say=progress):
     def stride(value, small):
         """Half the distance to focus that this reading says is left, once
         the slope is known and the stars are far out; otherwise `small`."""
-        if not value or value <= 1.75 * usual or not slopes:
+        if not value or value <= 1.75 * usual or value > CEILING or not slopes:
             return small
         slope = sorted(slopes)[len(slopes) // 2]
         return int(min(MOTOR_BIG, max(small, slope * (value - usual) / 2)))
 
-    # Out until clearly past focus: the stars grown well beyond the best seen
-    # on the way, or lost, after at least two steps.
-    least = value = step(0)
-    misses = 0
-    for count in range(4 * MOTOR_REACH):
-        value = step(stride(value, MOTOR_OUT), doing="going out")
-        if value and (least is None or value < least):
-            least = value
-        else:
-            misses += 1     # only steps that bring the stars no smaller count towards giving up
-        if misses >= MOTOR_REACH:
-            break
-        if count >= 1 and (value is None or (least and value > max(1.5 * least, 2.5 * usual))):
-            break
-        if count >= 1 and least and least > FAR * usual and value > 1.15 * least:
-            break           # far out and growing: already on the outer side, no need to go further
-        sizes = [r["hfr"] for r in readings]
-        if count == 3 and all(sizes) and max(sizes) - min(sizes) < 0.05 * min(sizes):
-            say("  HFR not changing: is the focuser gripping the knob?")
-    # In by steps that shrink as the stars do, trusting these readings only,
-    # until the stars have been sharp and grown again or been lost.
-    best = None
-    for _ in range(2 * MOTOR_REACH * MOTOR_OUT // MOTOR_IN):
-        value = step(-stride(value, MOTOR_IN if value or best else MOTOR_OUT), doing="coming in")
-        if value and (best is None or value < best[1]):
-            best = (place[0], value)
-        if best and best[1] < sharp and (value is None or value > 1.4 * best[1]):
-            break
-        if best and best[1] >= sharp and value and value > 1.4 * best[1] and best[0] > place[0]:
-            # A big step went past focus: back out beyond the slack, then
-            # in again from there by small steps.
-            value = step(best[0] - place[0] + MOTOR_SLACK, 1, doing="back out")
-            best = None
+    try:
+        # Out until clearly past focus: the stars grown well beyond the best seen
+        # on the way, or lost, after at least two steps.
+        least = value = step(0)
+        misses = 0
+        for count in range(4 * MOTOR_REACH):
+            value = step(stride(value, MOTOR_OUT), doing="going out")
+            if value and (least is None or value < least):
+                least = value
+            else:
+                misses += 1     # only steps that bring the stars no smaller count towards giving up
+            if misses >= MOTOR_REACH:
+                break
+            if count >= 1 and (value is None or (least and value > max(1.5 * least, 2.5 * usual))):
+                break
+            if count >= 1 and least and least > FAR * usual and value > 1.15 * least:
+                break           # far out and growing: already on the outer side, no need to go further
+            sizes = [r["hfr"] for r in readings]
+            if count == 3 and all(sizes) and max(sizes) - min(sizes) < 0.05 * min(sizes):
+                say("  HFR not changing: is the focuser gripping the knob?")
+        # In by steps that shrink as the stars do, trusting these readings only,
+        # until the stars have been sharp and grown again or been lost.
+        best = None
+        for _ in range(2 * MOTOR_REACH * MOTOR_OUT // MOTOR_IN):
+            value = step(-stride(value, MOTOR_IN if value or best else MOTOR_OUT), doing="coming in")
+            if value and (best is None or value < best[1]):
+                best = (place[0], value)
+            if best and best[1] < sharp and (value is None or value > 1.4 * best[1]):
+                break
+            if best and best[1] >= sharp and value and value > 1.4 * best[1] and best[0] > place[0]:
+                # A big step went past focus: back out beyond the slack, then
+                # in again from there by small steps.
+                value = step(best[0] - place[0] + MOTOR_SLACK, 1, doing="back out")
+                best = None
+    except OutOfReach:
+        say(f"  reached {MOTOR_TRAVEL} half-steps from the start")
+        best = None
     if not best or best[1] >= sharp:
         say("  no sharp stars found")
         step(-place[0], 1, doing="back to start")

@@ -469,10 +469,11 @@ class ShallowDrawtube(Drawtube):
         return None if off > 6000 else 2.0 + off / 300
 
 
-@pytest.mark.parametrize("best", [-4000, -2500, 2500, 4000])
+@pytest.mark.parametrize("best", [-2500, -1500, 1500, 2500])
 def test_far_out_of_focus_the_steps_grow_and_focus_is_still_found(best):
     """Fixed small steps gave up before reaching focus from this far out;
-    steps sized from the stars get there in a few dozen readings."""
+    steps sized from the stars get there in a few dozen readings. (Further
+    out, HFR is beyond what the measuring box can read: no guide at all.)"""
     tube = ShallowDrawtube(best, slack=150)
     result = focus.motor_focus(tube, tube.read, usual=2.0, say=lambda *a: None)
     assert result["found"]
@@ -493,3 +494,20 @@ def test_stars_that_do_not_change_as_it_turns_are_said_once():
     tube = Drawtube(best=0)
     focus.motor_focus(tube, lambda frames: 15.0, usual=2.0, say=said.append)
     assert sum("not changing" in line for line in said) == 1
+
+
+def test_a_run_never_goes_further_than_its_travel_from_the_start():
+    """18 October 2026: readings stuck at the measuring box's size (HFR ~22)
+    with one noisy dip sent a run five turns in. Readings that large set no
+    step size, and no run goes beyond MOTOR_TRAVEL either way."""
+    import random
+    rng = random.Random(1)
+    tube = Drawtube(best=50000)
+    result = focus.motor_focus(tube, lambda frames: rng.choice([22.0, 21.5, 19.3, 22.4]),
+                               usual=2.28, say=lambda *a: None)
+    assert not result["found"] and tube.at == 0
+    position, furthest = 0, 0
+    for move in tube.moves:
+        position += move
+        furthest = max(furthest, abs(position))
+    assert furthest <= focus.MOTOR_TRAVEL
