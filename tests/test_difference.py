@@ -106,3 +106,26 @@ def test_the_demo_does_not_pretend(monkeypatch):
     with pytest.raises(interface.Refusal) as refused:
         difference.run(type("Args", (), {"new": "M31", "reference": "M31"})())
     assert refused.value.code_name == "DEMO_UNSUPPORTED"
+
+
+def test_a_field_without_its_own_reference_is_told_to_make_one(field, monkeypatch, tmp_path):
+    # M31-P3 borrows M31's reference, which does not reach it: the answer is
+    # reference.py --make, not "0 stars in common".
+    import depth
+    import reference
+    xy, flux = field
+    blank = np.random.default_rng(8).normal(100, 4, SHAPE).astype(np.float32)
+    ref = night(xy, flux, fwhm=4.0, seed=7)
+    stacks = {"new": tmp_path / "new" / "final.fits", "ref": tmp_path / "ref" / "final.fits"}
+    monkeypatch.setattr(config, "DEMO", False)
+    monkeypatch.setattr(depth, "find_stack", lambda name: stacks["new"])
+    monkeypatch.setattr(reference, "for_field", lambda name: (stacks["ref"], "M31"))
+    monkeypatch.setattr(reference, "sessions_used", lambda owner: [])
+    monkeypatch.setattr(difference.fits, "getdata", lambda path: blank if path == stacks["new"] else ref)
+    monkeypatch.setattr(depth, "brightness", lambda image: image)
+    monkeypatch.setattr(depth, "plate", lambda image, name: None)
+    args = type("Args", (), {"new": "M31-P3", "reference": None, "near": "M31-P3", "plant": 0})()
+    with pytest.raises(interface.Refusal) as refused:
+        difference.run(args, say=lambda *_: None)
+    assert refused.value.code_name == "NO_SESSION"
+    assert "./reference.py M31-P3 --make" in refused.value.message and "in common" not in refused.value.message

@@ -431,6 +431,7 @@ def run(args, say=print):
     import reference
     new_path = depth.find_stack(args.new)
     name = args.near or depth.object_name(new_path)
+    owner = None
     if args.reference:
         ref_path = depth.find_stack(args.reference)
     else:
@@ -449,7 +450,15 @@ def run(args, say=print):
     new_wcs, ref_wcs = depth.plate(new, name), depth.plate(ref, name)
     kept = depth.record_path(new_path)
     zeropoint = json.loads(kept.read_text(encoding="utf-8"))["zeropoint"] if kept.exists() else None
-    record, significance = subtract(new, ref, new_wcs, ref_wcs, zeropoint, args.plant)
+    try:
+        record, significance = subtract(new, ref, new_wcs, ref_wcs, zeropoint, args.plant)
+    except interface.Refusal as refused:
+        # A borrowed reference that does not reach this field: the cure is the
+        # field's own reference, not a count of stars in common.
+        if refused.code_name != "NO_STARS" or owner in (None, name):
+            raise
+        raise interface.Refusal("NO_SESSION", f"{name} has no reference of its own, and {owner}'s does not "
+                                f"overlap it enough: ./reference.py {name} --make.") from None
     record.update(new=str(new_path), reference=str(ref_path), object=name,
                   band="unfiltered, calibrated approximately to Gaia G" if zeropoint else None)
     folder = new_path.parent
