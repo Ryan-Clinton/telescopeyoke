@@ -133,6 +133,53 @@ def keep(skyline, source, **more):
     return saved
 
 
+MOVED_DOUBT = 3.0     # degrees added to a skyline worked out from another spot, not measured
+
+
+def distance_at(az, distances):
+    """How far the things in the way are at bearing `az`, in metres, from
+    [(from, to, metres), ...] (bearings clockwise, wrapping through north);
+    None where no stretch covers it."""
+    for lo, hi, metres in distances:
+        lo, hi = lo % 360, hi % 360
+        if (lo <= az % 360 <= hi) if lo <= hi else (az % 360 >= lo or az % 360 <= hi):
+            return float(metres)
+    return None
+
+
+def moved(skyline, metres, bearing, distances, step=5, doubt=MOVED_DOUBT):
+    """The skyline from another spot, `metres` away at `bearing` from where
+    `skyline` was measured, worked out by geometry: each top is put at its
+    distance (`distances`, from the old spot), its height kept, and seen
+    again from the new place. What the old spot could not see (behind
+    something nearer) cannot be known, so each point carries `doubt` and
+    "moved": true until a survey from the new spot replaces it."""
+    missing = [az for az in range(0, 360, 10) if distance_at(az, distances) is None]
+    if missing:
+        raise interface.Refusal("INVALID_REQUEST", "No distance given for bearings "
+                                + ", ".join(f"{az}°" for az in missing) + ": cover the whole circle.")
+    east, north = metres * math.sin(math.radians(bearing)), metres * math.cos(math.radians(bearing))
+    seen = []
+    for az in np.arange(0.0, 360.0, 0.5):
+        alt = min(float(limit(skyline, np.array([az]))[0]), 80.0)   # straight up is a wall close by, not a roof
+        d = distance_at(az, distances)
+        x, y = d * math.sin(math.radians(az)) - east, d * math.cos(math.radians(az)) - north
+        far = math.hypot(x, y)
+        if far < 0.5:
+            continue        # the new spot is at the obstacle itself
+        top = d * math.tan(math.radians(alt))
+        seen.append((math.degrees(math.atan2(x, y)) % 360, math.degrees(math.atan2(top, far))))
+    bins = {}
+    for az, alt in seen:
+        b = int(round(az / step)) * step % 360
+        bins[b] = max(bins.get(b, 0.0), alt)
+    bearings = list(range(0, 360, step))
+    known = [b for b in bearings if b in bins]
+    tops = np.interp(bearings, known, [bins[b] for b in known], period=360)
+    return [{"az": float(b), "alt": round(float(a), 1), "extra": doubt, "moved": True}
+            for b, a in zip(bearings, tops)]
+
+
 def picture_of(skyline, low, margin=0.0):
     """The skyline as text, a line every 15 degrees."""
     lines = []
@@ -769,6 +816,13 @@ def main():
                          "and a dark frame with no stars is cloud")
     ap.add_argument("--fresh", action="store_true", help="with --trace: do not start from the skyline already measured")
     ap.add_argument("--show", action="store_true", help="print the skyline in use; nothing moves")
+    ap.add_argument("--move-from", metavar="SPOT",
+                    help="work this spot's skyline out from SPOT's measured one, until it is surveyed; nothing moves")
+    ap.add_argument("--offset", nargs=2, type=float, metavar=("METRES", "BEARING"),
+                    help="with --move-from: where this spot is from SPOT")
+    ap.add_argument("--distances", nargs="+", metavar="FROM-TO:METRES",
+                    help="with --move-from: how far the things in the way are from SPOT, by bearing, "
+                         "e.g. 270-330:4 330-60:12 60-200:15 200-270:20")
     ap.add_argument("--forget", action="store_true", help="throw the measured skyline away; nothing moves")
     ap.add_argument("--exposure", type=float, help="seconds (default 1; by day it is found from the sky)")
     ap.add_argument("--gain", type=int, help="default 2000, or 100 by day")
@@ -776,6 +830,7 @@ def main():
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
     name = "horizon.show" if args.show else "horizon.forget" if args.forget else \
+        "horizon.move" if args.move_from else \
         "horizon.dry_run" if args.dry_run else "horizon"
     return interface.main(name, lambda: run(args), args.json)
 
@@ -798,11 +853,43 @@ def show(low, margin, in_use=True):
             "saved": kept["saved"], "margin": margin, "in_use": in_use}
 
 
+def move_from(spot, offset, distances, low, margin):
+    """This spot's skyline from another spot's, by `moved`, kept for the
+    planner until a survey from here replaces it."""
+    if not config.SPOT or spot == config.SPOT:
+        raise interface.Refusal("INVALID_REQUEST", "Name where the telescope stands first (./ty spot NAME), "
+                                                   "and move from a different spot.")
+    if not offset or not distances:
+        raise interface.Refusal("INVALID_REQUEST", "--move-from needs --offset METRES BEARING and --distances.")
+    source = config.DATA / "cache" / f"horizon-{spot}.json"
+    try:
+        old = json.loads(source.read_text(encoding="utf-8"))["skyline"]
+    except (OSError, ValueError, KeyError):
+        raise interface.Refusal("INVALID_REQUEST", f"{spot} has no measured skyline to move from.")
+    stretches = []
+    for text in distances:
+        try:
+            span, metres = text.split(":")
+            lo, hi = span.split("-")
+            stretches.append((float(lo), float(hi), float(metres)))
+        except ValueError:
+            raise interface.Refusal("INVALID_REQUEST", f"A distance is FROM-TO:METRES, e.g. 270-330:4: not {text!r}.")
+    skyline = moved(old, offset[0], offset[1], stretches)
+    warning = (f"Worked out from {spot}'s skyline, {offset[0]:g} m away at {offset[1]:g}°, with distances "
+               f"guessed by eye; {MOVED_DOUBT:g}° of doubt added. Survey from here by daylight to replace it.")
+    keep(skyline, f"moved from {spot}", warnings=[warning], offset_m=offset[0], offset_bearing=offset[1],
+         distances=[{"from": a, "to": b, "metres": m} for a, b, m in stretches])
+    print(f"{config.SPOT}: skyline worked out from {spot}'s.\n\n{picture_of(skyline, low, margin)}\n\nCHECK: {warning}")
+    return {"spot": config.SPOT, "from": spot, "skyline": skyline, "usable": usable(skyline, low, margin)}
+
+
 def run(args):
     cfg = config.load() if config.FILE.exists() else config.example()
     site, low, margin = cfg["site"], cfg["horizon"]["min_altitude"], cfg["horizon"]["margin"]
     if args.show:
         return show(low, margin, cfg["horizon"]["use_survey"])
+    if args.move_from:
+        return move_from(args.move_from, args.offset, args.distances, low, margin)
     if args.forget:
         had = bool(measured())
         if RESULTS.exists():

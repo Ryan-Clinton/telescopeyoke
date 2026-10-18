@@ -102,3 +102,21 @@ def test_the_briefing_says_when_this_spot_has_no_skyline(monkeypatch):
     monkeypatch.setattr(agent, "night", no_skyline)
     text = agent.context(demo=True)
     assert "Spot: ralphie-side" in text and "NO SKYLINE MEASURED HERE" in text
+
+
+def test_a_new_spot_can_borrow_the_old_spots_skyline_moved_until_it_is_surveyed(garden):
+    agent.set_spot("louie-side")
+    agent.set_spot("ralphie-side")
+    config.SPOT = config._spot()
+    horizon = reload_paths()
+    try:
+        out = horizon.move_from("louie-side", (12, 90), ["0-180:15", "180-360:8"], 20, 2)
+        assert out["spot"] == "ralphie-side" and len(out["skyline"]) == 72
+        kept = horizon.measured()
+        assert kept["source"] == "moved from louie-side" and kept["warnings"]
+        assert config.load()["horizon"]["skyline"] == kept["skyline"]
+        with pytest.raises(interface.Refusal):
+            horizon.move_from("ralphie-side", (12, 90), ["0-360:8"], 20, 2)
+    finally:
+        config.SPOT = None
+        reload_paths()

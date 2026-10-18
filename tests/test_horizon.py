@@ -400,3 +400,20 @@ def test_the_profile_prints_a_bearing_blocked_as_far_up_as_it_looked():
     text = horizon.profile(found, 20)
     assert "open down to 66°" in text and "blocked up to 39°" in text
     assert "blocked as far up as it looked" in text and "not reachable" in text
+
+
+def test_a_wall_seen_from_further_away_is_lower_and_from_nearer_higher():
+    # A wall 10 m north of the old spot, 45° up from there: 10 m high.
+    wall = [{"az": float(az), "alt": 45.0 if az in (0, 350, 10) else 0.0} for az in range(0, 360, 10)]
+    everywhere = [(0, 359.9, 10)]
+    back = horizon.moved(wall, 5, 180, everywhere)        # 5 m further south: 15 m from the wall
+    near = horizon.moved(wall, 5, 0, everywhere)           # 5 m nearer: 5 m from it
+    at = lambda sky, az: next(p["alt"] for p in sky if p["az"] == az)
+    assert at(back, 0) == pytest.approx(math.degrees(math.atan2(10, 15)), abs=0.6)
+    assert at(near, 0) == pytest.approx(math.degrees(math.atan2(10, 5)), abs=0.6)
+    assert all(p["moved"] and p["extra"] == horizon.MOVED_DOUBT for p in back)
+
+
+def test_moving_a_skyline_needs_a_distance_all_round():
+    with pytest.raises(interface.Refusal):
+        horizon.moved([{"az": 0.0, "alt": 30.0}], 5, 90, [(0, 90, 10)])

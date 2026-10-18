@@ -32,6 +32,10 @@ when they say they have set up somewhere else in the garden. A spot whose
 skyline has not been measured is surveyed first, by daylight, before
 anything is planned there: `./horizon.py --trace --daylight` (about 35
 minutes; it needs the handset set up, step 1, and the sky still light).
+If it cannot be surveyed before dark, work its skyline out from a measured
+spot until it can: `./horizon.py --move-from louie-side --offset METRES
+BEARING --distances FROM-TO:METRES ...`, with where the new spot is from
+the old and roughly how far the things in the way are from the old one.
 Polar alignment does not need Polaris (`polaralign.py` measures from three
 plate solves anywhere), so a spot without a view of the pole is fine.
 
