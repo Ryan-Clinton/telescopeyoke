@@ -621,3 +621,21 @@ move of an arcminute. A dither is now one GoTo without solving, and the
 wait after a slew 10 s. The undithered run of the same field follows, for
 the noise-floor comparison.
 
+**The camera hung** during the patrol: on M31-P3 after 11 frames and on
+P7 after 4 the 16 s frames stopped arriving ("timed out waiting for the
+image") while the short plate-solving frames went on working; P1 got none.
+The camera never left USB (the kernel log has no disconnect); the driver,
+restarted by `camera.py` once a frame times out, came back by P4. Not
+understood: the open "camera hang".
+
+**Stripes**: broad horizontal bands, magenta and green, showed hard in P4's
+picture. `camera_test.py --banding` (new) scored them at the fan on and off
+and the black level at 0 and 50: 4.1 to 5.5 where 1 is none, no setting
+better than the driver's own (fan on, offset 0). Scored on the saved
+frames, every run tonight is the same, 4 to 6: the stripes were there all
+night, and only show in a sparse field's hard stretch. They survive
+stacking, so part is fixed in the sensor: dark frames should take that out
+(taken at dawn), and dithering spread the rest (the dithered and plain M31
+runs of tonight are the test). The fan and black level are now set from
+config.toml every time the camera opens.
+
