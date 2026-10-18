@@ -1,0 +1,53 @@
+# Observing site and equipment for tonight.py
+
+[site]
+name = "Ballymoney (back garden)"
+# Postcode centroid; accurate to a few hundred metres, which is plenty.
+latitude = 55.07285
+longitude = -6.499043
+elevation_m = 40
+timezone = "Europe/London"
+# Zenith sky brightness in mag/arcsec². Leave unset to look it up in the
+# light pollution atlas; set it if you measure the real value with a meter.
+# sqm = 20.55
+
+[horizon]
+# Lowest altitude (degrees) worth pointing at in any direction.
+min_altitude = 20
+# Directions blocked by houses, trees etc. Azimuth runs 0 = north, 90 = east,
+# 180 = south, 270 = west. Example: the house blocks the south up to 40°:
+#   blocked = [ { from = 150, to = 210, altitude = 40 } ]
+# Found on 6 October 2026, when a plate solve failed in each direction and
+# the user saw why. One look each: the widths (10° either side) are a guess
+# until ./horizon.py --trace or a panorama measures the skyline.
+blocked = [
+    { from = 274, to = 294, altitude = 47 },   # the house: no sky at 45° up, bearing 284°
+    { from = 65, to = 92, altitude = 53 },     # a tree: no sky at 48° up, bearing 75°; nor at 50° up, bearing 84° (M31, 13 October)
+    { from = 92, to = 100, altitude = 35 },    # the tree's southern side: no stars at 31° up, bearing 96° (M1, 14 October)
+]
+
+[scope]
+aperture_mm = 150
+focal_length_mm = 750
+
+[indi]
+# This laptop runs nothing else on INDI, so let the scripts restart the camera driver.
+manage_server = true
+
+# Telling the house when cloud or rain arrives: ./alert.py, docs/alerts.md
+[alerts]
+light = "Living room light"
+clouded_colour = "Purple"
+speaker = "Living Room speaker"
+speaker_address = "192.168.1.90"
+
+[mount]
+# Measured on 15 October 2026 while polar aligning: a foot moved about 2.3 cm
+# for each degree the tripod turned (6 cm gave 3.7 degrees, 7.5 cm gave 2.1),
+# and one and a half marks on the latitude scale moved the axis 2.8 degrees.
+tripod_cm_per_degree = 2.3
+latitude_degrees_per_mark = 1.9
+
+[telegram]
+token = "8926225145:AAGGEQTH5r1K0TWi-qQNEknCN7hA6ZDQD4w"
+chat = "1379597345"
