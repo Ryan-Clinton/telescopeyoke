@@ -335,3 +335,48 @@ def test_a_second_look_takes_more_frames_without_a_goto_and_searches_them(tmp_pa
     assert result == {"session": str(tmp_path)}
     assert [Path(c).name for c in ran[0][1:3]] == ["shoot.py", "M31"] and "goto" not in ran[0]
     assert ran[0][ran[0].index("--frames") + 1] == str(round(60 * patrol.CONFIRM_MINUTES / 16))
+
+
+def test_a_mosaic_moves_to_the_next_panel_while_the_last_is_still_searched(tmp_path, monkeypatch):
+    """18 October 2026: each panel kept the mount waiting about a minute and
+    a half for its final picture and its search. Now the next GoTo goes first,
+    and a panel with something unexplained is gone back to for a second look."""
+    import threading
+    import restack
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    monkeypatch.setattr(mount, "LOCK_FILE", tmp_path / "unlocked")
+    monkeypatch.setattr(patrol, "fields", lambda p: ["M31-P1", "M31-P2"])
+    monkeypatch.setattr(patrol, "priorities", lambda p, names, *a: [{"field": n, "minutes": 5} for n in names])
+    monkeypatch.setattr(patrol, "night_left", lambda p, site: 600)
+    monkeypatch.setattr(patrol, "fit", lambda rows, left: [
+        {"field": n, "priority": 1.0, "novae_reported": 1, "share_of_novae": 0.3, "expected_mag_50": 17.0,
+         "days_unwatched": 1, "minutes": 5} for n in ("M31-P1", "M31-P2")])
+    monkeypatch.setattr(patrol, "readiness", lambda p: [])
+    monkeypatch.setattr(patrol, "first_goto", lambda name: None)
+    monkeypatch.setattr(config, "load", config.example)
+    events, release = [], threading.Event()
+
+    def run_command(cmd, **kw):
+        events.append(" ".join(Path(c).name for c in cmd[1:4]) + (" --no-restack" if "--no-restack" in cmd else ""))
+        if events[-1] == "mount.py goto M31-P2":
+            release.set()              # P1's search may end only once the mount has moved on
+        return type("Done", (), {"returncode": 0})()
+    monkeypatch.setattr(patrol.subprocess, "run", run_command)
+    monkeypatch.setattr(patrol, "newest_session", lambda name, after: tmp_path / name)
+    monkeypatch.setattr(restack, "run", lambda session, **k: events.append(f"picture {Path(session).name}"))
+
+    def analyse(session, say, both_halves=True):
+        if session.name == "M31-P1":
+            release.wait(5)            # still searching P1 while P2 is imaged
+        events.append(f"searched {session.name}")
+        return {"unexplained": 1 if session.name == "M31-P1" else 0}
+    monkeypatch.setattr(patrol, "analyse", analyse)
+    monkeypatch.setattr(patrol, "unexplained", lambda result: result["unexplained"])
+    monkeypatch.setattr(patrol, "first_reference", lambda *a, **k: None)
+    monkeypatch.setattr(patrol, "second_look", lambda p, name, say: events.append(f"second look {name}") or {})
+    args = argparse.Namespace(programme="m31-panels", analyse=None, minutes=None, plan=False, dry_run=False)
+    answer = patrol.run(args, say=lambda *_: None)
+    assert events.index("mount.py goto M31-P2") < events.index("searched M31-P1")
+    assert "shoot.py M31-P1 --frames --no-restack" in events
+    assert events[-2:] == ["mount.py goto M31-P1", "second look M31-P1"]
+    assert [f["field"] for f in answer["fields"]] == ["M31-P1", "M31-P2"]

@@ -631,11 +631,32 @@ def run(args, say=print):
     if stopping:
         raise interface.Refusal("INVALID_REQUEST", "Not now: " + "; ".join(i["detail"] for i in stopping))
     answer["fields"] = []
+    # A mosaic's panels are finished (the final picture, then the search) in
+    # the background while the mount goes on to the next: on 18 October 2026
+    # each panel kept the mount waiting about a minute and a half for them.
+    # A second look at a panel with something unexplained then comes once the
+    # panels are done, with a GoTo back to it.
+    behind = len(chosen) > 1 and not args.dry_run
+    finishing, pool = [], None
+    if behind:
+        from concurrent.futures import ThreadPoolExecutor
+        pool = ThreadPoolExecutor(max_workers=1)
+
+    def finish_panel(name, session):
+        if behind:
+            import restack
+            restack.run(session, say=lambda *_: None)
+        result = analyse(session, say, both_halves=p.get("both_halves", True))
+        made = first_reference(name, session, say)
+        return {"field": name, "analysis": result, "reference_made": made}
+
     for name in chosen:
         say(f"== {name}")
         began = time.time()
         stopped = None
         for cmd in plans[name]:
+            if behind and Path(cmd[1]).name == "shoot.py":
+                cmd = [*cmd, "--no-restack"]       # the final picture is made in the background
             say("$ " + " ".join(Path(c).name if c.endswith(".py") else c for c in cmd[1:]))
             # Through sys.stdout as it stands: with --json that is stderr, and
             # the commands' own lines must not land in the middle of the answer.
@@ -656,12 +677,28 @@ def run(args, say=print):
         if session is None:
             answer["fields"].append({"field": name, "stopped": "no frames kept"})
             continue
-        result = analyse(session, say, both_halves=p.get("both_halves", True))
-        made = first_reference(name, session, say)
-        entry = {"field": name, "analysis": result, "reference_made": made}
-        if unexplained(result):
+        if behind:
+            say(f"  {name}: its picture and search go on in the background; on to the next panel")
+            finishing.append(pool.submit(finish_panel, name, session))
+            continue
+        entry = finish_panel(name, session)
+        if unexplained(entry["analysis"]):
             entry["second_look"] = second_look(p, name, say)
         answer["fields"].append(entry)
+    if behind:
+        pool.shutdown(wait=True)
+        for done in finishing:
+            try:
+                entry = done.result()
+            except Exception as problem:     # one panel's search failing is not the night's
+                say(f"  a panel's search failed: {problem}")
+                continue
+            if unexplained(entry["analysis"]):
+                goto = plans[entry["field"]][0]
+                say(f"== back to {entry['field']} for a second look")
+                if subprocess.run(goto, stdout=sys.stdout, env=dict(os.environ, TY_PATROL="1")).returncode == 0:
+                    entry["second_look"] = second_look(p, entry["field"], say)
+            answer["fields"].append(entry)
     if len(chosen) == 1 and answer["fields"] and "analysis" in answer["fields"][0]:
         answer["analysis"] = answer["fields"][0]["analysis"]
     return answer

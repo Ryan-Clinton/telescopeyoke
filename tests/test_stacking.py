@@ -637,3 +637,27 @@ def test_a_bias_at_zero_is_refused_not_kept(monkeypatch, tmp_path):
     args = type("A", (), {"kind": "bias", "gain": 1500, "frames": 3, "exposure": 2.0})()
     with pytest.raises(SystemExit, match="offset"):
         calibrate.run(args)
+
+
+def test_the_live_picture_never_holds_up_the_next_frame(session, monkeypatch):
+    """18 October 2026: finishing the live picture after the fifth frame took
+    half a minute, and the camera waited for it on every panel."""
+    import threading
+    import time
+    run, _ = session
+    started, release = threading.Event(), threading.Event()
+
+    def slow(stacked=None, count=None):
+        started.set()
+        release.wait(5)
+        return np.zeros((10, 10, 3), np.uint8)
+    monkeypatch.setattr(run, "picture", slow)
+    monkeypatch.setattr(shoot, "WEB", run.folder / "web")
+    run.published = 0.0
+    began = time.monotonic()
+    run.publish()
+    assert started.wait(2) and time.monotonic() - began < 1     # drawing, and publish has returned
+    run.publish()                                               # one at a time: skipped, not queued
+    release.set()
+    run.publish(force=True)                                     # the last waits and draws in full
+    assert (run.folder / "web" / "stack.jpg").exists()

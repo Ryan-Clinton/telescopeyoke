@@ -101,9 +101,14 @@ What a person does; everything else is automatic.
    --plan` says whether it is ready and what it would do, moving nothing.
    Then `./patrol.py m31-panels` points, images and searches each panel.
    A panel's first good night becomes its reference (`./reference.py
-   M31-P3` lists them); every night after is searched against it.
+   M31-P3` lists them); every night after is searched against it. Each
+   panel's final picture and search run in the background while the mount
+   goes on to the next panel, and the live picture on the page is drawn in
+   the background too, so the camera and the mount never wait for either.
 3. Anything nothing explains comes to your phone with its pictures and a
-   report packet, and the patrol takes a second look at once.
+   report packet, and the patrol takes a second look: at once for a single
+   field, and for a mosaic once its panels are done, going back to the
+   panel.
    `./ty candidates` lists the open ones; `./candidates.py M31-P3 --dismiss
    ID --reason LABEL` closes one that is not real.
 4. To claim one, tell the agent "claim ID": it makes a fresh `./report.py

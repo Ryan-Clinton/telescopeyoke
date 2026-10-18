@@ -35,6 +35,7 @@ import math
 import random
 import subprocess
 import sys
+import threading
 import time
 from collections import deque
 from datetime import datetime
@@ -138,11 +139,30 @@ class Session:
 
     def publish(self, force=False):
         """Update the picture on the web page, at most every few seconds: when
-        frames arrive quickly the page does not need every one."""
+        frames arrive quickly the page does not need every one. It is drawn
+        in the background from a copy of the stack, so the camera never waits
+        for it: finishing the picture takes half a minute, and on 18 October
+        2026 every panel lost that much after its fifth frame. While one is
+        being drawn the next is skipped; the last one (`force`) waits for it
+        and is drawn in full."""
+        drawing = getattr(self, "drawing", None)
+        if drawing is not None and drawing.is_alive():
+            if not force:
+                return
+            drawing.join()
         if not force and time.monotonic() - self.published < self.preview_every:
             return
+        stacked, count = self.stack.result(), len(self.accepted)
+        self.published = time.monotonic()
+        if force:
+            self.draw(stacked, count)
+        else:
+            self.drawing = threading.Thread(target=self.draw, args=(stacked, count), daemon=True)
+            self.drawing.start()
+
+    def draw(self, stacked, count):
         with self.timings.phase("update the web page"):
-            image = Image.fromarray(self.picture())
+            image = Image.fromarray(self.picture(stacked, count))
             WEB.mkdir(exist_ok=True)
             # The stack has its own picture; web/latest.jpg stays the newest
             # single frame, so the page shows both.
@@ -150,20 +170,19 @@ class Session:
                  .save(WEB / "stack.part.jpg", quality=88)
             host.replace_preview(WEB / "stack.part.jpg", WEB / "stack.jpg")
             image.save(WEB / f"{self.name}.jpg", quality=92)
-            seconds = self.exposure * len(self.accepted)
-            snap.label(f"live stack of {self.name}", f"{len(self.accepted)} accepted frames · "
+            seconds = self.exposure * count
+            snap.label(f"live stack of {self.name}", f"{count} accepted frames · "
                        f"{seconds:.0f} s integration", WEB, name="stack")
-        self.published = time.monotonic()
 
-    def picture(self):
+    def picture(self, stacked=None, count=None):
         """The stack so far as a picture to show. With enough frames in it,
         it is finished the way the final picture will be (the sky's glow and
         slope taken out, the colours balanced), so that what is watched looks
         like what will be kept; before that, or if that fails, plainly
         brightened. Finishing takes a few seconds, so the page is then
         updated less often: no more than a fifth of the time goes on it."""
-        stacked = self.stack.result()
-        if len(self.accepted) >= FINISH_FROM:
+        stacked = self.stack.result() if stacked is None else stacked
+        if (len(self.accepted) if count is None else count) >= FINISH_FROM:
             began = time.monotonic()
             try:
                 shown = process.process(stacked, background=process.sky_for(self.name))
