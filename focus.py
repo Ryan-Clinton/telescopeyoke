@@ -438,10 +438,17 @@ def say(words):
 
 
 def annotate(image, text, colour=(255, 220, 90)):
+    """Write `text` across the top of the picture, the letters made smaller
+    until the whole line fits: a reading cut off at the edge is no use."""
     draw = ImageDraw.Draw(image)
-    font = ImageFont.load_default(size=30)
+    text = " ".join(text.split())
+    size = 30
+    font = ImageFont.load_default(size=size)
+    while size > 12 and draw.textlength(text, font=font) > image.width - 20:
+        size -= 2
+        font = ImageFont.load_default(size=size)
     draw.rectangle([0, 0, image.width, 60], fill=(0, 0, 0))
-    draw.text((10, 12), text, fill=colour, font=font)
+    draw.text((10, 30 - size // 2 - 3), text, fill=colour, font=font)
     return image
 
 

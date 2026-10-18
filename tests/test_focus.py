@@ -538,3 +538,12 @@ def test_each_reading_is_numbered_and_says_the_step_it_took():
     lines = [line for line in said if "HFR" in line]
     assert lines[0].split()[0] == "#1" and lines[1].split()[0] == "#2"
     assert "step   +96" in lines[1]
+
+
+def test_a_long_reading_fits_across_the_page_picture():
+    from PIL import Image, ImageDraw, ImageFont
+    line = "20:31:35 motor focus: #12 coming in step -32 at -480 HFR 4.10 best 3.90 aim 2.28"
+    image = focus.annotate(Image.new("RGB", (900, 600)), line)
+    assert image.getpixel((5, 30)) == (0, 0, 0)            # the band is drawn
+    right = image.crop((880, 0, 900, 60))
+    assert right.getbbox() is None or all(p == (0, 0, 0) for p in right.getdata())
