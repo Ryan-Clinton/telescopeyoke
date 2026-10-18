@@ -839,9 +839,15 @@ def run_motor(args):
     if result["found"] and hfr:
         print(f"Focused: HFR {hfr:.2f} ({hfr * scale:.1f}\"), {result['moved']:+d} half-steps from the start.",
               flush=True)
-        with RUNS_FILE.open("a", encoding="utf-8") as log:
-            log.write(json.dumps({"saved": time.time(), "best_hfr": round(hfr, 2),
-                                  "best_arcsec": round(hfr * scale, 2), "motor": True}) + "\n")
+        # Only a run that reached good focus says what good focus is: one
+        # that ended soft (18 October 2026, HFR 5.03) would raise the aim.
+        if hfr <= 1.5 * usual:
+            with RUNS_FILE.open("a", encoding="utf-8") as log:
+                log.write(json.dumps({"saved": time.time(), "best_hfr": round(hfr, 2),
+                                      "best_arcsec": round(hfr * scale, 2), "motor": True}) + "\n")
+        else:
+            print(f"That is {hfr / usual:.1f} times the usual best, so it is not kept as what good focus is.",
+                  flush=True)
     elif result["found"]:
         print(f"The focuser is at the sharpest place seen, {result['moved']:+d} half-steps from the start, "
               "but the last reading there saw no stars: cloud?", flush=True)
