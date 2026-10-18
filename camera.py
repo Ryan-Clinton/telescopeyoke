@@ -194,7 +194,10 @@ class Camera:
         for more or less than that where the camera is known to keep its
         own time (shutter_share), and the frame's EXPTIME says `seconds`."""
         ask = seconds / self.shutter
-        wait = 12 + 6 * ask
+        # Long enough for a slow download, short enough that a hung camera is
+        # noticed: 12 + 6 x the exposure waited 164 s twice for a 16 s frame,
+        # and on 18 October 2026 a hang went unnoticed for six minutes.
+        wait = 30 + 1.5 * ask
         for attempt in range(2):
             try:
                 _, raw = self.client.expose(self.name, ask, timeout=wait, attempts=2)

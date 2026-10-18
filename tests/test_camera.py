@@ -193,6 +193,7 @@ def fake_indi(world):
 
         def expose(self, device, seconds, timeout, attempts=1):
             world.triggers += 1
+            world.timeouts = getattr(world, "timeouts", []) + [(seconds, timeout, attempts)]
             if world.silent:
                 raise IndiError("no frame")
             if world.native:
@@ -589,3 +590,15 @@ def test_stripes_new_in_each_frame_are_told_from_stripes_fixed_in_the_sensor(tmp
             afits.PrimaryHDU(mosaic.astype(np.float32)).writeto(folder / f"light-{i:04d}.fits")
         found = camera_test.stripes_in(folder, say=lambda s: None)
         assert found["fixed"] is fixed
+
+
+def test_a_hung_camera_is_given_up_on_within_about_two_minutes(world, monkeypatch):
+    """18 October 2026: a 16 s frame was waited for 164 s, twice, and a hang
+    went unnoticed for six minutes."""
+    monkeypatch.setattr(camera, "BACKEND", "indi")
+    monkeypatch.setattr(camera, "MANAGE_SERVER", False)
+    monkeypatch.setattr(camera, "Indi", fake_indi(world))
+    with camera.Camera(gain=1500) as cam:
+        cam.frame(16)
+    seconds, timeout, attempts = world.timeouts[-1]
+    assert timeout * attempts <= 150 and timeout >= seconds + 20
