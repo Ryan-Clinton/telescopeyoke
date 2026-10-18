@@ -439,6 +439,8 @@ def main():
     ap.add_argument("--corrected", action="store_true",
                     help="with --trail: leave camera.py's correction on, to check it; nothing is remembered")
     ap.add_argument("--gains", type=int, nargs="+", default=list(GAINS))
+    ap.add_argument("--exposures", type=float, nargs="+",
+                    help="with --gain-sweep: each gain at each of these exposures, seconds")
     ap.add_argument("--exposure", type=float,
                     help="seconds (default 2 for gains, 1 for throughput, 10 for --trail)")
     ap.add_argument("--frames", type=int, default=4, help="frames per mode, for --throughput")
@@ -549,20 +551,31 @@ def run(args):
             print(f"\nQuickest: {best['mode']} at {best['cycle_s']} s a frame. A smaller or binned "
                   "frame only helps if its colour pattern survives: check the pattern means differ.")
         return {"results": results}
-    exposure = args.exposure or 2.0
-    results = []
-    print(f"{'gain':>5} {'sky':>6} {'grain':>6} {'burnt':>7} {'stars':>6} {'signal':>7} {'FWHM':>5}")
-    for gain in args.gains:
-        with Camera(gain=gain) as cam:
-            mosaic, _ = cam.frame(exposure)
-        q = measure(mosaic)
-        results.append((gain, q))
-        fwhm = "" if q["fwhm"] is None else f"{q['fwhm']:.1f}"
-        print(f"{gain:>5} {q['background']:>6.0f} {q['noise']:>6.1f} {q['burnt']:>7.3%} "
-              f"{q['stars']:>6} {q['signal']:>7.0f} {fwhm:>5}", flush=True)
+    exposures = args.exposures or [args.exposure or 2.0]
+    results, rows = [], []
+    print(f"{'gain':>5} {'exp':>5} {'sky':>6} {'grain':>6} {'burnt':>7} {'stars':>6} {'signal':>7} {'FWHM':>5} "
+          f"{'round':>5} {'stripes':>7}")
+    for exposure in exposures:
+        for gain in args.gains:
+            with Camera(gain=gain) as cam:
+                mosaic, _ = cam.frame(exposure)
+            q = measure(mosaic)
+            # Row read noise against the sky's own grain (1 is none to speak of):
+            # more sky signal a frame, from a longer frame or a gentler gain, beats it down.
+            q["stripes"] = banding(mosaic)
+            if exposure == exposures[0]:
+                results.append((gain, q))
+            rows.append(dict(q, gain=gain, exposure_s=exposure))
+            fwhm = "" if q["fwhm"] is None else f"{q['fwhm']:.1f}"
+            print(f"{gain:>5} {exposure:>5g} {q['background']:>6.0f} {q['noise']:>6.1f} {q['burnt']:>7.3%} "
+                  f"{q['stars']:>6} {q['signal']:>7.0f} {fwhm:>5} {q.get('roundness') or 0:>5.2f} "
+                  f"{q['stripes']:>7.1f}", flush=True)
     best = recommend(results)
     print(f"\nSuggested gain: {best}" if best else "\nNo stars found at any gain.")
-    return {"suggested_gain": best, "results": [dict(q, gain=gain) for gain, q in results]}
+    calm = min(rows, key=lambda r: r["stripes"])
+    print(f"Weakest stripes: gain {calm['gain']}, {calm['exposure_s']:g} s ({calm['stripes']:g}).")
+    return {"suggested_gain": best, "results": rows, "weakest_stripes": {k: calm[k] for k in ("gain", "exposure_s",
+                                                                                             "stripes")}}
 
 
 if __name__ == "__main__":
