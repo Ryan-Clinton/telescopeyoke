@@ -529,3 +529,12 @@ def test_near_focus_a_jumpy_reading_never_makes_a_big_step():
     tube = Drawtube(best=0)
     focus.motor_focus(tube, lambda frames: next(jumps), usual=2.28, say=lambda *a: None)
     assert max(abs(m) for m in tube.moves[:20]) <= focus.MOTOR_SLACK + focus.MOTOR_OUT
+
+
+def test_each_reading_is_numbered_and_says_the_step_it_took():
+    said = []
+    tube = Drawtube(best=300)
+    focus.motor_focus(tube, tube.read, usual=2.0, say=said.append)
+    lines = [line for line in said if "HFR" in line]
+    assert lines[0].split()[0] == "#1" and lines[1].split()[0] == "#2"
+    assert "step   +96" in lines[1]

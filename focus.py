@@ -661,8 +661,8 @@ def motor_focus(motor, read, usual, say=progress):
         if value and (least_seen[0] is None or value < least_seen[0]):
             least_seen[0] = value
         best_text = "" if least_seen[0] is None else f"   best {least_seen[0]:.2f}"
-        say(f"  {doing:<15} {place[0]:+6d}  HFR {'none' if value is None else f'{value:.2f}'}"
-            f"{best_text}   aim {usual:.2f}")
+        say(f"  #{len(readings):<3} {doing:<15} step {n:+5d}  at {place[0]:+6d}  "
+            f"HFR {'none' if value is None else f'{value:.2f}'}{best_text}   aim {usual:.2f}")
         return value
 
     def stride(value, small):
