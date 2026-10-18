@@ -35,7 +35,6 @@ import math
 import random
 import subprocess
 import sys
-import threading
 import time
 from collections import deque
 from datetime import datetime
@@ -141,66 +140,92 @@ class Session:
     def publish(self, force=False):
         """Update the picture on the web page, at most every few seconds: when
         frames arrive quickly the page does not need every one. It is drawn
-        in the background from a copy of the stack, so the camera never waits
-        for it: finishing the picture takes half a minute, and on 18 October
-        2026 every panel lost that much after its fifth frame. While one is
-        being drawn the next is skipped; the last one (`force`) waits for it
-        and is drawn in full."""
+        by a separate process at low priority, from a copy of the stack, so
+        the camera never waits for it: finishing the picture takes half a
+        minute, and on 18 October 2026 every panel lost that much after its
+        fifth frame, and still lost a minute when it was drawn in a thread of
+        this process. While one is being drawn the next is skipped; the last
+        one (`force`) waits for it and is drawn here, in full."""
         drawing = getattr(self, "drawing", None)
-        if drawing is not None and drawing.is_alive():
-            if not force:
-                return
-            drawing.join()
+        if drawing is not None:
+            if not drawing.done():
+                if not force:
+                    return
+                drawing.result()
+            spent = drawing.result() if drawing.exception() is None else None
+            if spent:
+                self.preview_every = max(self.preview_every, 5 * spent)
+            self.drawing = None
         if not force and time.monotonic() - self.published < self.preview_every:
             return
         stacked, count = self.stack.result(), len(self.accepted)
         self.published = time.monotonic()
         if force:
-            self.draw(stacked, count)
+            with self.timings.phase("update the web page"):
+                draw_stack(stacked, count, self.name, self.exposure, WEB)
         else:
-            self.drawing = threading.Thread(target=self.draw, args=(stacked, count), daemon=True)
-            self.drawing.start()
-
-    def draw(self, stacked, count):
-        with self.timings.phase("update the web page"):
-            image = Image.fromarray(self.picture(stacked, count))
-            WEB.mkdir(exist_ok=True)
-            # The stack has its own picture; web/latest.jpg stays the newest
-            # single frame, so the page shows both.
-            image.resize((1600, round(1600 * image.height / image.width)), Image.LANCZOS) \
-                 .save(WEB / "stack.part.jpg", quality=88)
-            host.replace_preview(WEB / "stack.part.jpg", WEB / "stack.jpg")
-            image.save(WEB / f"{self.name}.jpg", quality=92)
-            seconds = self.exposure * count
-            snap.label(f"live stack of {self.name}", f"{count} accepted frames · "
-                       f"{seconds:.0f} s integration", WEB, name="stack")
+            if getattr(self, "drawer", None) is None:
+                from concurrent.futures import ProcessPoolExecutor
+                self.drawer = ProcessPoolExecutor(max_workers=1, initializer=lowly)
+            self.drawing = self.drawer.submit(draw_stack, stacked, count, self.name, self.exposure, WEB)
 
     def picture(self, stacked=None, count=None):
-        """The stack so far as a picture to show. With enough frames in it,
-        it is finished the way the final picture will be (the sky's glow and
-        slope taken out, the colours balanced), so that what is watched looks
-        like what will be kept; before that, or if that fails, plainly
-        brightened. Finishing takes a few seconds, so the page is then
-        updated less often: no more than a fifth of the time goes on it."""
+        """The stack so far as a picture to show (finished_picture)."""
         stacked = self.stack.result() if stacked is None else stacked
-        if (len(self.accepted) if count is None else count) >= FINISH_FROM:
-            began = time.monotonic()
-            try:
-                shown = process.process(stacked, background=process.sky_for(self.name))
-                self.preview_every = max(self.preview_every, 5 * (time.monotonic() - began))
-                return shown
-            except Exception as problem:     # never lose a run to its preview
-                print(f"  (live picture left plain: {problem})", flush=True)
-        return stretch(stacked)
+        return finished_picture(stacked, len(self.accepted) if count is None else count, self.name)[0]
 
     def finish(self):
         records.write((self.folder / "frames.json"), self.log)
         if not self.accepted:
             return
         self.publish(force=True)
+        if getattr(self, "drawer", None) is not None:
+            self.drawer.shutdown(wait=True)
+            self.drawer = None
         stacking.write_stack(self.folder / "live.fits", self.stack.result(),
                              {"OBJECT": self.name, "NFRAMES": len(self.accepted),
                               "EXPTIME": self.exposure * len(self.accepted), "GAIN": self.gain})
+
+
+def lowly():
+    """A drawing process runs below the camera's: it must never hold up a frame."""
+    import os
+    try:
+        os.nice(10)
+    except (AttributeError, OSError):
+        pass
+
+
+def finished_picture(stacked, count, name):
+    """(8-bit picture, seconds spent finishing). With enough frames in it,
+    the stack is finished the way the final picture will be (the sky's glow
+    and slope taken out, the colours balanced), so that what is watched
+    looks like what will be kept; before that, or if that fails, plainly
+    brightened."""
+    if count >= FINISH_FROM:
+        began = time.monotonic()
+        try:
+            return process.process(stacked, background=process.sky_for(name)), time.monotonic() - began
+        except Exception as problem:     # never lose a run to its preview
+            print(f"  (live picture left plain: {problem})", flush=True)
+    return stretch(stacked), 0.0
+
+
+def draw_stack(stacked, count, name, exposure, web):
+    """The live stack as the page's picture. Returns the seconds finishing
+    took, so the page is updated less often when it is slow."""
+    shown, spent = finished_picture(stacked, count, name)
+    image = Image.fromarray(shown)
+    web.mkdir(exist_ok=True)
+    # The stack has its own picture; web/latest.jpg stays the newest
+    # single frame, so the page shows both.
+    image.resize((1600, round(1600 * image.height / image.width)), Image.LANCZOS) \
+         .save(web / "stack.part.jpg", quality=88)
+    host.replace_preview(web / "stack.part.jpg", web / "stack.jpg")
+    image.save(web / f"{name}.jpg", quality=92)
+    snap.label(f"live stack of {name}", f"{count} accepted frames · {exposure * count:.0f} s integration",
+               web, name="stack")
+    return spent
 
 
 def tell(order):

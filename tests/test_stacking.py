@@ -641,27 +641,39 @@ def test_a_bias_at_zero_is_refused_not_kept(monkeypatch, tmp_path):
 
 def test_the_live_picture_never_holds_up_the_next_frame(session, monkeypatch):
     """18 October 2026: finishing the live picture after the fifth frame took
-    half a minute, and the camera waited for it on every panel."""
+    half a minute, and the camera waited for it on every panel; drawn in a
+    thread of the same process it still cost a frame a minute. It is drawn
+    by another process: publish hands it over and returns at once."""
     import threading
     import time
+    from concurrent.futures import ThreadPoolExecutor
     run, _ = session
     started, release = threading.Event(), threading.Event()
 
-    def slow(stacked=None, count=None):
+    def slow(stacked, count, name, exposure, web):
         started.set()
         release.wait(5)
-        return np.zeros((10, 10, 3), np.uint8)
-    monkeypatch.setattr(run, "picture", slow)
+        return 1.0
+    monkeypatch.setattr(shoot, "draw_stack", slow)
     monkeypatch.setattr(shoot, "WEB", run.folder / "web")
-    run.published = 0.0
+    run.drawer, run.drawing, run.published = ThreadPoolExecutor(max_workers=1), None, 0.0
     began = time.monotonic()
     run.publish()
-    assert started.wait(2) and time.monotonic() - began < 1     # drawing, and publish has returned
+    assert started.wait(2) and time.monotonic() - began < 1     # handed over, and publish has returned
     run.publish()                                               # one at a time: skipped, not queued
     release.set()
-    run.publish(force=True)                                     # the last waits and draws in full
-    assert (run.folder / "web" / "stack.jpg").exists()
+    drawn = []
+    monkeypatch.setattr(shoot, "draw_stack", lambda *a: drawn.append(a) or 0.0)
+    run.publish(force=True)                                     # the last waits, then draws in full
+    assert len(drawn) == 1 and run.preview_every >= 5.0
 
+
+def test_the_live_picture_is_drawn_by_another_process():
+    from concurrent.futures import ProcessPoolExecutor
+    import numpy as np
+    with ProcessPoolExecutor(max_workers=1, initializer=shoot.lowly) as pool:
+        picture, spent = pool.submit(shoot.finished_picture, np.ones((40, 60, 3), np.float32), 1, "M31").result()
+    assert picture.shape[:2] == (40, 60) and spent == 0.0
 
 def test_a_rejected_frame_is_retaken_but_not_into_cloud():
     """18 October 2026: the person would rather a rejected frame were taken
