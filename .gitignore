@@ -2,6 +2,8 @@
 config.toml
 config.toml.bak
 *.bak
+# Each spot in the garden: what is in the way from there
+spots/
 
 # Generated at run time
 __pycache__/

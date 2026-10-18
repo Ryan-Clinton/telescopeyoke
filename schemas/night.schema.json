@@ -9,6 +9,8 @@
     "verdict",
     "darkness",
     "moon",
+    "spot",
+    "skyline_measured",
     "discovery",
     "best_now"
   ],
@@ -36,6 +38,8 @@
     "moon": {
       "type": "object"
     },
+    "spot": {"type": ["string", "null"], "description": "Where in the garden the telescope stands (ty spot); null when none is named, and in the demo."},
+    "skyline_measured": {"type": "boolean", "description": "Whether a measured skyline is in use for this spot; false means the windows go by the lowest altitude alone."},
     "discovery": {
       "description": "The discovery programmes (programmes/*.toml), the night's first purpose: each field's window in darkness above the horizon limits and measured skyline, best first; window null when it is not up in darkness.",
       "type": "array",

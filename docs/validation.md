@@ -692,3 +692,15 @@ Not the motor focuser: its lead (the CH341 serial adapter) left USB at
 taken after it. To rule out coupling on other nights, the same capped
 stripes test three ways, 20 frames each, same port and lead: focuser
 unplugged, plugged in and idle, and moving.
+
+**A second spot, 18 October.** Louie side, where every night so far was
+set up, was chosen for its view of Polaris, and is beside the oil boiler's
+flue; on 17 October, the coldest night, the heating ran much of the night.
+Warm damp exhaust near the camera fits the fault (long frames failing,
+stripes, the timing shifted) as well as the cold does, and the camera
+worked indoors next morning. The next nights are set up at Ralphie side,
+across the garden, away from the flue and without Polaris, which polar
+alignment by plate solving does not need. Each spot keeps its own skyline
+and blocked directions (`./ty spot`); Ralphie side's skyline is surveyed
+by daylight before its first night. If the camera behaves there on a night
+as cold, the flue is the likelier cause.

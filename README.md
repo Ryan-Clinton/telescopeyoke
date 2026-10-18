@@ -77,7 +77,9 @@ stars.*
 phone panorama and it finds the line between sky and everything else, lets
 you redraw the line where it is wrong, and ties the picture to the compass
 from two known bearings. The planner then stops recommending targets you
-cannot see from that spot. The telescope can check and refine that skyline
+cannot see from that spot. Set up in more than one place? Each spot in the
+garden keeps its own skyline and blocked directions: `./ty spot NAME` says
+where the telescope stands tonight. The telescope can check and refine that skyline
 itself, looking only where the line bends. *Proven by day: on 17 October 2026 the
 telescope's own survey measured the author's garden in 34 minutes, one look
 checked by eye. The skyline has been found in real panoramas too; tying one

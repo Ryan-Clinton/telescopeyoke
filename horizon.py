@@ -53,8 +53,9 @@ import interface
 import records
 
 ROOT = Path(__file__).parent
-RESULTS = config.DATA / "cache" / "horizon.json"
-LOOKS = config.DATA / "horizon" / "looks"     # each look's picture, marked up
+# Each spot in the garden has its own skyline and pictures (config.SPOT).
+RESULTS = config.DATA / "cache" / (f"horizon-{config.SPOT}.json" if config.SPOT else "horizon.json")
+LOOKS = config.DATA / "horizon" / (config.SPOT or "") / "looks"     # each look's picture, marked up
 ALTITUDES = (25, 40, 55, 70)
 ENOUGH_STARS = 8
 STEADY = 5      # seconds for the tube to stop shaking before a frame of stars

@@ -27,6 +27,14 @@ Dry-run every move planned for the night (`--dry-run`), and run
 `./doctor.py --offline`. Anything that can fail should fail now, not with
 them standing beside the mount.
 
+Where is it standing? `./ty spot` says, and `./ty spot NAME` changes it
+when they say they have set up somewhere else in the garden. A spot whose
+skyline has not been measured is surveyed first, by daylight, before
+anything is planned there: `./horizon.py --trace --daylight` (about 35
+minutes; it needs the handset set up, step 1, and the sky still light).
+Polar alignment does not need Polaris (`polaralign.py` measures from three
+plate solves anywhere), so a spot without a view of the pole is fine.
+
 ## 1. Set the handset
 
 They have put the mount in home by eye (counterweight bar down, tube at the

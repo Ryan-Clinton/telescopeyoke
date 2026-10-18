@@ -56,7 +56,7 @@ import horizon
 import interface
 import records
 
-FOLDER = config.DATA / "horizon"
+FOLDER = config.DATA / "horizon" / (config.SPOT or "")     # each spot in the garden its own
 STATE = FOLDER / "panorama.json"
 MARKED = FOLDER / "skyline.jpg"     # the picture in use with its skyline drawn on
 KEPT_WIDTH = 2400       # pixels across the copy that is kept and shown

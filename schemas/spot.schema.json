@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/spot.schema.json",
+  "title": "Spot",
+  "description": "data of: ty spot --json (where in the garden the telescope stands, and every spot known) or ty spot NAME --json (it stands at NAME from now on). Each spot has its own settings, spots/NAME.toml, and its own measured skyline.",
+  "type": "object",
+  "required": ["spot", "skyline_measured"],
+  "properties": {
+    "spot": {"type": ["string", "null"], "description": "The spot named in config.toml's [site] spot; null when none is."},
+    "skyline_measured": {"type": "boolean", "description": "Whether that spot's skyline has been measured (./horizon.py --trace --daylight, or a panorama)."},
+    "settings": {"type": "string", "description": "ty spot NAME only: the spot's settings file."},
+    "spots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "current", "skyline_measured", "skyline_saved"],
+        "properties": {
+          "name": {"type": "string"},
+          "current": {"type": "boolean"},
+          "skyline_measured": {"type": "boolean"},
+          "skyline_saved": {"type": ["number", "null"], "description": "Unix time the skyline was kept."}
+        }
+      }
+    }
+  }
+}

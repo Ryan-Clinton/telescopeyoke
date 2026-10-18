@@ -92,6 +92,38 @@ def _read(path):
         return tomllib.load(f)
 
 
+# A spot is one place in the garden the telescope is set up: the site is the
+# same, but what is in the way is not. Each has its own settings file,
+# spots/NAME.toml (its [horizon]: blocked directions, lowest altitude), laid
+# over config.toml's, and its own measured skyline (horizon.py, panorama.py).
+# [site] spot in config.toml says where the telescope stands tonight; with
+# none named it is as it always was: config.toml's [horizon] and
+# cache/horizon.json.
+SPOTS = ROOT / "spots"
+NAME = r"[a-z0-9][a-z0-9_-]{0,30}"
+
+
+def _spot():
+    if DEMO or not FILE.exists():
+        return None
+    name = _read(FILE).get("site", {}).get("spot") or None
+    if name and not re.fullmatch(NAME, name):
+        sys.exit(f"[site] spot in {FILE.name} is lower-case letters, digits, - and _ (it names a file): not {name!r}")
+    return name
+
+
+SPOT = _spot()
+
+
+def spot_file(name):
+    return SPOTS / f"{name}.toml"
+
+
+def spots():
+    """The spots that have settings, in order."""
+    return sorted(p.stem for p in SPOTS.glob("*.toml"))
+
+
 def load():
     """Everything, including the observing site. Needs config.toml; the demo
     uses the example site instead."""
@@ -101,6 +133,9 @@ def load():
         raise SystemExit("No config.toml. Copy config.example.toml to config.toml "
                          "and put your own location in it.")
     cfg = _merged(_read(FILE))
+    if SPOT and spot_file(SPOT).exists():
+        for section, values in _read(spot_file(SPOT)).items():
+            cfg.setdefault(section, {}).update(values)
     if cfg["horizon"]["use_survey"]:
         # The skyline measured from where this telescope stands (horizon.py,
         # panorama.py). The example site has none: it is not that garden.

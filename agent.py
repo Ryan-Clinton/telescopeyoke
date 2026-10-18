@@ -308,6 +308,57 @@ def _target(t):
             "direction": t["direction"], "window": [t["start"], t["end"]], "tags": t["tags"]}
 
 
+def spots():
+    """Where the telescope stands tonight, and every spot known, each with
+    whether its skyline has been measured."""
+    import horizon
+    cache = config.DATA / "cache"
+    names = set(config.spots()) | {p.stem[len("horizon-"):] for p in cache.glob("horizon-*.json")}
+    rows = []
+    for name in sorted(names):
+        kept = cache / f"horizon-{name}.json"
+        saved = json.loads(kept.read_text(encoding="utf-8")).get("saved") if kept.exists() else None
+        rows.append({"name": name, "current": name == config.SPOT, "skyline_measured": saved is not None,
+                     "skyline_saved": saved})
+    return {"spot": config.SPOT, "skyline_measured": bool(horizon.measured()), "spots": rows}
+
+
+def set_spot(name):
+    """Say where the telescope stands from now on. A new spot gets its own
+    settings, spots/NAME.toml, with nothing yet known to be in the way. The
+    first spot named, when none was, takes over what was measured so far
+    (config.toml's blocked directions, the skyline and its pictures): it is
+    where the telescope has been standing."""
+    import re
+    import shutil
+    if not re.fullmatch(config.NAME, name or ""):
+        raise interface.Refusal("INVALID_REQUEST", f"A spot's name is lower-case letters, digits, - and _: not {name!r}.")
+    made = config.spot_file(name)
+    if not made.exists():
+        config.SPOTS.mkdir(exist_ok=True)
+        blocked = config.load()["horizon"].get("blocked", []) if config.SPOT is None else []
+        rows = "".join(f"    {{ from = {b['from']}, to = {b['to']}, altitude = {b['altitude']} }},\n" for b in blocked)
+        made.write_text(
+            f"# Where the telescope stands: {name} (./ty spot {name}). Laid over config.toml.\n"
+            "[horizon]\n# Directions blocked from here, as in config.toml; the measured skyline\n"
+            f"# (./horizon.py --trace --daylight) is kept apart, per spot.\nblocked = [\n{rows}]\n",
+            encoding="utf-8")
+    if config.SPOT is None:
+        old, new = config.DATA / "cache" / "horizon.json", config.DATA / "cache" / f"horizon-{name}.json"
+        if old.exists() and not new.exists():
+            old.replace(new)
+        pictures, home = config.DATA / "horizon", config.DATA / "horizon" / name
+        if pictures.exists() and not home.exists():
+            home.mkdir()
+            for item in list(pictures.iterdir()):
+                if item != home and item.name not in config.spots():
+                    shutil.move(str(item), home / item.name)
+    config.save({("site", "spot"): name})
+    config.SPOT = name
+    return {"spot": name, "settings": f"spots/{made.name}",
+            "skyline_measured": (config.DATA / "cache" / f"horizon-{name}.json").exists()}
+
+
 PROGRAMMES = Path(__file__).resolve().parent / "programmes"
 
 
@@ -366,6 +417,8 @@ def night(demo=False):
                      "hours": rep["dark_hours"]},
         "moon": rep["moon"],
         "sky_brightness_mag_arcsec2": (rep["light_pollution"] or {}).get("sqm"),
+        "spot": None if demo else config.SPOT,
+        "skyline_measured": bool(_site(demo)["horizon"].get("skyline")),
         "discovery": discovery_tonight(demo),
         "best_now": [_target(t) for t in rep["targets"] if t["now"]][:3],
     }
@@ -583,6 +636,10 @@ def context(demo=False):
         lines += ["Night:", f"  {tonight['verdict'] or 'no forecast'}.{window}",
                   f"  Dark {tonight['darkness']['start']:%H:%M}-{tonight['darkness']['end']:%H:%M}; "
                   f"Moon {tonight['moon']['illumination']}% lit.", ""]
+        where = f"Spot: {tonight['spot'] or 'not named'}"
+        lines += [where + ("; skyline measured." if tonight["skyline_measured"] else
+                           "; NO SKYLINE MEASURED HERE: windows go by the lowest altitude alone. "
+                           "Measure it first: ./horizon.py --trace --daylight."), ""]
         # The night is for discovery first (docs/discovery.md): plan from these.
         lines += ["Discovery tonight (programmes/, best first):"]
         for p in tonight["discovery"]:
