@@ -1,0 +1,16 @@
+# 20:27 ./ty focus --motor on Deneb, near focus, with small steps near focus. Whole log.
+Focus now: soft: HFR 4.18, against 2.28 usually (1.8 times): worth focusing.
+Motor focusing: HFR 2.3 is good focus here.
+  #1   start           step    +0  at     +0  HFR 7.17   best 7.17   aim 2.28
+  #2   going out       step   +96  at    +96  HFR 4.51   best 4.51   aim 2.28
+  #3   going out       step   +96  at   +192  HFR 3.55   best 3.55   aim 2.28
+  #4   going out       step   +96  at   +288  HFR 7.99   best 3.55   aim 2.28
+  #5   coming in       step   -32  at   +256  HFR 4.32   best 3.55   aim 2.28
+  #6   coming in       step   -32  at   +224  HFR 6.37   best 3.55   aim 2.28
+  #7   coming in       step   -32  at   +192  HFR 5.77   best 3.55   aim 2.28
+  #8   coming in       step   -32  at   +160  HFR 3.94   best 3.55   aim 2.28
+  #9   coming in       step   -32  at   +128  HFR 7.23   best 3.55   aim 2.28
+  #10  out past slack  step  +332  at   +460  HFR 4.53   best 3.55   aim 2.28
+  #11  in to sharpest  step  -300  at   +160  HFR 5.43   best 3.55   aim 2.28
+Focused: HFR 5.43 (7.2"), +160 half-steps from the start.
+That is 2.4 times the usual best, so it is not kept as what good focus is.

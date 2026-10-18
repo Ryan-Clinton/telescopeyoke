@@ -760,14 +760,17 @@ def seen_good(hfr, scale):
 
 
 def show(lum, line):
-    """The frame a focus reading was measured on, with that reading written
-    across it, as web/latest.jpg: the status page's NOW picture."""
+    """The frame a focus reading was measured on as web/latest.jpg, the
+    status page's NOW picture, and the reading as the caption above it: a
+    line of text written across a 900-pixel picture is cut off or too small
+    to read on the page."""
     from camera import stretch
     try:
         image = Image.fromarray(stretch(lum)).convert("RGB")
         image = image.resize((900, round(900 * image.height / image.width)))
         PREVIEW.parent.mkdir(parents=True, exist_ok=True)
-        annotate(image, f"{time.strftime('%H:%M:%S')} {line.strip()}").save(PREVIEW, quality=85)
+        image.save(PREVIEW, quality=85)
+        snap.label("focus", f"{time.strftime('%H:%M:%S')} {' '.join(line.split())}", PREVIEW.parent)
     except OSError:     # a picture not shown is not worth a focus run failing over
         pass
 

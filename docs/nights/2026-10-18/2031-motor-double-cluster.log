@@ -1,0 +1,45 @@
+Focus now: soft: HFR 2.94, against 2.28 usually (1.3 times): worth focusing.
+Motor focusing: HFR 2.3 is good focus here.
+  #1   start           step    +0  at     +0  HFR 2.95   best 2.95   aim 2.28
+  #2   going out       step   +96  at    +96  HFR 3.05   best 2.95   aim 2.28
+  #3   going out       step   +96  at   +192  HFR 3.11   best 2.95   aim 2.28
+  #4   going out       step   +96  at   +288  HFR 3.15   best 2.95   aim 2.28
+  #5   going out       step   +96  at   +384  HFR 3.21   best 2.95   aim 2.28
+  #6   going out       step   +96  at   +480  HFR 3.17   best 2.95   aim 2.28
+  #7   going out       step   +96  at   +576  HFR 3.33   best 2.95   aim 2.28
+  #8   going out       step   +96  at   +672  HFR 3.25   best 2.95   aim 2.28
+  #9   going out       step   +96  at   +768  HFR 3.46   best 2.95   aim 2.28
+  #10  going out       step   +96  at   +864  HFR 3.29   best 2.95   aim 2.28
+  #11  going out       step   +96  at   +960  HFR 3.55   best 2.95   aim 2.28
+  #12  going out       step   +96  at  +1056  HFR 3.11   best 2.95   aim 2.28
+  #13  going out       step   +96  at  +1152  HFR 3.26   best 2.95   aim 2.28
+  #14  going out       step   +96  at  +1248  HFR 2.87   best 2.87   aim 2.28
+  #15  going out       step   +96  at  +1344  HFR 3.36   best 2.87   aim 2.28
+  #16  going out       step   +96  at  +1440  HFR 3.43   best 2.87   aim 2.28
+  #17  coming in       step   -32  at  +1408  HFR 3.27   best 2.87   aim 2.28
+  #18  coming in       step   -32  at  +1376  HFR 3.63   best 2.87   aim 2.28
+  #19  coming in       step   -32  at  +1344  HFR 4.04   best 2.87   aim 2.28
+  #20  coming in       step   -32  at  +1312  HFR 3.38   best 2.87   aim 2.28
+  #21  coming in       step   -32  at  +1280  HFR 3.41   best 2.87   aim 2.28
+  #22  coming in       step   -32  at  +1248  HFR 3.48   best 2.87   aim 2.28
+  #23  coming in       step   -32  at  +1216  HFR 3.52   best 2.87   aim 2.28
+  #24  coming in       step   -32  at  +1184  HFR 3.57   best 2.87   aim 2.28
+  #25  coming in       step   -32  at  +1152  HFR 3.45   best 2.87   aim 2.28
+  #26  coming in       step   -32  at  +1120  HFR 3.52   best 2.87   aim 2.28
+  #27  coming in       step   -32  at  +1088  HFR 3.24   best 2.87   aim 2.28
+  #28  coming in       step   -32  at  +1056  HFR 3.44   best 2.87   aim 2.28
+  #29  coming in       step   -32  at  +1024  HFR 3.41   best 2.87   aim 2.28
+  #30  coming in       step   -32  at   +992  HFR 3.58   best 2.87   aim 2.28
+  #31  coming in       step   -32  at   +960  HFR 3.23   best 2.87   aim 2.28
+  #32  coming in       step   -32  at   +928  HFR 3.70   best 2.87   aim 2.28
+  #33  coming in       step   -32  at   +896  HFR 3.76   best 2.87   aim 2.28
+  #34  coming in       step   -32  at   +864  HFR 3.96   best 2.87   aim 2.28
+  #35  coming in       step   -32  at   +832  HFR 3.69   best 2.87   aim 2.28
+  #36  coming in       step   -32  at   +800  HFR 3.37   best 2.87   aim 2.28
+  #37  coming in       step   -32  at   +768  HFR 3.56   best 2.87   aim 2.28
+  #38  coming in       step   -32  at   +736  HFR 3.64   best 2.87   aim 2.28
+  #39  coming in       step   -32  at   +704  HFR 3.95   best 2.87   aim 2.28
+  #40  coming in       step   -32  at   +672  HFR 3.61   best 2.87   aim 2.28
+  #41  coming in       step   -32  at   +640  HFR 3.38   best 2.87   aim 2.28
+  #42  coming in       step   -32  at   +608  HFR 3.71   best 2.87   aim 2.28
+  #43  coming in       step   -32  at   +576  HFR 3.29   best 2.87   aim 2.28

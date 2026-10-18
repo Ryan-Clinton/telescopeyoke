@@ -1,0 +1,12 @@
+# 19:40 ./ty focus --motor after the focuser was freed, from about 1.75 turns further out. Readings that saw anything:
+Focus now: no stars measured: cloud, the cap, or far out of focus.
+Motor focusing: HFR 2.3 is good focus here.
+  start               +0  HFR none   aim 2.28
+  going out          +96  HFR none   aim 2.28
+  going out         +192  HFR none   aim 2.28
+  ... (all none, out to about +1344 and in)
+  coming in         -928  HFR 0.67   best 0.67   aim 2.28    <- a hot pixel taken for a star
+  coming in         -960  HFR none   best 0.67   aim 2.28
+  out past slack    -628  HFR none   best 0.67   aim 2.28
+  in to sharpest    -928  HFR none   best 0.67   aim 2.28
+No focus found within reach either way; the focuser is back where it started.   <- wrong: it was at -928

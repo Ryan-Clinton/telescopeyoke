@@ -1,0 +1,41 @@
+# 19:53 ./ty focus --motor, first version with steps sized from HFR. Readings other than "none"; stopped by hand at about -20400.
+Focus now: soft: HFR 22.28, against 2.28 usually (9.8 times): worth focusing.
+Motor focusing: HFR 2.3 is good focus here.
+  start               +0  HFR 22.06   best 22.06   aim 2.28
+  going out          +96  HFR 22.38   best 22.06   aim 2.28
+  going out         +192  HFR 22.41   best 22.06   aim 2.28
+  going out         +288  HFR 22.15   best 22.06   aim 2.28
+  coming in         +288  HFR 21.61   best 21.61   aim 2.28
+  coming in         +256  HFR 21.86   best 21.61   aim 2.28
+  coming in         +224  HFR 21.91   best 21.61   aim 2.28
+  coming in         +192  HFR 22.38   best 21.61   aim 2.28
+  coming in         +160  HFR 21.82   best 21.61   aim 2.28
+  coming in         +128  HFR 22.39   best 21.61   aim 2.28
+  coming in          +96  HFR 22.17   best 21.61   aim 2.28
+  coming in          +64  HFR 21.72   best 21.61   aim 2.28
+  coming in          +32  HFR 21.82   best 21.61   aim 2.28
+  coming in           +0  HFR 21.71   best 21.61   aim 2.28
+  coming in          -32  HFR 21.71   best 21.61   aim 2.28
+  coming in          -64  HFR 21.51   best 21.51   aim 2.28
+  coming in          -96  HFR 21.57   best 21.51   aim 2.28
+  coming in         -128  HFR 22.05   best 21.51   aim 2.28
+  coming in         -160  HFR 19.33   best 19.33   aim 2.28
+  coming in        -1184  HFR 22.31   best 19.33   aim 2.28
+  coming in        -2208  HFR 21.90   best 19.33   aim 2.28
+  coming in        -3264  HFR 22.18   best 19.33   aim 2.28
+  coming in        -4288  HFR 22.55   best 19.33   aim 2.28
+  coming in        -5312  HFR 22.69   best 19.33   aim 2.28
+  coming in        -6336  HFR 22.35   best 19.33   aim 2.28
+  coming in        -7616  HFR 22.67   best 19.33   aim 2.28
+  coming in        -8640  HFR 20.97   best 19.33   aim 2.28
+  coming in        -9664  HFR 23.61   best 19.33   aim 2.28
+  coming in       -10688  HFR 23.60   best 19.33   aim 2.28
+  coming in       -11712  HFR 21.32   best 19.33   aim 2.28
+  coming in       -12736  HFR 22.02   best 19.33   aim 2.28
+  coming in       -13792  HFR 21.94   best 19.33   aim 2.28
+  coming in       -14816  HFR 25.84   best 19.33   aim 2.28
+  coming in       -16000  HFR 21.64   best 19.33   aim 2.28
+  coming in       -17120  HFR 21.43   best 19.33   aim 2.28
+  coming in       -18208  HFR 20.92   best 19.33   aim 2.28
+  coming in       -19360  HFR 13.96   best 13.96   aim 2.28
+  coming in       -20384  HFR 25.39   best 13.96   aim 2.28

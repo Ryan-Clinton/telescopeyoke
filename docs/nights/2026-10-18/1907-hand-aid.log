@@ -1,0 +1,5 @@
+#1 19:06:48  L1 coarse   HFR 36.1 (47.7")   3 stars   best 36.1   settling   (exposure 2s, peak 25; frame in 2.53 s, heard 2.71 s after it began)
+#2 19:06:51  L1 coarse   HFR 37.8 (49.9")   3 stars   best 36.1   steady   (exposure 2s, peak 25; frame in 2.35 s, heard 2.54 s after it began)
+#3 19:07:26  L1 coarse   HFR 34.7 (45.8")   4 stars   steady   Level two.   (exposure 2s, peak 23; frame in 34.80 s, heard 35.00 s after it began)
+#4 19:07:28  L2 stars   HFR 37.7 (49.7")   5 stars   best 37.7   settling   (exposure 2s, peak 23; frame in 2.53 s, heard 2.80 s after it began)
+./focus.py terminated by signal TERM.

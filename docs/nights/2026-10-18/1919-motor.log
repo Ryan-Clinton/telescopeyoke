@@ -1,0 +1,28 @@
+# 19:19 ./ty focus --motor (fixed steps: out 96, in 32). Lines as read mid-run; the full log was overwritten by the next run.
+Focus now: soft: HFR 15.57, against 2.28 usually (6.8 times): worth focusing.
+Motor focusing: HFR 2.3 is good focus here.
+  start               +0  HFR 15.35   best 15.35   aim 2.28
+  going out          +96  HFR 15.61   best 15.35   aim 2.28
+  going out         +192  HFR 15.46   best 15.35   aim 2.28
+  going out         +288  HFR 15.55   best 15.35   aim 2.28
+  going out         +384  HFR 15.85   best 15.35   aim 2.28
+  going out         +480  HFR 15.86   best 15.35   aim 2.28
+  going out         +576  HFR 15.60   best 15.35   aim 2.28
+  going out         +672  HFR 15.06   best 15.06   aim 2.28
+  going out         +768  HFR 15.39   best 15.06   aim 2.28
+  going out         +864  HFR 15.40   best 15.06   aim 2.28
+  going out         +960  HFR 15.82   best 15.06   aim 2.28
+  going out        +1056  HFR 15.33   best 15.06   aim 2.28
+  going out        +1152  HFR 15.56   best 15.06   aim 2.28
+  going out        +1248  HFR 15.10   best 15.06   aim 2.28
+  going out        +1344  HFR 15.11   best 15.06   aim 2.28
+  coming in        +1312  HFR 14.89   best 14.89   aim 2.28
+  coming in        +1280  HFR 14.68   best 14.68   aim 2.28
+  coming in        +1248  HFR 16.13   best 14.68   aim 2.28
+  coming in        +1216  HFR 17.32   best 14.68   aim 2.28
+  coming in        +1184  HFR 19.03   best 14.68   aim 2.28
+  ... (no stars from about +700 down to about -1300)
+  no sharp stars found
+  back to start       +0  HFR none   best 14.68   aim 2.28
+No focus found within reach either way; the focuser is back where it started.
+# Afterwards: turned out by hand-ordered moves the motor struggled outward; a nut was loosened and it moved freely.

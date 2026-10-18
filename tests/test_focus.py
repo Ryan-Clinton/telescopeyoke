@@ -520,6 +520,8 @@ def test_a_focus_reading_puts_its_frame_and_line_on_the_status_page(monkeypatch,
     from PIL import Image
     with Image.open(tmp_path / "web" / "latest.jpg") as picture:
         assert picture.width == 900
+    note = json.loads((tmp_path / "web" / "latest.json").read_text())
+    assert note["kind"] == "focus" and "coming in -480 HFR 6.10 best 6.10 aim 2.28" in note["detail"]
 
 
 def test_near_focus_a_jumpy_reading_never_makes_a_big_step():

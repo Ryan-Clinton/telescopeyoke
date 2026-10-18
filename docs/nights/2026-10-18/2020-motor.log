@@ -1,0 +1,20 @@
+# 20:20 ./ty focus --motor from HFR ~6 after hand focusing. Whole log; stopped by hand.
+Focus now: soft: HFR 4.27, against 2.28 usually (1.9 times): worth focusing.
+Motor focusing: HFR 2.3 is good focus here.
+  start               +0  HFR 4.92   best 4.92   aim 2.28
+  going out          +96  HFR 10.56   best 4.92   aim 2.28
+  going out         +192  HFR 5.47   best 4.92   aim 2.28
+  going out         +288  HFR 4.33   best 4.33   aim 2.28
+  going out         +384  HFR 6.46   best 4.33   aim 2.28
+  going out         +560  HFR 4.10   best 4.10   aim 2.28
+  going out         +805  HFR 6.66   best 4.10   aim 2.28
+  coming in         +215  HFR 7.84   best 4.10   aim 2.28
+  coming in         -533  HFR 10.24   best 4.10   aim 2.28
+  coming in        -1557  HFR 11.90   best 4.10   aim 2.28
+  back out          +515  HFR 4.02   best 4.02   aim 2.28
+  coming in          +70  HFR 4.42   best 4.02   aim 2.28
+  coming in         -478  HFR 5.76   best 4.02   aim 2.28
+  coming in        -1371  HFR 5.90   best 4.02   aim 2.28
+  coming in        -2300  HFR 5.19   best 4.02   aim 2.28
+  coming in        -3047  HFR 9.30   best 4.02   aim 2.28
+./ty terminated by signal TERM.
