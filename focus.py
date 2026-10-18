@@ -601,22 +601,29 @@ def report():
     return out
 
 
-# Motor focusing. The focuser's gears have slack bigger than a focusing step:
-# on 15 October a reversal left the stars at 7.4 where they had been 17.1 at
-# the same count, and 3.6 where they had been 2.6. So only readings taken
-# while moving in are trusted: out past focus, in by small steps measuring
-# each, then out beyond the slack and in once to the sharpest. Sizes are HFR
-# in pixels of the full-size picture.
-MOTOR_OUT = 96          # half-steps a step out while looking for the far side (4096 to a turn)
-MOTOR_IN = 32           # half-steps a step in while measuring
-MOTOR_BIG = 1024        # the most one step turns, however far out the stars are
-MOTOR_SLACK = 300       # half-steps beyond the gears' slack, before the last move in
-MOTOR_REACH = 14        # steps out before giving up
+# Motor focusing: a measured focus curve, the way the established autofocus
+# programs do it. One frame's HFR near focus jumps by half again from seeing
+# alone (18 October 2026: 4.9, 10.6, 5.5 over 96 half-steps), so no single
+# reading can say which way focus lies. Instead the drawtube is swept through
+# focus in equal steps, every point reached moving in so the gears' slack
+# never enters a measurement, several frames at each; a curve is fitted to
+# the whole sweep and the focuser goes once to the curve's lowest point, the
+# last move inward; then that is measured, and kept only if it is better.
+# Sizes are HFR in pixels of the full-size picture; positions are motor
+# half-steps (4096 to a turn), plus out, counted from where the run started.
 MOTOR_EXPOSURE, MOTOR_GAIN = 1.0, 1500
-FAR = 4.0               # stars this many times the usual best are far out: one frame, big steps
+SWEEP_POINTS = 9        # positions in a sweep, the guess in the middle
+SWEEP_FRAMES = 3        # frames at each position: their median and scatter
+CHECK_FRAMES = 5        # frames to check the fitted focus with
+SWEEPS = 4              # sweeps a run may take, moving or widening it, before giving up
+STEP = 256              # half-steps between sweep positions until --measure-step has measured it
+BACKLASH = 1536         # half-steps of slack to overshoot until --measure-backlash has measured it:
+                        # the gears showed "well over a quarter turn" (1024), and too much costs only time
+SETTLE_S = 1.0          # seconds after a move before a frame, for the tube to stop shaking
 NOISE = 0.4             # a "star" this many times smaller than the usual best is a hot pixel
-CEILING = 12.0          # HFR beyond this is the measuring box's size, not the star's: no guide to distance
+CEILING = 12.0          # HFR beyond this is the measuring box's size, not the star's
 MOTOR_TRAVEL = 8192     # the furthest a run goes from where it started, either way (two turns)
+FOCUSER_FILE = config.DATA / "cache" / "focuser.json"
 
 
 class OutOfReach(Exception):
@@ -630,108 +637,305 @@ def progress(line):
     print(line, flush=True)
 
 
-def motor_focus(motor, read, usual, say=progress):
-    """Bring the stars to focus with the motor. `motor.move(n)` turns it (plus
-    is out); `read(frames)` is the median HFR over that many frames, or None
-    with no stars. `usual` is the HFR good focus comes to. Returns
-    {"hfr", "moved", "found", "readings"}; with "found" false the focuser has
-    been put back where it started.
+def focuser_settings():
+    """The focuser's measured step and backlash (half-steps), or the
+    defaults where they have not been measured."""
+    kept = {}
+    try:
+        kept = json.loads(FOCUSER_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        pass
+    return {"step": int(kept.get("step") or STEP), "backlash": int(kept.get("backlash") or BACKLASH),
+            "step_measured": bool(kept.get("step")), "backlash_measured": bool(kept.get("backlash"))}
 
-    Star size grows in step with the distance from focus, so once two
-    readings have shown how many half-steps make a pixel of HFR, a step far
-    out of focus goes half the distance that is left: big steps and one frame
-    each while the stars are large, the small careful steps only near focus."""
-    sharp = 1.75 * usual
-    readings, place, least_seen, slopes = [], [0], [None], []
-    heading = [0, 0]        # the way it last turned, and the first reading since the gears' slack was taken up
 
-    def step(n, frames=2, doing="start"):
-        last = next((r for r in reversed(readings) if r["hfr"]), None)
-        if last and last["hfr"] > FAR * usual:
-            frames = 1
-        if n and abs(place[0] + n) > MOTOR_TRAVEL:
+def keep_focuser(**measured):
+    kept = {}
+    try:
+        kept = json.loads(FOCUSER_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        pass
+    kept.update(measured, saved=time.time())
+    keep(FOCUSER_FILE, kept)
+
+
+class Drive:
+    """The motor, counting where it is from the start of a run and refusing
+    to go further than MOTOR_TRAVEL from there."""
+
+    def __init__(self, motor):
+        self.motor, self.at = motor, 0
+
+    def to(self, place):
+        n = place - self.at
+        if abs(place) > MOTOR_TRAVEL:
             raise OutOfReach
         if n:
-            if (n > 0) != (heading[0] > 0) or not heading[0]:
-                heading[:] = [n, len(readings) + 1]
-            motor.move(n)
-            place[0] += n
-        value = read(frames)
-        if value is not None and value < NOISE * usual:
-            value = None
-        # The slope only from two readings turning the same way: across a
-        # turn the gears' slack makes the distance look bigger than it was.
-        base = next((r for r in readings[heading[1]:] if r["hfr"] and r["hfr"] <= CEILING), None)
-        if value and value <= CEILING and base and base["at"] != place[0] and abs(value - base["hfr"]) >= 1:
-            slopes.append(abs(place[0] - base["at"]) / abs(value - base["hfr"]))
-        readings.append({"at": place[0], "hfr": value and round(value, 2)})
-        if value and (least_seen[0] is None or value < least_seen[0]):
-            least_seen[0] = value
-        best_text = "" if least_seen[0] is None else f"   best {least_seen[0]:.2f}"
-        say(f"  #{len(readings):<3} {doing:<15} step {n:+5d}  at {place[0]:+6d}  "
-            f"HFR {'none' if value is None else f'{value:.2f}'}{best_text}   aim {usual:.2f}")
-        return value
+            self.motor.move(n)
+            self.at = place
+        return n
 
-    def stride(value, small):
-        """Half the distance to focus that this reading says is left, once
-        the slope is known and the last two readings both say far out;
-        otherwise `small`. Near focus one frame's HFR jumps by half again
-        from seeing alone (18 October 2026: 4.9, 10.6, 5.5 over 96
-        half-steps), which is no guide to a big step."""
-        sizes = [r["hfr"] for r in readings[-2:]]
-        if (len(sizes) < 2 or not all(sizes) or min(sizes) <= FAR * usual
-                or max(sizes) > CEILING or not slopes):
-            return small
-        slope = sorted(slopes)[len(slopes) // 2]
-        return int(min(MOTOR_BIG, max(small, slope * (value - usual) / 2)))
+    def arrive(self, place, backlash):
+        """Go to `place` with the last move inward: out beyond it by the
+        slack first when it lies out from here, or when the last move was not
+        inward. Returns the moves made."""
+        moves = []
+        if place >= self.at or not getattr(self, "loaded_in", False):
+            moves.append(self.to(place + backlash))
+        moves.append(self.to(place))
+        self.loaded_in = True
+        return moves
+
+
+def sample(read, frames, usual):
+    """The HFRs `read(frames)` gave that are stars: not hot pixels, not the
+    measuring box. Their median, their scatter (median absolute deviation)
+    and how many there were."""
+    values = [v for v in read(frames) if v and NOISE * usual <= v <= CEILING]
+    if not values:
+        return {"hfr": None, "scatter": None, "frames": 0, "all": []}
+    median = float(np.median(values))
+    scatter = float(np.median(np.abs(np.array(values) - median))) if len(values) > 1 else None
+    return {"hfr": round(median, 2), "scatter": scatter and round(scatter, 2),
+            "frames": len(values), "all": [round(v, 2) for v in values]}
+
+
+def hyperbola(x, a, b, x0, c):
+    return a + b * np.sqrt((x - x0) ** 2 + c ** 2)
+
+
+def fit_curve(points, step):
+    """The focus curve through a sweep: a hyperbola, checked against two
+    straight wings. Returns {"ok", "focus", "hfr", "r2", "spread", "reason",
+    "toward"}: "reason" says why a fit is refused ("too few", "flat",
+    "edge", "poor fit", "unstable", "wings disagree"), and with "edge",
+    "toward" is +1 or -1, the way the sweep should move."""
+    from scipy.optimize import curve_fit
+    good = [p for p in points if p["hfr"] is not None]
+    out = {"ok": False, "focus": None, "hfr": None, "r2": None, "spread": None, "reason": None, "toward": 0}
+    if len(good) < 7:
+        out["reason"] = "too few"
+        if good:        # the stars that were seen lie that way
+            lowest = min(good, key=lambda p: p["hfr"])["at"]
+            middle = (points[0]["at"] + points[-1]["at"]) / 2
+            out["toward"] = 1 if lowest > middle else -1
+        return out
+    x = np.array([p["at"] for p in good], float)
+    y = np.array([p["hfr"] for p in good], float)
+    sigma = np.array([max(p["scatter"] or 0, 0.05 * p["hfr"]) for p in good])
+    low, high = x.min(), x.max()
+    lowest = x[np.argmin(y)]
+    if y.max() < 1.3 * y.min():
+        out["reason"] = "flat"
+        return out
+
+    def fit(xs, ys, ss):
+        guess = [0.5 * ys.min(), (ys.max() - ys.min()) / max(xs.max() - xs.min(), 1) * 2,
+                 xs[np.argmin(ys)], step]
+        values, _ = curve_fit(hyperbola, xs, ys, p0=guess, sigma=ss, maxfev=20000,
+                              bounds=([-np.inf, 0, low - 4 * step, 1], [np.inf, np.inf, high + 4 * step, 50 * step]))
+        return values
 
     try:
-        # Out until clearly past focus: the stars grown well beyond the best seen
-        # on the way, or lost, after at least two steps.
-        least = value = step(0)
-        misses = 0
-        for count in range(4 * MOTOR_REACH):
-            value = step(stride(value, MOTOR_OUT), doing="going out")
-            if value and (least is None or value < least):
-                least = value
+        a, b, x0, c = fit(x, y, sigma)
+    except (RuntimeError, ValueError):
+        out["reason"], out["toward"] = "poor fit", (1 if lowest > (low + high) / 2 else -1)
+        return out
+    model = hyperbola(x, a, b, x0, c)
+    r2 = 1 - float(np.sum((y - model) ** 2)) / max(float(np.sum((y - y.mean()) ** 2)), 1e-9)
+    out.update(focus=float(x0), hfr=round(float(hyperbola(x0, a, b, x0, c)), 2), r2=round(r2, 3))
+    margin = 0.15 * (high - low)
+    if not low + margin <= x0 <= high - margin or (x < x0).sum() < 3 or (x > x0).sum() < 3:
+        out["reason"], out["toward"] = "edge", (1 if x0 > (low + high) / 2 else -1)
+        return out
+    if r2 < 0.8:
+        out["reason"] = "poor fit"
+        return out
+    # Leave each point out in turn: a focus that moves with one point is not known.
+    others = []
+    for i in range(len(x)):
+        keep_ = np.arange(len(x)) != i
+        try:
+            others.append(fit(x[keep_], y[keep_], sigma[keep_])[2])
+        except (RuntimeError, ValueError):
+            pass
+    spread = float(np.std(others)) if others else float("inf")
+    out["spread"] = round(spread, 1)
+    if spread > 0.5 * step:
+        out["reason"] = "unstable"
+        return out
+    # Two straight wings, split at the fitted focus, should cross near it.
+    left, right = x < x0, x > x0
+    if left.sum() >= 2 and right.sum() >= 2:
+        l1, l0 = np.polyfit(x[left], y[left], 1)
+        r1, r0 = np.polyfit(x[right], y[right], 1)
+        if l1 < 0 < r1 and abs((r0 - l0) / (l1 - r1) - x0) > step:
+            out["reason"] = "wings disagree"
+            return out
+    out["ok"] = True
+    return out
+
+
+def curve_picture(points, fitted=None, width=40):
+    """The sweep as text: one row a position, a bar as long as its HFR."""
+    good = [p["hfr"] for p in points if p["hfr"] is not None]
+    if not good:
+        return []
+    top = max(good)
+    rows = []
+    for p in points:
+        bar = "" if p["hfr"] is None else "#" * max(1, round(width * p["hfr"] / top))
+        mark = "  <- fitted focus near here" if fitted is not None and abs(p["at"] - fitted) < 0.5 * abs(
+            points[1]["at"] - points[0]["at"]) else ""
+        size = "none" if p["hfr"] is None else f"{p['hfr']:5.2f}"
+        rows.append(f"    {p['at']:+6d}  {size}  {bar}{mark}")
+    return rows
+
+
+def motor_focus(motor, read, usual, say=progress, step=None, backlash=None, sweep_only=False):
+    """Bring the stars to focus with the motor by a measured focus curve.
+    `motor.move(n)` turns it (plus is out); `read(frames)` gives that many
+    frames' HFRs (None for a frame with no stars). `usual` is the HFR good
+    focus usually comes to: it says only whether focusing is needed, never
+    where focus is. Returns {"hfr", "moved", "found", "readings", "fit",
+    "start_hfr"}; with "found" false the focuser is back where it started.
+    With `sweep_only`, one sweep is measured and fitted and the focuser
+    goes back to the start, the last move inward."""
+    settings = focuser_settings()
+    step, backlash = step or settings["step"], backlash or settings["backlash"]
+    drive, readings = Drive(motor), []
+    half = SWEEP_POINTS // 2
+
+    def point(doing, frames, n=0):
+        found = sample(read, frames, usual)
+        found.update(at=drive.at, doing=doing)
+        readings.append(found)
+        spread = f" ±{found['scatter']:.2f}" if found["scatter"] is not None else ""
+        size = "none" if found["hfr"] is None else f"{found['hfr']:.2f}"
+        say(f"  #{len(readings):<3} {doing:<15} step {n:+5d}  at {drive.at:+6d}  "
+            f"HFR {size}{spread}  ({found['frames']}/{frames} frames)")
+        return found
+
+    start = point("start", SWEEP_FRAMES)
+    fitted, centre, tries = None, 0, 0
+    try:
+        for sweep in range(SWEEPS):
+            tries += 1
+            say(f"  sweep {sweep + 1}: {SWEEP_POINTS} positions {step} half-steps apart around {centre:+d}, "
+                f"{SWEEP_FRAMES} frames each, every one reached moving in")
+            drive.arrive(centre + half * step, backlash)
+            points = [point("sweep", SWEEP_FRAMES)]
+            for _ in range(SWEEP_POINTS - 1):
+                n = drive.to(drive.at - step)
+                points.append(point("sweep", SWEEP_FRAMES, n))
+            fitted = fit_curve(points, step)
+            for row in curve_picture(points, fitted["focus"] if fitted["ok"] else None):
+                say(row)
+            if fitted["ok"]:
+                say(f"  fit: focus at {fitted['focus']:+.0f}, HFR {fitted['hfr']:.2f} there, R² {fitted['r2']:.2f}, "
+                    f"±{fitted['spread']:.0f} half-steps")
+                break
+            say(f"  fit refused: {fitted['reason']}")
+            if fitted["reason"] == "flat":
+                step *= 2               # the sweep did not reach the wings: wider
+            elif fitted["toward"]:
+                centre += fitted["toward"] * half * step    # the low end of the curve is that way
             else:
-                misses += 1     # only steps that bring the stars no smaller count towards giving up
-            if misses >= MOTOR_REACH:
+                fitted = None
                 break
-            if count >= 1 and (value is None or (least and value > max(1.5 * least, 2.5 * usual))):
-                break
-            if count >= 1 and least and least > FAR * usual and value > 1.15 * least:
-                break           # far out and growing: already on the outer side, no need to go further
-            sizes = [r["hfr"] for r in readings]
-            if count == 3 and all(sizes) and max(sizes) - min(sizes) < 0.05 * min(sizes):
-                say("  HFR not changing: is the focuser gripping the knob?")
-        # In by steps that shrink as the stars do, trusting these readings only,
-        # until the stars have been sharp and grown again or been lost.
-        best = None
-        for _ in range(2 * MOTOR_REACH * MOTOR_OUT // MOTOR_IN):
-            value = step(-stride(value, MOTOR_IN if value or best else MOTOR_OUT), doing="coming in")
-            if value and (best is None or value < best[1]):
-                best = (place[0], value)
-            if best and best[1] < sharp and (value is None or value > 1.4 * best[1]):
-                break
-            if (best and best[1] >= sharp and value and value > 1.4 * best[1] and best[0] > place[0]
-                    and readings[-2]["at"] - place[0] > MOTOR_OUT):
-                # A big step went past focus: back out beyond the slack, then
-                # in again from there by small steps.
-                value = step(best[0] - place[0] + MOTOR_SLACK, 1, doing="back out")
-                best = None
+            fitted = None
     except OutOfReach:
         say(f"  reached {MOTOR_TRAVEL} half-steps from the start")
-        best = None
-    if not best or best[1] >= sharp:
-        say("  no sharp stars found")
-        step(-place[0], 1, doing="back to start")
-        return {"hfr": None, "moved": 0, "found": False, "readings": readings}
-    # Out beyond the slack, then in once to the sharpest.
-    step(MOTOR_SLACK + (best[0] - place[0]) if best[0] > place[0] else MOTOR_SLACK, 1,
-         doing="out past slack")
-    value = step(best[0] - place[0], 3, doing="in to sharpest")
-    return {"hfr": value, "moved": place[0], "found": True, "readings": readings}
+        fitted = None
+    result = {"readings": readings, "fit": fitted, "start_hfr": start["hfr"], "sweeps": tries,
+              "step": step, "backlash": backlash}
+    if sweep_only or not fitted:
+        if not sweep_only:
+            say("  no focus curve found: back to the start")
+        drive.arrive(0, backlash)
+        point("back to start", 1)
+        return dict(result, hfr=None, moved=0, found=False)
+    target = round(fitted["focus"])
+    moves = drive.arrive(target, backlash)
+    check = point("to focus", CHECK_FRAMES, moves[-1])
+    # Within what seeing alone scatters a median of a few frames by.
+    allow = (check["scatter"] or 0) + (start["scatter"] or 0)
+    better = check["hfr"] is not None and (start["hfr"] is None or check["hfr"] <= 1.05 * start["hfr"] + allow)
+    near_fit = check["hfr"] is not None and check["hfr"] <= 1.2 * fitted["hfr"] + allow
+    if better and near_fit:
+        return dict(result, hfr=check["hfr"], moved=target, found=True)
+    say(f"  checked: HFR {check['hfr']} at the fitted focus is not better than the start "
+        f"({start['hfr']}) or is far from the fit's {fitted['hfr']}: back to the start")
+    drive.arrive(0, backlash)
+    point("back to start", 1)
+    return dict(result, hfr=None, moved=0, found=False)
+
+
+def measure_step(motor, read, usual, say=progress, backlash=None, increment=64, most=4096):
+    """From focus, in by `increment` at a time until the stars are 2.5 times
+    the size they were: a sweep step is a quarter of that distance, so the
+    ends of a nine-position sweep reach well up the curve's sides. Then back
+    to the start, the last move inward. Returns the step, or None."""
+    backlash = backlash or focuser_settings()["backlash"]
+    drive = Drive(motor)
+    drive.arrive(0, backlash)
+    first = sample(read, SWEEP_FRAMES, usual)["hfr"]
+    say(f"  at focus: HFR {first}")
+    distance, found = 0, None
+    while first and distance < most:
+        drive.to(drive.at - increment)
+        distance += increment
+        now = sample(read, SWEEP_FRAMES, usual)["hfr"]
+        say(f"  in {distance:5d}: HFR {now}")
+        if now is None or now >= 2.5 * first:
+            found = max(32, round(distance / 4))
+            break
+    drive.arrive(0, backlash)
+    return found
+
+
+def dead_band(offsets, sizes):
+    """How far a reversal turned before the stars began to change: the best
+    `d` for a curve flat up to `d` and a straight line after it."""
+    x, y = np.array(offsets, float), np.array(sizes, float)
+    best = (float("inf"), None)
+    for d in x[:-2]:
+        after = x >= d
+        flat = float(np.mean(y[~after])) if (~after).any() else y[0]
+        if after.sum() >= 2:
+            slope, _ = np.polyfit(x[after], y[after], 1)
+            model = np.where(after, flat + slope * (x - d), flat)
+            error = float(np.sum((y - model) ** 2))
+            if error < best[0]:
+                best = (error, float(d))
+    return best[1]
+
+
+def measure_backlash(motor, read, usual, step, say=progress, increment=64, most=3072, repeats=2):
+    """The gears' slack, measured on the steep side of the curve where a
+    small move changes the stars: in by four sweep steps, then out by
+    `increment` at a time; the turning done before the stars begin to change
+    is the slack. Twice, and half as much again as the larger kept, as the
+    established programs advise: too much costs only time. Start at focus,
+    as a focus run leaves it. Returns it, or None."""
+    drive, found = Drive(motor), []
+    drive.loaded_in = True      # a focus run ends with an inward move, so start from focus
+    for time_ in range(repeats):
+        drive.arrive(-4 * step, most)
+        offsets, sizes = [0], [sample(read, SWEEP_FRAMES, usual)["hfr"]]
+        for k in range(1, most // increment + 1):
+            drive.to(-4 * step + k * increment)
+            offsets.append(k * increment)
+            sizes.append(sample(read, SWEEP_FRAMES, usual)["hfr"])
+        pairs = [(o, s) for o, s in zip(offsets, sizes) if s is not None]
+        if pairs:       # only up to the sharpest: beyond it the stars grow again
+            pairs = pairs[:min(range(len(pairs)), key=lambda i: pairs[i][1]) + 1]
+        d = dead_band(*zip(*pairs)) if len(pairs) >= 5 else None
+        say(f"  reversal {time_ + 1}: the stars began to change after {d if d is None else round(d)} half-steps")
+        if d is not None:
+            found.append(d)
+    drive.arrive(0, most)
+    return round(1.5 * max(found)) if found else None
 
 
 GOOD_ENOUGH = 1.1    # within this of the usual best, focus is left as it is
@@ -798,25 +1002,39 @@ def run_check(args):
             "usual_hfr": round(usual, 2), "good": good}
 
 
-def run_motor(args):
-    """./focus.py --motor: focus with the motor, on the stars in view now;
-    first a reading, and if focus is already as good as usual it is left
-    alone (--anyway to focus regardless)."""
+class Settled:
+    """The motor, waiting SETTLE_S after each move before anything is
+    measured, so a frame is not of a tube still shaking."""
+
+    def __init__(self, motor, wait=time.sleep):
+        self.motor, self.wait = motor, wait
+
+    def move(self, n):
+        self.motor.move(n)
+        self.wait(SETTLE_S)
+
+
+def run_motor(args, mode="focus"):
+    """./focus.py --motor: focus with the motor by a measured focus curve,
+    on the stars in view now; first a reading, and if focus is already as
+    good as usual it is left alone (--anyway to focus regardless).
+    `mode` "sweep" measures and fits one sweep and goes back to the start;
+    "step" and "backlash" measure the focuser and keep what they find."""
     import focuser
     scale = arcsec_per_pixel()
     usual = usual_best() / scale
+    settings = focuser_settings()
     if args.dry_run:
         port = focuser.find_port()
-        print(f"Would turn the focuser on {port}: out until the stars pass through sharp, then "
-              f"in, in steps sized from how big the stars are ({MOTOR_IN} to {MOTOR_BIG} half-steps), "
-              f"aiming for HFR {usual:.1f}. "
-              "The mount does not move.")
-        return {"would_move": True, "port": port, "usual_hfr": round(usual, 2)}
+        print(f"Would turn the focuser on {port}: {SWEEP_POINTS} positions {settings['step']} half-steps apart "
+              f"through focus, every one reached moving in after {settings['backlash']} half-steps out for the "
+              f"gears' slack, {SWEEP_FRAMES} frames each; then a curve fitted and one move, inward, to its "
+              f"lowest point, checked with {CHECK_FRAMES} frames. The mount does not move.")
+        return {"would_move": True, "port": port, "usual_hfr": round(usual, 2), **settings}
     motor = focuser.Focuser.open()
     try:
         with Camera(args.port, MOTOR_GAIN) as cam:
             cam.frame(MOTOR_EXPOSURE)               # the first frame after opening can be stale
-
             seen = {}
 
             def read(frames):
@@ -824,31 +1042,50 @@ def run_motor(args):
                 for _ in range(frames):
                     mosaic, _ = cam.frame(MOTOR_EXPOSURE)
                     seen["lum"] = luminance(mosaic)
-                    value, _ = measure_stars(seen["lum"])
-                    if value:
-                        values.append(value)
-                return float(np.median(values)) if values else None
+                    values.append(measure_stars(seen["lum"])[0])
+                return values
 
             def say(line):
                 progress(line)
                 if "lum" in seen:
-                    show(seen["lum"], "motor focus: " + line)
-            now = read(3)
+                    show(seen["lum"], "focus: " + line)
+            drive = Settled(motor)
+            if mode == "step":
+                found = measure_step(drive, read, usual, say=say)
+                if found:
+                    keep_focuser(step=found)
+                print(f"Sweep step: {found} half-steps" + (", kept." if found else ": not measured."), flush=True)
+                return {"step": found}
+            if mode == "backlash":
+                found = measure_backlash(drive, read, usual, settings["step"], say=say)
+                if found:
+                    keep_focuser(backlash=found)
+                print(f"Backlash to overshoot: {found} half-steps" + (", kept." if found else ": not measured."),
+                      flush=True)
+                return {"backlash": found}
+            now = sample(read, SWEEP_FRAMES, usual)["hfr"]
             print(f"Focus now: {verdict(now, usual)}.", flush=True)
-            if now is not None and now <= GOOD_ENOUGH * usual and not getattr(args, "anyway", False):
+            if (mode == "focus" and now is not None and now <= GOOD_ENOUGH * usual
+                    and not getattr(args, "anyway", False)):
                 print("Left as it is: it is already as good as focusing usually gets (--anyway to focus "
                       "regardless).", flush=True)
                 seen_good(now, scale)
                 return {"hfr": round(now, 2), "moved": 0, "found": True, "readings": [], "left_alone": True,
                         "hfr_arcsec": round(now * scale, 2)}
-            print(f"Motor focusing: HFR {usual:.1f} is good focus here.", flush=True)
-            result = motor_focus(motor, read, usual, say=say)
+            if not settings["step_measured"] or not settings["backlash_measured"]:
+                print(f"Not yet measured, so assumed: step {settings['step']}, backlash {settings['backlash']} "
+                      "(--measure-step, --measure-backlash).", flush=True)
+            result = motor_focus(drive, read, usual, say=say, sweep_only=mode == "sweep")
     finally:
         motor.close()
     hfr = result["hfr"]
-    if result["found"] and hfr:
-        print(f"Focused: HFR {hfr:.2f} ({hfr * scale:.1f}\"), {result['moved']:+d} half-steps from the start.",
-              flush=True)
+    fit = result["fit"]
+    if mode == "sweep":
+        print(f"Sweep: {'focus at ' + format(fit['focus'], '+.0f') + ', HFR ' + str(fit['hfr']) if fit and fit['ok'] else 'no curve fitted'}"
+              "; the focuser is back where it started.", flush=True)
+    elif result["found"]:
+        print(f"Focused: HFR {hfr:.2f} ({hfr * scale:.1f}\"), {result['moved']:+d} half-steps from the start "
+              f"(it was {result['start_hfr']}).", flush=True)
         # Only a run that reached good focus says what good focus is: one
         # that ended soft (18 October 2026, HFR 5.03) would raise the aim.
         if hfr <= 1.5 * usual:
@@ -858,11 +1095,8 @@ def run_motor(args):
         else:
             print(f"That is {hfr / usual:.1f} times the usual best, so it is not kept as what good focus is.",
                   flush=True)
-    elif result["found"]:
-        print(f"The focuser is at the sharpest place seen, {result['moved']:+d} half-steps from the start, "
-              "but the last reading there saw no stars: cloud?", flush=True)
     else:
-        print("No focus found within reach either way; the focuser is back where it started.", flush=True)
+        print("No focus found: the focuser is back where it started.", flush=True)
     return dict(result, hfr_arcsec=hfr and round(hfr * scale, 2))
 
 
@@ -892,7 +1126,18 @@ def main():
     ap.add_argument("--anyway", action="store_true", help="with --motor: focus even if it is already good")
     ap.add_argument("--check", action="store_true",
                     help="how sharp the stars are now against the usual best; takes three frames, turns nothing")
+    ap.add_argument("--sweep", action="store_true",
+                    help="measure and fit one focus sweep with the motor, then go back to the start")
+    ap.add_argument("--measure-step", action="store_true",
+                    help="from focus, measure how far the motor must turn to grow the stars 2.5 times; keeps a "
+                         "quarter of it as the sweep step")
+    ap.add_argument("--measure-backlash", action="store_true",
+                    help="measure the focuser gears' slack on the steep side of the curve; keeps half as much "
+                         "again as the overshoot")
     args = ap.parse_args()
+    for flag, mode in (("sweep", "sweep"), ("measure_step", "step"), ("measure_backlash", "backlash")):
+        if getattr(args, flag):
+            return interface.main("focus.motor", lambda: run_motor(args, mode), args.json)
     if args.check:
         return interface.main("focus.check", lambda: run_check(args), args.json)
     if args.motor:

@@ -2,7 +2,7 @@
 name: focus
 description: Check and, if needed, improve the telescope's focus with its motor focuser. Use when the person says to focus, that the stars look soft or bloated, or as the focus step of nightly-setup. Measures first, says the level, and only focuses when it is worse than usual or the person asks.
 compatibility: telescopeyoke at the telescope with the motor focuser (firmware/focuser) and the camera plugged in
-allowed-tools: Bash(./focus.py --motor --dry-run) Bash(./focus.py --report) Bash(./ty mount status)
+allowed-tools: Bash(./focus.py --motor --dry-run) Bash(./focus.py --report) Bash(./ty mount status) Bash(./focus.py --check)
 ---
 
 # Focus
@@ -34,6 +34,12 @@ way (17 October 2026: HFR 1.86 at the start, 3.52 after a stopped run).
    min in". No reading in the log for over a minute is the camera
    stalled: say so in the same line. Never answer with guesses about
    buffering or what might be happening.
+   A run sweeps nine positions through focus, three frames each, fits the
+   curve and goes once to its lowest point (`docs/focuser.md`): no
+   hunting, and it ends at tonight's best, not the usual. On a new night or
+   after the focuser has been off, measure it first:
+   `./focus.py --measure-step`, then `./focus.py --measure-backlash`, both
+   from focus.
 5. Report the HFR it ends on. Well above the usual: suggest the cause in
    this order: cloud or haze (ask what the sky looks like), dew on the
    mirror, the field too sparse.

@@ -310,43 +310,158 @@ def test_a_camera_failure_ends_the_run_with_its_reason(aid, monkeypatch, capsys)
 
 
 class Drawtube:
-    """A motor focuser on a pretend telescope: stars of HFR 2 at `best`,
-    growing by one for every 60 half-steps away, none past 1000, and gears
-    with `slack` half-steps of play: after a reversal the drawtube stays put
-    until that much has been turned."""
+    """A motor focuser on a pretend telescope: stars of HFR `sharp` at
+    `best`, growing by one for every `slope` half-steps away, none past
+    `reach`; gears with `slack` half-steps of play (after a reversal the
+    drawtube stays put until that much has been turned); each frame's HFR
+    scattered by `noise` (a standard deviation, in pixels), as seeing does."""
 
-    def __init__(self, best, slack=0):
+    def __init__(self, best, slack=0, slope=200, sharp=2.0, reach=6000, noise=0.0, seed=1):
         self.at, self.tube, self.best, self.slack, self.moves, self.going = 0, 0, best, slack, [], 0
+        self.slope, self.sharp, self.reach, self.noise = slope, sharp, reach, noise
+        self.rng = np.random.default_rng(seed)
+        self.read_going = []        # which way the motor last turned, at each read
 
     def move(self, steps):
         assert steps and abs(steps) <= 4096 * 10
         self.at += steps
         self.moves.append(steps)
         way = 1 if steps > 0 else -1
-        lost = self.slack if way != self.going and self.going else 0
+        if way != self.going and self.going:
+            self.play = self.slack          # the slack is taken up over however many moves it takes
+        lost = min(getattr(self, "play", 0), abs(steps))
+        self.play = getattr(self, "play", 0) - lost
         self.going = way
-        self.tube += way * max(abs(steps) - lost, 0)
+        self.tube += way * (abs(steps) - lost)
+
+    def size(self):
+        off = abs(self.tube - self.best)
+        return None if off > self.reach else self.sharp + off / self.slope
 
     def read(self, frames):
-        off = abs(self.tube - self.best)
-        return None if off > 1000 else 2.0 + off / 60
+        self.read_going.append(self.going)
+        size = self.size()
+        return [None if size is None else max(0.5, size + self.rng.normal(0, self.noise)) for _ in range(frames)]
 
 
-@pytest.mark.parametrize("best", [-300, 200, 700, -900, -500])
-@pytest.mark.parametrize("slack", [0, 150])
-def test_the_motor_brings_the_stars_to_focus_from_either_side(best, slack):
-    tube = Drawtube(best, slack)
-    result = focus.motor_focus(tube, tube.read, usual=2.0, say=lambda *a: None)
-    assert result["found"], result["readings"]
-    assert abs(tube.tube - tube.best) <= 32          # within one small step of the sharpest
-    assert result["hfr"] < 2.6
+def quiet(*args):
+    pass
+
+
+@pytest.mark.parametrize("best", [-700, -300, 0, 250, 700])
+@pytest.mark.parametrize("slack", [0, 600])
+def test_the_sweep_finds_focus_from_either_side_whatever_the_slack(best, slack):
+    tube = Drawtube(best, slack, noise=0.2)
+    result = focus.motor_focus(tube, tube.read, usual=2.0, say=quiet)
+    assert result["found"], result["fit"]
+    assert abs(tube.tube - tube.best) <= focus.STEP / 4
     assert tube.moves[-1] < 0                         # the last move is inward: the slack is taken up one way
+
+
+def test_every_point_of_a_sweep_is_reached_moving_in():
+    """The gears' slack never enters a measurement: each sweep point comes
+    after an inward move."""
+    tube = Drawtube(best=300, slack=600, noise=0.2)
+    result = focus.motor_focus(tube, tube.read, usual=2.0, say=quiet)
+    sweeps = [going for going, r in zip(tube.read_going, result["readings"]) if r["doing"] == "sweep"]
+    assert sweeps and all(going == -1 for going in sweeps)
+
+
+def test_seeing_that_scatters_each_frame_by_a_pixel_still_gives_focus():
+    """18 October 2026: near focus single frames read 4.9, 10.6, 5.5 over 96
+    half-steps. Three frames a point and a curve through all nine still
+    find it."""
+    for seed in range(8):
+        tube = Drawtube(best=150, slack=300, noise=0.5, seed=seed)
+        result = focus.motor_focus(tube, tube.read, usual=2.0, say=quiet)
+        assert result["found"] and abs(tube.tube - tube.best) <= focus.STEP / 4, (seed, result["fit"])
+    # A pixel of scatter a frame: focus within a step, or the start kept.
+    for seed in range(8):
+        tube = Drawtube(best=150, slack=300, noise=1.0, seed=seed)
+        result = focus.motor_focus(tube, tube.read, usual=2.0, say=quiet)
+        assert abs(tube.tube - tube.best) <= focus.STEP if result["found"] else tube.at == 0
+
+
+def test_a_worse_night_is_focused_to_its_own_best_not_to_the_usual():
+    """The usual best says only whether to focus: on a night of worse seeing
+    the curve's own lowest point is focus."""
+    tube = Drawtube(best=-200, sharp=3.2, noise=0.2)
+    result = focus.motor_focus(tube, tube.read, usual=2.0, say=quiet)
+    assert result["found"] and abs(tube.tube - tube.best) <= focus.STEP / 4
+
+
+def test_a_sweep_that_misses_focus_moves_towards_it():
+    tube = Drawtube(best=2200, noise=0.2)
+    result = focus.motor_focus(tube, tube.read, usual=2.0, say=quiet)
+    assert result["found"] and result["sweeps"] > 1 and abs(tube.tube - tube.best) <= focus.STEP / 4
+
+
+def test_a_flat_sweep_widens_its_step():
+    tube = Drawtube(best=0, slope=2000, noise=0.05)
+    result = focus.motor_focus(tube, tube.read, usual=2.0, say=quiet)
+    assert result["step"] > focus.STEP
 
 
 def test_with_no_focus_in_reach_the_focuser_goes_back_where_it_started():
     tube = Drawtube(best=50000)
-    result = focus.motor_focus(tube, tube.read, usual=2.0, say=lambda *a: None)
+    result = focus.motor_focus(tube, tube.read, usual=2.0, say=quiet)
+    assert not result["found"] and tube.at == 0 and tube.moves[-1] < 0
+
+
+def test_a_fitted_focus_that_checks_worse_than_the_start_is_not_kept():
+    """Seeing that goes bad just as the check is taken: the run goes back
+    to where it started rather than leave focus worse."""
+    tube = Drawtube(best=100, noise=0.1)
+    reads = []
+
+    def read(frames):
+        reads.append(frames)
+        values = tube.read(frames)
+        return [v * 3 for v in values] if frames == focus.CHECK_FRAMES else values
+    result = focus.motor_focus(tube, read, usual=2.0, say=quiet)
     assert not result["found"] and tube.at == 0
+
+
+def test_a_run_never_goes_further_than_its_travel_from_the_start():
+    tube = Drawtube(best=40000, reach=60000, slope=10000)
+    focus.motor_focus(tube, tube.read, usual=2.0, say=quiet)
+    position, furthest = 0, 0
+    for move in tube.moves:
+        position += move
+        furthest = max(furthest, abs(position))
+    assert furthest <= focus.MOTOR_TRAVEL
+
+
+def test_a_hot_pixel_or_the_measuring_box_is_not_a_star():
+    assert focus.sample(lambda frames: [0.6, None, 25.0], 3, usual=2.0)["hfr"] is None
+    found = focus.sample(lambda frames: [3.0, 3.4, 2.8], 3, usual=2.0)
+    assert found["hfr"] == 3.0 and found["frames"] == 3 and found["scatter"] == 0.2
+
+
+def test_the_fit_refuses_a_curve_with_one_side_only():
+    points = [{"at": 400 - 100 * k, "hfr": 10 - k * 0.9, "scatter": 0.1} for k in range(9)]
+    fitted = focus.fit_curve(points, 100)
+    assert not fitted["ok"] and fitted["reason"] == "edge" and fitted["toward"] == -1
+
+
+def test_the_fit_finds_the_bottom_of_a_v():
+    points = [{"at": 400 - 100 * k, "hfr": 2 + abs(400 - 100 * k - 37) / 60, "scatter": 0.1} for k in range(9)]
+    fitted = focus.fit_curve(points, 100)
+    assert fitted["ok"] and abs(fitted["focus"] - 37) < 20 and fitted["r2"] > 0.95
+
+
+def test_the_step_is_measured_as_a_quarter_of_the_way_to_two_and_a_half_times():
+    tube = Drawtube(best=0, slope=60)
+    step = focus.measure_step(tube, tube.read, usual=2.0, say=quiet, backlash=500)
+    # 2.5 times HFR 2 is 3 more pixels: 180 half-steps, reached at the 192 mark
+    assert step == 48 and tube.at == 0 and tube.moves[-1] < 0
+
+
+@pytest.mark.parametrize("slack", [300, 800])
+def test_the_backlash_is_measured_and_half_as_much_again_kept(slack):
+    tube = Drawtube(best=0, slack=slack, slope=200, reach=60000, noise=0.1)
+    found = focus.measure_backlash(tube, tube.read, usual=2.0, step=200, say=quiet)
+    assert 1.5 * slack - 100 <= found <= 1.5 * slack + 100
 
 
 def test_a_motor_dry_run_turns_nothing_and_takes_no_frames(monkeypatch, capsys):
@@ -387,6 +502,7 @@ def motor_run(monkeypatch, capsys, hfr, *flags):
     monkeypatch.setattr(focuser.Focuser, "open", classmethod(lambda cls, *a, **k: type(
         "M", (), {"move": lambda self, n: tube.move(n), "close": lambda self: None})()))
     monkeypatch.setattr(focus, "Camera", StarCamera)
+    monkeypatch.setattr(focus, "SETTLE_S", 0)
     monkeypatch.setattr(focus, "measure_stars", lambda lum: (hfr, None))
     monkeypatch.setattr(focus, "usual_best", lambda: 2.4 * focus.arcsec_per_pixel())
     monkeypatch.setattr(sys, "argv", ["focus.py", *flags, "--json"])
@@ -403,8 +519,9 @@ def test_motor_focus_measures_first_and_leaves_good_focus_alone(monkeypatch, cap
 
 
 def test_motor_focus_anyway_turns_even_when_focus_is_good(monkeypatch, capsys, tmp_path):
-    monkeypatch.setattr(focus, "motor_focus", lambda motor, read, usual, say=print: (
-        motor.move(32), {"hfr": 1.9, "moved": 32, "found": True, "readings": []})[1])
+    monkeypatch.setattr(focus, "motor_focus", lambda motor, read, usual, **k: (
+        motor.move(32), {"hfr": 1.9, "moved": 32, "found": True, "readings": [], "fit": None,
+                         "start_hfr": 1.86})[1])
     monkeypatch.setattr(focus, "RUNS_FILE", tmp_path / "runs.jsonl")
     answer, tube = motor_run(monkeypatch, capsys, 1.86, "--motor", "--anyway")
     assert tube.moves == [32] and not answer.get("left_alone")
@@ -438,10 +555,19 @@ def test_focus_counts_as_done_from_a_motor_run_or_a_good_check(tmp_path, monkeyp
     assert focus.usual_best() == 2.8      # a check does not move what good focus is
 
 
-def test_each_motor_reading_says_what_it_is_doing_and_goes_out_at_once(monkeypatch):
+def test_measured_step_and_backlash_are_kept_and_used(monkeypatch, tmp_path):
+    monkeypatch.setattr(focus, "FOCUSER_FILE", tmp_path / "focuser.json")
+    assert focus.focuser_settings()["step"] == focus.STEP and not focus.focuser_settings()["step_measured"]
+    focus.keep_focuser(step=120)
+    focus.keep_focuser(backlash=900)
+    kept = focus.focuser_settings()
+    assert kept["step"] == 120 and kept["backlash"] == 900 and kept["step_measured"] and kept["backlash_measured"]
+
+
+def test_each_motor_reading_is_numbered_says_its_step_and_goes_out_at_once(monkeypatch):
     """A progress report reads the log mid-run: every reading has to be in it
     the moment it is measured (18 October 2026: three minutes of a run showed
-    nothing, held back until the end), and say which way it is turning."""
+    nothing, held back until the end), numbered, with the step it took."""
     flushed = []
 
     class Out(io.StringIO):
@@ -449,68 +575,14 @@ def test_each_motor_reading_says_what_it_is_doing_and_goes_out_at_once(monkeypat
             flushed.append(self.getvalue())
     out = Out()
     monkeypatch.setattr(sys, "stdout", out)
-    tube = Drawtube(best=300)
+    tube = Drawtube(best=100)
     focus.motor_focus(tube, tube.read, usual=2.0)
     lines = out.getvalue().splitlines()
     assert lines and len(flushed) >= len(lines)
-    said = " ".join(lines)
-    for doing in ("start", "going out", "coming in", "out past slack", "in to sharpest"):
-        assert doing in said
-    assert all("aim 2.00" in line for line in lines)
-    assert "best" in lines[-1]
-
-
-class ShallowDrawtube(Drawtube):
-    """A focuser like the 150P's on 18 October 2026: 300 half-steps to a pixel
-    of HFR, stars lost only beyond a turn and a half from focus."""
-
-    def read(self, frames):
-        off = abs(self.tube - self.best)
-        return None if off > 6000 else 2.0 + off / 300
-
-
-@pytest.mark.parametrize("best", [-2500, -1500, 1500, 2500])
-def test_far_out_of_focus_the_steps_grow_and_focus_is_still_found(best):
-    """Fixed small steps gave up before reaching focus from this far out;
-    steps sized from the stars get there in a few dozen readings. (Further
-    out, HFR is beyond what the measuring box can read: no guide at all.)"""
-    tube = ShallowDrawtube(best, slack=150)
-    result = focus.motor_focus(tube, tube.read, usual=2.0, say=lambda *a: None)
-    assert result["found"]
-    assert abs(tube.tube - tube.best) <= 32
-    assert len(result["readings"]) <= 85
-    assert tube.moves[-1] < 0
-
-
-def test_a_hot_pixel_is_not_taken_for_a_sharp_star():
-    readings = iter([None, 0.6, None] + [None] * 400)
-    tube = Drawtube(best=50000)
-    result = focus.motor_focus(tube, lambda frames: next(readings), usual=2.0, say=lambda *a: None)
-    assert not result["found"] and tube.at == 0
-
-
-def test_stars_that_do_not_change_as_it_turns_are_said_once():
-    said = []
-    tube = Drawtube(best=0)
-    focus.motor_focus(tube, lambda frames: 15.0, usual=2.0, say=said.append)
-    assert sum("not changing" in line for line in said) == 1
-
-
-def test_a_run_never_goes_further_than_its_travel_from_the_start():
-    """18 October 2026: readings stuck at the measuring box's size (HFR ~22)
-    with one noisy dip sent a run five turns in. Readings that large set no
-    step size, and no run goes beyond MOTOR_TRAVEL either way."""
-    import random
-    rng = random.Random(1)
-    tube = Drawtube(best=50000)
-    result = focus.motor_focus(tube, lambda frames: rng.choice([22.0, 21.5, 19.3, 22.4]),
-                               usual=2.28, say=lambda *a: None)
-    assert not result["found"] and tube.at == 0
-    position, furthest = 0, 0
-    for move in tube.moves:
-        position += move
-        furthest = max(furthest, abs(position))
-    assert furthest <= focus.MOTOR_TRAVEL
+    readings = [line for line in lines if line.strip().startswith("#")]
+    assert readings[0].split()[0] == "#1" and readings[1].split()[0] == "#2"
+    assert any(f"step {-focus.STEP:+5d}" in line for line in readings)
+    assert any("fitted focus" in line for line in lines)        # the sweep drawn as text
 
 
 def test_a_focus_reading_puts_its_frame_and_line_on_the_status_page(monkeypatch, tmp_path):
@@ -522,24 +594,6 @@ def test_a_focus_reading_puts_its_frame_and_line_on_the_status_page(monkeypatch,
         assert picture.width == 900
     note = json.loads((tmp_path / "web" / "latest.json").read_text())
     assert note["kind"] == "focus" and "coming in -480 HFR 6.10 best 6.10 aim 2.28" in note["detail"]
-
-
-def test_near_focus_a_jumpy_reading_never_makes_a_big_step():
-    """18 October 2026: from HFR 5 one frame read 10.6 and the run took steps
-    of 900 half-steps. Near focus the steps stay small, whatever one reading says."""
-    jumps = iter([4.9, 10.6, 5.5, 4.3, 6.5, 4.1, 6.7, 7.8, 10.2] * 40)
-    tube = Drawtube(best=0)
-    focus.motor_focus(tube, lambda frames: next(jumps), usual=2.28, say=lambda *a: None)
-    assert max(abs(m) for m in tube.moves[:20]) <= focus.MOTOR_SLACK + focus.MOTOR_OUT
-
-
-def test_each_reading_is_numbered_and_says_the_step_it_took():
-    said = []
-    tube = Drawtube(best=300)
-    focus.motor_focus(tube, tube.read, usual=2.0, say=said.append)
-    lines = [line for line in said if "HFR" in line]
-    assert lines[0].split()[0] == "#1" and lines[1].split()[0] == "#2"
-    assert "step   +96" in lines[1]
 
 
 def test_a_long_reading_fits_across_the_page_picture():

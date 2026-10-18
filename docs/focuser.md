@@ -70,23 +70,46 @@ is too weak to harm anything at the end of the travel: it stalls and ticks.
     ./focus.py --motor
     ./focus.py --motor --dry-run    only checks the focuser is plugged in; nothing turns
 
-Point at a field with plenty of stars first (near Deneb or Vega; `--motor`
-focuses wherever the telescope is). It takes 1 s pictures at gain 1500 and:
+Point at a field with plenty of stars first (a rich cluster such as the
+Double Cluster gives steadier readings than a lone bright star; `--motor`
+focuses wherever the telescope is). It takes 1 s pictures at gain 1500 and
+does what the established autofocus programs (N.I.N.A., Ekos's Linear 1
+Pass) do, because one frame's HFR near focus jumps by half again from
+seeing alone (18 October 2026: 4.9, 10.6, 5.5 over 96 half-steps), so no
+single reading can say which way focus lies:
 
-1. steps the drawtube out by 96 half-steps until the stars are clearly
-   past focus (or gone);
-2. creeps back in by 32 at a time, measuring each time, through the
-   sharpest point until the stars grow again;
-3. goes back out 300 half-steps, beyond the gears' slack, and comes in once
-   to the sharpest position, so the last move is always inward.
+1. measures where it is (three frames); within 10% of the usual best it
+   leaves focus alone (`--anyway` focuses regardless). The usual best only
+   decides this: it is never the target, since a night of worse seeing has
+   its own best;
+2. goes out beyond the gears' slack and comes in to the top of a sweep, so
+   every point is reached moving in and the slack never enters a reading;
+3. sweeps in through nine positions a step apart, three frames at each,
+   keeping each point's median and scatter, with a second's pause after
+   each move for the tube to settle;
+4. fits a hyperbola to the whole sweep, checked against two straight wings,
+   and refuses a fit with too few points, no rise on one side, focus near an
+   end of the sweep, R² under 0.8, a focus that moves by over half a step
+   when any one point is left out, or wings that cross more than a step
+   away. Focus off one end moves the next sweep that way; a flat sweep
+   doubles the step; up to four sweeps;
+5. goes out beyond the slack and in once to the fitted focus, so the last
+   move is inward, and checks it with five frames: kept only if no worse
+   than the start and near what the fit predicted (within the frames'
+   scatter); otherwise back to where it started.
 
-A run starts with a reading, and if focus is already within 10% of the
-usual best it is left alone (`--anyway` focuses regardless); `./focus.py
---check` takes that reading and nothing more. Only readings taken moving in are trusted: the gears' slack is bigger than
-a step, so a move out and a move in by the same count do not land in the
-same place. Each run is kept in `cache/focus_runs.jsonl`. On 15 October
-2026 it took the 150P to HFR 2.47 (3.3"), 128
-half-steps out from where it started.
+Every reading is numbered with its step and shown on the status page;
+each sweep is drawn as text in the log. A run never goes more than two
+turns from where it started. Each kept run is in `cache/focus_runs.jsonl`.
+
+    ./focus.py --sweep               one sweep and fit, then back to the start: the curve only
+    ./focus.py --measure-step        from focus, in until the stars are 2.5 times their size; a quarter of that is the step
+    ./focus.py --measure-backlash    the slack, on the steep side of the curve, twice; half as much again is kept
+
+Until measured, the step is 256 half-steps and the slack overshoot 1536:
+the gears showed "well over a quarter turn" (1024) of slack, and the
+overshoot must be larger than the slack, never smaller; too much costs only
+time. What is measured is kept in `cache/focuser.json`.
 
 The two shafts have to be in line. With the motor's ear screws done up
 where they happened to sit, the printed coupler bound and the motor fell
