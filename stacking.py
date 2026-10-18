@@ -315,7 +315,12 @@ def judge(q, accepted):
         return False, "stars bloated (seeing or shake)"
     if q["roundness"] < 0.75 * typical["roundness"]:
         return False, "stars trailed (wind or a knock?)"
-    if q["background"] > 1.5 * typical["background"]:
+    # The sky's rise against its own level, measured from its own grain:
+    # after the bias it can sit near or below zero (18 October 2026, about
+    # -55 after the camera was moved to another port), where "half as much
+    # again" of a negative number rejected every frame of a clear night.
+    rise = q["background"] - typical["background"]
+    if rise > max(0.5 * abs(typical["background"]), 10 * q.get("noise", 0) or 0):
         return False, "sky brightened (cloud or a light)"
     return True, ""
 

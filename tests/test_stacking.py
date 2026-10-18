@@ -608,3 +608,12 @@ def test_a_picture_of_one_star_among_many_is_labelled(tmp_path, monkeypatch):
         raise interface.Refusal("PLATE_SOLVE_FAILED", "no")
     monkeypatch.setattr(depth, "plate", fails)
     assert process.mark(picture, rgb, "Tabby", said.append) is picture and "not labelled" in said[-1]
+
+
+def test_a_sky_below_the_bias_level_is_not_taken_for_a_brightening_one():
+    """18 October 2026: with the camera on another port the calibrated sky sat
+    near -55, and "half as much again" of that rejected 16 of 19 clear frames."""
+    accepted = [good(background=-55.0) for _ in range(5)]
+    for level in (-56.4, -54.2, -53.6):
+        assert stacking.judge(good(background=level), accepted) == (True, "")
+    assert "sky brightened" in stacking.judge(good(background=60.0), accepted)[1]
