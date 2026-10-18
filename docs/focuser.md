@@ -103,6 +103,7 @@ each sweep is drawn as text in the log. A run never goes more than two
 turns from where it started. Each kept run is in `cache/focus_runs.jsonl`.
 
     ./focus.py --sweep               one sweep and fit, then back to the start: the curve only
+    ./focus.py --find                far out, no star measuring: half a turn at a time in, then out, until stars do
     ./focus.py --measure-step        from focus, in until the stars are 2.5 times their size; a quarter of that is the step
     ./focus.py --measure-backlash    the slack, on the steep side of the curve, twice; half as much again is kept
 

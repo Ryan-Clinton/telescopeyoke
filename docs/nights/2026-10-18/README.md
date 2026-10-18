@@ -18,6 +18,8 @@ that run started.
 | `2020-motor.log` | From HFR ~6: readings jumping 4-10 from frame to frame made big steps near focus |
 | `2027-motor-deneb.log` | Small steps near focus on Deneb: readings 3.5-8 for 32-step moves, ended 5.43 |
 | `2031-motor-double-cluster.log` | On the Double Cluster: steadier, best 2.87 |
+| `2101-sweep-slipped.log` | The new fitted sweep (`focus.py --sweep`), first time on the sky. Started at HFR 3.25 ±0.03; its first move out (2560 half-steps) slipped the coupler, and every point after read 7.2-7.5: the drawtube was not following the motor |
+| `2109-sweep-no-stars.log` | After the coupler was refitted: no stars at any point (HFR over 12 or none); focus had moved |
 
 The code changes made during the evening are the commits of 18 October in
 `focus.py` and `tests/test_focus.py`.

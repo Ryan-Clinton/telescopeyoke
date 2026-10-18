@@ -1,0 +1,47 @@
+Focus now: soft: HFR 3.17, against 2.28 usually (1.4 times): worth focusing.
+Not yet measured, so assumed: step 256, backlash 1536 (--measure-step, --measure-backlash).
+  #1   start           step    +0  at     +0  HFR 3.25 ±0.03  (3/3 frames)
+  sweep 1: 9 positions 256 half-steps apart around +0, 3 frames each, every one reached moving in
+  #2   sweep           step    +0  at  +1024  HFR 7.32 ±0.28  (3/3 frames)
+  #3   sweep           step  -256  at   +768  HFR 7.18 ±0.01  (3/3 frames)
+  #4   sweep           step  -256  at   +512  HFR 7.44 ±0.04  (3/3 frames)
+  #5   sweep           step  -256  at   +256  HFR 7.30 ±0.04  (3/3 frames)
+  #6   sweep           step  -256  at     +0  HFR 7.44 ±0.02  (3/3 frames)
+  #7   sweep           step  -256  at   -256  HFR 7.43 ±0.01  (3/3 frames)
+  #8   sweep           step  -256  at   -512  HFR 7.23 ±0.01  (3/3 frames)
+  #9   sweep           step  -256  at   -768  HFR 7.37 ±0.07  (3/3 frames)
+  #10  sweep           step  -256  at  -1024  HFR 7.39 ±0.23  (3/3 frames)
+     +1024   7.32  #######################################
+      +768   7.18  #######################################
+      +512   7.44  ########################################
+      +256   7.30  #######################################
+        +0   7.44  ########################################
+      -256   7.43  ########################################
+      -512   7.23  #######################################
+      -768   7.37  ########################################
+     -1024   7.39  ########################################
+  fit refused: flat
+  sweep 2: 9 positions 512 half-steps apart around +0, 3 frames each, every one reached moving in
+  #11  sweep           step    +0  at  +2048  HFR 7.58 ±0.01  (3/3 frames)
+  #12  sweep           step  -512  at  +1536  HFR 7.28 ±0.17  (3/3 frames)
+  #13  sweep           step  -512  at  +1024  HFR 7.23 ±0.03  (3/3 frames)
+  #14  sweep           step  -512  at   +512  HFR 7.23 ±0.07  (3/3 frames)
+  #15  sweep           step  -512  at     +0  HFR 7.34 ±0.03  (3/3 frames)
+  #16  sweep           step  -512  at   -512  HFR 7.52 ±0.18  (3/3 frames)
+  #17  sweep           step  -512  at  -1024  HFR 7.27 ±0.06  (3/3 frames)
+  #18  sweep           step  -512  at  -1536  HFR 7.36 ±0.02  (3/3 frames)
+  #19  sweep           step  -512  at  -2048  HFR 7.33 ±0.09  (3/3 frames)
+     +2048   7.58  ########################################
+     +1536   7.28  ######################################
+     +1024   7.23  ######################################
+      +512   7.23  ######################################
+        +0   7.34  #######################################
+      -512   7.52  ########################################
+     -1024   7.27  ######################################
+     -1536   7.36  #######################################
+     -2048   7.33  #######################################
+  fit refused: flat
+  sweep 3: 9 positions 1024 half-steps apart around +0, 3 frames each, every one reached moving in
+  #20  sweep           step    +0  at  +4096  HFR none  (0/3 frames)
+./focus.py terminated by signal TERM.
+exit 1

@@ -1,0 +1,17 @@
+Focus now: no stars measured: cloud, the cap, or far out of focus.
+Not yet measured, so assumed: step 256, backlash 1536 (--measure-step, --measure-backlash).
+  #1   start           step    +0  at     +0  HFR none  (0/3 frames)
+  sweep 1: 9 positions 256 half-steps apart around +0, 3 frames each, every one reached moving in
+  #2   sweep           step    +0  at  +1024  HFR none  (0/3 frames)
+  #3   sweep           step  -256  at   +768  HFR none  (0/3 frames)
+  #4   sweep           step  -256  at   +512  HFR none  (0/3 frames)
+  #5   sweep           step  -256  at   +256  HFR none  (0/3 frames)
+  #6   sweep           step  -256  at     +0  HFR none  (0/3 frames)
+  #7   sweep           step  -256  at   -256  HFR none  (0/3 frames)
+  #8   sweep           step  -256  at   -512  HFR none  (0/3 frames)
+  #9   sweep           step  -256  at   -768  HFR none  (0/3 frames)
+  #10  sweep           step  -256  at  -1024  HFR none  (0/3 frames)
+  fit refused: too few
+  #11  back to start   step    +0  at     +0  HFR none  (0/1 frames)
+Sweep: no curve fitted; the focuser is back where it started.
+exit 0

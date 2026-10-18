@@ -602,3 +602,15 @@ def test_a_long_reading_fits_across_the_page_picture():
     image = focus.annotate(Image.new("RGB", (900, 600)), line)
     assert image.getpixel((5, 30)) == (0, 0, 0)            # the band is drawn
     assert image.crop((892, 0, 900, 60)).getbbox() is None     # nothing runs off the right edge
+
+
+@pytest.mark.parametrize("best, way", [(-6000, -1), (5000, 1)])
+def test_far_out_of_focus_the_stars_are_found_by_half_turns(best, way):
+    tube = Drawtube(best=best, slope=200, reach=2000)
+    found = focus.find_stars(tube, tube.read, usual=2.0, say=quiet)
+    assert found is not None and found * way > 0 and tube.size() is not None
+
+
+def test_with_no_stars_anywhere_the_search_goes_back_to_the_start():
+    tube = Drawtube(best=60000)
+    assert focus.find_stars(tube, tube.read, usual=2.0, say=quiet) is None and tube.at == 0

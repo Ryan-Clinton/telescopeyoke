@@ -871,6 +871,25 @@ def motor_focus(motor, read, usual, say=progress, step=None, backlash=None, swee
     return dict(result, hfr=None, moved=0, found=False)
 
 
+def find_stars(motor, read, usual, say=progress, stride=2048, turns=2):
+    """Far out of focus, where no star measures: half a turn at a time in,
+    then out, a check after each, until stars measure (HFR under CEILING),
+    so a sweep has something to fit. 18 October 2026: after the focuser was
+    refitted, stars were found again 1.5 turns in. Leaves the focuser where
+    they showed, or back at the start. Returns that place, or None."""
+    drive = Drive(motor)
+    reach = turns * 4096 // stride
+    for way in (-1, 1):
+        for k in range(1, reach + 1):
+            drive.to(way * k * stride)
+            found = sample(read, SWEEP_FRAMES, usual)
+            say(f"  {'in' if way < 0 else 'out'} {k * stride:5d}: HFR {found['hfr'] or 'none'}")
+            if found["hfr"] is not None:
+                return drive.at
+        drive.to(0)
+    return None
+
+
 def measure_step(motor, read, usual, say=progress, backlash=None, increment=64, most=4096):
     """From focus, in by `increment` at a time until the stars are 2.5 times
     the size they were: a sweep step is a quarter of that distance, so the
@@ -1050,6 +1069,11 @@ def run_motor(args, mode="focus"):
                 if "lum" in seen:
                     show(seen["lum"], "focus: " + line)
             drive = Settled(motor)
+            if mode == "find":
+                found = find_stars(drive, read, usual, say=say)
+                print(f"Stars measure {found:+d} half-steps from the start." if found is not None else
+                      "No stars within two turns either way: the focuser is back where it started.", flush=True)
+                return {"found_at": found}
             if mode == "step":
                 found = measure_step(drive, read, usual, say=say)
                 if found:
@@ -1131,11 +1155,14 @@ def main():
     ap.add_argument("--measure-step", action="store_true",
                     help="from focus, measure how far the motor must turn to grow the stars 2.5 times; keeps a "
                          "quarter of it as the sweep step")
+    ap.add_argument("--find", action="store_true",
+                    help="far out of focus: half a turn at a time in, then out, until stars measure")
     ap.add_argument("--measure-backlash", action="store_true",
                     help="measure the focuser gears' slack on the steep side of the curve; keeps half as much "
                          "again as the overshoot")
     args = ap.parse_args()
-    for flag, mode in (("sweep", "sweep"), ("measure_step", "step"), ("measure_backlash", "backlash")):
+    for flag, mode in (("sweep", "sweep"), ("find", "find"), ("measure_step", "step"),
+                       ("measure_backlash", "backlash")):
         if getattr(args, flag):
             return interface.main("focus.motor", lambda: run_motor(args, mode), args.json)
     if args.check:
