@@ -55,6 +55,10 @@ Things worth knowing:
   rotated or refitted. This camera cannot report its temperature, so with a
   bias and a dark at the same gain the dark is scaled to each frame's own hot
   pixels instead of being matched by temperature.
+- **A rejected frame is taken again.** With `--frames N`, each frame thrown
+  out (cloud, a knock, a light) is replaced by one more, up to a quarter
+  more than asked, so a run ends with as many good frames as it can. After
+  three rejected in a row it stops retaking: that is cloud, not bad luck.
 - **The black level has to sit above zero.** The camera's offset (`offset`
   under `[camera]`, also in the Settings screen) lifts every reading so the
   sky's grain is not cut off at zero; 46 gives the Altair 183C about 45 with

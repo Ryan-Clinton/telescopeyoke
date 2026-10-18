@@ -67,6 +67,7 @@ ASSIST_EVERY = 15   # accepted frames between trims of the Dec creep
 # A running run looks here after every frame for an order from "ty run ...".
 ORDERS = config.DATA / "cache" / "run_order.txt"
 KNOWN_ORDERS = ("stop", "recentre", "assist-on", "assist-off")
+RETAKE_GIVE_UP = 3  # with --frames N, no more retakes after this many rejected frames in a row
 CLOUD_STOP = 20     # with --frames 0, stop after this many rejected frames in a row
 PREVIEW_EVERY = 3.0  # seconds between updates of the picture on the web page
 FINISH_FROM = 5      # accepted frames before the live picture is finished like the final one
@@ -374,6 +375,20 @@ ALL_GONE = 0.05     # stars below this share of their kept brightness: gone, not
 PAUSED_NOTE = 900   # seconds between reminders that a --through-cloud run is still paused
 
 
+def retakes(log, asked):
+    """Frames to take over the `asked` count, one for each frame rejected,
+    so a run ends with as many good frames as it can (the person asked for
+    this on 18 October 2026, rather than making do with fewer). At most a
+    quarter more, and none once RETAKE_GIVE_UP frames in a row have been
+    rejected: that is cloud, not bad luck."""
+    measured = judged(log)
+    latest = measured[-RETAKE_GIVE_UP:]
+    if len(latest) == RETAKE_GIVE_UP and not any(f["accepted"] for f in latest):
+        return 0
+    lost = sum(1 for f in measured if not f["accepted"])
+    return min(lost, max(2, asked // 4))
+
+
 def judged(log):
     """The frames that were measured. A frame the live stack had no time for
     is logged with no figures and no verdict: it says nothing about cloud,
@@ -493,7 +508,7 @@ def run(args):
         if told["stop"]:
             return False
         if args.frames:
-            return index < args.frames
+            return index < args.frames + retakes(session.log, args.frames)
         if args.through_cloud and time.monotonic() - checked[0] >= NIGHT_CHECK:
             checked[0] = time.monotonic()
             why = night_over(args.name, site)

@@ -661,3 +661,16 @@ def test_the_live_picture_never_holds_up_the_next_frame(session, monkeypatch):
     release.set()
     run.publish(force=True)                                     # the last waits and draws in full
     assert (run.folder / "web" / "stack.jpg").exists()
+
+
+def test_a_rejected_frame_is_retaken_but_not_into_cloud():
+    """18 October 2026: the person would rather a rejected frame were taken
+    again than make do with fewer."""
+    good = {"accepted": True, "flux": 1.0}
+    bad = {"accepted": False, "flux": 1.0}
+    later = {"accepted": False, "flux": None}          # not measured: says nothing
+    assert shoot.retakes([good] * 10, 19) == 0
+    assert shoot.retakes([good, bad, good, later], 19) == 1
+    assert shoot.retakes([good, bad, good, bad, good, bad, good, bad, good, bad, good, bad, good], 19) == 4
+    assert shoot.retakes([good, bad, good, bad, good], 4) == 2      # at least two, small runs too
+    assert shoot.retakes([good, good, bad, bad, bad], 19) == 0      # three in a row: cloud, stop
