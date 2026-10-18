@@ -101,7 +101,8 @@ What a person does; everything else is automatic.
    --plan` says whether it is ready and what it would do, moving nothing.
    Then `./patrol.py m31-panels` points, images and searches each panel.
    A panel's first good night becomes its reference (`./reference.py
-   M31-P3` lists them); every night after is searched against it. Each
+   M31-P3` lists them), whether it was imaged by the patrol or by
+   `shoot.py` alone; every night after is searched against it. Each
    panel's final picture and search run in the background while the mount
    goes on to the next panel, and the live picture on the page is drawn in
    the background too, so the camera and the mount never wait for either.

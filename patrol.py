@@ -583,7 +583,13 @@ def run(args, say=print):
     if getattr(args, "sweep", False):
         return sweep(args.all_history, say=say)
     if args.analyse:
-        return analyse(args.analyse, say)
+        session = Path(args.analyse)
+        result = analyse(args.analyse, say)
+        # A panel's first night becomes its reference whichever way it was
+        # imaged: through the patrol or by shoot.py alone (18 October 2026,
+        # panel 8 imaged directly was left with nothing to search against).
+        first_reference(session.parent.name, session, say)
+        return result
     p = programme(args.programme)
     if args.minutes:
         p["minutes"] = args.minutes
@@ -748,7 +754,17 @@ def searchable(session):
     if not (session / "final.fits").is_file() or (session / "patrol.json").exists():
         return False
     ref, owner = reference.for_field(session.parent.name)
-    return ref is not None and session.resolve() not in reference.sessions_used(owner)
+    if ref is None or (reference.newest(session.parent.name) is None and is_panel(session.parent.name)):
+        # A mosaic panel with no reference of its own: searched all the same,
+        # so its depth is measured and its first good night becomes its reference.
+        return is_panel(session.parent.name)
+    return session.resolve() not in reference.sessions_used(owner)
+
+
+def is_panel(field):
+    """Whether a field is a mosaic panel (M31-P4)."""
+    import re
+    return re.match(r".+-P\d+$", field) is not None
 
 
 def search_later(session, say=print, start=subprocess.Popen):

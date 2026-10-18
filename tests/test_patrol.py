@@ -381,3 +381,30 @@ def test_a_mosaic_moves_to_the_next_panel_while_the_last_is_still_searched(tmp_p
     assert "shoot.py M31-P1 --frames --no-restack" in events
     assert events[-2:] == ["mount.py goto M31-P1", "second look M31-P1"]
     assert [f["field"] for f in answer["fields"]] == ["M31-P1", "M31-P2"]
+
+
+def test_a_panel_imaged_without_the_patrol_still_becomes_its_first_reference(tmp_path, monkeypatch):
+    """18 October 2026: panel 8, imaged by shoot.py alone, was searched but
+    left with no reference of its own, so the next night had nothing to
+    compare it with."""
+    made = []
+    monkeypatch.setattr(patrol, "analyse", lambda session, say: {"depth": 16.8})
+    monkeypatch.setattr(patrol, "first_reference", lambda name, session, say=print: made.append((name, session)))
+    session = tmp_path / "frames" / "M31-P8" / "20261018-232611"
+    args = argparse.Namespace(programme=None, analyse=str(session), minutes=None, plan=False, dry_run=False)
+    assert patrol.run(args, say=lambda *_: None) == {"depth": 16.8}
+    assert made == [("M31-P8", session)]
+
+
+def test_a_panel_with_no_reference_at_all_is_still_searched(tmp_path, monkeypatch):
+    import reference
+    session = tmp_path / "M31-P9" / "20261018-232611"
+    session.mkdir(parents=True)
+    (session / "final.fits").write_bytes(b"")
+    monkeypatch.setattr(reference, "for_field", lambda field: (None, None))
+    monkeypatch.setattr(reference, "newest", lambda field: None)
+    assert patrol.searchable(session)
+    other = tmp_path / "NGC7000" / "20261018-232611"
+    other.mkdir(parents=True)
+    (other / "final.fits").write_bytes(b"")
+    assert not patrol.searchable(other)       # a field nobody patrols is left alone
