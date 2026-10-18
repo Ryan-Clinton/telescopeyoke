@@ -149,10 +149,17 @@ class Camera:
             self.speed = None
         self.shutter = shutter_share(self.speed)
 
-    def settings(self, fan=None, offset=None):
-        """The cooling fan ("on" or "off") and the black level (offset), on
-        drivers that have them; None leaves either as it is."""
+    def settings(self, fan=None, offset=None, speed=None):
+        """The cooling fan ("on" or "off"), the black level (offset) and the
+        readout speed, on drivers that have them; None leaves each as it is.
+        A new speed changes the shutter's share (shutter_share), so it is
+        read again."""
         c = self.client
+        if speed is not None:
+            c.set(self.name, "CCD_CONTROLS", Speed=int(speed))
+            c.pump(1)
+            self.speed = int(speed)
+            self.shutter = shutter_share(self.speed)
         if fan in ("on", "off") and c.get(self.name, "TC_FAN_CONTROL"):
             c.set(self.name, "TC_FAN_CONTROL", **{f"TC_FAN_{fan.upper()}": "On"})
         if offset is not None and c.get(self.name, "CCD_OFFSET"):

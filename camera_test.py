@@ -439,6 +439,8 @@ def main():
     ap.add_argument("--corrected", action="store_true",
                     help="with --trail: leave camera.py's correction on, to check it; nothing is remembered")
     ap.add_argument("--gains", type=int, nargs="+", default=list(GAINS))
+    ap.add_argument("--speeds", type=int, nargs="+",
+                    help="with --gain-sweep: each at each of these readout speeds (Speed 2 is put back after)")
     ap.add_argument("--exposures", type=float, nargs="+",
                     help="with --gain-sweep: each gain at each of these exposures, seconds")
     ap.add_argument("--exposure", type=float,
@@ -475,6 +477,22 @@ def row_stripes(mosaic):
     return rows - ndimage.median_filter(rows, size=301, mode="nearest")
 
 
+def stripes_picture(mosaic, path, size=(900, 600)):
+    """A middle piece of one frame's brightness, scaled by its own noise
+    the same way for every frame (sky at grey, -3 to +6 times the noise),
+    so one night's stripes can be set beside another's fairly."""
+    from PIL import Image
+    lum = luminance(mosaic).astype(np.float64)
+    h, w = lum.shape
+    y0, x0 = (h - size[1]) // 2, (w - size[0]) // 2
+    piece = lum[y0:y0 + size[1], x0:x0 + size[0]]
+    sky = np.median(piece)
+    noise = 1.4826 * np.median(np.abs(piece - sky)) + 1e-9
+    scaled = np.clip((piece - sky) / noise, -3, 6)
+    Image.fromarray(((scaled + 3) / 9 * 255).astype(np.uint8)).save(path, quality=90)
+    return str(path)
+
+
 def stripes_in(session, most=12, say=print):
     """Whether a run's stripes are fixed in the sensor or new in each frame,
     from its saved frames (the camera is not used): how alike the stripes
@@ -495,6 +513,11 @@ def stripes_in(session, most=12, say=print):
               "one_frame_adu": round(float(np.std(stripes, axis=1).mean()), 1),
               "averaged_adu": round(float(np.std(stripes.mean(axis=0))), 1)}
     answer["fixed"] = answer["alike"] > 0.5
+    with fits.open(files[0]) as h:
+        first = next(x.data for x in h if x.data is not None)
+    picture = config.DATA / "web" / f"stripes-{Path(session).parent.name}-{Path(session).name}.jpg"
+    picture.parent.mkdir(parents=True, exist_ok=True)
+    answer["picture"] = stripes_picture(first, picture)
     say(f"{Path(session).parent.name} {Path(session).name}: stripes alike from frame to frame {answer['alike']:g} "
         f"(1 the same, 0 unrelated); {answer['one_frame_adu']:g} ADU in one frame, {answer['averaged_adu']:g} in "
         f"the average of {len(files)}: " + ("fixed in the sensor, for dark frames to take out" if answer["fixed"]
@@ -556,20 +579,24 @@ def run(args):
     print(f"{'gain':>5} {'exp':>5} {'sky':>6} {'grain':>6} {'burnt':>7} {'stars':>6} {'signal':>7} {'FWHM':>5} "
           f"{'round':>5} {'stripes':>7}")
     for exposure in exposures:
-        for gain in args.gains:
-            with Camera(gain=gain) as cam:
-                mosaic, _ = cam.frame(exposure)
-            q = measure(mosaic)
-            # Row read noise against the sky's own grain (1 is none to speak of):
-            # more sky signal a frame, from a longer frame or a gentler gain, beats it down.
-            q["stripes"] = banding(mosaic)
-            if exposure == exposures[0]:
-                results.append((gain, q))
-            rows.append(dict(q, gain=gain, exposure_s=exposure))
-            fwhm = "" if q["fwhm"] is None else f"{q['fwhm']:.1f}"
-            print(f"{gain:>5} {exposure:>5g} {q['background']:>6.0f} {q['noise']:>6.1f} {q['burnt']:>7.3%} "
-                  f"{q['stars']:>6} {q['signal']:>7.0f} {fwhm:>5} {q.get('roundness') or 0:>5.2f} "
-                  f"{q['stripes']:>7.1f}", flush=True)
+        for speed in (args.speeds or [None]):
+            for gain in args.gains:
+                with Camera(gain=gain) as cam:
+                    if speed is not None:
+                        cam.settings(speed=speed)
+                        cam.frame(1.0)                  # one frame to let the change take
+                    mosaic, _ = cam.frame(exposure)
+                q = measure(mosaic)
+                # Row read noise against the sky's own grain (1 is none to speak of):
+                # more sky signal a frame, from a longer frame or a gentler gain, beats it down.
+                q["stripes"] = banding(mosaic)
+                if exposure == exposures[0]:
+                    results.append((gain, q))
+                rows.append(dict(q, gain=gain, exposure_s=exposure, speed=speed))
+                fwhm = "" if q["fwhm"] is None else f"{q['fwhm']:.1f}"
+                print(f"{gain:>5} {exposure:>5g} {'' if speed is None else 'speed ' + str(speed)} {q['background']:>6.0f} {q['noise']:>6.1f} {q['burnt']:>7.3%} "
+                      f"{q['stars']:>6} {q['signal']:>7.0f} {fwhm:>5} {q.get('roundness') or 0:>5.2f} "
+                      f"{q['stripes']:>7.1f}", flush=True)
     best = recommend(results)
     print(f"\nSuggested gain: {best}" if best else "\nNo stars found at any gain.")
     calm = min(rows, key=lambda r: r["stripes"])
