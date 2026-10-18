@@ -639,3 +639,13 @@ stacking, so part is fixed in the sensor: dark frames should take that out
 runs of tonight are the test). The fan and black level are now set from
 config.toml every time the camera opens.
 
+
+**The stripes are row read noise, new in every frame** (`camera_test.py
+--stripes`): alike from one frame to the next 0.01 to 0.13, 2.1 to 2.4 ADU
+in one frame and a third of that averaged over twelve. Dark frames will not
+take them out; more sky signal a frame beats them down. A gain sweep on M33
+(`--gain-sweep --gains 900 1500 --exposures 16 32`), stripes against the
+sky's grain, 1 being none: gain 900 at 16 s 6.2, 1500 at 16 s 4.8, 900 at
+32 s 5.3, 1500 at 32 s 3.2, stars a little less round at 32 s (0.82 against
+0.91). A lower gain made them worse, as this sensor's read noise rises
+there; a longer frame made them weaker. M33's patrol now takes 32 s frames.
