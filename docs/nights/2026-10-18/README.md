@@ -20,6 +20,7 @@ that run started.
 | `2031-motor-double-cluster.log` | On the Double Cluster: steadier, best 2.87 |
 | `2101-sweep-slipped.log` | The new fitted sweep (`focus.py --sweep`), first time on the sky. Started at HFR 3.25 ±0.03; its first move out (2560 half-steps) slipped the coupler, and every point after read 7.2-7.5: the drawtube was not following the motor |
 | `2109-sweep-no-stars.log` | After the coupler was refitted: no stars at any point (HFR over 12 or none); focus had moved |
+| `2113-hand-aid.log` | Focused by hand with the spoken aid: HFR 2.1-2.2, and `--check` read 2.15 against the usual 2.28 |
 
 The code changes made during the evening are the commits of 18 October in
 `focus.py` and `tests/test_focus.py`.
