@@ -39,6 +39,7 @@ from the pole.
 import argparse
 import json
 import math
+from pathlib import Path
 import time
 from xml.sax.saxutils import quoteattr
 
@@ -429,6 +430,8 @@ def main():
     what.add_argument("--gain-sweep", action="store_true")
     what.add_argument("--timing", action="store_true")
     what.add_argument("--trail", action="store_true")
+    what.add_argument("--stripes", metavar="SESSION",
+                      help="whether a run's stripes are fixed in the sensor or new each frame, from its saved frames")
     what.add_argument("--banding", action="store_true",
                       help="how strong the horizontal stripes are with the fan on and off and at two black levels")
     ap.add_argument("--keep-best", action="store_true",
@@ -462,6 +465,41 @@ def banding(mosaic):
     return round(float(np.std(rows - smooth) / max(noise, 1e-9)), 1)
 
 
+def row_stripes(mosaic):
+    """Each row's median brightness less the slow gradient down the frame:
+    the stripes alone, row by row."""
+    from scipy import ndimage
+    rows = np.median(luminance(mosaic).astype(np.float64), axis=1)
+    return rows - ndimage.median_filter(rows, size=301, mode="nearest")
+
+
+def stripes_in(session, most=12, say=print):
+    """Whether a run's stripes are fixed in the sensor or new in each frame,
+    from its saved frames (the camera is not used): how alike the stripes
+    of one frame are to another's, and how big they are in one frame and in
+    the average of all. Alike and as big averaged means dark frames take
+    them out; unalike and shrinking means stacking and dithering do."""
+    from astropy.io import fits
+    files = sorted(Path(session).glob("light-*.fits"))[:most]
+    if len(files) < 3:
+        raise interface.Refusal("NO_SESSION", f"Fewer than three saved frames in {session}.")
+    found = []
+    for f in files:
+        with fits.open(f) as h:
+            found.append(row_stripes(next(x.data for x in h if x.data is not None)))
+    stripes = np.array(found)
+    alike = np.corrcoef(stripes)[~np.eye(len(files), dtype=bool)]
+    answer = {"session": str(session), "frames": len(files), "alike": round(float(np.median(alike)), 2),
+              "one_frame_adu": round(float(np.std(stripes, axis=1).mean()), 1),
+              "averaged_adu": round(float(np.std(stripes.mean(axis=0))), 1)}
+    answer["fixed"] = answer["alike"] > 0.5
+    say(f"{Path(session).parent.name} {Path(session).name}: stripes alike from frame to frame {answer['alike']:g} "
+        f"(1 the same, 0 unrelated); {answer['one_frame_adu']:g} ADU in one frame, {answer['averaged_adu']:g} in "
+        f"the average of {len(files)}: " + ("fixed in the sensor, for dark frames to take out" if answer["fixed"]
+                                            else "new in each frame, for stacking and dithering to spread"))
+    return answer
+
+
 def banding_trial(exposure, gain, frames=2, keep=False, settings=BANDING_SETTINGS, say=print):
     """Frames at each (fan, offset) in turn, and how striped each is. The
     mount is not touched. With `keep`, the weakest is kept in config.toml."""
@@ -482,6 +520,8 @@ def banding_trial(exposure, gain, frames=2, keep=False, settings=BANDING_SETTING
 
 
 def run(args):
+    if getattr(args, "stripes", None):      # saved frames only: nothing to dry-run
+        return stripes_in(args.stripes)
     if getattr(args, "dry_run", False):
         note = ("Stops the mount following the sky for one frame of "
                 f"{args.exposure or 10.0:g} s, so the stars trail, and starts it following again. Nothing is slewed."
@@ -497,6 +537,8 @@ def run(args):
         return timing(args.gain, frames=min(args.frames, 3))
     if args.trail:
         return trail(args.exposure or 10.0, args.gain, args.corrected)
+    if args.stripes:
+        return stripes_in(args.stripes)
     if args.banding:
         return banding_trial(args.exposure or 16.0, args.gain, min(args.frames, 2), args.keep_best)
     if args.throughput:

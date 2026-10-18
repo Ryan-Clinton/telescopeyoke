@@ -571,3 +571,20 @@ def test_the_camera_sets_its_fan_and_black_level_each_time_it_opens(world, monke
     with camera.Camera():
         pass
     assert ("TC_FAN_CONTROL", {"TC_FAN_OFF": "On"}) in sets and ("CCD_OFFSET", {"OFFSET": 50}) in sets
+
+
+def test_stripes_new_in_each_frame_are_told_from_stripes_fixed_in_the_sensor(tmp_path):
+    import camera_test
+    from astropy.io import fits as afits
+    rng = np.random.default_rng(3)
+    rows = np.arange(400)[:, None]
+    for case, fixed in (("random", False), ("fixed", True)):
+        folder = tmp_path / case
+        folder.mkdir()
+        for i in range(5):
+            phase = 0 if fixed else rng.uniform(0, 100)
+            lum = 1000 + rng.normal(0, 20, (400, 600)) + 8 * np.sin((rows + phase) / 7.0)
+            mosaic = np.repeat(np.repeat(lum, 2, 0), 2, 1) / 4
+            afits.PrimaryHDU(mosaic.astype(np.float32)).writeto(folder / f"light-{i:04d}.fits")
+        found = camera_test.stripes_in(folder, say=lambda s: None)
+        assert found["fixed"] is fixed
