@@ -619,7 +619,9 @@ def run(args, say=print):
     if order is not None:
         answer["order"] = order
     # For a person to confirm (the console's plan): what moves first, and where to.
-    answer.update(would_move=True, target=chosen[0], goto=first_goto(chosen[0]))
+    # In daylight no panel fits what is left of the night, and nothing would move.
+    answer.update(would_move=bool(chosen), target=chosen[0] if chosen else None,
+                  goto=first_goto(chosen[0]) if chosen else None)
     if args.plan:
         return answer
     stopping = [i for i in items if i["stops"]]

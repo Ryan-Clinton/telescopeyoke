@@ -56,6 +56,21 @@ def test_the_plan_moves_nothing(tmp_path, monkeypatch):
     assert not reference["ok"] and "--make" in reference["detail"]
 
 
+def test_a_mosaic_plan_with_no_night_left_would_move_nothing(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    monkeypatch.setattr(mount, "LOCK_FILE", tmp_path / "unlocked")
+    monkeypatch.setattr(patrol.subprocess, "run", lambda *a, **k: pytest.fail("the plan ran a command"))
+    monkeypatch.setattr(patrol, "fields", lambda p: ["M31-P1", "M31-P2"])
+    monkeypatch.setattr(mount, "find_target", lambda name: {"ra": 10.68, "dec": 41.27})
+    monkeypatch.setattr(patrol, "priorities", lambda p, names, *a: [{"field": n, "minutes": 5} for n in names])
+    monkeypatch.setattr(patrol, "night_left", lambda p, site: 0)
+    monkeypatch.setattr(config, "load", config.example)
+    args = argparse.Namespace(programme="m31-panels", analyse=None, minutes=None, plan=True, dry_run=False)
+    answer = patrol.run(args, say=lambda *_: None)
+    assert answer["order"] == [] and answer["would_move"] is False
+    assert answer["target"] is None and answer["goto"] is None
+
+
 def test_the_answer_names_each_verdict_and_lists_what_is_unexplained(tmp_path):
     session = tmp_path / "frames" / "M31" / "20261020-221500"
     session.mkdir(parents=True)
