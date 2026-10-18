@@ -25,5 +25,6 @@ referencing==0.37.0
 requests==2.34.2
 rpds-py==2026.9.1
 scipy==1.17.1
+sgp4==2.23
 typing-extensions==4.16.0
 urllib3==2.8.0

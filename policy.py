@@ -98,6 +98,7 @@ COMMANDS = {
     "testrun.py": ("local_write", {}, {}),
     "starwatch.py": ("hardware", {"--measure": "local_write", "--history": "read_only"},
                      {"--plan": "read_only", "--dry-run": "read_only"}),
+    "streak.py": ("local_write", {}, {}),           # keeps CelesTrak's orbits in cache/
     "sungrazer.py": ("local_write", {}, {}),
     "tonight.py": ("read_only", {}, {}),
     "tour.py": ("local_write", {}, {}),
@@ -112,7 +113,7 @@ COMMANDS = {
 TY = {"run": "hardware"}
 TY_PASSES = {"mount": "mount.py", "tonight": "tonight.py", "shoot": "shoot.py", "focus": "focus.py",
              "solve": "solve.py", "restack": "restack.py", "console": "console.py", "watch-run": "runwatch.py",
-             "agent-report": "agentlog.py", "test-run": "testrun.py"}
+             "agent-report": "agentlog.py", "test-run": "testrun.py", "streak": "streak.py"}
 
 
 def script_of(word):

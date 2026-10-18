@@ -1,9 +1,11 @@
-# Naming the satellite in a frame: a specification
+# Naming the satellite in a frame
 
 [README](../README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
-Not built. This says what it should do and how, from one worked example on
-13 October 2026.
+Built on 18 October 2026 as `streak.py` (`ty streak`), from this
+specification and its worked example of 13 October. What it found the first
+time it was used is under "18 October 2026" below; what is still to do is
+under "Not done yet".
 
 ## What it is for
 
@@ -81,7 +83,40 @@ Both are fixed by the two changes under "What has to change first".
    never name a satellite on position alone when two pass.
 6. **Say so**, in a sentence, and as `--json`.
 
-## What has to change first
+## 18 October 2026: the first use
+
+Frame 4 of the M31-P6 panel (16 s from 21:47:59.4 UTC) had a streak 0.17°
+long, entering at the top edge and ending sharply inside the frame, even in
+brightness along its length. The frame's own start time was used. Against
+that evening's orbits, fetched eight minutes after the frame, none of the
+16,755 active satellites fits: the nearest, CENTISPACE-2 S3, passed 0.45°
+from the streak's middle a minute before the shutter opened, in the Earth's
+shadow. The command said so and did not guess.
+
+Done by hand afterwards, and not part of the command: the frames before and
+after it (2, 3, 5 and 6) have nothing on that line, so whatever it was
+crossed during that one exposure. The streak's line extended passes 1.1°
+from the radiant of the epsilon Geminids (RA 102°, Dec +27°), which peak
+that night, with the radiant behind the end inside the frame. That fits a
+meteor that lit inside the frame and flew out of it. The Orionids' radiant
+is 13.8° off the line. CelesTrak's "active" list leaves out rocket bodies
+and debris, so a dead satellite or a spent stage is not ruled out.
+
+The 13 October frame (light-0001 of that NGC 7000 run) was run again. It
+does carry its own start, 19:54:06.9 UTC from the INDI driver, which the
+worked example above missed. With orbits fetched five days after the frame
+(the only ones kept), ONEWEB-0331 is still the nearest, at 0.34° a second
+and 1,205 km, but it does not fit: its path runs 14° from the streak and
+0.41° off it, and it reached the streak 3 to 4 seconds before the shutter
+opened. Five days is enough to put it seconds out along its path, so this
+neither confirms it nor rules it out; the command says it fits nothing and
+warns about the orbits' age.
+
+## What had to change first
+
+Both turned out done: frames carry DATE-OBS, the start of the exposure
+(the Altair library writes it, and the INDI driver did on 13 October), and
+`solve.py` keeps the CD matrix. As written before they were:
 
 - **Frames must record when they were exposed.** `camera.py` should write
   the exposure's start (UTC, to a tenth of a second) and its real length into
@@ -97,9 +132,11 @@ Both are fixed by the two changes under "What has to change first".
 
 ## Where the orbits come from
 
-CelesTrak's "active" list, as two-line elements: free, no key, about 1.5 MB.
-Fetch it through `feeds.py`, keep it under `config.DATA / "cache"`, and use a
-copy up to a day old. A frame from an earlier night needs the orbits of that
+CelesTrak's "active" list: free, no key, about 2.5 MB. It is fetched as CSV
+(OMM) rather than two-line elements, because catalogue numbers have passed
+99,999, which two-line elements cannot carry. Kept under
+`config.DATA / "cache" / "satellites"` by the time it was fetched, and a copy
+up to a day from the frame is used. A frame from an earlier night needs the orbits of that
 night: the list in the cache when the frame was taken is good, today's is
 not, and the command should say when the orbits are too far from the frame's
 date to trust.
@@ -123,6 +160,16 @@ A `--json` answer means a schema in `schemas/`, the function, and
   must be named with confidence.
 - The 13 October frame, kept small, with that night's orbit for ONEWEB-0331
   beside it, as a test that runs without the network.
+
+## Not done yet
+
+- The status page's line under the picture, and the streak frame named in
+  `shoot.py`'s run summary.
+- Rocket bodies and debris: CelesTrak's "active" list has payloads only. The
+  whole catalogue needs a Space-Track account.
+- The test on the 13 October frame with that night's orbits: none were kept.
+- Saying when a streak lines up with an active meteor shower's radiant (done
+  by hand on 18 October).
 
 ## Not in this
 

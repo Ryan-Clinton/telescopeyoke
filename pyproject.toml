@@ -16,6 +16,8 @@ dependencies = [
     "pyserial>=3.5",
     # Every kept record is checked against its schema before it is written.
     "jsonschema>=4.10",
+    # Satellites' orbits, for streak.py only.
+    "sgp4>=2.20",
     # Windows has no time zone database of its own.
     "tzdata; sys_platform == 'win32'",
 ]

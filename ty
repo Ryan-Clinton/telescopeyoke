@@ -24,6 +24,7 @@
     ./ty --rig heq5 ...      any of these for one rig (its settings are rigs/heq5.toml)
     ./ty mount ...           everything mount.py does, e.g. ./ty mount goto M27 --dry-run
     ./ty tonight ...         the full report, as tonight.py
+    ./ty streak [FRAME]      which satellite made the streak in the newest frame with one (streak.py)
 
 Add --json to any of them for a machine-readable answer in one fixed shape
 (see schemas/ and docs/agents/). Add --demo to try it with no telescope.
@@ -35,7 +36,7 @@ import sys
 
 PASS_THROUGH = {"mount": "mount", "tonight": "tonight", "shoot": "shoot", "focus": "focus",
                 "solve": "solve", "restack": "restack", "console": "console", "watch-run": "runwatch",
-                "agent-report": "agentlog", "test-run": "testrun"}
+                "agent-report": "agentlog", "test-run": "testrun", "streak": "streak"}
 
 
 def show(value, indent=0):

@@ -6,6 +6,12 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+- **Which satellite made a streak** (`streak.py`, `ty streak`): finds a
+  straight streak in a frame, plate-solves the frame and places every active
+  satellite from CelesTrak's orbits (SGP4) through the exposure; one that
+  alone runs along the streak in sunlight while the shutter was open is
+  named, and otherwise it says that nothing in the list fits. A new
+  dependency, `sgp4` (`docs/satellites.md`).
 - **A picture of a single star names it**: `restack.py`'s finished picture
   of Tabby's star, an exoplanet's host, a bright star or a followed
   transient marks the star with two ticks and its name, placed by plate

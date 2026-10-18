@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/streak.schema.json",
+  "title": "Streak",
+  "description": "data of: streak.py [FRAME] --json. The straight streaks in one frame and, for each, the satellites that passed near it with how well each fits. A satellite is named only when it alone fits.",
+  "type": "object",
+  "required": ["frame", "start", "exposure_s", "timed_by", "orbits", "streaks"],
+  "properties": {
+    "frame": {"type": "string"},
+    "start": {"type": "string", "description": "When the shutter opened, UTC."},
+    "exposure_s": {"type": ["number", "null"]},
+    "timed_by": {"type": "string", "description": "Where the start came from: the frame's own time, or when it arrived less its exposure."},
+    "orbits": {
+      "type": ["object", "null"],
+      "description": "The orbits used; null when there was no streak to check.",
+      "required": ["file", "fetched", "satellites", "days_from_frame"],
+      "properties": {
+        "file": {"type": "string"},
+        "fetched": {"type": "string"},
+        "satellites": {"type": "integer"},
+        "days_from_frame": {"type": "number"}
+      }
+    },
+    "streaks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["ends", "at_edge", "ends_sky", "profile", "length_deg", "satellites", "named", "said"],
+        "properties": {
+          "ends": {"type": "array", "items": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
+                   "minItems": 2, "maxItems": 2, "description": "Its two ends in pixels of the brightness image (half the raw frame's size)."},
+          "at_edge": {"type": "array", "items": {"type": "boolean"}, "minItems": 2, "maxItems": 2,
+                      "description": "Whether each end is at the frame's border, where the streak may go on beyond it."},
+          "ends_sky": {"type": "array", "items": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
+                       "description": "Each end's RA and Dec, degrees, J2000."},
+          "profile": {"type": "array", "items": {"type": "number"},
+                      "description": "Its brightness in eighths along it, as a share of the mean: even for a satellite."},
+          "length_deg": {"type": "number"},
+          "named": {"type": ["string", "null"], "description": "The one satellite that fits, or null when none or more than one does."},
+          "said": {"type": "string"},
+          "satellites": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["name", "number", "offset_deg", "angle_deg", "at", "ends_at_s", "distance_km",
+                           "speed_deg_s", "sunlit", "sunlit_length_deg", "fits"],
+              "properties": {
+                "name": {"type": "string"},
+                "number": {"type": "integer", "description": "Its catalogue (NORAD) number."},
+                "offset_deg": {"type": "number", "description": "How far its path passes from the streak's further end."},
+                "angle_deg": {"type": "number", "description": "The angle between its path and the streak."},
+                "at": {"type": "string", "description": "When it was nearest the streak's middle, UTC."},
+                "ends_at_s": {"type": "array", "items": {"type": "number"},
+                              "description": "When it was at each end of the streak, seconds after the shutter opened."},
+                "distance_km": {"type": "integer"},
+                "speed_deg_s": {"type": "number"},
+                "sunlit": {"type": "boolean"},
+                "sunlit_length_deg": {"type": "number", "description": "How far it went in sunlight while the shutter was open."},
+                "fits": {"type": "boolean"}
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

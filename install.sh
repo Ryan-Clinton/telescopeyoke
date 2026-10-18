@@ -27,7 +27,7 @@ case "${1:-}" in
     --demo) planner_only=true; open_demo=true ;;
 esac
 
-packages=(python3-astropy python3-scipy python3-numpy python3-pil python3-requests python3-serial python3-jsonschema)
+packages=(python3-astropy python3-scipy python3-numpy python3-pil python3-requests python3-serial python3-jsonschema python3-sgp4)
 # The application's own window: GTK with a WebKit view.
 packages+=(python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1)
 if ! $planner_only; then
