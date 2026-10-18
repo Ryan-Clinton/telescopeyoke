@@ -649,3 +649,16 @@ sky's grain, 1 being none: gain 900 at 16 s 6.2, 1500 at 16 s 4.8, 900 at
 32 s 5.3, 1500 at 32 s 3.2, stars a little less round at 32 s (0.82 against
 0.91). A lower gain made them worse, as this sensor's read noise rises
 there; a longer frame made them weaker. M33's patrol now takes 32 s frames.
+
+**The camera, later**: the stripes measure 2.0 to 2.4 ADU a frame tonight
+against 1.4 to 1.6 on every earlier night (4 to 16 October), on the same
+USB 3 lead (frames 11 to 17 s apart on those nights: never USB 2, whatever
+the README said) and the same port (2-4, from the kernel log); the other
+port (2-5) gave 2.2. The readout speed gave 4.9, 3.6 and 5.6 at Speed 0, 1
+and 2, one frame each. `camera_test.py --timing` now finds each second asked
+adds 0.48 s, where on 13 October at the same Speed 2 it was 0.63. Through
+Altair's own library (SDK 60.31589, no INDI) short exposures arrived (0.1
+and 0.5 s) and a 2 s one did not, as under INDI all night: the camera, not
+the driver. The last frames' stars were 18 pixels wide, not 5, and the
+night the coldest yet (about -1°C, dew margin under 1°). Firmware 1.4.1 of
+2017. Not yet known whether cold, damp or a fault.

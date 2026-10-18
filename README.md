@@ -259,7 +259,7 @@ There is one, and it is the author's:
 
 | Mount | Handset | Camera | System | What has worked | Tried by |
 |---|---|---|---|---|---|
-| Sky-Watcher EQ3 Pro | SynScan, firmware 3.35, FTDI serial lead | Altair Hypercam 183C (on USB 2 for every night so far; USB 3 timed indoors) | Ubuntu 26.04, Python 3.14 | ✅ Planner, mount moves, camera, focusing, plate solving, GoTo with centring, under real stars | the author |
+| Sky-Watcher EQ3 Pro | SynScan, firmware 3.35, FTDI serial lead | Altair Hypercam 183C (on its USB 3 lead from the first nights: frames 11 to 17 s apart) | Ubuntu 26.04, Python 3.14 | ✅ Planner, mount moves, camera, focusing, plate solving, GoTo with centring, under real stars | the author |
 | the same EQ3 Pro | the same | the same Hypercam 183C | Windows 11 | ⚠️ The demo, and camera frames indoors. No mount driven, no star seen | the author |
 | EQ5 | SynScan | any | Linux or Windows | ❔ wanted | could be you |
 | HEQ5 | SynScan | any | Linux or Windows | ❔ wanted | could be you |
@@ -553,7 +553,8 @@ Known limits:
 - Camera frames are slow with this driver on a USB 2 lead: about 4 s plus
   five times the exposure, so light is collected only about a seventh of the
   time. On a USB 3 lead, timed indoors on 6 October 2026, a 1 s frame takes
-  1.5 s instead of 9.3 s. No night has been run on USB 3 yet.
+  1.5 s instead of 9.3 s. The frames' timing shows the camera has been on
+  USB 3 since the first nights (17 October 2026).
 - After a slew the stars streak for up to half a minute while the gears
   settle; the scripts wait before photographing.
 - With a rough polar alignment the aim drifts by an arcsecond or more per
