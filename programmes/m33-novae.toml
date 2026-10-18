@@ -6,10 +6,10 @@
 target = "M33"
 
 # As on 16 October 2026, the session its first reference came from.
-exposure = 10
+exposure = 32    # 18 October 2026: the stripes (row read noise) a third weaker than at 16 s, gain 1500 (camera_test.py --gain-sweep)
 gain = 1500
 
-minutes = 30
+minutes = 75
 
 # Every this many frames, re-centre a little off the target (shoot.py
 # --dither): the camera's own pattern then falls on different stars and
