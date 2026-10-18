@@ -1,5 +1,7 @@
-# Your own location
+# Your own location, and the copy config.save() keeps of it
 config.toml
+config.toml.bak
+*.bak
 
 # Generated at run time
 __pycache__/

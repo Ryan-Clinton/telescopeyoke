@@ -566,6 +566,7 @@ def test_the_camera_sets_its_fan_and_black_level_each_time_it_opens(world, monke
             sets.append((name, values))
             return super().set(device, name, **values)
     monkeypatch.setattr(camera, "Indi", Watching)
+    monkeypatch.setattr(camera, "BACKEND", "indi")   # Windows defaults to Altair's library, which CI lacks
     monkeypatch.setitem(camera.SETTINGS["camera"], "fan", "off")
     monkeypatch.setitem(camera.SETTINGS["camera"], "offset", 50)
     with camera.Camera():
