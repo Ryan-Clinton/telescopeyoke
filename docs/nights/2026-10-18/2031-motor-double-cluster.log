@@ -43,3 +43,18 @@ Motor focusing: HFR 2.3 is good focus here.
   #41  coming in       step   -32  at   +640  HFR 3.38   best 2.87   aim 2.28
   #42  coming in       step   -32  at   +608  HFR 3.71   best 2.87   aim 2.28
   #43  coming in       step   -32  at   +576  HFR 3.29   best 2.87   aim 2.28
+  #44  coming in       step   -32  at   +544  HFR 4.02   best 2.87   aim 2.28
+  #45  coming in       step   -32  at   +512  HFR 3.52   best 2.87   aim 2.28
+  #46  coming in       step   -32  at   +480  HFR 3.25   best 2.87   aim 2.28
+  #47  coming in       step   -32  at   +448  HFR 3.19   best 2.87   aim 2.28
+  #48  coming in       step   -32  at   +416  HFR 3.17   best 2.87   aim 2.28
+  #49  coming in       step   -32  at   +384  HFR 3.26   best 2.87   aim 2.28
+  #50  coming in       step   -32  at   +352  HFR 3.03   best 2.87   aim 2.28
+  #51  coming in       step   -32  at   +320  HFR 3.10   best 2.87   aim 2.28
+  #52  coming in       step   -32  at   +288  HFR 3.00   best 2.87   aim 2.28
+  #53  coming in       step   -32  at   +256  HFR 2.70   best 2.70   aim 2.28
+  #54  coming in       step   -32  at   +224  HFR 2.98   best 2.70   aim 2.28
+  #55  coming in       step   -32  at   +192  HFR 2.92   best 2.70   aim 2.28
+  #56  coming in       step   -32  at   +160  HFR 2.92   best 2.70   aim 2.28
+./ty terminated by signal TERM.
+exit 1
