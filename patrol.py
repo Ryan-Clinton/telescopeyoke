@@ -283,10 +283,12 @@ CONFIRM_MINUTES = 10   # a second look at a field with an unexplained candidate,
 def second_look(p, name, say=print, dry_run=False, run_command=None, search=None):
     """More frames of the same field, at once, searched as the first were:
     a real object is there again, most false ones are not. No GoTo: the
-    telescope is already there."""
+    telescope is already there. It dithers before the first frame, so a
+    candidate falls on other pixels than the first time: a defect of the
+    camera does not move with the sky, a real object does."""
     frames = max(1, round(60 * CONFIRM_MINUTES / p["exposure"]))
     cmd = [sys.executable, str(ROOT / "shoot.py"), name, "--frames", str(frames), "--exposure", str(p["exposure"]),
-           "--gain", str(p["gain"]), *(["--dry-run"] if dry_run else [])]
+           "--gain", str(p["gain"]), "--dither-first", *(["--dry-run"] if dry_run else [])]
     say(f"== a second look at {name}: {CONFIRM_MINUTES:g} minutes more")
     say("$ " + " ".join(Path(c).name if c.endswith(".py") else c for c in cmd[1:]))
     began = time.time()

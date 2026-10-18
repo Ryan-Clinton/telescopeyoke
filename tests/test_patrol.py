@@ -335,6 +335,7 @@ def test_a_second_look_takes_more_frames_without_a_goto_and_searches_them(tmp_pa
     assert result == {"session": str(tmp_path)}
     assert [Path(c).name for c in ran[0][1:3]] == ["shoot.py", "M31"] and "goto" not in ran[0]
     assert ran[0][ran[0].index("--frames") + 1] == str(round(60 * patrol.CONFIRM_MINUTES / 16))
+    assert "--dither-first" in ran[0]      # the candidate falls on other pixels the second time
 
 
 def test_a_mosaic_moves_to_the_next_panel_while_the_last_is_still_searched(tmp_path, monkeypatch):

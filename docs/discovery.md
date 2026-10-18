@@ -108,7 +108,9 @@ What a person does; everything else is automatic.
 3. Anything nothing explains comes to your phone with its pictures and a
    report packet, and the patrol takes a second look: at once for a single
    field, and for a mosaic once its panels are done, going back to the
-   panel.
+   panel. The second look dithers before its first frame, so a candidate
+   lands on other pixels: a camera defect stays put on the sensor, a real
+   object moves with the sky.
    `./ty candidates` lists the open ones; `./candidates.py M31-P3 --dismiss
    ID --reason LABEL` closes one that is not real.
 4. To claim one, tell the agent "claim ID": it makes a fresh `./report.py

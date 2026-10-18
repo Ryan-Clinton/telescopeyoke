@@ -433,6 +433,9 @@ def main():
     ap.add_argument("--dither", type=int, metavar="N", default=0,
                     help="every N frames, re-centre a little off the target (about 1.5'), so the camera's "
                          "own pattern falls on different stars and averages away")
+    ap.add_argument("--dither-first", action="store_true",
+                    help="re-centre a little off the target before the first frame, so a second look at a "
+                         "candidate puts it on different pixels from the first")
     ap.add_argument("--through-cloud", action="store_true",
                     help="with --frames 0: cloud pauses the run instead of ending it; it re-centres when "
                          "the stars come back, and ends at dawn or when the target nears the mount's limit")
@@ -490,6 +493,9 @@ def run(args):
     print(f"{session.name}: {args.frames or 'an open-ended run of'} frames of {exposure:g} s at gain {args.gain}; "
           f"calibration: {session.calibration.describe()}; {workers} workers", flush=True)
     index, since_centre, since_dither, started = 0, 0, 0, time.monotonic()
+    if getattr(args, "dither_first", False):
+        args.dither = args.dither or 10 ** 9      # a dither before the first frame, then none unless asked
+        since_dither = args.dither
     rng = random.Random()
     ORDERS.unlink(missing_ok=True)   # an order left for an earlier run is not for this one
     told = {"stop": False, "recentre": False, "cloud": False, "cloudy": False}

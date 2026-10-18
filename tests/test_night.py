@@ -313,6 +313,19 @@ def test_a_dithered_run_aims_a_little_off_the_target_between_frames(night, monke
     assert summary["captured"] == 12 and summary["accepted"] >= 10
 
 
+def test_a_dither_first_run_starts_off_the_target_and_stays(night, monkeypatch, capsys):
+    """A second look at a candidate dithers before its first frame, so the
+    candidate falls on other pixels than the first time, and no more."""
+    aims = []
+    real = shoot.recentre
+    monkeypatch.setattr(shoot, "recentre", lambda target, aim_off=(0.0, 0.0): aims.append(aim_off) or real(target, aim_off))
+    monkeypatch.setattr(sys, "argv", ["shoot", reachable_target(), "--frames", "8", "--exposure", "2",
+                                      "--dither-first", "--no-restack"])
+    shoot.main()
+    dithered = [a for a in aims if a != (0.0, 0.0)]
+    assert len(dithered) == 1 and capsys.readouterr().out.count("dithering: re-centring") == 1
+
+
 def test_dithering_without_moving_the_mount_is_refused(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["shoot", "M31", "--dither", "4", "--no-recentre"])
     with pytest.raises(SystemExit) as stopped:
