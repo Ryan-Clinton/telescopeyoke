@@ -400,6 +400,21 @@ def discovery_tonight(demo=False):
     return plan
 
 
+def in_the_clear(plan, clear):
+    """Each programme's window cut to the forecast's clear spell, and its best
+    time inside it (the nearest the clear spell comes to the field's highest),
+    so a plan never sends a patrol to a field under cloud. Best first."""
+    for p in plan:
+        span = None
+        if p["window"] and clear:
+            start, end = max(p["window"][0], clear[0]), min(p["window"][1], clear[1])
+            span = [start, end] if start < end else None
+        p["in_clear"] = span
+        p["best_in_clear"] = min(max(p["best_time"], span[0]), span[1]) if span else None
+    plan.sort(key=lambda r: (r["best_in_clear"] is None, r["best_in_clear"] or 0))
+    return plan
+
+
 def night(demo=False):
     """Tonight in brief: the verdict, when it is dark and clear, the Moon,
     and the discovery programmes' fields first, then the best targets."""
@@ -419,7 +434,8 @@ def night(demo=False):
         "sky_brightness_mag_arcsec2": (rep["light_pollution"] or {}).get("sqm"),
         "spot": None if demo else config.SPOT,
         "skyline_measured": bool(_site(demo)["horizon"].get("skyline")),
-        "discovery": discovery_tonight(demo),
+        "discovery": in_the_clear(discovery_tonight(demo),
+                                  [w["clear_from"], w["clear_to"]] if w and w["clear_hours"] else None),
         "best_now": [_target(t) for t in rep["targets"] if t["now"]][:3],
     }
 
@@ -646,6 +662,9 @@ def context(demo=False):
             when = (f"up {p['window'][0]:%H:%M}-{p['window'][1]:%H:%M}, best {p['best_time']:%H:%M} "
                     f"at {p['best_altitude_deg']:.0f} deg {p['direction']}" if p["window"]
                     else "not up in darkness")
+            if tonight["clear_window"]:
+                when += (f"; in the clear {p['in_clear'][0]:%H:%M}-{p['in_clear'][1]:%H:%M}, "
+                         f"go about {p['best_in_clear']:%H:%M}" if p["in_clear"] else "; NOT up while clear")
             length = f"{p['minutes']} min{' a panel' if p['mosaic'] else ''}"
             lines += [f"  {p['programme']} ({p['field']}, {length}): {when}; {p['command']}"]
         lines += [""]

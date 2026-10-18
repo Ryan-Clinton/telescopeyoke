@@ -45,7 +45,7 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["programme", "field", "minutes", "mosaic", "command", "window", "best_time", "best_altitude_deg", "direction"],
+        "required": ["programme", "field", "minutes", "mosaic", "command", "window", "best_time", "best_altitude_deg", "direction", "in_clear", "best_in_clear"],
         "properties": {
           "programme": {"type": "string"},
           "field": {"type": "string"},
@@ -55,7 +55,9 @@
           "window": {"type": ["array", "null"]},
           "best_time": {},
           "best_altitude_deg": {"type": ["number", "null"]},
-          "direction": {"type": ["string", "null"]}
+          "direction": {"type": ["string", "null"]},
+          "in_clear": {"type": ["array", "null"], "description": "The window cut to the forecast's clear spell; null when the field is not up while it is clear."},
+          "best_in_clear": {"description": "When to take it: the best time inside the clear spell."}
         }
       }
     },

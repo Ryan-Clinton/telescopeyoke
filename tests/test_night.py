@@ -341,9 +341,22 @@ def test_the_night_leads_with_each_discovery_programme_and_when_its_field_is_up(
         assert p["command"] and p["command"].startswith("./")
         if p["window"]:
             assert p["window"][0] <= p["best_time"] <= p["window"][1]
-    timed = [p["best_time"] for p in plan if p["best_time"]]
+    timed = [p["best_in_clear"] for p in plan if p["best_in_clear"]]
     assert timed == sorted(timed)
     assert "Discovery tonight" in agent.context(demo=True)
+
+
+def test_each_discovery_window_is_cut_to_the_clear_spell():
+    # 18 October 2026: Tabby is best at dusk, but the sky clears only at 23:00.
+    from datetime import datetime
+    at = lambda h: datetime(2026, 10, 18, h) if h < 24 else datetime(2026, 10, 19, h - 24)
+    plan = [{"programme": "tabby", "window": [at(20), at(28)], "best_time": at(20)},
+            {"programme": "m33", "window": [at(20), at(30)], "best_time": at(25)},
+            {"programme": "early", "window": [at(19), at(22)], "best_time": at(20)}]
+    out = {p["programme"]: p for p in agent.in_the_clear(plan, [at(23), at(31)])}
+    assert out["tabby"]["in_clear"] == [at(23), at(28)] and out["tabby"]["best_in_clear"] == at(23)
+    assert out["m33"]["best_in_clear"] == at(25)
+    assert out["early"]["in_clear"] is None and plan[-1]["programme"] == "early"
 
 
 def test_a_field_behind_the_measured_skyline_is_not_up(monkeypatch):

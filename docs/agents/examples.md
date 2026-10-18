@@ -1,11 +1,11 @@
 # Worked examples
 
 **"What's the outlook for tonight?"**
-1. `ty night --json`: the verdict, the clear window, the Moon, and
-   `discovery`, each programme's field with its window in darkness.
-2. Plan around those: which patrol in which part of the clear window, Tabby
-   while it is clear of the house, dew and the Moon against each.
-3. Only then the pretty targets, in what the programmes leave.
+1. `ty night --json`, once, and nothing else: an outlook takes seconds.
+2. The verdict, the clear spell, the Moon and the dew in one line.
+3. `discovery` is already cut to the clear spell and in order: one line
+   each, with its `best_in_clear` time.
+4. Then the time left for a big target, in one line.
 
 **"What should I image tonight?"**
 1. `ty night --json` for the verdict and clear window.
