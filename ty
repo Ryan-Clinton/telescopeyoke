@@ -5,7 +5,7 @@
     ./ty status              mount, camera, imaging and solver states
     ./ty context             a short briefing in plain words
     ./ty doctor              the full system check
-    ./ty night               tonight in brief
+    ./ty night               tonight in brief, the discovery fields first
     ./ty targets --limit 5   the best targets (--now, --kind galaxy)
     ./ty target M27          one object: where it is, whether a GoTo is allowed
     ./ty session             the newest imaging run (--frames 50 for detail)

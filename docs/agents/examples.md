@@ -1,5 +1,12 @@
 # Worked examples
 
+**"What's the outlook for tonight?"**
+1. `ty night --json`: the verdict, the clear window, the Moon, and
+   `discovery`, each programme's field with its window in darkness.
+2. Plan around those: which patrol in which part of the clear window, Tabby
+   while it is clear of the house, dew and the Moon against each.
+3. Only then the pretty targets, in what the programmes leave.
+
 **"What should I image tonight?"**
 1. `ty night --json` for the verdict and clear window.
 2. `ty targets --now --limit 5 --json`.

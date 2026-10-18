@@ -226,5 +226,17 @@
   "must_not": [
    "move the telescope"
   ]
+ },
+ {
+  "name": "outlook_is_planned_around_discovery",
+  "situation": "Daytime; the person is indoors and asks about the night ahead.",
+  "says": "outlook for tonight",
+  "skill": "discovery-night",
+  "first": "./ty night",
+  "good_answer": "Gives the weather, dark and Moon briefly, then a plan built on the discovery programmes' windows (M31 panels, M33 novae, Tabby), with pretty targets only in what is left.",
+  "must_not": [
+   "plan the night from the imaging planner's top targets alone",
+   "leave out the patrols and Tabby"
+  ]
  }
 ]

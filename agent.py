@@ -308,8 +308,50 @@ def _target(t):
             "direction": t["direction"], "window": [t["start"], t["end"]], "tags": t["tags"]}
 
 
+PROGRAMMES = Path(__file__).resolve().parent / "programmes"
+
+
+def discovery_tonight(demo=False):
+    """When each discovery programme's field is up in darkness tonight, in
+    the order they come best: what the night is for, before any pretty
+    picture. The command is the one each programme's own header names."""
+    import re
+    import tomllib
+    import numpy as np
+    import sky
+    import starwatch
+    cfg = _site(demo)
+    night = sky.Night(cfg)
+    n = len(night.unix)
+    plan = []
+    for path in sorted(PROGRAMMES.glob("*.toml")):
+        text = path.read_text(encoding="utf-8")
+        p = tomllib.loads(text)
+        field = p.get("target") or p.get("mosaic")
+        # A watched star is placed by its watch (Tabby is in no catalogue).
+        found = next((s for s in starwatch.STARS.values() if s["name"] == field), None)
+        try:
+            found = found or mount.find_target(field)
+        except (interface.Refusal, Exception):
+            continue
+        alt, az = night.altaz_fixed([found["ra"]], [found["dec"]])
+        seen = night.assess({"id": field, "kind": "star"}, np.full(n, found["ra"]),
+                            np.full(n, found["dec"]), alt[0], az[0])
+        command = re.search(r"then (\./\S+ \S+)", text)
+        plan.append({"programme": path.stem, "field": field,
+                     "minutes": p.get("minutes"), "mosaic": "mosaic" in p,
+                     "command": command.group(1) if command else None,
+                     "window": [seen["start"], seen["end"]] if seen else None,
+                     "best_time": seen["best"] if seen else None,
+                     "best_altitude_deg": seen["best_alt"] if seen else None,
+                     "direction": seen["direction"] if seen else None})
+    plan.sort(key=lambda r: (r["best_time"] is None, r["best_time"] or 0))
+    return plan
+
+
 def night(demo=False):
-    """Tonight in brief: the verdict, when it is dark and clear, the Moon."""
+    """Tonight in brief: the verdict, when it is dark and clear, the Moon,
+    and the discovery programmes' fields first, then the best targets."""
     rep = _report(demo)
     w = rep["weather"]
     return {
@@ -324,6 +366,7 @@ def night(demo=False):
                      "hours": rep["dark_hours"]},
         "moon": rep["moon"],
         "sky_brightness_mag_arcsec2": (rep["light_pollution"] or {}).get("sqm"),
+        "discovery": discovery_tonight(demo),
         "best_now": [_target(t) for t in rep["targets"] if t["now"]][:3],
     }
 
@@ -540,6 +583,15 @@ def context(demo=False):
         lines += ["Night:", f"  {tonight['verdict'] or 'no forecast'}.{window}",
                   f"  Dark {tonight['darkness']['start']:%H:%M}-{tonight['darkness']['end']:%H:%M}; "
                   f"Moon {tonight['moon']['illumination']}% lit.", ""]
+        # The night is for discovery first (docs/discovery.md): plan from these.
+        lines += ["Discovery tonight (programmes/, best first):"]
+        for p in tonight["discovery"]:
+            when = (f"up {p['window'][0]:%H:%M}-{p['window'][1]:%H:%M}, best {p['best_time']:%H:%M} "
+                    f"at {p['best_altitude_deg']:.0f} deg {p['direction']}" if p["window"]
+                    else "not up in darkness")
+            length = f"{p['minutes']} min{' a panel' if p['mosaic'] else ''}"
+            lines += [f"  {p['programme']} ({p['field']}, {length}): {when}; {p['command']}"]
+        lines += [""]
         if tonight["best_now"]:
             lines += ["Best now: " + ", ".join(f"{t['id']} ({t['score']:.0f})"
                                                for t in tonight["best_now"]), ""]

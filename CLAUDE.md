@@ -9,6 +9,10 @@ what is specific to Claude and to this particular user.
 
 ## Working with this user
 
+- The nights are for discovery first (AGENTS.md): asked for the outlook or
+  a plan, use the `discovery-night` skill and plan around `./ty night`'s
+  `discovery` list.
+
 - At the telescope, follow `docs/agents/setup-routine.md` step by step:
   set the handset first, then ask the user where the sky is clear.
 - Run anything expected to take more than a minute in the background and

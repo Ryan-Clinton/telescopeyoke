@@ -9,6 +9,7 @@
     "verdict",
     "darkness",
     "moon",
+    "discovery",
     "best_now"
   ],
   "properties": {
@@ -34,6 +35,25 @@
     },
     "moon": {
       "type": "object"
+    },
+    "discovery": {
+      "description": "The discovery programmes (programmes/*.toml), the night's first purpose: each field's window in darkness above the horizon limits and measured skyline, best first; window null when it is not up in darkness.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["programme", "field", "minutes", "mosaic", "command", "window", "best_time", "best_altitude_deg", "direction"],
+        "properties": {
+          "programme": {"type": "string"},
+          "field": {"type": "string"},
+          "minutes": {"type": ["number", "null"], "description": "For a mosaic, minutes on each panel."},
+          "mosaic": {"type": "boolean"},
+          "command": {"type": ["string", "null"]},
+          "window": {"type": ["array", "null"]},
+          "best_time": {},
+          "best_altitude_deg": {"type": ["number", "null"]},
+          "direction": {"type": ["string", "null"]}
+        }
+      }
     },
     "best_now": {
       "type": "array",

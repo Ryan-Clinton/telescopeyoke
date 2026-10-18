@@ -331,3 +331,24 @@ def test_a_dither_is_one_goto_without_plate_solving(monkeypatch):
     shoot.recentre("M31", (1.0, -0.5))
     assert calls == [(True, (0.0, 0.0)), (False, (1.0, -0.5))]
     assert mount.SETTLE <= 10 or config.DEMO
+
+
+def test_the_night_leads_with_each_discovery_programme_and_when_its_field_is_up():
+    plan = agent.night(demo=True)["discovery"]
+    names = {p["programme"] for p in plan}
+    assert {"m31-novae", "m33-novae", "m31-panels", "tabby"} <= names
+    for p in plan:
+        assert p["command"] and p["command"].startswith("./")
+        if p["window"]:
+            assert p["window"][0] <= p["best_time"] <= p["window"][1]
+    timed = [p["best_time"] for p in plan if p["best_time"]]
+    assert timed == sorted(timed)
+    assert "Discovery tonight" in agent.context(demo=True)
+
+
+def test_a_field_behind_the_measured_skyline_is_not_up(monkeypatch):
+    # A wall all round: nothing in programmes/ is up in darkness.
+    cfg = config.example()
+    cfg["horizon"]["skyline"] = [{"az": float(az), "alt": 89.0} for az in range(0, 360, 10)]
+    monkeypatch.setattr(agent, "_site", lambda demo: cfg)
+    assert all(p["window"] is None for p in agent.discovery_tonight(demo=True))

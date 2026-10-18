@@ -7,6 +7,13 @@ on a laptop left beside the telescope. An Ubuntu application, with a Windows
 port on which the camera has taken frames but no mount has been driven. `README.md` is the user's guide; this file is the map for
 agents. Deeper notes are in `docs/agents/`.
 
+**What the nights are for now: discovery** (`docs/discovery.md`). Novae in
+M31 and M33 (`programmes/`), Tabby's star, comets near the Sun and
+exoplanet transits come first; pretty pictures fill what is left. Plan any
+night, or answer "what's the outlook", from `./ty night`'s `discovery` list
+(each programme's field and when it is up in darkness), not from the
+imaging planner's top targets.
+
 ## Start here
 
 ```bash
