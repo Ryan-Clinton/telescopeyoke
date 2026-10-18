@@ -247,6 +247,8 @@ SETTINGS = (
      {"optional": True}),
     ("webcam", "device", "Webcam", "text",
      "On Windows, the camera's name as ffmpeg lists it. Linux finds one by itself.", {"optional": True}),
+    ("webcam", "built_in", "Use the laptop's own webcam", "yesno",
+     "Off: only a webcam plugged in watches the telescope, and the laptop's camera light stays off.", {}),
     ("indi", "port", "INDI server port", "whole", "", {"min": 1, "max": 65535}),
     ("indi", "manage_server", "Start the INDI server automatically", "yesno",
      "That stops any INDI server already running, so leave it off if other equipment shares one.", {}),

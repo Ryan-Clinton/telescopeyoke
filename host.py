@@ -170,14 +170,25 @@ def _webcam_name():
     return config.hardware().get("webcam", {}).get("device", "")
 
 
+def _built_in_allowed():
+    import config
+    return bool(config.hardware().get("webcam", {}).get("built_in", False))
+
+
 def webcam_device():
-    """The webcam to use: on Linux an external one if plugged in, else the
-    laptop's own; on Windows the one config.toml names, or None."""
+    """The webcam to use: on Linux an external one if plugged in, and the
+    laptop's own only when the settings allow it (its light coming on
+    unnerved visitors, 18 October 2026, and it looks at the room, not the
+    telescope); on Windows the one config.toml names. None for none."""
     if WINDOWS:
         return _webcam_name() or None
     cameras = sorted(glob.glob("/dev/v4l/by-id/*-video-index0"))
     external = [c for c in cameras if BUILT_IN not in c]
-    return (external or cameras or ["/dev/video0"])[0]
+    if external:
+        return external[0]
+    if _built_in_allowed():
+        return (cameras or ["/dev/video0"])[0]
+    return None
 
 
 def webcam_input():
@@ -210,6 +221,9 @@ def has_webcam():
     if not WINDOWS:
         if not glob.glob("/dev/video*"):
             return WARN, "no webcam; slews will not be photographed"
+        if webcam_device() is None:
+            return WARN, ("only the laptop's own webcam, which is not used unless the settings allow it "
+                          "([webcam] built_in); slews will not be photographed")
         return OK, "webcam and ffmpeg"
     wanted = _webcam_name()
     if not wanted:
