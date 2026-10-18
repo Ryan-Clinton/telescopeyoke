@@ -707,6 +707,11 @@ def run(args, say=print):
                 if subprocess.run(goto, stdout=sys.stdout, env=dict(os.environ, TY_PATROL="1")).returncode == 0:
                     entry["second_look"] = second_look(p, entry["field"], say)
             answer["fields"].append(entry)
+    if order is not None and answer["fields"] and not args.dry_run:
+        # Every night's frames of the mosaic as one picture, growing with this night's.
+        import stitch
+        say(f"Joining every night's {p['mosaic']} panels into one picture, in the background: "
+            f"{stitch.later(p['mosaic'])}")
     if len(chosen) == 1 and answer["fields"] and "analysis" in answer["fields"][0]:
         answer["analysis"] = answer["fields"][0]["analysis"]
     return answer

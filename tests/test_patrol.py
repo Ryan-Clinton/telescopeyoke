@@ -375,11 +375,13 @@ def test_a_mosaic_moves_to_the_next_panel_while_the_last_is_still_searched(tmp_p
     monkeypatch.setattr(patrol, "unexplained", lambda result: result["unexplained"])
     monkeypatch.setattr(patrol, "first_reference", lambda *a, **k: None)
     monkeypatch.setattr(patrol, "second_look", lambda p, name, say: events.append(f"second look {name}") or {})
+    import stitch
+    monkeypatch.setattr(stitch, "later", lambda name: events.append(f"stitch {name}") or "log")
     args = argparse.Namespace(programme="m31-panels", analyse=None, minutes=None, plan=False, dry_run=False)
     answer = patrol.run(args, say=lambda *_: None)
     assert events.index("mount.py goto M31-P2") < events.index("searched M31-P1")
     assert "shoot.py M31-P1 --frames --no-restack" in events
-    assert events[-2:] == ["mount.py goto M31-P1", "second look M31-P1"]
+    assert events[-3:] == ["mount.py goto M31-P1", "second look M31-P1", "stitch M31"]   # then the whole picture
     assert [f["field"] for f in answer["fields"]] == ["M31-P1", "M31-P2"]
 
 

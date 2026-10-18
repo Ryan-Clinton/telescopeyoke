@@ -90,9 +90,12 @@ frames under `frames/M31-P1/`.
   where it did before, even if the camera has been turned since. Keep the
   camera's turn the same for the panels to tile neatly; `--replace` starts a
   new plan.
-- Stitching the finished panels into one picture is not done here: join
-  them in Siril or PixInsight.
-- Not yet tried on the real mount.
+- `./stitch.py M31` joins the panels into one picture, with every night's
+  frames of each panel (and of the object taken whole) restacked together:
+  plate-solved, resampled onto one grid, the skies levelled and the overlaps
+  blended. A mosaic patrol runs it when it ends, so the picture grows night
+  by night; `--on desktop` does the restacking on the desktop.
+- Patrolled panel by panel on the real mount since 17 October 2026.
 
 ## Dithering
 

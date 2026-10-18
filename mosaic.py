@@ -17,9 +17,8 @@ A panel is then a target like any other:
     ./mount.py goto M31-P1 --dry-run
     ./shoot.py M31-P1 --frames 600
 
-and its frames are kept under frames/M31-P1/. Stitching the panels into one
-picture is not done here; restack each panel, then join them in Siril or
-PixInsight.
+and its frames are kept under frames/M31-P1/. stitch.py joins every
+night's panels into one picture; a mosaic patrol starts it when it ends.
 """
 import argparse
 import json
