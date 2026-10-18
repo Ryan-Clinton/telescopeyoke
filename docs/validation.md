@@ -662,3 +662,10 @@ and 0.5 s) and a 2 s one did not, as under INDI all night: the camera, not
 the driver. The last frames' stars were 18 pixels wide, not 5, and the
 night the coldest yet (about -1°C, dew margin under 1°). Firmware 1.4.1 of
 2017. Not yet known whether cold, damp or a fault.
+
+**Dithering, measured** (the noise-floor question, P0): the two M31 runs of
+80 frames of 16 s, restacked alike, give a 5-sigma limit of G 17.50
+dithered against 17.27 not, with the same stars (6.3") and a sky a touch
+brighter for the dithered run (19.0 against 19.2 mag per square arcsecond):
+dithering went 0.23 mag deeper. Planted-star depth (`depth.py --plant`) and
+the same test with darks and flats are still to come.
