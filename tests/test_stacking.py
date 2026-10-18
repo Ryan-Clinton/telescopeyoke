@@ -617,3 +617,23 @@ def test_a_sky_below_the_bias_level_is_not_taken_for_a_brightening_one():
     for level in (-56.4, -54.2, -53.6):
         assert stacking.judge(good(background=level), accepted) == (True, "")
     assert "sky brightened" in stacking.judge(good(background=60.0), accepted)[1]
+
+
+def test_a_bias_at_zero_is_refused_not_kept(monkeypatch, tmp_path):
+    """18 October 2026: with the offset at 0 a bias read 1 and the sky's grain
+    was cut off at zero. Such a bias is refused, with what to change."""
+    class Cap:
+        def __init__(self, *a, **k):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *e):
+            return False
+    monkeypatch.setattr(calibrate, "Camera", Cap)
+    monkeypatch.setattr(calibrate, "capture", lambda cam, seconds, count, label: [np.ones((64, 64))] * 3)
+    monkeypatch.setattr(calibrate, "save", lambda *a, **k: pytest.fail("a bias at zero was kept"))
+    args = type("A", (), {"kind": "bias", "gain": 1500, "frames": 3, "exposure": 2.0})()
+    with pytest.raises(SystemExit, match="offset"):
+        calibrate.run(args)

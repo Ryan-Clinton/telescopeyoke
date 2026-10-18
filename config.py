@@ -226,6 +226,10 @@ SETTINGS = (
     ("camera", "pixel_size_um", "Pixel size", "number", "Micrometres.", {"min": 0.5, "max": 30}),
     ("camera", "width", "Sensor width", "whole", "Pixels.", {"min": 100, "max": 20000}),
     ("camera", "height", "Sensor height", "whole", "Pixels.", {"min": 100, "max": 20000}),
+    ("camera", "offset", "Black level (offset)", "whole",
+     "Raised above zero so the faintest signal is not cut off. 46 gives the Altair 183C a level of about 45 "
+     "with the cap on; at 0 it reads about 1 and the sky's grain is clipped. Take a new bias after changing it.",
+     {"min": 0, "max": 255, "optional": True}),
     ("camera", "setup", "Camera arrangement", "text",
      "A name for how the camera sits on the telescope. Change it, and take new flats, whenever the camera is "
      "rotated or taken off.", {}),

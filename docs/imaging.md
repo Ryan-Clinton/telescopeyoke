@@ -55,6 +55,13 @@ Things worth knowing:
   rotated or refitted. This camera cannot report its temperature, so with a
   bias and a dark at the same gain the dark is scaled to each frame's own hot
   pixels instead of being matched by temperature.
+- **The black level has to sit above zero.** The camera's offset (`offset`
+  under `[camera]`, also in the Settings screen) lifts every reading so the
+  sky's grain is not cut off at zero; 46 gives the Altair 183C about 45 with
+  the cap on. On 18 October 2026 it was 0: a bias read 1, the calibrated
+  sky came out at -55, and the cloud check threw out 16 of 19 clear frames.
+  `calibrate.py bias` now refuses a bias under 10 and says to raise the
+  offset. Change the offset and the bias and darks must be taken again.
 - **Alignment is shift and rotation only**, no scale or lens distortion,
   which is enough for one session through one set of optics. `restack.py`
   reports how closely the stars matched; if that ever nears a pixel, it is

@@ -94,6 +94,9 @@ def save(path, data, **cards):
     print(f"saved {path}")
 
 
+LOWEST_BIAS = 10        # a bias reading under this, of 4095, is the black level at zero
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("kind", choices=["dark", "bias", "flat"])
@@ -115,6 +118,13 @@ def run(args):
                  EXPTIME=args.exposure, GAIN=args.gain, NFRAMES=args.frames)
         elif args.kind == "bias":
             frames = capture(cam, 0.001, args.frames, "bias")
+            level = float(np.median(frames[0][::8, ::8]))
+            if level < LOWEST_BIAS:
+                # 18 October 2026: the offset was 0 and a bias read 1, so the
+                # sky's grain was cut off at zero and the sky measured negative.
+                raise SystemExit(f"That bias reads {level:.0f} with the cap on: the black level is at zero and "
+                                 "faint signal is cut off. Raise the camera's offset in the settings (46 on the "
+                                 "Altair 183C) and take the bias again.")
             save(stacking.master_path("bias", gain=args.gain), master(frames),
                  GAIN=args.gain, NFRAMES=args.frames)
         else:
