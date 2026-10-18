@@ -429,6 +429,10 @@ def main():
     what.add_argument("--gain-sweep", action="store_true")
     what.add_argument("--timing", action="store_true")
     what.add_argument("--trail", action="store_true")
+    what.add_argument("--banding", action="store_true",
+                      help="how strong the horizontal stripes are with the fan on and off and at two black levels")
+    ap.add_argument("--keep-best", action="store_true",
+                    help="with --banding: keep the setting with the weakest stripes in config.toml")
     ap.add_argument("--corrected", action="store_true",
                     help="with --trail: leave camera.py's correction on, to check it; nothing is remembered")
     ap.add_argument("--gains", type=int, nargs="+", default=list(GAINS))
@@ -440,6 +444,41 @@ def main():
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
     return interface.main("camera_test.dry_run" if args.dry_run else "camera_test", lambda: run(args), args.json)
+
+
+BANDING_SETTINGS = (("on", 0), ("off", 0), ("on", 50), ("off", 50))   # (fan, offset)
+
+
+def banding(mosaic):
+    """How strong the horizontal stripes are: the spread of each row's
+    median brightness once the slow gradient down the frame is taken out,
+    in units of what the pixels' own noise would give a row (1 is none
+    to speak of). Stars barely move a row's median."""
+    from scipy import ndimage
+    lum = luminance(mosaic).astype(np.float64)
+    rows = np.median(lum, axis=1)
+    smooth = ndimage.median_filter(rows, size=301, mode="nearest")
+    noise = 1.4826 * np.median(np.abs(lum - np.median(lum, axis=1, keepdims=True))) / np.sqrt(lum.shape[1])
+    return round(float(np.std(rows - smooth) / max(noise, 1e-9)), 1)
+
+
+def banding_trial(exposure, gain, frames=2, keep=False, settings=BANDING_SETTINGS, say=print):
+    """Frames at each (fan, offset) in turn, and how striped each is. The
+    mount is not touched. With `keep`, the weakest is kept in config.toml."""
+    rows = []
+    with Camera(gain=gain) as cam:
+        for fan, offset in settings:
+            cam.settings(fan, offset)
+            cam.frame(1.0)                      # one frame to let the change take
+            scores = [banding(cam.frame(exposure)[0]) for _ in range(frames)]
+            rows.append({"fan": fan, "offset": offset, "banding": round(float(np.median(scores)), 1)})
+            say(f"  fan {fan:3s} offset {offset:3d}: stripes {rows[-1]['banding']:g} (1 is none)")
+    best = min(rows, key=lambda r: r["banding"])
+    say(f"Weakest stripes: fan {best['fan']}, offset {best['offset']}.")
+    if keep:
+        config.save({("camera", "fan"): best["fan"], ("camera", "offset"): best["offset"]})
+        say("Kept in config.toml: the camera is set so every time it is opened.")
+    return {"exposure_s": exposure, "gain": gain, "settings": rows, "best": best, "kept": keep}
 
 
 def run(args):
@@ -458,6 +497,8 @@ def run(args):
         return timing(args.gain, frames=min(args.frames, 3))
     if args.trail:
         return trail(args.exposure or 10.0, args.gain, args.corrected)
+    if args.banding:
+        return banding_trial(args.exposure or 16.0, args.gain, min(args.frames, 2), args.keep_best)
     if args.throughput:
         results = (throughput_sdk if SDK else throughput)(args.exposure or 1.0, args.frames, args.gain)
         good = [r for r in results if "failed" not in r]

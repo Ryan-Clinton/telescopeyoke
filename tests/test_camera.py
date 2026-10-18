@@ -512,3 +512,62 @@ def test_the_doctor_says_which_sdk_file_is_missing(tmp_path, monkeypatch):
     monkeypatch.setattr(altair, "VENDOR", tmp_path)
     lines = altair.checks()
     assert lines[-1][0] == "fail" and "altaircam.py" in lines[-1][1]
+
+
+# --- stripes ------------------------------------------------------------------------------
+
+def striped(strength, rng, shape=(400, 600)):
+    rows = np.arange(shape[0])[:, None]
+    lum = 1000 + rng.normal(0, 20, shape) + strength * np.sin(rows / 15.0)
+    return np.repeat(np.repeat(lum, 2, axis=0), 2, axis=1) / 4    # a mosaic whose 2x2 cells sum to lum
+
+
+def test_banding_is_near_one_without_stripes_and_large_with_them():
+    import camera_test
+    rng = np.random.default_rng(1)
+    assert camera_test.banding(striped(0, rng)) < 2
+    assert camera_test.banding(striped(8, rng)) > 5
+
+
+def test_the_banding_trial_tries_each_setting_and_keeps_the_weakest(monkeypatch, tmp_path):
+    import camera_test
+    rng = np.random.default_rng(2)
+    seen = []
+
+    class Cam:
+        fan = "on"
+        def __init__(self, gain): pass
+        def __enter__(self): return self
+        def __exit__(self, *exc): return False
+        def settings(self, fan, offset):
+            Cam.fan = fan
+            seen.append((fan, offset))
+        def frame(self, seconds):
+            return striped(8 if Cam.fan == "on" else 0, rng), {}
+    saved = {}
+    monkeypatch.setattr(camera_test, "Camera", Cam)
+    monkeypatch.setattr(camera_test.config, "save", lambda changes: saved.update(changes))
+    answer = camera_test.banding_trial(16, 1500, frames=1, keep=True, say=lambda s: None)
+    assert seen == list(camera_test.BANDING_SETTINGS)
+    assert answer["best"]["fan"] == "off" and saved[("camera", "fan")] == "off"
+
+
+def test_the_camera_sets_its_fan_and_black_level_each_time_it_opens(world, monkeypatch):
+    sets = []
+    Client = fake_indi(world)
+
+    class Watching(Client):
+        def get(self, device, name):
+            if name in ("TC_FAN_CONTROL", "CCD_OFFSET"):
+                return {"x": "1"}
+            return super().get(device, name)
+
+        def set(self, device, name, **values):
+            sets.append((name, values))
+            return super().set(device, name, **values)
+    monkeypatch.setattr(camera, "Indi", Watching)
+    monkeypatch.setitem(camera.SETTINGS["camera"], "fan", "off")
+    monkeypatch.setitem(camera.SETTINGS["camera"], "offset", 50)
+    with camera.Camera():
+        pass
+    assert ("TC_FAN_CONTROL", {"TC_FAN_OFF": "On"}) in sets and ("CCD_OFFSET", {"OFFSET": 50}) in sets

@@ -136,6 +136,10 @@ class Camera:
             # it timed out), every frame arrives as something that is not FITS.
             c.set(self.name, "CCD_TRANSFER_FORMAT", FORMAT_FITS="On")
         c.set(self.name, "CCD_CONTROLS", Gain=self.gain)
+        # Set every time the camera is opened, so a restart of the driver
+        # cannot put them back to its own defaults (17 October 2026: after
+        # one, broad stripes crossed every frame).
+        self.settings(SETTINGS["camera"].get("fan"), SETTINGS["camera"].get("offset"))
         c.pump(1)
         # The readout speed the driver is using, and so how much longer to
         # ask for than is wanted: see shutter_share().
@@ -144,6 +148,15 @@ class Camera:
         except (KeyError, TypeError, ValueError):
             self.speed = None
         self.shutter = shutter_share(self.speed)
+
+    def settings(self, fan=None, offset=None):
+        """The cooling fan ("on" or "off") and the black level (offset), on
+        drivers that have them; None leaves either as it is."""
+        c = self.client
+        if fan in ("on", "off") and c.get(self.name, "TC_FAN_CONTROL"):
+            c.set(self.name, "TC_FAN_CONTROL", **{f"TC_FAN_{fan.upper()}": "On"})
+        if offset is not None and c.get(self.name, "CCD_OFFSET"):
+            c.set(self.name, "CCD_OFFSET", OFFSET=int(offset))
 
     def use(self, profile):
         """Set the camera up for what its frames are for (a name in PROFILES)
