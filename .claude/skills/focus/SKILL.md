@@ -12,6 +12,10 @@ set is usually still good, and a focus run drives the drawtube well out
 and back: minutes of sky, and a risk of leaving it worse if stopped part
 way (17 October 2026: HFR 1.86 at the start, 3.52 after a stopped run).
 
+0. `lsusb`, and `./focus.py --motor --dry-run`: the CH340 (`1a86:7523`)
+   on the list is the motor focuser, and the motor does the focusing.
+   Never the hand-turned aid while it is plugged in, whatever was said
+   earlier about taking it off: ask one question if the two disagree.
 1. The telescope must point at a rich star field in a part of the sky the
    person said is clear. If it does not, the GoTo to one (Vega, Deneb, or a
    field the planner suggests) is a move, under nightly-setup's rule.
@@ -21,9 +25,10 @@ way (17 October 2026: HFR 1.86 at the start, 3.52 after a stopped run).
 3. **Good** (within 10% of the usual best): say so and move on. Do not
    focus unless the person asks; then `./ty focus --motor --anyway`.
 4. **Soft**: say how soft, and focus: `./ty focus --motor` (it measures
-   again first). Run it with its output to a log and a Monitor on the log,
-   and pass each reading to the person as it comes: never through `tail`,
-   which holds every line back until the end.
+   again first). Run it with its output to a log and a Monitor on the log
+   (never through `tail`, which holds every line back until the end).
+   Say nothing per reading: a Monitor event that changes nothing gets no
+   reply. Say only a fault, or the end.
 5. Report the HFR it ends on. Well above the usual: suggest the cause in
    this order: cloud or haze (ask what the sky looks like), dew on the
    mirror, the field too sparse.
@@ -32,4 +37,5 @@ way (17 October 2026: HFR 1.86 at the start, 3.52 after a stopped run).
 
 Never ask for a hand on the knob while the motor is plugged in; `./focus.py
 --field`, the hand-turned aid with tones, is only for a telescope without
-it. Focus comes before anything that plate-solves.
+it, and only when `lsusb` shows no CH340 and the person has asked for it.
+Focus comes before anything that plate-solves.

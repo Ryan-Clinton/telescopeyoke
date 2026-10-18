@@ -21,8 +21,26 @@ rig's state shows is done tonight (say which, and why).
 
 ## Before each step
 
-1. Look first: `./doctor.py --offline` and `./ty mount status` (read only;
-   `lsusb` on Ubuntu). Advise from what is plugged in.
+1. Look first: `lsusb`, `./doctor.py --offline` and `./ty mount status`
+   (read only). Name every device `lsusb` lists before doing anything;
+   `doctor.py` does not check the focuser, so `lsusb` is the only place it
+   shows:
+
+   | USB ID      | What it is                           |
+   |-------------|--------------------------------------|
+   | `0403:6015` | FTDI lead to the SynScan handset     |
+   | `16d0:0c77` | Altair 183C camera                   |
+   | `1a86:7523` | CH340: the motor focuser             |
+
+   Anything else on the list that is not the laptop's own (webcam,
+   Bluetooth, fingerprint reader) is unknown: ask what it is before
+   starting anything. If what the person said disagrees with the list
+   ("took the focuser off" while the CH340 shows), the list is what is
+   plugged in: ask that one question before acting on either. Never
+   start a command for a device you have not seen on the list, or leave
+   out one that is on it. 18 October 2026: the CH340 was on USB, I took
+   "took the autofocuser off earlier" to mean it was still off, and ran
+   the hand-turned aid instead of the motor.
 2. Dry-run what the step will do (`--dry-run`); anything that fails, fails
    now, indoors in your words, not with them waiting.
 

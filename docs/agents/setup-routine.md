@@ -15,8 +15,12 @@ and the next step that fits that sky starts now, without asking.
 
 **Look before asking.** `lsusb`, `./doctor.py --offline` and `./mount.py
 status` (which only reads) say what is plugged in, whether the handset is
-past its start-up screens, and where the axes are. Reread what the person
-has said: do not ask what it already answers.
+past its start-up screens, and where the axes are. Name every device `lsusb`
+lists before doing anything: `0403:6015` the handset lead, `16d0:0c77` the
+camera, `1a86:7523` (CH340) the motor focuser, which `doctor.py` does not
+check. When what the person said disagrees with the list, ask that one
+question before acting. Reread what the person has said: do not ask what
+it already answers.
 
 **Follow the steps in order, and skip none.** A step may be left out only
 when the rig's state shows it is already done tonight: say which, and why.
@@ -83,11 +87,12 @@ is usually still good: then move on, and focus only if they ask
 The motor focuser does it: nobody touches the telescope, so never ask for a
 hand on the knob. `--motor` focuses wherever the telescope points, so point
 at a rich field first. Run it in the background with its output to a log
-and a Monitor on the log, passing each reading on as it comes, never
-through `tail`, which holds every line back. Never stop a run part way: on
+and a Monitor on the log, never through `tail`, which holds every line
+back; say only a fault or the end, never a line per reading. Never stop a run part way: on
 17 October 2026 a run started at HFR 1.86, needlessly, and once stopped left
 the focuser at 3.52. `./focus.py --field`, the hand-turned
-aid with tones, is only for a telescope without the motor. Focus comes before anything that plate-solves: the polar alignment
+aid with tones, is only for a telescope without the motor: no CH340 on
+`lsusb`, and the person asked for it. Focus comes before anything that plate-solves: the polar alignment
 and every `--solve` work from the stars in a picture, and blurred stars give
 no answer. A failed plate solve before this step says nothing about cloud.
 
