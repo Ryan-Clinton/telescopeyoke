@@ -22,3 +22,16 @@ stars' number, brightness or sharpness. Every frame was kept: the cloud
 check does not catch it, and at 7% it costs only about 3.5% more noise in
 those frames. From ralphie-side the kitchen light does no real harm.
 (17 October, from the other spot, two of Tabby's frames were lost to it.)
+
+## 2. Upstairs bathroom light
+
+Light on 22:11:55, off 22:13:28. Same panel and session.
+
+| Frames | Kept at | Light | Sky level | Stars | FWHM |
+|---|---|---|---|---|---|
+| 12-14 | 22:11:12-22:11:51 | off | 115.4-116.4 | 300 | 5.8-5.9 |
+| 15-18 | 22:12:11-22:13:10 | on | 115.2-116.0 | 300 | 5.8-6.1 |
+| 19 | 22:13:30 | off | 113.4 | 300 | 5.8 |
+
+No effect that can be measured: the sky stayed within its frame-to-frame
+scatter of about 1 while the light was on.
