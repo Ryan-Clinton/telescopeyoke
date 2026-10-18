@@ -33,6 +33,7 @@
         "bright_end": {"type": ["number", "null"], "description": "Share found among the brightest planted stars. What is missing landed on a real star: the cost of crowding."},
         "mag_90": {"type": ["number", "null"], "description": "Faintest magnitude at which 90% of the bright-end share is still found."},
         "mag_50": {"type": ["number", "null"], "description": "The same at 50%."},
+        "mag_50_error": {"type": ["number", "null"], "description": "Spread of mag_50 over the planted stars drawn again with replacement (200 draws). Two stacks whose mag_50 differ by less than about twice this are not told apart. Absent from records made before 18 October 2026."},
         "planted": {"type": "integer"}
       }
     }

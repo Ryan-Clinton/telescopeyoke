@@ -299,3 +299,18 @@ def test_the_colour_term_says_how_much_more_light_a_red_star_gives():
     assert found["colour_ref"] == pytest.approx(1.0, abs=0.3)
     # Without colours there is no term, and nothing breaks.
     assert depth.measure(image, wcs, catalogue)["colour_term"] is None
+
+
+def test_the_50_percent_point_comes_with_its_scatter_and_more_stars_shrink_it():
+    rng = np.random.default_rng(1)
+    levels = np.array(depth.MAGNITUDES, float)
+
+    def planted(n):
+        m = rng.choice(levels, n)
+        p = 1 / (1 + np.exp((m - 17.2) / 0.25))          # half found at 17.2
+        return m, rng.random(n) < p
+    few = depth.scatter_of_mag_50(*planted(400), np.random.default_rng(2))
+    many = depth.scatter_of_mag_50(*planted(8000), np.random.default_rng(2))
+    assert few is not None and many is not None and 0 < many < few
+    nothing = np.zeros(400, bool)
+    assert depth.scatter_of_mag_50(rng.choice(levels, 400), nothing, np.random.default_rng(2)) is None

@@ -22,7 +22,7 @@ only, ❌ tried and not yet working.
 | Motor focuser | ✅ the 150P to HFR 2.47 (15 October), 2.28, then 2.14 (17 October); the gears' slack is large, so it always finishes moving inward. Focus held from one night to the next (HFR 1.86 at the start on 17 October): it measures first now (`--check`) |
 | Click, tone and focus levels | 🧪 |
 | Shutter time | ✅ measured and corrected: a 10 s frame was open 6.4 s, now 9.6 s |
-| Imaging and stacking | ⚠️ runs of 48 and 207 frames, and M31 runs since; long stacks reach a noise floor not yet explained (darks, flats and dithering untried) |
+| Imaging and stacking | ⚠️ runs of 48 and 207 frames, and M31 runs since; long stacks reach a noise floor; dithering tried once (two M31 runs, 17 October) and made no measurable difference to planted-star depth (17.38 ± 0.02 against 17.36 ± 0.02); darks and flats not yet tested |
 | Drift model and Dec correction | ⚠️ an earlier, cruder version only |
 | Daytime Polaris | ❌ searched three times, not found; sensor blemishes were told from stars |
 | `findhome` and marking home | ✅ 17 October: from 10.66° out by eye to 0.19° on the marks |
@@ -105,7 +105,8 @@ frames came back full size and, at 1 s, faster than the exposure (0.91 s
 and 0.77 s), so the test is not selecting the mode or is counting old
 frames. That fault in `camera_test.py` is still to be found. The sensor was
 in room light and burnt out for the 1 s run, so the colour pattern of the
-binned frames is still unjudged. No night has been run on this lead.
+binned frames is still unjudged. When this was written (6 October) no night had
+been run on this lead; every night since has been, on USB 3.
 
 On USB 2, the 2736 x 1824 mode collects nearly four times the light per hour. Not yet
 adopted, for two reasons. Whether it keeps the colour pattern could not be
@@ -663,9 +664,31 @@ the driver. The last frames' stars were 18 pixels wide, not 5, and the
 night the coldest yet (about -1°C, dew margin under 1°). Firmware 1.4.1 of
 2017. Not yet known whether cold, damp or a fault.
 
-**Dithering, measured** (the noise-floor question, P0): the two M31 runs of
-80 frames of 16 s, restacked alike, give a 5-sigma limit of G 17.50
-dithered against 17.27 not, with the same stars (6.3") and a sky a touch
-brighter for the dithered run (19.0 against 19.2 mag per square arcsecond):
-dithering went 0.23 mag deeper. Planted-star depth (`depth.py --plant`) and
-the same test with darks and flats are still to come.
+**Dithering, measured** (the noise-floor question, P0): two M31 runs of 80
+frames of 16 s, one dithered every 10 frames and one not, taken one after the
+other (not the same frames stacked two ways); restack kept 68 of each. The
+5-sigma estimate said 17.50 dithered against 17.27, and on the night that was
+written up as dithering going 0.23 mag deeper. Planted stars (`depth.py
+--plant`, 10 trials of 400, scatter by redrawing the planted stars) do not
+bear it out: half found at G 17.38 ± 0.02 dithered and 17.36 ± 0.02 not, in
+the open sky 17.40 ± 0.04 against 17.38 ± 0.03. No difference this test can
+see. Stars 6.3" in both, sky 19.0 against 19.2 mag per square arcsecond.
+Not yet tried: darks and flats, which this test lacked, and longer stacks,
+where a fixed pattern would matter more than in 18 minutes.
+
+**Warm, the camera works** (18 October, indoors, cap on): every
+16 and 32 s frame arrived, stripes 1.0 to 1.3 on `camera_test.py
+--gain-sweep`'s scale (1 is none), and `--timing` gave 0.63 s per second
+asked, as on 13 October (0.48 in the cold). The kernel log of the night
+holds no USB error, reset or disconnect. So the fault follows the cold or
+the damp (dew margin under 1°, and the fan draws outside air through the
+body), not the lead, the port or the software. The camera reports no
+temperature of its own. Next: the same capped test outdoors on a cold dry
+evening, every ten minutes, beside the temperature and dew point, to find
+which one it follows.
+
+Not the motor focuser: its lead (the CH341 serial adapter) left USB at
+19:52 by the kernel log, and every frame scored for stripes that night was
+taken after it. To rule out coupling on other nights, the same capped
+stripes test three ways, 20 frames each, same port and lead: focuser
+unplugged, plugged in and idle, and moving.

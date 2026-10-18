@@ -456,8 +456,27 @@ def completeness(lum, shape, zp, kinds, trials=6, per_trial=400, seed=7, finder=
         relative = [None if s is None or not top else s / top for s in shares]
         out[label] = {"curve": rows, "bright_end": None if top is None else round(top, 3),
                       "mag_90": crossing(MAGNITUDES, relative, 0.9),
-                      "mag_50": crossing(MAGNITUDES, relative, 0.5), "planted": int(pick.sum())}
+                      "mag_50": crossing(MAGNITUDES, relative, 0.5),
+                      "mag_50_error": scatter_of_mag_50(mags[pick], hit[pick], rng),
+                      "planted": int(pick.sum())}
     return out
+
+
+def scatter_of_mag_50(mags, hit, rng, draws=200):
+    """How far the 50% point would move with another set of planted stars:
+    the spread of it over the planted stars drawn again with replacement.
+    Two stacks whose 50% points differ by less than about twice this have not
+    been told apart. None when too few draws give a 50% point."""
+    found = []
+    for _ in range(draws):
+        i = rng.integers(0, len(mags), len(mags))
+        m, h = mags[i], hit[i]
+        shares = [float(h[m == level].mean()) if (m == level).sum() >= 5 else None for level in MAGNITUDES]
+        top = plateau(shares)
+        point = crossing(MAGNITUDES, [None if s is None or not top else s / top for s in shares], 0.5)
+        if point is not None:
+            found.append(point)
+    return round(float(np.std(found)), 3) if len(found) >= draws // 2 else None
 
 
 # --- putting it together -------------------------------------------------------

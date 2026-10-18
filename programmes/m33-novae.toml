@@ -6,14 +6,19 @@
 target = "M33"
 
 # As on 16 October 2026, the session its first reference came from.
-exposure = 32    # 18 October 2026: the stripes (row read noise) a third weaker than at 16 s, gain 1500 (camera_test.py --gain-sweep)
+# 18 October 2026: the stripes (row read noise) a third weaker than at 16 s,
+# gain 1500 (camera_test.py --gain-sweep), on a night the camera was failing
+# in the cold. Not fixed for good: rerun the sweep when the camera changes and
+# take what it measures.
+exposure = 32
 gain = 1500
 
 minutes = 75
 
 # Every this many frames, re-centre a little off the target (shoot.py
 # --dither): the camera's own pattern then falls on different stars and
-# averages away. Each dither is a plate-solved GoTo of half a minute or so.
+# averages away. Each dither is one GoTo without plate solving and a 10 s
+# settle (17 October 2026; solving each one cost 1 to 3 minutes).
 dither = 15
 
 # A nova lasts the night: a candidate in one half of the night only is set

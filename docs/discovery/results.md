@@ -122,7 +122,28 @@ and dithering are a free gain. If B flattens too, the floor is elsewhere:
 the residual galaxy glow, the stars' own crowding, or the stacking.
 What it needs first: darks at 16 s and gain 1500 and a flat
 (`calibrate.py`, both possible now), and dithering, which `shoot.py --dither N` now does (built 17 October
-2026, proven against the simulator only).
+2026).
+
+**First try, 17 October 2026, dithering alone.** Two M31 runs one after the
+other: 80 frames of 16 s at gain 1500, dithered every 10 frames
+(`frames/M31/20261017-215824`) and not (`20261017-225507`); restack kept
+68 of each (18 minutes), bias only, no darks or flats. Stars 6.3" in both;
+sky 19.0 and 19.2 mag per square arcsecond. `depth.py --plant --trials 10`,
+400 stars a trial, 6000 in all; the scatter is the spread of the 50% point
+with the planted stars redrawn 200 times (`mag_50_error`).
+
+| | Dithered | Not dithered |
+|---|---|---|
+| 50% found, whole image | 17.38 ± 0.02 | 17.36 ± 0.02 |
+| 50% found, open sky | 17.40 ± 0.04 | 17.38 ± 0.03 |
+| 90% found, whole image | 16.76 | 16.94 |
+| 5-sigma estimate, open sky | 17.50 | 17.27 |
+
+No difference the planted stars can see. The 5-sigma estimate's 0.23 mag
+was reported first and did not hold. At 18 minutes the stack is short of
+the floor (it showed past 30), so this says dithering does not help a short
+stack, not that the floor is not the pattern. Session A against B above,
+with darks and flats and past 30 minutes, is still the test.
 
 **What to improve, for discovery, in order:** sharp focus from the motor
 focuser; tracking and round stars; dark frames, flats and dithering;
