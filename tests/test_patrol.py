@@ -61,7 +61,6 @@ def test_a_mosaic_plan_with_no_night_left_would_move_nothing(tmp_path, monkeypat
     monkeypatch.setattr(mount, "LOCK_FILE", tmp_path / "unlocked")
     monkeypatch.setattr(patrol.subprocess, "run", lambda *a, **k: pytest.fail("the plan ran a command"))
     monkeypatch.setattr(patrol, "fields", lambda p: ["M31-P1", "M31-P2"])
-    monkeypatch.setattr(mount, "find_target", lambda name: {"ra": 10.68, "dec": 41.27})
     monkeypatch.setattr(patrol, "priorities", lambda p, names, *a: [{"field": n, "minutes": 5} for n in names])
     monkeypatch.setattr(patrol, "night_left", lambda p, site: 0)
     monkeypatch.setattr(config, "load", config.example)
