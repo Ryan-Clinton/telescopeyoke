@@ -53,3 +53,12 @@ def test_tonight_with_a_mosaic_tabby_the_hunt_and_open_candidates(tmp_path, monk
 def test_a_quiet_night_has_nothing_to_show(tmp_path):
     d = agent.discovery(data=tmp_path)
     assert d == {"sessions": [], "mosaics": [], "tabby": None, "comets": None, "open_candidates": 0}
+
+
+def test_a_look_at_a_star_to_focus_on_is_not_discovery_work(tmp_path):
+    """18 October 2026: three one-frame looks at Deneb showed as "imaged; not
+    searched" beside the patrol."""
+    stamp = time.strftime("%Y%m%d-%H%M%S", time.localtime(time.time() - 600))
+    session(tmp_path, "Deneb", stamp, frames=1)
+    session(tmp_path, "M33", stamp)
+    assert [s["field"] for s in agent.discovery(data=tmp_path)["sessions"]] == ["M33"]

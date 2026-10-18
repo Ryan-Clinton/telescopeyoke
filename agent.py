@@ -504,6 +504,20 @@ def _explain(trend):
     return notes
 
 
+def discovery_fields():
+    """The fields the discovery programmes (programmes/*.toml) point at."""
+    import tomllib
+    fields = set()
+    for path in (Path(__file__).parent / "programmes").glob("*.toml"):
+        try:
+            target = tomllib.loads(path.read_text(encoding="utf-8")).get("target")
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        if target:
+            fields.add(target)
+    return fields
+
+
 STOPPED_AFTER = 300     # seconds without a frame after which an unfinished run is taken to have died
 
 
@@ -517,8 +531,14 @@ def discovery(hours=14, now=None, data=None):
     import mosaic
     base = data or config.DATA
     now = now or time.time()
+    watched = discovery_fields()
     sessions = []
     for folder in (base / "frames").glob("*/*"):
+        # Only discovery fields: a look at a bright star to focus on is not
+        # a search, and "imaged; not searched" for it says nothing (18 October 2026).
+        if not (folder.parent.name in watched or re.match(r".+-P\d+$", folder.parent.name)
+                or (folder / "patrol.json").exists()):
+            continue
         try:
             started = datetime.datetime.strptime(folder.name, "%Y%m%d-%H%M%S").timestamp()
         except ValueError:

@@ -43,6 +43,10 @@ rig's state shows is done tonight (say which, and why).
    the hand-turned aid instead of the motor.
 2. Dry-run what the step will do (`--dry-run`); anything that fails, fails
    now, indoors in your words, not with them waiting.
+3. To see what the camera sees, `./snap.py --exposure 2 --gain 1500`: one
+   frame, on the status page. Never `shoot.py` for a look: it starts an
+   imaging run, which makes a stack and a session that then show on the
+   page as work done (18 October 2026: three looks at Deneb).
 
 ## When a step moves something
 
