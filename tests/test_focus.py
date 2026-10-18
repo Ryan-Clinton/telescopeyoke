@@ -1,6 +1,7 @@
 """The focusing aid: its three levels, what it says and sounds, and the loop
 that keeps the camera exposing while a frame is measured. No camera and no
 speaker: the frames are made up and the sounds are caught."""
+import io
 import json
 import sys
 import time
@@ -435,3 +436,25 @@ def test_focus_counts_as_done_from_a_motor_run_or_a_good_check(tmp_path, monkeyp
     focus.seen_good(1.9, 1.32)
     assert focus.last_focused() > 500.0
     assert focus.usual_best() == 2.8      # a check does not move what good focus is
+
+
+def test_each_motor_reading_says_what_it_is_doing_and_goes_out_at_once(monkeypatch):
+    """A progress report reads the log mid-run: every reading has to be in it
+    the moment it is measured (18 October 2026: three minutes of a run showed
+    nothing, held back until the end), and say which way it is turning."""
+    flushed = []
+
+    class Out(io.StringIO):
+        def flush(self):
+            flushed.append(self.getvalue())
+    out = Out()
+    monkeypatch.setattr(sys, "stdout", out)
+    tube = Drawtube(best=300)
+    focus.motor_focus(tube, tube.read, usual=2.0)
+    lines = out.getvalue().splitlines()
+    assert lines and len(flushed) >= len(lines)
+    said = " ".join(lines)
+    for doing in ("start", "going out", "coming in", "out past slack", "in to sharpest"):
+        assert doing in said
+    assert all("aim 2.00" in line for line in lines)
+    assert "best" in lines[-1]

@@ -29,6 +29,11 @@ way (17 October 2026: HFR 1.86 at the start, 3.52 after a stopped run).
    (never through `tail`, which holds every line back until the end).
    Say nothing per reading: a Monitor event that changes nothing gets no
    reply. Say only a fault, or the end.
+   Asked for a progress report: read the log's last lines and answer in
+   one line from them, "coming in, +480, HFR 6.1, best 6.1, aim 2.3, 4
+   min in". No reading in the log for over a minute is the camera
+   stalled: say so in the same line. Never answer with guesses about
+   buffering or what might be happening.
 5. Report the HFR it ends on. Well above the usual: suggest the cause in
    this order: cloud or haze (ask what the sky looks like), dew on the
    mirror, the field too sparse.

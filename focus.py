@@ -607,29 +607,40 @@ MOTOR_REACH = 14        # steps out before giving up
 MOTOR_EXPOSURE, MOTOR_GAIN = 1.0, 1500
 
 
-def motor_focus(motor, read, usual, say=print):
+def progress(line):
+    """One reading of a focus run, out at once: a log being watched, or
+    read for a progress report, shows it the moment it is measured, not when
+    the run ends."""
+    print(line, flush=True)
+
+
+def motor_focus(motor, read, usual, say=progress):
     """Bring the stars to focus with the motor. `motor.move(n)` turns it (plus
     is out); `read(frames)` is the median HFR over that many frames, or None
     with no stars. `usual` is the HFR good focus comes to. Returns
     {"hfr", "moved", "found", "readings"}; with "found" false the focuser has
     been put back where it started."""
     sharp = 1.75 * usual
-    readings, place = [], [0]
+    readings, place, least_seen = [], [0], [None]
 
-    def step(n, frames=2):
+    def step(n, frames=2, doing="start"):
         if n:
             motor.move(n)
             place[0] += n
         value = read(frames)
         readings.append({"at": place[0], "hfr": value and round(value, 2)})
-        say(f"  {place[0]:+6d}  HFR {'none' if value is None else f'{value:.2f}'}")
+        if value and (least_seen[0] is None or value < least_seen[0]):
+            least_seen[0] = value
+        best_text = "" if least_seen[0] is None else f"   best {least_seen[0]:.2f}"
+        say(f"  {doing:<15} {place[0]:+6d}  HFR {'none' if value is None else f'{value:.2f}'}"
+            f"{best_text}   aim {usual:.2f}")
         return value
 
     # Out until clearly past focus: the stars grown well beyond the best seen
     # on the way, or lost, after at least two steps.
     least = step(0)
     for count in range(MOTOR_REACH):
-        value = step(MOTOR_OUT)
+        value = step(MOTOR_OUT, doing="going out")
         if value and (least is None or value < least):
             least = value
         if count >= 1 and (value is None or (least and value > max(1.5 * least, 2.5 * usual))):
@@ -638,18 +649,19 @@ def motor_focus(motor, read, usual, say=print):
     # been sharp and grown again or been lost.
     best = None
     for _ in range(2 * MOTOR_REACH * MOTOR_OUT // MOTOR_IN):
-        value = step(-MOTOR_IN)
+        value = step(-MOTOR_IN, doing="coming in")
         if value and (best is None or value < best[1]):
             best = (place[0], value)
         if best and best[1] < sharp and (value is None or value > 1.4 * best[1]):
             break
     if not best or best[1] >= sharp:
         say("  no sharp stars found")
-        step(-place[0], 1)
+        step(-place[0], 1, doing="back to start")
         return {"hfr": None, "moved": 0, "found": False, "readings": readings}
     # Out beyond the slack, then in once to the sharpest.
-    step(MOTOR_SLACK + (best[0] - place[0]) if best[0] > place[0] else MOTOR_SLACK, 1)
-    value = step(best[0] - place[0], 3)
+    step(MOTOR_SLACK + (best[0] - place[0]) if best[0] > place[0] else MOTOR_SLACK, 1,
+         doing="out past slack")
+    value = step(best[0] - place[0], 3, doing="in to sharpest")
     return {"hfr": value, "moved": place[0], "found": True, "readings": readings}
 
 
@@ -735,12 +747,13 @@ def run_motor(args):
         motor.close()
     hfr = result["hfr"]
     if result["found"] and hfr:
-        print(f"Focused: HFR {hfr:.2f} ({hfr * scale:.1f}\"), {result['moved']:+d} half-steps from the start.")
+        print(f"Focused: HFR {hfr:.2f} ({hfr * scale:.1f}\"), {result['moved']:+d} half-steps from the start.",
+              flush=True)
         with RUNS_FILE.open("a", encoding="utf-8") as log:
             log.write(json.dumps({"saved": time.time(), "best_hfr": round(hfr, 2),
                                   "best_arcsec": round(hfr * scale, 2), "motor": True}) + "\n")
     else:
-        print("No focus found within reach either way; the focuser is back where it started.")
+        print("No focus found within reach either way; the focuser is back where it started.", flush=True)
     return dict(result, hfr_arcsec=hfr and round(hfr * scale, 2))
 
 
