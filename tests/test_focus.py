@@ -478,7 +478,7 @@ def test_far_out_of_focus_the_steps_grow_and_focus_is_still_found(best):
     result = focus.motor_focus(tube, tube.read, usual=2.0, say=lambda *a: None)
     assert result["found"]
     assert abs(tube.tube - tube.best) <= 32
-    assert len(result["readings"]) <= 50
+    assert len(result["readings"]) <= 85
     assert tube.moves[-1] < 0
 
 
@@ -520,3 +520,12 @@ def test_a_focus_reading_puts_its_frame_and_line_on_the_status_page(monkeypatch,
     from PIL import Image
     with Image.open(tmp_path / "web" / "latest.jpg") as picture:
         assert picture.width == 900
+
+
+def test_near_focus_a_jumpy_reading_never_makes_a_big_step():
+    """18 October 2026: from HFR 5 one frame read 10.6 and the run took steps
+    of 900 half-steps. Near focus the steps stay small, whatever one reading says."""
+    jumps = iter([4.9, 10.6, 5.5, 4.3, 6.5, 4.1, 6.7, 7.8, 10.2] * 40)
+    tube = Drawtube(best=0)
+    focus.motor_focus(tube, lambda frames: next(jumps), usual=2.28, say=lambda *a: None)
+    assert max(abs(m) for m in tube.moves[:20]) <= focus.MOTOR_SLACK + focus.MOTOR_OUT
