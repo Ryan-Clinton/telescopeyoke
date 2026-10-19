@@ -40,6 +40,7 @@ import records
 ROOT = Path(__file__).parent
 FEATHER = 150           # pixels over which a field fades in from its edge
 SAMPLE = 8              # the sky level of a field is taken from every 8th pixel
+SKY_SHARE = 20          # percentile of a field's pixels taken as its sky level
 
 
 def fields(name):
@@ -129,10 +130,21 @@ def blend(fields_in, out_wcs, out_shape, feather=FEATHER):
         laid, covered = resample(planes, wcs, out_wcs, out_shape)
         if not covered.any():
             continue
+        grain = []
         for c in range(laid.shape[0]):
-            laid[c] -= np.median(laid[c][covered][::SAMPLE])
+            values = laid[c][covered][::SAMPLE]
+            # The sky from the darker part: in a frame full of galaxy the
+            # median is the galaxy, and taking it off left the whole-galaxy
+            # field a dark rectangle in the middle (18 October 2026).
+            sky = np.percentile(values, SKY_SHARE)
+            dark = values[values <= np.percentile(values, 50)]
+            grain.append(1.4826 * float(np.median(np.abs(dark - np.median(dark)))) + 1e-6)
+            laid[c] -= sky
+        # Deeper and cleaner counts more: exposure over the sky's grain
+        # squared, so a striped or noisy session gives way where a better
+        # one overlaps it.
         edge = ndimage.distance_transform_edt(covered)
-        w = np.clip(edge / feather, 0, 1).astype(np.float32) * float(depth)
+        w = np.clip(edge / feather, 0, 1).astype(np.float32) * float(depth) / float(np.mean(grain)) ** 2
         total += laid * w
         weights += w
     out = np.where(weights > 0, total / np.maximum(weights, 1e-9), 0).astype(np.float32)
