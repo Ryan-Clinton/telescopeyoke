@@ -122,6 +122,25 @@ def resample(planes, wcs, out_wcs, out_shape):
     return out.reshape(planes.shape[0], rows, cols), inside.reshape(rows, cols)
 
 
+def flatten(planes, step=16):
+    """Each colour plane less a tilted plane fitted to its darker half: the
+    town's glow slopes differently across each session's sky, and left in,
+    every session's edge showed as a seam (18 October 2026)."""
+    out = np.array(planes, dtype=np.float32, copy=True)
+    rows, cols = out.shape[1:]
+    yy, xx = np.mgrid[0:rows:step, 0:cols:step]
+    for c in range(out.shape[0]):
+        sample = out[c, ::step, ::step]
+        good = np.isfinite(sample) & (sample <= np.nanpercentile(sample, 50))
+        if good.sum() < 10:
+            continue
+        a = np.column_stack([np.ones(good.sum()), yy[good], xx[good]])
+        coef, *_ = np.linalg.lstsq(a, sample[good], rcond=None)
+        full_y, full_x = np.mgrid[0:rows, 0:cols]
+        out[c] -= (coef[1] * full_y + coef[2] * full_x).astype(np.float32)
+    return out
+
+
 def blend(fields_in, out_wcs, out_shape, feather=FEATHER):
     """[(planes, wcs, depth)] blended onto the grid: each field's sky level
     taken off, then a mean weighted by distance from the field's edge and by
@@ -129,7 +148,7 @@ def blend(fields_in, out_wcs, out_shape, feather=FEATHER):
     total = np.zeros((3,) + tuple(out_shape), np.float32)
     weights = np.zeros(out_shape, np.float32)
     for planes, wcs, depth in fields_in:
-        laid, covered = resample(planes, wcs, out_wcs, out_shape)
+        laid, covered = resample(flatten(planes), wcs, out_wcs, out_shape)
         if not covered.any():
             continue
         grain = []

@@ -116,3 +116,11 @@ def test_a_session_with_a_colour_cast_is_matched_to_its_neighbour_in_the_overlap
     x, y = out_wcs.world_to_pixel_values(*left.pixel_to_world_values(150, 60))
     overlap = joined[:, 40:80, int(x) - 10:int(x) + 10]
     assert abs(float(np.median(overlap[2] - overlap[0]))) < 4    # blue matches red where they meet
+
+
+def test_a_slope_in_a_sessions_sky_is_taken_out():
+    shape = (80, 120)
+    yy, xx = np.mgrid[0:shape[0], 0:shape[1]]
+    planes = np.stack([20 + 0.3 * xx + 0.1 * yy] * 3).astype(np.float32)
+    flat = stitch.flatten(planes)
+    assert float(np.ptp(flat[0])) < 1.0          # the tilt gone, the level left for the blend to match
