@@ -725,8 +725,13 @@ def camera_temperature(cam):
 def cooldown_step(cam, exposure, frames):
     """Capped frames at one moment: the row stripes in ADU (one frame's, the
     median of them) and against the pixels' noise (1 is none), how long each
-    frame took against the exposure asked, and how many never arrived."""
-    adu, scores, cycles, failed = [], [], [], 0
+    frame took against the exposure asked, and how many never arrived.
+
+    With them the sensor's own thermometer, since this camera has no other:
+    dark current roughly doubles every 6 °C, so the frames' mean level over
+    their median, and the share of pixels far above it (the hot ones, which
+    grow fastest), rise and fall with the sensor's temperature."""
+    adu, scores, cycles, failed, excess, hot = [], [], [], 0, [], []
     for _ in range(frames):
         start = time.monotonic()
         try:
@@ -737,9 +742,23 @@ def cooldown_step(cam, exposure, frames):
         cycles.append(time.monotonic() - start)
         adu.append(float(np.std(row_stripes(mosaic))))
         scores.append(banding(mosaic))
+        warmth = dark_current(mosaic)
+        excess.append(warmth["excess_adu"])
+        hot.append(warmth["hot_ppm"])
     pick = lambda v, places: round(float(np.median(v)), places) if v else None
     return {"frames": frames, "failed": failed, "stripes_adu": pick(adu, 2), "stripes": pick(scores, 1),
-            "frame_s": pick(cycles, 2)}
+            "frame_s": pick(cycles, 2), "dark_excess_adu": pick(excess, 3), "hot_ppm": pick(hot, 1)}
+
+
+def dark_current(mosaic, far=10):
+    """How warm a capped frame says the sensor is: its mean over its median
+    in ADU (the dark current's tail, as the black level and the read noise
+    cancel), and how many pixels in a million stand more than `far` times
+    the noise above the median."""
+    m = mosaic[::2, ::2].astype(np.float32)      # one Bayer site, a quarter of the work
+    median = float(np.median(m))
+    noise = 1.4826 * float(np.median(np.abs(m - median))) or 1.0
+    return {"excess_adu": float(m.mean()) - median, "hot_ppm": 1e6 * float(np.mean(m > median + far * noise))}
 
 
 def cooldown(exposure, gain, frames=20, every_min=10.0, steps=12, note="", say=print, sleep=time.sleep):
@@ -769,6 +788,7 @@ def cooldown(exposure, gain, frames=20, every_min=10.0, steps=12, note="", say=p
             air = row["outdoors"] or {}
             say(f"  {row['time'][11:16]}  stripes {row['stripes_adu']} ADU ({row['stripes']})  "
                 f"frame {row['frame_s']} s  failed {row['failed']}/{frames}  "
+                f"dark +{row['dark_excess_adu']} ADU, hot {row['hot_ppm']} ppm  "
                 f"air {air.get('temp_c', '?')}°C dew {air.get('dew_point_c', '?')}°C "
                 f"(margin {air.get('dew_margin_c', '?')}°)  "
                 f"camera {row['camera_c'] if row['camera_c'] is not None else '?'}°C  "

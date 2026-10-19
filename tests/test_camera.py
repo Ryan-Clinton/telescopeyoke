@@ -771,3 +771,20 @@ def test_a_replugged_camera_gets_a_fresh_server_before_the_first_frame(world, mo
     with camera.Camera(gain=300):
         pass
     assert len(restarted) == 1
+
+
+def test_a_warmer_dark_says_so_in_its_tail_and_hot_pixels():
+    """The fan-cooled 183C has no thermometer: its darks are one."""
+    import camera_test
+    rng = np.random.default_rng(31)
+    shape = (800, 1000)
+
+    def dark(doublings):
+        # Black level and read noise the same; each pixel's dark current
+        # spread over a long tail, doubling with each 6 °C or so.
+        current = rng.lognormal(0, 1.5, shape) * 2.0 ** doublings
+        return (200 + rng.normal(0, 4, shape) + rng.poisson(current)).astype(np.uint16)
+
+    cold, warm = camera_test.dark_current(dark(0)), camera_test.dark_current(dark(2))
+    assert warm["excess_adu"] > cold["excess_adu"] > 0
+    assert warm["hot_ppm"] > 2 * cold["hot_ppm"]
