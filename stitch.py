@@ -5,8 +5,8 @@
     ./stitch.py M31 --on desktop    a session with no stack yet is stacked on the desktop (remote.py)
     ./stitch.py M31 --dry-run       say what would be restacked and joined; nothing is done
 
-Every session of every field of the mosaic (its panels, M31-P1 to M31-P8,
-and the object itself when it was also taken whole) is used, each stacked on
+Every session of every panel of the mosaic (M31-P1 to M31-P8; with
+--with-whole, the object taken whole too) is used, each stacked on
 its own (restack.py, for a session without a stack yet) and placed on the
 sky by its own plate solve, kept in mosaics/NAME-stitch.json so it is solved
 once. A session only has to line up with itself, so a camera turned between
@@ -45,15 +45,18 @@ SOLID = 0.9             # a row or column of the picture is kept when this share
 MATCH_FROM = 20000      # pixels of overlap enough to match a session's level to the picture so far
 
 
-def fields(name):
-    """The fields that make up NAME's picture: its mosaic panels, and the
-    object itself if it was taken whole."""
+def fields(name, whole=False):
+    """The fields that make up NAME's picture: its mosaic panels, and with
+    `whole` the object itself where it was also taken whole. Left out by
+    default: the whole object fills its frame, so its sky cannot be measured
+    and it sat in the mosaic as a lighter rectangle (18 October 2026); the
+    panels alone join without a seam."""
     import mosaic
     plan = mosaic.load(name)
     if not plan:
         raise interface.Refusal("NO_SESSION", f"{name} has no mosaic plan (mosaic.py {name}).")
     found = [p["id"] for p in plan["panels"]]
-    if sessions(name):
+    if whole and sessions(name):
         found.append(name)
     return found
 
@@ -203,7 +206,7 @@ def exposure_of(session):
         return 1.0
 
 
-def run(name, host=None, dry_run=False, say=print, solver=None, restacker=None):
+def run(name, host=None, dry_run=False, say=print, solver=None, restacker=None, whole=False):
     """Every session of every field of NAME, each stacked on its own and
     placed on the sky by its own plate solve, blended into one picture.
     Each session lines up only with itself, so frames from nights with the
@@ -216,7 +219,7 @@ def run(name, host=None, dry_run=False, say=print, solver=None, restacker=None):
     path = record_path(name)
     kept = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
     solved = kept.setdefault("solved", {})
-    names = fields(name)
+    names = fields(name, whole)
     todo = [s for f in names for s in unstacked(f)]
     answer = {"mosaic": name, "fields": names, "restacked": [str(s) for s in todo]}
     if dry_run:
@@ -321,9 +324,11 @@ def main():
     ap.add_argument("name", help="the mosaic, as mosaic.py names it (M31)")
     ap.add_argument("--on", metavar="HOST", help="restack on another computer, named in ~/.ssh/config")
     ap.add_argument("--dry-run", action="store_true", help="say what would be done; do nothing")
+    ap.add_argument("--with-whole", action="store_true",
+                    help="also the sessions of the whole object (M31 itself), not only its panels")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
-    return interface.main("stitch", lambda: run(args.name, args.on, args.dry_run), args.json)
+    return interface.main("stitch", lambda: run(args.name, args.on, args.dry_run, whole=args.with_whole), args.json)
 
 
 if __name__ == "__main__":
