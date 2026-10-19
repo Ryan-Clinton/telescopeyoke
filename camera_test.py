@@ -699,14 +699,15 @@ def usb_devices(devices=Path("/sys/bus/usb/devices")):
 def conditions(cam, exposure, gain):
     """Everything about a cooldown set that should stay the same between
     sets and runs, written into every record so nothing has to be
-    remembered: gain, exposure asked and the share of it the shutter is
-    really open (camera.shutter_share, from the trail test), readout speed,
+    remembered: gain, the exposure (how long the shutter is open) and what
+    the driver was asked for to get it (camera.shutter_share, from the
+    trail test: camera.frame asks for more), readout speed,
     fan and black level, the USB port and speed, what else is on USB, and
     whether the laptop is on its charger."""
     import camera
     share = getattr(cam, "shutter", None)
     return {"gain": gain, "exposure_s": exposure,
-            "exposure_open_s": None if share is None else round(exposure * share, 2),
+            "exposure_asked_s": None if not share else round(exposure / share, 2),
             "speed": getattr(cam, "speed", None),
             "fan": camera.SETTINGS.get("camera", {}).get("fan"),
             "offset": camera.SETTINGS.get("camera", {}).get("offset"),

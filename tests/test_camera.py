@@ -733,3 +733,41 @@ def test_the_details_leave_out_what_an_older_library_cannot_say(sdk, world):
         found = cam.details()
     assert found["hardware"] is None and found["production_date"] is None and found["frame_buffer"] == "none"
     camera_test.show_details(dict(found, usb_link={"port": "2-4", "mbps": 480}))
+
+
+def test_a_camera_plugged_in_after_the_server_started_is_noticed(tmp_path):
+    """19 October 2026: the camera came back from another computer and the
+    first frame waited two minutes on the old server's dead connection."""
+    import os
+    devices, procs = tmp_path / "devices", tmp_path / "proc"
+    (devices / "2-1").mkdir(parents=True)
+    (devices / "2-1" / "product").write_text("ALTAIRH183C\n")
+    plugged = (devices / "2-1").stat().st_ctime
+    tick = os.sysconf("SC_CLK_TCK")
+    (procs / "4242").mkdir(parents=True)
+    (procs / "4242" / "comm").write_text("indiserver\n")
+    boot = 1000.0
+
+    def server_started(at):
+        fields = ["S"] + ["0"] * 18 + [str(int((at - boot) * tick))]
+        (procs / "4242" / "stat").write_text("4242 (indiserver) " + " ".join(fields) + " 0 0\n")
+    (procs / "stat").write_text(f"cpu 1 2 3\nbtime {boot:.0f}\n")
+    server_started(plugged - 120)
+    assert camera.replugged(devices, procs)
+    server_started(plugged + 120)
+    assert not camera.replugged(devices, procs)
+    (procs / "4242" / "comm").write_text("bash\n")
+    assert not camera.replugged(devices, procs)                 # no server running
+    assert not camera.replugged(tmp_path / "nowhere", procs)    # nothing to read
+
+
+def test_a_replugged_camera_gets_a_fresh_server_before_the_first_frame(world, monkeypatch):
+    restarted = []
+    monkeypatch.setattr(camera, "BACKEND", "indi")
+    monkeypatch.setattr(camera, "MANAGE_SERVER", True)
+    monkeypatch.setattr(camera, "Indi", fake_indi(world))
+    monkeypatch.setattr(camera, "replugged", lambda: True)
+    monkeypatch.setattr(camera, "start_driver", lambda port=None: restarted.append(port))
+    with camera.Camera(gain=300):
+        pass
+    assert len(restarted) == 1

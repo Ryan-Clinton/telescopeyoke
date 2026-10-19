@@ -14,8 +14,10 @@ exposure length, so a 2 s exposure takes roughly 14 s to arrive. On USB 3 a
 """
 import io
 import json
+import os
 import subprocess
 import time
+from pathlib import Path
 
 import numpy as np
 from astropy.io import fits
@@ -102,6 +104,8 @@ class Camera:
         self.client.close()
 
     def _open(self):
+        if MANAGE_SERVER and replugged():
+            start_driver(self.port)
         try:
             self.client = Indi(port=self.port)
         except OSError:
@@ -214,6 +218,26 @@ class Camera:
                     raise
                 start_driver(self.port)
                 self._open()
+
+
+def replugged(devices=Path("/sys/bus/usb/devices"), procs=Path("/proc")):
+    """Whether the camera was plugged in after the running INDI server
+    started, so that the server's driver holds a connection to a camera
+    that has gone. On 19 October 2026 the camera came back from another
+    computer, and the first frame waited on the old connection for two
+    minutes before the server was restarted. False where it cannot be told
+    (no server, no camera, not Linux)."""
+    try:
+        plugged = max((d.stat().st_ctime for d in devices.iterdir() if (d / "product").exists()
+                       and (d / "product").read_text().strip().upper().startswith("ALTAIR")), default=None)
+        boot = next(float(line.split()[1]) for line in (procs / "stat").read_text().splitlines()
+                    if line.startswith("btime"))
+        started = [boot + int((p / "stat").read_text().rsplit(")", 1)[1].split()[19]) / os.sysconf("SC_CLK_TCK")
+                   for p in procs.iterdir() if p.name.isdigit() and (p / "comm").exists()
+                   and (p / "comm").read_text().strip() == "indiserver"]
+    except (OSError, ValueError, StopIteration, AttributeError):
+        return False
+    return bool(plugged and started and plugged > max(started))
 
 
 def start_driver(port=PORT):
