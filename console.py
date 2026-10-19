@@ -1014,6 +1014,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(404, b"", "text/plain")
         if path.startswith("/pictures/"):
             name = path[len("/pictures/"):]
+            if name == "scope.jpg" and not host.webcam_on("show_picture"):
+                return self.send(404, b"", "text/plain")          # the webcam's picture is switched off
             if (name in PICTURES or name in self.reader.finished()) and (WEB / name).exists():
                 return self.send(200, (WEB / name).read_bytes(), "image/jpeg")
             return self.send(404, b"", "text/plain")

@@ -175,11 +175,26 @@ def _built_in_allowed():
     return bool(config.hardware().get("webcam", {}).get("built_in", False))
 
 
+def webcam_on(feature=None):
+    """Whether the webcam may be used at all, and for `feature`
+    ("watch_moves", "show_picture") when one is named. Every webcam feature
+    is off unless [webcam] in config.toml turns it on (19 October 2026: the
+    bench rig's picture was on the pages long after the webcam was finished
+    with, and the person asked for every webcam feature to be switchable and
+    off)."""
+    import config
+    settings = config.hardware().get("webcam", {})
+    return bool(settings.get("enabled", False)) and (feature is None or bool(settings.get(feature, False)))
+
+
 def webcam_device():
     """The webcam to use: on Linux an external one if plugged in, and the
     laptop's own only when the settings allow it (its light coming on
     unnerved visitors, 18 October 2026, and it looks at the room, not the
-    telescope); on Windows the one config.toml names. None for none."""
+    telescope); on Windows the one config.toml names. None for none, and
+    always None while the webcam is switched off (webcam_on)."""
+    if not webcam_on():
+        return None
     if WINDOWS:
         return _webcam_name() or None
     cameras = sorted(glob.glob("/dev/v4l/by-id/*-video-index0"))

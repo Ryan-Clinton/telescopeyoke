@@ -136,10 +136,12 @@ class Mount:
         # A simulated mount has no camera behind it, except in the full demo,
         # which has a pretend camera and sky to solve.
         self.can_solve = not self.demo or (config.DEMO and handset is None)
-        # The webcam photographs the scope during every real move unless told
-        # not to: its light comes on for each picture, which is no help beside
-        # a telescope in the dark, so TY_NO_WATCH=1 stops it for any script.
-        watch = watch and not os.environ.get("TY_NO_WATCH")
+        # The webcam photographs the scope during real moves only when the
+        # settings turn it on ([webcam] enabled and watch_moves, both off
+        # unless set: 19 October 2026). Its light comes on for each picture,
+        # which is no help beside a telescope in the dark, so TY_NO_WATCH=1
+        # also stops it for any script.
+        watch = watch and host.webcam_on("watch_moves") and not os.environ.get("TY_NO_WATCH")
         self.watching = Watching if watch and not self.demo else contextlib.nullcontext
         if self.demo:
             import simulator

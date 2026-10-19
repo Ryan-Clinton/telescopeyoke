@@ -20,6 +20,8 @@ from urllib.parse import parse_qs, unquote, urlparse
 import clouds
 import config
 import records
+import schedule
+import activity
 import agent
 import demo
 import host
@@ -172,7 +174,11 @@ def status_forever(seconds=2):
             status["pictures"] = pictures()
             status["now"] = image_status("latest")     # the newest single exposure
             status["stack"] = image_status("stack")    # the running stack
-            status["scope_age"] = age(WEB / "scope.jpg")
+            status["scope_age"] = age(WEB / "scope.jpg") if host.webcam_on("show_picture") else None
+            # What is being done now when it is not imaging (a GoTo, a plate
+            # solve, focusing, a patrol's panel), and tonight's schedule.
+            status["activity"] = activity.now()
+            status["schedule"] = schedule.view()
             # The system checks open a connection to INDI, so do them less often.
             if time.time() - checked > 15:
                 system, checked = system_status(status.get("age")), time.time()
@@ -211,6 +217,9 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         url = urlparse(self.path)
+        if url.path.endswith("/scope.jpg") and not host.webcam_on("show_picture"):
+            self.send_error(404)              # the webcam's picture is switched off
+            return
         if not url.path.startswith("/api/v1/"):
             return super().do_GET()
         import agent

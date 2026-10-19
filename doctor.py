@@ -279,6 +279,8 @@ def check_camera():
 def check_webcam():
     if _demo():
         return WARN, "no webcam in the demo; slews are not photographed"
+    if not host.webcam_on():
+        return OK, "webcam switched off in the settings ([webcam] enabled); nothing opens one"
     return host.has_webcam()
 
 

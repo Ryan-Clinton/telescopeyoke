@@ -194,6 +194,7 @@ def test_with_no_webcam_configured_on_windows_there_is_simply_no_picture(monkeyp
 def test_on_linux_the_laptops_own_webcam_is_used_only_when_allowed(monkeypatch):
     """18 October 2026: its light coming on at every slew unnerved visitors."""
     built_in = f"/dev/v4l/by-id/usb-{host.BUILT_IN}-video-index0"
+    monkeypatch.setattr(host, "webcam_on", lambda feature=None: True)     # the webcam switched on
     monkeypatch.setattr(host, "WINDOWS", False)
     monkeypatch.setattr(host.glob, "glob", lambda pattern: [built_in])
     monkeypatch.setattr(host, "_built_in_allowed", lambda: False)
@@ -207,6 +208,7 @@ def test_on_linux_the_laptops_own_webcam_is_used_only_when_allowed(monkeypatch):
 
 
 def test_the_configured_webcam_is_given_to_ffmpeg_by_name(monkeypatch):
+    monkeypatch.setattr(host, "webcam_on", lambda feature=None: True)     # the webcam switched on
     monkeypatch.setattr(host, "WINDOWS", True)
     monkeypatch.setattr(host, "_webcam_name", lambda: "USB2.0 PC CAMERA")
     assert host.webcam_input()[-1] == "video=USB2.0 PC CAMERA"

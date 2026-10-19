@@ -245,6 +245,13 @@ SETTINGS = (
      {"optional": True}),
     ("solver", "database", "Star database folder", "text", "Blank uses the usual place for this system.",
      {"optional": True}),
+    ("webcam", "enabled", "Use a webcam at all", "yesno",
+     "Off: nothing opens a webcam (the telescope pictures during moves, watch.py and the picture on the pages); "
+     "the settings below then do nothing.", {}),
+    ("webcam", "watch_moves", "Photograph the telescope during every move", "yesno",
+     "A picture a second while the mount moves, for the pages. Needs the webcam on.", {}),
+    ("webcam", "show_picture", "Show the telescope picture on the pages", "yesno",
+     "The status page and the console show the webcam's latest picture of the telescope. Needs the webcam on.", {}),
     ("webcam", "device", "Webcam", "text",
      "On Windows, the camera's name as ffmpeg lists it. Linux finds one by itself.", {"optional": True}),
     ("webcam", "built_in", "Use the laptop's own webcam", "yesno",

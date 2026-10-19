@@ -11,6 +11,7 @@ from datetime import timedelta
 from pathlib import Path
 from string import Template
 
+import host
 import tonight
 
 e = html.escape
@@ -293,6 +294,16 @@ PAGE = Template(r"""<!doctype html>
   tr:last-child td { border-bottom: 0; }
   #moving { border-color: var(--fair); }
   #moving h2 { margin-top: 0; color: var(--fair); }
+  #doing h2 { margin-top: 0; }
+  #doing .inner { padding-left: 16px; }
+  .step { display: grid; grid-template-columns: 7.5em 1fr 6em; gap: 10px; padding: 6px 0;
+          border-top: 1px solid var(--line); align-items: center; }
+  .step:first-child { border-top: 0; }
+  .step.done, .step.skipped { color: var(--dim); }
+  .step.running .label { font-weight: 600; }
+  .step.failed .state { color: var(--bad, #e06c6c); }
+  .step .state { text-align: right; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+  .step progress { grid-column: 1 / -1; width: 100%; height: 6px; }
 </style></head><body><main>
 <header>
   <h1>telescopeyoke <span>— $site</span></h1>
@@ -300,6 +311,16 @@ PAGE = Template(r"""<!doctype html>
 </header>
 <div class="cards">$cards</div>
 <div class="conditions">$conditions</div>
+
+<div id="doing" class="panel" hidden style="margin-top:16px">
+  <h2>Now</h2>
+  <div id="doing-lines"></div>
+</div>
+
+<div id="schedule-section" hidden>
+  <h2>Tonight's schedule</h2>
+  <div id="schedule" class="panel"></div>
+</div>
 
 <div id="moving" class="panel" hidden style="margin-top:16px">
   <h2>Mount moving</h2>
@@ -531,6 +552,34 @@ atlas. Comets: COBS and JPL Horizons. Cloud imagery: EUMETSAT. Catalogue: OpenNG
     $$("discovery-more").textContent = more.join(" · ");
   }
 
+  function ago(seconds) {
+    return seconds < 90 ? `$${seconds} s` : `$${Math.round(seconds / 60)} min`;
+  }
+
+  // What the telescope is doing now, from whatever started it: a GoTo, a
+  // plate solve, focusing, a patrol's panel (activity.py).
+  function showDoing(lines) {
+    lines = lines || [];
+    $$("doing").hidden = !lines.length;
+    $$("doing-lines").innerHTML = lines.map((d, i) =>
+      `<div class="$${i ? "inner" : ""}">$${esc(d.words)} <span class="dim">· $${ago(d.for_s)}</span></div>`).join("");
+  }
+
+  // Tonight's schedule: each step's expected start and finish, its state,
+  // and how far a running one has got (schedule.py).
+  function showSchedule(plan) {
+    const steps = (plan && plan.steps) || [];
+    $$("schedule-section").hidden = !steps.length;
+    const when = (t) => t ? new Date(t * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", hour12: false}) : "--:--";
+    $$("schedule").innerHTML = steps.map((s) => {
+      const running = s.status === "running" && s.progress != null;
+      return `<div class="step $${s.status}"><span>$${when(s.start)}–$${when(s.end)}</span>` +
+        `<span class="label">$${esc(s.label)}</span>` +
+        `<span class="state">$${running ? Math.round(100 * s.progress) + "%" : esc(s.status)}</span>` +
+        (running ? `<progress max="1" value="$${s.progress}"></progress>` : "") + `</div>`;
+    }).join("");
+  }
+
   async function refresh() {
     $$("clock").textContent = new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"});
     let status;
@@ -545,6 +594,8 @@ atlas. Comets: COBS and JPL Horizons. Cloud imagery: EUMETSAT. Catalogue: OpenNG
     showPictures(status.pictures || []);
     showDiscovery(status.discovery);
     showSystem(status.system);
+    showDoing(status.activity);
+    showSchedule(status.schedule);
     // The webcam comes to the top while the mount is slewing.
     $$("moving").hidden = !(status.scope_age != null && status.scope_age < 20);
   }
@@ -569,7 +620,7 @@ def render(rep, top, out_dir):
         clouds = ('<h2>Cloud from the satellite (bright = cloud, dark = clear)</h2>'
                   '<img src="clouds.jpg" alt="Infrared satellite image of cloud over the site">')
     scope = ""
-    if (out_dir / "scope.jpg").exists():
+    if (out_dir / "scope.jpg").exists() and host.webcam_on("show_picture"):
         scope = ('<h2>The telescope (webcam, updates during slews)</h2>'
                  '<img src="scope.jpg" data-live="scope.jpg" alt="View of the telescope">')
     shown = rep["targets"][:top]
