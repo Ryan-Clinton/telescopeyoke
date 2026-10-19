@@ -110,7 +110,18 @@ turns from where it started. Each kept run is in `cache/focus_runs.jsonl`.
 Until measured, the step is 256 half-steps and the slack overshoot 1536:
 the gears showed "well over a quarter turn" (1024) of slack, and the
 overshoot must be larger than the slack, never smaller; too much costs only
-time. What is measured is kept in `cache/focuser.json`.
+time. What is measured is kept in `cache/focuser.json`. That slack was seen
+before the night of 18 October 2026, when the motor's screws were tightened
+to take up backlash, so it is likely less now: measure it again
+(`--measure-backlash`) before trusting the starting figure.
+
+A Sharpie line on the focuser's drawtube marks where focus was on 18 October
+2026. With the drawtube at the line the stars are already close, so a focus
+run starts in the right place instead of searching for it. A hair's breadth
+either side of focus was the difference between a good reading and a poor
+one on the focus aid, which is why the step has to be measured
+(`--measure-step`): the starting 256 half-steps is many times the depth of
+sharp focus at f/5.
 
 The two shafts have to be in line. With the motor's ear screws done up
 where they happened to sit, the printed coupler bound and the motor fell

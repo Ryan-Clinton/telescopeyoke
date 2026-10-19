@@ -85,7 +85,12 @@ is usually still good: then move on, and focus only if they ask
     ./focus.py --motor         measures again, and focuses only if worse than usual
 
 The motor focuser does it: nobody touches the telescope, so never ask for a
-hand on the knob. `--motor` focuses wherever the telescope points, so point
+hand on the knob. The Sharpie line on the drawtube (18 October 2026) marks
+focus: a camera taken off and put back is close when the drawtube is at it.
+Until `cache/focuser.json` exists, run `./focus.py --measure-step` and
+`--measure-backlash` once, after the first focus of the night: the motor's
+screws were tightened on 18 October to take up the slack, and the step is
+still the starting guess. `--motor` focuses wherever the telescope points, so point
 at a rich field first. Run it in the background with its output to a log
 and a Monitor on the log, never through `tail`, which holds every line
 back; say only a fault or the end, never a line per reading. Never stop a run part way: on
