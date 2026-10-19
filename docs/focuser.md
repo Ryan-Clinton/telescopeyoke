@@ -179,6 +179,24 @@ it shows is the gearbox's alone; on the focuser, under the drawtube's
 load, the coupler and the focuser add theirs. The degrees a half-step is
 and how closely it comes back carry over.
 
+**On 19 October 2026**, the motor off the telescope on a stool, the
+screws tightened the night before, watched by a Pixel 9 on DroidCam
+(`cache/focuser-bench-20261019-2105.json`):
+
+| | Measured |
+|---|---|
+| A half-step | 0.088° (45.1° for 512): 4088 to a turn, 4096 on paper |
+| Slack, unloaded | 30 half-steps one way, 29 the other: about 2.6° |
+| Back to the same place | within 0.10° over three trips of 256 out and back, about one half-step |
+| Reading noise | 0.20° a picture: moves of 16 half-steps and more read cleanly, single moves of 4 (0.35°) barely |
+
+The smallest turn a hand could give the knob was about 0.1° to 0.4°, and
+that hair's breadth moved the focus aid's reading from 3 to 11 to 20, so
+focus is that sensitive; the motor comes back within 0.1°. The slack is
+some thirty half-steps, not the thousand seen before the screws were
+tightened, so the 1536 overshoot is far more than needed: on the telescope
+`./focus.py --measure-backlash` sets it, coupler and load included.
+
 ## Temperature (planned, not built)
 
 The Hypercam 183C has no thermometer, and the cold, damp night of 17 October
