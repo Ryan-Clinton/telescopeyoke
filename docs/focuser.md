@@ -134,3 +134,33 @@ The Nano is found by its USB chip's name (`1a86`, the CH340), or by
 `serial_match` under `[focuser]` in `config.toml`, or name it with `--port`.
 Its orders are lines beginning with a colon, so bytes meant for a mount's
 handset that reach it by mistake move nothing.
+
+## Temperature (planned, not built)
+
+The Hypercam 183C has no thermometer, and the cold, damp night of 17 October
+2026 brought stronger stripes and long frames that never arrived
+(`docs/banding.md`). Telling cold from damp needs the camera's temperature
+against the dew point at the telescope, and the forecast's dew point is the
+only one there is now. The Nano sits about 3 inches from the camera and uses
+only D4 to D7, so it can carry both readings. Until then, each cooldown set
+uses the darks themselves as a thermometer (their mean over their median,
+and the share of hot pixels).
+
+| Part | Measures | Wiring | Notes |
+|---|---|---|---|
+| **BME280** breakout (temperature, humidity, pressure) | the air at the telescope, and so the dew point | I²C: SDA to A4, SCL to A5, GND, and 3.3 V or 5 V as the board says | Buy this first: it answers most of the question alone. Outside the Nano's box on short wires, never sealed in it, away from the motor; a small hood (a bottle cap) keeps dew off it. |
+| **10 kΩ NTC thermistor, B3950, 1 %** | the camera body | One leg to A0, the other to GND; a 10 kΩ resistor from A0 to 5 V | A flat head, metal tab, ring lug or bare epoxy bead, flat on the body near the front flange under aluminium tape. Not the magnetic kind (the body is not steel) nor the round steel tube (it barely touches). The 2 m lead can be cut short; its plug will not fit the Nano, so cut it off or use a matching socket. |
+
+No screw of the camera's own is needed. Altair publish no body screw sizes,
+and the body has no tripod hole: the only threads are the front T2
+(M42x0.75) and the nosepiece insert. Some owners of ZWO cameras feed a
+thermistor in through the ST4 port to sit under the sensor; that means
+opening a camera that is not ours, so it is not done here. If a back-plate
+screw turns out to suit, a ring lug under it is slightly better contact
+than tape.
+
+What the software will need, written with its test before the parts are
+first used: a `:T` order in `focuser.ino` that answers with each reading;
+`focuser.py` reading it; and `camera_test.py --cooldown` and the night's
+log recording the camera's temperature and the dew margin measured at the
+telescope. Later, the same readings can move the focus as the night cools.
