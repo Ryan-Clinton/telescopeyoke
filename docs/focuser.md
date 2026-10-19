@@ -106,6 +106,8 @@ turns from where it started. Each kept run is in `cache/focus_runs.jsonl`.
     ./focus.py --find                far out, no star measuring: half a turn at a time in, then out, until stars do
     ./focus.py --measure-step        from focus, in until the stars are 2.5 times their size; a quarter of that is the step
     ./focus.py --measure-backlash    the slack, on the steep side of the curve, twice; half as much again is kept
+    ./focus.py --walk-in             from a little outside focus, set by hand: in 64 then 32 half-steps at a
+                                     time, slowly (40 ms a half-step), measuring each, to the sharpest
 
 Until measured, the step is 256 half-steps and the slack overshoot 1536:
 the gears showed "well over a quarter turn" (1024) of slack, and the
@@ -196,6 +198,19 @@ focus is that sensitive; the motor comes back within 0.1°. The slack is
 some thirty half-steps, not the thousand seen before the screws were
 tightened, so the 1536 overshoot is far more than needed: on the telescope
 `./focus.py --measure-backlash` sets it, coupler and load included.
+
+## When the motor cannot lift the drawtube
+
+On 19 October 2026 the motor turned but, with the camera's weight on the
+drawtube, moved it only downhill; uphill the drive slipped, nearly a turn
+of lost motion after each reversal, at every speed from 5 to 40 ms a
+half-step. What worked: point where the weight pulls the drawtube in (M31,
+east of the meridian, that night), set it a little out of focus by hand,
+and let `./focus.py --walk-in` bring it in. It reached HFR 1.58, the
+sharpest yet, and stops two moves past the best (at most 64 half-steps
+inside it), since it cannot go back. Far out, the search (`--find`) now
+follows the doughnuts' size and turns back the moment they grow. The
+slipping itself is still to be found, in daylight, with the focuser off.
 
 ## Temperature (planned, not built)
 

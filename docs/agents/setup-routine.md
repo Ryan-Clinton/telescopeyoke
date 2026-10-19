@@ -84,6 +84,11 @@ is usually still good: then move on, and focus only if they ask
 
     ./focus.py --motor         measures again, and focuses only if worse than usual
 
+If the motor turns but the stars do not change (19 October 2026: it could
+not lift the drawtube against the camera's weight), ask the person to set
+the drawtube a little out of focus by hand, then `./focus.py --walk-in`
+brings it in to the sharpest, downhill only.
+
 The motor focuser does it: nobody touches the telescope, so never ask for a
 hand on the knob. The Sharpie line on the drawtube (18 October 2026) marks
 focus: a camera taken off and put back is close when the drawtube is at it.

@@ -614,3 +614,45 @@ def test_far_out_of_focus_the_stars_are_found_by_half_turns(best, way):
 def test_with_no_stars_anywhere_the_search_goes_back_to_the_start():
     tube = Drawtube(best=60000)
     assert focus.find_stars(tube, tube.read, usual=2.0, say=quiet) is None and tube.at == 0
+
+
+def test_far_out_the_search_turns_back_as_soon_as_the_doughnuts_grow():
+    """19 October 2026: a search went a turn and a half in while focus lay
+    out. The doughnuts' size, which no HFR measures, says which way."""
+    tube = Drawtube(best=5000, slope=200, reach=2000)
+    rings = lambda frames: 10 + abs(tube.tube - tube.best) / 100      # grows away from focus
+    said = []
+    found = focus.find_stars(tube, tube.read, usual=2.0, say=said.append, ring=rings)
+    assert found is not None and found > 0 and tube.size() is not None
+    assert sum(1 for line in said if line.lstrip().startswith("in")) == 1    # one half turn in, then back
+    assert any("the other way" in line for line in said)
+
+
+@pytest.mark.parametrize("start, slope", [(300, 40), (600, 80), (1500, 200)])
+def test_walking_in_from_outside_ends_just_past_the_sharpest(start, slope):
+    """19 October 2026: set a little out by hand (HFR 9), brought in 32
+    half-steps at a time, it reached HFR 1.58 and stopped two moves past it."""
+    tube = Drawtube(best=-start, slope=slope, sharp=1.6, reach=2 * start, noise=0.02)
+    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet)
+    assert all(step < 0 for step in tube.moves)                     # inward only
+    assert result["best_hfr"] == pytest.approx(1.6, abs=0.5)
+    assert abs(result["best_at"] + start) <= 64
+    assert result["ended_at"] < result["best_at"] and result["ended_at"] >= -start - 2 * 64
+
+
+def test_walking_in_stops_on_a_reading_that_stays_empty_and_never_jumps():
+    """19 October 2026: an empty reading taken as "far out" jumped 256
+    half-steps and went past focus."""
+    class Gone(Drawtube):
+        def read(self, frames):
+            return [None] * frames if self.at <= -96 else super().read(frames)
+    tube = Gone(best=-300, slope=40, reach=600)
+    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet)
+    assert max(abs(step) for step in tube.moves) <= 64 and result["ended_hfr"] is None
+
+
+def test_walking_in_with_no_stars_at_the_start_moves_nothing():
+    tube = Drawtube(best=-60000, reach=600)
+    with pytest.raises(focus.interface.Refusal):
+        focus.walk_in(tube, tube.read, usual=2.0, say=quiet)
+    assert tube.moves == []

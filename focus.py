@@ -78,6 +78,7 @@ SMOOTH = {1: 1, 2: 2, 3: 3}             # readings each level steadies over
 PERCENT = {1: 10.0, 2: 6.0, 3: 4.0}     # the smallest change each level calls a change
 ENOUGH = 10         # stars in the middle of a full-size frame that make the rest not worth measuring
 SURE = 3            # readings in a row that settle a change of level
+WALK_MS = 40        # ms a half-step for --walk-in: the slowest and strongest tried on 19 October 2026
 HOLD = 5            # readings that must stay on the best before "Focus good"
 # Half-flux radius at good focus, in arcseconds: HFR 2 on the 150P with the
 # 183C. A starting figure only. Once runs have ended on "Focus good", what
@@ -871,23 +872,80 @@ def motor_focus(motor, read, usual, say=progress, step=None, backlash=None, swee
     return dict(result, hfr=None, moved=0, found=False)
 
 
-def find_stars(motor, read, usual, say=progress, stride=2048, turns=2):
+def find_stars(motor, read, usual, say=progress, stride=2048, turns=2, ring=None):
     """Far out of focus, where no star measures: half a turn at a time in,
     then out, a check after each, until stars measure (HFR under CEILING),
     so a sweep has something to fit. 18 October 2026: after the focuser was
     refitted, stars were found again 1.5 turns in. Leaves the focuser where
-    they showed, or back at the start. Returns that place, or None."""
+    they showed, or back at the start. Returns that place, or None.
+
+    `ring(frames)` gives the size of the defocused stars' doughnuts, which
+    no HFR can measure but which shrink steadily towards focus: a way they
+    grow on is the wrong way, and is left at once for the other (19 October
+    2026: a search went a turn and a half in while the doughnuts did not
+    shrink)."""
     drive = Drive(motor)
     reach = turns * 4096 // stride
+    start = ring(SWEEP_FRAMES) if ring else None
     for way in (-1, 1):
+        before = start
         for k in range(1, reach + 1):
             drive.to(way * k * stride)
             found = sample(read, SWEEP_FRAMES, usual)
-            say(f"  {'in' if way < 0 else 'out'} {k * stride:5d}: HFR {found['hfr'] or 'none'}")
+            size = ring(SWEEP_FRAMES) if ring and found["hfr"] is None else None
+            say(f"  {'in' if way < 0 else 'out'} {k * stride:5d}: HFR {found['hfr'] or 'none'}"
+                + (f", doughnuts {size:.0f} px" if size else ""))
             if found["hfr"] is not None:
                 return drive.at
+            if size and before and size > 1.05 * before:
+                say(f"  the doughnuts grew from {before:.0f} to {size:.0f} px: focus is the other way")
+                break
+            before = size or before
         drive.to(0)
     return None
+
+
+def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, switch=8.0, most=80, tries=3):
+    """Focus from a little outside it, moving only inward, a few half-steps
+    at a time, measuring after each, until the stars have been worse twice
+    running after their best; returns {"best_hfr", "best_at", "ended_at",
+    "ended_hfr", "readings"}. Where the motor can push the drawtube in but
+    not lift it out (19 October 2026, the camera's weight on the drawtube),
+    a person sets it a little out by hand and this brings it in: then it
+    reached HFR 1.58 in 32-step moves. Moves of `coarse` while the HFR is
+    over `switch`, `fine` below. A reading that comes back empty is taken
+    again, up to `tries` times; then it stops where it is, since a jump
+    there once overshot focus. It ends two moves past the best, at most
+    2 x `fine` inside it."""
+    def reading():
+        for _ in range(tries):
+            hfr = sample(read, SWEEP_FRAMES, usual)["hfr"]
+            if hfr is not None:
+                return hfr
+        return None
+    now = reading()
+    if now is None:
+        raise interface.Refusal("NO_STARS", "No stars measure here. Set the drawtube a little out of focus by "
+                                            "hand, where the stars still measure, and run this again.")
+    best, best_at, at, worse, readings = now, 0, 0, 0, [(0, now)]
+    say(f"  start: HFR {now}")
+    for _ in range(most):
+        step = fine if now < switch else coarse
+        motor.move(-step)
+        at -= step
+        now = reading()
+        say(f"  in {step} (at {at:+d}): HFR {now if now is not None else 'none'}")
+        if now is None:
+            say("  no reading after three tries: stopped here")
+            break
+        readings.append((at, now))
+        if now < best:
+            best, best_at, worse = now, at, 0
+        else:
+            worse += 1
+            if worse >= 2:
+                break
+    return {"best_hfr": best, "best_at": best_at, "ended_at": at, "ended_hfr": now, "readings": readings}
 
 
 def measure_step(motor, read, usual, say=progress, backlash=None, increment=64, most=4096):
@@ -1064,13 +1122,32 @@ def run_motor(args, mode="focus"):
                     values.append(measure_stars(seen["lum"])[0])
                 return values
 
+            def ring(frames):
+                """The doughnuts' size, median over `frames`, from the
+                brightest star's ring (measure())."""
+                sizes = []
+                for _ in range(frames):
+                    mosaic, _ = cam.frame(MOTOR_EXPOSURE)
+                    seen["lum"] = luminance(mosaic)
+                    found = measure(seen["lum"])
+                    if found:
+                        sizes.append(found[2])
+                return float(np.median(sizes)) if sizes else None
+
             def say(line):
                 progress(line)
                 if "lum" in seen:
                     show(seen["lum"], "focus: " + line)
             drive = Settled(motor)
+            if mode == "walk":
+                if hasattr(motor, "speed"):
+                    motor.speed(WALK_MS)
+                result = walk_in(drive, read, usual, say=say)
+                print(f"Best HFR {result['best_hfr']} at {result['best_at']:+d} half-steps; ended at "
+                      f"{result['ended_at']:+d}, HFR {result['ended_hfr']}.", flush=True)
+                return result
             if mode == "find":
-                found = find_stars(drive, read, usual, say=say)
+                found = find_stars(drive, read, usual, say=say, ring=ring)
                 print(f"Stars measure {found:+d} half-steps from the start." if found is not None else
                       "No stars within two turns either way: the focuser is back where it started.", flush=True)
                 return {"found_at": found}
@@ -1157,12 +1234,15 @@ def main():
                          "quarter of it as the sweep step")
     ap.add_argument("--find", action="store_true",
                     help="far out of focus: half a turn at a time in, then out, until stars measure")
+    ap.add_argument("--walk-in", action="store_true",
+                    help="from a little outside focus, set by hand: in a few half-steps at a time, slowly, "
+                         "measuring each, to the sharpest; for when the motor cannot lift the drawtube out")
     ap.add_argument("--measure-backlash", action="store_true",
                     help="measure the focuser gears' slack on the steep side of the curve; keeps half as much "
                          "again as the overshoot")
     args = ap.parse_args()
     for flag, mode in (("sweep", "sweep"), ("find", "find"), ("measure_step", "step"),
-                       ("measure_backlash", "backlash")):
+                       ("measure_backlash", "backlash"), ("walk_in", "walk")):
         if getattr(args, flag):
             return interface.main("focus.motor", lambda: run_motor(args, mode), args.json)
     if args.check:
