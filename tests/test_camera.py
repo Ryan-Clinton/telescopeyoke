@@ -553,6 +553,54 @@ def test_the_banding_trial_tries_each_setting_and_keeps_the_weakest(monkeypatch,
     assert answer["best"]["fan"] == "off" and saved[("camera", "fan")] == "off"
 
 
+def test_a_sweep_point_gives_the_stripes_in_adu_and_against_the_grain():
+    import camera_test
+    rng = np.random.default_rng(3)
+    calm = camera_test.sweep_point([striped(0, rng) for _ in range(3)])
+    rough = camera_test.sweep_point([striped(8, rng) for _ in range(3)])
+    assert calm["frames"] == 3 and rough["stripes_adu"] > 3 * calm["stripes_adu"]
+    assert rough["stripes_per_grain"] == round(rough["stripes_adu"] / rough["noise"], 3)
+
+
+def test_the_usb_link_is_read_from_the_kernels_record(tmp_path):
+    import camera_test
+    for name, product, speed in (("1-1", "Webcam", "480"), ("2-4", "ALTAIRH183C", "5000")):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "product").write_text(product + "\n")
+        (tmp_path / name / "speed").write_text(speed + "\n")
+    assert camera_test.usb_link(tmp_path) == {"port": "2-4", "mbps": 5000}
+    assert camera_test.usb_link(tmp_path / "missing") is None
+
+
+def test_the_cooldown_keeps_a_line_a_step_and_counts_frames_that_never_arrive(monkeypatch, tmp_path):
+    import camera_test
+    rng = np.random.default_rng(4)
+    taken = []
+
+    class Cam:
+        def __init__(self, gain): pass
+        def __enter__(self): return self
+        def __exit__(self, *exc): return False
+        def frame(self, seconds):
+            taken.append(seconds)
+            if len(taken) == 2:
+                raise IndiError("timed out waiting for the image")
+            return striped(4 * len(taken) // 3, rng), {}
+    monkeypatch.setattr(camera_test, "Camera", Cam)
+    monkeypatch.setattr(camera_test.config, "DATA", tmp_path)
+    monkeypatch.setattr(camera_test, "outdoors", lambda: {"temp_c": 1.0, "dew_point_c": 0.5})
+    monkeypatch.setattr(camera_test, "usb_link", lambda: {"port": "2-4", "mbps": 5000})
+    slept = []
+    answer = camera_test.cooldown(16, 1500, frames=3, every_min=5, steps=2, note="3 m lead",
+                                  say=lambda s: None, sleep=slept.append)
+    assert slept == [300] and taken == [16] * 6
+    first, second = answer["steps"]
+    assert first["failed"] == 1 and second["failed"] == 0 and first["note"] == "3 m lead"
+    assert second["stripes_adu"] > first["stripes_adu"] and first["usb"]["port"] == "2-4"
+    lines = (tmp_path / "cache").glob("cooldown-*.jsonl")
+    assert len(next(lines).read_text().splitlines()) == 2
+
+
 def test_the_camera_sets_its_fan_and_black_level_each_time_it_opens(world, monkeypatch):
     sets = []
     Client = fake_indi(world)

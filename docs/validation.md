@@ -652,10 +652,15 @@ sky's grain, 1 being none: gain 900 at 16 s 6.2, 1500 at 16 s 4.8, 900 at
 there; a longer frame made them weaker. M33's patrol now takes 32 s frames.
 
 **The camera, later**: the stripes measure 2.0 to 2.4 ADU a frame tonight
-against 1.4 to 1.6 on every earlier night (4 to 16 October), on the same
-USB 3 lead (frames 11 to 17 s apart on those nights: never USB 2, whatever
-the README said) and the same port (2-4, from the kernel log); the other
-port (2-5) gave 2.2. The readout speed gave 4.9, 3.6 and 5.6 at Speed 0, 1
+against 1.4 to 1.6 on every earlier night (4 to 16 October). Corrected
+19 October from the kernel log, which keeps each connection's port and
+speed: on 3 and 4 October the camera was linked at USB 2 (480 Mb/s, port
+1-5) on the lead it came with, and from 6 October at USB 3 (5000 Mb/s) on a
+new 3 m USB 3 lead, on ports 2-4 (13 and 17 October), 2-5 (15 and 18
+October) and 2-1 (18 October, indoors). The stripes were 1.4 to 1.6 on
+the USB 2 night and the USB 3 nights alike, and 13 and 17 October used the
+same port: neither the link speed nor the port made the difference. The
+other port (2-5) gave 2.2 on the cold night. The readout speed gave 4.9, 3.6 and 5.6 at Speed 0, 1
 and 2, one frame each. `camera_test.py --timing` now finds each second asked
 adds 0.48 s, where on 13 October at the same Speed 2 it was 0.63. Through
 Altair's own library (SDK 60.31589, no INDI) short exposures arrived (0.1

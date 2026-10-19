@@ -7,6 +7,7 @@
     ./camera_test.py --gain-sweep --gains 300 900 1500 2500 --exposure 2
     ./camera_test.py --timing           does a frame take as long as the exposure asked for?
     ./camera_test.py --trail            how long is the shutter really open? From a star's trail
+    ./camera_test.py --cooldown --note "3 m lead, port 2-4"   cap on, outside: do the stripes grow as it cools?
 
 With [camera] backend = "altair" the camera is read through Altair's own
 library: --capabilities then shows the model, versions and how it is
@@ -434,6 +435,12 @@ def main():
                       help="whether a run's stripes are fixed in the sensor or new each frame, from its saved frames")
     what.add_argument("--banding", action="store_true",
                       help="how strong the horizontal stripes are with the fan on and off and at two black levels")
+    what.add_argument("--cooldown", action="store_true",
+                      help="cap on: the stripes, failed frames and timing every few minutes as the camera cools, "
+                           "with the air temperature, dew point and USB port")
+    ap.add_argument("--every", type=float, default=10.0, help="with --cooldown: minutes between sets")
+    ap.add_argument("--steps", type=int, default=12, help="with --cooldown: how many sets")
+    ap.add_argument("--note", default="", help="with --cooldown: what is different in this run (cable, port, heater)")
     ap.add_argument("--keep-best", action="store_true",
                     help="with --banding: keep the setting with the weakest stripes in config.toml")
     ap.add_argument("--corrected", action="store_true",
@@ -445,7 +452,9 @@ def main():
                     help="with --gain-sweep: each gain at each of these exposures, seconds")
     ap.add_argument("--exposure", type=float,
                     help="seconds (default 2 for gains, 1 for throughput, 10 for --trail)")
-    ap.add_argument("--frames", type=int, default=4, help="frames per mode, for --throughput")
+    ap.add_argument("--frames", type=int,
+                    help="frames per mode for --throughput (default 4), per set for --cooldown (20), "
+                         "per setting for --gain-sweep (1)")
     ap.add_argument("--gain", type=int, default=1500)
     ap.add_argument("--dry-run", action="store_true", help="say what it would do; no camera, no mount")
     ap.add_argument("--json", action="store_true")
@@ -544,6 +553,111 @@ def banding_trial(exposure, gain, frames=2, keep=False, settings=BANDING_SETTING
     return {"exposure_s": exposure, "gain": gain, "settings": rows, "best": best, "kept": keep}
 
 
+def sweep_point(mosaics):
+    """One gain, exposure and speed of a sweep, from one or more frames: the
+    first frame's sky, grain, burnt pixels and stars, and the stripes as the
+    median over all of them in three ways. `stripes` is against what the
+    pixels' noise would give a row (1 is none); `stripes_adu` is the raw
+    row-to-row spread; `stripes_per_grain` is that spread over one pixel's
+    sky grain. ADU are not comparable between gains (a higher gain gives more
+    ADU for the same electrons), so a sweep is judged on the two ratios and
+    on what it finds; electrons would need the camera's electrons per ADU at
+    each gain, which has not been measured."""
+    q = measure(mosaics[0])
+    q["stripes"] = round(float(np.median([banding(m) for m in mosaics])), 1)
+    q["stripes_adu"] = round(float(np.median([np.std(row_stripes(m)) for m in mosaics])), 2)
+    q["stripes_per_grain"] = round(q["stripes_adu"] / max(q["noise"], 1e-9), 3)
+    q["frames"] = len(mosaics)
+    return q
+
+
+def usb_link(devices=Path("/sys/bus/usb/devices")):
+    """Which USB port the Altair camera is on and how fast it is linked, from
+    the kernel's own record ({"port": "2-4", "mbps": 5000}); 480 is USB 2.
+    None where there is no such record (Windows) or no camera."""
+    try:
+        for d in sorted(devices.iterdir()):
+            product = d / "product"
+            if product.exists() and product.read_text().strip().upper().startswith("ALTAIR"):
+                return {"port": d.name, "mbps": int((d / "speed").read_text().strip())}
+    except OSError:
+        pass
+    return None
+
+
+def outdoors(source=None):
+    """The forecast's temperature and dew point for this hour at the site,
+    {"temp_c", "dew_point_c"}; None without a site or a forecast."""
+    import feeds
+    try:
+        site = config.load()["site"]
+        w = (source or feeds).weather(site["lat"], site["lon"])
+    except Exception:
+        return None
+    now = time.time()
+    i = min(range(len(w["time"])), key=lambda k: abs(w["time"][k] - now))
+    return {"temp_c": w["temperature_2m"][i], "dew_point_c": w["dew_point_2m"][i]}
+
+
+def camera_temperature(cam):
+    """The camera's own thermometer in °C, where its library reports one."""
+    try:
+        return round(cam.handle.get_Temperature() / 10, 1)
+    except Exception:
+        return None
+
+
+def cooldown_step(cam, exposure, frames):
+    """Capped frames at one moment: the row stripes in ADU (one frame's, the
+    median of them) and against the pixels' noise (1 is none), how long each
+    frame took against the exposure asked, and how many never arrived."""
+    adu, scores, cycles, failed = [], [], [], 0
+    for _ in range(frames):
+        start = time.monotonic()
+        try:
+            mosaic, _ = cam.frame(exposure)
+        except (Exception, SystemExit):
+            failed += 1
+            continue
+        cycles.append(time.monotonic() - start)
+        adu.append(float(np.std(row_stripes(mosaic))))
+        scores.append(banding(mosaic))
+    pick = lambda v, places: round(float(np.median(v)), places) if v else None
+    return {"frames": frames, "failed": failed, "stripes_adu": pick(adu, 2), "stripes": pick(scores, 1),
+            "frame_s": pick(cycles, 2)}
+
+
+def cooldown(exposure, gain, frames=20, every_min=10.0, steps=12, note="", say=print, sleep=time.sleep):
+    """The cap-on test of whether the stripes grow as the camera cools: the
+    same frames every `every_min` minutes, each set with the outdoor
+    temperature and dew point, the camera's own temperature where it has
+    one, and the USB port and speed. Change one thing at a time between
+    runs (cable, port, hub, heater) and say which in `note`. Kept, a line a
+    step, in config.DATA/cache/cooldown-DATE.jsonl."""
+    log = config.DATA / "cache" / f"cooldown-{time.strftime('%Y%m%d')}.jsonl"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    rows = []
+    say(f"{steps} sets of {frames} capped frames of {exposure:g} s at gain {gain}, every {every_min:g} min"
+        + (f" ({note})" if note else ""))
+    with Camera(gain=gain) as cam:
+        for step in range(steps):
+            if step:
+                sleep(every_min * 60)
+            row = {"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "note": note, "exposure_s": exposure, "gain": gain,
+                   "camera_c": camera_temperature(cam), "usb": usb_link(), "outdoors": outdoors(),
+                   **cooldown_step(cam, exposure, frames)}
+            rows.append(row)
+            with open(log, "a", encoding="utf-8") as f:
+                f.write(json.dumps(row) + "\n")
+            air = row["outdoors"] or {}
+            say(f"  {row['time'][11:16]}  stripes {row['stripes_adu']} ADU ({row['stripes']})  "
+                f"frame {row['frame_s']} s  failed {row['failed']}/{frames}  "
+                f"air {air.get('temp_c', '?')}°C dew {air.get('dew_point_c', '?')}°C  "
+                f"camera {row['camera_c'] if row['camera_c'] is not None else '?'}°C  "
+                f"usb {(row['usb'] or {}).get('port', '?')} {(row['usb'] or {}).get('mbps', '?')} Mb/s")
+    return {"log": str(log), "steps": rows}
+
+
 def run(args):
     if getattr(args, "stripes", None):      # saved frames only: nothing to dry-run
         return stripes_in(args.stripes)
@@ -559,15 +673,17 @@ def run(args):
         (show_details if SDK else show_capabilities)(found)
         return found
     if args.timing:
-        return timing(args.gain, frames=min(args.frames, 3))
+        return timing(args.gain, frames=min(args.frames or 3, 3))
     if args.trail:
         return trail(args.exposure or 10.0, args.gain, args.corrected)
     if args.stripes:
         return stripes_in(args.stripes)
     if args.banding:
-        return banding_trial(args.exposure or 16.0, args.gain, min(args.frames, 2), args.keep_best)
+        return banding_trial(args.exposure or 16.0, args.gain, min(args.frames or 2, 2), args.keep_best)
+    if args.cooldown:
+        return cooldown(args.exposure or 16.0, args.gain, args.frames or 20, args.every, args.steps, args.note)
     if args.throughput:
-        results = (throughput_sdk if SDK else throughput)(args.exposure or 1.0, args.frames, args.gain)
+        results = (throughput_sdk if SDK else throughput)(args.exposure or 1.0, args.frames or 4, args.gain)
         good = [r for r in results if "failed" not in r]
         if good:
             best = min(good, key=lambda r: r["cycle_s"])
@@ -577,7 +693,7 @@ def run(args):
     exposures = args.exposures or [args.exposure or 2.0]
     results, rows = [], []
     print(f"{'gain':>5} {'exp':>5} {'sky':>6} {'grain':>6} {'burnt':>7} {'stars':>6} {'signal':>7} {'FWHM':>5} "
-          f"{'round':>5} {'stripes':>7}")
+          f"{'round':>5} {'stripes':>7} {'ADU':>5} {'/grain':>6}")
     for exposure in exposures:
         for speed in (args.speeds or [None]):
             for gain in args.gains:
@@ -585,18 +701,15 @@ def run(args):
                     if speed is not None:
                         cam.settings(speed=speed)
                         cam.frame(1.0)                  # one frame to let the change take
-                    mosaic, _ = cam.frame(exposure)
-                q = measure(mosaic)
-                # Row read noise against the sky's own grain (1 is none to speak of):
-                # more sky signal a frame, from a longer frame or a gentler gain, beats it down.
-                q["stripes"] = banding(mosaic)
+                    mosaics = [cam.frame(exposure)[0] for _ in range(args.frames or 1)]
+                q = sweep_point(mosaics)
                 if exposure == exposures[0]:
                     results.append((gain, q))
                 rows.append(dict(q, gain=gain, exposure_s=exposure, speed=speed))
                 fwhm = "" if q["fwhm"] is None else f"{q['fwhm']:.1f}"
                 print(f"{gain:>5} {exposure:>5g} {'' if speed is None else 'speed ' + str(speed)} {q['background']:>6.0f} {q['noise']:>6.1f} {q['burnt']:>7.3%} "
                       f"{q['stars']:>6} {q['signal']:>7.0f} {fwhm:>5} {q.get('roundness') or 0:>5.2f} "
-                      f"{q['stripes']:>7.1f}", flush=True)
+                      f"{q['stripes']:>7.1f} {q['stripes_adu']:>5.2f} {q['stripes_per_grain']:>6.3f}", flush=True)
     best = recommend(results)
     print(f"\nSuggested gain: {best}" if best else "\nNo stars found at any gain.")
     calm = min(rows, key=lambda r: r["stripes"])
