@@ -49,45 +49,47 @@ def test_two_overlapping_panels_join_with_the_star_once_and_no_step_in_the_sky()
     assert abs(np.nanmedian(sky[rows, 40:120]) - np.nanmedian(sky[rows, 230:310])) < 3
 
 
-def test_only_fields_with_a_new_session_are_restacked(tmp_path, monkeypatch):
-    monkeypatch.setattr(config, "DATA", tmp_path)
-    for field, nights in (("M31-P1", ["20261017-230000", "20261018-221000"]), ("M31-P2", ["20261018-221500"])):
-        for night in nights:
-            folder = tmp_path / "frames" / field / night
-            folder.mkdir(parents=True)
-            (folder / "light-0001.fits").write_bytes(b"")
-            (folder / "final.fits").write_bytes(b"")
-    (tmp_path / "frames" / "M31-P1" / "combined").mkdir()
-    (tmp_path / "frames" / "M31-P1" / "combined" / "final.fits").write_bytes(b"")
-    kept = {"M31-P1": ["20261017-230000"], "M31-P2": ["20261018-221500"]}
-    assert stitch.stale("M31", "M31-P1", kept)                  # a night added since
-    assert not stitch.stale("M31", "M31-P2", kept)
-    assert stitch.stack_of("M31-P2") == tmp_path / "frames" / "M31-P2" / "20261018-221500" / "final.fits"
-    assert stitch.stack_of("M31-P1") == tmp_path / "frames" / "M31-P1" / "combined" / "final.fits"
-
-
-def test_a_whole_run_restacks_what_is_new_and_writes_the_picture(tmp_path, monkeypatch):
+def test_every_session_is_placed_on_its_own_and_only_unstacked_ones_are_stacked(tmp_path, monkeypatch):
+    """Each session lines up only with itself: on 18 October 2026, after the
+    camera had been off for cleaning, a panel's nights restacked together
+    matched to 6 px. A session with no stack yet is stacked on its own."""
     import mosaic
     rng = np.random.default_rng(2)
     shape = (60, 90)
     monkeypatch.setattr(config, "DATA", tmp_path)
+    monkeypatch.setattr(mosaic, "load", lambda name: {"panels": [{"id": "M31-P1"}, {"id": "M31-P2"}], "angle_deg": 37.5})
     wcs = {"M31-P1": panel_wcs(10.0, 41.0, shape), "M31-P2": panel_wcs(10.02, 41.0, shape)}
-    monkeypatch.setattr(mosaic, "load", lambda name: {"panels": [{"id": "M31-P1"}, {"id": "M31-P2"}]})
+    made = []
     for field, w in wcs.items():
-        folder = tmp_path / "frames" / field / "20261018-221000"
-        folder.mkdir(parents=True)
-        (folder / "light-0001.fits").write_bytes(b"")
-        fits.PrimaryHDU(sky_with_star(w, shape, w.pixel_to_world_values(45, 30), 40, rng)).writeto(folder / "final.fits")
-        (folder / "restack.json").write_text(json.dumps({"summary": {"total_exposure_s": 256}}))
-    restacked = []
-    answer = stitch.run("M31", say=lambda *_: None, solver=lambda lum, field: wcs[field],
-                        restacker=lambda field, host: restacked.append(field))
-    assert restacked == ["M31-P1", "M31-P2"] and answer["joined"] == 2
+        for night, stacked in (("20261017-230000", True), ("20261018-221000", field == "M31-P1")):
+            folder = tmp_path / "frames" / field / night
+            folder.mkdir(parents=True)
+            (folder / "light-0001.fits").write_bytes(b"")
+            if stacked:
+                fits.PrimaryHDU(sky_with_star(w, shape, w.pixel_to_world_values(45, 30), 40, rng)).writeto(
+                    folder / "final.fits")
+                (folder / "restack.json").write_text(json.dumps({"summary": {"total_exposure_s": 256}}))
+
+    def restacker(session, host):
+        made.append(f"{session.parent.name} {session.name}")
+        w = wcs[session.parent.name]
+        fits.PrimaryHDU(sky_with_star(w, shape, w.pixel_to_world_values(45, 30), 40, rng)).writeto(session / "final.fits")
+    answer = stitch.run("M31", say=lambda *_: None, solver=lambda lum, field: wcs[field], restacker=restacker)
+    assert made == ["M31-P2 20261018-221000"] and answer["joined"] == 4
     assert (tmp_path / "mosaics" / "M31-mosaic.fits").exists() and (tmp_path / "web" / "M31-mosaic.jpg").exists()
-    restacked.clear()
-    stitch.run("M31", say=lambda *_: None, solver=lambda lum, field: wcs[field],
-               restacker=lambda field, host: restacked.append(field))
-    assert restacked == []                                       # nothing new: nothing restacked again
+
+
+def test_a_tilted_mosaic_gets_a_turned_grid_with_less_empty_corner():
+    shape = (100, 300)
+    tilted = []
+    for k in range(3):
+        w = panel_wcs(10.0 + k * 0.08, 41.0 + k * 0.06, shape)
+        c, s_ = np.cos(np.radians(37)), np.sin(np.radians(37))
+        w.wcs.cd = 1.32 / 3600 * np.array([[-c, s_], [s_, c]])
+        tilted.append((w, shape))
+    _, upright = stitch.grid(tilted)
+    _, turned = stitch.grid(tilted, angle=37)
+    assert turned[0] * turned[1] < 0.8 * upright[0] * upright[1]
 
 
 def test_a_mosaic_with_no_plan_is_refused(tmp_path, monkeypatch):

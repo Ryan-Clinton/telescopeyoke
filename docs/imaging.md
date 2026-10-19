@@ -93,11 +93,13 @@ frames under `frames/M31-P1/`.
   where it did before, even if the camera has been turned since. Keep the
   camera's turn the same for the panels to tile neatly; `--replace` starts a
   new plan.
-- `./stitch.py M31` joins the panels into one picture, with every night's
-  frames of each panel (and of the object taken whole) restacked together:
-  plate-solved, resampled onto one grid, the skies levelled and the overlaps
-  blended. A mosaic patrol runs it when it ends, so the picture grows night
-  by night; `--on desktop` does the restacking on the desktop.
+- `./stitch.py M31` joins the panels into one picture from every session of
+  every night (and of the object taken whole): each session stacked on its
+  own and placed by its own plate solve, so a camera turned between nights
+  changes nothing, then resampled onto one grid, the skies levelled and the
+  overlaps blended, deeper sessions counting more. A mosaic patrol runs it
+  when it ends, so the picture grows night by night; `--on desktop` stacks
+  any session that has no stack yet on the desktop.
 - Patrolled panel by panel on the real mount since 17 October 2026.
 
 ## Dithering

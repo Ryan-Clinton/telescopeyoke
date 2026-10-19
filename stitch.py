@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """Every night's frames of a mosaic as one picture, growing night by night.
 
-    ./stitch.py M31                 restack what is new, then join every panel into one picture
-    ./stitch.py M31 --on desktop    the restacking done on the desktop (remote.py)
+    ./stitch.py M31                 every session of every panel, placed on the sky, as one picture
+    ./stitch.py M31 --on desktop    a session with no stack yet is stacked on the desktop (remote.py)
     ./stitch.py M31 --dry-run       say what would be restacked and joined; nothing is done
 
-Each field of the mosaic (its panels, M31-P1 to M31-P8, and the object
-itself when it was also taken whole) is restacked with every session it has,
-from every night (restack.py --all), but only when a session has been added
-since the last time: what was used is kept in mosaics/NAME-stitch.json. Each
-field's deep stack is plate-solved, resampled onto one sky grid (north up,
-the panels' own scale), its sky level taken off, and the fields are blended
-where they overlap: each pixel weighted by how far it is from its field's
-edge, so no seam shows, and by how deep the field is (its exposure). The
-whole is then finished as every picture is (process.py).
+Every session of every field of the mosaic (its panels, M31-P1 to M31-P8,
+and the object itself when it was also taken whole) is used, each stacked on
+its own (restack.py, for a session without a stack yet) and placed on the
+sky by its own plate solve, kept in mosaics/NAME-stitch.json so it is solved
+once. A session only has to line up with itself, so a camera turned between
+nights changes nothing. Each is resampled onto one grid (the panels' own
+scale, turned to the mosaic's angle), its sky level taken off, and all are
+blended: each pixel weighted by how far it is from its session's edge, so no
+seam shows, and by the session's exposure, so every new night adds depth
+where it lands. The whole is then finished as every picture is (process.py).
 
 Kept as mosaics/NAME-mosaic.fits (the linear blend, colour planes first) and
 web/NAME-mosaic.jpg. The patrol runs this in the background when it ends,
@@ -63,39 +64,16 @@ def sessions(field):
                   if d.is_dir() and d.name != "combined" and any(d.glob("light-*.fits")))
 
 
-def stack_of(field):
-    """Where restack.py --all leaves a field's picture: the session itself
-    when it has only one, else the combined folder."""
-    found = sessions(field)
-    if not found:
-        return None
-    return (found[0] if len(found) == 1 else found[0].parent / "combined") / "final.fits"
-
-
 def record_path(name):
     return config.DATA / "mosaics" / f"{name.lower()}-stitch.json"
 
 
-def stale(name, field, kept):
-    """Whether a field has a session its last deep stack did not use."""
-    used = set(kept.get(field, []))
-    found = [s.name for s in sessions(field)]
-    stack = stack_of(field)
-    return bool(found) and (set(found) != used or stack is None or not stack.exists())
-
-
-def restack(field, host=None, run=subprocess.run):
-    """Restack every session of a field as one picture."""
-    cmd = [sys.executable, str(ROOT / "restack.py"), field, "--all"] + (["--on", host] if host else [])
-    done = run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
-    if done.returncode != 0:
-        last = (done.stderr or "").strip().splitlines()[-1:]
-        raise interface.Refusal("INVALID_REQUEST", f"Restacking {field} failed: {last[0] if last else 'no reason given'}")
-
-
-def grid(placed, scale=None):
-    """One north-up tangent-plane grid covering every placed field: [(wcs,
-    shape)]. Its scale is the fields' own, so nothing is enlarged."""
+def grid(placed, scale=None, angle=None):
+    """One tangent-plane grid covering every placed field: [(wcs, shape)].
+    Its scale is the fields' own, so nothing is enlarged. Turned by `angle`
+    (degrees, the mosaic's own; either way round, whichever box is smaller)
+    so a tilted mosaic is not a picture of mostly empty corners; north up
+    without one."""
     corners = []
     scales = []
     for wcs, shape in placed:
@@ -108,16 +86,21 @@ def grid(placed, scale=None):
                                       np.cos(np.radians(corners[:, 0])).mean()))) % 360
     dec0 = float(corners[:, 1].mean())
     step = scale or float(np.median(scales))
-    out = WCS(naxis=2)
-    out.wcs.ctype = ["RA---TAN", "DEC--TAN"]
-    out.wcs.crval = [ra0, dec0]
-    out.wcs.crpix = [1, 1]
-    out.wcs.cdelt = [-step, step]
-    x, y = out.world_to_pixel_values(corners[:, 0], corners[:, 1])
-    x0, y0 = np.floor(x.min()), np.floor(y.min())
-    out.wcs.crpix = [1 - x0, 1 - y0]
-    shape = (int(np.ceil(y.max() - y0)) + 1, int(np.ceil(x.max() - x0)) + 1)
-    return out, shape
+    best = None
+    for turn in ([0.0] if not angle else [float(angle), -float(angle)]):
+        c, s_ = np.cos(np.radians(turn)), np.sin(np.radians(turn))
+        out = WCS(naxis=2)
+        out.wcs.ctype = ["RA---TAN", "DEC--TAN"]
+        out.wcs.crval = [ra0, dec0]
+        out.wcs.crpix = [1, 1]
+        out.wcs.cd = step * np.array([[-c, s_], [s_, c]])
+        x, y = out.world_to_pixel_values(corners[:, 0], corners[:, 1])
+        x0, y0 = np.floor(x.min()), np.floor(y.min())
+        out.wcs.crpix = [1 - x0, 1 - y0]
+        shape = (int(np.ceil(y.max() - y0)) + 1, int(np.ceil(x.max() - x0)) + 1)
+        if best is None or shape[0] * shape[1] < best[1][0] * best[1][1]:
+            best = (out, shape)
+    return best
 
 
 def resample(planes, wcs, out_wcs, out_shape):
@@ -156,70 +139,121 @@ def blend(fields_in, out_wcs, out_shape, feather=FEATHER):
     return out, weights
 
 
-def depth_of(field):
-    """Seconds of exposure in a field's deep stack, from its restack record."""
-    stack = stack_of(field)
+def unstacked(field):
+    """A field's sessions that have no stack of their own yet."""
+    return [s for s in sessions(field) if not (s / "final.fits").exists()]
+
+
+def restack(session, host=None, run=subprocess.run):
+    """One session's own stack (restack.py)."""
+    cmd = [sys.executable, str(ROOT / "restack.py"), str(session)] + (["--on", host] if host else [])
+    done = run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    if done.returncode != 0:
+        last = (done.stderr or "").strip().splitlines()[-1:]
+        raise interface.Refusal("INVALID_REQUEST", f"Restacking {session} failed: {last[0] if last else 'no reason given'}")
+
+
+def exposure_of(session):
+    """Seconds of exposure in a session's stack, from its restack record."""
     try:
-        record = json.loads((stack.parent / "restack.json").read_text(encoding="utf-8"))
+        record = json.loads((Path(session) / "restack.json").read_text(encoding="utf-8"))
         return float(record["summary"]["total_exposure_s"]) or 1.0
-    except (OSError, ValueError, AttributeError, TypeError):
+    except (OSError, ValueError, KeyError, TypeError):
         return 1.0
 
 
 def run(name, host=None, dry_run=False, say=print, solver=None, restacker=None):
-    """Restack what is new, then join every field into one picture."""
+    """Every session of every field of NAME, each stacked on its own and
+    placed on the sky by its own plate solve, blended into one picture.
+    Each session lines up only with itself, so frames from nights with the
+    camera turned differently never have to line up with each other (18
+    October 2026: restacking a panel's nights together, after the camera
+    had been off for cleaning, matched its stars only to 6 px). A new
+    session adds depth where it lands."""
     import depth
+    import mosaic
     path = record_path(name)
     kept = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    solved = kept.setdefault("solved", {})
     names = fields(name)
-    todo = [f for f in names if stale(name, f, kept)]
-    answer = {"mosaic": name, "fields": names, "restacked": todo}
+    todo = [s for f in names for s in unstacked(f)]
+    answer = {"mosaic": name, "fields": names, "restacked": [str(s) for s in todo]}
     if dry_run:
-        say(f"{name}: {len(names)} fields; would restack {', '.join(todo) or 'none'}, then join them all.")
+        say(f"{name}: {len(names)} fields, {sum(len(sessions(f)) for f in names)} sessions; would stack "
+            f"{len(todo)} on their own, then place and join them all.")
         return dict(answer, dry_run=True)
-    for field in todo:
-        say(f"restacking {field}: {len(sessions(field))} sessions")
-        (restacker or restack)(field, host)
-        kept[field] = [s.name for s in sessions(field)]
+    for session in todo:
+        say(f"stacking {session.parent.name} {session.name}")
+        try:
+            (restacker or restack)(session, host)
+        except interface.Refusal as refused:
+            say(f"  {refused.message}")
+    placed, inputs, left_out = [], [], []
+    for field in names:
+        for session in sessions(field):
+            stack = session / "final.fits"
+            if not stack.exists():
+                continue
+            planes = np.asarray(fits.getdata(stack), dtype=np.float32)
+            key, stamp = str(session), stack.stat().st_mtime
+            known = solved.get(key)
+            if known and known.get("mtime") == stamp and solver is None:
+                wcs = WCS(fits.Header.fromstring(known["header"], sep="\n")) if known.get("header") else None
+            else:
+                try:
+                    lum = depth.brightness(planes)
+                    wcs = (solver or (lambda image, f: depth.plate(image, f)))(lum, field)
+                except interface.Refusal:
+                    wcs = None
+                solved[key] = {"mtime": stamp,
+                               "header": wcs.to_header().tostring(sep="\n") if wcs is not None else None}
+            if wcs is None:
+                left_out.append(f"{field} {session.name}")
+                continue
+            placed.append((wcs, planes.shape[1:]))
+            inputs.append((planes, wcs, exposure_of(session)))
+    if solver is None:
         path.parent.mkdir(parents=True, exist_ok=True)
         records.write(path, kept)
-    placed, inputs = [], []
-    for field in names:
-        stack = stack_of(field)
-        if stack is None or not stack.exists():
-            say(f"  {field}: no stack yet, left out")
-            continue
-        planes = np.asarray(fits.getdata(stack), dtype=np.float32)
-        try:
-            wcs = (solver or (lambda lum, f: depth.plate(lum, f)))(depth.brightness(planes), field)
-        except interface.Refusal as refused:
-            say(f"  {field}: {refused.message} Left out.")
-            continue
-        placed.append((wcs, planes.shape[1:]))
-        inputs.append((planes, wcs, depth_of(field)))
-        say(f"  {field}: placed")
+    if left_out:
+        say(f"  would not plate-solve, left out: {', '.join(left_out)}")
     if not inputs:
-        raise interface.Refusal("NO_SESSION", f"No field of {name} could be placed.")
-    out_wcs, out_shape = grid(placed)
-    say(f"joining {len(inputs)} fields onto {out_shape[1]} x {out_shape[0]} pixels")
+        raise interface.Refusal("NO_SESSION", f"No session of {name} could be placed.")
+    plan = mosaic.load(name) or {}
+    out_wcs, out_shape = grid(placed, angle=plan.get("angle_deg"))
+    say(f"joining {len(inputs)} sessions onto {out_shape[1]} x {out_shape[0]} pixels")
     joined, weights = blend(inputs, out_wcs, out_shape)
     folder = config.DATA / "mosaics"
     folder.mkdir(parents=True, exist_ok=True)
     out = folder / f"{name}-mosaic.fits"
     header = out_wcs.to_header()
     header["OBJECT"] = name
-    header["NFIELDS"] = len(inputs)
+    header["NSESSION"] = len(inputs)
     fits.PrimaryHDU(joined, header).writeto(out, overwrite=True)
-    import process
-    from PIL import Image
-    picture = process.process(np.moveaxis(joined, 0, -1), background=process.sky_for(name))
-    picture[weights == 0] = 0
     web = config.DATA / "web" / f"{name}-mosaic.jpg"
     web.parent.mkdir(parents=True, exist_ok=True)
-    Image.fromarray(picture).save(web, quality=92)
+    picture(joined, weights > 0, name).save(web, quality=92)
     say(f"saved {out} and {web}")
-    return dict(answer, joined=len(inputs), size=[out_shape[1], out_shape[0]], fits=str(out), picture=str(web),
-                saved=time.time())
+    return dict(answer, joined=len(inputs), left_out=left_out, size=[out_shape[1], out_shape[0]], fits=str(out),
+                picture=str(web), saved=time.time())
+
+
+def picture(joined, covered, name):
+    """The blend finished as every picture is (process.py), from the part
+    the sessions covered only: the empty corners would otherwise set the
+    stretch, and the whole picture came out black."""
+    import process
+    from PIL import Image
+    rows = np.flatnonzero(covered.any(axis=1))
+    cols = np.flatnonzero(covered.any(axis=0))
+    box = (slice(rows[0], rows[-1] + 1), slice(cols[0], cols[-1] + 1))
+    rgb = np.moveaxis(joined[:, box[0], box[1]], 0, -1).copy()
+    inside = covered[box]
+    sky = np.median(rgb[inside][::SAMPLE], axis=0)
+    rgb[~inside] = sky                     # the empty corners as plain sky, so they set nothing
+    shown = process.process(rgb, background=0)
+    shown[~inside] = 0
+    return Image.fromarray(shown)
 
 
 def later(name, start=subprocess.Popen):
