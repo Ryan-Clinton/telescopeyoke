@@ -78,7 +78,8 @@ Things worth knowing:
   dark have their row levels evened when loaded, so a master averaged from
   20 frames no longer stamps its own stripes into every light. Anything
   broader than about 100 rows of the stack, a gradient or a galaxy, is left
-  alone.
+  alone. What other owners of this camera have found, and what to try
+  next: `docs/banding.md`.
 - **Alignment is shift and rotation only**, no scale or lens distortion,
   which is enough for one session through one set of optics. `restack.py`
   reports how closely the stars matched; if that ever nears a pixel, it is
