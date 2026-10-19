@@ -13,7 +13,7 @@ from pathlib import Path
 
 import numpy as np
 import requests
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 import config
 
@@ -66,9 +66,9 @@ def update(site):
     if coast:
         infrared.paste(coast, (0, 0), coast)
     draw = ImageDraw.Draw(infrared)
+    # A circle for where the telescope is, and no name: the picture is on the
+    # page, and the place is nobody else's business (20 October 2026).
     draw.ellipse([x - 7, y - 7, x + 7, y + 7], outline=(255, 40, 40), width=3)
-    draw.text((x + 12, y - 11), site["name"].split(" (")[0], fill=(255, 80, 80),
-              font=ImageFont.load_default(size=18))
     # Stretch vertically so distances look right at this latitude.
     true_height = round(WIDTH * SPAN_LAT / (SPAN_LON * np.cos(np.radians(lat))))
     PICTURE.parent.mkdir(exist_ok=True)
