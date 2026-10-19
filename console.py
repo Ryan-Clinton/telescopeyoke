@@ -721,7 +721,10 @@ class Reader:
         if self.demo:
             import simulator
             sky = {"sky": simulator.sky()}
+        import activity
+        import schedule
         return dict(agent.status(), demo=self.demo, site=site, capabilities=agent.capabilities(),
+                    activity=activity.now(), schedule=schedule.view(),
                     available=[a for a in ACTIONS if (self.mode == "app" or a not in WORKSTATION)
                                and not (self.demo and a in NOT_IN_DEMO)],
                     **sky, **self.about())

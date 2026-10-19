@@ -35,6 +35,7 @@ import time
 
 import numpy as np
 
+import activity
 import config
 import interface
 import records
@@ -151,6 +152,7 @@ def positions(start_ha, dec, west, site, step=STEP, skyline=None):
     return spots
 
 
+@activity.during("Polar check", "three pictures {step:g}° apart")
 def measure(scope, site, step=STEP, skyline=None):
     """Photograph the sky at three RA-axis positions and return the polar
     axis's error as (degrees east of north, degrees too high). Slews about

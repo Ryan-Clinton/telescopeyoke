@@ -705,3 +705,16 @@ def test_the_discovery_screen_reads_the_programmes_the_last_patrol_and_open_cand
     assert {"m31-novae", "m31-panels", "m33-novae"} <= {p["name"] for p in found["programmes"]}
     assert found["latest"]["summary"] == ["Nothing unexplained: nothing new tonight."]
     assert [k["id"] for k in found["open"]] == ["M31-20261014-021118-001"]
+
+
+def test_the_page_script_parses():
+    """19 October 2026: the console's script was changed with nothing on the
+    laptop to check it; Node is there now, and on the CI machines."""
+    import shutil
+    import subprocess
+    import pytest
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("no Node to check the script with")
+    done = subprocess.run([node, "--check", str(console.ROOT / "console" / "console.js")], capture_output=True, text=True)
+    assert done.returncode == 0, done.stderr

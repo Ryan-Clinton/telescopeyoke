@@ -202,7 +202,7 @@ browser (this computer) ── POST /api/plan/goto ──► console.py ── s
 
 | Route | Answers from |
 |---|---|
-| `GET /api/state` | `agent.status`, `agent.capabilities`, the running job, the lock: everything the frame of the page needs, in one request |
+| `GET /api/state` | `agent.status`, `agent.capabilities`, the running job, the lock, what is being done now from whatever started it (`activity.now()`: a GoTo, a plate solve, focusing, a patrol's panel) and tonight's schedule (`schedule.view()`): everything the frame of the page needs, in one request |
 | `GET /api/night`, `/api/targets`, `/api/target/NAME` | `agent.night`, `agent.targets`, `agent.target` |
 | `GET /api/observing` | `agent.observing` |
 | `GET /api/session` | `agent.session`, with the per-frame series |

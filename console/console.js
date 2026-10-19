@@ -286,6 +286,8 @@ function drawBottom() {
   }
   const focus = seen.focus && seen.focus.reading;
   if (focus && focus.age_s < STALE) bits.push(el("span", {}, "Focus HFR ", el("b", { text: focus.hfr }), mode() === "focusing" ? "" : ` · ${age(focus.age_s)}`));
+  const doing = state.activity || [];
+  if (doing.length) bits.unshift(el("span", {}, el("b", { text: doing[doing.length - 1].words })));
   const solve = state.mount.last_plate_solve_age_s;
   if (solve != null && solve < STALE) bits.push(el("span", {}, `Plate solve ${age(solve)}`));
   fill($("statusline"), bits);
@@ -404,7 +406,33 @@ function table(head, rows, pick) {
             el("tbody", {}, rows.map((row, i) => el("tr", pick ? { class: "pick", on: { click: () => pick(i) } } : {}, row.map((c) => cell("td", c))))));
 }
 
+// What is being done now that is not imaging: a GoTo, a plate solve,
+// focusing, a patrol's panel, from whatever started it (activity.py).
+function drawNowDoing() {
+  const doing = (seen.state && seen.state.activity) || [];
+  $("now-doing").hidden = !doing.length;
+  if (!doing.length) return;
+  fill($("now-doing"), el("div", { class: "title", text: "NOW" }),
+       doing.map((d, i) => el("div", { class: `line${i ? " inner" : ""}` }, d.words,
+                                el("span", { class: "quiet", text: ` · ${age(d.for_s)}` }))));
+}
+
+// Tonight's schedule: each step's expected start and finish, its state,
+// and how far a running step has got (schedule.py).
+function drawSchedule() {
+  const plan = seen.state && seen.state.schedule, steps = (plan && plan.steps) || [];
+  $("schedule-title").hidden = !steps.length;
+  const when = (t) => (t ? new Date(t * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--");
+  fill($("schedule"), steps.map((s) => el("div", { class: `step ${s.status}` },
+    el("span", { class: "when", text: `${when(s.start)}–${when(s.end)}` }),
+    el("span", { class: "label", text: s.label }),
+    el("span", { class: "status", text: s.status === "running" && s.progress != null ? `${Math.round(100 * s.progress)}%` : s.status }),
+    s.status === "running" && s.progress != null ? el("progress", { max: "1", value: String(s.progress) }) : null)));
+}
+
 function drawHome() {
+  drawNowDoing();
+  drawSchedule();
   const watch = seen.observing, report = seen.report;
   if (watch) {
     const notes = watch.notes || [], run = watch.imaging || {}, alert = notes.length > 0;

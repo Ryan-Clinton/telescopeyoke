@@ -18,6 +18,7 @@ from pathlib import Path
 import numpy as np
 from astropy.io import fits
 
+import activity
 import config
 import interface
 from camera import Camera, luminance
@@ -46,6 +47,7 @@ def coarse(image, block=COARSE):
     return np.clip((small - np.median(small)) * block * block + 1000, 0, 65535)
 
 
+@activity.during("Plate solving")
 def solve(image, ra_hint=None, dec_hint=None, radius=30, field=FIELD_HEIGHT, timeout=180):
     """Plate-solve a 2-D brightness image. Hints are in degrees; with none,
     the whole sky is searched, which is slow. Returns a dict with ra, dec

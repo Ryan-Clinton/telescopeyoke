@@ -62,6 +62,7 @@ from pathlib import Path
 
 import serial
 
+import activity
 import config
 import records
 import host
@@ -722,6 +723,7 @@ class Mount:
         self.goto((true_sidereal(site) + offset - hour_angle) % 360, dec)
         self.tracking(False)
 
+    @activity.during("Moving", "to {name}")
     def goto_target(self, name, site, solve=False, aim_off=(0.0, 0.0)):
         """GoTo a catalogue object, and with `solve` centre it by plate
         solving. `aim_off` is arcminutes east and north of the object to aim

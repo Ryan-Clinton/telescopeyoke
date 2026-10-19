@@ -267,3 +267,18 @@ button.chosen { border-color: var(--warn); }
   .rail { border-left: 0; border-top: 1px solid var(--rule); max-height: 30vh; }
   .top .switch, .states { display: none; }
 }
+
+/* What is being done now, between frames, and tonight's schedule (19 October 2026). */
+.now-doing { border-left: 3px solid var(--good); padding: 4px 0 4px 14px; margin-bottom: 16px; }
+.now-doing .title { font-weight: 600; letter-spacing: .06em; }
+.now-doing .line { margin: 2px 0; }
+.now-doing .line.inner { padding-left: 14px; }
+.schedule { margin-bottom: 22px; }
+.schedule .step { display: grid; grid-template-columns: 7.5em 1fr 6em; gap: 10px; align-items: center;
+                  padding: 6px 0; border-top: 1px solid var(--rule); }
+.schedule .step.done, .schedule .step.skipped { color: var(--dim); }
+.schedule .step.failed .status { color: var(--warn); }
+.schedule .step.running .label { font-weight: 600; }
+.schedule .when { font-variant-numeric: tabular-nums; }
+.schedule .status { text-align: right; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+.schedule progress { grid-column: 1 / -1; height: 6px; }

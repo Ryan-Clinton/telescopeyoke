@@ -1,0 +1,51 @@
+"""Tonight's schedule: its times, its progress, and running it."""
+import types
+
+import schedule
+
+
+def test_the_times_follow_from_a_running_step_and_a_step_not_before():
+    plan = {"steps": [
+        {"label": "M31 novae", "minutes": 30, "status": "running", "started": 1000.0},
+        {"label": "M31 panels", "minutes": 60, "status": "queued"},
+        {"label": "WASP-12 b", "minutes": 250, "status": "queued", "not_before": None},
+    ]}
+    steps = schedule.view(plan, now=1000.0 + 15 * 60)["steps"]
+    assert steps[0]["progress"] == 0.5 and steps[0]["end"] == 1000.0 + 1800
+    assert steps[1]["start"] == steps[0]["end"] and steps[2]["start"] == steps[1]["end"]
+
+
+def test_a_step_running_late_pushes_the_rest_back():
+    plan = {"steps": [{"label": "a", "minutes": 10, "status": "running", "started": 0.0},
+                      {"label": "b", "minutes": 10, "status": "queued"}]}
+    steps = schedule.view(plan, now=900.0)["steps"]
+    assert steps[0]["end"] == 900.0 and steps[1]["start"] == 900.0 and steps[0]["progress"] == 0.99
+
+
+def test_steps_run_in_order_and_a_failure_stops_and_fetches_the_person():
+    schedule.save({"steps": []})
+    schedule.add("one", 1, ["true"])
+    schedule.add("two", 1, ["false"])
+    schedule.add("three", 1, ["true"])
+    ran, called = [], []
+    ok = schedule.run(say=lambda s: None, call=called.append,
+                      start=lambda cmd: (ran.append(cmd), types.SimpleNamespace(returncode=0 if cmd == ["true"] else 1))[1])
+    statuses = [s["status"] for s in schedule.load()["steps"]]
+    assert not ok and ran == [["true"], ["false"]] and statuses == ["done", "failed", "queued"]
+    assert called and "two" in called[0]
+
+
+def test_a_step_already_running_elsewhere_is_waited_for():
+    schedule.save({"steps": []})
+    schedule.add("novae", 30, None, pid=999999999)
+    schedule.add("panels", 60, ["true"])
+    ok = schedule.run(say=lambda s: None, sleep=lambda s: None,
+                      start=lambda cmd: types.SimpleNamespace(returncode=0))
+    assert ok and [s["status"] for s in schedule.load()["steps"]] == ["done", "done"]
+
+
+def test_a_time_not_to_start_before_is_kept_apart_from_the_command():
+    schedule.save({"steps": []})
+    schedule.main(["add", "GoTo", "3", "--not-before", "01:45", "--", "./mount.py", "goto", "WASP-12"])
+    step = schedule.load()["steps"][0]
+    assert step["not_before"] == "01:45" and step["command"] == ["./mount.py", "goto", "WASP-12"]

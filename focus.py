@@ -46,6 +46,7 @@ import time
 import wave
 from pathlib import Path
 
+import activity
 import config
 
 import numpy as np
@@ -1056,6 +1057,7 @@ def show(lum, line):
         pass
 
 
+@activity.during("Checking focus")
 def run_check(args):
     """./focus.py --check: three frames of the stars in view, their size
     against the usual best. Nothing turns."""
@@ -1091,6 +1093,7 @@ class Settled:
         self.wait(SETTLE_S)
 
 
+@activity.during("Focusing with the motor", "{mode}")
 def run_motor(args, mode="focus"):
     """./focus.py --motor: focus with the motor by a measured focus curve,
     on the stars in view now; first a reading, and if focus is already as

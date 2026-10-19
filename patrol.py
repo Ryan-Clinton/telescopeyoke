@@ -50,6 +50,7 @@ from pathlib import Path
 
 import numpy as np
 
+import activity
 import config
 import interface
 import records
@@ -687,8 +688,9 @@ def run(args, say=print):
         made = first_reference(name, session, say)
         return {"field": name, "analysis": result, "reference_made": made}
 
-    for name in chosen:
+    for number, name in enumerate(chosen, 1):
         say(f"== {name}")
+        activity.set_("Patrol", f"{name}, then its frames", number if len(chosen) > 1 else None, len(chosen))
         began = time.time()
         stopped = None
         for cmd in plans[name]:
@@ -723,6 +725,7 @@ def run(args, say=print):
             entry["second_look"] = second_look(p, name, say)
         answer["fields"].append(entry)
     if behind:
+        activity.set_("Patrol", "the last panels' pictures and searches")
         pool.shutdown(wait=True)
         for done in finishing:
             try:
