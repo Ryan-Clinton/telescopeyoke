@@ -27,7 +27,7 @@ SKETCH = ROOT / "firmware" / "focuser"
 MATCH = "1a86"              # the CH340 chip on a Nano clone, as /dev/serial/by-id names it
 TURN = 4096                 # half-steps to one turn of the motor's shaft
 MOST = 10 * TURN            # the firmware refuses more in one order
-STEP_SECONDS = 0.010       # as the firmware's STEP_MS
+STEP_SECONDS = 0.020       # as the firmware's STEP_MS
 # A Nano clone usually has the old bootloader; a genuine one the new.
 BOARDS = ("arduino:avr:nano:cpu=atmega328old", "arduino:avr:nano:cpu=atmega328")
 
@@ -49,6 +49,7 @@ class Focuser:
 
     def __init__(self, link):
         self.link = link
+        self.step_seconds = STEP_SECONDS
 
     @classmethod
     def open(cls, port=None):
@@ -74,9 +75,21 @@ class Focuser:
         """Turn the motor by `steps` half-steps and wait for it to finish."""
         if not steps or abs(steps) > MOST:
             raise ValueError(f"a move is 1 to {MOST} half-steps, not {steps}")
-        reply = self.ask(f":M{steps:+d}", abs(steps) * STEP_SECONDS + 3)
+        reply = self.ask(f":M{steps:+d}", abs(steps) * self.step_seconds + 3)
         if reply != f"OK {steps}":
             raise RuntimeError(f"the focuser answered {reply!r} to a move of {steps}")
+
+    def speed(self, ms):
+        """Step every `ms` milliseconds until the Nano next restarts, which
+        opening its port does: slower is stronger, for trying what the
+        drawtube needs (19 October 2026)."""
+        if not 2 <= ms <= 200:
+            raise ValueError(f"a step takes 2 to 200 ms, not {ms}")
+        reply = self.ask(f":S{ms}", 2)
+        if reply != f"OK S{ms}":
+            raise RuntimeError(f"the focuser answered {reply!r} to a speed of {ms} ms: load the firmware "
+                               "with ./focuser.py flash")
+        self.step_seconds = ms / 1000
 
     def close(self):
         self.link.close()
@@ -415,6 +428,8 @@ def main(argv=None):
     ap.add_argument("--watch", help="for bench: the camera looking down on the motor (a DroidCam "
                                     "http:// address, a /dev/video device, or a picture file kept up to date)")
     ap.add_argument("--port", help="the Nano's serial port, if it is not found by name")
+    ap.add_argument("--ms", type=int, help=f"for move and test: milliseconds a half-step (default "
+                                           f"{round(STEP_SECONDS * 1000)}; slower is stronger)")
     args = ap.parse_args(argv)
 
     if args.command == "flash":
@@ -435,6 +450,8 @@ def main(argv=None):
     if args.command == "bench":
         return run_bench(focuser, args.watch)
     try:
+        if args.ms:
+            focuser.speed(args.ms)
         for steps in ([TURN // 4, -TURN // 4] if args.command == "test" else [args.steps]):
             focuser.move(steps)
             print(f"moved {steps:+d} half-steps")

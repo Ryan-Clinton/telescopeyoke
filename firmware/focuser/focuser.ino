@@ -7,6 +7,8 @@
 //   :?         -> "TY focuser 1"
 //   :M+1024    -> "OK 1024" once the motor has made that many half-steps
 //   :M-1024    -> the same, the other way
+//   :S40       -> "OK S40": 40 ms a half-step from now until the Nano restarts
+//                 (opening its port restarts it), for trying speeds; 2 to 200
 //
 // The coils are off whenever the motor is still: the gearbox holds the shaft,
 // and a warm motor beside the tube spoils the seeing.
@@ -15,7 +17,8 @@ const byte PINS[4] = {4, 5, 6, 7};
 const byte HALF[8] = {0b0001, 0b0011, 0b0010, 0b0110,
                       0b0100, 0b1100, 0b1000, 0b1001};
 const long MOST = 40960;           // ten turns of the shaft: more is a mistake
-const int STEP_MS = 10;            // slow, for torque: at 2 a half turn on the telescope fell short
+const int STEP_MS = 20;            // slow, for torque: at 2 a half turn on the telescope fell short, and at 10 the motor lost half its steps against the drawtube on 19 October 2026
+int stepMs = STEP_MS;              // as :S sets it, until the next restart
 byte phase = 0;
 String line;
 
@@ -28,7 +31,7 @@ void turn(long steps) {
   for (long i = 0; i < abs(steps); i++) {
     phase = (phase + dir + 8) % 8;
     coils(HALF[phase]);
-    delay(STEP_MS);
+    delay(stepMs);
   }
   coils(0);
 }
@@ -43,6 +46,12 @@ void obey(const String &order) {
     turn(steps);
     Serial.print("OK ");
     Serial.println(steps);
+  } else if (order.startsWith(":S") && order.length() > 2) {
+    long ms = order.substring(2).toInt();
+    if (ms < 2 || ms > 200) { Serial.println("NO"); return; }
+    stepMs = ms;
+    Serial.print("OK S");
+    Serial.println(ms);
   } else {
     Serial.println("NO");
   }

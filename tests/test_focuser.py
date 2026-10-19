@@ -13,7 +13,9 @@ class Nano:
     def write(self, data):
         order = data.decode().strip()
         self.sent.append(order)
-        answer = self.replies.get(order, "OK " + str(int(order[2:])) if order.startswith(":M") else "NO")
+        default = ("OK " + str(int(order[2:])) if order.startswith(":M") else
+                   "OK S" + order[2:] if order.startswith(":S") else "NO")
+        answer = self.replies.get(order, default)
         self.waiting += answer.encode() + b"\r\n"
 
     def read(self, count):
@@ -51,6 +53,29 @@ def test_the_firmware_and_the_script_agree_on_the_longest_move():
 def test_the_script_waits_as_long_as_the_firmware_takes_over_a_step():
     sketch = (focuser.SKETCH / "focuser.ino").read_text()
     assert f"const int STEP_MS = {round(focuser.STEP_SECONDS * 1000)};" in sketch
+
+
+def test_a_speed_is_set_before_moves_and_the_wait_follows_it():
+    """19 October 2026: trying step speeds on the telescope, without loading
+    the firmware again for each."""
+    nano = Nano()
+    motor = focuser.Focuser(nano)
+    motor.speed(40)
+    motor.move(100)
+    assert nano.sent == [":S40", ":M+100"] and motor.step_seconds == 0.04
+    with pytest.raises(ValueError):
+        motor.speed(1)
+
+
+def test_an_old_firmware_that_does_not_know_speeds_is_an_error():
+    motor = focuser.Focuser(Nano({":S40": "NO"}))
+    with pytest.raises(RuntimeError):
+        motor.speed(40)
+
+
+def test_the_firmware_takes_speeds_within_the_same_limits():
+    sketch = (focuser.SKETCH / "focuser.ino").read_text()
+    assert "if (ms < 2 || ms > 200)" in sketch and "delay(stepMs);" in sketch
 
 
 def protractor(path, angle, width=1280, height=720, shift=(0, 0), scale=1.0, seed=0, off=(0, 0)):
