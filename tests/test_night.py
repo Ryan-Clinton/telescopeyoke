@@ -135,6 +135,10 @@ def reachable_target():
 
 def test_a_whole_night(night, monkeypatch, capsys):
     scope, folder = night
+    # How many frames a slow machine sets aside for the quality pass depends
+    # on its speed (19 October 2026: CI runners set aside enough that the
+    # tracking assist never ran); setting aside has its own test.
+    monkeypatch.setattr(shoot, "BACKLOG", 10 ** 6)
 
     # Plan: the night report and a target the mount is allowed to reach.
     assert valid(interface.run("night", lambda: agent.night(demo=True)), "night")["ok"]
@@ -175,14 +179,12 @@ def test_a_whole_night(night, monkeypatch, capsys):
     assert "Selected exposure: 2 s" in said               # 3 s and 4 s trail on this mount
     assert "centred" in said                               # it re-centred before starting
     assert "Tracking assist" in said
-    # The two cloudy frames are judged live and taken again. On a slow
-    # machine more frames are set aside for the quality pass instead of
-    # being stacked live; one rejected there is not taken again (it was
-    # never judged during the run), and the quality pass also trims the
-    # worst of the rest. So the run takes 2 to a quarter more frames, and
-    # rejects at least the two cloudy ones and at most about a third.
-    assert 2 <= summary["rejected"] <= summary["captured"] // 3
-    assert FRAMES + 2 <= summary["captured"] <= FRAMES + min(summary["rejected"], max(2, FRAMES // 4))
+    # Every frame is stacked live here (BACKLOG is lifted above, so a slow
+    # machine sets none aside for the quality pass): the two cloudy ones
+    # are always dropped, and each rejected frame is taken again, so the
+    # run ends with as many good ones.
+    assert 2 <= summary["rejected"] <= 6
+    assert summary["captured"] == FRAMES + min(summary["rejected"], max(2, FRAMES // 4))
     assert (folder / summary["picture"]).name == "final.jpg" and (folder / summary["picture"]).exists()
     stacked = json.loads((folder / summary["folder"] / "restack.json").read_text(encoding="utf-8"))["summary"]
     assert stacked["median_residual_px"] < 0.5
@@ -213,6 +215,22 @@ def test_an_open_ended_run_stops_when_cloud_arrives(night, monkeypatch, capsys):
     # A slow computer leaves some frames for later, unjudged, and needs more
     # frames before five judged ones in a row are rejected (Windows CI).
     assert 4 <= summary["accepted"] <= 8 and 13 <= summary["captured"] <= 40
+
+
+def test_frames_the_live_stack_has_no_time_for_are_kept_for_the_quality_pass(night, monkeypatch, capsys):
+    """Capture never waits for processing: once BACKLOG frames are waiting,
+    a new frame's raw file is kept, it is not taken again, and the quality
+    pass stacks it with the rest."""
+    _, folder = night
+    monkeypatch.setattr(shoot, "BACKLOG", 1)
+    Sky.pause, Sky.cloudy = 0.0, ()
+    monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "8", "--exposure", "2", "--no-recentre"])
+    summary = shoot.main()
+    said = capsys.readouterr().out
+    assert "LATER   live stack behind; kept for the quality pass" in said
+    assert summary["captured"] == 8
+    session = folder / summary["folder"]
+    assert len(list(session.glob("light-*.fits"))) == 8 and (session / "restack.json").exists()
 
 
 def test_a_running_run_can_be_told_to_stop(night, monkeypatch, capsys):

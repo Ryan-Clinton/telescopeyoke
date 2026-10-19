@@ -232,20 +232,21 @@ def smooth_rows(level, width=STRIPE_ROWS):
 SKY_SHARE = 0.2     # the least share of a row's section that must be sky to measure its stripe there
 
 
-def extended_light(image):
+def extended_light(image, small=31, broad=255):
     """Where an image shows light that is not sky: a galaxy, a nebula, a
     bright star's glow. The sky's tilt (a plane fitted to the whole image)
-    is taken off first; what is left, smoothed over 31 pixels, is light
-    where it stands above the broad background round it (255 pixels) by
+    is taken off first; what is left, smoothed over `small` pixels, is light
+    where it stands above the broad background round it (`broad` pixels) by
     three times its own spread. Row stripes barely show at that smoothing."""
-    yy, xx = np.mgrid[0:image.shape[0]:8, 0:image.shape[1]:8]
-    sample = image[::8, ::8].astype(np.float64)
+    step = max(1, min(image.shape) // 200)
+    yy, xx = np.mgrid[0:image.shape[0]:step, 0:image.shape[1]:step]
+    sample = image[::step, ::step].astype(np.float64)
     keep = sample < np.percentile(sample, 80)                      # the sky, not the galaxy
     design = np.column_stack([np.ones(keep.sum()), yy[keep], xx[keep]])
     a, b, c = np.linalg.lstsq(design, sample[keep], rcond=None)[0]
     rows, cols = np.indices(image.shape, dtype=np.float32)
     rest = image - (a + b * rows + c * cols)
-    excess = ndimage.uniform_filter(rest, 31) - ndimage.uniform_filter(rest, 255, mode="nearest")
+    excess = ndimage.uniform_filter(rest, small) - ndimage.uniform_filter(rest, broad, mode="nearest")
     spread = 1.4826 * float(np.median(np.abs(excess - np.median(excess)))) + 1e-6
     return excess > np.median(excess) + 3 * spread
 
@@ -270,9 +271,12 @@ def destripe(frame, sections=STRIPE_SECTIONS):
     Stars do not move a median; anything broader than STRIPE_ROWS, a
     gradient or a galaxy filling the frame, is left alone."""
     first = level_rows(frame, sections)
-    h, w = first.shape[0] // 2 * 2, first.shape[1] // 2 * 2
-    # One map of where the light is, from all four sites together.
-    light = extended_light(first[0:h:2, 0:w:2] + first[0:h:2, 1:w:2] + first[1:h:2, 0:w:2] + first[1:h:2, 1:w:2])
+    # One map of where the light is, from all four sites together, found in
+    # 4x4 blocks of a site (the smoothing is far broader than a block) and
+    # spread back to every pixel: a sixteenth of the work.
+    h, w = first.shape[0] // 8 * 8, first.shape[1] // 8 * 8
+    blocks = first[:h, :w].reshape(h // 8, 8, w // 8, 8).mean(axis=(1, 3))
+    light = np.repeat(np.repeat(extended_light(blocks, small=8, broad=64), 4, axis=0), 4, axis=1)
     return level_rows(frame, sections, light)
 
 
@@ -290,22 +294,26 @@ def level_rows(frame, sections=STRIPE_SECTIONS, light=None):
                 continue
             edges = np.linspace(0, cols, sections + 1).astype(int)
             middles = (edges[:-1] + edges[1:] - 1) / 2
-            sky = None
+            mask = None
             if light is not None:
                 mask = np.zeros(site.shape, bool)
                 mask[:light.shape[0], :light.shape[1]] = light[:rows, :cols]
-                sky = np.where(mask, np.nan, site)
             stripes = []
             for a, b in zip(edges[:-1], edges[1:]):
-                if sky is None:
-                    level = np.median(site[:, a:b], axis=1)
+                level = np.median(site[:, a:b], axis=1)
+                lit = None if mask is None else mask[:, a:b].any(axis=1)
+                if lit is None or not lit.any():
                     stripes.append(level - smooth_rows(level))
                     continue
-                part = sky[:, a:b]
-                enough = np.isfinite(part).mean(axis=1) >= SKY_SHARE
+                # Only rows with some light in them need the slower median of their sky alone.
+                part = np.where(mask[lit, a:b], np.nan, site[lit, a:b])
+                enough = np.ones(rows, bool)
+                enough[lit] = np.isfinite(part).mean(axis=1) >= SKY_SHARE
                 stripe = np.full(rows, np.nan)
                 if enough.sum() > 1:
-                    measured = np.nanmedian(np.where(enough[:, None], part, 0.0), axis=1)
+                    measured = level.copy()
+                    ok = enough[lit]
+                    measured[np.flatnonzero(lit)[ok]] = np.nanmedian(part[ok], axis=1)
                     # Rows with too little sky take their level from the sky rows round them.
                     level = np.interp(np.arange(rows), np.flatnonzero(enough), measured[enough])
                     stripe = level - smooth_rows(level)

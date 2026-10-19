@@ -137,6 +137,12 @@ def scope(tmp_path, monkeypatch):
     monkeypatch.setattr(focus, "FOCUS_FILE", tmp_path / "cache" / "focus.json")
     monkeypatch.setattr(landmark, "FOLDER", tmp_path / "landmarks")
     monkeypatch.setattr(polaris, "RUNS", tmp_path / "polaris-runs")
+    # One moment for every search: Polaris turns about the pole through the
+    # day, and at some minutes it fell at the very edge of the first look
+    # (it failed at 13:35 UTC on 19 October 2026 and passed either side).
+    from astropy.time import Time
+    fixed = Time("2026-10-19T13:30:00")
+    monkeypatch.setattr(Time, "now", classmethod(lambda cls: fixed))
     Sky.east, Sky.high, Sky.roll, Sky.mirrored, Sky.bright = 0.0, 0.0, 25.0, False, 1600.0
     Sky.dust, Sky.cloud, Sky.night, Sky.frames = True, False, False, 0
     Sky.scope = mount.Mount(handset=SimulatedHandset(slew_seconds=0))
