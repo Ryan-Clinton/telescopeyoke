@@ -4,7 +4,7 @@
   "title": "Destripe check",
   "description": "data of: depth.py SESSION --destripe-check --json. Whether the row-stripe correction (stacking.destripe) takes real light: stars of known brightness planted in a session's raw frames, before anything is done to them, measured with and without the correction.",
   "type": "object",
-  "required": ["session", "frames", "planted", "broad_light_changed", "plain", "destriped"],
+  "required": ["session", "frames", "planted", "broad_light_changed", "plain", "destriped", "galaxy"],
   "$defs": {
     "way": {
       "type": "object",
@@ -22,6 +22,17 @@
     "planted": {"type": "integer"},
     "broad_light_changed": {"type": "number", "description": "How much the correction changed the light in 64-pixel blocks, over how much that light varies across the frame; stripes removed count here too."},
     "plain": {"$ref": "#/$defs/way"},
-    "destriped": {"$ref": "#/$defs/way"}
+    "destriped": {"$ref": "#/$defs/way"},
+    "galaxy": {
+      "type": "object",
+      "description": "A faint exponential disc of random size, shape and turn planted in each frame: what the correction kept of its light, median over the frames; 1 is all kept.",
+      "required": ["rings", "profile", "centre", "total"],
+      "properties": {
+        "rings": {"type": "array", "items": {"type": "number"}, "description": "Edges of the elliptical rings, in the disc's scale lengths."},
+        "profile": {"type": "array", "items": {"type": "number"}, "description": "Light kept in each ring over light planted there."},
+        "centre": {"type": "number", "description": "The same for the innermost ring: the central surface brightness."},
+        "total": {"type": "number", "description": "The same for all the rings together."}
+      }
+    }
   }
 }

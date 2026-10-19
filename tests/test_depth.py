@@ -337,6 +337,9 @@ def test_the_destripe_check_plants_stars_in_raw_frames_and_measures_both_ways(tm
     assert destriped["found"] >= plain["found"]
     assert destriped["flux_ratio"] == pytest.approx(1, abs=0.05)
     assert answer["broad_light_changed"] < 0.05
+    galaxy = answer["galaxy"]
+    assert len(galaxy["profile"]) == len(galaxy["rings"]) - 1 and "galaxies" in said[1]
+    assert galaxy["total"] == pytest.approx(1, abs=0.1) and galaxy["centre"] == pytest.approx(1, abs=0.1)
 
 
 def test_the_destripe_check_needs_saved_frames(tmp_path):

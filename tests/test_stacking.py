@@ -7,6 +7,7 @@ import pytest
 
 import calibrate
 import camera_test
+import depth
 import restack
 import shoot
 import stacking
@@ -573,7 +574,6 @@ def test_frames_arriving_faster_than_their_exposure_are_noticed():
 def test_a_picture_of_one_star_among_many_is_labelled(tmp_path, monkeypatch):
     """Tabby's star is one dot in a field of hundreds, so its finished picture
     names it, placed by plate solving the stack; a galaxy's does not."""
-    import depth
     import interface
     import process
     from PIL import Image
@@ -753,3 +753,29 @@ def test_destriping_keeps_a_galaxy_narrower_than_its_window():
         frame = 1000 + glow + rng.normal(0, 6, rows)[:, None] + rng.normal(0, 8, (rows, cols))
         taken = (frame - stacking.destripe(frame))[780:820, 600:1200].mean()
         assert taken < 0.06 * 400
+
+
+def test_destriping_keeps_a_faint_galaxy_s_total_centre_and_profile():
+    """Points kept are not enough: a galaxy is broad light, and what matters
+    is its total, its central surface brightness and its profile. Measured
+    19 October 2026 (kept, centre to outskirts): galaxies whose centres are
+    2.5 times a pixel's noise keep 97% to 99% in all; one a pixel's noise
+    bright keeps 90%, and 78% at four scale lengths, because its outskirts
+    are below what the light finder sees and pull their rows' levels up.
+    Widening the found light saved most of that but left more of a stripe
+    that changes along its row, so these bounds hold it where it is."""
+    rng = np.random.default_rng(21)
+    rows, cols = 1600, 1800
+    sky = 1000 + rng.normal(0, 8, (rows, cols))
+    # scale, axis ratio, turn, central brightness; least total, centre and ring kept
+    cases = ((40, 0.4, 0.0, 20.0, 0.95, 0.98, 0.9), (80, 0.7, 0.5, 20.0, 0.97, 0.98, 0.95),
+             (25, 1.0, 0.0, 20.0, 0.97, 0.98, 0.94), (40, 0.4, 0.0, 8.0, 0.87, 0.95, 0.75))
+    for n, (scale, ratio, angle, peak, total, centre, ring) in enumerate(cases):
+        stripes = rng.normal(0, 6, rows)[:, None]
+        glow, radius = depth.galaxy((rows, cols), (900, 800), scale, ratio, angle, peak)
+        empty = stacking.destripe(sky + stripes)
+        kept = depth.profile(stacking.destripe(sky + stripes + glow) - empty, radius)
+        put = depth.profile(glow, radius)
+        assert total <= kept.sum() / put.sum() <= 1.03, n
+        assert centre <= kept[0] / put[0] <= 1.03, n
+        assert np.all((kept / put >= ring) & (kept / put <= 1.05)), (n, kept / put)

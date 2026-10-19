@@ -725,6 +725,29 @@ def gaussian_star(fwhm, half=PSF_HALF):
     return star / star.sum()
 
 
+# Elliptical rings of a planted galaxy, in its scale lengths: the first is
+# its centre, all of them together its total light.
+GALAXY_RINGS = (0, 0.5, 1, 2, 3, 4)
+
+
+def galaxy(shape, centre, scale, ratio, angle, peak):
+    """An exponential disc on an image of the given shape, peak brightness at
+    its centre, `scale` pixels along its long axis and `ratio` of that along
+    its short one, turned by `angle` radians; with each pixel's elliptical
+    radius in scale lengths."""
+    yy, xx = np.indices(shape, dtype=np.float32)
+    dx, dy = xx - centre[0], yy - centre[1]
+    along = dx * np.cos(angle) + dy * np.sin(angle)
+    across = -dx * np.sin(angle) + dy * np.cos(angle)
+    radius = np.hypot(along / scale, across / (scale * ratio))
+    return (peak * np.exp(-radius)).astype(np.float32), radius
+
+
+def profile(image, radius, rings=GALAXY_RINGS):
+    """Total light of an image in each elliptical ring."""
+    return np.array([image[(radius >= a) & (radius < b)].sum() for a, b in zip(rings, rings[1:])])
+
+
 def destripe_check(session, frames=5, per_frame=300, fwhm=4.0, seed=11, say=print):
     """Whether stacking.destripe takes real light with the stripes: stars of
     known brightness are planted in raw frames of a session, before
@@ -734,7 +757,11 @@ def destripe_check(session, frames=5, per_frame=300, fwhm=4.0, seed=11, say=prin
     lost). With it, how much of the broad light (a galaxy, the sky's
     gradient) the destriping changed, in blocks of 64 pixels, against how
     much that broad light varies. M31 filling a frame is the hard case: its
-    light runs along whole rows."""
+    light runs along whole rows. And since that broad light is what an
+    extended object is made of, a faint galaxy of known profile is planted
+    in each frame too, of a random size, shape and turn, and what the
+    destriping kept of it is measured in elliptical rings: its centre, its
+    profile and its total (1 is all kept)."""
     files = sorted(Path(session).glob("light-*.fits"))[:frames]
     if not files:
         raise interface.Refusal("NO_SESSION", f"No saved frames in {session}.")
@@ -744,6 +771,7 @@ def destripe_check(session, frames=5, per_frame=300, fwhm=4.0, seed=11, say=prin
     found = {"plain": [], "destriped": []}
     ratio = {"plain": [], "destriped": []}
     broad = []
+    rings = []
     for path in files:
         mosaic, header = stacking.load_light(path)
         raw = stacking.Calibration(float(header["EXPTIME"]), int(header["GAIN"])).apply(mosaic).astype(np.float32)
@@ -763,10 +791,26 @@ def destripe_check(session, frames=5, per_frame=300, fwhm=4.0, seed=11, say=prin
             ratio[way].append(photometry(full - empty, xy, 1.5 * fwhm) / flux)
         blocks = lambda image: image[:image.shape[0] // 64 * 64, :image.shape[1] // 64 * 64].reshape(
             image.shape[0] // 64, 64, -1, 64).mean(axis=(1, 3))
-        before, after = blocks(base), blocks(lum(stacking.destripe(raw)))
+        levelled = lum(stacking.destripe(raw))
+        before, after = blocks(base), blocks(levelled)
         broad.append(float(np.std(after - before) / max(np.std(before), 1e-9)))
+        # A galaxy from a few rows across to more than the levelling's
+        # window, its centre one to five times the noise of a pixel.
+        scale = rng.uniform(15, min(60, min(base.shape) / 10))
+        edge = GALAXY_RINGS[-1] * scale + 2
+        centre = rng.uniform((edge, edge), (base.shape[1] - edge, base.shape[0] - edge))
+        glow, radius = galaxy(base.shape, centre, scale, rng.uniform(0.3, 1), rng.uniform(0, np.pi),
+                              noise * rng.uniform(1, 5))
+        with_galaxy = raw + np.repeat(np.repeat(glow / 4, 2, axis=0), 2, axis=1)
+        kept = lum(stacking.destripe(with_galaxy)) - levelled
+        rings.append((profile(kept, radius), profile(glow, radius)))
     answer = {"session": str(session), "frames": len(files), "planted": per_frame * len(files),
               "broad_light_changed": round(float(np.median(broad)), 4)}
+    kept, put = (np.array(side) for side in zip(*rings))
+    answer["galaxy"] = {"rings": list(GALAXY_RINGS),
+                        "profile": [round(float(v), 4) for v in np.median(kept / put, axis=0)],
+                        "centre": round(float(np.median(kept[:, 0] / put[:, 0])), 4),
+                        "total": round(float(np.median(kept.sum(axis=1) / put.sum(axis=1))), 4)}
     for way in found:
         r = np.concatenate(ratio[way])
         r = r[np.isfinite(r)]
@@ -778,6 +822,10 @@ def destripe_check(session, frames=5, per_frame=300, fwhm=4.0, seed=11, say=prin
         f"frames: found {p['found']:.1%} plain, {d['found']:.1%} destriped; measured flux {p['flux_ratio']:.3f} "
         f"plain, {d['flux_ratio']:.3f} destriped (1 is all kept); broad light changed by "
         f"{answer['broad_light_changed']:.2%} of its own variation")
+    g = answer["galaxy"]
+    say(f"planted galaxies kept by the destriping: centre {g['centre']:.3f}, total {g['total']:.3f}, rings of "
+        f"{', '.join(f'{a}-{b}' for a, b in zip(GALAXY_RINGS, GALAXY_RINGS[1:]))} scale lengths "
+        f"{', '.join(f'{v:.3f}' for v in g['profile'])}")
     return answer
 
 

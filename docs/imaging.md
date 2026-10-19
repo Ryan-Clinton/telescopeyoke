@@ -84,8 +84,9 @@ Things worth knowing:
   synthetic galaxy 280 rows across lost 12% of its core, one 140 rows
   across 38%; now about 2% and 4%). Anything broader, a gradient or a
   galaxy filling the frame, is left alone. `depth.py SESSION
-  --destripe-check` plants stars in a session's raw frames and measures
-  them with and without the correction. What other owners of this camera
+  --destripe-check` plants stars and a faint galaxy in a session's raw
+  frames and measures them with and without the correction: the stars'
+  flux, and the galaxy's centre, profile and total. What other owners of this camera
   have found, and what to try next: `docs/banding.md`.
 - **Alignment is shift and rotation only**, no scale or lens distortion,
   which is enough for one session through one set of optics. `restack.py`
