@@ -129,18 +129,23 @@ def find_pointer(picture, marked=None):
     # stick, so an opening wider than they are clears them.
     bar = ndimage.binary_opening((dark > 0.35 * paper_level) & (b < r + 15), iterations=2)
     dark = np.where(bar, dark, 0)
-    # A bar through the middle: each direction through the centre is scored
-    # by the darkness along its whole length, leaving out the hub, so a
-    # printed tick or a shadow at the edge cannot win.
-    reach = np.linspace(0.3, 0.88, 60) * radius
-    best, best_score = 0.0, -1.0
+    # The darkest straight bar, at any angle and any offset: the paper is
+    # cut by hand, so its middle is not the shaft, and a search only through
+    # the middle flipped between two near misses 12° apart, picture by
+    # picture (19 October 2026). Every dark pixel votes, by its darkness,
+    # for the lines through it (a Radon transform), and the strongest wins.
+    ys, xs = np.nonzero(dark)
+    if len(xs) < 50:
+        return None
+    vote = dark[ys, xs]
+    best, best_off, best_score = 0.0, 0.0, -1.0
     for trial in np.arange(0.0, 180.0, 0.5):
         t = np.radians(trial)
-        px = np.clip(np.round(cx + np.concatenate([reach, -reach]) * np.cos(t)).astype(int), 0, r.shape[1] - 1)
-        py = np.clip(np.round(cy + np.concatenate([reach, -reach]) * np.sin(t)).astype(int), 0, r.shape[0] - 1)
-        score = float(np.mean(dark[py, px]))
-        if score > best_score:
-            best, best_score = trial, score
+        offsets = -(xs - cx) * np.sin(t) + (ys - cy) * np.cos(t)
+        counts, edges = np.histogram(offsets, bins=np.arange(-radius, radius + 3, 3), weights=vote)
+        i = int(np.argmax(counts))
+        if counts[i] > best_score:
+            best, best_off, best_score = trial, float(edges[i] + 1.5), float(counts[i])
     # Then the line itself: the middle of the bar found across it at many
     # points along it, away from the hub, and a straight line fitted through
     # those middles, leaving out any a crossing printed line has pulled
@@ -148,11 +153,13 @@ def find_pointer(picture, marked=None):
     # of a degree shows.
     t = np.radians(best)
     along, aside = np.array([np.cos(t), np.sin(t)]), np.array([-np.sin(t), np.cos(t)])
+    # Measured from the point of that line nearest the paper's middle.
+    ox, oy = cx + best_off * aside[0], cy + best_off * aside[1]
     width = np.linspace(-0.07, 0.07, 29) * radius
     points = []
     for d in np.concatenate([np.linspace(0.32, 0.86, 40), -np.linspace(0.32, 0.86, 40)]) * radius:
-        xs_ = cx + d * along[0] + width * aside[0]
-        ys_ = cy + d * along[1] + width * aside[1]
+        xs_ = ox + d * along[0] + width * aside[0]
+        ys_ = oy + d * along[1] + width * aside[1]
         profile = ndimage.map_coordinates(dark, [ys_, xs_], order=1)
         peak = int(np.argmax(profile))
         if profile[peak] < 0.35 * paper_level:                  # no bar here
@@ -178,8 +185,8 @@ def find_pointer(picture, marked=None):
         spread = 1.4826 * np.median(np.abs(resid[keep])) + 0.05
         keep = (np.abs(resid) < 3 * spread) & (wide <= np.median(wide) + 1)
     angle = float((best + np.degrees(np.arctan(slope))) % 180)
-    xs = cx + d[keep] * along[0] + (slope * d[keep] + icept) * aside[0]
-    ys = cy + d[keep] * along[1] + (slope * d[keep] + icept) * aside[1]
+    xs = ox + d[keep] * along[0] + (slope * d[keep] + icept) * aside[0]
+    ys = oy + d[keep] * along[1] + (slope * d[keep] + icept) * aside[1]
     x, y = np.cos(np.radians(angle)), np.sin(np.radians(angle))
     weight = np.ones(len(xs))
     if marked:
@@ -252,8 +259,8 @@ def bench(focuser, picture, settle=1.5, looks=3, say=print, sleep=time.sleep):
     a printed protractor, with no stars: docs/focuser.md, "Checking the
     motor on the bench". `picture()` gives a path to a fresh picture.
 
-    Each place is the median of `looks` pictures, and their spread is the
-    measuring noise. Moves are kept under a quarter turn, as a stick looks
+    Each place is the median of `looks` pictures in a row that agree, once
+    the stick has stopped, and their spread is the measuring noise. Moves are kept under a quarter turn, as a stick looks
     the same half a turn round. In order: the slack taken up; four moves
     of 512 half-steps (an eighth of a turn) for the degrees a half-step
     really is; smaller moves of 64, 16 and 4 in the same direction; then
@@ -263,16 +270,30 @@ def bench(focuser, picture, settle=1.5, looks=3, say=print, sleep=time.sleep):
     import numpy as np
     rows, spreads = [], []
 
+    behind = [0]       # pictures the camera runs behind the motor, measured below
+
+    def look():
+        angle = pointer_angle(picture())
+        sleep(0.3)
+        return angle
+
     def where(label, steps=0):
         if steps:
             focuser.move(steps)
         sleep(settle)
-        angles = []
-        for _ in range(looks):
-            angle = pointer_angle(picture())
+        for _ in range(behind[0]):
+            look()                                  # still showing before the move
+        # Then pictures until `looks` in a row agree: the stick has stopped.
+        angles, tries = [], 0
+        while tries < 8 * looks:
+            tries += 1
+            angle = look()
             if angle is not None:
                 angles.append(angle)
-            sleep(0.3)
+            recent = angles[-looks:]
+            if len(recent) == looks and np.ptp([turned(recent[0], a) for a in recent]) < 0.5:
+                break
+        angles = angles[-looks:]
         if not angles:
             raise RuntimeError("the stick could not be found in the pictures: check the camera's view")
         # Unwrapped round the first, so a stick near 0 or 180 averages right.
@@ -282,8 +303,23 @@ def bench(focuser, picture, settle=1.5, looks=3, say=print, sleep=time.sleep):
         rows.append({"label": label, "steps": steps, "angle": round(middle % 180, 3)})
         return middle % 180
 
-    where("start")
-    start = where("slack taken up", 256)
+    first = where("start")
+    # How far behind the camera runs: a phone's stream is a second or two
+    # late (19 October 2026: a run read 64 half-steps as 1.4°, 3.2° and then
+    # 17.5°), and pictures that agree with each other may all be from
+    # before a move. Counted once, on a move of 22°, then waited out on
+    # every move after.
+    focuser.move(256)
+    sleep(settle)
+    for count in range(1, 40):
+        angle = look()
+        if angle is not None and abs(turned(first, angle)) > 5:
+            behind[0] = count - 1               # the first picture showing the move is not behind
+            break
+    else:
+        raise RuntimeError("the stick did not move in the pictures: is the camera watching the motor?")
+    say(f"the camera runs {behind[0]} picture{'s' if behind[0] != 1 else ''} behind the motor")
+    start = where("slack taken up")
     big = [start]
     for _ in range(4):
         big.append(where("eighth turn", 512))

@@ -53,7 +53,7 @@ def test_the_script_waits_as_long_as_the_firmware_takes_over_a_step():
     assert f"const int STEP_MS = {round(focuser.STEP_SECONDS * 1000)};" in sketch
 
 
-def protractor(path, angle, width=1280, height=720, shift=(0, 0), scale=1.0, seed=0):
+def protractor(path, angle, width=1280, height=720, shift=(0, 0), scale=1.0, seed=0, off=(0, 0)):
     """A picture like the phone's: a white protractor with blue spokes on a
     dark bracket, a dark hub, and a blacked stick across its middle at `angle` degrees
     (y down), moved and zoomed as a phone switching lens moves it."""
@@ -71,7 +71,8 @@ def protractor(path, angle, width=1280, height=720, shift=(0, 0), scale=1.0, see
                 cy + 0.9 * r * np.sin(t)], fill=(70, 90, 170), width=2 * k)
     d.ellipse([cx - 0.15 * r, cy - 0.15 * r, cx + 0.15 * r, cy + 0.15 * r], fill=(60, 60, 65))
     t = np.radians(angle)
-    ends = [cx - 0.3 * r * np.cos(t), cy - 0.3 * r * np.sin(t), cx + 0.8 * r * np.cos(t), cy + 0.8 * r * np.sin(t)]
+    sx, sy = cx + k * off[0], cy + k * off[1]          # the shaft, if the paper is not centred on it
+    ends = [sx - 0.3 * r * np.cos(t), sy - 0.3 * r * np.sin(t), sx + 0.8 * r * np.cos(t), sy + 0.8 * r * np.sin(t)]
     d.line(ends, fill=(30, 28, 30), width=int(9 * scale * k))
     img = img.resize((width, height), Image.LANCZOS)
     noisy = np.asarray(img, dtype=np.float32) + rng.normal(0, 4, (height, width, 3))
@@ -139,9 +140,10 @@ def test_the_bench_run_finds_the_step_and_the_slack(tmp_path):
     for way in ("reversing in", "reversing out"):
         assert answer["slack_half_steps"][way] == pytest.approx(slack, abs=8)
     assert answer["comes_back_within_deg"] < 0.3
-    # Half-size pictures here, so each reading is good to about half a degree.
-    assert all(m["measured_deg"] == pytest.approx(m["expected_deg"], abs=0.5) for m in answer["small_moves"])
-    assert len(said) == 3
+    # Half-size pictures here: each reading is good to about 0.3°, so a move
+    # (the difference of two) to about 0.6°. Enough to catch 1.4° read for 5.7°.
+    assert all(m["measured_deg"] == pytest.approx(m["expected_deg"], abs=0.6) for m in answer["small_moves"])
+    assert len(said) == 4 and said[0] == "the camera runs 0 pictures behind the motor"
 
 
 def test_the_watcher_takes_only_a_picture_made_after_it_was_asked(tmp_path):
@@ -156,3 +158,40 @@ def test_the_watcher_takes_only_a_picture_made_after_it_was_asked(tmp_path):
     threading.Timer(0.3, lambda: Image.new("RGB", (8, 8), (9, 9, 9)).save(kept)).start()
     got = watcher.picture(tmp_path / "b.jpg", wait=3)
     assert Image.open(got).getpixel((0, 0))[0] > 5
+
+
+def test_a_camera_running_behind_the_motor_is_waited_for(tmp_path):
+    """19 October 2026: the phone's stream ran a second or two behind, and
+    pictures taken a fixed time after a move caught the stick still turning."""
+    per_step = 360 / 4076
+
+    class Motor:
+        shaft = 0.0
+
+        def move(self, steps):
+            self.shaft += steps
+
+    motor, shown, count = Motor(), [], [0]
+
+    def picture():
+        shown.append(motor.shaft)
+        lagging = shown[max(0, len(shown) - 4)]          # what the camera saw three pictures ago
+        count[0] += 1
+        path = tmp_path / f"{count[0]}.jpg"
+        protractor(path, (30 + lagging * per_step) % 180, width=640, height=360, scale=0.9, seed=count[0])
+        return path
+
+    said = []
+    answer = focuser.bench(motor, picture, looks=2, say=said.append, sleep=lambda s: None)
+    assert said[0] == "the camera runs 3 pictures behind the motor"
+    assert all(m["measured_deg"] == pytest.approx(m["expected_deg"], abs=0.6) for m in answer["small_moves"])
+    assert answer["half_steps_per_turn"] == pytest.approx(4076, rel=0.01)
+
+
+def test_a_stick_off_the_paper_s_middle_is_read_whole(tmp_path):
+    """19 October 2026: the protractor is cut out by hand, so the shaft is
+    not its middle, and a search only through the middle flipped between
+    two wrong lines 12° apart."""
+    for angle in (20.0, 70.0, 115.0):
+        protractor(tmp_path / "p.jpg", angle, off=(25, -18))
+        assert focuser.pointer_angle(tmp_path / "p.jpg") == pytest.approx(angle, abs=0.25)
