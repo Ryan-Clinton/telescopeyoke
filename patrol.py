@@ -227,6 +227,11 @@ def analyse(session, say=print, chain=None, both_halves=True, alerting=True):
             answer["difference"] = {"refused": "INVALID_REQUEST", "message": shallow}
             say(f"  difference stopped: {shallow}")
             break
+        askew = misaligned(answer[step]) if step == "difference" else None
+        if askew:
+            answer["vet"] = {"refused": "INVALID_REQUEST", "message": askew}
+            say(f"  vet stopped: {askew}")
+            break
     if "candidates" in answer.get("vet", {}):
         measure = (chain or {}).get("measure") or (lambda: tonight(session, answer.get("depth", {})))
         answer["followed"] = follow(name, session.name, answer["vet"]["candidates"], measure, both_halves)
@@ -315,6 +320,30 @@ def too_shallow(measured):
         return None
     return (f"too shallow to search: half of planted stars found at G {half}, brighter than G {SEARCH_FLOOR:g}; "
             f"a nova in M31 peaks near G {NOVA_PEAK[0]:g}")
+
+
+MOST_RESIDUAL = 0.8     # pixels: a subtraction whose stars lined up worse than this is not searched
+MOST_FADING = 0.5       # fading peaks as a share of brightening ones, beyond which it is all leftovers
+
+
+def misaligned(found):
+    """Why a subtraction cannot be searched, or None. When tonight's stack
+    and the reference do not line up, every star leaves a bright and a dark
+    leftover: on 18 October 2026 M33 lined up only to 1.75 px, and 16
+    leftovers went to the person's phone as candidates, beside 33 fading
+    peaks. A real night has few fading peaks; leftovers come in both signs."""
+    if not found or "candidates" not in found:
+        return None
+    residual = found.get("alignment_residual_px")
+    if residual is not None and residual > MOST_RESIDUAL:
+        return (f"the subtraction did not line up: stars matched only to {residual:.2f} px (it needs under "
+                f"{MOST_RESIDUAL:g}), so its {len(found['candidates'])} candidates are leftovers of stars; "
+                "nothing reported")
+    fading, rising = found.get("fading_peaks") or 0, len(found["candidates"])
+    if fading >= 5 and fading > MOST_FADING * rising:
+        return (f"the subtraction left as many dark leftovers as bright ones ({fading} fading, {rising} "
+                "brightening): it did not match tonight's stack to the reference; nothing reported")
+    return None
 
 
 def tonight(session, measured):

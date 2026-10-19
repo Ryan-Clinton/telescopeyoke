@@ -285,6 +285,23 @@ def test_a_stack_too_shallow_is_not_searched(tmp_path):
     assert any(line.startswith("Stopped at difference: too shallow") for line in answer["summary"])
 
 
+def test_a_subtraction_that_did_not_line_up_is_not_vetted_or_alerted(tmp_path):
+    """18 October 2026: M33 lined up to 1.75 px and 16 star leftovers, beside
+    33 fading peaks, went to the phone as candidates."""
+    session = tmp_path / "frames" / "M33" / "20261019-002602"
+    session.mkdir(parents=True)
+    for found, why in (({"candidates": [{}] * 48, "alignment_residual_px": 1.75, "fading_peaks": 33}, "did not line up"),
+                       ({"candidates": [{}] * 20, "alignment_residual_px": 0.3, "fading_peaks": 15}, "dark leftovers")):
+        ran = []
+        chain = {"depth": lambda: {"zeropoint": 21.6, "completeness": {"all": {"mag_50": 17.3}}},
+                 "difference": lambda f=found: f, "vet": lambda: ran.append("vet")}
+        answer = patrol.analyse(session, say=lambda *_: None, chain=chain)
+        assert ran == [] and why in answer["vet"]["message"] and "nothing reported" in answer["vet"]["message"]
+        assert not patrol.unexplained(answer)
+    good = {"candidates": [{}] * 2, "alignment_residual_px": 0.28, "fading_peaks": 1}
+    assert patrol.misaligned(good) is None
+
+
 def test_a_miss_with_no_limit_says_so_rather_than_none():
     lines = patrol.summary({"followed": [{"id": "M31-1", "seen_on": 1, "of": 2,
                                           "tonight": {"seen": False, "limit": None}}]})

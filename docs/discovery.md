@@ -106,6 +106,9 @@ What a person does; everything else is automatic.
    panel's final picture and search run in the background while the mount
    goes on to the next panel, and the live picture on the page is drawn in
    the background too, so the camera and the mount never wait for either.
+   A subtraction whose stars did not line up with the reference (worse
+   than 0.8 px, or as many dark leftovers as bright ones) is not searched:
+   the answer says why, and nothing goes to the phone.
 3. Anything nothing explains comes to your phone with its pictures and a
    report packet, and the patrol takes a second look: at once for a single
    field, and for a mosaic once its panels are done, going back to the
