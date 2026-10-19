@@ -98,3 +98,21 @@ def test_a_mosaic_with_no_plan_is_refused(tmp_path, monkeypatch):
     monkeypatch.setattr(mosaic, "load", lambda name: None)
     with pytest.raises(interface.Refusal):
         stitch.fields("M101")
+
+
+def test_a_session_with_a_colour_cast_is_matched_to_its_neighbour_in_the_overlap(monkeypatch):
+    """18 October 2026: some panels came out purple beside the others."""
+    rng = np.random.default_rng(3)
+    shape = (120, 200)
+    left = panel_wcs(10.0, 41.0, shape)
+    right = panel_wcs(10.0 + 100 * 1.32 / 3600 / np.cos(np.radians(41)), 41.0, shape)
+    star = left.pixel_to_world_values(60, 60)
+    a = sky_with_star(left, shape, star, 50, rng)
+    b = sky_with_star(right, shape, star, 50, rng)
+    b[2] += 30 * np.linspace(0, 1, shape[1])[None, :]      # a blue cast growing across the second panel
+    monkeypatch.setattr(stitch, "MATCH_FROM", 500)
+    out_wcs, out_shape = stitch.grid([(left, shape), (right, shape)])
+    joined, weights = stitch.blend([(a, left, 100.0), (b, right, 100.0)], out_wcs, out_shape, feather=10)
+    x, y = out_wcs.world_to_pixel_values(*left.pixel_to_world_values(150, 60))
+    overlap = joined[:, 40:80, int(x) - 10:int(x) + 10]
+    assert abs(float(np.median(overlap[2] - overlap[0]))) < 4    # blue matches red where they meet

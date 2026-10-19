@@ -41,6 +41,7 @@ ROOT = Path(__file__).parent
 FEATHER = 150           # pixels over which a field fades in from its edge
 SAMPLE = 8              # the sky level of a field is taken from every 8th pixel
 SKY_SHARE = 20          # percentile of a field's pixels taken as its sky level
+MATCH_FROM = 20000      # pixels of overlap enough to match a session's level to the picture so far
 
 
 def fields(name):
@@ -140,6 +141,14 @@ def blend(fields_in, out_wcs, out_shape, feather=FEATHER):
             dark = values[values <= np.percentile(values, 50)]
             grain.append(1.4826 * float(np.median(np.abs(dark - np.median(dark)))) + 1e-6)
             laid[c] -= sky
+        # Then matched to the picture so far where they overlap, colour by
+        # colour: a level taken from one session alone left the whole-galaxy
+        # field darker than the panels round it, and some panels purple.
+        shared = covered & (weights > 0)
+        if shared.sum() > MATCH_FROM:
+            so_far = total[:, shared] / weights[shared]
+            for c in range(laid.shape[0]):
+                laid[c] -= np.median((laid[c][shared] - so_far[c])[::SAMPLE])
         # Deeper and cleaner counts more: exposure over the sky's grain
         # squared, so a striped or noisy session gives way where a better
         # one overlaps it.
