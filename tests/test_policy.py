@@ -150,3 +150,11 @@ def test_the_commands_page_files_each_command_under_what_it_may_do():
             continue
         line = " ".join(["./" + words[0] if words[0].endswith(".py") else "./ty"] + [w for w in words[1:] if "[" not in w and "]" not in w])
         assert policy.classify_text(line) in kinds, f"{' '.join(words)} is under \"{section}\""
+
+
+def test_running_the_schedule_is_hardware_and_planning_it_is_not():
+    """schedule.py run starts moves when their time comes, so it is asked
+    for like a patrol; adding to the plan or showing it moves nothing."""
+    assert policy.classify(["./schedule.py", "run"]) == "hardware"
+    assert policy.classify(["./schedule.py"]) == "read_only"
+    assert policy.classify(["./schedule.py", "add", "x", "1", "--", "./mount.py", "goto", "M31"]) == "local_write"

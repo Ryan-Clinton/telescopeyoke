@@ -90,6 +90,10 @@ COMMANDS = {
     "report.py": ("local_write", {}, {}),
     "restack.py": ("local_write", {}, {}),
     "runwatch.py": ("read_only", {}, {}),
+    # run starts the queued steps, moves included, each when its time comes:
+    # hardware, asked for like a patrol; the rest only change the plan.
+    "schedule.py": ("read_only", {"run": "hardware", "add": "local_write", "wait": "local_write",
+                                  "clear": "local_write"}, {}),
     "serve.py": ("local_write", {}, {}),            # the status page: read-only to its visitors
     "shoot.py": ("hardware", {}, DRY),
     "skywatch.py": ("hardware", {}, {}),
