@@ -310,6 +310,11 @@ def test_a_daylight_skyline_survey_on_the_simulated_mount(scope, monkeypatch, tm
     import interface
     import snap
 
+    # One moment for the whole survey, the one at which a corner between
+    # two open bearings was first seen marked as blocked.
+    fixed = Time("2026-10-19T16:58:00")
+    monkeypatch.setattr(Time, "now", classmethod(lambda cls: fixed))
+
     wall = lambda az: 38.5 if 60 <= az <= 130 or 230 <= az <= 300 else 0
 
     class Camera:

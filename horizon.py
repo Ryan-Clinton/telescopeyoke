@@ -748,7 +748,14 @@ def skyline_from(found, low, known=None):
     for a, b in zip(list(points), points[1:] + points[:1]):
         if len(points) > 1 and abs(a["alt"] - b["alt"]) > JUMP:
             lower, at = (a, a["az"] + 0.1) if a["alt"] < b["alt"] else (b, b["az"] - 0.1)
-            points.append({"az": round(at % 360, 1), "alt": max(a["alt"], b["alt"])})
+            corner = {"az": round(at % 360, 1), "alt": max(a["alt"], b["alt"])}
+            # Between two open bearings nothing was seen at all: they differ
+            # only in how low the limits let each look (on 19 October 2026,
+            # 20° at 180° and 30° at 225° before 17:00 UTC), and a corner
+            # there marked blocked made up a wall at 30°.
+            if a.get("open") and b.get("open"):
+                corner["open"] = True
+            points.append(corner)
     if known and points:
         # How far each measured top is from the known skyline; open bearings
         # say only that it is no higher than was looked.
