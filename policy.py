@@ -99,6 +99,7 @@ COMMANDS = {
     "starwatch.py": ("hardware", {"--measure": "local_write", "--history": "read_only"},
                      {"--plan": "read_only", "--dry-run": "read_only"}),
     "streak.py": ("local_write", {}, {}),           # keeps CelesTrak's orbits in cache/
+    "stitch.py": ("local_write", {}, {}),           # the mosaic of every night; --on stacks on the person's own desktop
     "sungrazer.py": ("local_write", {}, {}),
     "tonight.py": ("read_only", {}, {}),
     "tour.py": ("local_write", {}, {}),

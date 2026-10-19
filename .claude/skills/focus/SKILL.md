@@ -2,7 +2,7 @@
 name: focus
 description: Check and, if needed, improve the telescope's focus with its motor focuser. Use when the person says to focus, that the stars look soft or bloated, or as the focus step of nightly-setup. Measures first, says the level, and only focuses when it is worse than usual or the person asks.
 compatibility: telescopeyoke at the telescope with the motor focuser (firmware/focuser) and the camera plugged in
-allowed-tools: Bash(./focus.py --motor --dry-run) Bash(./focus.py --report) Bash(./ty mount status) Bash(./focus.py --check)
+allowed-tools: Bash(./focus.py --motor --dry-run) Bash(./focus.py --report) Bash(./ty mount status)
 ---
 
 # Focus
