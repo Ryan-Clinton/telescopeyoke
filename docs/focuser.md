@@ -157,11 +157,12 @@ camera looking down on the shaft:
     ./focuser.py angle --pictures a.jpg b.jpg              the stick's angle in pictures already taken
 
 On the shaft, a printed protractor cut out round the motor and a thin stick
-(a cocktail stick) across its middle, turning with the shaft. The camera
+(a cocktail stick) across its middle, turning with the shaft, blacked all
+along with a marker: bare wood is too like the paper to be found. The camera
 looks straight down from a few centimetres, held still, with the
-protractor filling a good part of the picture. The stick is found by its
-colour against the paper, and its angle fitted along its whole length, to
-a fraction of a degree. It is measured against the picture's own rows, so
+protractor filling a good part of the picture. The stick is found as the
+dark bar through the protractor's middle, and its centre line fitted along
+its whole length, to about a fifth of a degree a picture. It is measured against the picture's own rows, so
 a phone that switches lens by itself, which a Pixel does up close
 (19 October 2026), shifts and zooms the picture without spoiling it; a
 camera that turns would. Each answer is kept in
