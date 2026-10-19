@@ -663,7 +663,7 @@ def outdoors(source=None):
     import feeds
     try:
         site = config.load()["site"]
-        w = (source or feeds).weather(site["lat"], site["lon"])
+        w = (source or feeds).weather(site["latitude"], site["longitude"])
     except Exception:
         return None
     now = time.time()

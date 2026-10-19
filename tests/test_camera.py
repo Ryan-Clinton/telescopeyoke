@@ -650,7 +650,10 @@ def test_the_dew_margin_is_kept_with_the_air_temperature(monkeypatch):
     now = __import__("time").time()
     weather = types.SimpleNamespace(weather=lambda lat, lon: {
         "time": [now - 3600, now], "temperature_2m": [5.0, 1.5], "dew_point_2m": [2.0, 0.7]})
-    monkeypatch.setattr(camera_test.config, "load", lambda: {"site": {"lat": 55.0, "lon": -6.5}})
+    # The example settings, so the site's names are the real ones: on 19
+    # October 2026 a made-up {"lat", "lon"} here hid that the real site says
+    # latitude and longitude, and no cooldown record had the air or dew.
+    monkeypatch.setattr(camera_test.config, "load", camera_test.config.example)
     assert camera_test.outdoors(weather) == {"temp_c": 1.5, "dew_point_c": 0.7, "dew_margin_c": 0.8}
 
 
