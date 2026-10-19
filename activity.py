@@ -32,10 +32,15 @@ def _read():
 
 
 def _write(entries):
-    FILE.parent.mkdir(parents=True, exist_ok=True)
-    spare = FILE.with_name(f"{FILE.name}.{os.getpid()}")
-    spare.write_text(json.dumps(entries), encoding="utf-8")
-    os.replace(spare, FILE)       # whole or not at all, with other processes writing too
+    # Never an error: this is a line for the console, called from inside a
+    # GoTo, and a full disk must not make a finished move look failed.
+    try:
+        FILE.parent.mkdir(parents=True, exist_ok=True)
+        spare = FILE.with_name(f"{FILE.name}.{os.getpid()}")
+        spare.write_text(json.dumps(entries), encoding="utf-8")
+        os.replace(spare, FILE)       # whole or not at all, with other processes writing too
+    except OSError:
+        pass
 
 
 def _alive(pid):

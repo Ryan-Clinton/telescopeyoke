@@ -38,3 +38,15 @@ def test_an_error_inside_still_clears_the_line():
     except RuntimeError:
         pass
     assert activity.now() == []
+
+
+def test_a_status_file_that_cannot_be_written_never_stops_what_it_describes(monkeypatch, tmp_path):
+    """It is written from inside a GoTo: a write failing must not fail the move."""
+    blocked = tmp_path / "file-not-folder"
+    blocked.write_text("")
+    monkeypatch.setattr(activity, "FILE", blocked / "activity.json")
+
+    @activity.during("Moving", "to {name}")
+    def goto(name):
+        return "arrived"
+    assert goto("M31") == "arrived" and activity.now() == []
