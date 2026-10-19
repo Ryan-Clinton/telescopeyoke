@@ -306,7 +306,7 @@ PAGE = Template(r"""<!doctype html>
   .step progress { grid-column: 1 / -1; width: 100%; height: 6px; }
 </style></head><body><main>
 <header>
-  <h1>telescopeyoke <span>— $site</span></h1>
+  <h1>telescopeyoke</h1>
   <div class="dim">night of $date · report made $generated · <span id="clock"></span></div>
 </header>
 <div class="cards">$cards</div>
@@ -629,7 +629,7 @@ def render(rep, top, out_dir):
                  '<img src="scope.jpg" data-live="scope.jpg" alt="View of the telescope">')
     shown = rep["targets"][:top]
     return PAGE.substitute(
-        site=e(rep["site"]), date=f"{rep['date']:%A %d %B %Y}",
+        date=f"{rep['date']:%A %d %B %Y}",
         generated=f"{rep['generated']:%H:%M}",
         cards=cards(rep), conditions=e(conditions(rep)),
         best=best_targets(rep), timeline=timeline(rep), count=len(shown),

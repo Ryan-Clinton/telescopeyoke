@@ -30,3 +30,17 @@ def test_the_page_script_names_each_function_once(tmp_path):
     html, _ = built(tmp_path)
     names = re.findall(r"function (\w+)\(", html)
     assert len(names) == len(set(names)), sorted(n for n in names if names.count(n) > 1)
+
+
+def test_the_page_names_no_place(tmp_path):
+    """20 October 2026: the heading said where the telescope stands."""
+    html, _ = built(tmp_path)
+    assert config.example()["site"]["name"] not in html
+
+
+def test_the_feeds_blank_the_place_wherever_it_appears():
+    import serve
+    answer = {"data": {"site": "Back garden, Somewhere", "notes": ["clear at Back garden, Somewhere tonight"],
+                       "rows": [{"site": "Back garden, Somewhere"}], "other": 3}}
+    out = serve.unplaced(answer, "Back garden, Somewhere")
+    assert out["data"]["site"] == "" and "Somewhere" not in str(out) and out["data"]["other"] == 3

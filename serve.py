@@ -156,6 +156,27 @@ def share_pictures(discovery):
             row.setdefault("shared", []).append(f"discovery/{target.name}")
 
 
+def unplaced(answer, name=None):
+    """An answer with the site's name blanked wherever it appears: the page
+    and its feeds are for the person, who knows where they are, and the
+    name says where the telescope stands to anyone else who reads them
+    (20 October 2026: "i really dont see the benefit of giving my
+    geographical location"). The planner keeps using the site; it never
+    leaves the laptop."""
+    if name is None:
+        try:
+            name = (config.load() if config.FILE.exists() else config.example())["site"]["name"]
+        except Exception:
+            return answer
+    if isinstance(answer, dict):
+        return {k: unplaced(v, name) for k, v in answer.items()}
+    if isinstance(answer, list):
+        return [unplaced(v, name) for v in answer]
+    if isinstance(answer, str) and name and name in answer:
+        return answer.replace(name, "").strip(" ,;—-") if answer != name else ""
+    return answer
+
+
 def status_forever(seconds=2):
     """Keep web/status.json describing the newest imaging run, so the page can
     show how far it has got without being rebuilt."""
@@ -245,7 +266,7 @@ class Handler(SimpleHTTPRequestHandler):
             work = lambda: (_ for _ in ()).throw(
                 interface.Refusal("INVALID_REQUEST", f"No such endpoint: /api/v1/{name}"))
         result = interface.run(name, work)
-        body = json.dumps(result, default=interface.jsonable).encode()
+        body = json.dumps(unplaced(result), default=interface.jsonable).encode()
         self.send_response(200 if result["ok"] else 404 if name not in routes
                            and not name.startswith("target/") else 409)
         self.send_header("Content-Type", "application/json")
