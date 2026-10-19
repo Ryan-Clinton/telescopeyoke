@@ -164,10 +164,13 @@ class Session:
         if force:
             with self.timings.phase("update the web page"):
                 draw_stack(stacked, count, self.name, self.exposure, WEB)
+        elif getattr(self, "drawer", None) is None:
+            draw_stack(stacked, count, self.name, self.exposure, WEB, False)    # only brightened: quick
         else:
-            if getattr(self, "drawer", None) is None:
-                from concurrent.futures import ProcessPoolExecutor
-                self.drawer = ProcessPoolExecutor(max_workers=1, initializer=lowly)
+            # The run's own worker pool, started before the first frame: a new
+            # process started mid-run loads the whole program afresh, and the
+            # camera waited for it a minute or more after the fifth frame of
+            # every run (18 October 2026).
             self.drawing = self.drawer.submit(draw_stack, stacked, count, self.name, self.exposure, WEB, False)
 
     def picture(self, stacked=None, count=None):
@@ -180,9 +183,6 @@ class Session:
         if not self.accepted:
             return
         self.publish(force=True)
-        if getattr(self, "drawer", None) is not None:
-            self.drawer.shutdown(wait=True)
-            self.drawer = None
         stacking.write_stack(self.folder / "live.fits", self.stack.result(),
                              {"OBJECT": self.name, "NFRAMES": len(self.accepted),
                               "EXPTIME": self.exposure * len(self.accepted), "GAIN": self.gain})
@@ -616,6 +616,7 @@ def run(args):
             print(session.absorb(future.result(), taken), flush=True)
 
     with stacking.worker_pool(workers) as pool:
+        session.drawer = pool       # the page's picture is drawn by these workers, never a new process
         while more():
             due = (args.recentre and since_centre >= args.recentre) or told["recentre"]
             if moving and args.dither and since_dither >= args.dither:
