@@ -35,6 +35,10 @@ SETTINGS = config.hardware()
 WHITE = 2 ** SETTINGS["camera"]["bit_depth"] - 1  # brightest raw value
 FLUSH_BOTH = 3      # ALTAIRCAM_OPTION_FLUSH: 1 the camera's memory, 2 the library's, 3 both
 USB3_ON_USB2 = 0x100   # ALTAIRCAM_FLAG_USB30_OVER_USB20
+USB3 = 0x40            # ALTAIRCAM_FLAG_USB30
+FAN = 0x10000          # ALTAIRCAM_FLAG_FAN
+BUFFER = 0x1000000     # ALTAIRCAM_FLAG_BUFFER: a frame buffer of some size in the camera
+DDR = 0x2000000        # ALTAIRCAM_FLAG_DDR: one big enough for a whole frame
 
 
 def wait_for(seconds):
@@ -379,12 +383,24 @@ class AltairCamera:
     # --- what the camera is, for camera_test.py and the doctor ----------------------
 
     def details(self):
+        """What the library knows of the camera: the camera's part of the
+        Diagnose File Altair's support ask for from AltairCapture, which
+        reads it through this same library."""
         lib, handle = self.lib, self.handle
         device = next((d for d in cameras(lib) if d.displayname == self.name), None)
         flags = device.model.flag if device else 0
+        asked = lambda name: getattr(handle, name)() if hasattr(handle, name) else None   # not in older wrappers
         return {
             "model": self.name, "serial": handle.SerialNumber(),
             "sdk_version": lib.Altaircam.Version(), "firmware": handle.FwVersion(),
+            "hardware": asked("HwVersion"), "fpga": asked("FpgaVersion"),
+            "production_date": asked("ProductionDate"), "revision": asked("Revision"),
+            "pixel_um": getattr(device.model, "xpixsz", None) if device else None,
+            "fan": bool(flags & FAN),
+            # Without one, each row goes down the lead as it is read, so
+            # anything that holds the link up meets the readout.
+            "frame_buffer": "whole frame" if flags & DDR else "part of a frame" if flags & BUFFER else "none",
+            "usb3_camera": bool(flags & USB3),
             "flags": hex(flags), "usb3_camera_on_usb2_port": bool(flags & USB3_ON_USB2),
             "size": [self.width, self.height], "bit_depth": self.bits, "bayer": self.pattern,
             "readout_speed": handle.get_Speed(), "max_readout_speed": handle.MaxSpeed(),

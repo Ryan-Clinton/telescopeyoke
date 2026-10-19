@@ -383,13 +383,19 @@ def trail(asked, gain, corrected=False):
 def show_details(found):
     """What Altair's library says about the camera and how it is connected."""
     for label, key in (("Camera", "model"), ("Serial number", "serial"), ("SDK version", "sdk_version"),
-                       ("Firmware", "firmware"), ("Flags", "flags"), ("Bit depth", "bit_depth"),
-                       ("Colour pattern", "bayer")):
-        print(f"{label + ':':<16}{found[key]}")
+                       ("Firmware", "firmware"), ("Hardware", "hardware"), ("FPGA", "fpga"),
+                       ("Made", "production_date"), ("Revision", "revision"), ("Pixel size", "pixel_um"),
+                       ("Fan", "fan"), ("Frame buffer", "frame_buffer"), ("Flags", "flags"),
+                       ("Bit depth", "bit_depth"), ("Colour pattern", "bayer")):
+        if found.get(key) is not None:
+            print(f"{label + ':':<16}{found[key]}")
     print(f"{'Frame:':<16}{found['size'][0]} x {found['size'][1]}")
     print(f"{'Readout speed:':<16}{found['readout_speed']} (range 0-{found['max_readout_speed']})")
     print(f"{'USB:':<16}" + ("a USB 3 camera on a USB 2 port: frames will be slow"
                              if found["usb3_camera_on_usb2_port"] else "not held back by a USB 2 port"))
+    link = found.get("usb_link")
+    if link:
+        print(f"{'Link:':<16}port {link['port']} at {link['mbps']} Mb/s" + (" (USB 2)" if link["mbps"] < 5000 else ""))
 
 
 def throughput_sdk(exposure, frames, gain):
@@ -427,7 +433,9 @@ def throughput_sdk(exposure, frames, gain):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     what = ap.add_mutually_exclusive_group(required=True)
-    what.add_argument("--capabilities", action="store_true")
+    what.add_argument("--capabilities", action="store_true",
+                      help="what the camera is: model, serial, firmware, hardware, FPGA, when it was made, its frame "
+                           "buffer and USB link (the camera's part of Altair's Diagnose File)")
     what.add_argument("--throughput", action="store_true")
     what.add_argument("--gain-sweep", action="store_true")
     what.add_argument("--timing", action="store_true")
@@ -779,6 +787,8 @@ def run(args):
     if args.capabilities:
         with Camera(gain=args.gain) as cam:
             found = cam.details() if SDK else capabilities(cam)
+        if SDK:
+            found["usb_link"] = usb_link()
         (show_details if SDK else show_capabilities)(found)
         return found
     if args.timing:

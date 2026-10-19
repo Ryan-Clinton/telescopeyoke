@@ -703,3 +703,33 @@ def test_a_hung_camera_is_given_up_on_within_about_two_minutes(world, monkeypatc
         cam.frame(16)
     seconds, timeout, attempts = world.timeouts[-1]
     assert timeout * attempts <= 150 and timeout >= seconds + 20
+
+
+def test_the_details_are_the_camera_s_part_of_altair_s_diagnose_file(sdk, world):
+    """As AltairCapture gave it for this camera on 19 October 2026, read
+    through the same library."""
+    handle = sdk.Altaircam.Open
+    def opened(camera_id):
+        h = handle(camera_id)
+        h.HwVersion, h.FpgaVersion = (lambda: "1.0"), (lambda: "1.1")
+        h.ProductionDate, h.Revision = (lambda: "20170607"), (lambda: 1)
+        return h
+    sdk.Altaircam.Open = staticmethod(opened)
+    flags = 0x40 | 0x10000 | 0x100           # USB 3 camera with a fan, on a USB 2 port; no frame buffer
+    sdk.Altaircam.EnumV2 = staticmethod(lambda: [types.SimpleNamespace(
+        displayname=name, id=serial, model=types.SimpleNamespace(flag=flags, xpixsz=2.4))
+        for name, serial in world.cameras])
+    with altair.AltairCamera() as cam:
+        found = cam.details()
+    assert (found["hardware"], found["fpga"], found["production_date"], found["revision"]) == ("1.0", "1.1",
+                                                                                               "20170607", 1)
+    assert found["pixel_um"] == 2.4 and found["fan"] and found["usb3_camera"]
+    assert found["frame_buffer"] == "none" and found["usb3_camera_on_usb2_port"]
+
+
+def test_the_details_leave_out_what_an_older_library_cannot_say(sdk, world):
+    import camera_test
+    with altair.AltairCamera() as cam:
+        found = cam.details()
+    assert found["hardware"] is None and found["production_date"] is None and found["frame_buffer"] == "none"
+    camera_test.show_details(dict(found, usb_link={"port": "2-4", "mbps": 480}))
