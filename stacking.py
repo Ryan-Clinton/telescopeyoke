@@ -135,6 +135,25 @@ def master_path(kind, exposure=None, gain=None):
     return CALIBRATION / f"flat-{setup_name()}.fits"
 
 
+def without_rows(master):
+    """A dark or bias with its row levels made even, each Bayer site to its
+    own overall level. The camera's row stripes are new in every frame, so a
+    master averaged from 20 keeps a set of its own (0.16-0.20 against 0.13 in
+    the mean of 60 lights, and unrelated to them); taken from every light, it
+    put that one set into all of them, where stacking cannot average it away
+    (the green bands of 19 October 2026). Pixels' own levels, the hot ones
+    included, are kept."""
+    if master is None:
+        return None
+    out = master.copy()
+    for dy in (0, 1):
+        for dx in (0, 1):
+            site = out[dy::2, dx::2]
+            level = np.median(site, axis=1)
+            site -= (level - np.median(level))[:, None]
+    return out
+
+
 class Calibration:
     """Master dark, bias and flat frames for one exposure and gain, loaded
     once. Any of them may be missing; whatever exists is applied."""
@@ -142,8 +161,8 @@ class Calibration:
     def __init__(self, exposure, gain):
         def load(path):
             return fits.getdata(path).astype(np.float32) if path.exists() else None
-        self.dark = load(master_path("dark", exposure, gain))
-        self.bias = load(master_path("bias", gain=gain))
+        self.dark = without_rows(load(master_path("dark", exposure, gain)))
+        self.bias = without_rows(load(master_path("bias", gain=gain)))
         self.flat = load(master_path("flat"))
         self.scale = 1.0   # how strongly the dark was applied to the last frame
         self.hot = None
@@ -193,9 +212,59 @@ def clean(rgb):
     return out
 
 
+# Rows over which a row's own level is compared with its neighbours', in
+# rows of one Bayer site (two rows of the sensor each), and the sections
+# across the frame each row is levelled in.
+STRIPE_ROWS = 101
+STRIPE_SECTIONS = 4
+
+
+def smooth_rows(level, width=STRIPE_ROWS):
+    """A running median of the row levels. Past each end the levels are
+    carried on by turning them about the end, so a gradient runs straight
+    to the edge instead of flattening there."""
+    half = width // 2
+    start, end = np.median(level[:5]), np.median(level[-5:])
+    padded = np.concatenate([2 * start - level[half:0:-1], level, 2 * end - level[-2:-half - 2:-1]])
+    return ndimage.median_filter(padded, width, mode="nearest")[half:half + len(level)]
+
+
+def destripe(frame, sections=STRIPE_SECTIONS):
+    """Take out the row stripes this camera reads into each frame: every row
+    of each Bayer site is brought to the level of the rows round it.
+
+    A stripe is not one level along its row: on 19 October 2026 a row green
+    at the left of the frame was magenta at the right (left and right
+    thirds correlated -0.87), the same in every frame, so stacking never
+    averaged it away. So each row is measured in `sections` across the frame
+    and the correction runs straight between their middles. A median is the
+    sky whatever stars cross it; anything broader than STRIPE_ROWS, a
+    gradient or a galaxy, is left alone."""
+    out = frame.astype(np.float32, copy=True)
+    for dy in (0, 1):
+        for dx in (0, 1):
+            site = out[dy::2, dx::2]
+            rows, cols = site.shape
+            if rows < STRIPE_ROWS:
+                continue
+            edges = np.linspace(0, cols, sections + 1).astype(int)
+            middles = (edges[:-1] + edges[1:] - 1) / 2
+            stripes = []
+            for a, b in zip(edges[:-1], edges[1:]):
+                level = np.median(site[:, a:b], axis=1)
+                stripes.append(level - smooth_rows(level))
+            # How much of each section's stripe reaches each column: straight
+            # between the middles, flat beyond the outer ones.
+            share = np.array([np.interp(np.arange(cols), middles, np.eye(sections)[i])
+                              for i in range(sections)])
+            site -= np.array(stripes).T @ share
+    return out
+
+
 def prepare(mosaic, calibration):
-    """A raw frame, calibrated, as half-size RGB with hot pixels removed."""
-    return clean(colour(calibration.apply(mosaic)))
+    """A raw frame, calibrated and destriped, as half-size RGB with hot
+    pixels removed."""
+    return clean(colour(destripe(calibration.apply(mosaic))))
 
 
 # --- raw frames on disk --------------------------------------------------------

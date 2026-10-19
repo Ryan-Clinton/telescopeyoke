@@ -69,6 +69,16 @@ Things worth knowing:
   sky came out at -55, and the cloud check threw out 16 of 19 clear frames.
   `calibrate.py bias` now refuses a bias under 10 and says to raise the
   offset. Change the offset and the bias and darks must be taken again.
+- **The camera's row stripes are taken out of every frame** before it is
+  stacked (`stacking.destripe`): each row of each Bayer site is levelled
+  against the rows round it, in four sections across the frame, since a
+  stripe can be green at one side and magenta at the other. Part of the
+  pattern is the same in every frame, so stacking alone never averaged it
+  away: the green bands in all the stacks of 19 October 2026. The bias and
+  dark have their row levels evened when loaded, so a master averaged from
+  20 frames no longer stamps its own stripes into every light. Anything
+  broader than about 100 rows of the stack, a gradient or a galaxy, is left
+  alone.
 - **Alignment is shift and rotation only**, no scale or lens distortion,
   which is enough for one session through one set of optics. `restack.py`
   reports how closely the stars matched; if that ever nears a pixel, it is

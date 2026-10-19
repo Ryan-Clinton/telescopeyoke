@@ -700,3 +700,43 @@ def test_a_second_imaging_run_refuses_while_one_holds_the_rig(tmp_path):
         shoot.hold_the_rig("M33", lock)
     first.close()                                   # the first run ends
     shoot.hold_the_rig("M33", lock).close()         # and the next may start
+
+
+def test_row_stripes_are_taken_out_and_a_gradient_and_stars_are_kept():
+    rng = np.random.default_rng(3)
+    rows, cols = 800, 600
+    sky = 100 + np.linspace(0, 40, rows)[:, None] * np.ones((1, cols))      # a gradient down the frame
+    stripes = rng.normal(0, 2.0, rows)[:, None]                             # a new level for every row
+    frame = sky + stripes + rng.normal(0, 0.5, (rows, cols))
+    frame[400, 300] += 5000                                                 # a star
+    out = stacking.destripe(frame)
+    level = np.median(out, axis=1) - np.median(sky, axis=1)
+    assert level[60:-60].std() < 0.4         # 2.0 before; what is left is as broad as the window, like sky
+    assert np.median(out[-50:]) - np.median(out[:50]) == pytest.approx(37.5, abs=1.5)  # gradient kept
+    assert out[400, 300] - np.median(out[400]) > 4900                       # star kept
+
+
+def test_a_frame_too_small_to_judge_its_rows_is_left_as_it_is():
+    frame = np.arange(40 * 40, dtype=np.float32).reshape(40, 40)
+    assert np.array_equal(stacking.destripe(frame), frame)
+
+
+def test_a_master_frame_loses_its_row_stripes_but_keeps_its_hot_pixels():
+    rng = np.random.default_rng(5)
+    master = 47 + rng.normal(0, 1.0, (200, 300))[:, :1] + rng.normal(0, 0.3, (200, 300))
+    master[100, 150] += 500                                                  # a hot pixel
+    even = stacking.without_rows(master)
+    for dy in (0, 1):
+        assert np.median(even[dy::2], axis=1).std() < 0.05                  # rows level (were 1.0)
+    assert even[100, 150] - np.median(even) > 490
+    assert stacking.without_rows(None) is None
+
+
+def test_a_stripe_that_changes_along_its_row_is_taken_out_too():
+    rng = np.random.default_rng(7)
+    rows, cols = 800, 800
+    ramp = np.linspace(-1, 1, cols)[None, :]
+    frame = 100 + rng.normal(0, 2.0, rows)[:, None] * ramp + rng.normal(0, 0.5, (rows, cols))   # green left, magenta right
+    out = stacking.destripe(frame)
+    left, right = np.median(out[60:-60, :200], axis=1), np.median(out[60:-60, -200:], axis=1)
+    assert left.std() < 0.4 and right.std() < 0.4                          # were about 1.5 each
