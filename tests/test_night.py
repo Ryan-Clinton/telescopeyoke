@@ -6,6 +6,8 @@ The mount is the simulated handset, the camera renders star fields, and the
 plate solver is told where the simulated mount is really aimed. Set
 TY_NIGHT_FRAMES for a longer run than the default.
 """
+import concurrent.futures
+import contextlib
 import json
 import math
 import os
@@ -119,6 +121,26 @@ def night(tmp_path, monkeypatch):
     return scope, tmp_path
 
 
+class AtOnce:
+    """A worker pool that does each piece of work as it is handed over."""
+
+    def submit(self, fn, *args, **kwargs):
+        done = concurrent.futures.Future()
+        try:
+            done.set_result(fn(*args, **kwargs))
+        except BaseException as problem:
+            done.set_exception(problem)
+        return done
+
+    def map(self, fn, *iterables):
+        return [fn(*item) for item in zip(*iterables)]
+
+
+@contextlib.contextmanager
+def at_once(workers=None):
+    yield AtOnce()
+
+
 def reachable_target():
     """Tonight's best target if the mount may go there now, else any object
     that is: the test must pass at any hour, in daylight too."""
@@ -135,9 +157,13 @@ def reachable_target():
 
 def test_a_whole_night(night, monkeypatch, capsys):
     scope, folder = night
-    # How many frames a slow machine sets aside for the quality pass depends
-    # on its speed (19 October 2026: CI runners set aside enough that the
-    # tracking assist never ran); setting aside has its own test.
+    # Each frame is processed before the next is taken, here, so what the
+    # run does cannot hang on the machine's speed (19 October 2026: on slow
+    # CI runners the frames were still being processed when the run reached
+    # its count, and the tracking assist never had its eight measured
+    # frames). Setting frames aside when processing falls behind has its
+    # own test.
+    monkeypatch.setattr(stacking, "worker_pool", at_once)
     monkeypatch.setattr(shoot, "BACKLOG", 10 ** 6)
 
     # Plan: the night report and a target the mount is allowed to reach.
