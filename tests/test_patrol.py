@@ -255,6 +255,20 @@ def test_a_sweep_searches_what_was_missed_and_all_history_reaches_back(tmp_path,
     assert searched == [old, new]
 
 
+def test_a_dry_run_sweep_only_lists_what_it_would_search(tmp_path, monkeypatch):
+    import datetime
+    import reference
+    from test_reference import measured
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    measured(tmp_path, "20261001-220000", 17.6)
+    reference.make("M31")
+    new = measured(tmp_path, "20261020-221500", 17.4)
+    searched = []
+    answer = patrol.sweep(False, say=lambda *_: None, search=searched.append,
+                          now=datetime.datetime(2026, 10, 21, 9, 0), dry_run=True)
+    assert searched == [] and answer["would_search"] == [str(new)]
+
+
 def test_one_session_failing_does_not_stop_the_sweep(tmp_path, monkeypatch):
     import datetime
     import reference

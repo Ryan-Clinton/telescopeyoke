@@ -61,6 +61,8 @@
         "required": ["session", "summary"],
         "properties": {"session": {"type": "string"}, "summary": {"type": ["array", "null"], "items": {"type": "string"}}}
       }
-    }
+    },
+    "dry_run": {"type": "boolean", "description": "--dry-run: nothing was searched or taken."},
+    "would_search": {"type": "array", "items": {"type": "string"}, "description": "--sweep --dry-run: the sessions a sweep would search."}
   }
 }

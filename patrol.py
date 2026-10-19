@@ -610,7 +610,7 @@ def last_watched(name):
 
 def run(args, say=print):
     if getattr(args, "sweep", False):
-        return sweep(args.all_history, say=say)
+        return sweep(args.all_history, say=say, dry_run=args.dry_run)
     if args.analyse:
         session = Path(args.analyse)
         result = analyse(args.analyse, say)
@@ -827,8 +827,10 @@ def taken(session):
         return None
 
 
-def sweep(all_history=False, days=SWEEP_DAYS, say=print, search=None, now=None):
-    """Search every session not yet searched: the last `days`, or all."""
+def sweep(all_history=False, days=SWEEP_DAYS, say=print, search=None, now=None, dry_run=False):
+    """Search every session not yet searched: the last `days`, or all. A dry
+    run only lists them: a search files candidates and sends alerts (19
+    October 2026, a dry run searched seven sessions and messaged the phone)."""
     search = search or (lambda session: analyse(session, say, alerting=not all_history))   # old nights: no alerts
     now = now or datetime.datetime.now()
     found = []
@@ -841,6 +843,11 @@ def sweep(all_history=False, days=SWEEP_DAYS, say=print, search=None, now=None):
         found.append(session)
     say(f"{len(found)} session{'s' if len(found) != 1 else ''} to search"
         f"{'' if all_history else f' from the last {days:g} days'}")
+    if dry_run:
+        for session in found:
+            say(f"would search {session.parent.name} {session.name}")
+        return {"sweep": "all" if all_history else f"{days:g} days", "dry_run": True,
+                "would_search": [str(session) for session in found]}
     searched = []
     for session in found:
         say(f"== {session.parent.name} {session.name}")
