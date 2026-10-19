@@ -47,6 +47,19 @@ No firmware list, changelog or download for the Hypercam 183C exists in public, 
 
 INDI now carries Altair's library 60.32226 (August 2026) ([altaircam.h](https://raw.githubusercontent.com/indilib/indi-3rdparty/master/libaltaircam/altaircam.h)), newer than the 60.31589 on Altair's own download page and in use here ([Altair downloads](https://www.altairastro.help/downloads/)). One INDI user found 57.27348 the last version with no timeouts ([#1114](https://github.com/indilib/indi-3rdparty/issues/1114)). Changing the library is the last test, not the first (below). The long-exposure failure happened under Altair's library without INDI too, which clears INDI but not the library, the USB stack, the laptop's USB controller, the camera or the cold.
 
+**Warming indoors, 19 October 2026.** The camera came in after a night on the telescope (a food probe on its body read about 15 °C), spent a while on the Windows PC for the Diagnose File, then went on the laptop's USB 3 port 2-1 on the 3 m lead, cap on, face down under a cloth: `camera_test.py --cooldown`, 16 s darks, 20 a set, from 18:14 to 19:36 (`cache/cooldown-20261019.jsonl`).
+
+| Set | Stripes | Frames lost | Frame time | Dark mean over median | Hot pixels |
+|---|---|---|---|---|---|
+| 18:14 | 1.36 ADU | 0 of 20 | 16.6 s | – | – |
+| 18:28 | 1.34 | 0 | 16.6 | +0.58 ADU | 1205 ppm |
+| 18:40 | 1.36 | 0 | 16.6 | +0.89 | 1263 |
+| 18:57 | 1.38 | 0 | 16.6 | +0.88 | 1293 |
+| 19:11 | 1.40 | 0 | 16.6 | +0.95 | 1309 |
+| 19:26 | 1.39 | 4 (unplugged) | 16.6 | +0.96 | 1316 |
+
+The 19:26 set's four lost frames are its last four: the camera was unplugged at 19:35:45 (the kernel's own disconnect) to make room for the focuser. Every one of the 116 frames taken with the camera connected arrived. The sensor was still warming, its darks climbing to a plateau, and the stripes stayed at the ordinary 1.34 to 1.40 ADU, if anything rising a little with the warmth, never near the cold night's 2.0 to 2.4. So a camera warming on the same lead, laptop and USB 3 link shows neither fault. What it did not test is cold or damp: it never began near −1 °C, and indoors the air is far from its dew point. That is test 3, outside.
+
 ## The tests, in order
 
 One thing changes at a time; everything else (gain, exposure, readout speed, lead, port, library) stays as it was, or the result says nothing. Each condition gets 20 to 30 frames. Darks are the measure throughout: they need no sky, and no star upsets the row estimates.
