@@ -1101,6 +1101,12 @@ def run_motor(args, mode="focus"):
     scale = arcsec_per_pixel()
     usual = usual_best() / scale
     settings = focuser_settings()
+    if args.dry_run and mode == "walk":
+        port = focuser.find_port()
+        print(f"Would turn the focuser on {port} inward only, 64 then 32 half-steps at a time at {WALK_MS} ms a "
+              f"half-step, {SWEEP_FRAMES} frames after each, until the stars have been worse twice after their "
+              "best. Start it a little outside focus, where the stars still measure. The mount does not move.")
+        return {"would_move": True, "port": port, "usual_hfr": round(usual, 2), "walk_ms": WALK_MS}
     if args.dry_run:
         port = focuser.find_port()
         print(f"Would turn the focuser on {port}: {SWEEP_POINTS} positions {settings['step']} half-steps apart "
