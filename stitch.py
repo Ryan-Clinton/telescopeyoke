@@ -41,6 +41,7 @@ ROOT = Path(__file__).parent
 FEATHER = 150           # pixels over which a field fades in from its edge
 SAMPLE = 8              # the sky level of a field is taken from every 8th pixel
 SKY_SHARE = 20          # percentile of a field's pixels taken as its sky level
+SOLID = 0.9             # a row or column of the picture is kept when this share of it is covered
 MATCH_FROM = 20000      # pixels of overlap enough to match a session's level to the picture so far
 
 
@@ -265,8 +266,13 @@ def picture(joined, covered, name):
     stretch, and the whole picture came out black."""
     import process
     from PIL import Image
-    rows = np.flatnonzero(covered.any(axis=1))
-    cols = np.flatnonzero(covered.any(axis=0))
+    # The picture is cropped to the rows and columns that are mostly covered:
+    # the zigzag edges of turned panels, and strips covered only by one
+    # striped session, are left off the picture (the FITS keeps them).
+    rows = np.flatnonzero(covered.mean(axis=1) > SOLID)
+    cols = np.flatnonzero(covered.mean(axis=0) > SOLID)
+    if not len(rows) or not len(cols):
+        rows, cols = np.flatnonzero(covered.any(axis=1)), np.flatnonzero(covered.any(axis=0))
     box = (slice(rows[0], rows[-1] + 1), slice(cols[0], cols[-1] + 1))
     rgb = np.moveaxis(joined[:, box[0], box[1]], 0, -1).copy()
     inside = covered[box]
