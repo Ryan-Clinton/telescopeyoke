@@ -6,6 +6,8 @@ Home speaker says so.
     ./alert.py check           look once and say what it finds; alerts as watch would
     ./alert.py test cloud      make the alert for cloud now (also: clouded, rain, clear)
     ./alert.py say "words"     say something on the speaker
+    ./alert.py call "words"    get the person's attention: every light pulses, the speaker
+                               says it, and it goes to their phone by Telegram
     ./alert.py pair            press the button on the Hue bridge, then run this once
     ./alert.py lights          the lights the bridge has, and which do colour
     ./alert.py speakers        the speakers found on the network
@@ -489,10 +491,55 @@ def check(dry_run=False, say_it=print):
     return events
 
 
+def call(words, dry_run=False, say_it=print, bridge=None, speak=None, send=None):
+    """Get the person's attention when the telescope needs their hands or
+    eyes: every light on the bridge pulses (red where it can), the speaker
+    says `words`, and they go to their phone by Telegram. Every light, not
+    the one chosen for the sky, so only when the person has said that is
+    welcome (19 October 2026: "im the only one in the house tonight so you
+    can flash all the lights"). Each part is done if it is set up; one
+    failing does not stop the others."""
+    s = settings()
+    if dry_run or config.DEMO:
+        say_it(f"Would pulse every light, say \"{words}\" on {s.get('speaker', 'no speaker chosen')} "
+               "and send it by Telegram.")
+        return
+    done, threads = [], []
+    try:
+        bridge = bridge or Bridge(s.get("hue_address"), s.get("hue_key"))
+        for light in bridge.lights():
+            def lit(light=light):
+                try:
+                    done.append(colour_light(bridge, light, "Red", s["brightness"], s["seconds"], s["restore"]))
+                except AlertError as error:
+                    done.append(f"light: {error}")
+            threads.append(threading.Thread(target=lit))
+            threads[-1].start()
+    except AlertError as error:
+        done.append(f"lights: {error}")
+    if s.get("speaker"):
+        try:
+            done.append((speak or announce)(words, s["speaker"], s.get("speaker_address"), s.get("volume")))
+        except AlertError as error:
+            done.append(f"speaker: {error}")
+    if send is None:
+        import notify
+        send = notify.send
+    try:
+        send(words)
+        done.append("sent by Telegram")
+    except Exception as error:      # a help, never a step anything waits on
+        done.append(f"Telegram: {error}")
+    for thread in threads:
+        thread.join()
+    for line in done:
+        say_it(line)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("command", choices=["watch", "check", "test", "say", "pair", "lights", "speakers"])
-    ap.add_argument("what", nargs="?", help="for test: cloud, clouded, rain or clear; for say: the words")
+    ap.add_argument("command", choices=["watch", "check", "test", "say", "call", "pair", "lights", "speakers"])
+    ap.add_argument("what", nargs="?", help="for test: cloud, clouded, rain or clear; for say and call: the words")
     ap.add_argument("--address", help="for pair: the bridge's address, if it is not found by itself")
     ap.add_argument("--dry-run", action="store_true", help="say what would be done; no light, no speaker")
     args = ap.parse_args(argv)
@@ -514,6 +561,10 @@ def main(argv=None):
                 raise AlertError("No speaker is chosen: see docs/alerts.md")
             print(f"Would say \"{args.what}\" on {s['speaker']}." if args.dry_run
                   else announce(args.what, s["speaker"], s.get("speaker_address"), s.get("volume")))
+        elif args.command == "call":
+            if not args.what:
+                ap.error("call needs the words")
+            call(args.what, args.dry_run)
         elif args.command == "test":
             if args.what not in EVENTS:
                 ap.error("test needs one of: " + ", ".join(EVENTS))

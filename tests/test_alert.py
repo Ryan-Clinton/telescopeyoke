@@ -102,3 +102,41 @@ def test_a_dry_run_says_what_it_would_do_and_does_nothing(monkeypatch):
     said = []
     alert.tell("rain", dry_run=True, say_it=said.append)
     assert said == ['Would turn Lamp blue and say "Rain is on the way. Cover the telescope." on Kitchen.']
+
+
+def test_a_call_pulses_every_light_speaks_and_sends(monkeypatch):
+    """19 October 2026: alone in the house, the person asked for every light
+    and the speaker as well as Telegram when the telescope needs them."""
+    monkeypatch.setattr(alert, "settings", lambda: {**alert.DEFAULTS, "speaker": "Kitchen", "seconds": 0})
+
+    class Lights:
+        def __init__(self):
+            self.state = {"a1": lamp(), "b2": {**lamp(colour=False), "id": "b2"}}
+            self.puts = []
+
+        def lights(self):
+            return list(self.state.values())
+
+        def light(self, light_id):
+            return self.state[light_id]
+
+        def put(self, light_id, body):
+            self.puts.append((light_id, body))
+            self.state[light_id] = {**self.state[light_id], **{k: v for k, v in body.items() if k != "alert"}}
+
+    bridge, spoken, sent, said = Lights(), [], [], []
+    alert.call("Come out to the telescope.", bridge=bridge, speak=lambda words, *a: spoken.append(words) or "spoke",
+               send=sent.append, say_it=said.append)
+    assert {light for light, _ in bridge.puts} == {"a1", "b2"}           # every light, each put back after
+    assert spoken == sent == ["Come out to the telescope."] and "sent by Telegram" in said
+
+
+def test_a_call_whose_telegram_fails_still_lights_and_speaks(monkeypatch):
+    monkeypatch.setattr(alert, "settings", lambda: {**alert.DEFAULTS, "speaker": "Kitchen", "seconds": 0})
+    spoken, said = [], []
+
+    def broken(words):
+        raise OSError("no network")
+    alert.call("Hello.", bridge=type("B", (), {"lights": lambda self: []})(), speak=lambda w, *a: spoken.append(w) or "ok",
+               send=broken, say_it=said.append)
+    assert spoken == ["Hello."] and any("Telegram: no network" in line for line in said)

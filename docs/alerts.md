@@ -71,3 +71,12 @@ Green, Red, Orange, Yellow, Blue, Purple, Pink, Cyan.
   nobody could guess, for the seconds it takes to play.
 - `--dry-run` on any command says what would be done and touches nothing.
 - Not yet proven on a real light or speaker.
+
+## Calling the person
+
+`./alert.py call "words"` gets the person's attention when the telescope
+needs their hands or eyes: every light on the bridge pulses (red where it
+can), the speaker says the words, and they go to the phone by Telegram.
+Every light, not only the one chosen for the sky, so it is used only when
+the person has said so for that night (19 October 2026: alone in the
+house, they asked for it).
