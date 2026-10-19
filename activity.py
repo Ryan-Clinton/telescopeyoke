@@ -127,7 +127,8 @@ def now(clock=time.time, alive=_alive):
 
 def during(what, detail=""):
     """A function that says what it is doing while it runs: `detail` is
-    filled in from its arguments ("to {name}" with name="M31")."""
+    filled in from its arguments ("to {name}" with name="M31"), or is a
+    function given them all."""
     def wrap(function):
         signature = inspect.signature(function)
 
@@ -136,7 +137,7 @@ def during(what, detail=""):
             try:
                 bound = signature.bind(*args, **kwargs)
                 bound.apply_defaults()
-                words = detail.format(**bound.arguments)
+                words = detail(bound.arguments) if callable(detail) else detail.format(**bound.arguments)
             except Exception:
                 words = ""
             with doing(what, words):

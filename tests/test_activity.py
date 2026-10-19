@@ -81,3 +81,20 @@ def test_threads_writing_at_once_never_raise():
     [t.start() for t in threads]
     [t.join() for t in threads]
     assert errors == [] and activity.now() == []
+
+
+def test_words_can_be_made_from_the_arguments_by_a_function():
+    seen = []
+
+    @activity.during("Quality pass", lambda a: f"{a['session'].split('/')[-2]}: restacking")
+    def run(session, keep=0.85):
+        seen.append(activity.now()[0]["words"])
+    run("frames/M31-P5/20261020-003500")
+    assert seen == ["Quality pass: M31-P5: restacking"]
+
+
+def test_the_quality_pass_and_the_search_say_what_they_are_doing():
+    import patrol
+    import restack
+    assert restack.run.__wrapped__ and patrol.analyse.__wrapped__
+    assert restack._field(["frames/M31-P5/a", "frames/M31-P5/b"]) == "M31-P5"

@@ -313,13 +313,8 @@ PAGE = Template(r"""<!doctype html>
 <div class="conditions">$conditions</div>
 
 <div id="doing" class="panel" hidden style="margin-top:16px">
-  <h2>Now</h2>
+  <h2>Doing now</h2>
   <div id="doing-lines"></div>
-</div>
-
-<div id="schedule-section" hidden>
-  <h2>Tonight's schedule</h2>
-  <div id="schedule" class="panel"></div>
 </div>
 
 <div id="moving" class="panel" hidden style="margin-top:16px">
@@ -352,6 +347,11 @@ PAGE = Template(r"""<!doctype html>
   </div>
 </div>
 
+<div id="schedule-section" hidden>
+  <h2>Tonight's schedule</h2>
+  <div id="schedule" class="panel"></div>
+</div>
+
 <div id="discovery" hidden>
   <h2>Tonight's discovery</h2>
   <div class="panel">
@@ -364,6 +364,7 @@ PAGE = Template(r"""<!doctype html>
 <div id="pictures" hidden>
   <h2>Pictures</h2>
   <div class="gallery" id="gallery"></div>
+  <p><a id="all-pictures" href="pictures.html">All pictures</a></p>
 </div>
 
 $best
@@ -496,7 +497,10 @@ atlas. Comets: COBS and JPL Horizons. Cloud imagery: EUMETSAT. Catalogue: OpenNG
     const key = JSON.stringify(pictures.map(p => [p.file, Math.round(p.time)]));
     if (!pictures.length || key === shownPictures) return;
     shownPictures = key;
-    $$("gallery").replaceChildren(...pictures.map(p => {
+    // The newest few here; every one on pictures.html, which grew too long
+    // for this page (20 October 2026).
+    $$("all-pictures").textContent = `All $${pictures.length} pictures →`;
+    $$("gallery").replaceChildren(...pictures.slice(0, 4).map(p => {
       const link = make("a");
       link.href = p.file;
       link.target = "_blank";
@@ -552,7 +556,7 @@ atlas. Comets: COBS and JPL Horizons. Cloud imagery: EUMETSAT. Catalogue: OpenNG
     $$("discovery-more").textContent = more.join(" · ");
   }
 
-  function ago(seconds) {
+  function lasted(seconds) {
     return seconds < 90 ? `$${seconds} s` : `$${Math.round(seconds / 60)} min`;
   }
 
@@ -562,7 +566,7 @@ atlas. Comets: COBS and JPL Horizons. Cloud imagery: EUMETSAT. Catalogue: OpenNG
     lines = lines || [];
     $$("doing").hidden = !lines.length;
     $$("doing-lines").innerHTML = lines.map((d, i) =>
-      `<div class="$${i ? "inner" : ""}">$${esc(d.words)} <span class="dim">· $${ago(d.for_s)}</span></div>`).join("");
+      `<div class="$${i ? "inner" : ""}">$${esc(d.words)} <span class="dim">· $${lasted(d.for_s)}</span></div>`).join("");
   }
 
   // Tonight's schedule: each step's expected start and finish, its state,
@@ -635,7 +639,52 @@ def render(rep, top, out_dir):
         clouds=clouds, scope=scope)
 
 
+PICTURES_PAGE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>telescopeyoke · pictures</title>
+STYLE
+</head><body><main>
+<header><h1>telescopeyoke <span>— pictures</span></h1>
+  <div class="dim"><a href="./">← back to the night</a> · <span id="count"></span></div></header>
+<div class="gallery" id="gallery" style="margin-top:16px"></div>
+</main>
+<script>
+  const make = (tag, text) => { const e = document.createElement(tag); if (text) e.textContent = text; return e; };
+  let shown = "";
+  async function refresh() {
+    let status;
+    try { status = await (await fetch("status.json?t=" + Date.now())).json(); } catch (error) { return; }
+    const pictures = status.pictures || [];
+    const key = JSON.stringify(pictures.map(p => [p.file, Math.round(p.time)]));
+    if (key === shown) return;
+    shown = key;
+    document.getElementById("count").textContent = pictures.length + " pictures, newest first";
+    document.getElementById("gallery").replaceChildren(...pictures.map(p => {
+      const link = make("a");
+      link.href = p.file;
+      link.target = "_blank";
+      const thumb = make("img");
+      thumb.src = p.file + "?t=" + Math.round(p.time);
+      thumb.loading = "lazy";
+      thumb.alt = (p.target + " " + p.kind).trim();
+      const when = new Date(p.time * 1000).toLocaleString([], {day: "numeric", month: "short", hour: "2-digit", minute: "2-digit"});
+      link.append(thumb, p.target || "Comparison", make("span", p.kind + " · " + when));
+      return link;
+    }));
+  }
+  refresh();
+  setInterval(refresh, 5000);
+</script></body></html>
+"""
+
+
 def write(rep, top, path):
+    """The status page at `path`, and beside it pictures.html with every
+    picture: the same look, from the same live list."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(render(rep, top, path.parent), encoding="utf-8")
+    html = render(rep, top, path.parent)
+    path.write_text(html, encoding="utf-8")
+    style = html[html.index("<style>"):html.index("</style>") + len("</style>")]
+    (path.parent / "pictures.html").write_text(PICTURES_PAGE.replace("STYLE", style), encoding="utf-8")

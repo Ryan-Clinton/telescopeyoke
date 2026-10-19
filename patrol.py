@@ -186,6 +186,8 @@ def newest_session(target, after):
     return sessions[-1] if sessions else None
 
 
+@activity.during("Searching", lambda a: f"{Path(a['session']).parent.name}: depth, the difference against the "
+                                       "reference, and vetting what is left")
 def analyse(session, say=print, chain=None, both_halves=True, alerting=True):
     """Depth, difference and vetting on a session, and the answer. `chain`
     replaces the three steps (for the tests)."""

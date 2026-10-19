@@ -109,8 +109,9 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run):
     for i, step in enumerate(plan["steps"]):
         if step["status"] == "running" and step.get("pid"):
             say(f"waiting for {step['label']} (process {step['pid']})")
-            while alive(step["pid"]):
-                sleep(20)
+            with activity.doing("Schedule", f"waiting for {step['label']} to finish, imaging and its search"):
+                while alive(step["pid"]):
+                    sleep(20)
             mark(i, status="done", finished=time.time())
             continue
         if step["status"] != "queued":

@@ -40,6 +40,7 @@ import json
 import time
 from pathlib import Path
 
+import activity
 import config
 
 import numpy as np
@@ -87,6 +88,13 @@ def select(frames, keep=0.85):
     return passed[:max(1, round(len(passed) * keep))]
 
 
+def _field(session):
+    """The field a session or sessions are of, for saying what is happening."""
+    first = session[0] if isinstance(session, (list, tuple)) else session
+    return Path(first).parent.name
+
+
+@activity.during("Quality pass", lambda a: f"{_field(a['session'])}: restacking every frame, keeping the best")
 def run(session, keep=0.85, say=print, workers=None, profile=False, discovery=False):
     """Stack one session, or a list of sessions into one picture."""
     sessions = [Path(s) for s in session] if isinstance(session, (list, tuple)) else [Path(session)]
