@@ -55,6 +55,9 @@ Things worth knowing:
   rotated or refitted. This camera cannot report its temperature, so with a
   bias and a dark at the same gain the dark is scaled to each frame's own hot
   pixels instead of being matched by temperature.
+- **One run at a time.** A run holds the mount and camera (a lock in
+  `cache/imaging.lock`, released however the run ends); a second run
+  refuses to start until the first finishes or is stopped (`./ty run stop`).
 - **A rejected frame is taken again.** With `--frames N`, each frame thrown
   out (cloud, a knock, a light) is replaced by one more, up to a quarter
   more than asked, so a run ends with as many good frames as it can. After

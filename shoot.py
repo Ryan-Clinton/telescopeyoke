@@ -32,6 +32,7 @@ which needs serial access:
 import argparse
 import json
 import math
+import os
 import random
 import subprocess
 import sys
@@ -504,7 +505,41 @@ def plan(args):
     return out
 
 
+RUN_LOCK = config.DATA / "cache" / "imaging.lock"
+
+
+def hold_the_rig(name, path=None):
+    """The mount and camera for this run alone: an open file locked for as
+    long as the run lives (the lock goes with the process, however it ends).
+    A second run refuses to start rather than share them: on 18 October 2026
+    a patrol's second look at M33 started while M34 was imaging, and its
+    GoTo swung the tube over the pole in the middle of M34's frames."""
+    path = Path(path or RUN_LOCK)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle = open(path, "a+", encoding="utf-8")
+    try:
+        if os.name == "nt":
+            import msvcrt
+            handle.seek(0)
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        handle.seek(0)
+        holder = handle.read().strip() or "another run"
+        handle.close()
+        raise interface.Refusal("INVALID_REQUEST", f"Another imaging run has the mount and camera ({holder}); "
+                                "it must finish or be stopped (./ty run stop) first.")
+    handle.seek(0)
+    handle.truncate()
+    handle.write(f"{name}, process {os.getpid()}, since {time.strftime('%H:%M:%S')}")
+    handle.flush()
+    return handle
+
+
 def run(args):
+    _rig = hold_the_rig(args.name)     # kept open, so locked, for the whole run
     moving = not args.no_recentre
     if moving:
         moving = recentre(args.name)

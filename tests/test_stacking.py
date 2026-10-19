@@ -686,3 +686,16 @@ def test_a_rejected_frame_is_retaken_but_not_into_cloud():
     assert shoot.retakes([good, bad, good, bad, good, bad, good, bad, good, bad, good, bad, good], 19) == 4
     assert shoot.retakes([good, bad, good, bad, good], 4) == 2      # at least two, small runs too
     assert shoot.retakes([good, good, bad, bad, bad], 19) == 0      # three in a row: cloud, stop
+
+
+def test_a_second_imaging_run_refuses_while_one_holds_the_rig(tmp_path):
+    """18 October 2026: a patrol's second look at M33 started while M34 was
+    imaging, and its GoTo swung the tube over the pole mid-run."""
+    import pytest
+    import interface
+    lock = tmp_path / "imaging.lock"
+    first = shoot.hold_the_rig("M34", lock)
+    with pytest.raises(interface.Refusal, match="M34"):
+        shoot.hold_the_rig("M33", lock)
+    first.close()                                   # the first run ends
+    shoot.hold_the_rig("M33", lock).close()         # and the next may start
