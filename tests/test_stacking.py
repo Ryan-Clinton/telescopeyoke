@@ -650,7 +650,8 @@ def test_the_live_picture_never_holds_up_the_next_frame(session, monkeypatch):
     run, _ = session
     started, release = threading.Event(), threading.Event()
 
-    def slow(stacked, count, name, exposure, web):
+    def slow(stacked, count, name, exposure, web, finish=True):
+        assert not finish                      # during a run the picture is only brightened
         started.set()
         release.wait(5)
         return 1.0

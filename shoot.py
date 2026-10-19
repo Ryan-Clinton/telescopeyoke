@@ -168,7 +168,7 @@ class Session:
             if getattr(self, "drawer", None) is None:
                 from concurrent.futures import ProcessPoolExecutor
                 self.drawer = ProcessPoolExecutor(max_workers=1, initializer=lowly)
-            self.drawing = self.drawer.submit(draw_stack, stacked, count, self.name, self.exposure, WEB)
+            self.drawing = self.drawer.submit(draw_stack, stacked, count, self.name, self.exposure, WEB, False)
 
     def picture(self, stacked=None, count=None):
         """The stack so far as a picture to show (finished_picture)."""
@@ -212,10 +212,14 @@ def finished_picture(stacked, count, name):
     return stretch(stacked), 0.0
 
 
-def draw_stack(stacked, count, name, exposure, web):
+def draw_stack(stacked, count, name, exposure, web, finish=True):
     """The live stack as the page's picture. Returns the seconds finishing
-    took, so the page is updated less often when it is slow."""
-    shown, spent = finished_picture(stacked, count, name)
+    took, so the page is updated less often when it is slow. Without
+    `finish` it is only brightened: during a run the finishing loads every
+    core for half a minute and starves the camera's download even from
+    another process (18 October 2026: 93 s between 32 s frames), so it is
+    kept for the picture at the end."""
+    shown, spent = finished_picture(stacked, count if finish else 0, name)
     image = Image.fromarray(shown)
     web.mkdir(exist_ok=True)
     # The stack has its own picture; web/latest.jpg stays the newest
