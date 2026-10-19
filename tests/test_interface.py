@@ -102,7 +102,7 @@ def test_a_dry_run_describes_the_move_and_touches_no_hardware(quiet, monkeypatch
     monkeypatch.setattr(mount, "Mount", lambda *a, **k: pytest.fail("a dry run opened the mount"))
     plan = mount.plan_goto("M27", SITE)
     jsonschema.validate(json.loads(json.dumps(plan)), schema("goto-plan"))
-    assert plan["pier_side"] == "west" and plan["warnings"] == ["The tube will swing over the pole."]
+    assert plan["pier_side"] == "west" and plan["warnings"] == ["The tube goes to the west side: it swings over the pole if it is on the east side now."]
     sky(monkeypatch, -30.0, 55.0)
     assert mount.plan_goto("M27", SITE)["warnings"] == []
 

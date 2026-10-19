@@ -395,7 +395,8 @@ Never the browser's own `confirm()` box. A card in the middle of the page:
 │  ✓ Above the 20° altitude limit                      │
 │  ✓ Within 5.75 h of the meridian                     │
 │  ✓ 94° from the Sun                                  │
-│  ⚠ The tube will swing over the pole.                │
+│  ⚠ The tube goes to the west side (a swing over the  │
+│    pole if it is on the east side now).              │
 │                                                      │
 │              [ Cancel ]        [ GO TO M27 ]         │
 └──────────────────────────────────────────────────────┘

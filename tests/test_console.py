@@ -383,7 +383,7 @@ def test_a_plan_expires(desk, monkeypatch):
 
 def test_confirm_makes_the_plan_again(desk, monkeypatch):
     seen = {"would_move": True, "safe": True, "altitude_deg": 48.0, "hour_angle_hours": 2.0,
-            "pier_side": "west", "target": "M27", "warnings": ["The tube will swing over the pole."]}
+            "pier_side": "west", "target": "M27", "warnings": ["The tube goes to the west side: it swings over the pole if it is on the east side now."]}
     answers = [dict(seen), dict(seen, altitude_deg=48.4, hour_angle_hours=2.03)]
     monkeypatch.setattr(desk.jobs, "dry_run", lambda action, params: answers.pop(0))
     started = []

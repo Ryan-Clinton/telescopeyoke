@@ -868,7 +868,10 @@ def _plan(hour_angle, dec, altitude, label):
                       f"{label} is {abs(hour_angle) / 15:.1f} h from the meridian, beyond the "
                       f"{MAX_HOUR_ANGLE} h limit; not slewing.")
     west = hour_angle > 0
-    warnings = ["The tube will swing over the pole."] if west else []
+    # From the plan alone the side the mount is on now is not known: a west
+    # target is a swing over the pole only from the east side (18 October
+    # 2026: the warning stopped a short move on the west side).
+    warnings = ["The tube goes to the west side: it swings over the pole if it is on the east side now."] if west else []
     # The handset chooses the side by its own clock and pointing, which can be
     # a couple of degrees from the truth: on 13 October 2026 a target 0.14 h
     # east of the meridian was reached with the tube swung over the pole.
@@ -880,7 +883,7 @@ def _plan(hour_angle, dec, altitude, label):
         "altitude_deg": round(float(altitude), 1), "dec_deg": round(float(dec), 2),
         "hour_angle_hours": round(float(hour_angle) / 15, 3),
         "pier_side": "west" if west else "east",
-        "side_note": "west: the tube will swing over the pole" if west else "east",
+        "side_note": "west: a swing over the pole if it is on the east side now" if west else "east",
         "warnings": warnings,
     }
 

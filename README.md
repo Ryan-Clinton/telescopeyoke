@@ -161,7 +161,7 @@ sky, worked out where it really was, and corrected itself:
 
 ```
 $ ./mount.py goto M27 --solve
-M27 Dumbbell Nebula: altitude 57°, hour angle +0.36 h (west: the tube will swing over the pole)
+M27 Dumbbell Nebula: altitude 57°, hour angle +0.36 h (west: a swing over the pole if it is on the east side now)
   off by -107.0' in hour angle, +94.4' in Dec
   off by -6.2' in hour angle, -11.4' in Dec
   off by +1.0' in hour angle, -1.8' in Dec

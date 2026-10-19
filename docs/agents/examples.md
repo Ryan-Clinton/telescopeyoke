@@ -15,7 +15,8 @@
 **"Point at M27."**
 1. `ty mount goto M27 --dry-run --json`.
 2. Report the altitude, side of the mount and any warning (for example "the
-   tube will swing over the pole").
+   tube goes to the west side: it swings over the pole if it is on the east
+   side now").
 3. If the person has asked for the move, run `ty mount goto M27 --solve`.
    If they only asked whether it is possible, stop at step 2.
 4. Afterwards `ty mount status --json` to confirm it is tracking.
