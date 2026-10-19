@@ -146,6 +146,38 @@ The Nano is found by its USB chip's name (`1a86`, the CH340), or by
 Its orders are lines beginning with a colon, so bytes meant for a mount's
 handset that reach it by mistake move nothing.
 
+## Checking the motor on the bench
+
+How far the motor really turns, how much slack its gears have, and how
+closely it comes back to a place can be measured with no stars, off a
+camera looking down on the shaft:
+
+    ./focuser.py bench --watch http://PHONE:4747/video     a phone running DroidCam
+    ./focuser.py bench --watch /dev/video2                 a webcam
+    ./focuser.py angle --pictures a.jpg b.jpg              the stick's angle in pictures already taken
+
+On the shaft, a printed protractor cut out round the motor and a thin stick
+(a cocktail stick) across its middle, turning with the shaft. The camera
+looks straight down from a few centimetres, held still, with the
+protractor filling a good part of the picture. The stick is found by its
+colour against the paper, and its angle fitted along its whole length, to
+a fraction of a degree. It is measured against the picture's own rows, so
+a phone that switches lens by itself, which a Pixel does up close
+(19 October 2026), shifts and zooms the picture without spoiling it; a
+camera that turns would. Each answer is kept in
+`cache/focuser-bench-DATE.json`, its pictures in `cache/focuser-bench/`,
+each with a marked copy showing what was found.
+
+A phone left with no viewer locks and stops sending, and the first frames
+of a new connection come before its focus settles, so the run holds one
+connection open for its whole length. The free DroidCam takes one viewer
+at a time.
+
+Off the telescope the gearbox has nothing to push against, so the slack
+it shows is the gearbox's alone; on the focuser, under the drawtube's
+load, the coupler and the focuser add theirs. The degrees a half-step is
+and how closely it comes back carry over.
+
 ## Temperature (planned, not built)
 
 The Hypercam 183C has no thermometer, and the cold, damp night of 17 October

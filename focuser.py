@@ -5,6 +5,9 @@
     ./focuser.py test          a quarter turn one way, then back
     ./focuser.py move 200      that many half-steps (4096 to a turn): plus takes the
                                drawtube out on the 150P, minus brings it in
+    ./focuser.py bench --watch http://PHONE:4747/video
+                               the step, the slack and how it comes back, off a
+                               camera watching a stick on the shaft; no stars
 
 Building and wiring it: docs/focuser.md. `./focus.py --motor` uses it to
 bring the stars to focus with nobody touching the telescope.
@@ -79,6 +82,276 @@ class Focuser:
         self.link.close()
 
 
+def find_pointer(picture, marked=None):
+    """The protractor and the stick laid across the motor's shaft, in a
+    picture looking down on them (docs/focuser.md, "Checking the motor on
+    the bench"): {"angle", "centre", "radius", "stick_pixels"}, or None if
+    either is missing. The protractor is the largest white patch that is
+    round, so a pale floor or a wall is passed over; the stick is the
+    warm-coloured line inside it, wood against white paper and blue print.
+    Its angle, 0 to 180 degrees, is the long axis of those pixels fitted
+    along the stick's whole length, to about a fifth of a degree in one picture.
+    It is measured against the picture's own rows: a phone that switches
+    lens shifts and scales the picture but does not turn it. With `marked`,
+    a copy of the picture is saved there with the protractor ringed and
+    the stick's line drawn, to see what was found."""
+    import numpy as np
+    from PIL import Image, ImageDraw
+    from scipy import ndimage
+    image = Image.open(picture).convert("RGB")
+    rgb = np.asarray(image, dtype=np.float32)
+    r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+    grey = (r + g + b) / 3
+    bright = ndimage.binary_opening(grey > np.percentile(grey, 60) + 20, iterations=2)
+    bright = ndimage.binary_fill_holes(bright)
+    patches, count = ndimage.label(bright)
+    paper, best = None, 0
+    for i, box in enumerate(ndimage.find_objects(patches), start=1):
+        h, w = box[0].stop - box[0].start, box[1].stop - box[1].start
+        area = float((patches[box] == i).sum())
+        # A disc fills pi/4 of its square box; a floor or a strip of wall does not.
+        if area > best and area > 0.005 * patches.size and 0.75 < h / w < 1.33 \
+                and 0.65 < area / (h * w) < 0.9:
+            paper, best = (patches == i), area
+    if paper is None:
+        return None
+    ys, xs = np.nonzero(paper)
+    cy, cx, radius = ys.mean(), xs.mean(), np.sqrt(paper.sum() / np.pi)
+    yy, xx = np.indices(paper.shape)
+    inside = np.hypot(yy - cy, xx - cx) < 0.95 * radius
+    # The stick is blacked with a marker: pale wood was too like the paper
+    # and the protractor's shaded wedges to be told apart by its colour
+    # (19 October 2026: a run read a stick at 34° as -15°). How much darker
+    # than the paper each pixel is, within the paper.
+    paper_level = float(np.median(grey[inside]))
+    dark = np.where(inside, np.clip(paper_level - ndimage.uniform_filter(grey, 3), 0, None), 0)
+    # Not the printed scale: its lines are blue, and far thinner than the
+    # stick, so an opening wider than they are clears them.
+    bar = ndimage.binary_opening((dark > 0.35 * paper_level) & (b < r + 15), iterations=2)
+    dark = np.where(bar, dark, 0)
+    # A bar through the middle: each direction through the centre is scored
+    # by the darkness along its whole length, leaving out the hub, so a
+    # printed tick or a shadow at the edge cannot win.
+    reach = np.linspace(0.3, 0.88, 60) * radius
+    best, best_score = 0.0, -1.0
+    for trial in np.arange(0.0, 180.0, 0.5):
+        t = np.radians(trial)
+        px = np.clip(np.round(cx + np.concatenate([reach, -reach]) * np.cos(t)).astype(int), 0, r.shape[1] - 1)
+        py = np.clip(np.round(cy + np.concatenate([reach, -reach]) * np.sin(t)).astype(int), 0, r.shape[0] - 1)
+        score = float(np.mean(dark[py, px]))
+        if score > best_score:
+            best, best_score = trial, score
+    # Then the line itself: the middle of the bar found across it at many
+    # points along it, away from the hub, and a straight line fitted through
+    # those middles, leaving out any a crossing printed line has pulled
+    # aside. Every pixel of the bar's width and length counts, so a fraction
+    # of a degree shows.
+    t = np.radians(best)
+    along, aside = np.array([np.cos(t), np.sin(t)]), np.array([-np.sin(t), np.cos(t)])
+    width = np.linspace(-0.07, 0.07, 29) * radius
+    points = []
+    for d in np.concatenate([np.linspace(0.32, 0.86, 40), -np.linspace(0.32, 0.86, 40)]) * radius:
+        xs_ = cx + d * along[0] + width * aside[0]
+        ys_ = cy + d * along[1] + width * aside[1]
+        profile = ndimage.map_coordinates(dark, [ys_, xs_], order=1)
+        peak = int(np.argmax(profile))
+        if profile[peak] < 0.35 * paper_level:                  # no bar here
+            continue
+        # Only the bar's own core: the run darker than half its peak, up to
+        # the first gap, so a printed line lying alongside adds nothing.
+        lo = hi = peak
+        while lo > 0 and profile[lo - 1] > profile[peak] / 2:
+            lo -= 1
+        while hi < len(profile) - 1 and profile[hi + 1] > profile[peak] / 2:
+            hi += 1
+        core = profile[lo:hi + 1] - profile[peak] / 2
+        points.append((d, float((core * width[lo:hi + 1]).sum() / core.sum()), hi - lo + 1))
+    if len(points) < 12:
+        return None
+    d, off, wide = np.array(points).T
+    # Where a printed line touches the bar their cores merge, and the bar
+    # looks wider there than anywhere else: those places are left out.
+    keep = wide <= np.median(wide) + 1
+    for _ in range(3):
+        slope, icept = np.polyfit(d[keep], off[keep], 1)
+        resid = off - (slope * d + icept)
+        spread = 1.4826 * np.median(np.abs(resid[keep])) + 0.05
+        keep = (np.abs(resid) < 3 * spread) & (wide <= np.median(wide) + 1)
+    angle = float((best + np.degrees(np.arctan(slope))) % 180)
+    xs = cx + d[keep] * along[0] + (slope * d[keep] + icept) * aside[0]
+    ys = cy + d[keep] * along[1] + (slope * d[keep] + icept) * aside[1]
+    x, y = np.cos(np.radians(angle)), np.sin(np.radians(angle))
+    weight = np.ones(len(xs))
+    if marked:
+        d = ImageDraw.Draw(image)
+        d.ellipse([cx - radius, cy - radius, cx + radius, cy + radius], outline=(0, 255, 0), width=3)
+        mx, my = np.average(xs, weights=weight), np.average(ys, weights=weight)
+        d.line([mx - radius * x, my - radius * y, mx + radius * x, my + radius * y], fill=(255, 0, 255), width=2)
+        image.save(marked)
+    return {"angle": angle, "centre": [round(float(cx), 1), round(float(cy), 1)],
+            "radius": round(float(radius), 1), "stick_pixels": int(len(xs))}
+
+
+def pointer_angle(picture):
+    """The stick's angle in a picture (find_pointer), or None."""
+    found = find_pointer(picture)
+    return None if found is None else found["angle"]
+
+
+def turned(before, after):
+    """How far the stick turned between two angles, -90 to 90 degrees: a
+    stick looks the same half a turn round, so each move between pictures
+    must be less than a quarter turn."""
+    return (after - before + 90) % 180 - 90
+
+
+class Watcher:
+    """The latest picture from a camera looking down on the motor: a phone
+    running DroidCam (its http:// address), a webcam (/dev/video...), or a
+    picture file something else keeps up to date. One connection is held
+    open for the whole run and the newest frame kept: a phone left without
+    a viewer locks its screen and stops sending, and the first frames of a
+    fresh connection come before its focus has settled (19 October 2026)."""
+
+    def __init__(self, source, folder):
+        self.source, self.process = str(source), None
+        self.latest = Path(folder) / "latest.jpg"
+        if self.source.startswith(("http://", "https://", "/dev/")):
+            grab = (["-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "2"]
+                    if self.source.startswith("http") else ["-f", "v4l2"])
+            self.process = subprocess.Popen(
+                ["ffmpeg", "-loglevel", "error", "-y", *grab, "-i", self.source, "-vf", "fps=4",
+                 "-update", "1", "-q:v", "2", str(self.latest)],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            self.latest = Path(self.source)
+
+    def picture(self, into, wait=20):
+        """A copy of the newest frame made after this call, saved at `into`."""
+        asked = time.time()
+        until = time.monotonic() + wait
+        while time.monotonic() < until:
+            try:
+                if self.latest.stat().st_mtime > asked:
+                    time.sleep(0.1)                  # let the file finish being written
+                    shutil.copyfile(self.latest, into)
+                    return into
+            except OSError:
+                pass
+            time.sleep(0.1)
+        raise RuntimeError(f"no new picture from {self.source} in {wait} s: is the camera on?")
+
+    def close(self):
+        if self.process:
+            self.process.terminate()
+            self.process.wait(5)
+
+
+def bench(focuser, picture, settle=1.5, looks=3, say=print, sleep=time.sleep):
+    """How the motor really turns, measured off a stick on its shaft against
+    a printed protractor, with no stars: docs/focuser.md, "Checking the
+    motor on the bench". `picture()` gives a path to a fresh picture.
+
+    Each place is the median of `looks` pictures, and their spread is the
+    measuring noise. Moves are kept under a quarter turn, as a stick looks
+    the same half a turn round. In order: the slack taken up; four moves
+    of 512 half-steps (an eighth of a turn) for the degrees a half-step
+    really is; smaller moves of 64, 16 and 4 in the same direction; then
+    the direction reversed 8 half-steps at a time, each way, until the
+    stick moves, for the slack; and three trips of 256 out and back, for
+    how closely it comes back to the same place."""
+    import numpy as np
+    rows, spreads = [], []
+
+    def where(label, steps=0):
+        if steps:
+            focuser.move(steps)
+        sleep(settle)
+        angles = []
+        for _ in range(looks):
+            angle = pointer_angle(picture())
+            if angle is not None:
+                angles.append(angle)
+            sleep(0.3)
+        if not angles:
+            raise RuntimeError("the stick could not be found in the pictures: check the camera's view")
+        # Unwrapped round the first, so a stick near 0 or 180 averages right.
+        middle = angles[0] + float(np.median([turned(angles[0], a) for a in angles]))
+        if len(angles) > 1:
+            spreads.append(float(np.ptp([turned(angles[0], a) for a in angles])))
+        rows.append({"label": label, "steps": steps, "angle": round(middle % 180, 3)})
+        return middle % 180
+
+    where("start")
+    start = where("slack taken up", 256)
+    big = [start]
+    for _ in range(4):
+        big.append(where("eighth turn", 512))
+    per_step = float(np.mean([turned(a, b) for a, b in zip(big, big[1:])])) / 512
+    say(f"512 half-steps turned {per_step * 512:.2f}° on average: {per_step:.4f}° a half-step, "
+        f"{abs(360 / per_step):.0f} to a turn (4096 on paper)")
+    small = []
+    last = big[-1]
+    for steps in (64, 64, 64, 16, 16, 16, 4, 4, 4):
+        now = where("small move", steps)
+        small.append({"steps": steps, "expected_deg": round(steps * per_step, 3),
+                      "measured_deg": round(turned(last, now), 3)})
+        last = now
+    noise = float(np.median(spreads)) if spreads else 0.0
+    slack = {}
+    for name, sign in (("reversing in", -1), ("reversing out", 1)):
+        before, pushed, moved_at = last, 0, []
+        while pushed < 400:
+            now = where(f"slack, {name}", 8 * sign)
+            pushed += 8
+            moved = abs(turned(before, now))
+            if moved > max(0.3, 4 * noise):
+                moved_at.append(pushed - moved / abs(per_step))
+                if len(moved_at) >= 3:
+                    break
+            last = now
+        slack[name] = round(float(np.median(moved_at)), 1) if moved_at else None
+        last = where(f"clear of the slack, {name}", 64 * sign)
+    say("slack: " + ", ".join(f"{k} {v if v is not None else 'over 400'} half-steps" for k, v in slack.items()))
+    homes = []
+    for _ in range(3):
+        where("out", 256)
+        homes.append(where("back", -256))
+    spread_back = float(np.ptp([turned(homes[0], h) for h in homes]))
+    say(f"back to the same place within {spread_back:.2f}° over three trips of 256 out and back; "
+        f"measuring noise {noise:.2f}°")
+    return {"degrees_per_half_step": round(per_step, 5), "half_steps_per_turn": round(abs(360 / per_step), 1),
+            "noise_deg": round(noise, 3), "small_moves": small, "slack_half_steps": slack,
+            "comes_back_within_deg": round(spread_back, 3), "places": rows}
+
+
+def run_bench(focuser, source):
+    """bench() with a camera, its pictures and its answer kept under
+    config.DATA/cache: the answer in focuser-bench-DATE.json, the pictures
+    in focuser-bench/ with each one's marked copy beside it."""
+    import json
+    stamp = time.strftime("%Y%m%d-%H%M")
+    folder = config.DATA / "cache" / "focuser-bench" / stamp
+    folder.mkdir(parents=True, exist_ok=True)
+    watcher = Watcher(source, folder)
+    count = 0
+
+    def picture():
+        nonlocal count
+        count += 1
+        return watcher.picture(folder / f"{count:03d}.jpg")
+    try:
+        answer = bench(focuser, picture)
+    finally:
+        watcher.close()
+        focuser.close()
+    answer["source"], answer["pictures"] = str(source), str(folder)
+    log = config.DATA / "cache" / f"focuser-bench-{stamp}.json"
+    log.write_text(json.dumps(answer, indent=1), encoding="utf-8")
+    print(f"kept in {log}")
+    return answer
+
+
 def flash(port=None):
     """Compile firmware/focuser and load it, trying each kind of Nano."""
     cli = shutil.which("arduino-cli") or shutil.which("arduino-cli", path=str(Path.home() / ".local" / "bin"))
@@ -100,16 +373,31 @@ def flash(port=None):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("command", choices=["flash", "test", "move"])
+    ap.add_argument("command", choices=["flash", "test", "move", "angle", "bench"])
     ap.add_argument("steps", nargs="?", type=int, help="for move: half-steps, minus for the other way")
+    ap.add_argument("--pictures", nargs="+", help="for angle: the stick's angle in each picture")
+    ap.add_argument("--watch", help="for bench: the camera looking down on the motor (a DroidCam "
+                                    "http:// address, a /dev/video device, or a picture file kept up to date)")
     ap.add_argument("--port", help="the Nano's serial port, if it is not found by name")
     args = ap.parse_args(argv)
 
     if args.command == "flash":
         return flash(args.port)
+    if args.command == "angle":
+        for picture in args.pictures or ap.error("angle needs --pictures"):
+            marked = Path(picture).with_name(Path(picture).stem + "-found.jpg")
+            found = find_pointer(picture, marked)
+            print(f"{picture}: " + ("no protractor or stick found" if found is None else
+                                    f"{found['angle']:.2f}°, protractor at {found['centre']} radius "
+                                    f"{found['radius']}, stick {found['stick_pixels']} pixels (see {marked.name})"))
+        return
     if args.command == "move" and not args.steps:
         ap.error("move needs a number of half-steps")
+    if args.command == "bench" and not args.watch:
+        ap.error("bench needs --watch, the camera looking down on the motor")
     focuser = Focuser.open(args.port)
+    if args.command == "bench":
+        return run_bench(focuser, args.watch)
     try:
         for steps in ([TURN // 4, -TURN // 4] if args.command == "test" else [args.steps]):
             focuser.move(steps)
