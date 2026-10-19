@@ -52,3 +52,11 @@ def test_a_cross_check_that_disagrees_gives_no_advice(monkeypatch, tmp_path):
 def test_a_cross_check_that_agrees_advises_on_the_middle(monkeypatch, tmp_path):
     _, second = measure_twice(monkeypatch, tmp_path, (2.4, 2.8), (2.0, 2.6))
     assert second["cross_check"]["agree"] and second["altitude_deg"] == 2.7
+
+
+def test_an_error_too_small_to_show_in_a_frame_is_left_alone():
+    """19 October 2026: half a degree on the hard-to-turn altitude bolts was
+    asked for, though it could not show in a 16 s frame."""
+    assert polaralign.shows(0.6, 16) == (1.0, False)
+    assert polaralign.shows(3.0, 16) == (4.8, True)
+    assert polaralign.shows(0.6, 120)[1]            # in a two-minute frame it would

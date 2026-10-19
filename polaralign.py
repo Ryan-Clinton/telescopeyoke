@@ -70,6 +70,15 @@ SIDES_FILE = config.DATA / "cache" / "polar_sides.json"
 # low with the tube one way, 4.8° east and 0.2° high the other) because the
 # handset was moving the Dec axis unseen; the axis was really about 3° out.
 CROSS_LIMIT = 1.0
+# How much an error on one axis shows: the stars drift about 0.1 pixel a
+# second for each degree (13 and 14 October 2026: 0.30 px/s at 3°, 0.07 at
+# 0.1°, the rest being other drift). A bolt turn is asked for only where the
+# drift over one frame would be more than a star's own size (HFR about 2);
+# the altitude bolts are hard to turn on this mount, and half a degree that
+# cannot show is not worth the struggle (19 October 2026).
+DRIFT_PX_PER_S_PER_DEG = 0.1
+SHOWS_PX = 2.0
+FRAME_S = 16.0           # the patrol's frames; --exposure for longer ones
 LEARN_WITHIN = 2 * 3600     # seconds: turns are matched to a measurement no older than this
 # How the two bolts of each pair are told apart, and what a positive number
 # of turns means. Both are named as seen standing behind the mount, on its
@@ -373,6 +382,13 @@ def guidance(azimuth, altitude, feet_apart_cm=None, cm_per_degree=None, degrees_
                      "each, so there is room to go either way."}
 
 
+def shows(error_deg, exposure=FRAME_S):
+    """How many pixels an error on one axis drifts the stars over one frame,
+    and whether that is more than a star's own size."""
+    pixels = DRIFT_PX_PER_S_PER_DEG * abs(error_deg) * exposure
+    return round(pixels, 1), pixels > SHOWS_PX
+
+
 def describe(azimuth, altitude):
     """The polar error in words, with what to do to the mount about it."""
     total = math.hypot(azimuth * math.cos(math.radians(55)), altitude)
@@ -395,6 +411,9 @@ def main():
                     help="the turns made since the last measurement, to learn what a turn does on this mount: "
                          "the azimuth pair then the altitude pair, positive for the left bolt and the rear bolt "
                          f"going in (clockwise), {VIEW}; 0 for a pair not touched")
+    ap.add_argument("--exposure", type=float, default=FRAME_S, metavar="S",
+                    help=f"the frames to be taken, seconds (default {FRAME_S:g}): an error is only worth a bolt "
+                         "turn if it would show in one of them")
     ap.add_argument("--cross-check", action="store_true",
                     help="compare with the last measurement from the other side of the meridian (in the last "
                          "two hours, bolts untouched since) and give no advice if the two disagree")
@@ -413,6 +432,7 @@ def run(args):
     if not LEAST <= step <= STEP:
         raise interface.Refusal("INVALID_REQUEST", f"--step is from {LEAST:.0f} to {STEP:.0f} degrees.")
     repeat = getattr(args, "repeat", 1)
+    exposure = getattr(args, "exposure", FRAME_S)
     if not 1 <= repeat <= MOST_REPEATS:
         raise interface.Refusal("INVALID_REQUEST", f"--repeat is from 2 to {MOST_REPEATS}.")
     if args.dry_run:
@@ -501,8 +521,15 @@ def run(args):
         else:
             print("Nothing learned from --turned: there is no measurement from the last two hours to compare with.")
     result["guidance"] = for_mount(azimuth, altitude, settings)
-    print("  " + result["guidance"]["azimuth"]["words"])
-    print("  " + result["guidance"]["altitude"]["words"])
+    for axis, error in (("azimuth", azimuth), ("altitude", altitude)):
+        pixels, worth = shows(error, exposure)
+        result["guidance"][axis].update(drift_px=pixels, worth_turning=worth)
+        if not worth:
+            name = "left-right" if axis == "azimuth" else "up-down"
+            result["guidance"][axis]["words"] = (
+                f"{name.capitalize()} {abs(error):.1f}°: drifts a {exposure:g} s frame about {pixels:g} px, "
+                f"under a star's own size ({SHOWS_PX:g}): leave it.")
+        print("  " + result["guidance"][axis]["words"])
     print(f"  (Left and right, rear and front: {VIEW}.)")
     kept = dict(result)
     kept.pop("guidance")

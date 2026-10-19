@@ -113,8 +113,12 @@ evenings), which also measures the pointing:
 
 Before the first measurement, they centre the two azimuth bolts. After each
 measurement, tell them which bolt, which way and how far, in its own words;
-once they have turned it, run it again with `--turned`, until under half a
-degree. A house or tree in the way of the third picture: a smaller `--step`.
+once they have turned it, run it again with `--turned`. It asks for a turn
+only where the error would drift the stars more than a star's own size in
+one frame (`--exposure`, 16 s by default): about 1.2° on either axis for
+16 s frames. Anything smaller it says to leave, and so does the agent: the
+altitude bolts are hard to turn, and the person will not touch them for
+half a degree that cannot show. A house or tree in the way of the third picture: a smaller `--step`.
 
 ## 6. GoTo and image
 
