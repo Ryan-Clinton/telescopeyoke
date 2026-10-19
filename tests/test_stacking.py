@@ -740,3 +740,16 @@ def test_a_stripe_that_changes_along_its_row_is_taken_out_too():
     out = stacking.destripe(frame)
     left, right = np.median(out[60:-60, :200], axis=1), np.median(out[60:-60, -200:], axis=1)
     assert left.std() < 0.4 and right.std() < 0.4                          # were about 1.5 each
+
+
+def test_destriping_keeps_a_galaxy_narrower_than_its_window():
+    """19 October 2026: with every pixel in each row's level, a galaxy 280
+    rows across lost 12% of its core and one 140 rows across 38%."""
+    rng = np.random.default_rng(14)
+    rows, cols = 1600, 1800
+    yy, xx = np.indices((rows, cols))
+    for across in (60, 120):
+        glow = 400 * np.exp(-(((xx - 900) / 300) ** 2 + ((yy - 800) / across) ** 2))
+        frame = 1000 + glow + rng.normal(0, 6, rows)[:, None] + rng.normal(0, 8, (rows, cols))
+        taken = (frame - stacking.destripe(frame))[780:820, 600:1200].mean()
+        assert taken < 0.06 * 400

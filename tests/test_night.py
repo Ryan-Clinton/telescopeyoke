@@ -175,11 +175,14 @@ def test_a_whole_night(night, monkeypatch, capsys):
     assert "Selected exposure: 2 s" in said               # 3 s and 4 s trail on this mount
     assert "centred" in said                               # it re-centred before starting
     assert "Tracking assist" in said
-    # On a slow machine a frame or two is set aside for the quality pass
-    # instead of being stacked live; the two cloudy ones are always dropped.
-    # Each rejected frame is taken again, so the run ends with as many good ones.
-    assert 2 <= summary["rejected"] <= 6
-    assert summary["captured"] == FRAMES + min(summary["rejected"], max(2, FRAMES // 4))
+    # The two cloudy frames are judged live and taken again. On a slow
+    # machine more frames are set aside for the quality pass instead of
+    # being stacked live; one rejected there is not taken again (it was
+    # never judged during the run), and the quality pass also trims the
+    # worst of the rest. So the run takes 2 to a quarter more frames, and
+    # rejects at least the two cloudy ones and at most about a third.
+    assert 2 <= summary["rejected"] <= summary["captured"] // 3
+    assert FRAMES + 2 <= summary["captured"] <= FRAMES + min(summary["rejected"], max(2, FRAMES // 4))
     assert (folder / summary["picture"]).name == "final.jpg" and (folder / summary["picture"]).exists()
     stacked = json.loads((folder / summary["folder"] / "restack.json").read_text(encoding="utf-8"))["summary"]
     assert stacked["median_residual_px"] < 0.5

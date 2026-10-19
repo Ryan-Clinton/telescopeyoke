@@ -76,10 +76,17 @@ Things worth knowing:
   pattern is the same in every frame, so stacking alone never averaged it
   away: the green bands in all the stacks of 19 October 2026. The bias and
   dark have their row levels evened when loaded, so a master averaged from
-  20 frames no longer stamps its own stripes into every light. Anything
-  broader than about 100 rows of the stack, a gradient or a galaxy, is left
-  alone. What other owners of this camera have found, and what to try
-  next: `docs/banding.md`.
+  20 frames no longer stamps its own stripes into every light. Each row's
+  level is taken from its sky alone: a first levelling finds where a
+  galaxy, nebula or glow is, and that light is left out of the second.
+  Measured from every pixel, as at first, a row's level followed a galaxy
+  narrower than about 100 rows, and the levelling took real light (a
+  synthetic galaxy 280 rows across lost 12% of its core, one 140 rows
+  across 38%; now about 2% and 4%). Anything broader, a gradient or a
+  galaxy filling the frame, is left alone. `depth.py SESSION
+  --destripe-check` plants stars in a session's raw frames and measures
+  them with and without the correction. What other owners of this camera
+  have found, and what to try next: `docs/banding.md`.
 - **Alignment is shift and rotation only**, no scale or lens distortion,
   which is enough for one session through one set of optics. `restack.py`
   reports how closely the stars matched; if that ever nears a pixel, it is

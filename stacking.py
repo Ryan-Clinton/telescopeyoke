@@ -229,6 +229,27 @@ def smooth_rows(level, width=STRIPE_ROWS):
     return ndimage.median_filter(padded, width, mode="nearest")[half:half + len(level)]
 
 
+SKY_SHARE = 0.2     # the least share of a row's section that must be sky to measure its stripe there
+
+
+def extended_light(image):
+    """Where an image shows light that is not sky: a galaxy, a nebula, a
+    bright star's glow. The sky's tilt (a plane fitted to the whole image)
+    is taken off first; what is left, smoothed over 31 pixels, is light
+    where it stands above the broad background round it (255 pixels) by
+    three times its own spread. Row stripes barely show at that smoothing."""
+    yy, xx = np.mgrid[0:image.shape[0]:8, 0:image.shape[1]:8]
+    sample = image[::8, ::8].astype(np.float64)
+    keep = sample < np.percentile(sample, 80)                      # the sky, not the galaxy
+    design = np.column_stack([np.ones(keep.sum()), yy[keep], xx[keep]])
+    a, b, c = np.linalg.lstsq(design, sample[keep], rcond=None)[0]
+    rows, cols = np.indices(image.shape, dtype=np.float32)
+    rest = image - (a + b * rows + c * cols)
+    excess = ndimage.uniform_filter(rest, 31) - ndimage.uniform_filter(rest, 255, mode="nearest")
+    spread = 1.4826 * float(np.median(np.abs(excess - np.median(excess)))) + 1e-6
+    return excess > np.median(excess) + 3 * spread
+
+
 def destripe(frame, sections=STRIPE_SECTIONS):
     """Take out the row stripes this camera reads into each frame: every row
     of each Bayer site is brought to the level of the rows round it.
@@ -237,9 +258,29 @@ def destripe(frame, sections=STRIPE_SECTIONS):
     at the left of the frame was magenta at the right (left and right
     thirds correlated -0.87), the same in every frame, so stacking never
     averaged it away. So each row is measured in `sections` across the frame
-    and the correction runs straight between their middles. A median is the
-    sky whatever stars cross it; anything broader than STRIPE_ROWS, a
-    gradient or a galaxy, is left alone."""
+    and the correction runs straight between their middles.
+
+    Each row's level is the median of its sky alone. Taken over every pixel,
+    as at first, the level followed a galaxy narrower than STRIPE_ROWS, and
+    levelling it against the rows round it took real light: on 19 October
+    2026 a galaxy 280 rows across lost 12% of its core and a narrower one
+    38% (now about 2% and 4%). So the frame is levelled the first way, which
+    takes out the stripes but only dents a galaxy, the light is found in
+    that (extended_light), and the frame is levelled again from its sky.
+    Stars do not move a median; anything broader than STRIPE_ROWS, a
+    gradient or a galaxy filling the frame, is left alone."""
+    first = level_rows(frame, sections)
+    h, w = first.shape[0] // 2 * 2, first.shape[1] // 2 * 2
+    # One map of where the light is, from all four sites together.
+    light = extended_light(first[0:h:2, 0:w:2] + first[0:h:2, 1:w:2] + first[1:h:2, 0:w:2] + first[1:h:2, 1:w:2])
+    return level_rows(frame, sections, light)
+
+
+def level_rows(frame, sections=STRIPE_SECTIONS, light=None):
+    """destripe's levelling, from every pixel of each row's section, or with
+    `light` (a map at the size of one Bayer site) from the sky alone. A
+    section of a row with less than SKY_SHARE sky takes its stripe from the
+    row's nearest sections that have enough."""
     out = frame.astype(np.float32, copy=True)
     for dy in (0, 1):
         for dx in (0, 1):
@@ -249,15 +290,36 @@ def destripe(frame, sections=STRIPE_SECTIONS):
                 continue
             edges = np.linspace(0, cols, sections + 1).astype(int)
             middles = (edges[:-1] + edges[1:] - 1) / 2
+            sky = None
+            if light is not None:
+                mask = np.zeros(site.shape, bool)
+                mask[:light.shape[0], :light.shape[1]] = light[:rows, :cols]
+                sky = np.where(mask, np.nan, site)
             stripes = []
             for a, b in zip(edges[:-1], edges[1:]):
-                level = np.median(site[:, a:b], axis=1)
-                stripes.append(level - smooth_rows(level))
+                if sky is None:
+                    level = np.median(site[:, a:b], axis=1)
+                    stripes.append(level - smooth_rows(level))
+                    continue
+                part = sky[:, a:b]
+                enough = np.isfinite(part).mean(axis=1) >= SKY_SHARE
+                stripe = np.full(rows, np.nan)
+                if enough.sum() > 1:
+                    measured = np.nanmedian(np.where(enough[:, None], part, 0.0), axis=1)
+                    # Rows with too little sky take their level from the sky rows round them.
+                    level = np.interp(np.arange(rows), np.flatnonzero(enough), measured[enough])
+                    stripe = level - smooth_rows(level)
+                    stripe[~enough] = np.nan
+                stripes.append(stripe)
+            stripes = np.array(stripes)
+            for r in np.flatnonzero(~np.isfinite(stripes).all(axis=0)):
+                have = np.flatnonzero(np.isfinite(stripes[:, r]))
+                stripes[:, r] = np.interp(np.arange(sections), have, stripes[have, r]) if len(have) else 0.0
             # How much of each section's stripe reaches each column: straight
             # between the middles, flat beyond the outer ones.
             share = np.array([np.interp(np.arange(cols), middles, np.eye(sections)[i])
                               for i in range(sections)])
-            site -= np.array(stripes).T @ share
+            site -= stripes.T @ share
     return out
 
 

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/depth-destripe-check.schema.json",
+  "title": "Destripe check",
+  "description": "data of: depth.py SESSION --destripe-check --json. Whether the row-stripe correction (stacking.destripe) takes real light: stars of known brightness planted in a session's raw frames, before anything is done to them, measured with and without the correction.",
+  "type": "object",
+  "required": ["session", "frames", "planted", "broad_light_changed", "plain", "destriped"],
+  "$defs": {
+    "way": {
+      "type": "object",
+      "required": ["found", "flux_ratio", "flux_scatter"],
+      "properties": {
+        "found": {"type": "number", "description": "Share of the planted stars the star finder picked up."},
+        "flux_ratio": {"type": "number", "description": "Median of measured over planted flux; 1 is none lost."},
+        "flux_scatter": {"type": "number", "description": "Spread of that ratio (1.4826 x median absolute deviation)."}
+      }
+    }
+  },
+  "properties": {
+    "session": {"type": "string"},
+    "frames": {"type": "integer"},
+    "planted": {"type": "integer"},
+    "broad_light_changed": {"type": "number", "description": "How much the correction changed the light in 64-pixel blocks, over how much that light varies across the frame; stripes removed count here too."},
+    "plain": {"$ref": "#/$defs/way"},
+    "destriped": {"$ref": "#/$defs/way"}
+  }
+}

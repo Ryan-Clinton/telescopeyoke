@@ -50,6 +50,7 @@ import config
 import interface
 import records
 import stacking
+from camera import luminance
 
 GAIA_URL = "https://vizier.cds.unistra.fr/viz-bin/asu-tsv"
 FAINTEST = 19.5           # Gaia stars fainter than this are no use to a 150P
@@ -717,6 +718,69 @@ def run_model(args, say=print):
     return answer
 
 
+def gaussian_star(fwhm, half=PSF_HALF):
+    """A round star of total 1 on a (2 half + 1) square."""
+    yy, xx = np.mgrid[-half:half + 1, -half:half + 1]
+    star = np.exp(-(xx ** 2 + yy ** 2) / (2 * (fwhm / 2.3548) ** 2))
+    return star / star.sum()
+
+
+def destripe_check(session, frames=5, per_frame=300, fwhm=4.0, seed=11, say=print):
+    """Whether stacking.destripe takes real light with the stripes: stars of
+    known brightness are planted in raw frames of a session, before
+    anything is done to them, and each frame is then measured with and
+    without the destriping. For each way: the share of planted stars found,
+    and the planted stars' measured flux over what was put in (1 is none
+    lost). With it, how much of the broad light (a galaxy, the sky's
+    gradient) the destriping changed, in blocks of 64 pixels, against how
+    much that broad light varies. M31 filling a frame is the hard case: its
+    light runs along whole rows."""
+    files = sorted(Path(session).glob("light-*.fits"))[:frames]
+    if not files:
+        raise interface.Refusal("NO_SESSION", f"No saved frames in {session}.")
+    rng = np.random.default_rng(seed)
+    shape = gaussian_star(fwhm)
+    lum = lambda mosaic: luminance(mosaic).astype(np.float32)
+    found = {"plain": [], "destriped": []}
+    ratio = {"plain": [], "destriped": []}
+    broad = []
+    for path in files:
+        mosaic, header = stacking.load_light(path)
+        raw = stacking.Calibration(float(header["EXPTIME"]), int(header["GAIN"])).apply(mosaic).astype(np.float32)
+        base = lum(raw)
+        noise = 1.4826 * float(np.median(np.abs(base - np.median(base))))
+        xy = places(base.shape, per_frame, rng)
+        # From a little above the noise in one aperture to well clear of it.
+        flux = noise * np.sqrt(np.pi * fwhm ** 2) * rng.uniform(3, 40, len(xy))
+        # Planted in the raw mosaic: the same star in each 2x2 cell's four
+        # sites, so its luminance is the flux asked for.
+        planted = plant(np.zeros(base.shape, np.float32), shape, xy, flux / 4)
+        with_stars = raw + np.repeat(np.repeat(planted, 2, axis=0), 2, axis=1)
+        for way, treat in (("plain", lambda m: m), ("destriped", stacking.destripe)):
+            empty, full = lum(treat(raw)), lum(treat(with_stars))
+            found[way].append(found_again(stacking.find_stars(empty, 10 ** 6),
+                                          stacking.find_stars(full, 10 ** 6), xy))
+            ratio[way].append(photometry(full - empty, xy, 1.5 * fwhm) / flux)
+        blocks = lambda image: image[:image.shape[0] // 64 * 64, :image.shape[1] // 64 * 64].reshape(
+            image.shape[0] // 64, 64, -1, 64).mean(axis=(1, 3))
+        before, after = blocks(base), blocks(lum(stacking.destripe(raw)))
+        broad.append(float(np.std(after - before) / max(np.std(before), 1e-9)))
+    answer = {"session": str(session), "frames": len(files), "planted": per_frame * len(files),
+              "broad_light_changed": round(float(np.median(broad)), 4)}
+    for way in found:
+        r = np.concatenate(ratio[way])
+        r = r[np.isfinite(r)]
+        answer[way] = {"found": round(float(np.concatenate(found[way]).mean()), 3),
+                       "flux_ratio": round(float(np.median(r)), 4),
+                       "flux_scatter": round(float(1.4826 * np.median(np.abs(r - np.median(r)))), 4)}
+    p, d = answer["plain"], answer["destriped"]
+    say(f"{Path(session).parent.name} {Path(session).name}, {answer['planted']} stars planted in {len(files)} raw "
+        f"frames: found {p['found']:.1%} plain, {d['found']:.1%} destriped; measured flux {p['flux_ratio']:.3f} "
+        f"plain, {d['flux_ratio']:.3f} destriped (1 is all kept); broad light changed by "
+        f"{answer['broad_light_changed']:.2%} of its own variation")
+    return answer
+
+
 def record_path(stack):
     """Where a stack's measurement is kept: depth.json beside the picture's
     final.fits, NAME-depth.json beside any other stack (discovery.fits)."""
@@ -755,8 +819,16 @@ def main():
     ap.add_argument("--fwhm", type=float, help="star width in arcseconds, for --predict")
     ap.add_argument("--sky", type=float, help="sky in mag per square arcsecond, for --predict")
     ap.add_argument("--minutes", type=float, default=5.0, help="length of the stack, for --predict (default 5)")
+    ap.add_argument("--destripe-check", action="store_true",
+                    help="with a session folder: plant stars in its raw frames and measure them with and "
+                         "without the row-stripe correction")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
+    if args.destripe_check:
+        if not args.target:
+            ap.error("name a session folder")
+        interface.main("depth-destripe-check", lambda: destripe_check(args.target), args.json)
+        return
     if args.model or args.predict:
         interface.main("depth-model", lambda: run_model(args), args.json)
         return

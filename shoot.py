@@ -524,14 +524,20 @@ def hold_the_rig(name, path=None):
     try:
         if os.name == "nt":
             import msvcrt
-            handle.seek(0)
+            # Windows locks are enforced on reading as well, so the byte
+            # locked lies well past the holder's name, which another run
+            # must still be able to read to say who has the rig.
+            handle.seek(1 << 20)
             msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
         else:
             import fcntl
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
-        handle.seek(0)
-        holder = handle.read().strip() or "another run"
+        try:
+            handle.seek(0)
+            holder = handle.read().strip() or "another run"
+        except OSError:
+            holder = "another run"
         handle.close()
         raise interface.Refusal("INVALID_REQUEST", f"Another imaging run has the mount and camera ({holder}); "
                                 "it must finish or be stopped (./ty run stop) first.")

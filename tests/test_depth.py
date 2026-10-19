@@ -314,3 +314,43 @@ def test_the_50_percent_point_comes_with_its_scatter_and_more_stars_shrink_it():
     assert few is not None and many is not None and 0 < many < few
     nothing = np.zeros(400, bool)
     assert depth.scatter_of_mag_50(rng.choice(levels, 400), nothing, np.random.default_rng(2)) is None
+
+
+def test_the_destripe_check_plants_stars_in_raw_frames_and_measures_both_ways(tmp_path):
+    """The row-stripe correction should find at least as many planted stars,
+    keep their light, and leave a broad glow (a galaxy across many rows)
+    nearly as it was."""
+    rng = np.random.default_rng(12)
+    rows, cols = 800, 1000
+    yy, xx = np.indices((rows, cols))
+    glow = 400 * np.exp(-(((xx - 500) / 300) ** 2 + ((yy - 400) / 120) ** 2))     # a galaxy along the rows
+    session = tmp_path / "M31" / "20261017-200000"
+    for n in range(3):
+        stripes = rng.normal(0, 6, rows)[:, None]                                  # new in every frame
+        mosaic = 1000 + glow + stripes + rng.normal(0, 8, (rows, cols))
+        stacking.save_light(session, n, np.clip(mosaic, 0, 65535).astype(np.uint16),
+                            fits.Header({"EXPTIME": 16.0, "GAIN": 1500}))
+    said = []
+    answer = depth.destripe_check(session, frames=3, per_frame=150, say=said.append)
+    plain, destriped = answer["plain"], answer["destriped"]
+    assert answer["planted"] == 450 and "destriped" in said[0]
+    assert destriped["found"] >= plain["found"]
+    assert destriped["flux_ratio"] == pytest.approx(1, abs=0.05)
+    assert answer["broad_light_changed"] < 0.05
+
+
+def test_the_destripe_check_needs_saved_frames(tmp_path):
+    with pytest.raises(interface.Refusal):
+        depth.destripe_check(tmp_path)
+
+
+def test_the_destripe_check_answers_in_its_schema(tmp_path):
+    import jsonschema
+    rng = np.random.default_rng(13)
+    session = tmp_path / "M81" / "20261019-040142"
+    for n in range(2):
+        mosaic = 1000 + rng.normal(0, 4, 600)[:, None] + rng.normal(0, 8, (600, 800))
+        stacking.save_light(session, n, mosaic.astype(np.uint16), fits.Header({"EXPTIME": 16.0, "GAIN": 1500}))
+    answer = interface.run("depth-destripe-check", lambda: depth.destripe_check(session, 2, 80, say=lambda s: None))
+    schema = json.loads((config.ROOT / "schemas" / "depth-destripe-check.schema.json").read_text(encoding="utf-8"))
+    jsonschema.validate(json.loads(json.dumps(answer["data"])), schema)
