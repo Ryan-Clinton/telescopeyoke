@@ -106,6 +106,7 @@ class Session:
         self.accepted, self.log = [], []
         self.drift = 0.0   # how far the newest frame was from the first, in frame heights
         self.track = []    # (time, x shift, y shift) of accepted frames since the last trim
+        self.shifts = []   # the same for every accepted frame of the run
         self.timings = stacking.Timings()
         self.preview_every, self.published = preview_every, 0.0
 
@@ -127,6 +128,7 @@ class Session:
                     self.stack = stacking.Stack(frame.shape)
                 self.drift = float(np.hypot(*entry["shift"])) / frame.shape[0]
                 self.track.append((taken or time.time(), *entry["shift"]))
+                self.shifts.append((taken or time.time(), *entry["shift"]))   # never cleared: the hold's
                 self.stack.add(frame)
                 self.accepted.append({k: entry[k] for k in
                                       ("fwhm", "roundness", "stars", "flux", "background", "noise")})
@@ -290,6 +292,114 @@ def recentre(target, aim_off=(0.0, 0.0)):
         scope.stop()
         raise
     return True
+
+
+HOLD_LEARN = 4.0     # seconds of each learning move: at 20"/s, about 60 pixels
+HOLD_RATE = 20.0     # arcsec/s of the hold's moves
+HOLD_GAIN = 0.7      # share of the miss each correction takes back: a guider's habit, so it never overshoots
+HOLD_SETTLE = 3      # frames kept after a move before the next is judged
+
+
+class Hold:
+    """The photometric hold: the target kept on the same pixels all night,
+    for transits (20 October 2026: unguided, the field wandered 80 pixels
+    and every star crossed different pixels, the first suspect for a 20 mmag
+    floor in the photometry).
+
+    It learns first, as a guider calibrates: a move of HOLD_LEARN seconds in
+    RA, then in Dec, each measured by how far the next frames' shifts move
+    (the stacker's shift onto the first frame: `session.shifts`). Then, when
+    the frames have wandered more than `pixels`, it makes the moves that
+    bring them back, HOLD_GAIN of the way. A miss bigger than a move can
+    take back is left to the run's usual re-centring. No dithering."""
+
+    def __init__(self, pixels, pulse=None):
+        self.pixels = pixels
+        self.pulse = pulse          # (axis, rate, seconds) -> moves the mount; set when the run starts
+        self.state = "learn RA"
+        self.before = None          # the shift before the learning move
+        self.mark = 0               # how many frames had been kept at the last move
+        self.columns = {}           # axis -> pixels of shift per second of move
+        self.creep = 0.0
+
+    @staticmethod
+    def where(track, last=3):
+        """The latest shift: the mean of the last few frames'."""
+        return np.mean([(x, y) for _, x, y in track[-last:]], axis=0) if track else None
+
+    def due(self, track):
+        """Whether a move is due now: never in the HOLD_SETTLE frames after one."""
+        if self.state == "off" or len(track) - self.mark < HOLD_SETTLE:
+            return False
+        if self.state != "hold":
+            return True
+        return math.hypot(*self.where(track)) > self.pixels
+
+    def step(self, track, say=print):
+        """The next move: a learning one, or a correction."""
+        import mount
+        now = self.where(track)
+        if self.state in ("learn RA", "learn Dec") and self.before is None:
+            axis = mount.RA if self.state == "learn RA" else mount.DEC
+            self.before = now
+            say(f"  hold: learning, a {HOLD_LEARN:g} s move in {self.state[6:]}")
+            self.pulse(axis, HOLD_RATE, HOLD_LEARN)
+            self.mark = len(track)
+        elif self.state in ("learn RA", "learn Dec"):
+            axis = mount.RA if self.state == "learn RA" else mount.DEC
+            moved = (now - self.before) / HOLD_LEARN
+            if math.hypot(*moved) < 0.5:
+                say(f"  hold: a move in {self.state[6:]} did not move the frames; the hold is off")
+                self.state = "off"
+                return
+            self.columns[axis] = moved
+            say(f"  hold: {self.state[6:]} moves the frames {moved[0]:+.1f}, {moved[1]:+.1f} px a second")
+            self.before = None
+            self.state = "learn Dec" if self.state == "learn RA" else "hold"
+            if self.state == "learn Dec":
+                self.step(track, say)
+                return
+            # Back where the learning started, from what was learnt.
+            self.correct(now, len(track), say)
+        elif self.state == "hold":
+            self.correct(now, len(track), say)
+
+    def correct(self, now, kept, say=print):
+        """Moves that take back HOLD_GAIN of the shift `now`."""
+        import mount
+        m = np.column_stack([self.columns[mount.RA], self.columns[mount.DEC]])
+        try:
+            seconds = np.linalg.solve(m, -HOLD_GAIN * np.asarray(now, float))
+        except np.linalg.LinAlgError:
+            say("  hold: RA and Dec move the frames the same way; the hold is off")
+            self.state = "off"
+            return
+        longest = mount.PULSE_LONGEST
+        if np.max(np.abs(seconds)) > longest:
+            say(f"  hold: {math.hypot(*now):.0f} px off is more than a move takes back; left to re-centring")
+            return
+        say(f"  hold: {math.hypot(*now):.1f} px off; moving {seconds[0]:+.1f} s in RA, {seconds[1]:+.1f} s in Dec")
+        for axis, s in ((mount.RA, seconds[0]), (mount.DEC, seconds[1])):
+            if abs(s) >= 0.1:
+                self.pulse(axis, HOLD_RATE if s > 0 else -HOLD_RATE, abs(s))
+        self.mark = kept
+
+
+def hold_mover():
+    """The hold's moves on the real mount, each through mount.Mount.pulse
+    (its rate and length limits, and the motion lock), the Dec creep the
+    tracking assist set kept."""
+    import mount
+    scope = mount.Mount(watch=False)
+
+    def pulse(axis, rate, seconds):
+        creep = 0.0
+        try:
+            creep = scope.drift_model(config.load()["site"]).creep or 0.0
+        except (SystemExit, KeyError, OSError, AttributeError):
+            pass
+        return scope.pulse(axis, rate, seconds, creep=creep)
+    return pulse
 
 
 def assist(session):
@@ -487,6 +597,9 @@ def main():
                          "the stars come back, and ends at dawn or when the target nears the mount's limit")
     ap.add_argument("--assist", action="store_true",
                     help="trim the Dec motor's creep from the drift the frames show")
+    ap.add_argument("--hold", type=float, metavar="PX",
+                    help="for transits: keep the target within PX pixels of where the first frame had it, "
+                         "learning first how small moves shift the frames; no dithering")
     ap.add_argument("--no-save", action="store_true", help="do not keep the raw frames")
     ap.add_argument("--no-restack", action="store_true", help="skip the final quality pass")
     ap.add_argument("--no-live", action="store_true",
@@ -498,6 +611,8 @@ def main():
     args = ap.parse_args()
     if args.dither and args.no_recentre:
         ap.error("--dither moves the mount between frames; it cannot go with --no-recentre")
+    if args.hold and (args.dither or args.dither_first or args.no_recentre):
+        ap.error("--hold keeps the stars on the same pixels: not with --dither or --no-recentre")
     work = (lambda: plan(args)) if args.dry_run else (lambda: run(args))
     return interface.main("shoot.dry_run" if args.dry_run else "shoot", work, args.json)
 
@@ -569,6 +684,13 @@ def run(args):
     moving = not args.no_recentre
     if moving:
         moving = recentre(args.name)
+    holding = None
+    if moving and getattr(args, "hold", None):
+        try:
+            holding = Hold(args.hold, hold_mover())
+            print(f"  hold: keeping {args.name} within {args.hold:g} px; learning from the first frames", flush=True)
+        except (OSError, SystemExit, interface.Refusal) as problem:
+            print(f"  hold: mount not available ({problem}); imaging without it", flush=True)
     if args.exposure == "auto":
         exposure = pick_exposure(args.gain, lambda s: stacking.Calibration(s, args.gain))
     else:
@@ -662,6 +784,13 @@ def run(args):
                 collect(everything=True)
                 if not assist(session):
                     args.assist = False
+            elif holding and moving and holding.due(session.shifts):
+                collect(everything=True)
+                try:
+                    holding.step(session.shifts)
+                except (OSError, SystemExit, interface.Refusal) as problem:
+                    print(f"  hold: the mount would not move ({problem}); the hold is off", flush=True)
+                    holding.state = "off"
             with Camera(gain=args.gain) as cam:
                 while more():
                     mosaic, header = cam.frame(exposure)
@@ -697,6 +826,8 @@ def run(args):
                     told["recentre"] = told["recentre"] or asked == "recentre"
                     due = (args.recentre and since_centre >= args.recentre) or told["recentre"]
                     if moving and (session.drift > DRIFT_LIMIT or due):
+                        break
+                    if holding and moving and holding.due(session.shifts):
                         break
                     if moving and args.dither and since_dither >= args.dither:
                         break

@@ -122,6 +122,8 @@ MERIDIAN_RA_AXIS = 90.0
 
 RA, DEC = 16, 17            # axis ids for fixed-rate slews
 POSITIVE, NEGATIVE = 36, 37
+PULSE_RATE = 30.0           # arcsec/s: the fastest move of the photometric hold (twice sidereal)
+PULSE_LONGEST = 10.0        # seconds: its longest; a bigger miss is re-centred by GoTo instead
 # Fixed-rate stages for closing in on an axis angle: (rate 1-9, stop within °).
 STAGES = ((8, 2.0), (6, 0.25), (4, 0.03))
 SLEW_TIMEOUT = 150
@@ -269,6 +271,32 @@ class Mount:
         steps = min(round(abs(rate) * 4), 0xFFFF)
         self.ask(bytes([ord("P"), 3, DEC, 6 if rate >= 0 else 7, steps >> 8, steps & 0xFF, 0, 0]))
         return math.copysign(steps / 4, rate) if steps else 0.0
+
+    def pulse(self, axis, rate, seconds, creep=0.0):
+        """Turn one axis at `rate` arcseconds per second (sign is direction)
+        for `seconds`, then put it back: tracking on again for RA, the Dec
+        creep it had for Dec. For the photometric hold's small moves
+        (shoot.py --hold): at most PULSE_RATE for PULSE_LONGEST seconds.
+
+        Whether the handset adds a variable RA rate to its tracking or
+        replaces tracking with it is not known for this mount, so nothing
+        relies on either: the hold measures what a pulse does to the frames
+        before it uses one, and tracking is switched on again after each."""
+        if LOCK_FILE.exists():
+            raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text(encoding='utf-8').strip()}")
+        rate = max(-PULSE_RATE, min(PULSE_RATE, rate))
+        seconds = max(0.0, min(PULSE_LONGEST, seconds))
+        steps = min(round(abs(rate) * 4), 0xFFFF)
+        try:
+            self.ask(bytes([ord("P"), 3, axis, 6 if rate >= 0 else 7, steps >> 8, steps & 0xFF, 0, 0]))
+            time.sleep(seconds)
+        finally:
+            if axis == RA:
+                self.ask(bytes([ord("P"), 3, RA, 6, 0, 0, 0, 0]))
+                self.tracking(True)
+            else:
+                self.dec_creep(creep)
+        return rate * seconds
 
     def west(self):
         """True with the tube swung over the pole, as for targets west of

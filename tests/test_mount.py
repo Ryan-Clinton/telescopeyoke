@@ -386,3 +386,17 @@ def test_a_planet_is_found_where_it_is_tonight_and_the_sun_never():
     assert saturn["id"] == "Saturn" and -30 < saturn["dec"] < 30
     with pytest.raises(mount.Refusal):
         mount.find_target("sun")
+
+
+def test_a_holding_pulse_is_capped_and_leaves_the_mount_tracking_as_it_was(scope, monkeypatch):
+    slept = []
+    monkeypatch.setattr(mount.time, "sleep", slept.append)
+    scope.tracking(True)
+    moved = scope.pulse(mount.RA, 100.0, 60.0)                    # far more than allowed
+    assert slept == [mount.PULSE_LONGEST] and moved == mount.PULSE_RATE * mount.PULSE_LONGEST
+    assert scope.s.rates[16] == 0 and scope.s.tracking                # tracking on again
+    scope.pulse(mount.DEC, -20.0, 2.0, creep=1.25)
+    assert scope.s.rates[17] == pytest.approx(1.25 / 3600)            # the assist's creep put back
+    mount.LOCK_FILE.write_text("testing")
+    with pytest.raises(mount.Refusal):
+        scope.pulse(mount.RA, 10.0, 1.0)
