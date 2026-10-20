@@ -90,11 +90,62 @@ Measured during the run (`frames.jsonl`):
 - star width 5.6 to 6.3 px (5–95%), so focus and seeing held fairly steady;
 - sky background rose from 15 to 36 ADU (haze coming in before the cloud).
 
+## What the diagnosis found
+
+`./precision.py frames/WASP-12/20261020-014726 --planet "WASP-12 b"`: the
+973 kept frames measured 288 ways (two stripe treatments × four colour
+channels × six apertures × six comparison sets), each frame on its own.
+All the figures are in `precision.json` beside the night's frames.
+
+| | per 4 s frame | per 10 frames, before / during | beta | baseline slope |
+|---|---|---|---|---|
+| best: star-shaped weighting, all colours, the steadiest 20 stars | 40.9 mmag | 13.1 / 13.9 | 1.17 | 40 mmag/h |
+| the 10 steadiest, destriped | 42.8 | 13.5 / 14.1 | 1.08 | 35 |
+| stars like WASP-12 in brightness and colour | 41.1 | 14.6 / 10.9 | 1.29 | 35 |
+| as measured until now (the whole field) | 42.0 | 18.0 / 16.1 | 1.55 | 65 |
+
+Median of the worse of the two scatters over everything else, by each choice:
+
+- **aperture:** star-shaped weighting 21.4, 1 FWHM 22.7, 1.5 FWHM 24.1,
+  2 FWHM 24.4, 2.5 FWHM 29.5, 3 FWHM 40.0 mmag;
+- **channel:** all four sites 21.3, green 21.4, blue 29.3, red 31.0;
+- **stripes:** destriped 25.0, as read 24.6 (no difference);
+- **comparison:** like WASP-12 21.7, best 10 22.8, best 5 25.1, best 20
+  27.9, nearest 10 28.2, all 29.3.
+
+What it means:
+
+1. **It is not a fixed floor.** Each 4 s frame scatters by about 41 mmag, and
+   averaging brings that down nearly as random noise would (beta 1.1 to 1.3
+   for the best ways). The "20 mmag floor" in the table above is mostly that
+   per-frame noise averaged over only 10 frames; an earlier version of this
+   page called it systematic, which was wrong.
+2. **The per-frame noise comes from the background round each star.**
+   Bigger apertures are worse, steeply, so the sky, read and dark noise in
+   the extra pixels outweigh the light gained: in 4 s frames at gain 1500,
+   WASP-12 (12,500 ADU in a 2 FWHM aperture) is not bright enough against
+   its background. Photon noise and scintillation together should be about
+   20 mmag a frame; the measured 41 is about twice that. Longer exposures
+   are the remedy the numbers point to (WASP-12 stays linear to about 50 s).
+3. **Stripes do not matter here**, and green alone is as good as all four
+   sites; red and blue alone are worse (fewer photons).
+4. **The comparison stars matter most.** A small set like WASP-12, or the
+   steadiest, beats the whole field by about a quarter.
+5. **The baseline slopes by 35 to 40 mmag an hour** and follows the airmass
+   (correlation about -0.2), as differential colour extinction would. Over
+   only 40 minutes of baseline, a box fit cannot tell that trend from a
+   transit: the box depth comes out at 2.0 to 2.9% (median 2.5%) whichever
+   way it is measured, against the published 1.54%, and none of these is a
+   measurement of the planet.
+
 ## Suspects, most likely first
 
 Revised after review (20 October 2026), with the expected depth (1.54%,
-about 16–17 mmag) no bigger than the floor (20–22 mmag): that is why the
-night is borderline despite nearly a thousand frames.
+about 16–17 mmag) no bigger than the scatter per 10 frames (20–22 mmag):
+that is why the night is borderline despite nearly a thousand frames. The
+diagnosis above has since put short exposures against a noisy background
+and the airmass trend first; flats and drift come next, untested until
+there are flats.
 
 1. **No flat field, with the stars wandering 80 px.** Each star crosses
    different pixels, dust shadows and vignetting through the night; with no

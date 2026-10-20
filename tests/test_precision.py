@@ -52,3 +52,29 @@ def test_the_comparison_stars_are_ranked_by_their_own_steadiness():
     target = 1000 * (1 + rng.normal(0, 0.002, 500))
     mag = precision.light_curve(target, flux[:, :4])
     assert 1000 * precision.robust(mag) < 4
+
+
+def test_the_ways_are_judged_on_kept_frames_and_the_slope_is_in_mmag_an_hour(tmp_path):
+    import json
+    rng = np.random.default_rng(4)
+    frames, stars = 400, 8
+    jd = 2461333.53 + np.arange(frames) * 5 / 86400                      # 4 s frames every 5 s
+    light = 1000 * (1 + rng.normal(0, 0.003, (frames, stars)))
+    light[:, 0] *= 10 ** (-0.4 * 0.010 * (jd - jd[0]) * 24)               # the target fades 10 mmag an hour
+    flux = np.broadcast_to(light[None, None, :, :, None], (2, 4, frames, stars, len(precision.APERTURES))).copy()
+    data = {"flux": flux, "jd": jd, "x": np.zeros(frames), "y": np.zeros(frames), "fwhm": np.full(frames, 5.0),
+            "sky": np.full(frames, 20.0)}
+    p = {"planet": "Test b", "ra": 97.6, "dec": 29.7, "hours": 0.5, "period": 100.0, "epoch": jd[0] + 50}
+    stars_rows = np.column_stack([np.full(stars, 97.6), np.full(stars, 29.7), np.linspace(11.5, 12.5, stars),
+                                  np.full(stars, 0.8)])
+    answer = precision.judge(p, stars_rows, np.column_stack([np.arange(stars) * 50.0, np.zeros(stars)]), data)
+    slope = answer["ways"][0]["baseline_slope_mmag_per_h"]
+    assert slope == pytest.approx(10, abs=3)
+    session = tmp_path / "s"
+    session.mkdir()
+    log = [{"index": i + 1, "accepted": i != 2} for i in range(4)]
+    (session / "frames.jsonl").write_text("".join(json.dumps(r) + "\n" for r in log))
+    paths = [session / f"light-{i + 1:04d}.fits" for i in range(4)]
+    small = {k: (v[:, :, :4] if k == "flux" else v[:4]) for k, v in data.items()}
+    kept = precision.accepted_only(session, small, paths)
+    assert kept["flux"].shape[2] == 3 and len(kept["jd"]) == 3

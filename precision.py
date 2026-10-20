@@ -160,7 +160,8 @@ def measure_night(session, planet, say=print, again=False, workers=None, first=N
         kept = session / f"precision-flux-first{first}.npz"
     if kept.exists() and not again:
         saved = np.load(kept)
-        if saved["flux"].shape[0] == len(frames) and saved["flux"].shape[3] == len(xy):
+        # The flux is [variants, channels, frames, stars, apertures].
+        if saved["flux"].shape[2] == len(frames) and saved["flux"].shape[3] == len(xy):
             say(f"{session.name}: {len(frames)} frames, as measured before")
             return p, stars, {k: saved[k] for k in saved.files}
     log = {r["index"]: r for r in (json.loads(line) for line in
@@ -283,6 +284,20 @@ def correlation(a, b):
     return round(float(np.corrcoef(a[ok], b[ok])[0, 1]), 2)
 
 
+def accepted_only(session, data, frames):
+    """The measurements of the frames the run kept (frames.jsonl
+    "accepted"): a frame thrown out for cloud is not the star's light.
+    20 October 2026: the 19 cloudy frames at the end made the depths nonsense."""
+    log = {r["index"]: r for r in (json.loads(line) for line in
+                                   (session / "frames.jsonl").read_text(encoding="utf-8").splitlines() if line)}
+    keep = np.array([log.get(int(f.stem.split("-")[1]), {}).get("accepted", False) for f in frames])
+    out = dict(data)
+    out["flux"] = data["flux"][:, :, keep]
+    for k in ("jd", "x", "y", "fwhm", "sky"):
+        out[k] = data[k][keep]
+    return out
+
+
 def judge(p, stars, xy, data):
     """Every way's figures, the best first."""
     import transits
@@ -316,7 +331,7 @@ def judge(p, stars, xy, data):
                     m = binned(mag, BIN)
                     fit = transits.fit(t, m, middle, p["hours"]) if middle else None
                     ok = before & np.isfinite(mag)
-                    slope = 1000 * 24 * float(np.polyfit(jd[ok], mag[ok], 1)[0]) if ok.sum() > 10 else np.nan
+                    slope = 1000 / 24 * float(np.polyfit(jd[ok], mag[ok], 1)[0]) if ok.sum() > 10 else np.nan   # mmag an hour
                     rows.append({
                         "stripes": variant, "channel": channel, "aperture": aperture, "comparison": name,
                         "comparison_stars": int(len(pick)),
@@ -341,6 +356,8 @@ def run(args, say=print):
     if not session.is_dir():
         raise interface.Refusal("NO_SESSION", f"No session folder {session}.")
     p, stars, data = measure_night(session, args.planet, say, again=args.again, first=args.first)
+    import vet
+    data = accepted_only(session, data, vet.restack_frames(session)[:args.first])
     _, _, xy, _ = chosen_stars(session, args.planet)
     answer = judge(p, stars, xy, data)
     answer["session"] = session.name
