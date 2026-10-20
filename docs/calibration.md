@@ -17,9 +17,11 @@ been done.
 | 4 | See how the pointing differs east and west | `./mount.py pointing` | 3 |
 | 5 | See that the telescope turns when the mount says so | nothing to run: steps 2 to 4 are judged by their plate solves as they go | |
 
-**None of steps 2 to 5 has been run on the real mount with this code**
-except single polar measurements. What follows is how each is meant to
-work, and what is proven only on the simulated mount.
+Steps 2 to 4 have run on the real mount: polar alignment (13 and 17
+October 2026), finding and marking home (17 October: 10.66° out by eye,
+0.19° on the marks) and the pointing survey (17 October). Polar
+repeatability (`--repeat`) and step 5's check by night are still to be run.
+What follows is how each works.
 
 ## 1. Level, roughly
 

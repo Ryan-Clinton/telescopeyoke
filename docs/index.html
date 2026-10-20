@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TelescopeYoke: makes an ordinary Sky-Watcher SynScan telescope smarter</title>
-<meta name="description" content="Makes an ordinary Sky-Watcher SynScan telescope smarter by measuring and correcting the things that normally have to be set up perfectly by hand: self-centring GoTos, focusing by ear, a skyline from a phone panorama, polar alignment and stacking. Free and open source, for EQ3, EQ5, HEQ5 and EQ6 mounts. Linux, with a Windows port. Try the demo with no telescope.">
+<meta name="description" content="A self-measuring robotic observatory for ordinary Sky-Watcher SynScan gear: it measures and corrects its own faults, runs whole nights, hunts for new objects and tells you what matters: self-centring GoTos, focusing by ear, a skyline from a phone panorama, polar alignment and stacking. Free and open source, for EQ3, EQ5, HEQ5 and EQ6 mounts. Linux, with a Windows port. Try the demo with no telescope.">
 <meta property="og:title" content="TelescopeYoke">
-<meta property="og:description" content="Makes an ordinary Sky-Watcher SynScan telescope smarter by measuring and correcting the things that normally have to be set up perfectly by hand: self-centring GoTos, focusing by ear, a skyline from a phone panorama, polar alignment and stacking.">
+<meta property="og:description" content="A self-measuring robotic observatory for ordinary Sky-Watcher SynScan gear: it measures and corrects its own faults, runs whole nights, hunts for new objects and tells you what matters: self-centring GoTos, focusing by ear, a skyline from a phone panorama, polar alignment and stacking.">
 <meta property="og:image" content="https://ryan-clinton.github.io/telescopeyoke/social-preview.png">
 <link rel="icon" href="logo.svg">
 <style>
@@ -46,7 +46,7 @@
 
 <header>
   <h1>TelescopeYoke</h1>
-  <p class="lead">Makes an ordinary Sky-Watcher SynScan telescope smarter by measuring and correcting the things that normally have to be set up perfectly by hand.</p>
+  <p class="lead">A self-measuring robotic observatory for ordinary Sky-Watcher gear, run by a person and an AI agent together.</p>
   <p class="quiet">Free and open source. Runs on a laptop beside the telescope: Linux, with a Windows port.</p>
   <div class="buttons">
     <a class="main" href="#try">Try the demo</a>
@@ -72,6 +72,11 @@
   <li><b>Plans the night</b>: darkness, Moon, cloud, and a GO / MARGINAL / NO-GO verdict, with targets ranked for your own sky.</li>
   <li><b>Controls Sky-Watcher SynScan mounts</b> through the handset's serial lead, correcting for a handset clock that is wrong.</li>
   <li><b>Keeps the mount inside its limits</b>. Every move is checked first and shown as a plan; nothing turns until you confirm it.</li>
+  <li><b>Runs the whole night</b>: the agreed steps in order, a failed step fetches you, and at the end it parks the mount and tells you.</li>
+  <li><b>Hunts for something new</b>: novae in M31 and M33 by image subtraction, comets in spacecraft pictures every six hours, exoplanet transits; each find checked before it reaches you, with the evidence.</li>
+  <li><b>Tells you what matters</b>: on your phone with the evidence, and when it needs your hands, through the house's lights and a speaker.</li>
+  <li><b>Explains itself live</b>: a Twitch broadcast with the stack building up, a presenter that says what and why, and chat commands viewers can ask but not operate.</li>
+  <li><b>Works with an AI agent</b>: every command answers in a fixed JSON shape, skills and specialist agents hold the routines, and code that does not depend on the agent decides what may move.</li>
 </ul>
 <p>It runs on your own computer. No account, no cloud service, no ASCOM.</p>
 

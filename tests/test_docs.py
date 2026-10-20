@@ -57,3 +57,31 @@ def test_every_relative_link_leads_to_a_file(path):
             continue
         file = target.split("#")[0]
         assert (path.parent / file).exists(), f"{path.relative_to(ROOT)} links to {target}"
+
+
+FACTS = ROOT / "docs" / "validation.toml"
+MARK = {"proven": "✅", "partly": "⚠️", "simulated": "🧪", "tried": "❌"}
+
+
+def facts():
+    import tomllib
+    return tomllib.loads(FACTS.read_text(encoding="utf-8"))["facts"]
+
+
+def test_each_fact_stands_in_the_validation_record_as_it_does_in_its_index():
+    conclusions = text(VALIDATION).split("## Current conclusions")[1].split("\n## ")[0]
+    rows = {line.split("|")[1].strip(): line.split("|")[2].strip()
+            for line in conclusions.splitlines() if line.startswith("| ") and line.count("|") >= 3}
+    for name, fact in facts().items():
+        assert fact["row"] in rows, f"{name}: no row '{fact['row']}' in validation.md's Current conclusions"
+        assert rows[fact["row"]].startswith(MARK[fact["status"]]), \
+            f"{name}: validation.md has '{rows[fact['row']][:20]}', the index says {fact['status']}"
+
+
+@pytest.mark.parametrize("path", [p for p in PAGES + [ROOT / "docs" / "index.html"] if current(p)],
+                         ids=lambda p: str(p.relative_to(ROOT)))
+def test_no_page_still_says_what_a_proven_fact_has_overtaken(path):
+    body = text(path)
+    for name, fact in facts().items():
+        for stale in fact.get("contradicted_by", []):
+            assert stale not in body, f"{path.relative_to(ROOT)} still says '{stale}' ({name} is {fact['status']})"

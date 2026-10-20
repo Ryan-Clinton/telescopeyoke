@@ -1,4 +1,8 @@
-# The live stream's picture: a spec
+# The live stream's picture: the design record
+
+Why the stream looks as it does, as specified and reviewed. How to run it,
+and what it does now, is in [streaming.md](streaming.md); where the two
+differ, that page is the present.
 
 Status: built and on air on 20 October 2026, from 01:43 UTC on the WASP-12 b
 transit. `streamlook.py` draws the picture, `stream-targets.toml` holds the words
@@ -548,10 +552,10 @@ itself, never on the letterbox bars beside a narrow picture.
 
 ## Between targets
 
-At present the stream stops five minutes after the last exposure and
-starts again with the next run, so it drops out at every GoTo.
+Before this change the stream stopped five minutes after the last exposure
+and started again with the next run, so it dropped out at every GoTo.
 
-The change: while the schedule runner is alive and its next step starts
+Built: while the schedule runner is alive and its next step starts
 within 15 minutes, the stream stays up and shows a between-targets card. The
 last stack fills the screen, cropped slightly, darkened by 40 % and lightly
 blurred, with this over it:
@@ -646,10 +650,13 @@ bouncing LIVE badge, glowing borders, or any games-overlay effect.
 
 ## Not in this change
 
-- Changing the Twitch or YouTube title or category per target. This needs
-  an OAuth app on each service.
+Two of the items first listed here have since been built: the Twitch
+title, category and tags set for each target (`twitch.py`, through an app
+registered for the channel), and the chat's read-only commands
+(`streamchat.py`). Still not done:
+
+- The same for YouTube's title and category.
 - Sound or music. The silent track stays, as the services need one.
-- Chat or viewer interaction.
 - Sending to YouTube and Twitch at once. That is a change to `stream.py`'s
   output, not to the picture.
 

@@ -1,6 +1,6 @@
 # telescopeyoke 🔭
 
-**Makes an ordinary Sky-Watcher SynScan telescope smarter by measuring and correcting the things that normally have to be set up perfectly by hand.**
+**A self-measuring robotic observatory for ordinary Sky-Watcher gear, run by a person and an AI agent together.**
 
 [![tests](https://github.com/Ryan-Clinton/telescopeyoke/actions/workflows/tests.yml/badge.svg)](https://github.com/Ryan-Clinton/telescopeyoke/actions/workflows/tests.yml)
 
@@ -16,13 +16,21 @@ and the real centring, focusing and stacking code runs on it.*
 [What it has been tried on](#hardware) ·
 [Ask a question](https://github.com/Ryan-Clinton/telescopeyoke/discussions)**
 
-telescopeyoke adds smart-telescope behaviour to the Sky-Watcher SynScan gear
-many amateur astronomers already own. It is built around one idea: **measure
-the imperfections of modest equipment instead of pretending they are not
-there.** A home position set by eye, a manual focuser, a rough polar
-alignment, a garden with a house in the way: each is measured, and then
-corrected or planned around. It runs on a laptop left beside the telescope,
-and you watch from indoors.
+telescopeyoke takes the Sky-Watcher SynScan gear many amateur astronomers
+already own and adds what much bigger systems do. It measures its own
+pointing, polar alignment, focus, drift, camera timing and image depth, and
+corrects for them; plans and runs a whole night; searches its pictures and
+public data for new objects, and follows them up; tells you when something
+matters, on your phone or through the house's lights and speaker; and can
+explain the night live to an audience. An AI agent can operate it beside
+you, inside limits that do not depend on the agent behaving.
+
+It is built around one idea: **measure the imperfections of modest
+equipment instead of pretending they are not there.** A home position set
+by eye, a manual focuser, a rough polar alignment, a garden with a house in
+the way: each is measured, and then corrected or planned around. The laptop
+stays with the telescope; the observatory comes back to you through the
+status page, your phone, the house and, if you want, a live broadcast.
 
 It is an Ubuntu application. It also runs natively on Windows, where the
 tests and the demo pass and the camera has taken frames, but no mount has
@@ -40,6 +48,32 @@ been driven yet.
 > You do not have to let it move your mount: `./doctor.py --report` only
 > looks at what is connected, and what it writes is useful by itself. See
 > [Hardware](#hardware).
+
+## The observatory at a glance
+
+```
+OBSERVE   plan → schedule → GoTo and centre → focus → image → hold → park
+MEASURE   pointing · polar error · true home · drift · focus · shutter · depth · precision
+DISCOVER  patrol → subtract → vet → second look → follow night to night → report
+OPERATE   cloud and rain · stopped runs · alerts by phone, lights and speaker
+REASON    JSON for every command · ty · MCP · skills and specialist agents · a person approves moves
+SHARE     status page · public live page · Twitch broadcast with a presenter and chat
+```
+
+[The TelescopeYoke observatory](docs/observatory.md) puts the whole system
+on one page. What happened in its first 17 days, each proven on the
+author's telescope ([validation](docs/validation.md)):
+
+- **3 October 2026:** first light; a GoTo from a home set 10° out by eye
+  centred by plate solving in three corrections.
+- **13 October:** polar alignment measured and corrected from 3.3° to 0.1°.
+- **17 October:** the true home found from 10.66° out to 0.19°, and the
+  garden's skyline measured by the telescope itself.
+- **19 October:** the six-hourly comet hunt found a known Kreutz sungrazer by
+  itself in live GOES-19 coronagraph pictures.
+- **20 October:** live on Twitch; a first exoplanet transit attempt on
+  WASP-12 b, rejected by its own measurement as not a detection, and the
+  reasons found and worked on the same day.
 
 ## What makes it different
 
@@ -60,8 +94,9 @@ centred M27 in three corrections: 107′ off, then 6′, then 1′
 ([the run is below](#see-it-working)). And after a polar alignment it can
 measure where home really is, from plate solves either side of the meridian,
 drive there, and have you mark the joints, so that home is two marks lined
-up from then on ([Calibrating a mount](docs/calibration.md)). *The centring
-is proven under real stars; finding home has run only on the simulated mount.*
+up from then on ([Calibrating a mount](docs/calibration.md)). *Both are
+proven under real stars: finding home took an EQ3 set 10.66° out by eye to
+0.19° on the marks (17 October 2026).*
 
 **Manual focuser?** Keep your hand on it and listen. Every frame, once it
 has been measured, gives a click: your last turn has been seen. A tone
@@ -135,18 +170,67 @@ have been stacked; the newest fixes have not yet been through a real run.*
 
 ## What it does
 
+**Observe**
+
+- 🌙 **Plans tonight's observing**: darkness, Moon, and a GO / MARGINAL / NO-GO verdict, with the discovery programmes timed into the clear spell
+- 🗓️ **Runs the whole night** (`schedule.py`): the agreed steps in order, not before their times, gaps filled with more of the last field; a failed step stops the rest and fetches you; at the end it parks the mount and tells you
 - 🧭 **Plate-solves and centres GoTos automatically** (`goto M27 --solve`)
-- 🔊 **Focusing by ear**, eyes on the focuser not the screen: a click and a tone for every frame, higher as focus improves, and a few words at the turning points: "Level two" … "Minimum passed. Reverse slightly" … "Focus good. Hold"
-- 🎯 **Ranks targets for your actual sky**: altitude, moonlight, light pollution, and your own skyline, measured from a phone panorama or by the telescope
+- 🔭 **Controls SynScan mounts** through the handset, with the handset's clock errors corrected
+- 📷 **Captures and stacks images**: every raw frame kept, poor frames rejected, stars lined up to a fraction of a pixel, satellite trails clipped out, and the whole stack rebuilt from the raw frames afterwards
+- 🎯 **Holds a transit's target on the same pixels all night** (`shoot.py --hold`), learning how the mount answers first
+
+**Measure**
+
 - 📐 **Measures the polar alignment**, by night from three plate solves or before dark from Polaris alone, and says which way to turn each adjuster
 - 🧮 **Makes the best of a rough polar alignment**: predicts the drift it causes anywhere in the sky and creeps a motor against it
-- 📷 **Captures and stacks images**: every raw frame kept, poor frames rejected, stars lined up to a fraction of a pixel, satellite trails clipped out, and the whole stack rebuilt from the raw frames afterwards
-- 🔭 **Controls SynScan mounts** through the handset, with the handset's clock errors corrected
-- 🛑 **Keeps the mount inside physical limits**, with a motion lock and a webcam watching every slew
-- 🌙 **Plans tonight's observing**: darkness, Moon, and a GO / MARGINAL / NO-GO verdict
-- ☁️ **Checks cloud, rain, wind, dew and seeing**, plus a live satellite cloud picture
-- 🏠 **Shows it all on a status page** you can watch from indoors: the verdict, the run's progress and star quality frame by frame, the live stack, what to point at now, and the state of the kit
+- 🔊 **Focuses**: with a motor focuser by itself, or by ear with your hand on the knob: a click and a tone for every frame, and a few words at the turning points: "Level two" … "Minimum passed. Reverse slightly" … "Focus good. Hold"
+- 📏 **Measures itself**: the true home, the pointing on each side, the camera's real shutter time and stripes, how deep each picture reaches (planted fake stars) and how precise its photometry is (`precision.py`)
+- 🎯 **Ranks targets for your actual sky**: altitude, moonlight, light pollution, and your own skyline, measured from a phone panorama or by the telescope
+
+**Discover** ([the discovery station](docs/discovery.md))
+
+- 🌌 **Patrols M31 and M33 for novae**: subtracts a reference, vets every candidate against catalogues, asteroids and a classifier trained on its own pictures, takes a second look, and follows candidates from night to night
+- ☄️ **Hunts comets in spacecraft pictures** every six hours, checks each find against the planets, bright stars and the Sungrazer Project's reports, and says what it turned out to be
+- 🪐 **Measures exoplanet transits and variable stars**, with the verdict before any fitted number
+- 🔁 **Searches public survey alerts and its own old pictures again** as its methods improve, and prepares a report packet for a find
+
+**Operate** ([alerts](docs/alerts.md))
+
+- ☁️ **Checks cloud, rain, wind, dew and seeing**, from the forecast and from its own frames, plus a live satellite cloud picture
+- 📱 **Tells you what matters, by the right channel**: candidates, comets and the end of the night on Telegram with the evidence; for hands now, every light in the house, a spoken sentence on a speaker, and your phone
+- 🛑 **Keeps the mount inside physical limits**, with a motion lock, the handset's state checked before each move, and moves checked against what the camera saw
+
+**Reason** ([for programs and AI agents](docs/agents/README.md))
+
+- 🤖 **Built to be operated with an AI agent**: every command answers in one JSON shape, `ty` is one front door, the web API and MCP server are read-only, and skills and specialist agents hold the routines (see below)
+
+**Share** ([streaming](docs/streaming.md))
+
+- 🏠 **Shows it all on a status page** you can watch from indoors, and a public live page with the place left out
+- 📺 **Broadcasts the night live on Twitch**: the stack building up, what the object is and why it matters, a presenter that explains the method, cards between targets, and chat commands that let viewers ask but not operate
 - 🧪 **Has a complete pretend rig built in**: the demo runs the real centring, focusing and imaging code against a simulated mount, camera and sky, with a focuser to turn, cloud to bring over and a lead to pull out
+
+## A person and an AI, together
+
+**AI proposes; deterministic code decides what is safe; a person authorises
+movement.** An AI agent (the author uses Claude) can read everything the
+observatory knows, plan a night, investigate a candidate and propose the
+next step: fourteen skills hold the routines (setup at the telescope,
+focusing, polar alignment, a discovery night, a claim, a comet report) and
+eight specialist agents do focused jobs (vetting a candidate, researching a
+place in catalogues, checking a comet track, reviewing a change that moves
+the mount, analysing a night). What may move is decided by code that does
+not depend on the agent: the Sun and altitude limits, the motion lock, the
+handset's state, dry runs, moves checked against the camera, and hooks that
+refuse any attempt to work round them. The MCP server and web API are
+read-only, every agent action is logged, and a person asks for each move.
+[AGENTS.md](AGENTS.md) and [the observatory page](docs/observatory.md) have
+the detail.
+
+It learns from real nights: a comet split in two by a gap in the pictures
+became joined tracks and a checked verdict by noon the next day; a transit
+that could not be measured became a precision diagnosis, a hold on the same
+pixels and a recipe the same day ([the records](docs/discovery.md#recent-proofs)).
 
 ## See it working
 
@@ -434,7 +518,10 @@ plan the night → GoTo → photograph → plate-solve (ASTAP) → correct → p
 | [From box to first galaxy](docs/first-night.md) | A first night for someone who knows none of the words: assemble, point north, switch on, align, focus, GoTo, picture. Says which steps are proven on a real mount. |
 | [What telescopeyoke just did for you](docs/how-it-all-works.md) | The astronomy and the engineering behind each of those steps, for afterwards. |
 | [Calibrating a mount, in order](docs/calibration.md) | Level roughly, polar-align, find the true home and mark it, measure the pointing each side, and check that the mount really turns. |
-| [Looking for something new](docs/discovery.md) | Novae in M31 and M33: how deep the rig reaches, proper image subtraction, vetting, and `patrol.py`. A plan with measurements; a patrol is one command, nothing found yet. |
+| [The TelescopeYoke observatory](docs/observatory.md) | The whole system on one page: observe, measure, discover, operate, reason, share; the safety rule; what it has learnt from real nights. |
+| [Looking for something new](docs/discovery.md) | The discovery station: novae in M31 and M33, comets in spacecraft pictures, transits, public alerts; its recent proofs. Operational; no find of its own yet. |
+| [The live stream](docs/streaming.md) | Running the Twitch broadcast: what viewers see, the presenter, the chat's commands. [The design record](docs/stream-look.md) says why it looks as it does. |
+| [Alerts](docs/alerts.md) | The house's lights and speaker, the phone, and calling the person. |
 | [How a picture is made](docs/imaging.md) | Calibration, frame checks, lining up, stacking, the quality pass. |
 | [Focusing by ear](docs/focus.md) | Turn the knob and the laptop talks you onto focus. |
 | [The cloud sensor](docs/cloudsensor.md) | A plan for a £40 box on the wall that says whether the sky above the garden is clear, cloudy or raining, all night. Not yet built. |
@@ -526,7 +613,12 @@ against the simulated rig and the tests.
 | Pointing survey: one correction for each side | ✅ 17 October 2026 | ✅ | ✅ |
 | Polar repeatability, creep response | not yet | not yet | ✅ |
 | Discovery: subtraction, candidates, vetting | ⚠️ on real M31 stacks, with planted fakes; no find of our own yet | ✅ | ✅ a known nova found again in ZTF's archive images |
-| Comets in spacecraft pictures (`sungrazer.py`) | does not need them | does not need them | ✅ known comets found in archived LASCO pictures |
+| Comets in spacecraft pictures (`sungrazer.py`) | does not need them | ✅ 19 October 2026: a known Kreutz sungrazer found by the hunt itself in live CCOR-1 pictures | ✅ known comets found in archived LASCO pictures |
+| Lights, speaker and phone alerts (`alert.py`) | does not need them | ✅ cloud and rain alerts on a real light and speaker; the call that woke the author when a run stopped (20 October 2026) | ✅ |
+| Live stream on Twitch (`stream.py`) | ✅ on air 20 October 2026 on the WASP-12 b run | ✅ | ✅ |
+| Exoplanet transit photometry | ⚠️ one attempt (WASP-12 b): dimming seen, not a detection | ✅ | ✅ |
+| Photometric hold (`shoot.py --hold`) | not yet | not yet | ✅ |
+| The night's end: parked and told | not yet | ⚠️ `mount.py home` only | ✅ |
 | Several rigs, `--probe` | not yet | not yet | ✅ |
 | Dark and flat frames, gain sweep | not yet | not yet | ✅ |
 

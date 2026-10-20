@@ -1,0 +1,79 @@
+# What has been proven, one fact a table, for the tests to hold the pages to.
+#
+# docs/validation.md is the account; this is its index. Each fact names the
+# row of validation.md's "Current conclusions" (`row`, the text of its first
+# cell) and where it stands (`status`): "proven" (✅ on real equipment),
+# "partly" (⚠️), "simulated" (🧪 the simulated rig and the tests only) or
+# "tried" (❌ tried, not yet working). `contradicted_by` lists sentences that
+# were true once and are not now: tests/test_docs.py fails if any current page
+# still says one. Change a fact here and in validation.md together.
+
+[facts.goto_centring]
+row = "GoTo centred by plate solving"
+status = "proven"
+date = 2026-10-03
+summary = "to about an arcminute, from 10° out"
+
+[facts.polar_alignment]
+row = "Polar alignment"
+status = "proven"
+date = 2026-10-13
+summary = "3.3° to 0.1° over six rounds"
+
+[facts.true_home]
+row = "`findhome` and marking home"
+status = "proven"
+date = 2026-10-17
+summary = "from 10.66° out by eye to 0.19° on the marks"
+contradicted_by = [
+    "finding home has run only on the simulated mount",
+    "Not yet proven: this has run only on a simulated mount",
+    "None of steps 2 to 5 has been run on the real mount",
+]
+
+[facts.pointing_survey]
+row = "Pointing survey"
+status = "proven"
+date = 2026-10-17
+summary = "one correction for each side is enough"
+
+[facts.comets]
+row = "Comets in spacecraft pictures"
+status = "proven"
+date = 2026-10-19
+summary = "known comets found in archived LASCO pictures; a known Kreutz sungrazer recovered by the hunt itself in GOES-19 CCOR-1 pictures, 19 October"
+
+[facts.alert_call]
+row = "Lights, speaker and phone alerts"
+status = "proven"
+date = 2026-10-20
+summary = "cloud and rain alerts changed a light and spoke on a speaker; the call at 04:59 on 20 October pulsed the lights, spoke and sent the phone message"
+contradicted_by = ["Not yet proven on a real light or speaker"]
+
+[facts.live_stream]
+row = "Live stream on Twitch"
+status = "proven"
+date = 2026-10-20
+summary = "on air from 01:20 UTC on 20 October: 1080p, title and category set for each target, the presenter, the chat's commands"
+contradicted_by = [
+    "Changing the Twitch or YouTube title or category per target. This needs",
+    "At present the stream stops five minutes after the last exposure",
+]
+
+[facts.transit]
+row = "Exoplanet transit photometry"
+status = "partly"
+date = 2026-10-20
+summary = "one attempt, WASP-12 b: dimming seen but not a detection (no baseline after it; about 14 mmag per 40 s point)"
+
+[facts.photometric_hold]
+row = "Photometric hold (`shoot.py --hold`)"
+status = "simulated"
+date = 2026-10-20
+summary = "built and reviewed; not yet run on the real mount"
+
+[facts.night_end]
+row = "The night's end: parked and told"
+status = "simulated"
+date = 2026-10-20
+summary = "schedule.py end and the morning guard; built and reviewed, not yet through a real night"

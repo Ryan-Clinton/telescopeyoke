@@ -10,9 +10,11 @@ tried, including figures later found to be wrong.
 
 ## Current conclusions
 
-As of 17 October 2026, on the author's EQ3 Pro, 150P and Hypercam 183C on
+As of 20 October 2026, on the author's EQ3 Pro, 150P and Hypercam 183C on
 Ubuntu. ✅ proven on real equipment, ⚠️ partly, 🧪 simulator and tests
-only, ❌ tried and not yet working.
+only, ❌ tried and not yet working. `docs/validation.toml` indexes these rows
+for the tests, which fail if a page still says something a row has
+overtaken.
 
 | What | Where it stands |
 |---|---|
@@ -34,7 +36,12 @@ only, ❌ tried and not yet working.
 | Windows | ⚠️ camera frames indoors; no mount driven; no whole night 🧪 |
 | Dark and flat frames, gain sweep | 🧪 |
 | Discovery pipeline | ⚠️ subtraction, vetting and planted fakes on real M31 stacks; a known nova found again in ZTF archive images; no transient of our own yet (`docs/discovery.md`) |
-| Comets in spacecraft pictures | ✅ known comets found in archived LASCO pictures |
+| Comets in spacecraft pictures | ✅ known comets found in archived LASCO pictures; 19 October, the six-hourly hunt found a known Kreutz sungrazer by itself in 74 GOES-19 CCOR-1 pictures, followed it for 7 hours across a gap and matched it to the Sungrazer Project's report to about 2 pixels; SOHO's C3 showed it too (`docs/discovery/comet-hunt-2026-10-19`) |
+| Lights, speaker and phone alerts | ✅ cloud and rain alerts changed a Hue light and spoke on a Google speaker (before the watch was turned off on 16 October); the call at 04:59 on 20 October, when a transit run stopped, pulsed the house's lights, spoke and sent the phone message, and woke the person |
+| Live stream on Twitch | ✅ on air from 01:20 UTC on 20 October on the WASP-12 b run: 1080p, the title, category and tags set for each target, the presenter and the chat's commands; one 9-minute freeze when old code met new words (restarted). YouTube not yet tried |
+| Exoplanet transit photometry | ⚠️ one attempt, WASP-12 b on 20 October: 973 frames, dimming of about the right size seen but not a detection: no baseline after the transit (cloud), and about 14 mmag per 40 s point (`docs/discovery/transit-wasp12b-2026-10-20`) |
+| Photometric hold (`shoot.py --hold`) | 🧪 built and reviewed 20 October; not yet run on the real mount |
+| The night's end: parked and told | 🧪 `schedule.py end` and the morning guard, built and reviewed 20 October; `mount.py home` itself proven, the whole not yet through a real night |
 
 Much of the newer work is proven on made-up star fields and a simulated
 mount, not yet on real sky. These are the experiments that will settle it.

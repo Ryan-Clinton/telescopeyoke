@@ -1,8 +1,10 @@
-# Looking for something new: a specification
+# Looking for something new: the discovery station
 
 [README](../README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
-Mostly built, not yet proved on the sky. This says how telescopeyoke
+The discovery station is operational; the milestone still to come is a
+new astronomical find of its own. Each programme has its own level of proof
+(the table below). This says how telescopeyoke
 becomes an always-on discovery station with a telescope attached, and
 how far it has got (the table below; "Phases" has the detail). The design
 and its reasons, what has been measured, and how a find is reported are
@@ -15,7 +17,32 @@ asks for another look when that would settle a question. It hands the
 person evidence, not guesses. Written 16 October 2026 from the sources at
 the end.
 
-Where it stands on 17 October 2026, phase by phase:
+## Recent proofs
+
+- **19 October 2026, GOES-19 CCOR-1:** the six-hourly comet hunt found a
+  known Kreutz sungrazer by itself in 74 pictures, followed it for seven
+  hours across a 45-minute gap, and matched it to the Sungrazer Project's
+  report of it to about 2 pixels; SOHO's C3 showed it too. A weak track on
+  the occulter's flickering rim was its one false alarm. Within hours the
+  hunt joined tracks across gaps, set rim tracks aside, gave positions in
+  the project's own frame, checked each find against the planets, bright
+  stars and the project's reports, and told the person in two messages
+  ([the record](discovery/comet-hunt-2026-10-19/README.md)).
+- **20 October 2026, WASP-12 b:** the first exoplanet transit attempt, 973
+  frames through ingress and the middle. Dimming of about the right size
+  was seen and rejected as a detection: no baseline after the transit, and
+  about 14 mmag per 40 s point. Measuring the same frames 288 ways showed
+  why (short frames against a noisy background, the comparison stars, a
+  slope with the airmass), and the next attempt has a hold on the same
+  pixels, the calibration warnings and a recipe
+  ([the record](discovery/transit-wasp12b-2026-10-20/README.md)).
+- **20 October 2026, M31 panel 4:** a candidate from 18 October seemed to
+  be seen again; measured in each night's stack with no reference involved,
+  nothing was there, so the striped reference was the cause, and a
+  candidate from an earlier night seen again is now sent to the person at
+  once with how it was seen.
+
+Where it stands on 20 October 2026, phase by phase:
 
 | Phase | Software | Proved |
 |---|---|---|
@@ -23,7 +50,7 @@ Where it stands on 17 October 2026, phase by phase:
 | 1 Transient pipeline | built | on archive data (AT2024koe from ZTF images); not yet a transient in our own frames |
 | 2 M31 patrol | built | no: a known nova recovered from our own data is still to come |
 | 3 M33 | programme and depth only | no: a night with its completeness measured is still to come |
-| 4 Sungrazer | built, running every 6 hours | yes: known comets found in archived pictures |
+| 4 Sungrazer | built, running every 6 hours | yes: known comets found in archived pictures, and a known Kreutz sungrazer found by the hunt itself in live CCOR-1 pictures (19 October) |
 | 5 Report packet | built | the packet, yes (95 s); a claim filled in on the Transient Name Server and stopped before sending, not yet |
 | 6 Public alerts | built | the month's search, yes; a public transient observed with the 150P, not yet |
 | 7 Search everything again | built | not yet run as a rerun that finds fakes planted in old frames |

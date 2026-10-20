@@ -70,7 +70,10 @@ Green, Red, Orange, Yellow, Blue, Purple, Pink, Cyan.
 - The speaker fetches the sound from this computer: one file, at an address
   nobody could guess, for the seconds it takes to play.
 - `--dry-run` on any command says what would be done and touches nothing.
-- Not yet proven on a real light or speaker.
+- Proven on the real light and speaker: cloud and rain alerts changed a Hue
+  light and spoke on a Google speaker, and the call at 04:59 on 20 October
+  pulsed the house's lights, spoke and sent the phone message
+  (`docs/validation.md`).
 
 ## Calling the person
 
