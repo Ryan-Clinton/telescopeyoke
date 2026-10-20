@@ -1,213 +1,470 @@
 # The live stream's picture: a spec
 
-Status: proposed, 20 October 2026. Nothing here is built yet.
+Status: proposed, 20 October 2026, revised the same day after review.
+Nothing here is built yet.
 
 `stream.py` sends the telescope to Twitch (and later YouTube) whenever a run
-is imaging. What it sends now (`./stream.py frame` makes a copy as
-`cache/stream-preview.jpg`) is two pictures side by side: the stack, and the
-newest frame. Under them are the target's name, "203 frames of 4 s kept" and
-the clock. That is correct, but a stranger arriving on the stream can't tell
+is imaging. What it sends now (`./stream.py frame` saves a copy as
+`cache/stream-preview.jpg`) is two pictures side by side: the stack and the
+newest frame, with the target's name, "203 frames of 4 s kept" and the clock
+underneath. That is correct, but a stranger arriving on the stream can't tell
 what they are looking at, why, or whether anything is happening. The newest
 frame is an unstretched pink-grey mush, and the bottom third of the screen
 is empty.
 
-This spec is for a picture that looks finished, shows a little live data, and
-tells a viewer in one glance what the telescope is doing and why.
+## The direction, in one paragraph
+
+> The stream should look like a quiet live science documentary, not a
+> computer dashboard. The sky is always the hero. The graphics are dark,
+> restrained, spacious and informative, and motion is slow and purposeful.
+> A viewer who knows nothing about astronomy should understand within five
+> seconds what they are seeing, why the telescope is looking at it, whether
+> the observations are progressing, and what happens next.
+
+Every choice below follows from that paragraph. Where an implementation
+choice is not covered here, decide it by the same rule.
 
 ## Who it is for
 
-Someone who clicks in from Twitch or from ryanclinton.uk ([live-page.md](live-page.md)) knowing nothing.
-Within five seconds they should be able to answer:
+Someone who clicks in from Twitch or from ryanclinton.uk
+([live-page.md](live-page.md)) knowing nothing. Within five seconds they
+should be able to answer:
 
 1. What is that? (the object, in plain words)
 2. Why tonight? (the programme: a transit being timed, a nova patrol, a picture)
-3. Is it working? (live figures that change, and when the last frame came)
-4. What happens next? (the rest of tonight's schedule)
+3. Is it working? (live figures that change, and when the last exposure came)
+4. What happens next? (the rest of tonight)
 
 ## Rules carried over (unchanged)
 
-- Nothing names or locates the place. That means no site name, no latitude
-  or longitude, no horizon picture, no cloud map, no weather and no webcam.
-  Times are shown in UTC, which astronomers use anyway, so the stream does
-  not even give away the time zone. Sunrise and sunset are never shown as
-  clock times, because with the date they give the latitude. Only "dawn in
-  2 h 10 min" is allowed.
-- The stream key appears nowhere: not in the picture, the log or the tests.
-- Candidates from a patrol are shown as counts only, never positions or
-  cut-outs, until they have been vetted. An unvetted position on a public
-  stream is a claim nobody made.
-- Off unless `[stream] enabled`. It streams only while the telescope is
-  working (see "Between targets" for the one change to that).
+- **Nothing names or locates the place.** That means no site name, no
+  latitude or longitude, no horizon picture, no cloud map, no weather and no
+  webcam. All times are UTC and labelled "UTC", which astronomers use anyway
+  and which does not give away the time zone. Sunrise and sunset are never
+  shown as clock times, because with the date they give the latitude. Only
+  "dawn in 2 h 10 min" is allowed.
+- **The stream key appears nowhere**: not in the picture, the log or the tests.
+- **No candidate position is ever shown**: no coordinates, no cut-out and no
+  marker on the picture, until it has been vetted and reported. An unvetted
+  position on a public stream is a claim nobody made.
+- **Off unless `[stream] enabled`.** It streams only while the telescope is
+  working, with the two additions under "Between targets" and "End of
+  night".
+- **Every word on screen comes from data or curated text.** Target
+  descriptions and science captions are hand-written in the repository.
+  Nothing is generated live, and nothing is guessed: a cause such as cloud is
+  only named when the project has measured it.
 
-## Layout (1280 × 720, kept)
+## The video itself
+
+| | Now | Proposed |
+|---|---|---|
+| Size | 1280 × 720 | **1920 × 1080** |
+| Frames sent | 5 a second | **30 a second** |
+| Bitrate | 2.5 Mbit/s | **5 Mbit/s** (Twitch suggests 4.5 for 1080p30; YouTube about 5 or more) |
+| Keyframe | every 2 s | every 2 s (both services ask for 2 s) |
+| Encoder | VAAPI on the Radeon (`renderD129`), else libx264 | the same |
+
+Faint stars, galaxy structure, small text and a light curve are exactly
+what compression smears at 720p and 2.5 Mbit/s.
+
+The picture is still composed only when something changes: every 3 s, plus
+the in-between frames of a fade. It goes to ffmpeg at **10 pictures a
+second**, and ffmpeg's `fps=30` filter repeats each one up to 30. A raw
+1080p picture is 6.2 MB, so 30 a second through the pipe would be 187 MB/s
+for nothing; at 10 a second it is 62 MB/s. Composing must take under 200 ms,
+and a fade's frames are made from two finished pictures by blending, not by
+drawing again.
+
+**Bandwidth.** The home upload has not been measured. `stream.py` watches
+ffmpeg's `speed=` report. If the stream falls behind (speed under 0.95 for
+30 s), it restarts at 1280 × 720, 30 fps and 3 Mbit/s, and says so in its
+log. A clean 720p is better than a starved 1080p. `./stream.py` (the check
+that sends nothing) reports which one it would use.
+
+## Layout (1920 × 1080)
 
 ```
-┌──────────────────────────────────────────────┬───────────────────────┐
-│                                              │ WASP-12               │
-│                                              │ a star with a hot     │
-│                                              │ Jupiter in a 26 h orbit│
-│          THE STACK (main picture)            │                       │
-│          ~ 880 × 590                         │ TONIGHT: timing the   │
-│                                              │ planet's transit      │
-│                                   ┌────────┐ │                       │
-│                                   │ newest │ │ [programme panel]     │
-│                                   │ frame  │ │                       │
-│                                   └────────┘ │ figures: frames, time,│
-│                                              │ sharpness, stars      │
-├──────────────────────────────────────────────┴───────────────────────┤
-│ ● LIVE 02:21 UTC · last frame 3 s ago · Next: M31 P6 second look 06:25│
-└──────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TELESCOPEYOKE  live observatory                        ● LIVE  02:21 UTC│
+│                                                                         │
+│                                                  ┌────────────────────┐ │
+│                                                  │ M31                │ │
+│                                                  │ ANDROMEDA GALAXY   │ │
+│                                                  │                    │ │
+│              THE STACK (the hero)                │ NOVA PATROL        │ │
+│              ~1300 × 870                         │ Searching tonight's│ │
+│              "225 exposures combined"            │ image for stars    │ │
+│                                                  │ that weren't here  │ │
+│                                                  │ before.            │ │
+│                                                  │                    │ │
+│                                                  │ [programme graphic]│ │
+│                                     ┌──────────┐ │                    │ │
+│                                     │ONE       │ │ 203 / 211          │ │
+│                                     │EXPOSURE  │ │ FRAMES KEPT        │ │
+│                                     │4 s       │ │ 54 MIN             │ │
+│                                     └──────────┘ │ LIGHT COLLECTED    │ │
+│                                                  └────────────────────┘ │
+│ ● LIVE        02:21:36 UTC              LAST EXPOSURE 3 s    NEXT · P7  │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
 
-- **The stack is the main picture**, about 880 × 590, letterboxed on black.
-  It's the thing worth looking at, and it gets better through the night.
-- **The newest frame is a small inset**, about 240 × 160, in the stack's
-  lower right with a thin border and the label "newest frame · 4 s". It is
-  stretched the same way as the stack (black point and gamma taken from the
-  frame's own background and noise), so it looks like a real frame of sky
-  and not a pink sheet. It shows that the telescope is live.
-- **A side panel**, 380 wide, has the object, the programme and the
-  figures, in that order.
-- **A footer line** shows "● LIVE", the UTC time, how long ago the last
-  frame came, and the next step on tonight's schedule with its UTC start.
+- **The sky is about three quarters of the screen.** The stack is about
+  1300 × 870, with a small caption in its corner: "225 exposures combined".
+- **The single exposure is an inset**, about 300 × 200 in the stack's lower
+  right, labelled **ONE EXPOSURE · 4 s**, using the run's real exposure. Side
+  by side with the stack, it teaches what stacking is: one exposure is faint
+  and noisy, and the combined one keeps improving.
+- **The side panel is about 430 wide**, with the object, the programme, its
+  graphic and two or three figures, top to bottom.
+- **Header**: a small "TELESCOPEYOKE live observatory" at the top left, and
+  "● LIVE" with the UTC time at the top right. There is no other logo.
+- **Footer**: separate fields lined up by position, not joined with dots:
+  live state, UTC time, how long ago the last exposure came, and what is
+  next.
+- **Safe margins**: nothing important within 96 px of either side or 54 px
+  of the top and bottom (5 %), as broadcast titles are kept.
 
-Colours are taken from the status page (dark blue-black background, pale
-text, one accent colour) so the stream and the page look like one thing. The
-font is DejaVu Sans, which is already installed and openly licensed; it
-replaces PIL's default font. Text is at least 18 px, because Twitch viewers
-watch at 480p on phones.
+### Colour
+
+| Use | Colour |
+|---|---|
+| background | `#060A12` |
+| panel | `#0B1220` |
+| panel raised | `#111A2A` |
+| main text | `#EEF4FF` (never pure white) |
+| secondary text | `#A5B2C8` |
+| accent (the one identity colour) | `#66C5FF` |
+| live | `#63D68B` |
+| attention | `#F2B95D` |
+| problem (only something genuinely wrong) | `#EE6B73` |
+
+Text contrast is about 7:1 against its panel or more, well above WCAG's
+4.5:1, because the pictures under and around it are dark and low in
+contrast. A test checks each text colour against its background.
+
+### Type
+
+The fonts are DejaVu Sans, Bold and Mono, which are already installed and
+openly licensed. Sizes at 1080p:
+
+| Text | Font | Size |
+|---|---|---|
+| Target name | Bold | 50 px |
+| Programme name | Bold | 28 px |
+| Body words | Sans | 25 px |
+| Figure numbers | Bold | 36 px |
+| Figure labels | Sans, capitals | 18 px |
+| Footer, UTC time, exposure lengths | Mono | 21 px |
+
+At the 720p fallback, every size is two thirds of this. Nothing is smaller
+than 18 px at 1080p, because viewers watch inside a phone app.
+
+## The stack looks its best
+
+This is the piece most worth the effort. The stream gets its own **display
+stretch**, made from the same stack the page shows. It never touches the FITS
+files that the measurements use:
+
+science stack → a non-destructive display transform → broadcast picture
+
+The display stretch:
+
+- keeps the sky black (the black point is set from the background, not at
+  zero);
+- lifts faint structure gently (an asinh stretch);
+- neutralises a colour cast (scaling each channel's background to grey);
+- tames bright stars before they clip (a soft shoulder);
+- gives a slight saturation lift and a very mild local contrast;
+- does no sharpening and adds no detail.
+
+The single exposure gets the same stretch, made from its own background and
+noise, so it looks like a real exposure of sky.
+
+When a new stack arrives, it **crossfades over 350 ms** from the old one, so
+the galaxy seems to come out of the dark through the night.
 
 ## The side panel
 
 ### The object
 
-The name, then one line of plain words, then a second line of facts:
+Its name, its common name in capitals, one or two plain sentences, then one
+small line of facts:
+
+> **M31**
+> **ANDROMEDA GALAXY**
+> The nearest large galaxy to the Milky Way. Its light has travelled about
+> 2.5 million years to reach this camera.
+> ~2.5 million light years · magnitude 3.4
 
 > **WASP-12**
-> A star in Auriga with a giant planet that circles it in 26 hours
-> 1,400 light years · magnitude 11.6
+> A star with a giant planet so close that it circles in just over a day.
+> ~1,400 light years · magnitude 11.6
 
-The words come from a hand-written table, `stream-targets.toml`, kept in the
-repository. It has one entry per object the project images (M31, M33, M45,
-WASP-12, …): `words`, `distance`, `magnitude`, and where useful `size`. An
-object with no entry shows its name and its type from the catalogue
-`tonight.py` already uses. A missing entry is never filled with made-up
-facts, and the test checks every entry's fields are present and short
-enough to fit.
+These come from a hand-written table, **`stream-targets.toml`**, kept in the
+repository. It has one entry for each object the project images, with these
+fields:
 
-### The programme: what is being done, and why
+- `common` (optional);
+- `words`, in plain language and never catalogue prose ("spectral type G0V"
+  is not for viewers);
+- `distance` and `magnitude`;
+- `captions`, the science captions below.
 
-This panel changes with the kind of run. It is chosen from what is running:
-the schedule step's label, the activity line (`activity.now()`), and which
-programme made the run.
+An object with no entry shows its name and its catalogue type only. A
+missing entry is never filled with made-up facts. A test checks that every
+entry has its fields and fits its box.
 
-**A transit** (a planet listed by `transits.py` tonight for this star):
+### The programme: a graphic only where the graphic is the science
 
-> **Timing the planet's transit**
-> The planet passes in front of its star and dims it by 1.4 %.
-> Ingress HH:MM · mid HH:MM · egress HH:MM UTC (from transits.py)
-> [a small light curve: the star's brightness against time, with
->  the expected ingress/egress marked and a "now" line]
+There are no general telemetry graphs. Each programme gets the one graphic
+that explains it, or none.
 
-The light curve uses `transits.measure` on the session so far, run every 5
-minutes in a separate process (it reads frames; it must not slow the
-stream), and drawn as dots with the expected box shape behind them. Before
-ingress, the panel says "Before ingress: measuring the star's steady light"
-so that a flat line looks deliberate.
+**Transit** (a planet `transits.py` lists tonight for this star):
 
-**A nova patrol** (patrol.py, M31 or M33):
+> **WASP-12 b**
+> **HOT JUPITER TRANSIT**
+> The planet passes in front of its star and dims it by about 1.4 %.
 
-> **Nova patrol: Andromeda's 8 panels**
-> Looking for new stars against last month's pictures.
-> [a small map of the panels: done ones filled, the current one outlined]
-> Panel 6 of 8 · 2 candidates so far, being checked
+The graphic is the light curve. The expected transit is drawn as a muted
+box shape, using the ingress, middle and egress times from `transits.py`,
+which are labelled under the axis. The measurements are brighter dots, and a
+"NOW" marker shows the time. The key says **EXPECTED** and **LIVE
+MEASUREMENTS**: the dots are never called a confirmed transit. The panel has
+one state at a time:
 
-The counts come from the status file's `discovery` sessions. A second look is
-shown as "Second look at panel 8".
+- **MEASURING BASELINE**, with "18 min collected · transit begins in 32 min".
+  This shows until there are 30 minutes of points and the scatter (in 5 min
+  bins) is under half the expected depth.
+- **LIVE PHOTOMETRY**: the dots, once the test above passes.
+- **PHOTOMETRY PAUSED: LOW SIGNAL**, when the comparison stars' summed flux
+  drops by more than 30 %, or frames are being rejected. It never says
+  "cloud" unless the cloud sensor or the run's rejection reason says cloud.
 
-**A picture** (shoot.py run for an image):
+A poor light curve is never shown just because one exists. The measurement
+is `transits.measure` on the session so far, run every 5 minutes in its own
+process, because it reads frames and must not slow the stream.
 
-> **Building a picture**
-> Every frame is added to the stack; the noise falls as they add up.
-> 1 h 12 min collected
+**Nova patrol** (patrol.py, M31 or M33):
+
+> **NOVA PATROL · ANDROMEDA**
+> Every star in this picture is being compared with an earlier night.
+
+The graphic is the panel map, drawn from the patrol's own panel layout. A
+done panel is filled, the current one is outlined and gently pulsing, and
+the rest are open, with "5 / 8 searched" beside it. Candidates are counts
+only, worded so they don't sound like discoveries:
+
+- "2 possible changes, being checked automatically" (not "2 unexplained").
+- "No confirmed new star yet", once vetting has rejected them.
+
+At the start of each panel, for 10 seconds, the graphic becomes
+**REFERENCE / TONIGHT**: two small views of the panel, the reference stack
+(`reference.py`) and tonight's. They are whole panels, never a cut-out
+around a candidate. This shows what "looking for new stars" means.
+
+**Variable star** (starwatch.py): the brightness curve so far, with the
+same rule of not showing it before there are enough points.
+
+**A picture** (a shoot.py imaging run): "Every exposure is added to the
+stack; the noise falls as they add up." The graphic is a thin progress arc
+of the time collected against the time planned, if a time is planned.
+Otherwise there is none.
 
 ### The figures
 
-These are four small figures, each with a sparkline of the last 30 minutes
-from the status `series`:
+There are three at most, as large numbers with small labels and no graphs:
 
 | Figure | From | Shown as |
 |---|---|---|
-| Frames kept | `accepted` / `captured` | "203 of 203 kept" |
-| Time collected | `integration` | "13 min 32 s" |
-| Sharpness | `series.fwhm` × the plate scale | "star size 6.8″" |
-| Stars found | `series.stars` | "300" |
+| Frames kept | `accepted` / `captured` | **203 / 211** FRAMES KEPT |
+| Light collected | `integration` | **54 MIN** LIGHT COLLECTED |
+| Star size | `series.fwhm` × the plate scale | **5.8″** STAR SIZE |
 
-Tracking drift is left off: it means nothing to a viewer and plenty to us,
-and we have the page for that.
+When a figure changes, it crossfades over 300 ms rather than jumping.
+Tracking drift, star counts and roundness stay on the status page, which is
+the place for them.
+
+## Moments: short, then out of the way
+
+The panel above is what is on screen most of the time. These appear for a
+few seconds and then fade:
+
+- **Target introduction, 7 s**, when a new target starts imaging. The
+  newest stack (or the last one, dimmed) fills the screen behind it:
+
+  ```
+                M31
+          ANDROMEDA GALAXY
+   the nearest large galaxy to the Milky Way
+       about 2.5 million light years away
+          NOVA PATROL · PANEL 4
+  ```
+
+  It then dissolves into the normal layout over 400 ms.
+- **Science captions, 8 s, every 7 minutes**, across the bottom of the
+  stack. These are curated sentences from the target's `captions` and from
+  each programme's own list (also in `stream-targets.toml`), taken in turn
+  and never generated. For example: "A nova would appear here as a point of
+  light that wasn't in the reference image."
+- **Tonight ribbon, 10 s, every 15 minutes** and during every between-targets
+  card:
+
+  ```
+  TONIGHT   M31 core ✓ ─ M31 panels ✓ ─ WASP-12 b ● ─ M31 P6 second look ○
+  ```
+
+  Done steps are dimmed, the current one is in the accent colour, and those
+  to come are outlined. It comes from the schedule's steps.
+- **Night stage**, a single short line under the header that changes through
+  the night. Early: "Tonight's observing begins". Then "3 h 18 min observed
+  · 5 fields done". Finally "Last target before dawn", when the schedule's
+  last step is running.
+
+## Is it live? The age of the last exposure
+
+The footer says so, worded calmly:
+
+| Last exposure | Footer | Colour |
+|---|---|---|
+| under 30 s, or under twice the exposure length | ● LIVE | live |
+| up to 120 s | ● WAITING FOR NEXT EXPOSURE | secondary |
+| over 120 s | PAUSED · no new exposure for 2 min | attention |
+
+When the paused state is shown and the status page's checks show the
+camera and mount connected, it adds "telescope still connected". It says
+cloud only when the cloud sensor or the run's rejections say cloud.
 
 ## Between targets
 
-At present the stream stops five minutes after the last frame and starts
-again with a new run. A GoTo, a plate solve and a focus check take two to
-six minutes, so a viewer sees the stream drop out between every target.
+At present the stream stops five minutes after the last exposure and
+starts again with the next run, so it drops out at every GoTo.
 
-Proposed change: while the schedule runner is alive and its next step starts
-within 15 minutes, the stream stays up and shows a card instead of the stack:
+The change: while the schedule runner is alive and its next step starts
+within 15 minutes, the stream stays up and shows a between-targets card. The
+last stack fills the screen, cropped slightly, darkened by 40 % and lightly
+blurred, with this over it:
 
-> **Moving to WASP-12**
-> (or "Plate solving", "Checking focus": the words from `activity.now()`)
-> The last picture: [the last stack, dimmed]
-> Next: WASP-12 b transit, 4 s frames, from 01:50 UTC
+```
+NEXT TARGET
+WASP-12
+Hot Jupiter transit · imaging begins in about 4 min
 
-It still stops after five minutes when nothing is running and nothing is
-due, as now: at cloud, the end of the night, or the telescope put away.
+✓ moving telescope
+● confirming field        (plate solving)
+○ checking focus
+○ imaging
+```
 
-## Holding the picture together
+The checklist steps come from `activity.now()`: "Moving" for the GoTo,
+"Plate solving", and "Focus" for the focus check. A step is ticked when its
+activity line ends. The card then dissolves into the target introduction.
 
-- The picture is drawn every 3 s, as now. Drawing it must take under 200 ms
-  on the laptop, because the stacking needs the processors. The light curve
-  and the sparklines are drawn from data already in memory; only the
-  light-curve measurement reads frames, and it does so in its own process.
-- Every piece degrades on its own. With no stack yet, the main picture says
-  "The stack starts after the first few frames". With no series, the
-  sparklines are left out. With no table entry, the object has its name
-  only. Nothing is ever blank without a reason shown.
-- The footer's "last frame N s ago" turns amber over 60 s and says "waiting
-  for a frame (cloud?)" over 120 s, the same thresholds as the page.
+With nothing running and nothing due, the stream ends as now, after the
+end-of-night card when the night has finished.
+
+## Possible change detected
+
+When a patrol's search finds an unexplained candidate, the programme panel
+changes for as long as the follow-up lasts. There are never coordinates,
+cut-outs or a marker.
+
+1. **POSSIBLE CHANGE DETECTED**: "The software found a point of light that
+   wasn't clear in the reference image. Taking another look now."
+2. **SECOND LOOK UNDER WAY**: shown while `patrol.second_look` runs.
+3. The result, in the vetting's own terms (`vet.verdict`):
+   - "Not confirmed: it did not appear again", when the second look did
+     not reproduce it;
+   - "Not confirmed: a known asteroid / variable star", when a catalogue
+     explained it;
+   - "Still unexplained: kept for private checking", for anything else. The
+     person decides what is claimed and when (`/claim`).
+
+This lets viewers watch the method (a candidate, a repeat observation,
+catalogue checks, a result) without anything being published early.
+
+## End of night
+
+When the schedule's last step has ended, and nothing more is due before
+dawn, the stream shows an end card for 2 minutes and then stops:
+
+```
+TONIGHT COMPLETE
+
+6 targets observed
+1 h 47 min of light collected
+742 frames kept
+8 M31 panels searched · 0 confirmed new stars
+
+[the night's best final stack]
+
+TELESCOPEYOKE
+```
+
+The figures are added up from tonight's sessions, which are already in the
+status file's `discovery` and the frame logs. Nothing on the card is counted
+anywhere new.
+
+## Motion
+
+Allowed: fades of 250–400 ms, figures crossfading, one gentle pulse on the
+current panel or step, one faint flash of the inset's border when an
+exposure arrives, and light-curve dots fading in.
+
+Not allowed: sliding panels, spinning loaders, animated starfields, a
+bouncing LIVE badge, glowing borders, or any games-overlay effect.
+
+## Holding it together
+
+- Each piece degrades on its own. With no stack yet, the stack area says
+  "The picture builds up after the first few exposures". With no table
+  entry, only the name is shown. With no graphic for a programme, the panel
+  shows its words only. Nothing is ever blank without a reason shown.
+- Composing stays under 200 ms. Fades are blends of finished pictures.
+  Only the light-curve measurement reads frames, and it runs in its own
+  process.
 
 ## Not in this change
 
-- Changing the Twitch or YouTube stream title or category per target. That
-  needs an OAuth app on each service; it is a separate piece of work.
+- Changing the Twitch or YouTube title or category per target. This needs
+  an OAuth app on each service.
 - Sound or music. The silent track stays, as the services need one.
 - Chat or viewer interaction.
-- Sending to two services at once (YouTube and Twitch). That is a separate
-  change to `stream.py`'s output, not to the picture.
+- Sending to YouTube and Twitch at once. That is a change to `stream.py`'s
+  output, not to the picture.
 
 ## Tests
 
-- `frame()` for each kind of run (a transit, a patrol, a picture, and
-  between targets) draws without error from a fixture status. The parts the
-  run has are present, which is checked by drawing into a recorder rather
-  than by reading pixels.
-- No text drawn contains the site's name, its latitude or longitude, or the
-  stream key. This test already exists for the current picture and is
-  extended to every kind of run.
-- Every entry in `stream-targets.toml` has its fields and fits its box.
-- Drawing takes under 200 ms on a 1280 × 720 fixture (marked slow-sensitive).
-- Times on the picture are UTC.
-- The between-targets rule: with the schedule runner alive and the next step
-  due within 15 min, `decide()` carries on and does not stop the stream.
+- `frame()` draws without error from a fixture status for each state:
+  - a transit (in each of its three panel states);
+  - a nova patrol (with no candidates, a possible change, a second look, and
+    each result);
+  - a variable star;
+  - a picture;
+  - between targets;
+  - the end card;
+  - the target introduction.
+  The parts each state has are checked by drawing into a recorder, not by
+  reading pixels.
+- No text drawn in any state contains the site's name, its latitude or
+  longitude, the stream key, or a candidate's RA or Dec.
+- Every time drawn is UTC and labelled.
+- Each text colour has at least 7:1 contrast with its background.
+- Every important box lies inside the safe margins at 1080p and at 720p.
+- Every `stream-targets.toml` entry has its fields and fits its box.
+- Composing takes under 200 ms on a fixture.
+- `decide()`:
+  - carries on between targets while the runner is alive and the next step
+    is due within 15 min;
+  - holds the end card for 2 min, then stops;
+  - stops as now otherwise.
+- The fallback from 1080p to 720p happens on a slow `speed=` report and is
+  logged.
 
-## For review
+## Still to decide
 
-1. Is UTC right for a public stream, or does local time read better to a
-   viewer, given that it gives away the time zone?
-2. Should a light curve go on a public stream before the measurement is
-   checked? (A bad comparison star makes a fake dip.) A proposed rule: show
-   it only once there are 30 minutes of points and the scatter is under half
-   the expected depth; until then show "measuring".
-3. Is 15 minutes the right gap to keep the stream up between targets?
-4. Does anything in the side panel leak the place? The object list and
-   times together hint at the latitude, as any astronomy stream does.
+1. Is 15 minutes the right gap for keeping the stream up between targets?
+2. Does anything shown leak the place? The objects and times together hint
+   at the latitude, as on any astronomy stream; nothing more should.
+3. The upload speed at home is unmeasured. The first night will show
+   whether 1080p holds.
