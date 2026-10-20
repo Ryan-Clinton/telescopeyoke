@@ -10,7 +10,7 @@ on the Windows desktop it is Ubuntu under WSL, reached through a port
 forwarded from Windows. It needs Python with the project's packages: its
 ~/telescopeyoke/.venv, or python3.
 
-Everything goes under ~/telescopeyoke-remote on HOST, apart from any
+Everything goes under ~/telescopeyoke-laptop/remote on HOST, apart from any
 checkout of the project there, so nothing being worked on is touched. Raw
 frames already sent are not sent again (rsync), so a second stack of the
 same sessions starts at once.
@@ -26,7 +26,7 @@ import records
 import stacking
 
 ROOT = Path(__file__).parent
-PLACE = "telescopeyoke-remote"     # under HOST's home folder
+PLACE = "telescopeyoke-laptop/remote"     # under HOST's home folder
 PYTHONS = ("telescopeyoke/.venv/bin/python", "python3")
 BACK = ("final.fits", "final.jpg", "restack.json", "discovery.fits", "discovery.json")
 

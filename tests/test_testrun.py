@@ -47,7 +47,7 @@ def test_on_the_desktop_it_copies_the_checkout_then_runs_there(monkeypatch):
     runner, calls = fake(["", OUTPUT])
     answer = testrun.run(argparse.Namespace(tests=["tests/test_mount.py"], k="meridian", here=False),
                          say=lambda s: None, runner=runner)
-    assert calls[0][0] == "rsync" and calls[0][-1] == "desktop:telescopeyoke-tests/"
+    assert calls[0][0] == "rsync" and calls[0][-1] == "desktop:telescopeyoke-laptop/tests/"
     assert calls[1][0] == "ssh" and "~/telescopeyoke/.venv/bin/python -m pytest" in calls[1][-1]
     assert "tests/test_mount.py -k meridian" in calls[1][-1] and "COLUMNS=1000" in calls[1][-1]
     assert answer["where"] == "desktop" and answer["failed"] == 1 and not answer["ok"]

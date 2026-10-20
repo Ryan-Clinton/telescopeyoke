@@ -8,7 +8,7 @@
     ./ty test-run --json
 
 The checkout as it is now, committed or not, is copied to the desktop
-(~/telescopeyoke-tests, tracked and new files, nothing git ignores) and the
+(~/telescopeyoke-laptop/tests, tracked and new files, nothing git ignores) and the
 tests run there with its own Python (~/telescopeyoke/.venv). The answer is
 the counts and, for each failure, its name and its first lines: what an
 agent needs to start on it, without the run's whole output. Run it in the
@@ -31,7 +31,7 @@ import remote
 
 ROOT = Path(__file__).parent
 HOST = "desktop"
-PLACE = "telescopeyoke-tests"
+PLACE = "telescopeyoke-laptop/tests"
 FIRST_LINES = 8      # of each failure, kept
 WIDE = "1000"        # columns pytest is told it has, so it never trims a failure's reason
 

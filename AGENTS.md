@@ -55,7 +55,7 @@ them and every file kept under `demo/`.
 | `focuser.py`, `firmware/focuser/` | The focuser's motor: an Arduino Nano driving a small stepper, and the firmware it runs. `focuser.py` turns the motor; `focus.py --motor` uses it to focus on the stars in view |
 | `shoot.py`, `stacking.py`, `restack.py`, `process.py`, `calibrate.py` | Imaging pipeline |
 | `depth.py` | How faint a stack reaches, measured: zero point against Gaia, 5-sigma limit, planted stars found again (`docs/discovery.md`, phase 0) |
-| `remote.py` | `restack.py --on HOST`: sends the frames, calibration and code to another computer by SSH and rsync, stacks there under `~/telescopeyoke-remote`, and brings the picture back |
+| `remote.py` | `restack.py --on HOST`: sends the frames, calibration and code to another computer by SSH and rsync, stacks there under `~/telescopeyoke-laptop/remote`, and brings the picture back |
 | `planet.py` | A planet: thousands of a second per frame, a square round it kept from each, the sharpest stacked. Uses the camera only |
 | `difference.py` | Proper image subtraction (ZOGY) of a reference stack from a new one: what is brighter now (`docs/discovery.md`, phase 1) |
 | `patrol.py`, `programmes/` | A discovery patrol of one field: readiness, point and image (through `mount.py` and `shoot.py`), then depth, subtraction, vetting and a short answer |
@@ -136,6 +136,10 @@ a motor's creep rate. `mount.py stop` is always allowed.
   live in `interface.py` and are stable. Bump `SCHEMA_VERSION` for any
   breaking change.
 - Keep `--demo` and the tests working with every change.
+- On another computer (the desktop), everything goes under one folder,
+  `~/telescopeyoke-laptop/`: `tests/` for `ty test-run`, `remote/` for
+  `restack.py --on`. Nothing else is made in its home folder: no
+  one-off copies for a test run.
 - Keep every JSON file through `records.write` (never `write_text`): a
   scientific result with `stamp=True` and its schema, a file two processes
   may change (a field's candidate book) through `records.change`. Change a
