@@ -201,10 +201,16 @@ tightened, so the 1536 overshoot is far more than needed: on the telescope
 
 ## When the motor cannot lift the drawtube
 
-On 19 October 2026 the motor turned but, with the camera's weight on the
-drawtube, moved it only downhill; uphill the drive slipped, nearly a turn
-of lost motion after each reversal, at every speed from 5 to 40 ms a
-half-step. What worked: point where the weight pulls the drawtube in (M31,
+On 19 October 2026, with the camera's weight on the drawtube, the motor
+moved it only downhill; uphill the drawtube did not move, nearly a turn of
+lost motion after each reversal, at every speed from 5 to 40 ms a
+half-step. Nobody saw whether the motor's shaft turned meanwhile (the Nano
+only knows the steps were sent), so a stalled motor and a slipping coupler
+are both still possible. The coupler had one grub screw of its two, as
+built: the second was never fitted. A Sharpie line across the motor's
+shaft, the coupler and the focuser's shaft tells them apart: all three
+still in line and nothing moved is a stall; the line broken at the
+coupler's motor end or focuser end is slip there. What worked: point where the weight pulls the drawtube in (M31,
 east of the meridian, that night), set it a little out of focus by hand,
 and let `./focus.py --walk-in` bring it in. It reached HFR 1.58, the
 sharpest yet, and stops two moves past the best (at most 64 half-steps
