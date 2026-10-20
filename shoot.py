@@ -38,7 +38,7 @@ import subprocess
 import sys
 import time
 from collections import deque
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import config
@@ -75,6 +75,19 @@ FINISH_FROM = 5      # accepted frames before the live picture is finished like 
 BACKLOG = 8         # frames allowed to wait for the live stack before it skips some
 
 
+def clock_state(run=subprocess.run):
+    """Whether the system clock is kept to time by network time (systemd's
+    timedatectl), and when that was asked; "unknown" where it cannot say."""
+    try:
+        done = run(["timedatectl", "show", "-p", "NTPSynchronized", "--value"], capture_output=True, text=True,
+                   timeout=5)
+        synced = {"yes": True, "no": False}.get(done.stdout.strip())
+    except (OSError, subprocess.SubprocessError):
+        synced = None
+    return {"synchronized": "unknown" if synced is None else synced,
+            "checked": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+
+
 class Session:
     """One run on one target: the folder, the running stack and the log."""
 
@@ -83,8 +96,10 @@ class Session:
         self.folder = config.DATA / "frames" / self.name / f"{datetime.now():%Y%m%d-%H%M%S}"
         self.folder.mkdir(parents=True, exist_ok=True)
         # What was asked for, so the web page can say "frame 31 of 200".
+        # And whether the computer's clock was kept to time, for timing transits.
         records.write(self.folder / "session.json",
-                      {"name": self.name, "frames": frames, "exposure": exposure, "gain": gain}, indent=None)
+                      {"name": self.name, "frames": frames, "exposure": exposure, "gain": gain,
+                       "clock": clock_state()}, indent=None)
         self.exposure, self.gain, self.save = exposure, gain, save
         self.calibration = stacking.Calibration(exposure, gain)
         self.reference, self.stack = None, None

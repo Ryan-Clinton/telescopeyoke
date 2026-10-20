@@ -228,6 +228,129 @@ def draw(answer, path, size=(900, 420)):
     return str(path)
 
 
+CHECK_BINS = (1, 2, 4, 8)    # points averaged, for how the scatter falls
+
+
+def falls(mag, bins=CHECK_BINS):
+    """The scatter (mmag) of points averaged in runs of each of `bins`, and
+    beta: the scatter at the most points against what random noise alone
+    would leave. Near 1, the points' noise is random; well above it, a
+    slow systematic drift is mixed in and a fit's error is too small."""
+    mag = np.asarray(mag, float)
+    mag = mag[np.isfinite(mag)]
+    out = {}
+    for n in bins:
+        m = len(mag) // n
+        if m >= 4:
+            means = mag[:m * n].reshape(m, n).mean(axis=1)
+            out[n] = round(1000 * float(np.std(means, ddof=1)), 2)
+    if 1 not in out or len(out) < 2:
+        return out, None
+    ratios = [out[n] / (out[1] / math.sqrt(n)) for n in out if n > 1]
+    return out, round(float(np.median(ratios)), 2)
+
+
+def checks(session, jd, mag, middle, hours, site=None):
+    """What a reader of the result needs to weigh it: the calibration the
+    frames had, how the scatter falls with averaging, and how the times
+    were made (BJD_TDB where the site is known). 20 October 2026: a review
+    of the first transit asked for all three."""
+    import stacking
+    frames = sorted(Path(session).glob("light-*.fits"))
+    out = {"calibration": [], "timing": {}}
+    if frames:
+        head = stacking.load_light(frames[0])[1]
+        exposure, gain = float(head.get("EXPTIME", 0)), int(float(head.get("GAIN", 0)))
+        if not stacking.master_path("dark", exposure, gain).exists():
+            darks = sorted(stacking.CALIBRATION.glob(f"dark-*-g{gain}.fits"))
+            out["calibration"].append(f"no dark matched to the {exposure:g} s frames at gain {gain}"
+                                      + (f" (only {', '.join(d.stem for d in darks)})" if darks else "")
+                                      + ": the bias alone was taken off")
+        if not stacking.master_path("flat").exists():
+            out["calibration"].append("no flat field: each star's light changes as it drifts over the sensor")
+        out["timing"]["frame_time"] = "DATE-OBS, the start of each exposure, plus half the exposure"
+        try:
+            log = [json.loads(line) for line in (Path(session) / "frames.jsonl").read_text().splitlines()[:20]]
+            from astropy.time import Time
+            starts = {int(f.stem.split("-")[1]): Time(stacking.load_light(f)[1]["DATE-OBS"]).unix
+                      for f in frames[:20]}
+            lag = [r["taken"] - starts[r["index"]] for r in log if r.get("taken") and r.get("index") in starts]
+            if lag:
+                out["timing"]["frame_kept_after_start_s"] = round(float(np.median(lag)), 2)
+        except (OSError, ValueError, KeyError):
+            pass
+    try:
+        clock = json.loads((Path(session) / "session.json").read_text(encoding="utf-8")).get("clock")
+    except (OSError, ValueError):
+        clock = None
+    out["timing"]["clock"] = clock or "not recorded for this session (shoot.py records it since 20 October 2026)"
+    before = np.asarray(jd) < (middle - hours / 48) if middle else np.ones(len(jd), bool)
+    out["scatter_by_points"], out["beta"] = falls(np.asarray(mag, float)[before])
+    if site is not None and len(jd):
+        from astropy.coordinates import EarthLocation
+        import astropy.units as u
+        where = EarthLocation(lat=site["latitude"] * u.deg, lon=site["longitude"] * u.deg,
+                              height=site.get("elevation_m", 0) * u.m)
+        out["timing"]["bjd_tdb"] = "each point's time as BJD_TDB is in bjd_tdb"
+        out["_where"] = where
+    return out
+
+
+def bjd_tdb(jd, ra, dec, where):
+    """Julian dates (UTC) as barycentric dates in TDB, for the star at ra, dec."""
+    from astropy.coordinates import SkyCoord
+    from astropy.time import Time
+    import astropy.units as u
+    t = Time(np.asarray(jd, float), format="jd", scale="utc", location=where)
+    return (t.tdb + t.light_travel_time(SkyCoord(ra * u.deg, dec * u.deg))).jd
+
+
+FULL = 4095          # the camera's highest reading (12 bits)
+LINEAR = 0.7         # share of FULL a star's peak may reach and stay linear
+
+
+def headroom(session, ra, dec, size=BIN, frames=5):
+    """How bright the target's peak pixel is in the first raw frames, less
+    the sky, and so the longest exposure that keeps it under LINEAR of
+    FULL, scaled from this one (in focus; a little defocus spreads the light
+    and allows longer). None without the night's star places."""
+    import stacking
+    session = Path(session)
+    try:
+        kept = json.loads((session / f"variables-{size}.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    stars = np.array([[np.nan if v is None else v for v in row[:2]] for row in kept["stars"]], float)
+    if not len(stars):
+        return None
+    j = int(np.argmin(np.hypot((stars[:, 0] - ra) * math.cos(math.radians(dec)), stars[:, 1] - dec)))
+    x, y = (2 * v for v in kept["xy"][j])          # the stacks are 2x2 superpixels of the raw frame
+    peaks, exposure = [], None
+    for path in sorted(session.glob("light-*.fits"))[:frames]:
+        raw, head = stacking.load_light(path)
+        exposure = float(head.get("EXPTIME", 0)) or exposure
+        cut = raw[max(int(y) - 30, 0):int(y) + 31, max(int(x) - 30, 0):int(x) + 31].astype(float)
+        if cut.size:
+            peaks.append(float(cut.max() - np.median(raw[::16, ::16])))
+    if not peaks or not exposure:
+        return None
+    peak = float(np.median(peaks))
+    return {"peak": round(peak), "of": FULL, "exposure": exposure,
+            "longest_linear_s": round(exposure * LINEAR * FULL / max(peak, 1.0), 1)}
+
+
+def verdict(result, expected):
+    """The headline: what the night shows, before any fitted number."""
+    if not result:
+        return "No transit measured: the frames do not cover one with time either side."
+    if not result["timed"]:
+        return ("Transit-like dimming seen, but not independently measurable: the star was not watched both "
+                f"before and after the transit. Exploratory fit: {result['depth']:.2f} ± "
+                f"{result['depth_error']:.2f}% (expected {expected:.2f}%); timing unconstrained.")
+    return (f"Transit measured: {result['depth']:.2f} ± {result['depth_error']:.2f}% deep (expected "
+            f"{expected:.2f}%), middle {result['early_late_min']:+.1f} min against the prediction.")
+
+
 def measure(session, planet, size=BIN, say=print, rows=None, night=None):
     """The planet's star in a night's frames: its light curve and the fitted
     transit beside the predicted one."""
@@ -258,19 +381,34 @@ def measure(session, planet, size=BIN, say=print, rows=None, night=None):
     middles = transits_between(p, jd.min() - 0.5, jd.max() + 0.5)
     predicted = min(middles, key=lambda m: abs(m - jd.mean())) if middles else None
     result = fit(jd, mag, predicted, p["hours"]) if predicted is not None else None
+    try:
+        site = config.load()["site"]
+    except (SystemExit, KeyError, OSError):
+        site = None
+    looked = checks(session, jd, mag, predicted, p["hours"], site)
+    looked["headroom"] = headroom(session, p["ra"], p["dec"], size)
+    where = looked.pop("_where", None)
     answer = {"planet": p["planet"], "star": p["star"], "session": session.name,
               "predicted_middle": predicted, "expected_depth": p["depth"], "hours": p["hours"],
-              "fit": result, "jd": [round(t, 5) for t in jd], "mag": [None if not np.isfinite(m) else round(float(m), 4)
-                                                                     for m in mag], "kind": "measured"}
+              "fit": result, "verdict": verdict(result, p["depth"]), "checks": looked,
+              "jd": [round(t, 5) for t in jd], "mag": [None if not np.isfinite(m) else round(float(m), 4)
+                                                       for m in mag], "kind": "measured"}
+    if where is not None:
+        answer["bjd_tdb"] = [round(float(t), 6) for t in bjd_tdb(jd, p["ra"], p["dec"], where)]
     records.write(session / f"transit-{p['planet'].replace(' ', '')}.json", answer, schema="transits", stamp=True)
     picture = draw(answer, session / f"transit-{p['planet'].replace(' ', '')}.png")
+    say(f"{p['planet']}: {answer['verdict']}")
     if result:
-        when = (f"middle {result['early_late_min']:+.1f} min against the prediction" if result["timed"] else
-                "middle not timed: the star was not watched both before and after the transit")
-        say(f"{p['planet']}: {result['depth']:.2f} ± {result['depth_error']:.2f}% deep (expected {p['depth']:.2f}%), "
-            f"{when}; {result['scatter_mmag']} mmag scatter out of transit; the curve: {picture}")
-    else:
-        say(f"{p['planet']}: the night's frames do not cover a transit and time either side of it")
+        say(f"  scatter out of transit {result['scatter_mmag']} mmag per point; averaged over "
+            + ", ".join(f"{n} points {v}" for n, v in looked["scatter_by_points"].items())
+            + (f" (beta {looked['beta']}: 1 for random noise)" if looked["beta"] else ""))
+    for line in looked["calibration"]:
+        say(f"  calibration: {line}")
+    room = looked["headroom"]
+    if room:
+        say(f"  {p['star']} peaks at {room['peak']} of {room['of']} in {room['exposure']:g} s frames: up to about "
+            f"{room['longest_linear_s']:g} s in focus keeps it linear")
+    say(f"  the curve: {picture}")
     return answer
 
 

@@ -90,3 +90,30 @@ def test_a_transit_seen_on_one_side_only_is_not_timed_and_its_curve_is_drawn(tmp
     path = transits.draw(answer, tmp_path / "curve.png")
     from PIL import Image
     assert Image.open(path).size == (900, 420)
+
+
+def test_a_measurement_leads_with_its_verdict_and_says_what_weakens_it():
+    one_sided = {"depth": 2.16, "depth_error": 0.47, "timed": False, "early_late_min": -24.0}
+    assert transits.verdict(one_sided, 1.54).startswith("Transit-like dimming seen, but not independently measurable")
+    assert "timing unconstrained" in transits.verdict(one_sided, 1.54)
+    assert transits.verdict(dict(one_sided, timed=True), 1.54).startswith("Transit measured: 2.16")
+    rng = np.random.default_rng(1)
+    random, beta = transits.falls(rng.normal(0, 0.01, 400))
+    assert 0.7 < beta < 1.3 and random[1] > random[8]
+    drift, beta = transits.falls(np.linspace(0, 0.05, 400) + rng.normal(0, 0.005, 400))
+    assert beta > 1.5                                         # a slow trend: the scatter stops falling
+
+
+def test_the_headroom_says_how_long_a_frame_can_be_before_the_star_stops_being_linear(tmp_path):
+    import json
+    from astropy.io import fits
+    session = tmp_path / "WASP-12" / "20261020-014726"
+    session.mkdir(parents=True)
+    raw = np.full((400, 400), 100, np.uint16)
+    raw[200:203, 300:303] = 100 + 219                       # the star's peak, 219 above the sky
+    head = fits.Header({"EXPTIME": 4.0, "DATE-OBS": "2026-10-20T00:47:31"})
+    fits.HDUList([fits.PrimaryHDU(), fits.ImageHDU(raw, head)]).writeto(session / "light-0001.fits")
+    (session / "variables-10.json").write_text(json.dumps({"stars": [[97.636645, 29.6722662, 11.5, None]],
+                                                           "xy": [[150.5, 100.5]]}))
+    room = transits.headroom(session, 97.636645, 29.6722662)
+    assert room["peak"] == 219 and room["longest_linear_s"] == pytest.approx(4 * 0.7 * 4095 / 219, abs=0.1)

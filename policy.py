@@ -77,6 +77,7 @@ COMMANDS = {
     "patrol.py": ("hardware", {"--analyse": "local_write", "--sweep": "local_write"},
                   {"--plan": "read_only", "--dry-run": "read_only"}),
     "planet.py": ("hardware", {"--restack": "local_write"}, DRY),
+    "precision.py": ("local_write", {}, {}),     # a night's frames measured every way; keeps its answer in the session
     "plant.py": ("local_write", {}, {}),
     "polaralign.py": ("hardware", {}, DRY),
     "polaris.py": ("hardware", {}, DRY),
