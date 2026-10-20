@@ -85,3 +85,45 @@ def test_no_page_still_says_what_a_proven_fact_has_overtaken(path):
     for name, fact in facts().items():
         for stale in fact.get("contradicted_by", []):
             assert stale not in body, f"{path.relative_to(ROOT)} still says '{stale}' ({name} is {fact['status']})"
+
+
+UNPROVEN = ("only on a simulated mount", "only on the simulated mount", "simulated only", "not yet proven",
+            "Not yet proven", "has not yet run", "not yet been run", "untried")
+
+
+def sentences(body):
+    return re.split(r"(?<=[.!?])\s+", re.sub(r"\s+", " ", body))
+
+
+@pytest.mark.parametrize("path", [p for p in PAGES + [ROOT / "docs" / "index.html"] if current(p)],
+                         ids=lambda p: str(p.relative_to(ROOT)))
+def test_no_sentence_calls_a_proven_fact_unproven_whatever_its_wording(path):
+    for name, fact in facts().items():
+        if fact["status"] != "proven":
+            continue
+        for sentence in sentences(text(path)):
+            if any(m in sentence for m in fact.get("mentions", [])):
+                said = [u for u in UNPROVEN if u in sentence]
+                assert not said, f"{path.relative_to(ROOT)}: '{sentence[:160]}' calls {name} {said[0]!r}"
+
+
+def test_the_readme_status_table_agrees_with_the_facts():
+    status = text(ROOT / "README.md").split("## Current status")[1].split("\n## ")[0]
+    rows = {line.split("|")[1].strip(): line for line in status.splitlines() if line.startswith("| ")}
+    for name, fact in facts().items():
+        if "readme" not in fact:
+            continue
+        assert fact["readme"] in rows, f"{name}: no row '{fact['readme']}' in the README's Current status"
+        cells = [c.strip() for c in rows[fact["readme"]].split("|")[2:-1]]
+        if fact["status"] == "proven":
+            assert any(c.startswith("✅") for c in cells[:2]), f"{name} is proven; the README row says {cells}"
+        else:
+            assert not cells[0].startswith("✅"), f"{name} is {fact['status']}; the README row says {cells}"
+
+
+def test_the_sentence_check_would_have_caught_the_first_night_page():
+    # 20 October 2026: an exact-wording ban missed this variant on docs/first-night.md.
+    old = ("Finding and marking the true home (step 7) and the click-and-tone focusing sounds have so far run "
+           "only on a simulated mount and made-up stars.")
+    mentions = facts()["true_home"]["mentions"]
+    assert any(m in old for m in mentions) and any(u in old for u in UNPROVEN)

@@ -14,11 +14,10 @@ explains all of it afterwards, when you have a picture to show for it.
 
 **How much of this has been done for real.** This project is young and says
 so. On the author's EQ3, 150 mm Newtonian and Hypercam, under real stars:
-the polar alignment (step 6), focusing by the star measurement (step 5), the
-GoTo that corrects itself (step 9) and the picture (step 10) have all
-worked. Finding and marking the true home (step 7) and the click-and-tone
-focusing sounds have so far run only on a simulated mount and made-up
-stars. Each step says which it is. [The full account](validation.md) is kept
+the polar alignment (step 6), focusing by the star measurement (step 5),
+finding and marking the true home (step 7, 17 October 2026), the GoTo that
+corrects itself (step 9) and the picture (step 10) have all worked. The
+click-and-tone focusing sounds have so far run only on made-up stars. Each step says which it is. [The full account](validation.md) is kept
 up to date.
 
 It is written for Ubuntu, where the project is developed. On Windows the

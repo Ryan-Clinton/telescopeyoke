@@ -122,11 +122,30 @@ MERIDIAN_RA_AXIS = 90.0
 
 RA, DEC = 16, 17            # axis ids for fixed-rate slews
 POSITIVE, NEGATIVE = 36, 37
+# SynScan firmware from which "z" reportedly answers the precise Az/Alt, as the
+# Celestron protocol and Sky-Watcher's protocol v3.3 define it, and no longer
+# the raw axis angles this file reads it as (a 4.39.21 release note, seen only
+# quoted: docs/research/mount-protocols-2026-10-20.md). The author's handset
+# is 3.35. A newer one is refused until it has been checked.
+Z_CHANGED = (4, 39, 21)
 PULSE_RATE = 30.0           # arcsec/s: the fastest move of the photometric hold (twice sidereal)
 PULSE_LONGEST = 10.0        # seconds: its longest; a bigger miss is re-centred by GoTo instead
 # Fixed-rate stages for closing in on an axis angle: (rate 1-9, stop within °).
 STAGES = ((8, 2.0), (6, 0.25), (4, 0.03))
 SLEW_TIMEOUT = 150
+
+
+def handset_firmware(raw):
+    """(major, minor, patch) from a handset's answer to "V" when it is the
+    newer six hexadecimal digits ("042507#" for 4.37.07); None for the older
+    two-byte answer (below version 4) or anything else."""
+    body = raw[:-1] if raw.endswith(b"#") else raw
+    if len(body) == 6:
+        try:
+            return tuple(int(body[i:i + 2], 16) for i in (0, 2, 4))
+        except ValueError:
+            return None
+    return None
 
 
 class Mount:
@@ -186,6 +205,14 @@ class Mount:
                           "The handset has not been set up since power-on (its date is "
                           "still the default). Press ENTER through its start-up screens "
                           "to the main menu, entering today's date.")
+        firmware = handset_firmware(self.ask(b"V"))
+        if firmware is not None and firmware >= Z_CHANGED:
+            raise Refusal("HANDSET_NOT_SUPPORTED",
+                          f"This handset's firmware is {'.'.join(str(v) for v in firmware)}. From "
+                          f"{'.'.join(str(v) for v in Z_CHANGED)} the handset reportedly answers the "
+                          "question this program reads the axis angles with (z) with altitude and "
+                          "azimuth instead, which would put home and the limits in the wrong place. "
+                          "Not supported until checked: see docs/mounts.md, and please report it.")
 
     def record(self, folder):
         """Keep every plate-solve frame and progress message from now on, for

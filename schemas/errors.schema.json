@@ -20,6 +20,7 @@
         "MOUNT_NOT_MOVING",
         "HANDSET_NOT_ANSWERING",
         "HANDSET_NOT_SET_UP",
+        "HANDSET_NOT_SUPPORTED",
         "INTERNAL_ERROR",
         "INVALID_REQUEST",
         "MOTION_LOCKED",

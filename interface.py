@@ -22,6 +22,7 @@ ERRORS = {
     "MOTION_LOCKED": (False, "A MOTION_LOCKED file blocks all movement; a person must remove it."),
     "HANDSET_NOT_ANSWERING": (True, "Check the handset is on, past its start-up screens, and the lead is in."),
     "HANDSET_NOT_SET_UP": (False, "Press ENTER through the handset's start-up screens, entering today's date."),
+    "HANDSET_NOT_SUPPORTED": (False, "This handset's firmware is not yet supported: see docs/mounts.md and report it."),
     "MOUNT_NOT_CONNECTED": (False, "Plug in the handset's serial lead."),
     "TARGET_UNKNOWN": (False, "Use a catalogue name such as M27, NGC 7000 or Vega."),
     "TARGET_BELOW_ALTITUDE_LIMIT": (False, "Wait for it to rise, or pick a higher target."),

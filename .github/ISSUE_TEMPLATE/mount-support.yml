@@ -1,0 +1,57 @@
+name: Mount support request
+description: Ask for your mount to be supported, or offer to test one that is planned (docs/mounts.md)
+title: "Mount support: "
+labels: ["mount-support"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you. [docs/mounts.md](https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/mounts.md) lists the mounts planned and how each would be reached. Nothing here asks you to let the software move your mount: the first step only reads.
+  - type: input
+    id: mount
+    attributes:
+      label: Mount, as sold
+      description: For example "Celestron Advanced VX", "ZWO AM5", "iOptron CEM40", "Sky-Watcher AZ-GTi"
+    validations:
+      required: true
+  - type: input
+    id: controller
+    attributes:
+      label: Hand controller or app, and its firmware if you know it
+      description: For example "NexStar+ 5.35", "SynScan app 2.5 over Wi-Fi", "none: USB straight to the mount"
+  - type: dropdown
+    id: link
+    attributes:
+      label: How the computer reaches it
+      options:
+        - USB or serial lead to the hand controller
+        - USB straight to the mount
+        - Wi-Fi
+        - Through INDI (Linux, KStars/Ekos)
+        - Through ASCOM or ASCOM Alpaca (Windows)
+        - I do not know yet
+    validations:
+      required: true
+  - type: dropdown
+    id: system
+    attributes:
+      label: Computer
+      options:
+        - Linux
+        - Windows
+        - Raspberry Pi or similar
+        - macOS
+  - type: textarea
+    id: doctor
+    attributes:
+      label: What the doctor says (optional, and it moves nothing)
+      description: Run `./doctor.py --report --probe PORT` (Windows `python doctor.py --report --probe COM7`) with any other program closed, and paste what it writes. It asks the port what it is in each language it knows and tells it to do nothing.
+      render: text
+  - type: checkboxes
+    id: testing
+    attributes:
+      label: Would you test it?
+      options:
+        - label: I can run read-only checks (position, model, time) and send the output
+        - label: I can stand beside the mount while it makes a small move, after a dry run
+        - label: I can try a whole night once the moves work

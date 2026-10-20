@@ -2,9 +2,16 @@
 
 [README](../README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
-The discovery station is operational; the milestone still to come is a
-new astronomical find of its own. Each programme has its own level of proof
-(the table below). This says how telescopeyoke
+The discovery station is operational; what remains unproven is an
+original astronomical discovery with this rig:
+
+- the software, on planted fakes and archive data: ✅
+- known objects found again: ✅ a known nova in ZTF's archive, known comets
+  in archived LASCO pictures, and a known Kreutz sungrazer in live GOES-19
+  pictures, found by the hunt itself (19 October 2026)
+- an original transient in this rig's own pictures: ❌ not yet
+
+Each programme has its own level of proof (the table below). This says how telescopeyoke
 becomes an always-on discovery station with a telescope attached, and
 how far it has got (the table below; "Phases" has the detail). The design
 and its reasons, what has been measured, and how a find is reported are

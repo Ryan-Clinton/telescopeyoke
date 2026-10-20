@@ -1,6 +1,6 @@
 # telescopeyoke 🔭
 
-**A self-measuring robotic observatory for ordinary Sky-Watcher gear, run by a person and an AI agent together.**
+**A self-measuring robotic observatory for affordable GoTo mounts, run by a person and an AI agent together.**
 
 [![tests](https://github.com/Ryan-Clinton/telescopeyoke/actions/workflows/tests.yml/badge.svg)](https://github.com/Ryan-Clinton/telescopeyoke/actions/workflows/tests.yml)
 
@@ -16,14 +16,18 @@ and the real centring, focusing and stacking code runs on it.*
 [What it has been tried on](#hardware) ·
 [Ask a question](https://github.com/Ryan-Clinton/telescopeyoke/discussions)**
 
-telescopeyoke takes the Sky-Watcher SynScan gear many amateur astronomers
-already own and adds what much bigger systems do. It measures its own
+telescopeyoke takes the kind of GoTo mount many amateur astronomers already
+own, starting with Sky-Watcher's SynScan family, and adds what much bigger
+systems do. It runs on the author's EQ3 Pro today; other mounts are
+welcome, and [Mounts](docs/mounts.md) says which are planned and how to ask
+for yours. It measures its own
 pointing, polar alignment, focus, drift, camera timing and image depth, and
 corrects for them; plans and runs a whole night; searches its pictures and
 public data for new objects, and follows them up; tells you when something
 matters, on your phone or through the house's lights and speaker; and can
 explain the night live to an audience. An AI agent can operate it beside
-you, inside limits that do not depend on the agent behaving.
+you, by one rule: **AI proposes; deterministic code decides what is safe; a
+person authorises movement.**
 
 It is built around one idea: **measure the imperfections of modest
 equipment instead of pretending they are not there.** A home position set
@@ -61,8 +65,8 @@ SHARE     status page · public live page · Twitch broadcast with a presenter a
 ```
 
 [The TelescopeYoke observatory](docs/observatory.md) puts the whole system
-on one page. What happened in its first 17 days, each proven on the
-author's telescope ([validation](docs/validation.md)):
+on one page. What happened in its first 17 days, each recorded in
+[the validation record](docs/validation.md):
 
 - **3 October 2026:** first light; a GoTo from a home set 10° out by eye
   centred by plate solving in three corrections.
@@ -74,6 +78,17 @@ author's telescope ([validation](docs/validation.md)):
 - **20 October:** live on Twitch; a first exoplanet transit attempt on
   WASP-12 b, rejected by its own measurement as not a detection, and the
   reasons found and worked on the same day.
+
+| Live broadcast | Discovery | Science |
+|---|---|---|
+| ![The live broadcast's card about the comet hunt: three frames of the comet over a dimmed star field, with the hunt's own figures](docs/pictures/stream-2026-10-20.jpg) | ![Four frames of a comet's head and short tail moving towards the Sun](docs/pictures/comet-ccor1-2026-10-19.jpg) | ![WASP-12's light through the night, scattered points slightly lower after the first forty minutes, with the fitted box](docs/pictures/wasp12b-2026-10-20.jpg) |
+| The Twitch broadcast's comet-hunt card, as `./stream.py preview` draws it (the side panel's figures are its examples) | A known Kreutz sungrazer the hunt found by itself in GOES-19 coronagraph pictures, 19 October 2026 | The first exoplanet transit attempt, WASP-12 b, 20 October 2026: dimming seen, not a detection |
+
+**Why it is unusual.** No one of these functions is new. What is unusual
+is that one inexpensive amateur rig combines measuring its own faults,
+robotic observing, searches for new objects with their vetting,
+AI-agent workflows, alerts in the house and a public science broadcast, and
+keeps physical safety outside the language model.
 
 ## What makes it different
 
@@ -340,6 +355,16 @@ says what each script does.
 
 ## Hardware
 
+**Other mounts are wanted.** It has driven one mount, a Sky-Watcher EQ3
+Pro; nothing in it is meant to stay Sky-Watcher-only. [Mounts](docs/mounts.md)
+says which mounts can be reached and how, in the order planned: the rest of
+Sky-Watcher's family through the motor board's own protocol, Celestron's
+NexStar hand controllers, any mount INDI drives on Linux, any ASCOM or Alpaca
+driver through Alpaca, and ZWO's AM mounts natively. Ask for yours, or offer
+to test one, with a
+[Mount support request](https://github.com/Ryan-Clinton/telescopeyoke/issues/new?template=mount-support.yml):
+the first step only reads, and nothing moves until you choose it.
+
 **Tried so far.** One row for each set of equipment someone has run it on.
 There is one, and it is the author's:
 
@@ -427,7 +452,8 @@ lock (`MOTION_LOCKED`) stops every rig at once.
 | EQ5, HEQ5, EQ6 with a SynScan handset | ⚠️ Untested. Likely: same serial protocol. |
 | Other INDI cameras | ⚠️ Untested. Likely for mono or RGGB colour sensors: set the driver and sensor size in `config.toml`. |
 | Other telescopes | Set the focal length in `config.toml`. |
-| ASCOM, Alpaca | ❌ Not used. An ASCOM or EQMOD installation is noticed and left alone; see above. |
+| ASCOM, Alpaca | ❌ Not used yet. An ASCOM or EQMOD installation is noticed and left alone; see above. Alpaca is planned as the way to every ASCOM driver ([Mounts](docs/mounts.md)). |
+| Celestron, ZWO, iOptron and others | 🗓️ Planned, in order, in [Mounts](docs/mounts.md); testers wanted. |
 
 ## Commands
 
@@ -706,7 +732,7 @@ Later, if people ask for them:
   the telescope logic stays in `agent.py` either way.
 - Guiding; focusers other than this project's own motor (`docs/focuser.md`).
 
-Not planned: ASCOM, mobile apps, a React front end, cloud services, AI target
+Not planned: ASCOM's Windows-only COM interface (Alpaca reaches the same drivers, and is planned: [Mounts](docs/mounts.md)), mobile apps, a React front end, cloud services, AI target
 selection, Docker images, plugin systems, a sequencing language. Bigger
 projects (NINA, KStars/Ekos) do those well; this one stays small, readable,
 and aimed at ordinary SynScan gear.

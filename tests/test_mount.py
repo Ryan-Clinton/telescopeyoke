@@ -400,3 +400,21 @@ def test_a_holding_pulse_is_capped_and_leaves_the_mount_tracking_as_it_was(scope
     mount.LOCK_FILE.write_text("testing")
     with pytest.raises(mount.Refusal):
         scope.pulse(mount.RA, 10.0, 1.0)
+
+
+def test_a_handset_whose_z_may_mean_altitude_and_azimuth_is_refused():
+    assert mount.handset_firmware(b"042507#") == (4, 37, 7)
+    assert mount.handset_firmware(b"\x03#") is None                   # the older two-byte answer: below 4
+    assert mount.handset_firmware(b"042715#") >= mount.Z_CHANGED
+
+    class Handset(SimulatedHandset):
+        def __init__(self, version):
+            super().__init__(slew_seconds=0)
+            self.version = version
+
+        def _answer(self, c):
+            return self.version if c[:1] == b"V" else super()._answer(c)
+    mount.Mount(handset=Handset(b"042507#"))                           # 4.37.07: as before
+    with pytest.raises(mount.Refusal) as refused:
+        mount.Mount(handset=Handset(b"042715#"))                       # 4.39.21
+    assert refused.value.code_name == "HANDSET_NOT_SUPPORTED" and "4.39.21" in refused.value.message

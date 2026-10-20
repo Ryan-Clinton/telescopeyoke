@@ -7,7 +7,8 @@ the other pages go into each part; [validation.md](validation.md) says how
 far each is proven, and its figures win over anything here.
 
 It began on 3 October 2026 as scripts to point a Sky-Watcher 150P on an EQ3
-Pro. It is now a small observatory: it plans and runs nights, measures and
+Pro, and still runs only on that mount; [mounts.md](mounts.md) is the plan
+for others. It is now a small observatory: it plans and runs nights, measures and
 corrects its own hardware's faults, searches its pictures and public data
 for new objects, tells its person what matters and how urgently, and
 explains itself live. An AI agent (Claude) operates it beside a person,

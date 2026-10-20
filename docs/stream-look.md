@@ -1,8 +1,11 @@
 # The live stream's picture: the design record
 
-Why the stream looks as it does, as specified and reviewed. How to run it,
-and what it does now, is in [streaming.md](streaming.md); where the two
-differ, that page is the present.
+> **Design record.** For the stream as built and how to run it, see
+> [streaming.md](streaming.md). Some sections below describe the design as it
+> stood before it was built; where the two differ, streaming.md is the
+> present.
+
+Why the stream looks as it does, as specified and reviewed.
 
 Status: built and on air on 20 October 2026, from 01:43 UTC on the WASP-12 b
 transit. `streamlook.py` draws the picture, `stream-targets.toml` holds the words

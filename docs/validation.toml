@@ -6,25 +6,34 @@
 # "partly" (⚠️), "simulated" (🧪 the simulated rig and the tests only) or
 # "tried" (❌ tried, not yet working). `contradicted_by` lists sentences that
 # were true once and are not now: tests/test_docs.py fails if any current page
-# still says one. Change a fact here and in validation.md together.
+# still says one. `mentions` are words a page uses for the fact: a sentence
+# with one of them must not also say it is unproven ("only on a simulated
+# mount", "not yet proven" and the like; the list is in the test), whatever
+# the wording. `readme` is the first cell of its row in the README's Current
+# status table, whose marks must agree. Change a fact here and in
+# validation.md together.
 
 [facts.goto_centring]
 row = "GoTo centred by plate solving"
 status = "proven"
 date = 2026-10-03
 summary = "to about an arcminute, from 10° out"
+readme = "GoTo centred by plate solving"
 
 [facts.polar_alignment]
 row = "Polar alignment"
 status = "proven"
 date = 2026-10-13
 summary = "3.3° to 0.1° over six rounds"
+readme = "Polar alignment from three plate solves"
 
 [facts.true_home]
 row = "`findhome` and marking home"
 status = "proven"
 date = 2026-10-17
 summary = "from 10.66° out by eye to 0.19° on the marks"
+mentions = ["true home", "finding home", "findhome", "Finding home"]
+readme = "Finding and marking the true home (`findhome`, `truehome`)"
 contradicted_by = [
     "finding home has run only on the simulated mount",
     "Not yet proven: this has run only on a simulated mount",
@@ -36,6 +45,7 @@ row = "Pointing survey"
 status = "proven"
 date = 2026-10-17
 summary = "one correction for each side is enough"
+readme = "Pointing survey: one correction for each side"
 
 [facts.comets]
 row = "Comets in spacecraft pictures"
@@ -48,6 +58,8 @@ row = "Lights, speaker and phone alerts"
 status = "proven"
 date = 2026-10-20
 summary = "cloud and rain alerts changed a light and spoke on a speaker; the call at 04:59 on 20 October pulsed the lights, spoke and sent the phone message"
+mentions = ["Hue", "speaker"]
+readme = "Lights, speaker and phone alerts (`alert.py`)"
 contradicted_by = ["Not yet proven on a real light or speaker"]
 
 [facts.live_stream]
@@ -55,6 +67,8 @@ row = "Live stream on Twitch"
 status = "proven"
 date = 2026-10-20
 summary = "on air from 01:20 UTC on 20 October: 1080p, title and category set for each target, the presenter, the chat's commands"
+mentions = ["Twitch"]
+readme = "Live stream on Twitch (`stream.py`)"
 contradicted_by = [
     "Changing the Twitch or YouTube title or category per target. This needs",
     "At present the stream stops five minutes after the last exposure",
@@ -65,12 +79,14 @@ row = "Exoplanet transit photometry"
 status = "partly"
 date = 2026-10-20
 summary = "one attempt, WASP-12 b: dimming seen but not a detection (no baseline after it; about 14 mmag per 40 s point)"
+readme = "Exoplanet transit photometry"
 
 [facts.photometric_hold]
 row = "Photometric hold (`shoot.py --hold`)"
 status = "simulated"
 date = 2026-10-20
 summary = "built and reviewed; not yet run on the real mount"
+readme = "Photometric hold (`shoot.py --hold`)"
 
 [facts.night_end]
 row = "The night's end: parked and told"
