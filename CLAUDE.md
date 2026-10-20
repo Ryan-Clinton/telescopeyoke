@@ -17,6 +17,11 @@ what is specific to Claude and to this particular user.
   set the handset first, then ask the user where the sky is clear.
 - Run anything expected to take more than a minute in the background and
   carry on with the next task.
+- Never defer work that can be done here and now: no "tomorrow", "on my
+  list", "next time" or "I can do that if you want" for something plainly
+  wanted. Do it, with its test, then say it is done. Waiting on a background
+  job is time to do the next thing, not to report waiting. Defer only what
+  needs daylight, the user's hands or their permission, and say which.
 - No one-off scripts for anything new that will be used every night
   (focusing, alignment, a new piece of hardware): write it as a project
   command with a test before its first use, and use it only through that
