@@ -56,10 +56,25 @@ are put into the real pictures at a strength of each of STRENGTHS times
 the noise there, and the share of each strength found is the answer
 (kept in the look folder as plant.json); nothing else is listed.
 
+A track that stops and one that starts where it was heading, moving the
+same way, within STITCH_GAP minutes, are joined into one (`stitch`): on
+19 October 2026 a 45-minute gap in CCOR-1's pictures split one comet in
+two. Each candidate's places are also given as the Sungrazer Project
+measures them (`native`): for CCOR-1, pixels of the full 2048 x 1920
+frame from the top left, where a kept level-3 picture is half that and
+bottom row first.
+
 `hunt` is the hunt left running: it fetches the last HUNT_HOURS, looks,
 keeps the candidates heading in towards the Sun (the rest are mostly the
 corona blowing outwards) in sungrazer/hunt-CAMERA.json, and deletes
-pictures older than KEEP_DAYS. `hunt --install` runs it every 6 hours as
+pictures older than KEEP_DAYS. A weak track (below RIM_STRENGTH) that
+never leaves the occulter's flickering rim is set aside, kept in the
+answer but not sent. Each one sent is checked against the project's
+public list of reports for that camera (`public_match`, one page a
+hunt): "known comet" when it lies on a report of a known comet carried to
+its times, "possible public match" for anyone else's report, "no matching
+public report found" otherwise. Nothing is dropped for a match; the
+message's first line says what the hunt found. `hunt --install` runs it every 6 hours as
 a systemd user timer, from the checkout it is installed from; only for
 CCOR-1, whose archive is NOAA's open one, until the Sungrazer Project has
 been asked about LASCO. `systemctl --user disable --now
@@ -121,6 +136,16 @@ KEEP_DAYS = 3        # hunt: pictures older than this are deleted
 TOWARDS = 0.5        # hunt: a candidate heading in towards the Sun at least this squarely
 BLOCK = 64           # pixels square in which the noise is measured on its own
 CAPTION = 60         # pixels along the bottom left out: the date and time written there
+STITCH_GAP = 120.0   # minutes: a track that stops and one that starts this soon after may be one thing
+STITCH_NEAR = 3.0    # pixels between where the first track was heading and where the second starts
+STITCH_SAME = 0.6    # pixels in CADENCE minutes the two tracks' motions may differ
+REPORTS = "https://sungrazer.nrl.navy.mil/index.php/reports"
+REPORT_CAMERA = {"ccor1": "CCOR1", "c3": "C3", "c2": "C2"}
+NATIVE = {"ccor1": (2048, 1920)}   # the full frame the project's reports measure, where a kept picture is smaller
+MATCH_PX = 12.0      # pixels of the report's frame: a reported point this near the track at its time is a match
+MATCH_HOURS = 6.0    # hours a track is carried on, either way, to meet a report's times
+RIM = {"ccor1": 70}  # pixels beyond the occulter where its bright edge flickers (40 elsewhere)
+RIM_STRENGTH = 20.0  # hunt: a track wholly in the rim this weak is set aside, not sent
 
 
 def folder():
@@ -348,6 +373,98 @@ def tracks(found, frames, reach=REACH, length=TRACK_LEN, straight=STRAIGHT, minu
     return out
 
 
+def stitch(all_tracks, most_gap=STITCH_GAP, near=STITCH_NEAR, same=STITCH_SAME):
+    """Tracks joined across a gap: one that stops, and one that starts
+    within `most_gap` minutes where the first was heading (within `near`
+    pixels) and moving the same way (within `same` pixels in CADENCE
+    minutes), are one thing seen twice (a missing picture or a faint
+    spell). The longer gaps the linking itself cannot bridge."""
+    out = sorted((list(t) for t in all_tracks), key=lambda t: t[0][4])
+    joined = True
+    while joined:
+        joined = False
+        for a in out:
+            va = velocity(a) / CADENCE
+            for b in out:
+                gap = b[0][4] - a[-1][4]
+                if b is a or not 0 < gap <= most_gap:
+                    continue
+                guess = np.array([a[-1][1], a[-1][2]]) + va * gap
+                if np.hypot(*(guess - (b[0][1], b[0][2]))) <= near and \
+                        np.hypot(*(velocity(b) - va * CADENCE)) <= same:
+                    a.extend(b)
+                    out.remove(b)
+                    joined = True
+                    break
+            if joined:
+                break
+    return out
+
+
+def gaps(times, most=MOST_GAP * CADENCE):
+    """The gaps in a track longer than its linking bridges: ["20:00-20:45"]."""
+    when = [datetime.datetime.strptime(t, "%Y-%m-%d %H:%M") for t in times]
+    return [f"{a:%H:%M}-{b:%H:%M}" for a, b in zip(when, when[1:]) if (b - a).total_seconds() / 60 > most]
+
+
+def native(x, y, camera, shape):
+    """A point in the project's own convention: pixels of the camera's full
+    frame from the top left. A CCOR-1 level-3 picture is half the full
+    frame each way and kept bottom row first (FITS); the JPEGs are as the
+    project measures them."""
+    if camera not in NATIVE:
+        return round(x, 1), round(y, 1)
+    w, h = NATIVE[camera]
+    sx, sy = w / shape[1], h / shape[0]
+    return round(x * sx, 1), round(h - y * sy, 1)
+
+
+def public_reports(camera, get=requests.get):
+    """The project's recent reports for `camera`, from its public list:
+    [{"id", "who", "date", "type", "group", "points": [(HHMM, x, y)]}]. One page,
+    fetched once a hunt."""
+    page = get(REPORTS, params={"field_camera_value": REPORT_CAMERA[camera]}, timeout=30,
+               headers={"User-Agent": "telescopeyoke comet hunt"})
+    page.raise_for_status()
+    out = []
+    for row in re.findall(r"<tr class=\"sungrazer-reports-table.*?</tr>", page.text, re.S):
+        cell = {k: re.sub(r"<[^>]+>", " ", v).strip()
+                for k, v in re.findall(r'views-field-(?:field-)?([a-z-]+) table__cell">(.*?)</td>', row, re.S)}
+        frames = re.findall(r'views-field-field-frames table__cell">(.*?)</td>', row, re.S)
+        date = re.search(r'datetime="(\d{4}-\d{2}-\d{2})', row)
+        if cell.get("camera") != REPORT_CAMERA[camera] or not date or not frames:
+            continue
+        points = [(h + m, float(x), float(y))
+                  for h, m, x, y in re.findall(r"(\d{2}):?(\d{2})\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)", frames[0])]
+        out.append({"id": cell.get("title", ""), "who": cell.get("contributor", ""), "date": date[1],
+                    "type": cell.get("sighting-type", ""), "group": cell.get("comet-group", ""), "points": points})
+    return out
+
+
+def public_match(c, reports, near=MATCH_PX, hours=MATCH_HOURS):
+    """How a candidate stands against the project's reports: "known comet"
+    (it matches a report of a known one), "possible public match" (it
+    matches someone's report), or "no matching public report found". A
+    report matches when one of its points lies within `near` pixels of the
+    track carried to that point's time. Nothing is rejected for it."""
+    when = [datetime.datetime.strptime(t, "%Y-%m-%d %H:%M") for t in c["times"]]
+    t = np.array([(w - when[0]).total_seconds() / 60 for w in when])
+    xy = np.array(c["sungrazer_xy"], float)
+    fit = [np.polyfit(t, xy[:, k], 1) for k in (0, 1)] if len(t) > 1 else None
+    for r in reports:
+        day = datetime.datetime.strptime(r["date"], "%Y-%m-%d")
+        for hhmm, x, y in r["points"]:
+            for d in (day - datetime.timedelta(days=1), day):     # a report sent after midnight
+                m = (d.replace(hour=int(hhmm[:2]), minute=int(hhmm[2:])) - when[0]).total_seconds() / 60
+                if fit is None or m < t[0] - hours * 60 or m > t[-1] + hours * 60:
+                    continue
+                if np.hypot(np.polyval(fit[0], m) - x, np.polyval(fit[1], m) - y) <= near:
+                    state = "known comet" if "known" in r["type"].lower() else "possible public match"
+                    return {"state": state, "report": r["id"], "who": r["who"], "type": r["type"],
+                            "group": r.get("group", "")}
+    return {"state": "no matching public report found"}
+
+
 def steady(track, most=STEADY):
     """Whether a track's brightness holds steady enough to be one thing:
     chance alignments of noise jump about."""
@@ -384,8 +501,9 @@ def star_drift(all_tracks, long=STAR_TRACK):
     return np.median(v, axis=0)
 
 
-def judge(all_tracks, drift, shape):
-    """The tracks that do not move like the stars, as candidates."""
+def judge(all_tracks, drift, shape, camera=None):
+    """The tracks that do not move like the stars, as candidates; `rim`
+    marks one that never leaves the occulter's flickering edge."""
     out = []
     centre = np.array([shape[1] / 2, shape[0] / 2])
     for t in all_tracks:
@@ -394,8 +512,10 @@ def judge(all_tracks, drift, shape):
             continue
         start = np.array([t[0][1], t[0][2]])
         inward = float(np.dot(v, centre - start) / (np.linalg.norm(v) * np.linalg.norm(centre - start) + 1e-9))
+        reach = OCCULTER.get(camera, 80) + RIM.get(camera, 40)
         out.append({"pictures": [p[0] for p in t], "track": [[round(p[1], 1), round(p[2], 1)] for p in t],
                     "pixels_per_12_min": round(float(np.hypot(*v)), 2),
+                    "rim": bool(max(np.hypot(p[1] - centre[0], p[2] - centre[1]) for p in t) <= reach),
                     "towards_sun": round(inward, 2), "strength": round(float(np.median([p[3] for p in t])), 1)})
     return sorted(out, key=lambda c: (-c["towards_sun"], -c["strength"]))
 
@@ -504,9 +624,9 @@ def look(camera, hours=None, say=print, paths=None, until=None, raw=False, plant
     found = points(images, mask)
     start = stamp(paths[0].name)
     minutes = [(stamp(p.name) - start).total_seconds() / 60 for p in paths]
-    linked = tracks(found, len(images), minutes=minutes)
+    linked = stitch(tracks(found, len(images), minutes=minutes))
     drift = star_drift(linked)
-    candidates = judge(linked, drift, shape)
+    candidates = judge(linked, drift, shape, camera)
     day = stamp(paths[-1].name).strftime("%Y%m%d-%H%M") + ("-raw" if raw else "")
     out = folder() / day
     out.mkdir(parents=True, exist_ok=True)
@@ -524,6 +644,8 @@ def look(camera, hours=None, say=print, paths=None, until=None, raw=False, plant
     for n, c in enumerate(candidates[:20], 1):
         c["times"] = [stamp(paths[i].name).strftime("%Y-%m-%d %H:%M") for i in c["pictures"]]
         c["files"] = [paths[i].name for i in c["pictures"]]
+        c["gaps"] = gaps(c["times"])
+        c["sungrazer_xy"] = [list(native(x, y, camera, shape)) for x, y in c["track"]]
         c["movie"] = movie(images, c, out / f"candidate-{n}.gif")
     answer = {"camera": camera, "raw": raw, "pictures": len(paths), "from": paths[0].name, "to": paths[-1].name,
               "points": len(found), "tracks": len(linked),
@@ -536,7 +658,8 @@ def look(camera, hours=None, say=print, paths=None, until=None, raw=False, plant
         say("No track moves other than as the stars do.")
     for n, c in enumerate(candidates[:20], 1):
         say(f"  {n}. {len(c['pictures'])} pictures from {c['times'][0]}, {c['pixels_per_12_min']} px in 12 min, "
-            f"{'towards' if c['towards_sun'] > 0.5 else 'not towards'} the Sun, strength {c['strength']}: {c['movie']}")
+            f"{'towards' if c['towards_sun'] > 0.5 else 'not towards'} the Sun, strength {c['strength']}"
+            + (f", one track across {', '.join(c['gaps'])}" if c["gaps"] else "") + f": {c['movie']}")
     if candidates:
         say("Watch each movie. A comet is faint and moves steadily; check the project's recent finds, then "
             "report through sungrazer.nrl.navy.mil/report with your name, the times and its positions.")
@@ -561,13 +684,39 @@ def prune(camera, days=KEEP_DAYS, now=None):
 def report_text(c, camera):
     """What the Sungrazer Project's report form asks, filled from a
     candidate: the camera, and each picture's time with the point's place in
-    it (pixels of the 1024-pixel picture, from the top left)."""
+    it, as the project measures it (`native`: pixels from the top left of
+    the full frame), and how it stands against the project's own reports."""
     instrument = {"c3": "LASCO C3", "c2": "LASCO C2", "ccor1": "GOES-19 CCOR-1"}.get(camera, camera)
     lines = [f"Instrument: {instrument}", f"Motion: {c['pixels_per_12_min']} pixels in 12 minutes, "
-             f"{'towards' if c['towards_sun'] > 0.5 else 'not towards'} the Sun", "Positions (UTC, x, y):"]
-    for t, f, (x, y) in zip(c.get("times", []), c.get("files", []), c["track"]):
+             f"{'towards' if c['towards_sun'] > 0.5 else 'not towards'} the Sun"
+             + (f"; one track across the gap {', '.join(c['gaps'])}" if c.get("gaps") else "")]
+    match = c.get("public")
+    if match:
+        lines.append("Public reports: " + match["state"]
+                     + (f" ({match['report']}, {match['who']}, {match['type']})" if match.get("report") else ""))
+    lines.append("Positions (UTC, x, y from the top left of the full frame):")
+    for t, f, (x, y) in zip(c.get("times", []), c.get("files", []), c.get("sungrazer_xy") or c["track"]):
         lines.append(f"  {t}  {x:.1f}  {y:.1f}  ({f})")
     return "\n".join(lines)
+
+
+def headline(towards, rim):
+    """The hunt's answer in one line: known comets recovered, tracks someone
+    has reported, and what is unexplained."""
+    def count(n, one, many):
+        return f"{n} {one if n == 1 else many}"
+    state = [(c.get("public") or {}).get("state", "") for c in towards]
+    known, matched = state.count("known comet"), state.count("possible public match")
+    left = len(towards) - known - matched
+    parts = [count(known, "known comet recovered", "known comets recovered")] if known else []
+    if matched:
+        parts.append(count(matched, "track matching someone's report", "tracks matching others' reports"))
+    parts.append(count(left, "unexplained track heading for the Sun", "unexplained tracks heading for the Sun")
+                 if left else "no unexplained candidates")
+    if rim:
+        parts.append(count(len(rim), "weak track on the occulter's rim set aside",
+                           "weak tracks on the occulter's rim set aside"))
+    return "; ".join(parts)
 
 
 def hunt(camera, hours=HUNT_HOURS, say=print, now=None, get=requests.get, looker=None, send=None):
@@ -577,21 +726,34 @@ def hunt(camera, hours=HUNT_HOURS, say=print, now=None, get=requests.get, looker
     fetch(hours, camera, say, get=get, now=now)
     looker = looker or (lambda: look(camera, hours, say=lambda *_: None, until=now))
     seen = looker()
-    towards = [c for c in seen.get("candidates", []) if c["towards_sun"] >= TOWARDS]
+    heading = [c for c in seen.get("candidates", []) if c["towards_sun"] >= TOWARDS]
+    rim = [c for c in heading if c.get("rim") and c["strength"] < RIM_STRENGTH]
+    towards = [c for c in heading if c not in rim]
+    if towards and camera in REPORT_CAMERA:
+        try:
+            reports = public_reports(camera, get)
+        except (requests.RequestException, OSError) as error:
+            say(f"The project's public reports could not be read ({error}): not checked")
+            reports = None
+        for c in towards:
+            c["public"] = public_match(c, reports) if reports is not None and c.get("sungrazer_xy") \
+                else {"state": "public reports not checked"}
     answer = {"camera": camera, "pictures": seen["pictures"], "when": now.strftime("%Y-%m-%d %H:%M"),
-              "towards_sun": towards, "moving": len(seen.get("candidates", [])), "folder": seen.get("folder"),
+              "towards_sun": towards, "rim": rim, "moving": len(seen.get("candidates", [])),
+              "folder": seen.get("folder"),
               "deleted": prune(camera, KEEP_DAYS, now)}
     records.write(folder() / f"hunt-{camera}.json", answer, schema="sungrazer", stamp=True)
     with (folder() / "hunt.log").open("a", encoding="utf-8") as log:
         log.write(f"{answer['when']} {camera} {answer['pictures']} pictures, {len(towards)} heading for the Sun\n")
     say(f"{answer['pictures']} {camera.upper()} pictures to {answer['when']} UTC: {len(towards)} heading in towards "
-        f"the Sun, of {answer['moving']} moving other than the stars")
+        f"the Sun, of {answer['moving']} moving other than the stars"
+        + (f"; {len(rim)} weak on the occulter's rim set aside" if rim else ""))
     for c in towards:
         say(f"  {len(c['pictures'])} pictures from {c['times'][0]}, {c['pixels_per_12_min']} px in 12 min, "
-            f"strength {c['strength']}: {c['movie']}")
+            f"strength {c['strength']}" + (f", {c['public']['state']}" if c.get("public") else "") + f": {c['movie']}")
     if towards:
         import notify
-        text = (f"Comet hunt, {camera.upper()} to {answer['when']} UTC: {len(towards)} heading in towards the Sun. "
+        text = (f"Comet hunt, {camera.upper()} to {answer['when']} UTC: {headline(towards, rim)}. "
                 f"Watch each movie, check the project's recent finds, and to report one tell Claude "
                 f"\"report comet N\": it fills the Sungrazer form and you press send.\n\n"
                 + "\n\n".join(f"{n}. " + report_text(c, camera) for n, c in enumerate(towards, 1)))

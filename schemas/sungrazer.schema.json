@@ -18,6 +18,7 @@
     "folder": {"type": ["string", "null"]},
     "when": {"type": "string", "description": "hunt: the end of the hours looked at, UTC."},
     "towards_sun": {"type": "array", "description": "hunt: the candidates heading in towards the Sun.", "items": {"type": "object"}},
+    "rim": {"type": "array", "description": "hunt: weak candidates on the occulter's rim, set aside and not sent.", "items": {"type": "object"}},
     "moving": {"type": "integer", "description": "hunt: candidates moving other than the stars, heading anywhere."},
     "deleted": {"type": "integer", "description": "hunt: pictures older than KEEP_DAYS deleted."},
     "installed": {"type": "string", "description": "hunt --install: the timer written and started."},
@@ -37,7 +38,14 @@
           "strength": {"type": "number"},
           "times": {"type": "array", "items": {"type": "string"}},
           "files": {"type": "array", "items": {"type": "string"}},
-          "movie": {"type": "string"}
+          "movie": {"type": "string"},
+          "rim": {"type": "boolean", "description": "the track never leaves the occulter's flickering rim."},
+          "gaps": {"type": "array", "items": {"type": "string"}, "description": "gaps the track was joined across, HH:MM-HH:MM UTC."},
+          "sungrazer_xy": {"type": "array", "items": {"type": "array", "items": {"type": "number"}}, "description": "the track's places as the Sungrazer Project measures them: pixels of the full frame from the top left."},
+          "public": {"type": "object", "description": "hunt: how it stands against the project's public reports.",
+                     "required": ["state"],
+                     "properties": {"state": {"enum": ["known comet", "possible public match", "no matching public report found", "public reports not checked"]},
+                                    "report": {"type": "string"}, "who": {"type": "string"}, "type": {"type": "string"}, "group": {"type": "string"}}}
         }
       }
     }

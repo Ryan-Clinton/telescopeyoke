@@ -36,3 +36,21 @@ each movie side by side. `look.json` is the hunt's full answer.
   October), outside the field; Mercury, Mars, Jupiter and Saturn are
   further. Spica is about 3.5° from the Sun but drifts only about 1° a day
   with the stars; this track moves about 4° a day.
+
+## What the hunt does now
+
+The same pictures looked at again after the changes this day:
+
+- the two pieces are one track of 27 pictures, "one track across
+  20:00-20:45";
+- its places are given in the project's frame (2048 x 1920 from the top
+  left), and it is matched by itself to report_ms_20261019125628: "known
+  comet";
+- track 3, strength 6.8 and never leaving the occulter's rim, is set
+  aside and not sent;
+- the message's first line reads "1 known comet recovered; no unexplained
+  candidates; 1 weak track on the occulter's rim set aside".
+
+SOHO's LASCO C3 saw the same hours: one track of 39 pictures, 14:54-23:54
+across a gap at 15:54-16:49, heading in, matched to the C3 report
+report_nu_20261019163827 ("Potential Comet", Kreutz, from a new user).

@@ -261,3 +261,144 @@ def test_the_timer_runs_the_ccor1_hunt_every_6_hours_and_lasco_is_refused(tmp_pa
     assert ran[-1] == ["systemctl", "--user", "enable", "--now", "ty-sungrazer.timer"] and answer["installed"]
     with pytest.raises(sungrazer.interface.Refusal):
         sungrazer.install("c3", say=lambda *_: None, run=lambda cmd, check: None, home=tmp_path)
+
+
+def piece(start_minute, count, x, y, vx, vy, first_picture=0):
+    """A made-up track: (picture, x, y, strength, minute), every 15 minutes."""
+    return [(first_picture + i, x + vx * 15 * i, y + vy * 15 * i, 50.0, start_minute + 15 * i) for i in range(count)]
+
+
+def test_one_object_split_by_a_gap_is_joined_and_a_different_one_is_not():
+    # 19 Oct 2026, CCOR-1: one comet seen 16:45-20:00 and again 20:45-23:45, a 45-minute gap between.
+    before = piece(0, 14, 979.0, 295.0, -0.272, 0.087)
+    after = piece(240, 13, 979.0 - 0.272 * 240, 295.0 + 0.087 * 240, -0.272, 0.087, first_picture=16)
+    other = piece(240, 6, 600.0, 400.0, 0.1, 0.6, first_picture=16)
+    joined = sungrazer.stitch([after, other, before])
+    assert len(joined) == 2
+    whole = next(t for t in joined if len(t) == 27)
+    assert whole[0] == before[0] and whole[-1] == after[-1]
+    assert sungrazer.gaps(["2026-10-19 19:45", "2026-10-19 20:00", "2026-10-19 20:45"]) == ["20:00-20:45"]
+
+
+def test_a_track_that_turns_or_comes_too_late_is_not_joined():
+    first = piece(0, 8, 900.0, 300.0, -0.27, 0.09)
+    turned = piece(150, 8, 900.0 - 0.27 * 150, 300.0 + 0.09 * 150, -0.27, -0.3, first_picture=10)
+    late = piece(105 + 300, 8, 900.0 - 0.27 * 405, 300.0 + 0.09 * 405, -0.27, 0.09, first_picture=30)
+    assert len(sungrazer.stitch([first, turned])) == 2
+    assert len(sungrazer.stitch([first, late])) == 2
+
+
+def test_ccor1_positions_are_given_as_the_project_measures_them():
+    # A kept level-3 picture is 1024 x 960, bottom row first; the project's reports measure 2048 x 1920 from the top.
+    assert sungrazer.native(1016.0, 283.0, "ccor1", (960, 1024)) == (2032.0, 1354.0)
+    assert sungrazer.native(500.0, 300.0, "c3", (1024, 1024)) == (500.0, 300.0)
+
+
+REPORTS_PAGE = """
+<tr class="sungrazer-reports-table table__row odd">
+<td headers="view-title-table-column" class="views-field views-field-title table__cell"><a href="/report/x">report_ms_20261019125628</a>  </td>
+<td headers="c" class="views-field views-field-field-contributor table__cell">Michael Stark  </td>
+<td headers="d" class="views-field views-field-field-report-date table__cell"><time datetime="2026-10-19T12:00:00Z" class="datetime">2026-10-19</time>
+</td>
+<td headers="s" class="views-field views-field-field-sighting-type table__cell">Known Comet Now Entering  </td>
+<td headers="g" class="views-field views-field-field-comet-group table__cell">Kreutz  </td>
+<td headers="k" class="views-field views-field-field-camera table__cell">CCOR1  </td>
+<td headers="f" class="views-field views-field-field-frames table__cell">1430 2029 1352<br>1445 2021 1349<br>1500 2013 1346  </td>
+</tr>
+<tr class="sungrazer-reports-table table__row even">
+<td headers="view-title-table-column" class="views-field views-field-title table__cell"><a href="/report/y">report_bc_20261019233808</a>  </td>
+<td headers="c" class="views-field views-field-field-contributor table__cell">Bill Collins  </td>
+<td headers="d" class="views-field views-field-field-report-date table__cell"><time datetime="2026-10-19T12:00:00Z" class="datetime">2026-10-19</time>
+</td>
+<td headers="s" class="views-field views-field-field-sighting-type table__cell">Potential Comet  </td>
+<td headers="g" class="views-field views-field-field-comet-group table__cell">Kreutz  </td>
+<td headers="k" class="views-field views-field-field-camera table__cell">CCOR1  </td>
+<td headers="f" class="views-field views-field-field-frames table__cell">1945 897 924<br>2000 892 920<br>2130 875 902  </td>
+</tr>
+<tr class="sungrazer-reports-table table__row odd">
+<td headers="view-title-table-column" class="views-field views-field-title table__cell"><a href="/report/z">report_nu_20261019163827</a>  </td>
+<td headers="c" class="views-field views-field-field-contributor table__cell">NEW USER  </td>
+<td headers="d" class="views-field views-field-field-report-date table__cell"><time datetime="2026-10-19T12:00:00Z" class="datetime">2026-10-19</time>
+</td>
+<td headers="s" class="views-field views-field-field-sighting-type table__cell">Potential Comet  </td>
+<td headers="g" class="views-field views-field-field-comet-group table__cell">Kreutz  </td>
+<td headers="k" class="views-field views-field-field-camera table__cell">C3  </td>
+<td headers="f" class="views-field views-field-field-frames table__cell">1406 803 747<br>1430 800 744  </td>
+</tr>
+"""
+
+
+def reports_get(*_, **__):
+    return Reply(REPORTS_PAGE, status_code=200)
+
+
+def test_the_projects_reports_are_read_for_one_camera():
+    found = sungrazer.public_reports("ccor1", get=reports_get)
+    assert [r["id"] for r in found] == ["report_ms_20261019125628", "report_bc_20261019233808"]
+    assert found[0]["who"] == "Michael Stark" and found[0]["type"] == "Known Comet Now Entering"
+    assert found[0]["date"] == "2026-10-19" and found[0]["points"][0] == ("1430", 2029.0, 1352.0)
+
+
+def test_a_candidate_is_matched_to_a_report_carried_along_its_track_and_never_rejected():
+    reports = sungrazer.public_reports("ccor1", get=reports_get)
+    times = [f"2026-10-19 {h:02d}:{m:02d}" for h, m in [(16, 45), (17, 0), (17, 15), (17, 30), (17, 45)]]
+    known = {"times": times, "sungrazer_xy": [[1958.0 - 8.16 * i, 1330.0 - 2.6 * i] for i in range(5)]}
+    assert sungrazer.public_match(known, reports) == {
+        "state": "known comet", "report": "report_ms_20261019125628", "who": "Michael Stark",
+        "type": "Known Comet Now Entering", "group": "Kreutz"}
+    collins = {"times": ["2026-10-19 19:45", "2026-10-19 20:00"], "sungrazer_xy": [[898.0, 923.0], [893.0, 919.0]]}
+    assert sungrazer.public_match(collins, reports)["state"] == "possible public match"
+    alone = {"times": times, "sungrazer_xy": [[1158.0, 1250.0 + 9 * i] for i in range(5)]}
+    assert sungrazer.public_match(alone, reports) == {"state": "no matching public report found"}
+
+
+def test_the_hunts_message_gives_the_projects_positions_and_the_public_match(tmp_path, monkeypatch):
+    import config
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    now = datetime.datetime(2026, 10, 20, 0, 0, tzinfo=datetime.timezone.utc)
+    times = ["2026-10-19 16:45", "2026-10-19 17:00"]
+    seen = {"pictures": 74, "folder": "f", "candidates": [
+        {"pictures": [1, 2], "towards_sun": 1.0, "times": times, "files": ["a.fits", "b.fits"],
+         "track": [[979.0, 295.0], [975.0, 296.0]], "sungrazer_xy": [[1958.0, 1330.0], [1950.0, 1328.0]],
+         "gaps": ["20:00-20:45"], "pixels_per_12_min": 3.47, "strength": 110.0, "movie": "m1.gif"}]}
+    sent = []
+
+    def get(url, *a, **k):
+        return reports_get() if url == sungrazer.REPORTS else Reply("", status_code=200)
+    answer = sungrazer.hunt("ccor1", 24, say=lambda *_: None, now=now, get=get, looker=lambda: seen,
+                            send=lambda text, animations, say: sent.append(text))
+    assert answer["towards_sun"][0]["public"]["state"] == "known comet"
+    assert "2026-10-19 16:45  1958.0  1330.0  (a.fits)" in sent[0]
+    assert "known comet (report_ms_20261019125628, Michael Stark" in sent[0] and "20:00-20:45" in sent[0]
+
+    def broken(url, *a, **k):
+        if url == sungrazer.REPORTS:
+            raise sungrazer.requests.ConnectionError("down")
+        return Reply("", status_code=200)
+    answer = sungrazer.hunt("ccor1", 24, say=lambda *_: None, now=now, get=broken, looker=lambda: seen,
+                            send=lambda *a, **k: None)
+    assert answer["towards_sun"][0]["public"]["state"] == "public reports not checked"
+
+
+def test_a_weak_track_on_the_occulters_rim_is_set_aside_and_the_message_says_what_was_found(tmp_path, monkeypatch):
+    import config
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    # 19 Oct 2026: candidate 3 crept along the rim, 120-160 px from the middle, at strength 6.8.
+    rim_track = [(i, 579.0 + 1.4 * i, 335.0 + 7.6 * i, 6.8, 15.0 * i) for i in range(5)]
+    comet = [(i, 979.0 - 4.1 * i, 295.0 + 1.3 * i, 110.0, 15.0 * i) for i in range(5)]
+    judged = sungrazer.judge([rim_track, comet], None, (960, 1024), "ccor1")
+    assert [c["rim"] for c in sorted(judged, key=lambda c: c["strength"])] == [True, False]
+    now = datetime.datetime(2026, 10, 20, 0, 0, tzinfo=datetime.timezone.utc)
+    known = {"pictures": [1], "towards_sun": 1.0, "times": ["2026-10-19 16:45"], "files": ["a.fits"],
+             "track": [[979.0, 295.0]], "pixels_per_12_min": 3.47, "strength": 110.0, "movie": "m1.gif", "rim": False}
+    weak = {"pictures": [1], "towards_sun": 0.82, "times": ["2026-10-19 11:30"], "files": ["c.fits"],
+            "track": [[579.0, 335.0]], "pixels_per_12_min": 7.72, "strength": 6.8, "movie": "m3.gif", "rim": True}
+    sent = []
+    answer = sungrazer.hunt("ccor1", 24, say=lambda *_: None, now=now, get=lambda *a, **k: Reply("", status_code=200),
+                            looker=lambda: {"pictures": 74, "folder": "f", "candidates": [known, weak]},
+                            send=lambda text, animations, say: sent.append((text, animations)))
+    assert [c["movie"] for c in answer["towards_sun"]] == ["m1.gif"] and answer["rim"][0]["movie"] == "m3.gif"
+    assert sent[0][1] == [("m1.gif", "comet candidate 1")]
+    assert sungrazer.headline([dict(known, public={"state": "known comet"})], [weak]) == (
+        "1 known comet recovered; no unexplained candidates; 1 weak track on the occulter's rim set aside")
+    assert sungrazer.headline([known], []) == "1 unexplained track heading for the Sun"

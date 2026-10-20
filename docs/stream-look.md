@@ -445,6 +445,16 @@ would say it. It never pretends to think.
   is labelled as a diagram, and its stars are drawn, never a real field or
   a real candidate.
 
+- **The comet hunt.** When the comet hunt (`sungrazer.py hunt`) has, in
+  the last 36 hours, found a comet that matches the Sungrazer Project's
+  report of a known comet, the first, middle and last pictures of its
+  movie, with the hunt's own figures: "On 19 October the comet hunt found
+  a known Kreutz sungrazing comet by itself in 74 pictures from the
+  GOES-19 satellite: 27 of them, over 7 hours." The same words join the
+  HOW IT WORKS cards. A track that matches no report, or only someone's
+  unconfirmed one, is never shown: like a nova candidate, it is the
+  person's to check first (`streamstory.comet_hunt`).
+
 Which explainers come depends on the programme. They are taken in turn.
 
 **The crawl, 45 s every 10 minutes**: one slow line along the bottom, over

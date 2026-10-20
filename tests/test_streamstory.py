@@ -76,3 +76,34 @@ def test_every_curated_line_fits_and_none_names_the_place():
     for items in TARGETS["stories"].values():
         pools += items
     assert pools and all(len(t) <= 170 and place not in t for t in pools)
+
+
+def hunt_file(tmp_path, state, when="2026-10-20 05:05"):
+    import json
+    (tmp_path / "sungrazer").mkdir(exist_ok=True)
+    every = [f"2026-10-19 {h:02d}:{m:02d}" for h in range(16, 24) for m in (0, 15, 30, 45)]
+    times = every[3:17] + every[19:]                    # 16:45-20:00 and 20:45-23:45, as on 19 October
+    (tmp_path / "sungrazer" / "hunt-ccor1.json").write_text(json.dumps({
+        "when": when, "pictures": 74, "towards_sun": [
+            {"times": times, "movie": str(tmp_path / "candidate-1.gif"),
+             "public": {"state": state, "report": "report_ms_20261019125628", "who": "Michael Stark",
+                        "type": "Known Comet Now Entering", "group": "Kreutz"}}]}))
+
+
+def test_a_known_comet_the_hunt_found_is_told_and_an_unreported_track_never_is(tmp_path, monkeypatch):
+    import datetime
+    import config
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    evening = datetime.datetime(2026, 10, 20, 19, 0, tzinfo=datetime.timezone.utc).timestamp()
+    hunt_file(tmp_path, "known comet")
+    hunt = streamstory.comet_hunt(evening)
+    assert hunt["seen"] == 27 and hunt["pictures"] == 74 and hunt["day"] == "19 October"
+    words = streamstory.comet_words(hunt)
+    assert "74 pictures" in words and "known Kreutz sungrazing comet" in words and "27 of them, over 7 hours" in words
+    story = streamstory.Story()
+    seen = [streamstory.plan(PATROL, LIVE, evening + t, story, TARGETS) for t in range(0, 6 * 300, 5)]
+    assert any(p["explainer"] == "comet" and p["comet"]["seen"] == 27 for p in seen)
+    assert streamstory.comet_hunt(evening + 2 * 86400) is None                     # old news
+    for state in ("no matching public report found", "possible public match", "public reports not checked"):
+        hunt_file(tmp_path, state)
+        assert streamstory.comet_hunt(evening) is None

@@ -329,7 +329,7 @@ def explain(c, kind, s, area, stack, single):
     on = COLOURS["panel"]
     left, top, inner = bx0 + 40, by0 + 34, bx1 - bx0 - 80
     titles = {"stacking": "WHAT IS STACKING?", "transit": "WHAT IS A TRANSIT?", "nova": "WHAT IS A NOVA?",
-              "subtraction": "HOW DOES THE SEARCH WORK?"}
+              "subtraction": "HOW DOES THE SEARCH WORK?", "comet": "THE COMET HUNT"}
     c.text((left, top), titles[kind], "bold", 36, "accent", on=on)
     top += 66
     row_h = (by1 - 110) - top
@@ -366,6 +366,16 @@ def explain(c, kind, s, area, stack, single):
             if i < 2:
                 c.text((px + col - 40, top + row_h * 0.3), "→", "bold", 36, "accent", on=on)
         words = "A nova does not destroy its star: it is an explosion on the surface of a white dwarf."
+    elif kind == "comet":
+        import streamstory
+        hunt = (s.get("story") or {}).get("comet") or {}
+        shots = movie_frames(hunt.get("movie"))
+        size = min((inner - 80) / 3, row_h - 120)
+        for i, (shot, label) in enumerate(zip(shots, ("FIRST", "MIDDLE", "LAST"))):
+            px = left + i * (size + 40)
+            c.image.paste(shot.resize((int(size), int(size)), Image.NEAREST), (int(px), int(top)))
+            c.text((px, top + size + 8), label, "mono", 22, "text", on=on)
+        words = streamstory.comet_words(hunt) if hunt else "A known comet, found by the comet hunt."
     else:                                                               # subtraction, as a diagram
         size = min((inner - 160) / 3, row_h - 50)
         for i, (label, extra) in enumerate((("OLD SKY", False), ("TONIGHT", True), ("WHAT CHANGED?", None))):
@@ -383,6 +393,24 @@ def explain(c, kind, s, area, stack, single):
                 c.text((px + size + 26, top + size / 2 - 22), "−" if i == 0 else "=", "bold", 40, "accent", on=on)
         words = "A diagram: tonight's picture minus an earlier one leaves only what has changed, then it is checked."
     c.wrap((left, by1 - 96), words, "sans", 25, inner, "text", on=on)
+
+
+@functools.lru_cache(maxsize=4)
+def _frames(path, mtime):
+    from PIL import ImageSequence
+    with Image.open(path) as gif:
+        frames = [f.convert("RGB").copy() for f in ImageSequence.Iterator(gif)]
+    inside = frames[2:-3] or frames                  # the movie runs two pictures before the track, three after
+    return [inside[0], inside[len(inside) // 2], inside[-1]]
+
+
+def movie_frames(path):
+    """The first, middle and last pictures of a comet hunt's movie; none
+    when it has gone."""
+    try:
+        return _frames(str(path), Path(path).stat().st_mtime) if path else []
+    except (OSError, ValueError):
+        return []
 
 
 def about(c, s, x, y, width):
@@ -693,6 +721,10 @@ def examples(now=None):
         **{f"explain-{k}": dict(patrol, story={"chapter": "NOW", "card": None, "line": None, "explainer": k,
                                                "crawl": None})
            for k in ("stacking", "subtraction", "nova", "transit")},
+        "explain-comet": dict(patrol, story={"chapter": "NOW", "card": None, "line": None, "explainer": "comet",
+                                             "crawl": None, "comet": {"pictures": 74, "seen": 27, "group": "Kreutz",
+                                                                      "hours": 7.0, "day": "19 October",
+                                                                      "movie": None}}),
         "transit": {"kind": "transit", "target": "WASP-12", "now": now, "exposure": 4, "last_age": 2,
                     "combined": 980, "kept": 975, "captured": 980, "integration_s": 3900, "fwhm_arcsec": 4.9,
                     "next": "M31 P6 second look at 06:25 UTC",
