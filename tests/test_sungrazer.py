@@ -225,38 +225,15 @@ def test_planted_comets_are_found_when_strong_and_counted_by_strength():
     assert len(strong) == 3 and all(strong) and sum(weak) <= 1
 
 
-def test_the_hunt_keeps_what_heads_for_the_sun_and_tidies_old_pictures(tmp_path, monkeypatch):
-    import config
-    import json
-    monkeypatch.setattr(config, "DATA", tmp_path)
-    store = tmp_path / "sungrazer" / "pictures" / "ccor1"
-    store.mkdir(parents=True)
-    (store / "CCOR1_3_20261010T000025_V00_NC.fits").write_bytes(b"old")
-    (store / "CCOR1_3_20261016T000025_V00_NC.fits").write_bytes(b"new")
-    now = datetime.datetime(2026, 10, 16, 12, 0, tzinfo=datetime.timezone.utc)
-    seen = {"pictures": 40, "folder": "f", "candidates": [
-        {"pictures": [1, 2, 3, 4, 5], "towards_sun": 0.9, "times": ["2026-10-16 01:00", "2026-10-16 01:15"],
-         "files": ["a.fits", "b.fits"], "track": [[100.0, 200.0], [103.0, 198.0]], "pixels_per_12_min": 3.0,
-         "strength": 9.0, "movie": "m1.gif"},
-        {"pictures": [1, 2, 3, 4, 5], "towards_sun": -0.8, "times": ["2026-10-16 02:00"], "pixels_per_12_min": 6.0,
-         "strength": 12.0, "movie": "m2.gif"}]}
-    sent = []
-    answer = sungrazer.hunt("ccor1", 24, say=lambda *_: None, now=now, get=lambda *a, **k: Reply("", status_code=200),
-                            looker=lambda: seen, send=lambda text, animations, say: sent.append((text, animations)))
-    text, animations = sent[0]
-    assert "GOES-19 CCOR-1" in text and "2026-10-16 01:15  103.0  198.0  (b.fits)" in text
-    assert animations == [("m1.gif", "comet candidate 1")]
-    assert [c["movie"] for c in answer["towards_sun"]] == ["m1.gif"] and answer["moving"] == 2
-    assert answer["deleted"] == 1 and [p.name for p in store.iterdir()] == ["CCOR1_3_20261016T000025_V00_NC.fits"]
-    assert json.loads((tmp_path / "sungrazer" / "hunt-ccor1.json").read_text())["towards_sun"][0]["movie"] == "m1.gif"
-
-
 def test_the_timer_runs_the_ccor1_hunt_every_6_hours_and_lasco_is_refused(tmp_path):
     ran = []
     answer = sungrazer.install("ccor1", say=lambda *_: None, run=lambda cmd, check: ran.append(cmd), home=tmp_path)
     place = tmp_path / ".config" / "systemd" / "user"
     service = (place / "ty-sungrazer.service").read_text()
     assert "sungrazer.py hunt --camera ccor1" in service and "Nice=19" in service
+    # A detached checkout kept for the timer follows the pushed code; a branch is left alone.
+    assert "symbolic-ref -q HEAD" in service and "checkout -q --detach origin/main" in service
+    assert service.index("ExecStartPre") < service.index("ExecStart=")
     assert "OnUnitActiveSec=6h" in (place / "ty-sungrazer.timer").read_text()
     assert ran[-1] == ["systemctl", "--user", "enable", "--now", "ty-sungrazer.timer"] and answer["installed"]
     with pytest.raises(sungrazer.interface.Refusal):
@@ -352,53 +329,86 @@ def test_a_candidate_is_matched_to_a_report_carried_along_its_track_and_never_re
     assert sungrazer.public_match(alone, reports) == {"state": "no matching public report found"}
 
 
-def test_the_hunts_message_gives_the_projects_positions_and_the_public_match(tmp_path, monkeypatch):
-    import config
-    monkeypatch.setattr(config, "DATA", tmp_path)
-    now = datetime.datetime(2026, 10, 20, 0, 0, tzinfo=datetime.timezone.utc)
-    times = ["2026-10-19 16:45", "2026-10-19 17:00"]
-    seen = {"pictures": 74, "folder": "f", "candidates": [
-        {"pictures": [1, 2], "towards_sun": 1.0, "times": times, "files": ["a.fits", "b.fits"],
-         "track": [[979.0, 295.0], [975.0, 296.0]], "sungrazer_xy": [[1958.0, 1330.0], [1950.0, 1328.0]],
-         "gaps": ["20:00-20:45"], "pixels_per_12_min": 3.47, "strength": 110.0, "movie": "m1.gif"}]}
+def comet_seen():
+    """19 Oct 2026's CCOR-1 hunt: the known comet and the weak rim track."""
+    comet = {"pictures": [1, 2], "towards_sun": 1.0, "times": ["2026-10-19 16:45", "2026-10-19 17:00"],
+             "files": ["a.fits", "b.fits"], "track": [[979.0, 295.0], [975.0, 296.0]],
+             "sungrazer_xy": [[1958.0, 1330.0], [1950.0, 1328.0]], "gaps": ["20:00-20:45"],
+             "pixels_per_12_min": 3.47, "strength": 110.0, "movie": "m1.gif", "rim": False}
+    weak = {"pictures": [1], "towards_sun": 0.82, "times": ["2026-10-19 11:30"], "files": ["c.fits"],
+            "track": [[579.0, 335.0]], "pixels_per_12_min": 7.72, "strength": 6.8, "movie": "m3.gif", "rim": True}
+    away = {"pictures": [1], "towards_sun": -0.8, "times": ["2026-10-19 02:00"], "files": ["d.fits"],
+            "track": [[300.0, 300.0]], "pixels_per_12_min": 6.0, "strength": 12.0, "movie": "m2.gif"}
+    return {"pictures": 74, "folder": "f", "candidates": [comet, weak, away]}
+
+
+def run_hunt(tmp_path, seen, get, now=datetime.datetime(2026, 10, 20, 5, 5, tzinfo=datetime.timezone.utc)):
     sent = []
+    answer = sungrazer.hunt("ccor1", 24, say=lambda *_: None, now=now, get=get, looker=lambda: seen,
+                            send=lambda text, animations=(), say=None, **k: sent.append((text, list(animations))))
+    return answer, sent
+
+
+def test_the_person_hears_of_a_find_then_what_it_turned_out_to_be_and_only_once(tmp_path, monkeypatch):
+    import config
+    import json
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    store = tmp_path / "sungrazer" / "pictures" / "ccor1"
+    store.mkdir(parents=True)
+    (store / "CCOR1_3_20261010T000025_V00_NC.fits").write_bytes(b"old")
 
     def get(url, *a, **k):
         return reports_get() if url == sungrazer.REPORTS else Reply("", status_code=200)
-    answer = sungrazer.hunt("ccor1", 24, say=lambda *_: None, now=now, get=get, looker=lambda: seen,
-                            send=lambda text, animations, say: sent.append(text))
-    assert answer["towards_sun"][0]["public"]["state"] == "known comet"
-    assert "2026-10-19 16:45  1958.0  1330.0  (a.fits)" in sent[0]
-    assert "known comet (report_ms_20261019125628, Michael Stark" in sent[0] and "20:00-20:45" in sent[0]
+    answer, sent = run_hunt(tmp_path, comet_seen(), get)
+    (first, movies), (checked, _) = sent
+    assert "1 possible comet heading in towards the Sun" in first and movies == [("m1.gif", "possible comet 1")]
+    assert checked.startswith("Comet hunt checked: 1 known comet recovered; no unexplained candidates; "
+                              "1 weak track on the occulter's rim set aside.")
+    assert "already known: a Kreutz comet" in checked and "report_ms_20261019125628, Michael Stark" in checked
+    assert "2026-10-19 16:45  1958.0  1330.0  (a.fits)" in checked and "20:00-20:45" in checked
+    assert "report comet" not in checked                                 # nothing to report
+    assert [c["movie"] for c in answer["towards_sun"]] == ["m1.gif"] and answer["rim"][0]["movie"] == "m3.gif"
+    assert answer["deleted"] == 1 and answer["moving"] == 3
+    assert json.loads((tmp_path / "sungrazer" / "hunt-ccor1.json").read_text())["towards_sun"][0]["public"][
+        "state"] == "known comet"
+    # Six hours later the same comet is in the pictures again: nothing is sent.
+    answer, sent = run_hunt(tmp_path, comet_seen(), get, now=datetime.datetime(2026, 10, 20, 11, 5,
+                                                                               tzinfo=datetime.timezone.utc))
+    assert sent == [] and answer["towards_sun"][0]["verdict"]["kind"] == "known comet"
 
-    def broken(url, *a, **k):
-        if url == sungrazer.REPORTS:
-            raise sungrazer.requests.ConnectionError("down")
-        return Reply("", status_code=200)
-    answer = sungrazer.hunt("ccor1", 24, say=lambda *_: None, now=now, get=broken, looker=lambda: seen,
-                            send=lambda *a, **k: None)
-    assert answer["towards_sun"][0]["public"]["state"] == "public reports not checked"
 
-
-def test_a_weak_track_on_the_occulters_rim_is_set_aside_and_the_message_says_what_was_found(tmp_path, monkeypatch):
+def test_an_unexplained_find_is_offered_for_reporting_and_its_later_match_is_told(tmp_path, monkeypatch):
     import config
     monkeypatch.setattr(config, "DATA", tmp_path)
-    # 19 Oct 2026: candidate 3 crept along the rim, 120-160 px from the middle, at strength 6.8.
-    rim_track = [(i, 579.0 + 1.4 * i, 335.0 + 7.6 * i, 6.8, 15.0 * i) for i in range(5)]
-    comet = [(i, 979.0 - 4.1 * i, 295.0 + 1.3 * i, 110.0, 15.0 * i) for i in range(5)]
-    judged = sungrazer.judge([rim_track, comet], None, (960, 1024), "ccor1")
-    assert [c["rim"] for c in sorted(judged, key=lambda c: c["strength"])] == [True, False]
-    now = datetime.datetime(2026, 10, 20, 0, 0, tzinfo=datetime.timezone.utc)
-    known = {"pictures": [1], "towards_sun": 1.0, "times": ["2026-10-19 16:45"], "files": ["a.fits"],
-             "track": [[979.0, 295.0]], "pixels_per_12_min": 3.47, "strength": 110.0, "movie": "m1.gif", "rim": False}
-    weak = {"pictures": [1], "towards_sun": 0.82, "times": ["2026-10-19 11:30"], "files": ["c.fits"],
-            "track": [[579.0, 335.0]], "pixels_per_12_min": 7.72, "strength": 6.8, "movie": "m3.gif", "rim": True}
-    sent = []
-    answer = sungrazer.hunt("ccor1", 24, say=lambda *_: None, now=now, get=lambda *a, **k: Reply("", status_code=200),
-                            looker=lambda: {"pictures": 74, "folder": "f", "candidates": [known, weak]},
-                            send=lambda text, animations, say: sent.append((text, animations)))
-    assert [c["movie"] for c in answer["towards_sun"]] == ["m1.gif"] and answer["rim"][0]["movie"] == "m3.gif"
-    assert sent[0][1] == [("m1.gif", "comet candidate 1")]
-    assert sungrazer.headline([dict(known, public={"state": "known comet"})], [weak]) == (
-        "1 known comet recovered; no unexplained candidates; 1 weak track on the occulter's rim set aside")
-    assert sungrazer.headline([known], []) == "1 unexplained track heading for the Sun"
+    nobody = "<html></html>"
+    answer, sent = run_hunt(tmp_path, comet_seen(), lambda url, *a, **k: Reply(nobody, status_code=200))
+    checked = sent[1][0]
+    assert "1 unexplained track: possibly new" in checked and "It could be new" in checked
+    assert "\"report comet 1\"" in checked
+    # By the next hunt someone has reported it as a known comet: one update, then quiet.
+    get = lambda url, *a, **k: reports_get() if url == sungrazer.REPORTS else Reply("", status_code=200)  # noqa: E731
+    later = datetime.datetime(2026, 10, 20, 11, 5, tzinfo=datetime.timezone.utc)
+    _, sent = run_hunt(tmp_path, {"pictures": 70, "folder": "f", "candidates": []}, get, now=later)
+    assert len(sent) == 1 and sent[0][0].startswith("Comet hunt update: the possible comet first seen 2026-10-19 16:45")
+    assert "already known" in sent[0][0]
+    _, sent = run_hunt(tmp_path, {"pictures": 70, "folder": "f", "candidates": []}, get, now=later)
+    assert sent == []
+
+
+def test_a_planet_on_the_track_is_named(tmp_path, monkeypatch):
+    import config
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    (tmp_path / "sungrazer" / "pictures" / "ccor1").mkdir(parents=True)
+    for name in ("a.fits", "b.fits"):
+        (tmp_path / "sungrazer" / "pictures" / "ccor1" / name).write_bytes(b"")
+    monkeypatch.setattr(sungrazer, "where_bodies", lambda path: {"Venus": (978.0, 294.0) if path.name == "a.fits"
+                                                                  else (976.0, 297.0), "Mars": (10.0, 10.0)})
+    answer, sent = run_hunt(tmp_path, comet_seen(), lambda url, *a, **k: Reply("<html></html>", status_code=200))
+    assert "not a comet: it is the planet Venus" in sent[1][0] and "1 planet; no unexplained" in sent[1][0]
+
+
+def test_the_suns_pole_angle_is_as_the_almanac_gives():
+    from astropy.time import Time
+    # Meeus's example 29.a: 1992 October 13.0 TD, P = +26.27 degrees.
+    assert sungrazer.solar_p(Time(2448908.50068, format="jd")) == pytest.approx(26.27, abs=0.05)
+

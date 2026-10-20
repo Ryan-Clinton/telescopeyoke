@@ -10,6 +10,9 @@ each is expected to start and finish, for the console to show.
     ./schedule.py wait "M31 novae" 30 PID  a step already running elsewhere, by its process id
     ./schedule.py run                     run the queued steps, one after the other
     ./schedule.py clear                   start a new schedule
+    ./schedule.py end                     the night is over: park the mount and tell the person
+    ./schedule.py guard                   the same, if a night's imaging has stopped and it is morning
+    ./schedule.py guard --install         run the guard every 10 minutes (a systemd user timer)
 
 Each step has a label, its expected minutes, a command, and maybe a time
 not to start before; the times of the steps after a running one follow from
@@ -17,6 +20,17 @@ when it started. A step that fails stops the schedule and fetches the person
 (alert.py call): nothing after it runs on a night that has gone wrong. Kept in
 config.DATA/cache/schedule.json. 19 October 2026: the night's plan was a
 script nobody could see, and the console said nothing between frames.
+
+When the last step has run, the night is over: the mount goes home and the
+person is told on their phone what the night got and that it is parked
+(`end`). A night can also end outside the schedule (cloud, a camera that
+hangs, runs restarted by hand), so `guard`, every 10 minutes from a timer,
+does the same once it is morning (MORNING), the night has imaged, nothing
+has been kept for IDLE_MINUTES and nothing is running. 20 October 2026:
+the night ended at 05:28 in cloud, outside the schedule, and the mount
+tracked on, unparked and unsaid, until the person came down. The person
+asked for this; it moves the mount only home, through mount.py and its
+motion lock, and only once a night.
 """
 import argparse
 import json
@@ -32,6 +46,11 @@ import records
 
 FILE = config.DATA / "cache" / "schedule.json"
 RUNNER = config.DATA / "cache" / "schedule.runner"     # the process id of `schedule.py run` while it runs
+ENDED = config.DATA / "cache" / "night.ended"          # when a night was last ended (parked and told)
+MORNING = (3, 12)          # local hours in which guard may end a night
+IDLE_MINUTES = 30          # guard: no frame kept for this long
+NIGHT_HOURS = 16           # a night's sessions: those begun within this many hours
+IMAGING = ("shoot.py", "patrol.py", "starwatch.py", "focus.py", "polaralign.py", "camera_setup.py")
 
 
 def load():
@@ -126,6 +145,7 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run):
         RUNNER.write_text(str(os.getpid()), encoding="utf-8")
     except OSError:
         pass
+    ran = False
     while True:
         plan = load()
         steps = plan["steps"]
@@ -134,6 +154,8 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run):
         waiting = next((s for s in steps if s["status"] == "running" and s.get("pid")), None)
         step = waiting or next((s for s in steps if s["status"] == "queued"), None)
         if step is None:
+            if ran:
+                end(say=say)
             return True
         number = steps.index(step) + 1
         if waiting:
@@ -161,6 +183,7 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run):
                 continue
             command = ["timeout", "--signal=INT", str(left)] + command
         say(f"{datetime.now():%H:%M} starting {step['label']}")
+        ran = True
         mark_id(step["id"], status="running", started=time.time())
         with activity.doing("Schedule", step["label"], number, len(steps)):
             try:
@@ -178,6 +201,134 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run):
         if not ok:
             (call or fetch)(f"The telescope needs you: {step['label']} stopped with an error.")
             return False
+
+
+def tonight(now=None, hours=NIGHT_HOURS):
+    """The night's sessions: [(field, frames kept, newest frame's time)]."""
+    now = now or time.time()
+    out = []
+    for d in sorted((config.DATA / "frames").glob("*/2*")):
+        try:
+            begun = datetime.strptime(d.name[:15], "%Y%m%d-%H%M%S").timestamp()
+        except ValueError:
+            continue
+        if now - begun > hours * 3600 or not d.is_dir():
+            continue
+        frames = list(d.glob("light-*.fits"))
+        newest = max((f.stat().st_mtime for f in frames), default=begun)
+        out.append((d.parent.name, len(frames), newest))
+    return out
+
+
+def summary(sessions):
+    """What the night got, in one line: frames kept by field."""
+    fields = {}
+    for field, frames, _ in sessions:
+        fields[field] = fields.get(field, 0) + frames
+    return ", ".join(f"{field} {n} frames" for field, n in fields.items()) or "no frames kept"
+
+
+def mount_state(run=subprocess.run):
+    """The mount's status (mount.py status --json's data), or None if it does not answer."""
+    try:
+        done = run([sys.executable, str(config.ROOT / "mount.py"), "status", "--json"], capture_output=True,
+                   text=True, timeout=60)
+        return json.loads(done.stdout)["data"]
+    except (OSError, ValueError, KeyError, subprocess.SubprocessError):
+        return None
+
+
+def end(say=print, send=None, run=subprocess.run, now=None):
+    """The night is over: send the mount home (mount.py, so its motion lock
+    and checks hold), check it got there, and tell the person on their
+    phone. Returns whether it is parked."""
+    import notify
+    send = send or notify.send
+    now = now or time.time()
+    sessions = tonight(now)
+    got = summary(sessions)
+    state = mount_state(run)
+    if state is None:
+        words = f"Observation is over. Tonight: {got}. The mount did not answer, so it may not be parked: please check it."
+        parked = False
+    else:
+        if not state.get("at_home"):
+            run([sys.executable, str(config.ROOT / "mount.py"), "home"], capture_output=True, text=True, timeout=600)
+            state = mount_state(run) or {}
+        parked = bool(state.get("at_home"))
+        words = (f"Observation is over. Tonight: {got}. The telescope is parked at home (by its axis readouts)."
+                 if parked else
+                 f"Observation is over. Tonight: {got}. The telescope could NOT be parked: it is still "
+                 f"{state.get('state', 'where it was')}. Please check it.")
+    try:
+        ENDED.parent.mkdir(parents=True, exist_ok=True)
+        ENDED.write_text(str(now), encoding="utf-8")
+    except OSError:
+        pass
+    say(words)
+    send(words, say=say)
+    return parked
+
+
+def busy(names=IMAGING):
+    """A process running one of the imaging or mount scripts, by its command line."""
+    for proc in Path("/proc").glob("[0-9]*"):
+        try:
+            line = (proc / "cmdline").read_bytes().split(b"\0")
+        except OSError:
+            continue
+        if any(Path(part.decode(errors="replace")).name in names for part in line[:3]):
+            return True
+    return False
+
+
+def guard(say=print, send=None, run=subprocess.run, now=None, running=None):
+    """End the night (`end`) if it is over and nobody has: morning, the
+    night has imaged, nothing kept for IDLE_MINUTES, the schedule not
+    running, no imaging script running, and this night not already ended.
+    Returns why it did nothing, or "ended"."""
+    now = now or time.time()
+    hour = datetime.fromtimestamp(now).hour
+    if not MORNING[0] <= hour < MORNING[1]:
+        return "not morning"
+    sessions = tonight(now)
+    if not sessions:
+        return "nothing imaged tonight"
+    if now - max(s[2] for s in sessions) < IDLE_MINUTES * 60:
+        return "still imaging"
+    try:
+        if now - float(ENDED.read_text(encoding="utf-8")) < NIGHT_HOURS * 3600:
+            return "already ended"
+    except (OSError, ValueError):
+        pass
+    try:
+        if alive(RUNNER.read_text(encoding="utf-8").strip()):
+            return "the schedule is running"
+    except OSError:
+        pass
+    if (running or busy)():
+        return "an imaging script is running"
+    end(say=say, send=send, run=run, now=now)
+    return "ended"
+
+
+def install(say=print, run=subprocess.run, home=None):
+    """The guard every 10 minutes, as a systemd user timer, from this checkout."""
+    root = config.ROOT
+    place = Path(home or Path.home()) / ".config" / "systemd" / "user"
+    place.mkdir(parents=True, exist_ok=True)
+    (place / "ty-night-end.service").write_text(
+        "[Unit]\nDescription=telescopeyoke: park and say so when the night is over\n\n"
+        f"[Service]\nType=oneshot\nWorkingDirectory={root}\n"
+        f"ExecStart={sys.executable} {root / 'schedule.py'} guard\n", encoding="utf-8")
+    (place / "ty-night-end.timer").write_text(
+        "[Unit]\nDescription=telescopeyoke: check every 10 minutes whether the night is over\n\n"
+        "[Timer]\nOnBootSec=10min\nOnUnitActiveSec=10min\n\n[Install]\nWantedBy=timers.target\n",
+        encoding="utf-8")
+    run(["systemctl", "--user", "daemon-reload"], check=True)
+    run(["systemctl", "--user", "enable", "--now", "ty-night-end.timer"], check=True)
+    say(f"The night-end guard runs every 10 minutes ({place / 'ty-night-end.timer'}). "
+        "Stop it: systemctl --user disable --now ty-night-end.timer")
 
 
 def mark_id(step_id, **fields):
@@ -220,6 +371,9 @@ def main(argv=None):
     w.add_argument("pid", type=int)
     sub.add_parser("run")
     sub.add_parser("clear")
+    sub.add_parser("end")
+    g = sub.add_parser("guard")
+    g.add_argument("--install", action="store_true", help="run it every 10 minutes as a systemd user timer")
     args = ap.parse_args(argv)
     if args.action == "add":
         # Everything after "--" is the command; an option given after the
@@ -239,6 +393,14 @@ def main(argv=None):
         sys.exit(0 if run() else 1)
     elif args.action == "clear":
         save({"steps": [], "made": time.time()})
+    elif args.action == "end":
+        sys.exit(0 if end() else 1)
+    elif args.action == "guard":
+        if args.install:
+            install()
+        else:
+            print(guard(say=lambda *_: None))
+        return
     show()
 
 

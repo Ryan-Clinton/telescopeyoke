@@ -18,8 +18,11 @@ What happens before anyone asks:
    same field at once (no GoTo) and searches them: a real object is there
    again, and the second alert says "seen on 2 of 2 nights".
 3. The comet hunt (`sungrazer.py hunt`, every 6 hours) sends any track
-   heading in towards the Sun, with its movie and the Sungrazer form's
-   fields filled in.
+   heading in towards the Sun, with its movie; then, once checked against
+   the planets, bright stars and the Sungrazer Project's reports, what it
+   is, with the form's fields filled in (in the project's own frame). An
+   unexplained one is offered for "report comet N"; a later match is sent
+   as an update.
 
 ## "claim ID": a nova or other transient, to the Transient Name Server
 

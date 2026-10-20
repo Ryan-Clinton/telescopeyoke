@@ -138,8 +138,12 @@ a motor's creep rate. `mount.py stop` is always allowed.
 - Keep `--demo` and the tests working with every change.
 - On another computer (the desktop), everything goes under one folder,
   `~/telescopeyoke-laptop/`: `tests/` for `ty test-run`, `remote/` for
-  `restack.py --on`. Nothing else is made in its home folder: no
-  one-off copies for a test run.
+  `restack.py --on`, `pycache/` for the test run's compiled files. Nothing
+  else is made in its home folder: no one-off copies for a test run.
+- What goes to the person's phone (`notify.send`) is copied to
+  `cache/sent.jsonl`; `.claude/hooks/news.py` puts anything new from it in
+  front of the agent at the start of a session and with each message, so
+  an alert that reached the phone overnight reaches the agent too.
 - Keep every JSON file through `records.write` (never `write_text`): a
   scientific result with `stamp=True` and its schema, a file two processes
   may change (a field's candidate book) through `records.change`. Change a

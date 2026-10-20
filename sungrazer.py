@@ -69,12 +69,18 @@ keeps the candidates heading in towards the Sun (the rest are mostly the
 corona blowing outwards) in sungrazer/hunt-CAMERA.json, and deletes
 pictures older than KEEP_DAYS. A weak track (below RIM_STRENGTH) that
 never leaves the occulter's flickering rim is set aside, kept in the
-answer but not sent. Each one sent is checked against the project's
-public list of reports for that camera (`public_match`, one page a
-hunt): "known comet" when it lies on a report of a known comet carried to
-its times, "possible public match" for anyone else's report, "no matching
-public report found" otherwise. Nothing is dropped for a match; the
-message's first line says what the hunt found. `hunt --install` runs it every 6 hours as
+answer but not sent. The person hears in two messages: first what was
+found, with its movies; then, once checked, what each one is. The checks:
+a planet or bright star on the track (`body_on`, CCOR-1, whose pictures
+carry sky coordinates), and the project's public list of reports for that
+camera (`public_match`, one page a hunt): "known comet" when it lies on a
+report of a known comet carried to its times, "possible public match" for
+anyone else's report, "no matching public report found" otherwise, which
+is offered for reporting. A candidate already sent is remembered for
+TOLD_DAYS (sungrazer/told-CAMERA.json) and not sent again by the next
+hunts, which look at the same hours; one still unexplained is checked
+again by each, and the person told when its answer changes. 20 October
+2026: the comet the hunt found was only identified once the person asked. `hunt --install` runs it every 6 hours as
 a systemd user timer, from the checkout it is installed from; only for
 CCOR-1, whose archive is NOAA's open one, until the Sungrazer Project has
 been asked about LASCO. `systemctl --user disable --now
@@ -88,6 +94,7 @@ or uses the camera.
 """
 import argparse
 import datetime
+import json
 import math
 import os
 import re
@@ -700,18 +707,119 @@ def report_text(c, camera):
     return "\n".join(lines)
 
 
+BODY_NEAR = 10.0     # pixels: a track this near a planet or bright star at its first and last pictures is that
+TOLD_DAYS = 4        # days a candidate already sent is remembered, so the next hunts do not send it again
+BRIGHT_STARS = {     # stars bright enough to leave a track near the Sun (RA, Dec in degrees, J2000)
+    "Spica": (201.298, -11.161), "Regulus": (152.093, 11.967), "Antares": (247.352, -26.432),
+    "Aldebaran": (68.980, 16.509), "Pollux": (116.329, 28.026), "Castor": (113.650, 31.888),
+    "Elnath": (81.573, 28.608), "Nunki": (283.816, -26.297), "Zubenelgenubi": (222.720, -16.042),
+    "Deneb Algedi": (326.760, -16.127), "Alcyone": (56.871, 24.105), "Sabik": (257.595, -15.725)}
+
+
+def solar_p(t):
+    """The position angle of the Sun's north pole from celestial north, in
+    degrees (Meeus, chapter 29): CCOR-1's sky is measured from solar north."""
+    jd = t.jd
+    T = (jd - 2451545.0) / 36525
+    K = 73.6667 + 1.3958333 * (jd - 2396758) / 36525
+    L = (280.46646 + 36000.76983 * T) % 360
+    M = math.radians(357.52911 + 35999.05029 * T)
+    C = (1.914602 - 0.004817 * T) * math.sin(M) + 0.019993 * math.sin(2 * M)
+    omega = math.radians(125.04 - 1934.136 * T)
+    lam = L + C - 0.00569 - 0.00478 * math.sin(omega)
+    eps = 23.4392911 - 0.0130042 * T + 0.00256 * math.cos(omega)
+    x = math.degrees(math.atan(-math.cos(math.radians(lam)) * math.tan(math.radians(eps))))
+    y = math.degrees(math.atan(-math.cos(math.radians(lam - K)) * math.tan(math.radians(7.25))))
+    return x + y
+
+
+def where_bodies(path):
+    """Where each planet and bright star is in a CCOR-1 picture: {name:
+    (x, y)} in its pixels. Checked on 19 October 2026: Spica, predicted at
+    779, 380, was the brightest point within 4 pixels."""
+    import warnings
+    from astropy.coordinates import SkyCoord, get_body
+    from astropy.io import fits
+    from astropy.time import Time
+    from astropy.wcs import WCS
+    import astropy.units as u
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with fits.open(path) as f:
+            head = next(h for h in f if h.data is not None).header
+        wcs, t = WCS(head), Time(head["DATE-OBS"])
+        sun, tilt = get_body("sun", t), solar_p(Time(head["DATE-OBS"]))
+        bodies = {name.title(): get_body(name, t) for name in
+                  ("mercury", "venus", "mars", "jupiter", "saturn", "uranus", "neptune")}
+        bodies.update({name: SkyCoord(ra * u.deg, dec * u.deg) for name, (ra, dec) in BRIGHT_STARS.items()})
+        out = {}
+        for name, body in bodies.items():
+            sep = float(sun.separation(body).deg)
+            if sep > 8:
+                continue
+            pa = math.radians(float(sun.position_angle(body).deg) - tilt)
+            x, y = wcs.wcs_world2pix([[-sep * math.sin(pa), sep * math.cos(pa)]], 0)[0]
+            out[name] = (float(x), float(y))
+    return out
+
+
+def body_on(c, camera):
+    """The planet or bright star a CCOR-1 track lies on, at its first and
+    last pictures; None for none, or for a camera whose pictures carry no
+    sky coordinates."""
+    if camera != "ccor1" or not c.get("files"):
+        return None
+    ends = []
+    for k in (0, -1):
+        path = folder() / "pictures" / camera / c["files"][k]
+        if not path.exists():
+            return None
+        try:
+            ends.append(where_bodies(path))
+        except Exception:      # an unreadable picture: no answer, never a stopped hunt
+            return None
+    for name in ends[0]:
+        if name in ends[1] and all(math.dist(e[name], c["track"][k]) <= BODY_NEAR for e, k in zip(ends, (0, -1))):
+            return name
+    return None
+
+
+def verdict(c, camera):
+    """What a candidate turned out to be, from the checks: {"kind", "words"}."""
+    body = c.get("body")
+    if body:
+        kind = "star" if body in BRIGHT_STARS else "planet"
+        return {"kind": kind, "words": f"not a comet: it is the {'star' if kind == 'star' else 'planet'} {body}"}
+    match = c.get("public") or {}
+    state = match.get("state", "public reports not checked")
+    who = f"{match.get('report')}, {match.get('who')}" if match.get("report") else ""
+    group = f" {match['group']}" if match.get("group") else ""
+    if state == "known comet":
+        return {"kind": "known comet", "words": f"a comet, but already known: a{group} comet in the "
+                                                f"Sungrazer Project's reports ({who}, \"{match.get('type')}\")"}
+    if state == "possible public match":
+        return {"kind": "reported", "words": f"a comet someone has already reported, not yet confirmed: "
+                                             f"{who}, \"{match.get('type')}\"{group}"}
+    if state == "no matching public report found":
+        return {"kind": "unexplained", "words": "nothing explains it: no planet or bright star, and no report "
+                                                "of it in the project's list. It could be new"}
+    return {"kind": "not checked", "words": "the project's reports could not be read: not checked yet"}
+
+
 def headline(towards, rim):
-    """The hunt's answer in one line: known comets recovered, tracks someone
-    has reported, and what is unexplained."""
+    """The checked hunt in one line: what each track turned out to be."""
     def count(n, one, many):
         return f"{n} {one if n == 1 else many}"
-    state = [(c.get("public") or {}).get("state", "") for c in towards]
-    known, matched = state.count("known comet"), state.count("possible public match")
-    left = len(towards) - known - matched
-    parts = [count(known, "known comet recovered", "known comets recovered")] if known else []
-    if matched:
-        parts.append(count(matched, "track matching someone's report", "tracks matching others' reports"))
-    parts.append(count(left, "unexplained track heading for the Sun", "unexplained tracks heading for the Sun")
+    kinds = [(c.get("verdict") or verdict(c, None))["kind"] for c in towards]
+    parts = []
+    for kind, one, many in (("known comet", "known comet recovered", "known comets recovered"),
+                            ("reported", "track matching someone's report", "tracks matching others' reports"),
+                            ("planet", "planet", "planets"), ("star", "bright star", "bright stars"),
+                            ("not checked", "not yet checked", "not yet checked")):
+        if kinds.count(kind):
+            parts.append(count(kinds.count(kind), one, many))
+    left = kinds.count("unexplained")
+    parts.append(count(left, "unexplained track: possibly new", "unexplained tracks: possibly new")
                  if left else "no unexplained candidates")
     if rim:
         parts.append(count(len(rim), "weak track on the occulter's rim set aside",
@@ -719,9 +827,32 @@ def headline(towards, rim):
     return "; ".join(parts)
 
 
+def same(a, b, near=6.0):
+    """Whether two candidates are one object: a picture in common, with the
+    two points in it within `near` pixels."""
+    places = dict(zip(b.get("files", []), b["track"]))
+    return any(f in places and math.dist(xy, places[f]) <= near for f, xy in zip(a.get("files", []), a["track"]))
+
+
+def told(camera, now):
+    """The candidates already sent, from the last TOLD_DAYS."""
+    try:
+        rows = json.loads((folder() / f"told-{camera}.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    return [r for r in rows if now.timestamp() - r.get("told", 0) <= TOLD_DAYS * 86400]
+
+
 def hunt(camera, hours=HUNT_HOURS, say=print, now=None, get=requests.get, looker=None, send=None):
-    """Fetch the last `hours`, look, keep what heads in towards the Sun,
-    and tidy away old pictures. `looker` stands in for look (for the tests)."""
+    """Fetch the last `hours`, look, keep what heads in towards the Sun, and
+    tidy away old pictures; tell the person in two messages: first what was
+    found, then, once checked against the planets, bright stars and the
+    Sungrazer Project's own reports, what each one is. A candidate already
+    sent is not sent again; one still unexplained is checked again by each
+    later hunt, and the person told if the answer changes. `looker` stands
+    in for look (for the tests)."""
+    import notify
+    send = send or notify.send
     now = now or datetime.datetime.now(datetime.timezone.utc)
     fetch(hours, camera, say, get=get, now=now)
     looker = looker or (lambda: look(camera, hours, say=lambda *_: None, until=now))
@@ -729,15 +860,31 @@ def hunt(camera, hours=HUNT_HOURS, say=print, now=None, get=requests.get, looker
     heading = [c for c in seen.get("candidates", []) if c["towards_sun"] >= TOWARDS]
     rim = [c for c in heading if c.get("rim") and c["strength"] < RIM_STRENGTH]
     towards = [c for c in heading if c not in rim]
-    if towards and camera in REPORT_CAMERA:
+    earlier = told(camera, now)
+    new = [c for c in towards if not any(same(c, t) for t in earlier)]
+    if new:
+        send(f"Comet hunt, {camera.upper()} to {now:%Y-%m-%d %H:%M} UTC: "
+             f"{len(new)} possible comet{'s' if len(new) > 1 else ''} heading in towards the Sun. Checking "
+             f"{'them' if len(new) > 1 else 'it'} now against the planets, bright stars and the Sungrazer Project's "
+             f"reports; the answer follows.",
+             animations=[(c["movie"], f"possible comet {n}") for n, c in enumerate(new, 1)], say=say)
+    pending = [t for t in earlier if t["verdict"]["kind"] in ("unexplained", "reported", "not checked")]
+    reports = None
+    if (new or pending) and camera in REPORT_CAMERA:
         try:
             reports = public_reports(camera, get)
         except (requests.RequestException, OSError) as error:
             say(f"The project's public reports could not be read ({error}): not checked")
-            reports = None
-        for c in towards:
-            c["public"] = public_match(c, reports) if reports is not None and c.get("sungrazer_xy") \
-                else {"state": "public reports not checked"}
+    for c in new + pending:
+        if "body" not in c:
+            c["body"] = body_on(c, camera)
+        c["public"] = public_match(c, reports) if reports is not None and c.get("sungrazer_xy") \
+            else c.get("public") or {"state": "public reports not checked"}
+        c["verdict"] = verdict(c, camera)
+    for c in towards:
+        twin = next((t for t in earlier if same(c, t)), None)
+        if twin:
+            c["verdict"], c["public"], c["body"] = twin["verdict"], twin.get("public"), twin.get("body")
     answer = {"camera": camera, "pictures": seen["pictures"], "when": now.strftime("%Y-%m-%d %H:%M"),
               "towards_sun": towards, "rim": rim, "moving": len(seen.get("candidates", [])),
               "folder": seen.get("folder"),
@@ -746,19 +893,29 @@ def hunt(camera, hours=HUNT_HOURS, say=print, now=None, get=requests.get, looker
     with (folder() / "hunt.log").open("a", encoding="utf-8") as log:
         log.write(f"{answer['when']} {camera} {answer['pictures']} pictures, {len(towards)} heading for the Sun\n")
     say(f"{answer['pictures']} {camera.upper()} pictures to {answer['when']} UTC: {len(towards)} heading in towards "
-        f"the Sun, of {answer['moving']} moving other than the stars"
+        f"the Sun ({len(new)} new), of {answer['moving']} moving other than the stars"
         + (f"; {len(rim)} weak on the occulter's rim set aside" if rim else ""))
-    for c in towards:
-        say(f"  {len(c['pictures'])} pictures from {c['times'][0]}, {c['pixels_per_12_min']} px in 12 min, "
-            f"strength {c['strength']}" + (f", {c['public']['state']}" if c.get("public") else "") + f": {c['movie']}")
-    if towards:
-        import notify
-        text = (f"Comet hunt, {camera.upper()} to {answer['when']} UTC: {headline(towards, rim)}. "
-                f"Watch each movie, check the project's recent finds, and to report one tell Claude "
-                f"\"report comet N\": it fills the Sungrazer form and you press send.\n\n"
-                + "\n\n".join(f"{n}. " + report_text(c, camera) for n, c in enumerate(towards, 1)))
-        (send or notify.send)(text, animations=[(c["movie"], f"comet candidate {n}") for n, c in enumerate(towards, 1)],
-                              say=say)
+    if new:
+        lines = [f"Comet hunt checked: {headline(new, rim)}."]
+        for n, c in enumerate(new, 1):
+            lines.append(f"\n{n}. {c['verdict']['words']}.")
+            lines.append(report_text(c, camera))
+            if c["verdict"]["kind"] == "unexplained":
+                lines.append(f"To report it, tell Claude \"report comet {n}\": it fills the Sungrazer form and you "
+                             "press send.")
+        send("\n".join(lines), say=say)
+    for t in pending:
+        before = t.get("said", "")
+        if t["verdict"]["words"] != before:
+            send(f"Comet hunt update: the possible comet first seen {t['times'][0]} UTC is {t['verdict']['words']}.",
+                 say=say)
+    stamp = now.timestamp()
+    kept = [dict(t, said=t["verdict"]["words"]) for t in earlier]
+    kept += [{"files": c.get("files", []), "track": c["track"], "times": c.get("times", []),
+              "sungrazer_xy": c.get("sungrazer_xy"), "movie": c.get("movie"), "body": c.get("body"),
+              "public": c.get("public"), "verdict": c["verdict"], "said": c["verdict"]["words"], "told": stamp}
+             for c in new]
+    records.write(folder() / f"told-{camera}.json", kept)
     return answer
 
 
@@ -767,8 +924,14 @@ def units(camera="ccor1", root=None, python=None, data=None):
     root = Path(root or Path(__file__).resolve().parent)
     python = python or sys.executable
     env = f"Environment=TY_DATA={data}\n" if data else ""
+    # A checkout kept for the timer alone (its HEAD detached) is brought up
+    # to the pushed code before each hunt; a person's own branch is left
+    # alone. 20 October 2026: the timer ran three-day-old code, whose alerts
+    # left no copy on the laptop, and the agent never heard of the comet.
+    follow = (f"ExecStartPre=-/bin/sh -c 'git -C {root} symbolic-ref -q HEAD >/dev/null || "
+              f"(git -C {root} fetch -q origin && git -C {root} checkout -q --detach origin/main)'\n")
     service = (f"[Unit]\nDescription=telescopeyoke: comets in {camera.upper()} pictures\n\n"
-               f"[Service]\nType=oneshot\nWorkingDirectory={root}\n{env}"
+               f"[Service]\nType=oneshot\nWorkingDirectory={root}\n{env}{follow}"
                f"ExecStart={python} {root / 'sungrazer.py'} hunt --camera {camera}\nNice=19\n")
     timer = ("[Unit]\nDescription=telescopeyoke: the comet hunt every 6 hours\n\n"
              "[Timer]\nOnBootSec=15min\nOnUnitActiveSec=6h\nPersistent=true\n\n"

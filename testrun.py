@@ -32,6 +32,7 @@ import remote
 ROOT = Path(__file__).parent
 HOST = "desktop"
 PLACE = "telescopeyoke-laptop/tests"
+PYCACHE = "telescopeyoke-laptop/pycache"   # Python's compiled files for the test run
 FIRST_LINES = 8      # of each failure, kept
 WIDE = "1000"        # columns pytest is told it has, so it never trims a failure's reason
 
@@ -85,7 +86,10 @@ def run(args, say=print, runner=subprocess.run):
         runner_python = python if python == "python3" else f"~/{python}"
         say(f"running the tests on {HOST}")
         done = runner(["ssh", "-o", "BatchMode=yes", HOST,
-                       f"cd ~/{PLACE} && COLUMNS={WIDE} {runner_python} -m pytest -q -rfE -p no:cacheprovider "
+                       # Compiled files kept apart from the copy: ones left in it name the folder they
+                       # were made in (20 October 2026: after a move, a traceback test read the old one).
+                       f"cd ~/{PLACE} && COLUMNS={WIDE} PYTHONPYCACHEPREFIX=~/{PYCACHE} "
+                       f"{runner_python} -m pytest -q -rfE -p no:cacheprovider "
                        + " ".join(shlex.quote(c) for c in chosen)], capture_output=True, text=True)
         where = HOST
     counts, failures = summary(done.stdout)
