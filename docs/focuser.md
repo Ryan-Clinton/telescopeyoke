@@ -240,6 +240,22 @@ tube if the pressure is too little or the flat greasy. `./focuser.py look
 --watch URL` keeps one picture from the phone, for marking which screw is
 which.
 
+### 20 October 2026, afternoon: the motor is not up to it
+
+With moves fast enough to see (10 ms a half-step, a quarter turn in 10 s)
+and the camera off: coupled to the focuser, the motor turned it inward but
+outward managed about a sixteenth of a turn and stopped. The shafts are in
+line by eye, and the focuser turns easily by hand. Run free, off the
+focuser, out and back ten times, the motor itself was clearly weaker one
+way: the owner could hold it back with a finger one way, much less the
+other. A healthy 28BYJ-48 is the same both ways, so this one (or its
+wiring or driver board) is faulty, and even healthy it is marginal for
+this focuser. Decided: a stronger drive. In order of cost: a fresh
+28BYJ-48 with a 3:1 to 5:1 gear or belt reduction; a NEMA 14 or NEMA 17
+on a TMC2209 driver at 12 V, with a bracket for it (several to more than
+ten times the torque, no gearing); or a ZWO EAF through INDI. The rest of
+the project (`focus.py --motor`, `--walk-in`, the load test) stays.
+
 ### Finding where the turn is lost (`./focuser.py load-test`)
 
 In daylight, on the telescope with the camera on: the blacked stick and the
