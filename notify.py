@@ -76,7 +76,28 @@ def send(text, pictures=(), animations=(), post=requests.post, say=print):
                 sent += 1
     except requests.RequestException as error:
         say(f"  the alert was not sent ({error.__class__.__name__}); carrying on")
+    keep(text, pictures, animations, sent)
     return sent
+
+
+SENT_LOG = config.DATA / "cache" / "sent.jsonl"
+
+
+def keep(text, pictures, animations, sent):
+    """A copy of every message for the phone, sent or not, kept on the laptop:
+    an agent watching the night reads the alerts as they go (20 October
+    2026: candidate alerts reached the phone with nothing on the laptop
+    saying so). Never raises."""
+    import json
+    import time
+    try:
+        SENT_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with open(SENT_LOG, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"time": time.time(), "sent": sent, "text": text,
+                                "pictures": [str(path) for path, _ in pictures],
+                                "animations": [str(path) for path, _ in animations]}) + "\n")
+    except Exception:
+        pass
 
 
 def candidate_alert(name, session, vetted, followed, pictures, reports):

@@ -47,3 +47,13 @@ def test_a_failure_to_send_does_not_stop_the_caller(bot):
         raise requests.ConnectionError("no network")
     said = []
     assert notify.send("hello", post=post, say=said.append) == 0 and "not sent" in said[0]
+
+
+def test_every_message_is_kept_on_the_laptop_as_well(bot, tmp_path, monkeypatch):
+    """20 October 2026: alerts reached the phone with nothing on the laptop
+    to say so, and the agent watching the night could not comment on them."""
+    import json
+    monkeypatch.setattr(notify, "SENT_LOG", tmp_path / "sent.jsonl")
+    notify.send("M31-P8: 4 unexplained candidates", post=lambda url, **k: Reply())
+    kept = [json.loads(line) for line in (tmp_path / "sent.jsonl").read_text().splitlines()]
+    assert kept[0]["text"].startswith("M31-P8") and kept[0]["sent"] == 1
