@@ -169,3 +169,12 @@ def test_a_shorter_frame_trusts_brighter_stars():
     assert variables.trusted(16) == pytest.approx(variables.TRUSTED)
     assert variables.trusted(4) == pytest.approx(11.495, abs=0.001)    # WASP-12, G 11.50, is measured in 4 s frames
     assert variables.trusted(None) == variables.TRUSTED
+
+
+def test_the_stacking_says_how_far_it_has_got_and_how_long_is_left():
+    said, ticks = [], iter(range(0, 1000, 60))                  # began, then a minute a batch
+    done = variables.progress(10, said.append, every=5, clock=lambda: next(ticks))
+    for _ in range(10):
+        done(None)
+    assert said == ["  stacked 5 of 10 batches; about 5 min left for the stacking",
+                    "  stacked all 10 batches in 10 min"]

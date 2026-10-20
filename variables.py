@@ -34,6 +34,7 @@ uses the camera; reporting a new variable to VSX is a person's decision.
 import argparse
 import json
 import math
+import time
 
 import numpy as np
 import requests
@@ -198,6 +199,21 @@ def plain(values):
     return [None if v is None or not np.isfinite(v) else round(float(v), 6) for v in values]
 
 
+def progress(total, say, every=5, clock=time.monotonic):
+    """A `done` for vet.stacked that says how far the stacking has got and
+    about how long is left, every `every` batches (20 October 2026: an
+    hour and more of stacking said nothing until the end)."""
+    began, count = clock(), [0]
+
+    def done(part):
+        count[0] += 1
+        n, spent = count[0], clock() - began
+        if n % every == 0 or n == total:
+            say(f"  stacked {n} of {total} batches; about {spent / n * (total - n) / 60:.0f} min left for the "
+                "stacking" if n < total else f"  stacked all {total} batches in {spent / 60:.0f} min")
+    return done
+
+
 def measured(session, name, size, say=print, stack=None, solve=None, gaia=None):
     """One night's measurements of every Gaia star in range in every batch,
     kept in the session (variables-BIN.json) and read back from there while
@@ -221,7 +237,8 @@ def measured(session, name, size, say=print, stack=None, solve=None, gaia=None):
     if len(groups) < 2:
         raise interface.Refusal("NO_SESSION", f"{session.name}: too few frames for {size}-frame batches.")
     say(f"{session.name}: {len(groups)} batches of {size} frames")
-    images = stack(groups)
+    images = stack(groups, done=progress(len(groups), say)) if stack is vet.stacked else stack(groups)
+    say("lining the stacks up with the star catalogue")
     wcs = solve(images[0])
     h, w = images[0].shape
     corners = wcs.pixel_to_world_values([0, w, 0, w, w / 2], [0, 0, h, h, h / 2])
@@ -233,6 +250,7 @@ def measured(session, name, size, say=print, stack=None, solve=None, gaia=None):
     light = difference.glow(images[0])
     sky = float(np.nanmedian(light))
     under = [float(light[int(round(y)), int(round(x))]) / sky if sky > 0 else 1.0 for x, y in xy]
+    say(f"measuring {len(xy)} stars in {len(images)} stacks")
     record = {"version": VERSION, "session": session.name, "bin": size, "frames": len(frames),
               "fwhm_px": round(fwhm, 2),
               "jd": [middle_time(g) for g in groups],
