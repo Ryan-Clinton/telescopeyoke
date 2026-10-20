@@ -269,6 +269,15 @@ def checks(session, jd, mag, middle, hours, site=None):
         if not stacking.master_path("flat").exists():
             out["calibration"].append("no flat field: each star's light changes as it drifts over the sensor")
         out["timing"]["frame_time"] = "DATE-OBS, the start of each exposure, plus half the exposure"
+        # Whether the exposure is the shutter's real time: camera.py writes TY_ASKED when it
+        # applied the trail-measured share (the 183C's clock runs fast through its library).
+        if head.get("TY_ASKED") is not None:
+            out["timing"]["exposure"] = (f"{exposure:g} s open (the trail-measured share applied; "
+                                         f"{float(head['TY_ASKED']):g} s asked)")
+        else:
+            out["timing"]["exposure"] = (f"{exposure:g} s as asked; the shutter's real time was not measured on "
+                                         "this camera path, so each middle may be off by up to half the "
+                                         "shortfall (camera_test.py --trail)")
         try:
             log = [json.loads(line) for line in (Path(session) / "frames.jsonl").read_text().splitlines()[:20]]
             from astropy.time import Time
