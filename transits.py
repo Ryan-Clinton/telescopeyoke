@@ -177,7 +177,12 @@ def measure(session, planet, size=BIN, say=print, rows=None, night=None):
     p = next((r for r in rows if r["planet"].replace(" ", "").lower() == planet.replace(" ", "").lower()), None)
     if p is None:
         raise interface.Refusal("TARGET_UNKNOWN", f"'{planet}' is not among the transiting planets kept.")
-    n = night or variables.night(session, session.parent.name, size, say)
+    exposure = None
+    try:
+        exposure = json.loads((session / "session.json").read_text(encoding="utf-8")).get("exposure")
+    except (OSError, ValueError):
+        pass
+    n = night or variables.night(session, session.parent.name, size, say, brightest=variables.trusted(exposure))
     stars = np.asarray(n["stars"])
     if not len(stars):
         raise interface.Refusal("NO_SESSION", f"No star measured in {session.name}.")

@@ -146,3 +146,26 @@ def test_a_dip_its_neighbours_share_is_the_skys_not_the_stars():
                           "jd": jd, "mag": list(mag), "noise": [0.01] * 60, "session": ["s"] * 60}
     listed = [s for s in variables.judge(curves) if s["dips"]]
     assert [s["ra"] for s in listed] == [pytest.approx(11.025)]
+
+
+def test_measurements_made_during_the_run_are_made_again_once_it_has_more_frames(tmp_path):
+    # 20 October 2026: WASP-12's measurement was kept at 510 frames mid-run and read back at 973.
+    images, wcs, catalogue, _ = made_up_night()
+    session = session_with_frames(tmp_path / "WASP-12" / "20261020-014726", BATCHES * 10)
+    stacked = []
+
+    def again():
+        return variables.night(session, "WASP-12", 10, say=lambda *_: None,
+                               stack=lambda g: stacked.append(len(g)) or images[:len(g)],
+                               solve=lambda lum: wcs, gaia=lambda ra, dec, r: catalogue)
+    again()
+    (session / f"light-{BATCHES * 10 + 1:04d}.fits").write_bytes(b"")
+    again()
+    again()
+    assert len(stacked) == 2
+
+
+def test_a_shorter_frame_trusts_brighter_stars():
+    assert variables.trusted(16) == pytest.approx(variables.TRUSTED)
+    assert variables.trusted(4) == pytest.approx(11.495, abs=0.001)    # WASP-12, G 11.50, is measured in 4 s frames
+    assert variables.trusted(None) == variables.TRUSTED

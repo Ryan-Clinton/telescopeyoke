@@ -48,6 +48,7 @@ BIN = 10             # frames in each point of a light curve
 BRIGHTEST = 10.5     # G: brighter stars are not even measured
 TRUSTED = 13.0       # G: brighter ones fill the camera's wells in a 16 s frame on a sharp night (14 October 2026's
                      # 6" stars: G 11 to 12.7 lost light then), so are left out of judging; 4 s frames reach 11.5
+TRUSTED_FOR = 16.0   # seconds: the exposure TRUSTED is for (`trusted` scales it to another)
 FAINTEST = 16.0      # G: fainter ones are too noisy in one batch
 ALONE = 15.0         # arcseconds: a star with a neighbour within this, less than CROWD mag fainter, shares its light
 CROWD = 3.0
@@ -199,7 +200,9 @@ def plain(values):
 
 def measured(session, name, size, say=print, stack=None, solve=None, gaia=None):
     """One night's measurements of every Gaia star in range in every batch,
-    kept in the session (variables-BIN.json) and read back from there."""
+    kept in the session (variables-BIN.json) and read back from there while
+    the session has the same frames (one measured during the run is made
+    again once the run has added more)."""
     import depth
     import difference
     import stacking
@@ -207,13 +210,14 @@ def measured(session, name, size, say=print, stack=None, solve=None, gaia=None):
     kept = session / f"variables-{size}.json"
     if kept.exists():
         record = json.loads(kept.read_text(encoding="utf-8"))
-        if record.get("version") == VERSION:
+        if record.get("version") == VERSION and record.get("frames") == len(vet.restack_frames(session)):
             say(f"{session.name}: {len(record['jd'])} batches of {size} frames, as measured before")
             return record
     stack = stack or vet.stacked
     solve = solve or (lambda lum: depth.plate(lum, name))
     gaia = gaia or depth.gaia
-    groups = batches(vet.restack_frames(session), size)
+    frames = vet.restack_frames(session)
+    groups = batches(frames, size)
     if len(groups) < 2:
         raise interface.Refusal("NO_SESSION", f"{session.name}: too few frames for {size}-frame batches.")
     say(f"{session.name}: {len(groups)} batches of {size} frames")
@@ -229,13 +233,21 @@ def measured(session, name, size, say=print, stack=None, solve=None, gaia=None):
     light = difference.glow(images[0])
     sky = float(np.nanmedian(light))
     under = [float(light[int(round(y)), int(round(x))]) / sky if sky > 0 else 1.0 for x, y in xy]
-    record = {"version": VERSION, "session": session.name, "bin": size, "fwhm_px": round(fwhm, 2),
+    record = {"version": VERSION, "session": session.name, "bin": size, "frames": len(frames),
+              "fwhm_px": round(fwhm, 2),
               "jd": [middle_time(g) for g in groups],
               "stars": [plain(row) + [None] * (4 - len(row)) for row in stars], "xy": [plain(p) for p in xy],
               "alone": [bool(a) for a in alone], "glow": plain(under),
               "flux": [plain(measure(image, xy, fwhm)) for image in images]}
     records.write(kept, record, stamp=True, record_version=VERSION, indent=None)
     return record
+
+
+def trusted(exposure):
+    """The brightest G trusted in frames of `exposure` seconds: a shorter
+    frame fills the wells with a brighter star (WASP-12, G 11.50, in the 4 s
+    frames of 20 October 2026, peaked at 270 of 4095)."""
+    return TRUSTED + 2.5 * math.log10(exposure / TRUSTED_FOR) if exposure else TRUSTED
 
 
 def night(session, name, size, say=print, stack=None, solve=None, gaia=None, brightest=TRUSTED):
