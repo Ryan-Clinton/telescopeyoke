@@ -75,3 +75,22 @@ def test_a_step_with_an_end_time_already_past_is_skipped(monkeypatch):
     ran = []
     assert schedule.run(say=lambda s: None, start=lambda cmd: ran.append(cmd))
     assert ran == [] and schedule.load()["steps"][0]["status"] == "skipped"
+
+
+def test_a_step_added_while_it_runs_is_taken_in_its_place():
+    """20 October 2026: a step added mid-night needed the runner restarting."""
+    schedule.save({"steps": []})
+    schedule.add("panels", 60, ["panels"])
+    schedule.add("transit", 250, ["transit"])
+    ran = []
+
+    def start(cmd):
+        ran.append(cmd[0])
+        if cmd == ["panels"]:            # while the panels run, a step goes in after them
+            plan = schedule.load()
+            plan["steps"].insert(1, {"id": "fill", "label": "fill", "minutes": 0, "command": ["fill"],
+                                     "status": "queued"})
+            schedule.save(plan)
+        return types.SimpleNamespace(returncode=0)
+    assert schedule.run(say=lambda s: None, start=start)
+    assert ran == ["panels", "fill", "transit"]

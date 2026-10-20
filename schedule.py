@@ -83,7 +83,10 @@ def view(plan=None, now=None):
 
 def add(label, minutes, command, not_before_=None, pid=None, until=None):
     plan = load()
-    plan["steps"].append({"label": label, "minutes": minutes, "command": command, "not_before": not_before_,
+    taken = {s.get("id", s["label"]) for s in plan["steps"]}
+    step_id = label if label not in taken else f"{label} ({len(taken) + 1})"
+    plan["steps"].append({"id": step_id, "label": label, "minutes": minutes, "command": command,
+                          "not_before": not_before_,
                           "until": until,
                           "pid": pid, "status": "running" if pid else "queued",
                           "started": time.time() if pid else None, "finished": None})
@@ -109,22 +112,33 @@ def alive(pid):
 def run(say=print, sleep=time.sleep, call=None, start=subprocess.run):
     """The queued steps in order. A step given by process id is waited for;
     the rest are started here, each when the one before has ended and not
-    before its time."""
-    plan = load()
-    for i, step in enumerate(plan["steps"]):
-        if step["status"] == "running" and step.get("pid"):
+    before its time. The plan is read again before every step and each step
+    found by its id, so steps can be added, moved or dropped while it runs
+    (20 October 2026: a step added mid-night needed the runner restarting,
+    since it worked from the plan it had read at the start, by position)."""
+    while True:
+        plan = load()
+        steps = plan["steps"]
+        for step in steps:
+            step.setdefault("id", step["label"])
+        waiting = next((s for s in steps if s["status"] == "running" and s.get("pid")), None)
+        step = waiting or next((s for s in steps if s["status"] == "queued"), None)
+        if step is None:
+            return True
+        number = steps.index(step) + 1
+        if waiting:
             say(f"waiting for {step['label']} (process {step['pid']})")
             with activity.doing("Schedule", f"waiting for {step['label']} to finish, imaging and its search"):
                 while alive(step["pid"]):
                     sleep(20)
-            mark(i, status="done", finished=time.time())
-            continue
-        if step["status"] != "queued":
+            mark_id(step["id"], status="done", finished=time.time())
             continue
         if step.get("not_before"):
             until = not_before(step["not_before"], time.time())
-            while time.time() < until:
+            if time.time() < until:
+                # A minute at a time, then the plan again: it may have changed.
                 sleep(min(60, until - time.time()))
+                continue
         command = [c.replace("{last}", last_field() or "") for c in step["command"]]
         if step.get("until"):
             # More of whatever was imaged last, to fill the time before a
@@ -132,22 +146,29 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run):
             # ran early, and the frames all go into the panel's stack).
             left = round(not_before(step["until"], time.time()) - time.time())
             if left < 120 or not last_field():
-                mark(i, status="skipped", started=time.time(), finished=time.time())
+                mark_id(step["id"], status="skipped", started=time.time(), finished=time.time())
                 say(f"{datetime.now():%H:%M} {step['label']}: skipped, {max(left, 0)} s left")
                 continue
             command = ["timeout", "--signal=INT", str(left)] + command
         say(f"{datetime.now():%H:%M} starting {step['label']}")
-        mark(i, status="running", started=time.time())
-        with activity.doing("Schedule", step["label"], i + 1, len(plan["steps"])):
+        mark_id(step["id"], status="running", started=time.time())
+        with activity.doing("Schedule", step["label"], number, len(steps)):
             done = start(command)
         # Stopped at its time by timeout is how a step with an end time ends.
         ok = done.returncode == 0 or (step.get("until") and done.returncode == 124)
-        mark(i, status="done" if ok else "failed", finished=time.time(), exit=done.returncode)
+        mark_id(step["id"], status="done" if ok else "failed", finished=time.time(), exit=done.returncode)
         say(f"{datetime.now():%H:%M} {step['label']} {'done' if ok else f'failed (exit {done.returncode})'}")
         if not ok:
             (call or fetch)(f"The telescope needs you: {step['label']} stopped with an error.")
             return False
-    return True
+
+
+def mark_id(step_id, **fields):
+    plan = load()
+    for step in plan["steps"]:
+        if step.get("id", step["label"]) == step_id:
+            step.update(fields)
+    save(plan)
 
 
 def last_field():
