@@ -117,3 +117,17 @@ def test_the_headroom_says_how_long_a_frame_can_be_before_the_star_stops_being_l
                                                            "xy": [[150.5, 100.5]]}))
     room = transits.headroom(session, 97.636645, 29.6722662)
     assert room["peak"] == 219 and room["longest_linear_s"] == pytest.approx(4 * 0.7 * 4095 / 219, abs=0.1)
+
+
+def test_a_transit_night_says_first_which_calibration_it_still_needs(tmp_path, monkeypatch):
+    import stacking
+    monkeypatch.setattr(stacking, "CALIBRATION", tmp_path)
+    listed = [{"exposure": 4}, {"exposure": 16}]
+    needs = transits.before_the_night(listed, gain=1500)
+    assert any("no flat field" in n for n in needs) and any("dark --exposure 4 --gain 1500" in n for n in needs)
+    (tmp_path / "dark-4s-g1500.fits").write_bytes(b"")
+    (tmp_path / stacking.master_path("flat").name).write_bytes(b"")
+    needs = transits.before_the_night(listed, gain=1500)
+    assert [n for n in needs if n.startswith("no ")] == ["no dark for 16 s at gain 1500: ./calibrate.py dark "
+                                                         "--exposure 16 --gain 1500"]
+    assert "--hold 5" in needs[-1] and transits.before_the_night([], gain=1500) == []

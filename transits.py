@@ -412,6 +412,27 @@ def measure(session, planet, size=BIN, say=print, rows=None, night=None):
     return answer
 
 
+def before_the_night(transits, gain=None):
+    """What a transit night needs first, from the calibration kept: a flat
+    field, and a dark matched to each exposure listed (a review of the first
+    transit, 20 October 2026: no flat, and a 1 s dark for 4 s frames)."""
+    import stacking
+    if not transits:
+        return []
+    gain = gain if gain is not None else config.hardware()["camera"].get("gain", 1500)
+    out = []
+    if not stacking.master_path("flat").exists():
+        out.append("no flat field: ./calibrate.py flat before imaging (the stars drift over the sensor's dust "
+                   "and vignetting without one)")
+    for exposure in sorted({t["exposure"] for t in transits}):
+        if not stacking.master_path("dark", exposure, gain).exists():
+            out.append(f"no dark for {exposure:g} s at gain {gain}: ./calibrate.py dark --exposure {exposure:g} "
+                       f"--gain {gain}")
+    out.append("image with ./shoot.py STAR --hold 5 (the stars kept on the same pixels, no dithering), from an "
+               "hour before the transit to an hour after it")
+    return out
+
+
 def run(args, say=print):
     if args.action == "measure":
         if not args.session or not args.planet:
@@ -427,6 +448,9 @@ def run(args, say=print):
         say(f"  {t['planet']:<14} {t['depth']:.2f}% deep, V {t['v']:.1f}, {t['start']} to {t['end']} "
             f"(middle {t['mid']}, {t['altitude']:.0f}° high), {t['exposure']} s frames: ./mount.py goto "
             f"{t['star'].replace(' ', '')}")
+    answer["before"] = before_the_night(answer["transits"])
+    for line in answer["before"]:
+        say(f"  before: {line}")
     return answer
 
 
