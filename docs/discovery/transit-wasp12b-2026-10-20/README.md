@@ -26,7 +26,9 @@ Predicted on this night: ingress 01:27, middle 02:57, egress 04:27 UTC.
 - Session `frames/WASP-12/20261020-014726`: 00:47 to 03:59 UTC, 992 frames
   taken, 973 kept (cloud from about 03:50). Three short restarts after
   camera hangs added 45 frames after 04:00 and are not in this curve.
-- Calibration: a bias and a 1 s dark at gain 1500. **No flat frames.**
+- Calibration: a bias and a 1 s dark at gain 1500. With no dark matched
+  to the 4 s frames, the stacking took off the bias alone. **No flat
+  frames.**
 - Baseline before ingress: about 40 minutes (the BAA asks for at least 30,
   ideally 60). **None after egress**: cloud and camera hangs from 03:50.
 
@@ -46,8 +48,12 @@ Predicted on this night: ingress 01:27, middle 02:57, egress 04:27 UTC.
   smooth surface over the field taking out vignetting that moves;
 - a box fitted with its middle sought within an hour of the prediction.
 
-Result: **dip 2.16 ± 0.47% (expected 1.54%)**, 89 points inside the box, 10
-outside, **scatter 15.3 mmag per point outside it**. The fit puts the middle
+Result: **transit-like dimming seen, but not independently measurable**:
+the star was not watched after the transit. Exploratory box fit: 2.16 ±
+0.47% (expected 1.54%), 89 points inside the box, 10 outside, scatter 15.3
+mmag per point outside it; timing unconstrained. The error is conditioned on
+the box model and does not cover a slow trend standing in for the missing
+baseline. The fit puts the middle
 24 minutes early, but with no baseline after the transit an earlier middle
 and a deeper dip fit the same points, so the timing is not measured; the
 command now says so (cd0ce83). The depth agrees with the published one
@@ -86,6 +92,10 @@ Measured during the run (`frames.jsonl`):
 
 ## Suspects, most likely first
 
+Revised after review (20 October 2026), with the expected depth (1.54%,
+about 16–17 mmag) no bigger than the floor (20–22 mmag): that is why the
+night is borderline despite nearly a thousand frames.
+
 1. **No flat field, with the stars wandering 80 px.** Each star crosses
    different pixels, dust shadows and vignetting through the night; with no
    flat, the sensitivity it meets changes by a percent or more. The ensemble
@@ -99,16 +109,23 @@ Measured during the run (`frames.jsonl`):
    colour; a star's light on the Bayer pattern changes as it drifts by a
    pixel, and the interpolation in registering each frame onto the first
    adds to it.
-4. **Row stripes.** The camera reads faint row stripes into every frame
-   (docs/banding.md, 1.3–2.4 ADU per row); against a star's light they are
-   small, but they are not taken out before photometry here.
+4. **Differential colour extinction.** Unfiltered colour pixels see a
+   wide band, WASP-12 and the ensemble differ in colour, and the haze
+   thickened through the night (the sky rose from 15 to 36 ADU), so the
+   atmosphere dims them by different amounts as the airmass and haze
+   change. A red filter is the usual remedy.
 5. **The comparison ensemble.** Every star brighter than G 16 is in it,
    weighted by the whole field; a smaller set of steady stars near WASP-12's
    brightness and colour would be the usual choice.
+6. **Row stripes.** Lowest: the frames are destriped before photometry
+   (`stacking.prepare`; an earlier version of this page said otherwise),
+   and at WASP-12's brightness what is left is small beside a 20 mmag
+   floor.
 
 ## What would separate them
 
-All from this night's frames; nothing needs the telescope:
+All from this night's frames; nothing needs the telescope. `precision.py`
+(below) does them all in one pass:
 
 - the scatter against the **weighting radius** (1, 2, 3 FWHM, and a plain
   aperture): if 2–3 FWHM drops the floor, suspect 2;
@@ -121,10 +138,45 @@ All from this night's frames; nothing needs the telescope:
 - WASP-12 against **5–10 hand-picked comparison stars** of G 11–12.5 near it:
   suspect 5.
 
-And for the next attempt at the telescope: flat frames, guiding or at least
-re-centring so the field stays within a few pixels, the target at the same
-place on the sensor all night, an hour of baseline both sides, and the
-transit chosen high in a clear forecast.
+## What was built from the review
+
+- `./precision.py SESSION --planet "WASP-12 b"`: every kept frame measured
+  with round apertures of 1–3 FWHM and the star-shaped weighting; all four
+  Bayer sites and red, green and blue alone (2x2 superpixels, nothing
+  interpolated); with and without destriping; against all steady stars, the
+  best 20, 10 and 5 (ranked on the whole night, not the baseline they are
+  judged on), stars like WASP-12 in brightness and colour, and the 10
+  nearest. For each way: the scatter before the transit and during it, the
+  bright stars' own scatter, the scatter as more frames are averaged and its
+  beta, the depth, the baseline's slope, and the correlation with drift, star
+  width, sky and airmass.
+- `transits.py measure` now leads with the verdict above; gives the scatter
+  as points are averaged and beta; names the calibration the frames lacked;
+  says how the times were made (DATE-OBS is the exposure's start; the
+  frame is kept about 5.3 s later) and gives each point as BJD_TDB; records
+  whether the computer's clock was kept to time (`session.json` "clock",
+  from shoot.py, since 20 October); and the exposure headroom: WASP-12 peaked
+  at 219 of 4095 in the 4 s frames, so frames up to about 50 s keep it
+  linear in focus. The 4 s frames were far shorter than they needed to be.
+- `transits.py` (tonight) says first which calibration a transit night
+  still needs: a flat, and a dark for each exposure (there is no 4 s or 16 s
+  dark at gain 1500).
+- `shoot.py --hold PX`: the target kept within PX pixels all night. It
+  learns each direction of each axis from a short move, then takes back most
+  of any wander with small capped moves; no dithering. Not yet tried on the
+  real mount.
+
+## The recipe for the next attempt
+
+Flats (20 or more) and darks matched to the exposure → the target held
+within a few pixels (`--hold 5`) → slight defocus and longer exposures,
+the longest that keeps WASP-12 and the comparison stars linear (10, 15, 20
+and 30 s to be tried) → green-channel differential photometry with 5–10
+chosen comparison stars → at least an hour of baseline before and after,
+the whole transit covered → the aperture and comparison set chosen by
+`precision.py` on the baseline's scatter → the scatter's fall with
+averaging looked at before any fit. A ~1.5% dip centred near the prediction
+with flat baselines on both sides would then be a detection.
 
 ## Questions for a reviewer
 
