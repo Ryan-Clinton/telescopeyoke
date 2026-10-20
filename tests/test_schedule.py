@@ -94,3 +94,13 @@ def test_a_step_added_while_it_runs_is_taken_in_its_place():
         return types.SimpleNamespace(returncode=0)
     assert schedule.run(say=lambda s: None, start=start)
     assert ran == ["panels", "fill", "transit"]
+
+
+def test_a_step_that_cannot_start_fails_and_fetches_the_person():
+    """20 October 2026: a command cut wrongly ('goto' with no ./mount.py)
+    crashed the runner at 01:45, and nobody was told."""
+    schedule.save({"steps": []})
+    schedule.add("GoTo", 3, ["no-such-program-anywhere"])
+    called = []
+    assert schedule.run(say=lambda s: None, call=called.append) is False
+    assert schedule.load()["steps"][0]["status"] == "failed" and called

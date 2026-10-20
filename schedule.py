@@ -153,7 +153,14 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run):
         say(f"{datetime.now():%H:%M} starting {step['label']}")
         mark_id(step["id"], status="running", started=time.time())
         with activity.doing("Schedule", step["label"], number, len(steps)):
-            done = start(command)
+            try:
+                done = start(command)
+            except Exception as error:
+                # A step that cannot even start is a failed step, not the end
+                # of the runner: on 20 October 2026 a command cut wrongly
+                # stopped the night at 01:45 with nobody told.
+                say(f"{datetime.now():%H:%M} {step['label']} could not start: {error}")
+                done = subprocess.CompletedProcess(command, 127)
         # Stopped at its time by timeout is how a step with an end time ends.
         ok = done.returncode == 0 or (step.get("until") and done.returncode == 124)
         mark_id(step["id"], status="done" if ok else "failed", finished=time.time(), exit=done.returncode)
