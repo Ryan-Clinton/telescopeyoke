@@ -1,5 +1,8 @@
 # 18 October 2026: focus logs
 
+The same night's test of the house's lights against the sky is in
+[tests.md](tests.md) (`./lighttest.py` measures one now).
+
 The telescope at ralphie-side. Before dark the motor focuser was taken off,
 nuts on it tightened, the camera taken off and its sensor cleaned. Every
 focus attempt of the evening is here, by start time. Positions are in

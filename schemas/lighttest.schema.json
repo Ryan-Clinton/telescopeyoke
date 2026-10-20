@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/lighttest.schema.json",
+  "title": "Light test",
+  "description": "data of: lighttest.py SESSION --on HH:MM:SS --off HH:MM:SS --json. What a light round the house did to the sky the telescope saw, from the run's own frame records. Reads only.",
+  "type": "object",
+  "required": ["session", "on", "off", "frames_on", "frames_off", "measures", "verdict"],
+  "properties": {
+    "session": {"type": "string"},
+    "on": {"type": "string", "description": "When the light went on, local time."},
+    "off": {"type": "string"},
+    "exposure": {"type": "number"},
+    "frames_on": {"type": "integer", "description": "Kept frames wholly while the light was on."},
+    "frames_off": {"type": "integer", "description": "Kept frames wholly while it was off."},
+    "measures": {"type": "object", "description": "background (sky level), stars, flux (star brightness), fwhm (star width): each with its median on and off, the change in percent, and the change in multiples of the off frames' own scatter.",
+                 "additionalProperties": {"type": "object", "required": ["name", "on", "off", "sigmas"],
+                                          "properties": {"name": {"type": "string"}, "on": {"type": "number"}, "off": {"type": "number"},
+                                                         "change_percent": {"type": ["number", "null"]}, "sigmas": {"type": "number"}}}},
+    "verdict": {"type": "string"}
+  }
+}

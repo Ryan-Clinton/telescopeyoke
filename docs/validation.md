@@ -618,6 +618,13 @@ were behind the house.
 eye: the reason the first GoTo of a night misses by about 10°. Marked, and
 measured again on the marks: 0.19° and 0.05° (rows 10 and 15 above).
 
+**House lights**, 18 October, at ralphie-side, during the M31 patrol
+([the record](nights/2026-10-18/tests.md); `./lighttest.py SESSION --on
+HH:MM:SS --off HH:MM:SS` measures it now): the kitchen light raised the sky
+7.5%, 18 times the frames' own scatter, with the stars unchanged, and the
+cloud check did not catch it; the upstairs bathroom and the utility room
+lights made no measurable change.
+
 **Tabby's star**, first night: G 11.655 ± 0.019 over ten batches of ten 4 s
 frames; the stack, to G 16.1, is now its reference. Two frames were
 rejected for a kitchen light.
