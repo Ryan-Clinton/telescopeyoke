@@ -209,8 +209,36 @@ east of the meridian, that night), set it a little out of focus by hand,
 and let `./focus.py --walk-in` bring it in. It reached HFR 1.58, the
 sharpest yet, and stops two moves past the best (at most 64 half-steps
 inside it), since it cannot go back. Far out, the search (`--find`) now
-follows the doughnuts' size and turns back the moment they grow. The
-slipping itself is still to be found, in daylight, with the focuser off.
+follows the doughnuts' size and turns back the moment they grow. 
+
+### Finding where the turn is lost (`./focuser.py load-test`)
+
+In daylight, on the telescope with the camera on: the blacked stick and the
+printed protractor on the focuser's other knob (it shares the motor's
+shaft through the coupler), the phone looking straight down on it as on the
+bench, then
+
+    ./focuser.py load-test --watch http://PHONE:4747/video
+
+It turns 256 half-steps (22.5°) three times out, three in and three out
+again, reads how far the knob really turned each time, and says what share
+of a steady move gets through each way and how much is lost at each
+reversal. Run it with the tube level and with it pointing high, and once
+with the camera off:
+
+- the turn gets through both ways: nothing slips under that load;
+- it slips one way only: the bracket swinging on the focuser's thumbscrew,
+  or the coupler's grub screw; Sharpie marks across bracket and focuser and
+  across coupler and shaft show which joint moved;
+- it slips both ways: the coupler first; if it passes with the camera off,
+  the 28BYJ-48 (about 30 to 35 mN·m) is too weak for the camera, about 30
+  mN·m on a 5 mm pinion with the focuser near vertical before the
+  focuser's own friction. Then: the motor run bipolar from an A4988 or
+  DRV8825 (about twice the torque), a NEMA 14 or 17, or a spring taking
+  the camera's weight off the drawtube.
+
+Its answer and pictures are kept like the bench's, in
+`cache/focuser-bench-DATE.json` and `cache/focuser-bench/`.
 
 ## Temperature (planned, not built)
 

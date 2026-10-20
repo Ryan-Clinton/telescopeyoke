@@ -8,6 +8,9 @@
     ./focuser.py bench --watch http://PHONE:4747/video
                                the step, the slack and how it comes back, off a
                                camera watching a stick on the shaft; no stars
+    ./focuser.py load-test --watch http://PHONE:4747/video
+                               on the telescope, the stick on the other knob: how
+                               much of each turn reaches the focuser, each way
 
 Building and wiring it: docs/focuser.md. `./focus.py --motor` uses it to
 bring the stars to focus with nobody touching the telescope.
@@ -267,19 +270,13 @@ class Watcher:
             self.process.wait(5)
 
 
-def bench(focuser, picture, settle=1.5, looks=3, say=print, sleep=time.sleep):
-    """How the motor really turns, measured off a stick on its shaft against
-    a printed protractor, with no stars: docs/focuser.md, "Checking the
-    motor on the bench". `picture()` gives a path to a fresh picture.
-
-    Each place is the median of `looks` pictures in a row that agree, once
-    the stick has stopped, and their spread is the measuring noise. Moves are kept under a quarter turn, as a stick looks
-    the same half a turn round. In order: the slack taken up; four moves
-    of 512 half-steps (an eighth of a turn) for the degrees a half-step
-    really is; smaller moves of 64, 16 and 4 in the same direction; then
-    the direction reversed 8 half-steps at a time, each way, until the
-    stick moves, for the slack; and three trips of 256 out and back, for
-    how closely it comes back to the same place."""
+def stick_reader(focuser, picture, settle=1.5, looks=3, sleep=time.sleep):
+    """The way the bench and the load test read a blacked stick against the
+    protractor: `where(label, steps)` moves (if asked), waits for the camera
+    to catch up and the stick to stop, and gives the stick's angle; `lag()`
+    measures once how many pictures the camera runs behind the motor, on a
+    move of 256 half-steps. `rows` and `spreads` keep every place and its
+    measuring spread."""
     import numpy as np
     rows, spreads = [], []
 
@@ -316,22 +313,45 @@ def bench(focuser, picture, settle=1.5, looks=3, say=print, sleep=time.sleep):
         rows.append({"label": label, "steps": steps, "angle": round(middle % 180, 3)})
         return middle % 180
 
-    first = where("start")
-    # How far behind the camera runs: a phone's stream is a second or two
-    # late (19 October 2026: a run read 64 half-steps as 1.4°, 3.2° and then
-    # 17.5°), and pictures that agree with each other may all be from
-    # before a move. Counted once, on a move of 22°, then waited out on
-    # every move after.
-    focuser.move(256)
-    sleep(settle)
-    for count in range(1, 40):
-        angle = look()
-        if angle is not None and abs(turned(first, angle)) > 5:
-            behind[0] = count - 1               # the first picture showing the move is not behind
-            break
-    else:
-        raise RuntimeError("the stick did not move in the pictures: is the camera watching the motor?")
-    say(f"the camera runs {behind[0]} picture{'s' if behind[0] != 1 else ''} behind the motor")
+    def lag():
+        first = where("start")
+        # How far behind the camera runs: a phone's stream is a second or two
+        # late (19 October 2026: a run read 64 half-steps as 1.4°, 3.2° and then
+        # 17.5°), and pictures that agree with each other may all be from
+        # before a move. Counted once, on a move of 22°, then waited out on
+        # every move after.
+        focuser.move(256)
+        sleep(settle)
+        for count in range(1, 40):
+            angle = look()
+            if angle is not None and abs(turned(first, angle)) > 5:
+                behind[0] = count - 1               # the first picture showing the move is not behind
+                break
+        else:
+            raise RuntimeError("the stick did not move in the pictures: is the camera watching the motor?")
+        say_lag = f"the camera runs {behind[0]} picture{'s' if behind[0] != 1 else ''} behind the motor"
+        return first, say_lag
+
+    return where, lag, rows, spreads
+
+
+def bench(focuser, picture, settle=1.5, looks=3, say=print, sleep=time.sleep):
+    """How the motor really turns, measured off a stick on its shaft against
+    a printed protractor, with no stars: docs/focuser.md, "Checking the
+    motor on the bench". `picture()` gives a path to a fresh picture.
+
+    Each place is the median of `looks` pictures in a row that agree, once
+    the stick has stopped, and their spread is the measuring noise. Moves are kept under a quarter turn, as a stick looks
+    the same half a turn round. In order: the slack taken up; four moves
+    of 512 half-steps (an eighth of a turn) for the degrees a half-step
+    really is; smaller moves of 64, 16 and 4 in the same direction; then
+    the direction reversed 8 half-steps at a time, each way, until the
+    stick moves, for the slack; and three trips of 256 out and back, for
+    how closely it comes back to the same place."""
+    import numpy as np
+    where, lag, rows, spreads = stick_reader(focuser, picture, settle, looks, sleep)
+    _, said = lag()
+    say(said)
     start = where("slack taken up")
     big = [start]
     for _ in range(4):
@@ -374,7 +394,60 @@ def bench(focuser, picture, settle=1.5, looks=3, say=print, sleep=time.sleep):
             "comes_back_within_deg": round(spread_back, 3), "places": rows}
 
 
-def run_bench(focuser, source):
+DEGREES_PER_HALF_STEP = 0.088   # the motor's own turn, measured on the bench (19 October 2026)
+LOAD_MOVE = 256                 # half-steps of each load-test move: 22.5°, well inside a quarter turn
+LOAD_MOVES = 3                  # moves each way, after the first, which takes up the slack
+
+
+def load_test(focuser, picture, per_step=DEGREES_PER_HALF_STEP, settle=1.5, looks=3, say=print,
+              sleep=time.sleep):
+    """How much of the motor's turn reaches the focuser on the telescope,
+    each way: the stick on the focuser's other knob, which shares the
+    motor's shaft through the coupler, read against the protractor as on
+    the bench (docs/focuser.md, "When the motor cannot lift the drawtube").
+
+    LOAD_MOVES moves of LOAD_MOVE half-steps out, then the same in, then out
+    again: the first move each way takes up the slack (the motion lost at
+    the reversal), the rest show what share of a steady move gets through.
+    A share well under 1 one way only is slip under load that way (the
+    bracket swinging on its thumbscrew, or the coupler on the shaft); low
+    both ways is the coupler; full shares with the camera off and not with
+    it on is the motor's strength."""
+    import numpy as np
+    where, lag, rows, spreads = stick_reader(focuser, picture, settle, looks, sleep)
+    _, said = lag()
+    say(said)
+    last = where("start")
+    legs = []
+    for name, sign in (("out", 1), ("in", -1), ("out again", 1)):
+        moved = []
+        for k in range(LOAD_MOVES + 1):
+            now = where(f"{name} {k + 1}", sign * LOAD_MOVE)
+            moved.append(turned(last, now))
+            last = now
+        asked = LOAD_MOVE * per_step
+        steady = [abs(m) / asked for m in moved[1:]]
+        legs.append({"direction": name, "asked_deg": round(asked, 2), "moved_deg": [round(m, 2) for m in moved],
+                     "lost_at_reversal_deg": round(max(0.0, asked - abs(moved[0])), 2),
+                     "share_through": round(float(np.median(steady)), 2)})
+        say(f"{name}: {', '.join(f'{abs(m):.1f}°' for m in moved)} for {asked:.1f}° asked each time; "
+            f"{legs[-1]['share_through'] * 100:.0f}% of a steady move gets through, "
+            f"{legs[-1]['lost_at_reversal_deg']:.1f}° lost at the reversal")
+    out, inward = legs[0]["share_through"], legs[1]["share_through"]
+    if out >= 0.9 and inward >= 0.9:
+        verdict = "the turn gets through both ways: no slip under this load"
+    elif min(out, inward) < 0.9 <= max(out, inward):
+        verdict = (f"it slips {'in' if inward < out else 'out'} only: look at the bracket swinging on its "
+                   "thumbscrew and the coupler's grub screw, with marks across each joint")
+    else:
+        verdict = ("it slips both ways: the coupler on the shaft first; if the same test passes with the camera "
+                   "off, the motor is too weak for the load")
+    say(verdict)
+    noise = float(np.median(spreads)) if spreads else 0.0
+    return {"legs": legs, "verdict": verdict, "noise_deg": round(noise, 3), "places": rows}
+
+
+def run_bench(focuser, source, test=None):
     """bench() with a camera, its pictures and its answer kept under
     config.DATA/cache: the answer in focuser-bench-DATE.json, the pictures
     in focuser-bench/ with each one's marked copy beside it."""
@@ -390,7 +463,7 @@ def run_bench(focuser, source):
         count += 1
         return watcher.picture(folder / f"{count:03d}.jpg")
     try:
-        answer = bench(focuser, picture)
+        answer = (test or bench)(focuser, picture)
     finally:
         watcher.close()
         focuser.close()
@@ -422,7 +495,7 @@ def flash(port=None):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("command", choices=["flash", "test", "move", "angle", "bench"])
+    ap.add_argument("command", choices=["flash", "test", "move", "angle", "bench", "load-test"])
     ap.add_argument("steps", nargs="?", type=int, help="for move: half-steps, minus for the other way")
     ap.add_argument("--pictures", nargs="+", help="for angle: the stick's angle in each picture")
     ap.add_argument("--watch", help="for bench: the camera looking down on the motor (a DroidCam "
@@ -444,11 +517,13 @@ def main(argv=None):
         return
     if args.command == "move" and not args.steps:
         ap.error("move needs a number of half-steps")
-    if args.command == "bench" and not args.watch:
-        ap.error("bench needs --watch, the camera looking down on the motor")
+    if args.command in ("bench", "load-test") and not args.watch:
+        ap.error(f"{args.command} needs --watch, the camera looking down on the stick")
     focuser = Focuser.open(args.port)
     if args.command == "bench":
         return run_bench(focuser, args.watch)
+    if args.command == "load-test":
+        return run_bench(focuser, args.watch, test=load_test)
     try:
         if args.ms:
             focuser.speed(args.ms)

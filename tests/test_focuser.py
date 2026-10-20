@@ -220,3 +220,36 @@ def test_a_stick_off_the_paper_s_middle_is_read_whole(tmp_path):
     for angle in (20.0, 70.0, 115.0):
         protractor(tmp_path / "p.jpg", angle, off=(25, -18))
         assert focuser.pointer_angle(tmp_path / "p.jpg") == pytest.approx(angle, abs=0.25)
+
+
+def test_the_load_test_says_which_way_the_drive_slips(tmp_path):
+    """A knob that follows the motor out in full but only a third of the way
+    in (the bracket swinging on its thumbscrew), with 40 half-steps of slack:
+    the load test reads the knob's stick and names the direction."""
+    per_step, slack = focuser.DEGREES_PER_HALF_STEP, 40
+
+    class Drive:
+        commanded = knob = 0.0
+
+        def move(self, steps):
+            self.commanded += steps
+            if self.commanded > self.knob + slack / 2:
+                self.knob = self.commanded - slack / 2
+            elif self.commanded < self.knob - slack / 2:
+                gain = self.knob - (self.commanded + slack / 2)
+                self.knob -= gain / 3                        # most of the turn lost going in
+                self.commanded = self.knob + slack / 2
+
+    drive, count = Drive(), [0]
+
+    def picture():
+        count[0] += 1
+        path = tmp_path / f"{count[0]}.jpg"
+        protractor(path, (30 + drive.knob * per_step) % 180, width=640, height=360, scale=0.9, seed=count[0])
+        return path
+
+    said = []
+    answer = focuser.load_test(drive, picture, looks=2, say=said.append, sleep=lambda s: None)
+    out, inward = answer["legs"][0], answer["legs"][1]
+    assert out["share_through"] == pytest.approx(1.0, abs=0.1) and inward["share_through"] == pytest.approx(0.33, abs=0.1)
+    assert answer["verdict"].startswith("it slips in only")
