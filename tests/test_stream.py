@@ -47,5 +47,5 @@ def test_the_picture_names_no_place(monkeypatch):
 def test_it_is_off_unless_switched_on(monkeypatch):
     monkeypatch.setattr(config, "hardware", lambda: {})
     said = []
-    stream.watch(say=said.append, sleep=lambda s: None)
+    stream.watch(say=said.append, sleep=lambda s: None, wait=False)
     assert said and "off" in said[0]

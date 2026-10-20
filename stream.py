@@ -176,17 +176,25 @@ def command(target, device=None):
             *encoder(device), "-c:a", "aac", "-b:a", "64k", "-shortest", *out]
 
 
-def watch(to=None, say=print, sleep=time.sleep, clock=time.time, run=subprocess.Popen):
-    """Stream while a run is imaging, until stopped."""
-    s = settings()
-    if not to and not s["enabled"]:
-        say("Streaming is off ([stream] enabled in config.toml); nothing is sent.")
-        return
-    stream_key = None if to else key()
-    target = to or (destination(s, stream_key) if stream_key else None)
-    if not target:
-        say(f"No stream key in {KEY_FILE}: nothing is sent.")
-        return
+def watch(to=None, say=print, sleep=time.sleep, clock=time.time, run=subprocess.Popen, wait=True):
+    """Stream while a run is imaging, until stopped. While streaming is off
+    or there is no key it waits, looking again each minute, so switching it
+    on is all it takes (`wait` False: say why and return)."""
+    told = None
+    while True:
+        s = settings()
+        stream_key = None if to else key()
+        target = to or (destination(s, stream_key) if s["enabled"] and stream_key else None)
+        if target:
+            break
+        why = ("Streaming is off ([stream] enabled in config.toml); nothing is sent." if not s["enabled"]
+               else f"No stream key in {KEY_FILE}: nothing is sent.")
+        if why != told:
+            say(why)
+            told = why
+        if not wait:
+            return
+        sleep(60)
     device = working_device()
     say(f"Video encoding on {device or 'the processors (no working video hardware)'}")
     process, quiet_since, picture, made, retry_at = None, None, None, 0.0, 0.0
