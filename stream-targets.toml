@@ -1,47 +1,115 @@
-# What the live stream says about each object and programme (docs/stream-look.md).
+# What the live stream says about each object, programme and the telescope
+# (docs/stream-look.md; shown by streamstory.py).
 # Plain words for someone who knows no astronomy; never catalogue prose. `words` is one
-# short sentence, always on screen; anything more goes in `captions`, shown now and then.
-# Every figure here is checked against a published source before it goes in:
-# an object with no entry shows its name and its catalogue type only.
+# short sentence, always on screen. The rest is shown a card at a time:
+#   facts   - SCIENCE cards: what the object is
+#   why     - SCIENCE cards: why it is worth looking at
+#   notice  - LOOK CLOSELY lines across the picture: what to look for in it
+# Every figure here is checked against a published source before it goes in.
+# An object with no entry shows its name and its catalogue type only. Figures that
+# change (exposures, depth, star size) are never written here: streamstory.py
+# makes them from the night's own measurements.
 
 [targets.M31]
 common = "Andromeda Galaxy"
 words = "The nearest large galaxy to the Milky Way."
 distance = "~2.5 million light years"
 magnitude = 3.4
-captions = [
+facts = [
     "The light reaching the camera from Andromeda left it about 2.5 million years ago.",
-    "Andromeda holds about a trillion stars; every faint smudge in its disc is millions of them.",
+    "Andromeda holds roughly a trillion stars: every faint smudge in its disc is millions of them.",
+    "Andromeda and the Milky Way are moving towards each other at about 110 km a second.",
+]
+why = [
+    "Dozens of novae are found in Andromeda every year: it is the best place in the sky to catch one.",
+]
+notice = [
+    "Away from the core, the faint glow is the disc: billions of stars too far apart to see one by one.",
+    "Almost every sharp star in this picture is in our own galaxy, in front of Andromeda.",
 ]
 
 [targets.M33]
 common = "Triangulum Galaxy"
-words = "A nearby spiral galaxy, smaller than ours, where the telescope patrols for exploding stars."
+words = "A nearby spiral galaxy, smaller than ours."
 distance = "~2.7 million light years"
 magnitude = 5.7
-captions = [
-    "Triangulum is one of the most distant things the human eye can see without a telescope.",
+facts = [
+    "Triangulum is the third largest galaxy in our Local Group, after Andromeda and the Milky Way.",
+    "Triangulum holds about 40 billion stars, roughly a tenth as many as the Milky Way.",
+]
+why = [
+    "Triangulum is one of the most distant things the eye can see without a telescope, under a dark sky.",
+]
+notice = [
+    "Its arms are loose and patchy: the brighter knots are clouds where new stars are forming.",
 ]
 
 [targets.WASP-12]
 words = "A star with a giant planet so close that it circles in just over a day."
 distance = "~1,400 light years"
 magnitude = 11.6
-captions = [
-    "WASP-12 b is so close to its star that the star is slowly pulling it apart.",
-    "Each transit's timing is compared with earlier ones: the planet's orbit is shrinking.",
+facts = [
+    "WASP-12 b was found in 2008 by SuperWASP, a set of cameras watching for stars that dim.",
+    "WASP-12 b is almost twice as wide as Jupiter, puffed up by the heat of its star.",
+    "WASP-12 b is one of the hottest planets known: about 2,300 °C on the side facing its star.",
+]
+why = [
+    "WASP-12 b's orbit is shrinking: its transits come a little earlier each year, so each one timed matters.",
+    "The star is slowly pulling the planet apart: it may not survive more than a few million years.",
+]
+notice = [
+    "WASP-12 is one faint star among hundreds here: the light curve, not the picture, shows the planet.",
 ]
 
-# Captions for each kind of run, shown in turn with the object's own.
-[programmes]
-patrol = [
-    "Every star in this picture is being compared with an earlier night.",
-    "A nova would appear here as a point of light that wasn't in the reference image.",
+[programmes.patrol]
+title = "Nova patrol"
+explainers = [
+    "A nova is a white dwarf star pulling gas from a companion until the gas ignites: for a few days it shines thousands of times brighter.",
+    "A nova does not destroy its star: some flare up again decades later.",
 ]
-transit = [
-    "When the planet crosses its star it blocks a little of the light: the dip in the curve.",
-    "The timing of the dip is measured to the minute and shared with other observers.",
+method = [
+    "Tonight's picture is lined up with an earlier one of the same field and subtracted from it: whatever is left over has changed.",
+    "Anything left over is checked against catalogues of known variable stars and asteroids before it counts.",
+    "Finding nothing is useful too: each clear search rules out a new star brighter than its measured limit.",
 ]
-picture = [
+
+[programmes.transit]
+title = "Transit"
+explainers = [
+    "When a planet crosses in front of its star, the star dims a little: that dip is a transit.",
+    "Most of the planets known around other stars were found by the dips they make in their stars' light.",
+]
+method = [
+    "The star's brightness is measured against hundreds of other stars in the same picture, so haze dims them all alike.",
+    "The out-of-transit time before and after the dip is as important as the dip: it shows the star's steady light.",
+    "Timings like this can be shared with ExoClock, which keeps planets' timetables for ESA's Ariel space telescope.",
+]
+
+[programmes.picture]
+title = "Building a picture"
+explainers = [
     "Every exposure is added to the stack; the noise falls as they add up.",
+]
+method = []
+
+# How the telescope works: HOW IT WORKS and THE TELESCOPE cards, for any programme.
+[stories]
+stacking = [
+    "One exposure is noisy. Stacking many lines them up and averages them: a hundred exposures are about ten times cleaner than one.",
+    "Frames spoiled by cloud, wind or a passing satellite are set aside before stacking, not added.",
+]
+plate_solving = [
+    "Before imaging, the software works out exactly where the telescope points by matching the stars in a picture to a star catalogue.",
+]
+focus = [
+    "A small motor on the focuser turns it in steps far finer than a hand can, and the software judges focus by the stars' size.",
+]
+discovery = [
+    "Fake stars of known brightness are hidden in each picture and searched for: how many are found measures how faint the search can reach.",
+    "During its testing, this software found a known nova again in archived survey pictures before it was trusted with new ones.",
+]
+telescope = [
+    "The telescope is a 150 mm reflector: a mirror gathers the light, on a mount that follows the stars across the sky.",
+    "The camera sees about 1° by 0.7° of sky at once: two full Moons side by side.",
+    "The camera's sensor has 20 million pixels, each 2.4 thousandths of a millimetre across.",
 ]

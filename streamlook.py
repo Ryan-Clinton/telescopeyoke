@@ -171,6 +171,7 @@ class Canvas:
         self.image = Image.new("RGB", (width, height), COLOURS["background"])
         self.draw = ImageDraw.Draw(self.image)
         self.written = []                       # (words, box, colour, background)
+        self.crawl = None                       # a slow line for stream.py to run along the bottom
 
     def text(self, xy, words, kind, size, colour="text", on="background", anchor="la"):
         f = font(kind, size)
@@ -239,7 +240,7 @@ def footer(c, s):
         c.text((MARGIN_X, y), f"LAST EXPOSURE {int(s['last_age'])} s ago", "mono", 21, "secondary")
     c.text((WIDTH // 2, y), utc(s["now"], seconds=True), "mono", 21, "secondary", anchor="ma")
     if s.get("next"):
-        c.text((WIDTH - MARGIN_X, y), f"NEXT · {s['next']}", "mono", 21, "secondary", anchor="ra")
+        c.text((WIDTH - MARGIN_X, y), f"COMING UP · {s['next']}", "mono", 21, "secondary", anchor="ra")
 
 
 def plate(c, rect, strength=0.65, colour=COLOURS["background"]):
@@ -272,10 +273,12 @@ def sky_area(c, s, stack, single):
     scale = min(w / stack.width, h / stack.height)
     pw, ph = round(stack.width * scale), round(stack.height * scale)
     x, y, w, h = x + (w - pw) // 2, y + (h - ph) // 2, pw, ph
-    if s.get("caption"):
-        # A science caption, for a few seconds, across the top of the picture.
-        under = plate(c, (x, y, x + w, y + 64), 0.7)
-        c.text((x + 24, y + 18), s["caption"], "sans", 24, "text", on=under)
+    line = (s.get("story") or {}).get("line")
+    if line:
+        # LOOK CLOSELY, or the presenter, for a few seconds across the top of the picture.
+        under = plate(c, (x, y, x + w, y + 92), 0.72)
+        c.wrap((x + 24, y + 14), line, "sans", 24, w - 48, "text", on=under, gap=1.25)
+
     if s.get("combined"):
         under = plate(c, (x + 16, y + h - 48, x + min(470, w // 2), y + h - 16), 0.55)
         words = c.text((x + 28, y + h - 42), f"{s['combined']} exposures combined", "mono", 19, "secondary",
@@ -291,6 +294,95 @@ def sky_area(c, s, stack, single):
         exposure = s.get("exposure")
         c.text((ix + 10, iy - 29), "ONE EXPOSURE" + (f" · {exposure:g} s" if exposure else ""),
                "mono", 19, "text", on=under)
+    explainer = (s.get("story") or {}).get("explainer")
+    if explainer:
+        # Over everything on the picture: for a few seconds it is the picture.
+        explain(c, explainer, s, (x, y, w, h), stack, single)
+
+
+def dots(c, rect, seed, extra=False):
+    """A little schematic star field in `rect` (the same `seed` gives the
+    same stars); `extra` adds one new star, marked, in the middle."""
+    import random
+    rng = random.Random(seed)
+    x0, y0, x1, y1 = rect
+    c.box(rect, (0, 0, 0), outline="muted", width=2, radius=6)
+    for _ in range(26):
+        px, py, r = rng.uniform(x0 + 10, x1 - 10), rng.uniform(y0 + 10, y1 - 10), rng.choice((1.5, 2, 2.5, 3.5))
+        c.draw.ellipse((px - r, py - r, px + r, py + r), fill=COLOURS["text"])
+    if extra:
+        mx, my = (x0 + x1) / 2 + 18, (y0 + y1) / 2 - 12
+        c.draw.ellipse((mx - 4, my - 4, mx + 4, my + 4), fill=COLOURS["attention"])
+        c.draw.ellipse((mx - 14, my - 14, mx + 14, my + 14), outline=COLOURS["attention"], width=2)
+
+
+def explain(c, kind, s, area, stack, single):
+    """A larger explainer for a few seconds, over a dimmed picture: what
+    stacking does (with tonight's own exposure and stack), what a transit or
+    a nova is, and how a search finds what changed (as a diagram, never a
+    real candidate)."""
+    x, y, w, h = area
+    c.image.paste(Image.blend(c.image.crop((x, y, x + w, y + h)), Image.new("RGB", (w, h), (0, 0, 0)), 0.6),
+                  (x, y))
+    bx0, by0, bx1, by1 = x + w * 0.06, y + h * 0.16, x + w * 0.94, y + h * 0.84
+    c.box((bx0, by0, bx1, by1), "panel", radius=16)
+    on = COLOURS["panel"]
+    left, top, inner = bx0 + 40, by0 + 34, bx1 - bx0 - 80
+    titles = {"stacking": "WHAT IS STACKING?", "transit": "WHAT IS A TRANSIT?", "nova": "WHAT IS A NOVA?",
+              "subtraction": "HOW DOES THE SEARCH WORK?"}
+    c.text((left, top), titles[kind], "bold", 36, "accent", on=on)
+    top += 66
+    row_h = (by1 - 110) - top
+    if kind == "stacking" and stack is not None and single is not None:
+        n = s.get("combined") or 0
+        for i, (picture, label, role) in enumerate(((single, "1 EXPOSURE", "single"),
+                                                    (stack, f"{n} EXPOSURES" if n else "THE STACK", "stack"))):
+            box = (int(inner / 2 - 20), int(row_h - 40))
+            px = int(left + i * (inner / 2 + 20))
+            c.image.paste(fit(display(shrunk(picture, box), role=role), box), (px, int(top)))
+            c.text((px, top + box[1] + 8), label, "mono", 22, "text", on=on)
+        words = "Each exposure is noisy. Added together, the noise averages away and fainter stars appear."
+    elif kind == "transit":
+        cx, cy, r = left + inner * 0.22, top + row_h / 2, min(row_h / 2 - 10, 120)
+        c.draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=(255, 214, 140))
+        c.draw.ellipse((cx + r * 0.1 - r * 0.22, cy - r * 0.22, cx + r * 0.1 + r * 0.22, cy + r * 0.22),
+                       fill=(10, 12, 18))
+        c.draw.line([(cx - r * 1.3, cy), (cx + r * 1.3, cy)], fill=COLOURS["muted"], width=2)
+        gx0, gx1, gy = left + inner * 0.5, left + inner, top + row_h * 0.35
+        dip = row_h * 0.3
+        c.draw.line([(gx0, gy), (gx0 + (gx1 - gx0) * 0.3, gy), (gx0 + (gx1 - gx0) * 0.38, gy + dip),
+                     (gx0 + (gx1 - gx0) * 0.62, gy + dip), (gx0 + (gx1 - gx0) * 0.7, gy), (gx1, gy)],
+                    fill=COLOURS["accent"], width=5)
+        c.text((gx0, gy + dip + 30), "THE STAR'S BRIGHTNESS", "mono", 22, "secondary", on=on)
+        words = "As the planet crosses its star, a little of the light is blocked: the brightness dips, then recovers."
+    elif kind == "nova":
+        steps = [("A WHITE DWARF", "pulls gas from a companion star"), ("THE GAS BUILDS UP", "on its surface"),
+                 ("IT IGNITES", "thousands of times brighter, for days")]
+        col = inner / 3
+        for i, (head, sub) in enumerate(steps):
+            px = left + i * col
+            c.wrap((px, top + row_h * 0.3), head, "bold", 28, col - 50, "text", on=on)
+            c.wrap((px, top + row_h * 0.3 + 44), sub, "sans", 24, col - 50, "secondary", on=on)
+            if i < 2:
+                c.text((px + col - 40, top + row_h * 0.3), "→", "bold", 36, "accent", on=on)
+        words = "A nova does not destroy its star: it is an explosion on the surface of a white dwarf."
+    else:                                                               # subtraction, as a diagram
+        size = min((inner - 160) / 3, row_h - 50)
+        for i, (label, extra) in enumerate((("OLD SKY", False), ("TONIGHT", True), ("WHAT CHANGED?", None))):
+            px = left + i * (size + 80)
+            rect = (px, top, px + size, top + size)
+            if extra is None:
+                c.box(rect, (0, 0, 0), outline="muted", width=2, radius=6)
+                mx, my = px + size / 2 + 18, top + size / 2 - 12
+                c.draw.ellipse((mx - 4, my - 4, mx + 4, my + 4), fill=COLOURS["attention"])
+                c.draw.ellipse((mx - 14, my - 14, mx + 14, my + 14), outline=COLOURS["attention"], width=2)
+            else:
+                dots(c, rect, 7, extra)
+            c.text((px, top + size + 8), label, "mono", 22, "text", on=on)
+            if i < 2:
+                c.text((px + size + 26, top + size / 2 - 22), "−" if i == 0 else "=", "bold", 40, "accent", on=on)
+        words = "A diagram: tonight's picture minus an earlier one leaves only what has changed, then it is checked."
+    c.wrap((left, by1 - 96), words, "sans", 25, inner, "text", on=on)
 
 
 def about(c, s, x, y, width):
@@ -444,13 +536,27 @@ def candidate(c, k, x, y, width):
     return y + 10
 
 
+def chapter_card(c, card, x, y, width):
+    """One of the presenter's chapters (SCIENCE, HOW IT WORKS, TONIGHT,
+    COMING UP) in place of the programme, for half a minute."""
+    title, lines = card
+    y = c.wrap((x, y), title, "bold", 28, width, "accent", on="panel") + 8
+    for line in lines:
+        y = c.wrap((x, y), line, "sans", 25, width, "text", on="panel") + 10
+    return y
+
+
 def side_panel(c, s):
     x, y, w, h = PANEL_BOX
     c.box((x, y, x + w, y + h), "panel", radius=14)
     inner = x + 28
     width = w - 56
     top = about(c, s, inner, y + 26, width)
-    top = programme(c, s, inner, top, width)
+    story = s.get("story") or {}
+    if story.get("card") and story.get("chapter") != "NOW":
+        top = chapter_card(c, story["card"], inner, top, width)
+    else:
+        top = programme(c, s, inner, top, width)
     # The programme comes first; the figures take what room is left (PRIORITY).
     figures(c, s, inner, max(top + 10, y + h - 3 * FIGURE_ROW - 10), y + h - 10)
 
@@ -507,6 +613,34 @@ def end_card(c, s, stack):
     c.text((x, HEIGHT - MARGIN_Y - 60), "TELESCOPEYOKE", "bold", 26, "accent")
 
 
+CRAWL_BOX = (MARGIN_X, HEIGHT - MARGIN_Y - 34, WIDTH - MARGIN_X, HEIGHT - MARGIN_Y + 4)   # over the footer
+CRAWL_SPEED = 70           # pixels a second: slow enough to read
+
+
+def crawl_strip(text):
+    """The crawl's line drawn once, wide enough to run in from the right
+    and out at the left, as an array for stream.py to slide along."""
+    x0, y0, x1, y1 = CRAWL_BOX
+    width = x1 - x0
+    f = font("mono", 21)
+    length = int(ImageDraw.Draw(Image.new("RGB", (1, 1))).textlength(text, font=f))
+    strip = Image.new("RGB", (length + 2 * width, y1 - y0), COLOURS["background"])
+    ImageDraw.Draw(strip).text((width, 8), text, font=f, fill=COLOURS["secondary"])
+    return np.asarray(strip)
+
+
+def crawled(picture, strip, seconds):
+    """The picture as an array with the crawl `seconds` along, or None once
+    it has run out at the left."""
+    x0, y0, x1, y1 = CRAWL_BOX
+    offset = int(seconds * CRAWL_SPEED)
+    if offset + (x1 - x0) > strip.shape[1]:
+        return None
+    out = picture.copy()
+    out[y0:y1, x0:x1] = strip[:, offset:offset + (x1 - x0)]
+    return out
+
+
 def compose(state, stack=None, single=None):
     """The stream's picture for `state`, as a Canvas (its image and what was written)."""
     c = Canvas()
@@ -521,6 +655,7 @@ def compose(state, stack=None, single=None):
     sky_area(c, state, stack, single)
     side_panel(c, state)
     footer(c, state)
+    c.crawl = (state.get("story") or {}).get("crawl")
     return c
 
 
@@ -543,8 +678,21 @@ def examples(now=None):
               "combined": 225, "kept": 203, "captured": 211, "integration_s": 3248, "fwhm_arcsec": 5.8,
               "new_exposures": 1, "next": "M31 P7", "stage": "3 h 18 min observed · 5 fields done",
               "patrol": {"field": "Andromeda", "panels": m31, "possible": 0}}
+    science = dict(patrol, story={"chapter": "SCIENCE", "card": ("SCIENCE", [
+        "A nova is a white dwarf star pulling gas from a companion until the gas ignites: for a few days it "
+        "shines thousands of times brighter."]), "line": None, "explainer": None, "crawl": None})
+    coming = dict(patrol, story={"chapter": "COMING UP", "card": ("COMING UP IN ~12 MIN", [
+        "WASP-12 b transit", "A star with a giant planet so close that it circles in just over a day."]),
+        "line": "LOOK CLOSELY · Almost every sharp star in this picture is in our own galaxy, in front of Andromeda.",
+        "explainer": None, "crawl": "TONIGHT   ·   M31 nova patrol   ·   5 of 8 M31 fields searched   ·   "
+                                    "next: WASP-12 b transit"})
     return {
         "patrol": patrol,
+        "science": science,
+        "coming-up": coming,
+        **{f"explain-{k}": dict(patrol, story={"chapter": "NOW", "card": None, "line": None, "explainer": k,
+                                               "crawl": None})
+           for k in ("stacking", "subtraction", "nova", "transit")},
         "transit": {"kind": "transit", "target": "WASP-12", "now": now, "exposure": 4, "last_age": 2,
                     "combined": 980, "kept": 975, "captured": 980, "integration_s": 3900, "fwhm_arcsec": 4.9,
                     "next": "M31 P6 second look at 06:25 UTC",
@@ -611,7 +759,11 @@ def preview(out, web=None, say=print):
     for name, state in examples().items():
         stack, single = (real_pictures(web, state["target"]) if web is not None else None) or made_up
         started = time.perf_counter()
-        picture = compose(state, stack, single).image
+        canvas = compose(state, stack, single)
+        picture = canvas.image
+        if canvas.crawl:                                    # the crawl part-way along, as stream.py runs it
+            moved = crawled(np.asarray(picture), crawl_strip(canvas.crawl), 14)
+            picture = Image.fromarray(moved) if moved is not None else picture
         took = 1000 * (time.perf_counter() - started)
         picture.save(out / f"{name}.png")
         picture.resize(PHONE, Image.LANCZOS).save(out / f"{name}-phone.png")
@@ -761,31 +913,27 @@ def stage(steps, now):
     return f"{hours} h {minutes:02d} min observed · {done} step{'s' if done != 1 else ''} done"
 
 
-CAPTION_EVERY, CAPTION_S = 7 * 60, 8      # at most one caption each 7 minutes, shown for 8 seconds
-_CAPTION = {"last": None, "shown_at": None, "text": None, "turn": 0}
+def depth_of(discovery):
+    """The newest searched session's depth tonight: the magnitude at which
+    half of the planted stars were found, or None."""
+    import json
+
+    import config
+    for row in reversed((discovery or {}).get("sessions") or []):
+        try:
+            found = json.loads((config.DATA / "frames" / row["field"] / row["session"] / "depth.json")
+                               .read_text(encoding="utf-8"))
+            return found["completeness"]["all"]["mag_50"]
+        except (OSError, ValueError, KeyError, TypeError):
+            continue
+    return None
 
 
-def caption(s, now):
-    """A science caption when one is due, else None: never during a
-    candidate's follow-up or a warning, and never more often than
-    CAPTION_EVERY. Curated words only (stream-targets.toml)."""
-    if s.get("candidate") or (s.get("last_age") or 0) > 120:
-        return None
-    if _CAPTION["shown_at"] is not None and now - _CAPTION["shown_at"] < CAPTION_S:
-        return _CAPTION["text"]
-    if _CAPTION["last"] is None:
-        _CAPTION["last"] = now                 # the first one waits a full interval
-        return None
-    if now - _CAPTION["last"] < CAPTION_EVERY:
-        return None
-    found = targets()
-    pool = found.get("targets", {}).get(s.get("target"), {}).get("captions", []) \
-        + found.get("programmes", {}).get(s.get("kind"), [])
-    if not pool:
-        return None
-    text = pool[_CAPTION["turn"] % len(pool)]
-    _CAPTION.update(last=now, shown_at=now, text=text, turn=_CAPTION["turn"] + 1)
-    return text
+def told(s, st, now):
+    """The presenter's additions for this picture (streamstory.py)."""
+    import streamstory
+    live = dict(st, depth_mag=depth_of(st.get("discovery")) if s.get("kind") == "patrol" else None)
+    return streamstory.plan(s, live, now)
 
 
 HOLD_S = 30               # the star size shown changes at most this often
@@ -820,18 +968,18 @@ def from_status(st, now=None, session=None):
          "exposure": st.get("exposure"), "last_age": st.get("age"), "combined": st.get("accepted"),
          "kept": st.get("accepted"), "captured": st.get("captured"), "integration_s": st.get("integration"),
          "fwhm_arcsec": held_star_size(fwhm, scale, now),
-         "next": (f"{upcoming['label']}" + (f" at {utc(upcoming['start'])}" if upcoming.get("start") else ""))
+         "next": (f"{upcoming['label'].split(',')[0]}" + (f" at {utc(upcoming['start'])}" if upcoming.get("start") else ""))
          if upcoming else None,
          "stage": stage(steps, now)}
     p = transit_for(name)
     if p:
         s["kind"], s["transit"] = "transit", transit_state(p, session, now)
-        s["caption"] = caption(s, now)
+        s["story"] = told(s, st, now)
         return s
     patrol, candidate = patrol_state(name, st.get("discovery"), now)
     if patrol:
         s["kind"], s["patrol"] = "patrol", patrol
         if candidate:
             s["candidate"] = candidate
-    s["caption"] = caption(s, now)
+    s["story"] = told(s, st, now)
     return s

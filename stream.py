@@ -40,8 +40,10 @@ import sys
 import time
 from pathlib import Path
 
-import config
+import numpy as np
 from PIL import Image
+
+import config
 
 WEB = config.DATA / "web"
 KEY_FILE = Path(os.path.expanduser("~/.config/telescopeyoke/stream-key"))
@@ -230,7 +232,9 @@ def frame(st, now=None, mode="imaging"):
         state = {"kind": "end", "target": st.get("name") or "", "now": now, "end": {"lines": end_lines(st)}}
     else:
         state = streamlook.from_status(st, now, session_of(st))
-    return streamlook.compose(state, stack, single).image
+    canvas = streamlook.compose(state, stack, single)
+    canvas.image.info["crawl"] = canvas.crawl          # run along the bottom by Composer, not drawn in
+    return canvas.image
 
 
 def encoder(device=None, size=(WIDTH, HEIGHT)):
@@ -348,6 +352,21 @@ def announce(st, now, say=print):
     threading.Thread(target=run, daemon=True).start()
 
 
+def chat(say=print):
+    """Answer the chat's commands (streamchat.py) on their own thread while
+    streaming; False when the sign-in does not allow it (said once)."""
+    import threading
+
+    import streamchat
+    import twitch
+    tokens = twitch.chat_tokens()
+    if tokens is None:
+        say("The chat's commands are off: sign in again with ./stream.py twitch-login to allow them.")
+        return False
+    threading.Thread(target=streamchat.run, args=(status, tokens, say), daemon=True).start()
+    return True
+
+
 class Composer:
     """Draws the picture on its own thread every few seconds, so the loop
     feeding ffmpeg never waits on it: a 1080p picture takes most of a
@@ -358,12 +377,13 @@ class Composer:
         import threading
         self.draw, self.every = draw or frame, every
         self.view, self.ready, self.lock = None, [], threading.Lock()
+        self.base, self.strip, self.crawl, self.crawl_from = None, None, None, 0.0
         self.stopped = threading.Event()
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.thread.start()
 
     def run(self):
-        last = None
+        last, said = None, None
         while not self.stopped.is_set():
             if self.view is not None:
                 st, mode = self.view
@@ -373,18 +393,34 @@ class Composer:
                     out = [Image.blend(last, new, (i + 1) / (FADE + 1)).tobytes() for i in range(FADE)] \
                         if last is not None and last.size == new.size else []
                     out.append(new.tobytes())
+                    crawl = new.info.get("crawl")
                     with self.lock:
                         self.ready = out
+                        self.base = np.asarray(new) if crawl else None
+                        if crawl and crawl != self.crawl:
+                            import streamlook
+                            self.strip, self.crawl, self.crawl_from = streamlook.crawl_strip(crawl), crawl, time.time()
+                        elif not crawl:
+                            self.strip, self.crawl = None, None
                     last = new
                 except Exception as error:          # one bad picture never ends the stream
-                    print(f"picture not drawn: {error}", flush=True)
+                    if str(error) != said:              # said once, not every 3 s
+                        print(f"picture not drawn, the last one stays: {error}", flush=True)
+                        said = str(error)
             self.stopped.wait(self.every)
 
     def next(self, current):
-        """The next picture's bytes: the next of a fade, else the newest, else `current`."""
+        """The next picture's bytes: the next of a fade, else the newest with
+        the crawl moved along, else `current`."""
+        import streamlook
         with self.lock:
             if len(self.ready) > 1:
                 return self.ready.pop(0)
+            if self.strip is not None and self.base is not None:
+                moved = streamlook.crawled(self.base, self.strip, time.time() - self.crawl_from)
+                if moved is not None:
+                    return moved.tobytes()
+                self.strip = None                       # it has run out at the left
             return self.ready[0] if self.ready else current
 
     def stop(self):
@@ -416,6 +452,7 @@ def watch(to=None, say=print, sleep=time.sleep, clock=time.time, run=subprocess.
     process, quiet_since, shown, retry_at = None, None, None, 0.0
     reports, drops, frames, breaks, measuring, measured_at, announced = [], [], [], [], None, 0.0, None
     tested = False
+    chatting = None
     composer = Composer(draw=lambda st, now, mode: frame(st, now, mode).resize(size)
                         if size != (WIDTH, HEIGHT) else frame(st, now, mode))
     tick = clock()
@@ -446,6 +483,8 @@ def watch(to=None, say=print, sleep=time.sleep, clock=time.time, run=subprocess.
                 process.stdin.close()
                 process.wait(timeout=30)
                 process, quiet_since, shown = None, None, None
+            if process is not None and to is None and s["service"] == "twitch" and chatting is None:
+                chatting = chat(say)
             if process is not None and to is None and s["service"] == "twitch" and imaging(st) \
                     and st.get("name") != announced:
                 announced = st.get("name")

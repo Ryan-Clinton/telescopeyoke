@@ -7,9 +7,10 @@ Twitch only lets an app change a channel with the owner's permission. The app
 is "TelescopeYoke", registered at dev.twitch.tv as a public client: its
 client ID goes in config.toml as [stream] twitch_client_id, and it is not a
 secret. The person signs in once with Twitch's device code (they type a short
-code at twitch.tv/activate), granting only channel:manage:broadcast (title,
-category and tags). The tokens are kept in ~/.config/telescopeyoke/twitch.json,
-readable only by them, never shown and never logged. A public client's sign-in
+code at twitch.tv/activate), granting channel:manage:broadcast (title,
+category and tags) and chat:read and chat:edit (streamchat.py's answers). The tokens are kept in ~/.config/telescopeyoke/twitch.json,
+readable only by them, never shown and never logged. It also grants chat:read and
+chat:edit, for the chat's commands (streamchat.py). A public client's sign-in
 lasts while it is used at least once a month.
 
 Nothing here may stop the stream: every failure is said once and the stream
@@ -25,7 +26,7 @@ import requests
 import config
 
 TOKEN_FILE = Path(os.path.expanduser("~/.config/telescopeyoke/twitch.json"))
-SCOPE = "channel:manage:broadcast"
+SCOPE = "channel:manage:broadcast chat:read chat:edit"   # the title, category and tags; the chat's commands
 DEVICE = "https://id.twitch.tv/oauth2/device"
 TOKEN = "https://id.twitch.tv/oauth2/token"
 API = "https://api.twitch.tv/helix"
@@ -98,7 +99,7 @@ def login(say=print, post=requests.post, get=requests.get, sleep=time.sleep, cli
             user = get(f"{API}/users", headers={"Authorization": f"Bearer {found['access_token']}",
                                                  "Client-Id": client}, timeout=30).json()["data"][0]
             _keep({"access_token": found["access_token"], "refresh_token": found["refresh_token"],
-                   "broadcaster_id": user["id"], "login": user["login"]})
+                   "broadcaster_id": user["id"], "login": user["login"], "scopes": found.get("scope", [])})
             say(f"Signed in as {user['login']}: the stream will set the channel's title, category and tags.")
             return True
         if found.get("message") not in ("authorization_pending", "slow_down"):
@@ -130,6 +131,24 @@ def redacted(text, tokens=None):
         if isinstance(value, str) and len(value) > 8 and value in text:
             text = text.replace(value, "<token>")
     return text
+
+
+def refreshed(post=requests.post):
+    """Fresh tokens after the old ones lapsed, kept; None when the sign-in itself has lapsed."""
+    client, tokens = client_id(), _tokens()
+    if not client or not tokens:
+        return None
+    try:
+        return _refresh(tokens, client, post)
+    except (requests.RequestException, ValueError, KeyError):
+        return None
+
+
+def chat_tokens():
+    """The tokens when the sign-in allows the chat's commands, else None."""
+    import streamchat
+    tokens = _tokens()
+    return tokens if tokens and streamchat.CHAT_SCOPES <= set(tokens.get("scopes") or []) else None
 
 
 def set_channel(title, tags, say=print, patch=requests.patch, post=requests.post, clock=time.time):

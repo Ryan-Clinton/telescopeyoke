@@ -20,7 +20,8 @@ def drawn():
 
 
 def test_each_state_draws_a_full_picture(drawn):
-    assert set(drawn) == {"patrol", "transit", "between", "candidate", "end"}
+    assert {"patrol", "transit", "between", "candidate", "end", "science", "coming-up", "explain-stacking",
+            "explain-subtraction", "explain-nova", "explain-transit"} <= set(drawn)
     for canvas in drawn.values():
         assert canvas.image.size == (streamlook.WIDTH, streamlook.HEIGHT)
         assert canvas.written
@@ -143,20 +144,6 @@ def test_what_matters_still_reads_on_a_phone(drawn):
     assert sizes["203 / 211"] * scale >= 8
 
 
-def test_a_caption_comes_at_most_every_seven_minutes_and_never_during_a_follow_up(monkeypatch):
-    monkeypatch.setattr(streamlook, "_CAPTION", {"last": None, "shown_at": None, "text": None, "turn": 0})
-    s = {"kind": "patrol", "target": "M31", "last_age": 3}
-    assert streamlook.caption(s, 0) is None                       # the first waits a full interval
-    assert streamlook.caption(s, 60) is None
-    first = streamlook.caption(s, streamlook.CAPTION_EVERY)
-    assert first and streamlook.caption(s, streamlook.CAPTION_EVERY + 5) == first        # shown for a few seconds
-    assert streamlook.caption(s, streamlook.CAPTION_EVERY + 20) is None
-    later = 2 * streamlook.CAPTION_EVERY + 30
-    assert streamlook.caption(dict(s, candidate={"stage": "second"}), later) is None
-    assert streamlook.caption(dict(s, last_age=600), later) is None
-    assert streamlook.caption(s, later) not in (None, first)                              # the next in turn
-
-
 def test_a_second_look_s_result_is_news_for_five_minutes_then_one_small_line(monkeypatch):
     monkeypatch.setattr(streamlook, "_SEEN", {})
     discovery = {"mosaics": [{"name": "M31", "columns": 4, "rows": 2, "panels": [
@@ -182,3 +169,13 @@ def test_a_galaxy_filling_the_frame_does_not_lift_the_sky():
     galaxy = sky.copy()
     galaxy[100:300, 100:500] = 0.5                      # a bright object over a third of the picture
     assert np.allclose(streamlook.sky_of(galaxy)[0], 0.1)
+
+
+def test_the_crawl_runs_in_from_the_right_and_out_at_the_left():
+    import numpy as np
+    picture = np.zeros((streamlook.HEIGHT, streamlook.WIDTH, 3), dtype=np.uint8)
+    strip = streamlook.crawl_strip("TONIGHT · a slow line")
+    x0, y0, x1, y1 = streamlook.CRAWL_BOX
+    start = streamlook.crawled(picture, strip, 0)
+    assert start is not None and not start[y0:y1, x0:x1].any() == False      # it overwrites the footer's place
+    assert streamlook.crawled(picture, strip, 3600) is None                   # gone after it has run through

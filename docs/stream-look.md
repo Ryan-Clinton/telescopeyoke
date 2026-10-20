@@ -5,9 +5,11 @@ transit. `streamlook.py` draws the picture, `stream-targets.toml` holds the word
 about each object, and `stream.py` sends it; `./stream.py preview` draws each
 state at full size and at a phone's size, on the night's real pictures where
 there are some, with `cache/stream-preview/index.html` showing them all
-together. Not built yet: the target introduction, the tonight ribbon outside
-the between-targets card, the reference/tonight view, the variable-star curve,
-and a catalogue's reason in a candidate's result.
+together. The presenter (`streamstory.py`, "The story") and the chat's
+commands (`streamchat.py`) were added the same night. Not built yet: the
+target introduction, the tonight ribbon outside the between-targets card, the
+reference/tonight view, the variable-star curve, and a catalogue's reason in a
+candidate's result.
 
 `stream.py` sends the telescope to Twitch (and later YouTube) whenever a run
 is imaging. What it sends now (`./stream.py frame` saves a copy as
@@ -367,13 +369,7 @@ few seconds and then fade:
   ```
 
   It then dissolves into the normal layout over 400 ms.
-- **Science captions, 8 s, no more often than every 7 minutes**, across the
-  top of the stack on a see-through plate (built: `streamlook.caption`). The
-  first waits a full 7 minutes. Never during a target introduction, a candidate
-  follow-up, a transition or a warning. These are curated sentences from the target's `captions` and from
-  each programme's own list (also in `stream-targets.toml`), taken in turn
-  and never generated. For example: "A nova would appear here as a point of
-  light that wasn't in the reference image."
+- **Science captions** became the presenter's lines and chapters: see "The story".
 - **Tonight ribbon, 10 s, every 15 minutes** and during every between-targets
   card:
 
@@ -387,6 +383,122 @@ few seconds and then fade:
   the night. Early: "Tonight's observing begins". Then "3 h 18 min observed
   · 5 fields done". Finally "Last target before dawn", when the schedule's
   last step is running.
+
+## The story: a presenter, not a ticker
+
+The panel and the picture above are correct, but they are an instrument
+display. Someone arriving takes it all in within 30 seconds, and nothing
+says that anything else is coming. NASA's and ESA's launch broadcasts keep
+an audience through a long wait in the same way: they keep saying what you
+are watching, why it matters, what has happened and what comes next.
+`streamstory.py` is that presenter. It never adds a permanent ticker,
+because a ticker becomes wallpaper.
+
+**The broadcast clock.** From the stream's start, round and round (`CLOCK`,
+4½ minutes):
+
+```
+NOW 45 s · SCIENCE 25 s · NOW 45 s · HOW IT WORKS 25 s · NOW 45 s · TONIGHT 20 s · NOW 45 s · COMING UP 20 s
+```
+
+During NOW the panel shows the programme as it is: the light curve, the
+panel map. In the other chapters the programme's place in the panel shows
+one card under that heading:
+
+- **SCIENCE**: the object's `facts` and `why`, and the programme's
+  `explainers` (what a nova is, what a transit is).
+- **HOW IT WORKS**: the programme's `method`, how the telescope works
+  (`[stories]`: stacking, plate solving, focus, discovery, the telescope),
+  and cards made from the night's own measurements:
+  - "This picture combines 225 exposures of 16 s each: 60 minutes of light
+    from this one patch of sky."
+  - how many frames have been set aside, and the main reason why;
+  - the stars' measured size;
+  - for a patrol, the depth measured by planted fake stars, for example
+    "down to about magnitude 16.7: some 20,000 times fainter than the
+    faintest star the eye can see".
+- **TONIGHT**: the fields searched, the frames kept, the candidates awaiting
+  review, and how long the night has run. With no candidate it says "No
+  confirmed new star yet: most nights find none, and that is still a
+  result", so that "0" reads as science rather than failure.
+- **COMING UP**: the next step in plain words and when, for example "COMING
+  UP IN ~12 MIN · WASP-12 b transit", with that object's own one-line
+  description and what follows it. The footer's operational "NEXT" became
+  "COMING UP" too.
+
+**Between chapters**, a line goes across the top of the picture for 10 s
+every 90 s. It is either a **LOOK CLOSELY** line from the object's `notice`
+("Almost every sharp star in this picture is in our own galaxy, in front
+of Andromeda"), or the presenter's own voice made from the run's state
+("TELESCOPEYOKE · I'm searching this part of M31 for any star that wasn't
+here before"). That voice is deterministic status, worded as a presenter
+would say it. It never pretends to think.
+
+**Explainers, 12 s every 5 minutes**, drawn over the dimmed picture:
+
+- **What is stacking?** Tonight's own single exposure beside tonight's own
+  stack.
+- **What is a transit?** A star with the planet's shadow, and the dip in
+  its brightness.
+- **What is a nova?** White dwarf → gas builds up → it ignites.
+- **How does the search work?** OLD SKY − TONIGHT = WHAT CHANGED. This one
+  is labelled as a diagram, and its stars are drawn, never a real field or
+  a real candidate.
+
+Which explainers come depends on the programme. They are taken in turn.
+
+**The crawl, 45 s every 10 minutes**: one slow line along the bottom, over
+the footer, for example "TONIGHT · M31 nova patrol · 5 of 8 M31 fields
+searched · next: WASP-12 b transit". It is drawn once
+(`streamlook.crawl_strip`) and slid along at 70 px a second by
+`stream.Composer` between the pictures it draws. It is never constant: it
+runs and then it is gone.
+
+**Rules.**
+
+- Someone arriving sees a chapter, a line or an explainer within a minute.
+  A test checks that the longest gap is 60 s.
+- A card shown is not shown again until the rest of its pool has been
+  (`Story.pick`). Each card stays the same through its slot.
+- Every word is curated in `stream-targets.toml`, or made from a
+  measurement. A number not measured is left out, never filled in. A test
+  checks that a state with nothing measured gets no measured cards.
+- A candidate's follow-up or a paused run takes the screen to itself, with
+  no chapters, lines, explainers or crawl (PRIORITY below).
+
+**Not every idea was a fact.** Some suggested lines were not true of this
+project, so they are not used:
+
+- "The telescope checks a possible change twice before bothering a human":
+  the phone is told at once.
+- "Each timing goes to ExoClock": sharing a timing is the person's
+  decision.
+
+Each line in `stream-targets.toml` was checked against a published source
+before it went in.
+
+**One lesson from the first night.** The running stream reads
+`stream-targets.toml` live. When the file's shape changed under older code,
+the picture stopped being drawn and froze for about 9 minutes, until the
+stream was restarted on matching code. Change the file's shape only together
+with the code, and restart the stream. A drawing error is now said once
+("picture not drawn, the last one stays"), not every 3 s.
+
+## Chat
+
+`streamchat.py` answers a few commands in the Twitch chat, from the same
+curated words and measured figures, so that a curious viewer can dig deeper
+without the picture filling up: `!what`, `!target`, `!next`, `!telescope`,
+`!camera`, `!nova`, `!transit` and `!help`.
+
+- No command moves or changes anything, and an unknown command gets no
+  answer.
+- It answers at most once every 3 s, and each command at most once every
+  30 s.
+- It runs inside `stream.py watch` while the stream is on air.
+- It needs the sign-in to include `chat:read` and `chat:edit`. Until the
+  person runs `./stream.py twitch-login` again with those, it says once that
+  the chat's commands are off.
 
 ## What wins the screen
 
