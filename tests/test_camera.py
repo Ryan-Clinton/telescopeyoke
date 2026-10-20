@@ -696,6 +696,33 @@ def test_stripes_new_in_each_frame_are_told_from_stripes_fixed_in_the_sensor(tmp
         assert found["fixed"] is fixed
 
 
+def test_each_nights_stripes_are_set_beside_its_weather(tmp_path, monkeypatch):
+    import camera_test
+    import config
+    from datetime import datetime
+    from astropy.io import fits as afits
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    rng = np.random.default_rng(5)
+    rows = np.arange(400)[:, None]
+    times = []
+    for day, size in ((15, 2.0), (16, 4.0), (17, 6.0), (18, 8.0)):
+        folder = tmp_path / "frames" / "M31" / f"202610{day}-220000"
+        folder.mkdir(parents=True)
+        times.append(datetime(2026, 10, day, 22).astimezone().timestamp())
+        for i in range(3):
+            lum = 1000 + rng.normal(0, 5, (400, 600)) + size * np.sin((rows + rng.uniform(0, 100)) / 7.0)
+            afits.PrimaryHDU(np.repeat(np.repeat(lum, 2, 0), 2, 1).astype(np.float32) / 4).writeto(
+                folder / f"light-{i:04d}.fits")
+    (tmp_path / "frames" / "M31" / "20261019-220000").mkdir()      # too few frames: left out
+    weather = {"time": times, "temperature_2m": [9.0, 6.0, 3.0, 0.0], "dew_point_2m": [5.0, 4.0, 2.0, -0.5],
+               "relative_humidity_2m": [75, 85, 93, 96]}
+    found = camera_test.stripes_weather(weather, say=lambda s: None)
+    assert [r["night"] for r in found["nights"]] == ["2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18"]
+    assert found["nights"][0]["stripes_adu"] < found["nights"][-1]["stripes_adu"]
+    assert found["follows"]["temp_c"] < -0.9 and found["follows"]["humidity_pct"] > 0.9
+    assert (tmp_path / "cache" / "stripes-sessions.json").exists()
+
+
 def test_a_hung_camera_is_given_up_on_within_about_two_minutes(world, monkeypatch):
     """18 October 2026: a 16 s frame was waited for 164 s, twice, and a hang
     went unnoticed for six minutes."""

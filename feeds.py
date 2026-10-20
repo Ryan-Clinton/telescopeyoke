@@ -62,6 +62,19 @@ def weather(lat, lon):
     return _cached(f"weather8w_{lat:.3f}_{lon:.3f}", 0.5, fetch)
 
 
+def weather_past(lat, lon, days=60):
+    """The last `days` days' hourly air temperature, dew point and humidity
+    as a dict of lists, 'time' in unix seconds (UTC): the model's own
+    analysis, for setting a night's measurements beside its weather."""
+    def fetch():
+        return _get(
+            "https://api.open-meteo.com/v1/forecast",
+            latitude=lat, longitude=lon, hourly="temperature_2m,dew_point_2m,relative_humidity_2m",
+            past_days=days, forecast_days=1, timeformat="unixtime", timezone="UTC",
+        ).json()["hourly"]
+    return _cached(f"weatherpast{days}_{lat:.3f}_{lon:.3f}", 1, fetch)
+
+
 # --- Seeing and transparency: 7Timer ASTRO (https://www.7timer.info) --------
 
 SEEING = {1: '<0.5"', 2: '0.5-0.75"', 3: '0.75-1"', 4: '1-1.25"',

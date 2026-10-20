@@ -442,6 +442,8 @@ def main():
     what.add_argument("--trail", action="store_true")
     what.add_argument("--stripes", metavar="SESSION",
                       help="whether a run's stripes are fixed in the sensor or new each frame, from its saved frames")
+    what.add_argument("--stripes-weather", action="store_true",
+                      help="every saved night's stripes beside its temperature, dew point and humidity")
     what.add_argument("--banding", action="store_true",
                       help="how strong the horizontal stripes are with the fan on and off and at two black levels")
     what.add_argument("--electrons", action="store_true",
@@ -545,6 +547,81 @@ def stripes_in(session, most=12, say=print):
         f"the average of {len(files)}: " + ("fixed in the sensor, for dark frames to take out" if answer["fixed"]
                                             else "new in each frame, for stacking and dithering to spread"))
     return answer
+
+
+def session_stripes(session, most=6):
+    """A saved run's stripes in one frame, ADU: the median over up to `most`
+    frames of each frame's row-by-row spread. None with fewer than three."""
+    from astropy.io import fits
+    files = sorted(Path(session).glob("light-*.fits"))[:most]
+    if len(files) < 3:
+        return None
+    spreads = []
+    for f in files:
+        with fits.open(f) as h:
+            spreads.append(float(np.std(row_stripes(next(x.data for x in h if x.data is not None)))))
+    return round(float(np.median(spreads)), 2)
+
+
+def stripes_weather(weather=None, say=print):
+    """Each night's stripes beside its weather: every saved run under
+    frames/ measured once (kept in cache/stripes-sessions.json), grouped by
+    the evening it began, with the air temperature, dew point and humidity
+    at the site in the middle of the night's runs (Open-Meteo's hourly
+    analysis), and how closely the stripes follow each across the nights
+    (correlation, -1 to 1). Run folders are named in local time."""
+    from datetime import datetime, timedelta, timezone
+    import feeds
+    import records
+    kept_path = config.DATA / "cache" / "stripes-sessions.json"
+    kept = json.loads(kept_path.read_text()) if kept_path.exists() else {}
+    for folder in sorted((config.DATA / "frames").glob("*/20[0-9][0-9]*-*")):
+        key = f"{folder.parent.name}/{folder.name}"
+        if key not in kept and folder.is_dir():
+            kept[key] = session_stripes(folder)
+    kept_path.parent.mkdir(parents=True, exist_ok=True)
+    records.write(kept_path, kept)
+    nights = {}
+    for key, adu in kept.items():
+        if adu is None:
+            continue
+        try:
+            started = datetime.strptime(key.split("/")[-1], "%Y%m%d-%H%M%S").astimezone()
+        except ValueError:
+            continue
+        nights.setdefault(f"{started - timedelta(hours=12):%Y-%m-%d}", []).append((started.timestamp(), adu))
+    if not nights:
+        raise interface.Refusal("NO_SESSION", "No saved runs with three or more frames under frames/.")
+    if weather is None:
+        site = config.load()["site"]
+        weather = feeds.weather_past(site["latitude"], site["longitude"], days=92)
+    hours = np.array((weather or {}).get("time") or [], dtype=float)
+    rows = []
+    for night, runs in sorted(nights.items()):
+        middle = float(np.median([t for t, _ in runs]))
+        row = {"night": night, "runs": len(runs), "stripes_adu": round(float(np.median([a for _, a in runs])), 2)}
+        if hours.size and abs(hours - middle).min() <= 3600:
+            i = int(np.argmin(abs(hours - middle)))
+            row.update(temp_c=weather["temperature_2m"][i], dew_point_c=weather["dew_point_2m"][i],
+                       humidity_pct=weather["relative_humidity_2m"][i],
+                       at_utc=datetime.fromtimestamp(hours[i], timezone.utc).strftime("%H:%M"))
+            if None not in (row["temp_c"], row["dew_point_c"]):
+                row["dew_margin_c"] = round(row["temp_c"] - row["dew_point_c"], 1)
+        rows.append(row)
+    follows = {}
+    for name in ("temp_c", "dew_point_c", "humidity_pct", "dew_margin_c"):
+        pairs = [(r["stripes_adu"], r[name]) for r in rows if r.get(name) is not None]
+        if len(pairs) >= 4:
+            a, b = np.array(pairs, dtype=float).T
+            if a.std() and b.std():
+                follows[name] = round(float(np.corrcoef(a, b)[0, 1]), 2)
+    for r in rows:
+        air = (f"{r['temp_c']:5.1f}°C  dew {r['dew_point_c']:5.1f}°C  margin {r['dew_margin_c']:4.1f}°  "
+               f"humidity {r['humidity_pct']:3.0f}% at {r['at_utc']} UTC" if "dew_margin_c" in r else "no weather")
+        say(f"{r['night']}  {r['stripes_adu']:4.2f} ADU from {r['runs']:2d} runs  {air}")
+    say("stripes follow: " + (", ".join(f"{k} {v:+.2f}" for k, v in follows.items()) or "too few nights to say")
+        + " (1 rises with it, -1 falls as it rises, 0 unrelated)")
+    return {"nights": rows, "follows": follows}
 
 
 def banding_trial(exposure, gain, frames=2, keep=False, settings=BANDING_SETTINGS, say=print):
@@ -799,6 +876,8 @@ def cooldown(exposure, gain, frames=20, every_min=10.0, steps=12, note="", say=p
 def run(args):
     if getattr(args, "stripes", None):      # saved frames only: nothing to dry-run
         return stripes_in(args.stripes)
+    if getattr(args, "stripes_weather", False):
+        return stripes_weather()
     if getattr(args, "dry_run", False):
         note = ("Stops the mount following the sky for one frame of "
                 f"{args.exposure or 10.0:g} s, so the stars trail, and starts it following again. Nothing is slewed."
