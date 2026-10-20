@@ -161,10 +161,71 @@ def fit(jd, mag, middle, hours, search=SEARCH):
     spread = float(np.std(mag[~inside], ddof=1)) if (~inside).sum() > 2 else float("nan")
     error = spread * math.sqrt(1 / inside.sum() + 1 / (~inside).sum())
     to_percent = lambda m: 100 * (1 - 10 ** (-0.4 * m))
+    half = hours / 48
+    # The middle is only timed with the star's light seen both before the
+    # transit and after it: with one side only, an earlier middle and a
+    # deeper dip fit the same points (20 October 2026: egress lost to cloud).
+    timed = bool(np.any(jd < middle - half) and np.any(jd > middle + half))
     return {"depth": round(to_percent(drop), 2), "depth_error": round(100 * 0.921 * error, 2),
-            "middle": round(middle + shift, 5), "early_late_min": round(shift * 1440, 1),
+            "middle": round(middle + shift, 5), "early_late_min": round(shift * 1440, 1), "timed": timed,
             "scatter_mmag": round(1000 * spread, 1), "in_transit_points": int(inside.sum()),
             "out_of_transit_points": int((~inside).sum())}
+
+
+def draw(answer, path, size=(900, 420)):
+    """The light curve as a picture: the star's brightness against the
+    baseline before the transit (in percent, brighter up), with the
+    predicted transit shaded and the fitted dip drawn over the points;
+    times in UTC."""
+    from PIL import Image, ImageDraw
+    jd = np.array(answer["jd"], float)
+    mag = np.array([np.nan if m is None else m for m in answer["mag"]], float)
+    ok = np.isfinite(mag)
+    image = Image.new("RGB", size, "white")
+    pen = ImageDraw.Draw(image)
+    if ok.sum() < 2:
+        image.save(path)
+        return str(path)
+    jd, mag = jd[ok], mag[ok]
+    middle, half = answer.get("predicted_middle"), answer["hours"] / 48
+    outside = (np.abs(jd - middle) > half) if middle else np.ones_like(jd, bool)
+    base = float(np.median(mag[outside] if outside.any() else mag))
+    flux = 100 * (10 ** (-0.4 * (mag - base)) - 1)                 # percent against the baseline
+    left, right, top, bottom = 70, size[0] - 20, 40, size[1] - 50
+    t0, t1 = float(jd.min()), float(jd.max())
+    if middle:
+        t0, t1 = min(t0, middle - half), max(t1, middle + half)
+    lo, hi = min(float(np.percentile(flux, 1)), -1.5 * answer["expected_depth"]), max(float(np.percentile(flux, 99)), 1.0)
+
+    def x(t):
+        return left + (t - t0) / (t1 - t0) * (right - left)
+
+    def y(f):
+        return top + (hi - f) / (hi - lo) * (bottom - top)
+    if middle:
+        pen.rectangle([x(middle - half), top, x(middle + half), bottom], fill=(236, 240, 248))
+        pen.text((x(middle - half) + 4, top + 4), "predicted transit", fill="grey")
+    pen.line([left, y(0), right, y(0)], fill="grey")
+    for t, f in zip(jd, flux):
+        pen.ellipse([x(t) - 3, y(f) - 3, x(t) + 3, y(f) + 3], fill="black")
+    fitted = answer.get("fit")
+    if fitted:
+        m, d = fitted["middle"], -fitted["depth"]
+        pen.line([(left, y(0)), (x(m - half), y(0)), (x(m - half), y(d)), (x(m + half), y(d)),
+                  (x(m + half), y(0)), (right, y(0))], fill=(200, 40, 40), width=2)
+    for f in (0, -answer["expected_depth"]):
+        pen.text((4, y(f) - 6), f"{f:+.1f}%", fill="grey")
+    hours = np.arange(math.ceil(t0 * 24), math.floor(t1 * 24) + 1) / 24
+    for h in hours:
+        label = time.strftime("%H:%M", time.gmtime((h - 2440587.5) * 86400))
+        pen.line([x(h), bottom, x(h), bottom + 5], fill="grey")
+        pen.text((x(h) - 14, bottom + 8), label, fill="grey")
+    title = f"{answer['planet']} on {answer['session'][:8]}, UTC: the star's light against the baseline"
+    if fitted:
+        title += f"; fitted dip {fitted['depth']:.2f} ± {fitted['depth_error']:.2f}% (expected {answer['expected_depth']:.2f}%)"
+    pen.text((left, 12), title, fill="black")
+    image.save(path)
+    return str(path)
 
 
 def measure(session, planet, size=BIN, say=print, rows=None, night=None):
@@ -202,10 +263,12 @@ def measure(session, planet, size=BIN, say=print, rows=None, night=None):
               "fit": result, "jd": [round(t, 5) for t in jd], "mag": [None if not np.isfinite(m) else round(float(m), 4)
                                                                      for m in mag], "kind": "measured"}
     records.write(session / f"transit-{p['planet'].replace(' ', '')}.json", answer, schema="transits", stamp=True)
+    picture = draw(answer, session / f"transit-{p['planet'].replace(' ', '')}.png")
     if result:
+        when = (f"middle {result['early_late_min']:+.1f} min against the prediction" if result["timed"] else
+                "middle not timed: the star was not watched both before and after the transit")
         say(f"{p['planet']}: {result['depth']:.2f} ± {result['depth_error']:.2f}% deep (expected {p['depth']:.2f}%), "
-            f"middle {result['early_late_min']:+.1f} min against the prediction; "
-            f"{result['scatter_mmag']} mmag scatter out of transit")
+            f"{when}; {result['scatter_mmag']} mmag scatter out of transit; the curve: {picture}")
     else:
         say(f"{p['planet']}: the night's frames do not cover a transit and time either side of it")
     return answer

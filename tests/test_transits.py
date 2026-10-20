@@ -73,3 +73,20 @@ def test_a_star_not_in_the_picture_is_refused(tmp_path):
     night = {"jd": [MIDNIGHT], "stars": np.array([[p["ra"] + 1, p["dec"], 12.0, 0.8]]), "mags": np.array([[12.0]])}
     with pytest.raises(transits.interface.Refusal):
         transits.measure(tmp_path, "TEST-1 b", say=lambda *_: None, rows=[p], night=night)
+
+
+def test_a_transit_seen_on_one_side_only_is_not_timed_and_its_curve_is_drawn(tmp_path):
+    rng = np.random.default_rng(5)
+    middle, hours = 2461333.6234, 3.0
+    jd = middle + np.arange(-2.1, 1.0, 0.03) / 24                     # baseline, ingress and middle; no egress
+    inside = np.abs(jd - middle) < hours / 48
+    mag = 11.5 + np.where(inside, 0.0167, 0.0) + rng.normal(0, 0.003, len(jd))
+    result = transits.fit(jd, mag, middle, hours)
+    assert result["timed"] is False and abs(result["depth"] - 1.54) < 0.4
+    both = middle + np.arange(-2.1, 2.1, 0.03) / 24
+    assert transits.fit(both, 11.5 + np.where(np.abs(both - middle) < hours / 48, 0.0167, 0.0), middle, hours)["timed"]
+    answer = {"planet": "WASP-12 b", "session": "20261020-014726", "predicted_middle": middle, "hours": hours,
+              "expected_depth": 1.54, "fit": result, "jd": list(jd), "mag": list(mag)}
+    path = transits.draw(answer, tmp_path / "curve.png")
+    from PIL import Image
+    assert Image.open(path).size == (900, 420)
