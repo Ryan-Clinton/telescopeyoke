@@ -49,3 +49,29 @@ def test_a_time_not_to_start_before_is_kept_apart_from_the_command():
     schedule.main(["add", "GoTo", "3", "--not-before", "01:45", "--", "./mount.py", "goto", "WASP-12"])
     step = schedule.load()["steps"][0]
     assert step["not_before"] == "01:45" and step["command"] == ["./mount.py", "goto", "WASP-12"]
+
+
+def test_a_step_with_an_end_time_images_the_last_field_until_then(monkeypatch):
+    """20 October 2026: the panels ran early; the time before the transit's
+    fixed start went on the last panel instead of waiting."""
+    import time
+    schedule.save({"steps": []})
+    monkeypatch.setattr(schedule, "last_field", lambda: "M31-P4")
+    until = time.strftime("%H:%M", time.localtime(time.time() + 3600))
+    schedule.main(["add", "Keep going", "0", "--until", until, "--", "./shoot.py", "{last}", "--frames", "0"])
+    ran = []
+    ok = schedule.run(say=lambda s: None,
+                      start=lambda cmd: (ran.append(cmd), types.SimpleNamespace(returncode=124))[1])
+    assert ok and ran[0][:2] == ["timeout", "--signal=INT"] and ran[0][3:] == ["./shoot.py", "M31-P4", "--frames", "0"]
+    assert 3400 < int(ran[0][2]) <= 3600 and schedule.load()["steps"][0]["status"] == "done"
+
+
+def test_a_step_with_an_end_time_already_past_is_skipped(monkeypatch):
+    import time
+    schedule.save({"steps": []})
+    monkeypatch.setattr(schedule, "last_field", lambda: "M31-P4")
+    until = time.strftime("%H:%M", time.localtime(time.time() + 30))
+    schedule.main(["add", "Keep going", "0", "--until", until, "--", "./shoot.py", "{last}"])
+    ran = []
+    assert schedule.run(say=lambda s: None, start=lambda cmd: ran.append(cmd))
+    assert ran == [] and schedule.load()["steps"][0]["status"] == "skipped"
