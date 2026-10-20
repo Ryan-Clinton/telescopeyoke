@@ -10,6 +10,13 @@ facts behind it, with their sources and what is still unconfirmed, are in
 the [research notes](research/mount-protocols-2026-10-20.md) (20 October
 2026).
 
+**Plugged in something new?** `./newhardware.py` notices it without
+sending it anything; `./newhardware.py --probe PORT` (or `--probe wifi` for a
+SynScan Wi-Fi network) asks it what it is, only reading, writes the report
+with serial numbers left out, and gives you the support form filled in to
+send if you choose. `./newhardware.py --watch --install` keeps watching from
+boot.
+
 **Your mount is not here, or you would test one?** Open a
 [Mount support request](https://github.com/Ryan-Clinton/telescopeyoke/issues/new?template=mount-support.yml).
 The first thing asked of you only reads: `./doctor.py --report --probe
@@ -51,7 +58,9 @@ the right protocol; it needs its transports named and tested: the USB socket
 on the mount at 115200 (already a setting: `[mount] baud`), and Wi-Fi on
 UDP 11880 (already `link = "wifi"`). Testers: an EQ6-R or HEQ5 on its USB
 socket, an AZ-GTi or Star Adventurer GTi on Wi-Fi, any mount on an EQDIR
-lead. Steps: the doctor's probe; `./mount.py status`; `./mount.py
+lead. The first will be the author's own SynScan Wi-Fi adapter on the EQ3
+Pro, which has been read (firmware, gearing, position) but has not yet moved
+the mount. Steps: the doctor's probe; `./mount.py status`; `./mount.py
 directions` with the person watching (which way the Dec motor turns); one
 `nudge`; a GoTo with centring.
 

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/newhardware.schema.json",
+  "title": "New hardware",
+  "description": "data of: newhardware.py [--probe PORT | --known PORT] --json. The serial devices plugged in and whether each is in use, known or new; with --probe, the report written and the Mount support form's link filled in, never sent.",
+  "type": "object",
+  "properties": {
+    "devices": {"type": "array", "items": {"type": "object", "required": ["device", "state"],
+                "properties": {"device": {"type": "string"}, "description": {"type": "string"}, "maker": {"type": "string"},
+                               "usb": {"type": "string"}, "state": {"enum": ["in use", "known", "new"]}}}},
+    "known": {"type": "string", "description": "--known: the device marked as yours."},
+    "device": {"type": "string"}, "description": {"type": ["string", "null"]}, "usb": {"type": ["string", "null"]},
+    "report": {"type": "string", "description": "--probe: the report's file."},
+    "form": {"type": "string", "description": "--probe: the Mount support form, filled in, for the person to send or not."}
+  }
+}

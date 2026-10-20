@@ -78,6 +78,7 @@ COMMANDS = {
                   {"--plan": "read_only", "--dry-run": "read_only"}),
     "planet.py": ("hardware", {"--restack": "local_write"}, DRY),
     "lighttest.py": ("read_only", {}, {}),       # what a house light did to the sky, from a run's records
+    "newhardware.py": ("read_only", {"--probe": "hardware", "--known": "local_write", "--watch": "local_write"}, {}),
     "precision.py": ("local_write", {}, {}),     # a night's frames measured every way; keeps its answer in the session
     "plant.py": ("local_write", {}, {}),
     "polaralign.py": ("hardware", {}, DRY),

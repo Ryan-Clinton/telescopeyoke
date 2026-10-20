@@ -81,7 +81,7 @@ on one page. What happened in its first 17 days, each recorded in
 
 | Live broadcast | Discovery | Science |
 |---|---|---|
-| ![The live broadcast's card about the comet hunt: three frames of the comet over a dimmed star field, with the hunt's own figures](docs/pictures/stream-2026-10-20.jpg) | ![Four frames of a comet's head and short tail moving towards the Sun](docs/pictures/comet-ccor1-2026-10-19.jpg) | ![WASP-12's light through the night, scattered points slightly lower after the first forty minutes, with the fitted box](docs/pictures/wasp12b-2026-10-20.jpg) |
+| ![The live broadcast's card about the comet hunt: three frames of the comet over a dimmed star field, with the hunt's own figures](docs/results/stream-2026-10-20.jpg) | ![Four frames of a comet's head and short tail moving towards the Sun](docs/results/comet-ccor1-2026-10-19.jpg) | ![WASP-12's light through the night, scattered points slightly lower after the first forty minutes, with the fitted box](docs/results/wasp12b-2026-10-20.jpg) |
 | The Twitch broadcast's comet-hunt card, as `./stream.py preview` draws it (the side panel's figures are its examples) | A known Kreutz sungrazer the hunt found by itself in GOES-19 coronagraph pictures, 19 October 2026 | The first exoplanet transit attempt, WASP-12 b, 20 October 2026: dimming seen, not a detection |
 
 **Why it is unusual.** No one of these functions is new. What is unusual

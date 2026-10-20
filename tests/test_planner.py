@@ -223,7 +223,7 @@ def test_a_controller_that_speaks_the_motor_boards_language_is_recognised(monkey
     assert "motor board answered at 115200" in lines[2] and "HEQ5" in lines[2] and "not moving" in lines[2]
     assert tried == [9600, 115200]
     monkeypatch.setattr(direct, "describe", lambda link: (_ for _ in ()).throw(Refusal("HANDSET_NOT_ANSWERING", "silent")))
-    assert doctor.probe("COM7")[-1] == "nothing on this port answered in either language"
+    assert doctor.probe("COM7")[-1] == "nothing on this port answered in any language this project knows"
     text = doctor.hardware_report(offline=True, skip_handset=True, probe_port="COM7")
     assert "Asked COM7 directly" in text and "nothing on this port answered" in text
 

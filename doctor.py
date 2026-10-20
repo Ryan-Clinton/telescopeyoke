@@ -449,7 +449,32 @@ def probe(port):
         return lines + [f"a motor board answered at {baud} baud in the language EQMOD speaks: model {seen['model']}, "
                         f"firmware {seen['firmware']}, {seen['counts_per_turn']} counts per turn, "
                         f"{'moving' if any(seen['moving']) else 'not moving'}"]
-    return lines + ["nothing on this port answered in either language"]
+    lines.append("no motor board answered")
+    return lines + lx200(port)
+
+
+def lx200(port, opener=None):
+    """Ask, last, as an LX200-family mount would be asked (ZWO's AM mounts,
+    OnStep, Meade): its product name and firmware, two questions that only
+    read (docs/mounts.md). Asked only when nothing answered as a SynScan
+    handset or a motor board, so neither is sent these words."""
+    if opener is None:
+        import serial
+        opener = lambda: serial.Serial(port, 9600, timeout=2)    # noqa: E731
+    try:
+        with opener() as link:
+            answers = []
+            for question in (b":GVP#", b":GVN#"):
+                getattr(link, "reset_input_buffer", lambda: None)()
+                link.write(question)
+                answers.append(link.read_until(b"#", 64).rstrip(b"#").decode("ascii", "replace").strip())
+    except Exception as problem:
+        return [f"no LX200-family answer ({getattr(problem, 'message', problem)})"]
+    product, firmware = answers
+    if product and product.isprintable():
+        return [f"an LX200-family mount answered at 9600 baud: product {product}, firmware {firmware or 'not given'} "
+                "(not yet supported: docs/mounts.md)"]
+    return ["no LX200-family answer at 9600 baud", "nothing on this port answered in any language this project knows"]
 
 
 def system():
