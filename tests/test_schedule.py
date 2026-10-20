@@ -8,14 +8,20 @@ import pytest
 
 import schedule
 
-ENDED = []
+ENDED, TOLD = [], []
+REAL_END, REAL_STATE = schedule.end, schedule.mount_state
 
 
 @pytest.fixture(autouse=True)
 def no_real_mount(monkeypatch):
-    """No test here ever asks the real mount anything: a night's end is recorded instead."""
+    """No test here ever asks the real mount anything or sends a message: a
+    night's end and each message are recorded instead."""
+    import notify
     ENDED.clear()
+    TOLD.clear()
     monkeypatch.setattr(schedule, "end", lambda **k: ENDED.append(k) or True)
+    monkeypatch.setattr(notify, "send", lambda text, **k: TOLD.append(text))
+    monkeypatch.setattr(schedule, "mount_state", lambda run=None: pytest.fail("the real mount was asked"))
 
 
 def test_the_times_follow_from_a_running_step_and_a_step_not_before():
@@ -128,7 +134,22 @@ def test_a_step_that_cannot_start_fails_and_fetches_the_person():
     assert schedule.load()["steps"][0]["status"] == "failed" and called
 
 
-def test_the_night_ends_parked_and_told_when_the_last_step_has_run():
+class Clock:
+    """datetime with now() fixed at an hour, for the schedule's morning test."""
+    def __init__(self, hour):
+        self.hour = hour
+
+    def now(self):
+        import datetime
+        return datetime.datetime(2026, 10, 20, self.hour, 0)
+
+    def __getattr__(self, name):
+        import datetime
+        return getattr(datetime.datetime, name)
+
+
+def test_the_night_ends_parked_and_told_when_the_last_step_has_run_in_the_morning(monkeypatch):
+    monkeypatch.setattr(schedule, "datetime", Clock(6))
     schedule.save({"steps": []})
     schedule.add("one", 1, ["true"])
     assert schedule.run(say=lambda s: None, start=lambda cmd: types.SimpleNamespace(returncode=0))
@@ -136,6 +157,14 @@ def test_the_night_ends_parked_and_told_when_the_last_step_has_run():
     ENDED.clear()
     assert schedule.run(say=lambda s: None, start=lambda cmd: types.SimpleNamespace(returncode=0))
     assert ENDED == []                                   # nothing ran: nothing to end
+
+
+def test_a_schedule_finished_in_the_evening_says_so_and_moves_nothing(monkeypatch):
+    monkeypatch.setattr(schedule, "datetime", Clock(21))
+    schedule.save({"steps": []})
+    schedule.add("focus", 1, ["true"])
+    assert schedule.run(say=lambda s: None, start=lambda cmd: types.SimpleNamespace(returncode=0))
+    assert ENDED == [] and "still where it was" in TOLD[0]
 
 
 def session(field, name, frames, age_s):
@@ -148,13 +177,13 @@ def session(field, name, frames, age_s):
     return d
 
 
-def mount(states, moved):
-    """A stand-in for mount.py: status answers from `states` in turn; home is recorded."""
+def mount(states):
+    """A stand-in for mount.py status --json: answers from `states` in turn
+    (None is a refusal, as interface.envelope gives one: ok false, data {})."""
     def run(command, **k):
-        if command[-1] == "home":
-            moved.append("home")
-            return types.SimpleNamespace(stdout="")
-        return types.SimpleNamespace(stdout=json.dumps({"data": states.pop(0)}))
+        state = states.pop(0)
+        reply = {"ok": state is not None, "data": state if state is not None else {}}
+        return types.SimpleNamespace(stdout=json.dumps(reply))
     return run
 
 
@@ -162,26 +191,31 @@ def own_data(monkeypatch, tmp_path):
     monkeypatch.setattr(schedule.config, "DATA", tmp_path)
     monkeypatch.setattr(schedule, "ENDED", tmp_path / "cache" / "night.ended")
     monkeypatch.setattr(schedule, "RUNNER", tmp_path / "cache" / "schedule.runner")
+    monkeypatch.setattr(schedule, "LOOKED", tmp_path / "cache" / "night.looked")
+    monkeypatch.setattr(schedule, "mount_state", REAL_STATE)
 
 
 def test_ending_the_night_parks_the_mount_and_says_what_the_night_got(monkeypatch, tmp_path):
-    monkeypatch.undo()
     own_data(monkeypatch, tmp_path)
-    real_end = schedule.end
     now = time.mktime((2026, 10, 20, 5, 40, 0, 0, 0, -1))
     stamp = time.strftime("%Y%m%d-%H%M%S", time.localtime(now - 4 * 3600))
     session("WASP-12", stamp, 3, 900)
     moved, sent = [], []
-    parked = real_end(say=lambda *_: None, send=lambda text, **k: sent.append(text), now=now,
-                      run=mount([{"at_home": False, "state": "tracking"}, {"at_home": True}], moved))
-    assert parked and moved == ["home"]
+
+    def end(states):
+        return REAL_END(say=lambda *_: None, send=lambda text, **k: sent.append(text), now=now,
+                        run=mount(states), home=lambda: moved.append("home"))
+    assert end([{"at_home": False, "state": "tracking"}, {"at_home": True}]) and moved == ["home"]
     assert sent == ["Observation is over. Tonight: WASP-12 3 frames. "
                     "The telescope is parked at home (by its axis readouts)."]
     sent.clear()
-    parked = real_end(say=lambda *_: None, send=lambda text, **k: sent.append(text), now=now,
-                      run=mount([{"at_home": False, "state": "tracking"}, {"at_home": False, "state": "tracking"}],
-                                []))
-    assert not parked and "could NOT be parked: it is still tracking" in sent[0]
+    assert not end([{"at_home": False, "state": "tracking"}, {"at_home": False, "state": "tracking"}])
+    assert "could NOT be parked: it is still tracking" in sent[0]
+    # A refusal from mount.py (handset not answering) is no answer: nothing moves.
+    sent.clear()
+    moved.clear()
+    assert not end([None]) and moved == [] and "did not answer" in sent[0]
+    assert schedule.ENDED.exists()                      # written before any move: never tried twice
 
 
 def test_the_guard_ends_a_night_only_in_the_morning_once_imaging_has_stopped(monkeypatch, tmp_path):
@@ -200,9 +234,23 @@ def test_the_guard_ends_a_night_only_in_the_morning_once_imaging_has_stopped(mon
     assert schedule.guard(now=morning, running=idle) == "still imaging"
     for f in d.glob("*.fits"):
         os.utime(f, (morning - 3600, morning - 3600))
-    assert schedule.guard(now=morning, running=lambda: True) == "an imaging script is running"
-    assert schedule.guard(now=morning, running=idle) == "ended" and len(ended) == 1
+    assert schedule.guard(now=morning, running=lambda: True) == "something is driving the mount or camera"
+    tracking = {"at_home": False, "state": "tracking", "ra_hours": 6.33, "dec_deg": 27.86}
+    assert schedule.guard(now=morning, running=idle, run=mount([None])) == "the mount did not answer"
+    assert schedule.guard(now=morning, running=idle, run=mount([dict(tracking, at_home=True)])) == "already at home"
+    assert schedule.guard(now=morning, running=idle, run=mount([tracking])) == "not yet seen tracking unmoved"
+    moved = dict(tracking, dec_deg=40.0)                 # someone at the handset between the looks
+    assert schedule.guard(now=morning + 600, running=idle, run=mount([moved])) == "not yet seen tracking unmoved"
+    assert ended == []
+    assert schedule.guard(now=morning + 1200, running=idle, run=mount([moved])) == "ended" and len(ended) == 1
     schedule.ENDED.parent.mkdir(parents=True, exist_ok=True)
-    schedule.ENDED.write_text(str(morning))
-    assert schedule.guard(now=morning + 600, running=idle) == "already ended" and len(ended) == 1
+    schedule.ENDED.write_text(str(morning + 1200))
+    assert schedule.guard(now=morning + 1800, running=idle) == "already ended" and len(ended) == 1
 
+
+def test_anything_driving_the_mount_or_camera_is_seen_however_it_was_started():
+    assert schedule.driving(["timeout", "--signal=INT", "600", "./shoot.py", "WASP-12"])
+    assert schedule.driving(["python3", "/home/x/telescopeyoke/ty", "mount", "goto", "M31"])
+    assert schedule.driving(["/usr/bin/python3", "./mount.py", "findhome"])
+    assert not schedule.driving(["python3", "./schedule.py", "guard"])
+    assert not schedule.driving(["python3", "./ty", "night"])

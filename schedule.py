@@ -21,12 +21,16 @@ when it started. A step that fails stops the schedule and fetches the person
 config.DATA/cache/schedule.json. 19 October 2026: the night's plan was a
 script nobody could see, and the console said nothing between frames.
 
-When the last step has run, the night is over: the mount goes home and the
-person is told on their phone what the night got and that it is parked
-(`end`). A night can also end outside the schedule (cloud, a camera that
-hangs, runs restarted by hand), so `guard`, every 10 minutes from a timer,
-does the same once it is morning (MORNING), the night has imaged, nothing
-has been kept for IDLE_MINUTES and nothing is running. 20 October 2026:
+When the last step has run in the morning (MORNING), the night is over:
+the mount goes home and the person is told on their phone what the night
+got and that it is parked (`end`); a schedule that finishes earlier only
+says so, as the person may be out at the scope. A night can also end
+outside the schedule (cloud, a camera that hangs, runs restarted by hand),
+so `guard`, every 10 minutes from a timer, does the same once it is
+morning, the night has imaged, nothing has been kept for IDLE_MINUTES,
+nothing that drives the mount or camera is running, and the mount has
+been tracking without being moved between two of its looks (STILL), so
+nobody is at it with the handset. 20 October 2026:
 the night ended at 05:28 in cloud, outside the schedule, and the mount
 tracked on, unparked and unsaid, until the person came down. The person
 asked for this; it moves the mount only home, through mount.py and its
@@ -39,6 +43,7 @@ import subprocess
 import sys
 import time
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import activity
 import config
@@ -47,10 +52,14 @@ import records
 FILE = config.DATA / "cache" / "schedule.json"
 RUNNER = config.DATA / "cache" / "schedule.runner"     # the process id of `schedule.py run` while it runs
 ENDED = config.DATA / "cache" / "night.ended"          # when a night was last ended (parked and told)
-MORNING = (3, 12)          # local hours in which guard may end a night
+MORNING = (3, 9)           # local hours in which a night may be ended: after it, the person may be at the scope
 IDLE_MINUTES = 30          # guard: no frame kept for this long
 NIGHT_HOURS = 16           # a night's sessions: those begun within this many hours
-IMAGING = ("shoot.py", "patrol.py", "starwatch.py", "focus.py", "polaralign.py", "camera_setup.py")
+IMAGING = ("shoot.py", "patrol.py", "starwatch.py", "focus.py", "focuser.py", "polaralign.py", "camera_setup.py",
+           "mount.py", "direct.py", "console.py", "app.py", "planet.py", "skywatch.py", "snap.py", "tour.py")
+TY_MOVING = ("shoot", "mount", "focus", "run", "polar-align", "goto")   # `ty` commands that drive the mount or camera
+LOOKED = config.DATA / "cache" / "night.looked"        # guard: the mount's place at its last look
+STILL = (0.02, 0.2, 15 * 60)   # guard: hours of RA, degrees of Dec, and seconds apart for "not moved between looks"
 
 
 def load():
@@ -155,7 +164,12 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run):
         step = waiting or next((s for s in steps if s["status"] == "queued"), None)
         if step is None:
             if ran:
-                end(say=say)
+                if MORNING[0] <= datetime.now().hour < MORNING[1]:
+                    end(say=say)
+                else:
+                    import notify
+                    notify.send(f"Tonight's schedule finished at {datetime.now():%H:%M}. The telescope is still where "
+                                "it was; it will be parked in the morning if nothing else runs.", say=say)
             return True
         number = steps.index(step) + 1
         if waiting:
@@ -229,16 +243,40 @@ def summary(sessions):
 
 
 def mount_state(run=subprocess.run):
-    """The mount's status (mount.py status --json's data), or None if it does not answer."""
+    """The mount's status (mount.py status --json's data), or None if it
+    did not answer properly: a refusal (handset not answering or not set
+    up, port busy) is no answer, never "not at home"."""
     try:
         done = run([sys.executable, str(config.ROOT / "mount.py"), "status", "--json"], capture_output=True,
                    text=True, timeout=60)
-        return json.loads(done.stdout)["data"]
-    except (OSError, ValueError, KeyError, subprocess.SubprocessError):
+        reply = json.loads(done.stdout)
+    except (OSError, ValueError, subprocess.SubprocessError):
         return None
+    data = reply.get("data") if isinstance(reply, dict) else None
+    if not reply.get("ok", True) or not isinstance(data, dict) or "at_home" not in data:
+        return None
+    return data
 
 
-def end(say=print, send=None, run=subprocess.run, now=None):
+def go_home(home=None, wait=600):
+    """mount.py home, stopped with Ctrl-C (so mount.py stops the motors
+    itself) if it has not finished in `wait` seconds."""
+    if home:
+        return home()
+    proc = subprocess.Popen([sys.executable, str(config.ROOT / "mount.py"), "home"],
+                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        proc.wait(timeout=wait)
+    except subprocess.TimeoutExpired:
+        import signal
+        proc.send_signal(signal.SIGINT)
+        try:
+            proc.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+
+def end(say=print, send=None, run=subprocess.run, now=None, home=None):
     """The night is over: send the mount home (mount.py, so its motion lock
     and checks hold), check it got there, and tell the person on their
     phone. Returns whether it is parked."""
@@ -247,46 +285,78 @@ def end(say=print, send=None, run=subprocess.run, now=None):
     now = now or time.time()
     sessions = tonight(now)
     got = summary(sessions)
+    try:
+        # Written before any move, so a move that goes wrong is never tried again by the guard.
+        ENDED.parent.mkdir(parents=True, exist_ok=True)
+        ENDED.write_text(str(now), encoding="utf-8")
+    except OSError:
+        pass
     state = mount_state(run)
     if state is None:
         words = f"Observation is over. Tonight: {got}. The mount did not answer, so it may not be parked: please check it."
         parked = False
     else:
         if not state.get("at_home"):
-            run([sys.executable, str(config.ROOT / "mount.py"), "home"], capture_output=True, text=True, timeout=600)
+            go_home(home)
             state = mount_state(run) or {}
         parked = bool(state.get("at_home"))
         words = (f"Observation is over. Tonight: {got}. The telescope is parked at home (by its axis readouts)."
                  if parked else
                  f"Observation is over. Tonight: {got}. The telescope could NOT be parked: it is still "
                  f"{state.get('state', 'where it was')}. Please check it.")
-    try:
-        ENDED.parent.mkdir(parents=True, exist_ok=True)
-        ENDED.write_text(str(now), encoding="utf-8")
-    except OSError:
-        pass
     say(words)
     send(words, say=say)
     return parked
 
 
-def busy(names=IMAGING):
-    """A process running one of the imaging or mount scripts, by its command line."""
+def driving(line, names=IMAGING, ty=TY_MOVING):
+    """Whether a command line runs a script that drives the mount or camera:
+    by name anywhere in it (`timeout --signal=INT N ./shoot.py`), or as
+    `ty shoot`, `ty mount` and the like."""
+    words = [Path(w).name for w in line]
+    return any(w in names for w in words) or any(a == "ty" and b in ty for a, b in zip(words, words[1:]))
+
+
+def busy():
+    """A process driving the mount or camera, by its command line."""
     for proc in Path("/proc").glob("[0-9]*"):
         try:
-            line = (proc / "cmdline").read_bytes().split(b"\0")
+            line = [w.decode(errors="replace") for w in (proc / "cmdline").read_bytes().split(b"\0") if w]
         except OSError:
             continue
-        if any(Path(part.decode(errors="replace")).name in names for part in line[:3]):
+        if driving(line):
             return True
     return False
+
+
+def unmoved(state, now):
+    """Whether the mount is tracking where it was at the guard's last look
+    (within STILL): nobody is moving it with the handset or a program.
+    Remembers this look."""
+    last = None
+    try:
+        last = json.loads(LOOKED.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        pass
+    try:
+        LOOKED.parent.mkdir(parents=True, exist_ok=True)
+        LOOKED.write_text(json.dumps({"time": now, "ra": state.get("ra_hours"), "dec": state.get("dec_deg")}),
+                          encoding="utf-8")
+    except OSError:
+        pass
+    if not last or state.get("state") != "tracking" or None in (last.get("ra"), state.get("ra_hours")):
+        return False
+    gap = now - last.get("time", 0)
+    ra = abs(state["ra_hours"] - last["ra"]) % 24
+    return 0 < gap <= STILL[2] and min(ra, 24 - ra) <= STILL[0] and abs(state["dec_deg"] - last["dec"]) <= STILL[1]
 
 
 def guard(say=print, send=None, run=subprocess.run, now=None, running=None):
     """End the night (`end`) if it is over and nobody has: morning, the
     night has imaged, nothing kept for IDLE_MINUTES, the schedule not
-    running, no imaging script running, and this night not already ended.
-    Returns why it did nothing, or "ended"."""
+    running, nothing driving the mount or camera, this night not already
+    ended, and the mount tracking unmoved since the last look. Returns why
+    it did nothing, or "ended"."""
     now = now or time.time()
     hour = datetime.fromtimestamp(now).hour
     if not MORNING[0] <= hour < MORNING[1]:
@@ -307,14 +377,26 @@ def guard(say=print, send=None, run=subprocess.run, now=None, running=None):
     except OSError:
         pass
     if (running or busy)():
-        return "an imaging script is running"
+        return "something is driving the mount or camera"
+    state = mount_state(run)
+    if state is None:
+        return "the mount did not answer"
+    if state.get("at_home"):
+        return "already at home"
+    if not unmoved(state, now):
+        return "not yet seen tracking unmoved"
     end(say=say, send=send, run=run, now=now)
     return "ended"
 
 
 def install(say=print, run=subprocess.run, home=None):
-    """The guard every 10 minutes, as a systemd user timer, from this checkout."""
+    """The guard every 10 minutes, as a systemd user timer, from this
+    checkout: the real one, whose motion lock and frames are the night's."""
     root = config.ROOT
+    if Path(config.DATA).resolve() != Path(root).resolve():
+        import interface
+        raise interface.Refusal("INVALID_REQUEST", "Install the guard from the telescope's own checkout, where its "
+                                "frames and motion lock are, not from a copy or with TY_DATA set.")
     place = Path(home or Path.home()) / ".config" / "systemd" / "user"
     place.mkdir(parents=True, exist_ok=True)
     (place / "ty-night-end.service").write_text(
