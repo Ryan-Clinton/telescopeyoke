@@ -96,6 +96,17 @@ class Focuser:
                                "with ./focuser.py flash")
         self.step_seconds = ms / 1000
 
+    def full(self, on=True):
+        """Two coils on at every step until the Nano next restarts: about a
+        quarter more torque than half-steps, moves still counted in
+        half-steps and taking as long (20 October 2026: the motor could not
+        push the drawtube out)."""
+        order = ":F1" if on else ":F0"
+        reply = self.ask(order, 2)
+        if reply != f"OK {order[1:]}":
+            raise RuntimeError(f"the focuser answered {reply!r} to {order}: load the firmware "
+                               "with ./focuser.py flash")
+
     def close(self):
         self.link.close()
 
@@ -521,6 +532,8 @@ def main(argv=None):
     ap.add_argument("--port", help="the Nano's serial port, if it is not found by name")
     ap.add_argument("--ms", type=int, help=f"for move and test: milliseconds a half-step (default "
                                            f"{round(STEP_SECONDS * 1000)}; slower is stronger)")
+    ap.add_argument("--full", action="store_true",
+                    help="for move and test: two coils at every step, about a quarter more torque")
     args = ap.parse_args(argv)
 
     if args.command == "flash":
@@ -550,6 +563,8 @@ def main(argv=None):
     try:
         if args.ms:
             focuser.speed(args.ms)
+        if args.full:
+            focuser.full()
         for steps in ([TURN // 4, -TURN // 4] if args.command == "test" else [args.steps]):
             focuser.move(steps)
             print(f"moved {steps:+d} half-steps")

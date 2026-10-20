@@ -16,7 +16,8 @@ class Nano:
         order = data.decode().strip()
         self.sent.append(order)
         default = ("OK " + str(int(order[2:])) if order.startswith(":M") else
-                   "OK S" + order[2:] if order.startswith(":S") else "NO")
+                   "OK S" + order[2:] if order.startswith(":S") else
+                   "OK " + order[1:] if order in (":F1", ":F0") else "NO")
         answer = self.replies.get(order, default)
         self.waiting += answer.encode() + b"\r\n"
 
@@ -77,7 +78,7 @@ def test_an_old_firmware_that_does_not_know_speeds_is_an_error():
 
 def test_the_firmware_takes_speeds_within_the_same_limits():
     sketch = (focuser.SKETCH / "focuser.ino").read_text()
-    assert "if (ms < 2 || ms > 200)" in sketch and "delay(stepMs);" in sketch
+    assert "if (ms < 2 || ms > 200)" in sketch and "? stepMs : 2 * stepMs" in sketch
 
 
 def protractor(path, angle, width=1280, height=720, shift=(0, 0), scale=1.0, seed=0, off=(0, 0)):
@@ -271,3 +272,15 @@ def test_a_look_keeps_one_fresh_picture_and_lets_the_camera_go(tmp_path, monkeyp
     path = focuser.look("http://phone:4747/video", watcher=Phone(), sleep=lambda s: None)
     assert Path(path).parent == tmp_path / "cache" / "focuser-looks" and Path(path).read_bytes() == b"jpeg"
     assert closed == [True]
+
+
+def test_full_steps_are_asked_for_and_the_firmware_knows_them():
+    nano = Nano()
+    motor = focuser.Focuser(nano)
+    motor.full()
+    motor.move(100)
+    assert nano.sent == [":F1", ":M+100"]
+    with pytest.raises(RuntimeError):
+        focuser.Focuser(Nano({":F1": "NO"})).full()
+    sketch = (focuser.SKETCH / "focuser.ino").read_text()
+    assert 'order == ":F1" || order == ":F0"' in sketch and "step(2 * dir)" in sketch

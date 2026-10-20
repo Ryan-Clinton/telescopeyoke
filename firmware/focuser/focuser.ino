@@ -9,6 +9,11 @@
 //   :M-1024    -> the same, the other way
 //   :S40       -> "OK S40": 40 ms a half-step from now until the Nano restarts
 //                 (opening its port restarts it), for trying speeds; 2 to 200
+//   :F1        -> "OK F1": two coils on at every step (full steps), about a
+//                 quarter more torque than half-steps; :F0 back to half-steps.
+//                 Moves are still counted in half-steps, two to a full step,
+//                 at the same speed through a turn (20 October 2026: the motor
+//                 could not push the drawtube out)
 //
 // The coils are off whenever the motor is still: the gearbox holds the shaft,
 // and a warm motor beside the tube spoils the seeing.
@@ -19,6 +24,7 @@ const byte HALF[8] = {0b0001, 0b0011, 0b0010, 0b0110,
 const long MOST = 40960;           // ten turns of the shaft: more is a mistake
 const int STEP_MS = 20;            // slow, for torque: at 2 a half turn on the telescope fell short, and at 10 the motor lost half its steps against the drawtube on 19 October 2026
 int stepMs = STEP_MS;              // as :S sets it, until the next restart
+bool full = false;                 // as :F sets it: two coils at every step
 byte phase = 0;
 String line;
 
@@ -26,12 +32,26 @@ void coils(byte bits) {
   for (byte i = 0; i < 4; i++) digitalWrite(PINS[i], (bits >> i) & 1);
 }
 
+void step(int by) {
+  phase = (phase + by + 16) % 8;
+  coils(HALF[phase]);
+  delay(by == 1 || by == -1 ? stepMs : 2 * stepMs);
+}
+
 void turn(long steps) {
   int dir = steps < 0 ? -1 : 1;
-  for (long i = 0; i < abs(steps); i++) {
-    phase = (phase + dir + 8) % 8;
-    coils(HALF[phase]);
-    delay(stepMs);
+  long left = abs(steps);
+  if (full && phase % 2 == 0 && left) {   // onto a two-coil state (the odd phases) first
+    step(dir);
+    left--;
+  }
+  while (full && left >= 2) {
+    step(2 * dir);
+    left -= 2;
+  }
+  while (left > 0) {
+    step(dir);
+    left--;
   }
   coils(0);
 }
@@ -52,6 +72,9 @@ void obey(const String &order) {
     stepMs = ms;
     Serial.print("OK S");
     Serial.println(ms);
+  } else if (order == ":F1" || order == ":F0") {
+    full = order == ":F1";
+    Serial.println(full ? "OK F1" : "OK F0");
   } else {
     Serial.println("NO");
   }
