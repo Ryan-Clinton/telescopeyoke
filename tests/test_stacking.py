@@ -418,6 +418,16 @@ def test_the_web_page_can_be_told_how_far_a_run_has_got(session):
     assert status["finished"]
 
 
+def test_the_run_keeps_every_field_the_public_live_page_reads(session):
+    """ryanclinton.uk's live page reads these from web/status.json (docs/live-page.md)."""
+    run, _ = session
+    status = stacking.run_status(run.folder)
+    for field in ("name", "age", "planned", "captured", "accepted", "rejected", "exposure",
+                  "integration", "finished", "reasons"):
+        assert field in status, field
+    assert {"fwhm", "stars", "drift", "accepted"} <= set(status["series"])
+
+
 def saved_session(folder, name, exposure, turned=0.0, count=6, seed=0):
     """Raw frames of the same field, as shoot.py leaves them. A longer
     exposure collects proportionally more light from stars and sky alike."""

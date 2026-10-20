@@ -16,7 +16,7 @@ tells a viewer in one glance what the telescope is doing and why.
 
 ## Who it is for
 
-Someone who clicks in from Twitch or from ryanclinton.uk knowing nothing.
+Someone who clicks in from Twitch or from ryanclinton.uk ([live-page.md](live-page.md)) knowing nothing.
 Within five seconds they should be able to answer:
 
 1. What is that? (the object, in plain words)

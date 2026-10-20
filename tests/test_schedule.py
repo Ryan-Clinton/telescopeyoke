@@ -22,6 +22,14 @@ def test_a_step_running_late_pushes_the_rest_back():
     assert steps[0]["end"] == 900.0 and steps[1]["start"] == 900.0 and steps[0]["progress"] == 0.99
 
 
+def test_each_step_keeps_the_fields_the_public_live_page_reads():
+    """ryanclinton.uk's live page shows tonight's plan from these (docs/live-page.md)."""
+    plan = {"steps": [{"label": "a", "minutes": 10, "status": "running", "started": 0.0},
+                      {"label": "b", "minutes": 10, "status": "queued"}]}
+    for step in schedule.view(plan, now=60.0)["steps"]:
+        assert {"label", "status", "start", "end"} <= set(step)
+
+
 def test_steps_run_in_order_and_a_failure_stops_and_fetches_the_person():
     schedule.save({"steps": []})
     schedule.add("one", 1, ["true"])
