@@ -256,6 +256,42 @@ on a TMC2209 driver at 12 V, with a bracket for it (several to more than
 ten times the torque, no gearing); or a ZWO EAF through INDI. The rest of
 the project (`focus.py --motor`, `--walk-in`, the load test) stays.
 
+### 20 October 2026, evening: two coils help, but not enough
+
+With two coils on at every step (`:F1`, now what `Focuser.open()` always
+asks for; `--half` for the old way), 10 ms a half-step, coupled: camera
+off, outward went better than on half-steps at first, then struggled;
+inward ran smoothly; camera on, outward did not move at all, on the
+Nano's own short USB lead too, though it went with the slightest help by
+hand. At 30 ms a half-step, two coils, camera on, it went outward and
+inward unaided: `Focuser.open()` now sets 30 ms as well (`--ms` to try
+another), so every move, focusing included, is on two coils at 30 ms. To tell
+whether a slow move is turning, rest a finger and thumb lightly on the
+focuser's other knob: the turn is felt long before it can be seen. The Nano
+cannot tell: "moved +2048 half-steps" means the steps were sent, not that
+the shaft turned.
+
+A motor weaker one way than the other is not what a stalled 28BYJ-48 does
+to itself (a stall does not harm a stepper's coils). Ways it happens, most
+likely first:
+
+1. **Two of the four signal wires in a different order** (D5 and D6 the
+   usual pair): the coils are then fed out of turn, and the commonest
+   report of a 28BYJ-48 strong one way and weak or dead the other is
+   exactly this, cured by swapping the middle two. Checked that evening:
+   the wiring was right, as in the table above.
+2. **One coil or one driver channel weak**: the four lights on the driver
+   board, at a slow speed, should each light in turn; with a multimeter,
+   red to each of the other four wires reads the same (about 50 Ω on the
+   5 V motor).
+3. **A damaged plastic gear** in the 64:1 gearbox, least likely: a
+   chipped tooth catches at one place in a turn, both ways, rather than
+   making the motor weaker one way all the way round, which is what was
+   felt.
+
+A fresh 28BYJ-48 with its driver board (a few pounds, usually sold in
+fives) settles 2 and 3 at once.
+
 ### Finding where the turn is lost (`./focuser.py load-test`)
 
 In daylight, on the telescope with the camera on: the blacked stick and the

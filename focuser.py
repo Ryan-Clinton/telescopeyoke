@@ -33,6 +33,7 @@ MATCH = "1a86"              # the CH340 chip on a Nano clone, as /dev/serial/by-
 TURN = 4096                 # half-steps to one turn of the motor's shaft
 MOST = 10 * TURN            # the firmware refuses more in one order
 STEP_SECONDS = 0.020       # as the firmware's STEP_MS
+MOTOR_MS = 30              # what open() sets: on 20 October 2026 two coils at 10 ms could not push the drawtube out, at 30 ms they could
 # A Nano clone usually has the old bootloader; a genuine one the new.
 BOARDS = ("arduino:avr:nano:cpu=atmega328old", "arduino:avr:nano:cpu=atmega328")
 
@@ -57,7 +58,11 @@ class Focuser:
         self.step_seconds = STEP_SECONDS
 
     @classmethod
-    def open(cls, port=None):
+    def open(cls, port=None, full=True, ms=MOTOR_MS):
+        """The focuser, on two coils at every step unless `full` is false:
+        on 20 October 2026 half-steps could not push the drawtube out, nor
+        two coils at 10 ms a half-step with the camera on, but two coils at
+        `ms` 30 could, unaided."""
         import serial
         link = serial.Serial(find_port(port), 9600, timeout=1)
         time.sleep(2)               # opening the port restarts a Nano; let it come up
@@ -66,6 +71,14 @@ class Focuser:
         if focuser.ask(":?", 2) != "TY focuser 1":
             link.close()
             sys.exit("The Nano did not answer as a focuser. Load the firmware with ./focuser.py flash")
+        try:
+            if ms:
+                focuser.speed(ms)
+            if full:
+                focuser.full()
+        except RuntimeError:
+            link.close()
+            raise
         return focuser
 
     def ask(self, order, wait):
@@ -531,9 +544,11 @@ def main(argv=None):
                                     "http:// address, a /dev/video device, or a picture file kept up to date)")
     ap.add_argument("--port", help="the Nano's serial port, if it is not found by name")
     ap.add_argument("--ms", type=int, help=f"for move and test: milliseconds a half-step (default "
-                                           f"{round(STEP_SECONDS * 1000)}; slower is stronger)")
+                                           f"{MOTOR_MS}; slower is stronger)")
     ap.add_argument("--full", action="store_true",
-                    help="for move and test: two coils at every step, about a quarter more torque")
+                    help="two coils at every step, about a quarter more torque: now always so, kept for old notes")
+    ap.add_argument("--half", action="store_true",
+                    help="half-steps, one coil at a time, as before 20 October 2026: weaker")
     args = ap.parse_args(argv)
 
     if args.command == "flash":
@@ -555,7 +570,7 @@ def main(argv=None):
         ap.error("move needs a number of half-steps")
     if args.command in ("bench", "load-test") and not args.watch:
         ap.error(f"{args.command} needs --watch, the camera looking down on the stick")
-    focuser = Focuser.open(args.port)
+    focuser = Focuser.open(args.port, full=not args.half)
     if args.command == "bench":
         return run_bench(focuser, args.watch)
     if args.command == "load-test":
@@ -563,8 +578,6 @@ def main(argv=None):
     try:
         if args.ms:
             focuser.speed(args.ms)
-        if args.full:
-            focuser.full()
         for steps in ([TURN // 4, -TURN // 4] if args.command == "test" else [args.steps]):
             focuser.move(steps)
             print(f"moved {steps:+d} half-steps")

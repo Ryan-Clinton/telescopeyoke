@@ -284,3 +284,18 @@ def test_full_steps_are_asked_for_and_the_firmware_knows_them():
         focuser.Focuser(Nano({":F1": "NO"})).full()
     sketch = (focuser.SKETCH / "focuser.ino").read_text()
     assert 'order == ":F1" || order == ":F0"' in sketch and "step(2 * dir)" in sketch
+
+
+def test_the_focuser_opens_on_two_coils_unless_asked_for_half_steps(monkeypatch):
+    import serial
+    nanos = []
+
+    def port(*args, **kwargs):
+        nanos.append(Nano({":?": "TY focuser 1"}))
+        nanos[-1].reset_input_buffer = lambda: None
+        return nanos[-1]
+    monkeypatch.setattr(serial, "Serial", port)
+    monkeypatch.setattr(focuser.time, "sleep", lambda s: None)
+    focuser.Focuser.open("/dev/ttyUSB9")
+    focuser.Focuser.open("/dev/ttyUSB9", full=False, ms=None)
+    assert nanos[0].sent == [":?", ":S30", ":F1"] and nanos[1].sent == [":?"]
