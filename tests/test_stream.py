@@ -49,3 +49,11 @@ def test_it_is_off_unless_switched_on(monkeypatch):
     said = []
     stream.watch(say=said.append, sleep=lambda s: None, wait=False)
     assert said and "off" in said[0]
+
+
+def test_the_key_is_kept_readable_only_by_its_owner(tmp_path, monkeypatch):
+    monkeypatch.setattr(stream, "KEY_FILE", tmp_path / "ty" / "stream-key")
+    assert not stream.keep_key("  \n")
+    assert stream.keep_key(" live_123_abc \n")
+    assert stream.key() == "live_123_abc"
+    assert (stream.KEY_FILE.stat().st_mode & 0o777) == 0o600

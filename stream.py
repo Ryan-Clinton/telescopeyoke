@@ -6,6 +6,7 @@
     ./stream.py watch --to F.mp4   the same into a file, to try it with no account and no key
     ./stream.py watch --install    run `watch` as a systemd user service, from boot; it idles while off
     ./stream.py frame              make one picture of what would be sent, as cache/stream-preview.jpg
+    ./stream.py key                paste the stream key in (not shown as typed); kept readable only by you
 
 Off unless [stream] enabled in config.toml (the Settings screen has it).
 The service is [stream] service: "youtube", "twitch", or "custom" with
@@ -28,6 +29,7 @@ put away. YouTube makes and ends a broadcast by itself when its stream key
 has Auto-start and Auto-stop on; Twitch goes live when the stream arrives.
 """
 import argparse
+import getpass
 import json
 import os
 import shutil
@@ -64,6 +66,19 @@ def key():
     except OSError:
         return None
     return text or None
+
+
+def keep_key(text):
+    """Keep the stream key in KEY_FILE, readable only by its owner. False when empty."""
+    text = text.strip()
+    if not text:
+        return False
+    KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as out:
+        out.write(text + "\n")
+    os.chmod(KEY_FILE, 0o600)
+    return True
 
 
 def destination(s, stream_key):
@@ -255,7 +270,7 @@ def install(say=print, run=subprocess.run, home=None):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("action", nargs="?", choices=["watch", "frame"])
+    ap.add_argument("action", nargs="?", choices=["watch", "frame", "key"])
     ap.add_argument("--to", help="with watch: stream into this file instead, to try it")
     ap.add_argument("--install", action="store_true", help="with watch: run it as a systemd user service")
     args = ap.parse_args(argv)
@@ -263,6 +278,10 @@ def main(argv=None):
         return install()
     if args.action == "watch":
         return watch(args.to)
+    if args.action == "key":
+        text = getpass.getpass("Stream key (not shown): ") if sys.stdin.isatty() else sys.stdin.readline()
+        print(f"Kept in {KEY_FILE}." if keep_key(text) else "Nothing pasted: the key is unchanged.")
+        return
     if args.action == "frame":
         PREVIEW.parent.mkdir(parents=True, exist_ok=True)
         frame(status()).save(PREVIEW, quality=90)
