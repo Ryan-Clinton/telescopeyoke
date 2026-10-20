@@ -217,29 +217,26 @@ sharpest yet, and stops two moves past the best (at most 64 half-steps
 inside it), since it cannot go back. Far out, the search (`--find`) now
 follows the doughnuts' size and turns back the moment they grow. 
 
-### 20 October 2026: the focuser itself is too stiff for the motor
+### 20 October 2026: too slow to see, not too stiff
 
 In daylight, the camera level: twelve moves out at 20 ms a half-step and
-then forty at 40 ms turned nothing, the Nano reporting each move done.
-With the camera off and the focuser's nut loosened it still did not turn;
-disconnected from the focuser, the motor turned freely, and with the
-coupler's grub screw loose its play could be seen taken up before it
-stopped. So the motor, driver and Nano work, and the focuser takes more to
-turn than the motor gives. The coupler has one of its two grub screws.
+forty at 40 ms, and nothing could be seen to turn. At those speeds the
+motor turns once in three to six minutes, and through the 4 mm Crayford-style
+shaft the drawtube moves a few hundredths of a millimetre a second: too
+slow and too small to see. With the camera and bracket off, the focuser
+turns easily by hand and its centre thumbscrew makes no difference to it;
+the stiffness felt turning the motor's shaft by hand is the motor's own 64:1
+gearbox, which is normal. So "nothing moved" did not show the focuser too
+stiff, as first written here. To see a move, use a fast one with a strip
+of tape on the coupler: `./focuser.py move 4096 --ms 3` turns once in
+about 12 seconds. The coupler has one of its two grub screws; the second
+is to be fitted.
 
 The 150P's focuser is most likely a Crayford-style friction drive, not
 rack and pinion (unconfirmed until seen from underneath:
 [research notes](research/focuser-stiffness-2026-10-20.md)): a smooth 4 mm
-shaft pressing on a flat on the drawtube. Too much pressure (the centre
-thumbscrew, which also holds the motor's bracket, and the small grub screws
-beside it), old grease or a slipped pad and it will not turn; too little,
-or grease on the flat, and the shaft spins without moving the tube. In
-order: with the bracket off and the thumbscrew backed off, see whether the
-bare knob turns easily; set the pressure so the drawtube just holds the
-camera, clean and dry; give the ULN2003 its own 5 V supply (the Nano's 5 V
-pin on USB leaves the motor about three quarters of its torque); both grub
-screws on the coupler, onto a filed flat; and if it still struggles, a 3:1
-to 5:1 gear or belt reduction, or a NEMA 14 or 17. `./focuser.py look
+shaft pressing on a flat on the drawtube, which spins without moving the
+tube if the pressure is too little or the flat greasy. `./focuser.py look
 --watch URL` keeps one picture from the phone, for marking which screw is
 which.
 
