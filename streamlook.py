@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The live stream's picture, drawn as docs/stream-look.md sets it out.
 
-    ./stream.py preview            each state as a 1920 x 1080 picture, in cache/stream-preview/
+    ./stream.py preview            each state at full and phone size, with index.html to see them together
 
 `compose(state, stack, single)` draws one picture from a state (what is
 running, its figures and its programme) and the two pictures (the stack and
@@ -9,9 +9,10 @@ one exposure). Every piece of text goes through `Canvas.text`, which keeps
 what was written, where, and on what, so the tests can check the words,
 the margins and the contrast without reading pixels.
 
-Built first as a preview, from example states, so the look can be judged
-before it is wired into the stream: `stream.py` still sends its old picture.
+`stream.py` sends it (drawn on its own thread); `from_status()` turns the
+status page's web/status.json into the state.
 """
+import functools
 import math
 import time
 import tomllib
@@ -39,18 +40,27 @@ FONTS = {"sans": "DejaVuSans.ttf", "bold": "DejaVuSans-Bold.ttf", "mono": "DejaV
 PRIORITY = ["problem", "candidate", "transition", "programme", "caption", "figures"]
 
 
+@functools.lru_cache(maxsize=64)
 def font(kind, size):
+    """A font, loaded once for each kind and size."""
     try:
         return ImageFont.truetype(str(FONT_DIR / FONTS[kind]), size)
     except OSError:
         return ImageFont.load_default(size=size)
 
 
+_TARGETS = {"mtime": None, "found": {}}
+
+
 def targets():
+    """stream-targets.toml, read again only when it changes."""
     try:
-        return tomllib.loads(TARGETS.read_text(encoding="utf-8"))
+        mtime = TARGETS.stat().st_mtime
+        if mtime != _TARGETS["mtime"]:
+            _TARGETS.update(mtime=mtime, found=tomllib.loads(TARGETS.read_text(encoding="utf-8")))
     except (OSError, ValueError):
         return {}
+    return _TARGETS["found"]
 
 
 def luminance(colour):
@@ -84,17 +94,44 @@ def _asinh_for(level, x):
     return k
 
 
-def display(picture, sky=0.09):
+def sky_of(a):
+    """(background, noise) of each channel, from the sky only: the darkest
+    60 % of the picture by brightness, so a galaxy filling much of the
+    frame (M31) or a bright star does not lift the sky's level."""
+    small = a[::4, ::4].reshape(-1, 3)
+    light = small.mean(axis=1)
+    sky = small[light <= np.percentile(light, 60)]
+    background = np.median(sky, axis=0)
+    noise = 1.4826 * np.median(np.abs(sky - background), axis=0) + 1e-4
+    return background, noise
+
+
+_STEADY = {}
+
+
+def steady(role, background, noise, weight=0.2):
+    """The display calibration for `role` ("single", "stack"), moved only a
+    fifth of the way towards each new picture's: one exposure after another
+    then does not pump in brightness or colour on the screen."""
+    old = _STEADY.get(role)
+    if old is not None and old[0].shape == background.shape:
+        background = old[0] + weight * (background - old[0])
+        noise = old[1] + weight * (noise - old[1])
+    _STEADY[role] = (background, noise)
+    return background, noise
+
+
+def display(picture, sky=0.09, role=None):
     """The picture as shown on the stream: the sky dark and neutral without
     clipping faint structure, faint light lifted gently, bright stars
-    rounded off before they clip, a little more colour. Its own background
-    and noise set it (each picture is normalised independently), so one
-    exposure and the stack share a style, not numbers. Shows only: nothing
-    measured ever reads it, and it adds no detail."""
+    rounded off before they clip, a little more colour. Its own sky sets it
+    (each picture is normalised independently, smoothed over time for its
+    `role`), so one exposure and the stack share a style, not numbers.
+    Shows only: nothing measured ever reads it, and it adds no detail."""
     a = np.asarray(picture.convert("RGB"), dtype=np.float32) / 255.0
-    small = a[::4, ::4].reshape(-1, 3)
-    background = np.median(small, axis=0)
-    noise = 1.4826 * np.median(np.abs(small - background), axis=0) + 1e-4
+    background, noise = sky_of(a)
+    if role:
+        background, noise = steady(role, background, noise)
     # The black point sits well under the sky, so the faintest light stays.
     black = np.clip(background - np.minimum(3.0 * noise, 0.06), 0, None)
     a = np.clip((a - black) / np.maximum(1 - black, 1e-3), 0, 1)
@@ -205,6 +242,14 @@ def footer(c, s):
         c.text((WIDTH - MARGIN_X, y), f"NEXT · {s['next']}", "mono", 21, "secondary", anchor="ra")
 
 
+def plate(c, rect, strength=0.65, colour=COLOURS["background"]):
+    """A see-through dark plate over the picture: quiet, not another widget."""
+    rect = tuple(int(v) for v in rect)
+    under = c.image.crop(rect)
+    c.image.paste(Image.blend(under, Image.new("RGB", under.size, colour), strength), rect[:2])
+    return colour
+
+
 STACK_BOX = (MARGIN_X, MARGIN_Y + 50, 1274, 870)        # x, y, width, height
 PANEL_BOX = (MARGIN_X + 1274 + 24, MARGIN_Y + 50, WIDTH - 2 * MARGIN_X - 1274 - 24, 870)
 
@@ -216,42 +261,48 @@ def sky_area(c, s, stack, single):
         c.text((x + w // 2, y + h // 2), "The picture builds up after the first few exposures",
                "sans", 25, "secondary", on="panel", anchor="mm")
         return
-    shown = fit(display(shrunk(stack, (w, h))), (w, h))
+    shown = fit(display(shrunk(stack, (w, h)), role="stack"), (w, h))
     age = s.get("last_age") or 0
     if age > 120:
         # Paused: a little dimmer and greyer, so it reads as waiting, not broken.
         grey = shown.convert("L").convert("RGB")
         shown = Image.blend(Image.blend(shown, grey, 0.4), Image.new("RGB", shown.size, (0, 0, 0)), 0.25)
     c.image.paste(shown, (x, y))
-    plate = COLOURS["background"]
+    # The picture's own edges inside the letterbox: what sits on it goes on it, not on the bars.
+    scale = min(w / stack.width, h / stack.height)
+    pw, ph = round(stack.width * scale), round(stack.height * scale)
+    x, y, w, h = x + (w - pw) // 2, y + (h - ph) // 2, pw, ph
+    if s.get("caption"):
+        # A science caption, for a few seconds, across the top of the picture.
+        under = plate(c, (x, y, x + w, y + 64), 0.7)
+        c.text((x + 24, y + 18), s["caption"], "sans", 24, "text", on=under)
     if s.get("combined"):
-        c.box((x + 16, y + h - 54, x + 540, y + h - 14), plate, radius=8)
-        words = c.text((x + 30, y + h - 46), f"{s['combined']} exposures combined", "mono", 21, "secondary",
-                       on=plate)
+        under = plate(c, (x + 16, y + h - 48, x + min(470, w // 2), y + h - 16), 0.55)
+        words = c.text((x + 28, y + h - 42), f"{s['combined']} exposures combined", "mono", 19, "secondary",
+                       on=under)
         if s.get("new_exposures"):
-            c.text((words[2] + 18, y + h - 46), f"+{s['new_exposures']} exposure"
-                   + ("s" if s["new_exposures"] > 1 else ""), "mono", 21, "live", on=plate)
+            c.text((words[2] + 14, y + h - 42), f"+{s['new_exposures']}", "mono", 19, "live", on=under)
     if single is not None:
         iw, ih = 300, 200
         ix, iy = x + w - iw - 20, y + h - ih - 20
-        c.image.paste(fit(display(shrunk(single, (iw, ih))), (iw, ih)), (ix, iy))
+        c.image.paste(fit(display(shrunk(single, (iw, ih)), role="single"), (iw, ih)), (ix, iy))
         c.box((ix, iy, ix + iw, iy + ih), None, outline="secondary", width=2, radius=4)
-        c.box((ix, iy - 34, ix + iw, iy - 4), plate, radius=6)
+        under = plate(c, (ix, iy - 32, ix + iw, iy - 4), 0.7)
         exposure = s.get("exposure")
-        c.text((ix + 10, iy - 30), "ONE EXPOSURE" + (f" · {exposure:g} s" if exposure else ""),
-               "mono", 19, "text", on=plate)
+        c.text((ix + 10, iy - 29), "ONE EXPOSURE" + (f" · {exposure:g} s" if exposure else ""),
+               "mono", 19, "text", on=under)
 
 
 def about(c, s, x, y, width):
     """The object: its name, common name, plain words and one line of facts."""
     entry = targets().get("targets", {}).get(s["target"], {})
-    c.text((x, y), s["target"], "bold", 50, "text", on="panel")
-    y += 64
+    c.text((x, y), s["target"], "bold", 60, "text", on="panel")
+    y += 76
     if entry.get("common"):
-        c.text((x, y), entry["common"].upper(), "bold", 24, "secondary", on="panel")
-        y += 38
+        c.text((x, y), entry["common"].upper(), "bold", 26, "secondary", on="panel")
+        y += 40
     if entry.get("words"):
-        y = c.wrap((x, y + 6), entry["words"], "sans", 22, width, "text", on="panel") + 4
+        y = c.wrap((x, y + 6), entry["words"], "sans", 25, width, "text", on="panel") + 4
     facts = " · ".join(str(f) for f in (entry.get("distance"),
                                          f"magnitude {entry['magnitude']}" if entry.get("magnitude") else None) if f)
     if facts:
@@ -260,6 +311,9 @@ def about(c, s, x, y, width):
         c.text((x, y), s["kind_of_object"], "sans", 22, "secondary", on="panel")
         y += 30
     return y + 18
+
+
+FIGURE_ROW = 88
 
 
 def figures(c, s, x, y, bottom):
@@ -271,10 +325,10 @@ def figures(c, s, x, y, bottom):
         rows.append((f"{minutes:.0f} MIN" if minutes < 120 else f"{minutes / 60:.1f} H", "LIGHT COLLECTED"))
     if s.get("fwhm_arcsec"):
         rows.append((f"{s['fwhm_arcsec']:.1f}″", "STAR SIZE"))
-    for number, label in rows[:max(0, min(3, int((bottom - y) // 78)))]:
-        c.text((x, y), number, "bold", 36, "text", on="panel")
-        c.text((x, y + 44), label, "sans", 18, "secondary", on="panel")
-        y += 78
+    for number, label in rows[:max(0, min(3, int((bottom - y) // FIGURE_ROW)))]:
+        c.text((x, y), number, "bold", 46, "text", on="panel")
+        c.text((x, y + 54), label, "sans", 18, "secondary", on="panel")
+        y += FIGURE_ROW
     return y
 
 
@@ -326,24 +380,29 @@ def programme(c, s, x, y, width):
         return candidate(c, s["candidate"], x, y, width)
     if kind == "patrol":
         p = s["patrol"]
-        y = c.wrap((x, y), f"NOVA PATROL · {p['field'].upper()}", "bold", 24, width, "accent", on="panel")
-        y = c.wrap((x, y + 4), "Every star in this picture is being compared with an earlier night.",
-                   "sans", 22, width, "text", on="panel") + 10
+        y = c.wrap((x, y), "NOVA PATROL", "bold", 28, width, "accent", on="panel")
+        y = c.wrap((x, y + 4), f"Every star in this part of {p['field']} is being compared with an earlier night.",
+                   "sans", 24, width, "text", on="panel") + 10
         bottom = panel_map(c, p, x, y)
         done = sum(panel["state"] == "done" for panel in p["panels"])
         c.text((x + 272, y + 2), f"{done} / {len(p['panels'])}", "bold", 30, "text", on="panel")
         c.text((x + 272, y + 40), "SEARCHED", "sans", 18, "secondary", on="panel")
         y = bottom + 14
-        words = (f"{p['possible']} possible change{'s' if p['possible'] != 1 else ''}, being checked "
-                 "automatically" if p.get("possible") else "No confirmed new star yet")
+        if p.get("awaiting"):
+            words = f"{p['awaiting']} candidate{'s' if p['awaiting'] != 1 else ''} awaiting private review"
+        elif p.get("possible"):
+            words = (f"{p['possible']} possible change{'s' if p['possible'] != 1 else ''}, being checked "
+                     "automatically")
+        else:
+            words = "No confirmed new star yet"
         return c.wrap((x, y), words, "sans", 20, width, "secondary", on="panel") + 14
     if kind == "transit":
         t = s["transit"]
-        c.text((x, y), t["planet"], "bold", 26, "accent", on="panel")
+        c.text((x, y), t["planet"], "bold", 28, "accent", on="panel")
         c.text((x, y + 36), "HOT JUPITER TRANSIT" if t.get("hot_jupiter") else "PLANET TRANSIT",
                "bold", 20, "secondary", on="panel")
         y = c.wrap((x, y + 70), f"The planet passes in front of its star and dims it by about "
-                   f"{100 * t['depth']:.1f} %.", "sans", 22, width, "text", on="panel") + 10
+                   f"{100 * t['depth']:.1f} %.", "sans", 24, width, "text", on="panel") + 10
         c.text((x, y), f"{utc(t['ingress'])[:5]} → {utc(t['egress'])}, mid {utc(t['mid'])[:5]}",
                "mono", 18, "secondary", on="panel")
         y += 34
@@ -356,9 +415,9 @@ def programme(c, s, x, y, width):
             return c.wrap((x, y), t.get("baseline_words", ""), "sans", 20, width, "secondary", on="panel")
         return light_curve(c, t, x, y + 28, width, 170, s["now"])
     if kind == "picture":
-        c.text((x, y), "BUILDING A PICTURE", "bold", 26, "accent", on="panel")
+        c.text((x, y), "BUILDING A PICTURE", "bold", 28, "accent", on="panel")
         return c.wrap((x, y + 40), "Every exposure is added to the stack; the noise falls as they add up.",
-                      "sans", 22, width, "text", on="panel") + 10
+                      "sans", 24, width, "text", on="panel") + 10
     return y
 
 
@@ -372,8 +431,8 @@ def candidate(c, k, x, y, width):
                    "to see whether it appears again."),
         "result": ("RESULT", k.get("result", "")),
     }[k["stage"]]
-    c.text((x, y), title, "bold", 26, "attention", on="panel")
-    y = c.wrap((x, y + 42), words, "sans", 22, width, "text", on="panel") + 12
+    y = c.wrap((x, y), title, "bold", 28, width, "attention", on="panel")
+    y = c.wrap((x, y + 6), words, "sans", 24, width, "text", on="panel") + 12
     steps = [("candidate", "detected"), ("second look", "second"), ("catalogue checks", "result"),
              ("result", "result")]
     order = ["detected", "second", "result"]
@@ -393,7 +452,7 @@ def side_panel(c, s):
     top = about(c, s, inner, y + 26, width)
     top = programme(c, s, inner, top, width)
     # The programme comes first; the figures take what room is left (PRIORITY).
-    figures(c, s, inner, max(top + 10, y + h - 3 * 78 - 10), y + h - 10)
+    figures(c, s, inner, max(top + 10, y + h - 3 * FIGURE_ROW - 10), y + h - 10)
 
 
 def ribbon(c, steps, y):
@@ -519,21 +578,55 @@ def example_pictures(seed=0):
     return stack, single
 
 
-def preview(out, web=None, say=print):
-    """Each example state as a picture in `out`, using the real stack and
-    newest exposure from `web` when there are some."""
-    stack, single = example_pictures()
-    if web is not None:
+PHONE = (360, 203)        # a 1080p stream in a phone's player
+
+
+def real_pictures(web, name):
+    """(stack, single) from the night's own pictures in web/ for `name`,
+    else None: the look is judged on real sky, not only made-up stars."""
+    for stem in (f"{name}-final", name, f"{name}-P6-final", f"{name}-P1-final"):
         try:
-            stack = Image.open(web / "stack.jpg").convert("RGB")
-            single = Image.open(web / "latest.jpg").convert("RGB")
+            with Image.open(web / f"{stem}.jpg") as im:
+                stack = im.convert("RGB")
+            break
         except OSError:
-            pass
+            continue
+    else:
+        return None
+    try:
+        with Image.open(web / "latest.jpg") as im:
+            single = im.convert("RGB")
+    except OSError:
+        single = None
+    return stack, single
+
+
+def preview(out, web=None, say=print):
+    """Each example state at full size and at a phone's size, on real
+    pictures from `web` where there are some, and index.html showing them
+    all together so a change to the look can be seen at a glance."""
+    made_up = example_pictures()
     out.mkdir(parents=True, exist_ok=True)
+    rows = []
     for name, state in examples().items():
+        stack, single = (real_pictures(web, state["target"]) if web is not None else None) or made_up
         started = time.perf_counter()
-        compose(state, stack, single).image.save(out / f"{name}.png")
-        say(f"{out / (name + '.png')}  ({1000 * (time.perf_counter() - started):.0f} ms)")
+        picture = compose(state, stack, single).image
+        took = 1000 * (time.perf_counter() - started)
+        picture.save(out / f"{name}.png")
+        picture.resize(PHONE, Image.LANCZOS).save(out / f"{name}-phone.png")
+        rows.append(f'<section><h2>{name} <small>{took:.0f} ms</small></h2>'
+                    f'<a href="{name}.png"><img class="full" src="{name}.png"></a>'
+                    f'<img class="phone" src="{name}-phone.png"></section>')
+        say(f"{out / (name + '.png')}  ({took:.0f} ms)")
+    (out / "index.html").write_text(
+        "<!doctype html><meta charset=utf-8><title>Stream preview</title><style>"
+        "body{background:#060A12;color:#EEF4FF;font-family:sans-serif;margin:24px}"
+        "section{display:flex;gap:24px;align-items:flex-start;margin-bottom:32px;flex-wrap:wrap}"
+        "h2{width:100%;margin:0}small{color:#A5B2C8;font-weight:normal}"
+        ".full{width:960px;max-width:100%}.phone{width:360px;outline:1px solid #333}</style>"
+        "<h1>The stream's look, each state, at full and phone size</h1>" + "".join(rows), encoding="utf-8")
+    say(f"{out / 'index.html'}: all of them together")
 
 
 # --- the state, from what is running ----------------------------------------------
@@ -605,9 +698,26 @@ def transit_state(p, session, now):
     return t
 
 
-def patrol_state(name, discovery):
+RESULT_S = 300             # a second look's result is shown strongly this long, then as one small line
+_SEEN = {}
+
+
+def follow_ups(sessions):
+    """Each field looked at again tonight after an unexplained candidate:
+    (field, the second look's session, still unexplained), oldest first."""
+    out = []
+    for field in dict.fromkeys(s["field"] for s in sessions):
+        done = [s for s in sessions if s["field"] == field and s.get("finished")]
+        if len(done) >= 2 and done[-2].get("unexplained"):
+            out.append((field, done[-1]["session"], bool(done[-1].get("unexplained"))))
+    return sorted(out, key=lambda r: r[1])
+
+
+def patrol_state(name, discovery, now=None):
     """The patrol panel for a mosaic panel run (M31-P5): the panels as the
-    night's discovery summary lays them out, and the possible changes."""
+    night's discovery summary lays them out, the possible changes, and a
+    candidate's follow-up while it is news."""
+    now = now or time.time()
     field, _, number = name.partition("-P")
     mosaic = next((m for m in (discovery or {}).get("mosaics", []) if m["name"] == field), None)
     if mosaic is None or not number.isdigit():
@@ -620,14 +730,22 @@ def patrol_state(name, discovery):
                        "state": state})
     sessions = [s for s in (discovery or {}).get("sessions", []) if s["field"].startswith(field)]
     possible = sum(1 for s in sessions if s.get("unexplained"))
-    # A second look: this panel was searched earlier tonight with something unexplained.
-    earlier = [s for s in sessions if s["field"] == name and s.get("finished")]
     candidate = None
-    if earlier and earlier[-1].get("unexplained") and not earlier[-1].get("second_look_of"):
+    # A second look: this panel was searched once earlier tonight, with something unexplained.
+    earlier = [s for s in sessions if s["field"] == name and s.get("finished")]
+    if len(earlier) == 1 and earlier[0].get("unexplained"):
         candidate = {"stage": "second"}
+    results = follow_ups(sessions)
+    if results and candidate is None:
+        where, session, still = results[-1]
+        first = _SEEN.setdefault((where, session), now)
+        if now - first < RESULT_S:
+            candidate = {"stage": "result", "result": "Still unexplained: kept for private checking." if still
+                         else "Not confirmed: it did not appear again."}
+    awaiting = sum(1 for _, _, still in results if still)
     entry = targets().get("targets", {}).get(field, {})
     label = entry.get("common", field).split()[0]
-    return {"field": label, "panels": panels, "possible": possible}, candidate
+    return {"field": label, "panels": panels, "possible": possible, "awaiting": awaiting}, candidate
 
 
 def stage(steps, now):
@@ -641,6 +759,48 @@ def stage(steps, now):
         return "Last target before dawn"
     hours, minutes = divmod(int((now - min(started)) / 60), 60)
     return f"{hours} h {minutes:02d} min observed · {done} step{'s' if done != 1 else ''} done"
+
+
+CAPTION_EVERY, CAPTION_S = 7 * 60, 8      # at most one caption each 7 minutes, shown for 8 seconds
+_CAPTION = {"last": None, "shown_at": None, "text": None, "turn": 0}
+
+
+def caption(s, now):
+    """A science caption when one is due, else None: never during a
+    candidate's follow-up or a warning, and never more often than
+    CAPTION_EVERY. Curated words only (stream-targets.toml)."""
+    if s.get("candidate") or (s.get("last_age") or 0) > 120:
+        return None
+    if _CAPTION["shown_at"] is not None and now - _CAPTION["shown_at"] < CAPTION_S:
+        return _CAPTION["text"]
+    if _CAPTION["last"] is None:
+        _CAPTION["last"] = now                 # the first one waits a full interval
+        return None
+    if now - _CAPTION["last"] < CAPTION_EVERY:
+        return None
+    found = targets()
+    pool = found.get("targets", {}).get(s.get("target"), {}).get("captions", []) \
+        + found.get("programmes", {}).get(s.get("kind"), [])
+    if not pool:
+        return None
+    text = pool[_CAPTION["turn"] % len(pool)]
+    _CAPTION.update(last=now, shown_at=now, text=text, turn=_CAPTION["turn"] + 1)
+    return text
+
+
+HOLD_S = 30               # the star size shown changes at most this often
+_HELD = {"value": None, "at": 0.0}
+
+
+def held_star_size(fwhm, scale, now):
+    """The star size in arcseconds: the median of the last 10 kept frames,
+    changed at most every HOLD_S so seeing's flicker does not look like a
+    fault."""
+    if not fwhm or not scale:
+        return None
+    if _HELD["value"] is None or now - _HELD["at"] >= HOLD_S:
+        _HELD.update(value=float(np.median(fwhm[-10:])) * scale, at=now)
+    return _HELD["value"]
 
 
 def from_status(st, now=None, session=None):
@@ -659,17 +819,19 @@ def from_status(st, now=None, session=None):
     s = {"kind": "picture", "target": name.partition("-P")[0] if "-P" in name else name, "now": now,
          "exposure": st.get("exposure"), "last_age": st.get("age"), "combined": st.get("accepted"),
          "kept": st.get("accepted"), "captured": st.get("captured"), "integration_s": st.get("integration"),
-         "fwhm_arcsec": float(np.median(fwhm[-20:])) * scale if fwhm and scale else None,
+         "fwhm_arcsec": held_star_size(fwhm, scale, now),
          "next": (f"{upcoming['label']}" + (f" at {utc(upcoming['start'])}" if upcoming.get("start") else ""))
          if upcoming else None,
          "stage": stage(steps, now)}
     p = transit_for(name)
     if p:
         s["kind"], s["transit"] = "transit", transit_state(p, session, now)
+        s["caption"] = caption(s, now)
         return s
-    patrol, candidate = patrol_state(name, st.get("discovery"))
+    patrol, candidate = patrol_state(name, st.get("discovery"), now)
     if patrol:
         s["kind"], s["patrol"] = "patrol", patrol
         if candidate:
             s["candidate"] = candidate
+    s["caption"] = caption(s, now)
     return s

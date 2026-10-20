@@ -65,3 +65,12 @@ Exoplanet, or Nova and Galaxy, as the programme suits.
   never shown. A public client's sign-in lasts while it is used at least once
   a month. When it has lapsed, the stream's log says to sign in again.
 - **Failures** never stop the stream: the channel keeps the info it had.
+- **Not sent twice**: the last title and tags sent are remembered, so the
+  same info is never sent again. After a 429 (too many) nothing is sent until
+  Twitch's `Ratelimit-Reset`, or for at least a minute.
+- **The tokens** get the same care as the stream key: kept readable only by
+  the owner, outside the repository (so outside git), and never said. Any
+  error is passed through `twitch.redacted()` before it is said, so a token
+  cannot reach the log. A backup of `~/.config` would carry them, as it would
+  the stream key, so leave that folder out of any backup that leaves the
+  laptop.

@@ -132,3 +132,53 @@ def test_the_state_follows_what_is_running(monkeypatch):
     assert streamlook.from_status(status, now=1.0)["kind"] == "picture"
     monkeypatch.setattr(streamlook, "transit_for", lambda name: PLANET if name == "WASP-12" else None)
     assert streamlook.from_status(dict(status, name="WASP-12"), now=1792460464.0)["kind"] == "transit"
+
+
+def test_what_matters_still_reads_on_a_phone(drawn):
+    """A 1080p stream in a phone's player is about 360 px wide: the object's
+    name and the figures must still be some 10 and 8 pixels tall there."""
+    scale = 360 / streamlook.WIDTH
+    sizes = {w["words"]: w["size"] for w in drawn["patrol"].written}
+    assert sizes["M31"] * scale >= 10
+    assert sizes["203 / 211"] * scale >= 8
+
+
+def test_a_caption_comes_at_most_every_seven_minutes_and_never_during_a_follow_up(monkeypatch):
+    monkeypatch.setattr(streamlook, "_CAPTION", {"last": None, "shown_at": None, "text": None, "turn": 0})
+    s = {"kind": "patrol", "target": "M31", "last_age": 3}
+    assert streamlook.caption(s, 0) is None                       # the first waits a full interval
+    assert streamlook.caption(s, 60) is None
+    first = streamlook.caption(s, streamlook.CAPTION_EVERY)
+    assert first and streamlook.caption(s, streamlook.CAPTION_EVERY + 5) == first        # shown for a few seconds
+    assert streamlook.caption(s, streamlook.CAPTION_EVERY + 20) is None
+    later = 2 * streamlook.CAPTION_EVERY + 30
+    assert streamlook.caption(dict(s, candidate={"stage": "second"}), later) is None
+    assert streamlook.caption(dict(s, last_age=600), later) is None
+    assert streamlook.caption(s, later) not in (None, first)                              # the next in turn
+
+
+def test_a_second_look_s_result_is_news_for_five_minutes_then_one_small_line(monkeypatch):
+    monkeypatch.setattr(streamlook, "_SEEN", {})
+    discovery = {"mosaics": [{"name": "M31", "columns": 4, "rows": 2, "panels": [
+        {"panel": n, "state": "done"} for n in range(1, 9)]}],
+        "sessions": [{"field": "M31-P8", "session": "1", "finished": True, "unexplained": 4},
+                     {"field": "M31-P8", "session": "2", "finished": True, "unexplained": 1}]}
+    patrol, candidate = streamlook.patrol_state("M31-P3", discovery, now=1000)
+    assert candidate["stage"] == "result" and "Still unexplained" in candidate["result"]
+    patrol, candidate = streamlook.patrol_state("M31-P3", discovery, now=1000 + streamlook.RESULT_S)
+    assert candidate is None and patrol["awaiting"] == 1
+
+
+def test_the_star_size_is_a_median_held_for_half_a_minute(monkeypatch):
+    monkeypatch.setattr(streamlook, "_HELD", {"value": None, "at": 0.0})
+    assert streamlook.held_star_size([5.0] * 9 + [9.0], 1.0, 100) == 5.0          # one bad frame does not show
+    assert streamlook.held_star_size([7.0] * 10, 1.0, 110) == 5.0                  # held
+    assert streamlook.held_star_size([7.0] * 10, 1.0, 100 + streamlook.HOLD_S) == 7.0
+
+
+def test_a_galaxy_filling_the_frame_does_not_lift_the_sky():
+    import numpy as np
+    sky = np.full((400, 600, 3), 0.1, dtype=np.float32)
+    galaxy = sky.copy()
+    galaxy[100:300, 100:500] = 0.5                      # a bright object over a third of the picture
+    assert np.allclose(streamlook.sky_of(galaxy)[0], 0.1)

@@ -78,11 +78,36 @@ def test_the_next_step_due_soon_and_the_night_over_come_from_the_schedule():
 def test_it_goes_down_to_720p_only_when_it_keeps_falling_behind():
     assert stream.speed("frame=1\nspeed=0.98x\nprogress=continue\nspeed=0.79x\n") == 0.79
     assert stream.speed("speed=N/A\n") is None
-    slow = [(t, 0.8) for t in range(0, 40, 5)]
-    assert stream.falling_behind(slow, 40)
-    assert not stream.falling_behind(slow[-2:], 40)                      # not for long enough yet
-    assert not stream.falling_behind(slow[:-1] + [(35, 1.0)], 40)       # it caught up
+    span = stream.SLOW_S + 10
+    slow = [(t, 0.8) for t in range(0, span, 5)]
+    assert stream.falling_behind(slow, span)
+    assert not stream.falling_behind(slow[-2:], span)                     # not for long enough yet
+    assert not stream.falling_behind(slow[:-1] + [(span - 5, 1.0)], span)  # it caught up
     assert stream.BITRATE[stream.FALLBACK] and "scale=1280:720" in " ".join(stream.encoder(None, stream.FALLBACK))
+
+
+def test_a_stalled_connection_or_repeated_breaks_count_as_falling_behind_whatever_the_speed():
+    span = stream.SLOW_S + 10
+    fine = [(t, 1.0) for t in range(0, span, 5)]
+    assert stream.falling_behind(fine, span, frames=[(0, 500), (span, 500)])          # no frame went out
+    assert not stream.falling_behind(fine, span, frames=[(0, 500), (span, 500 + 30 * span)])
+    assert stream.falling_behind([], 1000, breaks=[700, 800, 990])
+    assert not stream.falling_behind([], 1000, breaks=[100, 800, 990])               # one too old
+
+
+def test_the_start_size_comes_from_twitch_s_bandwidth_test(tmp_path, monkeypatch):
+    monkeypatch.setattr(stream, "PROGRESS", tmp_path / "progress.txt")
+    sent = []
+
+    def run(cmd, **kw):
+        sent.append(cmd[-1])
+        (tmp_path / "stream-bandwidth.txt").write_text(f"drop_frames=0\nspeed={speed}x\n")
+    speed = 1.0
+    assert stream.bandwidth_test("rtmp://live.twitch.tv/app/k", run=run) == (stream.WIDTH, stream.HEIGHT)
+    assert sent[-1] == "rtmp://live.twitch.tv/app/k?bandwidthtest=true"
+    speed = 0.7
+    assert stream.bandwidth_test("rtmp://live.twitch.tv/app/k", run=run) == stream.FALLBACK
+    assert stream.bandwidth_test("rtmp://a.rtmp.youtube.com/live2/k", run=run) == (stream.WIDTH, stream.HEIGHT)
 
 
 def test_the_feed_goes_out_at_30_a_second_from_10_pictures_a_second():
@@ -107,6 +132,14 @@ def test_a_new_picture_fades_in_and_the_feed_never_waits_for_one():
 
 def test_dropped_frames_count_as_falling_behind_too():
     assert stream.reported("drop_frames=3\ndrop_frames=40\n", "drop_frames") == 40
-    fine = [(t, 1.0) for t in range(0, 40, 5)]
-    assert not stream.falling_behind(fine, 40, drops=[(0, 0), (40, 5)])
-    assert stream.falling_behind(fine, 40, drops=[(0, 0), (40, 5 + stream.FPS + 1)])
+    span = stream.SLOW_S + 10
+    fine = [(t, 1.0) for t in range(0, span, 5)]
+    assert not stream.falling_behind(fine, span, drops=[(0, 0), (span, 5)])
+    assert stream.falling_behind(fine, span, drops=[(0, 0), (span, 5 + stream.FPS + 1)])
+
+
+def test_the_between_targets_checklist_comes_from_the_named_activities():
+    import activity
+    assert activity.phase([{"what": "Schedule"}, {"what": "Moving"}]) == "goto"
+    assert activity.phase([{"what": "Schedule"}, {"what": "Plate solving"}]) == "solve"
+    assert activity.phase([{"what": "Schedule"}]) is None

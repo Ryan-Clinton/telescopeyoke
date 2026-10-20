@@ -142,6 +142,21 @@ def now(clock=time.time, alive=_alive):
     return out
 
 
+# Where getting to a target has got, by the name each step's code gives its
+# activity line (mount.py, solve.py, focus.py, patrol.py, shoot.py): the
+# stream's between-targets card reads this rather than the words.
+PHASES = {"Moving": "goto", "Plate solving": "solve", "Checking focus": "focus",
+          "Focusing with the motor": "focus", "Patrol": "imaging", "Imaging": "imaging", "Searching": "imaging"}
+ORDER = ["goto", "solve", "focus", "imaging"]
+
+
+def phase(entries=None):
+    """The newest of goto / solve / focus / imaging being done now, or None."""
+    entries = now() if entries is None else entries
+    found = [PHASES[e["what"]] for e in entries if e.get("what") in PHASES]
+    return found[-1] if found else None
+
+
 def during(what, detail=""):
     """A function that says what it is doing while it runs: `detail` is
     filled in from its arguments ("to {name}" with name="M31"), or is a

@@ -120,9 +120,27 @@ def _refresh(tokens, client, post=requests.post):
     return tokens
 
 
-def set_channel(title, tags, say=print, patch=requests.patch, post=requests.post):
+_SENT = {"info": None, "wait_until": 0.0}
+
+
+def redacted(text, tokens=None):
+    """`text` with any token taken out, for anything said or logged."""
+    text = str(text)
+    for value in (tokens or {}).values():
+        if isinstance(value, str) and len(value) > 8 and value in text:
+            text = text.replace(value, "<token>")
+    return text
+
+
+def set_channel(title, tags, say=print, patch=requests.patch, post=requests.post, clock=time.time):
     """The channel's title, category (Science & Technology) and tags. True
-    when Twitch took them; never raises."""
+    when Twitch took them, or already has them; never raises. Nothing is
+    sent when they are unchanged, and after Twitch says too many (429)
+    nothing is sent again until it says so."""
+    if (title, tuple(tags)) == _SENT["info"]:
+        return True
+    if clock() < _SENT["wait_until"]:
+        return False
     client, tokens = client_id(), _tokens()
     if not client or not tokens:
         say("The channel's info was left as it is: this laptop is not signed in to Twitch "
@@ -135,8 +153,14 @@ def set_channel(title, tags, say=print, patch=requests.patch, post=requests.post
                           headers={"Authorization": f"Bearer {tokens['access_token']}", "Client-Id": client},
                           timeout=30)
             if reply.status_code == 204:
+                _SENT["info"] = (title, tuple(tags))
                 say(f"Channel title set: {title}")
                 return True
+            if reply.status_code == 429:
+                reset = float(getattr(reply, "headers", {}).get("Ratelimit-Reset", 0) or 0)
+                _SENT["wait_until"] = max(reset, clock() + 60)
+                say("Twitch says too many changes: the channel's info waits a minute.")
+                return False
             if reply.status_code != 401:
                 break
             tokens = _refresh(tokens, client, post)
@@ -145,5 +169,5 @@ def set_channel(title, tags, say=print, patch=requests.patch, post=requests.post
                 return False
         say(f"Twitch did not take the channel's info ({reply.status_code}); left as it is.")
     except (requests.RequestException, ValueError, KeyError) as error:
-        say(f"The channel's info was left as it is: {error}")
+        say(f"The channel's info was left as it is: {redacted(error, tokens)}")
     return False

@@ -3,10 +3,11 @@
 Status: built and on air on 20 October 2026, from 01:43 UTC on the WASP-12 b
 transit. `streamlook.py` draws the picture, `stream-targets.toml` holds the words
 about each object, and `stream.py` sends it; `./stream.py preview` draws each
-state from example figures into `cache/stream-preview/`. Not built yet: the target
-introduction, the science captions, the tonight ribbon outside the
-between-targets card, the reference/tonight view, and the variable-star
-curve.
+state at full size and at a phone's size, on the night's real pictures where
+there are some, with `cache/stream-preview/index.html` showing them all
+together. Not built yet: the target introduction, the tonight ribbon outside
+the between-targets card, the reference/tonight view, the variable-star curve,
+and a catalogue's reason in a candidate's result.
 
 `stream.py` sends the telescope to Twitch (and later YouTube) whenever a run
 is imaging. What it sends now (`./stream.py frame` saves a copy as
@@ -81,28 +82,39 @@ for nothing; at 10 a second it is 62 MB/s. Composing must take under 200 ms,
 and a fade's frames are made from two finished pictures by blending, not by
 drawing again.
 
-**Bandwidth.** The home upload has not been measured. `stream.py` watches
-ffmpeg's own progress reports (`-progress cache/stream-progress.txt`). If the
-stream falls behind (speed under 0.95 for 30 s), it restarts at 1280 × 720,
-30 fps and 3 Mbit/s, and says so in its log. A clean 720p is better than a
-starved 1080p.
+**Bandwidth.** The home upload has not been measured, so the size is chosen
+once, at the start, by a test against the real ingest. On Twitch,
+`bandwidth_test()` sends 20 s of 1080p to the stream key with
+`?bandwidthtest=true`, which Twitch takes without showing it to anyone. If
+that kept up (speed 0.95 or more, no more than a second's frames dropped),
+the stream starts at 1080p; otherwise it starts at 1280 × 720, 30 fps and
+3 Mbit/s. YouTube has no such test, so it starts at 1080p.
 
-Encoder speed alone does not prove that the network is healthy, so the
-transport is judged on all of these:
+After that the size changes only on **sustained** failure, because
+restarting ffmpeg at a new size interrupts the viewers. `stream.py` reads
+ffmpeg's own progress reports (`-progress cache/stream-progress.txt`).
+Encoder speed alone does not prove that the network is healthy, so it goes
+down to 720p on any one of these:
 
-- the speed reports;
-- the writes to ffmpeg failing (the stream broke off, so it retries after
-  30 s, never in a tight loop);
-- ffmpeg's `drop_frames` count rising.
+- every speed report for 60 s is under 0.95;
+- ffmpeg's `drop_frames` count rises by more than a second's frames in 60 s;
+- ffmpeg's `frame` count stands still for 60 s, which is how a stalled
+  connection shows even at speed 1;
+- the stream breaks off (a write to ffmpeg fails) 3 times in 10 minutes.
+  Each break retries after 30 s, never in a tight loop.
+
+Each of these is said in the stream's log.
 
 On the first night, 1080p held at speed 1.01 with no frames dropped, once
 the drawing moved to its own thread: drawn on the feeding loop, it stalled
 the feed to 0.79.
 
-**Drawing.** A 1080p picture takes about 0.7 s to draw on the laptop with the
-stretches, which is over the 200 ms aimed for. So it is drawn on its own
-thread (`stream.Composer`) every 3 s, and the loop feeding ffmpeg never waits
-for it. The new picture crossfades in over three pictures (300 ms).
+**Drawing.** A 1080p picture took about 0.7 s to draw at first, which is
+over the 200 ms aimed for. Loading each font and size once
+(`functools.lru_cache`), reading `stream-targets.toml` again only when it
+changes, and stretching the pictures after shrinking them brought it to about
+220 ms. It is still drawn on its own thread (`stream.Composer`) every 3 s,
+and the loop feeding ffmpeg never waits for it. The new picture crossfades in over three pictures (300 ms).
 
 ## Layout (1920 × 1080)
 
@@ -173,15 +185,24 @@ openly licensed. Sizes at 1080p:
 
 | Text | Font | Size |
 |---|---|---|
-| Target name | Bold | 50 px |
+| Target name | Bold | 60 px |
 | Programme name | Bold | 28 px |
-| Body words | Sans | 25 px |
-| Figure numbers | Bold | 36 px |
+| Body words | Sans | 24–25 px |
+| Figure numbers | Bold | 46 px |
 | Figure labels | Sans, capitals | 18 px |
 | Footer, UTC time, exposure lengths | Mono | 21 px |
 
 At the 720p fallback, every size is two thirds of this. Nothing is smaller
 than 18 px at 1080p, because viewers watch inside a phone app.
+
+**On a phone.** A 1080p stream in a phone's Twitch player is about 360 px
+wide, a fifth of its size, so body text cannot be read there whatever its
+size. What must read is the object's name and the figures, and a test keeps
+them at least 10 and 8 px tall at that size. `./stream.py preview` draws
+each state at 360 × 203 beside the full size, to judge the rest by eye.
+
+**Less text.** Each object's `words` is one short sentence, always on screen.
+Anything more goes into its `captions`, which are shown now and then.
 
 ## The stack looks its best
 
@@ -204,6 +225,16 @@ The display stretch:
 The single exposure gets the same display style, normalised independently from
 its own background and noise. Its stretch is never the stack's parameters
 reused, so that it looks like a real exposure of sky.
+
+**The sky, not the object.** The background and noise are measured from the
+darkest 60 % of the picture only (`sky_of`). That way a galaxy filling a
+third of the frame, as M31 does, does not lift the sky's level and flatten
+the galaxy.
+
+**No pumping.** Each new exposure would otherwise jump in brightness and
+colour as its own sky moved. So the calibration used for each role (the
+stack, the single exposure) moves only a fifth of the way towards each new
+picture's (`steady`).
 
 **Cropping.** Scientific content is never cropped just to fill the box. A
 picture is fitted whole and letterboxed by default. A crop for presentation
@@ -309,9 +340,13 @@ There are three at most, as large numbers with small labels and no graphs:
 |---|---|---|
 | Frames kept | `accepted` / `captured` | **203 / 211** FRAMES KEPT |
 | Light collected | `integration` | **54 MIN** LIGHT COLLECTED |
-| Star size | `series.fwhm` × the plate scale | **5.8″** STAR SIZE |
+| Star size | the median `series.fwhm` of the last 10 kept frames × the plate scale, changed at most every 30 s | **5.8″** STAR SIZE |
 
-When a figure changes, it crossfades over 300 ms rather than jumping.
+When a figure changes, it crossfades over 300 ms rather than jumping. The
+star size is held for 30 s at a time, so the flicker of seeing from frame to
+frame does not make a healthy run look unsteady. When the programme needs
+the room, the figures go first: the transit's light curve can leave room for
+only one or two.
 Tracking drift, star counts and roundness stay on the status page, which is
 the place for them.
 
@@ -333,7 +368,8 @@ few seconds and then fade:
 
   It then dissolves into the normal layout over 400 ms.
 - **Science captions, 8 s, no more often than every 7 minutes**, across the
-  bottom of the stack. Never during a target introduction, a candidate
+  top of the stack on a see-through plate (built: `streamlook.caption`). The
+  first waits a full 7 minutes. Never during a target introduction, a candidate
   follow-up, a transition or a warning. These are curated sentences from the target's `captions` and from
   each programme's own list (also in `stream-targets.toml`), taken in turn
   and never generated. For example: "A nova would appear here as a point of
@@ -382,8 +418,11 @@ While paused, the stack itself is a little dimmer and greyer (40 % towards
 grey, 25 % darker). This shows that it is not updating without making it
 look broken.
 
-Each time the stack grows, a small "+1 exposure" (or "+N") fades in for a
-moment beside its "exposures combined" caption.
+Each time the stack grows, a small "+1" (or "+N") appears for a moment
+beside its "exposures combined" caption. That caption sits on a quiet,
+see-through plate in a smaller type (19 px), so it reads as a caption and not
+as another widget. The plates, the caption and the inset sit on the picture
+itself, never on the letterbox bars beside a narrow picture.
 
 ## Between targets
 
@@ -406,9 +445,14 @@ Hot Jupiter transit · imaging begins in about 4 min
 ○ imaging
 ```
 
-The checklist steps come from `activity.now()`: "Moving" for the GoTo,
-"Plate solving", and "Focus" for the focus check. A step is ticked when its
-activity line ends. The card then dissolves into the target introduction.
+The checklist comes from `activity.phase()`, which maps each activity's own
+name to an explicit step (`activity.PHASES`): "Moving" is goto, "Plate
+solving" is solve, "Checking focus" and "Focusing with the motor" are focus,
+and "Patrol", "Imaging" and "Searching" are imaging. It never parses the
+words. The steps before the current one are ticked. This lives in
+`activity.py` rather than `schedule.py` because the steps are set by
+mount.py, solve.py and focus.py inside the schedule's commands, and
+`activity.py` is where every process says what it is doing. The card then dissolves into the target introduction.
 
 With nothing running and nothing due, the stream ends as now, after the
 end-of-night card when the night has finished.
@@ -422,13 +466,17 @@ cut-outs or a marker.
 1. **POSSIBLE CHANGE DETECTED**: "The software found a point of light that
    wasn't clear in the reference image. Taking another look now."
 2. **SECOND LOOK UNDER WAY**: shown while `patrol.second_look` runs.
-3. The result, in the vetting's own terms (`vet.verdict`):
-   - "Not confirmed: it did not appear again", when the second look did
-     not reproduce it;
+3. **RESULT**, from the second look's own search:
+   - "Not confirmed: it did not appear again", when the second look found
+     nothing unexplained;
+   - "Still unexplained: kept for private checking", when it did. The person
+     decides what is claimed and when (`/claim`).
    - "Not confirmed: a known asteroid / variable star", when a catalogue
-     explained it;
-   - "Still unexplained: kept for private checking", for anything else. The
-     person decides what is claimed and when (`/claim`).
+     explained it. This one is not built yet.
+
+The result is news for 5 minutes (`RESULT_S`). After that the panel goes back
+to the patrol, with one small line in place of the counts: "1 candidate
+awaiting private review".
 
 This lets viewers watch the method (a candidate, a repeat observation,
 catalogue checks, a result) without anything being published early.

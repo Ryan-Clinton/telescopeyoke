@@ -1,11 +1,12 @@
 # What the live stream says about each object and programme (docs/stream-look.md).
-# Plain words for someone who knows no astronomy; never catalogue prose.
+# Plain words for someone who knows no astronomy; never catalogue prose. `words` is one
+# short sentence, always on screen; anything more goes in `captions`, shown now and then.
 # Every figure here is checked against a published source before it goes in:
 # an object with no entry shows its name and its catalogue type only.
 
 [targets.M31]
 common = "Andromeda Galaxy"
-words = "The nearest large galaxy to the Milky Way. Its light has travelled about 2.5 million years to reach this camera."
+words = "The nearest large galaxy to the Milky Way."
 distance = "~2.5 million light years"
 magnitude = 3.4
 captions = [

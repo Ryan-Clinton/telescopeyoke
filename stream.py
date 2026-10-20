@@ -53,7 +53,10 @@ BITRATE = {(1920, 1080): "5000k", (1280, 720): "3000k"}
 FPS = 30                # frames a second sent, as the services expect
 INPUT_FPS = 10          # pictures a second handed to ffmpeg, which repeats each up to FPS
 FADE = 3                # pictures in a crossfade: 300 ms
-SLOW_S = 30             # falling behind this long: go down to FALLBACK
+SLOW_S = 60             # falling behind this long (sustained, not a blip): go down to FALLBACK
+BREAKS = 3              # the stream breaking off this often within BREAKS_S at 1080p: go down too
+BREAKS_S = 600
+TEST_S = 20             # Twitch's bandwidth test at the start: seconds of 1080p sent and not shown
 BETWEEN_S = 15 * 60     # stay on air between targets when the next step is due within this
 END_S = 120             # the end-of-night card is held this long
 MEASURE_S = 300         # a transit's light curve is measured again this often
@@ -199,12 +202,12 @@ def between_state(st, now):
     steps = (st.get("schedule") or {}).get("steps") or []
     upcoming = next((s for s in steps if s.get("status") in ("running", "queued")
                      and not s["label"].lower().startswith(("goto", "focus"))), None)
-    doing = " ".join(a.get("words", "") for a in (activity.now() or []))
-    stages = [("moving telescope", "Moving"), ("confirming field", "Plate solving"),
-              ("checking focus", "focus"), ("imaging", "Imaging")]
-    current = next((i for i, (_, word) in enumerate(stages) if word.lower() in doing.lower()), None)
-    checklist = [(label, "now" if i == current else ("done" if current is not None and i < current else "open"))
-                 for i, (label, _) in enumerate(stages)]
+    labels = {"goto": "moving telescope", "solve": "confirming field", "focus": "checking focus",
+              "imaging": "imaging"}
+    found = activity.phase()
+    current = activity.ORDER.index(found) if found else None
+    checklist = [(labels[name], "now" if i == current else ("done" if current is not None and i < current else "open"))
+                 for i, name in enumerate(activity.ORDER)]
     label = upcoming["label"] if upcoming else "the next target"
     begins = max(0, (upcoming.get("start") or now) - now) if upcoming else 0
     tonight = [(s["label"].split(",")[0], {"done": "done", "running": "running"}.get(s.get("status"), "open"))
@@ -269,17 +272,48 @@ def speed(text):
     return reported(text, "speed")
 
 
-def falling_behind(reports, now, within=SLOW_S, drops=None):
-    """True once every speed report for `within` seconds is under 0.95, or
-    ffmpeg has dropped more than a second's frames in that time (`drops`:
-    (time, drop_frames) reports): the stream is not getting out as fast as
-    it is made."""
+def falling_behind(reports, now, within=SLOW_S, drops=None, frames=None, breaks=()):
+    """True when the stream is not getting out as fast as it is made: every
+    speed report for `within` seconds under 0.95; ffmpeg dropping more than
+    a second's frames in that time (`drops`: (time, drop_frames)); its frame
+    count standing still that long (`frames`: (time, frame)), which is how a
+    stalled connection shows; or the stream breaking off BREAKS times in
+    BREAKS_S (`breaks`: their times). Encoder speed alone says little about
+    the network, so it takes any of them."""
+    if sum(1 for t in breaks if now - t <= BREAKS_S) >= BREAKS:
+        return True
+    if frames:
+        old = [f for t, f in frames if now - t >= within]
+        if old and frames[-1][1] <= old[-1]:
+            return True
     if drops:
         old = [d for t, d in drops if now - t >= within]
         if old and drops[-1][1] - old[-1] > FPS:
             return True
     recent = [s for t, s in reports if now - t <= within]
     return len(recent) >= 3 and reports[0][0] <= now - within and all(s < 0.95 for s in recent)
+
+
+def bandwidth_test(target, device=None, run=subprocess.run, seconds=TEST_S):
+    """The size to start at: 1080p if a short test of it to Twitch kept up,
+    else 720p. Twitch takes a stream key with ?bandwidthtest=true without
+    showing it to anyone. Other services have no such test: 1080p, and the
+    stream watches itself."""
+    if "live.twitch.tv" not in target:
+        return (WIDTH, HEIGHT)
+    progress = PROGRESS.with_name("stream-bandwidth.txt")
+    rate = BITRATE[(WIDTH, HEIGHT)]
+    try:
+        run(["ffmpeg", "-loglevel", "error", "-y", "-progress", str(progress), "-re", "-f", "lavfi",
+             "-i", f"testsrc2=size={WIDTH}x{HEIGHT}:rate={FPS}", "-f", "lavfi",
+             "-i", "anullsrc=channel_layout=stereo:sample_rate=44100", "-t", str(seconds),
+             *encoder(device), "-c:a", "aac", "-b:a", "64k", "-f", "flv", target + "?bandwidthtest=true"],
+            capture_output=True, timeout=seconds + 60)
+        text = progress.read_text()
+    except (OSError, subprocess.SubprocessError):
+        return FALLBACK
+    found, lost = speed(text), reported(text, "drop_frames") or 0
+    return (WIDTH, HEIGHT) if found is not None and found >= 0.95 and lost <= FPS else FALLBACK
 
 
 def measure_transit(st, running, say=print):
@@ -380,7 +414,8 @@ def watch(to=None, say=print, sleep=time.sleep, clock=time.time, run=subprocess.
     say(f"Video encoding on {device or 'the processors (no working video hardware)'}")
     size = (WIDTH, HEIGHT)
     process, quiet_since, shown, retry_at = None, None, None, 0.0
-    reports, drops, measuring, measured_at, announced = [], [], None, 0.0, None
+    reports, drops, frames, breaks, measuring, measured_at, announced = [], [], [], [], None, 0.0, None
+    tested = False
     composer = Composer(draw=lambda st, now, mode: frame(st, now, mode).resize(size)
                         if size != (WIDTH, HEIGHT) else frame(st, now, mode))
     tick = clock()
@@ -396,11 +431,15 @@ def watch(to=None, say=print, sleep=time.sleep, clock=time.time, run=subprocess.
                 if now < retry_at:
                     sleep(1)
                     continue
+                if not tested and to is None:
+                    size, tested = bandwidth_test(target, device), True
+                    with composer.lock:
+                        composer.ready = []
                 say(f"{time.strftime('%H:%M')} imaging {st.get('name')}: streaming {size[0]}x{size[1]} to "
                     f"{hidden(target, stream_key)}")
                 PROGRESS.parent.mkdir(parents=True, exist_ok=True)
                 PROGRESS.write_text("")
-                process, reports, drops = run(command(target, device, size), stdin=subprocess.PIPE), [], []
+                process, reports, drops, frames = run(command(target, device, size), stdin=subprocess.PIPE), [], [], []
             elif action == "stop":
                 say(f"{time.strftime('%H:%M')} nothing new for {(END_S if ending else STOP_S) // 60} minutes: "
                     "stream stopped")
@@ -424,17 +463,26 @@ def watch(to=None, say=print, sleep=time.sleep, clock=time.time, run=subprocess.
                     # Never a tight loop: wait, and the next try is a fresh start.
                     say(f"{time.strftime('%H:%M')} the stream broke off; trying again in 30 s")
                     process, retry_at = None, now + 30
+                    breaks = [t for t in breaks if now - t <= BREAKS_S] + [now]
+                    if size == (WIDTH, HEIGHT) and falling_behind([], now, breaks=breaks):
+                        size = FALLBACK
+                        say(f"{time.strftime('%H:%M')} it broke off {len(breaks)} times in "
+                            f"{BREAKS_S // 60} minutes: going down to {size[0]}x{size[1]}")
+                        with composer.lock:
+                            composer.ready = []
                     continue
                 try:
                     progress = PROGRESS.read_text()
                 except OSError:
                     progress = ""
-                found, lost = speed(progress), reported(progress, "drop_frames")
+                found, lost, sent = speed(progress), reported(progress, "drop_frames"), reported(progress, "frame")
                 if found is not None and (not reports or now - reports[-1][0] >= 5):
                     reports = (reports + [(now, found)])[-30:]
                     if lost is not None:
                         drops = (drops + [(now, lost)])[-30:]
-                if size == (WIDTH, HEIGHT) and falling_behind(reports, now, drops=drops):
+                    if sent is not None:
+                        frames = (frames + [(now, sent)])[-30:]
+                if size == (WIDTH, HEIGHT) and falling_behind(reports, now, drops=drops, frames=frames):
                     size = FALLBACK
                     say(f"{time.strftime('%H:%M')} the stream is falling behind (speed {reports[-1][1]:.2f}): "
                         f"going down to {size[0]}x{size[1]}")
