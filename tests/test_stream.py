@@ -57,3 +57,56 @@ def test_the_key_is_kept_readable_only_by_its_owner(tmp_path, monkeypatch):
     assert stream.keep_key(" live_123_abc \n")
     assert stream.key() == "live_123_abc"
     assert (stream.KEY_FILE.stat().st_mode & 0o777) == 0o600
+
+
+def test_it_stays_on_air_between_targets_and_holds_the_end_card():
+    quiet = {"name": "WASP-12", "age": 400}
+    action, since = stream.decide(True, quiet, None, 0, between=True)
+    assert action == "carry on"
+    assert stream.decide(True, quiet, 0, 10 * stream.STOP_S, between=True)[0] == "carry on"
+    assert stream.decide(True, quiet, 0, stream.END_S - 1, ending=True)[0] == "carry on"
+    assert stream.decide(True, quiet, 0, stream.END_S, ending=True)[0] == "stop"
+
+
+def test_the_next_step_due_soon_and_the_night_over_come_from_the_schedule():
+    soon = {"schedule": {"steps": [{"label": "a", "status": "done"}, {"label": "b", "status": "queued", "start": 600}]}}
+    assert stream.due_soon(soon, 0) and not stream.due_soon(soon, 0, within=60)
+    over = {"schedule": {"steps": [{"label": "a", "status": "done"}, {"label": "b", "status": "skipped"}]}}
+    assert stream.night_over(over) and not stream.night_over(soon) and not stream.night_over({})
+
+
+def test_it_goes_down_to_720p_only_when_it_keeps_falling_behind():
+    assert stream.speed("frame=1\nspeed=0.98x\nprogress=continue\nspeed=0.79x\n") == 0.79
+    assert stream.speed("speed=N/A\n") is None
+    slow = [(t, 0.8) for t in range(0, 40, 5)]
+    assert stream.falling_behind(slow, 40)
+    assert not stream.falling_behind(slow[-2:], 40)                      # not for long enough yet
+    assert not stream.falling_behind(slow[:-1] + [(35, 1.0)], 40)       # it caught up
+    assert stream.BITRATE[stream.FALLBACK] and "scale=1280:720" in " ".join(stream.encoder(None, stream.FALLBACK))
+
+
+def test_the_feed_goes_out_at_30_a_second_from_10_pictures_a_second():
+    cmd = " ".join(stream.command("rtmp://x/live/k", "/dev/dri/b"))
+    assert "-r 10 -i -" in cmd and "fps=30" in cmd and "-progress" in cmd
+
+
+def test_a_new_picture_fades_in_and_the_feed_never_waits_for_one():
+    from PIL import Image
+    pictures = iter([Image.new("RGB", (4, 4), (0, 0, 0)), Image.new("RGB", (4, 4), (200, 200, 200))])
+    composer = stream.Composer(draw=lambda st, now, mode: next(pictures), every=0.05)
+    assert composer.next(b"old") == b"old"                     # nothing drawn yet: the last one again
+    composer.view = ({}, "imaging")
+    import time
+    deadline = time.time() + 5
+    while time.time() < deadline and len(composer.ready) < stream.FADE + 1:
+        time.sleep(0.02)
+    composer.stop()
+    steps = [composer.next(None) for _ in range(stream.FADE + 2)]
+    assert steps[0] != steps[-1] and steps[-1] == steps[-2] == bytes([200] * 48)
+
+
+def test_dropped_frames_count_as_falling_behind_too():
+    assert stream.reported("drop_frames=3\ndrop_frames=40\n", "drop_frames") == 40
+    fine = [(t, 1.0) for t in range(0, 40, 5)]
+    assert not stream.falling_behind(fine, 40, drops=[(0, 0), (40, 5)])
+    assert stream.falling_behind(fine, 40, drops=[(0, 0), (40, 5 + stream.FPS + 1)])

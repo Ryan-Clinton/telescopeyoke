@@ -95,7 +95,7 @@ COMMANDS = {
     # hardware, asked for like a patrol; the rest only change the plan.
     # watch sends video to a public service while a run images; frame and the
     # default view send nothing.
-    "stream.py": ("read_only", {"watch": "external", "frame": "local_write"}, {"--to": "local_write"}),
+    "stream.py": ("read_only", {"watch": "external", "frame": "local_write", "preview": "local_write", "key": "local_write", "twitch-login": "external"}, {"--to": "local_write"}),
     "schedule.py": ("read_only", {"run": "hardware", "add": "local_write", "wait": "local_write",
                                   "clear": "local_write"}, {}),
     "serve.py": ("local_write", {}, {}),            # the status page: read-only to its visitors

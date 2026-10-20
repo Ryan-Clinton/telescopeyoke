@@ -5,9 +5,9 @@ The telescope is public in two places while it works:
 - **https://ryanclinton.uk/astrophotography/live/**, the person's own site.
   It went live on 20 October 2026.
 - **Twitch** (and YouTube once its streaming check clears), sent by
-  `stream.py`. It went live on 20 October 2026 at 02:20, on the WASP-12 b
-  transit. The picture it sends is described in
-  [stream-look.md](stream-look.md).
+  `stream.py`. It went live on 20 October 2026 at 01:20 UTC, on the WASP-12 b
+  transit, and in its 1080p look from 01:43 UTC. The picture it sends is
+  described in [stream-look.md](stream-look.md).
 
 Both show what the status page (`serve.py`, port 8080) shows. Neither ever
 shows where the telescope is: no site name (`serve.unplaced()` blanks it in
@@ -44,3 +44,24 @@ fields and the schedule's fields are still there.
 
 Anything added to `status.json` may reach the public page (`discovery` is
 sent as it is), so keep everything in it fit to publish.
+
+## The Twitch channel's title, category and tags
+
+`twitch.py` sets them each time the stream starts and each time it moves to a
+new target. A transit gets "Live telescope: timing a transit of the exoplanet
+WASP-12 b, as it happens | TelescopeYoke", a patrol names the galaxy, and a
+picture names its object. The category is always Science & Technology, and
+the tags are Astronomy, Telescope, Space, Science and Astrophotography, plus
+Exoplanet, or Nova and Galaxy, as the programme suits.
+
+- **The app**: "TelescopeYoke", registered at dev.twitch.tv on 20 October
+  2026 as a public client, with the redirect URL `http://localhost`. Its
+  client ID is in config.toml as `[stream] twitch_client_id`. It is not a
+  secret, and there is no client secret anywhere.
+- **The sign-in**: `./stream.py twitch-login` asks Twitch for a device code,
+  and the person approves it at twitch.tv/activate. It grants only
+  `channel:manage:broadcast`. The tokens are kept in
+  `~/.config/telescopeyoke/twitch.json`, readable only by the person, and are
+  never shown. A public client's sign-in lasts while it is used at least once
+  a month. When it has lapsed, the stream's log says to sign in again.
+- **Failures** never stop the stream: the channel keeps the info it had.

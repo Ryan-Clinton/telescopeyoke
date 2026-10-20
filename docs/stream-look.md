@@ -1,7 +1,12 @@
 # The live stream's picture: a spec
 
-Status: proposed, 20 October 2026, revised the same day after review.
-Nothing here is built yet.
+Status: built and on air on 20 October 2026, from 01:43 UTC on the WASP-12 b
+transit. `streamlook.py` draws the picture, `stream-targets.toml` holds the words
+about each object, and `stream.py` sends it; `./stream.py preview` draws each
+state from example figures into `cache/stream-preview/`. Not built yet: the target
+introduction, the science captions, the tonight ribbon outside the
+between-targets card, the reference/tonight view, and the variable-star
+curve.
 
 `stream.py` sends the telescope to Twitch (and later YouTube) whenever a run
 is imaging. What it sends now (`./stream.py frame` saves a copy as
@@ -77,10 +82,27 @@ and a fade's frames are made from two finished pictures by blending, not by
 drawing again.
 
 **Bandwidth.** The home upload has not been measured. `stream.py` watches
-ffmpeg's `speed=` report. If the stream falls behind (speed under 0.95 for
-30 s), it restarts at 1280 × 720, 30 fps and 3 Mbit/s, and says so in its
-log. A clean 720p is better than a starved 1080p. `./stream.py` (the check
-that sends nothing) reports which one it would use.
+ffmpeg's own progress reports (`-progress cache/stream-progress.txt`). If the
+stream falls behind (speed under 0.95 for 30 s), it restarts at 1280 × 720,
+30 fps and 3 Mbit/s, and says so in its log. A clean 720p is better than a
+starved 1080p.
+
+Encoder speed alone does not prove that the network is healthy, so the
+transport is judged on all of these:
+
+- the speed reports;
+- the writes to ffmpeg failing (the stream broke off, so it retries after
+  30 s, never in a tight loop);
+- ffmpeg's `drop_frames` count rising.
+
+On the first night, 1080p held at speed 1.01 with no frames dropped, once
+the drawing moved to its own thread: drawn on the feeding loop, it stalled
+the feed to 0.79.
+
+**Drawing.** A 1080p picture takes about 0.7 s to draw on the laptop with the
+stretches, which is over the 200 ms aimed for. So it is drawn on its own
+thread (`stream.Composer`) every 3 s, and the loop feeding ffmpeg never waits
+for it. The new picture crossfades in over three pictures (300 ms).
 
 ## Layout (1920 × 1080)
 
@@ -117,11 +139,12 @@ that sends nothing) reports which one it would use.
   and noisy, and the combined one keeps improving.
 - **The side panel is about 430 wide**, with the object, the programme, its
   graphic and two or three figures, top to bottom.
-- **Header**: a small "TELESCOPEYOKE live observatory" at the top left, and
-  "● LIVE" with the UTC time at the top right. There is no other logo.
+- **Header**: a small "TELESCOPEYOKE live observatory" at the top left, the
+  night-stage line in the middle, and the live state alone ("● LIVE") at the
+  top right. There is no other logo.
 - **Footer**: separate fields lined up by position, not joined with dots:
-  live state, UTC time, how long ago the last exposure came, and what is
-  next.
+  how long ago the last exposure came (left), the UTC time (centre, the only
+  clock on screen), and what is next (right).
 - **Safe margins**: nothing important within 96 px of either side or 54 px
   of the top and bottom (5 %), as broadcast titles are kept.
 
@@ -170,16 +193,23 @@ science stack → a non-destructive display transform → broadcast picture
 
 The display stretch:
 
-- keeps the sky black (the black point is set from the background, not at
-  zero);
+- keeps the sky dark and neutral without clipping faint structure (the
+  black point sits a little under the background, never at it);
 - lifts faint structure gently (an asinh stretch);
 - neutralises a colour cast (scaling each channel's background to grey);
 - tames bright stars before they clip (a soft shoulder);
 - gives a slight saturation lift and a very mild local contrast;
 - does no sharpening and adds no detail.
 
-The single exposure gets the same stretch, made from its own background and
-noise, so it looks like a real exposure of sky.
+The single exposure gets the same display style, normalised independently from
+its own background and noise. Its stretch is never the stack's parameters
+reused, so that it looks like a real exposure of sky.
+
+**Cropping.** Scientific content is never cropped just to fill the box. A
+picture is fitted whole and letterboxed by default. A crop for presentation
+is allowed only where it is defined for that target. The blurred backdrop of
+the between-targets card is not scientific content and may fill the
+screen.
 
 When a new stack arrives, it **crossfades over 350 ms** from the old one, so
 the galaxy seems to come out of the dark through the night.
@@ -302,8 +332,9 @@ few seconds and then fade:
   ```
 
   It then dissolves into the normal layout over 400 ms.
-- **Science captions, 8 s, every 7 minutes**, across the bottom of the
-  stack. These are curated sentences from the target's `captions` and from
+- **Science captions, 8 s, no more often than every 7 minutes**, across the
+  bottom of the stack. Never during a target introduction, a candidate
+  follow-up, a transition or a warning. These are curated sentences from the target's `captions` and from
   each programme's own list (also in `stream-targets.toml`), taken in turn
   and never generated. For example: "A nova would appear here as a point of
   light that wasn't in the reference image."
@@ -321,6 +352,18 @@ few seconds and then fade:
   · 5 fields done". Finally "Last target before dawn", when the schedule's
   last step is running.
 
+## What wins the screen
+
+When two things want the same space, the one higher in this list wins
+(`streamlook.PRIORITY`):
+
+1. a problem or failure;
+2. a candidate follow-up;
+3. a target transition (introduction, between targets, end of night);
+4. the programme graphic;
+5. a science caption;
+6. the figures, which take whatever room is left in the panel.
+
 ## Is it live? The age of the last exposure
 
 The footer says so, worded calmly:
@@ -334,6 +377,13 @@ The footer says so, worded calmly:
 When the paused state is shown and the status page's checks show the
 camera and mount connected, it adds "telescope still connected". It says
 cloud only when the cloud sensor or the run's rejections say cloud.
+
+While paused, the stack itself is a little dimmer and greyer (40 % towards
+grey, 25 % darker). This shows that it is not updating without making it
+look broken.
+
+Each time the stack grows, a small "+1 exposure" (or "+N") fades in for a
+moment beside its "exposures combined" caption.
 
 ## Between targets
 
