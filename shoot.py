@@ -42,6 +42,7 @@ from datetime import datetime
 from pathlib import Path
 
 import config
+import live
 
 import numpy as np
 from PIL import Image
@@ -591,15 +592,16 @@ def run(args):
             if why:
                 print(f"  {why}; stopping", flush=True)
                 return False
-        latest = judged(session.log)[-CLOUD_STOP:]
-        if len(latest) == CLOUD_STOP and not any(f["accepted"] for f in latest):
+        cloud_stop = live.get("shoot.cloud_stop", CLOUD_STOP)
+        latest = judged(session.log)[-cloud_stop:]
+        if len(latest) == cloud_stop and not any(f["accepted"] for f in latest):
             if not args.through_cloud:
-                print(f"  the last {CLOUD_STOP} frames were all rejected ({what_dimmed(session.log)}); stopping",
+                print(f"  the last {cloud_stop} frames were all rejected ({what_dimmed(session.log)}); stopping",
                       flush=True)
                 told["cloud"] = True
                 return False
             if not told["cloudy"]:
-                print(f"  the last {CLOUD_STOP} frames were all rejected ({what_dimmed(session.log)}); "
+                print(f"  the last {cloud_stop} frames were all rejected ({what_dimmed(session.log)}); "
                       "carrying on until it clears", flush=True)
                 told["cloudy"], paused[0] = True, time.monotonic()
             elif time.monotonic() - paused[0] >= PAUSED_NOTE:
@@ -641,7 +643,7 @@ def run(args):
                 recentre(args.name)
                 session.drift, since_centre = 0.0, 0
                 session.track.clear()   # the slew, not drift, moved the next frames
-            elif args.assist and moving and len(session.track) >= ASSIST_EVERY:
+            elif args.assist and moving and len(session.track) >= live.get("shoot.assist_every", ASSIST_EVERY):
                 collect(everything=True)
                 if not assist(session):
                     args.assist = False
@@ -683,7 +685,7 @@ def run(args):
                         break
                     if moving and args.dither and since_dither >= args.dither:
                         break
-                    if args.assist and moving and len(session.track) >= ASSIST_EVERY:
+                    if args.assist and moving and len(session.track) >= live.get("shoot.assist_every", ASSIST_EVERY):
                         break
         collect(everything=True)
 

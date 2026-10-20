@@ -68,6 +68,7 @@ COMMANDS = {
     "horizon.py": ("hardware", {"--show": "read_only", "--forget": "local_write"}, DRY),
     "landmark.py": ("hardware", {"list": "read_only"}, DRY),
     "liveview.py": ("hardware", {}, {}),
+    "live.py": ("local_write", {}, {}),           # settings a run going reads; moves nothing itself
     "mcp_server.py": ("read_only", {}, {}),
     "mosaic.py": ("local_write", {}, {}),
     "mount.py": ("hardware", {"status": "read_only"}, DRY),

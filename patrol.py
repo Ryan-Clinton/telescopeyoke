@@ -51,6 +51,7 @@ from pathlib import Path
 import numpy as np
 
 import activity
+import live
 import config
 import interface
 import records
@@ -294,10 +295,11 @@ def second_look(p, name, say=print, dry_run=False, run_command=None, search=None
     telescope is already there. It dithers before the first frame, so a
     candidate falls on other pixels than the first time: a defect of the
     camera does not move with the sky, a real object does."""
-    frames = max(1, round(60 * CONFIRM_MINUTES / p["exposure"]))
+    minutes = live.get("patrol.second_look_minutes", CONFIRM_MINUTES)
+    frames = max(1, round(60 * minutes / p["exposure"]))
     cmd = [sys.executable, str(ROOT / "shoot.py"), name, "--frames", str(frames), "--exposure", str(p["exposure"]),
            "--gain", str(p["gain"]), "--dither-first", *(["--dry-run"] if dry_run else [])]
-    say(f"== a second look at {name}: {CONFIRM_MINUTES:g} minutes more")
+    say(f"== a second look at {name}: {minutes:g} minutes more")
     say("$ " + " ".join(Path(c).name if c.endswith(".py") else c for c in cmd[1:]))
     began = time.time()
     run_command = run_command or (lambda c: subprocess.run(c, stdout=sys.stdout, env=dict(os.environ, TY_PATROL="1")))
@@ -735,7 +737,7 @@ def run(args, say=print):
             except Exception as problem:     # one panel's search failing is not the night's
                 say(f"  a panel's search failed: {problem}")
                 continue
-            if unexplained(entry["analysis"]):
+            if unexplained(entry["analysis"]) and live.get("patrol.second_looks"):
                 goto = plans[entry["field"]][0]
                 say(f"== back to {entry['field']} for a second look")
                 if subprocess.run(goto, stdout=sys.stdout, env=dict(os.environ, TY_PATROL="1")).returncode == 0:
