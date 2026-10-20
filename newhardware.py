@@ -72,10 +72,15 @@ def in_use():
             used.add(port)
     except Exception:
         pass
-    focuser = (hw.get("focuser") or {}).get("port")
-    if focuser:
-        used.add(focuser)
-    return used
+    # The focuser's Nano is found by its USB chip, as focuser.py finds it.
+    try:
+        import focuser
+        port = host.serial_port((hw.get("focuser") or {}).get("serial_match", focuser.MATCH))
+        if port:
+            used.add(port)
+    except Exception:
+        pass
+    return used | {str(Path(p).resolve()) for p in used}
 
 
 def load_known():
