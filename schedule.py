@@ -164,7 +164,7 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run):
         step = waiting or next((s for s in steps if s["status"] == "queued"), None)
         if step is None:
             if ran:
-                if MORNING[0] <= datetime.now().hour < MORNING[1]:
+                if MORNING[0] <= datetime.now().hour < MORNING[1] and not busy():
                     end(say=say)
                 else:
                     import notify
@@ -393,10 +393,10 @@ def install(say=print, run=subprocess.run, home=None):
     """The guard every 10 minutes, as a systemd user timer, from this
     checkout: the real one, whose motion lock and frames are the night's."""
     root = config.ROOT
-    if Path(config.DATA).resolve() != Path(root).resolve():
+    if Path(config.DATA).resolve() != Path(root).resolve() or (Path(root) / ".git").is_file():
         import interface
         raise interface.Refusal("INVALID_REQUEST", "Install the guard from the telescope's own checkout, where its "
-                                "frames and motion lock are, not from a copy or with TY_DATA set.")
+                                "frames and motion lock are, not from a copy, a worktree or with TY_DATA set.")
     place = Path(home or Path.home()) / ".config" / "systemd" / "user"
     place.mkdir(parents=True, exist_ok=True)
     (place / "ty-night-end.service").write_text(
