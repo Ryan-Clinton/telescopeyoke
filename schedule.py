@@ -31,6 +31,7 @@ import config
 import records
 
 FILE = config.DATA / "cache" / "schedule.json"
+RUNNER = config.DATA / "cache" / "schedule.runner"     # the process id of `schedule.py run` while it runs
 
 
 def load():
@@ -78,7 +79,11 @@ def view(plan=None, now=None):
             s["start"], s["end"], s["progress"] = start, end, 0.0
         free = s["end"] if s["end"] is not None else free
         out.append(s)
-    return {"steps": out, "now": now}
+    try:
+        runner = alive(int(RUNNER.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        runner = False
+    return {"steps": out, "now": now, "runner": runner}
 
 
 def add(label, minutes, command, not_before_=None, pid=None, until=None):
@@ -116,6 +121,11 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run):
     found by its id, so steps can be added, moved or dropped while it runs
     (20 October 2026: a step added mid-night needed the runner restarting,
     since it worked from the plan it had read at the start, by position)."""
+    try:
+        RUNNER.parent.mkdir(parents=True, exist_ok=True)
+        RUNNER.write_text(str(os.getpid()), encoding="utf-8")
+    except OSError:
+        pass
     while True:
         plan = load()
         steps = plan["steps"]

@@ -199,6 +199,7 @@ def status_forever(seconds=2):
             # What is being done now when it is not imaging (a GoTo, a plate
             # solve, focusing, a patrol's panel), and tonight's schedule.
             status["activity"] = activity.now()
+            status["activity_last"] = activity.last()
             status["schedule"] = schedule.view()
             # The system checks open a connection to INDI, so do them less often.
             if time.time() - checked > 15:

@@ -83,14 +83,31 @@ def set_(what, detail="", step=None, of=None, key=None):
         pass
 
 
+LAST = FILE.with_name("activity_last.json")
+
+
 def clear(key=None):
     try:
         with _lock:
             entries = _read()
-            if entries.pop(key or _key("main"), None) is not None:
+            ended = entries.pop(key or _key("main"), None)
+            if ended is not None:
                 _write(entries)
+                # What finished last, so a page with nothing going on can
+                # still say what happened and when (20 October 2026).
+                LAST.write_text(json.dumps(dict(ended, ended=time.time())), encoding="utf-8")
     except Exception:
         pass
+
+
+def last():
+    """The last thing that finished: {"what", "detail", "ended", "words"}, or None."""
+    try:
+        e = json.loads(LAST.read_text(encoding="utf-8"))
+        count = f" {e['step']} of {e['of']}" if e.get("step") is not None and e.get("of") else ""
+        return dict(e, words=f"{e['what']}{count}" + (f": {e['detail']}" if e.get("detail") else ""))
+    except Exception:
+        return None
 
 
 _count = itertools.count()

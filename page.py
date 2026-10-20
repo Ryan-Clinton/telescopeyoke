@@ -480,14 +480,14 @@ atlas. Comets: COBS and JPL Horizons. Cloud imagery: EUMETSAT. Catalogue: OpenNG
 
   // The newest single exposure, and separately the running stack. A
   // picture that has not changed for a while is marked as old.
-  function showImage(figure, image, kind) {
+  function showImage(figure, image, kind, ended) {
     $$(figure).hidden = !image;
     if (!image) return false;
     if (kind) $$(kind).textContent = image.kind.toUpperCase();
     const stale = image.age > 120;
     const detail = $$(figure + "-detail");
     detail.textContent = [kind ? "" : image.kind, image.detail,
-                          (stale ? "not updating: " : "") + ago(image.age)].filter(Boolean).join(" · ");
+                          (stale ? (ended ? "run ended: " : "not updating: ") : "") + ago(image.age)].filter(Boolean).join(" · ");
     detail.className = stale ? "fair" : "";
     return true;
   }
@@ -562,11 +562,26 @@ atlas. Comets: COBS and JPL Horizons. Cloud imagery: EUMETSAT. Catalogue: OpenNG
 
   // What the telescope is doing now, from whatever started it: a GoTo, a
   // plate solve, focusing, a patrol's panel (activity.py).
-  function showDoing(lines) {
+  // Never silent: what is running; or, when nothing is, that nothing is,
+  // what finished last and what is next; and whether the schedule has
+  // stopped (20 October 2026: minutes of a blank page left the person
+  // guessing whether all was well).
+  function showDoing(lines, last, plan) {
     lines = lines || [];
-    $$("doing").hidden = !lines.length;
-    $$("doing-lines").innerHTML = lines.map((d, i) =>
-      `<div class="$${i ? "inner" : ""}">$${esc(d.words)} <span class="dim">· $${lasted(d.for_s)}</span></div>`).join("");
+    $$("doing").hidden = false;
+    if (lines.length) {
+      $$("doing-lines").innerHTML = lines.map((d, i) =>
+        `<div class="$${i ? "inner" : ""}">$${esc(d.words)} <span class="dim">· $${lasted(d.for_s)}</span></div>`).join("");
+      return;
+    }
+    const steps = (plan && plan.steps) || [];
+    const next = steps.find((s) => s.status === "queued");
+    const when = (t) => new Date(t * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", hour12: false});
+    const parts = [`<div><b>Nothing running</b></div>`];
+    if (last && last.ended) parts.push(`<div class="dim">Last: $${esc(last.words)}, finished $${lasted(Math.round(Date.now() / 1000 - last.ended))} ago</div>`);
+    if (next) parts.push(`<div class="dim">Next: $${esc(next.label)} at $${when(next.start)}</div>`);
+    if (next && plan && plan.runner === false) parts.push(`<div class="fair">The schedule has stopped: nothing will start by itself</div>`);
+    $$("doing-lines").innerHTML = parts.join("");
   }
 
   // Tonight's schedule: each step's expected start and finish, its state,
@@ -593,12 +608,13 @@ atlas. Comets: COBS and JPL Horizons. Cloud imagery: EUMETSAT. Catalogue: OpenNG
       return;
     }
     const run = showRun(status);
-    const now = showImage("now", status.now), stack = showImage("stack", status.stack, "stack-kind");
+    const ended = !!(status.finished || status.restacked);
+    const now = showImage("now", status.now, undefined, ended), stack = showImage("stack", status.stack, "stack-kind", ended);
     $$("live-section").hidden = !(run || now || stack);
     showPictures(status.pictures || []);
     showDiscovery(status.discovery);
     showSystem(status.system);
-    showDoing(status.activity);
+    showDoing(status.activity, status.activity_last, status.schedule);
     showSchedule(status.schedule);
     // The webcam comes to the top while the mount is slewing.
     $$("moving").hidden = !(status.scope_age != null && status.scope_age < 20);
