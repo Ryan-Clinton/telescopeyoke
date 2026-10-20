@@ -25,7 +25,8 @@ def test_report_renders_as_a_web_page(tmp_path):
     report = tonight.build(config.example(), demo=True)
     tonight.write_html(report, 10, tmp_path / "index.html")
     page = (tmp_path / "index.html").read_text(encoding="utf-8")
-    assert "<table>" in page and "My back garden" in page
+    # The page never names the place (serve.unplaced, 20 October 2026).
+    assert "<table>" in page and "My back garden" not in page
 
 
 def test_bortle_class_from_sky_brightness():
