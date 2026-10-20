@@ -441,3 +441,36 @@ def test_a_panel_with_no_reference_at_all_is_still_searched(tmp_path, monkeypatc
     other.mkdir(parents=True)
     (other / "final.fits").write_bytes(b"")
     assert not patrol.searchable(other)       # a field nobody patrols is left alone
+
+
+def test_a_candidate_from_an_earlier_night_seen_again_is_sent_and_says_how_it_was_seen():
+    sent = []
+    followed = [{"id": "M31-P4-20261018-225844-001", "first": "20261018-225844", "seen_on": 2, "of": 3,
+                 "tonight": {"seen": True, "mag": 17.40, "forced": True}},
+                {"id": "M31-P4-20261018-225844-002", "first": "20261018-225844", "seen_on": 1, "of": 3,
+                 "tonight": {"seen": False, "limit": 16.97}},
+                {"id": "M31-P4-20261020-012141-004", "first": "20261020-012141", "seen_on": 2, "of": 2,
+                 "tonight": {"seen": True, "mag": 16.9}}]               # tonight's own second look: not news
+    ids = patrol.seen_again("M31-P4", "frames/M31-P4/20261020-012141", {"followed": followed},
+                            say=lambda *_: None, send=lambda text, **k: sent.append(text))
+    assert ids == ["M31-P4-20261018-225844-001"] and len(sent) == 1
+    assert "seen again tonight, G 17.40, measured at its place only" in sent[0] and "2 of 3 nights" in sent[0]
+    assert patrol.seen_again("M31-P4", "frames/M31-P4/20261020-012141", {"followed": followed[1:]},
+                             say=lambda *_: None, send=lambda text, **k: sent.append(text)) == []
+    assert len(sent) == 1
+
+
+def test_the_second_look_always_says_what_became_of_the_alert():
+    sent = []
+    first = {"alerted": ["A", "B", "C", "D"]}
+
+    def said(second):
+        return patrol.second_look_said("M31-P8", first, second, say=lambda *_: None,
+                                       send=lambda text, **k: sent.append(text))
+    none_back = {"followed": [{"id": i, "tonight": {"seen": False, "limit": 16.9}} for i in "ABCD"]}
+    assert said(none_back) == "M31-P8: second look done. 0 of 4 candidate(s) seen again: a false alarm, nothing new here."
+    one_back = {"followed": [{"id": "B", "tonight": {"seen": True, "mag": 16.8}}]}
+    assert "1 of 4 candidate(s) seen again (B): look hard" in said(one_back)
+    assert "could not judge the 4 candidate(s): the GoTo back to it failed" in said({"stopped": "the GoTo back to it failed"})
+    assert patrol.second_look_said("M31-P8", {"alerted": []}, none_back, send=lambda *a, **k: sent.append(a)) is None
+    assert len(sent) == 3

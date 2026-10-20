@@ -247,7 +247,68 @@ def analyse(session, say=print, chain=None, both_halves=True, alerting=True):
         say(line)
     if chain is None and alerting:
         answer["alerted"] = alert(name, session, answer, say)
+        answer["seen_again"] = seen_again(name, session, answer, say)
     return answer
+
+
+SAME_NIGHT_HOURS = 12   # a candidate first found less than this long before tonight's stack is tonight's own
+
+
+def stamp_of(session):
+    try:
+        return time.mktime(time.strptime(Path(session).name[:15], "%Y%m%d-%H%M%S"))
+    except ValueError:
+        return None
+
+
+def seen_again(name, session, result, say=print, send=None):
+    """The person told when a candidate on file from an earlier night is
+    seen again tonight: it may be real, and it is the one thing worth
+    waking for. Says how it was seen: found by tonight's search, or only
+    measured at its place against the reference, which a flaw in the
+    reference shows just the same. 20 October 2026: a panel 4 candidate
+    from the 18th was seen again and nobody was told. Returns the IDs."""
+    import notify
+    tonight_at = stamp_of(session)
+    found = []
+    for k in result.get("followed") or []:
+        t = k.get("tonight") or {}
+        first_at = stamp_of(k.get("first") or "")
+        if not t.get("seen") or k["seen_on"] < 2 or None in (tonight_at, first_at) \
+                or tonight_at - first_at < SAME_NIGHT_HOURS * 3600:
+            continue
+        how = ("measured at its place only, above the reference (tonight's search did not find it; a flaw in "
+               "the reference shows the same way)" if t.get("forced") else "found by tonight's search")
+        mag = f", G {t['mag']:.2f}" if t.get("mag") is not None else ""
+        found.append(f"{k['id']} (first found {k['first']}): seen again tonight{mag}, {how}. Now seen on "
+                     f"{k['seen_on']} of {k['of']} nights.")
+    if found:
+        (send or notify.send)(f"{name}: a candidate from an earlier night is back.\n\n" + "\n\n".join(found)
+                              + "\n\nNothing is claimed yet. Claude checks it (candidate-vetter) as soon as it sees this message.",
+                              say=say)
+    return [line.split(" ")[0] for line in found]
+
+
+def second_look_said(name, first, second, say=print, send=None):
+    """The person told what the second look made of the candidates they
+    were alerted to: each one seen again (look hard) or not (a false
+    alarm), so the night's alert is never left hanging. 20 October 2026:
+    panel 8's four came to nothing and the person was never told."""
+    import notify
+    alerted = (first or {}).get("alerted") or []
+    if not alerted:
+        return None
+    if not second or "followed" not in second:
+        why = (second or {}).get("stopped") or "its search did not finish"
+        words = f"{name}: the second look could not judge the {len(alerted)} candidate(s): {why}."
+    else:
+        book = {k["id"]: k for k in second["followed"]}
+        back = [i for i in alerted if (book.get(i, {}).get("tonight") or {}).get("seen")]
+        words = (f"{name}: second look done. {len(back)} of {len(alerted)} candidate(s) seen again"
+                 + (f" ({', '.join(back)}): look hard, nothing is claimed yet." if back else
+                    ": a false alarm, nothing new here."))
+    (send or notify.send)(words, say=say)
+    return words
 
 
 def unexplained(result):
@@ -386,7 +447,8 @@ def follow(name, night, vetted, measure, both_halves=True):
         return book
     book = candidates.change(name, tonight_too)
     return [{"id": k["id"], "ra": k["ra"], "dec": k["dec"], "seen_on": candidates.nights_seen(k),
-             "of": len(k["nights"]), "tonight": next((n for n in k["nights"] if n["night"] == night), None)}
+             "of": len(k["nights"]), "first": k.get("first"),
+             "tonight": next((n for n in k["nights"] if n["night"] == night), None)}
             for k in book["candidates"] if k["open"]]
 
 
@@ -727,6 +789,7 @@ def run(args, say=print):
         entry = finish_panel(name, session)
         if unexplained(entry["analysis"]):
             entry["second_look"] = second_look(p, name, say)
+            second_look_said(name, entry["analysis"], entry["second_look"], say)
         answer["fields"].append(entry)
     if behind:
         activity.set_("Patrol", "the last panels' pictures and searches")
@@ -742,6 +805,13 @@ def run(args, say=print):
                 say(f"== back to {entry['field']} for a second look")
                 if subprocess.run(goto, stdout=sys.stdout, env=dict(os.environ, TY_PATROL="1")).returncode == 0:
                     entry["second_look"] = second_look(p, entry["field"], say)
+                else:
+                    entry["second_look"] = {"stopped": "the GoTo back to it failed"}
+                second_look_said(entry["field"], entry["analysis"], entry["second_look"], say)
+            elif unexplained(entry["analysis"]):
+                second_look_said(entry["field"], entry["analysis"],
+                                 {"stopped": "second looks are off tonight; it goes first on the next clear night"},
+                                 say)
             answer["fields"].append(entry)
     if order is not None and answer["fields"] and not args.dry_run:
         # Every night's frames of the mosaic as one picture, growing with this night's.
