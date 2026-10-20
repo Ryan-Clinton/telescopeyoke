@@ -298,6 +298,9 @@ HOLD_LEARN = 4.0     # seconds of each learning move: at 20"/s, about 60 pixels
 HOLD_RATE = 20.0     # arcsec/s of the hold's moves
 HOLD_GAIN = 0.7      # share of the miss each correction takes back: a guider's habit, so it never overshoots
 HOLD_SETTLE = 3      # frames kept after a move before the next is judged
+HOLD_NO_BETTER = 3   # corrections in a row that leave the miss no smaller: the hold stops
+HOLD_MOST = 600.0    # seconds of moving in all, in one run: beyond it the hold stops
+LEARNING = (("RA", +1), ("RA", -1), ("Dec", +1), ("Dec", -1))
 
 
 class Hold:
@@ -306,98 +309,169 @@ class Hold:
     and every star crossed different pixels, the first suspect for a 20 mmag
     floor in the photometry).
 
-    It learns first, as a guider calibrates: a move of HOLD_LEARN seconds in
-    RA, then in Dec, each measured by how far the next frames' shifts move
-    (the stacker's shift onto the first frame: `session.shifts`). Then, when
-    the frames have wandered more than `pixels`, it makes the moves that
-    bring them back, HOLD_GAIN of the way. A miss bigger than a move can
-    take back is left to the run's usual re-centring. No dithering."""
+    It learns first, as a guider calibrates, each direction on its own: a
+    move of HOLD_LEARN seconds east in RA, then back, then the same in Dec,
+    each measured by how far the next frames' shifts move (the stacker's
+    shift onto the first frame: `session.shifts`). Each direction is learnt
+    apart because whether the handset adds a variable RA rate to tracking or
+    replaces tracking with it is not known for this mount, and the two would
+    make one direction several times stronger than the other. Then, when the
+    frames have wandered more than `pixels`, it makes the moves that bring
+    them back, HOLD_GAIN of the way. It stops itself when HOLD_NO_BETTER
+    corrections in a row leave the miss no smaller, or after HOLD_MOST
+    seconds of moving; it learns again after any re-centring (a GoTo may
+    swing the tube over the pole, which turns the Dec response round). A
+    correction is at most PULSE_LONGEST seconds on each axis, so a big miss
+    is taken back over several; a frame that has drifted past DRIFT_LIMIT is
+    re-centred by GoTo as in any run. No dithering."""
 
     def __init__(self, pixels, pulse=None):
         self.pixels = pixels
         self.pulse = pulse          # (axis, rate, seconds) -> moves the mount; set when the run starts
-        self.state = "learn RA"
+        self.reset()
+        self.moved = 0.0            # seconds of moving so far
+        self.state = "learn"
+
+    def reset(self):
+        """Learn again from the start: after a re-centring or a swing over the pole."""
+        self.state = "learn"
+        self.lesson = 0             # which of LEARNING is next
         self.before = None          # the shift before the learning move
         self.mark = 0               # how many frames had been kept at the last move
-        self.columns = {}           # axis -> pixels of shift per second of move
-        self.creep = 0.0
+        self.columns = {}           # (axis name, sign) -> pixels of shift per second of move
+        self.misses = []            # the miss before each correction
 
     @staticmethod
     def where(track, last=3):
         """The latest shift: the mean of the last few frames'."""
         return np.mean([(x, y) for _, x, y in track[-last:]], axis=0) if track else None
 
+    @staticmethod
+    def drifting(track, last=6):
+        """The frames' own drift, pixels a second, from the last few: what a
+        learning move's measurement must not count as the move's."""
+        if len(track) < 3:
+            return np.zeros(2)
+        t = np.array([row[0] for row in track[-last:]], float)
+        xy = np.array([row[1:] for row in track[-last:]], float)
+        if np.ptp(t) <= 0:
+            return np.zeros(2)
+        return np.array([np.polyfit(t, xy[:, k], 1)[0] for k in (0, 1)])
+
     def due(self, track):
         """Whether a move is due now: never in the HOLD_SETTLE frames after one."""
         if self.state == "off" or len(track) - self.mark < HOLD_SETTLE:
             return False
-        if self.state != "hold":
+        if self.state == "learn":
             return True
         return math.hypot(*self.where(track)) > self.pixels
 
+    def move(self, name, sign, seconds):
+        import mount
+        if self.moved + seconds > HOLD_MOST:
+            raise interface.Refusal("INVALID_REQUEST", f"the hold has moved {self.moved:.0f} s in all this run")
+        self.pulse(mount.RA if name == "RA" else mount.DEC, sign * HOLD_RATE, seconds)
+        self.moved += seconds
+
     def step(self, track, say=print):
         """The next move: a learning one, or a correction."""
-        import mount
+        try:
+            self._step(track, say)
+        except interface.Refusal as stopped:
+            say(f"  hold: {stopped.message}; the hold is off")
+            self.state = "off"
+
+    def _step(self, track, say):
         now = self.where(track)
-        if self.state in ("learn RA", "learn Dec") and self.before is None:
-            axis = mount.RA if self.state == "learn RA" else mount.DEC
-            self.before = now
-            say(f"  hold: learning, a {HOLD_LEARN:g} s move in {self.state[6:]}")
-            self.pulse(axis, HOLD_RATE, HOLD_LEARN)
+        if self.state == "learn":
+            name, sign = LEARNING[self.lesson]
+            if self.before is not None:
+                then, drift, when = self.before
+                elapsed = np.mean([row[0] for row in track[-3:]]) - when
+                moved = (now - then - drift * elapsed) / HOLD_LEARN
+                if math.hypot(*moved) < 0.2:
+                    say(f"  hold: a move {'+' if sign > 0 else '-'}{name} did not move the frames; the hold is off")
+                    self.state = "off"
+                    return
+                self.columns[(name, sign)] = moved
+                say(f"  hold: {'+' if sign > 0 else '-'}{name} moves the frames {moved[0]:+.1f}, "
+                    f"{moved[1]:+.1f} px a second")
+                self.lesson += 1
+                self.before = None
+                if self.lesson == len(LEARNING):
+                    self.state = "hold"
+                    say("  hold: learnt; holding from here")
+                    self.mark = len(track)
+                    return
+                name, sign = LEARNING[self.lesson]
+            # The drift from the frames since the last move only: a move's own jump is not drift.
+            self.before = (now, self.drifting(track[self.mark:]), float(np.mean([row[0] for row in track[-3:]])))
+            self.move(name, sign, HOLD_LEARN)
             self.mark = len(track)
-        elif self.state in ("learn RA", "learn Dec"):
-            axis = mount.RA if self.state == "learn RA" else mount.DEC
-            moved = (now - self.before) / HOLD_LEARN
-            if math.hypot(*moved) < 0.5:
-                say(f"  hold: a move in {self.state[6:]} did not move the frames; the hold is off")
-                self.state = "off"
-                return
-            self.columns[axis] = moved
-            say(f"  hold: {self.state[6:]} moves the frames {moved[0]:+.1f}, {moved[1]:+.1f} px a second")
-            self.before = None
-            self.state = "learn Dec" if self.state == "learn RA" else "hold"
-            if self.state == "learn Dec":
-                self.step(track, say)
-                return
-            # Back where the learning started, from what was learnt.
-            self.correct(now, len(track), say)
-        elif self.state == "hold":
-            self.correct(now, len(track), say)
+            return
+        self.correct(now, len(track), say)
+
+    def solve(self, now):
+        """Seconds of move in RA and Dec (signed) that take back HOLD_GAIN of
+        `now`, each direction with its own learnt strength."""
+        want = -HOLD_GAIN * np.asarray(now, float)
+        signs = (1, 1)
+        for _ in range(3):              # the signs decide the strengths, the strengths the signs
+            m = np.column_stack([self.columns[("RA", signs[0])] * signs[0],
+                                 self.columns[("Dec", signs[1])] * signs[1]])
+            seconds = np.linalg.solve(m, want)
+            new = tuple(1 if s >= 0 else -1 for s in seconds)
+            if new == signs:
+                break
+            signs = new
+        return seconds
 
     def correct(self, now, kept, say=print):
         """Moves that take back HOLD_GAIN of the shift `now`."""
         import mount
-        m = np.column_stack([self.columns[mount.RA], self.columns[mount.DEC]])
+        miss = math.hypot(*now)
+        self.misses.append(miss)                # only a correction made comes here
+        recent = self.misses[-(HOLD_NO_BETTER + 1):]
+        if len(recent) > HOLD_NO_BETTER and all(b >= a for a, b in zip(recent, recent[1:])):
+            say(f"  hold: {HOLD_NO_BETTER} corrections left the miss no smaller ({miss:.0f} px); the hold is off")
+            self.state = "off"
+            return
         try:
-            seconds = np.linalg.solve(m, -HOLD_GAIN * np.asarray(now, float))
+            seconds = self.solve(now)
         except np.linalg.LinAlgError:
             say("  hold: RA and Dec move the frames the same way; the hold is off")
             self.state = "off"
             return
-        longest = mount.PULSE_LONGEST
-        if np.max(np.abs(seconds)) > longest:
-            say(f"  hold: {math.hypot(*now):.0f} px off is more than a move takes back; left to re-centring")
-            return
-        say(f"  hold: {math.hypot(*now):.1f} px off; moving {seconds[0]:+.1f} s in RA, {seconds[1]:+.1f} s in Dec")
-        for axis, s in ((mount.RA, seconds[0]), (mount.DEC, seconds[1])):
+        longest = float(np.max(np.abs(seconds)))
+        if longest > mount.PULSE_LONGEST:
+            # A step of the way, the longest move the mount allows; the next corrections do the rest.
+            seconds = seconds * (mount.PULSE_LONGEST / longest)
+        say(f"  hold: {miss:.1f} px off; moving {seconds[0]:+.1f} s in RA, {seconds[1]:+.1f} s in Dec")
+        for name, s in (("RA", seconds[0]), ("Dec", seconds[1])):
             if abs(s) >= 0.1:
-                self.pulse(axis, HOLD_RATE if s > 0 else -HOLD_RATE, abs(s))
+                self.move(name, 1 if s > 0 else -1, abs(s))
         self.mark = kept
 
 
-def hold_mover():
+def hold_mover(name):
     """The hold's moves on the real mount, each through mount.Mount.pulse
-    (its rate and length limits, and the motion lock), the Dec creep the
-    tracking assist set kept."""
+    (its rate and length limits, and the motion lock), refused once the
+    target is near the mount's limit or the Sun is up (night_over), with the
+    Dec creep the tracking assist set put back after each Dec move."""
     import mount
     scope = mount.Mount(watch=False)
+    site = config.load()["site"]
 
     def pulse(axis, rate, seconds):
-        creep = 0.0
+        why = night_over(name, site)
+        if why:
+            raise interface.Refusal("INVALID_REQUEST", f"no more holding moves: {why}")
         try:
-            creep = scope.drift_model(config.load()["site"]).creep or 0.0
-        except (SystemExit, KeyError, OSError, AttributeError):
-            pass
+            creep = scope.drift_model(site).creep or 0.0
+        except (OSError, KeyError, AttributeError, ValueError):
+            if axis == mount.DEC:
+                print("  hold: the Dec creep is not known; a Dec move leaves the creep off", flush=True)
+            creep = 0.0
         return scope.pulse(axis, rate, seconds, creep=creep)
     return pulse
 
@@ -625,7 +699,9 @@ def plan(args):
     out = {"target": args.name, "frames": args.frames, "exposure": args.exposure,
            "gain": args.gain, "keeps_raw_frames": not args.no_save,
            "quality_pass": not (args.no_save or args.no_restack), "would_move": False,
-           "dither_every": getattr(args, "dither", 0) or None}
+           "dither_every": getattr(args, "dither", 0) or None,
+           # The hold moves the mount in small steps all through the run.
+           "hold_px": getattr(args, "hold", None)}
     if not args.no_recentre:
         site = (config.load() if config.FILE.exists() else config.example())["site"]
         try:
@@ -687,7 +763,7 @@ def run(args):
     holding = None
     if moving and getattr(args, "hold", None):
         try:
-            holding = Hold(args.hold, hold_mover())
+            holding = Hold(args.hold, hold_mover(args.name))
             print(f"  hold: keeping {args.name} within {args.hold:g} px; learning from the first frames", flush=True)
         except (OSError, SystemExit, interface.Refusal) as problem:
             print(f"  hold: mount not available ({problem}); imaging without it", flush=True)
@@ -780,6 +856,9 @@ def run(args):
                 recentre(args.name)
                 session.drift, since_centre = 0.0, 0
                 session.track.clear()   # the slew, not drift, moved the next frames
+                if holding and holding.state != "off":
+                    holding.reset()     # a GoTo may have swung the tube over the pole
+                    holding.mark = len(session.shifts)
             elif args.assist and moving and len(session.track) >= live.get("shoot.assist_every", ASSIST_EVERY):
                 collect(everything=True)
                 if not assist(session):
@@ -788,7 +867,7 @@ def run(args):
                 collect(everything=True)
                 try:
                     holding.step(session.shifts)
-                except (OSError, SystemExit, interface.Refusal) as problem:
+                except (OSError, SystemExit) as problem:
                     print(f"  hold: the mount would not move ({problem}); the hold is off", flush=True)
                     holding.state = "off"
             with Camera(gain=args.gain) as cam:
