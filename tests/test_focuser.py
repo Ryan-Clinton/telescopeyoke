@@ -1,4 +1,6 @@
 """The focuser's motor: what focuser.py sends the Nano and what it accepts back."""
+from pathlib import Path
+
 import pytest
 
 import focuser
@@ -253,3 +255,19 @@ def test_the_load_test_says_which_way_the_drive_slips(tmp_path):
     out, inward = answer["legs"][0], answer["legs"][1]
     assert out["share_through"] == pytest.approx(1.0, abs=0.1) and inward["share_through"] == pytest.approx(0.33, abs=0.1)
     assert answer["verdict"].startswith("it slips in only")
+
+
+def test_a_look_keeps_one_fresh_picture_and_lets_the_camera_go(tmp_path, monkeypatch):
+    monkeypatch.setattr(focuser.config, "DATA", tmp_path)
+    closed = []
+
+    class Phone:
+        def picture(self, into):
+            Path(into).write_bytes(b"jpeg")
+            return into
+
+        def close(self):
+            closed.append(True)
+    path = focuser.look("http://phone:4747/video", watcher=Phone(), sleep=lambda s: None)
+    assert Path(path).parent == tmp_path / "cache" / "focuser-looks" and Path(path).read_bytes() == b"jpeg"
+    assert closed == [True]

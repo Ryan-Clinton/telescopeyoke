@@ -9,6 +9,8 @@
                                the step, the slack and how it comes back, off a
                                camera watching a stick on the shaft; no stars
     ./focuser.py load-test --watch http://PHONE:4747/video
+    ./focuser.py look --watch http://PHONE:4747/video
+                               one fresh picture from the phone, to look at the focuser
                                on the telescope, the stick on the other knob: how
                                much of each turn reaches the focuser, each way
 
@@ -270,6 +272,22 @@ class Watcher:
             self.process.wait(5)
 
 
+def look(source, settle=3.0, watcher=None, sleep=time.sleep):
+    """One fresh picture from the camera watching the focuser (the phone on
+    DroidCam), kept as cache/focuser-looks/TIME.jpg, after `settle` seconds
+    for a new connection's focus to settle. For a person to be shown which
+    screw is which (20 October 2026: the 150P's focuser, looked at from
+    each side in turn). Returns the picture's path."""
+    folder = config.DATA / "cache" / "focuser-looks"
+    folder.mkdir(parents=True, exist_ok=True)
+    watcher = watcher or Watcher(source, folder)
+    try:
+        sleep(settle)
+        return watcher.picture(folder / f"{time.strftime('%Y%m%d-%H%M%S')}.jpg")
+    finally:
+        watcher.close()
+
+
 def stick_reader(focuser, picture, settle=1.5, looks=3, sleep=time.sleep):
     """The way the bench and the load test read a blacked stick against the
     protractor: `where(label, steps)` moves (if asked), waits for the camera
@@ -495,7 +513,7 @@ def flash(port=None):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("command", choices=["flash", "test", "move", "angle", "bench", "load-test"])
+    ap.add_argument("command", choices=["flash", "test", "move", "angle", "bench", "load-test", "look"])
     ap.add_argument("steps", nargs="?", type=int, help="for move: half-steps, minus for the other way")
     ap.add_argument("--pictures", nargs="+", help="for angle: the stick's angle in each picture")
     ap.add_argument("--watch", help="for bench: the camera looking down on the motor (a DroidCam "
@@ -514,6 +532,11 @@ def main(argv=None):
             print(f"{picture}: " + ("no protractor or stick found" if found is None else
                                     f"{found['angle']:.2f}°, protractor at {found['centre']} radius "
                                     f"{found['radius']}, stick {found['stick_pixels']} pixels (see {marked.name})"))
+        return
+    if args.command == "look":
+        if not args.watch:
+            ap.error("look needs --watch, the camera to take the picture from")
+        print(look(args.watch))
         return
     if args.command == "move" and not args.steps:
         ap.error("move needs a number of half-steps")

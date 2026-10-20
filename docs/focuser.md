@@ -217,6 +217,32 @@ sharpest yet, and stops two moves past the best (at most 64 half-steps
 inside it), since it cannot go back. Far out, the search (`--find`) now
 follows the doughnuts' size and turns back the moment they grow. 
 
+### 20 October 2026: the focuser itself is too stiff for the motor
+
+In daylight, the camera level: twelve moves out at 20 ms a half-step and
+then forty at 40 ms turned nothing, the Nano reporting each move done.
+With the camera off and the focuser's nut loosened it still did not turn;
+disconnected from the focuser, the motor turned freely, and with the
+coupler's grub screw loose its play could be seen taken up before it
+stopped. So the motor, driver and Nano work, and the focuser takes more to
+turn than the motor gives. The coupler has one of its two grub screws.
+
+The 150P's focuser is most likely a Crayford-style friction drive, not
+rack and pinion (unconfirmed until seen from underneath:
+[research notes](research/focuser-stiffness-2026-10-20.md)): a smooth 4 mm
+shaft pressing on a flat on the drawtube. Too much pressure (the centre
+thumbscrew, which also holds the motor's bracket, and the small grub screws
+beside it), old grease or a slipped pad and it will not turn; too little,
+or grease on the flat, and the shaft spins without moving the tube. In
+order: with the bracket off and the thumbscrew backed off, see whether the
+bare knob turns easily; set the pressure so the drawtube just holds the
+camera, clean and dry; give the ULN2003 its own 5 V supply (the Nano's 5 V
+pin on USB leaves the motor about three quarters of its torque); both grub
+screws on the coupler, onto a filed flat; and if it still struggles, a 3:1
+to 5:1 gear or belt reduction, or a NEMA 14 or 17. `./focuser.py look
+--watch URL` keeps one picture from the phone, for marking which screw is
+which.
+
 ### Finding where the turn is lost (`./focuser.py load-test`)
 
 In daylight, on the telescope with the camera on: the blacked stick and the
@@ -237,9 +263,8 @@ with the camera off:
   or the coupler's grub screw; Sharpie marks across bracket and focuser and
   across coupler and shaft show which joint moved;
 - it slips both ways: the coupler first; if it passes with the camera off,
-  the 28BYJ-48 (about 30 to 35 mN·m) is too weak for the camera, about 30
-  mN·m on a 5 mm pinion with the focuser near vertical before the
-  focuser's own friction. Then: the motor run bipolar from an A4988 or
+  the 28BYJ-48 (about 30 mN·m, 300 gf·cm, measured on a ULN2003 board) is
+  too weak for the focuser's friction and the camera's weight. Then: the motor run bipolar from an A4988 or
   DRV8825 (about twice the torque), a NEMA 14 or 17, or a spring taking
   the camera's weight off the drawtube.
 
