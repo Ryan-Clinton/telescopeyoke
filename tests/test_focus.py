@@ -577,12 +577,139 @@ def test_each_motor_reading_is_numbered_says_its_step_and_goes_out_at_once(monke
     monkeypatch.setattr(sys, "stdout", out)
     tube = Drawtube(best=100)
     focus.motor_focus(tube, tube.read, usual=2.0)
-    lines = out.getvalue().splitlines()
+    lines = [line.split(" ", 1)[1] for line in out.getvalue().splitlines()]     # past the time
     assert lines and len(flushed) >= len(lines)
     readings = [line for line in lines if line.strip().startswith("#")]
     assert readings[0].split()[0] == "#1" and readings[1].split()[0] == "#2"
     assert any(f"step {-focus.STEP:+5d}" in line for line in readings)
     assert any("fitted focus" in line for line in lines)        # the sweep drawn as text
+
+
+STAMPED = r"^\d\d:\d\d:\d\d "
+
+
+class Log(io.StringIO):
+    """stdout as a log file being tailed: what had been flushed, line by line."""
+
+    def __init__(self):
+        super().__init__()
+        self.shown = ""
+
+    def flush(self):
+        self.shown = self.getvalue()
+
+
+def opened_motor(tube, closed=None):
+    """focuser.Focuser.open() faked: a motor on `tube`, its port named."""
+    link = type("Link", (), {"port": "/dev/ttyUSB7"})()
+    return classmethod(lambda cls, *a, **k: type("M", (), {
+        "link": link, "move": lambda self, n: tube.move(n),
+        "close": lambda self: closed is not None and closed.append(True)})())
+
+
+def test_a_motor_run_stamps_every_line_and_says_each_stage_before_it_waits(monkeypatch):
+    """21 October 2026: a run's log stayed empty for four minutes while the
+    camera hung. Each stage is said, with the time, before it is waited on."""
+    import re
+    import focuser
+    log = Log()
+    shown_at_frame = []
+
+    class Camera(StarCamera):
+        def frame(self, seconds):
+            shown_at_frame.append(log.shown)
+            return super().frame(seconds)
+    monkeypatch.setattr(sys, "stdout", log)
+    monkeypatch.setattr(focuser.Focuser, "open", opened_motor(Drawtube(best=0)))
+    monkeypatch.setattr(focus, "Camera", Camera)
+    monkeypatch.setattr(focus, "measure_stars", lambda lum: (1.86, None))
+    monkeypatch.setattr(focus, "usual_best", lambda: 2.4 * focus.arcsec_per_pixel())
+    monkeypatch.setattr(sys, "argv", ["focus.py", "--motor"])
+    focus.main()
+    lines = log.getvalue().splitlines()
+    assert lines and all(re.match(STAMPED, line) for line in lines)
+    assert log.shown == log.getvalue()                       # nothing held back at the end
+    assert "focuser open on /dev/ttyUSB7" in shown_at_frame[0] and "camera open" in shown_at_frame[0]
+    assert f"measuring the start: {focus.SWEEP_FRAMES} frames of 1 s" in shown_at_frame[1]
+    assert "Left as it is" in lines[-1]
+
+
+def hung_camera(after):
+    """A camera that gives `after` frames and then times out, as on 21 October 2026."""
+    import indi
+
+    class Camera(StarCamera):
+        given = 0
+
+        def frame(self, seconds):
+            if Camera.given >= after:
+                raise indi.IndiError("timed out waiting for the image")
+            Camera.given += 1
+            return super().frame(seconds)
+    return Camera
+
+
+def test_a_hung_camera_ends_a_motor_run_in_one_plain_line_saying_where_the_focuser_is(monkeypatch, capsys):
+    import focuser
+    tube, closed = Drawtube(best=0), []
+    monkeypatch.setattr(focuser.Focuser, "open", opened_motor(tube, closed))
+    monkeypatch.setattr(focus, "Camera", hung_camera(after=4))     # the stale frame and the start's three
+    monkeypatch.setattr(focus, "SETTLE_S", 0)
+    monkeypatch.setattr(focus, "measure_stars", lambda lum: (1.86, None))
+    monkeypatch.setattr(focus, "usual_best", lambda: 2.4 * focus.arcsec_per_pixel())
+    monkeypatch.setattr(focus, "motor_focus", lambda motor, read, usual, **k: (motor.move(320), read(3)))
+    monkeypatch.setattr(sys, "argv", ["focus.py", "--motor", "--anyway"])
+    with pytest.raises(SystemExit) as end:       # not an IndiError: no traceback
+        focus.main()
+    import re
+    line = str(end.value.code)
+    assert re.match(STAMPED, line) and "\n" not in line
+    assert "the camera sent no picture for 0 s: it has hung; ./camera_setup.py restarts it" in line
+    assert "The focuser is where it was: +320 half-steps from the start." in line
+    assert closed == [True] and tube.at == 320
+    # The same with --json: the envelope says so, and stderr carries no traceback.
+    capsys.readouterr()
+    monkeypatch.setattr(focus, "Camera", hung_camera(after=0))
+    monkeypatch.setattr(sys, "argv", ["focus.py", "--motor", "--json"])
+    with pytest.raises(SystemExit) as end:
+        focus.main()
+    out = capsys.readouterr()
+    answer = json.loads(out.out)
+    assert end.value.code == 1 and answer["errors"][0]["code"] == "CAMERA_NOT_CONNECTED"
+    assert "has hung" in answer["errors"][0]["message"] and "has not moved" in answer["errors"][0]["message"]
+    assert "Traceback" not in out.err
+
+
+def test_a_hung_camera_ends_a_check_in_one_plain_line(monkeypatch):
+    import focuser
+    monkeypatch.setattr(focuser.Focuser, "open", classmethod(lambda cls, *a, **k: pytest.fail("it turned")))
+    monkeypatch.setattr(focus, "Camera", hung_camera(after=2))
+    monkeypatch.setattr(focus, "measure_stars", lambda lum: (1.86, None))
+    monkeypatch.setattr(focus, "usual_best", lambda: 2.4 * focus.arcsec_per_pixel())
+    log = Log()
+    monkeypatch.setattr(sys, "stdout", log)
+    monkeypatch.setattr(sys, "argv", ["focus.py", "--check"])
+    with pytest.raises(SystemExit) as end:
+        focus.main()
+    import re
+    assert "it has hung; ./camera_setup.py restarts it." in str(end.value.code)
+    assert "focuser" not in str(end.value.code)             # a check has no focuser to speak of
+    lines = log.shown.splitlines()
+    assert all(re.match(STAMPED, line) for line in lines)
+    assert "camera open" in lines[1] and "focus check 1/3: HFR 1.86" in lines[2]
+
+
+def test_a_late_frame_is_said_to_be_late_while_it_is_waited_for(monkeypatch):
+    log = Log()
+    monkeypatch.setattr(sys, "stdout", log)
+    monkeypatch.setattr(focus, "SLOW_FRAME_S", 0.05)
+
+    class Slow:
+        def frame(self, seconds):
+            time.sleep(0.4)
+            return "picture"
+    assert focus.Watched(Slow(), 0.05).frame() == "picture"
+    assert "no picture from the camera after 0 s (a frame is 0.05 s): still waiting" in log.shown
 
 
 def test_a_focus_reading_puts_its_frame_and_line_on_the_status_page(monkeypatch, tmp_path):

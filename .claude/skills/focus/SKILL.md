@@ -31,9 +31,13 @@ way (17 October 2026: HFR 1.86 at the start, 3.52 after a stopped run).
    reply. Say only a fault, or the end.
    Asked for a progress report: read the log's last lines and answer in
    one line from them, "coming in, +480, HFR 6.1, best 6.1, aim 2.3, 4
-   min in". No reading in the log for over a minute is the camera
-   stalled: say so in the same line. Never answer with guesses about
-   buffering or what might be happening.
+   min in". Every line starts with the time it was printed, and each
+   stage (focuser open, camera open, measuring the start) is a line as it
+   starts; a frame late by 15 s says "no picture from the camera ...
+   still waiting". A run that ends "the camera sent no picture ... it has
+   hung" says where the focuser was left: run `./camera_setup.py`, then
+   `--check`. Never answer with guesses about buffering or what might be
+   happening.
    A run sweeps nine positions through focus, three frames each, fits the
    curve and goes once to its lowest point (`docs/focuser.md`): no
    hunting, and it ends at tonight's best, not the usual. On a new night or

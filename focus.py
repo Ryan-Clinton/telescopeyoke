@@ -41,6 +41,7 @@ Runs for 15 minutes (Ctrl+C to stop sooner); the web page shows the picture.
 import argparse
 import json
 import queue
+import sys
 import threading
 import time
 import wave
@@ -58,6 +59,7 @@ import interface
 import snap
 import stacking
 from camera import PORT, WHITE, Camera, luminance
+from indi import IndiError
 
 ROOT = Path(__file__).parent
 PREVIEW = config.DATA / "web" / "latest.jpg"
@@ -626,6 +628,7 @@ NOISE = 0.4             # a "star" this many times smaller than the usual best i
 CEILING = 12.0          # HFR beyond this is the measuring box's size, not the star's
 MOTOR_TRAVEL = 8192     # the furthest a run goes from where it started, either way (two turns)
 FOCUSER_FILE = config.DATA / "cache" / "focuser.json"
+SLOW_FRAME_S = 15       # a frame not come this long after its exposure is said to be late, then every 30 s
 
 
 class OutOfReach(Exception):
@@ -633,10 +636,54 @@ class OutOfReach(Exception):
 
 
 def progress(line):
-    """One reading of a focus run, out at once: a log being watched, or
-    read for a progress report, shows it the moment it is measured, not when
-    the run ends."""
-    print(line, flush=True)
+    """One line of a focus run, the time at its front, out at once: a log
+    being watched, or read for a progress report, shows it the moment it
+    happens, not when the run ends. On 21 October 2026 a run's log stayed
+    empty for four minutes while the camera hung, then ended in a traceback."""
+    print(f"{time.strftime('%H:%M:%S')} {line}", flush=True)
+
+
+class Watched:
+    """The camera, each frame watched: one still not come SLOW_FRAME_S after
+    its exposure is said to be late while it is waited for, and `since` says
+    when the frame being waited for was asked for, for when it never comes."""
+
+    def __init__(self, cam, seconds):
+        self.cam, self.seconds, self.since = cam, seconds, None
+
+    def waited(self):
+        return time.monotonic() - self.since if self.since is not None else 0.0
+
+    def frame(self):
+        self.since, done = time.monotonic(), threading.Event()
+
+        def watch():
+            wait = self.seconds + SLOW_FRAME_S
+            while not done.wait(wait):
+                progress(f"no picture from the camera after {self.waited():.0f} s (a frame is "
+                         f"{self.seconds:g} s): still waiting")
+                wait = 30
+        threading.Thread(target=watch, daemon=True).start()
+        try:
+            got = self.cam.frame(self.seconds)
+        finally:
+            done.set()
+        self.since = None
+        return got
+
+
+def hung(problem, frames, moved=None):
+    """A camera that stopped answering, as one plain line that ends the run
+    (a refusal, so no traceback): how long it was waited for, how to restart
+    it, and, with `moved`, where the focuser was left."""
+    if frames is not None and frames.since is not None:
+        what = f"the camera sent no picture for {frames.waited():.0f} s: it has hung"
+    else:
+        what = f"the camera did not answer ({problem})"
+    where = ("" if moved is None else " The focuser has not moved." if not moved else
+             f" The focuser is where it was: {moved:+d} half-steps from the start.")
+    return interface.Refusal("CAMERA_NOT_CONNECTED", f"{time.strftime('%H:%M:%S')} {what}; "
+                             f"./camera_setup.py restarts it.{where}")
 
 
 def focuser_settings():
@@ -1063,18 +1110,27 @@ def run_check(args):
     against the usual best. Nothing turns."""
     scale = arcsec_per_pixel()
     usual = usual_best() / scale
-    with Camera(args.port, MOTOR_GAIN) as cam:
-        cam.frame(MOTOR_EXPOSURE)               # the first frame after opening can be stale
-        values = []
-        for n in range(3):
-            lum = luminance(cam.frame(MOTOR_EXPOSURE)[0])
-            value = measure_stars(lum)[0]
-            show(lum, f"focus check {n + 1}/3: HFR {'none' if value is None else f'{value:.2f}'}")
-            if value:
-                values.append(value)
+    frames = None
+    progress(f"opening the camera (INDI port {args.port})")
+    try:
+        with Camera(args.port, MOTOR_GAIN) as cam:
+            frames = Watched(cam, MOTOR_EXPOSURE)
+            progress(f"camera open; checking focus: 3 frames of {MOTOR_EXPOSURE:g} s after one thrown away")
+            frames.frame()                          # the first frame after opening can be stale
+            values = []
+            for n in range(3):
+                lum = luminance(frames.frame()[0])
+                value = measure_stars(lum)[0]
+                line = f"focus check {n + 1}/3: HFR {'none' if value is None else f'{value:.2f}'}"
+                progress(line)
+                show(lum, line)
+                if value:
+                    values.append(value)
+    except IndiError as problem:
+        raise hung(problem, frames) from None
     hfr = float(np.median(values)) if values else None
     good = hfr is not None and hfr <= GOOD_ENOUGH * usual
-    print(f"Focus now: {verdict(hfr, usual)}.", flush=True)
+    progress(f"Focus now: {verdict(hfr, usual)}.")
     if good:
         seen_good(hfr, scale)
     return {"hfr": hfr and round(hfr, 2), "hfr_arcsec": hfr and round(hfr * scale, 2),
@@ -1086,10 +1142,11 @@ class Settled:
     measured, so a frame is not of a tube still shaking."""
 
     def __init__(self, motor, wait=time.sleep):
-        self.motor, self.wait = motor, wait
+        self.motor, self.wait, self.moved = motor, wait, 0
 
     def move(self, n):
         self.motor.move(n)
+        self.moved += n         # where it is from the start, for a run cut short
         self.wait(SETTLE_S)
 
 
@@ -1117,26 +1174,34 @@ def run_motor(args, mode="focus"):
               f"gears' slack, {SWEEP_FRAMES} frames each; then a curve fitted and one move, inward, to its "
               f"lowest point, checked with {CHECK_FRAMES} frames. The mount does not move.")
         return {"would_move": True, "port": port, "usual_hfr": round(usual, 2), **settings}
+    # Every stage says so as it starts, so a log is never empty while the
+    # run waits on the focuser or the camera.
+    progress("opening the focuser")
     motor = focuser.Focuser.open()
+    progress(f"focuser open on {getattr(getattr(motor, 'link', None), 'port', None) or 'its port'}; "
+             f"opening the camera (INDI port {args.port})")
+    frames = drive = None
     try:
         with Camera(args.port, MOTOR_GAIN) as cam:
-            cam.frame(MOTOR_EXPOSURE)               # the first frame after opening can be stale
+            frames = Watched(cam, MOTOR_EXPOSURE)
+            progress(f"camera open; one frame of {MOTOR_EXPOSURE:g} s thrown away (the first can be stale)")
+            frames.frame()
             seen = {}
 
-            def read(frames):
+            def read(count):
                 values = []
-                for _ in range(frames):
-                    mosaic, _ = cam.frame(MOTOR_EXPOSURE)
+                for _ in range(count):
+                    mosaic, _ = frames.frame()
                     seen["lum"] = luminance(mosaic)
                     values.append(measure_stars(seen["lum"])[0])
                 return values
 
-            def ring(frames):
-                """The doughnuts' size, median over `frames`, from the
+            def ring(count):
+                """The doughnuts' size, median over `count` frames, from the
                 brightest star's ring (measure())."""
                 sizes = []
-                for _ in range(frames):
-                    mosaic, _ = cam.frame(MOTOR_EXPOSURE)
+                for _ in range(count):
+                    mosaic, _ = frames.frame()
                     seen["lum"] = luminance(mosaic)
                     found = measure(seen["lum"])
                     if found:
@@ -1151,51 +1216,62 @@ def run_motor(args, mode="focus"):
             if mode == "walk":
                 if hasattr(motor, "speed"):
                     motor.speed(WALK_MS)
+                progress(f"walking in at {WALK_MS} ms a half-step, {SWEEP_FRAMES} frames of "
+                         f"{MOTOR_EXPOSURE:g} s after each move")
                 result = walk_in(drive, read, usual, say=say)
-                print(f"Best HFR {result['best_hfr']} at {result['best_at']:+d} half-steps; ended at "
-                      f"{result['ended_at']:+d}, HFR {result['ended_hfr']}.", flush=True)
+                progress(f"Best HFR {result['best_hfr']} at {result['best_at']:+d} half-steps; ended at "
+                         f"{result['ended_at']:+d}, HFR {result['ended_hfr']}.")
                 return result
             if mode == "find":
+                progress("looking for stars: half a turn at a time, in and then out")
                 found = find_stars(drive, read, usual, say=say, ring=ring)
-                print(f"Stars measure {found:+d} half-steps from the start." if found is not None else
-                      "No stars within two turns either way: the focuser is back where it started.", flush=True)
+                progress(f"Stars measure {found:+d} half-steps from the start." if found is not None else
+                         "No stars within two turns either way: the focuser is back where it started.")
                 return {"found_at": found}
             if mode == "step":
+                progress("measuring the sweep step, out from focus")
                 found = measure_step(drive, read, usual, say=say)
                 if found:
                     keep_focuser(step=found)
-                print(f"Sweep step: {found} half-steps" + (", kept." if found else ": not measured."), flush=True)
+                progress(f"Sweep step: {found} half-steps" + (", kept." if found else ": not measured."))
                 return {"step": found}
             if mode == "backlash":
+                progress("measuring the gears' slack")
                 found = measure_backlash(drive, read, usual, settings["step"], say=say)
                 if found:
                     keep_focuser(backlash=found)
-                print(f"Backlash to overshoot: {found} half-steps" + (", kept." if found else ": not measured."),
-                      flush=True)
+                progress(f"Backlash to overshoot: {found} half-steps" + (", kept." if found else ": not measured."))
                 return {"backlash": found}
+            progress(f"measuring the start: {SWEEP_FRAMES} frames of {MOTOR_EXPOSURE:g} s")
             now = sample(read, SWEEP_FRAMES, usual)["hfr"]
-            print(f"Focus now: {verdict(now, usual)}.", flush=True)
+            progress(f"Focus now: {verdict(now, usual)}.")
             if (mode == "focus" and now is not None and now <= GOOD_ENOUGH * usual
                     and not getattr(args, "anyway", False)):
-                print("Left as it is: it is already as good as focusing usually gets (--anyway to focus "
-                      "regardless).", flush=True)
+                progress("Left as it is: it is already as good as focusing usually gets (--anyway to focus "
+                         "regardless).")
                 seen_good(now, scale)
                 return {"hfr": round(now, 2), "moved": 0, "found": True, "readings": [], "left_alone": True,
                         "hfr_arcsec": round(now * scale, 2)}
             if not settings["step_measured"] or not settings["backlash_measured"]:
-                print(f"Not yet measured, so assumed: step {settings['step']}, backlash {settings['backlash']} "
-                      "(--measure-step, --measure-backlash).", flush=True)
+                progress(f"Not yet measured, so assumed: step {settings['step']}, backlash {settings['backlash']} "
+                         "(--measure-step, --measure-backlash).")
+            progress(f"sweeping: {SWEEP_POINTS} positions {settings['step']} half-steps apart, "
+                     f"{SWEEP_FRAMES} frames each")
             result = motor_focus(drive, read, usual, say=say, sweep_only=mode == "sweep")
+    except IndiError as problem:
+        # A hung camera ends the run in one plain line, not a traceback,
+        # saying where it left the focuser.
+        raise hung(problem, frames, drive.moved if drive else 0) from None
     finally:
         motor.close()
     hfr = result["hfr"]
     fit = result["fit"]
     if mode == "sweep":
-        print(f"Sweep: {'focus at ' + format(fit['focus'], '+.0f') + ', HFR ' + str(fit['hfr']) if fit and fit['ok'] else 'no curve fitted'}"
-              "; the focuser is back where it started.", flush=True)
+        progress(f"Sweep: {'focus at ' + format(fit['focus'], '+.0f') + ', HFR ' + str(fit['hfr']) if fit and fit['ok'] else 'no curve fitted'}"
+                 "; the focuser is back where it started.")
     elif result["found"]:
-        print(f"Focused: HFR {hfr:.2f} ({hfr * scale:.1f}\"), {result['moved']:+d} half-steps from the start "
-              f"(it was {result['start_hfr']}).", flush=True)
+        progress(f"Focused: HFR {hfr:.2f} ({hfr * scale:.1f}\"), {result['moved']:+d} half-steps from the start "
+                 f"(it was {result['start_hfr']}).")
         # Only a run that reached good focus says what good focus is: one
         # that ended soft (18 October 2026, HFR 5.03) would raise the aim.
         if hfr <= 1.5 * usual:
@@ -1203,10 +1279,9 @@ def run_motor(args, mode="focus"):
                 log.write(json.dumps({"saved": time.time(), "best_hfr": round(hfr, 2),
                                       "best_arcsec": round(hfr * scale, 2), "motor": True}) + "\n")
         else:
-            print(f"That is {hfr / usual:.1f} times the usual best, so it is not kept as what good focus is.",
-                  flush=True)
+            progress(f"That is {hfr / usual:.1f} times the usual best, so it is not kept as what good focus is.")
     else:
-        print("No focus found: the focuser is back where it started.", flush=True)
+        progress("No focus found: the focuser is back where it started.")
     return dict(result, hfr_arcsec=hfr and round(hfr * scale, 2))
 
 
@@ -1250,6 +1325,12 @@ def main():
                     help="measure the focuser gears' slack on the steep side of the curve; keeps half as much "
                          "again as the overshoot")
     args = ap.parse_args()
+    # Written to a file, stdout is held back in blocks: line by line, a log
+    # being tailed shows each line as it is printed.
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except (AttributeError, ValueError):     # not a real stream (a test's)
+        pass
     for flag, mode in (("sweep", "sweep"), ("find", "find"), ("measure_step", "step"),
                        ("measure_backlash", "backlash"), ("walk_in", "walk")):
         if getattr(args, flag):
