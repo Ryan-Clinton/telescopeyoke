@@ -3,6 +3,7 @@ real telescope."""
 import json
 import math
 
+import numpy as np
 import pytest
 
 import config
@@ -418,3 +419,47 @@ def test_a_handset_whose_z_may_mean_altitude_and_azimuth_is_refused():
     with pytest.raises(mount.Refusal) as refused:
         mount.Mount(handset=Handset(b"042715#"))                       # 4.39.21
     assert refused.value.code_name == "HANDSET_NOT_SUPPORTED" and "4.39.21" in refused.value.message
+
+
+def test_a_plate_solve_takes_its_picture_again_when_the_camera_sends_none(scope, monkeypatch):
+    """21 October 2026: a polar check was lost at its third picture when one
+    frame never came. The picture is taken again with the camera opened afresh."""
+    import camera
+    import solve
+    from indi import IndiError
+    opened = []
+
+    class Flaky:
+        def __init__(self, *args, **kwargs):
+            opened.append(self)
+        def __enter__(self):
+            return self
+        def __exit__(self, *exc):
+            return False
+        def frame(self, seconds):
+            if len(opened) < 3:
+                raise IndiError("no frame within 18 s of a 1 s exposure")
+            return np.zeros((40, 60), dtype=np.uint16), {}
+
+    monkeypatch.setattr(camera, "Camera", Flaky)
+    monkeypatch.setattr(solve, "solve", lambda *args, **kwargs: None)
+    assert scope.where_really(10, 20) is None and len(opened) == 3
+
+
+def test_a_plate_solve_gives_up_when_the_camera_never_sends_a_picture(scope, monkeypatch):
+    import camera
+    from indi import IndiError
+
+    class Gone:
+        def __init__(self, *args, **kwargs):
+            pass
+        def __enter__(self):
+            return self
+        def __exit__(self, *exc):
+            return False
+        def frame(self, seconds):
+            raise IndiError("no frame")
+
+    monkeypatch.setattr(camera, "Camera", Gone)
+    with pytest.raises(IndiError):
+        scope.where_really(10, 20)

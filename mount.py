@@ -86,6 +86,7 @@ LOCK_FILE = ROOT / "MOTION_LOCKED"
 POINTING_FILE = config.DATA / "cache" / "pointing.json"
 CENTRED = 2 / 60  # degrees; close enough to stop correcting
 LAST_SOLVE = config.DATA / "cache" / "last_solve.json"
+FRAME_TRIES = 3   # pictures tried for one plate solve before the camera counts as gone
 # What has been learned about the drift, and the Dec creep now running.
 DRIFT_FILE = config.DATA / "cache" / "drift_model.json"
 # What `response` and `pointing` found, for looking at afterwards.
@@ -850,8 +851,19 @@ class Mount:
         # Short exposure at high gain: after a slew the stars drift for a
         # while, and streaked stars do not solve.
         from astropy.time import Time
-        with Camera(gain=2000) as cam:
-            mosaic, _ = cam.frame(exposure)
+        from indi import IndiError
+        # The camera sometimes sends no frame, on both drivers (21 October
+        # 2026: a polar check lost at its third picture). Open it afresh and
+        # take the picture again before giving up.
+        for attempt in range(FRAME_TRIES):
+            try:
+                with Camera(gain=2000) as cam:
+                    mosaic, _ = cam.frame(exposure)
+                break
+            except IndiError:
+                if attempt == FRAME_TRIES - 1:
+                    raise
+                print(f"{time.strftime('%H:%M:%S')} the camera sent no picture; trying again", flush=True)
         when = Time.now()
         snap.publish(mosaic, kind="plate-solve frame", detail=f"{exposure:g} s")
         if self.recording:
