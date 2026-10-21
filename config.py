@@ -246,10 +246,12 @@ SETTINGS = (
     ("solver", "database", "Star database folder", "text", "Blank uses the usual place for this system.",
      {"optional": True}),
     ("stream", "enabled", "Stream live while imaging", "yesno",
-     "To YouTube or Twitch, while a run is imaging (stream.py). The stream key goes in "
-     "~/.config/telescopeyoke/stream-key, not here.", {}),
-    ("stream", "service", "Streaming service", "choice", "Where the live stream goes.",
-     {"choices": ["youtube", "twitch", "custom"]}),
+     "To YouTube, Twitch or both, while a run is imaging (stream.py). The stream keys go in "
+     "~/.config/telescopeyoke/ (./stream.py key youtube, ./stream.py key twitch), not here.", {}),
+    ("stream", "service", "Streaming service", "choice",
+     "Where the live stream goes. youtube+twitch sends the same stream to both at once; one without a key "
+     "is left out.",
+     {"choices": ["youtube", "twitch", "youtube+twitch", "custom"]}),
     ("webcam", "enabled", "Use a webcam at all", "yesno",
      "Off: nothing opens a webcam (the telescope pictures during moves, watch.py and the picture on the pages); "
      "the settings below then do nothing.", {}),

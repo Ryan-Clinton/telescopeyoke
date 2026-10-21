@@ -839,10 +839,14 @@ class Reader:
         written = config._read(config.EXAMPLE if self.demo or not config.FILE.exists() else config.FILE)
         in_use = config._merged(written)
         # A setting that may be left blank shows what the file says, blank
-        # included; the rest show the value in use, default or not.
+        # included; the rest show the value in use, default or not. A list
+        # (["youtube", "twitch"] for the stream) shows as its choice, joined by +.
+        def shown(value):
+            return "+".join(map(str, value)) if isinstance(value, list) else value
         return {"file": str(config.FILE), "exists": config.FILE.exists(), "demo": self.demo,
                 "fields": [dict({"section": section, "key": key, "label": label, "kind": kind, "help": text,
-                                 "value": (written if limits.get("optional") else in_use).get(section, {}).get(key)},
+                                 "value": shown((written if limits.get("optional") else in_use)
+                                                .get(section, {}).get(key))},
                                 **limits)
                            for section, key, label, kind, text, limits in config.SETTINGS]}
 

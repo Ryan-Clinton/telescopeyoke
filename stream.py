@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stream the telescope live to YouTube or Twitch while it is imaging.
+"""Stream the telescope live to YouTube, Twitch or both while it is imaging.
 
     ./stream.py                    what it would do now, and why; streams nothing
     ./stream.py watch              keep watching: stream while a run is imaging, stop when it is not
@@ -9,12 +9,25 @@
     ./stream.py preview            the new look (docs/stream-look.md) in each state, as cache/stream-preview/*.png
     ./stream.py twitch-login       once: let it set the Twitch channel's title, category and tags (twitch.py)
     ./stream.py key                paste the stream key in (not shown as typed); kept readable only by you
+    ./stream.py key youtube        the same for one service, when streaming to more than one
 
 Off unless [stream] enabled in config.toml (the Settings screen has it).
-The service is [stream] service: "youtube", "twitch", or "custom" with
-[stream] url. The stream key is the person's and works like a password: it
-is kept in ~/.config/telescopeyoke/stream-key (readable only by them), never
-in config.toml, never shown, never written to a log.
+Where it goes is [stream] service: "youtube", "twitch", or "custom" with
+[stream] url; or several at once, as a list (["youtube", "twitch"]) or
+joined with + ("youtube+twitch", which is what the Settings screen writes).
+The picture is encoded once and sent to every one through ffmpeg's tee
+muxer, each with onfail=ignore, so one service dropping the stream leaves
+the others on air (the dropped one comes back at the next start).
+
+A stream key is the person's and works like a password: kept readable only
+by them under ~/.config/telescopeyoke/, never in config.toml, never shown,
+never written to a log. Each service has its own file, stream-key-youtube,
+stream-key-twitch or stream-key-custom (`./stream.py key SERVICE`). The
+plain stream-key (`./stream.py key`) is the key when there is one service,
+as it always was, and when there are several it is still the Twitch key
+when stream-key-twitch is missing: it held the Twitch key before there
+were two. A service with no key is left out, said once, and the stream goes
+to the others.
 
 What is sent: the running stack, beside the newest frame, with the target,
 how many frames, and what is next. Nothing else: no webcam, no cloud map,
@@ -70,31 +83,66 @@ INGEST = {
 }
 
 
+NAMES = {"youtube": "YouTube", "twitch": "Twitch", "custom": "the custom address"}
+
+
 def settings():
     found = config.hardware().get("stream", {})
     return {"enabled": bool(found.get("enabled", False)), "service": found.get("service", "youtube"),
             "url": found.get("url", "")}
 
 
-def key():
-    """The stream key, or None. Read only here, and only when streaming."""
+def services(s):
+    """The services streamed to, in order: [stream] service as one name, a
+    list of names, or names joined with +."""
+    found = s["service"]
+    names = found if isinstance(found, (list, tuple)) else str(found).split("+")
+    out = []
+    for name in (str(n).strip().lower() for n in names):
+        if name and name not in out:
+            out.append(name)
+    return out or ["youtube"]
+
+
+def key_file(service=None):
+    """Where a service's own key is kept; KEY_FILE, the plain one, for None."""
+    return KEY_FILE if service is None else KEY_FILE.with_name(f"stream-key-{service}")
+
+
+def _read(path):
     try:
-        text = KEY_FILE.read_text(encoding="utf-8").strip()
+        return path.read_text(encoding="utf-8").strip() or None
     except OSError:
         return None
-    return text or None
 
 
-def keep_key(text):
-    """Keep the stream key in KEY_FILE, readable only by its owner. False when empty."""
+def key_path(service=None, alone=True):
+    """The file `service`'s key is read from, or None when there is none:
+    its own file first, then the plain KEY_FILE when it is the only service
+    (`alone`) or Twitch, whose key that file held before there were two."""
+    places = [KEY_FILE] if service is None else \
+        [key_file(service)] + ([KEY_FILE] if alone or service == "twitch" else [])
+    return next((p for p in places if _read(p)), None)
+
+
+def key(service=None, alone=True):
+    """The stream key, or None. Read only here, and only when streaming."""
+    found = key_path(service, alone)
+    return _read(found) if found else None
+
+
+def keep_key(text, service=None):
+    """Keep a stream key (`service`'s own, or the plain one), readable only
+    by its owner. False when empty."""
     text = text.strip()
     if not text:
         return False
-    KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
-    descriptor = os.open(KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    path = key_file(service)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
     with os.fdopen(descriptor, "w", encoding="utf-8") as out:
         out.write(text + "\n")
-    os.chmod(KEY_FILE, 0o600)
+    os.chmod(path, 0o600)
     return True
 
 
@@ -105,9 +153,34 @@ def destination(s, stream_key):
     return template.format(key=stream_key) if template else None
 
 
-def hidden(text, stream_key):
-    """Text with the key taken out, for anything that might be shown."""
-    return text.replace(stream_key, "<stream key>") if stream_key else text
+def destinations(s):
+    """([(service, address, key)], [(service, why it is left out)]) for
+    the services in `s`: one without a key, or not known, is left out."""
+    names = services(s)
+    found, left = [], []
+    for name in names:
+        if name not in INGEST and name != "custom":
+            left.append((name, f"{name} left out: not a service this streams to (youtube, twitch or custom)."))
+            continue
+        stream_key = key(name, alone=len(names) == 1)
+        address = destination(dict(s, service=name), stream_key) if stream_key else None
+        if address:
+            found.append((name, address, stream_key))
+        elif stream_key:
+            left.append((name, f"{NAMES[name]} left out: no [stream] url in config.toml."))
+        else:
+            left.append((name, f"{NAMES[name]} left out: no stream key in {key_file(name)} "
+                               f"(./stream.py key {name})."))
+    return found, left
+
+
+def hidden(text, keys):
+    """Text with the key, or every one of `keys`, taken out, for anything
+    that might be shown."""
+    for stream_key in ([keys] if isinstance(keys, str) else keys or []):
+        if stream_key:
+            text = text.replace(stream_key, "<stream key>")
+    return text
 
 
 def status():
@@ -253,9 +326,15 @@ def encoder(device=None, size=(WIDTH, HEIGHT)):
 
 def command(target, device=None, size=(WIDTH, HEIGHT)):
     """ffmpeg taking raw pictures on its input and sending them to `target`
-    (an rtmp:// address, or a file to try it), reporting its speed in
-    PROGRESS."""
-    out = ["-f", "flv", target] if target.startswith("rtmp") else [target]
+    (an rtmp:// address, a file to try it, or a list of addresses),
+    reporting its speed in PROGRESS. Several are fed from one encoding by
+    the tee muxer, each with onfail=ignore so one failing leaves the rest."""
+    targets = [target] if isinstance(target, str) else list(target)
+    if len(targets) > 1:
+        out = ["-map", "0:v", "-map", "1:a", "-flags", "+global_header", "-f", "tee",
+               "|".join(f"[f=flv:onfail=ignore]{t}" for t in targets)]
+    else:
+        out = ["-f", "flv", targets[0]] if targets[0].startswith("rtmp") else [targets[0]]
     return ["ffmpeg", "-loglevel", "error", "-y", "-progress", str(PROGRESS), "-stats_period", "5",
             "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{WIDTH}x{HEIGHT}", "-r", str(INPUT_FPS), "-i", "-",
             "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
@@ -302,8 +381,11 @@ def bandwidth_test(target, device=None, run=subprocess.run, seconds=TEST_S):
     """The size to start at: 1080p if a short test of it to Twitch kept up,
     else 720p. Twitch takes a stream key with ?bandwidthtest=true without
     showing it to anyone. Other services have no such test: 1080p, and the
-    stream watches itself."""
-    if "live.twitch.tv" not in target:
+    stream watches itself. `target` may be a list: the test goes to the
+    Twitch one among them. It measures one stream, so with two the upload
+    needs twice what it showed; falling_behind catches it if that is short."""
+    target = next((t for t in ([target] if isinstance(target, str) else target) if "live.twitch.tv" in t), None)
+    if target is None:
         return (WIDTH, HEIGHT)
     progress = PROGRESS.with_name("stream-bandwidth.txt")
     rate = BITRATE[(WIDTH, HEIGHT)]
@@ -427,25 +509,47 @@ class Composer:
         self.stopped.set()
 
 
-def watch(to=None, say=print, sleep=time.sleep, clock=time.time, run=subprocess.Popen, wait=True):
+def passed_on(process, keys, say=print):
+    """Pass ffmpeg's own messages on, on their own thread, with every key
+    taken out: its errors name the address, key and all (a tee destination
+    that fails is printed whole)."""
+    import threading
+    pipe = getattr(process, "stderr", None)
+    if pipe is None:
+        return
+
+    def run():
+        for line in iter(pipe.readline, b""):
+            text = line.decode("utf-8", "replace").rstrip()
+            if text:
+                say(hidden(text, keys))
+    threading.Thread(target=run, daemon=True).start()
+
+
+def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.Popen, wait=True):
     """Stream while a run is imaging, until stopped. While streaming is off
     or there is no key it waits, looking again each minute, so switching it
     on is all it takes (`wait` False: say why and return)."""
     told = None
     while True:
         s = settings()
-        stream_key = None if to else key()
-        target = to or (destination(s, stream_key) if s["enabled"] and stream_key else None)
-        if target:
+        found, left = ([("file", to, None)], []) if to else (destinations(s) if s["enabled"] else ([], []))
+        if found:
             break
         why = ("Streaming is off ([stream] enabled in config.toml); nothing is sent." if not s["enabled"]
-               else f"No stream key in {KEY_FILE}: nothing is sent.")
+               else " ".join(w for _, w in left) + " Nothing is sent.")
         if why != told:
             say(why)
             told = why
         if not wait:
             return
         sleep(60)
+    for _, why in left:
+        say(why)
+    names = [name for name, _, _ in found]
+    target = to or [address for _, address, _ in found]
+    stream_keys = [k for _, _, k in found]
+    twitch_on = to is None and "twitch" in names
     device = working_device()
     say(f"Video encoding on {device or 'the processors (no working video hardware)'}")
     size = (WIDTH, HEIGHT)
@@ -473,19 +577,22 @@ def watch(to=None, say=print, sleep=time.sleep, clock=time.time, run=subprocess.
                     with composer.lock:
                         composer.ready = []
                 say(f"{time.strftime('%H:%M')} imaging {st.get('name')}: streaming {size[0]}x{size[1]} to "
-                    f"{hidden(target, stream_key)}")
+                    f"{to or ' and '.join(NAMES[n] for n in names)} "
+                    f"({hidden(' '.join([target] if isinstance(target, str) else target), stream_keys)})")
                 PROGRESS.parent.mkdir(parents=True, exist_ok=True)
                 PROGRESS.write_text("")
-                process, reports, drops, frames = run(command(target, device, size), stdin=subprocess.PIPE), [], [], []
+                process, reports, drops, frames = run(command(target, device, size), stdin=subprocess.PIPE,
+                                                      stderr=subprocess.PIPE), [], [], []
+                passed_on(process, stream_keys, say)
             elif action == "stop":
                 say(f"{time.strftime('%H:%M')} nothing new for {(END_S if ending else STOP_S) // 60} minutes: "
                     "stream stopped")
                 process.stdin.close()
                 process.wait(timeout=30)
                 process, quiet_since, shown = None, None, None
-            if process is not None and to is None and s["service"] == "twitch" and chatting is None:
+            if process is not None and twitch_on and chatting is None:
                 chatting = chat(say)
-            if process is not None and to is None and s["service"] == "twitch" and imaging(st) \
+            if process is not None and twitch_on and imaging(st) \
                     and st.get("name") != announced:
                 announced = st.get("name")
                 announce(st, now, say)
@@ -581,12 +688,13 @@ def install(say=print, run=subprocess.run, home=None):
     run(["systemctl", "--user", "daemon-reload"], check=True)
     run(["systemctl", "--user", "enable", "--now", "ty-stream.service"], check=True)
     say(f"Installed {place / 'ty-stream.service'}: it streams while a run is imaging, once [stream] enabled is on "
-        f"and the key is in {KEY_FILE}. Stop it: systemctl --user disable --now ty-stream.service")
+        f"and a key is in {KEY_FILE.parent}. Stop it: systemctl --user disable --now ty-stream.service")
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("action", nargs="?", choices=["watch", "frame", "preview", "key", "twitch-login"])
+    ap.add_argument("service", nargs="?", choices=sorted(NAMES), help="with key: whose key it is")
     ap.add_argument("--to", help="with watch: stream into this file instead, to try it")
     ap.add_argument("--install", action="store_true", help="with watch: run it as a systemd user service")
     args = ap.parse_args(argv)
@@ -597,9 +705,13 @@ def main(argv=None):
     if args.action == "twitch-login":
         import twitch
         return 0 if twitch.login() else 1
+    if args.service and args.action != "key":
+        ap.error("a service is named only with key")
     if args.action == "key":
-        text = getpass.getpass("Stream key (not shown): ") if sys.stdin.isatty() else sys.stdin.readline()
-        print(f"Kept in {KEY_FILE}." if keep_key(text) else "Nothing pasted: the key is unchanged.")
+        whose = f"{NAMES[args.service]} stream key" if args.service else "Stream key"
+        text = getpass.getpass(f"{whose} (not shown): ") if sys.stdin.isatty() else sys.stdin.readline()
+        print(f"Kept in {key_file(args.service)}." if keep_key(text, args.service)
+              else "Nothing pasted: the key is unchanged.")
         return
     if args.action == "preview":
         import streamlook
@@ -611,8 +723,14 @@ def main(argv=None):
         print(f"saved {PREVIEW}")
         return
     s, st = settings(), status()
-    print(f"Streaming is {'on' if s['enabled'] else 'off'}; service {s['service']}; "
-          f"stream key {'in place' if key() else 'not set'} ({KEY_FILE}).")
+    names = services(s)
+    print(f"Streaming is {'on' if s['enabled'] else 'off'}; to {' and '.join(names)}.")
+    found, left = destinations(s)
+    for name in names:
+        if any(n == name for n, _, _ in found):
+            print(f"  {name}: stream key in place ({key_path(name, alone=len(names) == 1)}).")
+        else:
+            print("  " + next(why for n, why in left if n == name))
     print(f"A run is {'imaging now: it would stream' if imaging(st) else 'not imaging: it would wait'}.")
     device = working_device()
     print(f"Video encoding: {device or 'the processors'}; "

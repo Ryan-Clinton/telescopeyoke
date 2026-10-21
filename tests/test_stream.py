@@ -59,6 +59,96 @@ def test_the_key_is_kept_readable_only_by_its_owner(tmp_path, monkeypatch):
     assert (stream.KEY_FILE.stat().st_mode & 0o777) == 0o600
 
 
+def test_one_service_named_as_a_string_works_as_before(tmp_path, monkeypatch):
+    monkeypatch.setattr(stream, "KEY_FILE", tmp_path / "stream-key")
+    stream.keep_key("live_123_abc")
+    for service in ("twitch", "youtube"):
+        found, left = stream.destinations({"service": service, "url": ""})
+        assert [name for name, _, _ in found] == [service] and not left
+        assert found[0][1] == stream.destination({"service": service, "url": ""}, "live_123_abc")
+    assert stream.command(found[0][1])[-3:] == ["-f", "flv", found[0][1]]          # no tee for one
+    assert stream.services({"service": "twitch"}) == ["twitch"]
+
+
+def test_several_services_each_have_their_own_key_and_the_old_one_is_twitch_s(tmp_path, monkeypatch):
+    monkeypatch.setattr(stream, "KEY_FILE", tmp_path / "stream-key")
+    s = {"service": ["youtube", "twitch"], "url": ""}
+    assert stream.services(s) == ["youtube", "twitch"] == stream.services({"service": "youtube+twitch"})
+    stream.keep_key("old-twitch-key")                       # the key kept before there were two
+    stream.keep_key("yt-aaaa-bbbb", "youtube")
+    assert (stream.key_file("youtube").stat().st_mode & 0o777) == 0o600
+    assert stream.key_file("youtube").name == "stream-key-youtube"
+    found, left = stream.destinations(s)
+    assert [(n, k) for n, _, k in found] == [("youtube", "yt-aaaa-bbbb"), ("twitch", "old-twitch-key")]
+    assert found[0][1].startswith("rtmp://a.rtmp.youtube.com/live2/") and not left
+    stream.keep_key("new-twitch-key", "twitch")             # its own file comes first
+    assert stream.key("twitch", alone=False) == "new-twitch-key"
+    # The plain key is never taken as YouTube's when there are two.
+    (tmp_path / "stream-key-youtube").unlink()
+    assert stream.key("youtube", alone=False) is None and stream.key("youtube", alone=True) == "old-twitch-key"
+
+
+def test_a_service_without_a_key_is_left_out_and_the_others_still_go(tmp_path, monkeypatch):
+    monkeypatch.setattr(stream, "KEY_FILE", tmp_path / "stream-key")
+    stream.keep_key("tw-key", "twitch")
+    found, left = stream.destinations({"service": ["youtube", "twitch"], "url": ""})
+    assert [n for n, _, _ in found] == ["twitch"]
+    assert len(left) == 1 and left[0][0] == "youtube" and "stream-key-youtube" in left[0][1]
+    monkeypatch.setattr(config, "hardware", lambda: {"stream": {"enabled": True, "service": ["youtube", "twitch"]}})
+    said, started = [], []
+    monkeypatch.setattr(stream, "status", lambda: {})
+    monkeypatch.setattr(stream, "working_device", lambda: None)
+    stream.watch(say=said.append, sleep=lambda s: (_ for _ in ()).throw(KeyboardInterrupt), wait=False,
+                 run=lambda *a, **k: started.append(a))
+    assert sum("YouTube left out" in line for line in said) == 1
+    assert not any("tw-key" in line for line in said)
+
+
+def test_two_services_go_out_from_one_encoding_through_tee_and_no_key_shows():
+    keys = ["yt-aaaa-bbbb", "live_123_abc"]
+    targets = [stream.INGEST["youtube"].format(key=keys[0]), stream.INGEST["twitch"].format(key=keys[1])]
+    cmd = stream.command(targets, "/dev/dri/b")
+    assert cmd[-2:] == ["tee", "[f=flv:onfail=ignore]" + targets[0] + "|[f=flv:onfail=ignore]" + targets[1]]
+    joined = " ".join(cmd)
+    assert "-map 0:v -map 1:a" in joined and "+global_header" in joined and cmd.count("-i") == 2
+    shown = stream.hidden(joined, keys)
+    assert not any(k in shown for k in keys) and shown.count("<stream key>") == 2
+    assert stream.hidden("x", None) == "x"
+
+
+def test_ffmpeg_s_own_messages_are_passed_on_with_the_keys_taken_out():
+    import io
+    import time
+
+    class Process:
+        stderr = io.BytesIO(b"[tee] Slave '[f=flv:onfail=ignore]rtmp://a.rtmp.youtube.com/live2/yt-aaaa-bbbb': "
+                            b"error opening: Connection refused\n\n")
+    said = []
+    stream.passed_on(Process(), ["yt-aaaa-bbbb", "live_123_abc"], said.append)
+    deadline = time.time() + 5
+    while not said and time.time() < deadline:
+        time.sleep(0.01)
+    assert len(said) == 1 and "yt-aaaa-bbbb" not in said[0] and "<stream key>" in said[0]
+
+
+def test_with_two_services_the_bandwidth_test_goes_to_twitch(tmp_path, monkeypatch):
+    monkeypatch.setattr(stream, "PROGRESS", tmp_path / "progress.txt")
+    sent = []
+
+    def run(cmd, **kw):
+        sent.append(cmd[-1])
+        (tmp_path / "stream-bandwidth.txt").write_text("drop_frames=0\nspeed=1.0x\n")
+    both = ["rtmp://a.rtmp.youtube.com/live2/y", "rtmp://live.twitch.tv/app/t"]
+    assert stream.bandwidth_test(both, run=run) == (stream.WIDTH, stream.HEIGHT)
+    assert sent == ["rtmp://live.twitch.tv/app/t?bandwidthtest=true"]
+    assert stream.bandwidth_test(both[:1], run=run) == (stream.WIDTH, stream.HEIGHT) and len(sent) == 1
+
+
+def test_the_settings_form_can_choose_both():
+    assert config.checked("stream", "service", "youtube+twitch") == "youtube+twitch"
+    assert stream.services({"service": config.checked("stream", "service", "youtube+twitch")}) == ["youtube", "twitch"]
+
+
 def test_it_stays_on_air_between_targets_and_holds_the_end_card():
     quiet = {"name": "WASP-12", "age": 400}
     action, since = stream.decide(True, quiet, None, 0, between=True)
