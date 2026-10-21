@@ -953,9 +953,10 @@ def find_stars(motor, read, usual, say=progress, stride=2048, turns=2, ring=None
     return None
 
 
-def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, switch=8.0, most=80, tries=3):
+def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, switch=8.0, near=1.5,
+            most=120, tries=3, patience=3, spike=1.8):
     """Focus from a little outside it, moving only inward, a few half-steps
-    at a time, measuring after each, until the stars have been worse twice
+    at a time, measuring after each, until the stars have been worse three times
     running after their best; returns {"best_hfr", "best_at", "ended_at",
     "ended_hfr", "readings"}. Where the motor can push the drawtube in but
     not lift it out (19 October 2026, the camera's weight on the drawtube),
@@ -963,8 +964,12 @@ def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, switch=8.0, mo
     reached HFR 1.58 in 32-step moves. Moves of `coarse` while the HFR is
     over `switch`, `fine` below. A reading that comes back empty is taken
     again, up to `tries` times; then it stops where it is, since a jump
-    there once overshot focus. It ends two moves past the best, at most
-    2 x `fine` inside it."""
+    there once overshot focus. Within `near` x the usual best it moves
+    `finest` at a time, and it ends `patience` moves past the best, at most
+    `patience` x `finest` inside it. A reading over `spike` x the best is
+    taken again before it counts: on 21 October 2026 one passing cloud read
+    6.3 between 2.92 and 2.55, and two moves past the best ended a run that
+    still had finer focus to find."""
     def reading():
         for _ in range(tries):
             hfr = sample(read, SWEEP_FRAMES, usual)["hfr"]
@@ -978,10 +983,13 @@ def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, switch=8.0, mo
     best, best_at, at, worse, readings = now, 0, 0, 0, [(0, now)]
     say(f"  start: HFR {now}")
     for _ in range(most):
-        step = fine if now < switch else coarse
+        step = finest if now < near * usual else fine if now < switch else coarse
         motor.move(-step)
         at -= step
         now = reading()
+        if now is not None and now > spike * best and best < switch:
+            say(f"  in {step} (at {at:+d}): HFR {now}, a cloud? measuring again")
+            now = reading()
         say(f"  in {step} (at {at:+d}): HFR {now if now is not None else 'none'}")
         if now is None:
             say("  no reading after three tries: stopped here")
@@ -991,7 +999,7 @@ def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, switch=8.0, mo
             best, best_at, worse = now, at, 0
         else:
             worse += 1
-            if worse >= 2:
+            if worse >= patience:
                 break
     return {"best_hfr": best, "best_at": best_at, "ended_at": at, "ended_hfr": now, "readings": readings}
 
@@ -1163,8 +1171,8 @@ def run_motor(args, mode="focus"):
     settings = focuser_settings()
     if args.dry_run and mode == "walk":
         port = focuser.find_port()
-        print(f"Would turn the focuser on {port} inward only, 64 then 32 half-steps at a time at {WALK_MS} ms a "
-              f"half-step, {SWEEP_FRAMES} frames after each, until the stars have been worse twice after their "
+        print(f"Would turn the focuser on {port} inward only, 64, 32 then 16 half-steps at a time at {WALK_MS} ms a "
+              f"half-step, {SWEEP_FRAMES} frames after each, until the stars have been worse three times after their "
               "best. Start it a little outside focus, where the stars still measure. The mount does not move.")
         return {"would_move": True, "port": port, "usual_hfr": round(usual, 2), "walk_ms": WALK_MS}
     if args.dry_run:

@@ -783,3 +783,22 @@ def test_walking_in_with_no_stars_at_the_start_moves_nothing():
     with pytest.raises(focus.interface.Refusal):
         focus.walk_in(tube, tube.read, usual=2.0, say=quiet)
     assert tube.moves == []
+
+
+def test_walking_in_takes_finer_steps_near_focus_and_reads_past_a_cloud():
+    """21 October 2026: 32-step moves found HFR 2.23 and the run stopped two
+    moves later, and one passing cloud read 6.3 between 2.92 and 2.55."""
+    class Cloud(Drawtube):
+        clouded = False
+        def read(self, frames):
+            if not self.clouded and (self.size() or 99) < 3:
+                self.clouded = True
+                return [9.0] * frames
+            return super().read(frames)
+    tube = Cloud(best=-300, slope=40, sharp=1.6, reach=600, noise=0.02)
+    said = []
+    result = focus.walk_in(tube, tube.read, usual=2.0, say=said.append)
+    assert any("a cloud?" in line for line in said)
+    assert 16 in [-step for step in tube.moves]
+    assert abs(result["best_at"] + 300) <= 32
+    assert result["ended_at"] >= result["best_at"] - 3 * 16
