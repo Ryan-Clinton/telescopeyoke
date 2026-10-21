@@ -1,0 +1,12 @@
+23:56:00 opening the focuser
+23:56:02 focuser open on /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0; opening the camera (INDI port 7624)
+23:56:07 camera open; one frame of 1 s thrown away (the first can be stale)
+23:56:09 walking in at 40 ms a half-step, 3 frames of 1 s after each move
+23:56:16   start: HFR 3.91
+23:56:40 no picture from the camera after 16 s (a frame is 1 s): still waiting
+23:57:10 no picture from the camera after 46 s (a frame is 1 s): still waiting
+23:57:40 no picture from the camera after 76 s (a frame is 1 s): still waiting
+23:57:46   in 32 (at -32): HFR 3.25
+23:58:21 no picture from the camera after 16 s (a frame is 1 s): still waiting
+23:58:58 no picture from the camera after 16 s (a frame is 1 s): still waiting
+23:59:25 no picture from the camera after 16 s (a frame is 1 s): still waiting

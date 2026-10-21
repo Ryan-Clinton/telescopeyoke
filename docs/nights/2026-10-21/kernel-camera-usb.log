@@ -1,0 +1,9 @@
+Oct 21 23:12:10 PastieLaptop kernel: usb 2-4: new SuperSpeed USB device number 2 using xhci_hcd
+Oct 21 23:54:07 PastieLaptop kernel: usb 2-4: USB disconnect, device number 2
+Oct 21 23:54:40 PastieLaptop kernel: usb 2-4: new SuperSpeed USB device number 3 using xhci_hcd
+Oct 21 23:56:24 PastieLaptop kernel: usb 2-4: USB disconnect, device number 3
+Oct 21 23:56:27 PastieLaptop kernel: usb 2-4: new SuperSpeed USB device number 4 using xhci_hcd
+Oct 21 23:56:28 PastieLaptop kernel: usb 2-4: USB disconnect, device number 4
+Oct 21 23:56:28 PastieLaptop kernel: usb 2-4: new SuperSpeed USB device number 5 using xhci_hcd
+Oct 21 23:56:38 PastieLaptop kernel: usb 2-4: USB disconnect, device number 5
+Oct 21 23:56:43 PastieLaptop kernel: usb 2-4: new SuperSpeed USB device number 6 using xhci_hcd
