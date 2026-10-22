@@ -281,6 +281,30 @@ def test_a_running_run_can_be_told_to_stop(night, monkeypatch, capsys):
         shoot.tell("explode")
 
 
+def test_a_run_says_on_the_status_page_how_many_frames_it_has(night, monkeypatch):
+    """22 October 2026: the page said "Nothing running" while shoot.py
+    waited for M31-P6's first frame."""
+    import activity
+    seen = []
+    taken = FakeCamera.frame
+
+    def frame(self, seconds):
+        seen.append([n["words"] for n in activity.now()])
+        return taken(self, seconds)
+
+    monkeypatch.setattr(FakeCamera, "frame", frame)
+    monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "3", "--exposure", "2",
+                                      "--no-recentre", "--no-restack"])
+    summary = shoot.main()
+    assert seen[0] == ["Imaging Test: 0 of 3 frames of 2 s"]
+    assert ["Imaging Test: 2 of 3 frames of 2 s"] in seen
+    assert activity.now() == []
+    ended = activity.last()
+    assert ended["words"] == f"Imaging Test: {summary['captured']} of 3 frames of 2 s" and not ended["stopped"]
+    state = activity.run_state(summary["folder"], [])
+    assert state["running"] is False and state["stopped_at"] is not None
+
+
 def test_through_cloud_a_run_waits_for_the_stars_and_ends_at_dawn(night, monkeypatch, capsys):
     _, folder = night
     monkeypatch.setattr(shoot, "CLOUD_STOP", 5)

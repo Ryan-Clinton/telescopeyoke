@@ -14,6 +14,7 @@ from datetime import datetime
 import numpy as np
 from scipy import ndimage
 
+import activity
 from camera import Camera, luminance
 from snap import publish, save
 
@@ -46,23 +47,29 @@ def main():
     ap.add_argument("--every", type=float, default=60, help="seconds between frames")
     ap.add_argument("--exposure", type=float, default=2.0)
     args = ap.parse_args()
+    watch(args.until, args.every, args.exposure)
 
-    hour, minute = (int(x) for x in args.until.split(":"))
+
+@activity.during("Watching for stars", "a {exposure:g} s frame every {every:g} s until {until}")
+def watch(until, every, exposure):
+    """Frames until stars show or `until` comes, with "Watching for stars"
+    on the status page meanwhile."""
+    hour, minute = (int(x) for x in until.split(":"))
     end = datetime.now().replace(hour=hour, minute=minute, second=0)
     streak = 0
     with Camera() as cam:
         while datetime.now() < end:
             started = time.monotonic()
-            mosaic, header = cam.frame(args.exposure)
+            mosaic, header = cam.frame(exposure)
             stars = count_stars(luminance(mosaic))
-            publish(mosaic, kind="sky check", detail=f"{args.exposure:g} s")
+            publish(mosaic, kind="sky check", detail=f"{exposure:g} s")
             print(f"{datetime.now():%H:%M:%S}  {stars} stars, sky level "
                   f"{np.median(mosaic):.0f}", flush=True)
             streak = streak + 1 if stars >= ENOUGH_STARS else 0
             if streak >= 2:
                 print(f"STARS VISIBLE: frame saved as {save(mosaic, header)}", flush=True)
                 return
-            time.sleep(max(0, args.every - (time.monotonic() - started)))
+            time.sleep(max(0, every - (time.monotonic() - started)))
     print("No clear sky before the deadline.", flush=True)
 
 

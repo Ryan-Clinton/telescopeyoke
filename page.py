@@ -438,20 +438,31 @@ atlas. Comets: COBS and JPL Horizons. Cloud imagery: EUMETSAT. Catalogue: OpenNG
   }
 
   function showRun(run) {
-    if (!run.name || !run.captured) return false;
+    // A run with no frame yet shows too, while a process is running it
+    // (22 October 2026: M31-P6 waited minutes for its first frame unseen).
+    // `running` is whether a process is still running the run (serve.py);
+    // a run none is running and that has not finished was stopped.
+    const stopped = run.running === false && !run.finished;
+    if (!run.name || !(run.captured || run.running || stopped)) return false;
     $$("run-title").textContent = run.title || run.name;
-    const running = !run.finished && run.age <= 180;
+    const running = !run.finished && !stopped && (run.running || run.age <= 180);
+    const clock = (t) => (Date.now() / 1000 - t > 12 * 3600
+      ? new Date(t * 1000).toLocaleDateString([], {day: "numeric", month: "short"}) + " " : "") +
+      new Date(t * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", hour12: false});
     const state = run.restacked ? "finished" : run.finished ? "making the final picture"
-      : running ? "running" : "paused " + ago(run.age).replace(" ago", "");
+      : stopped ? `stopped$${run.stopped_at ? " at " + clock(run.stopped_at) : ""} with $${run.captured}$${run.planned ? " of " + run.planned : ""} frames`
+      : run.camera_silent_s != null ? `camera has sent no frame for $${lasted(run.camera_silent_s)}`
+      : running ? (run.captured ? "running" : "waiting for the first frame")
+      : "paused " + ago(run.age).replace(" ago", "");
     $$("run-state").textContent = state;
-    $$("run-state").className = "state" + (running ? " running" : "");
+    $$("run-state").className = "state" + (run.camera_silent_s != null ? " bad" : running ? " running" : stopped ? " fair" : "");
     const share = run.planned ? Math.min(100, 100 * run.captured / run.planned) : 100;
     $$("run-bar").style.width = share + "%";
     $$("run-count").textContent = run.captured + (run.planned ? " of " + run.planned : "") + " frames"
       + (run.exposure ? " of " + run.exposure + " s" : "");
     const figures = [[run.accepted, "accepted"], [run.rejected, "rejected"]];
     if (run.integration != null) figures.push([run.integration + " s", "integration"]);
-    figures.push([Math.round(100 * run.accepted / run.captured) + "%", "kept"]);
+    if (run.captured) figures.push([Math.round(100 * run.accepted / run.captured) + "%", "kept"]);
     $$("run-figures").replaceChildren(...figures.map(([value, label]) => {
       const item = make("span");
       item.append(make("b", String(value)), " " + label);
@@ -483,9 +494,19 @@ atlas. Comets: COBS and JPL Horizons. Cloud imagery: EUMETSAT. Catalogue: OpenNG
   function showImage(figure, image, kind, ended) {
     $$(figure).hidden = !image;
     if (!image) return false;
+    const detail = $$(figure + "-detail");
+    const picture = $$(figure).querySelector("img");
+    // A stack of an earlier run is never shown as this one's (22 October
+    // 2026: a WASP-12 stack from two nights before under M31-P6).
+    picture.style.display = image.current === false ? "none" : "";   // the CSS's display:block beats `hidden`
+    if (image.current === false) {
+      if (kind) $$(kind).textContent = "STACK";
+      detail.textContent = image.instead || "no stack yet";
+      detail.className = "dim";
+      return true;
+    }
     if (kind) $$(kind).textContent = image.kind.toUpperCase();
     const stale = image.age > 120;
-    const detail = $$(figure + "-detail");
     detail.textContent = [kind ? "" : image.kind, image.detail,
                           (stale ? (ended ? "run ended: " : "not updating: ") : "") + ago(image.age)].filter(Boolean).join(" · ");
     detail.className = stale ? "fair" : "";
@@ -570,15 +591,17 @@ atlas. Comets: COBS and JPL Horizons. Cloud imagery: EUMETSAT. Catalogue: OpenNG
     lines = lines || [];
     $$("doing").hidden = false;
     if (lines.length) {
+      // A camera that has stopped sending frames is said in the line itself
+      // ("— camera has sent no frame for 5 min") and shown in red.
       $$("doing-lines").innerHTML = lines.map((d, i) =>
-        `<div class="$${i ? "inner" : ""}">$${esc(d.words)} <span class="dim">· $${lasted(d.for_s)}</span></div>`).join("");
+        `<div class="$${i ? "inner" : ""}$${d.camera_silent_s != null ? " bad" : ""}">$${esc(d.words)} <span class="dim">· $${lasted(d.for_s)}</span></div>`).join("");
       return;
     }
     const steps = (plan && plan.steps) || [];
     const next = steps.find((s) => s.status === "queued");
     const when = (t) => new Date(t * 1000).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", hour12: false});
     const parts = [`<div><b>Nothing running</b></div>`];
-    if (last && last.ended) parts.push(`<div class="dim">Last: $${esc(last.words)}, finished $${lasted(Math.round(Date.now() / 1000 - last.ended))} ago</div>`);
+    if (last && last.ended) parts.push(`<div class="dim">Last: $${esc(last.words)}, $${last.stopped ? "stopped" : "finished"} $${lasted(Math.round(Date.now() / 1000 - last.ended))} ago</div>`);
     if (next) parts.push(`<div class="dim">Next: $${esc(next.label)} at $${when(next.start)}</div>`);
     if (next && plan && plan.runner === false) parts.push(`<div class="fair">The schedule has stopped: nothing will start by itself</div>`);
     $$("doing-lines").innerHTML = parts.join("");

@@ -244,11 +244,14 @@ def session_of(st):
         return None
 
 
-def pictures():
+def pictures(st=None):
+    """The stack and the newest single frame; no stack when status.json
+    says web/stack.jpg is an earlier run's (serve.stack_status)."""
     stack = single = None
     try:
-        with Image.open(WEB / "stack.jpg") as im:
-            stack = im.convert("RGB")
+        if ((st or {}).get("stack") or {}).get("current") is not False:
+            with Image.open(WEB / "stack.jpg") as im:
+                stack = im.convert("RGB")
         with Image.open(WEB / "latest.jpg") as im:
             single = im.convert("RGB")
     except OSError:
@@ -298,7 +301,7 @@ def frame(st, now=None, mode="imaging"):
     summary. Never anything that names the place."""
     import streamlook
     now = now or time.time()
-    stack, single = pictures()
+    stack, single = pictures(st)
     if mode == "between":
         state = between_state(st, now)
     elif mode == "end":

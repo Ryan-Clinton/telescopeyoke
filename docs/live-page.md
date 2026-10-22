@@ -42,6 +42,16 @@ breaks the public page, so change them only together with the site:
 `tests/test_stacking.py` and `tests/test_schedule.py` check that the run's
 fields and the schedule's fields are still there.
 
+Added on 22 October 2026, for the site to use when it is ready (nothing
+above changed): `running` (a process is still running the run), `stopped_at`
+(when a run that never finished stopped), `camera_silent_s` (seconds the
+camera has kept the run waiting past twice the exposure and a minute), and
+`stack.current`: false when `web/stack.jpg` is an earlier run's stack, with
+`stack.instead` ("no stack yet for M31-P6"). Until the site reads
+`stack.current`, it can show an earlier run's stack under a new run that
+has none yet; the status page and `stream.py` already leave it out
+(`tests/test_doing_now.py`).
+
 Anything added to `status.json` may reach the public page (`discovery` is
 sent as it is), so keep everything in it fit to publish.
 

@@ -10,6 +10,7 @@ latest.jpg from the camera) is served alongside it.
 import argparse
 import functools
 import os
+import re
 import subprocess
 import sys
 import socket
@@ -148,6 +149,24 @@ def image_status(name):
     return info
 
 
+def stack_status(stack, name, session):
+    """The stack's note, with "current": whether web/stack.jpg is the stack
+    of the newest run (`name`, its folder `session`), not of one before it.
+    On 22 October 2026 the page showed a WASP-12 stack from two nights
+    before under an M31-P6 run that had no frame yet. When it is not,
+    "instead" says so for the page."""
+    if not stack or not name:
+        return stack
+    made_for = stack.get("target") or re.sub(r"^live stack of ", "", stack.get("kind", ""))
+    try:
+        made = (WEB / "stack.jpg").stat().st_mtime
+        began = (Path(session) / "session.json").stat().st_mtime if session else 0
+    except OSError:
+        made, began = 0, 0
+    current = made_for == name and made >= began
+    return dict(stack, current=current, **({} if current else {"instead": f"no stack yet for {name}"}))
+
+
 def share_pictures(discovery):
     """Copy tonight's candidate pictures where the page can show them, as
     web/discovery/FIELD-SESSION-patrol-N.png, once each."""
@@ -183,6 +202,33 @@ def unplaced(answer, name=None):
     return answer
 
 
+def run_now(names=None):
+    """The part of web/status.json about what is going on: the newest
+    imaging run, whether a process is still running it ("running", and if
+    not "stopped_at"), its pictures (a stack of an earlier run marked not
+    "current"), and what is being done now ("activity", "activity_last")."""
+    # A session is any folder with a frame log or a plan, newest activity
+    # last: a run that has not kept its first frame yet is still the newest
+    # (22 October 2026, the page showed a WASP-12 run from two nights
+    # before while M31-P6 waited for a frame).
+    folders = {p.parent for pattern in ("*/*/frames.json*", "*/*/session.json")
+               for p in (config.DATA / "frames").glob(pattern)}
+    sessions = sorted(folders, key=lambda d: max(q.stat().st_mtime for q in d.glob("*.json*")))
+    status = stacking.run_status(sessions[-1]) if sessions else {}
+    if status.get("name"):
+        full = (names or {}).get(status["name"], "")
+        status["title"] = f"{status['name']} — {full}" if full else status["name"]
+    status["now"] = image_status("latest")     # the newest single exposure
+    status["stack"] = stack_status(image_status("stack"), status.get("name"), sessions[-1] if sessions else None)
+    # What is being done now: a GoTo, a plate solve, focusing, a patrol's
+    # panel, the imaging run, and whether its camera has gone quiet.
+    status["activity"] = activity.now()
+    if sessions:
+        status.update(activity.run_state(sessions[-1], status["activity"]))
+    status["activity_last"] = activity.last()
+    return status
+
+
 def status_forever(seconds=2):
     """Keep web/status.json describing the newest imaging run, so the page can
     show how far it has got without being rebuilt."""
@@ -191,25 +237,9 @@ def status_forever(seconds=2):
     names = {t["id"]: t["name"] for t in sky.load_targets()}
     while True:
         try:
-            # A session is any folder with a frame log or a plan, newest
-            # activity last: a run that has not kept its first frame yet is
-            # still the newest (22 October 2026, the page showed a WASP-12
-            # run from two nights before while M31-P6 waited for a frame).
-            folders = {p.parent for pattern in ("*/*/frames.json*", "*/*/session.json")
-                       for p in (config.DATA / "frames").glob(pattern)}
-            sessions = sorted(folders, key=lambda d: max(q.stat().st_mtime for q in d.glob("*.json*")))
-            status = stacking.run_status(sessions[-1]) if sessions else {}
-            if status.get("name"):
-                full = names.get(status["name"], "")
-                status["title"] = f"{status['name']} — {full}" if full else status["name"]
+            status = run_now(names)
             status["pictures"] = pictures()
-            status["now"] = image_status("latest")     # the newest single exposure
-            status["stack"] = image_status("stack")    # the running stack
             status["scope_age"] = age(WEB / "scope.jpg") if host.webcam_on("show_picture") else None
-            # What is being done now when it is not imaging (a GoTo, a plate
-            # solve, focusing, a patrol's panel), and tonight's schedule.
-            status["activity"] = activity.now()
-            status["activity_last"] = activity.last()
             status["schedule"] = schedule.view()
             # The system checks open a connection to INDI, so do them less often.
             if time.time() - checked > 15:

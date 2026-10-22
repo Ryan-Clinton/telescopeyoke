@@ -29,6 +29,7 @@ import time
 import zipfile
 from pathlib import Path
 
+import activity
 import config
 import host
 import interface
@@ -197,6 +198,13 @@ def test_frame(steps, exposure, gain):
 
 
 def run(args):
+    """Set the camera up, saying so on the status page while it does:
+    "Restarting the camera", or "Checking the camera" with --check."""
+    with activity.doing("Checking the camera" if getattr(args, "check", False) else "Restarting the camera"):
+        return setup(args)
+
+
+def setup(args):
     backend = config.hardware()["camera"]["backend"]
     steps = Steps()
     print(f"Camera setup ({'Altair library' if backend == 'altair' else 'INDI driver'})\n", flush=True)

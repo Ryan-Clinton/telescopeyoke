@@ -756,7 +756,10 @@ def run(args, say=print):
 
     for number, name in enumerate(chosen, 1):
         say(f"== {name}")
-        activity.set_("Patrol", f"{name}, then its frames", number if len(chosen) > 1 else None, len(chosen))
+        # "Patrol M31 panels: panel 1 of 8, M31-P6", with shoot.py's
+        # "Imaging M31-P6: 0 of 19 frames of 16 s" under it.
+        activity.set_("Patrol", f"panel {number} of {len(chosen)}, {name}" if len(chosen) > 1 else name,
+                      heading=heading(p))
         began = time.time()
         stopped = None
         for cmd in plans[name]:
@@ -792,7 +795,7 @@ def run(args, say=print):
             second_look_said(name, entry["analysis"], entry["second_look"], say)
         answer["fields"].append(entry)
     if behind:
-        activity.set_("Patrol", "the last panels' pictures and searches")
+        activity.set_("Patrol", "the last panels' pictures and searches", heading=heading(p))
         pool.shutdown(wait=True)
         for done in finishing:
             try:
@@ -821,6 +824,12 @@ def run(args, say=print):
     if len(chosen) == 1 and answer["fields"] and "analysis" in answer["fields"][0]:
         answer["analysis"] = answer["fields"][0]["analysis"]
     return answer
+
+
+def heading(p):
+    """The programme as the status page names it: m31-panels as "M31 panels"."""
+    words = str(p.get("name", "")).replace("-", " ").replace("_", " ").split()
+    return " ".join(w.upper() if w[:1] in "mM" and w[1:].isdigit() else w for w in words)
 
 
 def first_goto(name):

@@ -1183,7 +1183,12 @@ class Settled:
         self.wait(SETTLE_S)
 
 
-@activity.during("Focusing with the motor", "{mode}")
+MODE_WORDS = {"focus": "to the sharpest", "walk": "walking in to the sharpest", "find": "finding focus",
+              "sweep": "one focus sweep", "step": "measuring the motor's step",
+              "backlash": "measuring the backlash"}
+
+
+@activity.during("Focusing with the motor", lambda a: MODE_WORDS.get(a["mode"], a["mode"]))
 def run_motor(args, mode="focus"):
     """./focus.py --motor: focus with the motor by a measured focus curve,
     on the stars in view now; first a reading, and if focus is already as
@@ -1383,6 +1388,7 @@ def main():
     return interface.main("focus", lambda: run(args), args.json)
 
 
+@activity.during("Focusing", "by the live view")
 def run(args):
     """The focusing loop. Returns the last reading."""
     if not args.quiet and not host.has_sound()[0] == host.OK:

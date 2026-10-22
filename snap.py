@@ -8,6 +8,7 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+import activity
 import config
 import records
 
@@ -24,11 +25,13 @@ PREVIEW = config.DATA / "web" / "latest.jpg"
 PREVIEW_WIDTH = 1600
 
 
-def label(kind, detail="", folder=None, name="latest"):
-    """Note beside a picture in web/ saying what it is a picture of."""
+def label(kind, detail="", folder=None, name="latest", **extra):
+    """Note beside a picture in web/ saying what it is a picture of; `extra`
+    is kept with it (the stack's target, so the page can tell it is not the
+    run going now)."""
     folder = folder or PREVIEW.parent
     folder.mkdir(exist_ok=True)
-    records.write((folder / f"{name}.json"), {"kind": kind, "detail": detail}, indent=None)
+    records.write((folder / f"{name}.json"), {**extra, "kind": kind, "detail": detail}, indent=None)
 
 
 def publish(mosaic, path=PREVIEW, kind="single frame", detail="", quick=False):
@@ -55,6 +58,13 @@ def save(mosaic, header):
     return path
 
 
+@activity.during("Taking a look", "{exposure:g} s")
+def look(exposure, gain, port=PORT):
+    """One frame, with "Taking a look: 1 s" on the status page meanwhile."""
+    with Camera(port, gain) as cam:
+        return cam.frame(exposure)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--exposure", type=float, default=1.0, help="seconds")
@@ -63,8 +73,7 @@ def main():
     args = ap.parse_args()
 
     started = time.monotonic()
-    with Camera(args.port, args.gain) as cam:
-        mosaic, header = cam.frame(args.exposure)
+    mosaic, header = look(args.exposure, args.gain, args.port)
     took = time.monotonic() - started
     path = save(mosaic, header)
     publish(mosaic, detail=f"{args.exposure:g} s")

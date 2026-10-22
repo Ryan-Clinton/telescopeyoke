@@ -41,6 +41,7 @@ from collections import deque
 from datetime import datetime, timezone
 from pathlib import Path
 
+import activity
 import config
 import live
 
@@ -247,7 +248,7 @@ def draw_stack(stacked, count, name, exposure, web, finish=True):
     host.replace_preview(web / "stack.part.jpg", web / "stack.jpg")
     image.save(web / f"{name}.jpg", quality=92)
     snap.label(f"live stack of {name}", f"{count} accepted frames · {exposure * count:.0f} s integration",
-               web, name="stack")
+               web, name="stack", target=name)
     return spent
 
 
@@ -773,6 +774,14 @@ def run(args):
         exposure = float(args.exposure)
 
     session = Session(args.name, exposure, args.gain, save=not args.no_save, frames=args.frames or None)
+    # "Imaging M31-P6: 4 of 19 frames of 16 s" on the status page for as long
+    # as the run lives, and a camera that has stopped sending said plainly.
+    with activity.imaging(session.name, args.frames or None, exposure, session.folder) as tracker:
+        return image(args, session, exposure, moving, holding, tracker)
+
+
+def image(args, session, exposure, moving, holding, tracker):
+    """The run's frames, from the first to the quality pass."""
     workers = max(1, stacking.cores() - 1)   # one core stays free for the camera and the stack
     print(f"{session.name}: {args.frames or 'an open-ended run of'} frames of {exposure:g} s at gain {args.gain}; "
           f"calibration: {session.calibration.describe()}; {workers} workers", flush=True)
@@ -839,6 +848,7 @@ def run(args):
     with stacking.worker_pool(workers) as pool:
         session.drawer = pool       # the page's picture is drawn by these workers, never a new process
         while more():
+            tracker.pause()      # re-centring or catching up is not the camera keeping it waiting
             due = (args.recentre and since_centre >= args.recentre) or told["recentre"]
             if moving and args.dither and since_dither >= args.dither:
                 # A dither centres the target again too, a little off.
@@ -870,10 +880,12 @@ def run(args):
                 except (OSError, SystemExit) as problem:
                     print(f"  hold: the mount would not move ({problem}); the hold is off", flush=True)
                     holding.state = "off"
+            tracker.waiting()
             with Camera(gain=args.gain) as cam:
                 while more():
                     mosaic, header = cam.frame(exposure)
                     index += 1
+                    tracker.took(index)
                     since_centre += 1
                     since_dither += 1
                     if time.monotonic() - shown >= PREVIEW_EVERY:
