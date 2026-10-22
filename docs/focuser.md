@@ -292,6 +292,18 @@ likely first:
 A fresh 28BYJ-48 with its driver board (a few pounds, usually sold in
 fives) settles 2 and 3 at once.
 
+### 21 to 22 October 2026: inward only again, on the sky
+
+With two coils at 30 ms, it still could not lift the drawtube out with the
+camera on. A sweep's outward moves did not turn it, and `move 320` out
+changed nothing. Each time, the person set it a little out by hand and
+`--walk-in` brought it in. Over six runs the best was HFR 2.19, slightly
+better than the usual 2.28 but well short of 19 October's 1.58, and each
+run ended past focus because it cannot step back. The walk-in now starts
+from doughnuts, takes 16 and then 8 half-step moves near focus, and
+re-reads a cloud. Below 8 half-steps the seeing hides the difference.
+[The night's record](nights/2026-10-21/focuser.md).
+
 ### Finding where the turn is lost (`./focuser.py load-test`)
 
 In daylight, on the telescope with the camera on: the blacked stick and the
