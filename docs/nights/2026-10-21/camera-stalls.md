@@ -55,3 +55,19 @@ arrived: the M31-P6 patrol run waited from 04:39:51 with no frame for
 more than five minutes. After a restart, the 0.1 s test frame took 28 s,
 and a single 16 s frame then failed to arrive within 90 s. The kernel log
 shows no USB disconnect.
+
+## Altair's mains suggestions, tested (22 October, 05:30 to 05:46)
+
+Cap on, indoors, the camera warm, Altair's own library, gain 1500, the camera
+on the laptop's USB 3 port at 5000 Mbps. Each lost frame was given up after
+75 s (three tries).
+
+| Power to the laptop | 2 s frames arrived |
+|---|---|
+| Charger in the kitchen socket through the usual extension lead | 0 of 3 |
+| The same socket, charger plugged straight in | 0 of 2 |
+| Charger unplugged, laptop on battery | 0 of 2 |
+
+1 s frames arrived in their normal 2.5 s between the sets. So it is not the
+socket, the extension lead or a ground loop through the charger. The cut-off
+is between 1 s and 2 s of exposure.
