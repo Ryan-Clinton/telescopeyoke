@@ -45,3 +45,13 @@ So it has these signs:
 The focuser (CH340 on its own USB bus, 3) was on for all of it. The stalls
 come mostly after a focuser move, but they also happened in the focus check,
 which moves nothing.
+
+## Later: long frames, Altair's own library (22 October, 04:39 to 04:48)
+
+From 00:05 the camera was read through Altair's own library (`[camera]
+backend = "altair"`) on the 3 m lead again. 1 s frames mostly arrived in
+their normal 2.5 s, with a stall every few minutes. 16 s frames never
+arrived: the M31-P6 patrol run waited from 04:39:51 with no frame for
+more than five minutes. After a restart, the 0.1 s test frame took 28 s,
+and a single 16 s frame then failed to arrive within 90 s. The kernel log
+shows no USB disconnect.
