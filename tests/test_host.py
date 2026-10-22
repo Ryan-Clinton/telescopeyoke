@@ -316,6 +316,34 @@ def test_the_status_page_serves_and_answers(tmp_path, monkeypatch):
         server.server_close()
 
 
+def test_serve_install_writes_a_user_service_that_restarts_and_starts_at_boot(tmp_path, monkeypatch):
+    """On 22 October 2026 the laptop rebooted at 21:51 and nothing started
+    serve.py again: --install makes it a systemd user service. Nothing real
+    is run here: the commands are only collected."""
+    import serve
+    calls, said = [], []
+    monkeypatch.setenv("TY_DATA", str(tmp_path / "data"))
+    serve.install(say=said.append, run=lambda cmd, check: calls.append(cmd), home=tmp_path)
+    text = (tmp_path / ".config" / "systemd" / "user" / "ty-serve.service").read_text(encoding="utf-8")
+    assert "Restart=always" in text and "WantedBy=default.target" in text
+    assert f"ExecStart={sys.executable} -u {Path(serve.__file__).resolve()}\n" in text
+    assert f"Environment=TY_DATA={tmp_path / 'data'}" in text
+    assert [c[2:] for c in calls] == [["daemon-reload"], ["enable", "--now", "ty-serve.service"]]
+    assert "disable --now ty-serve.service" in said[0]
+    assert " --port 8081" in serve.unit(port=8081)
+
+
+def test_serve_install_goes_through_main_and_refuses_the_demo(monkeypatch):
+    import serve
+    asked = []
+    monkeypatch.setattr(serve, "install", lambda port: asked.append(port))
+    serve.main(["--install", "--port", "8090"])
+    assert asked == [8090]
+    with pytest.raises(SystemExit):
+        serve.main(["--install", "--demo"])
+    assert asked == [8090]
+
+
 def test_the_computers_own_figures_are_numbers_or_nothing():
     for value in (host.processor_load(), host.temperature()):
         assert value is None or value >= 0

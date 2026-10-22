@@ -4,14 +4,20 @@ another computer: run this, then open http://<this laptop's address>:8080
 
 The page is rebuilt every few minutes. Anything else saved into web/ (such as
 latest.jpg from the camera) is served alongside it.
+
+    ./serve.py --install    run it as a systemd user service, from boot, restarted if it stops
 """
 import argparse
 import functools
+import os
+import subprocess
+import sys
 import socket
 import threading
 import time
 import traceback
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 
 import json
 import shutil
@@ -286,14 +292,47 @@ def lan_address():
             return "localhost"
 
 
-def main():
+SERVICE = "ty-serve.service"
+
+
+def unit(root=None, python=None, data=None, port=8080):
+    """The systemd user service that keeps the status page served. On 22
+    October 2026 the laptop rebooted at 21:51 and nothing started serve.py
+    again, so the status page showed nothing through a patrol."""
+    root = Path(root or Path(__file__).resolve().parent)
+    python = python or sys.executable
+    env = f"Environment=TY_DATA={data}\n" if data else ""
+    extra = f" --port {port}" if port != 8080 else ""
+    return (f"[Unit]\nDescription=telescopeyoke: the status page on port {port}\n"
+            f"After=network-online.target\n\n"
+            f"[Service]\nWorkingDirectory={root}\n{env}ExecStart={python} -u {root / 'serve.py'}{extra}\n"
+            f"Restart=always\nRestartSec=10\n\n[Install]\nWantedBy=default.target\n")
+
+
+def install(port=8080, say=print, run=subprocess.run, home=None):
+    place = Path(home or Path.home()) / ".config" / "systemd" / "user"
+    place.mkdir(parents=True, exist_ok=True)
+    (place / SERVICE).write_text(unit(data=os.environ.get("TY_DATA"), port=port), encoding="utf-8")
+    run(["systemctl", "--user", "daemon-reload"], check=True)
+    run(["systemctl", "--user", "enable", "--now", SERVICE], check=True)
+    say(f"Installed {place / SERVICE}: the status page is served on port {port} from boot, and started "
+        f"again if it stops. Stop it: systemctl --user disable --now {SERVICE}")
+
+
+def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--port", type=int, default=8080)
     ap.add_argument("--every", type=float, default=10, help="minutes between rebuilds")
     ap.add_argument("--top", type=int, default=40, help="targets to list")
     ap.add_argument("--demo", action="store_true",
                     help="made-up weather at the example site; needs no telescope")
-    args = ap.parse_args()
+    ap.add_argument("--install", action="store_true",
+                    help="run it as a systemd user service, from boot, restarted if it stops")
+    args = ap.parse_args(argv)
+    if args.install:
+        if args.demo:
+            ap.error("--install serves the real page, not --demo")
+        return install(args.port)
 
     WEB.mkdir(exist_ok=True)
     threading.Thread(target=rebuild_forever, args=(args.every, args.top, args.demo),

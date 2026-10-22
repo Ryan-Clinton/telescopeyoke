@@ -460,7 +460,7 @@ lock (`MOTION_LOCKED`) stops every rig at once.
 | Script | What it does |
 |---|---|
 | `tonight.py` | Report for the night: darkness, Moon, weather verdict, ranked targets. `--html` writes the web page. |
-| `serve.py` | Serves the status page on port 8080: the night's report rebuilt every 10 minutes, and the imaging run, pictures and system panel refreshed every two seconds. |
+| `serve.py` | Serves the status page on port 8080: the night's report rebuilt every 10 minutes, and the imaging run, pictures and system panel refreshed every two seconds. `--install` runs it as a systemd user service (`ty-serve`) that starts at boot and restarts if it stops. |
 | `clouds.py` | Fetches the latest infrared satellite image with the site marked on it. |
 | `mount.py` | Moves the mount: `status`, `settime` (gives the handset this computer's date, time and the site's position, once you have pressed ENTER through its start-up screens), `nudge` (from home, tips the tube 5° and back, for someone beside it to see that it turns), `home`, `zenith`, `goto NAME [--solve]`, `point AZ ALT`, `sync`, `drift`, `compensate`, `stop`. `response` sets the Dec motor creeping at five rates and measures the drift at each, to see whether the sky answers in proportion; `pointing` plate-solves at eight hour angles, four each side of the meridian, to see whether one correction for each side is enough. `findhome` works out from one run of plate solves where the home position really is, and `truehome` drives there for the joints to be marked. |
 | `liveview.py` | Takes a frame every few seconds so the status page shows what the telescope sees now. Steps aside while `shoot.py` runs. |
