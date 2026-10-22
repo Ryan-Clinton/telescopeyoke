@@ -149,3 +149,13 @@ from the log.
 6. `tonight.py`, the console and `shoot.py` using it.
 
 Nothing here has been built or tried yet.
+
+## Parts ordered, 22 October 2026
+
+From AliExpress, with the focuser parts: an ESP32 DevKit V1 (USB-C) on a 30-pin
+screw-terminal board, an MLX90614ESF-BAA (GY-906), a 3.3 V BME280, a TSL2591,
+a rain plate module, two MOSFET switch modules (screw terminals, in place of
+a bare MOSFET), 47 Ω 1 W resistors for the heaters, a 115 × 90 × 55 mm IP67
+box, PG7 glands and lever connectors. It is solder-free apart from the
+sensors' four-pin headers. The outdoor 5 V supply and the conformal coating
+were not ordered.
