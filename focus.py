@@ -954,7 +954,7 @@ def find_stars(motor, read, usual, say=progress, stride=2048, turns=2, ring=None
 
 
 def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, switch=8.0, near=1.5,
-            most=120, tries=3, patience=3, spike=1.8):
+            most=120, tries=3, patience=3, spike=1.8, ring=None, ring_step=128, ring_most=4096):
     """Focus from a little outside it, moving only inward, a few half-steps
     at a time, measuring after each, until the stars have been worse three times
     running after their best; returns {"best_hfr", "best_at", "ended_at",
@@ -977,10 +977,31 @@ def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, swi
                 return hfr
         return None
     now = reading()
+    at = 0
+    if now is None and ring:
+        # Doughnuts, too wide for an HFR (21 October 2026, set "a touch out"
+        # by hand): in `ring_step` at a time while they shrink, until the
+        # stars measure. Doughnuts that grow mean focus is not inward.
+        size = ring(SWEEP_FRAMES)
+        if size is not None:
+            say(f"  start: doughnuts {size:.0f} px; in {ring_step} at a time until the stars measure")
+        grew = 0
+        while size is not None and now is None and at > -ring_most:
+            motor.move(-ring_step)
+            at -= ring_step
+            now = reading()
+            if now is None:
+                was, size = size, ring(SWEEP_FRAMES)
+                say(f"  in {ring_step} (at {at:+d}): doughnuts {size if size is None else round(size)} px")
+                grew = grew + 1 if size is not None and size > was else 0
+                if grew >= 2:
+                    raise interface.Refusal("NO_STARS", f"The doughnuts grew as it went in ({at:+d} half-steps "
+                                                        "from the start): focus is outward. Set the drawtube a "
+                                                        "little out of focus by hand and run this again.")
     if now is None:
         raise interface.Refusal("NO_STARS", "No stars measure here. Set the drawtube a little out of focus by "
                                             "hand, where the stars still measure, and run this again.")
-    best, best_at, at, worse, readings = now, 0, 0, 0, [(0, now)]
+    best, best_at, worse, readings = now, at, 0, [(at, now)]
     say(f"  start: HFR {now}")
     for _ in range(most):
         step = finest if now < near * usual else fine if now < switch else coarse
@@ -1226,7 +1247,7 @@ def run_motor(args, mode="focus"):
                     motor.speed(WALK_MS)
                 progress(f"walking in at {WALK_MS} ms a half-step, {SWEEP_FRAMES} frames of "
                          f"{MOTOR_EXPOSURE:g} s after each move")
-                result = walk_in(drive, read, usual, say=say)
+                result = walk_in(drive, read, usual, say=say, ring=ring)
                 progress(f"Best HFR {result['best_hfr']} at {result['best_at']:+d} half-steps; ended at "
                          f"{result['ended_at']:+d}, HFR {result['ended_hfr']}.")
                 return result

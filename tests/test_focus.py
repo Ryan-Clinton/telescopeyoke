@@ -802,3 +802,21 @@ def test_walking_in_takes_finer_steps_near_focus_and_reads_past_a_cloud():
     assert 16 in [-step for step in tube.moves]
     assert abs(result["best_at"] + 300) <= 32
     assert result["ended_at"] >= result["best_at"] - 3 * 16
+
+
+def test_walking_in_from_doughnuts_comes_in_until_the_stars_measure():
+    """21 October 2026: set "a touch out" by hand, the stars were doughnuts
+    no HFR measures, and the walk-in refused to start."""
+    tube = Drawtube(best=-1200, slope=40, sharp=1.6, reach=400, noise=0.02)
+    rings = lambda frames: 10 + abs(tube.tube - tube.best) / 20
+    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet, ring=rings)
+    assert all(step < 0 for step in tube.moves)
+    assert abs(result["best_at"] + 1200) <= 32
+
+
+def test_walking_in_refuses_when_the_doughnuts_grow_inward():
+    tube = Drawtube(best=1200, slope=40, reach=400)
+    rings = lambda frames: 10 + abs(tube.tube - tube.best) / 20
+    with pytest.raises(focus.interface.Refusal):
+        focus.walk_in(tube, tube.read, usual=2.0, say=quiet, ring=rings)
+    assert len(tube.moves) == 2
