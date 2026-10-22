@@ -118,4 +118,12 @@ Siril's `seqfixbanding` and SharpCap's Banding Suppression both level whole rows
 
 **21 October 2026:** with the camera warm (indoors all day) and on a 1 m USB 3 lead direct to the laptop at 5000 Mbps, 1 s and 2 s frames still stopped arriving every minute or two, with no USB disconnect: [the record](nights/2026-10-21/camera-stalls.md). So the lost frames are not the cold or the long lead.
 
+**Altair's answer, 21 October 2026, 12:46:** use a Windows PC, as that is what they test on: WinUSB drivers are the most robust for high data rates and steady power to the camera. They add that it can be a ground loop through the laptop's power supply, and that customers have cured banding with a different mains socket, a different USB port or a different computer. That gives three tests, in this order:
+
+1. **Another mains socket** for the laptop's charger, on another circuit if there is one, with the camera on the same lead and port. Stripes and lost frames are measured as before (`./camera_test.py --stripes`, a run of 16 s frames).
+2. **The Windows PC** with AltairCapture, the camera on its own USB 3 port: 16 s frames for ten minutes, and the stripes in the saved frames. If long frames arrive there and not on the laptop, the fault is the laptop's USB or driver, not the camera.
+3. **Another USB controller** on the laptop. Two ports have been tried, but only one of the laptop's two USB-C ports sees devices, so this may need a powered USB 3 hub.
+
+The reply to send once 1 and 2 are done: which socket, whether long frames arrived, the stripe figures, and the Windows result.
+
 Whichever venue, attach two or three raw darks and lights from a bad night and a matching indoor set, the stripe figures for each Bayer channel against the per-pixel read noise, the cooldown log, the failure's log lines, and everything already tried.
