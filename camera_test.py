@@ -800,7 +800,7 @@ def camera_temperature(cam):
         return None
 
 
-def cooldown_step(cam, exposure, frames):
+def cooldown_step(cam, exposure, frames, say=lambda line: None):
     """Capped frames at one moment: the row stripes in ADU (one frame's, the
     median of them) and against the pixels' noise (1 is none), how long each
     frame took against the exposure asked, and how many never arrived.
@@ -810,15 +810,21 @@ def cooldown_step(cam, exposure, frames):
     their median, and the share of pixels far above it (the hot ones, which
     grow fastest), rise and fall with the sensor's temperature."""
     adu, scores, cycles, failed, excess, hot = [], [], [], 0, [], []
-    for _ in range(frames):
+    for n in range(frames):
         start = time.monotonic()
         try:
             mosaic, _ = cam.frame(exposure)
         except (Exception, SystemExit):
             failed += 1
+            # Each frame said as it ends: on 22 October 2026 a set ran 20
+            # minutes in silence, its frames failing one after another.
+            say(f"{time.strftime('%H:%M:%S')} frame {n + 1} of {frames}: never arrived "
+                f"(gave up after {time.monotonic() - start:.0f} s)")
             continue
         cycles.append(time.monotonic() - start)
         adu.append(float(np.std(row_stripes(mosaic))))
+        say(f"{time.strftime('%H:%M:%S')} frame {n + 1} of {frames}: arrived in {cycles[-1]:.1f} s, "
+            f"stripes {adu[-1]:.2f} ADU")
         scores.append(banding(mosaic))
         warmth = dark_current(mosaic)
         excess.append(warmth["excess_adu"])
@@ -858,7 +864,7 @@ def cooldown(exposure, gain, frames=20, every_min=10.0, steps=12, note="", say=p
                 sleep(every_min * 60)
             row = {"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "note": note, **conditions(cam, exposure, gain),
                    "camera_c": camera_temperature(cam), "outdoors": outdoors(),
-                   **cooldown_step(cam, exposure, frames)}
+                   **cooldown_step(cam, exposure, frames, say=say)}
             k = electrons_known(gain)
             row["stripes_e"] = None if k is None or row["stripes_adu"] is None else round(row["stripes_adu"] * k, 2)
             rows.append(row)

@@ -818,3 +818,22 @@ def test_a_warmer_dark_says_so_in_its_tail_and_hot_pixels():
     cold, warm = camera_test.dark_current(dark(0)), camera_test.dark_current(dark(2))
     assert warm["excess_adu"] > cold["excess_adu"] > 0
     assert warm["hot_ppm"] > 2 * cold["hot_ppm"]
+
+
+def test_the_cooldown_says_each_frame_as_it_ends():
+    """22 October 2026: a set ran 20 minutes in silence while its 16 s
+    frames failed one after another."""
+    import camera_test
+    rng = np.random.default_rng(5)
+    count = []
+
+    class Cam:
+        def frame(self, seconds):
+            count.append(seconds)
+            if len(count) == 2:
+                raise IndiError("no frame")
+            return striped(2, rng), {}
+    said = []
+    result = camera_test.cooldown_step(Cam(), 16, 3, say=said.append)
+    assert result["failed"] == 1 and len(said) == 3
+    assert "frame 2 of 3: never arrived" in said[1] and "frame 1 of 3: arrived in" in said[0]
