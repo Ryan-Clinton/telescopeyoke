@@ -632,13 +632,34 @@ def end_card(c, s, stack):
     e = s["end"]
     if stack is not None:
         c.image.paste(fit(display(shrunk(stack, (900, 640))), (900, 640)), (WIDTH - MARGIN_X - 900, 220))
-    x, y = MARGIN_X + 40, 220
-    c.text((x, y), "TONIGHT COMPLETE", "bold", 48, "text")
-    y += 90
+    x, y = MARGIN_X + 40, 160
+    c.text((x, y), "THE NIGHT'S RESULT", "bold", 24, "secondary")
+    c.text((x, y + 40), "TONIGHT COMPLETE", "bold", 48, "text")
+    y += 130
+    width = (WIDTH - MARGIN_X - 900 - 40) - x if stack is not None else WIDTH - MARGIN_X - x
     for line in e["lines"]:
-        c.text((x, y), line, "sans", 28, "text")
-        y += 48
+        if y > HEIGHT - MARGIN_Y - 130:
+            break                     # what does not fit is left off, never drawn over the footer
+        y = c.wrap((x, y), line, "sans", 28, width, "text", gap=1.25) + 12
     c.text((x, HEIGHT - MARGIN_Y - 60), "TELESCOPEYOKE", "bold", 26, "accent")
+
+
+def open_card(c, s, stack):
+    """The night opens: tonight's plan, before anything else on air."""
+    if stack is not None:
+        back = fit(display(shrunk(stack, (WIDTH, HEIGHT))), (WIDTH, HEIGHT)).filter(ImageFilter.GaussianBlur(8))
+        c.image.paste(Image.blend(back, Image.new("RGB", back.size, (0, 0, 0)), 0.7), (0, 0))
+    shade = (0, 0, 0)
+    x, y = MARGIN_X + 60, 170
+    c.text((x, y), "THE NIGHT OPENS", "bold", 24, "secondary", on=shade)
+    c.text((x, y + 40), "TONIGHT AT THE OBSERVATORY", "bold", 60, "text", on=shade)
+    y += 150
+    for label, words in s["open"]["lines"]:
+        if y > HEIGHT - MARGIN_Y - 140:
+            break
+        c.text((x, y), label, "bold", 22, "accent", on=shade)
+        y = c.wrap((x + 300, y - 4), words, "sans", 30, WIDTH - 2 * MARGIN_X - 420, "text", on=shade, gap=1.25) + 18
+    c.text((x, HEIGHT - MARGIN_Y - 60), "TELESCOPEYOKE", "bold", 26, "accent", on=shade)
 
 
 CRAWL_BOX = (MARGIN_X, HEIGHT - MARGIN_Y - 34, WIDTH - MARGIN_X, HEIGHT - MARGIN_Y + 4)   # over the footer
@@ -973,6 +994,10 @@ def compose(state, stack=None, single=None):
     if state["kind"] == "end":
         end_card(c, state, stack)
         return c
+    if state["kind"] == "open":
+        open_card(c, state, stack)
+        footer(c, state)
+        return c
     header(c, state)
     sky_area(c, state, stack, single)
     side_panel(c, state)
@@ -1034,8 +1059,16 @@ def examples(now=None):
         "candidate": {**patrol, "patrol": {**patrol["patrol"], "possible": 1},
                       "candidate": {"stage": "second"}},
         "end": {"kind": "end", "target": "M31", "now": now,
-                "end": {"lines": ["6 targets observed", "1 h 47 min of light collected", "742 frames kept",
-                                  "8 M31 panels searched · 0 confirmed new stars"]}},
+                "end": {"lines": ["6 fields observed: M31-P1, M31-P2, M31-P3, M31-P5, M31-P6, WASP-12",
+                                  "742 frames kept", "8 M31 panels searched", "no possible changes",
+                                  "sharpest focus tonight: HFR 2.19",
+                                  "polar alignment: 9.6° → 1.2° from the pole in 5 rounds",
+                                  "next: 3 candidates open for a person to check"]}},
+        "open": {"kind": "open", "target": "", "now": now, "open": {"lines": [
+            ("THE SKY", "forecast GO, 20% cloud on average"), ("CLEAR SPELL", "21:00 to 03:00 UTC, about 6 h"),
+            ("DARK", "astronomical darkness from 18:50 to 04:40 UTC"),
+            ("THE MOON", "34% lit, waxing, sets 23:10 UTC"),
+            ("TONIGHT WILL TRY", "M31 nova patrol, M31 mosaic fields, WASP-12 b transit, Tabby's star")]}},
         **focus_examples(now),
         **polar_examples(now),
     }

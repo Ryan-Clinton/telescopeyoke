@@ -126,8 +126,15 @@ keeps the old silent track. It takes effect when the stream next starts.
 
 A night on air runs in five parts, and each has its look:
 
-1. **The night opens.** The stream goes on air with the first thing worth
-   watching: usually the setup. There is no opening card yet.
+1. **The night opens.** The first time the stream goes on air in a night
+   (none in the last twelve hours, `cache/stream-night.json`) it holds a
+   card for a minute (`OPEN_S`) before anything else: the forecast's
+   verdict and mean cloud, the clear spell, the darkness, the Moon (how lit,
+   waxing or waning, when it rises or sets) and what tonight will try (the
+   schedule's steps, or else the discovery programmes in the clear), all
+   from `agent.night()` (`./ty night`), times in UTC, never the site. The
+   plan is read on its own thread, so going on air never waits for the
+   forecast; with no plan there is no card.
 2. **Setup and calibration.** Focusing and polar alignment, each with its
    own look and its result card; the GoTo and plate solve show on the
    between-targets card's checklist.
@@ -137,8 +144,13 @@ A night on air runs in five parts, and each has its look:
 4. **Background work.** Between targets, while the schedule has more due,
    the card with what comes next; the presenter's explainers (stacking, the
    search, a comet the hunt recovered) run through the science.
-5. **The night's result.** The end card, counted from tonight's sessions,
-   for two minutes, then the stream stops.
+5. **The night's result.** The end card, for two minutes, then the stream
+   stops: the fields observed and their names, frames kept, mosaic panels
+   searched and possible changes, counted from tonight's sessions; the
+   sharpest focus tonight (`cache/focus_runs.jsonl`); the polar alignment
+   from its first round to its last (`cache/polar_stream.json`); and what
+   is next, the candidates still open for a person to check. A figure not
+   found is left out.
 
 ## YouTube and Twitch at once
 

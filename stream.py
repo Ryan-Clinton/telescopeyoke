@@ -293,18 +293,151 @@ def pictures(st=None):
     return stack, single
 
 
-def end_lines(st):
-    """The end card's figures, counted from tonight's sessions only."""
-    sessions = (st.get("discovery") or {}).get("sessions") or []
-    lines = [f"{len({s['field'] for s in sessions})} fields observed",
+def end_lines(st, now=None):
+    """The night's result: what was imaged and its figures, counted from
+    tonight's sessions only, then tonight's focus and polar alignment from
+    their own files, and the candidates still open for a person to check."""
+    import streamlook
+    now = now or time.time()
+    discovery = st.get("discovery") or {}
+    sessions = discovery.get("sessions") or []
+    fields = list(dict.fromkeys(s["field"] for s in sessions))
+    lines = [f"{len(fields)} fields observed" + (": " + ", ".join(fields[:6]) + (" …" if len(fields) > 6 else "")
+                                                if fields else ""),
              f"{sum(s.get('kept') or 0 for s in sessions) + (st.get('accepted') or 0)} frames kept"]
-    for m in (st.get("discovery") or {}).get("mosaics", []):
+    for m in discovery.get("mosaics", []):
         done = sum(p.get("state") == "done" for p in m["panels"])
         lines.append(f"{done} {m['name']} panels searched")
     possible = sum(1 for s in sessions if s.get("unexplained"))
     lines.append(f"{possible} possible change{'s' if possible != 1 else ''}, kept for checking" if possible
                  else "no possible changes")
+    try:
+        import focus
+        best = streamlook.tonight_best(None, now, focus.RUNS_FILE)
+        if best is not None:
+            lines.append(f"sharpest focus tonight: HFR {best:.2f}")
+        polar = streamlook.polar_stream_state(now)
+        rounds = (polar or {}).get("rounds") or []
+        if rounds:
+            lines.append(f"polar alignment: {rounds[0]['total_deg']:.1f}° → {rounds[-1]['total_deg']:.1f}° "
+                         f"from the pole in {len(rounds)} round{'s' if len(rounds) != 1 else ''}"
+                         if len(rounds) > 1 else f"polar alignment: {rounds[0]['total_deg']:.1f}° from the pole")
+    except Exception:                  # a figure not found is left out, never guessed
+        pass
+    still = discovery.get("open_candidates")
+    if still:
+        lines.append(f"next: {still} candidate{'s' if still != 1 else ''} open for a person to check")
     return lines
+
+
+OPEN_S = 60               # the night-opens card is held this long when the stream first goes on air
+NIGHT_S = 12 * 3600       # the stream going on air this long after the last opening is a new night
+NIGHT_FILE = config.DATA / "cache" / "stream-night.json"
+
+
+def utc_clock(value):
+    """'21:10 UTC' from a datetime or an ISO time with its zone; None if it is neither."""
+    import datetime
+    try:
+        when = value if isinstance(value, datetime.datetime) else datetime.datetime.fromisoformat(str(value))
+        if when.tzinfo is None:
+            return None             # a time without its zone cannot be said in UTC
+        return when.astimezone(datetime.timezone.utc).strftime("%H:%M UTC")
+    except (TypeError, ValueError):
+        return None
+
+
+def opening_due(now, path=None):
+    """Whether this is the stream's first time on air tonight; noting that it is."""
+    import json
+    path = path or NIGHT_FILE
+    try:
+        last = json.loads(path.read_text(encoding="utf-8")).get("opened", 0)
+    except (OSError, ValueError, AttributeError):
+        last = 0
+    if now - last < NIGHT_S:
+        return False
+    try:
+        import records
+        path.parent.mkdir(parents=True, exist_ok=True)
+        records.write(path, {"opened": now}, indent=None)
+    except Exception:
+        pass
+    return True
+
+
+def programme_words(p):
+    field = p.get("field") or ""
+    if field == "Tabby":
+        return "Tabby's star"
+    if p.get("mosaic"):
+        return f"{field} mosaic fields"
+    if "novae" in (p.get("programme") or ""):
+        return f"{field} nova patrol"
+    return field
+
+
+def open_lines(brief, st):
+    """The night-opens card: the forecast's verdict and clear spell, the
+    darkness, the Moon, and what tonight will try, from agent.night() and
+    tonight's schedule. Only what is known; never the site."""
+    lines = []
+    if brief.get("verdict"):
+        cloud = brief.get("mean_cloud_percent")
+        lines.append(("THE SKY", f"forecast {brief['verdict']}" + (f", {cloud}% cloud on average" if cloud is not None
+                                                                    else "")))
+    window = brief.get("clear_window") or []
+    if len(window) == 2 and all(utc_clock(t) for t in window):
+        lines.append(("CLEAR SPELL", f"{utc_clock(window[0])[:5]} to {utc_clock(window[1])}"
+                      + (f", about {brief['clear_hours']} h" if brief.get("clear_hours") else "")))
+    dark = brief.get("darkness") or {}
+    if utc_clock(dark.get("start")) and utc_clock(dark.get("end")):
+        level = f"{dark['level']} darkness" if dark.get("level") else "dark"
+        lines.append(("DARK", f"{level} from {utc_clock(dark['start'])[:5]} to {utc_clock(dark['end'])}"))
+    moon = brief.get("moon") or {}
+    if moon.get("illumination") is not None:
+        words = f"{moon['illumination']}% lit, {'waxing' if moon.get('waxing') else 'waning'}"
+        if utc_clock(moon.get("rise")):
+            words += f", rises {utc_clock(moon['rise'])}"
+        if utc_clock(moon.get("set")):
+            words += f", sets {utc_clock(moon['set'])}"
+        lines.append(("THE MOON", words))
+    trying = [s["label"].split(",")[0] for s in (st.get("schedule") or {}).get("steps") or []
+              if s.get("status") in ("queued", "running")
+              and not s["label"].lower().startswith(("goto", "focus", "keep going"))]
+    if not trying:
+        found = brief.get("discovery") or []
+        clear = [p for p in found if p.get("in_clear")]
+        trying = [programme_words(p) for p in (clear or [p for p in found if p.get("window")])]
+    if trying:
+        lines.append(("TONIGHT WILL TRY", ", ".join(dict.fromkeys(trying[:5]))))
+    return lines
+
+
+def night_brief(get=None):
+    """Tonight's plan (agent.night), or None when it cannot be had."""
+    try:
+        if get is None:
+            import agent
+            get = agent.night
+        return get()
+    except Exception:
+        return None
+
+
+class Opening:
+    """The night-opens card, from the first time the stream goes on air in a
+    night until OPEN_S later. Tonight's plan is read on its own thread (it
+    reads the forecast), so going on air never waits for it; with no plan,
+    there is no card."""
+
+    def __init__(self, now, get=None):
+        import threading
+        self.until, self.brief = now + OPEN_S, None
+        threading.Thread(target=lambda: setattr(self, "brief", night_brief(get)), daemon=True).start()
+
+    def showing(self, now):
+        return bool(self.brief) and now < self.until
 
 
 def between_state(st, now):
@@ -345,10 +478,12 @@ def frame(st, now=None, mode="imaging"):
             state["story"] = streamstory.plan(state, st, now)
             return streamlook.compose(state).image
         mode = "imaging"                # gone between looking and drawing: what was there before
-    if mode == "between":
+    if mode == "open" and st.get("night_brief"):
+        state = {"kind": "open", "target": "", "now": now, "open": {"lines": open_lines(st["night_brief"], st)}}
+    elif mode == "between":
         state = between_state(st, now)
     elif mode == "end":
-        state = {"kind": "end", "target": st.get("name") or "", "now": now, "end": {"lines": end_lines(st)}}
+        state = {"kind": "end", "target": st.get("name") or "", "now": now, "end": {"lines": end_lines(st, now)}}
     else:
         state = streamlook.from_status(st, now, session_of(st))
     canvas = streamlook.compose(state, stack, single)
@@ -690,7 +825,7 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
     composer = Composer(draw=lambda st, now, mode: frame(st, now, mode).resize(size)
                         if size != (WIDTH, HEIGHT) else frame(st, now, mode))
     tick = clock()
-    segment, segment_state, active, looked_at, tones = None, None, False, -1e9, None
+    segment, segment_state, active, looked_at, tones, opening = None, None, False, -1e9, None, None
     try:
         while True:
             st, now = status(), clock()
@@ -703,8 +838,12 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
             between = not imaging(st) and runner_alive() and due_soon(st, now)
             ending = not imaging(st) and not between and night_over(st)
             action, quiet_since = decide(process is not None, st, quiet_since, now, between, ending, active)
-            composer.view = (st, segment or ("imaging" if imaging(st) else ("between" if between else
-                                                                            ("end" if ending else "imaging"))))
+            mode = segment or ("imaging" if imaging(st) else ("between" if between else
+                                                              ("end" if ending else "imaging")))
+            if opening is not None and opening.showing(now) and mode != "end":
+                # The night opens: tonight's plan before anything else, once a night.
+                st, mode = dict(st, night_brief=opening.brief), "open"
+            composer.view = (st, mode)
             if action == "start":
                 if now < retry_at:
                     sleep(1)
@@ -720,6 +859,8 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                     f"({hidden(' '.join([target] if isinstance(target, str) else target), stream_keys)})")
                 PROGRESS.parent.mkdir(parents=True, exist_ok=True)
                 PROGRESS.write_text("")
+                if to is None and opening_due(now):
+                    opening = Opening(now)
                 listen = os.pipe() if s["tones"] and os.name == "posix" else None
                 process, reports, drops, frames = run(
                     command(target, device, size, audio_fd=listen and listen[0]), stdin=subprocess.PIPE,

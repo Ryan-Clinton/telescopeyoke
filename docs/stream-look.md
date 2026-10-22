@@ -684,27 +684,55 @@ awaiting private review".
 This lets viewers watch the method (a candidate, a repeat observation,
 catalogue checks, a result) without anything being published early.
 
-## End of night
+## The night opens
+
+The first time the stream goes on air in a night, a card holds for a
+minute before anything else (`stream.Opening`, drawn by
+`streamlook.open_card`), over the last stack darkened and blurred:
+
+```
+THE NIGHT OPENS
+TONIGHT AT THE OBSERVATORY
+
+THE SKY            forecast GO, 20% cloud on average
+CLEAR SPELL        21:00 to 03:00 UTC, about 6 h
+DARK               astronomical darkness from 18:50 to 04:40 UTC
+THE MOON           34% lit, waxing, sets 23:10 UTC
+TONIGHT WILL TRY   M31 nova patrol, M31 mosaic fields, WASP-12 b transit
+```
+
+Every line is from `agent.night()` and tonight's schedule; a line is left
+out when its figure is not known (a time without its zone is never said),
+and the site is never shown.
+
+## End of night: the night's result
 
 When the schedule's last step has ended, and nothing more is due before
 dawn, the stream shows an end card for 2 minutes and then stops:
 
 ```
+THE NIGHT'S RESULT
 TONIGHT COMPLETE
 
-6 targets observed
-1 h 47 min of light collected
+6 fields observed: M31-P1, M31-P2, M31-P3, M31-P5, M31-P6, WASP-12
 742 frames kept
-8 M31 panels searched · 0 confirmed new stars
+8 M31 panels searched
+no possible changes
+sharpest focus tonight: HFR 2.19
+polar alignment: 9.6° → 1.2° from the pole in 5 rounds
+next: 3 candidates open for a person to check
 
 [the night's best final stack]
 
 TELESCOPEYOKE
 ```
 
-The figures are added up from tonight's sessions, which are already in the
-status file's `discovery` and the frame logs. Nothing on the card is counted
-anywhere new.
+The fields, frames, panels and possible changes are added up from tonight's
+sessions, already in the status file's `discovery`; the focus from
+`cache/focus_runs.jsonl` (the last twelve hours), the polar alignment from
+`cache/polar_stream.json`, and the open candidates from the status file.
+Nothing on the card is counted anywhere new, and a figure not found is left
+out.
 
 ## Motion
 

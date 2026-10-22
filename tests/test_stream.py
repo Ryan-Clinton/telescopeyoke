@@ -355,3 +355,85 @@ def test_the_tones_reach_the_stream_s_sound_through_ffmpeg(tmp_path):
                            capture_output=True, text=True, timeout=60).stderr
     loudest = float(probe.split("max_volume:")[1].split("dB")[0])
     assert loudest > -30, probe
+
+
+# --- the night opens, and the night's result ------------------------------------
+
+def brief():
+    import datetime
+    bst = datetime.timezone(datetime.timedelta(hours=1))
+    at = lambda h, m, day=21: datetime.datetime(2026, 10, day, h, m, tzinfo=bst)
+    return {"site": "My back garden", "verdict": "GO", "mean_cloud_percent": 20, "clear_hours": 6,
+            "clear_window": [at(22, 0), at(4, 0, 22)],
+            "darkness": {"level": "astronomical", "start": at(19, 50).isoformat(), "end": at(5, 40, 22).isoformat()},
+            "moon": {"illumination": 34, "waxing": True, "rise": None, "set": at(0, 10, 22)},
+            "discovery": [{"programme": "m31-novae", "field": "M31", "mosaic": False, "window": [1, 2], "in_clear": True},
+                          {"programme": "m31-panels", "field": "M31", "mosaic": True, "window": [1, 2], "in_clear": True},
+                          {"programme": "tabby", "field": "Tabby", "mosaic": False, "window": None, "in_clear": None}]}
+
+
+def test_the_night_opens_with_tonight_s_plan_in_utc_and_never_the_site():
+    lines = dict(stream.open_lines(brief(), {}))
+    assert lines["THE SKY"] == "forecast GO, 20% cloud on average"
+    assert lines["CLEAR SPELL"] == "21:00 to 03:00 UTC, about 6 h"
+    assert lines["DARK"] == "astronomical darkness from 18:50 to 04:40 UTC"
+    assert lines["THE MOON"] == "34% lit, waxing, sets 23:10 UTC"
+    assert lines["TONIGHT WILL TRY"] == "M31 nova patrol, M31 mosaic fields"      # what is in the clear
+    assert not any("garden" in words for words in lines.values())
+    # Tonight's schedule, where there is one, says what will be tried.
+    st = {"schedule": {"steps": [{"label": "goto M31", "status": "queued"},
+                                 {"label": "WASP-12 b transit, 4 s frames", "status": "queued"},
+                                 {"label": "M31 panels", "status": "done"}]}}
+    assert dict(stream.open_lines(brief(), st))["TONIGHT WILL TRY"] == "WASP-12 b transit"
+    # Only what is known: no forecast, no times without their zone.
+    bare = stream.open_lines({"verdict": None, "darkness": {"start": "2026-10-21T19:50:00"}, "moon": {}}, {})
+    assert bare == []
+    assert stream.utc_clock("2026-10-21T19:50:00") is None and stream.utc_clock(None) is None
+
+
+def test_the_night_opens_once_a_night_and_never_waits_for_the_plan(tmp_path):
+    import time
+    path = tmp_path / "night.json"
+    assert stream.opening_due(1e9, path) and not stream.opening_due(1e9 + 3600, path)
+    assert stream.opening_due(1e9 + stream.NIGHT_S + 1, path)
+    opening = stream.Opening(time.time(), get=brief)
+    deadline = time.time() + 5
+    while opening.brief is None and time.time() < deadline:
+        time.sleep(0.01)
+    assert opening.showing(time.time()) and not opening.showing(time.time() + stream.OPEN_S + 1)
+    failed = stream.Opening(time.time(), get=lambda: 1 / 0)
+    time.sleep(0.05)
+    assert not failed.showing(time.time())                        # no plan: no card
+
+
+def test_the_night_opens_card_draws(monkeypatch):
+    monkeypatch.setattr(stream, "pictures", lambda st=None: (None, None))
+    picture = stream.frame({"night_brief": brief()}, 1000.0, "open")
+    assert picture.size == (stream.WIDTH, stream.HEIGHT)
+
+
+def test_the_night_s_result_adds_focus_polar_and_what_is_next(monkeypatch, tmp_path):
+    import json
+    import time
+
+    import focus
+    import polaralign
+    now = time.time()
+    monkeypatch.setattr(focus, "RUNS_FILE", tmp_path / "runs.jsonl")
+    (tmp_path / "runs.jsonl").write_text(json.dumps({"saved": now - 3600, "best_hfr": 2.19}) + "\n")
+    monkeypatch.setattr(polaralign, "STREAM_FILE", tmp_path / "polar.json")
+    (tmp_path / "polar.json").write_text(json.dumps({"stage": "complete", "updated": now, "ended": now - 3600,
+                                                     "rounds": [{"total_deg": 9.6, "measured": now - 4000},
+                                                                {"total_deg": 1.2, "measured": now - 3600}]}))
+    st = {"discovery": {"sessions": [{"field": "M31-P5", "kept": 40}, {"field": "M31-P6", "kept": 30,
+                                                                       "unexplained": 1}],
+                        "open_candidates": 3}}
+    lines = stream.end_lines(st, now)
+    assert lines[0] == "2 fields observed: M31-P5, M31-P6" and lines[1] == "70 frames kept"
+    assert "1 possible change, kept for checking" in lines
+    assert "sharpest focus tonight: HFR 2.19" in lines
+    assert "polar alignment: 9.6° → 1.2° from the pole in 2 rounds" in lines
+    assert lines[-1] == "next: 3 candidates open for a person to check"
+    (tmp_path / "runs.jsonl").unlink()
+    (tmp_path / "polar.json").unlink()
+    assert stream.end_lines({}, now) == ["0 fields observed", "0 frames kept", "no possible changes"]
