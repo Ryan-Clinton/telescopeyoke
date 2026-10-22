@@ -1254,6 +1254,12 @@ def run_motor(args, mode="focus"):
                 result = walk_in(drive, read, usual, say=say, ring=ring)
                 progress(f"Best HFR {result['best_hfr']} at {result['best_at']:+d} half-steps; ended at "
                          f"{result['ended_at']:+d}, HFR {result['ended_hfr']}.")
+                # Where it ended, if that is good, counts as focused for the
+                # patrol's readiness (21 October 2026: it said "last focused
+                # 52 hours ago" straight after a walk-in to HFR 2.31).
+                last = result["readings"][-1][1]
+                if last <= 1.5 * usual:
+                    seen_good(last, scale)
                 return result
             if mode == "find":
                 progress("looking for stars: half a turn at a time, in and then out")
