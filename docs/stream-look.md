@@ -505,8 +505,9 @@ with the code, and restart the stream. A drawing error is now said once
 
 `streamchat.py` answers a few commands in the Twitch chat, from the same
 curated words and measured figures, so that a curious viewer can dig deeper
-without the picture filling up: `!what`, `!target`, `!next`, `!telescope`,
-`!camera`, `!nova`, `!transit` and `!help`.
+without the picture filling up: `!what`, `!target`, `!next`, `!focus`,
+`!polar`, `!telescope`, `!camera`, `!nova`, `!transit` and `!help`. `!focus`
+and `!polar` answer from the same files as the focus and polar looks.
 
 - No command moves or changes anything, and an unknown command gets no
   answer.
@@ -575,9 +576,12 @@ Hot Jupiter transit · imaging begins in about 4 min
 ```
 
 The checklist comes from `activity.phase()`, which maps each activity's own
-name to an explicit step (`activity.PHASES`): "Moving" is goto, "Plate
-solving" is solve, "Checking focus" and "Focusing with the motor" are focus,
-and "Patrol", "Imaging" and "Searching" are imaging. It never parses the
+name to an explicit phase (`activity.PHASES`): "Moving" is goto, "Plate
+solving" is solve, "Patrol", "Imaging" and "Searching" are imaging, and the
+focus stages ("Checking focus" is focus_check; "Focusing with the motor" is
+focus_sweep, or focus_walk and focus_find by its mode; "Fitting the focus
+curve" is focus_fit; "Checking the fitted focus" is focus_verify) all count
+as the checklist's focus step (`activity.step_of`). It never parses the
 words. The steps before the current one are ticked. This lives in
 `activity.py` rather than `schedule.py` because the steps are set by
 mount.py, solve.py and focus.py inside the schedule's commands, and
@@ -585,6 +589,76 @@ mount.py, solve.py and focus.py inside the schedule's commands, and
 
 With nothing running and nothing due, the stream ends as now, after the
 end-of-night card when the night has finished.
+
+## Focusing and polar alignment
+
+Built on 22 October 2026, seen so far in the preview and the tests only.
+Setting up is part of the night, and worth watching: the stream goes on air
+for it (`docs/streaming.md`, "Focusing and polar alignment on air"), and
+each has a look of its own in place of the stack and the object panel.
+
+### Focus
+
+```
+[ STAR SIZE (HFR)                                  ]   FOCUSING
+[  ●                                       ●       ]   what this run does, in a line
+[        ●                         ●               ]   5.07  AT THE START · HFR
+[              ●           ●                       ]   2.40  NOW · HFR
+[ - - - - - - - ◎ - - - - - - - - - USUAL BEST 2.28 ]   2.31  BEST SO FAR · HFR
+[             BEST SO FAR 2.31                     ]   usual best 2.28 · tonight's best so far 2.19
+  FOCUSER POSITION, half-steps from the start          position 4 of 9
+[START] [NOW]  ONE STAR, MAGNIFIED                     ✓ measure  ● sweep  ○ fit  ○ verify
+                                                       HOW FOCUSING WORKS (a card from [stories] focus)
+```
+
+- The curve is every reading, as focus.py measured it: the focuser's
+  position against the HFR. The best so far is ringed and labelled, the
+  usual best is a dashed line, the fitted focus a line once the fit is
+  made, and the newest reading has an outline. Far out of focus, before any
+  HFR measures, it draws the doughnuts' size instead, and says what the
+  doughnut is.
+- The two squares are the brightest star in view, magnified: as it was at
+  the start of the run, and in the newest picture.
+- The steps are the run's own (`focus.STAGES`): a check measures; a focus
+  run measures, sweeps, fits and verifies; a walk-in has doughnuts, coming
+  in, finest steps and done; the search for stars searches. A count is
+  shown only where it is known: "picture 2 of 3" for a check, "position 4
+  of 9" in a sweep, "step 3 of 4" in the search.
+- When it ends a card is held for ten seconds (`streamlook.CARD_S`):
+  FOCUS COMPLETE with the start and end HFR and how much smaller the stars
+  are; FOCUS CHECK PASSED when it was left alone; FOCUS IS SOFT for a check
+  that found it worth focusing; FOCUS CURVE REJECTED, FOCUS RETURNED TO
+  START, NO STARS FOUND or FOCUS RUN STOPPED with what happened in plain
+  words.
+
+### Polar alignment
+
+```
+          TOO HIGH                ROUND BY ROUND               POLAR ALIGNMENT
+     ( ( (  +  ) ) )              1 ███████████████ 9.6°       Waiting for the mount to be adjusted
+ WEST   [drift limit]   EAST      2 ████ 2.5°                   1.8°  FROM THE POLE
+          ●                       3 ███████ 4.2°                2.1°  AZIMUTH · WEST OF NORTH
+          TOO LOW                 4 ███ 1.8°                    1.3°  ALTITUDE · TOO LOW
+ + TRUE POLE  ● POLAR AXIS        WHAT TO DO                    the round before: 4.2°
+                                  Turn the whole tripod 2.1°    drift in a 16 s frame: 3.4 px, 2.1 px
+                                  clockwise, seen from above…   target: under the drift limit, 1.25°
+```
+
+- The bullseye has the true pole at its centre and the axis at its measured
+  azimuth and altitude errors, as polaralign.py gives them: up is too high,
+  east to the right as seen facing north. The drift limit is a square, since
+  it holds on each axis alone. While a measurement is under way the last
+  one is dimmed and the three pictures are ticked off in its place.
+- Every round tonight is a bar, the newest in the accent colour.
+- The advice is polaralign's, said for people not standing behind the
+  mount: the whole tripod or the mount turned clockwise or anticlockwise
+  seen from above, with centimetres at each foot where the tripod's figure
+  is known, the polar axis raised or lowered, and a learned bolt named by
+  the side it is on (west-side, east-side, rear, front). Never left or right.
+- The cards: POLAR ALIGNMENT COMPLETE with the first round and the last
+  when neither axis is worth a turn; POLAR MEASUREMENT FAILED with what
+  happened (a picture that could not be plate-solved, the mount not
+  turning, the two sides of the meridian disagreeing).
 
 ## Possible change detected
 
@@ -659,7 +733,8 @@ registered for the channel), and the chat's read-only commands
 (`streamchat.py`). Still not done:
 
 - The same for YouTube's title and category.
-- Sound or music. The silent track stays, as the services need one.
+- Music. The track is silent except for the focus tones while the telescope
+  focuses (`docs/streaming.md`, "The sound").
 - Sending to YouTube and Twitch at once. That is a change to `stream.py`'s
   output, not to the picture.
 
@@ -673,7 +748,10 @@ registered for the channel), and the chat's read-only commands
   - a picture;
   - between targets;
   - the end card;
-  - the target introduction.
+  - the target introduction;
+  - focusing (a sweep, a walk-in, each result card) and polar alignment
+    (measuring, waiting for an adjustment, complete, failed), from their
+    own files.
   The parts each state has are checked by drawing into a recorder, not by
   reading pixels.
 - No text drawn in any state contains the site's name, its latitude or

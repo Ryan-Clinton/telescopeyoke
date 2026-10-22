@@ -101,8 +101,31 @@ stacking = [
 plate_solving = [
     "Before imaging, the software works out exactly where the telescope points by matching the stars in a picture to a star catalogue.",
 ]
+# Also the cards shown while the telescope focuses (stream.py's focus segment).
+# From docs/how-it-all-works.md ("Focus") and docs/focuser.md.
 focus = [
     "A small motor on the focuser turns it in steps far finer than a hand can, and the software judges focus by the stars' size.",
+    "HFR, the half-flux radius, is the radius of the circle holding half a star's light. Smaller is sharper: about 2 pixels is good focus here.",
+    "The air shimmers, so any one star swells and shrinks from moment to moment. Measuring many stars and taking the middle value is far steadier.",
+    "Near focus one reading can jump by half again from the air alone, so no single reading can say which way focus lies.",
+    "In a reflector far out of focus, a star is a doughnut: its dark middle is the shadow of the small second mirror in the tube.",
+    "The focuser's gears have a little slack, so every position is reached moving the same way, inward: the slack never enters a reading.",
+    "Star size against focuser position makes a V-shaped curve. A curve fitted through every point finds its bottom more surely than any one reading.",
+    "Focus drifts through a night: as the air cools the telescope's tube shrinks a little, so focus is checked again between targets.",
+    "Focus is only changed when it needs it: a quick check first, and if the stars are as small as usual it is left alone.",
+]
+# The cards shown while the mount is polar aligned (stream.py's polar segment).
+# From docs/how-it-all-works.md ("Polar alignment") and docs/calibration.md.
+polar = [
+    "The sky turns about one point near Polaris, the celestial pole. The mount's polar axis has to point there for it to follow the stars.",
+    "Polaris is not exactly at the pole: it is about two thirds of a degree away, so aiming at Polaris alone is not quite enough.",
+    "An equatorial mount follows a star by turning one axis. Aimed at the pole, that turn keeps the star still; aimed off it, the star creeps away.",
+    "Three pictures with only the polar axis turned between them land on a circle. The circle's centre is where the axis really points.",
+    "That centre against the true pole gives the error as two numbers, one for each pair of bolts: azimuth, round, and altitude, up and down.",
+    "With the axis off the pole the stars creep slowly across the picture, mostly in declination: the drift that polar alignment removes.",
+    "The azimuth bolts turn the mount round on the tripod; the altitude bolts tilt it up and down. More than 2° out, the whole tripod is turned.",
+    "A level tripod is not essential: once the axis points at the pole the mount tracks the same however the tripod leans. Level only saves rounds.",
+    "Small errors are left alone: one is worth a turn of the bolts only if the drift it causes would show in a single picture.",
 ]
 discovery = [
     "Fake stars of known brightness are hidden in each picture and searched for: how many are found measures how faint the search can reach.",

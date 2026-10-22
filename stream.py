@@ -33,14 +33,17 @@ What is sent: the running stack, beside the newest frame, with the target,
 how many frames, and what is next. Nothing else: no webcam, no cloud map,
 nothing that names the place (the same rule as the status page and the
 site's live page). The pictures change every few seconds, so a few frames a
-second are sent, the picture repeating between updates, with a silent sound
-track, as the services expect. The video is encoded by the laptop's own
+second are sent, the picture repeating between updates, with a sound track
+as the services expect: silent, but for the focus tones while focusing
+([stream] focus_tones, on unless set false). The video is encoded by the laptop's own
 video hardware where it has some (Intel Quick Sync, through VAAPI), so it
 does not take the processors the stacking needs.
 
-It starts when a run's newest frame is under START_S old and stops when
-none has arrived for STOP_S: cloud, the end of the night, or the telescope
-put away. YouTube makes and ends a broadcast by itself when its stream key
+It starts when a run's newest frame is under START_S old, or while the
+telescope focuses or is polar aligned (observatory(): their own files, with
+a look of their own and the focus tones as the sound), and stops when
+nothing new has come for STOP_S: cloud, the end of the night, or the
+telescope put away. YouTube makes and ends a broadcast by itself when its stream key
 has Auto-start and Auto-stop on; Twitch goes live when the stream arrives.
 """
 import argparse
@@ -76,6 +79,7 @@ BETWEEN_S = 15 * 60     # stay on air between targets when the next step is due 
 END_S = 120             # the end-of-night card is held this long
 MEASURE_S = 300         # a transit's light curve is measured again this often
 START_S = 120           # a run whose newest frame is younger than this is imaging
+LOOK_S = 2              # how often the focus and polar files are looked at while watching
 STOP_S = 300            # no new frame for this long: stop streaming
 INGEST = {
     "youtube": "rtmp://a.rtmp.youtube.com/live2/{key}",
@@ -89,7 +93,7 @@ NAMES = {"youtube": "YouTube", "twitch": "Twitch", "custom": "the custom address
 def settings():
     found = config.hardware().get("stream", {})
     return {"enabled": bool(found.get("enabled", False)), "service": found.get("service", "youtube"),
-            "url": found.get("url", "")}
+            "url": found.get("url", ""), "tones": bool(found.get("focus_tones", True))}
 
 
 def services(s):
@@ -219,12 +223,42 @@ def night_over(st):
     return bool(steps) and all(s.get("status") in ("done", "failed", "skipped") for s in steps)
 
 
-def decide(streaming, st, quiet_since, now, between=False, ending=False):
+def observatory(now=None):
+    """("focus" | "polar", its state) while a focus run or a polar alignment
+    is worth showing (running, a person turning the bolts between rounds,
+    or its result card), from their own files (streamlook.focus_stream_state,
+    polar_stream_state); else (None, None). Focus first: polar alignment
+    needs focus, and the two never run at once."""
+    import streamlook
+    now = now or time.time()
+    try:
+        found = streamlook.focus_stream_state(now)
+        if found and found["showing"]:
+            return "focus", found
+        found = streamlook.polar_stream_state(now)
+        if found and found["showing"]:
+            return "polar", found
+    except Exception:            # a file half-read is never worth the stream
+        pass
+    return None, None
+
+
+def broadcasting(now=None):
+    """(the segment to show or None, whether the observatory is doing
+    something worth going on air for): a focus run or polar alignment by its
+    file, or any broadcast activity line (activity.BROADCAST)."""
+    import activity
+    kind, found = observatory(now)
+    return kind, found, kind is not None or activity.phase() in activity.BROADCAST
+
+
+def decide(streaming, st, quiet_since, now, between=False, ending=False, active=False):
     """("start" | "stop" | "carry on", quiet_since): start when a run is
-    imaging; carry on between targets while the schedule has more due
+    imaging, or when the observatory is focusing or polar aligning
+    (`active`); carry on between targets while the schedule has more due
     (`between`); hold the end card for END_S once the night is over
     (`ending`); otherwise stop once nothing new has come for STOP_S."""
-    if imaging(st):
+    if imaging(st) or active:
         return ("carry on" if streaming else "start"), None
     if not streaming:
         return "carry on", None
@@ -282,7 +316,7 @@ def between_state(st, now):
                      and not s["label"].lower().startswith(("goto", "focus"))), None)
     labels = {"goto": "moving telescope", "solve": "confirming field", "focus": "checking focus",
               "imaging": "imaging"}
-    found = activity.phase()
+    found = activity.step_of(activity.phase())
     current = activity.ORDER.index(found) if found else None
     checklist = [(labels[name], "now" if i == current else ("done" if current is not None and i < current else "open"))
                  for i, name in enumerate(activity.ORDER)]
@@ -298,10 +332,19 @@ def frame(st, now=None, mode="imaging"):
     """The picture sent (docs/stream-look.md, drawn by streamlook.py): while
     imaging, the stack with one exposure and the side panel; between
     targets, the card with what comes next; at the night's end, its
-    summary. Never anything that names the place."""
+    summary; while focusing or polar aligning ("focus", "polar"), their
+    looks. Never anything that names the place."""
     import streamlook
     now = now or time.time()
     stack, single = pictures(st)
+    if mode in ("focus", "polar"):
+        import streamstory
+        found = (streamlook.focus_stream_state if mode == "focus" else streamlook.polar_stream_state)(now)
+        if found is not None:
+            state = {"kind": mode, "target": "", "now": now, mode: found}
+            state["story"] = streamstory.plan(state, st, now)
+            return streamlook.compose(state).image
+        mode = "imaging"                # gone between looking and drawing: what was there before
     if mode == "between":
         state = between_state(st, now)
     elif mode == "end":
@@ -327,11 +370,15 @@ def encoder(device=None, size=(WIDTH, HEIGHT)):
             "-tune", "stillimage", *common]
 
 
-def command(target, device=None, size=(WIDTH, HEIGHT)):
+def command(target, device=None, size=(WIDTH, HEIGHT), audio_fd=None):
     """ffmpeg taking raw pictures on its input and sending them to `target`
     (an rtmp:// address, a file to try it, or a list of addresses),
     reporting its speed in PROGRESS. Several are fed from one encoding by
-    the tee muxer, each with onfail=ignore so one failing leaves the rest."""
+    the tee muxer, each with onfail=ignore so one failing leaves the rest.
+    The sound is silence, or with `audio_fd` raw sound read from that
+    descriptor (Tones: the focus run's tones)."""
+    sound = (["-f", "s16le", "-ar", str(TONE_RATE), "-ac", "1", "-i", f"pipe:{audio_fd}"] if audio_fd is not None
+             else ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"])
     targets = [target] if isinstance(target, str) else list(target)
     if len(targets) > 1:
         out = ["-map", "0:v", "-map", "1:a", "-flags", "+global_header", "-f", "tee",
@@ -340,8 +387,88 @@ def command(target, device=None, size=(WIDTH, HEIGHT)):
         out = ["-f", "flv", targets[0]] if targets[0].startswith("rtmp") else [targets[0]]
     return ["ffmpeg", "-loglevel", "error", "-y", "-progress", str(PROGRESS), "-stats_period", "5",
             "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{WIDTH}x{HEIGHT}", "-r", str(INPUT_FPS), "-i", "-",
-            "-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100",
-            *encoder(device, size), "-c:a", "aac", "-b:a", "64k", "-shortest", *out]
+            *sound, *encoder(device, size), "-c:a", "aac", "-b:a", "64k", "-ar", "44100", "-ac", "2",
+            "-shortest", *out]
+
+
+TONE_RATE = 22050         # the focus aid's own (focus.RATE)
+TONE_CHUNK_S = 0.1        # sound handed to ffmpeg this much at a time, paced by the clock
+
+
+class Tones:
+    """The stream's sound while the telescope focuses: for each new reading
+    a click and a tone, higher the sharper the stars (focus.pitch, as the
+    focus aid's), or two clicks for a reading with no stars; silence
+    between. Written to ffmpeg's second input on a thread of its own,
+    paced by the clock, so the pictures never wait on it; it ends when
+    ffmpeg does (a broken pipe) or on stop()."""
+
+    def __init__(self, fd, clock=time.monotonic, sleep=time.sleep):
+        import threading
+        self.fd, self.clock, self.sleep = fd, clock, sleep
+        self.queue, self.lock = np.zeros(0, dtype=np.int16), threading.Lock()
+        self.seen, self.run_started = None, None
+        self.stopped = threading.Event()
+        self.thread = threading.Thread(target=self.run, daemon=True)
+
+    def start(self):
+        self.thread.start()
+        return self
+
+    def hear(self, found):
+        """Queue the sound for the newest reading of a focus run's state
+        (streamlook.focus_stream_state), if it is new."""
+        import focus
+        if not found or not found.get("running"):
+            return
+        count = found.get("count") or 0
+        if found.get("started") != self.run_started:
+            self.run_started, self.seen = found.get("started"), count     # a new run: from its next reading
+            return
+        if count <= (self.seen or 0):
+            return
+        self.seen = count
+        hfr, usual = found.get("last_hfr"), found.get("usual_hfr")
+        if not hfr:
+            samples = focus.waveform("double")
+        else:
+            fraction = min(1.0, (usual or hfr) / hfr)        # 1 at the usual best or sharper
+            samples = focus.waveform("tone", focus.pitch(fraction))
+        with self.lock:
+            self.queue = np.concatenate([self.queue, (0.4 * 32767 * samples).astype(np.int16)])
+
+    def chunk(self, n):
+        """The next `n` samples: queued sound, then silence."""
+        with self.lock:
+            out, self.queue = self.queue[:n], self.queue[n:]
+        return np.concatenate([out, np.zeros(n - len(out), dtype=np.int16)]).astype("<i2").tobytes()
+
+    def run(self):
+        n = int(TONE_RATE * TONE_CHUNK_S)
+        tick = self.clock()
+        try:
+            while not self.stopped.is_set() and self.fd is not None:
+                os.write(self.fd, self.chunk(n))
+                tick += TONE_CHUNK_S
+                self.sleep(max(0.0, tick - self.clock()))
+        except (OSError, TypeError):      # ffmpeg has gone (or stop() closed it): so has the sound
+            pass
+        finally:
+            self.close()
+
+    def close(self):
+        with self.lock:
+            fd, self.fd = self.fd, None          # closed once only: the number may be reused after
+        if fd is not None:
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+    def stop(self):
+        self.stopped.set()
+        if not self.thread.is_alive():
+            self.close()
 
 
 def reported(text, name):
@@ -563,14 +690,21 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
     composer = Composer(draw=lambda st, now, mode: frame(st, now, mode).resize(size)
                         if size != (WIDTH, HEIGHT) else frame(st, now, mode))
     tick = clock()
+    segment, segment_state, active, looked_at, tones = None, None, False, -1e9, None
     try:
         while True:
             st, now = status(), clock()
+            if now - looked_at >= LOOK_S:
+                # Focusing or polar alignment going on: read from their files, not every picture.
+                segment, segment_state, active = broadcasting(now)
+                looked_at = now
+                if tones is not None and segment == "focus":
+                    tones.hear(segment_state)
             between = not imaging(st) and runner_alive() and due_soon(st, now)
             ending = not imaging(st) and not between and night_over(st)
-            action, quiet_since = decide(process is not None, st, quiet_since, now, between, ending)
-            composer.view = (st, "imaging" if imaging(st) else ("between" if between else
-                                                                ("end" if ending else "imaging")))
+            action, quiet_since = decide(process is not None, st, quiet_since, now, between, ending, active)
+            composer.view = (st, segment or ("imaging" if imaging(st) else ("between" if between else
+                                                                            ("end" if ending else "imaging"))))
             if action == "start":
                 if now < retry_at:
                     sleep(1)
@@ -579,18 +713,26 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                     size, tested = bandwidth_test(target, device), True
                     with composer.lock:
                         composer.ready = []
-                say(f"{time.strftime('%H:%M')} imaging {st.get('name')}: streaming {size[0]}x{size[1]} to "
+                doing = {"focus": "focusing", "polar": "polar aligning"}.get(segment) \
+                    or (f"imaging {st.get('name')}" if imaging(st) else "at work")
+                say(f"{time.strftime('%H:%M')} {doing}: streaming {size[0]}x{size[1]} to "
                     f"{to or ' and '.join(NAMES[n] for n in names)} "
                     f"({hidden(' '.join([target] if isinstance(target, str) else target), stream_keys)})")
                 PROGRESS.parent.mkdir(parents=True, exist_ok=True)
                 PROGRESS.write_text("")
-                process, reports, drops, frames = run(command(target, device, size), stdin=subprocess.PIPE,
-                                                      stderr=subprocess.PIPE), [], [], []
+                listen = os.pipe() if s["tones"] and os.name == "posix" else None
+                process, reports, drops, frames = run(
+                    command(target, device, size, audio_fd=listen and listen[0]), stdin=subprocess.PIPE,
+                    stderr=subprocess.PIPE, **({"pass_fds": (listen[0],)} if listen else {})), [], [], []
+                if listen:
+                    os.close(listen[0])                 # ffmpeg has its own copy
+                    tones = Tones(listen[1]).start()
                 passed_on(process, stream_keys, say)
             elif action == "stop":
                 say(f"{time.strftime('%H:%M')} nothing new for {(END_S if ending else STOP_S) // 60} minutes: "
                     "stream stopped")
                 process.stdin.close()
+                tones = quiet(tones)
                 process.wait(timeout=30)
                 process, quiet_since, shown = None, None, None
             if process is not None and twitch_on and chatting is None:
@@ -611,7 +753,7 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                 except (BrokenPipeError, OSError):
                     # Never a tight loop: wait, and the next try is a fresh start.
                     say(f"{time.strftime('%H:%M')} the stream broke off; trying again in 30 s")
-                    process, retry_at = None, now + 30
+                    process, retry_at, tones = None, now + 30, quiet(tones)
                     breaks = [t for t in breaks if now - t <= BREAKS_S] + [now]
                     if size == (WIDTH, HEIGHT) and falling_behind([], now, breaks=breaks):
                         size = FALLBACK
@@ -636,6 +778,7 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                     say(f"{time.strftime('%H:%M')} the stream is falling behind (speed {reports[-1][1]:.2f}): "
                         f"going down to {size[0]}x{size[1]}")
                     process.stdin.close()
+                    tones = quiet(tones)
                     process.wait(timeout=30)
                     process, shown = None, None
                     with composer.lock:
@@ -650,9 +793,17 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
         pass
     finally:
         composer.stop()
+        quiet(tones)
         if process is not None:
             process.stdin.close()
             process.wait(timeout=30)
+
+
+def quiet(tones):
+    """Stop the tones' thread, if there is one; None, for what it was."""
+    if tones is not None:
+        tones.stop()
+    return None
 
 
 def working_device(devices=None, test=None):

@@ -233,3 +233,125 @@ def test_the_between_targets_checklist_comes_from_the_named_activities():
     assert activity.phase([{"what": "Schedule"}, {"what": "Moving"}]) == "goto"
     assert activity.phase([{"what": "Schedule"}, {"what": "Plate solving"}]) == "solve"
     assert activity.phase([{"what": "Schedule"}]) is None
+
+
+# --- on air for focusing and polar alignment ------------------------------------
+
+def test_focusing_or_polar_alignment_puts_the_stream_on_air_and_imaging_is_as_before():
+    quiet = {"name": "M31-P6", "age": 900}
+    assert stream.decide(False, quiet, None, 0, active=True) == ("start", None)
+    assert stream.decide(True, quiet, 50, 10 * stream.STOP_S, active=True) == ("carry on", None)
+    # Once it ends, the same quiet rule as after imaging.
+    action, since = stream.decide(True, quiet, None, 1000)
+    assert action == "carry on" and stream.decide(True, quiet, since, since + stream.STOP_S)[0] == "stop"
+    assert stream.decide(False, {"name": "M31-P6", "age": 10}, None, 0) == ("start", None)
+
+
+def test_what_is_shown_comes_from_the_focus_and_polar_files(monkeypatch):
+    import activity
+    import streamlook
+    monkeypatch.setattr(streamlook, "focus_stream_state", lambda now=None: {"showing": True, "running": True})
+    monkeypatch.setattr(streamlook, "polar_stream_state", lambda now=None: {"showing": True})
+    assert stream.observatory()[0] == "focus"                    # focus first: polar alignment needs it
+    monkeypatch.setattr(streamlook, "focus_stream_state", lambda now=None: {"showing": False})
+    assert stream.observatory()[0] == "polar"
+    monkeypatch.setattr(streamlook, "polar_stream_state", lambda now=None: None)
+    assert stream.observatory() == (None, None)
+    monkeypatch.setattr(activity, "phase", lambda: "focus_check")
+    assert stream.broadcasting()[2]                               # an activity line alone keeps it on air
+    monkeypatch.setattr(activity, "phase", lambda: "goto")
+    assert not stream.broadcasting()[2]
+    monkeypatch.setattr(streamlook, "polar_stream_state", lambda now=None: 1 / 0)
+    assert stream.observatory() == (None, None)                   # a bad file never stops the stream
+
+
+def test_the_focus_and_polar_segments_draw_from_their_files(monkeypatch):
+    import streamlook
+    examples = streamlook.examples()
+    monkeypatch.setattr(stream, "pictures", lambda st=None: (None, None))
+    monkeypatch.setattr(streamlook, "focus_stream_state", lambda now=None: examples["focus"]["focus"])
+    monkeypatch.setattr(streamlook, "polar_stream_state", lambda now=None: examples["polar-adjust"]["polar"])
+    assert stream.frame({}, 1000.0, "focus").size == (stream.WIDTH, stream.HEIGHT)
+    assert stream.frame({}, 1000.0, "polar").size == (stream.WIDTH, stream.HEIGHT)
+    monkeypatch.setattr(streamlook, "focus_stream_state", lambda now=None: None)
+    assert stream.frame({}, 1000.0, "focus").size == (stream.WIDTH, stream.HEIGHT)   # gone: the usual picture
+
+
+def test_a_focus_reading_is_heard_as_a_tone_higher_the_sharper():
+    import numpy as np
+
+    import focus
+    tones = stream.Tones(fd=None)
+    run = {"running": True, "started": 1.0, "count": 1, "last_hfr": 5.0, "usual_hfr": 2.0}
+    tones.hear(run)                                               # a run first seen: nothing until its next reading
+    assert len(tones.queue) == 0
+    tones.hear(dict(run, count=2, last_hfr=4.0))
+    soft = np.copy(tones.queue)
+    assert len(soft) == len(focus.waveform("tone", 300))
+    tones.queue = tones.queue[:0]
+    tones.hear(dict(run, count=2, last_hfr=2.0))                  # the same reading again: no sound
+    assert len(tones.queue) == 0
+    tones.hear(dict(run, count=3, last_hfr=2.0))
+    sharp = np.copy(tones.queue)
+
+    def hertz(samples):
+        spectrum = np.abs(np.fft.rfft(samples[len(samples) // 2:].astype(float)))
+        return np.argmax(spectrum) * focus.RATE / len(samples[len(samples) // 2:])
+    assert hertz(sharp) > hertz(soft)
+    tones.queue = tones.queue[:0]
+    tones.hear(dict(run, count=4, last_hfr=None))                 # no stars: two clicks
+    assert len(tones.queue) == len(focus.waveform("double"))
+    tones.queue = tones.queue[:0]
+    n = 100
+    assert len(tones.chunk(n)) == 2 * n and tones.chunk(10 ** 6).count(b"\0") == 2 * 10 ** 6
+    tones.hear({"running": False})
+
+
+def test_the_sound_comes_from_a_pipe_when_there_are_tones_and_is_silent_otherwise():
+    plain = " ".join(stream.command("rtmp://x/live/k"))
+    assert "anullsrc" in plain and "pipe:" not in plain
+    piped = " ".join(stream.command("rtmp://x/live/k", audio_fd=7))
+    assert f"-f s16le -ar {stream.TONE_RATE} -ac 1 -i pipe:7" in piped and "anullsrc" not in piped
+    assert "-ar 44100 -ac 2" in piped and piped.count("-i") == 2
+    both = stream.command(["rtmp://a/live/k", "rtmp://live.twitch.tv/app/k"], audio_fd=7)
+    assert "-map 1:a" in " ".join(both)
+
+
+def test_the_tones_reach_the_stream_s_sound_through_ffmpeg(tmp_path):
+    """The whole path for real, into a file: pictures on ffmpeg's input,
+    the tones on a pipe, and the file has sound that is not silence."""
+    import os
+    import shutil
+    import subprocess
+
+    import pytest
+    if not shutil.which("ffmpeg"):
+        pytest.skip("no ffmpeg here")
+    out = tmp_path / "tones.mp4"
+    stream.PROGRESS.parent.mkdir(parents=True, exist_ok=True)
+    listen = os.pipe()
+    process = subprocess.Popen(stream.command(str(out), None, (1280, 720), audio_fd=listen[0]),
+                               stdin=subprocess.PIPE, stderr=subprocess.PIPE, pass_fds=(listen[0],))
+    os.close(listen[0])
+    tones = stream.Tones(listen[1]).start()
+    picture = bytes(stream.WIDTH * stream.HEIGHT * 3)
+    run = {"running": True, "started": 1.0, "count": 0, "last_hfr": 3.0, "usual_hfr": 2.0}
+    tones.hear(run)
+    import time
+    for i in range(20):                                         # two seconds of pictures
+        if i % 5 == 0:
+            run = dict(run, count=run["count"] + 1)
+            tones.hear(run)
+        try:
+            process.stdin.write(picture)
+        except BrokenPipeError:
+            pytest.fail(process.stderr.read().decode())
+        time.sleep(1 / stream.INPUT_FPS)
+    process.stdin.close()
+    tones.stop()
+    process.wait(timeout=60)
+    assert out.exists() and out.stat().st_size > 0, process.stderr.read().decode()
+    probe = subprocess.run(["ffmpeg", "-hide_banner", "-i", str(out), "-af", "volumedetect", "-f", "null", "-"],
+                           capture_output=True, text=True, timeout=60).stderr
+    loudest = float(probe.split("max_volume:")[1].split("dB")[0])
+    assert loudest > -30, probe

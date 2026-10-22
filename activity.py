@@ -332,18 +332,51 @@ def run_state(session, entries=None):
     return {"running": False, "stopped_at": ended, "camera_silent_s": None}
 
 
-# Where getting to a target has got, by the name each step's code gives its
-# activity line (mount.py, solve.py, focus.py, patrol.py, shoot.py): the
-# stream's between-targets card reads this rather than the words.
-PHASES = {"Moving": "goto", "Plate solving": "solve", "Checking focus": "focus", "Focusing": "focus",
-          "Focusing with the motor": "focus", "Patrol": "imaging", "Imaging": "imaging", "Searching": "imaging"}
+# What is being done, by the name each step's code gives its activity line
+# (mount.py, solve.py, focus.py, polaralign.py, patrol.py, shoot.py): the
+# stream reads this rather than the words. Focusing and polar alignment are
+# told apart by stage, since the stream shows each its own way.
+PHASES = {"Moving": "goto", "Plate solving": "solve",
+          "Checking focus": "focus_check", "Focusing with the motor": "focus_sweep", "Focusing": "focus_aid",
+          "Fitting the focus curve": "focus_fit", "Checking the fitted focus": "focus_verify",
+          "Polar check": "polar_measure", "Polar recheck": "polar_recheck",
+          "Patrol": "imaging", "Imaging": "imaging", "Searching": "imaging"}
+# The focus motor's other modes, from the words its line carries
+# (focus.MODE_WORDS; a test keeps the two in step). "Focusing" is the hand
+# aid by ear, which the stream does not show.
+MODES = {"walking in to the sharpest": "focus_walk", "finding focus": "focus_find",
+         "measuring the motor's step": "focus_calibrate", "measuring the backlash": "focus_calibrate"}
+# What the stream goes on air for, besides imaging. polar_adjust has no
+# process of its own (a person is turning the bolts): polaralign.py's
+# stream file says so, not an activity line.
+BROADCAST = ("focus_check", "focus_sweep", "focus_walk", "focus_find", "focus_fit", "focus_verify",
+             "polar_measure", "polar_adjust", "polar_recheck")
+# The steps of getting to a target, for the stream's between-targets card.
 ORDER = ["goto", "solve", "focus", "imaging"]
 
 
+def step_of(found):
+    """The between-targets step a phase belongs to (every focus_* is
+    "focus"), or None for one that is not a step of getting to a target."""
+    if found is None:
+        return None
+    if found.startswith("focus"):
+        return "focus"
+    return found if found in ORDER else None
+
+
 def phase(entries=None):
-    """The newest of goto / solve / focus / imaging being done now, or None."""
+    """The newest phase being done now (goto, solve, focus_check,
+    focus_sweep, focus_walk, focus_find, focus_fit, focus_verify,
+    polar_measure, polar_recheck, imaging), or None."""
     entries = now() if entries is None else entries
-    found = [PHASES[e["what"]] for e in entries if e.get("what") in PHASES]
+    found = []
+    for e in entries:
+        name = PHASES.get(e.get("what"))
+        if name == "focus_sweep":
+            name = MODES.get(str(e.get("detail") or "").strip(), name)
+        if name:
+            found.append(name)
     return found[-1] if found else None
 
 

@@ -31,6 +31,10 @@ EXPLAINER_EVERY, EXPLAINER_S = 300, 12
 CRAWL_EVERY, CRAWL_S = 600, 45
 NAKED_EYE = 6.0                       # the faintest stars an eye sees under a dark sky (magnitude)
 COMET_HOURS = 36                      # a comet the hunt recovered is told for this long after the hunt
+# While the telescope focuses or is polar aligned: the card's title, its
+# pool in [stories], and how long each card stays.
+SEGMENTS = {"focus": "HOW FOCUSING WORKS", "polar": "HOW POLAR ALIGNMENT WORKS"}
+SEGMENT_S = 25
 
 
 class Story:
@@ -210,6 +214,15 @@ def plan(s, live, now=None, story=None, targets=None):
         import streamlook
         targets = streamlook.targets()
     out = {"chapter": "NOW", "card": None, "line": None, "explainer": None, "crawl": None}
+    if s.get("kind") in SEGMENTS:
+        # Focusing or polar alignment: one card at a time from its own pool,
+        # each held SEGMENT_S, beside the live graphics.
+        if story.start is None:
+            story.start = now
+        text = story.pick(f"segment-{s['kind']}", targets.get("stories", {}).get(s["kind"], []),
+                          int((now - story.start) // SEGMENT_S))
+        out.update(chapter="HOW IT WORKS", card=(SEGMENTS[s["kind"]], [text]) if text else None)
+        return out
     if s.get("candidate") or (s.get("last_age") or 0) > 120 or s.get("kind") not in ("patrol", "transit", "picture"):
         return out                    # a follow-up or a warning has the screen
     if story.start is None:

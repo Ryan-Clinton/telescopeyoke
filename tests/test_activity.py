@@ -293,4 +293,28 @@ def test_every_way_of_focusing_with_the_motor_says_what_it_is_doing():
         assert focus.MODE_WORDS[mode]
     assert focus.MODE_WORDS["walk"] == "walking in to the sharpest" and focus.MODE_WORDS["find"] == "finding focus"
     assert focus.run_motor.__wrapped__ and focus.run.__wrapped__ and focus.run_check.__wrapped__
-    assert activity.PHASES["Focusing with the motor"] == activity.PHASES["Focusing"] == "focus"
+    # Each is the between-targets card's focus step (the stream tells the stages apart).
+    assert activity.step_of(activity.PHASES["Focusing with the motor"]) == "focus"
+    assert activity.step_of(activity.PHASES["Focusing"]) == "focus"
+
+
+def test_focusing_and_polar_alignment_are_told_apart_stage_by_stage():
+    import focus
+    phase = activity.phase
+    words = focus.MODE_WORDS
+    assert phase([{"what": "Checking focus"}]) == "focus_check"
+    assert phase([{"what": "Focusing with the motor", "detail": words["focus"]}]) == "focus_sweep"
+    assert phase([{"what": "Focusing with the motor", "detail": words["sweep"]}]) == "focus_sweep"
+    assert phase([{"what": "Focusing with the motor", "detail": words["walk"]}]) == "focus_walk"
+    assert phase([{"what": "Focusing with the motor", "detail": words["find"]}]) == "focus_find"
+    assert phase([{"what": "Focusing with the motor", "detail": words["step"]}]) == "focus_calibrate"
+    assert phase([{"what": "Focusing with the motor", "detail": words["backlash"]}]) == "focus_calibrate"
+    assert phase([{"what": "Focusing", "detail": "by the live view"}]) == "focus_aid"
+    assert phase([{"what": "Focusing with the motor"}, {"what": "Fitting the focus curve"}]) == "focus_fit"
+    assert phase([{"what": "Focusing with the motor"}, {"what": "Checking the fitted focus"}]) == "focus_verify"
+    assert phase([{"what": "Polar check"}]) == "polar_measure" and phase([{"what": "Polar recheck"}]) == "polar_recheck"
+    assert {"focus_check", "focus_sweep", "focus_walk", "focus_find", "focus_fit", "focus_verify",
+            "polar_measure", "polar_adjust", "polar_recheck"} == set(activity.BROADCAST)
+    # The between-targets card still has its four steps: every focus stage is "focus".
+    assert [activity.step_of(p) for p in ("goto", "solve", "focus_fit", "focus_walk", "imaging", "polar_measure",
+                                          None)] == ["goto", "solve", "focus", "focus", "imaging", None, None]

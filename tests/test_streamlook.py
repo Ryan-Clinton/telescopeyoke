@@ -179,3 +179,105 @@ def test_the_crawl_runs_in_from_the_right_and_out_at_the_left():
     start = streamlook.crawled(picture, strip, 0)
     assert start is not None and not start[y0:y1, x0:x1].any() == False      # it overwrites the footer's place
     assert streamlook.crawled(picture, strip, 3600) is None                   # gone after it has run through
+
+
+# --- focusing and polar alignment, from their own files -------------------------
+
+def test_the_focus_and_polar_looks_have_their_states(drawn):
+    assert {"focus", "focus-walk", "focus-complete", "focus-check-passed", "focus-rejected", "polar-measuring",
+            "polar-adjust", "polar-complete", "polar-failed"} <= set(drawn)
+    words = {name: " ".join(w["words"] for w in canvas.written) for name, canvas in drawn.items()}
+    assert "BEST SO FAR" in words["focus"] and "USUAL BEST 2.28" in words["focus"] and "position 8 of 9" in words["focus"]
+    assert "✓  measure" in words["focus"] and "●  sweep" in words["focus"] and "○  verify" in words["focus"]
+    assert "usual best 2.28 · tonight's best so far 2.31" in words["focus"]
+    assert "●  finest steps" in words["focus-walk"] and "START" in words["focus"] and "NOW" in words["focus"]
+    assert "FOCUS COMPLETE" in words["focus-complete"] and "5.07 → 2.19 HFR, 57% smaller stars" in words["focus-complete"]
+    assert "FOCUS CHECK PASSED" in words["focus-check-passed"] and "FOCUS CURVE REJECTED" in words["focus-rejected"]
+    assert "ROUND BY ROUND" in words["polar-adjust"] and "9.6°" in words["polar-adjust"] and "WHAT TO DO" in words["polar-adjust"]
+    assert "●  picture 2" in words["polar-measuring"] and "Recheck: picture 2 of 3" in words["polar-measuring"]
+    assert "TRUE POLE" in words["polar-adjust"] and "DRIFT LIMIT" in words["polar-adjust"]
+    assert "target: under the drift limit, 1.25°" in words["polar-adjust"]
+    assert "POLAR ALIGNMENT COMPLETE" in words["polar-complete"] and "9.6° → 1.2°" in words["polar-complete"]
+    assert "POLAR MEASUREMENT FAILED" in words["polar-failed"] and "plate-solved" in words["polar-failed"]
+    for name in ("polar-adjust", "polar-measuring"):
+        assert not re.search(r"\b(left|right)\b", words[name], re.I), name
+
+
+def focus_file(tmp_path, **changes):
+    import json
+    import os
+    import time
+    f = {"kind": "focus", "steps": ["measure", "sweep", "fit", "verify"], "stage": "sweep", "usual_hfr": 2.28,
+         "start_hfr": 5.07, "hfr": 2.4, "best_hfr": 2.31, "best_at": -512, "at": -256, "position": 4,
+         "positions": 9, "readings": [{"at": 0, "hfr": 5.07}, {"at": -512, "hfr": 2.31}, {"at": -256, "hfr": None}],
+         "fit": None, "outcome": None, "words": None, "pid": os.getpid(), "started": time.time() - 60,
+         "updated": time.time(), "ended": None}
+    f.update(changes)
+    (tmp_path / "focus_stream.json").write_text(json.dumps(f))
+    return tmp_path / "focus_stream.json"
+
+
+def test_a_running_focus_run_is_read_from_focus_py_s_own_file(tmp_path):
+    import time
+    path = focus_file(tmp_path)
+    (tmp_path / "focus_runs.jsonl").write_text('{"saved": %f, "best_hfr": 2.19}\n{"saved": 0, "best_hfr": 1.5}\n'
+                                               % (time.time() - 3600))
+    f = streamlook.focus_stream_state(path=path)
+    assert f["running"] and f["showing"] and f["card"] is None
+    assert f["steps"] == [("measure", "done"), ("sweep", "now"), ("fit", "open"), ("verify", "open")]
+    assert f["readings"] == [(0, 5.07), (-512, 2.31)] and f["count"] == 3 and f["last_hfr"] is None
+    assert f["tonight_best_hfr"] == 2.19                    # an earlier run tonight, not one from long ago
+    # A run whose process has gone without saying so is not shown.
+    gone = streamlook.focus_stream_state(path=focus_file(tmp_path, pid=2 ** 22 + 12345))
+    assert not gone["running"] and not gone["showing"]
+
+
+def test_a_finished_focus_run_holds_its_card_for_ten_seconds(tmp_path):
+    import time
+    ended = time.time()
+    path = focus_file(tmp_path, outcome="complete", end_hfr=2.19, ended=ended)
+    f = streamlook.focus_stream_state(ended + 5, path=path)
+    assert f["card"] == ("FOCUS COMPLETE", "5.07 → 2.19 HFR, 57% smaller stars", "live") and f["showing"]
+    assert all(status == "done" for _, status in f["steps"])
+    assert not streamlook.focus_stream_state(ended + streamlook.CARD_S + 1, path=path)["showing"]
+    failed = streamlook.focus_stream_state(ended + 1, path=focus_file(tmp_path, outcome="returned", ended=ended,
+                                                                      words="no better, back to the start"))
+    assert failed["card"][0] == "FOCUS RETURNED TO START" and failed["card"][1] == "no better, back to the start"
+    assert ("sweep", "failed") in failed["steps"]
+    assert streamlook.focus_card({"outcome": "left_alone", "end_hfr": 2.2, "usual_hfr": 2.28})[0] == "FOCUS CHECK PASSED"
+    assert streamlook.focus_stream_state(path=tmp_path / "none.json") is None
+
+
+def polar_file(tmp_path, **changes):
+    import json
+    import os
+    import time
+    p = {"stage": "adjust", "picture": 3, "taken": 3, "recheck": True, "pid": os.getpid(), "updated": time.time(),
+         "ended": time.time(), "rounds": [{"total_deg": 9.6, "measured": time.time() - 900},
+                                          {"total_deg": 2.5, "measured": time.time() - 60}],
+         "azimuth_deg": 4.2, "altitude_deg": -0.5, "total_deg": 2.5, "previous_total_deg": 9.6, "limit_deg": 1.25,
+         "limit_px": 2.0, "exposure_s": 16.0, "drift_px": {"azimuth": 6.7, "altitude": 0.8},
+         "advice": ["Turn the whole tripod 4.2° anticlockwise, seen from above."]}
+    p.update(changes)
+    (tmp_path / "polar_stream.json").write_text(json.dumps(p))
+    return tmp_path / "polar_stream.json"
+
+
+def test_a_polar_alignment_is_read_from_polaralign_py_s_own_file(tmp_path):
+    import time
+    p = streamlook.polar_stream_state(path=polar_file(tmp_path))
+    assert p["adjusting"] and p["showing"] and p["card"] is None and p["doing"].startswith("Waiting")
+    # A person turning the bolts keeps it on air for ADJUST_S, then it is not news.
+    later = time.time() + streamlook.ADJUST_S + 1
+    assert not streamlook.polar_stream_state(later, path=polar_file(tmp_path))["showing"]
+    measuring = streamlook.polar_stream_state(path=polar_file(tmp_path, stage="measuring", picture=2, taken=1))
+    assert measuring["running"] and measuring["doing"] == "Recheck: picture 2 of 3"
+    assert measuring["pictures_steps"] == [("picture 1", "done"), ("picture 2", "now"), ("picture 3", "open")]
+    done = streamlook.polar_stream_state(path=polar_file(tmp_path, stage="complete", total_deg=1.2, rounds=[
+        {"total_deg": 9.6, "measured": time.time() - 900}, {"total_deg": 1.2, "measured": time.time()}]))
+    assert done["card"] == ("POLAR ALIGNMENT COMPLETE", "9.6° → 1.2° from the pole: under the drift limit on both "
+                                                        "axes.", "live")
+    failed = streamlook.polar_stream_state(path=polar_file(tmp_path, stage="failed", words="Cloud. Nothing was measured."))
+    assert failed["card"] == ("POLAR MEASUREMENT FAILED", "Cloud. Nothing was measured.", "attention")
+    old = streamlook.polar_stream_state(path=polar_file(tmp_path, rounds=[{"total_deg": 3, "measured": 0}]))
+    assert old["rounds"] == []                               # another night's rounds are not tonight's history

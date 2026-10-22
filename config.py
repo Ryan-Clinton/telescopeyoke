@@ -71,6 +71,8 @@ DEFAULTS = {
     # "wifi" (the SynScan Wi-Fi adapter) or "eqdir" (an EQDIR lead).
     "mount": {"serial_match": "FTDI", "link": "handset"},
     "indi": {"port": 7624, "manage_server": False},
+    # focus_tones: the focus run's tones in the live stream's sound (stream.Tones).
+    "stream": {"focus_tones": True},
 }
 
 # Where ASTAP's installer puts the program and the star database on Windows.
@@ -252,6 +254,9 @@ SETTINGS = (
      "Where the live stream goes. youtube+twitch sends the same stream to both at once; one without a key "
      "is left out.",
      {"choices": ["youtube", "twitch", "youtube+twitch", "custom"]}),
+    ("stream", "focus_tones", "Focus tones on the stream", "yesno",
+     "While the telescope focuses, the stream's sound has a click and a tone for each reading, higher the sharper "
+     "the stars, as the focus aid's. Off: the stream stays silent. Takes effect when the stream next starts.", {}),
     ("webcam", "enabled", "Use a webcam at all", "yesno",
      "Off: nothing opens a webcam (the telescope pictures during moves, watch.py and the picture on the pages); "
      "the settings below then do nothing.", {}),

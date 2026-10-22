@@ -40,6 +40,7 @@ Runs for 15 minutes (Ctrl+C to stop sooner); the web page shows the picture.
 """
 import argparse
 import json
+import os
 import queue
 import sys
 import threading
@@ -635,6 +636,120 @@ class OutOfReach(Exception):
     """A focus run would go further than MOTOR_TRAVEL from where it started."""
 
 
+# What a focus run is doing, as one small file for the live stream
+# (streamlook.focus_stream_state): its stage, every reading with where the
+# focuser was, the fit, and how it ended. Before 22 October 2026 a motor run
+# left only lines of log, and the stream could show nothing of a focus run.
+# The brightest star's square, at the start and now, is kept beside it.
+STREAM_FILE = config.DATA / "cache" / "focus_stream.json"
+STAR_START = STREAM_FILE.with_name("focus_star_start.png")
+STAR_NOW = STREAM_FILE.with_name("focus_star_now.png")
+STAGES = {"check": ["measure"],
+          "focus": ["measure", "sweep", "fit", "verify"],
+          "sweep": ["measure", "sweep", "fit"],
+          "walk": ["doughnuts", "coming in", "finest steps", "done"],
+          "find": ["searching"]}
+
+
+def star_square(lum, least=12, most=60):
+    """The brightest star (or its doughnut) in a square around it, stretched
+    to 8 bits, or None when there is no star."""
+    found = measure(lum)
+    if found is None:
+        return None
+    x, y, diameter = found
+    half = int(np.clip(0.8 * diameter, least, most))
+    x0, y0 = max(int(x) - half, 0), max(int(y) - half, 0)
+    box = np.asarray(lum[y0:y0 + 2 * half, x0:x0 + 2 * half], dtype=np.float32)
+    if box.size == 0:
+        return None
+    lo, hi = np.percentile(box, (5, 99.8))
+    scaled = np.clip((box - lo) / max(float(hi - lo), 1e-6), 0, 1)
+    return Image.fromarray((255 * np.sqrt(scaled)).astype(np.uint8))
+
+
+class Broadcast:
+    """A focus run's STREAM_FILE, kept up to date as it goes. Never raises:
+    a stream file not written is not worth a focus run failing over. With
+    `path` None nothing is written (a run whose caller keeps no file)."""
+
+    def __init__(self, kind, usual, path="stream", picture=None, clock=time.time):
+        self.path = STREAM_FILE if path == "stream" else path       # looked up now, not when defined
+        self.picture, self.clock = picture, clock
+        now = clock()
+        self.state = {"kind": kind, "steps": STAGES.get(kind, []), "stage": STAGES.get(kind, [None])[0],
+                      "usual_hfr": round(usual, 2) if usual else None, "start_hfr": None, "hfr": None,
+                      "best_hfr": None, "best_at": None, "at": 0, "position": None, "positions": None,
+                      "readings": [], "fit": None, "outcome": None, "words": None, "pid": os.getpid(),
+                      "started": now, "updated": now, "ended": None}
+        self.started_star = False
+        self.write()
+
+    def write(self):
+        if self.path is None:
+            return
+        try:
+            import records
+            self.state["updated"] = self.clock()
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            records.write(self.path, self.state, indent=None)
+        except Exception:
+            pass
+
+    def stage(self, name, position=None, positions=None):
+        self.state.update(stage=name, position=position, positions=positions)
+        self.write()
+
+    def reading(self, at, hfr, doing=None, ring=None):
+        """One measurement: where the focuser was (half-steps from the
+        start) and the HFR there (None for none), or the doughnuts' size."""
+        s = self.state
+        s["at"] = at
+        s["readings"] = (s["readings"] + [{"at": at, "hfr": hfr, "doing": doing, "ring": ring and round(ring)}])[-80:]
+        if hfr is not None:
+            s["hfr"] = hfr
+            if s["start_hfr"] is None:
+                s["start_hfr"] = hfr
+            if s["best_hfr"] is None or hfr < s["best_hfr"]:
+                s["best_hfr"], s["best_at"] = hfr, at
+        self.star()
+        self.write()
+
+    def star(self):
+        """The brightest star now, and at the start, as small pictures."""
+        if self.path is None or self.picture is None:
+            return
+        import warnings
+        try:
+            lum = self.picture()
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)      # a blank frame has no star to find
+                square = star_square(lum) if lum is not None else None
+            if square is None:
+                return
+            for path in ([STAR_NOW] if self.started_star else [STAR_START, STAR_NOW]):
+                partial = path.with_suffix(".part.png")
+                square.save(partial)
+                partial.replace(path)
+            self.started_star = True
+        except Exception:
+            pass
+
+    def fitted(self, fit):
+        if fit:
+            self.state["fit"] = {k: (round(v, 2) if isinstance(v, float) else v) for k, v in fit.items()
+                                 if k in ("ok", "focus", "hfr", "r2", "reason")}
+        self.write()
+
+    def done(self, outcome, words, **extra):
+        """How the run ended: "complete", "left_alone" or "passed" (good as
+        it was), "soft" (a check that found it worth focusing), "rejected"
+        (no curve fitted), "returned" (the fitted focus was no better), "found"
+        or "not_found" (the search for stars), or "failed"."""
+        self.state.update(outcome=outcome, words=words, ended=self.clock(), **extra)
+        self.write()
+
+
 def progress(line):
     """One line of a focus run, the time at its front, out at once: a log
     being watched, or read for a progress report, shows it the moment it
@@ -841,7 +956,7 @@ def curve_picture(points, fitted=None, width=40):
     return rows
 
 
-def motor_focus(motor, read, usual, say=progress, step=None, backlash=None, sweep_only=False):
+def motor_focus(motor, read, usual, say=progress, step=None, backlash=None, sweep_only=False, live=None):
     """Bring the stars to focus with the motor by a measured focus curve.
     `motor.move(n)` turns it (plus is out); `read(frames)` gives that many
     frames' HFRs (None for a frame with no stars). `usual` is the HFR good
@@ -849,22 +964,26 @@ def motor_focus(motor, read, usual, say=progress, step=None, backlash=None, swee
     where focus is. Returns {"hfr", "moved", "found", "readings", "fit",
     "start_hfr"}; with "found" false the focuser is back where it started.
     With `sweep_only`, one sweep is measured and fitted and the focuser
-    goes back to the start, the last move inward."""
+    goes back to the start, the last move inward. `live` (a Broadcast) is
+    told each stage and reading, for the stream."""
     settings = focuser_settings()
     step, backlash = step or settings["step"], backlash or settings["backlash"]
     drive, readings = Drive(motor), []
     half = SWEEP_POINTS // 2
+    live = live or Broadcast("sweep" if sweep_only else "focus", usual, path=None)
 
     def point(doing, frames, n=0):
         found = sample(read, frames, usual)
         found.update(at=drive.at, doing=doing)
         readings.append(found)
+        live.reading(drive.at, found["hfr"], doing)
         spread = f" ±{found['scatter']:.2f}" if found["scatter"] is not None else ""
         size = "none" if found["hfr"] is None else f"{found['hfr']:.2f}"
         say(f"  #{len(readings):<3} {doing:<15} step {n:+5d}  at {drive.at:+6d}  "
             f"HFR {size}{spread}  ({found['frames']}/{frames} frames)")
         return found
 
+    live.stage("measure")
     start = point("start", SWEEP_FRAMES)
     fitted, centre, tries = None, 0, 0
     try:
@@ -872,12 +991,17 @@ def motor_focus(motor, read, usual, say=progress, step=None, backlash=None, swee
             tries += 1
             say(f"  sweep {sweep + 1}: {SWEEP_POINTS} positions {step} half-steps apart around {centre:+d}, "
                 f"{SWEEP_FRAMES} frames each, every one reached moving in")
+            live.stage("sweep", 1, SWEEP_POINTS)
             drive.arrive(centre + half * step, backlash)
             points = [point("sweep", SWEEP_FRAMES)]
-            for _ in range(SWEEP_POINTS - 1):
+            for k in range(SWEEP_POINTS - 1):
+                live.stage("sweep", k + 2, SWEEP_POINTS)
                 n = drive.to(drive.at - step)
                 points.append(point("sweep", SWEEP_FRAMES, n))
-            fitted = fit_curve(points, step)
+            live.stage("fit")
+            with activity.doing("Fitting the focus curve"):
+                fitted = fit_curve(points, step)
+            live.fitted(fitted)
             for row in curve_picture(points, fitted["focus"] if fitted["ok"] else None):
                 say(row)
             if fitted["ok"]:
@@ -903,24 +1027,36 @@ def motor_focus(motor, read, usual, say=progress, step=None, backlash=None, swee
             say("  no focus curve found: back to the start")
         drive.arrive(0, backlash)
         point("back to start", 1)
+        if sweep_only:
+            live.done("swept", f"Focus curve fitted: best focus at HFR {fitted['hfr']:.2f}; the focuser went back "
+                               "to where it started." if fitted else
+                               "No focus curve could be fitted; the focuser went back to where it started.")
+        else:
+            live.done("rejected", "No focus curve could be fitted to the sweep, so the focuser went back to where "
+                                  "it started.")
         return dict(result, hfr=None, moved=0, found=False)
     target = round(fitted["focus"])
     moves = drive.arrive(target, backlash)
-    check = point("to focus", CHECK_FRAMES, moves[-1])
+    live.stage("verify")
+    with activity.doing("Checking the fitted focus"):
+        check = point("to focus", CHECK_FRAMES, moves[-1])
     # Within what seeing alone scatters a median of a few frames by.
     allow = (check["scatter"] or 0) + (start["scatter"] or 0)
     better = check["hfr"] is not None and (start["hfr"] is None or check["hfr"] <= 1.05 * start["hfr"] + allow)
     near_fit = check["hfr"] is not None and check["hfr"] <= 1.2 * fitted["hfr"] + allow
     if better and near_fit:
+        live.done("complete", None, end_hfr=check["hfr"])
         return dict(result, hfr=check["hfr"], moved=target, found=True)
     say(f"  checked: HFR {check['hfr']} at the fitted focus is not better than the start "
         f"({start['hfr']}) or is far from the fit's {fitted['hfr']}: back to the start")
     drive.arrive(0, backlash)
     point("back to start", 1)
+    live.done("returned", f"At the fitted focus the stars measured {check['hfr']} against {start['hfr']} at the "
+                          "start: no better, so the focuser went back to where it started.")
     return dict(result, hfr=None, moved=0, found=False)
 
 
-def find_stars(motor, read, usual, say=progress, stride=2048, turns=2, ring=None):
+def find_stars(motor, read, usual, say=progress, stride=2048, turns=2, ring=None, live=None):
     """Far out of focus, where no star measures: half a turn at a time in,
     then out, a check after each, until stars measure (HFR under CEILING),
     so a sweep has something to fit. 18 October 2026: after the focuser was
@@ -934,27 +1070,37 @@ def find_stars(motor, read, usual, say=progress, stride=2048, turns=2, ring=None
     shrink)."""
     drive = Drive(motor)
     reach = turns * 4096 // stride
+    live = live or Broadcast("find", usual, path=None)
+    live.stage("searching")
     start = ring(SWEEP_FRAMES) if ring else None
+    live.reading(0, None, "start", ring=start)
     for way in (-1, 1):
         before = start
         for k in range(1, reach + 1):
+            live.stage("searching", k, reach)
             drive.to(way * k * stride)
             found = sample(read, SWEEP_FRAMES, usual)
             size = ring(SWEEP_FRAMES) if ring and found["hfr"] is None else None
+            live.reading(drive.at, found["hfr"], "in" if way < 0 else "out", ring=size)
             say(f"  {'in' if way < 0 else 'out'} {k * stride:5d}: HFR {found['hfr'] or 'none'}"
                 + (f", doughnuts {size:.0f} px" if size else ""))
             if found["hfr"] is not None:
+                live.done("found", f"Stars measure again {abs(drive.at)} half-steps "
+                                   f"{'in' if drive.at < 0 else 'out'} from the start.")
                 return drive.at
             if size and before and size > 1.05 * before:
                 say(f"  the doughnuts grew from {before:.0f} to {size:.0f} px: focus is the other way")
                 break
             before = size or before
         drive.to(0)
+    live.done("not_found", "No stars measured within two turns either way: the focuser went back to where it "
+                           "started.")
     return None
 
 
 def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, closest=8, switch=8.0, near=1.5,
-            close=1.15, most=160, tries=3, patience=3, spike=1.8, ring=None, ring_step=128, ring_most=4096):
+            close=1.15, most=160, tries=3, patience=3, spike=1.8, ring=None, ring_step=128, ring_most=4096,
+            live=None):
     """Focus from a little outside it, moving only inward, a few half-steps
     at a time, measuring after each, until the stars have been worse three times
     running after their best; returns {"best_hfr", "best_at", "ended_at",
@@ -976,13 +1122,16 @@ def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, clo
             if hfr is not None:
                 return hfr
         return None
+    live = live or Broadcast("walk", usual, path=None)
     now = reading()
     at = 0
     if now is None and ring:
         # Doughnuts, too wide for an HFR (21 October 2026, set "a touch out"
         # by hand): in `ring_step` at a time while they shrink, until the
         # stars measure. Doughnuts that grow mean focus is not inward.
+        live.stage("doughnuts")
         size = ring(SWEEP_FRAMES)
+        live.reading(at, None, "doughnuts", ring=size)
         if size is not None:
             say(f"  start: doughnuts {size:.0f} px; in {ring_step} at a time until the stars measure")
         grew = 0
@@ -992,16 +1141,21 @@ def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, clo
             now = reading()
             if now is None:
                 was, size = size, ring(SWEEP_FRAMES)
+                live.reading(at, None, "doughnuts", ring=size)
                 say(f"  in {ring_step} (at {at:+d}): doughnuts {size if size is None else round(size)} px")
                 grew = grew + 1 if size is not None and size > was else 0
                 if grew >= 2:
+                    live.done("failed", "The doughnuts grew as the focuser went in: focus is the other way.")
                     raise interface.Refusal("NO_STARS", f"The doughnuts grew as it went in ({at:+d} half-steps "
                                                         "from the start): focus is outward. Set the drawtube a "
                                                         "little out of focus by hand and run this again.")
     if now is None:
+        live.done("failed", "No stars measured here, so the focus walk could not start.")
         raise interface.Refusal("NO_STARS", "No stars measure here. Set the drawtube a little out of focus by "
                                             "hand, where the stars still measure, and run this again.")
     best, best_at, worse, readings = now, at, 0, [(at, now)]
+    live.stage("coming in")
+    live.reading(at, now, "start")
     say(f"  start: HFR {now}")
     for _ in range(most):
         # Sized by the best so far, not the last reading: on 21 October 2026
@@ -1009,6 +1163,8 @@ def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, clo
         # ended 80 half-steps inside focus.
         step = (closest if best < close * usual else finest if best < near * usual
                 else fine if best < switch else coarse)
+        if step in (finest, closest) and live.state["stage"] != "finest steps":
+            live.stage("finest steps")
         motor.move(-step)
         at -= step
         now = reading()
@@ -1020,12 +1176,15 @@ def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, clo
             say("  no reading after three tries: stopped here")
             break
         readings.append((at, now))
+        live.reading(at, now, "in")
         if now < best:
             best, best_at, worse = now, at, 0
         else:
             worse += 1
             if worse >= patience:
                 break
+    live.stage("done")
+    live.done("complete", None, end_hfr=best)
     return {"best_hfr": best, "best_at": best_at, "ended_at": at, "ended_hfr": now, "readings": readings}
 
 
@@ -1144,6 +1303,8 @@ def run_check(args):
     scale = arcsec_per_pixel()
     usual = usual_best() / scale
     frames = None
+    seen = {}
+    live = Broadcast("check", usual, picture=lambda: seen.get("lum"))
     progress(f"opening the camera (INDI port {args.port})")
     try:
         with Camera(args.port, MOTOR_GAIN) as cam:
@@ -1152,18 +1313,28 @@ def run_check(args):
             frames.frame()                          # the first frame after opening can be stale
             values = []
             for n in range(3):
-                lum = luminance(frames.frame()[0])
+                live.stage("measure", n + 1, 3)
+                lum = seen["lum"] = luminance(frames.frame()[0])
                 value = measure_stars(lum)[0]
+                live.reading(0, value and round(value, 2), "check")
                 line = f"focus check {n + 1}/3: HFR {'none' if value is None else f'{value:.2f}'}"
                 progress(line)
                 show(lum, line)
                 if value:
                     values.append(value)
     except IndiError as problem:
+        live.done("failed", "The camera stopped sending pictures, so the focus check could not finish.")
         raise hung(problem, frames) from None
+    except BaseException:
+        live.done("failed", "The focus check stopped before it finished.")
+        raise
     hfr = float(np.median(values)) if values else None
     good = hfr is not None and hfr <= GOOD_ENOUGH * usual
     progress(f"Focus now: {verdict(hfr, usual)}.")
+    if hfr is None:
+        live.done("failed", "No stars measured: cloud, the cap, or far out of focus.")
+    else:
+        live.done("passed" if good else "soft", None, end_hfr=round(hfr, 2))
     if good:
         seen_good(hfr, scale)
     return {"hfr": hfr and round(hfr, 2), "hfr_arcsec": hfr and round(hfr * scale, 2),
@@ -1219,12 +1390,15 @@ def run_motor(args, mode="focus"):
     progress(f"focuser open on {getattr(getattr(motor, 'link', None), 'port', None) or 'its port'}; "
              f"opening the camera (INDI port {args.port})")
     frames = drive = None
+    seen = {}
+    # For the live stream: what this run is doing, stage by stage. The
+    # focuser's own measurements (step, backlash) are not shown.
+    live = Broadcast(mode, usual, path=STREAM_FILE if mode in STAGES else None, picture=lambda: seen.get("lum"))
     try:
         with Camera(args.port, MOTOR_GAIN) as cam:
             frames = Watched(cam, MOTOR_EXPOSURE)
             progress(f"camera open; one frame of {MOTOR_EXPOSURE:g} s thrown away (the first can be stale)")
             frames.frame()
-            seen = {}
 
             def read(count):
                 values = []
@@ -1256,7 +1430,7 @@ def run_motor(args, mode="focus"):
                     motor.speed(WALK_MS)
                 progress(f"walking in at {WALK_MS} ms a half-step, {SWEEP_FRAMES} frames of "
                          f"{MOTOR_EXPOSURE:g} s after each move")
-                result = walk_in(drive, read, usual, say=say, ring=ring)
+                result = walk_in(drive, read, usual, say=say, ring=ring, live=live)
                 progress(f"Best HFR {result['best_hfr']} at {result['best_at']:+d} half-steps; ended at "
                          f"{result['ended_at']:+d}, HFR {result['ended_hfr']}.")
                 # Where it ended, if that is good, counts as focused for the
@@ -1268,7 +1442,7 @@ def run_motor(args, mode="focus"):
                 return result
             if mode == "find":
                 progress("looking for stars: half a turn at a time, in and then out")
-                found = find_stars(drive, read, usual, say=say, ring=ring)
+                found = find_stars(drive, read, usual, say=say, ring=ring, live=live)
                 progress(f"Stars measure {found:+d} half-steps from the start." if found is not None else
                          "No stars within two turns either way: the focuser is back where it started.")
                 return {"found_at": found}
@@ -1287,12 +1461,15 @@ def run_motor(args, mode="focus"):
                 progress(f"Backlash to overshoot: {found} half-steps" + (", kept." if found else ": not measured."))
                 return {"backlash": found}
             progress(f"measuring the start: {SWEEP_FRAMES} frames of {MOTOR_EXPOSURE:g} s")
+            live.stage("measure")
             now = sample(read, SWEEP_FRAMES, usual)["hfr"]
+            live.reading(0, now, "start")
             progress(f"Focus now: {verdict(now, usual)}.")
             if (mode == "focus" and now is not None and now <= GOOD_ENOUGH * usual
                     and not getattr(args, "anyway", False)):
                 progress("Left as it is: it is already as good as focusing usually gets (--anyway to focus "
                          "regardless).")
+                live.done("left_alone", None, end_hfr=round(now, 2))
                 seen_good(now, scale)
                 return {"hfr": round(now, 2), "moved": 0, "found": True, "readings": [], "left_alone": True,
                         "hfr_arcsec": round(now * scale, 2)}
@@ -1301,11 +1478,17 @@ def run_motor(args, mode="focus"):
                          "(--measure-step, --measure-backlash).")
             progress(f"sweeping: {SWEEP_POINTS} positions {settings['step']} half-steps apart, "
                      f"{SWEEP_FRAMES} frames each")
-            result = motor_focus(drive, read, usual, say=say, sweep_only=mode == "sweep")
+            result = motor_focus(drive, read, usual, say=say, sweep_only=mode == "sweep", live=live)
     except IndiError as problem:
         # A hung camera ends the run in one plain line, not a traceback,
         # saying where it left the focuser.
+        if live.state["outcome"] is None:
+            live.done("failed", "The camera stopped sending pictures, so the focus run could not finish.")
         raise hung(problem, frames, drive.moved if drive else 0) from None
+    except BaseException:
+        if live.state["outcome"] is None:
+            live.done("failed", "The focus run stopped before it finished.")
+        raise
     finally:
         motor.close()
     hfr = result["hfr"]

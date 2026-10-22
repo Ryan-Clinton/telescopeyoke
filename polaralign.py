@@ -31,6 +31,7 @@ the motion lock is respected.
 import argparse
 import json
 import math
+import os
 import time
 
 import numpy as np
@@ -86,6 +87,16 @@ LEARN_WITHIN = 2 * 3600     # seconds: turns are matched to a measurement no old
 # south side, facing north; "in" is clockwise, as a screw tightens.
 PAIRS = {"azimuth": ("left", "right"), "altitude": ("rear", "front")}
 VIEW = "standing behind the mount, on its south side, facing north"
+# The same azimuth bolts named by the side of the mount they are on, for
+# words read by people not standing there (the live stream): seen from
+# behind the mount facing north, the left one is on the west side.
+SIDES = {"left": "west-side", "right": "east-side", "rear": "rear", "front": "front"}
+# Where a polar alignment has got, for the live stream
+# (streamlook.polar_stream_state): which picture is being taken, each
+# round's error tonight, the newest advice and the drift it causes, or why
+# a measurement failed. polar.json keeps only the newest measurement.
+STREAM_FILE = config.DATA / "cache" / "polar_stream.json"
+NIGHT_S = 6 * 3600       # a round further back than this is from another night: the history starts again
 
 
 def vector(hour_angle, dec):
@@ -152,11 +163,66 @@ def positions(start_ha, dec, west, site, step=STEP, skyline=None):
     return spots
 
 
-@activity.during("Polar check", "three pictures {step:g}° apart")
+def told():
+    """The stream file as it stands, or {}."""
+    try:
+        found = json.loads(STREAM_FILE.read_text(encoding="utf-8"))
+        return found if isinstance(found, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def tell(**changes):
+    """Change the stream file. Never raises: a line for the stream not
+    written is not worth a measurement failing over."""
+    try:
+        found = told()
+        found.update(changes, pid=os.getpid(), updated=time.time())
+        STREAM_FILE.parent.mkdir(parents=True, exist_ok=True)
+        records.write(STREAM_FILE, found, indent=None)
+    except Exception:
+        pass
+
+
+def rounds_tonight(now=None):
+    """Tonight's measurements so far, oldest first: [{"total_deg", ...}]."""
+    now = now or time.time()
+    rounds = told().get("rounds") or []
+    if rounds and now - rounds[-1].get("measured", 0) > NIGHT_S:
+        return []
+    return rounds
+
+
+FAILED = {"PLATE_SOLVE_FAILED": "A picture could not be plate-solved: cloud, or something in the way. "
+                                "Nothing was measured.",
+          "MOUNT_NOT_MOVING": "The sky did not move between two pictures, so the mount may not have turned. "
+                              "Nothing was measured."}
+
+
 def measure(scope, site, step=STEP, skyline=None):
     """Photograph the sky at three RA-axis positions and return the polar
     axis's error as (degrees east of north, degrees too high). Slews about
-    step degrees twice, away from the meridian, and returns to where it was."""
+    step degrees twice, away from the meridian, and returns to where it was.
+    A measurement after another tonight is a recheck."""
+    again = bool(rounds_tonight())
+    tell(stage="measuring", picture=1, pictures=3, taken=0, recheck=again, words=None, ended=None,
+         started=time.time())
+    try:
+        with activity.doing("Polar recheck" if again else "Polar check", f"three pictures {step:g}° apart"):
+            found = _measure(scope, site, step, skyline)
+    except interface.Refusal as refused:
+        tell(stage="failed", words=FAILED.get(refused.code_name, "The measurement stopped before the third "
+                                                                 "picture. Nothing was measured."), ended=time.time())
+        raise
+    except BaseException:
+        tell(stage="failed", words="The measurement stopped before the third picture. Nothing was measured.",
+             ended=time.time())
+        raise
+    tell(stage="measured", taken=3, ended=time.time())
+    return found
+
+
+def _measure(scope, site, step=STEP, skyline=None):
     offset = json.loads(mount.CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
 
     def believed_hour_angle():
@@ -170,6 +236,7 @@ def measure(scope, site, step=STEP, skyline=None):
     points = []
     try:
         for i, (target_ha, _) in enumerate(planned):
+            tell(picture=i + 1, taken=i)
             if i:
                 scope.goto((mount.true_sidereal(site) + offset - target_ha) % 360, dec_handset)
                 scope.tracking(True)
@@ -214,6 +281,7 @@ def measure(scope, site, step=STEP, skyline=None):
                 first_axis = dec_axis
             moved_by = (dec_axis - first_axis) * (-1 if dec_axis > 90 else 1)
             points.append((ha, dec - moved_by))
+            tell(taken=i + 1)
             scope.say(f"position {i + 1}: hour angle {ha / 15:+.3f} h, Dec {dec:+.2f}°, "
                       f"altitude {alt:.0f}°" + (f" (the Dec axis had moved {moved_by:+.3f}°, taken out)" if moved_by else ""))
         # Back to where it started.
@@ -391,6 +459,44 @@ def shows(error_deg, exposure=FRAME_S):
     return round(pixels, 1), pixels > SHOWS_PX
 
 
+def limit_deg(exposure=FRAME_S):
+    """The error on one axis below which its drift over one frame stays under
+    a star's own size: where shows() says leave it."""
+    return SHOWS_PX / (DRIFT_PX_PER_S_PER_DEG * exposure)
+
+
+def stream_advice(guidance, exposure=FRAME_S):
+    """What to do, for people watching who are not standing behind the
+    mount: turns said as clockwise or anticlockwise seen from above, or
+    raise and lower; bolts by the side they are on, never left or right."""
+    lines = []
+    az, alt = guidance["azimuth"], guidance["altitude"]
+    for name, pair in (("Azimuth", az), ("Altitude", alt)):
+        if not pair.get("worth_turning", True):
+            lines.append(f"{name} {pair['by_deg']:.1f}°: drifts a {exposure:g} s frame about {pair['drift_px']:g} px, "
+                         f"under a star's own size: leave it.")
+            continue
+        if name == "Azimuth" and az.get("whole_tripod"):
+            tripod = az["tripod"]
+            words = f"Turn the whole tripod {tripod['turn_deg']:g}° {tripod['way']}, seen from above"
+            if tripod.get("cm_at_each_foot"):
+                words += f": about {tripod['cm_at_each_foot']:g} cm at each foot, all three the same way round"
+            lines.append(words + ".")
+            continue
+        if name == "Azimuth":
+            way = "anticlockwise" if az["move"] == "west" else "clockwise"
+            words = f"Turn the mount {az['by_deg']:.1f}° {way}, seen from above, with the azimuth bolts"
+        else:
+            words = f"{'Lower' if alt['move'] == 'down' else 'Raise'} the polar axis {alt['by_deg']:.1f}°"
+            if alt.get("scale_marks"):
+                words += f" (about {marks_in_words(alt['scale_marks'])} on the latitude scale)"
+        if pair.get("known"):
+            words += (f": the {SIDES[pair['tighten']]} bolt in (clockwise) about {turns_in_words(pair['turns'])}, "
+                      f"the {SIDES[pair['loosen']]} bolt eased out first")
+        lines.append(words + ".")
+    return lines
+
+
 def describe(azimuth, altitude):
     """The polar error in words, with what to do to the mount about it."""
     total = math.hypot(azimuth * math.cos(math.radians(55)), altitude)
@@ -400,6 +506,23 @@ def describe(azimuth, altitude):
             f"{abs(azimuth):.1f}° to the {'west' if azimuth > 0 else 'east'}\n"
             f"  up-down:    it points {abs(altitude):.1f}° too {'high' if altitude > 0 else 'low'}; "
             f"{'lower' if altitude > 0 else 'raise'} the axis by {abs(altitude):.1f}°")
+
+
+def broadcast(result, exposure=FRAME_S):
+    """This measurement as a round of tonight's alignment, for the stream:
+    "complete" when neither axis is worth a turn (the drift limit), else
+    "adjust", waiting for a person to turn what the advice says."""
+    rounds = rounds_tonight() + [{"total_deg": result["total_deg"], "azimuth_deg": result["azimuth_deg"],
+                                  "altitude_deg": result["altitude_deg"], "measured": result["measured"]}]
+    guidance = result["guidance"]
+    worth = [guidance[axis]["worth_turning"] for axis in ("azimuth", "altitude")]
+    tell(stage="adjust" if any(worth) else "complete", rounds=rounds[-20:],
+         azimuth_deg=result["azimuth_deg"], altitude_deg=result["altitude_deg"], total_deg=result["total_deg"],
+         previous_total_deg=rounds[-2]["total_deg"] if len(rounds) > 1 else None,
+         drift_px={axis: guidance[axis]["drift_px"] for axis in ("azimuth", "altitude")},
+         worth_turning={axis: guidance[axis]["worth_turning"] for axis in ("azimuth", "altitude")},
+         limit_deg=round(limit_deg(exposure), 2), limit_px=SHOWS_PX, exposure_s=exposure,
+         advice=stream_advice(guidance, exposure), words=None, ended=time.time())
 
 
 def main():
@@ -495,6 +618,8 @@ def run(args):
                 print(f"That is more than {CROSS_LIMIT:.0f}°: they are not measuring the same axis, so something "
                       "in the measurement is wrong. No adjustment is advised. Check that nothing touched the "
                       "mount between them, and measure both sides again.")
+                tell(stage="failed", words=f"The two sides of the meridian disagreed by {gap:.1f}°, so no "
+                                           "adjustment is advised: both are measured again.", ended=time.time())
                 return {"azimuth_deg": round(azimuth, 2), "altitude_deg": round(altitude, 2),
                         "cross_check": checked, "advice": None, "measured": time.time()}
             azimuth, altitude = mid_az, mid_alt
@@ -533,6 +658,7 @@ def run(args):
                 f"under a star's own size ({SHOWS_PX:g}): leave it.")
         print("  " + result["guidance"][axis]["words"])
     print(f"  (Left and right, rear and front: {VIEW}.)")
+    broadcast(result, exposure)
     kept = dict(result)
     kept.pop("guidance")
     if repeat > 1:

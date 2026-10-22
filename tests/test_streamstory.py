@@ -107,3 +107,19 @@ def test_a_known_comet_the_hunt_found_is_told_and_an_unreported_track_never_is(t
     for state in ("no matching public report found", "possible public match", "public reports not checked"):
         hunt_file(tmp_path, state)
         assert streamstory.comet_hunt(evening) is None
+
+
+def test_while_focusing_or_polar_aligning_the_cards_come_from_their_own_pools():
+    for kind, title in (("focus", "HOW FOCUSING WORKS"), ("polar", "HOW POLAR ALIGNMENT WORKS")):
+        story = streamstory.Story()
+        pool = TARGETS["stories"][kind]
+        assert len(pool) >= 8
+        cards = [streamstory.plan({"kind": kind}, {}, 1000 + t, story, TARGETS)["card"]
+                 for t in range(0, streamstory.SEGMENT_S * len(pool), streamstory.SEGMENT_S)]
+        assert all(card[0] == title for card in cards)
+        assert sorted(card[1][0] for card in cards) == sorted(pool)        # each one once before any again
+    words = " ".join(TARGETS["stories"]["focus"] + TARGETS["stories"]["polar"])
+    for idea in ("half-flux radius", "shimmer", "slack", "doughnut", "second mirror", "cools", "curve",
+                 "celestial pole", "Polaris is not exactly at the pole", "circle", "declination", "bolts",
+                 "level tripod is not essential"):
+        assert idea in words, idea

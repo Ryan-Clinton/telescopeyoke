@@ -830,3 +830,120 @@ def test_walking_in_keeps_small_steps_past_the_best():
     focus.walk_in(tube, tube.read, usual=2.0, say=quiet)
     past = [step for step, at in zip(tube.moves, itertools.accumulate(tube.moves)) if at < -300]
     assert past and all(-step <= 16 for step in past)
+
+
+# --- what a focus run tells the live stream (focus_stream.json) -----------------
+
+def stream_file(tmp_path, kind, usual=2.0, picture=None):
+    return focus.Broadcast(kind, usual, path=tmp_path / "focus_stream.json", picture=picture)
+
+
+def kept(tmp_path):
+    return json.loads((tmp_path / "focus_stream.json").read_text(encoding="utf-8"))
+
+
+def recorded(live):
+    """The stages a Broadcast is told, in order, as well as writing them."""
+    seen, real = [], live.stage
+    live.stage = lambda name, *a: (seen.append((name, *a)), real(name, *a))
+    return seen
+
+
+def test_a_sweep_tells_the_stream_each_stage_position_and_reading(tmp_path):
+    live = stream_file(tmp_path, "focus")
+    seen = recorded(live)
+    tube = Drawtube(best=-300, slack=0, noise=0.1)
+    result = focus.motor_focus(tube, tube.read, usual=2.0, say=quiet, live=live)
+    f = kept(tmp_path)
+    assert result["found"] and f["outcome"] == "complete" and f["ended"]
+    assert [s[0] for s in seen][:2] == ["measure", "sweep"] and ("fit",) in seen and ("verify",) in seen
+    assert ("sweep", 9, 9) in seen                                       # "position 9 of 9"
+    assert f["start_hfr"] == result["readings"][0]["hfr"] and f["end_hfr"] == result["hfr"]
+    assert f["best_hfr"] == min(r["hfr"] for r in result["readings"] if r["hfr"])
+    assert len(f["readings"]) == len(result["readings"]) and f["fit"]["ok"]
+    assert f["steps"] == ["measure", "sweep", "fit", "verify"] and f["usual_hfr"] == 2.0
+
+
+def test_a_sweep_with_no_curve_or_a_worse_focus_says_so_plainly(tmp_path, monkeypatch):
+    live = stream_file(tmp_path, "focus")
+    tube = Drawtube(best=60000, reach=600)                 # no stars in reach: no curve
+    focus.motor_focus(tube, tube.read, usual=2.0, say=quiet, live=live)
+    f = kept(tmp_path)
+    assert f["outcome"] == "rejected" and "went back to where it started" in f["words"]
+    live = stream_file(tmp_path, "focus")
+    monkeypatch.setattr(focus, "fit_curve", lambda points, step: {"ok": True, "focus": 600.0, "hfr": 1.0,
+                                                                  "r2": 0.99, "spread": 1.0, "reason": None,
+                                                                  "toward": 0})
+    tube = Drawtube(best=-300, noise=0.0)
+    focus.motor_focus(tube, tube.read, usual=2.0, say=quiet, live=live)
+    f = kept(tmp_path)
+    assert f["outcome"] == "returned" and "no better" in f["words"]
+
+
+def test_a_walk_in_tells_the_stream_its_own_steps(tmp_path):
+    live = stream_file(tmp_path, "walk")
+    seen = recorded(live)
+    tube = Drawtube(best=-1200, slope=40, sharp=1.6, reach=400, noise=0.02)
+    rings = lambda frames: 10 + abs(tube.tube - tube.best) / 20
+    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet, ring=rings, live=live)
+    f = kept(tmp_path)
+    stages = [s[0] for s in seen]
+    assert stages[0] == "doughnuts" and "coming in" in stages and "finest steps" in stages and stages[-1] == "done"
+    assert f["steps"] == ["doughnuts", "coming in", "finest steps", "done"]
+    assert any(r["ring"] for r in f["readings"]) and f["outcome"] == "complete"
+    assert f["end_hfr"] == result["best_hfr"] and f["best_hfr"] == result["best_hfr"]
+
+
+def test_a_walk_in_that_cannot_start_says_why(tmp_path):
+    live = stream_file(tmp_path, "walk")
+    tube = Drawtube(best=-60000, reach=600)
+    with pytest.raises(focus.interface.Refusal):
+        focus.walk_in(tube, tube.read, usual=2.0, say=quiet, live=live)
+    assert kept(tmp_path)["outcome"] == "failed"
+
+
+def test_the_star_search_tells_the_stream_where_it_is(tmp_path):
+    live = stream_file(tmp_path, "find")
+    tube = Drawtube(best=-4096, slope=200, reach=2200)
+    found = focus.find_stars(tube, tube.read, usual=2.0, say=quiet, live=live)
+    f = kept(tmp_path)
+    assert found is not None and f["outcome"] == "found" and f["positions"] == 4
+    live = stream_file(tmp_path, "find")
+    nowhere = Drawtube(best=60000, reach=10)
+    focus.find_stars(nowhere, nowhere.read, usual=2.0, say=quiet, live=live)
+    assert kept(tmp_path)["outcome"] == "not_found"
+
+
+def test_the_brightest_star_is_kept_as_a_small_picture_at_the_start_and_now(tmp_path, monkeypatch):
+    monkeypatch.setattr(focus, "STAR_START", tmp_path / "start.png")
+    monkeypatch.setattr(focus, "STAR_NOW", tmp_path / "now.png")
+    lum = np.zeros((400, 400), dtype=np.float32) + 100
+    yy, xx = np.indices(lum.shape)
+    picture = {"lum": lum + 5000 * np.exp(-((yy - 200) ** 2 + (xx - 220) ** 2) / (2 * 9 ** 2))}
+    live = stream_file(tmp_path, "focus", picture=lambda: picture["lum"])
+    live.reading(0, 4.0)
+    first = (tmp_path / "start.png").read_bytes()
+    picture["lum"] = lum + 5000 * np.exp(-((yy - 200) ** 2 + (xx - 220) ** 2) / (2 * 2 ** 2))
+    live.reading(-64, 2.1)
+    assert (tmp_path / "start.png").read_bytes() == first and (tmp_path / "now.png").read_bytes() != first
+    assert focus.star_square(np.zeros((100, 100))) is None
+
+
+def test_a_stream_file_that_cannot_be_written_never_stops_a_focus_run(tmp_path):
+    (tmp_path / "blocked").write_text("a file where a folder should be")
+    live = focus.Broadcast("focus", 2.0, path=tmp_path / "blocked" / "focus_stream.json")
+    tube = Drawtube(best=-300, noise=0.1)
+    assert focus.motor_focus(tube, tube.read, usual=2.0, say=quiet, live=live)["found"]
+
+
+def test_a_motor_run_and_a_check_write_the_stream_file(monkeypatch, capsys, tmp_path):
+    monkeypatch.setattr(focus, "STREAM_FILE", tmp_path / "focus_stream.json")
+    motor_run(monkeypatch, capsys, 1.86, "--motor")
+    f = kept(tmp_path)
+    assert f["kind"] == "focus" and f["outcome"] == "left_alone" and f["end_hfr"] == 1.86
+    monkeypatch.setattr(sys, "argv", ["focus.py", "--check", "--json"])
+    with pytest.raises(SystemExit):
+        focus.main()
+    capsys.readouterr()
+    f = kept(tmp_path)
+    assert f["kind"] == "check" and f["outcome"] == "passed" and f["positions"] == 3 and len(f["readings"]) == 3

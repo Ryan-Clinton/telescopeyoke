@@ -669,9 +669,303 @@ def crawled(picture, strip, seconds):
     return out
 
 
+# --- focusing and polar alignment -------------------------------------------------
+
+LEFT = (MARGIN_X, MARGIN_Y + 50, 1274, 870)        # the area the stack has while imaging
+
+
+def checklist(c, x, y, steps, size=22, gap=34, on="panel"):
+    """Steps as ✓ done, ● now, ○ to come; the y below them."""
+    for label, status in steps:
+        mark, colour = {"done": ("✓", "live"), "now": ("●", "accent"),
+                        "failed": ("✕", "attention")}.get(status, ("○", "secondary"))
+        c.text((x, y), f"{mark}  {label}", "sans", size, colour, on=on)
+        y += gap
+    return y
+
+
+def number_rows(c, x, y, rows, row=78):
+    """Big figures with their labels under them, as the imaging panel's."""
+    for number, label in rows:
+        c.text((x, y), number, "bold", 42, "text", on="panel")
+        c.text((x, y + 50), label, "sans", 18, "secondary", on="panel")
+        y += row
+    return y
+
+
+def story_card(c, s, x, y, width, bottom):
+    """The presenter's card for this segment (streamstory.plan), in what room is left."""
+    card = (s.get("story") or {}).get("card")
+    if not card or y > bottom - 90:
+        return y
+    title, lines = card
+    rows = [row for line in lines for row in wrapped(c, line, "sans", 21, width)]
+    if y + 34 + 27 * len(rows) > bottom:
+        return y                    # a card that does not fit whole is not shown at all
+    y = c.wrap((x, y), title, "bold", 22, width, "accent", on="panel") + 4
+    for row in rows:
+        c.text((x, y), row, "sans", 21, "text", on="panel")
+        y += 27
+    return y
+
+
+def wrapped(c, words, kind, size, width):
+    """`words` as the lines Canvas.wrap would draw them."""
+    f, out, line = font(kind, size), [], ""
+    for word in words.split():
+        trial = f"{line} {word}".strip()
+        if c.draw.textlength(trial, font=f) <= width or not line:
+            line = trial
+        else:
+            out.append(line)
+            line = word
+    return out + ([line] if line else [])
+
+
+def result_card(c, card, area):
+    """A finished run's card, held for a few seconds over the left area:
+    what happened, in plain words."""
+    title, line, colour = card
+    x, y, w, h = area
+    plate(c, (x, y, x + w, y + h), 0.55)
+    bx0, by0, bx1, by1 = x + w * 0.08, y + h * 0.3, x + w * 0.92, y + h * 0.7
+    c.box((bx0, by0, bx1, by1), "panel", radius=16)
+    c.box((bx0, by0, bx0 + 12, by1), "live" if colour == "live" else "problem", radius=6)
+    c.text((bx0 + 48, by0 + 40), title, "bold", 52, colour, on="panel")
+    c.wrap((bx0 + 48, by0 + 120), line or "", "sans", 30, bx1 - bx0 - 96, "text", on="panel")
+
+
+def focus_chart(c, f, x, y, w, h):
+    """Star size against the focuser's position: each reading a dot, the best
+    so far ringed, the usual best as a line, the fitted focus where there is one."""
+    points = [(a, v) for a, v in f["readings"]]
+    label = "STAR SIZE (HFR)"
+    if not points and f.get("rings"):
+        points, label = f["rings"], "DOUGHNUT SIZE (px)"
+    c.box((x, y, x + w, y + h), "raised", radius=8)
+    c.text((x, y - 34), label, "mono", 19, "secondary", on="background")
+    c.text((x + w, y + h + 40), "FOCUSER POSITION, half-steps from the start (minus is in)", "mono", 18,
+           "secondary", on="background", anchor="ra")
+    if not points:
+        c.text((x + w / 2, y + h / 2), "The first reading is being taken", "sans", 24, "secondary",
+               on="raised", anchor="mm")
+        return
+    xs = [a for a, _ in points]
+    ys = [v for _, v in points] + ([f["usual_hfr"]] if f.get("usual_hfr") and label.startswith("STAR") else [])
+    lo_x, hi_x = min(xs), max(xs)
+    if hi_x - lo_x < 1:
+        lo_x, hi_x = lo_x - 64, hi_x + 64
+    pad = 0.08 * (hi_x - lo_x)
+    lo_x, hi_x = lo_x - pad, hi_x + pad
+    lo_y, hi_y = 0.0, max(ys) * 1.15
+
+    def at(a, v):
+        return x + 24 + (a - lo_x) / (hi_x - lo_x) * (w - 48), y + h - 20 - (v - lo_y) / (hi_y - lo_y) * (h - 40)
+    for k in range(1, 4):
+        value = hi_y * k / 4
+        gy = at(lo_x, value)[1]
+        c.draw.line([(x + 8, gy), (x + w - 8, gy)], fill=COLOURS["muted"], width=1)
+        c.text((x - 12, gy), f"{value:.1f}", "mono", 18, "secondary", on="background", anchor="rm")
+    if f.get("usual_hfr") and label.startswith("STAR"):
+        uy = at(lo_x, f["usual_hfr"])[1]
+        for gx in range(int(x + 8), int(x + w - 8), 24):
+            c.draw.line([(gx, uy), (gx + 12, uy)], fill=COLOURS["live"], width=2)
+        c.text((x + w - 16, uy - 6), f"USUAL BEST {f['usual_hfr']:.2f}", "mono", 18, "live", on="raised",
+               anchor="rb")
+    fit = f.get("fit") or {}
+    if fit.get("ok") and fit.get("focus") is not None and lo_x <= fit["focus"] <= hi_x:
+        fx = at(fit["focus"], 0)[0]
+        c.draw.line([(fx, y + 10), (fx, y + h - 10)], fill=COLOURS["accent"], width=2)
+        c.text((fx + 8, y + 14), "FITTED FOCUS", "mono", 18, "accent", on="raised")
+    for a, v in points:
+        px, py = at(a, v)
+        c.draw.ellipse((px - 6, py - 6, px + 6, py + 6), fill=COLOURS["text"])
+    for a in sorted({min(xs), max(xs)}):
+        c.text((at(a, 0)[0], y + h + 8), f"{a:d}", "mono", 18, "secondary", on="background", anchor="ma")
+    if label.startswith("STAR") and f.get("best_hfr") is not None:
+        bx, by = at(f["best_at"], f["best_hfr"])
+        c.draw.ellipse((bx - 16, by - 16, bx + 16, by + 16), outline=COLOURS["live"], width=3)
+        c.text((bx, by + 22), f"BEST SO FAR {f['best_hfr']:.2f}", "mono", 18, "live", on="raised", anchor="ma")
+    nx, ny = at(*points[-1])
+    c.draw.ellipse((nx - 9, ny - 9, nx + 9, ny + 9), outline=COLOURS["accent"], width=3)
+
+
+def star_pair(c, f, x, y, size):
+    """One star magnified, as it was at the start and as it is now."""
+    stars = f.get("stars") or {}
+    for i, (key, label) in enumerate((("start", "START"), ("now", "NOW"))):
+        px = x + i * (size + 32)
+        c.box((px, y, px + size, y + size), (0, 0, 0), outline="muted", width=2, radius=6)
+        picture = stars.get(key)
+        if picture is not None:
+            shown = picture.convert("RGB").resize((size - 8, size - 8), Image.NEAREST)
+            c.image.paste(shown, (int(px + 4), int(y + 4)))
+        else:
+            c.text((px + size / 2, y + size / 2), "no star yet", "sans", 19, "secondary", on=(0, 0, 0),
+                   anchor="mm")
+        c.text((px, y + size + 10), label, "mono", 19, "text", on="background")
+
+
+FOCUS_KINDS = {"check": ("FOCUS CHECK", "Three pictures: how sharp the stars are, against the usual best. "
+                                        "Nothing turns."),
+               "focus": ("FOCUSING", "The motor sweeps the focuser through focus, a curve is fitted to the "
+                                     "star sizes, and it goes to the curve's lowest point."),
+               "sweep": ("FOCUS CURVE", "The motor sweeps the focuser through focus to measure the curve, "
+                                        "then goes back to where it started."),
+               "walk": ("FOCUS WALK-IN", "From a little outside focus, the motor brings the focuser in a few "
+                                         "steps at a time, measuring after each, to the sharpest."),
+               "find": ("FINDING THE STARS", "Far out of focus no star measures: the motor turns half a turn "
+                                             "at a time, in and then out, until they do.")}
+
+
+def focus_layout(c, s):
+    f = s["focus"]
+    x, y, w, h = LEFT
+    focus_chart(c, f, x + 80, y + 50, w - 100, 470)
+    star_pair(c, f, x + 10, y + 610, 200)
+    if f.get("rings") and not f["readings"]:
+        last = f["rings"][-1][1]
+        c.text((x + 500, y + 610), f"DOUGHNUTS {last:.0f} px across", "bold", 22, "secondary")
+        c.wrap((x + 500, y + 650), "Far from focus a star is a ring: the dark middle is the shadow of the "
+               "telescope's small second mirror.", "sans", 22, w - 520, "text")
+    else:
+        c.text((x + 500, y + 610), "ONE STAR, MAGNIFIED", "bold", 22, "secondary")
+        c.wrap((x + 500, y + 650), "The brightest star in view, at the start and in the newest picture. "
+               "Each dot on the curve is the stars' size measured at that focuser position: the smaller, the "
+               "sharper.", "sans", 22, w - 520, "text")
+    # The panel: what this is, the numbers, the target and the steps.
+    px, py, pw, ph = PANEL_BOX
+    c.box((px, py, px + pw, py + ph), "panel", radius=14)
+    inner, width = px + 28, pw - 56
+    title, words = FOCUS_KINDS.get(f["kind"], ("FOCUSING", ""))
+    top = c.wrap((inner, py + 26), title, "bold", 28, width, "accent", on="panel")
+    top = c.wrap((inner, top + 4), words, "sans", 20, width, "text", on="panel") + 12
+    rows = []
+    for key, label in (("start_hfr", "AT THE START"), ("hfr", "NOW"), ("best_hfr", "BEST SO FAR")):
+        if f.get(key) is not None:
+            rows.append((f"{f[key]:.2f}", label + " · HFR"))
+    top = number_rows(c, inner, top, rows)
+    if f.get("usual_hfr"):
+        target = f"usual best {f['usual_hfr']:.2f}"
+        if f.get("tonight_best_hfr") is not None:
+            target += f" · tonight's best so far {f['tonight_best_hfr']:.2f}"
+        top = c.wrap((inner, top), target, "mono", 18, width, "live", on="panel") + 8
+    if f.get("positions") and not f.get("card"):
+        unit = "picture" if f["kind"] == "check" else ("step" if f["kind"] == "find" else "position")
+        c.text((inner, top), f"{unit} {f['position']} of {f['positions']}", "bold", 22, "text", on="panel")
+        top += 36
+    top = checklist(c, inner, top + 4, f["steps"]) + 10
+    story_card(c, s, inner, top, width, py + ph - 20)
+    if f.get("card"):
+        result_card(c, f["card"], LEFT)
+
+
+NICE = (0.5, 1, 2, 3, 5, 10, 15, 20, 30)
+
+
+def bullseye(c, p, cx, cy, r):
+    """The true pole at the centre and the polar axis at its measured
+    azimuth and altitude errors, as polaralign.py gives them: up is too
+    high, east is to the right as seen facing north. The drift limit is a
+    square, since it holds for each axis on its own. While a measurement is
+    under way the last one is shown dimmed."""
+    az, alt, limit = p.get("azimuth_deg"), p.get("altitude_deg"), p.get("limit_deg") or 1.0
+    reach = next((n for n in NICE if n >= 1.4 * max(abs(az or 0), abs(alt or 0), limit)), NICE[-1])
+    c.draw.ellipse((cx - r, cy - r, cx + r, cy + r), fill=COLOURS["raised"])
+    for k in (1, 2):
+        rr = r * k / 2
+        c.draw.ellipse((cx - rr, cy - rr, cx + rr, cy + rr), outline=COLOURS["muted"], width=2)
+        c.text((cx + rr * 0.71 + 6, cy - rr * 0.71 - 6), f"{reach * k / 2:g}°", "mono", 18, "secondary",
+               on="background", anchor="lb")
+    side = r * limit / reach
+    c.draw.rectangle((cx - side, cy - side, cx + side, cy + side), outline=COLOURS["live"], width=3)
+    c.text((cx, cy + side + 6), "DRIFT LIMIT", "mono", 18, "live", on="raised", anchor="ma")
+    c.draw.line([(cx - 14, cy), (cx + 14, cy)], fill=COLOURS["text"], width=3)
+    c.draw.line([(cx, cy - 14), (cx, cy + 14)], fill=COLOURS["text"], width=3)
+    for words, xy, anchor in (("TOO HIGH", (cx, cy - r - 8), "mb"), ("TOO LOW", (cx, cy + r + 8), "ma"),
+                              ("EAST", (cx + r + 10, cy), "lm"), ("WEST", (cx - r - 10, cy), "rm")):
+        c.text(xy, words, "mono", 18, "secondary", on="background", anchor=anchor)
+    if az is not None and alt is not None:
+        ax = cx + max(-r, min(r, r * az / reach))
+        ay = cy - max(-r, min(r, r * alt / reach))
+        colour = COLOURS["accent"] if p["stage"] != "measuring" else COLOURS["muted"]
+        c.draw.line([(cx, cy), (ax, ay)], fill=colour, width=2)
+        c.draw.ellipse((ax - 13, ay - 13, ax + 13, ay + 13), fill=colour)
+    c.text((cx - r, cy + r + 44), "+ TRUE POLE   ● POLAR AXIS" + ("  (last measured)" if p["stage"] == "measuring"
+                                                                 else ""), "mono", 18, "text")
+
+
+def round_bars(c, rounds, x, y, w, most=8):
+    """Each round's distance from the pole tonight, as a bar: the history of the alignment."""
+    c.text((x, y), "ROUND BY ROUND", "bold", 22, "secondary")
+    y += 40
+    shown = rounds[-most:]
+    if not shown:
+        c.text((x, y), "The first measurement is under way", "sans", 22, "secondary")
+        return y + 36
+    top = max(r["total_deg"] for r in shown) or 1
+    first = len(rounds) - len(shown)
+    for i, r in enumerate(shown):
+        c.text((x, y), f"{first + i + 1}", "mono", 20, "secondary")
+        bar = max(6, (w - 150) * r["total_deg"] / top)
+        last = i == len(shown) - 1
+        c.box((x + 40, y + 2, x + 40 + bar, y + 26), "accent" if last else "muted", radius=4)
+        c.text((x + 52 + bar, y), f"{r['total_deg']:.1f}°", "mono", 20, "text" if last else "secondary")
+        y += 38
+    return y
+
+
+def polar_layout(c, s):
+    p = s["polar"]
+    x, y, w, h = LEFT
+    bullseye(c, p, x + 330, y + 360, 260)
+    right = x + 700
+    top = round_bars(c, p.get("rounds") or [], right, y + 20, w - 700)
+    top += 16
+    if p["stage"] == "measuring":
+        c.text((right, top), "THREE PICTURES, TURNING THE POLAR AXIS BETWEEN", "bold", 20, "secondary")
+        checklist(c, right, top + 40, p["pictures_steps"], size=24, gap=40, on="background")
+    elif p.get("advice") and p["stage"] == "adjust":
+        c.text((right, top), "WHAT TO DO", "bold", 22, "attention")
+        top += 38
+        for line in p["advice"]:
+            top = c.wrap((right, top), line, "sans", 22, w - 700, "text") + 8
+    px, py, pw, ph = PANEL_BOX
+    c.box((px, py, px + pw, py + ph), "panel", radius=14)
+    inner, width = px + 28, pw - 56
+    top = c.wrap((inner, py + 26), "POLAR ALIGNMENT", "bold", 28, width, "accent", on="panel")
+    top = c.wrap((inner, top + 4), p["doing"], "sans", 21, width, "text", on="panel") + 12
+    rows = []
+    if p.get("total_deg") is not None:
+        rows.append((f"{p['total_deg']:.1f}°", "FROM THE POLE"))
+        rows.append((f"{abs(p['azimuth_deg']):.1f}°", f"AZIMUTH · {'EAST' if p['azimuth_deg'] > 0 else 'WEST'} OF NORTH"))
+        rows.append((f"{abs(p['altitude_deg']):.1f}°", f"ALTITUDE · TOO {'HIGH' if p['altitude_deg'] > 0 else 'LOW'}"))
+    top = number_rows(c, inner, top, rows)
+    if p.get("previous_total_deg") is not None:
+        top = c.wrap((inner, top), f"the round before: {p['previous_total_deg']:.1f}°", "mono", 18, width,
+                     "secondary", on="panel") + 4
+    if p.get("drift_px"):
+        d = p["drift_px"]
+        top = c.wrap((inner, top), f"drift in a {p['exposure_s']:g} s frame: {d['azimuth']:g} px azimuth, "
+                     f"{d['altitude']:g} px altitude", "mono", 18, width, "secondary", on="panel") + 4
+    if p.get("limit_deg"):
+        top = c.wrap((inner, top), f"target: under the drift limit, {p['limit_deg']:.2f}° on each axis "
+                     f"({p['limit_px']:g} px, a star's own size, in a {p['exposure_s']:g} s frame)", "mono", 18,
+                     width, "live", on="panel") + 10
+    story_card(c, s, inner, top, width, py + ph - 20)
+    if p.get("card"):
+        result_card(c, p["card"], LEFT)
+
+
 def compose(state, stack=None, single=None):
     """The stream's picture for `state`, as a Canvas (its image and what was written)."""
     c = Canvas()
+    if state["kind"] in ("focus", "polar"):
+        header(c, state)
+        c.text((WIDTH - MARGIN_X, MARGIN_Y), "● LIVE", "bold", 22, "live", anchor="ra")
+        (focus_layout if state["kind"] == "focus" else polar_layout)(c, state)
+        footer(c, state)
+        return c
     if state["kind"] == "between":
         between(c, state, stack)
         footer(c, state)
@@ -742,7 +1036,94 @@ def examples(now=None):
         "end": {"kind": "end", "target": "M31", "now": now,
                 "end": {"lines": ["6 targets observed", "1 h 47 min of light collected", "742 frames kept",
                                   "8 M31 panels searched · 0 confirmed new stars"]}},
+        **focus_examples(now),
+        **polar_examples(now),
     }
+
+
+def example_star(spread, ring=False, size=64):
+    """A made-up star for the preview: a soft spot, or a doughnut far out of focus."""
+    yy, xx = np.indices((size, size)) - size / 2
+    r = np.hypot(yy, xx)
+    light = np.exp(-((r - spread) ** 2) / 18) * (r > spread * 0.45) if ring else np.exp(-(r ** 2) / (2 * spread ** 2))
+    return Image.fromarray((255 * light / light.max()).astype(np.uint8))
+
+
+def focus_examples(now):
+    """Focus states for the preview, the figures made up for the look only
+    (5.07 to 2.19 and the usual 2.28 are of the size real runs give)."""
+    sweep = [(0, 5.07), (1024, 8.9), (768, 7.6), (512, 6.4), (256, 5.3), (0, 4.9), (-256, 3.7), (-512, 2.31)]
+    base = {"kind": "focus", "stage": "sweep", "start_hfr": 5.07, "hfr": 2.31, "best_hfr": 2.31, "best_at": -512,
+            "usual_hfr": 2.28, "tonight_best_hfr": 2.31, "at": -512, "position": 8, "positions": 9, "fit": None,
+            "outcome": None,
+            "readings": sweep, "rings": [], "card": None, "running": True, "showing": True,
+            "steps": steps_of(["measure", "sweep", "fit", "verify"], "sweep"),
+            "stars": {"start": example_star(9), "now": example_star(2.2)}}
+    story = {"chapter": "HOW IT WORKS", "card": ("HOW FOCUSING WORKS", [
+        "Star size against focuser position makes a V-shaped curve. A curve fitted through every point finds "
+        "its bottom more surely than any one reading."])}
+    walk = dict(base, kind="walk", stage="finest steps", position=None, positions=None, start_hfr=3.4,
+                readings=[(0, 3.4), (-64, 3.0), (-128, 2.7), (-160, 2.5), (-176, 2.36), (-192, 2.29)],
+                hfr=2.29, best_hfr=2.29, best_at=-192, steps=steps_of(["doughnuts", "coming in", "finest steps",
+                                                                         "done"], "finest steps"))
+    fitted = dict(base, stage="verify", fit={"ok": True, "focus": -560, "hfr": 2.2, "r2": 0.97},
+                  readings=sweep + [(-768, 3.0), (-560, 2.19)], best_hfr=2.19, best_at=-560, hfr=2.19,
+                  tonight_best_hfr=2.19,
+                  steps=steps_of(["measure", "sweep", "fit", "verify"], "verify", True))
+    return {
+        "focus": {"kind": "focus", "target": "", "now": now, "focus": base, "story": story},
+        "focus-walk": {"kind": "focus", "target": "", "now": now, "focus": walk, "story": story},
+        "focus-complete": {"kind": "focus", "target": "", "now": now, "story": story,
+                           "focus": dict(fitted, card=focus_card({"outcome": "complete", "start_hfr": 5.07,
+                                                                  "end_hfr": 2.19}))},
+        "focus-check-passed": {"kind": "focus", "target": "", "now": now, "story": story,
+                               "focus": dict(base, kind="check", stage="measure", readings=[(0, 2.26), (0, 2.31),
+                                                                                           (0, 2.24)],
+                                             start_hfr=2.26, hfr=2.24, best_hfr=2.24, best_at=0, position=3,
+                                             positions=3, steps=[("measure", "done")],
+                                             card=focus_card({"outcome": "passed", "end_hfr": 2.26,
+                                                              "usual_hfr": 2.28}))},
+        "focus-rejected": {"kind": "focus", "target": "", "now": now, "story": story,
+                           "focus": dict(base, stage="fit", steps=steps_of(["measure", "sweep", "fit", "verify"],
+                                                                            "fit", True, True),
+                                         card=focus_card({"outcome": "rejected", "words": (
+                                             "No focus curve could be fitted to the sweep, so the focuser went "
+                                             "back to where it started.")}))},
+    }
+
+
+def polar_examples(now):
+    """Polar alignment states for the preview, from the real rounds early on
+    22 October 2026 (9.6°, 2.5°, 4.2°, 1.8°, 1.2° from the pole, the night's
+    notes); the sky-scaled azimuths and the timings are made up for the
+    look only."""
+    totals = [9.6, 2.5, 4.2, 1.8, 1.2]
+    rounds = [{"total_deg": t, "measured": now - 600 * (len(totals) - i)} for i, t in enumerate(totals)]
+    base = {"stage": "adjust", "rounds": rounds[:4], "azimuth_deg": -2.1,
+            "altitude_deg": -1.3, "total_deg": 1.8, "previous_total_deg": 4.2, "limit_deg": 1.25, "limit_px": 2.0,
+            "exposure_s": 16.0, "drift_px": {"azimuth": 3.4, "altitude": 2.1},
+            "advice": ["Turn the whole tripod 2.1° clockwise, seen from above: about 4.8 cm at each foot, all "
+                       "three the same way round.",
+                       "Raise the polar axis 1.3° (about three quarters of a mark on the latitude scale)."],
+            "card": None, "doing": "Waiting for the mount to be adjusted, then it measures again",
+            "pictures_steps": [("picture 1", "done"), ("picture 2", "done"), ("picture 3", "done")]}
+    story = {"chapter": "HOW IT WORKS", "card": ("HOW POLAR ALIGNMENT WORKS", [
+        "Three pictures with only the polar axis turned between them land on a circle. The circle's centre is "
+        "where the axis really points."])}
+    measuring = dict(base, stage="measuring", rounds=rounds[:3], total_deg=4.2, previous_total_deg=2.5,
+                     azimuth_deg=7.1, altitude_deg=-0.9, drift_px=None, advice=None,
+                     doing="Recheck: picture 2 of 3",
+                     pictures_steps=[("picture 1", "done"), ("picture 2", "now"), ("picture 3", "open")])
+    done = dict(base, stage="complete", rounds=rounds, total_deg=1.2, previous_total_deg=1.8, azimuth_deg=-0.4,
+                altitude_deg=-1.2, drift_px={"azimuth": 0.6, "altitude": 1.9}, advice=None,
+                doing="Complete: the axis is close enough")
+    done["card"] = polar_card(done)
+    failed = dict(measuring, stage="failed", doing="The measurement failed",
+                  words="A picture could not be plate-solved: cloud, or something in the way. Nothing was measured.")
+    failed["card"] = polar_card(failed)
+    return {name: {"kind": "polar", "target": "", "now": now, "polar": p, "story": story}
+            for name, p in (("polar-measuring", measuring), ("polar-adjust", base), ("polar-complete", done),
+                            ("polar-failed", failed))}
 
 
 def example_pictures(seed=0):
@@ -1015,3 +1396,168 @@ def from_status(st, now=None, session=None):
             s["candidate"] = candidate
     s["story"] = told(s, st, now)
     return s
+
+
+# --- the state of a focus run or a polar alignment, from their own files ----------
+
+LIVE_S = 600              # a run that has written nothing for this long has stopped, whatever it said
+CARD_S = 10               # a finished run's card is held this long
+ADJUST_S = 15 * 60        # after a polar measurement, the bolts are being turned for up to this long
+
+
+def _kept(path):
+    import json
+    try:
+        found = json.loads(Path(path).read_text(encoding="utf-8"))
+        return found if isinstance(found, dict) else None
+    except (OSError, ValueError):
+        return None
+
+
+def _picture(path, since):
+    """A small picture written since `since`, or None."""
+    try:
+        if Path(path).stat().st_mtime < since - 1:
+            return None
+        with Image.open(path) as im:
+            return im.convert("L").copy()
+    except OSError:
+        return None
+
+
+def _alive(pid):
+    import activity
+    return pid is not None and activity._alive(pid)
+
+
+def steps_of(steps, stage, ended=False, failed=False):
+    """[(step, "done" | "now" | "open" | "failed")] for a run at `stage`."""
+    at = steps.index(stage) if stage in steps else -1
+    out = []
+    for i, name in enumerate(steps):
+        if ended and not failed:
+            status = "done"
+        elif i < at:
+            status = "done"
+        elif i == at:
+            status = "failed" if failed else "now"
+        else:
+            status = "open"
+        out.append((name, status))
+    return out
+
+
+NIGHT_S = 12 * 3600       # a focus run further back than this was another night
+
+
+def tonight_best(this_run, now, runs_file):
+    """The sharpest HFR tonight: this run's best and every run or check
+    kept in focus.py's RUNS_FILE in the last NIGHT_S. None if none."""
+    import json
+    found = [this_run] if this_run is not None else []
+    try:
+        for line in Path(runs_file).read_text(encoding="utf-8").splitlines():
+            try:
+                run = json.loads(line)
+            except ValueError:
+                continue
+            value = run.get("best_hfr", run.get("checked_hfr"))
+            if value is not None and 0 <= now - float(run.get("saved", 0)) <= NIGHT_S:
+                found.append(float(value))
+    except OSError:
+        pass
+    return round(min(found), 2) if found else None
+
+
+def focus_card(f):
+    """(title, line, colour) for how a focus run ended, said plainly."""
+    start, end, usual = f.get("start_hfr"), f.get("end_hfr"), f.get("usual_hfr")
+    outcome = f.get("outcome")
+    if outcome == "complete" and start and end:
+        smaller = round(100 * (1 - end / start))
+        return ("FOCUS COMPLETE", f"{start:.2f} → {end:.2f} HFR" + (f", {smaller}% smaller stars" if smaller > 0
+                                                                   else ": as sharp as it was"), "live")
+    if outcome in ("left_alone", "passed") and end:
+        return ("FOCUS CHECK PASSED", f"HFR {end:.2f}" + (f", as good as the usual best of {usual:.2f}" if usual
+                                                          else "") + ": left as it is.", "live")
+    if outcome == "soft" and end:
+        return ("FOCUS IS SOFT", f"HFR {end:.2f}" + (f" against the usual best of {usual:.2f}" if usual else "")
+                + ": worth focusing.", "attention")
+    titles = {"rejected": ("FOCUS CURVE REJECTED", "attention"), "returned": ("FOCUS RETURNED TO START", "attention"),
+              "failed": ("FOCUS RUN STOPPED", "attention"), "swept": ("FOCUS CURVE MEASURED", "live"),
+              "found": ("STARS FOUND", "live"), "not_found": ("NO STARS FOUND", "attention"),
+              "complete": ("FOCUS COMPLETE", "live")}
+    title, colour = titles.get(outcome, ("FOCUS RUN ENDED", "attention"))
+    return title, f.get("words") or "", colour
+
+
+def focus_stream_state(now=None, path=None):
+    """What a focus run is doing, from focus.py's STREAM_FILE: its kind,
+    stage and steps, the start, current, best and usual HFR, where the
+    focuser is, the fit, every reading, the star at the start and now, and
+    once it has ended the card saying how. None when there is no such file.
+    "showing" says whether the stream should show it now."""
+    import focus
+    path = Path(path or focus.STREAM_FILE)
+    f = _kept(path)
+    if not f:
+        return None
+    now = now or time.time()
+    ended = f.get("ended")
+    running = ended is None and _alive(f.get("pid")) and now - f.get("updated", 0) < LIVE_S
+    card = focus_card(f) if ended is not None and 0 <= now - ended < CARD_S else None
+    steps = f.get("steps") or []
+    out = {k: f.get(k) for k in ("kind", "stage", "start_hfr", "hfr", "best_hfr", "best_at", "usual_hfr", "at",
+                                 "position", "positions", "fit", "outcome", "words", "end_hfr", "started", "ended")}
+    out.update(running=running, card=card, showing=bool(running or card),
+               steps=steps_of(steps, f.get("stage"), ended is not None,
+                              f.get("outcome") in ("failed", "rejected", "returned", "not_found")),
+               readings=[(r["at"], r["hfr"]) for r in f.get("readings") or [] if r.get("hfr") is not None],
+               rings=[(r["at"], r["ring"]) for r in f.get("readings") or [] if r.get("ring")],
+               count=len(f.get("readings") or []),
+               last_hfr=(f.get("readings") or [{}])[-1].get("hfr"),
+               tonight_best_hfr=tonight_best(f.get("best_hfr"), now, path.with_name("focus_runs.jsonl")),
+               stars={"start": _picture(path.with_name("focus_star_start.png"), f.get("started", 0)),
+                      "now": _picture(path.with_name("focus_star_now.png"), f.get("started", 0))})
+    return out
+
+
+def polar_card(p):
+    if p["stage"] == "complete":
+        totals = [r["total_deg"] for r in p.get("rounds") or []]
+        line = (f"{totals[0]:.1f}° → {totals[-1]:.1f}° from the pole" if len(totals) > 1
+                else f"{p['total_deg']:.1f}° from the pole") + ": under the drift limit on both axes."
+        return "POLAR ALIGNMENT COMPLETE", line, "live"
+    return "POLAR MEASUREMENT FAILED", p.get("words") or "Nothing was measured.", "attention"
+
+
+def polar_stream_state(now=None, path=None):
+    """Where a polar alignment has got, from polaralign.py's STREAM_FILE:
+    the stage (measuring, adjust, complete, failed), the picture being taken
+    of three, the error now and the round before, tonight's rounds, the
+    drift each axis causes, the drift limit and the advice; and a card once
+    it is complete or has failed. None when there is no such file."""
+    import polaralign
+    p = _kept(Path(path or polaralign.STREAM_FILE))
+    if not p:
+        return None
+    now = now or time.time()
+    stage, updated, ended = p.get("stage"), p.get("updated", 0), p.get("ended")
+    running = stage == "measuring" and _alive(p.get("pid")) and now - updated < LIVE_S
+    adjusting = stage == "adjust" and 0 <= now - updated < ADJUST_S
+    card = polar_card(p) if stage in ("complete", "failed") and ended and 0 <= now - ended < CARD_S else None
+    rounds = p.get("rounds") or []
+    if rounds and now - rounds[-1].get("measured", 0) > polaralign.NIGHT_S:
+        rounds = []
+    picture, taken = p.get("picture") or 1, p.get("taken") or 0
+    out = dict(p, rounds=rounds, running=running, adjusting=adjusting, card=card,
+               showing=bool(running or adjusting or card),
+               pictures_steps=[(f"picture {n}", "done" if n <= taken else ("now" if n == picture else "open"))
+                               for n in (1, 2, 3)])
+    recheck = "Recheck" if p.get("recheck") else "Measuring"
+    out["doing"] = {"measuring": f"{recheck}: picture {picture} of 3",
+                    "adjust": "Waiting for the mount to be adjusted, then it measures again",
+                    "complete": "Complete: the axis is close enough",
+                    "failed": "The measurement failed",
+                    "measured": "Measured"}.get(stage, "")
+    return out

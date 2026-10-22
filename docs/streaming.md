@@ -5,7 +5,9 @@ still to come, is in [stream-look.md](stream-look.md), the design record.
 
 On air since 20 October 2026 on Twitch, from the WASP-12 b transit run
 (`docs/validation.md`, "Live stream on Twitch"). YouTube is built as a
-destination, alone or beside Twitch, and not yet tried on air.
+destination, alone or beside Twitch, and not yet tried on air. The focus
+and polar alignment looks and the focus tones were built on 22 October
+2026 and have been seen only in the preview and the tests, not yet on air.
 
 ## What a viewer sees
 
@@ -23,6 +25,24 @@ status page's own data:
   CLOSELY or TELESCOPEYOKE line across the picture now and then; a larger
   explainer every five minutes (stacking, a transit, a nova, how the search
   works, and a comet the hunt recovered); and a slow crawl every ten;
+- while the telescope focuses, the focus look: the focus curve as it is
+  measured (star size against focuser position, the best so far ringed, the
+  usual best as a line, the fitted focus once there is one), one star
+  magnified at the start and now, the start, current and best HFR, "usual
+  best 2.28 · tonight's best so far 2.19", "position 4 of 9", and the steps
+  ticked off (measure, sweep, fit, verify; a walk-in has doughnuts, coming
+  in, finest steps, done); with the focus run's tones as the stream's sound;
+- while the mount is polar aligned, the polar look: a bullseye with the true
+  pole at the centre, the axis at its measured azimuth and altitude errors
+  and the drift limit as a square, picture 1, 2 and 3 ticked off, every
+  round tonight as a bar (9.6° → 2.5° → 4.2° → 1.8° → 1.2° on 22 October
+  2026), the error and the round before, the drift each axis causes in a
+  frame, "target: under the drift limit", and what to do, said as clockwise
+  or anticlockwise seen from above (never left or right);
+- a card for ten seconds when either ends: "FOCUS COMPLETE 5.07 → 2.19 HFR,
+  57% smaller stars", "FOCUS CHECK PASSED", "POLAR ALIGNMENT COMPLETE 9.6° →
+  1.2°", or what went wrong in plain words (the curve rejected, focus sent
+  back to the start, a picture that could not be plate-solved);
 - a card between targets (the next target, a checklist of the GoTo, plate
   solve, focus and imaging) and one at the end of the night;
 - a candidate's state without its place: "possible change detected",
@@ -44,10 +64,81 @@ is ever shown.
 It is off unless `[stream] enabled` in `config.toml` (the Settings screen),
 with `[stream] service` "twitch", "youtube" or "custom", or several of them
 (below). The watcher goes on
-air when a run's newest frame is under two minutes old, stays on air between
+air when a run's newest frame is under two minutes old, or while the
+telescope is focusing or being polar aligned (below); stays on air between
 targets when the schedule's next step is due within 15 minutes, holds the
-end-of-night card for two minutes, and stops when no frame has come for
+end-of-night card for two minutes, and stops when nothing new has come for
 five. For each target it sets the Twitch title, category and tags.
+
+## Focusing and polar alignment on air
+
+The stream goes on air for these as it does for imaging, and shows each its
+own way. What it shows comes from small files the two commands write as they
+go, never from their log:
+
+| File (under `cache/`) | Written by | What it holds |
+|---|---|---|
+| `focus_stream.json` | `focus.py --motor`, `--walk-in`, `--find`, `--sweep`, `--check` (`focus.Broadcast`) | kind, stage, steps, every reading with the focuser's position, start, current, best and usual HFR, the fit, how it ended and why |
+| `focus_star_start.png`, `focus_star_now.png` | the same | the brightest star in a small square, at the start and now |
+| `polar_stream.json` | `polaralign.py` (`polaralign.tell`) | stage (measuring, adjust, complete, failed), picture n of 3, a recheck or not, every round tonight, the error now and the round before, the drift per axis, the drift limit, the advice |
+
+Focusing by ear (`./focus.py` with no `--motor`) and the focuser's own
+measurements (`--measure-step`, `--measure-backlash`) write no stream file
+and are not shown. `streamlook.focus_stream_state()` and
+`polar_stream_state()` read them. The
+stream is on air while a run is going (its process alive and its file
+written in the last ten minutes), for 15 minutes after a polar measurement
+that asks for an adjustment (a person turning the bolts: `polar_adjust`),
+and for the ten-second card when either ends. Any activity line in
+`activity.BROADCAST` keeps it on air too. Focus is shown first: polar
+alignment needs it, and the two never run at once.
+
+The activity lines name each stage (`activity.PHASES`): `focus_check`,
+`focus_sweep`, `focus_walk`, `focus_find`, `focus_fit`, `focus_verify`,
+`polar_measure`, `polar_recheck`, with `polar_adjust` from the polar file.
+The between-targets checklist still counts every focus stage as "checking
+focus" (`activity.step_of`).
+
+Only what the code has is shown. The usual best is `focus.usual_best()`;
+tonight's best is this run's and those in `cache/focus_runs.jsonl` from the
+last twelve hours. The drift limit is polaralign's own: an error is left
+alone when the drift it causes over one frame stays under a star's own size
+(2 px; 1.25° for 16 s frames), and the drift shown is what polaralign
+works out from 0.1 px a second per degree. The polar history starts again
+when the last round is more than six hours old. The polar alignment's three
+numbers (azimuth, altitude and the total) together hint at the latitude to
+a few degrees, as the objects and times already do; nothing more is shown.
+
+### The sound
+
+While a focus run is on air, each new reading is heard as the focus aid's
+own sound: a click and a tone, higher the sharper the stars (`focus.pitch`
+of the usual best over the reading, so the top note is the usual best or
+sharper), or two clicks for a reading with no stars. Between readings, and
+for everything else, the sound is silence as before. The tones go to
+ffmpeg as raw sound on a pipe of their own, written on their own thread and
+paced by the clock, so the pictures never wait on them; a test sends both
+through ffmpeg into a file and checks the sound is there. `[stream]
+focus_tones = false` (the Settings screen: "Focus tones on the stream")
+keeps the old silent track. It takes effect when the stream next starts.
+
+## The broadcast's running order
+
+A night on air runs in five parts, and each has its look:
+
+1. **The night opens.** The stream goes on air with the first thing worth
+   watching: usually the setup. There is no opening card yet.
+2. **Setup and calibration.** Focusing and polar alignment, each with its
+   own look and its result card; the GoTo and plate solve show on the
+   between-targets card's checklist.
+3. **Science.** The imaging runs: a nova patrol's mosaic, a transit's light
+   curve, a picture building up, and a candidate's follow-up without its
+   place.
+4. **Background work.** Between targets, while the schedule has more due,
+   the card with what comes next; the presenter's explainers (stacking, the
+   search, a comet the hunt recovered) run through the science.
+5. **The night's result.** The end card, counted from tonight's sessions,
+   for two minutes, then the stream stops.
 
 ## YouTube and Twitch at once
 
@@ -91,7 +182,13 @@ breaks in ten minutes), never on a blip.
 curated words and measured figures, at most one reply every 3 s and each
 command once in 30 s:
 
-    !what  !target  !next  !telescope  !camera  !nova  !transit  !help
+    !what  !target  !next  !focus  !polar  !telescope  !camera  !nova  !transit  !help
+
+`!focus` says what the focus run is doing (its stage, position, current and
+best HFR against the start and the usual best) or how tonight's last one
+ended; `!polar` how far tonight's polar alignment has got (picture n of 3,
+waiting for an adjustment, the error now, the rounds and where it began, and
+the drift limit it aims for). Both read the same files as the picture.
 
 Viewers can ask the observatory what it is doing; nothing they type can move
 or change anything. It needs the chat permissions, so `./stream.py

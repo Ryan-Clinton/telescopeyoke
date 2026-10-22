@@ -101,6 +101,10 @@ single reading can say which way focus lies:
 Every reading is numbered with its step and shown on the status page;
 each sweep is drawn as text in the log. A run never goes more than two
 turns from where it started. Each kept run is in `cache/focus_runs.jsonl`.
+As it goes, a run (and `--check`, `--walk-in`, `--find`, `--sweep`) also
+keeps its stage, readings and result in `cache/focus_stream.json`, with the
+brightest star at the start and now, for the live stream's focus look
+([streaming.md](streaming.md#focusing-and-polar-alignment-on-air)).
 
     ./focus.py --sweep               one sweep and fit, then back to the start: the curve only
     ./focus.py --find                far out, no star measuring: half a turn at a time in, then out, until stars do

@@ -41,6 +41,9 @@ measurement took out the handset's own movement of the Dec axis
 ([validation](validation.md#night-of-13-october-2026)). `--repeat 5`,
 with the bolts left alone, gives the scatter of the measurement itself,
 which says what a reading of 0.1° is worth. That has not been run yet.
+Each round tonight, the picture being taken and the advice are also kept in
+`cache/polar_stream.json` for the live stream's polar look
+([streaming.md](streaming.md#focusing-and-polar-alignment-on-air)).
 
 ### What to do with your hands
 
