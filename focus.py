@@ -953,8 +953,8 @@ def find_stars(motor, read, usual, say=progress, stride=2048, turns=2, ring=None
     return None
 
 
-def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, switch=8.0, near=1.5,
-            most=120, tries=3, patience=3, spike=1.8, ring=None, ring_step=128, ring_most=4096):
+def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, closest=8, switch=8.0, near=1.5,
+            close=1.15, most=160, tries=3, patience=3, spike=1.8, ring=None, ring_step=128, ring_most=4096):
     """Focus from a little outside it, moving only inward, a few half-steps
     at a time, measuring after each, until the stars have been worse three times
     running after their best; returns {"best_hfr", "best_at", "ended_at",
@@ -1004,7 +1004,11 @@ def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, swi
     best, best_at, worse, readings = now, at, 0, [(at, now)]
     say(f"  start: HFR {now}")
     for _ in range(most):
-        step = finest if now < near * usual else fine if now < switch else coarse
+        # Sized by the best so far, not the last reading: on 21 October 2026
+        # one bad reading past the best went back to 32-step moves and
+        # ended 80 half-steps inside focus.
+        step = (closest if best < close * usual else finest if best < near * usual
+                else fine if best < switch else coarse)
         motor.move(-step)
         at -= step
         now = reading()

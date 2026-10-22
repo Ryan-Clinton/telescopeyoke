@@ -2,6 +2,7 @@
 that keeps the camera exposing while a frame is measured. No camera and no
 speaker: the frames are made up and the sounds are caught."""
 import io
+import itertools
 import json
 import sys
 import time
@@ -820,3 +821,12 @@ def test_walking_in_refuses_when_the_doughnuts_grow_inward():
     with pytest.raises(focus.interface.Refusal):
         focus.walk_in(tube, tube.read, usual=2.0, say=quiet, ring=rings)
     assert len(tube.moves) == 2
+
+
+def test_walking_in_keeps_small_steps_past_the_best():
+    """21 October 2026: a bad reading past the best (3.73 after 2.85) went
+    back to 32-step moves and the run ended 80 half-steps inside focus."""
+    tube = Drawtube(best=-300, slope=40, sharp=2.0, reach=600, noise=0.02)
+    focus.walk_in(tube, tube.read, usual=2.0, say=quiet)
+    past = [step for step, at in zip(tube.moves, itertools.accumulate(tube.moves)) if at < -300]
+    assert past and all(-step <= 16 for step in past)
