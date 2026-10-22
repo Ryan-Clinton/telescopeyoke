@@ -191,8 +191,12 @@ def status_forever(seconds=2):
     names = {t["id"]: t["name"] for t in sky.load_targets()}
     while True:
         try:
-            # A session is any folder with a frame log, newest activity last.
-            folders = {p.parent for p in (config.DATA / "frames").glob("*/*/frames.json*")}
+            # A session is any folder with a frame log or a plan, newest
+            # activity last: a run that has not kept its first frame yet is
+            # still the newest (22 October 2026, the page showed a WASP-12
+            # run from two nights before while M31-P6 waited for a frame).
+            folders = {p.parent for pattern in ("*/*/frames.json*", "*/*/session.json")
+                       for p in (config.DATA / "frames").glob(pattern)}
             sessions = sorted(folders, key=lambda d: max(q.stat().st_mtime for q in d.glob("*.json*")))
             status = stacking.run_status(sessions[-1]) if sessions else {}
             if status.get("name"):
