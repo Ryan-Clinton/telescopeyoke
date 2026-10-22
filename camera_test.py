@@ -47,6 +47,7 @@ from xml.sax.saxutils import quoteattr
 
 import numpy as np
 
+import activity
 import config
 import interface
 import records
@@ -838,6 +839,7 @@ def dark_current(mosaic, far=10):
     return {"excess_adu": float(m.mean()) - median, "hot_ppm": 1e6 * float(np.mean(m > median + far * noise))}
 
 
+@activity.during("Testing the camera", lambda a: f"{a['steps']} set(s) of {a['frames']} frames of {a['exposure']:g} s" + (f": {a['note']}" if a['note'] else ""))
 def cooldown(exposure, gain, frames=20, every_min=10.0, steps=12, note="", say=print, sleep=time.sleep):
     """The cap-on test of whether the stripes grow as the camera cools: the
     same frames every `every_min` minutes, each set with the outdoor
