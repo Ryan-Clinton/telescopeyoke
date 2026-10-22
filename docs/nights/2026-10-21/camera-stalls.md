@@ -49,7 +49,7 @@ which moves nothing.
 ## Later: long frames, Altair's own library (22 October, 04:39 to 04:48)
 
 From 00:05 the camera was read through Altair's own library (`[camera]
-backend = "altair"`) on the 3 m lead again. 1 s frames mostly arrived in
+backend = "altair"`), on the 1 m lead until the rain and on the 3 m lead again from 03:25. 1 s frames mostly arrived in
 their normal 2.5 s, with a stall every few minutes. 16 s frames never
 arrived: the M31-P6 patrol run waited from 04:39:51 with no frame for
 more than five minutes. After a restart, the 0.1 s test frame took 28 s,
