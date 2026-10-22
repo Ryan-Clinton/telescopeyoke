@@ -366,7 +366,7 @@ first used: a `:T` order in `focuser.ino` that answers with each reading;
 log recording the camera's temperature and the dew margin measured at the
 telescope. Later, the same readings can move the focus as the night cools.
 
-### Parts ordered, 22 October 2026 (AliExpress, about three weeks' delivery)
+### Parts chosen, 22 October 2026 (AliExpress; the order did not go through, see the night notes)
 
 A stronger, solder-free drive for the Printables NEMA 17 bracket
 ([model 436129](https://www.printables.com/model/436129)): a 17HS4401 NEMA 17

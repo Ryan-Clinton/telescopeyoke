@@ -150,7 +150,7 @@ from the log.
 
 Nothing here has been built or tried yet.
 
-## Parts ordered, 22 October 2026
+## Parts chosen, 22 October 2026 (not yet ordered)
 
 From AliExpress, with the focuser parts: an ESP32 DevKit V1 (USB-C) on a 30-pin
 screw-terminal board, an MLX90614ESF-BAA (GY-906), a 3.3 V BME280, a TSL2591,
