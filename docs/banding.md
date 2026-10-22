@@ -122,7 +122,7 @@ Siril's `seqfixbanding` and SharpCap's Banding Suppression both level whole rows
 
 1. **Another mains socket** for the laptop's charger, on another circuit if there is one, with the camera on the same lead and port. Stripes and lost frames are measured as before (`./camera_test.py --stripes`, a run of 16 s frames).
 2. **The Windows PC** with AltairCapture, the camera on its own USB 3 port: 16 s frames for ten minutes, and the stripes in the saved frames. If long frames arrive there and not on the laptop, the fault is the laptop's USB or driver, not the camera.
-3. **Another USB controller** on the laptop. Two ports have been tried, but only one of the laptop's two USB-C ports sees devices, so this may need a powered USB 3 hub.
+3. **Another USB port**: done. The camera has been tried in every USB port on the laptop, with the same faults. A powered USB 3 hub (its own 5 V supply) is the one power test left: it gives the camera steady power, though it is still the same laptop controller and does not break a ground loop.
 
 The reply to send once 1 and 2 are done: which socket, whether long frames arrived, the stripe figures, and the Windows result.
 
