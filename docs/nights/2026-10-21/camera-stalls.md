@@ -67,7 +67,8 @@ on the laptop's USB 3 port at 5000 Mbps. Each lost frame was given up after
 | Charger in the kitchen socket through the usual extension lead | 0 of 3 |
 | The same socket, charger plugged straight in | 0 of 2 |
 | Charger unplugged, laptop on battery | 0 of 2 |
+| Charger in an upstairs socket (another circuit) through an extension lead | 0 of 2 |
 
 1 s frames arrived in their normal 2.5 s between the sets. So it is not the
-socket, the extension lead or a ground loop through the charger. The cut-off
+socket, the circuit, the extension lead or a ground loop through the charger. The cut-off
 is between 1 s and 2 s of exposure.
