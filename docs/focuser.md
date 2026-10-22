@@ -366,16 +366,28 @@ first used: a `:T` order in `focuser.ino` that answers with each reading;
 log recording the camera's temperature and the dew margin measured at the
 telescope. Later, the same readings can move the focus as the night cools.
 
-### Parts chosen, 22 October 2026 (not yet ordered)
+### Parts ordered, 22 October 2026 (AliExpress, about a week to three weeks)
 
 A stronger, solder-free drive for the Printables NEMA 17 bracket
-([model 436129](https://www.printables.com/model/436129)): a 17HS4401 NEMA 17
-(40 mm, 0.4 N·m), two TMC2209 drivers on a red A4988/DRV8825 screw-terminal
-carrier board, a 12 V 2 A supply with a 5.5 × 2.5 mm socket lead, 4 × 5 and
-5 × 6 mm jaw couplers, M3 screws, a Nano screw-terminal board and jumper
-leads. For the temperature work below: a 5 V BME280, an M3 ring-lug 10 kΩ
-B3950 thermistor and 10 kΩ resistors. The sensor boards come with their pins
-loose; a soldering practice kit came with them. What the software needs on
-arrival: the Nano's firmware driving STEP/DIR/EN instead of the ULN2003, and
-`focuser.py` and `focus.py` counting full steps × microsteps instead of
-28BYJ-48 half-steps, each with its test, before the first use on the sky.
+([model 436129](https://www.printables.com/model/436129)), about £32 in all:
+
+- the motor: a 17HS4401 NEMA 17 (40 mm, 0.4 N·m), the "no plug" version;
+- the driver: two TMC2209s (one spare) on a red A4988/DRV8825
+  screw-terminal carrier board;
+- power: a 12 V 2 A supply with a 5.5 × 2.5 mm socket lead;
+- the coupling: D20L25 elastic couplers, 4 × 5 and 5 × 6 mm (the focuser's
+  shaft is not yet measured);
+- fixings: a Nano screw-terminal board and M3 screws.
+
+For the camera's temperature (below) an M3 ring-lug 10 kΩ B3950 thermistor
+and 10 kΩ resistors are on the way too. Jumper leads are on hand from the
+old focuser.
+
+If the motor arrives with a socket and no lead, a 4-pin NEMA 17 cable is
+needed.
+
+What the software needs on arrival: the Nano's firmware driving STEP/DIR/EN
+instead of the ULN2003, and `focuser.py` and `focus.py` counting full steps
+× microsteps instead of 28BYJ-48 half-steps, each with its test, before the
+first use on the sky.
+
