@@ -763,6 +763,34 @@ def test_the_details_leave_out_what_an_older_library_cannot_say(sdk, world):
         found = cam.details()
     assert found["hardware"] is None and found["production_date"] is None and found["frame_buffer"] == "none"
     camera_test.show_details(dict(found, usb_link={"port": "2-4", "mbps": 480}))
+    assert set(found["settings"].values()) == {None}     # no get_Option in this wrapper
+
+
+def test_the_details_say_whether_a_low_power_mode_or_a_give_up_is_set(sdk, world, capsys):
+    """23 October 2026: 1 s frames arrived and 2 s ones never did, and the
+    library has a low-power mode entered above a set exposure."""
+    import camera_test
+    sdk.ALTAIRCAM_OPTION_LOW_POWERCONSUMPTION, sdk.ALTAIRCAM_OPTION_LOW_POWER_EXPOTIME = 0x66, 0x6f
+    sdk.ALTAIRCAM_OPTION_NOPACKET_TIMEOUT = 0x2b       # NOFRAME_TIMEOUT left out: an older library
+    handle = sdk.Altaircam.Open
+    reported = {0x66: 1, 0x6f: 1000}
+
+    def opened(camera_id):
+        h = handle(camera_id)
+        def get_Option(option):
+            if option not in reported:
+                raise Exception("E_NOTIMPL")               # a camera that does not know it
+            return reported[option]
+        h.get_Option = get_Option
+        return h
+    sdk.Altaircam.Open = staticmethod(opened)
+    with altair.AltairCamera() as cam:
+        found = cam.details()
+    assert found["settings"] == {"low_power": 1, "low_power_above_ms": 1000,
+                                 "no_packet_timeout_ms": None, "no_frame_timeout_ms": None}
+    camera_test.show_details(found)
+    out = capsys.readouterr().out
+    assert "Low power:      on" in out and "Low power above:1000 ms" in out and "not reported" in out
 
 
 def test_a_camera_plugged_in_after_the_server_started_is_noticed(tmp_path):

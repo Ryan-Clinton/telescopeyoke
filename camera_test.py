@@ -394,6 +394,12 @@ def show_details(found):
     print(f"{'Readout speed:':<16}{found['readout_speed']} (range 0-{found['max_readout_speed']})")
     print(f"{'USB:':<16}" + ("a USB 3 camera on a USB 2 port: frames will be slow"
                              if found["usb3_camera_on_usb2_port"] else "not held back by a USB 2 port"))
+    names = {"low_power": "Low power", "low_power_above_ms": "Low power above",
+             "no_packet_timeout_ms": "No-packet limit", "no_frame_timeout_ms": "No-frame limit"}
+    for key, value in (found.get("settings") or {}).items():
+        shown = "not reported" if value is None else ("on" if value else "off") if key == "low_power" \
+            else "off" if value == 0 else f"{value} ms"
+        print(f"{names[key] + ':':<16}{shown}")
     link = found.get("usb_link")
     if link:
         print(f"{'Link:':<16}port {link['port']} at {link['mbps']} Mb/s" + (" (USB 2)" if link["mbps"] < 5000 else ""))

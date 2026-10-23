@@ -39,6 +39,11 @@ USB3 = 0x40            # ALTAIRCAM_FLAG_USB30
 FAN = 0x10000          # ALTAIRCAM_FLAG_FAN
 BUFFER = 0x1000000     # ALTAIRCAM_FLAG_BUFFER: a frame buffer of some size in the camera
 DDR = 0x2000000        # ALTAIRCAM_FLAG_DDR: one big enough for a whole frame
+# Settings that could stop long frames while short ones arrive: a low-power
+# mode the camera enters above a set exposure, and the library's own
+# give-ups when no packet or no frame comes in time (0: off).
+WATCHED = (("low_power", "LOW_POWERCONSUMPTION"), ("low_power_above_ms", "LOW_POWER_EXPOTIME"),
+           ("no_packet_timeout_ms", "NOPACKET_TIMEOUT"), ("no_frame_timeout_ms", "NOFRAME_TIMEOUT"))
 
 
 def wait_for(seconds):
@@ -408,7 +413,20 @@ class AltairCamera:
             # frame stamps turned out not to keep time.
             "frame_clock_usable": self.clock,
             "values_shifted_up": self._shifted,
+            "settings": self.settings(),
         }
+
+    def settings(self):
+        """The camera's WATCHED settings as it reports them; None for one
+        this library or this camera does not have."""
+        found = {}
+        for key, option in WATCHED:
+            number = getattr(self.lib, "ALTAIRCAM_OPTION_" + option, None)
+            try:
+                found[key] = self.handle.get_Option(number) if number is not None else None
+            except Exception:
+                found[key] = None     # a 2017 firmware may not know it
+        return found
 
 
 def _reason(problem):
