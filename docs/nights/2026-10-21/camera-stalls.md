@@ -143,3 +143,66 @@ a link kept busy.
 
 Until it is mended, the camera can be run in its USB 2 mode (through a USB 2
 hub or extension), at about 9 s of download a frame.
+
+## What others have found (23 October)
+
+- **The same camera, the same fault.** A Hypercam 183C owner in 2019 had
+  frames that never arrived "on three different computers", with new cables
+  and a fresh Windows, sometimes hours without a fault and sometimes stopping
+  after three frames
+  ([APT forum](https://www.aptforum.com/phpbb/viewtopic.php?t=2124&start=20)).
+  In the same thread a QHY168C owner's hangs went when the camera was put on
+  a USB 2 port, and it was stable at USB 3 on another laptop. A ZWO ASI294MC
+  owner's dropped frames went from now and then to almost always, on every
+  cable, port and laptop, and USB 2 worked
+  ([ZWO forum](https://bbs.zwoastro.com/d/10188-asi-294mc-pro-dropped-frames)).
+- **A camera that never says its frame is ready.** An Altair Hypercam
+  IMX178 stuck on "downloading" at USB 3 and worked at USB 2. The logs showed
+  that "the camera never reports" the frame ready, and no cause was found
+  ([SGP forum](https://forum.sequencegeneratorpro.com/t/downloading-problems-on-usb-3-0-with-altair-hypercam-imx178/5165)).
+- **Altair's own advice** for interrupted downloads is power saving: USB
+  selective suspend off, and the CPU's idle states (C-states) off in the BIOS,
+  since "your CPU halts during idle periods"
+  ([interrupted frames](https://www.altairastro.help/info-instructions/troubleshooting/interrupted-frames-subs-download-during-imaging-session/),
+  [random disconnects](https://www.altairastro.help/info-instructions/troubleshooting/my-usb-astro-camera-randomly-disconnects-showing-a-black-image/)).
+  On USB 3 controllers, link power states have stalled other cameras
+  ([kernel bug 115961](https://bugzilla.kernel.org/show_bug.cgi?id=115961)).
+  That would explain why only long frames fail, but it would not explain a
+  change on 20 October seen on three computers.
+- **The library's own limits.** ToupTek's library, which Altair's is, can
+  give up on a frame after 1 s with no packet or 2 s with no frame. One
+  driver writer found a stuck camera came back after a simulated replug
+  (`DEVICE_RESET`) when restarting failed
+  ([ToupTek.SDK notes](https://www.nuget.org/packages/ToupTek.SDK/)). On this
+  camera both limits are off and its 2017 firmware has no low-power mode, as
+  `camera_test.py --capabilities` read them on the desktop PC.
+- **The socket.** A USB 3 socket's five extra SuperSpeed contacts can be
+  pushed back or bent while the USB 2 ones still work
+  ([hwbusters](https://hwbusters.com/news/slow-usb-3-0-insertion-drops-your-drive-to-480mbps-and-the-connector-is-why/)).
+  Most such faults show as a link at USB 2. This camera links at USB 3 and
+  then loses frames, which fits a contact that is marginal rather than open.
+
+## The readout speed decides it (23 October, 02:10 to 03:00)
+
+Still on the desktop PC at USB 3 (1 m lead, cap on, gain 1500, Altair's
+library), with only the readout speed changed (`camera_test.py --throughput`,
+then `--gain-sweep --speeds`):
+
+| Readout speed | 2 s frames | 16 s frames |
+|---|---|---|
+| 2 (the one used every night) | lost (no frame in 24 s) | lost |
+| 1 | arrived, 2.03 s each | lost (3 tries of 108 s) |
+| 0 (slowest) | arrived, 3.03 s each | **20 of 20**, after 2 of 2 at 4, 8 and 16 s |
+
+The faster the camera sends its rows, the shorter the exposure at which it
+starts losing them. At Speed 0 it images as it did before 20 October, for
+about a second more a frame. That fits a USB 3 connection that has become
+marginal, in the socket or in the camera's USB 3 chip: fine when it is asked
+for less, failing when pushed. The stripes at Speed 0 were 1.18 to 1.50 ADU,
+the ordinary warm level.
+
+`camera_test.py --speed-ladder --keep-best` now finds the fastest speed that
+keeps every long frame and sets it as `readout_speed`, which both routes (INDI
+and Altair's library) use when the camera opens. The exposure timing at Speed
+0 has not been checked on stars: `camera_test.py --trail` on the next clear
+night.
