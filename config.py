@@ -232,6 +232,10 @@ SETTINGS = (
      "Raised above zero so the faintest signal is not cut off. 46 gives the Altair 183C a level of about 45 "
      "with the cap on; at 0 it reads about 1 and the sky's grain is clipped. Take a new bias after changing it.",
      {"min": 0, "max": 255, "optional": True}),
+    ("camera", "readout_speed", "Readout speed", "whole",
+     "0 is the slowest. On 23 October 2026 the Altair 183C lost long frames at 1 and 2 and kept them at 0; "
+     "camera_test.py --speed-ladder finds the fastest that keeps them. Blank leaves the driver's own.",
+     {"min": 0, "max": 3, "optional": True}),
     ("camera", "setup", "Camera arrangement", "text",
      "A name for how the camera sits on the telescope. Change it, and take new flats, whenever the camera is "
      "rotated or taken off.", {}),

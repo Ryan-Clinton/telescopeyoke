@@ -173,11 +173,15 @@ def fake_indi(world):
         def get(self, device, name):
             if name == "CCD_TRANSFER_FORMAT":
                 return {"FORMAT_FITS": "Off" if world.native else "On", "FORMAT_NATIVE": "On" if world.native else "Off"}
+            if name == "CCD_CONTROLS" and hasattr(self, "speed"):
+                return {"Gain": str(self.gain), "Speed": str(self.speed)}
             return {"CCD_EXPOSURE_VALUE": "0"} if name == "CCD_EXPOSURE" else None
 
         def set(self, device, name, **values):
             if name == "CCD_CONTROLS":
-                self.gain = values["Gain"]
+                self.gain = values.get("Gain", getattr(self, "gain", None))
+                if "Speed" in values:
+                    self.speed = values["Speed"]
             if name == "CCD_TRANSFER_FORMAT":
                 world.native = values.get("FORMAT_FITS") != "On"
             if name == "CCD_BINNING":
@@ -877,3 +881,56 @@ def test_the_readout_speed_fan_and_black_level_are_set_through_altair_s_library(
         assert cam.handle.options[0x07] == 0 and cam.handle.options[0x15] == 40
         cam.settings(speed=0)
         assert cam.handle.get_Speed() == 0 and cam.handle.options[0x15] == 40
+
+
+def test_the_speed_ladder_keeps_the_fastest_speed_that_loses_no_frame(monkeypatch):
+    """As on 23 October 2026: every 16 s frame lost at Speeds 2 and 1, every
+    one kept at 0, and the 1 s settling frame kept at all three."""
+    import camera_test
+    tried = []
+
+    class Cam:
+        speed = 2
+        def __init__(self, gain): pass
+        def __enter__(self): return self
+        def __exit__(self, *exc): return False
+        def settings(self, fan=None, offset=None, speed=None):
+            Cam.speed = speed
+        def frame(self, seconds):
+            tried.append((Cam.speed, seconds))
+            if seconds > 1 and Cam.speed > 0:
+                raise RuntimeError(f"no frame within 54 s of a {seconds:g} s exposure")
+            return np.zeros((4, 4), np.uint16), {}
+    saved = {}
+    monkeypatch.setattr(camera_test, "Camera", Cam)
+    monkeypatch.setattr(camera_test.config, "save", lambda changes: saved.update(changes))
+    answer = camera_test.speed_ladder(16, 1500, frames=3, keep=True, say=lambda s: None)
+    assert answer["best"] == 0 and saved == {("camera", "readout_speed"): 0}
+    assert [r["arrived"] for r in answer["speeds"]] == [0, 0, 3]
+    assert tried[-3:] == [(0, 16)] * 3
+
+
+def test_the_speed_ladder_changes_nothing_when_no_speed_keeps_its_frames(monkeypatch):
+    import camera_test
+
+    class Cam:
+        def __init__(self, gain): pass
+        def __enter__(self): return self
+        def __exit__(self, *exc): return False
+        def settings(self, speed=None): pass
+        def frame(self, seconds):
+            raise RuntimeError("no frame")
+    saved = {}
+    monkeypatch.setattr(camera_test, "Camera", Cam)
+    monkeypatch.setattr(camera_test.config, "save", lambda changes: saved.update(changes))
+    answer = camera_test.speed_ladder(16, 1500, keep=True, say=lambda s: None)
+    assert answer["best"] is None and not answer["kept"] and saved == {}
+
+
+def test_the_indi_route_sets_the_readout_speed_kept_in_the_settings(world, monkeypatch):
+    monkeypatch.setattr(camera, "BACKEND", "indi")
+    monkeypatch.setattr(camera, "MANAGE_SERVER", False)
+    monkeypatch.setattr(camera, "Indi", fake_indi(world))
+    monkeypatch.setitem(camera.SETTINGS, "camera", dict(camera.SETTINGS.get("camera", {}), readout_speed=0))
+    with camera.Camera(gain=1500) as cam:
+        assert cam.speed == 0

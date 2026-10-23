@@ -143,7 +143,8 @@ class Camera:
         # Set every time the camera is opened, so a restart of the driver
         # cannot put them back to its own defaults (17 October 2026: after
         # one, broad stripes crossed every frame).
-        self.settings(SETTINGS["camera"].get("fan"), SETTINGS["camera"].get("offset"))
+        self.settings(SETTINGS["camera"].get("fan"), SETTINGS["camera"].get("offset"),
+                      SETTINGS["camera"].get("readout_speed"))
         c.pump(1)
         # The readout speed the driver is using, and so how much longer to
         # ask for than is wanted: see shutter_share().

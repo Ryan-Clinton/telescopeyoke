@@ -437,6 +437,44 @@ def throughput_sdk(exposure, frames, gain):
     return results
 
 
+def speed_ladder(exposure, gain, frames=3, keep=False, say=print):
+    """The fastest readout speed at which every one of `frames` exposures
+    arrives, trying the fastest first and stopping at the first that keeps
+    them all. On 23 October 2026 the 183C lost every 2 s frame at Speed 2
+    and every 16 s one at Speed 1, and kept 16 s frames at Speed 0. With
+    `keep`, the speed found is set in config.toml for every opening."""
+    rows, best = [], None
+    with Camera(gain=gain) as cam:
+        handle = getattr(cam, "handle", None)
+        top = handle.MaxSpeed() if handle is not None else 2
+        say(f"{frames} frames of {exposure:g} s at each readout speed, the fastest first")
+        for level in range(top, -1, -1):
+            cam.settings(speed=level)
+            arrived = 0
+            try:
+                cam.frame(1.0)                  # one frame to let the change take
+                for _ in range(frames):
+                    cam.frame(exposure)
+                    arrived += 1
+            except Exception as problem:
+                say(f"  speed {level}: {arrived} of {frames} arrived ({problem})")
+                rows.append({"speed": level, "arrived": arrived, "failed": str(problem)})
+                continue
+            say(f"  speed {level}: {frames} of {frames} arrived")
+            rows.append({"speed": level, "arrived": arrived})
+            best = level
+            break
+    if best is None:
+        say(f"No readout speed kept every {exposure:g} s frame.")
+    elif keep:
+        config.save({("camera", "readout_speed"): best})
+        say(f"Kept in config.toml: readout speed {best}, set every time the camera is opened.")
+    else:
+        say(f"Fastest that kept them all: speed {best}. --keep-best sets it in config.toml.")
+    return {"exposure_s": exposure, "gain": gain, "frames": frames, "speeds": rows, "best": best,
+            "kept": keep and best is not None}
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     what = ap.add_mutually_exclusive_group(required=True)
@@ -456,6 +494,9 @@ def main():
     what.add_argument("--electrons", action="store_true",
                       help="cap off, an evenly lit field: electrons per ADU at each of --gains, for the stripes "
                            "in electrons")
+    what.add_argument("--speed-ladder", action="store_true",
+                      help="cap on: the fastest readout speed at which every --frames exposure of --exposure s "
+                           "arrives (default 3 of 16 s); --keep-best sets it in config.toml")
     what.add_argument("--cooldown", action="store_true",
                       help="cap on: the stripes, failed frames and timing every few minutes as the camera cools, "
                            "with the air temperature, dew point and USB port")
@@ -913,6 +954,8 @@ def run(args):
         return stripes_in(args.stripes)
     if args.banding:
         return banding_trial(args.exposure or 16.0, args.gain, min(args.frames or 2, 2), args.keep_best)
+    if args.speed_ladder:
+        return speed_ladder(args.exposure or 16.0, args.gain, args.frames or 3, args.keep_best)
     if args.electrons:
         return electrons_trial(args.gains, args.exposures or [0.05, 0.1, 0.2, 0.4, 0.8])
     if args.cooldown:
