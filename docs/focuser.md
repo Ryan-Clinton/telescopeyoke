@@ -113,10 +113,25 @@ brightest star at the start and now, for the live stream's focus look
     ./focus.py --walk-in             from a little outside focus, set by hand: in 64 then 32 half-steps at a
                                      time, slowly (40 ms a half-step), measuring each, to the sharpest
 
-Until measured, the step is 256 half-steps and the slack overshoot 1536:
-the gears showed "well over a quarter turn" (1024) of slack, and the
-overshoot must be larger than the slack, never smaller; too much costs only
-time. What is measured is kept in `cache/focuser.json`. That slack was seen
+No move of a run goes further than `[focuser] travel` (512 half-steps by
+default, overshoot included) from where it started: a move beyond it is
+refused before the motor turns. The Sharpie line marks focus, so focus is
+always that close. On 23 October 2026, with focus "within microns", a sweep
+on guessed sizes, stopped part way twice and started again, left the
+drawtube about an inch out. Since then:
+
+- `--motor` and `--sweep` refuse until the step and slack are measured
+  (`--walk-in` to focus, then `--measure-step` and `--measure-backlash`),
+  and refuse a sweep whose ends and overshoot would not fit in the travel;
+- stars that measured at the start and are gone near it partway through a
+  sweep stop the run and send the focuser back to the start: that is the
+  focuser, not cloud;
+- a run stopped part way (Ctrl-C, or a background stop's SIGTERM) lets the
+  move under way finish and takes the focuser back to where it started.
+
+The guesses, used only for the measuring, are a step of 64 and an overshoot
+of 256, small enough to fit the travel. What is measured is kept in
+`cache/focuser.json`. That slack was seen
 before the night of 18 October 2026, when the motor's screws were tightened
 to take up backlash, so it is likely less now: measure it again
 (`--measure-backlash`) before trusting the starting figure.

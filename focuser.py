@@ -93,7 +93,17 @@ class Focuser:
         """Turn the motor by `steps` half-steps and wait for it to finish."""
         if not steps or abs(steps) > MOST:
             raise ValueError(f"a move is 1 to {MOST} half-steps, not {steps}")
-        reply = self.ask(f":M{steps:+d}", abs(steps) * self.step_seconds + 3)
+        wait = abs(steps) * self.step_seconds + 3
+        try:
+            reply = self.ask(f":M{steps:+d}", wait)
+        except KeyboardInterrupt:
+            # The Nano finishes a move once ordered: wait for its answer, so
+            # whoever counts where the motor is can count this move, and the
+            # answer is not taken for the next order's.
+            until = time.monotonic() + wait
+            while time.monotonic() < until and not self.link.read(1).endswith(b"\n"):
+                pass
+            raise
         if reply != f"OK {steps}":
             raise RuntimeError(f"the focuser answered {reply!r} to a move of {steps}")
 
