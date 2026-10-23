@@ -26,16 +26,15 @@ way (17 October 2026: HFR 1.86 at the start, 3.52 after a stopped run).
    focus unless the person asks; then `./ty focus --motor --anyway`.
 4. **Soft**: say how soft, and focus with `./focus.py --walk-in` only,
    from the drawtube set a touch **out** from the Sharpie line by hand.
-   **Never `--motor`, `--measure-step` or `--measure-backlash`** with the
-   28BYJ-48: it cannot lift the drawtube out with the camera on, so its
-   outward moves do nothing and a sweep ratchets the drawtube further and
-   further in (21 October 2026, `docs/nights/2026-10-21/focuser.md`; and
-   again on 23 October, when it ended about an inch from the line after
-   the person had said it was a touch out). The person's word on how far
-   out it is beats the HFR: HFR 13 can be a few tens of microns. Stars
-   that vanish during a run mean the focuser, not cloud. The rest of this
-   step is for a focuser that can move out; until then it applies to the
-   walk-in's log.
+   **Never `--motor`, `--measure-step` or `--measure-backlash`** with
+   their 256-step, 1536-overshoot guesses: on 23 October 2026 two of
+   them, each stopped part way, left the drawtube about an inch from the
+   Sharpie line after the person had said it was a touch out. The method
+   proved on 20 October (two coils, 30 ms a half-step, out two turns with
+   the camera on) is a small step out and tiny steps in: the walk-in.
+   The person's word on how far out it is beats the HFR: HFR 13 can be a
+   few tens of microns. Stars that vanish during a run mean the focuser,
+   not cloud. The rest of this step is about the walk-in's log.
    Run it with its output to a log and a Monitor on the log
    (never through `tail`, which holds every line back until the end).
    Say nothing per reading: a Monitor event that changes nothing gets no
