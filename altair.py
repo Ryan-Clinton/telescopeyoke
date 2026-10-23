@@ -209,6 +209,18 @@ class AltairCamera:
             except Exception:
                 pass   # it is being closed whatever it says
 
+    def settings(self, fan=None, offset=None, speed=None):
+        """As camera.Camera.settings: the fan ("on" or "off"), the black
+        level and the readout speed; None leaves each as it is. 23 October
+        2026: 2 s frames arrived at speeds 0 and 1 and never at 2."""
+        lib, handle = self.lib, self.handle
+        if speed is not None:
+            handle.put_Speed(int(speed))
+        if fan in ("on", "off"):
+            handle.put_Option(lib.ALTAIRCAM_OPTION_FAN, -1 if fan == "on" else 0)   # -1: its usual speed
+        if offset is not None:
+            handle.put_Option(lib.ALTAIRCAM_OPTION_BLACKLEVEL, int(offset))
+
     # --- the library's thread ----------------------------------------------------
 
     @staticmethod
@@ -413,10 +425,10 @@ class AltairCamera:
             # frame stamps turned out not to keep time.
             "frame_clock_usable": self.clock,
             "values_shifted_up": self._shifted,
-            "settings": self.settings(),
+            "watched": self.watched(),
         }
 
-    def settings(self):
+    def watched(self):
         """The camera's WATCHED settings as it reports them; None for one
         this library or this camera does not have."""
         found = {}

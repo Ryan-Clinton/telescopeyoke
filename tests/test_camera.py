@@ -763,7 +763,7 @@ def test_the_details_leave_out_what_an_older_library_cannot_say(sdk, world):
         found = cam.details()
     assert found["hardware"] is None and found["production_date"] is None and found["frame_buffer"] == "none"
     camera_test.show_details(dict(found, usb_link={"port": "2-4", "mbps": 480}))
-    assert set(found["settings"].values()) == {None}     # no get_Option in this wrapper
+    assert set(found["watched"].values()) == {None}     # no get_Option in this wrapper
 
 
 def test_the_details_say_whether_a_low_power_mode_or_a_give_up_is_set(sdk, world, capsys):
@@ -786,7 +786,7 @@ def test_the_details_say_whether_a_low_power_mode_or_a_give_up_is_set(sdk, world
     sdk.Altaircam.Open = staticmethod(opened)
     with altair.AltairCamera() as cam:
         found = cam.details()
-    assert found["settings"] == {"low_power": 1, "low_power_above_ms": 1000,
+    assert found["watched"] == {"low_power": 1, "low_power_above_ms": 1000,
                                  "no_packet_timeout_ms": None, "no_frame_timeout_ms": None}
     camera_test.show_details(found)
     out = capsys.readouterr().out
@@ -865,3 +865,15 @@ def test_the_cooldown_says_each_frame_as_it_ends():
     result = camera_test.cooldown_step(Cam(), 16, 3, say=said.append)
     assert result["failed"] == 1 and len(said) == 3
     assert "frame 2 of 3: never arrived" in said[1] and "frame 1 of 3: arrived in" in said[0]
+
+
+def test_the_readout_speed_fan_and_black_level_are_set_through_altair_s_library(sdk, world):
+    """23 October 2026: camera_test.py --gain-sweep --speeds failed on the
+    Altair route, which had no settings(); the speed was the test wanted."""
+    sdk.ALTAIRCAM_OPTION_FAN, sdk.ALTAIRCAM_OPTION_BLACKLEVEL = 0x07, 0x15
+    with altair.AltairCamera() as cam:
+        cam.settings("off", 40, speed=1)
+        assert cam.handle.get_Speed() == 1
+        assert cam.handle.options[0x07] == 0 and cam.handle.options[0x15] == 40
+        cam.settings(speed=0)
+        assert cam.handle.get_Speed() == 0 and cam.handle.options[0x15] == 40

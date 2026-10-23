@@ -396,7 +396,7 @@ def show_details(found):
                              if found["usb3_camera_on_usb2_port"] else "not held back by a USB 2 port"))
     names = {"low_power": "Low power", "low_power_above_ms": "Low power above",
              "no_packet_timeout_ms": "No-packet limit", "no_frame_timeout_ms": "No-frame limit"}
-    for key, value in (found.get("settings") or {}).items():
+    for key, value in (found.get("watched") or {}).items():
         shown = "not reported" if value is None else ("on" if value else "off") if key == "low_power" \
             else "off" if value == 0 else f"{value} ms"
         print(f"{names[key] + ':':<16}{shown}")
