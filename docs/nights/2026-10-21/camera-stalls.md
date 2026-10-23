@@ -72,3 +72,21 @@ on the laptop's USB 3 port at 5000 Mbps. Each lost frame was given up after
 1 s frames arrived in their normal 2.5 s between the sets. So it is not the
 socket, the circuit, the extension lead or a ground loop through the charger. The cut-off
 is between 1 s and 2 s of exposure.
+
+## On Windows too (23 October, 00:16 to 01:20)
+
+The same laptop, booted into Windows 11, with the camera on WinUSB (Windows
+bound it by itself) and Altair's SDK 60.31589. There was no INDI and no Linux,
+the port was the same blue USB 3 one, and the cap was on indoors:
+
+| Exposure | Frames arrived |
+|---|---|
+| 1 s | 6 of 6, 0.9 s each |
+| 2 s | 0 of 6 |
+| 16 s | 0 of 10 |
+
+The same cut-off between 1 s and 2 s, on a different operating system, USB
+stack and driver, so **the fault is in the camera**, not the laptop's Linux
+USB or the project's code. The full record is in
+[windows-camera-test.md](windows-camera-test.md). The camera's firmware is
+1.4.1 from January 2017: worth asking Altair whether a newer one exists.

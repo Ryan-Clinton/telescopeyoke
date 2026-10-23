@@ -727,3 +727,5 @@ as cold, the flue is the likelier cause.
 **Camera stalls, warm camera, 1 m lead**, 21 October 2026 ([the record](nights/2026-10-21/camera-stalls.md)): 1 s frames stopped arriving within a minute or two on a 1 m USB 3 lead at 5000 Mbps with the camera warm, with no USB disconnect; single frames mostly came in their normal time, or in about 43 s.
 
 **Motor focus, walk-in only**, 21 to 22 October 2026 ([the record](nights/2026-10-21/focuser.md)): the motor still turned inward only with the camera on. Set out by hand, the walk-in reached HFR 2.19 (usual 2.28, sharpest 1.58 on 19 October), and each run ended 24 to 64 half-steps past its best.
+
+**Camera on Windows**, 23 October 2026 ([the record](nights/2026-10-21/windows-camera-test.md)): on the laptop under Windows 11 and WinUSB, 1 s frames arrived 6 of 6, 2 s 0 of 6 and 16 s 0 of 10. That is the same cut-off as on Ubuntu, so the fault is the camera.
