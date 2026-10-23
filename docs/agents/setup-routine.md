@@ -80,23 +80,26 @@ says it moved and they say it did not, the motors have stalled (6 October
 **Measure first, and tell the person the number** against the usual best
 ("HFR 1.86, usual 2.38: good"). Focus left untouched since it was last set
 is usually still good: then move on, and focus only if they ask
-(`./focus.py --motor --anyway`). Only when it is soft:
+(`./focus.py --walk-in`). Only when it is soft: the person sets the
+drawtube a touch **out** from the Sharpie line by hand, then
 
-    ./focus.py --motor         measures again, and focuses only if worse than usual
+    ./focus.py --walk-in       brings it in to the sharpest, downhill only
 
-If the motor turns but the stars do not change (19 October 2026: it could
-not lift the drawtube against the camera's weight), ask the person to set
-the drawtube a little out of focus by hand, then `./focus.py --walk-in`
-brings it in to the sharpest, downhill only.
+**Never `./focus.py --motor`** (nor `--measure-step` or
+`--measure-backlash`) with the 28BYJ-48: it cannot lift the drawtube out
+with the camera on, so its outward moves do nothing and a sweep ratchets
+the drawtube further and further in (21 October 2026,
+`docs/nights/2026-10-21/focuser.md`). On 23 October it was run anyway and
+ended about an inch from the line, after the person had said focus was a
+touch out. Their word on how far out it is beats the HFR: HFR 13 can be a
+few tens of microns. Stars that vanish during a run mean the focuser, not
+cloud.
 
 The motor focuser does it: nobody touches the telescope, so never ask for a
 hand on the knob. The Sharpie line on the drawtube (18 October 2026) marks
 focus: a camera taken off and put back is close when the drawtube is at it.
-Until `cache/focuser.json` exists, run `./focus.py --measure-step` and
-`--measure-backlash` once, after the first focus of the night: the motor's
-screws were tightened on 18 October to take up the slack, and the step is
-still the starting guess. `--motor` focuses wherever the telescope points, so point
-at a rich field first. Run it in the background with its output to a log
+The walk-in focuses wherever the telescope points, so point at a rich
+field first. Run it in the background with its output to a log
 and a Monitor on the log, never through `tail`, which holds every line
 back; say only a fault or the end, never a line per reading. Never stop a run part way: on
 17 October 2026 a run started at HFR 1.86, needlessly, and once stopped left
