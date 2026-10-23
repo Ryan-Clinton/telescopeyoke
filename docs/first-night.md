@@ -127,7 +127,7 @@ stars give no answer. Wait until it is dark enough to see stars.
 
 With the motor focuser (`docs/focuser.md`), point at a rich star field and
 set the drawtube a touch out from the Sharpie line and run `./focus.py
---walk-in`: the present motor can only move the drawtube in.
+--walk-in`: a small step out, then tiny steps in.
 Without one, start the focusing aid. With `--field` it first moves the telescope to a
 bright star with plenty of others round it, so keep clear as it starts:
 

@@ -86,12 +86,12 @@ drawtube a touch **out** from the Sharpie line by hand, then
     ./focus.py --walk-in       brings it in to the sharpest, downhill only
 
 **Never `./focus.py --motor`** (nor `--measure-step` or
-`--measure-backlash`) with the 28BYJ-48: it cannot lift the drawtube out
-with the camera on, so its outward moves do nothing and a sweep ratchets
-the drawtube further and further in (21 October 2026,
-`docs/nights/2026-10-21/focuser.md`). On 23 October it was run anyway and
-ended about an inch from the line, after the person had said focus was a
-touch out. Their word on how far out it is beats the HFR: HFR 13 can be a
+`--measure-backlash`) with their 256-step, 1536-overshoot guesses: on 23
+October 2026 two of them, each stopped part way, left the drawtube about
+an inch from the Sharpie line after the person had said focus was a touch
+out. The method proved on 20 October (two coils, 30 ms a half-step, out
+two turns with the camera on) is a small step out and tiny steps in: the
+walk-in. Their word on how far out it is beats the HFR: HFR 13 can be a
 few tens of microns. Stars that vanish during a run mean the focuser, not
 cloud.
 
