@@ -206,3 +206,9 @@ keeps every long frame and sets it as `readout_speed`, which both routes (INDI
 and Altair's library) use when the camera opens. The exposure timing at Speed
 0 has not been checked on stars: `camera_test.py --trail` on the next clear
 night.
+
+**After cleaning the socket (23 October, about 02:35).** The camera's USB
+socket looked sound in phone photos and was wiped with isopropyl alcohol and
+left to dry. On the desktop PC at USB 3, `camera_test.py --speed-ladder
+--exposure 2 --frames 3` still lost 3 of 3 at Speed 2 and kept 3 of 3 at
+Speed 1, as before. So no dirt or film on the contacts was to blame.
