@@ -90,3 +90,22 @@ stack and driver, so **the fault is in the camera**, not the laptop's Linux
 USB or the project's code. The full record is in
 [windows-camera-test.md](windows-camera-test.md). The camera's firmware is
 1.4.1 from January 2017: worth asking Altair whether a newer one exists.
+
+## USB 2 against USB 3 on the desktop PC (23 October, 01:36 to 01:46)
+
+The camera was moved to the desktop PC (AMD USB 3.1 controller, Windows,
+WinUSB, Altair's SDK 60.31589) on the same 3 m lead, cap on, gain 1500. At
+first the lead was not fully home, so the camera came up in its USB 2 mode
+(PID 0C78); after it was reseated, it came up at USB 3 (PID 0C77) on the same
+port.
+
+| Mode | 1 s frames | 2 s frames | 16 s frames |
+|---|---|---|---|
+| USB 2 | 6 of 6 (8.7 s each) | **6 of 6** (15.0 s each, stripes 1.02 to 1.09 ADU) | arrived (1 tried, 104 s) |
+| USB 3 | | **0 of 2** (each given up after 73 s) | |
+
+Same camera, PC, port and lead. Long exposures arrive in the camera's USB 2
+mode and never in its USB 3 mode, here as on the laptop under Ubuntu and
+Windows. **The fault is in the camera's USB 3 path.** Until it is repaired,
+the camera can be run at USB 2 (through a USB 2 hub or extension), at about
+9 s of download a frame.
