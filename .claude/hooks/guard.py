@@ -20,6 +20,12 @@ starting, a timeout). The rules (docs/skills-and-agents.md):
 - no-self-kill: no pkill -f or pgrep -f, which match their own command line.
 - no-secrets-out: nothing prints config.toml whole, its Telegram section,
   or a token from the environment.
+- small-focus: no focus.py sweep (--motor, --sweep, --find, --measure-step,
+  --measure-backlash) and no focuser.py move of more than FOCUS_MOST
+  half-steps. On 23 October 2026 two --motor runs, each stopped part way,
+  left the drawtube about an inch from the Sharpie line after the person
+  had said it was a touch out; focusing is the walk-in, small steps in
+  (docs/agents/setup-routine.md, step 4).
 """
 import fnmatch
 import json
@@ -236,6 +242,44 @@ def no_secrets_out(payload):
         raise Refused(refusal)
 
 
+# argparse takes any unambiguous start of an option: --mot is --motor, --fin is --find.
+FOCUS_SWEEP = re.compile(r"(?<![\w-])--(mo|sw|fin|measure-s|measure-b)[\w-]*")
+FOCUS_MOST = 64     # half-steps a hand-sent focuser.py move may turn
+
+
+def small_focus(payload):
+    """Read as text, a piece at a time between ; & | and line ends, so the
+    command is caught however it is started: inside bash -c '...', after if,
+    do or {, behind X=1 or ty --rig NAME. Small moves added up in a loop are
+    not caught: the hard limit for that is focus.py's own."""
+    if payload.get("tool_name") not in SHELL_TOOLS:
+        return
+    command = payload.get("tool_input", {}).get("command", "").replace("\\", "/")
+    command = re.sub(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?\n\s*\2\s*(\n|$)", "\n", command, flags=re.S)
+    for piece in re.split(r"[;&|\n]", command):
+        if "--dry-run" in piece:
+            continue
+        if re.search(r"(^|[\s/'\"(])(focus\.py|-m\s+focus|ty(\.cmd)?\s(.*\s)?focus)(?![\w.-])", piece):
+            sweep = FOCUS_SWEEP.search(piece)
+            if sweep:
+                raise Refused(f"focus.py {sweep.group(0)} is refused: on 23 October 2026 the sweep moved the "
+                              "drawtube about an inch from the Sharpie line. Focus with ./focus.py --walk-in, "
+                              "from the drawtube a touch out, small steps in.")
+        found = re.search(r"focuser\.py(?![\w.-])(.*?)(?<![\w-])move(?![\w-])(.*)", piece)
+        if found:
+            words = re.findall(r"\S+", found.group(1) + " " + found.group(2))
+            for i, w in enumerate(words):
+                if i and words[i - 1] in ("--ms", "--port"):
+                    continue
+                try:
+                    steps = int(w.strip("'\""))
+                except ValueError:
+                    continue
+                if abs(steps) > FOCUS_MOST:
+                    raise Refused(f"focuser.py move {steps} is refused: more than {FOCUS_MOST} half-steps by "
+                                  "hand. Focus is within a few tens of microns of the Sharpie line.")
+
+
 # The two below are for agents only, set in their own frontmatter
 # (.claude/agents/), and are allowlists: what is not named is refused.
 LOOKERS = {"ls", "cat", "head", "tail", "wc", "grep", "rg", "stat", "file", "pwd", "echo", "sort", "uniq", "cut",
@@ -296,12 +340,12 @@ def docs_only(payload):
 
 
 RULES = {"motion-lock": motion_lock, "no-inline-hardware": no_inline_hardware, "no-motion": no_motion,
-         "no-self-kill": no_self_kill, "no-secrets-out": no_secrets_out,
+         "no-self-kill": no_self_kill, "no-secrets-out": no_secrets_out, "small-focus": small_focus,
          "read-only-bash": read_only_bash, "docs-only": docs_only}
 AGENT_RULES = {"read-only-bash", "docs-only"}
 
 
-EVERY_SESSION = ("motion-lock", "no-inline-hardware", "no-motion", "no-self-kill", "no-secrets-out")
+EVERY_SESSION = ("motion-lock", "no-inline-hardware", "no-motion", "no-self-kill", "no-secrets-out", "small-focus")
 
 
 def check(rule, payload):

@@ -256,3 +256,35 @@ def test_docs_keeper_writes_only_the_docs():
         assert not refused("docs-only", edit(ok)), ok
     for no in ("mount.py", "AGENTS.md", "CLAUDE.md", ".claude/settings.json", "docs/../mount.py", "config.toml"):
         assert refused("docs-only", edit(no)), no
+
+
+# Small focus moves only ------------------------------------------------------
+
+@pytest.mark.parametrize("command", [
+    "./focus.py --motor", "./focus.py --motor --anyway", "python3 focus.py --motor", "./ty focus --motor",
+    "systemd-inhibit --what=sleep:idle ./focus.py --motor > log 2>&1", "./focus.py --sweep",
+    "./focus.py --measure-step", "./focus.py --measure-backlash", "./focus.py --find",
+    "ls && ./focus.py --motor", "./focuser.py move 1024", "./focuser.py move -320", "python3 focuser.py move 65",
+    "./focus.py --mot", "./focus.py --moto --anyway", "./focus.py --swe", "./focus.py --fin",
+    "./focus.py --measure-s", "./focus.py --measure-b", "./focus.py --motor=1",
+    "X=1 ./focus.py --motor", "PYTHONUNBUFFERED=1 python3 ./focus.py --motor", "./ty --rig r focus --motor",
+    "if ./focus.py --motor; then :; fi", "for i in 1; do ./focus.py --motor; done", "{ ./focus.py --motor; }",
+    "! ./focus.py --motor", "bash -c './focus.py --motor'", "nohup bash -c \"./focus.py --motor\" &",
+    "python3.12 focus.py --motor", f"{ROOT}/focus.py --motor", "eval ./focus.py --motor",
+    "./focuser.py --ms 5 move 1024", "./focuser.py --port /dev/ttyUSB0 move -1024", "python3 -m focus --motor",
+])
+def test_no_focus_sweep_or_big_focuser_move(command):
+    # 23 October 2026: two stopped --motor runs left the drawtube an inch from the line.
+    assert refused("small-focus", shell(command))
+    assert refused("all", shell(command))
+
+
+@pytest.mark.parametrize("command", [
+    "./focus.py --walk-in", "./focus.py --check", "./focus.py --report", "./focus.py --motor --dry-run",
+    "./focuser.py move 64", "./focuser.py move -16", "./focuser.py test", "grep -n motor focus.py",
+    "./focus.py --walk-in --dry-run", "./ty focus --walk-in", "./focus.py --field", "./focus.py --minutes 5",
+    "./focuser.py --ms 300 move 16", "./focus.py --motor --dry-run > log", "git log --grep focus",
+    "git commit -F - <<'EOF'\nfocus.py --motor is refused\nEOF",
+])
+def test_the_walk_in_checks_and_small_moves_pass(command):
+    assert not refused("small-focus", shell(command))
