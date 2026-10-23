@@ -306,7 +306,7 @@ better than the usual 2.28 but well short of 19 October's 1.58, and each
 run ended past focus because it cannot step back. The walk-in now starts
 from doughnuts, takes 16 and then 8 half-step moves near focus, and
 re-reads a cloud. Below 8 half-steps the seeing hides the difference.
-[The night's record](nights/2026-10-21/focuser.md).
+[The night's record](nights/2026-10-21/focuser.md). On 23 October 2026 a `--motor` sweep on guessed sizes, stopped twice part way, left the drawtube about an inch from the line and lost the night ([the record](nights/2026-10-23/focus-runaway.md)): the sweep is now refused, and every move is held within `[focuser] travel`.
 
 ### Finding where the turn is lost (`./focuser.py load-test`)
 

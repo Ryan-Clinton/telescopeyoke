@@ -1,0 +1,67 @@
+20:17:04 opening the focuser
+20:17:07 focuser open on /dev/serial/by-id/usb-1a86_USB_Serial-if00-port0; opening the camera (INDI port 7624)
+20:17:08 camera open; one frame of 1 s thrown away (the first can be stale)
+20:17:10 measuring the start: 3 frames of 1 s
+20:17:17 Focus now: no stars measured: cloud, the cap, or far out of focus.
+20:17:17 Not yet measured, so assumed: step 256, backlash 1536 (--measure-step, --measure-backlash).
+20:17:17 sweeping: 9 positions 256 half-steps apart, 3 frames each
+20:17:25   #1   start           step    +0  at     +0  HFR none  (0/3 frames)
+20:17:25   sweep 1: 9 positions 256 half-steps apart around +0, 3 frames each, every one reached moving in
+20:19:38   #2   sweep           step    +0  at  +1024  HFR none  (0/3 frames)
+20:19:55   #3   sweep           step  -256  at   +768  HFR none  (0/3 frames)
+20:20:11   #4   sweep           step  -256  at   +512  HFR none  (0/3 frames)
+20:20:28   #5   sweep           step  -256  at   +256  HFR none  (0/3 frames)
+20:20:45   #6   sweep           step  -256  at     +0  HFR none  (0/3 frames)
+20:21:02   #7   sweep           step  -256  at   -256  HFR 4.69 ±0.05  (3/3 frames)
+20:21:18   #8   sweep           step  -256  at   -512  HFR 6.92 ±0.02  (3/3 frames)
+20:21:35   #9   sweep           step  -256  at   -768  HFR none  (0/3 frames)
+20:21:52   #10  sweep           step  -256  at  -1024  HFR none  (0/3 frames)
+20:21:52      +1024  none  
+20:21:52       +768  none  
+20:21:53       +512  none  
+20:21:53       +256  none  
+20:21:53         +0  none  
+20:21:53       -256   4.69  ###########################
+20:21:54       -512   6.92  ########################################
+20:21:54       -768  none  
+20:21:54      -1024  none  
+20:21:54   fit refused: too few
+20:21:55   sweep 2: 9 positions 256 half-steps apart around -1024, 3 frames each, every one reached moving in
+Traceback (most recent call last):
+  File "/home/facepipe/telescopeyoke/./focus.py", line 1768, in <module>
+    main()
+    ~~~~^^
+  File "/home/facepipe/telescopeyoke/./focus.py", line 1568, in main
+    return interface.main("focus.motor", lambda: run_motor(args), args.json)
+           ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/facepipe/telescopeyoke/interface.py", line 128, in main
+    return work()
+  File "/home/facepipe/telescopeyoke/./focus.py", line 1568, in <lambda>
+    return interface.main("focus.motor", lambda: run_motor(args), args.json)
+                                                 ~~~~~~~~~^^^^^^
+  File "/home/facepipe/telescopeyoke/activity.py", line 399, in run
+    return function(*args, **kwargs)
+  File "/home/facepipe/telescopeyoke/./focus.py", line 1481, in run_motor
+    result = motor_focus(drive, read, usual, say=say, sweep_only=mode == "sweep", live=live)
+  File "/home/facepipe/telescopeyoke/./focus.py", line 995, in motor_focus
+    drive.arrive(centre + half * step, backlash)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/facepipe/telescopeyoke/./focus.py", line 848, in arrive
+    moves.append(self.to(place + backlash))
+                 ~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "/home/facepipe/telescopeyoke/./focus.py", line 838, in to
+    self.motor.move(n)
+    ~~~~~~~~~~~~~~~^^^
+  File "/home/facepipe/telescopeyoke/./focus.py", line 1352, in move
+    self.motor.move(n)
+    ~~~~~~~~~~~~~~~^^^
+  File "/home/facepipe/telescopeyoke/focuser.py", line 96, in move
+    reply = self.ask(f":M{steps:+d}", abs(steps) * self.step_seconds + 3)
+  File "/home/facepipe/telescopeyoke/focuser.py", line 89, in ask
+    reply += self.link.read(1)
+             ~~~~~~~~~~~~~~^^^
+  File "/usr/lib/python3/dist-packages/serial/serialposix.py", line 565, in read
+    ready, _, _ = select.select([self.fd, self.pipe_abort_read_r], [], [], timeout.time_left())
+                  ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+KeyboardInterrupt
+./focus.py terminated by signal INT.

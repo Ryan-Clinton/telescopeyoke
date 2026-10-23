@@ -728,6 +728,8 @@ as cold, the flue is the likelier cause.
 
 **Motor focus, walk-in only**, 21 to 22 October 2026 ([the record](nights/2026-10-21/focuser.md)): the motor still turned inward only with the camera on. Set out by hand, the walk-in reached HFR 2.19 (usual 2.28, sharpest 1.58 on 19 October), and each run ended 24 to 64 half-steps past its best.
 
+**A night lost to the focuser**, 23 October 2026 ([the record](nights/2026-10-23/focus-runaway.md)): with focus set a touch out by the person, Claude ran the `--motor` sweep on guessed sizes, blamed the vanishing stars on cloud, stopped it twice, and left the drawtube about an inch from the Sharpie line. Nothing imaged. The sweep is now refused by a hook, and `focus.py` holds every move within 512 half-steps of the start.
+
 **Camera on Windows**, 23 October 2026 ([the record](nights/2026-10-21/windows-camera-test.md)): on the laptop under Windows 11 and WinUSB, 1 s frames arrived 6 of 6, 2 s 0 of 6 and 16 s 0 of 10. That is the same cut-off as on Ubuntu, so the fault is the camera.
 
 **Camera USB 2 against USB 3**, 23 October 2026 ([the record](nights/2026-10-21/camera-stalls.md#usb-2-against-usb-3-on-the-desktop-pc-23-october-0136-to-0151)): on one PC and port, 2 s frames arrived 6 of 6 in USB 2 mode and 0 of 5 in USB 3 mode, on the 3 m and the 1 m lead. The same camera kept long frames at USB 3 until 04:59 on 20 October ([when it started](nights/2026-10-21/camera-stalls.md#when-it-started-0459-on-20-october)). At readout speed 0 it kept 20 of 20 16 s frames at USB 3, where Speed 1 lost 16 s frames and Speed 2 lost 2 s ones ([the speeds](nights/2026-10-21/camera-stalls.md#the-readout-speed-decides-it-23-october-0210-to-0300)).
