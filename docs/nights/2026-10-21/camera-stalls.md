@@ -220,3 +220,15 @@ laptop, on the 3 m lead at USB 3 (port 2-5, 5000 Mb/s),
 `camera_test.py --speed-ladder --exposure 16 --frames 3 --keep-best` lost
 0 of 3 at Speed 2 and at Speed 1 and kept 3 of 3 at Speed 0, which is now set
 as `readout_speed = 0` in the laptop's config for every opening.
+
+**An older driver (23 October, 17:55 to 18:05).** To try a driver from
+before 2019, Altair's December 2018 library (SDK 32.13483) was taken from
+[INDI's history](https://github.com/indilib/indi-3rdparty/commit/65ec3a6ba4)
+and put under today's `indi_altair_ccd` in a scratch folder, with stand-ins for the three
+functions it lacks. The driver found the camera, then on connecting said
+"Failed to start camera push mode. Not supported or not implemented" and
+crashed: today's driver takes frames through a function the 2018 library
+does not have, and Altair's Python wrapper needs hundreds more. So a 2018
+library can only be tried with a 2018 driver or program as well. The
+evidence against the driver stands: the laptop's INDI library (53.21445,
+September 2022) did not change between the good nights and the bad.
