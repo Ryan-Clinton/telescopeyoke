@@ -730,4 +730,4 @@ as cold, the flue is the likelier cause.
 
 **Camera on Windows**, 23 October 2026 ([the record](nights/2026-10-21/windows-camera-test.md)): on the laptop under Windows 11 and WinUSB, 1 s frames arrived 6 of 6, 2 s 0 of 6 and 16 s 0 of 10. That is the same cut-off as on Ubuntu, so the fault is the camera.
 
-**Camera USB 2 against USB 3**, 23 October 2026 ([the record](nights/2026-10-21/camera-stalls.md#usb-2-against-usb-3-on-the-desktop-pc-23-october-0136-to-0146)): on one PC, port and lead, 2 s frames arrived 6 of 6 in USB 2 mode and 0 of 2 in USB 3 mode.
+**Camera USB 2 against USB 3**, 23 October 2026 ([the record](nights/2026-10-21/camera-stalls.md#usb-2-against-usb-3-on-the-desktop-pc-23-october-0136-to-0151)): on one PC and port, 2 s frames arrived 6 of 6 in USB 2 mode and 0 of 5 in USB 3 mode, on the 3 m and the 1 m lead. The same camera kept long frames at USB 3 until 04:59 on 20 October ([when it started](nights/2026-10-21/camera-stalls.md#when-it-started-0459-on-20-october)).

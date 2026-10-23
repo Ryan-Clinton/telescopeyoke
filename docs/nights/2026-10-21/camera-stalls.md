@@ -91,7 +91,7 @@ USB or the project's code. The full record is in
 [windows-camera-test.md](windows-camera-test.md). The camera's firmware is
 1.4.1 from January 2017: worth asking Altair whether a newer one exists.
 
-## USB 2 against USB 3 on the desktop PC (23 October, 01:36 to 01:46)
+## USB 2 against USB 3 on the desktop PC (23 October, 01:36 to 01:51)
 
 The camera was moved to the desktop PC (AMD USB 3.1 controller, Windows,
 WinUSB, Altair's SDK 60.31589) on the same 3 m lead, cap on, gain 1500. At
@@ -102,10 +102,44 @@ port.
 | Mode | 1 s frames | 2 s frames | 16 s frames |
 |---|---|---|---|
 | USB 2 | 6 of 6 (8.7 s each) | **6 of 6** (15.0 s each, stripes 1.02 to 1.09 ADU) | arrived (1 tried, 104 s) |
-| USB 3 | | **0 of 2** (each given up after 73 s) | |
+| USB 3, 3 m lead | | **0 of 2** (each given up after 73 s) | |
+| USB 3, 1 m lead | | **0 of 3** (each given up after 73 s) | |
 
-Same camera, PC, port and lead. Long exposures arrive in the camera's USB 2
-mode and never in its USB 3 mode, here as on the laptop under Ubuntu and
-Windows. **The fault is in the camera's USB 3 path.** Until it is repaired,
-the camera can be run at USB 2 (through a USB 2 hub or extension), at about
-9 s of download a frame.
+Same camera, PC and port. Long exposures arrive in the camera's USB 2 mode and
+never in its USB 3 mode, on either lead, here as on the laptop under Ubuntu
+and Windows.
+
+## When it started: 04:59 on 20 October
+
+This is not how the camera always was. The kernel log shows it linked at USB
+3 (SuperSpeed) on every night from 6 October, and at USB 3 it kept long
+frames for hours: 16 s frames on 13, 14, 17, 18 and 19 October (256 in one M31
+run on the 13th), 32 s frames of M33 on the 19th, 116 of 116 16 s darks
+indoors on the 19th, and 992 4 s frames of WASP-12 b from 01:47 to 04:56 on
+20 October. Nothing in `camera.py`, `indi.py` or `altair.py` changed between
+that night and the 21st (the last change, the frame wait, was on 19 October
+at 00:05, before both), the laptop ran the same kernel, 7.0.0-38, and the
+updates installed on 21 October touched no USB, INDI or firmware package.
+The camera's firmware still reads 1.4.1.
+
+The change came at the end of the 19 to 20 October night, outdoors, after a
+night in the cold, as cloud came in at 04:51: the camera hung on the
+re-centre at 04:59, then again at 05:06 (after 10 frames), 05:21 (after 78)
+and 05:28 (after 5). It came indoors at 08:17. Since then, every frame of 2 s
+or more has been lost at USB 3: on the laptop under INDI and Altair's library
+(21 to 22 October), under Windows on the laptop, and on the desktop PC on
+both leads. Shorter hangs had come before, on the cold nights of 15 and 18
+October, and cleared.
+
+So something in the camera itself changed that morning and has not changed
+back, and it is on the USB 3 side: the same camera works in USB 2 mode. The
+likeliest places are the USB 3 socket's five extra SuperSpeed contacts
+(bent, loose or corroded; damp at dawn could do it) or the camera's own USB 3
+chip. Why the exposure matters, when the frame sent down the lead is the
+same size at 1 s and 2 s, is not proven. One explanation fits: a USB 3 link
+left idle drops into a low-power state and has to wake up to send the frame,
+and a marginal SuperSpeed connection may fail that wake while it copes with
+a link kept busy.
+
+Until it is mended, the camera can be run in its USB 2 mode (through a USB 2
+hub or extension), at about 9 s of download a frame.
