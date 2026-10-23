@@ -213,10 +213,10 @@ left to dry. On the desktop PC at USB 3, `camera_test.py --speed-ladder
 --exposure 2 --frames 3` still lost 3 of 3 at Speed 2 and kept 3 of 3 at
 Speed 1, as before. So no dirt or film on the contacts was to blame.
 
-**Back on the laptop (23 October, 02:53).** On the 3 m lead at USB 3 (port
-2-5, 5000 Mb/s), the camera lost every 16 s frame whether the lead was held
-up or down on the desktop PC first (2 s at Speed 2, 0 of 3 both ways), so a
-plug sitting badly is not the cause. On the laptop,
+**Holding the lead, then back on the laptop (23 October, 02:40 to 03:05).**
+On the desktop PC, 2 s frames at Speed 2 were still lost with the lead held
+up and with it held down, so a plug sitting badly is not the cause. On the
+laptop, on the 3 m lead at USB 3 (port 2-5, 5000 Mb/s),
 `camera_test.py --speed-ladder --exposure 16 --frames 3 --keep-best` lost
 0 of 3 at Speed 2 and at Speed 1 and kept 3 of 3 at Speed 0, which is now set
 as `readout_speed = 0` in the laptop's config for every opening.
