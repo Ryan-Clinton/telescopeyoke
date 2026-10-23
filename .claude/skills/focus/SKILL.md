@@ -23,7 +23,7 @@ way (17 October 2026: HFR 1.86 at the start, 3.52 after a stopped run).
    Tell the person the number and what it is against, in one line:
    "Focus now HFR 1.86, usual 2.38: good."
 3. **Good** (within 10% of the usual best): say so and move on. Do not
-   focus unless the person asks; then `./ty focus --motor --anyway`.
+   focus unless the person asks; then `./focus.py --walk-in`.
 4. **Soft**: say how soft, and focus with `./focus.py --walk-in` only,
    from the drawtube set a touch **out** from the Sharpie line by hand.
    **Never `--motor`, `--measure-step` or `--measure-backlash`** with
