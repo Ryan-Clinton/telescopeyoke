@@ -644,11 +644,15 @@ class StarsLost(Exception):
     cloud while the drawtube ended about an inch out)."""
 
 
+TRAVEL_MOST = 8192      # the most [focuser] travel may be, as config.SETTINGS allows
+
+
 def focuser_travel():
     """How far, in half-steps either way, a run may turn the motor from
     where it started ([focuser] travel)."""
     given = config.hardware().get("focuser", {})
-    return int(given.get("travel") or config.DEFAULTS["focuser"]["travel"])
+    travel = int(given.get("travel") or config.DEFAULTS["focuser"]["travel"])
+    return min(travel, TRAVEL_MOST)     # a hand-edited config.toml is held to the Settings form's limit
 
 
 def motor_refusal(mode, settings, travel):
@@ -1572,12 +1576,15 @@ def run_motor(args, mode="focus"):
     except KeyboardInterrupt:
         # Stopped part way (Ctrl-C, or the SIGTERM of a background stop):
         # on 23 October 2026 two runs stopped mid-sweep left the drawtube
-        # wound out. Back to the start, the last move inward.
-        if drive is not None and drive.moved:
+        # wound out. Back to the start, the last move inward. A walk-in
+        # moves inward only and stays where it is: going home would turn
+        # the drawtube out, and throw away the way in.
+        if drive is not None and drive.moved and mode != "walk":
             progress(f"stopped: taking the focuser back {-drive.moved:+d} half-steps to where it started")
             drive.home(settings["backlash"])
-        live.done("failed", "The focus run was stopped before it finished; the focuser went back to where it "
-                            "started.")
+        live.done("failed", "The walk-in was stopped before it finished; the focuser stays where it is."
+                  if mode == "walk" else
+                  "The focus run was stopped before it finished; the focuser went back to where it started.")
         raise
     except BaseException:
         if live.state["outcome"] is None:

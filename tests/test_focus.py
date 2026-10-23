@@ -1091,3 +1091,39 @@ def test_measuring_the_focuser_stays_inside_the_travel(monkeypatch, capsys, flag
     answer = json.loads(capsys.readouterr().out)
     assert answer["ok"], answer
     assert max(abs(at) for at in itertools.accumulate(tube.moves)) <= 512 and tube.at == 0
+
+
+@pytest.mark.parametrize("stop", ["ctrl-c", "sigterm"])
+def test_a_walk_in_stopped_part_way_stays_where_it_is(monkeypatch, capsys, stop):
+    """A walk-in moves inward only: stopped, it never turns the drawtube out
+    to go home, and keeps the way in it has made."""
+    import os
+    import signal
+
+    def walk(drive, read, usual, **k):
+        drive.move(-96)
+        if stop == "sigterm":
+            os.kill(os.getpid(), signal.SIGTERM)
+            time.sleep(1)
+        raise KeyboardInterrupt
+    import focuser
+    tube = Drawtube(best=0)
+    measured_focuser(monkeypatch)
+    monkeypatch.setattr(focuser.Focuser, "open", opened_motor(tube))
+    monkeypatch.setattr(focus, "Camera", StarCamera)
+    monkeypatch.setattr(focus, "SETTLE_S", 0)
+    monkeypatch.setattr(focus, "measure_stars", lambda lum: (3.5, None))
+    monkeypatch.setattr(focus, "usual_best", lambda: 2.4 * focus.arcsec_per_pixel())
+    monkeypatch.setattr(focus, "walk_in", walk)
+    monkeypatch.setattr(sys, "argv", ["focus.py", "--walk-in"])
+    with pytest.raises(KeyboardInterrupt):
+        focus.main()
+    assert tube.at == -96 and tube.moves == [-96]
+    assert "taking the focuser back" not in capsys.readouterr().out
+
+
+def test_a_hand_edited_travel_is_held_to_the_settings_limit(monkeypatch):
+    monkeypatch.setattr(focus.config, "hardware", lambda: {"focuser": {"travel": 100000}})
+    assert focus.focuser_travel() == focus.TRAVEL_MOST == 8192
+    row = next(r for r in focus.config.SETTINGS if r[:2] == ("focuser", "travel"))
+    assert row[-1]["max"] == focus.TRAVEL_MOST
