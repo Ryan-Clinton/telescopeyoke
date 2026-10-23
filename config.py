@@ -73,6 +73,9 @@ DEFAULTS = {
     "indi": {"port": 7624, "manage_server": False},
     # focus_tones: the focus run's tones in the live stream's sound (stream.Tones).
     "stream": {"focus_tones": True},
+    # travel: the furthest, in half-steps either way, a focus run may turn the
+    # motor from where it started.
+    "focuser": {"travel": 512},
 }
 
 # Where ASTAP's installer puts the program and the star database on Windows.
@@ -239,6 +242,10 @@ SETTINGS = (
     ("camera", "setup", "Camera arrangement", "text",
      "A name for how the camera sits on the telescope. Change it, and take new flats, whenever the camera is "
      "rotated or taken off.", {}),
+    ("focuser", "travel", "Focuser: furthest a run turns", "whole",
+     "Half-steps either way from where a focus run starts, overshoot included; a move beyond it is refused. "
+     "The Sharpie line on the drawtube marks focus, so it is always close: on 23 October 2026 a sweep with "
+     "no limit left the drawtube about an inch out.", {"min": 64, "max": 8192}),
     ("mount", "link", "Mount reached by", "choice",
      "handset: a serial lead to the SynScan handset. wifi: the SynScan Wi-Fi adapter. eqdir: an EQDIR lead. "
      "The last two have no handset.", {"choices": ["handset", "wifi", "eqdir"]}),

@@ -299,3 +299,24 @@ def test_the_focuser_opens_on_two_coils_unless_asked_for_half_steps(monkeypatch)
     focuser.Focuser.open("/dev/ttyUSB9")
     focuser.Focuser.open("/dev/ttyUSB9", full=False, ms=None)
     assert nanos[0].sent == [":?", ":S30", ":F1"] and nanos[1].sent == [":?"]
+
+
+def test_a_move_stopped_with_ctrl_c_is_let_finish_and_its_answer_read():
+    """23 October 2026: two focus runs were stopped part way. The Nano
+    carries on with a move once ordered, so the stop waits for its answer:
+    the move can be counted, and the answer is not taken for the next one's."""
+    class Stopped(Nano):
+        interrupted = False
+
+        def read(self, count):
+            if not self.interrupted:
+                self.interrupted = True
+                raise KeyboardInterrupt
+            return super().read(count)
+    nano = Stopped()
+    motor = focuser.Focuser(nano)
+    with pytest.raises(KeyboardInterrupt):
+        motor.move(300)
+    assert nano.waiting == b""          # its answer read, all of it
+    motor.move(-300)                    # and the next move's answer is its own
+    assert nano.sent == [":M+300", ":M-300"]

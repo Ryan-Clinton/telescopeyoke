@@ -90,6 +90,11 @@ serial_match = "FTDI"
 # [webcam]
 # device = "USB2.0 PC CAMERA"
 
+# The motor focuser (docs/focuser.md). travel: the furthest, in half-steps
+# either way, a focus run may turn it from where it started.
+[focuser]
+travel = 512
+
 [indi]
 port = 7624
 # true: start and restart the INDI server for the camera automatically. That

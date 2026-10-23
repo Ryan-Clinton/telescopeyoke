@@ -42,6 +42,7 @@ import argparse
 import json
 import os
 import queue
+import signal
 import sys
 import threading
 import time
@@ -621,9 +622,9 @@ SWEEP_POINTS = 9        # positions in a sweep, the guess in the middle
 SWEEP_FRAMES = 3        # frames at each position: their median and scatter
 CHECK_FRAMES = 5        # frames to check the fitted focus with
 SWEEPS = 4              # sweeps a run may take, moving or widening it, before giving up
-STEP = 256              # half-steps between sweep positions until --measure-step has measured it
-BACKLASH = 1536         # half-steps of slack to overshoot until --measure-backlash has measured it:
-                        # the gears showed "well over a quarter turn" (1024), and too much costs only time
+STEP = 64               # half-steps between sweep positions until --measure-step has measured it
+BACKLASH = 256          # half-steps of slack to overshoot until --measure-backlash has measured it: small
+                        # enough that a sweep and its overshoot fit inside the travel ([focuser] travel)
 SETTLE_S = 1.0          # seconds after a move before a frame, for the tube to stop shaking
 NOISE = 0.4             # a "star" this many times smaller than the usual best is a hot pixel
 CEILING = 12.0          # HFR beyond this is the measuring box's size, not the star's
@@ -633,7 +634,42 @@ SLOW_FRAME_S = 15       # a frame not come this long after its exposure is said 
 
 
 class OutOfReach(Exception):
-    """A focus run would go further than MOTOR_TRAVEL from where it started."""
+    """A focus run would go further than MOTOR_TRAVEL, or the focuser's
+    travel setting, from where it started."""
+
+
+class StarsLost(Exception):
+    """Stars that measured at the start of a run have gone partway through
+    it: the focuser has run away from focus (23 October 2026, put down to
+    cloud while the drawtube ended about an inch out)."""
+
+
+TRAVEL_MOST = 8192      # the most [focuser] travel may be, as config.SETTINGS allows
+
+
+def focuser_travel():
+    """How far, in half-steps either way, a run may turn the motor from
+    where it started ([focuser] travel)."""
+    given = config.hardware().get("focuser", {})
+    travel = int(given.get("travel") or config.DEFAULTS["focuser"]["travel"])
+    return min(travel, TRAVEL_MOST)     # a hand-edited config.toml is held to the Settings form's limit
+
+
+def motor_refusal(mode, settings, travel):
+    """Why a motor run of `mode` must not start, or None: a sweep needs its
+    measured sizes, and all of it, overshoot included, inside the travel."""
+    if mode not in ("focus", "sweep"):
+        return None
+    if not (settings["step_measured"] and settings["backlash_measured"]):
+        return ("Refused: the focuser's step and backlash are only guesses until measured (on 23 October 2026 "
+                "a sweep on guesses left the drawtube about an inch out). From focus, by ./focus.py --walk-in, "
+                "run ./focus.py --measure-step and ./focus.py --measure-backlash first.")
+    reach = SWEEP_POINTS // 2 * settings["step"] + settings["backlash"]
+    if reach > travel:
+        return (f"Refused: a sweep {settings['step']} half-steps apart with {settings['backlash']} of overshoot "
+                f"reaches {reach} half-steps from the start, beyond the focuser's travel of "
+                f"{travel} ([focuser] travel).")
+    return None
 
 
 # What a focus run is doing, as one small file for the live stream
@@ -981,6 +1017,11 @@ def motor_focus(motor, read, usual, say=progress, step=None, backlash=None, swee
         size = "none" if found["hfr"] is None else f"{found['hfr']:.2f}"
         say(f"  #{len(readings):<3} {doing:<15} step {n:+5d}  at {drive.at:+6d}  "
             f"HFR {size}{spread}  ({found['frames']}/{frames} frames)")
+        # A sweep's ends may be too blurred to measure; no stars back near
+        # the start, where they measured, is the drawtube having run away.
+        if (doing == "sweep" and found["hfr"] is None and readings[0]["hfr"] is not None
+                and abs(drive.at) <= step):
+            raise StarsLost
         return found
 
     live.stage("measure")
@@ -1018,8 +1059,17 @@ def motor_focus(motor, read, usual, say=progress, step=None, backlash=None, swee
                 break
             fitted = None
     except OutOfReach:
-        say(f"  reached {MOTOR_TRAVEL} half-steps from the start")
+        say("  the next move would go beyond the focuser's travel from the start")
         fitted = None
+    except StarsLost:
+        say(f"  the stars measured at the start and are gone at {drive.at:+d}: the focuser has run away "
+            "from focus, not cloud. Stopped: back to the start")
+        drive.arrive(0, backlash)
+        point("back to start", 1)
+        live.done("returned", "The stars went partway through the sweep, so the focuser stopped and went back "
+                              "to where it started.")
+        return {"readings": readings, "fit": None, "start_hfr": start["hfr"], "sweeps": tries, "step": step,
+                "backlash": backlash, "hfr": None, "moved": 0, "found": False, "stars_lost": True}
     result = {"readings": readings, "fit": fitted, "start_hfr": start["hfr"], "sweeps": tries,
               "step": step, "backlash": backlash}
     if sweep_only or not fitted:
@@ -1343,15 +1393,44 @@ def run_check(args):
 
 class Settled:
     """The motor, waiting SETTLE_S after each move before anything is
-    measured, so a frame is not of a tube still shaking."""
+    measured, so a frame is not of a tube still shaking. With `travel`, a
+    move that would end further than that from where the run started is
+    refused before the motor turns."""
 
-    def __init__(self, motor, wait=time.sleep):
-        self.motor, self.wait, self.moved = motor, wait, 0
+    def __init__(self, motor, wait=time.sleep, travel=None):
+        self.motor, self.wait, self.moved, self.travel = motor, wait, 0, travel
 
     def move(self, n):
-        self.motor.move(n)
+        if self.travel is not None and abs(self.moved + n) > self.travel:
+            raise OutOfReach(self.moved + n)
+        try:
+            self.motor.move(n)
+        except KeyboardInterrupt:
+            self.moved += n     # focuser.Focuser.move lets a move ordered finish before it stops
+            raise
         self.moved += n         # where it is from the start, for a run cut short
         self.wait(SETTLE_S)
+
+    def home(self, backlash):
+        """Back to where the run started, the last move inward: the slack
+        overshot outward first when it lies out from here, within the travel."""
+        over = min(backlash, self.travel) if self.travel is not None else backlash
+        if self.moved < 0 and over:
+            self.move(-self.moved + over)
+        if self.moved:
+            self.move(-self.moved)
+
+
+def stop_on_term():
+    """Until the function returned is called, SIGTERM stops the run as
+    Ctrl-C does, so a run stopped in the background still tidies up."""
+    if threading.current_thread() is not threading.main_thread():
+        return lambda: None
+
+    def interrupt(signum, frame):
+        raise KeyboardInterrupt
+    before = signal.signal(signal.SIGTERM, interrupt)
+    return lambda: signal.signal(signal.SIGTERM, before)
 
 
 MODE_WORDS = {"focus": "to the sharpest", "walk": "walking in to the sharpest", "find": "finding focus",
@@ -1369,7 +1448,10 @@ def run_motor(args, mode="focus"):
     import focuser
     scale = arcsec_per_pixel()
     usual = usual_best() / scale
-    settings = focuser_settings()
+    settings, travel = focuser_settings(), focuser_travel()
+    refused = motor_refusal(mode, settings, travel)
+    if refused:
+        raise interface.Refusal("INVALID_REQUEST", refused)
     if args.dry_run and mode == "walk":
         port = focuser.find_port()
         print(f"Would turn the focuser on {port} inward only, 64, 32 then 16 half-steps at a time at {WALK_MS} ms a "
@@ -1387,6 +1469,7 @@ def run_motor(args, mode="focus"):
     # run waits on the focuser or the camera.
     progress("opening the focuser")
     motor = focuser.Focuser.open()
+    stopped = stop_on_term()
     progress(f"focuser open on {getattr(getattr(motor, 'link', None), 'port', None) or 'its port'}; "
              f"opening the camera (INDI port {args.port})")
     frames = drive = None
@@ -1424,7 +1507,7 @@ def run_motor(args, mode="focus"):
                 progress(line)
                 if "lum" in seen:
                     show(seen["lum"], "focus: " + line)
-            drive = Settled(motor)
+            drive = Settled(motor, travel=travel)
             if mode == "walk":
                 if hasattr(motor, "speed"):
                     motor.speed(WALK_MS)
@@ -1448,14 +1531,16 @@ def run_motor(args, mode="focus"):
                 return {"found_at": found}
             if mode == "step":
                 progress("measuring the sweep step, out from focus")
-                found = measure_step(drive, read, usual, say=say)
+                found = measure_step(drive, read, usual, say=say, most=travel)
                 if found:
                     keep_focuser(step=found)
                 progress(f"Sweep step: {found} half-steps" + (", kept." if found else ": not measured."))
                 return {"step": found}
             if mode == "backlash":
                 progress("measuring the gears' slack")
-                found = measure_backlash(drive, read, usual, settings["step"], say=say)
+                # Out no further than the travel, the return's overshoot too.
+                found = measure_backlash(drive, read, usual, settings["step"], say=say,
+                                         most=min(3072, travel - travel % 64))
                 if found:
                     keep_focuser(backlash=found)
                 progress(f"Backlash to overshoot: {found} half-steps" + (", kept." if found else ": not measured."))
@@ -1473,9 +1558,6 @@ def run_motor(args, mode="focus"):
                 seen_good(now, scale)
                 return {"hfr": round(now, 2), "moved": 0, "found": True, "readings": [], "left_alone": True,
                         "hfr_arcsec": round(now * scale, 2)}
-            if not settings["step_measured"] or not settings["backlash_measured"]:
-                progress(f"Not yet measured, so assumed: step {settings['step']}, backlash {settings['backlash']} "
-                         "(--measure-step, --measure-backlash).")
             progress(f"sweeping: {SWEEP_POINTS} positions {settings['step']} half-steps apart, "
                      f"{SWEEP_FRAMES} frames each")
             result = motor_focus(drive, read, usual, say=say, sweep_only=mode == "sweep", live=live)
@@ -1485,12 +1567,32 @@ def run_motor(args, mode="focus"):
         if live.state["outcome"] is None:
             live.done("failed", "The camera stopped sending pictures, so the focus run could not finish.")
         raise hung(problem, frames, drive.moved if drive else 0) from None
+    except OutOfReach:
+        live.done("failed", "The next move would have gone beyond the focuser's travel, so the run stopped.")
+        raise interface.Refusal("INVALID_REQUEST", f"Stopped: the next move would have taken the focuser beyond "
+                                                   f"{travel} half-steps from where it started "
+                                                   f"([focuser] travel). It is {drive.moved:+d} half-steps "
+                                                   "from the start.") from None
+    except KeyboardInterrupt:
+        # Stopped part way (Ctrl-C, or the SIGTERM of a background stop):
+        # on 23 October 2026 two runs stopped mid-sweep left the drawtube
+        # wound out. Back to the start, the last move inward. A walk-in
+        # moves inward only and stays where it is: going home would turn
+        # the drawtube out, and throw away the way in.
+        if drive is not None and drive.moved and mode != "walk":
+            progress(f"stopped: taking the focuser back {-drive.moved:+d} half-steps to where it started")
+            drive.home(settings["backlash"])
+        live.done("failed", "The walk-in was stopped before it finished; the focuser stays where it is."
+                  if mode == "walk" else
+                  "The focus run was stopped before it finished; the focuser went back to where it started.")
+        raise
     except BaseException:
         if live.state["outcome"] is None:
             live.done("failed", "The focus run stopped before it finished.")
         raise
     finally:
         motor.close()
+        stopped()
     hfr = result["hfr"]
     fit = result["fit"]
     if mode == "sweep":

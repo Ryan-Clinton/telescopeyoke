@@ -11,10 +11,27 @@ import wave
 import numpy as np
 import pytest
 
+import config
 import focus
 import simulator
 
 STARS = 20     # a reading taken over many stars; 0 is one star, or its ring
+
+
+@pytest.fixture(autouse=True)
+def wide_sizes(monkeypatch):
+    """The focus curve's tests were written for the wide sweep of a focuser
+    with a turn of travel; the travel a real run may use, and the sizes
+    that fit it, are tested by themselves below."""
+    monkeypatch.setattr(focus, "STEP", 256)
+    monkeypatch.setattr(focus, "BACKLASH", 1536)
+
+
+def measured_focuser(monkeypatch, travel=8192, step=256, backlash=1536):
+    """A focuser with its step and slack measured and `travel` to turn in."""
+    monkeypatch.setattr(focus, "focuser_travel", lambda: travel)
+    monkeypatch.setattr(focus, "focuser_settings", lambda: {"step": step, "backlash": backlash,
+                                                            "step_measured": True, "backlash_measured": True})
 
 
 def each(tracker, values, stars=STARS):
@@ -470,6 +487,7 @@ def test_a_motor_dry_run_turns_nothing_and_takes_no_frames(monkeypatch, capsys):
 
     def never(*args, **kwargs):
         raise AssertionError("a dry run opened the focuser or the camera")
+    measured_focuser(monkeypatch)
     monkeypatch.setattr(focuser, "find_port", lambda port=None: "/dev/ttyUSB1")
     monkeypatch.setattr(focuser.Focuser, "open", classmethod(never))
     monkeypatch.setattr(focus, "Camera", never)
@@ -500,6 +518,7 @@ class StarCamera:
 def motor_run(monkeypatch, capsys, hfr, *flags):
     import focuser
     tube = Drawtube(best=0)
+    measured_focuser(monkeypatch)
     monkeypatch.setattr(focuser.Focuser, "open", classmethod(lambda cls, *a, **k: type(
         "M", (), {"move": lambda self, n: tube.move(n), "close": lambda self: None})()))
     monkeypatch.setattr(focus, "Camera", StarCamera)
@@ -613,6 +632,7 @@ def test_a_motor_run_stamps_every_line_and_says_each_stage_before_it_waits(monke
     camera hung. Each stage is said, with the time, before it is waited on."""
     import re
     import focuser
+    measured_focuser(monkeypatch)
     log = Log()
     shown_at_frame = []
 
@@ -653,6 +673,7 @@ def hung_camera(after):
 def test_a_hung_camera_ends_a_motor_run_in_one_plain_line_saying_where_the_focuser_is(monkeypatch, capsys):
     import focuser
     tube, closed = Drawtube(best=0), []
+    measured_focuser(monkeypatch)
     monkeypatch.setattr(focuser.Focuser, "open", opened_motor(tube, closed))
     monkeypatch.setattr(focus, "Camera", hung_camera(after=4))     # the stale frame and the start's three
     monkeypatch.setattr(focus, "SETTLE_S", 0)
@@ -947,3 +968,162 @@ def test_a_motor_run_and_a_check_write_the_stream_file(monkeypatch, capsys, tmp_
     capsys.readouterr()
     f = kept(tmp_path)
     assert f["kind"] == "check" and f["outcome"] == "passed" and f["positions"] == 3 and len(f["readings"]) == 3
+
+
+# --- 23 October 2026: a run that left the drawtube about an inch out ---------
+
+def test_a_sweep_on_guessed_sizes_is_refused_before_anything_opens(monkeypatch, capsys, tmp_path):
+    """The user had said focus was within microns; a sweep on the guessed
+    step and slack, stopped part way twice, left it about an inch out."""
+    import focuser
+    monkeypatch.setattr(focus, "FOCUSER_FILE", tmp_path / "focuser.json")
+    monkeypatch.setattr(focuser.Focuser, "open", classmethod(lambda cls, *a, **k: pytest.fail("it opened")))
+    for flag in ("--motor", "--sweep"):
+        monkeypatch.setattr(sys, "argv", ["focus.py", flag, "--json"])
+        with pytest.raises(SystemExit):
+            focus.main()
+        answer = json.loads(capsys.readouterr().out)
+        assert not answer["ok"] and answer["errors"][0]["code"] == "INVALID_REQUEST"
+        assert "--measure-step" in answer["errors"][0]["message"]
+
+
+def test_the_guessed_sizes_fit_inside_the_usual_travel(monkeypatch, tmp_path):
+    monkeypatch.undo()                  # the sizes as shipped, not the curve tests' wide ones
+    monkeypatch.setattr(focus, "FOCUSER_FILE", tmp_path / "focuser.json")
+    travel = config.DEFAULTS["focuser"]["travel"]
+    assert focus.SWEEP_POINTS // 2 * focus.STEP + focus.BACKLASH <= travel
+    focus.keep_focuser(step=focus.STEP, backlash=focus.BACKLASH)
+    assert focus.motor_refusal("focus", focus.focuser_settings(), travel) is None
+    assert "beyond the focuser's travel" in focus.motor_refusal("focus", dict(
+        focus.focuser_settings(), step=200), travel)
+    assert ("focuser", "travel") in {(section, key) for section, key, *_ in config.SETTINGS}
+
+
+def test_no_move_goes_beyond_the_travel_from_the_start():
+    tube = Drawtube(best=0)
+    drive = focus.Settled(tube, wait=lambda s: None, travel=512)
+    drive.move(-400)
+    with pytest.raises(focus.OutOfReach):
+        drive.move(-200)                # to -600: refused before the motor turns
+    drive.move(912)                     # +512 is the edge, and allowed
+    with pytest.raises(focus.OutOfReach):
+        drive.move(1)
+    assert tube.moves == [-400, 912] and tube.at == 512
+
+
+def test_a_walk_in_stops_at_the_travel(monkeypatch, capsys):
+    """Focus further in than the travel: the walk stops at its edge and says
+    where it is, rather than go on."""
+    import focuser
+    tube = Drawtube(best=-3000, slope=2000)
+    measured_focuser(monkeypatch, travel=512)
+    monkeypatch.setattr(focuser.Focuser, "open", opened_motor(tube))
+    monkeypatch.setattr(focus, "Camera", StarCamera)
+    monkeypatch.setattr(focus, "SETTLE_S", 0)
+    monkeypatch.setattr(focus, "measure_stars", lambda lum: (tube.size(), None))
+    monkeypatch.setattr(focus, "usual_best", lambda: 2.4 * focus.arcsec_per_pixel())
+    monkeypatch.setattr(sys, "argv", ["focus.py", "--walk-in", "--json"])
+    with pytest.raises(SystemExit):
+        focus.main()
+    answer = json.loads(capsys.readouterr().out)
+    assert answer["errors"][0]["code"] == "INVALID_REQUEST" and "512" in answer["errors"][0]["message"]
+    assert -512 <= tube.at < 0
+
+
+def test_stars_gone_near_the_start_stop_the_sweep_and_go_back(monkeypatch):
+    """Stars that measured at the start and are gone where they were: the
+    focuser, not cloud."""
+    tube = Drawtube(best=0)
+    reads = []
+
+    def read(frames):
+        reads.append(frames)
+        return tube.read(frames) if len(reads) <= 4 else [None] * frames
+    result = focus.motor_focus(tube, read, usual=2.0, say=quiet)
+    assert result["stars_lost"] and not result["found"] and tube.at == 0 and tube.moves[-1] < 0
+    assert result["readings"][-1]["doing"] == "back to start"
+
+
+@pytest.mark.parametrize("stop", ["ctrl-c", "sigterm"])
+@pytest.mark.parametrize("moved", [320, -320])
+def test_a_run_stopped_part_way_goes_back_to_where_it_started(monkeypatch, capsys, stop, moved):
+    import os
+    import signal
+
+    def run(motor, read, usual, **k):
+        motor.move(moved)
+        if stop == "sigterm":
+            os.kill(os.getpid(), signal.SIGTERM)
+            time.sleep(1)
+        raise KeyboardInterrupt
+    import focuser
+    tube = Drawtube(best=0)
+    measured_focuser(monkeypatch)
+    monkeypatch.setattr(focuser.Focuser, "open", opened_motor(tube))
+    monkeypatch.setattr(focus, "Camera", StarCamera)
+    monkeypatch.setattr(focus, "SETTLE_S", 0)
+    monkeypatch.setattr(focus, "measure_stars", lambda lum: (3.5, None))
+    monkeypatch.setattr(focus, "usual_best", lambda: 2.4 * focus.arcsec_per_pixel())
+    monkeypatch.setattr(focus, "motor_focus", run)
+    monkeypatch.setattr(sys, "argv", ["focus.py", "--motor"])
+    before = signal.getsignal(signal.SIGTERM)
+    with pytest.raises(KeyboardInterrupt):
+        focus.main()
+    assert tube.at == 0 and tube.moves[-1] < 0          # home, the last move inward
+    assert "taking the focuser back" in capsys.readouterr().out
+    assert signal.getsignal(signal.SIGTERM) == before   # the handler is put back
+
+
+@pytest.mark.parametrize("flag", ["--measure-step", "--measure-backlash"])
+def test_measuring_the_focuser_stays_inside_the_travel(monkeypatch, capsys, flag):
+    import focuser
+    tube = Drawtube(best=0, slack=200, slope=100)
+    measured_focuser(monkeypatch, travel=512, step=64, backlash=256)
+    monkeypatch.setattr(focus, "keep_focuser", lambda **measured: None)
+    monkeypatch.setattr(focuser.Focuser, "open", opened_motor(tube))
+    monkeypatch.setattr(focus, "Camera", StarCamera)
+    monkeypatch.setattr(focus, "SETTLE_S", 0)
+    monkeypatch.setattr(focus, "measure_stars", lambda lum: (tube.size(), None))
+    monkeypatch.setattr(focus, "usual_best", lambda: 2.4 * focus.arcsec_per_pixel())
+    monkeypatch.setattr(sys, "argv", ["focus.py", flag, "--json"])
+    with pytest.raises(SystemExit):
+        focus.main()
+    answer = json.loads(capsys.readouterr().out)
+    assert answer["ok"], answer
+    assert max(abs(at) for at in itertools.accumulate(tube.moves)) <= 512 and tube.at == 0
+
+
+@pytest.mark.parametrize("stop", ["ctrl-c", "sigterm"])
+def test_a_walk_in_stopped_part_way_stays_where_it_is(monkeypatch, capsys, stop):
+    """A walk-in moves inward only: stopped, it never turns the drawtube out
+    to go home, and keeps the way in it has made."""
+    import os
+    import signal
+
+    def walk(drive, read, usual, **k):
+        drive.move(-96)
+        if stop == "sigterm":
+            os.kill(os.getpid(), signal.SIGTERM)
+            time.sleep(1)
+        raise KeyboardInterrupt
+    import focuser
+    tube = Drawtube(best=0)
+    measured_focuser(monkeypatch)
+    monkeypatch.setattr(focuser.Focuser, "open", opened_motor(tube))
+    monkeypatch.setattr(focus, "Camera", StarCamera)
+    monkeypatch.setattr(focus, "SETTLE_S", 0)
+    monkeypatch.setattr(focus, "measure_stars", lambda lum: (3.5, None))
+    monkeypatch.setattr(focus, "usual_best", lambda: 2.4 * focus.arcsec_per_pixel())
+    monkeypatch.setattr(focus, "walk_in", walk)
+    monkeypatch.setattr(sys, "argv", ["focus.py", "--walk-in"])
+    with pytest.raises(KeyboardInterrupt):
+        focus.main()
+    assert tube.at == -96 and tube.moves == [-96]
+    assert "taking the focuser back" not in capsys.readouterr().out
+
+
+def test_a_hand_edited_travel_is_held_to_the_settings_limit(monkeypatch):
+    monkeypatch.setattr(focus.config, "hardware", lambda: {"focuser": {"travel": 100000}})
+    assert focus.focuser_travel() == focus.TRAVEL_MOST == 8192
+    row = next(r for r in focus.config.SETTINGS if r[:2] == ("focuser", "travel"))
+    assert row[-1]["max"] == focus.TRAVEL_MOST
