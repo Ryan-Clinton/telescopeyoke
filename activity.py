@@ -341,7 +341,8 @@ PHASES = {"Moving": "goto", "Plate solving": "solve",
           "Fitting the focus curve": "focus_fit", "Checking the fitted focus": "focus_verify",
           "Polar check": "polar_measure", "Polar recheck": "polar_recheck",
           "Patrol": "imaging", "Imaging": "imaging", "Searching": "imaging",
-          "Taking a lucky-imaging video": "lucky", "Stacking the lucky frames": "lucky"}
+          "Taking a lucky-imaging video": "lucky", "Stacking the lucky frames": "lucky",
+          "Imaging the Moon": "lucky"}
 # The focus motor's other modes, from the words its line carries
 # (focus.MODE_WORDS; a test keeps the two in step). "Focusing" is the hand
 # aid by ear, which the stream does not show.

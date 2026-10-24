@@ -22,9 +22,10 @@ core functions ───┼── --json (interface.py envelope)
   the simulator) sets the binning. `focus.py` is the only such caller.
 - `stacking.py` holds calibration, star measurement, registration and
   stacking; `shoot.py` uses it live, `restack.py` afterwards on the saved raws.
-  The Moon has its own path: `lucky.py` takes a fast video (`altair.py`'s
-  video mode) and stacks the sharpest frames on alignment points, with no
-  stars involved.
+  The Moon has its own path, with no stars involved: `moon.py` centres the
+  disc from the picture (`lunar.py`) and holds it there between bursts, and
+  `lucky.py` takes the fast video (`altair.py`'s video mode) and stacks it
+  part by part on alignment points.
 - `agent.py` gathers read-only facts for programs; `interface.py` defines the
   envelope, error codes and states.
 

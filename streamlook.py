@@ -567,6 +567,10 @@ def programme(c, s, x, y, width):
     if kind == "moon":
         y = c.wrap((x, y), "EXPLORING THE MOON", "bold", 28, width, "accent", on="panel")
         y = c.wrap((x, y + 6), moon_words(s.get("lucky")), "sans", 24, width, "text", on="panel") + 10
+        if s.get("lucky_stage"):
+            title, figures = s["lucky_stage"]
+            y = c.wrap((x, y), title, "bold", 20, width, "live", on="panel")
+            y = c.wrap((x, y + 2), figures, "mono", 18, width, "secondary", on="panel") + 10
         tonight = moon_tonight(s.get("moon") or {})
         if tonight:
             y = c.wrap((x, y), tonight, "mono", 18, width, "secondary", on="panel") + 10
@@ -582,8 +586,8 @@ def moon_words(lucky):
     """How the Moon is being imaged, in plain words: a lucky-imaging video
     (lucky.py) or a run of short exposures stacked as they come."""
     if lucky:
-        return ("Short exposures freeze moments of steadier air. The sharpest fifth of them "
-                "are combined afterwards, patch by patch, to show finer detail.")
+        return ("Short exposures freeze moments of steadier air. Afterwards each part of the Moon is "
+                "built from the frames that were sharpest there.")
     return "Hundreds of short exposures are combined to make the surface cleaner and more detailed."
 
 
@@ -1465,6 +1469,36 @@ def moon_now(now):
         return {}
 
 
+LUCKY_STAGES = {"centring": "FINDING THE MOON", "capturing": "CAPTURING FRAMES",
+                "ranking": "FINDING THE SHARPEST MOMENTS", "stacking": "CORRECTING THE ATMOSPHERE",
+                "done": "RESULT READY"}
+
+
+def lucky_stage(now, fresh=120):
+    """(title, figures) for where the lucky imaging has got, from
+    web/lucky.json (lucky.progress), or None when it says nothing recent."""
+    import json
+    import config
+    try:
+        p = json.loads((config.DATA / "web" / "lucky.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if now - p.get("at", 0) > fresh or p.get("stage") not in LUCKY_STAGES:
+        return None
+    stage = p["stage"]
+    if stage == "capturing":
+        words = (f"{p.get('done', 0):,} / {p.get('frames', 0):,} · {p.get('fps', 0):g} a second · "
+                 f"{1000 * p.get('exposure', 0):.0f} ms exposures")
+    elif stage in ("ranking", "stacking"):
+        words = f"{p.get('done', 0):,} / {p.get('frames', 0):,}" + (
+            f" · {p['points']} alignment regions" if p.get("points") else "")
+    elif stage == "done":
+        words = f"best {p.get('kept', 0):,} of {p.get('frames', 0):,} frames"
+    else:
+        words = "centring the disc from its own picture"
+    return LUCKY_STAGES[stage], words
+
+
 def lucky_now():
     """True while a lucky-imaging video is taken or stacked (lucky.py)."""
     try:
@@ -1498,6 +1532,7 @@ def from_status(st, now=None, session=None):
     if (st.get("object_kind") or sky.object_kind(name)) == "moon":
         s["kind"], s["moon"], s["fwhm_arcsec"] = "moon", moon_now(now), None
         s["lucky"] = lucky_now()
+        s["lucky_stage"] = lucky_stage(now) if s["lucky"] else None
         s["story"] = told(s, st, now)
         return s
     p = transit_for(name)

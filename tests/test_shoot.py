@@ -94,3 +94,14 @@ def test_a_hold_whose_moves_do_nothing_switches_itself_off():
     shifts += [(t, 0.0, 0.0) for t in range(5, 10)]
     hold.step(shifts, said.append)
     assert hold.state == "off" and not hold.due(shifts) and "the hold is off" in said[-1]
+
+
+def test_a_run_knows_when_the_disk_is_nearly_full(tmp_path, monkeypatch):
+    """24 October 2026: the Moon at a frame a second left 5 GB in 25 minutes."""
+    import shutil
+    import shoot
+    real = shutil.disk_usage
+    monkeypatch.setattr(shutil, "disk_usage", lambda p: real(p)._replace(free=2_000_000_000))
+    assert shoot.disk_full(tmp_path / "not-made-yet")
+    monkeypatch.setattr(shutil, "disk_usage", lambda p: real(p)._replace(free=50_000_000_000))
+    assert not shoot.disk_full(tmp_path)

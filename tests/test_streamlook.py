@@ -317,3 +317,19 @@ def test_the_moon_programme_says_how_it_is_being_imaged():
     assert "sharpest" in streamlook.moon_words(lucky=True)
     assert "Hundreds of short exposures" in streamlook.moon_words(lucky=False)
     assert streamlook.moon_tonight({}) is None
+
+
+def test_the_moon_panel_says_where_the_lucky_imaging_has_got(tmp_path, monkeypatch):
+    """CAPTURING with frames and rate, then the ranking and the stacking,
+    from lucky.py's web/lucky.json; nothing from a stale file."""
+    import json
+    import config
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    (tmp_path / "web").mkdir()
+    note = tmp_path / "web" / "lucky.json"
+    note.write_text(json.dumps({"stage": "capturing", "at": 1000.0, "done": 846, "frames": 2000,
+                                "fps": 31.0, "exposure": 0.008}))
+    assert streamlook.lucky_stage(1010.0) == ("CAPTURING FRAMES", "846 / 2,000 · 31 a second · 8 ms exposures")
+    note.write_text(json.dumps({"stage": "stacking", "at": 1000.0, "done": 25, "frames": 400, "points": 742}))
+    assert streamlook.lucky_stage(1010.0) == ("CORRECTING THE ATMOSPHERE", "25 / 400 · 742 alignment regions")
+    assert streamlook.lucky_stage(5000.0) is None

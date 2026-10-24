@@ -400,7 +400,7 @@ class AltairCamera:
     def video(self, seconds, count, roi=None, timeout=5.0):
         """`count` frames as fast as the camera sends them, in its video mode
         rather than one triggered exposure at a time, for lucky imaging
-        (lucky.py): yields (uint16 Bayer mosaic, seconds since the first).
+        (lucky.py): yields (uint16 Bayer mosaic, seconds since the first, the camera's frame number).
         `roi` is (x, y, width, height) on the sensor, rounded to even numbers
         so the Bayer pattern stays the same. The camera is put back as it
         was afterwards, however the loop ends."""
@@ -425,10 +425,10 @@ class AltairCamera:
                     if self._failure or not arrived:
                         raise CameraError(self._failure or f"no video frame within {timeout:g} s")
                     self._ready -= 1
-                data, _ = self._pull()
+                data, info = self._pull()
                 now = time.perf_counter()
                 first = first if first is not None else now
-                yield self._normalise(data), now - first
+                yield self._normalise(data), now - first, int(getattr(info, "seq", 0))
         finally:
             with self._changed:
                 self._waiting = False

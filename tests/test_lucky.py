@@ -1,5 +1,7 @@
 """Lucky imaging: the SER file, the ranking and the multi-point stack, on
 made-up frames of a textured disc bent by made-up seeing."""
+import json
+
 import numpy as np
 from scipy import ndimage
 
@@ -30,7 +32,7 @@ def mosaic_of(image):
 
 def test_a_ser_file_reads_back_what_was_written(tmp_path):
     frames = [np.full((6, 8), v, np.uint16) for v in (1, 2, 4095)]
-    writer = lucky.SerWriter(tmp_path / "v.ser", 8, 6, instrument="ALTAIRH183C")
+    writer = lucky.SerWriter(tmp_path / "v.ser", 8, 6, instrument="ALTAIRH183C", depth=16)
     for f in frames:
         writer.add(f)
     writer.close()
@@ -38,6 +40,14 @@ def test_a_ser_file_reads_back_what_was_written(tmp_path):
     assert colour == lucky.SER_RGGB and data.shape == (3, 6, 8)
     assert [int(d[0, 0]) for d in data] == [1, 2, 4095]
     assert (tmp_path / "v.ser").stat().st_size == lucky.SER_HEADER + 3 * 6 * 8 * 2
+
+
+def test_8_bit_video_takes_the_top_bits_of_the_12(tmp_path):
+    writer = lucky.SerWriter(tmp_path / "v.ser", 2, 1)
+    writer.add(np.array([[4095, 160]], np.uint16))
+    writer.close()
+    data, _ = lucky.read_ser(tmp_path / "v.ser")
+    assert data.dtype == np.uint8 and data[0].tolist() == [[255, 10]]
 
 
 def test_the_phase_correlation_finds_a_shift_to_a_fraction_of_a_pixel():
@@ -53,14 +63,26 @@ def test_sharper_frames_rank_higher():
     assert lucky.sharpness(sharp) > lucky.sharpness(soft)
 
 
-def test_the_stack_keeps_the_best_share_of_frames():
+def test_the_detail_picture_is_the_greens_filled_in_so_the_colour_pattern_does_not_show():
+    mosaic = np.zeros((8, 8), np.uint16)
+    mosaic[0::2, 0::2] = 4000      # red
+    mosaic[1::2, 1::2] = 100       # blue
+    mosaic[0::2, 1::2] = mosaic[1::2, 0::2] = 1000    # green
+    assert np.allclose(lucky.green(mosaic)[1:-1, 1:-1], 1000)
+    rgb = lucky.colour(mosaic)
+    assert np.allclose(rgb[2:-2, 2:-2, 0], 4000) and np.allclose(rgb[2:-2, 2:-2, 2], 100)
+
+
+def test_the_stack_keeps_each_share_of_frames():
     rng = np.random.default_rng(7)
     truth = surface()
     blurs = [0.6 if i % 3 == 0 else 3.0 for i in range(30)]
     frames = np.array([mosaic_of(seen(truth, rng, bend=0.5, blur=b)) for b in blurs])
-    _, done = lucky.stack(frames, keep=30, progress=None, box=48, step=24)
-    assert done["kept"] == 9 and done["alignment_points"] > 0
-    assert done["kept_sharpness_from"] > lucky.sharpness(lucky.grey(frames[1], (1, 1)))
+    results, done = lucky.stack(frames, keeps=(10, 30, 100), report=None, box=48, step=24)
+    assert done["kept"] == {"10": 3, "30": 9, "100": 30} and done["alignment_points"] > 0 and done["local"]
+    assert set(results) == {10.0, 30.0, 100.0}
+    # The sharp third beats all thirty, blurred ones and all.
+    assert done["sharpness"]["30"] > done["sharpness"]["100"]
 
 
 def test_alignment_points_put_back_what_the_air_bent():
@@ -74,11 +96,45 @@ def test_alignment_points_put_back_what_the_air_bent():
     # sits in the frame is not what is being judged.
     error = lambda image: np.abs(ndimage.shift(image, lucky.phase_shift(truth, image), order=1)
                                  - truth)[inner].mean()
-    points, done = lucky.stack(frames, keep=100, progress=None, box=48, step=24)
-    whole, _ = lucky.stack(frames, keep=100, points=False, progress=None)
+    points, done = lucky.stack(frames, keeps=(100,), report=None, box=48, step=24)
+    whole, _ = lucky.stack(frames, keeps=(100,), points=False, report=None)
     assert done["alignment_points"] > 20
-    assert error(points) < 0.95 * error(whole)
-    assert lucky.sharpness(points) > lucky.sharpness(whole)
+    assert error(points[100.0]) < 0.95 * error(whole[100.0])
+    assert lucky.sharpness(points[100.0]) > lucky.sharpness(whole[100.0])
+
+
+def test_each_part_is_built_from_the_frames_sharpest_there():
+    """The air blurs one part of a frame and not another: with local
+    selection, each half of the picture takes the frames sharp in that half."""
+    rng = np.random.default_rng(5)
+    truth = surface()
+    frames = []
+    for i in range(20):
+        image = seen(truth, rng, bend=0.3, blur=0.5)
+        half = slice(0, 128) if i % 2 else slice(128, 256)
+        image[:, half] = ndimage.gaussian_filter(image, 3.0)[:, half]
+        frames.append(mosaic_of(image))
+    frames = np.array(frames)
+    local, _ = lucky.stack(frames, keeps=(25,), report=None, box=48, step=24)
+    whole, _ = lucky.stack(frames, keeps=(25,), local=False, report=None, box=48, step=24)
+    assert lucky.sharpness(local[25.0]) > 1.2 * lucky.sharpness(whole[25.0])
+
+
+def test_a_weak_or_odd_alignment_point_is_not_trusted():
+    truth = surface().astype(np.float32)
+    moved = ndimage.shift(truth, (1.0, -2.0), order=1, mode="nearest")
+    points = lucky.alignment_points(truth, 48, 24)
+    field = lucky.shift_field(truth, moved, points, 48)
+    assert abs(np.median(field[0]) + 1.0) < 0.3 and abs(np.median(field[1]) - 2.0) < 0.3
+    # Pure noise in one patch: its match is weak or disagrees, and the
+    # field there follows the points around it.
+    rows, cols, used = points
+    i, j = (int(v[len(v) // 2]) for v in np.nonzero(used))
+    y, x = rows[i], cols[j]
+    noisy = moved.copy()
+    noisy[y - 24:y + 24, x - 24:x + 24] = np.random.default_rng(1).normal(2000, 400, (48, 48))
+    field = lucky.shift_field(truth, noisy, points, 48)
+    assert abs(field[1][y, x] - 2.0) < 1.0 and abs(field[0][y, x] + 1.0) < 1.0
 
 
 def test_a_video_is_written_and_shown_on_the_page_as_it_is_taken(tmp_path, monkeypatch):
@@ -93,7 +149,7 @@ def test_a_video_is_written_and_shown_on_the_page_as_it_is_taken(tmp_path, monke
         def __init__(self, gain): pass
         def video(self, seconds, count, roi=None):
             for n in range(count):
-                yield np.full((6, 8), n, np.uint16), n * 0.01
+                yield np.full((6, 8), 16 * n, np.uint16), n * 0.01, n + 1 + (n >= 2)    # one frame dropped
         def close(self): pass
 
     monkeypatch.setattr(camera, "Camera", Cam)
@@ -102,4 +158,7 @@ def test_a_video_is_written_and_shown_on_the_page_as_it_is_taken(tmp_path, monke
     monkeypatch.setattr(lucky, "OUT", tmp_path)
     path = lucky.capture("Moon", 4, 0.02, 100)
     data, _ = lucky.read_ser(path)
-    assert data.shape == (4, 6, 8) and shown[0] == "frame 1 of 4"
+    assert data.shape == (4, 6, 8) and data.dtype == np.uint8 and int(data[3, 0, 0]) == 3
+    assert shown[0] == "frame 1 of 4"
+    notes = json.loads(path.with_suffix(".json").read_text())
+    assert notes["frames"] == 4 and notes["dropped"] == 1 and notes["exposure"] == 0.02

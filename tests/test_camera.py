@@ -961,7 +961,8 @@ def test_a_video_comes_back_to_back_from_part_of_the_sensor_and_the_camera_is_pu
     (24 October 2026, the Moon). Afterwards single exposures work again."""
     with altair.AltairCamera() as cam:
         got = list(cam.video(0.001, 5, roi=(3, 5, 17, 11)))
-        assert len(got) == 5 and all(m.shape == (10, 16) for m, _ in got)
+        assert len(got) == 5 and all(m.shape == (10, 16) for m, _, _ in got)
+        assert [s for _, _, s in got] == [1, 2, 3, 4, 5]
         assert cam.handle.roi == (0, 0, 0, 0)
         assert cam.handle.options[sdk.ALTAIRCAM_OPTION_TRIGGER] == 1
         assert (cam.width, cam.height) == (WIDTH, HEIGHT)

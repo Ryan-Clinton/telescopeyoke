@@ -720,6 +720,19 @@ def plan(args):
 
 
 RUN_LOCK = config.DATA / "cache" / "imaging.lock"
+# A run stops itself with this much disk left: the stack, the quality pass
+# and every other program still need room. 24 October 2026: a run of the
+# Moon at a frame a second kept 33 MB a frame and left 5 GB in 25 minutes.
+MIN_FREE = 3e9
+
+
+def disk_full(folder, least=None):
+    """True when the disk holding `folder` has less than MIN_FREE free."""
+    import shutil
+    path = Path(folder)
+    while not path.exists() and path != path.parent:
+        path = path.parent
+    return shutil.disk_usage(path).free < (MIN_FREE if least is None else least)
 
 
 def hold_the_rig(name, path=None):
@@ -911,6 +924,9 @@ def image(args, session, exposure, moving, holding, tracker):
                     asked = order()
                     if asked:
                         print(f"  told to {asked}", flush=True)
+                    if disk_full(session.folder):
+                        print(f"  stopping: under {MIN_FREE / 1e9:.0f} GB left on the disk", flush=True)
+                        asked = "stop"
                     if asked == "stop":
                         told["stop"] = True
                         break
