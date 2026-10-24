@@ -39,7 +39,8 @@ SER_HEADER = 178
 SER_RGGB = 8         # SER's colour ID for an RGGB Bayer mosaic
 BOX = 96             # alignment point size, pixels
 STEP = 64            # alignment point spacing
-SEARCH = 24          # furthest a patch is looked for from where the whole-frame shift puts it
+PUBLISH_S = 3.0      # seconds between frames shown on the page during a video
+SEARCH = 24         # furthest a patch is looked for from where the whole-frame shift puts it
 
 
 # --- SER files -----------------------------------------------------------------
@@ -310,13 +311,19 @@ def capture(target, frames, exposure, gain, roi=None):
     cam = Camera(gain=gain)
     if not hasattr(cam, "video"):
         raise SystemExit("lucky imaging needs the camera through Altair's library ([camera] backend = \"altair\")")
+    import snap
     writer = None
-    began = time.perf_counter()
+    began = shown = time.perf_counter()
     try:
         for n, (mosaic, _) in enumerate(cam.video(exposure, frames, roi=roi), 1):
             if writer is None:
                 writer = SerWriter(path, mosaic.shape[1], mosaic.shape[0], instrument=cam.name)
             writer.add(mosaic)
+            # The page and the stream show the video as it is taken, not
+            # the last picture from before it (24 October 2026).
+            if n == 1 or time.perf_counter() - shown >= PUBLISH_S:
+                snap.publish(mosaic, kind="lucky-imaging video", detail=f"frame {n} of {frames}", quick=True)
+                shown = time.perf_counter()
             if n % 100 == 0:
                 print(f"{n} frames, {n / (time.perf_counter() - began):.1f} a second", flush=True)
     finally:

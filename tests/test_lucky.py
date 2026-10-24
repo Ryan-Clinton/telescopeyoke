@@ -79,3 +79,27 @@ def test_alignment_points_put_back_what_the_air_bent():
     assert done["alignment_points"] > 20
     assert error(points) < 0.95 * error(whole)
     assert lucky.sharpness(points) > lucky.sharpness(whole)
+
+
+def test_a_video_is_written_and_shown_on_the_page_as_it_is_taken(tmp_path, monkeypatch):
+    """24 October 2026: the page and stream went blank for the whole video."""
+    import camera
+    import shoot
+    import snap
+    shown = []
+
+    class Cam:
+        name = "fake"
+        def __init__(self, gain): pass
+        def video(self, seconds, count, roi=None):
+            for n in range(count):
+                yield np.full((6, 8), n, np.uint16), n * 0.01
+        def close(self): pass
+
+    monkeypatch.setattr(camera, "Camera", Cam)
+    monkeypatch.setattr(shoot, "RUN_LOCK", tmp_path / "imaging.lock")
+    monkeypatch.setattr(snap, "publish", lambda mosaic, **kw: shown.append(kw["detail"]))
+    monkeypatch.setattr(lucky, "OUT", tmp_path)
+    path = lucky.capture("Moon", 4, 0.02, 100)
+    data, _ = lucky.read_ser(path)
+    assert data.shape == (4, 6, 8) and shown[0] == "frame 1 of 4"
