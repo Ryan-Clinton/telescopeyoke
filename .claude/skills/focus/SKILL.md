@@ -34,7 +34,10 @@ way (17 October 2026: HFR 1.86 at the start, 3.52 after a stopped run).
    the camera on) is a small step out and tiny steps in: the walk-in.
    The person's word on how far out it is beats the HFR: HFR 13 can be a
    few tens of microns. Stars that vanish during a run mean the focuser,
-   not cloud. The rest of this step is about the walk-in's log.
+   not cloud. A walk-in that ends past its best tries one move back out
+   to it and says whether the motor lifted the drawtube: report that line
+   too (24 October 2026: try it, don't assume it can't). The rest of this
+   step is about the walk-in's log.
    Run it with its output to a log and a Monitor on the log
    (never through `tail`, which holds every line back until the end).
    Say nothing per reading: a Monitor event that changes nothing gets no

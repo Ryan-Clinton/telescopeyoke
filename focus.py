@@ -1150,7 +1150,7 @@ def find_stars(motor, read, usual, say=progress, stride=2048, turns=2, ring=None
 
 def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, closest=8, switch=8.0, near=1.5,
             close=1.15, most=160, tries=3, patience=3, spike=1.8, ring=None, ring_step=128, ring_most=4096,
-            live=None):
+            live=None, back_out=True):
     """Focus from a little outside it, moving only inward, a few half-steps
     at a time, measuring after each, until the stars have been worse three times
     running after their best; returns {"best_hfr", "best_at", "ended_at",
@@ -1165,7 +1165,14 @@ def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, clo
     `patience` x `finest` inside it. A reading over `spike` x the best is
     taken again before it counts: on 21 October 2026 one passing cloud read
     6.3 between 2.92 and 2.55, and two moves past the best ended a run that
-    still had finer focus to find."""
+    still had finer focus to find.
+
+    With `back_out`, a run that ended past its best then tries the one small
+    move back out to the best, and says whether the motor lifted the
+    drawtube: 24 October 2026, it ended 24 half-steps inside the best (2.55
+    against 2.16), and the person asked for that move to be tried rather
+    than assumed impossible. The result gains "back_out": {"steps", "hfr",
+    "lifted"}, and "ended_at" and "ended_hfr" are where it then is."""
     def reading():
         for _ in range(tries):
             hfr = sample(read, SWEEP_FRAMES, usual)["hfr"]
@@ -1233,9 +1240,21 @@ def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, clo
             worse += 1
             if worse >= patience:
                 break
+    result = {"best_hfr": best, "best_at": best_at, "ended_at": at, "ended_hfr": now, "readings": readings}
+    if back_out and now is not None and at < best_at:
+        steps = best_at - at
+        motor.move(steps)
+        back = reading()
+        lifted = back is not None and back < 0.9 * now
+        say(f"  back out {steps} to the best: HFR {back if back is not None else 'none'} "
+            f"({'it lifted' if lifted else 'no better: the motor did not lift it'})")
+        result["back_out"] = {"steps": steps, "hfr": back, "lifted": lifted}
+        if back is not None:
+            readings.append((best_at, back))
+            result.update(ended_at=best_at if lifted else at, ended_hfr=back)
     live.stage("done")
-    live.done("complete", None, end_hfr=best)
-    return {"best_hfr": best, "best_at": best_at, "ended_at": at, "ended_hfr": now, "readings": readings}
+    live.done("complete", None, end_hfr=result["ended_hfr"] if result["ended_hfr"] is not None else best)
+    return result
 
 
 def measure_step(motor, read, usual, say=progress, backlash=None, increment=64, most=4096):

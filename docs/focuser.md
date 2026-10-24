@@ -111,7 +111,8 @@ brightest star at the start and now, for the live stream's focus look
     ./focus.py --measure-step        from focus, in until the stars are 2.5 times their size; a quarter of that is the step
     ./focus.py --measure-backlash    the slack, on the steep side of the curve, twice; half as much again is kept
     ./focus.py --walk-in             from a little outside focus, set by hand: in 64 then 32 half-steps at a
-                                     time, slowly (40 ms a half-step), measuring each, to the sharpest
+                                     time, slowly (40 ms a half-step), measuring each, to the sharpest;
+                                     then one move back out to the best, saying whether the motor lifted it
 
 No move of a run goes further than `[focuser] travel` (512 half-steps by
 default, overshoot included) from where it started: a move beyond it is
@@ -321,7 +322,12 @@ better than the usual 2.28 but well short of 19 October's 1.58, and each
 run ended past focus because it cannot step back. The walk-in now starts
 from doughnuts, takes 16 and then 8 half-step moves near focus, and
 re-reads a cloud. Below 8 half-steps the seeing hides the difference.
-[The night's record](nights/2026-10-21/focuser.md). On 23 October 2026 a `--motor` sweep on guessed sizes, stopped twice part way, left the drawtube about an inch from the line and lost the night ([the record](nights/2026-10-23/focus-runaway.md)): the sweep is now refused, and every move is held within `[focuser] travel`.
+[The night's record](nights/2026-10-21/focuser.md). On 24 October 2026 a
+walk-in from the drawtube a millimetre past the line reached HFR 2.16 in
+under two minutes and ended 24 half-steps inside it at 2.55. The person
+asked for the move back to be tried rather than assumed impossible, so a
+walk-in that ends past its best now makes that one move out, measures, and
+says whether the drawtube rose (`back_out` in its result). On 23 October 2026 a `--motor` sweep on guessed sizes, stopped twice part way, left the drawtube about an inch from the line and lost the night ([the record](nights/2026-10-23/focus-runaway.md)): the sweep is now refused, and every move is held within `[focuser] travel`.
 
 ### Finding where the turn is lost (`./focuser.py load-test`)
 

@@ -782,11 +782,28 @@ def test_walking_in_from_outside_ends_just_past_the_sharpest(start, slope):
     """19 October 2026: set a little out by hand (HFR 9), brought in 32
     half-steps at a time, it reached HFR 1.58 and stopped two moves past it."""
     tube = Drawtube(best=-start, slope=slope, sharp=1.6, reach=2 * start, noise=0.02)
-    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet)
+    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet, back_out=False)
     assert all(step < 0 for step in tube.moves)                     # inward only
     assert result["best_hfr"] == pytest.approx(1.6, abs=0.5)
     assert abs(result["best_at"] + start) <= 64
     assert result["ended_at"] < result["best_at"] and result["ended_at"] >= -start - 2 * 64
+
+
+def test_a_walk_in_past_its_best_tries_the_one_move_back_out():
+    """24 October 2026: it ended 24 half-steps inside the best, 2.55 against
+    2.16; the person asked for the move back to be tried, not assumed."""
+    tube = Drawtube(best=-300, slope=40, sharp=1.6, reach=600, noise=0.02)
+    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet)
+    inward, last = tube.moves[:-1], tube.moves[-1]
+    assert all(step < 0 for step in inward) and last == result["back_out"]["steps"] > 0
+    assert result["back_out"]["lifted"] and result["ended_at"] == result["best_at"]
+
+    class Stuck(Drawtube):           # the motor turns but the drawtube does not rise
+        def move(self, steps):
+            super().move(steps) if steps < 0 else self.moves.append(steps)
+    tube = Stuck(best=-300, slope=40, sharp=1.6, reach=600, noise=0.02)
+    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet)
+    assert not result["back_out"]["lifted"] and result["ended_at"] < result["best_at"]
 
 
 def test_walking_in_stops_on_a_reading_that_stays_empty_and_never_jumps():
@@ -832,7 +849,7 @@ def test_walking_in_from_doughnuts_comes_in_until_the_stars_measure():
     tube = Drawtube(best=-1200, slope=40, sharp=1.6, reach=400, noise=0.02)
     rings = lambda frames: 10 + abs(tube.tube - tube.best) / 20
     result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet, ring=rings)
-    assert all(step < 0 for step in tube.moves)
+    assert all(step < 0 for step in tube.moves[:-1]) and tube.moves[-1] == result["back_out"]["steps"]
     assert abs(result["best_at"] + 1200) <= 32
 
 
@@ -912,7 +929,7 @@ def test_a_walk_in_tells_the_stream_its_own_steps(tmp_path):
     assert stages[0] == "doughnuts" and "coming in" in stages and "finest steps" in stages and stages[-1] == "done"
     assert f["steps"] == ["doughnuts", "coming in", "finest steps", "done"]
     assert any(r["ring"] for r in f["readings"]) and f["outcome"] == "complete"
-    assert f["end_hfr"] == result["best_hfr"] and f["best_hfr"] == result["best_hfr"]
+    assert f["end_hfr"] == result["ended_hfr"] and f["best_hfr"] == result["best_hfr"]
 
 
 def test_a_walk_in_that_cannot_start_says_why(tmp_path):
