@@ -50,6 +50,47 @@ def compass(az):
     return COMPASS[int((az + 11.25) % 360 // 22.5)]
 
 
+SYNODIC_DAYS = 29.530589     # new Moon to new Moon, mean
+MOON_RADIUS_KM = 1737.4      # NASA Moon fact sheet, volumetric mean radius
+
+
+def object_kind(name):
+    """"moon", "planet" or "deep_sky" for a target or session name: the
+    stream shows each its own way (24 October 2026: a Moon run showed STAR
+    SIZE). "Moon", "Moon-Copernicus", "lunar terminator" are all the Moon."""
+    first = (name or "").strip().lower().replace("_", "-").split("-")[0].split()
+    word = first[0] if first else ""
+    if word in ("moon", "lunar", "luna"):
+        return "moon"
+    if word in BODIES:
+        return "planet"
+    return "deep_sky"
+
+
+def moon_state(site, when=None):
+    """The Moon now as seen from `site` (config's [site]): how much of it is
+    lit, waxing or waning, days since new Moon, distance, apparent size and
+    altitude. The age is from the Sun-Moon angle along the ecliptic and the
+    mean month, so it is good to a few hours."""
+    from astropy.coordinates import GeocentricTrueEcliptic
+    t = Time(when or datetime.now(timezone.utc))
+    location = EarthLocation(lat=site["latitude"] * u.deg, lon=site["longitude"] * u.deg,
+                             height=site.get("elevation_m", 0) * u.m)
+    moon, sun = get_body("moon", t, location), get_body("sun", t, location)
+    elongation = float(moon.separation(sun).deg)
+    ahead = float((moon.transform_to(GeocentricTrueEcliptic(obstime=t)).lon.deg
+                   - sun.transform_to(GeocentricTrueEcliptic(obstime=t)).lon.deg) % 360)
+    distance = float(moon.distance.to(u.km).value)
+    return {
+        "illumination": round(100 * (1 - math.cos(math.radians(elongation))) / 2),
+        "waxing": ahead < 180,
+        "age_days": round(ahead / 360 * SYNODIC_DAYS, 1),
+        "distance_km": round(distance, -2),
+        "size_deg": round(2 * math.degrees(math.asin(MOON_RADIUS_KM / distance)), 2),
+        "altitude": round(float(moon.transform_to(AltAz(obstime=t, location=location)).alt.deg)),
+    }
+
+
 def load_targets():
     def number(text):
         return float(text) if text else None

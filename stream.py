@@ -411,6 +411,13 @@ def open_lines(brief, st):
         trying = [programme_words(p) for p in (clear or [p for p in found if p.get("window")])]
     if trying:
         lines.append(("TONIGHT WILL TRY", ", ".join(dict.fromkeys(trying[:5]))))
+    # A Moon step on tonight's plan gets its own line, said as what will
+    # happen; never when no Moon step is planned.
+    import sky
+    if any(sky.object_kind(t) == "moon" for t in trying):
+        lit = (f"{moon['illumination']}% lit, {'waxing' if moon.get('waxing') else 'waning'} · "
+               if moon.get("illumination") is not None else "")
+        lines.append(("TONIGHT: THE MOON", f"{lit}coming up: close-up imaging → frame selection → final stack"))
     return lines
 
 

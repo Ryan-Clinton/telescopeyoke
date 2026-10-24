@@ -341,15 +341,47 @@ stack; the noise falls as they add up." The graphic is a thin progress arc
 of the time collected against the time planned, if a time is planned.
 Otherwise there is none.
 
+**The Moon** (a run whose `object_kind` is `moon`, from `sky.object_kind`,
+written into the session by `shoot.py`; older sessions fall back on the
+name, so "Moon-Copernicus" is still the Moon). The first object with its own
+mode, so a figure that means nothing for it is never shown (24 October 2026:
+a Moon run's panel said STAR SIZE 9.3″):
+
+> **EXPLORING THE MOON**
+> Hundreds of short exposures are combined to make the surface cleaner and more detailed.
+> TONIGHT'S MOON · Waxing · 97% illuminated · 12.9 days after new Moon
+
+While a lucky-imaging video is taken or stacked (`lucky.py`, activity phase
+`lucky`), the words say instead that short exposures freeze steadier moments
+and the sharpest fifth are combined afterwards. The Moon's state comes from
+`sky.moon_state` at the site, worked out live: never from
+`stream-targets.toml`. Its LOOK CLOSELY lines follow the phase
+(`streamstory.moon_notices`): from 90 % lit, short shadows, rays and maria;
+otherwise the terminator. A line "THE MOON · 97% illuminated · altitude 31° ·
+371,200 km away" joins them and leads the crawl. The story never says star
+size or search depth for the Moon. Where the Moon is in the frame is not
+measured, so features are never named at a place in the picture. A Moon
+step on tonight's plan adds "TONIGHT: THE MOON" to the night-opens card.
+
 ### The figures
 
-There are three at most, as large numbers with small labels and no graphs:
+There are three at most, as large numbers with small labels and no graphs.
+They depend on what is observed (`streamlook.figures_for`). Deep sky:
 
 | Figure | From | Shown as |
 |---|---|---|
-| Frames kept | `accepted` / `captured` | **203 / 211** FRAMES KEPT |
+| Frames kept | `accepted` / (`captured` − `waiting`) | **203 / 211** FRAMES KEPT |
 | Light collected | `integration` | **54 MIN** LIGHT COLLECTED |
 | Star size | the median `series.fwhm` of the last 10 kept frames × the plate scale, changed at most every 30 s | **5.8″** STAR SIZE |
+
+The Moon (`moon_figures`), in this order, as many as fit:
+
+| Figure | From | Shown as |
+|---|---|---|
+| Illuminated | `sky.moon_state` | **97%** ILLUMINATED |
+| Lunar age, or apparent size from 97 % lit | `sky.moon_state` | **6.1 DAYS** LUNAR AGE / **0.54°** APPARENT SIZE |
+| Altitude | `sky.moon_state` | **31°** ALTITUDE |
+| Frames kept, keep rate | as deep sky | **7 / 7** FRAMES KEPT, **100%** KEEP RATE |
 
 When a figure changes, it crossfades over 300 ms rather than jumping. The
 star size is held for 30 s at a time, so the flicker of seeing from frame to

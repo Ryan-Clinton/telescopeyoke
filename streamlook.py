@@ -436,7 +436,7 @@ def about(c, s, x, y, width):
 FIGURE_ROW = 88
 
 
-def figures(c, s, x, y, bottom):
+def deep_sky_figures(s):
     rows = []
     if s.get("kept") is not None and s.get("captured"):
         rows.append((f"{s['kept']} / {s['captured']}", "FRAMES KEPT"))
@@ -445,6 +445,36 @@ def figures(c, s, x, y, bottom):
         rows.append((f"{minutes:.0f} MIN" if minutes < 120 else f"{minutes / 60:.1f} H", "LIGHT COLLECTED"))
     if s.get("fwhm_arcsec"):
         rows.append((f"{s['fwhm_arcsec']:.1f}″", "STAR SIZE"))
+    return rows
+
+
+def moon_figures(s):
+    """The Moon's own figures, then the run's. Never a star size: there are
+    no stars to measure (24 October 2026)."""
+    m = s.get("moon") or {}
+    rows = []
+    if m.get("illumination") is not None:
+        rows.append((f"{m['illumination']}%", "ILLUMINATED"))
+    if m.get("age_days") is not None and m["illumination"] < 97:
+        rows.append((f"{m['age_days']:.1f} DAYS", "LUNAR AGE"))
+    elif m.get("size_deg"):
+        rows.append((f"{m['size_deg']:.2f}°", "APPARENT SIZE"))
+    if m.get("altitude") is not None:
+        rows.append((f"{m['altitude']}°", "ALTITUDE"))
+    if s.get("kept") is not None and s.get("captured"):
+        rows.append((f"{s['kept']} / {s['captured']}", "FRAMES KEPT"))
+        rows.append((f"{round(100 * s['kept'] / s['captured'])}%", "KEEP RATE"))
+    return rows
+
+
+def figures_for(s):
+    """The figures for what is being observed: each kind of object its own,
+    so a number that means nothing for it is never shown."""
+    return moon_figures(s) if s.get("kind") == "moon" else deep_sky_figures(s)
+
+
+def figures(c, s, x, y, bottom):
+    rows = figures_for(s)
     for number, label in rows[:max(0, min(3, int((bottom - y) // FIGURE_ROW)))]:
         c.text((x, y), number, "bold", 46, "text", on="panel")
         c.text((x, y + 54), label, "sans", 18, "secondary", on="panel")
@@ -534,11 +564,36 @@ def programme(c, s, x, y, width):
         if t["state"] in ("baseline", "measuring"):
             return c.wrap((x, y), t.get("baseline_words", ""), "sans", 20, width, "secondary", on="panel")
         return light_curve(c, t, x, y + 28, width, 170, s["now"])
+    if kind == "moon":
+        y = c.wrap((x, y), "EXPLORING THE MOON", "bold", 28, width, "accent", on="panel")
+        y = c.wrap((x, y + 6), moon_words(s.get("lucky")), "sans", 24, width, "text", on="panel") + 10
+        tonight = moon_tonight(s.get("moon") or {})
+        if tonight:
+            y = c.wrap((x, y), tonight, "mono", 18, width, "secondary", on="panel") + 10
+        return y
     if kind == "picture":
         c.text((x, y), "BUILDING A PICTURE", "bold", 28, "accent", on="panel")
         return c.wrap((x, y + 40), "Every exposure is added to the stack; the noise falls as they add up.",
                       "sans", 24, width, "text", on="panel") + 10
     return y
+
+
+def moon_words(lucky):
+    """How the Moon is being imaged, in plain words: a lucky-imaging video
+    (lucky.py) or a run of short exposures stacked as they come."""
+    if lucky:
+        return ("Short exposures freeze moments of steadier air. The sharpest fifth of them "
+                "are combined afterwards, patch by patch, to show finer detail.")
+    return "Hundreds of short exposures are combined to make the surface cleaner and more detailed."
+
+
+def moon_tonight(m):
+    """"TONIGHT'S MOON · Waxing · 34% illuminated · 6.1 days after new Moon",
+    or None when the Moon's state is not known."""
+    if m.get("illumination") is None:
+        return None
+    return (f"TONIGHT'S MOON · {'Waxing' if m.get('waxing') else 'Waning'} · {m['illumination']}% illuminated · "
+            f"{m['age_days']:.1f} days after new Moon")
 
 
 def candidate(c, k, x, y, width):
@@ -1397,6 +1452,28 @@ def held_star_size(fwhm, scale, now):
     return _HELD["value"]
 
 
+def moon_now(now):
+    """sky.moon_state at the observatory's own site (the example site in the
+    demo and the tests), or {} if it cannot be worked out."""
+    import config
+    import sky
+    from datetime import datetime, timezone
+    try:
+        site = config.example()["site"] if config.DEMO else config.load()["site"]
+        return sky.moon_state(site, datetime.fromtimestamp(now, timezone.utc))
+    except Exception:
+        return {}
+
+
+def lucky_now():
+    """True while a lucky-imaging video is taken or stacked (lucky.py)."""
+    try:
+        import activity
+        return activity.phase() == "lucky"
+    except Exception:
+        return False
+
+
 def from_status(st, now=None, session=None):
     """The picture's state from web/status.json, as stream.py reads it."""
     now = now or time.time()
@@ -1417,6 +1494,12 @@ def from_status(st, now=None, session=None):
          "next": (f"{upcoming['label'].split(',')[0]}" + (f" at {utc(upcoming['start'])}" if upcoming.get("start") else ""))
          if upcoming else None,
          "stage": stage(steps, now)}
+    import sky
+    if (st.get("object_kind") or sky.object_kind(name)) == "moon":
+        s["kind"], s["moon"], s["fwhm_arcsec"] = "moon", moon_now(now), None
+        s["lucky"] = lucky_now()
+        s["story"] = told(s, st, now)
+        return s
     p = transit_for(name)
     if p:
         s["kind"], s["transit"] = "transit", transit_state(p, session, now)

@@ -61,6 +61,46 @@ notice = [
     "WASP-12 is one faint star among hundreds here: the light curve, not the picture, shows the planet.",
 ]
 
+# The Moon's figures that change (how much is lit, its age, distance and
+# altitude) come from sky.moon_state, never from here. Sources: NASA's Moon
+# fact sheet (nssdc.gsfc.nasa.gov/planetary/factsheet/moonfact.html) and
+# NASA's Moon pages (science.nasa.gov/moon). LOOK CLOSELY lines are chosen by
+# phase (streamstory.moon_notices): notice_full from 90% lit, else
+# notice_terminator; notice at any phase.
+[targets.Moon]
+common = "Earth's natural satellite"
+words = "Our nearest neighbour in space, seen tonight in close-up."
+facts = [
+    "The Moon is about 3,475 km across: a little over a quarter of the Earth's width.",
+    "The Moon is on average about 384,400 km away: light from it takes just over a second to reach us.",
+    "We always see nearly the same side of the Moon, because it turns once on its axis for each orbit of the Earth.",
+    "The dark plains, the maria, are ancient lava that flooded huge basins over three billion years ago.",
+]
+why = [
+    "Its distance changes through the month because its orbit is not quite a circle: its size in the picture changes a little with it.",
+]
+notice = [
+    "The darker plains are maria: old lava flows, smoother and younger than the bright highlands around them.",
+]
+notice_terminator = [
+    "Look along the terminator, the edge between lunar day and night: low sunlight there makes crater walls and mountains cast long shadows.",
+    "The rough edge between light and dark is not the edge of the Moon: it is sunrise or sunset on the lunar surface.",
+]
+notice_full = [
+    "Near full Moon the Sun is almost overhead there, so shadows are short and craters look flat.",
+    "The bright streaks spreading across the surface are rays: rock thrown out when craters such as Tycho and Copernicus were made.",
+]
+
+[programmes.moon]
+title = "Exploring the Moon"
+explainers = [
+    "The Moon is bright enough to need exposures of a hundredth of a second or less, short enough to freeze the shimmer of the air.",
+]
+method = [
+    "Many short frames are taken; the air blurs each a little differently, so the sharpest are kept and combined.",
+    "Lucky imaging lines up each kept frame patch by patch before adding it, so the air's ripple across the Moon is undone.",
+]
+
 [programmes.patrol]
 title = "Nova patrol"
 explainers = [

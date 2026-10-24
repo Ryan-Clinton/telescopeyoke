@@ -30,7 +30,8 @@ LINE_EVERY, LINE_S = 90, 10           # a LOOK CLOSELY / TELESCOPEYOKE line, dur
 EXPLAINER_EVERY, EXPLAINER_S = 300, 12
 CRAWL_EVERY, CRAWL_S = 600, 45
 NAKED_EYE = 6.0                       # the faintest stars an eye sees under a dark sky (magnitude)
-COMET_HOURS = 36                      # a comet the hunt recovered is told for this long after the hunt
+FULLISH = 90                          # % lit from which the Moon is told as near full (short shadows)
+COMET_HOURS = 36                     # a comet the hunt recovered is told for this long after the hunt
 # While the telescope focuses or is polar aligned: the card's title, its
 # pool in [stories], and how long each card stays.
 SEGMENTS = {"focus": "HOW FOCUSING WORKS", "polar": "HOW POLAR ALIGNMENT WORKS"}
@@ -88,7 +89,11 @@ def made(s, live):
     is measured is said."""
     out = []
     combined, exposure = s.get("combined"), s.get("exposure")
-    if combined and exposure:
+    moon = s.get("kind") == "moon"
+    if combined and exposure and moon:
+        out.append(("made-stack", f"This picture combines {plural(combined, 'exposure')} of {exposure:g} s each: "
+                                  "short enough to freeze the shimmer of the air in each one."))
+    elif combined and exposure:
         out.append(("made-stack", f"This picture combines {plural(combined, 'exposure')} of {exposure:g} s each: "
                                   f"{combined * exposure / 60:.0f} minutes of light from this one patch of sky."))
     rejected = (live.get("rejected") or 0)
@@ -96,10 +101,10 @@ def made(s, live):
         reason = next(iter(live["reasons"]))
         out.append(("made-rejected", f"{plural(rejected, 'frame')} set aside so far, mostly: {reason}. "
                                      "A spoiled frame would only add noise."))
-    if s.get("fwhm_arcsec"):
+    if s.get("fwhm_arcsec") and not moon:
         out.append(("made-stars", f"The stars measure about {s['fwhm_arcsec']:.0f} arcseconds across: "
                                   "mostly the blurring of the air, not the telescope."))
-    depth = live.get("depth_mag")
+    depth = None if moon else live.get("depth_mag")
     if depth:
         out.append(("made-depth", f"Tonight's search can find a new star down to about magnitude {depth:.1f}: "
                                   f"some {fainter(depth)} times fainter than the faintest star the eye can see."))
@@ -178,9 +183,32 @@ def coming_up(steps, now, targets):
     return title, words
 
 
+def moon_line(m):
+    """"THE MOON · 97% illuminated · altitude 31° · 371,200 km away", from
+    what is known now; None when nothing is."""
+    if m.get("illumination") is None:
+        return None
+    parts = ["THE MOON", f"{m['illumination']}% illuminated"]
+    if m.get("altitude") is not None:
+        parts.append(f"altitude {m['altitude']}°")
+    if m.get("distance_km"):
+        parts.append(f"{m['distance_km']:,.0f} km away")
+    return " · ".join(parts)
+
+
+def moon_notices(entry, m):
+    """What to look for on the Moon tonight: near full, the short shadows,
+    the rays and the maria; otherwise the terminator, where the shadows are
+    long. Each from its own list in stream-targets.toml."""
+    full = (m.get("illumination") or 0) >= FULLISH
+    return entry.get("notice_full" if full else "notice_terminator", []) + entry.get("notice", [])
+
+
 def crawl_text(s, live, now, targets):
     parts = ["TONIGHT"]
-    if s.get("kind") == "patrol":
+    if s.get("kind") == "moon":
+        parts.append(moon_line(s.get("moon") or {}) or "imaging the Moon")
+    elif s.get("kind") == "patrol":
         parts.append(f"{s.get('target')} nova patrol")
     elif s.get("kind") == "transit":
         parts.append(f"{s['transit']['planet']} transit")
@@ -199,6 +227,9 @@ def host_line(s):
     if s.get("kind") == "transit":
         return (f"TELESCOPEYOKE · I'm measuring {name}'s brightness every few seconds, "
                 "waiting for the planet's shadow.")
+    if s.get("kind") == "moon":
+        return ("TELESCOPEYOKE · I'm taking a fast video: only the sharpest frames will be kept."
+                if s.get("lucky") else "TELESCOPEYOKE · I'm taking short exposures of the Moon and combining them.")
     if s.get("kind") == "patrol":
         return f"TELESCOPEYOKE · I'm searching this part of {name} for any star that wasn't here before."
     exposure = s.get("exposure")
@@ -223,7 +254,7 @@ def plan(s, live, now=None, story=None, targets=None):
                           int((now - story.start) // SEGMENT_S))
         out.update(chapter="HOW IT WORKS", card=(SEGMENTS[s["kind"]], [text]) if text else None)
         return out
-    if s.get("candidate") or (s.get("last_age") or 0) > 120 or s.get("kind") not in ("patrol", "transit", "picture"):
+    if s.get("candidate") or (s.get("last_age") or 0) > 120 or s.get("kind") not in ("patrol", "transit", "picture", "moon"):
         return out                    # a follow-up or a warning has the screen
     if story.start is None:
         story.start = now
@@ -256,7 +287,10 @@ def plan(s, live, now=None, story=None, targets=None):
         out["chapter"] = "NOW"
     # A line across the picture, while the panel shows NOW: what to look for, or the presenter.
     if chapter == "NOW" and elapsed % LINE_EVERY < LINE_S and elapsed >= LINE_EVERY / 2:
-        pool = [f"LOOK CLOSELY · {t}" for t in entry.get("notice", [])] + [host_line(s)]
+        notices = moon_notices(entry, s.get("moon") or {}) if s["kind"] == "moon" else entry.get("notice", [])
+        pool = [f"LOOK CLOSELY · {t}" for t in notices] + [host_line(s)]
+        if s["kind"] == "moon" and moon_line(s.get("moon") or {}):
+            pool.append(moon_line(s["moon"]))
         out["line"] = story.pick("line", pool, int(elapsed // LINE_EVERY))
     if elapsed % EXPLAINER_EVERY < EXPLAINER_S and elapsed >= EXPLAINER_EVERY / 2:
         kinds = {"transit": ["transit", "stacking"], "patrol": ["subtraction", "nova", "stacking"]}.get(

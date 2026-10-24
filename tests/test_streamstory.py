@@ -123,3 +123,20 @@ def test_while_focusing_or_polar_aligning_the_cards_come_from_their_own_pools():
                  "celestial pole", "Polaris is not exactly at the pole", "circle", "declination", "bolts",
                  "level tripod is not essential"):
         assert idea in words, idea
+
+
+MOON = {"kind": "moon", "target": "Moon", "combined": 40, "exposure": 0.02, "fwhm_arcsec": 9.3,
+        "moon": {"illumination": 97, "waxing": True, "age_days": 12.9, "distance_km": 371200.0,
+                 "size_deg": 0.54, "altitude": 31}}
+
+
+def test_the_moon_s_story_has_no_star_size_or_depth_and_its_notices_follow_the_phase():
+    made = dict(streamstory.made(MOON, {"depth_mag": 16.0}))
+    assert "made-stars" not in made and "made-depth" not in made and "freeze" in made["made-stack"]
+    entry = streamlook.targets()["targets"]["Moon"]
+    full = streamstory.moon_notices(entry, MOON["moon"])
+    crescent = streamstory.moon_notices(entry, dict(MOON["moon"], illumination=30))
+    assert any("rays" in t.lower() for t in full) and not any("terminator" in t.lower() for t in full)
+    assert any("terminator" in t.lower() for t in crescent)
+    assert streamstory.moon_line(MOON["moon"]) == "THE MOON · 97% illuminated · altitude 31° · 371,200 km away"
+    assert streamstory.crawl_text(MOON, {}, 0, {}).startswith("TONIGHT   ·   THE MOON · 97% illuminated")

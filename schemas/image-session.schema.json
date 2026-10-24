@@ -45,6 +45,17 @@
     "rejected": {
       "type": "integer"
     },
+    "waiting": {
+      "description": "frames the live stack had no time for, kept for the quality pass: neither accepted nor rejected",
+      "type": "integer"
+    },
+    "object_kind": {
+      "enum": [
+        "moon",
+        "planet",
+        "deep_sky"
+      ]
+    },
     "acceptance_rate": {
       "type": "number"
     },

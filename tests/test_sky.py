@@ -108,3 +108,25 @@ def test_the_catalogue_loads_with_all_the_messier_objects():
     messier = [t for t in targets if t["messier"]]
     assert len(messier) == 109  # M102 is a duplicate of M101
     assert all(0 <= t["ra"] < 360 and -90 <= t["dec"] <= 90 for t in targets)
+
+
+def test_the_moon_and_planets_are_told_from_deep_sky_targets():
+    kinds = [sky.object_kind(n) for n in ("Moon", "moon-copernicus", "Lunar terminator", "Jupiter",
+                                         "M31", "Moonlight Nebula", "", None)]
+    assert kinds == ["moon", "moon", "moon", "planet", "deep_sky", "deep_sky", "deep_sky", "deep_sky"]
+
+
+def test_the_moon_s_phase_age_and_size_match_the_published_times():
+    """January 2024: new Moon on the 11th at 11:57 UTC, first quarter on the
+    18th at 03:53, full on the 25th at 17:54 (USNO)."""
+    from datetime import datetime, timezone
+    site = config.example()["site"]
+    new = sky.moon_state(site, datetime(2024, 1, 11, 11, 57, tzinfo=timezone.utc))
+    quarter = sky.moon_state(site, datetime(2024, 1, 18, 3, 53, tzinfo=timezone.utc))
+    full = sky.moon_state(site, datetime(2024, 1, 25, 17, 54, tzinfo=timezone.utc))
+    assert new["illumination"] <= 1 and (new["age_days"] < 0.5 or new["age_days"] > 29)
+    assert 45 <= quarter["illumination"] <= 55 and quarter["waxing"] and 6.5 < quarter["age_days"] < 8
+    assert full["illumination"] >= 99 and 14 < full["age_days"] < 16
+    for state in (new, quarter, full):
+        assert 356_000 <= state["distance_km"] <= 407_000 and 0.48 <= state["size_deg"] <= 0.57
+        assert -90 <= state["altitude"] <= 90

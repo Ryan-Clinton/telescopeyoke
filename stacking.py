@@ -902,6 +902,8 @@ def run_status(session, now=None):
     """Where an imaging run has got to, for the web page: frames taken, kept
     and dropped, why the dropped ones were dropped, and the newest frame."""
     import time
+
+    import sky
     session = Path(session)
     log = read_log(session)
     plan = {}
@@ -919,6 +921,8 @@ def run_status(session, now=None):
         reasons[reason] = reasons.get(reason, 0) + 1
     status = {
         "name": plan.get("name", session.parent.name),
+        # Older sessions did not say; their name does (sky.object_kind).
+        "object_kind": plan.get("object_kind") or sky.object_kind(plan.get("name", session.parent.name)),
         "planned": plan.get("frames"), "exposure": plan.get("exposure"),
         "captured": len(log), "accepted": len(log) - len(rejected) - len(waiting),
         "rejected": len(rejected), "waiting": len(waiting),

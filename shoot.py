@@ -97,10 +97,12 @@ class Session:
         self.folder = config.DATA / "frames" / self.name / f"{datetime.now():%Y%m%d-%H%M%S}"
         self.folder.mkdir(parents=True, exist_ok=True)
         # What was asked for, so the web page can say "frame 31 of 200".
-        # And whether the computer's clock was kept to time, for timing transits.
+        # And whether the computer's clock was kept to time, for timing transits,
+        # and what kind of object it is, so the stream shows the Moon as the Moon.
+        import sky
         records.write(self.folder / "session.json",
                       {"name": self.name, "frames": frames, "exposure": exposure, "gain": gain,
-                       "clock": clock_state()}, indent=None)
+                       "object_kind": sky.object_kind(name), "clock": clock_state()}, indent=None)
         self.exposure, self.gain, self.save = exposure, gain, save
         self.calibration = stacking.Calibration(exposure, gain)
         self.reference, self.stack = None, None

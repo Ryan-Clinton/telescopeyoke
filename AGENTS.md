@@ -57,6 +57,7 @@ them and every file kept under `demo/`.
 | `depth.py` | How faint a stack reaches, measured: zero point against Gaia, 5-sigma limit, planted stars found again (`docs/discovery.md`, phase 0) |
 | `remote.py` | `restack.py --on HOST`: sends the frames, calibration and code to another computer by SSH and rsync, stacks there under `~/telescopeyoke-laptop/remote`, and brings the picture back |
 | `planet.py` | A planet: thousands of a second per frame, a square round it kept from each, the sharpest stacked. Uses the camera only |
+| `lucky.py` | `ty lucky`: lucky imaging of the Moon. `capture` takes a video in the camera's video mode (optionally a region of the sensor) as a SER file; `stack` keeps the sharpest share and lines each frame up as a whole and then on alignment points before averaging and sharpening (`docs/lucky-imaging.md`). Uses the camera only |
 | `difference.py` | Proper image subtraction (ZOGY) of a reference stack from a new one: what is brighter now (`docs/discovery.md`, phase 1) |
 | `patrol.py`, `programmes/` | A discovery patrol of one field: readiness, point and image (through `mount.py` and `shoot.py`), then depth, subtraction, vetting and a short answer |
 | `realbogus.py` | Real or bogus: a logistic model trained on stars planted in this rig's own subtractions and on the peaks the subtraction leaves, tested night by night; its probability goes into each vetted candidate's evidence, as advice (`docs/discovery.md`, phase 8) |

@@ -65,11 +65,16 @@ def test_the_candidate_states_show_no_cut_out_or_place():
 
 def test_each_target_entry_has_its_facts_and_fits():
     found = streamlook.targets()
+    import sky
     for name, entry in found["targets"].items():
-        assert entry["words"] and entry["distance"] and entry["magnitude"], name
+        # The Moon's distance and brightness change through the month:
+        # sky.moon_state gives them live, never the file.
+        fixed = sky.object_kind(name) != "moon"
+        assert entry["words"] and (not fixed or (entry["distance"] and entry["magnitude"])), name
+        assert fixed or not {"distance", "magnitude"} & set(entry), name
         assert len(entry["words"]) <= 160, name
         assert all(len(caption) <= 120 for caption in entry.get("captions", [])), name
-    assert set(found["programmes"]) >= {"patrol", "transit", "picture"}
+    assert set(found["programmes"]) >= {"patrol", "transit", "picture", "moon"}
 
 
 def test_the_display_stretch_keeps_the_sky_dark_and_the_picture_its_size():
@@ -281,3 +286,34 @@ def test_a_polar_alignment_is_read_from_polaralign_py_s_own_file(tmp_path):
     assert failed["card"] == ("POLAR MEASUREMENT FAILED", "Cloud. Nothing was measured.", "attention")
     old = streamlook.polar_stream_state(path=polar_file(tmp_path, rounds=[{"total_deg": 3, "measured": 0}]))
     assert old["rounds"] == []                               # another night's rounds are not tonight's history
+
+
+MOON_NOW = {"illumination": 97, "waxing": True, "age_days": 12.9, "distance_km": 371200.0,
+            "size_deg": 0.54, "altitude": 31}
+
+
+def test_the_moon_is_shown_as_the_moon_never_with_a_star_size(monkeypatch):
+    """24 October 2026: the Moon run's sidebar said STAR SIZE 9.3″."""
+    monkeypatch.setattr(streamlook, "moon_now", lambda now: dict(MOON_NOW))
+    monkeypatch.setattr(streamlook, "lucky_now", lambda: False)
+    status = {"name": "Moon", "age": 1, "exposure": 0.02, "accepted": 7, "captured": 7, "integration": 0,
+              "object_kind": "moon", "series": {"fwhm": [6.0] * 7, "accepted": [True] * 7}}
+    s = streamlook.from_status(status, now=1792800000.0)
+    assert s["kind"] == "moon" and s["fwhm_arcsec"] is None
+    labels = [label for _, label in streamlook.figures_for(s)]
+    assert labels[:3] == ["ILLUMINATED", "APPARENT SIZE", "ALTITUDE"] and "STAR SIZE" not in labels
+    assert "KEEP RATE" in labels
+    # Away from full, the Moon's age; a session named only "Moon-Copernicus" is still the Moon.
+    monkeypatch.setattr(streamlook, "moon_now", lambda now: dict(MOON_NOW, illumination=34, age_days=6.1))
+    s = streamlook.from_status(dict(status, name="Moon-Copernicus", object_kind=None), now=1792800000.0)
+    assert s["kind"] == "moon" and streamlook.figures_for(s)[1] == ("6.1 DAYS", "LUNAR AGE")
+    assert streamlook.moon_tonight(s["moon"]) == ("TONIGHT'S MOON · Waxing · 34% illuminated · "
+                                                 "6.1 days after new Moon")
+    # Deep sky is as it was.
+    assert "STAR SIZE" in [label for _, label in streamlook.deep_sky_figures({"fwhm_arcsec": 4.8})]
+
+
+def test_the_moon_programme_says_how_it_is_being_imaged():
+    assert "sharpest" in streamlook.moon_words(lucky=True)
+    assert "Hundreds of short exposures" in streamlook.moon_words(lucky=False)
+    assert streamlook.moon_tonight({}) is None

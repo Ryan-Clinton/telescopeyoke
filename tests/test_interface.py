@@ -170,6 +170,7 @@ def test_scenario_diagnose_cloud(quiet, monkeypatch):
                    "image-session")
     data = result["data"]
     assert (data["captured"], data["accepted"], data["rejected"]) == (10, 6, 4)
+    assert data["object_kind"] == "deep_sky" and data["waiting"] == 0
     assert data["reasons"] == {"star brightness down (cloud)": 4}
     assert len(data["frames"]) == 5 and data["state"] == "capturing"
     # Without asking for frames the answer stays small.

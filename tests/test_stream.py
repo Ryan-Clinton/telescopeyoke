@@ -437,3 +437,11 @@ def test_the_night_s_result_adds_focus_polar_and_what_is_next(monkeypatch, tmp_p
     (tmp_path / "runs.jsonl").unlink()
     (tmp_path / "polar.json").unlink()
     assert stream.end_lines({}, now) == ["0 fields observed", "0 frames kept", "no possible changes"]
+
+
+def test_a_moon_step_on_the_plan_opens_with_the_moon():
+    st = {"schedule": {"steps": [{"label": "Moon, 0.02 s frames", "status": "queued"}]}}
+    lines = dict(stream.open_lines(brief(), st))
+    assert lines["TONIGHT: THE MOON"] == ("34% lit, waxing · coming up: close-up imaging → frame selection → "
+                                          "final stack")
+    assert "TONIGHT: THE MOON" not in dict(stream.open_lines(brief(), {}))
