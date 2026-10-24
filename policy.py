@@ -57,6 +57,7 @@ COMMANDS = {
     "camera_test.py": ("hardware", {}, DRY),
     "candidates.py": ("read_only", {"--dismiss": "local_write", "--reopen": "local_write"}, {}),
     "clouds.py": ("read_only", {}, {}),
+    "collimation.py": ("hardware", {"--file": "local_write", "--history": "read_only"}, {}),   # the camera only
     "compare.py": ("local_write", {}, {}),
     "console.py": ("hardware", {}, {}),             # its server runs the other scripts on request
     "depth.py": ("local_write", {}, {}),
@@ -128,7 +129,7 @@ TY = {"run": "hardware"}
 TY_PASSES = {"mount": "mount.py", "tonight": "tonight.py", "shoot": "shoot.py", "focus": "focus.py",
              "solve": "solve.py", "restack": "restack.py", "console": "console.py", "watch-run": "runwatch.py",
              "agent-report": "agentlog.py", "test-run": "testrun.py", "streak": "streak.py",
-             "lucky": "lucky.py", "moon": "moon.py"}
+             "lucky": "lucky.py", "moon": "moon.py", "collimation": "collimation.py"}
 
 
 def script_of(word):

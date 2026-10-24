@@ -112,7 +112,8 @@ brightest star at the start and now, for the live stream's focus look
     ./focus.py --measure-backlash    the slack, on the steep side of the curve, twice; half as much again is kept
     ./focus.py --walk-in             from a little outside focus, set by hand: in 64 then 32 half-steps at a
                                      time, slowly (40 ms a half-step), measuring each, to the sharpest;
-                                     then one move back out to the best, saying whether the motor lifted it
+                                     then one move back out to the best, saying whether the motor lifted it;
+                                     the collimation is checked on its first doughnuts (collimation.md)
 
 No move of a run goes further than `[focuser] travel` (512 half-steps by
 default, overshoot included) from where it started: a move beyond it is

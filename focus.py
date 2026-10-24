@@ -1520,6 +1520,7 @@ def run_motor(args, mode="focus"):
                     found = measure(seen["lum"])
                     if found:
                         sizes.append(found[2])
+                        seen.setdefault("doughnut", seen["lum"])    # for the collimation check
                 return float(np.median(sizes)) if sizes else None
 
             def say(line):
@@ -1533,6 +1534,15 @@ def run_motor(args, mode="focus"):
                 progress(f"walking in at {WALK_MS} ms a half-step, {SWEEP_FRAMES} frames of "
                          f"{MOTOR_EXPOSURE:g} s after each move")
                 result = walk_in(drive, read, usual, say=say, ring=ring, live=live)
+                if "doughnut" in seen:
+                    # The doughnuts it started from show the collimation for free
+                    # (collimation.py; 24 October 2026).
+                    import collimation
+                    checked = collimation.check(seen["doughnut"])
+                    progress(collimation.words(checked))
+                    if checked:
+                        collimation.keep(checked, "walk-in")
+                        result["collimation"] = checked
                 progress(f"Best HFR {result['best_hfr']} at {result['best_at']:+d} half-steps; ended at "
                          f"{result['ended_at']:+d}, HFR {result['ended_hfr']}.")
                 # Where it ended, if that is good, counts as focused for the

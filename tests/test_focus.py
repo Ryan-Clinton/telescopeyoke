@@ -1144,3 +1144,31 @@ def test_a_hand_edited_travel_is_held_to_the_settings_limit(monkeypatch):
     assert focus.focuser_travel() == focus.TRAVEL_MOST == 8192
     row = next(r for r in focus.config.SETTINGS if r[:2] == ("focuser", "travel"))
     assert row[-1]["max"] == focus.TRAVEL_MOST
+
+
+def test_a_walk_in_from_doughnuts_checks_the_collimation_on_them(monkeypatch, capsys, tmp_path):
+    """24 October 2026: the doughnuts a walk-in starts from show whether the
+    mirrors are still lined up, for free."""
+    import collimation
+    import focuser
+    tube = Drawtube(best=-300, slope=40)
+    measured_focuser(monkeypatch, travel=512)
+    monkeypatch.setattr(focuser.Focuser, "open", opened_motor(tube))
+    monkeypatch.setattr(focus, "Camera", StarCamera)
+    monkeypatch.setattr(focus, "SETTLE_S", 0)
+    monkeypatch.setattr(focus, "measure", lambda lum: (10.0, 10.0, 60.0))
+    monkeypatch.setattr(focus, "usual_best", lambda: 2.4 * focus.arcsec_per_pixel())
+    monkeypatch.setattr(collimation, "HISTORY", tmp_path / "collimation.jsonl")
+    monkeypatch.setattr(collimation, "check", lambda lum: {"offset": 0.12, "towards": "left", "ring_px": 60,
+                                                            "verdict": collimation.verdict(0.12)})
+
+    def walk(motor, read, usual, ring=None, **k):
+        ring(1)
+        return {"best_hfr": 2.0, "best_at": -8, "ended_at": -8, "ended_hfr": 2.0, "readings": [(-8, 2.0)]}
+    monkeypatch.setattr(focus, "walk_in", walk)
+    monkeypatch.setattr(sys, "argv", ["focus.py", "--walk-in", "--json"])
+    with pytest.raises(SystemExit):
+        focus.main()
+    answer = json.loads(capsys.readouterr().out)
+    assert answer["data"]["collimation"]["verdict"].startswith("off")
+    assert json.loads((tmp_path / "collimation.jsonl").read_text())["source"] == "walk-in"
