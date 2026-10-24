@@ -907,7 +907,11 @@ def run_status(session, now=None):
     plan = {}
     if (session / "session.json").exists():
         plan = json.loads((session / "session.json").read_text(encoding="utf-8"))
-    rejected = [f for f in log if not f["accepted"]]
+    # A frame the live stack had no time for is kept for the quality pass,
+    # not dropped: counted apart, never as rejected (24 October 2026, the
+    # Moon: the page said 27 of 52 rejected when 5 were).
+    waiting = [f for f in log if not f["accepted"] and (f.get("deferred") or "kept for the quality pass" in f["reason"])]
+    rejected = [f for f in log if not f["accepted"] and f not in waiting]
     reasons = {}
     for f in rejected:
         # "star brightness down 61% (cloud)" and "... 54% (cloud)" are one reason.
@@ -916,7 +920,8 @@ def run_status(session, now=None):
     status = {
         "name": plan.get("name", session.parent.name),
         "planned": plan.get("frames"), "exposure": plan.get("exposure"),
-        "captured": len(log), "accepted": len(log) - len(rejected), "rejected": len(rejected),
+        "captured": len(log), "accepted": len(log) - len(rejected) - len(waiting),
+        "rejected": len(rejected), "waiting": len(waiting),
         "reasons": dict(sorted(reasons.items(), key=lambda item: -item[1])),
         "finished": (session / "final.fits").exists() or (session / "live.fits").exists(),
         "restacked": (session / "final.fits").exists(),

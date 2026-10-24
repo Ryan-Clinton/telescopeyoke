@@ -36,7 +36,7 @@ import sys
 
 PASS_THROUGH = {"mount": "mount", "tonight": "tonight", "shoot": "shoot", "focus": "focus",
                 "solve": "solve", "restack": "restack", "console": "console", "watch-run": "runwatch",
-                "agent-report": "agentlog", "test-run": "testrun", "streak": "streak"}
+                "agent-report": "agentlog", "test-run": "testrun", "streak": "streak", "lucky": "lucky"}
 
 
 def show(value, indent=0):

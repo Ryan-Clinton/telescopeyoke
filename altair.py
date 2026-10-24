@@ -397,6 +397,50 @@ class AltairCamera:
         header["INSTRUME"] = self.name
         return data, header
 
+    def video(self, seconds, count, roi=None, timeout=5.0):
+        """`count` frames as fast as the camera sends them, in its video mode
+        rather than one triggered exposure at a time, for lucky imaging
+        (lucky.py): yields (uint16 Bayer mosaic, seconds since the first).
+        `roi` is (x, y, width, height) on the sensor, rounded to even numbers
+        so the Bayer pattern stays the same. The camera is put back as it
+        was afterwards, however the loop ends."""
+        lib, handle = self.lib, self.handle
+        full = (self.width, self.height)
+        handle.Stop()
+        try:
+            handle.put_Option(lib.ALTAIRCAM_OPTION_TRIGGER, 0)     # 0: video, frames back to back
+            if roi:
+                x, y, w, h = (max(8, int(v)) // 2 * 2 for v in roi)
+                handle.put_Roi(x, y, w, h)
+                self.width, self.height = w, h
+            handle.put_ExpoTime(max(1, round(seconds * 1e6)))
+            handle.put_ExpoAGain(self.gain)
+            with self._changed:
+                self._ready, self._failure, self._waiting = 0, None, True
+            handle.StartPullModeWithCallback(self._callback, self)
+            first = None
+            for _ in range(count):
+                with self._changed:
+                    arrived = self._changed.wait_for(lambda: self._ready or self._failure, timeout=timeout)
+                    if self._failure or not arrived:
+                        raise CameraError(self._failure or f"no video frame within {timeout:g} s")
+                    self._ready -= 1
+                data, _ = self._pull()
+                now = time.perf_counter()
+                first = first if first is not None else now
+                yield self._normalise(data), now - first
+        finally:
+            with self._changed:
+                self._waiting = False
+            for step in (handle.Stop, lambda: handle.put_Roi(0, 0, 0, 0),
+                         lambda: handle.put_Option(lib.ALTAIRCAM_OPTION_TRIGGER, 1)):
+                try:
+                    step()
+                except Exception:
+                    pass   # put back as far as it will go
+            self.width, self.height = full
+            handle.StartPullModeWithCallback(self._callback, self)
+
     # --- what the camera is, for camera_test.py and the doctor ----------------------
 
     def details(self):

@@ -789,3 +789,19 @@ def test_destriping_keeps_a_faint_galaxy_s_total_centre_and_profile():
         assert total <= kept.sum() / put.sum() <= 1.03, n
         assert centre <= kept[0] / put[0] <= 1.03, n
         assert np.all((kept / put >= ring) & (kept / put <= 1.05)), (n, kept / put)
+
+
+def test_frames_kept_for_the_quality_pass_are_not_counted_rejected(tmp_path):
+    """24 October 2026, the Moon at a frame a second: the page said 27 of
+    52 rejected when 22 were only waiting for the quality pass."""
+    for entry in ([{"index": i, "accepted": True, "fwhm": 5.0, "roundness": 0.9, "stars": 200, "reason": ""} for i in range(3)]
+                  + [{"index": 3, "accepted": False, "deferred": True, "fwhm": None, "stars": 0,
+                      "reason": "live stack behind; kept for the quality pass"},
+                     {"index": 4, "accepted": False, "fwhm": None, "stars": 0,       # logged before the flag
+                      "reason": "live stack behind; kept for the quality pass"},
+                     {"index": 5, "accepted": False, "fwhm": 6.0, "stars": 90,
+                      "reason": "star brightness down 42% (cloud)"}]):
+        stacking.append_log(tmp_path, entry)
+    status = stacking.run_status(tmp_path)
+    assert (status["captured"], status["accepted"], status["rejected"], status["waiting"]) == (6, 3, 1, 2)
+    assert status["reasons"] == {"star brightness down (cloud)": 1}

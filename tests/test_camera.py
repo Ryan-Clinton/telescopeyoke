@@ -97,6 +97,22 @@ def fake_sdk(world):
 
         def StartPullModeWithCallback(self, callback, context):
             self.callback, self.context = callback, context
+            if self.options.get(lib.ALTAIRCAM_OPTION_TRIGGER) == 0:
+                self.streaming = True
+                w, h = getattr(self, "roi", (0, 0, 0, 0))[2:] or (0, 0)
+
+                def stream():     # video mode: frames back to back until stopped
+                    n = 0
+                    while self.streaming:
+                        n += 1
+                        data = np.full((h or HEIGHT, w or WIDTH), n, dtype=np.uint16)
+                        self.held.append((data, n, 0))
+                        self.callback(lib.ALTAIRCAM_EVENT_IMAGE, self.context)
+                        time.sleep(0.002)
+                threading.Thread(target=stream, daemon=True).start()
+
+        def put_Roi(self, x, y, w, h):
+            self.roi = (x, y, w, h)
 
         def Trigger(self, number):
             if number == 0:
@@ -135,7 +151,11 @@ def fake_sdk(world):
             if info is not None:
                 info.seq, info.timestamp = seq, stamp
 
-        def Stop(self): pass
+        def Stop(self):
+            self.streaming = False
+            time.sleep(0.01)
+            self.held.clear()
+
         def Close(self): self.closed += 1
 
     class Altaircam:
@@ -934,3 +954,16 @@ def test_the_indi_route_sets_the_readout_speed_kept_in_the_settings(world, monke
     monkeypatch.setitem(camera.SETTINGS, "camera", dict(camera.SETTINGS.get("camera", {}), readout_speed=0))
     with camera.Camera(gain=1500) as cam:
         assert cam.speed == 0
+
+
+def test_a_video_comes_back_to_back_from_part_of_the_sensor_and_the_camera_is_put_back(sdk, world):
+    """lucky.py's frames: the camera's video mode, not one trigger a frame
+    (24 October 2026, the Moon). Afterwards single exposures work again."""
+    with altair.AltairCamera() as cam:
+        got = list(cam.video(0.001, 5, roi=(3, 5, 17, 11)))
+        assert len(got) == 5 and all(m.shape == (10, 16) for m, _ in got)
+        assert cam.handle.roi == (0, 0, 0, 0)
+        assert cam.handle.options[sdk.ALTAIRCAM_OPTION_TRIGGER] == 1
+        assert (cam.width, cam.height) == (WIDTH, HEIGHT)
+        data, _ = cam.frame(0.01)
+        assert data.shape == (HEIGHT, WIDTH)

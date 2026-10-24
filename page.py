@@ -461,8 +461,10 @@ atlas. Comets: COBS and JPL Horizons. Cloud imagery: EUMETSAT. Catalogue: OpenNG
     $$("run-count").textContent = run.captured + (run.planned ? " of " + run.planned : "") + " frames"
       + (run.exposure ? " of " + run.exposure + " s" : "");
     const figures = [[run.accepted, "accepted"], [run.rejected, "rejected"]];
+    if (run.waiting) figures.push([run.waiting, "for the quality pass"]);
     if (run.integration != null) figures.push([run.integration + " s", "integration"]);
-    if (run.captured) figures.push([Math.round(100 * run.accepted / run.captured) + "%", "kept"]);
+    const judged = run.captured - (run.waiting || 0);
+    if (judged) figures.push([Math.round(100 * run.accepted / judged) + "%", "kept"]);
     $$("run-figures").replaceChildren(...figures.map(([value, label]) => {
       const item = make("span");
       item.append(make("b", String(value)), " " + label);

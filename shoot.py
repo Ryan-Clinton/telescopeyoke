@@ -151,7 +151,7 @@ class Session:
     def defer(self, index):
         """Note a frame the live stack had no time for; its raw file is kept
         for the quality pass."""
-        entry = {"index": index, "accepted": False, "fwhm": None, "stars": 0,
+        entry = {"index": index, "accepted": False, "deferred": True, "fwhm": None, "stars": 0,
                  "reason": "live stack behind; kept for the quality pass"}
         self.log.append(entry)
         stacking.append_log(self.folder, entry)

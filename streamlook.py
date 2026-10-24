@@ -1412,7 +1412,7 @@ def from_status(st, now=None, session=None):
     upcoming = next((s for s in steps if s.get("status") == "queued"), None)
     s = {"kind": "picture", "target": name.partition("-P")[0] if "-P" in name else name, "now": now,
          "exposure": st.get("exposure"), "last_age": st.get("age"), "combined": st.get("accepted"),
-         "kept": st.get("accepted"), "captured": st.get("captured"), "integration_s": st.get("integration"),
+         "kept": st.get("accepted"), "captured": (st.get("captured") or 0) - (st.get("waiting") or 0), "integration_s": st.get("integration"),
          "fwhm_arcsec": held_star_size(fwhm, scale, now),
          "next": (f"{upcoming['label'].split(',')[0]}" + (f" at {utc(upcoming['start'])}" if upcoming.get("start") else ""))
          if upcoming else None,

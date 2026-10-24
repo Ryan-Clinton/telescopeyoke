@@ -235,7 +235,8 @@ def session(include_frames=False, limit=50, include_series=False, data=None):
     status["state"] = imaging_state(status)
     status["folder"] = str(newest.relative_to(base))
     if status["captured"]:
-        status["acceptance_rate"] = round(status["accepted"] / status["captured"], 3)
+        judged = status["captured"] - status.get("waiting", 0)    # not those kept for the quality pass
+        status["acceptance_rate"] = round(status["accepted"] / judged, 3) if judged else 1.0
     if include_frames:
         log = stacking.read_log(newest)
         status["frames"] = [{k: f.get(k) for k in ("index", "accepted", "reason", "fwhm",
