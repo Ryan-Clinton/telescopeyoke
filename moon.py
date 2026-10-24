@@ -244,7 +244,7 @@ def run(args, scope=None, cam=None, site=None, say=print):
     say(f"{notes['frames']} frames at {notes['fps']} a second ({notes['dropped']} dropped): {path}")
     if args.no_stack:
         return {"video": str(path), **notes}
-    done = lucky.stack_file(path, keeps=args.keep, in_colour=args.colour)
+    done = lucky.stack_file(path, keeps=args.keep, in_colour=args.colour, pixels=args.pixels)
     return {"video": str(path), **notes, "stack": done}
 
 
@@ -258,6 +258,8 @@ def parse(argv=None):
     ap.add_argument("--depth", type=int, choices=(8, 16), default=8)
     ap.add_argument("--keep", type=float, nargs="+", default=list(lucky.KEEPS), help="shares to stack, per cent")
     ap.add_argument("--colour", action="store_true", help="natural colour rather than green detail")
+    ap.add_argument("--pixels", choices=("green", "all"), default="green",
+                    help="the detail picture from the greens filled in, or every pixel balanced")
     ap.add_argument("--full-frame", action="store_true", help="the whole sensor rather than the region round the disc")
     ap.add_argument("--aim", type=float, nargs=2, default=[0.0, 0.0], metavar=("EAST", "NORTH"),
                     help="arcminutes off the Moon's centre to aim at first")

@@ -81,7 +81,7 @@ def rig(tmp_path, monkeypatch):
     monkeypatch.setattr(shoot, "RUN_LOCK", tmp_path / "imaging.lock")
     monkeypatch.setattr(snap, "publish", lambda *a, **k: None)
     stacked = []
-    monkeypatch.setattr(lucky, "stack_file", lambda path, keeps, in_colour: stacked.append(path) or {"shown": "20"})
+    monkeypatch.setattr(lucky, "stack_file", lambda path, keeps, in_colour, pixels: stacked.append(path) or {"shown": "20"})
     return stacked
 
 

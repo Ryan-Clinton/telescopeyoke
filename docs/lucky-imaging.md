@@ -117,6 +117,13 @@ centring was done by hand-reckoned aim-offs and a fixed exposure, and the
 Moon drifted toward the region's edge in the 10 minutes because the mount
 tracks at the stars' rate. `./ty moon` does those three from the picture.
 
+Restacked the next morning with the new stacker (each part from the frames
+sharpest there, green detail, the best 5 to 40 %): the pixel noise halved,
+but Tycho's rim and rays were softer than the first stack's every-pixel
+picture. Filling in the greens costs detail at this sampling. The first
+stack stays the night's picture, and `--pixels all` puts the every-pixel
+picture back within reach of the new stacker.
+
 Not yet tried on the sky: `./ty moon` itself (centring, the lunar hold,
 the automatic exposure and region), the local frame choice, and readout
 speeds faster than Speed 0 for short frames.

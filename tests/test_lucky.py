@@ -73,6 +73,18 @@ def test_the_detail_picture_is_the_greens_filled_in_so_the_colour_pattern_does_n
     assert np.allclose(rgb[2:-2, 2:-2, 0], 4000) and np.allclose(rgb[2:-2, 2:-2, 2], 100)
 
 
+def test_every_pixel_balanced_to_the_green_s_level():
+    mosaic = np.zeros((8, 8), np.uint16)
+    mosaic[0::2, 0::2] = 2000
+    mosaic[1::2, 1::2] = 500
+    mosaic[0::2, 1::2] = mosaic[1::2, 0::2] = 1000
+    assert np.allclose(lucky.balanced(mosaic), 1000)
+    rng = np.random.default_rng(2)
+    frames = np.array([mosaic_of(seen(surface(), rng, bend=0.3)) for _ in range(6)])
+    results, done = lucky.stack(frames, keeps=(50,), report=None, box=48, step=24, pixels="all")
+    assert done["kept"] == {"50": 3} and results[50.0].shape == (256, 256)
+
+
 def test_the_stack_keeps_each_share_of_frames():
     rng = np.random.default_rng(7)
     truth = surface()

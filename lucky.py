@@ -151,6 +151,22 @@ def green(mosaic):
     return ndimage.convolve(m * g, CROSS, mode="mirror")
 
 
+def balanced(mosaic, gains=None):
+    """Every pixel of an RGGB mosaic at full resolution, the red and blue
+    ones scaled to the green's level (`gains`, or worked out from this
+    mosaic). The finer of the two detail pictures where the surface is grey:
+    on 24 October 2026 Tycho's rim was crisper this way than from the greens
+    alone, at twice the pixel noise."""
+    m = np.asarray(mosaic, dtype=np.float32)
+    if gains is None:
+        g = (m[0::2, 1::2].mean() + m[1::2, 0::2].mean()) / 2
+        gains = (g / max(m[0::2, 0::2].mean(), 1e-6), g / max(m[1::2, 1::2].mean(), 1e-6))
+    out = m.copy()
+    out[0::2, 0::2] *= gains[0]
+    out[1::2, 1::2] *= gains[1]
+    return out
+
+
 def colour(mosaic):
     """The mosaic as (height, width, 3) RGB, each colour filled in between
     its own pixels."""
@@ -323,33 +339,41 @@ def local_sharpness(image, points, box=BOX, shift=(0.0, 0.0)):
     return out
 
 
-def stack(frames, keeps=KEEPS, points=True, local=True, in_colour=False, report=print, box=BOX, step=STEP):
+def stack(frames, keeps=KEEPS, points=True, local=True, in_colour=False, report=print, box=BOX, step=STEP,
+          pixels="green"):
     """`frames` (Bayer mosaics) stacked for each share in `keeps` (per cent
     of all frames). Returns ({share: picture}, what was done).
 
     Ranked by whole-frame sharpness first; the best max(keeps) % are the
     pool. With `local`, every alignment point then takes its own best share
     of the pool, by the sharpness of its own patch, and a frame adds to each
-    part of the picture as much as it was chosen there."""
+    part of the picture as much as it was chosen there. `pixels` is the
+    detail picture: "green" (the greens filled in) or "all" (balanced())."""
     say = report or (lambda line: None)
     total = len(frames)
+    look = green
+    if pixels == "all":
+        middle = np.asarray(frames[total // 2], dtype=np.float32)
+        g = (middle[0::2, 1::2].mean() + middle[1::2, 0::2].mean()) / 2
+        gains = (g / max(middle[0::2, 0::2].mean(), 1e-6), g / max(middle[1::2, 1::2].mean(), 1e-6))
+        look = lambda mosaic: balanced(mosaic, gains)      # noqa: E731 - the detail picture for this stack
     keeps = sorted({float(k) for k in keeps})
     scores = []
     for i in range(total):
-        scores.append(sharpness(green(frames[i])))
+        scores.append(sharpness(look(frames[i])))
         if (i + 1) % 100 == 0:
             say(f"ranked {i + 1} of {total}")
             progress("ranking", done=i + 1, frames=total)
     order = np.argsort(scores)[::-1]
     pool = order[:max(1, round(total * keeps[-1] / 100))]
-    best = green(frames[pool[0]])
+    best = look(frames[pool[0]])
     # The reference: the best frames, each moved as a whole onto the best,
     # averaged. The air bends each frame a different way, so their average
     # has the surface's true shape, which no single frame has.
     few = pool[:max(1, min(50, round(total * keeps[0] / 100) or 1))]
     reference = np.zeros_like(best)
     for i in few:
-        image = green(frames[i])
+        image = look(frames[i])
         reference += ndimage.shift(image, whole_shift(best, image), order=1, mode="nearest")
     reference /= len(few)
     aps = alignment_points(reference, box, step) if points else None
@@ -361,7 +385,7 @@ def stack(frames, keeps=KEEPS, points=True, local=True, in_colour=False, report=
         # there. Only frames chosen somewhere are then lined up and added.
         quality = np.zeros((total,) + aps[2].shape, np.float32)
         for i in range(total):
-            image = green(frames[i])
+            image = look(frames[i])
             shifts[i] = whole_shift(reference, image)
             quality[i] = local_sharpness(image, aps, box, shifts[i])
             if (i + 1) % 100 == 0:
@@ -374,7 +398,7 @@ def stack(frames, keeps=KEEPS, points=True, local=True, in_colour=False, report=
     sums = {k: None for k in keeps}
     weights = {k: None for k in keeps}
     for n, i in enumerate(pool):
-        image = green(frames[i])
+        image = look(frames[i])
         shift = shifts.get(i) or whole_shift(reference, image)
         moved = ndimage.shift(image, shift, order=1, mode="nearest")
         field = shift_field(reference, moved, aps, box) if aps is not None else None
@@ -406,7 +430,7 @@ def stack(frames, keeps=KEEPS, points=True, local=True, in_colour=False, report=
     done = {"frames": total, "pool": int(len(pool)),
             "kept": {f"{k:g}": int(max(1, round(total * k / 100))) for k in keeps},
             "alignment_points": int(aps[2].sum()) if aps is not None else 0, "local": bool(choose[keeps[0]] is not None),
-            "sharpness": {f"{k:g}": round(sharpness(results[k] if results[k].ndim == 2 else results[k].mean(axis=2)), 6)
+            "sharpness": {f"{k:g}": float(f"{sharpness(results[k] if results[k].ndim == 2 else results[k].mean(axis=2)):.4g}")
                           for k in results}}
     return results, done
 
@@ -426,7 +450,7 @@ def picture(image, path):
 
 
 @activity.during("Stacking the lucky frames", "{path}")
-def stack_file(path, keeps=KEEPS, in_colour=False, publish=True):
+def stack_file(path, keeps=KEEPS, in_colour=False, publish=True, pixels="green"):
     """Stack a SER file for each share in `keeps`, keep every result beside
     it (unsharpened and sharpened, FITS and a picture), and show the sharpest
     on the status page. Returns what was done, with the share shown."""
@@ -437,7 +461,8 @@ def stack_file(path, keeps=KEEPS, in_colour=False, publish=True):
         raise SystemExit(f"{path}: only RGGB colour videos are read (colour ID {code})")
     print(f"{path.name}: {len(frames)} frames of {frames.shape[2]}x{frames.shape[1]}; "
           f"stacking the best {', '.join(f'{k:g}' for k in keeps)} %", flush=True)
-    results, done = stack(frames, keeps=keeps, in_colour=in_colour, report=lambda line: print(line, flush=True))
+    results, done = stack(frames, keeps=keeps, in_colour=in_colour, report=lambda line: print(line, flush=True),
+                          pixels=pixels)
     shown = max(done["sharpness"], key=done["sharpness"].get)
     for share, image in results.items():
         stem = path.with_suffix("").name + f".best{share:g}"
@@ -529,14 +554,16 @@ def main():
     ap.add_argument("--keep", type=float, nargs="+", default=list(KEEPS),
                     help="stack: the shares of frames to stack, in per cent")
     ap.add_argument("--colour", action="store_true", help="stack: natural colour rather than green detail")
+    ap.add_argument("--pixels", choices=("green", "all"), default="green",
+                    help="stack: the detail picture from the greens filled in, or every pixel balanced")
     ap.add_argument("--then-stack", action="store_true", help="capture: stack it straight after")
     args = ap.parse_args()
     if args.command == "capture":
         path = capture(args.target, args.frames, args.exposure, args.gain, roi=args.roi, depth=args.depth)
         if args.then_stack:
-            stack_file(path, keeps=args.keep, in_colour=args.colour)
+            stack_file(path, keeps=args.keep, in_colour=args.colour, pixels=args.pixels)
     else:
-        stack_file(args.target, keeps=args.keep, in_colour=args.colour)
+        stack_file(args.target, keeps=args.keep, in_colour=args.colour, pixels=args.pixels)
 
 
 if __name__ == "__main__":
