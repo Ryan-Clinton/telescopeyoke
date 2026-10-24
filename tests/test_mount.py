@@ -134,6 +134,29 @@ def test_a_goto_with_an_offset_aims_that_far_off_the_target(scope):
     assert aimed["dec"] - plain["dec"] == pytest.approx(-0.4)
 
 
+def test_goto_aim_off_aims_off_an_object_plate_solving_cannot_centre(monkeypatch):
+    """24 October 2026: the Moon sat off to one side, with no stars to solve on."""
+    import sys
+    asked = {}
+    monkeypatch.setattr(mount, "act", lambda args, site: asked.update(aim_off=args.aim_off, solve=args.solve))
+    monkeypatch.setattr(sys, "argv", ["mount", "--demo", "goto", "Moon", "--aim-off", "-12", "4.5"])
+    mount.main()
+    assert asked == {"aim_off": [-12.0, 4.5], "solve": False}
+    monkeypatch.setattr(sys, "argv", ["mount", "--demo", "goto", "Moon", "--solve", "--aim-off", "5", "0"])
+    with pytest.raises(SystemExit):
+        mount.main()
+    calls = []
+    monkeypatch.setattr(mount.Mount, "goto_target", lambda self, name, site, solve=False, aim_off=(0.0, 0.0):
+                        calls.append((name, aim_off)))
+    monkeypatch.setattr(mount, "act", ACT)
+    monkeypatch.setattr(sys, "argv", ["mount", "--demo", "goto", "Vega", "--aim-off", "3", "-2"])
+    mount.main()
+    assert calls == [("Vega", (3.0, -2.0))]
+
+
+ACT = mount.act
+
+
 def test_an_offset_is_measured_on_the_sky_not_in_right_ascension():
     near_pole = mount.offset_target({"ra": 10.0, "dec": 80.0}, 60.0, 0.0)
     assert near_pole["ra"] - 10.0 == pytest.approx(1 / math.cos(math.radians(80)), rel=1e-6)

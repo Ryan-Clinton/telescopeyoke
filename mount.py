@@ -1386,6 +1386,9 @@ def main():
     ap.add_argument("--hours", type=float, nargs="+", default=list(SURVEY_HOURS), metavar="H",
                     help="with pointing and findhome: the hour angles to visit, in hours from the meridian (east is negative)")
     ap.add_argument("--dec", type=float, default=SURVEY_DEC, help="with pointing: the declination to visit them at")
+    ap.add_argument("--aim-off", type=float, nargs=2, default=[0.0, 0.0], metavar=("EAST", "NORTH"),
+                    help="with goto: aim this many arcminutes east and north of the object, to centre "
+                         "one plate solving cannot, such as the Moon (west and south are negative)")
     ap.add_argument("--record", metavar="FOLDER",
                     help="with goto --solve: keep each solve frame and message there, "
                          "for replay.py to animate")
@@ -1403,6 +1406,8 @@ def main():
         site = config.load()["site"]
     if args.command == "goto" and not args.target:
         ap.error("goto needs a target, e.g. goto M81")
+    if any(args.aim_off) and (args.command != "goto" or args.solve):
+        ap.error("--aim-off goes with goto, without --solve, which centres the object itself")
     if args.command == "point" and len(args.target) != 2:
         ap.error("point needs a bearing and a height, e.g. point 225 10")
 
@@ -1501,7 +1506,8 @@ def act(args, site):
             elif args.command == "zenith":
                 mount.zenith(site)
             elif args.command == "goto":
-                mount.goto_target(" ".join(args.target), site, solve=args.solve)
+                mount.goto_target(" ".join(args.target), site, solve=args.solve,
+                                  aim_off=tuple(args.aim_off))
             elif args.command == "point":
                 mount.point(float(args.target[0]), float(args.target[1]), site)
             elif args.command == "home":
