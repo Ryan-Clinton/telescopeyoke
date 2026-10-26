@@ -131,7 +131,8 @@ STRAIGHT = 1.0       # pixels a track's points may sit off its straight line
 STAR_LIKE = 0.6      # pixels in CADENCE minutes: a track this close to the stars' common drift is a star
 EDGE = 30            # pixels round the edge left out
 OCCULTER = {"c3": 80, "c2": 150, "ccor1": 110}   # pixels round the middle left out (the occulter and its pylon)
-ARM = {"ccor1": 20}  # pixels left out beside the occulter's arm, where its edge flickers (10 elsewhere)
+ARM = {"ccor1": 45}  # pixels left out beside the occulter's arm, where its edge flickers (10 elsewhere):
+                     # on 25 Oct 2026 its glare 18-34 px out made 13 false inward tracks in a day
 CCOR = "https://noaa-nesdis-swfo-ccor-1-pds.s3.amazonaws.com"
 CCOR_LEVEL = "SWFO/GOES-19/CCOR-1/ccor1-l3"
 CCOR_NAME = re.compile(r"CCOR1_3_(\d{8})T(\d{6})_V\d+_NC\.fits")

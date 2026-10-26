@@ -334,6 +334,18 @@ a comet not moving that way. In CCOR-1, after the arm, nothing heading for the S
 that held the 12 October CCOR-1 comet, and the project's own pages, with
 its positions, would not answer from here to say where it was.
 
+**The glare beside CCOR-1's arm, 26 October 2026.** The 06:43 hunt sent
+13 tracks "heading in towards the Sun", and the one of 24 October was the
+same: every one ran up a single line (x 876-908 in the project's frame)
+18-34 pixels from the arm's blanked edge, where the sky brightens steeply
+towards it, at different hours all day. A comet does not come down one
+line thirteen times. The strip left out beside the arm went from 20 to 45
+pixels: the same 24 hours then give no track heading in, and fake comets
+are found as before (4, 6, 6, 6, 6 of 7 at 4, 6, 8, 12 and 16 times the
+noise, against 1, 5, 7, 6, 6 before). The 11 movies sent in a row also
+hit Telegram's limit and cut off the checked answer; a send now waits
+the time Telegram asks for and tries again.
+
 **A real faint comet found, 17 October 2026.** On 15 September 2026, the
 day a Kreutz comet was found in C3, both the JPEGs and the raw pictures
 give one object moving steadily in towards the Sun, about 2.3 pixels in

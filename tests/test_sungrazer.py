@@ -213,6 +213,17 @@ def test_ccor1s_blanked_arm_and_its_edges_are_left_out():
     assert not mask[60, 256] and not mask[60, 233] and not mask[60, 278] and mask[60, 200]
 
 
+def test_ccor1s_glare_beside_its_arm_is_left_out():
+    # On 25 October 2026 the arm's glare 18-34 pixels out made thirteen
+    # tracks "heading in towards the Sun" along one line in a day.
+    images = [np.ones((960, 1024), np.float32) for _ in range(5)]
+    for i in images:
+        i[:400, 472:530] = 0                                          # the arm, blanked, as in the real pictures
+    mask = sungrazer.usable((960, 1024), "ccor1", images)
+    assert not mask[200, 472 - 34] and not mask[200, 530 + 34]       # where the false tracks ran
+    assert mask[200, 472 - 60] and mask[200, 530 + 60]                # sky further out is still searched
+
+
 def test_planted_comets_are_found_when_strong_and_counted_by_strength():
     images, _, _ = sequence(frames=16, comet=False, seed=5)
     mask = sungrazer.usable(SHAPE, "c3")

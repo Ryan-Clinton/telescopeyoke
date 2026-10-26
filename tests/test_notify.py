@@ -49,6 +49,17 @@ def test_a_failure_to_send_does_not_stop_the_caller(bot):
     assert notify.send("hello", post=post, say=said.append) == 0 and "not sent" in said[0]
 
 
+def test_a_busy_telegram_is_waited_for_and_tried_again(bot):
+    class Busy(Reply):
+        status_code = 429
+
+        def json(self):
+            return {"ok": False, "parameters": {"retry_after": 7}}
+    replies, waits = [Busy(), Reply()], []
+    sent = notify.send("hello", post=lambda *a, **k: replies.pop(0), sleep=waits.append)
+    assert sent == 1 and waits == [8] and not replies
+
+
 def test_every_message_is_kept_on_the_laptop_as_well(bot, tmp_path, monkeypatch):
     """20 October 2026: alerts reached the phone with nothing on the laptop
     to say so, and the agent watching the night could not comment on them."""

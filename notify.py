@@ -26,6 +26,7 @@ the movie). Sending a report anywhere else stays a person's decision.
 import argparse
 import os
 import sys
+import time
 from pathlib import Path
 
 import requests
@@ -36,6 +37,8 @@ import interface
 API = "https://api.telegram.org/bot{token}/{method}"
 LONGEST = 4000          # characters in one message (Telegram's limit is 4096)
 TIMEOUT = 30
+BUSY_WAIT = 60          # seconds at most waited when Telegram says too many were sent at once (429)
+BUSY_TRIES = 3          # times a message is tried while Telegram says that
 
 
 def settings():
@@ -52,7 +55,23 @@ def quiet():
     return config.DEMO or "PYTEST_CURRENT_TEST" in os.environ
 
 
-def send(text, pictures=(), animations=(), post=requests.post, say=print):
+def patiently(attempt, sleep=time.sleep):
+    """The reply to `attempt()`, tried again after the wait Telegram asks
+    for while it says too many were sent at once: on 26 October 2026 a hunt
+    sent eleven movies in a row and the checked answer after them was cut off."""
+    for _ in range(BUSY_TRIES - 1):
+        reply = attempt()
+        if getattr(reply, "status_code", 200) != 429:
+            return reply
+        try:
+            wait = float(reply.json()["parameters"]["retry_after"])
+        except (ValueError, KeyError, TypeError):
+            wait = 5.0
+        sleep(min(wait + 1, BUSY_WAIT))
+    return attempt()
+
+
+def send(text, pictures=(), animations=(), post=requests.post, say=print, sleep=time.sleep):
     """Send the text, then each picture and animation (path, caption).
     Returns how many went; never raises, as no caller waits on it."""
     token, chat = settings()
@@ -61,17 +80,21 @@ def send(text, pictures=(), animations=(), post=requests.post, say=print):
     sent = 0
     try:
         for part in [text[i:i + LONGEST] for i in range(0, len(text), LONGEST)] or [""]:
-            reply = post(API.format(token=token, method="sendMessage"), timeout=TIMEOUT,
-                         data={"chat_id": chat, "text": part, "disable_web_page_preview": "true"})
+            reply = patiently(lambda: post(API.format(token=token, method="sendMessage"), timeout=TIMEOUT,
+                                           data={"chat_id": chat, "text": part, "disable_web_page_preview": "true"}),
+                              sleep)
             reply.raise_for_status()
             sent += 1
         for method, field, items in (("sendPhoto", "photo", pictures), ("sendAnimation", "animation", animations)):
             for path, caption in items:
                 if not Path(path).exists():
                     continue
-                with open(path, "rb") as f:
-                    reply = post(API.format(token=token, method=method), timeout=TIMEOUT * 2,
-                                 data={"chat_id": chat, "caption": caption[:1000]}, files={field: f})
+
+                def attempt():
+                    with open(path, "rb") as f:
+                        return post(API.format(token=token, method=method), timeout=TIMEOUT * 2,
+                                    data={"chat_id": chat, "caption": caption[:1000]}, files={field: f})
+                reply = patiently(attempt, sleep)
                 reply.raise_for_status()
                 sent += 1
     except requests.RequestException as error:
