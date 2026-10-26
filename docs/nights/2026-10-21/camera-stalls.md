@@ -232,3 +232,6 @@ does not have, and Altair's Python wrapper needs hundreds more. So a 2018
 library can only be tried with a 2018 driver or program as well. The
 evidence against the driver stands: the laptop's INDI library (53.21445,
 September 2022) did not change between the good nights and the bad.
+
+**A new lead (26 October).** A brand new USB 3 lead kept 21 of 21 frames
+(2 s and 16 s) at Speed 2 on the laptop: [the record](../2026-10-26/camera-lead.md).
