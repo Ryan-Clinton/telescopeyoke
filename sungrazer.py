@@ -143,6 +143,7 @@ HUNT_HOURS = 24      # hunt: the last this many hours
 KEEP_DAYS = 3        # hunt: pictures older than this are deleted
 TOWARDS = 0.5        # hunt: a candidate heading in towards the Sun at least this squarely
 BLOCK = 64           # pixels square in which the noise is measured on its own
+PIXEL_PICTURES = 20  # pictures enough to measure each pixel's own noise over them
 CAPTION = 60         # pixels along the bottom left out: the date and time written there
 STITCH_GAP = 120.0   # minutes: a track that stops and one that starts this soon after may be one thing
 STITCH_NEAR = 3.0    # pixels between where the first track was heading and where the second starts
@@ -300,20 +301,36 @@ def points(images, mask, sigma=SIGMA, window=WINDOW):
     neighbours enough."""
     out = []
     stack = np.array(images)
+    diffs = {}
     for i in range(len(images)):
         lo, hi = max(0, i - window), min(len(images), i + window + 1)
         others = np.concatenate([stack[lo:i], stack[i + 1:hi]])
         if len(others) < 2:
             continue
-        diff = stack[i] - np.median(others, axis=0)
-        diff = ndimage.gaussian_filter(diff, 1.0)
-        spread = local_spread(diff, mask)
+        diffs[i] = ndimage.gaussian_filter(stack[i] - np.median(others, axis=0), 1.0)
+    steady = pixel_spread(list(diffs.values()))
+    for i, diff in diffs.items():
+        spread = np.maximum(local_spread(diff, mask), steady)
         peak = (diff == ndimage.maximum_filter(diff, size=5)) & (diff > sigma * spread) & mask
         ys, xs = np.nonzero(peak)
         strongest = np.argsort(-diff[ys, xs])[:MOST]
         for x, y in zip(xs[strongest], ys[strongest]):
             out.append((i, float(x), float(y), float(diff[y, x] / spread[y, x])))
     return out
+
+
+def pixel_spread(diffs, least=PIXEL_PICTURES, size=5):
+    """The noise at each pixel over all the pictures, where a block's figure
+    is too coarse: on 26 October 2026 CCOR-1's noise was still six times the
+    sky's 50-60 pixels beside the occulter's arm, inside a 64-pixel block
+    that averaged it away, and a track there was sent as a possible comet.
+    A comet crosses a pixel in a picture or two, so it hardly moves this.
+    Zero (no limit) with too few pictures to measure it."""
+    if len(diffs) < least:
+        return np.zeros(diffs[0].shape if diffs else (1, 1), np.float32)
+    stack = np.array(diffs)
+    spread = 1.4826 * np.median(np.abs(stack - np.median(stack, axis=0)), axis=0)
+    return ndimage.median_filter(spread, size).astype(np.float32)
 
 
 def local_spread(diff, mask, block=BLOCK):

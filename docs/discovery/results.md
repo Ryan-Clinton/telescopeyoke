@@ -346,6 +346,22 @@ noise, against 1, 5, 7, 6, 6 before). The 11 movies sent in a row also
 hit Telegram's limit and cut off the checked answer; a send now waits
 the time Telegram asks for and tries again.
 
+**The glare reaches further, 27 October 2026.** The 06:47 hunt sent one
+more, from 26 October 08:00-09:00 (1182, 1860 to 1160, 1844 in the
+project's frame): 52-63 pixels right of the arm, beyond the 45 left out,
+and its movie shows only noise. Measured in the day's pictures, the noise
+beside the arm falls off slowly: about 15 times the open sky's at 30
+pixels from its edge, 6 to 8 times at 50-60, and still twice it at 100.
+The 64-pixel squares the noise was
+measured in averaged that slope away. Each pixel's own noise over the
+whole day's pictures (median of 5 pixels) now sets the bar wherever it is
+higher than its square's. On the kept pictures to 26 and 27 October the
+tracks moving other than the stars went from 3 and 3 to none, nothing
+heads in, and fake comets at 6, 8, 12 and 16 times the noise are found
+18, 17, 20, 20 and 18, 20, 20, 20 of 20 (18, 18, 20, 20 and 18, 20, 20,
+20 before). Below the 5-times bar the weakest are found less: at 4 times,
+3 and 11 of 20 against 10 and 14.
+
 **A real faint comet found, 17 October 2026.** On 15 September 2026, the
 day a Kreutz comet was found in C3, both the JPEGs and the raw pictures
 give one object moving steadily in towards the Sun, about 2.3 pixels in

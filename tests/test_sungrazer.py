@@ -205,6 +205,26 @@ def test_the_noise_is_measured_where_it_is():
     assert spread[128, 20] == pytest.approx(10, rel=0.15) and spread[128, 236] == pytest.approx(1, rel=0.15)
 
 
+def test_a_narrow_noisy_strip_is_not_buried_in_its_block():
+    # On 26 October 2026 CCOR-1's noise 50-60 pixels beside the arm was six
+    # times the sky's, inside a 64-pixel block that averaged it down, and
+    # a track of noise there was sent as a possible comet.
+    rng = np.random.default_rng(3)
+    images = [rng.normal(0, 1.0, (256, 256)).astype(np.float32) for _ in range(30)]
+    for i in images:
+        i[:, 100:110] *= 6                                            # the strip of glare
+    mask = np.ones((256, 256), bool)
+    found = sungrazer.points(images, mask)
+    assert not [p for p in found if 100 <= p[1] < 110]
+    spread = sungrazer.pixel_spread([i - images[0] for i in images[1:]])
+    assert spread[128, 105] > 4 * spread[128, 200]
+
+
+def test_each_pixels_noise_needs_pictures_enough():
+    few = [np.ones((8, 8), np.float32)] * (sungrazer.PIXEL_PICTURES - 1)
+    assert not sungrazer.pixel_spread(few).any()
+
+
 def test_ccor1s_blanked_arm_and_its_edges_are_left_out():
     images = [np.ones((512, 512), np.float32) for _ in range(5)]
     for i in images:
