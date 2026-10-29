@@ -136,6 +136,20 @@ def comet_results(night, lat, lon, elevation, source=feeds):
     return out
 
 
+def supernova_results(night, source=feeds):
+    """The bright supernovae (feeds.supernovae) up here in the dark tonight,
+    each with its window, brightest first."""
+    out = []
+    n = len(night.unix)
+    for s in source.supernovae(datetime.fromtimestamp(night.unix[0], timezone.utc)) or []:
+        alt, az = night.altaz_fixed([s["ra"]], [s["dec"]])
+        target = {"id": s["id"], "name": s["host"], "kind": "supernova", "mag": s["mag"]}
+        r = night.assess(target, np.full(n, s["ra"]), np.full(n, s["dec"]), alt[0], az[0])
+        if r:
+            out.append(dict(r, type=s["type"], last_seen=s["last_seen"], peak_mag=s["peak_mag"]))
+    return out
+
+
 def build(cfg, date=None, offline=False, demo=False):
     # In demo mode the weather and sky brightness come from demo.py.
     source = feeds
@@ -172,9 +186,10 @@ def build(cfg, date=None, offline=False, demo=False):
     if not offline:
         results += comet_results(night, lat, lon, site.get("elevation_m", 0), source)
     results.sort(key=lambda r: -r["score"])
+    supernovae = [] if offline else supernova_results(night, source)
 
     now = datetime.now(night.tz)
-    for t in results:
+    for t in results + supernovae:
         # A window "starting" within the next few minutes is open now: the
         # sky is only sampled every ten minutes.
         t["now"] = t["start"] <= now + timedelta(minutes=sky.STEP_MIN) and now <= t["end"]
@@ -202,6 +217,7 @@ def build(cfg, date=None, offline=False, demo=False):
         "light_pollution": pollution,
         "weather": None if offline else weather_report(night, lat, lon, source),
         "targets": results,
+        "supernovae": supernovae,
     }
 
 
@@ -323,6 +339,10 @@ def render_text(rep, top):
     out += [table(TARGET_HEAD, rows), "",
             "Sky = background brightness at the target's best time, including "
             "moonlight (higher is darker)."]
+    if rep.get("supernovae"):
+        out += ["", "Bright supernovae up tonight (Rochester's active list):"]
+        out += [f"  {s['id']} in {s['name']} ({s['type']}), mag {s['mag']:g} on {s['last_seen']}: "
+                f"best {hm(s['best'])} at {s['best_alt']:.0f}° {s['direction']}" for s in rep["supernovae"]]
     return "\n".join(out)
 
 

@@ -66,6 +66,26 @@
       "items": {
         "type": "object"
       }
+    },
+    "supernovae": {
+      "description": "Supernovae on the Rochester list of active ones, brighter than magnitude 15.5 when last measured in the past 30 days, that are up here in the dark tonight; brightest first. Empty offline and in the demo.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "mag", "type", "last_seen", "peak_mag", "best_time", "best_altitude_deg", "direction", "window", "observable_now"],
+        "properties": {
+          "id": {"type": "string", "description": "SN and its name, e.g. SN 2026aaiv."},
+          "name": {"type": "string", "description": "The host galaxy."},
+          "mag": {"type": "number", "description": "The latest magnitude reported."},
+          "type": {"type": "string"},
+          "last_seen": {"type": "string", "description": "The date of that magnitude, YYYY-MM-DD."},
+          "peak_mag": {"type": ["number", "null"]},
+          "best_altitude_deg": {"type": "number"},
+          "direction": {"type": "string"},
+          "window": {"type": "array"},
+          "observable_now": {"type": "boolean"}
+        }
+      }
     }
   }
 }

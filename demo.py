@@ -65,6 +65,10 @@ def comets(lat, lon, elevation_m, start, stop):
     return []
 
 
+def supernovae(now):
+    return []
+
+
 def bortle(sqm):
     import feeds
     return feeds.bortle(sqm)

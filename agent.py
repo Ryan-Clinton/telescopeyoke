@@ -438,6 +438,8 @@ def night(demo=False):
         "discovery": in_the_clear(discovery_tonight(demo),
                                   [w["clear_from"], w["clear_to"]] if w and w["clear_hours"] else None),
         "best_now": [_target(t) for t in rep["targets"] if t["now"]][:3],
+        "supernovae": [dict(_target(s), mag=s["mag"], type=s["type"], last_seen=s["last_seen"], peak_mag=s["peak_mag"])
+                       for s in rep.get("supernovae", [])],
     }
 
 
@@ -689,6 +691,11 @@ def context(demo=False):
             length = f"{p['minutes']} min{' a panel' if p['mosaic'] else ''}"
             lines += [f"  {p['programme']} ({p['field']}, {length}): {when}; {p['command']}"]
         lines += [""]
+        for s in tonight["supernovae"]:
+            lines += [f"Supernova: {s['id']} in {s['name']}, mag {s['mag']:g} ({s['last_seen']}), "
+                      f"best {s['best_time']:%H:%M} at {s['best_altitude_deg']:.0f} deg {s['direction']}"]
+        if tonight["supernovae"]:
+            lines += [""]
         if tonight["best_now"]:
             lines += ["Best now: " + ", ".join(f"{t['id']} ({t['score']:.0f})"
                                                for t in tonight["best_now"]), ""]

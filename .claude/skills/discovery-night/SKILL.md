@@ -22,6 +22,9 @@ is `docs/agents/setup-routine.md` step 6b.
      `best_in_clear` time ("go about"), its length. One marked NOT up
      while clear is said once as skipped tonight.
    - One line: the free time after the programmes, for a big target.
+   - One line per `supernovae` item (bright ones on the Rochester list, up
+     tonight): its name, host galaxy, magnitude and date, best time and
+     direction. None, no line.
    - Only if `skyline_measured` is false: one line saying so.
 
 1. `./patrol.py m31-panels --plan` (or `m31-novae`, `m33-novae`): read it

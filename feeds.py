@@ -1,4 +1,5 @@
-"""Network data for tonight.py: weather, seeing, light pollution and comets.
+"""Network data for tonight.py: weather, seeing, light pollution, comets and
+bright supernovae.
 
 Every fetch returns None on failure, so the report degrades instead of dying
 when the laptop is out of Wi-Fi range.
@@ -6,6 +7,7 @@ when the laptop is out of Wi-Fi range.
 import gzip
 import json
 import math
+import re
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -147,6 +149,57 @@ def light_pollution(lat, lon):
             "bortle": bortle(sqm), "source": f"Lorenz atlas {ATLAS_YEAR}",
         }
     return _cached(f"lightpollution_{lat:.4f}_{lon:.4f}", 24 * 90, fetch)
+
+
+# --- Supernovae: the Rochester list of those still being measured --------------
+
+ACTIVE_SUPERNOVAE = "https://www.rochesterastronomy.org/snimages/snactive.html"
+SUPERNOVA_MAG_LIMIT = 15.5   # news worth a night: this rig reaches about 17 in a stack
+SUPERNOVA_DAYS = 30          # its latest magnitude measured within this many days
+_SUPERNOVA_ROW = re.compile(r'<tr><td><a href="\.\./supernova\.html#[^"]*"[^>]*>([^<]+)</a></td>(.*?)</tr>')
+
+
+def read_supernovae(text):
+    """The rows of Rochester's table of active supernovae: name, host galaxy,
+    position, latest magnitude and when, type, and the brightest it got. The
+    page repeats each one in several tables; each is kept once."""
+    out = {}
+    for name, rest in _SUPERNOVA_ROW.findall(text):
+        cells = [re.sub(r"<[^>]+>", "", c).strip() for c in rest.removeprefix("<td>").removesuffix("</td>").split("</td><td>")]
+        try:
+            host, ra, dec, _, mag, seen, kind, _, peak, _, first = cells[:11]
+            h, m, s = (float(v) for v in ra.split(":"))
+            d, dm, ds = (abs(float(v)) for v in dec.split(":"))
+            row = {"id": f"SN {name}", "host": host, "type": kind,
+                   "ra": round(15 * (h + m / 60 + s / 3600), 5),
+                   "dec": round((-1 if dec.startswith("-") else 1) * (d + dm / 60 + ds / 3600), 5),
+                   "mag": float(mag.rstrip("*")), "last_seen": seen.replace("/", "-"),
+                   "peak_mag": float(peak.rstrip("*")) if peak else None, "discovered": first.replace("/", "-")}
+        except ValueError:
+            continue
+        out.setdefault(name, row)
+    return list(out.values())
+
+
+def supernovae(now):
+    """Supernovae brighter than SUPERNOVA_MAG_LIMIT at their latest
+    measurement, made within SUPERNOVA_DAYS of `now` (a UTC datetime)."""
+    def fetch():
+        r = requests.get(ACTIVE_SUPERNOVAE, timeout=TIMEOUT, headers=HEADERS)
+        r.raise_for_status()
+        return [s for s in read_supernovae(r.text) if s["mag"] <= SUPERNOVA_MAG_LIMIT + 1]
+    return bright_now(_cached("supernovae", 12, fetch) or [], now)
+
+
+def bright_now(rows, now, limit=SUPERNOVA_MAG_LIMIT, days=SUPERNOVA_DAYS):
+    """The rows bright enough, measured recently enough, brightest first."""
+    def recent(s):
+        try:
+            seen = datetime.strptime(s["last_seen"], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        except ValueError:
+            return False
+        return (now - seen).days <= days
+    return sorted((s for s in rows if s["mag"] <= limit and recent(s)), key=lambda s: s["mag"])
 
 
 # --- Comets: COBS for what is bright, JPL Horizons for where it is ----------

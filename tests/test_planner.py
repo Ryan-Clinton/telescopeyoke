@@ -425,3 +425,51 @@ def test_each_hour_says_where_the_wind_is_from_and_does_without_when_the_feed_ha
     hour = report["weather"]["hours"][0]
     assert hour["wind_from"] == 225.0 and tonight.weather_row(hour)[6].endswith(" SW")
     assert " " not in tonight.weather_row({**hour, "wind_from": None})[6]
+
+
+ACTIVE = """<table><tr><th>SN</th></tr>
+<tr><td><a href="../supernova.html#2026aaiv" target="_self">2026aaiv</a></td><td>NGC 7331</td><td>22:37:05.618</td><td>+34:24:35.37</td><td>  19.9W  20.5S</td><td>14.4</td><td>2026/10/21</td><td>Ia</td><td>0.003000</td><td>11.5</td><td>2026/09/18</td><td>2026/09/01</td><td>ATLAS</td><td>GOTO26jfm</td></tr>
+<tr><td><a href="../supernova.html#2026old" target="_self">2026old</a></td><td>NGC 1</td><td>00:07:15.8</td><td>-27:42:29.0</td><td> 1W 1S</td><td>15.0*</td><td>2026/08/01</td><td>II</td><td>0.01</td><td></td><td></td><td>2026/07/01</td><td>X</td><td></td></tr>
+<tr><td><a href="../supernova.html#2026faint" target="_self">2026faint</a></td><td>NGC 2</td><td>01:00:00</td><td>+10:00:00</td><td></td><td>17.9</td><td>2026/10/27</td><td>Ia</td><td></td><td>17.5</td><td></td><td>2026/10/20</td><td></td><td></td></tr>
+<tr><td><a href="../supernova.html#2026bad" target="_self">2026bad</a></td><td>NGC 3</td><td>somewhere</td><td>+10:00:00</td><td></td><td>12.0</td><td>2026/10/27</td><td>Ia</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+</table><table>
+<tr><td><a href="../supernova.html#2026aaiv" target="_self">2026aaiv</a></td><td>NGC 7331</td><td>22:37:05.618</td><td>+34:24:35.37</td><td></td><td>14.4</td><td>2026/10/21</td><td>Ia</td><td></td><td>11.5</td><td></td><td>2026/09/01</td><td></td><td></td></tr>
+</table>"""
+
+
+def test_the_active_supernova_list_is_read_once_each_and_a_broken_row_left_out():
+    rows = feeds.read_supernovae(ACTIVE)
+    assert [r["id"] for r in rows] == ["SN 2026aaiv", "SN 2026old", "SN 2026faint"]
+    sn = rows[0]
+    assert sn["host"] == "NGC 7331" and sn["type"] == "Ia" and sn["mag"] == 14.4 and sn["peak_mag"] == 11.5
+    assert sn["ra"] == pytest.approx(339.27341, abs=1e-5) and sn["dec"] == pytest.approx(34.40982, abs=1e-5)
+    assert sn["last_seen"] == "2026-10-21" and sn["discovered"] == "2026-09-01"
+    assert rows[1]["dec"] < 0 and rows[1]["mag"] == 15.0 and rows[1]["peak_mag"] is None
+
+
+def test_only_the_bright_and_recently_measured_supernovae_are_news():
+    from datetime import datetime, timezone
+    rows = feeds.read_supernovae(ACTIVE)
+    now = datetime(2026, 10, 29, tzinfo=timezone.utc)
+    assert [r["id"] for r in feeds.bright_now(rows, now)] == ["SN 2026aaiv"]     # one too faint, one gone quiet
+    assert [r["id"] for r in feeds.bright_now(rows, now, days=100)] == ["SN 2026aaiv", "SN 2026old"]
+
+
+def test_a_bright_supernova_up_tonight_comes_with_its_window_and_one_never_up_does_not(monkeypatch):
+    import agent
+    import demo
+    import interface
+    from test_interface import valid
+    up = {"id": "SN 2026up", "host": "NGC 9", "type": "Ia", "ra": 30.0, "dec": 85.0, "mag": 13.9,
+          "last_seen": "2026-10-28", "peak_mag": 12.0, "discovered": "2026-10-01"}
+    down = dict(up, id="SN 2026down", dec=-80.0)
+    monkeypatch.setattr(demo, "supernovae", lambda now: [up, down])
+    report = tonight.build(config.example(), demo=True)
+    assert [s["id"] for s in report["supernovae"]] == ["SN 2026up"]
+    s = report["supernovae"][0]
+    assert s["name"] == "NGC 9" and s["kind"] == "supernova" and s["best_alt"] > 40 and s["start"] < s["end"]
+    assert "SN 2026up in NGC 9 (Ia), mag 13.9 on 2026-10-28" in tonight.render_text(report, 5)
+    monkeypatch.setattr(agent, "_night_cache", {})
+    night = valid(interface.run("night", lambda: agent.night(demo=True)), "night")["data"]
+    assert [s["id"] for s in night["supernovae"]] == ["SN 2026up"] and night["supernovae"][0]["peak_mag"] == 12.0
+    assert not tonight.build(config.example(), demo=True, offline=True)["supernovae"]

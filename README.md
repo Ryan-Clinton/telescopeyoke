@@ -755,6 +755,7 @@ against `simulator.py`.
 Weather: [Open-Meteo](https://open-meteo.com). Seeing: [7Timer](https://www.7timer.info).
 Light pollution: [D. Lorenz's atlas](https://djlorenz.github.io/astronomy/lp/).
 Comets: [COBS](https://cobs.si) and [JPL Horizons](https://ssd.jpl.nasa.gov/horizons/).
+Bright supernovae: [the Rochester list of active ones](https://www.rochesterastronomy.org/snimages/snactive.html), in `./ty night` and `./tonight.py` when one brighter than magnitude 15.5 is up.
 Cloud imagery: [EUMETSAT](https://view.eumetsat.int).
 
 ## Licence
