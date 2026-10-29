@@ -756,6 +756,7 @@ Weather: [Open-Meteo](https://open-meteo.com). Seeing: [7Timer](https://www.7tim
 Light pollution: [D. Lorenz's atlas](https://djlorenz.github.io/astronomy/lp/).
 Comets: [COBS](https://cobs.si) and [JPL Horizons](https://ssd.jpl.nasa.gov/horizons/).
 Bright supernovae: [the Rochester list of active ones](https://www.rochesterastronomy.org/snimages/snactive.html), in `./ty night` and `./tonight.py` when one brighter than magnitude 15.5 is up.
+The sky's events and the news: [in-the-sky.org](https://in-the-sky.org), [Universe Today](https://www.universetoday.com) and the [BAA](https://britastro.org), in `./ty night` and `./tonight.py`.
 Cloud imagery: [EUMETSAT](https://view.eumetsat.int).
 
 ## Licence

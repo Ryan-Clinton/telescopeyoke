@@ -473,3 +473,50 @@ def test_a_bright_supernova_up_tonight_comes_with_its_window_and_one_never_up_do
     night = valid(interface.run("night", lambda: agent.night(demo=True)), "night")["data"]
     assert [s["id"] for s in night["supernovae"]] == ["SN 2026up"] and night["supernovae"][0]["peak_mag"] == 12.0
     assert not tonight.build(config.example(), demo=True, offline=True)["supernovae"]
+
+
+SKY_RSS = """<?xml version="1.0"?><rss><channel><title>In-The-Sky.org</title>
+<item><title>02 Nov 2026 (4 days away): Lunar occultation of Mars</title><link>https://in-the-sky.org/a</link><pubDate>Mon, 02 Nov 2026 00:00:00 GMT</pubDate></item>
+<item><title>01 Nov 2026 (3 days away): Moon at Last Quarter</title><link>https://in-the-sky.org/b</link><pubDate>Sun, 01 Nov 2026 00:00:00 GMT</pubDate></item>
+<item><title>29 Oct 2026 (today): Moon at  apogee</title><link>https://in-the-sky.org/c</link><pubDate>Thu, 29 Oct 2026 00:00:00 GMT</pubDate></item>
+<item><title>No date</title><link>x</link></item>
+</channel></rss>"""
+
+HEAD_RSS = """<?xml version="1.0"?><rss><channel>
+<item><title>Old news</title><link>https://u/old</link><pubDate>Mon, 19 Oct 2026 09:00:00 +0000</pubDate></item>
+<item><title>A stellar creche</title><link>https://u/new</link><pubDate>Thu, 29 Oct 2026 18:00:00 +0000</pubDate></item>
+<item><title>Yesterday's</title><link>https://u/y</link><pubDate>Wed, 28 Oct 2026 08:00:00 +0000</pubDate></item>
+</channel></rss>"""
+
+
+def test_the_news_is_the_next_few_days_events_in_order_then_the_newest_headlines():
+    from datetime import datetime, timezone
+    rows = feeds.read_rss(SKY_RSS, "in-the-sky.org") + feeds.read_rss(HEAD_RSS, "Universe Today")
+    assert len(rows) == 6 and rows[2]["title"] == "29 Oct 2026 (today): Moon at apogee"   # undated left out
+    picked = feeds.news_now(rows, datetime(2026, 10, 29, 23, 30, tzinfo=timezone.utc))
+    assert [(n["kind"], n["link"]) for n in picked] == [
+        ("event", "https://in-the-sky.org/c"), ("event", "https://in-the-sky.org/b"), ("event", "https://in-the-sky.org/a"),
+        ("headline", "https://u/new"), ("headline", "https://u/y")]       # old news gone
+
+
+def test_the_news_reaches_ty_night_and_its_text(monkeypatch):
+    import agent
+    import demo
+    import interface
+    from test_interface import valid
+    item = {"kind": "event", "source": "in-the-sky.org", "title": "Lunar occultation of Mars",
+            "link": "https://in-the-sky.org/a", "when": "2026-11-02T00:00:00+00:00"}
+    monkeypatch.setattr(demo, "news", lambda now: [item, dict(item, kind="headline", source="BAA", title="Handbook")])
+    report = tonight.build(config.example(), demo=True)
+    text = tonight.render_text(report, 5)
+    assert "  Lunar occultation of Mars" in text and "  BAA: Handbook" in text
+    monkeypatch.setattr(agent, "_night_cache", {})
+    night = valid(interface.run("night", lambda: agent.night(demo=True)), "night")["data"]
+    assert [n["title"] for n in night["news"]] == ["Lunar occultation of Mars", "Handbook"]
+    assert not tonight.build(config.example(), demo=True, offline=True)["news"]
+
+
+def test_a_feeds_own_encoding_is_kept():
+    text = '<?xml version="1.0" encoding="UTF-8"?><rss><channel><item><title>It’s a crèche</title>' \
+           '<pubDate>Thu, 29 Oct 2026 18:00:00 +0000</pubDate></item></channel></rss>'
+    assert feeds.read_rss(text.encode("utf-8"), "Universe Today")[0]["title"] == "It’s a crèche"

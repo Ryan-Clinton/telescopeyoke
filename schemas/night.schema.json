@@ -86,6 +86,21 @@
           "observable_now": {"type": "boolean"}
         }
       }
+    },
+    "news": {
+      "description": "The sky's events from today to four days ahead (in-the-sky.org), in date order, then astronomy headlines of the last two days (Universe Today, the BAA), newest first. Empty offline and in the demo.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "source", "title", "link", "when"],
+        "properties": {
+          "kind": {"enum": ["event", "headline"]},
+          "source": {"type": "string"},
+          "title": {"type": "string"},
+          "link": {"type": "string"},
+          "when": {"type": "string", "description": "UTC, ISO 8601: the event's day, or when the headline was published."}
+        }
+      }
     }
   }
 }

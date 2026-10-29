@@ -1,5 +1,5 @@
-"""Network data for tonight.py: weather, seeing, light pollution, comets and
-bright supernovae.
+"""Network data for tonight.py: weather, seeing, light pollution, comets,
+bright supernovae, and the news.
 
 Every fetch returns None on failure, so the report degrades instead of dying
 when the laptop is out of Wi-Fi range.
@@ -9,7 +9,7 @@ import json
 import math
 import re
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
@@ -149,6 +149,63 @@ def light_pollution(lat, lon):
             "bortle": bortle(sqm), "source": f"Lorenz atlas {ATLAS_YEAR}",
         }
     return _cached(f"lightpollution_{lat:.4f}_{lon:.4f}", 24 * 90, fetch)
+
+
+# --- News: the sky's events in the days ahead, and the latest headlines ---------
+
+SKY_EVENTS = "https://in-the-sky.org/rss.php?feed=dfan"     # each item dated on its event's day
+HEADLINES = {"Universe Today": "https://www.universetoday.com/feed/",
+             "BAA": "https://britastro.org/feed"}
+EVENT_DAYS = 4        # events from today to this many days ahead
+HEADLINE_DAYS = 2     # headlines published in this many days
+MAX_HEADLINES = 6
+
+
+def read_rss(text, source):
+    """An RSS feed's items (its bytes, so the parser reads their encoding as
+    declared): source, title, link and when (UTC, ISO)."""
+    from email.utils import parsedate_to_datetime
+    from xml.etree import ElementTree
+    out = []
+    for item in ElementTree.fromstring(text).iter("item"):
+        try:
+            when = parsedate_to_datetime(item.findtext("pubDate") or "").astimezone(timezone.utc)
+        except (TypeError, ValueError):
+            continue
+        out.append({"source": source, "title": " ".join((item.findtext("title") or "").split()),
+                    "link": (item.findtext("link") or "").strip(), "when": when.isoformat()})
+    return out
+
+
+def news(now):
+    """The sky's events from today to EVENT_DAYS ahead, then the headlines of
+    the last HEADLINE_DAYS, newest first; whichever feed fails is left out."""
+    def fetch():
+        rows = []
+        for source, url in [("in-the-sky.org", SKY_EVENTS)] + list(HEADLINES.items()):
+            try:
+                r = requests.get(url, timeout=TIMEOUT, headers=HEADERS)
+                r.raise_for_status()
+                rows += read_rss(r.content, source)
+            except (requests.RequestException, ValueError, SyntaxError):
+                continue
+        return rows or None
+    return news_now(_cached("news", 6, fetch) or [], now)
+
+
+def news_now(rows, now):
+    day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    events, headlines = [], []
+    for r in rows:
+        when = datetime.fromisoformat(r["when"])
+        if r["source"] == "in-the-sky.org":
+            if day <= when < day + timedelta(days=EVENT_DAYS + 1):
+                events.append(dict(r, kind="event"))
+        elif timedelta(0) <= now - when <= timedelta(days=HEADLINE_DAYS):
+            headlines.append(dict(r, kind="headline"))
+    events.sort(key=lambda r: r["when"])
+    headlines.sort(key=lambda r: r["when"], reverse=True)
+    return events + headlines[:MAX_HEADLINES]
 
 
 # --- Supernovae: the Rochester list of those still being measured --------------

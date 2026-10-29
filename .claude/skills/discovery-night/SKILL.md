@@ -25,6 +25,9 @@ is `docs/agents/setup-routine.md` step 6b.
    - One line per `supernovae` item (bright ones on the Rochester list, up
      tonight): its name, host galaxy, magnitude and date, best time and
      direction. None, no line.
+   - One line for the `news` events (in-the-sky.org) that fall on tonight or
+     the night planned: a Moon or planet approach or an occultation. The
+     headlines only when asked for the news.
    - Only if `skyline_measured` is false: one line saying so.
 
 1. `./patrol.py m31-panels --plan` (or `m31-novae`, `m33-novae`): read it

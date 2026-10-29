@@ -69,6 +69,10 @@ def supernovae(now):
     return []
 
 
+def news(now):
+    return []
+
+
 def bortle(sqm):
     import feeds
     return feeds.bortle(sqm)

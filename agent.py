@@ -440,6 +440,7 @@ def night(demo=False):
         "best_now": [_target(t) for t in rep["targets"] if t["now"]][:3],
         "supernovae": [dict(_target(s), mag=s["mag"], type=s["type"], last_seen=s["last_seen"], peak_mag=s["peak_mag"])
                        for s in rep.get("supernovae", [])],
+        "news": rep.get("news", []),
     }
 
 

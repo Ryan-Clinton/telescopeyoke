@@ -218,6 +218,7 @@ def build(cfg, date=None, offline=False, demo=False):
         "weather": None if offline else weather_report(night, lat, lon, source),
         "targets": results,
         "supernovae": supernovae,
+        "news": [] if offline else source.news(datetime.now(timezone.utc)) or [],
     }
 
 
@@ -343,6 +344,9 @@ def render_text(rep, top):
         out += ["", "Bright supernovae up tonight (Rochester's active list):"]
         out += [f"  {s['id']} in {s['name']} ({s['type']}), mag {s['mag']:g} on {s['last_seen']}: "
                 f"best {hm(s['best'])} at {s['best_alt']:.0f}° {s['direction']}" for s in rep["supernovae"]]
+    if rep.get("news"):
+        out += ["", "In the sky soon (in-the-sky.org), and the news:"]
+        out += [f"  {n['title']}" if n["kind"] == "event" else f"  {n['source']}: {n['title']}" for n in rep["news"]]
     return "\n".join(out)
 
 
