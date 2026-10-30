@@ -21,7 +21,10 @@ than speed 2.
 down. **At each speed it stops at the first lost frame and moves on.** So
 "0 of 8" at a speed means the first frame was lost and the other seven were
 not tried. A speed that passes has had every frame tried. Since 30 October
-the output says this in words.
+the output says this in words, and every run adds a line to
+`cache/camera-fault.jsonl` with the result, the `--note`, and where the
+camera was on USB (`usb_state`: the port, the link speed, its power
+setting, and whether the USB 3 link power states U1 and U2 are in use).
 
 ## The record
 
@@ -49,17 +52,29 @@ the output says this in words.
 | 30 Oct 14:31 | | Unplugged by hand | |
 | 30 Oct 14:37 | Plugged into port 2-1 | | |
 | 30 Oct 14:40 | Same | 8 × 16 s at speed 2 | **8 of 8** |
+| 30 Oct 16:43 | Behind a USB 3.2 hub (Realtek 0bda:0411, says it is self-powered) on port 2-5, the camera on 2-5.1 at 5000 Mb/s | | Not yet tested |
 
 ## What is ruled out
 
-- **The lead.** Two leads failed on 21 to 23 Oct; a new lead and the old 3 m
-  one both passed on 26 Oct.
-- **The laptop, Linux, INDI or this project's code.** It failed under
-  Windows with Altair's own SDK, and on the desktop PC.
+- **A lead as the root cause.** Two leads failed on 21 to 23 Oct; a new lead
+  and the old 3 m one both passed on 26 Oct. A marginal camera can still
+  work with one lead and port and fail with another, so a lead can make the
+  difference on the day without being the fault.
+- **A particular computer, operating system or program as the root cause.**
+  It failed on the laptop and the desktop PC, under Linux (INDI and Altair's
+  library) and Windows (Altair's SDK). The host's USB 3 port and controller
+  can still affect whether the fault shows: see the ports below.
 - **The mains supply.** It failed on battery too.
 - **Dirt on the socket.** No change after cleaning it.
 - **Cold.** It failed indoors and warm on 30 Oct, eight hours after passing
   outside.
+- **Damp, as an active cause.** It came and went within a quarter of an
+  hour indoors and warm on 30 Oct. Corrosion left by damp on 20 Oct, making
+  a contact marginal, is not ruled out.
+- **USB 3 link power states on the laptop.** For the camera, the kernel
+  makes no U1 or U2 setting at all (no `usb3_hardware_lpm_u1` or `_u2`
+  file), so those states are not in use, and its power control is `on`
+  (never suspended). Read by `usb_state`, no root needed.
 - **The length of the frame.** 16 s frames were lost at speed 2 at 10:46 and
   kept at 14:40; 60 to 300 s frames passed at speed 2 in between.
 - **Needing a power cycle to clear it.** On 30 Oct it was lost at about
@@ -78,6 +93,11 @@ the output says this in words.
 - **It started at 04:59 on 20 October,** at dawn after a cold night, and was
   not there before. Nothing in the software changed between the good nights
   and the bad.
+- **The port may matter.** On 30 Oct it failed on port 2-5 at 10:46 and
+  passed on 2-1 at 14:40. Ports 2-5 and 2-1 are on the same root hub
+  (bus 2) but are separate sockets and traces. One test each, hours apart,
+  so the fault's own coming and going could explain it too: the port
+  survey below would tell.
 
 ## What is still open
 
@@ -85,16 +105,89 @@ the output says this in words.
   suggested on 26 Oct (the camera drying out after the dawn of 20 Oct); it
   is not ruled out, but it does not explain a change within 15 minutes
   indoors.
-- **Where it is.** The likeliest places are the camera's USB 3 socket (five
-  extra contacts that can be marginal) or its USB 3 chip: both fit "worse
-  when pushed harder" and "fine at USB 2".
+- **Where it is.** Everything points at the camera's SuperSpeed path: the
+  same camera, computer and program work at USB 2 and fail at USB 3, and a
+  slower readout keeps it working. Ranked, as a guide to what to test, not
+  as measured odds:
+  1. The camera's USB 3 bridge chip or its high-speed signal path on the
+     board. It fits the link staying at 5000 Mb/s while frames stop, and a
+     state that comes and goes with nothing touched.
+  2. The camera's USB 3 socket or its solder joints. Holding the lead up
+     and down changed nothing, cleaning changed nothing, and the link never
+     dropped to USB 2, which makes a bent or loose contact less likely, but
+     a joint that is marginal at 5 Gb/s would not show those signs.
+  3. The camera's firmware (1.4.1, 2017) and the library's USB transport.
+  4. The camera's own power: its USB 3 chip runs from the lead's 5 V, and a
+     tired regulator or capacitor could fail only at the fastest readout.
+     A powered hub would test this (other makers of IMX183 cameras suggest
+     one for hangs, e.g. QHY's 183C manual).
+  5. How the host's USB 3 port and controller treat a marginal device.
 - **Whether the first frames after the camera is opened matter.** At 10:46
   the fault showed within minutes of the camera being plugged in; it has not
   been seen to begin partway through a test that was passing.
 - **Whether speed 0 can ever fail.** It has not yet, in every test since
   23 Oct.
 
+## Next tests
+
+In order. Each says what it needs.
+
+1. **Stay at speed 0 for imaging.** It costs about a second a frame.
+2. **Through a powered USB 3 hub.** The camera is on a USB 3.2 hub now (16:43,
+   30 Oct) that says it is self-powered; whether its own supply is plugged
+   in is for the person to say.
+   `camera_test.py --speed-ladder --speeds 2 --exposure 16 --frames 50
+   --note "powered hub, port 2-5"`. If speed 2 holds through the hub, power
+   or signal conditioning moves up the list. Needs the person's go: it runs
+   the camera for about 20 minutes.
+3. **The ports, one at a time.** The same 50 frames of 16 s at speed 2 on
+   each of the laptop's USB 3 ports in turn; the fault log records which.
+   Needs the person's hands to move the plug.
+4. **usbmon during a lost frame.** It shows whether the laptop was waiting
+   on transfers the camera never answered (the camera never sent the frame)
+   or never asked (the program or firmware stopped). Loading usbmon and
+   reading its capture need root, so the person runs these two:
+   `sudo modprobe usbmon` and, during a test,
+   `sudo cat /sys/kernel/debug/usb/usbmon/2u > usbmon.txt`. Then
+   `camera_test.py --usb-report usbmon.txt` says what the capture shows for
+   the camera.
+5. **AltairCapture's Diagnose, on Windows, camera plugged straight in**, as
+   Altair asks of support customers. Needs the Windows boot and AltairCapture
+   installed.
+6. **Another Hypercam 183C on this laptop, or this one on another
+   astronomy computer.** Needs a second camera or computer.
+
+## For Altair (ticket #3470)
+
+The camera is Gary's, and the ticket is his to answer. In short:
+
+| | |
+|---|---|
+| Computers | laptop and desktop PC |
+| Systems | Ubuntu (INDI, Altair's library) and Windows 11 (Altair's SDK 60.31589) |
+| Leads | four: 3 m, 1 m, a new one, and the 3 m again |
+| USB 2 mode | 2 s and 16 s frames arrive |
+| USB 3, speed 0 | every frame has arrived, in every test since 23 Oct |
+| USB 3, speed 2 | frames lost at times, as short as 2 s; the link stays at 5000 Mb/s, no disconnect |
+| Started | 04:59 on 20 Oct 2026, at dawn after a cold night |
+| Comes and goes | gone 26 Oct; back 30 Oct 10:46; gone again by 11:02, nothing touched |
+| Firmware | 1.4.1 (January 2017) |
+
 ## What others have found
+
+- **Altair's own advice for dropped frames.** Altair's help page on a black
+  or halted preview names the Hypercam 183C's large frames, and says to
+  lower the camera's USB frame-rate setting until it runs smoothly, use a
+  region or binning, and take other devices off the same USB controller
+  ([altairastro.help](https://www.altairastro.help/black_preview_screen/)).
+  It is written for the live preview, but it is the same remedy as speed 0.
+- **A port change fixed it for one owner.** A Hypercam 183C review's
+  unexplained dropped frames went when the author changed USB port on the
+  laptop ([AstroBackyard](https://astrobackyard.com/altair-hypercam-183c-review/)).
+- **Timeouts fixed in a driver for the 183M.** Altair's ASCOM driver
+  1.4.142.0 "resolves reported timeout issue with Hypercam 183M TEC Camera"
+  ([altairastro.help](https://www.altairastro.help/download/ascom-driver-1-4-142-0/)).
+  The 183C is not named.
 
 The same camera model with the same fault, and similar cameras that worked
 at USB 2 and not at USB 3, are listed with their sources in

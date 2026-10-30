@@ -1010,3 +1010,40 @@ def test_each_video_frame_is_freed_as_soon_as_it_is_let_go(sdk, world):
         finally:
             gc.enable()
     assert len(pulled) == 6 and all(r() is None for r in pulled[:-1])
+
+
+def test_each_speed_test_records_where_the_camera_is_on_usb(tmp_path, monkeypatch):
+    """30 October 2026: lost on port 2-5, kept on 2-1; sysfs's entries are links."""
+    import camera_test
+    devices, real = tmp_path / "devices", tmp_path / "real"
+    devices.mkdir()
+    for name, vendor in (("2-1", "16d0"), ("1-5", "1a86")):
+        d = real / name
+        (d / "power").mkdir(parents=True)
+        (d / "idVendor").write_text(vendor + "\n")
+        (d / "speed").write_text("5000\n")
+        (d / "devnum").write_text("6\n")
+        (d / "power" / "control").write_text("on\n")
+        (devices / name).symlink_to(d)
+    state = camera_test.usb_state(devices)
+    assert state["port"] == "2-1" and state["mb_s"] == "5000" and state["power_control"] == "on"
+    assert state["lpm_u1"] is None and state["lpm_u2"] is None           # the kernel makes no file: not in use
+    assert camera_test.usb_state(tmp_path / "nowhere") is None
+    monkeypatch.setattr(camera_test, "USB", devices)
+    log = camera_test.keep_fault({"best": 0, "speeds": [{"speed": 2, "arrived": 0, "tried": 1}]}, "port 2-1",
+                                 tmp_path / "fault.jsonl")
+    import json
+    kept = json.loads(log.read_text().splitlines()[-1])
+    assert kept["usb"]["port"] == "2-1" and kept["note"] == "port 2-1" and kept["speeds"][0]["tried"] == 1
+
+
+def test_a_usbmon_capture_tells_a_frame_never_sent_from_one_never_asked_for():
+    import camera_test
+    sent = ["a1 1000000 S Bi:2:006:1 -115 16384 <", "a1 1001000 C Bi:2:006:1 0 16384 =",
+            "a2 1002000 S Bi:2:006:1 -115 16384 <", "b1 1002500 S Bi:1:003:2 -115 64 <",
+            "a2 1003000 C Bi:2:006:1 -32 0", "a3 1004000 S Bi:2:006:1 -115 16384 <",
+            "c1 9000000 C Co:2:006:0 0 0"]
+    found = camera_test.usb_report(sent, 6)
+    assert found["asked"] == 3 and found["completed"] == 1 and found["errors"] == {"-32": 1}
+    assert found["still_waiting"] == 1 and found["received_mb"] == 0.0
+    assert camera_test.usb_report(sent, 9)["asked"] == 0

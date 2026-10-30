@@ -437,6 +437,90 @@ def throughput_sdk(exposure, frames, gain):
     return results
 
 
+FAULT_LOG = config.DATA / "cache" / "camera-fault.jsonl"
+VENDOR = "16d0"          # the camera's USB vendor (MCS, which Altair's cameras use)
+USB = Path("/sys/bus/usb/devices")
+
+
+def usb_state(root=None, vendor=VENDOR):
+    """Where the camera is on USB and how its link is set, read from sysfs
+    (nothing needs root): the port (bus-port, as the kernel names it), the
+    link speed in Mb/s, its power control ("on": never suspended), and
+    whether USB 3 link power states U1 and U2 are in use (the kernel makes
+    their files only when they are). None when the camera is not plugged in.
+    On 30 October 2026 the same camera lost frames on port 2-5 and kept
+    them on 2-1, so every test records which."""
+    root = Path(root or USB)
+    for here in sorted(root.iterdir()) if root.exists() else []:      # links: glob would skip them
+        seen = here / "idVendor"
+        try:
+            if not seen.exists():
+                continue
+            if seen.read_text().strip() != vendor:
+                continue
+
+            def read(name):
+                f = here / name
+                return f.read_text().strip() if f.exists() else None
+            return {"port": here.name, "mb_s": read("speed"), "product": read("product"),
+                    "power_control": read("power/control"),
+                    "lpm_u1": read("power/usb3_hardware_lpm_u1"), "lpm_u2": read("power/usb3_hardware_lpm_u2")}
+        except OSError:
+            continue
+    return None
+
+
+def keep_fault(result, note="", log=None):
+    """One line in the camera-fault log for a speed test, with where the
+    camera was on USB: docs/camera-fault.md is written from these."""
+    log = Path(log or FAULT_LOG)
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with open(log, "a", encoding="utf-8") as f:
+        f.write(json.dumps({"time": time.strftime("%Y-%m-%d %H:%M:%S"), "note": note, "usb": usb_state(),
+                            **result}) + "\n")
+    return log
+
+
+def usb_report(lines, device):
+    """What a usbmon text capture (the kernel's usbmon, `Nu` file) says of
+    the bulk transfers to and from USB device number `device` on its bus:
+    how many were asked for, how many came back and with what status, how
+    many were still waiting at the end, and the longest wait between
+    completions. A lost frame with requests left waiting means the camera
+    never sent it; with no requests at all, nothing asked for it."""
+    asked, waiting, done, errors, received, gaps, last = 0, {}, 0, {}, 0, [], None
+    for line in lines:
+        part = line.split()
+        if len(part) < 6 or not part[3][:1] == "B":
+            continue
+        try:
+            kind, bus, dev, endpoint = part[3].split(":")
+            when = int(part[1]) / 1e6
+            dev = int(dev)
+        except ValueError:
+            continue
+        if dev != int(device):
+            continue
+        if part[2] == "S":
+            asked += 1
+            waiting[part[0]] = when
+        elif part[2] in ("C", "E"):
+            waiting.pop(part[0], None)
+            status = part[4]
+            if status != "0":
+                errors[status] = errors.get(status, 0) + 1
+            else:
+                done += 1
+                if kind == "Bi" and part[5].isdigit():
+                    received += int(part[5])
+            if last is not None:
+                gaps.append(when - last)
+            last = when
+    return {"asked": asked, "completed": done, "errors": errors, "still_waiting": len(waiting),
+            "oldest_waiting_s": round(last - min(waiting.values()), 1) if waiting and last else None,
+            "received_mb": round(received / 1e6, 1), "longest_gap_s": round(max(gaps), 1) if gaps else None}
+
+
 def speed_ladder(exposure, gain, frames=3, keep=False, say=print, speeds=None):
     """The fastest readout speed at which every one of `frames` exposures
     arrives, trying the fastest first and stopping at the first that keeps
@@ -498,6 +582,8 @@ def main():
     what.add_argument("--electrons", action="store_true",
                       help="cap off, an evenly lit field: electrons per ADU at each of --gains, for the stripes "
                            "in electrons")
+    what.add_argument("--usb-report", metavar="CAPTURE",
+                      help="what a usbmon text capture taken during a test says of the camera's bulk transfers")
     what.add_argument("--speed-ladder", action="store_true",
                       help="cap on: the fastest readout speed at which every --frames exposure of --exposure s "
                            "arrives (default 3 of 16 s); --keep-best sets it in config.toml")
@@ -506,7 +592,9 @@ def main():
                            "with the air temperature, dew point and USB port")
     ap.add_argument("--every", type=float, default=10.0, help="with --cooldown: minutes between sets")
     ap.add_argument("--steps", type=int, default=12, help="with --cooldown: how many sets")
-    ap.add_argument("--note", default="", help="with --cooldown: what is different in this run (cable, port, heater)")
+    ap.add_argument("--note", default="", help="with --cooldown or --speed-ladder: what is different in this run "
+                                                 "(cable, port, hub, heater)")
+    ap.add_argument("--device", type=int, help="with --usb-report: the camera's USB device number, if unplugged now")
     ap.add_argument("--keep-best", action="store_true",
                     help="with --banding: keep the setting with the weakest stripes in config.toml")
     ap.add_argument("--corrected", action="store_true",
@@ -960,7 +1048,18 @@ def run(args):
     if args.banding:
         return banding_trial(args.exposure or 16.0, args.gain, min(args.frames or 2, 2), args.keep_best)
     if args.speed_ladder:
-        return speed_ladder(args.exposure or 16.0, args.gain, args.frames or 3, args.keep_best, speeds=args.speeds)
+        result = speed_ladder(args.exposure or 16.0, args.gain, args.frames or 3, args.keep_best, speeds=args.speeds)
+        keep_fault(result, args.note)
+        return result
+    if args.usb_report:
+        lines = Path(args.usb_report).read_text(encoding="utf-8", errors="replace").splitlines()
+        state = usb_state()
+        device = args.device or (int((USB / state["port"] / "devnum").read_text()) if state else None)
+        if device is None:
+            raise SystemExit("--device: the camera's device number (lsusb), as it is not plugged in now")
+        found = usb_report(lines, device)
+        print(json.dumps(found, indent=1))
+        return found
     if args.electrons:
         return electrons_trial(args.gains, args.exposures or [0.05, 0.1, 0.2, 0.4, 0.8])
     if args.cooldown:
