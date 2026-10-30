@@ -292,13 +292,9 @@ def plan(s, live, now=None, story=None, targets=None):
         if s["kind"] == "moon" and moon_line(s.get("moon") or {}):
             pool.append(moon_line(s["moon"]))
         out["line"] = story.pick("line", pool, int(elapsed // LINE_EVERY))
-    if elapsed % EXPLAINER_EVERY < EXPLAINER_S and elapsed >= EXPLAINER_EVERY / 2:
-        kinds = {"transit": ["transit", "stacking"], "patrol": ["subtraction", "nova", "stacking"]}.get(
-            s["kind"], ["stacking"])
-        hunt = comet_hunt(now)
-        out["explainer"] = story.pick("explainer", kinds + (["comet"] if hunt else []), int(elapsed // EXPLAINER_EVERY))
-        if out["explainer"] == "comet":
-            out["comet"] = hunt
+    # No explainer drawn over the picture: what the telescope sees is never
+    # covered (30 October 2026: "I don't see the point in broadcasting 'we
+    # are stacking' when the scope is seeing stuff"). The side panel tells it.
     if elapsed % CRAWL_EVERY < CRAWL_S and elapsed >= CRAWL_EVERY / 2:
         out["crawl"] = crawl_text(s, live, now, targets)
     return out

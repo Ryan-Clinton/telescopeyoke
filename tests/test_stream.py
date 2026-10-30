@@ -428,3 +428,19 @@ def test_a_moon_step_on_the_plan_opens_with_the_moon():
     assert lines["TONIGHT: THE MOON"] == ("34% lit, waxing · coming up: close-up imaging → frame selection → "
                                           "final stack")
     assert "TONIGHT: THE MOON" not in dict(stream.open_lines(brief(), {}))
+
+
+def test_a_fresh_picture_keeps_the_stream_on_air_and_no_stack_never_costs_it(tmp_path, monkeypatch):
+    """30 October 2026: "what the scope sees is broadcast", whatever takes the picture."""
+    import os
+    from PIL import Image
+    monkeypatch.setattr(stream, "WEB", tmp_path)
+    Image.new("RGB", (40, 30), (200, 200, 200)).save(tmp_path / "latest.jpg")
+    now = (tmp_path / "latest.jpg").stat().st_mtime + 3
+    assert stream.seeing(now) and not stream.seeing(now + stream.START_S)
+    stack, single = stream.pictures({})
+    assert stack is None and single is not None                  # no stack.jpg: the newest frame still comes
+    over = {"name": "M31", "age": 90000, "schedule": {"steps": [{"label": "M31", "status": "done"}]}}
+    assert not stream.night_ending(over, between=False, active=stream.seeing(now))
+    os.utime(tmp_path / "latest.jpg", (now - 3600, now - 3600))
+    assert stream.night_ending(over, between=False, active=stream.seeing(now))

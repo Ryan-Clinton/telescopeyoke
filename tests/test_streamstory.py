@@ -102,7 +102,7 @@ def test_a_known_comet_the_hunt_found_is_told_and_an_unreported_track_never_is(t
     assert "74 pictures" in words and "known Kreutz sungrazing comet" in words and "27 of them, over 7 hours" in words
     story = streamstory.Story()
     seen = [streamstory.plan(PATROL, LIVE, evening + t, story, TARGETS) for t in range(0, 6 * 300, 5)]
-    assert any(p["explainer"] == "comet" and p["comet"]["seen"] == 27 for p in seen)
+    assert not any(p["explainer"] for p in seen)          # never drawn over the picture (30 October 2026)
     assert streamstory.comet_hunt(evening + 2 * 86400) is None                     # old news
     for state in ("no matching public report found", "possible public match", "public reports not checked"):
         hunt_file(tmp_path, state)
