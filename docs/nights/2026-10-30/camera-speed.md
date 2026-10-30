@@ -25,9 +25,12 @@ The ladder stops at the fastest speed that keeps every frame, so speeds 1 and
   fault back is still untested.
 - Damp is not ruled out either: the dew point was 3.7 °C under the air, and
   the frames still came. One mild damp night does not settle it.
-- It is a short test. The lost frames came partway through a night's run
-  before, so `readout_speed` stays 0 until a whole run at speed 2 keeps its
-  frames.
+- It is a short test: the lost frames came partway through a night's run
+  before.
+
+**Decision, 03:20:** back to readout speed 2 (`readout_speed = 2` in
+config.toml) until the fault reappears, on the person's word. If a run loses
+frames again, go back to 0 with `camera_test.py --speed-ladder --keep-best`.
 
 At 02:59 one of the laptop's USB controllers dropped for a moment, taking the
 camera and the focuser with it ("the camera was unplugged" ended the M34 run);
