@@ -126,6 +126,12 @@ def read_ser(path):
     _, colour, _, width, height, depth, frames = struct.unpack("<7i", head[14:42])
     # The little-endian flag is read both ways by different programs; ours writes little-endian.
     dtype = np.dtype("<u2" if depth > 8 else "u1")
+    # A capture cut off before it closed (30 October 2026: the laptop crashed
+    # after 1018 frames) leaves the count at 0: the whole frames in the file
+    # are the video.
+    whole = (Path(path).stat().st_size - SER_HEADER) // (width * height * dtype.itemsize)
+    if frames <= 0 or frames > whole:
+        frames = whole
     data = np.memmap(path, dtype=dtype, mode="r", offset=SER_HEADER, shape=(frames, height, width))
     return data, colour
 

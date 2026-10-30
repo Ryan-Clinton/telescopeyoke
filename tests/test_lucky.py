@@ -42,6 +42,16 @@ def test_a_ser_file_reads_back_what_was_written(tmp_path):
     assert (tmp_path / "v.ser").stat().st_size == lucky.SER_HEADER + 3 * 6 * 8 * 2
 
 
+def test_a_video_cut_off_before_it_closed_still_reads_its_whole_frames(tmp_path):
+    writer = lucky.SerWriter(tmp_path / "v.ser", 8, 6)
+    for v in (10, 20, 30):
+        writer.add(np.full((6, 8), v << 4, np.uint16))
+    writer.file.write(b"\x07" * 20)       # part of a fourth frame, then the crash: never closed
+    writer.file.close()
+    data, _ = lucky.read_ser(tmp_path / "v.ser")
+    assert data.shape == (3, 6, 8) and [int(d[0, 0]) for d in data] == [10, 20, 30]
+
+
 def test_8_bit_video_takes_the_top_bits_of_the_12(tmp_path):
     writer = lucky.SerWriter(tmp_path / "v.ser", 2, 1)
     writer.add(np.array([[4095, 160]], np.uint16))
