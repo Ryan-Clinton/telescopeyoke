@@ -7,6 +7,7 @@ whole Moon night through it; this is the engine underneath.
     ./lucky.py stack frames/lucky/Moon-20261024-0210.ser --keep 5 10 20 40
     ./lucky.py picture frames/lucky/Moon-*.fits    draw the stacks' pictures again
     ./lucky.py mineral frames/lucky/Moon-A.ser Moon-B.ser    the Moon's colour turned up
+    ./lucky.py reference CLEMENTINE.tif                       a spacecraft colour map to check it against
 
 `capture` takes the frames back to back in the camera's video mode and
 writes them as one SER file, the format every planetary stacker reads, with
@@ -506,13 +507,14 @@ class Flattened:
         return np.asarray(self.frames[i], dtype=np.float32) / self.flat
 
 
-def flat_for(path, shape):
+def flat_for(path, shape, where=None):
     """The flat for a video (its notes say the part of the sensor it read),
     cut to that part; None when there is no flat for this camera setup.
+    `where` names a flat file other than this setup's master.
     Refused when the flat and the video cannot be made to match."""
     import stacking
     from astropy.io import fits
-    where = stacking.master_path("flat")
+    where = Path(where) if where else stacking.master_path("flat")
     if not where.exists():
         return None, None
     flat = fits.getdata(where).astype(np.float32)
@@ -642,7 +644,7 @@ def capture(target, frames, exposure, gain, roi=None, depth=8):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["capture", "stack", "picture", "mineral"])
+    ap.add_argument("command", choices=["capture", "stack", "picture", "mineral", "reference"])
     ap.add_argument("target", nargs="+",
                     help="capture: the object's name; stack: the SER file; picture: stacks' FITS files to draw again; "
                          "mineral: the stacked SER files to combine")
@@ -661,15 +663,30 @@ def main():
     ap.add_argument("--flat", action="store_true", help="stack: divide each frame by the flat first (for colour)")
     ap.add_argument("--detail", nargs="+", metavar="SER", help="mineral: stacked videos for the detail (default: the colour ones)")
     ap.add_argument("--strength", default="standard", help="mineral: mild, standard, strong, auto, or a number")
+    ap.add_argument("--slope", choices=("bright", "mapped"), default="bright",
+                    help="mineral: fit the slope across the disc on its brighter half (agreed better with "
+                         "Clementine on 30 October 2026) or on the mapped highlands")
+    ap.add_argument("--no-send", action="store_true", help="mineral: do not send the picture (a run to compare)")
+    ap.add_argument("--compare-flats", nargs="+", metavar="FLAT",
+                    help="mineral: the colour stacked again with each flat (none, master, or a FITS file) "
+                         "and how well the videos agree with each")
     args = ap.parse_args()
     if args.command == "picture":
         from astropy.io import fits
         for name in args.target:
             print(picture(fits.getdata(name), Path(name).with_suffix(".jpg")))
         return
+    if args.command == "reference":
+        import mineral
+        mineral.reference_from(args.target[0])
+        return
     if args.command == "mineral":
         import mineral
-        mineral.run(args.target, details=args.detail, strength=args.strength)
+        if args.compare_flats:
+            mineral.compare_flats(args.target, args.compare_flats, details=args.detail)
+        else:
+            mineral.run(args.target, details=args.detail, strength=args.strength, slope=args.slope,
+                        send=not args.no_send)
         return
     args.target = args.target[0]
     if args.command == "capture":

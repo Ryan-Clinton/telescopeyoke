@@ -75,7 +75,10 @@ def test_colour_that_does_not_repeat_from_video_to_video_is_turned_down():
     false = s[45:65, 125:145]
     true = s[100:150, 45:85]
     assert (true[..., 2] - true[..., 0]).mean() > 3 * abs((false[..., 2] - false[..., 0]).mean())
-    assert out["facts"]["repeatability"] == "measured"
+    assert out["facts"]["repeatability"].startswith("measured")
+    # each false patch is one video's: without that video it goes, so it is marked less sure
+    assert (out["confidence"][45:65, 125:145] == 1).mean() > 0.8
+    assert [e["left_out"] for e in out["facts"]["left_out"]] == [1, 2, 3]
     one = mineral.mineral(stray[:1], [truth], blur=2.0)
     assert one["facts"]["repeatability"].startswith("one video")
 
@@ -197,7 +200,7 @@ def moon_picture(look, turn, mirrored, size=240):
 def test_the_picture_s_turn_and_mirroring_are_found_from_the_terminator_and_the_seas(turn, mirrored):
     look = lunar.view(config.example()["site"], WHEN)
     image, disc, _ = moon_picture(look, turn, mirrored)
-    found, flipped, score = lunar.fit_turn(image, disc, look, shrink=2)
+    found, flipped, score, other = lunar.fit_turn(image, disc, look, shrink=2)
     assert flipped == mirrored and score > 1.2
     assert min(abs(found - turn), 360 - abs(found - turn)) < 5
 
@@ -214,3 +217,108 @@ def test_the_check_says_whether_tranquillitatis_is_bluer():
     assert checks[0]["bluer_by_percent"] == pytest.approx(1.0, abs=0.05)
     reversed_ = mineral.check_seas([-m for m in maps], [np.ones(usable.shape)] * 3, usable, g)
     assert reversed_[0]["result"] == "disagrees"
+    assert checks[0]["videos_agreeing"] == "3 of 3" and checks[0]["holds_without_any_one_video"]
+    assert "sigma" not in checks[0] and "consistency_score" in checks[0]
+
+
+def test_the_night_s_plate_solve_gives_the_moon_s_turn_across_the_meridian():
+    """30 October 2026: M34's solve at 02:52, west of the meridian; the Moon
+    east of it earlier, so the camera was turned 180 degrees. The Moon's
+    picture alone gave 213 degrees, not mirrored."""
+    cd = [[-0.00030768966784819703, -0.0001993048761656354], [0.00019923622610959374, -0.00030792602338303187]]
+    assert lunar.turn_from_solve(cd, False)[0] == pytest.approx(32.9, abs=0.1)
+    turn, mirrored = lunar.turn_from_solve(cd, True)
+    assert turn == pytest.approx(212.9, abs=0.1) and not mirrored
+    assert lunar.turn_from_solve([[0.0003, 0.0], [0.0, -0.0003]], False)[1]     # east to the right: mirrored
+
+
+def test_the_solve_is_used_only_from_the_same_night(tmp_path):
+    look = lunar.view(config.example()["site"], WHEN)
+    solve = tmp_path / "last_solve.json"
+    cd = [[-0.000308, -0.000199], [0.000199, -0.000308]]
+    solve.write_text(json.dumps({"ra": 40.5, "dec": 42.7, "cd": cd, "saved": WHEN.timestamp() + 2400}))
+    got = mineral.solved_turn(config.example()["site"], WHEN, look, solve)
+    assert got is not None and set(got) >= {"turn_deg", "mirrored", "flipped_across_meridian"}
+    solve.write_text(json.dumps({"ra": 40.5, "dec": 42.7, "cd": cd, "saved": WHEN.timestamp() + 86400}))
+    assert mineral.solved_turn(config.example()["site"], WHEN, look, solve) is None
+
+
+def test_the_orientation_reports_how_clearly_the_seas_chose_it():
+    look = lunar.view(config.example()["site"], WHEN)
+    image, disc, _ = moon_picture(look, 213, False)
+    _, mirrored, score, other = lunar.fit_turn(image, disc, look, shrink=2)
+    assert not mirrored and score > other
+
+
+def test_a_pattern_on_the_sensor_is_told_from_one_on_the_moon():
+    rng = np.random.default_rng(4)
+    big = ndimage.gaussian_filter(rng.normal(size=(300, 300)), 12)
+    where = np.zeros((300, 300), bool)
+    where[60:240, 60:240] = True
+    ones = [np.ones((300, 300))] * 3
+    shifts = [(0.0, 0.0), (0.0, 80.0), (80.0, 0.0)]
+    moons = [big + rng.normal(0, 0.002, big.shape) for _ in range(3)]
+    assert mineral.follows(moons, ones, shifts, where)["verdict"] == "the Moon"
+    # the same pattern fixed on the sensor lands somewhere else on the Moon in each video
+    sensors = [ndimage.shift(big, s, order=1, mode="nearest") for s in shifts]
+    assert mineral.follows(sensors, ones, shifts, where)["verdict"] == "the sensor"
+    close = mineral.follows(moons, ones, [(0.0, 0.0), (0.0, 5.0), (5.0, 0.0)], where)
+    assert close["verdict"].startswith("not measured")
+
+
+def test_the_slope_is_fitted_on_mapped_highlands_when_the_orientation_is_known():
+    look = lunar.view(config.example()["site"], WHEN)
+    image, _, g = moon_picture(look, 213, False, size=400)
+    inner = ndimage.binary_erosion(g["inside"] & (g["cos_i"] > 0.05), iterations=3)
+    ground, said = mineral.slope_ground(image, inner, g)
+    assert said.startswith("mapped highlands")
+    on = [lunar.near(g, *p, 8.0) for p in lunar.HIGHLANDS.values()]
+    assert ground[np.any(on, axis=0)].mean() > 0.5 and not ground[lunar.near(g, *lunar.SEAS["Mare Tranquillitatis"], 4)].any()
+    assert mineral.slope_ground(image, inner, None)[1].startswith("the brighter half")
+
+
+def test_flats_are_compared_by_how_well_the_videos_then_agree(tmp_path, monkeypatch):
+    from astropy.io import fits
+    truth = surface()
+    for n in range(2):
+        stem = tmp_path / f"Moon-colour{n + 1}"
+        (tmp_path / f"{stem.name}.ser").write_bytes(b"")
+        stem.with_suffix(".stack.json").write_text(json.dumps({"shown": "10", "kept": {"10": 5}, "white_level": 4095}))
+        fits.PrimaryHDU(truth.astype(np.float32)).writeto(tmp_path / f"{stem.name}.best10.fits")
+    flat = tmp_path / "flat-test.fits"
+    used = []
+    monkeypatch.setattr(lucky, "read_ser", lambda path: (np.ones((2, 256, 256), np.float32), lucky.SER_RGGB))
+    monkeypatch.setattr(lucky, "flat_for", lambda path, shape, where=None: (used.append(where) or np.ones(shape), where))
+    monkeypatch.setattr(lucky, "stack", lambda frames, **kw: ({40: tinted(truth)}, {}))
+    monkeypatch.setattr(mineral, "placed_on_moon", lambda *a, **k: (None, {}))
+    rows = mineral.compare_flats([tmp_path / "Moon-colour1.ser", tmp_path / "Moon-colour2.ser"],
+                                 ["none", str(flat)], say=lambda s: None)
+    assert [r["flat"] for r in rows] == ["none", str(flat)] and used == [str(flat)] * 2
+    assert all(r["agreement"] for r in rows)
+    assert json.loads((tmp_path / "Moon-colour1-mineral-flats.json").read_text())[1]["flat"] == str(flat)
+
+
+def test_our_colour_is_compared_by_rank_with_the_spacecraft_map(tmp_path):
+    look = lunar.view(config.example()["site"], WHEN)
+    _, _, g = moon_picture(look, 213, False, size=400)
+    cell = 0.25
+    lat = 90 - (np.arange(720) + 0.5) * cell
+    lon = -180 + (np.arange(1440) + 0.5) * cell
+    blue = np.sin(np.radians(lon))[None, :] * 40 + np.cos(np.radians(lat))[:, None] * 10   # its own stretch
+    ref = tmp_path / "reference.npz"
+    np.savez(ref, blue_less_red=blue, green=blue, cell_deg=cell, source="made up")
+    where = g["inside"] & (g["cos_e"] > 0.3)
+    ours = np.where(g["inside"], 0.01 * np.sin(np.radians(np.nan_to_num(g["lon"]))), 0)
+    same = mineral.compare_reference(ours, where, g, ref)
+    assert same["rank_correlation"] > 0.9 and same["cells"] >= 10
+    backwards = mineral.compare_reference(-ours, where, g, ref)
+    assert backwards["rank_correlation"] < -0.9
+    assert mineral.compare_reference(ours, where, g, tmp_path / "none.npz") is None
+
+
+def test_a_reference_map_in_another_layout_is_refused(tmp_path):
+    from PIL import Image
+    path = tmp_path / "wrong.tif"
+    Image.new("RGB", (40, 20)).save(path)                  # interleaved, not three planes
+    with pytest.raises(SystemExit):
+        mineral.reference_from(path, tmp_path / "out.npz", say=lambda s: None)

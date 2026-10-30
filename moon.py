@@ -197,14 +197,20 @@ def video(s, cam, path, frames, bursts_wanted, exposure, region, depth, matrix, 
     return notes
 
 
-def dither_steps(count, room):
-    """Where each colour video puts the disc across the sensor, pixels right
-    of the middle: spread over 80 % of the `room` either side, so a pattern
-    of the sensor's (its flat's errors, a colour gradient) lands on a
-    different part of the Moon in each video and fails to repeat."""
-    if count < 2 or room <= 0:
-        return [0.0] * count
-    return [float(v) for v in np.linspace(-0.8 * room, 0.8 * room, count)]
+CORNERS = [(-1, -1), (1, 1), (1, -1), (-1, 1)]     # each pair of the first three apart across and down, or both
+
+
+def dither_steps(count, room, room_down=0.0):
+    """Where each colour video puts the disc on the sensor, (pixels right,
+    pixels down) of the middle, at 80 % of the `room` each way: the corners
+    in turn, so a pattern of the sensor's (its flat's errors, a colour
+    gradient) lands on a different part of the Moon in each video, across
+    and down, and fails to repeat, while the Moon's own colour repeats
+    (mineral.follows tells which). One video sits in the middle."""
+    if count < 2 or (room <= 0 and room_down <= 0):
+        return [(0.0, 0.0)] * count
+    return [(0.8 * max(room, 0) * a, 0.8 * max(room_down, 0) * b) for a, b in
+            (CORNERS[n % len(CORNERS)] for n in range(count))]
 
 
 def colour_videos(s, cam, stamp, args, exposure, shape, matrix, white, say):
@@ -217,10 +223,10 @@ def colour_videos(s, cam, stamp, args, exposure, shape, matrix, white, say):
     _, disc = s.look(exposure)
     if disc is None:
         raise SystemExit("The Moon was lost before the colour videos: cloud?")
-    room = (shape[1] - lunar.roi(disc, shape)[2]) / 2
+    _, _, w, h = lunar.roi(disc, shape)
     out = []
-    for n, right in enumerate(dither_steps(args.colour_videos, room)):
-        east, north = lunar.correction(matrix, 0.0, -right)
+    for n, (right, down) in enumerate(dither_steps(args.colour_videos, (shape[1] - w) / 2, (shape[0] - h) / 2)):
+        east, north = lunar.correction(matrix, -down, -right)
         s.aim = [start[0] + east, start[1] + north]
         s.go()
         _, disc = s.look(level)
@@ -235,9 +241,9 @@ def colour_videos(s, cam, stamp, args, exposure, shape, matrix, white, say):
             continue
         path = lucky.OUT / f"Moon-{stamp}-colour{n + 1}.ser"
         say(f"colour video {n + 1} of {args.colour_videos}: {level * 1000:.1f} ms, 16-bit, disc {right:+.0f} px "
-            f"across the sensor")
+            f"across and {down:+.0f} px down the sensor")
         notes = video(s, cam, path, frames, 2, level, region, 16, matrix, white, say)
-        notes["dither_px"] = right
+        notes["dither_px"] = [right, down]
         lucky.write_notes(path, notes)
         out.append({"video": str(path), **notes})
     s.aim = start

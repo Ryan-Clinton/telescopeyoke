@@ -147,11 +147,13 @@ SEAS = {      # selenographic latitude, longitude (east +), degrees: the IAU's n
     "Mare Nubium": (-21.3, -16.6),
     "Oceanus Procellarum": (18.4, -57.4),
 }
-HIGHLANDS = {     # points in the bright southern uplands, well away from any sea
+HIGHLANDS = {     # points in the bright uplands, well away from any sea
     "southern highlands (30S 10E)": (-30.0, 10.0),
     "southern highlands (45S 20E)": (-45.0, 20.0),
     "southern highlands (50S 15W)": (-50.0, -15.0),
     "southern highlands (30S 32E)": (-30.0, 32.0),
+    "Descartes highlands, Apollo 16 (9S 15E)": (-9.0, 15.5),
+    "south-western highlands near Wilhelm (43S 20W)": (-43.0, -20.0),
 }
 
 
@@ -278,16 +280,17 @@ def _seas_score(level, geometry):
 
 
 def fit_turn(image, disc, look, shrink=8):
-    """(turn, mirrored, score): how the picture lies on the sky, found from
-    the picture alone. The turn puts the predicted sunlit side on the lit
-    part of the picture; which way round it is comes from the seas, which
-    must be darker than the uplands."""
+    """(turn, mirrored, score, other): how the picture lies on the sky, found
+    from the picture alone. The turn puts the predicted sunlit side on the
+    lit part of the picture; which way round it is comes from the seas,
+    which must be darker than the uplands. `other` is the best score the
+    other way round: near `score`, which way round is not sure."""
     a = np.asarray(image, dtype=np.float32)
     h, w = a.shape[0] // shrink, a.shape[1] // shrink
     small = a[:h * shrink, :w * shrink].reshape(h, shrink, w, shrink).mean(axis=(1, 3))
     sd = {"cy": (disc["cy"] + 0.5) / shrink - 0.5, "cx": (disc["cx"] + 0.5) / shrink - 0.5, "r": disc["r"] / shrink}
     seen = small > 0.15 * np.percentile(small, 99.5)
-    best = None
+    best, each = None, {}
     for mirrored in (False, True):
         scores = []
         for turn in range(0, 360, 2):
@@ -298,6 +301,31 @@ def fit_turn(image, disc, look, shrink=8):
             g = surface(sd, small.shape, look, turn, mirrored)
             lit = float(((g["inside"] & (g["cos_i"] > 0)) == seen)[g["inside"] | seen].mean())
             score = _seas_score(small, g)
+            each[mirrored] = max(each.get(mirrored, 0.0), score)
             if best is None or (score, lit) > (best[2], best[3]):
                 best = (float(turn % 360), mirrored, score, lit)
-    return best[0], best[1], best[2]
+    return best[0], best[1], best[2], each[not best[1]]
+
+
+def turn_from_solve(cd, flipped):
+    """(turn, mirrored) of a picture from a plate solve's CD matrix (FITS
+    pixels, rows counted down the picture as the camera sends them), for
+    the same camera on the same night: `flipped` when the mount was on the
+    other side of the meridian, which turns the camera 180 degrees on the
+    sky. On 30 October 2026 M34's solve at 02:52 (west of the meridian)
+    gave 32.9 degrees, so the Moon (east of it) 212.9; the Moon's picture
+    alone gave 213."""
+    (a, b), (c, d) = cd
+    turn = math.degrees(math.atan2(-b, -d))         # up the picture is down the rows: (0, -1)
+    t = math.radians(turn)
+    mirrored = (a * -math.cos(t) + c * math.sin(t)) < 0
+    return (turn + (180.0 if flipped else 0.0)) % 360, bool(mirrored)
+
+
+def hour_angle(site, when, ra):
+    """Hours west of the meridian (-12 to 12) of right ascension `ra`
+    (degrees) at `when`: below 0 the mount sits west of the pier."""
+    import astropy.units as u
+    from astropy.time import Time
+    lst = Time(when).sidereal_time("apparent", longitude=site["longitude"] * u.deg).deg
+    return ((lst - ra + 180) % 360 - 180) / 15

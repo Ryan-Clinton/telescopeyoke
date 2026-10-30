@@ -108,14 +108,28 @@ Never the Sun: nothing here knows whether a solar filter is fitted, and
     ./ty moon --mineral                       take the videos for it and make it
     ./ty lucky mineral COLOUR.ser ... [--detail DETAIL.ser] [--strength mild|standard|strong|auto|N]
     ./ty lucky stack VIDEO.ser --colour --flat   a colour stack divided by the flat
+    ./ty lucky mineral COLOUR.ser ... --compare-flats none master FLAT.fits   which flat makes the videos agree best
+    ./ty lucky mineral COLOUR.ser ... --slope mapped --no-send   the slope fitted on mapped highlands, not sent
+    ./ty lucky reference CLEMENTINE.tif       the spacecraft colour map it is checked against, made small
 
-The Moon's colours are real but faint, a percent or two either way. On
-spacecraft maps the bluer seas are richer in titanium and the browner ones
-poorer, and fresh ground is bluer than old. A colour camera's three broad,
-overlapping filters cannot measure titanium or iron, though (Earth and
-Space Science 2023, doi:10.1029/2022EA002710). So the mineral Moon is
-enhanced colour that goes with composition and maturity, and is never read
-as an abundance.
+The Moon's colours are real but faint, a percent or two either way.
+Spacecraft maps, made through narrow filters, show many titanium-rich seas
+as bluer, and fresh ground as bluer than old. This camera's broad colours
+can show some of those differences between regions, but cannot tell how
+much titanium or iron there is (Earth and Space Science 2023,
+doi:10.1029/2022EA002710). So the mineral Moon is enhanced colour that goes
+with composition and maturity, and is never read as an abundance.
+
+**Whose colours.** The blue and red are the Hypercam 183C's: the IMX183's
+Bayer filters, broad and overlapping. Two makers' EMVA 1288 reports for
+cameras on the same sensor give its quantum efficiency at their test
+wavelengths: blue 61 to 63 % at 460 to 467 nm, green 68 % at 530 to 533 nm,
+red 43 to 50 % at 625 to 630 nm
+([FLIR BFS-U3-200S6C](https://softwareservices.flir.com/BFS-U3-200S6-BD2/latest/EMVA/EMVA.html),
+[Baumer VCXG.2-201C](https://media.baumer.com/mamfile_1963053.pdf)). No full
+curve is published. So its B/R is this camera's own index, spanning about
+460 to 625 nm, not Clementine's 415/750 nm ratio or Galileo's filters; the
+files say so (`BANDS` in their FITS headers, `bands` in the json).
 
 **Taking it (`./ty moon --mineral`).** First the usual detail video (8-bit,
 fast). Then `--colour-videos` (3) colour videos of `--colour-frames` (200)
@@ -123,9 +137,11 @@ each. They are 16-bit, holding the camera's 12 bits whole, with the SER
 header saying 12. In 8 bits the Moon's colours are only a step or two of
 the scale. They are exposed to 55 % of the scale rather than 72 % so that
 nothing clips, and the disc is put somewhere else across the sensor in each
-(`dither_steps`). A pattern of the sensor's, from a flat's error or a
-colour gradient, then lands on a different part of the Moon each time and
-fails the repeat test below. Each colour video is stacked with `--flat`,
+(`dither_steps`): to the corners in turn, at 80 % of the room across and
+down, so every two videos are apart across, down or both. A pattern of the
+sensor's, from a flat's error or a colour gradient, then lands on a
+different part of the Moon each time and fails the repeat test below, and
+`follows` says whether the colour stays with the Moon or the sensor. Each colour video is stacked with `--flat`,
 the flat from `calibrate.py flat` cut to the video's region. Each colour's
 response changing slowly across the sensor would otherwise be turned up
 with the rest. Then the mineral Moon is made from them. Turning the camera
@@ -140,11 +156,22 @@ hands, and the check below compares nights.
    SER header's depth, never from the file's 8 or 16 bits.
 3. The colour is worked out on 2×2 blocks, as log ratios of each colour to
    the three's mean.
-4. The slope across the disc is taken off, fitted to the bright uplands only.
+4. The slope across the disc is taken off, fitted to the brighter half of
+   the disc. `--slope mapped` fits it to the mapped highlands instead
+   (`lunar.HIGHLANDS`, 8° round each). On 30 October 2026 that agreed worse
+   with Clementine's map (rank correlation 0.19 against 0.38) and between
+   the videos: the mapped points are all central and southern, so the
+   slope was carried across the north from them. The brighter half takes
+   in rays and lit seas as well as uplands; the json says which was used.
 
 Across the stacks, each pixel's blue-against-orange is compared from video
-to video. Colour less than 2 standard errors from nothing is turned down
-in proportion. The result is turned up by a stated factor: mild 8,
+to video, as a consistency score: the colour over its standard error
+between the videos. Colour scoring under 2 is turned down in proportion.
+With two or three videos, smoothed and sharing the optics and the air, the
+score measures agreement; it is not a statistical significance, and it is
+never quoted as "sigma". Then each video is left out in turn: where the
+colour changes sign, or by more than half, without some one video (among
+pixels with more than the typical colour), it is marked less sure. The result is turned up by a stated factor: mild 8,
 standard 15, strong 25, a number, or auto (the strongest 1 % to 35 % of
 the brightness).
 
@@ -154,12 +181,13 @@ the brightness).
 |---|---|
 | `.jpg`, `.fits` | Blue against orange only: the safe picture |
 | `-full.jpg` | Every colour kept: exploratory, as the camera's green-magenta tint may not all be gone |
-| `-natural.jpg` | The colour as it is, on the sharpened detail |
+| `-balanced.jpg` | The colour as it is, its three colours balanced to a grey Moon, on the sharpened detail. Balanced, not calibrated: the Moon's mean is made grey |
 | `-ratios.fits` | log B/R, R/G and B/G after calibration |
 | `-ratio-br.jpg` | log B/R as grey, brighter bluer |
-| `-confidence.jpg` | Green robust; amber faint, near the limb or terminator (Sun or view under 15°), or not repeated; red clipped or off the Moon |
+| `-confidence.jpg` | Green robust; amber faint, near the limb or terminator (Sun or view under 15°), not repeated, or changed by leaving one video out; red clipped or off the Moon |
 | `-difference.fits` | The first two videos' blue-orange, one less the other |
-| `.json` | The colour as measured (the strongest 1 %, the spread) and the factor it was turned up by, each video's white level, clipping and flat, how well the videos agree two by two, the picture's orientation, and the check against the seas |
+| `.json` | The colour as measured (the strongest 1 %, the spread) and the factor it was turned up by, each video's white level, clipping and flat, how well the videos agree two by two and with each left out, whether the colour follows the Moon or the sensor, where the slope was fitted, the picture's orientation with its margin and plate-solve check, the check against the seas, and the comparison with the spacecraft map |
+| `-flats.json` | With `--compare-flats`: for each flat, how well the videos agree, how much is sure, and the check against the seas |
 
 **The check against the seas.** `lunar.orientation` is the IAU model of
 the Moon's pole and prime meridian (Archinal et al. 2011). `lunar.view`
@@ -169,15 +197,40 @@ is, and which way round from the seas, which must come out darker than the
 uplands once the light's angle is allowed for. That puts every named sea
 on the picture. Spacecraft colour maps say Mare Tranquillitatis is bluer
 than Mare Serenitatis and than the uplands (NASA's Galileo colour Moon).
-The json says whether this picture agrees, by how much, and to how many
-standard errors across the videos.
+The json says whether this picture agrees, by how much, in how many of the
+videos, whether it holds with any one video left out, and its consistency
+score.
+
+**Checking the orientation.** The seas help choose the orientation, and
+the same seas are then checked, so the orientation is checked by something
+else where it can be. The json keeps the seas' score both ways round and
+the margin between them. If a plate solve of the same night is within six
+hours (`cache/last_solve.json`), its CD matrix gives the camera's angle on
+the sky (`lunar.turn_from_solve`), turned 180° if the mount was on the
+other side of the meridian. Without a solve, a margin under 1.1 marks the
+orientation, and so the seas' check, not sure.
+
+**Against a spacecraft map.** `./ty lucky reference FILE.tif` reads USGS's
+Clementine UVVIS warped colour-ratio mosaic
+([the record](https://astrogeology.usgs.gov/search/map/moon_clementine_uvvis_warped_color_ratio_mosaic_200m),
+4.46 GB, 200 m a pixel, public domain; red 750/415 nm, blue 415/750) a
+strip at a time and keeps its blue less red on 0.25° cells in
+`cache/moon-colour-reference.npz` (11 MB). The mineral Moon then looks up
+each sure pixel's latitude and longitude on it, averages both over 2°
+cells and compares them by rank, and puts the named seas in order by each.
+
+**Which flat.** `--compare-flats none master FLAT.fits` stacks the colour
+videos again with each flat (in memory: the stacks on disk are left alone)
+and says how well the videos then agree with each. A right flat makes the
+Moon's colour repeat better; a wrong one adds a pattern that stays on the
+sensor.
 
 Not done:
 
 - **Correcting the colour for the light's angle.** It would need each of
   this camera's colours' phase reddening, which has not been measured.
-- **A full comparison against a spacecraft map.** The check uses named
-  seas, not a registered map.
+- **Calibrated colour.** That needs this camera's full spectral response,
+  which no maker publishes, or a colour reference measured through it.
 
 ## The first result, 24 October 2026
 
@@ -208,5 +261,8 @@ speeds faster than Speed 0 for short frames.
 
 Three 8-bit videos of the 80 %-lit waning Moon, 2,513 frames
 ([the record](nights/2026-10-30/mineral-moon.md)). Mare Tranquillitatis came
-out bluer than Mare Serenitatis by 2.0 % (11 standard errors) and than the
-uplands by 2.3 % (3.3), as the spacecraft maps have it.
+out bluer than Mare Serenitatis by 2.0 % and than the uplands by 2.3 %, in
+all three videos and with any one left out, as the spacecraft maps have it.
+The orientation found from the picture (213°) agreed with the night's plate
+solve (212.9°). Against Clementine's whole colour map the agreement is weak
+so far: rank correlation 0.38 over 2,739 cells of 2°.

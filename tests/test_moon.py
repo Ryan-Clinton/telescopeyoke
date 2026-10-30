@@ -155,11 +155,15 @@ def test_a_mineral_moon_adds_16_bit_colour_videos_exposed_lower_with_the_disc_mo
     assert all(lucky.ser_facts(v)[0] == 12 for v in videos)          # the header says the camera's 12 bits
     assert all(n["exposure"] < out["exposure"] for n in notes)        # lower: nothing clips
     lefts = [n["roi"][0] for n in notes]
-    assert lefts == sorted(lefts) and lefts[-1] - lefts[0] > 100       # the disc somewhere else on the sensor each time
+    assert lefts[1] - lefts[0] > 100                                    # the disc somewhere else on the sensor each time
     steps = [n["dither_px"] for n in notes]
-    assert steps[1] == 0 and steps[0] == pytest.approx(-steps[2]) and steps[2] > 0
+    assert steps[0] == [pytest.approx(-steps[1][0]), pytest.approx(-steps[1][1])] and steps[1][0] > 0
 
 
-def test_dither_steps_spread_across_the_room():
-    assert moon.dither_steps(1, 500) == [0.0]
-    assert moon.dither_steps(3, 100) == [-80.0, 0.0, 80.0]
+def test_dither_steps_spread_across_and_down_the_room():
+    assert moon.dither_steps(1, 500, 300) == [(0.0, 0.0)]
+    steps = moon.dither_steps(3, 100, 50)
+    assert steps == [(-80.0, -40.0), (80.0, 40.0), (80.0, -40.0)]
+    # every pair apart across or down, so a sensor pattern moves on the Moon each time
+    assert all(a != b for i, a in enumerate(steps) for b in steps[i + 1:])
+    assert {s[0] for s in steps} == {-80.0, 80.0} and {s[1] for s in steps} == {-40.0, 40.0}
