@@ -4,6 +4,7 @@ Telegram bot.
 
     ./notify.py --test               a test message, to see the bot is set up
     ./notify.py "the text"           any message
+    ./notify.py "the text" --file F  with F attached at full size
 
 The bot is the person's own: made with Telegram's @BotFather, which gives
 its token, and the chat is theirs (the number @userinfobot gives, or the
@@ -71,8 +72,10 @@ def patiently(attempt, sleep=time.sleep):
     return attempt()
 
 
-def send(text, pictures=(), animations=(), post=requests.post, say=print, sleep=time.sleep):
-    """Send the text, then each picture and animation (path, caption).
+def send(text, pictures=(), animations=(), post=requests.post, say=print, sleep=time.sleep, documents=()):
+    """Send the text, then each picture, animation and document (path,
+    caption). A picture is shrunk by Telegram (2560 pixels at most); a
+    document arrives as the file itself, full size (50 MB at most).
     Returns how many went; never raises, as no caller waits on it."""
     token, chat = settings()
     if not token or quiet():
@@ -85,7 +88,8 @@ def send(text, pictures=(), animations=(), post=requests.post, say=print, sleep=
                               sleep)
             reply.raise_for_status()
             sent += 1
-        for method, field, items in (("sendPhoto", "photo", pictures), ("sendAnimation", "animation", animations)):
+        for method, field, items in (("sendPhoto", "photo", pictures), ("sendAnimation", "animation", animations),
+                                     ("sendDocument", "document", documents)):
             for path, caption in items:
                 if not Path(path).exists():
                     continue
@@ -99,15 +103,19 @@ def send(text, pictures=(), animations=(), post=requests.post, say=print, sleep=
                 sent += 1
     except requests.RequestException as error:
         say(f"  the alert was not sent ({error.__class__.__name__}); carrying on")
-    keep(text, pictures, animations, sent)
+    keep(text, list(pictures) + list(documents), animations, sent)
     return sent
 
 
-def stack_ready(what, picture, say=print, post=requests.post):
+def stack_ready(what, picture, say=print, post=requests.post, full=None):
     """A finished stack's picture to the person's phone (30 October 2026:
-    "whenever the stacks finish send me the pics on Telegram"). Returns how
-    many messages went; never raises."""
-    return send(f"Stack finished: {what}", pictures=[(picture, what)], post=post, say=say)
+    "whenever the stacks finish send me the pics on Telegram"), to look at,
+    then the same file as an attachment at full resolution ("full res image
+    as an attachment please"), as Telegram shrinks a picture: `full`, the
+    picture at the stack's own size, when `picture` is a smaller copy.
+    Returns how many messages went; never raises."""
+    return send(f"Stack finished: {what}", pictures=[(picture, what)], documents=[(full or picture, f"{what} (full size)")],
+                post=post, say=say)
 
 
 SENT_LOG = config.DATA / "cache" / "sent.jsonl"
@@ -155,7 +163,8 @@ def run(args, say=print):
                                                    "config.toml (see ./notify.py --help).")
     text = "telescopeyoke: the alerts reach you." if args.test else " ".join(args.text)
     pictures = [(path, " ".join(args.text)[:200]) for path in getattr(args, "picture", None) or []]
-    sent = send(text, pictures=pictures, say=say)
+    documents = [(path, " ".join(args.text)[:200]) for path in getattr(args, "file", None) or []]
+    sent = send(text, pictures=pictures, documents=documents, say=say)
     if not sent:
         raise interface.Refusal("INVALID_REQUEST", "Telegram did not take the message: check the token and chat.")
     say("sent")
@@ -167,6 +176,8 @@ def main():
     ap.add_argument("text", nargs="*", help="the message")
     ap.add_argument("--test", action="store_true", help="a test message")
     ap.add_argument("--picture", action="append", metavar="FILE", help="a picture to send after the message")
+    ap.add_argument("--file", action="append", metavar="FILE",
+                    help="a file to send as an attachment, untouched (a picture at full size)")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
     if not args.test and not args.text:

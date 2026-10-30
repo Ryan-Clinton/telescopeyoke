@@ -472,16 +472,17 @@ def grey_moon(image):
     return image * (means.mean() / np.maximum(means, 1e-6))
 
 
-def picture(image, path, balance=True):
+def picture(image, path, balance=True, largest=1600):
     """An 8-bit picture of a stack, black to the brightest surface, a colour
-    one balanced to a grey Moon unless `balance` is off."""
+    one balanced to a grey Moon unless `balance` is off, `largest` pixels
+    across at most (None: the stack's own size)."""
     from PIL import Image
     image = grey_moon(image) if balance else np.asarray(image, dtype=np.float32)
     low, high = np.percentile(image, [0.5, 99.95])
     scaled = np.clip((image - low) / max(high - low, 1e-6), 0, 1) ** (1 / 1.4)
     out = Image.fromarray((scaled * 255).astype(np.uint8))
-    if out.width > 1600:
-        out = out.resize((1600, round(out.height * 1600 / out.width)), Image.LANCZOS)
+    if largest and out.width > largest:
+        out = out.resize((largest, round(out.height * largest / out.width)), Image.LANCZOS)
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     out.save(path, quality=92)
@@ -559,6 +560,8 @@ def stack_file(path, keeps=KEEPS, in_colour=False, publish=True, pixels="green",
         fits.PrimaryHDU(final.astype(np.float32)).writeto(path.with_name(stem + ".sharp.fits"), overwrite=True)
         picture(image, path.with_name(stem + ".jpg"))
         jpg = picture(final, path.with_name(stem + ".sharp.jpg"))
+        if publish and f"{share:g}" == shown:
+            picture(final, path.with_name(stem + ".sharp.fullsize.jpg"), largest=None)
         print(f"best {share:g} %: {done['kept'][f'{share:g}']} frames, sharpness {done['sharpness'][f'{share:g}']}"
               + ("  <- shown" if f"{share:g}" == shown else ""), flush=True)
         if publish and f"{share:g}" == shown:
@@ -575,7 +578,8 @@ def stack_file(path, keeps=KEEPS, in_colour=False, publish=True, pixels="green",
         import notify
         notify.stack_ready(f"{path.with_suffix('').name}, the best {done['kept'][shown]} of {done['frames']} frames"
                            + (" in colour" if in_colour else ""),
-                           path.with_name(path.with_suffix("").name + f".best{shown}.sharp.jpg"))
+                           path.with_name(path.with_suffix("").name + f".best{shown}.sharp.jpg"),
+                           full=path.with_name(path.with_suffix("").name + f".best{shown}.sharp.fullsize.jpg"))
     return done
 
 

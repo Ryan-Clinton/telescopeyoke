@@ -385,6 +385,7 @@ def mineral_file(stems, details=None, strength="standard", site=None, say=print)
     header["NATIVE"] = (facts["native_colour"]["p99_percent"], "strongest 1% of colour measured, %")
     fits.PrimaryHDU(out["picture"].astype(np.float32), header=header).writeto(f"{stem}.fits", overwrite=True)
     jpg = lucky.picture(out["picture"], f"{stem}.jpg", balance=False)
+    lucky.picture(out["picture"], f"{stem}-fullsize.jpg", balance=False, largest=None)
     lucky.picture(out["full"], f"{stem}-full.jpg", balance=False)
     lucky.picture(out["natural"], f"{stem}-natural.jpg", balance=False)
     fits.HDUList([fits.PrimaryHDU()] + [fits.ImageHDU(v.astype(np.float32), name=k) for k, v in out["ratios"].items()]
@@ -411,6 +412,6 @@ def run(stems, details=None, strength="standard"):
     import notify
     seas = "; ".join(f"{c['expected']}: {c['result']}" for c in facts.get("seas", []))
     notify.stack_ready(f"Mineral Moon from {facts['videos']} videos, colour turned up {facts['display_gain']:g} times"
-                       + (f". {seas}" if seas else ""), jpg)
+                       + (f". {seas}" if seas else ""), jpg, full=jpg.with_name(jpg.stem + "-fullsize.jpg"))
     return jpg, facts
 

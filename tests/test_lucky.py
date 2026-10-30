@@ -98,6 +98,14 @@ def test_a_colour_stack_is_drawn_as_a_grey_moon_not_a_green_one(tmp_path):
     assert lucky.grey_moon(flat) is not None and lucky.grey_moon(flat).shape == (8, 8)
 
 
+def test_the_picture_for_the_phone_is_cut_down_and_the_attachment_is_full_size(tmp_path):
+    """30 October 2026: "full res image as an attachment please"."""
+    from PIL import Image
+    image = np.random.default_rng(1).random((2000, 3000)).astype(np.float32)
+    assert Image.open(lucky.picture(image, tmp_path / "small.jpg")).size == (1600, 1067)
+    assert Image.open(lucky.picture(image, tmp_path / "full.jpg", largest=None)).size == (3000, 2000)
+
+
 def test_every_pixel_balanced_to_the_green_s_level():
     mosaic = np.zeros((8, 8), np.uint16)
     mosaic[0::2, 0::2] = 2000

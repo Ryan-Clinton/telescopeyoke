@@ -42,6 +42,17 @@ def test_long_text_is_split_and_pictures_follow(bot, tmp_path):
     assert calls[0][0].startswith("https://api.telegram.org/bot123:abc/") and calls[0][1]["data"]["chat_id"] == "42"
 
 
+def test_a_document_goes_as_the_file_itself(bot, tmp_path):
+    """30 October 2026: "full res image as an attachment please"."""
+    picture = tmp_path / "Moon.jpg"
+    picture.write_bytes(b"jpg")
+    calls = []
+    sent = notify.send("Stack finished", pictures=[(picture, "Moon")], documents=[(picture, "Moon (full size)")],
+                       post=lambda url, **k: calls.append((url, k)) or Reply())
+    assert sent == 3 and [c[0].rsplit("/", 1)[1] for c in calls] == ["sendMessage", "sendPhoto", "sendDocument"]
+    assert "document" in calls[2][1]["files"] and calls[2][1]["data"]["caption"] == "Moon (full size)"
+
+
 def test_a_failure_to_send_does_not_stop_the_caller(bot):
     def post(*a, **k):
         raise requests.ConnectionError("no network")
@@ -74,10 +85,21 @@ def test_a_finished_stack_sends_its_picture(monkeypatch, tmp_path):
     """30 October 2026: "whenever the stacks finish send me the pics on Telegram"."""
     import restack
     sent = []
-    monkeypatch.setattr(notify, "send", lambda text, pictures=(), **kw: sent.append((text, list(pictures))) or 2)
+    documents = []
+
+    def send(text, pictures=(), documents=(), **kw):
+        sent.append((text, list(pictures)))
+        attached.extend(documents)
+        return 3
+    attached = documents
+    monkeypatch.setattr(notify, "send", send)
     picture = tmp_path / "Moon.best10.sharp.jpg"
-    assert notify.stack_ready("Moon, the best 100 of 1000 frames", picture) == 2
+    assert notify.stack_ready("Moon, the best 100 of 1000 frames", picture) == 3
     assert sent[-1] == ("Stack finished: Moon, the best 100 of 1000 frames", [(picture, "Moon, the best 100 of 1000 frames")])
+    assert documents == [(picture, "Moon, the best 100 of 1000 frames (full size)")]
+    full = tmp_path / "Moon.best10.sharp.fullsize.jpg"
+    notify.stack_ready("Moon", picture, full=full)
+    assert documents[-1] == (full, "Moon (full size)") and sent[-1][1] == [(picture, "Moon")]
     session = tmp_path / "M34" / "20261030-025230"
     restack.tell(session, {"stacked": 12, "total_exposure_s": 192})
     assert sent[-1][0] == "Stack finished: M34, 12 frames, 3 min of light"
@@ -88,7 +110,10 @@ def test_the_command_sends_a_picture_after_its_message(monkeypatch, tmp_path):
     import argparse
     sent = []
     monkeypatch.setattr(notify, "settings", lambda: ("token", "chat"))
-    monkeypatch.setattr(notify, "send", lambda text, pictures=(), **kw: sent.append((text, pictures)) or 2)
-    args = argparse.Namespace(test=False, text=["Stack", "finished"], picture=[str(tmp_path / "m.jpg")], json=False)
-    assert notify.run(args, say=lambda m: None) == {"sent": 2}
-    assert sent == [("Stack finished", [(str(tmp_path / "m.jpg"), "Stack finished")])]
+    monkeypatch.setattr(notify, "send", lambda text, pictures=(), documents=(), **kw:
+                        sent.append((text, pictures, documents)) or 3)
+    args = argparse.Namespace(test=False, text=["Stack", "finished"], picture=[str(tmp_path / "m.jpg")],
+                              file=[str(tmp_path / "m.fits")], json=False)
+    assert notify.run(args, say=lambda m: None) == {"sent": 3}
+    assert sent == [("Stack finished", [(str(tmp_path / "m.jpg"), "Stack finished")],
+                     [(str(tmp_path / "m.fits"), "Stack finished")])]
