@@ -342,7 +342,7 @@ PHASES = {"Moving": "goto", "Plate solving": "solve",
           "Polar check": "polar_measure", "Polar recheck": "polar_recheck",
           "Patrol": "imaging", "Imaging": "imaging", "Searching": "imaging",
           "Taking a lucky-imaging video": "lucky", "Stacking the lucky frames": "lucky",
-          "Imaging the Moon": "lucky"}
+          "Imaging the Moon": "lucky", "Live view": "live"}
 # The focus motor's other modes, from the words its line carries
 # (focus.MODE_WORDS; a test keeps the two in step). "Focusing" is the hand
 # aid by ear, which the stream does not show.
@@ -352,7 +352,7 @@ MODES = {"walking in to the sharpest": "focus_walk", "finding focus": "focus_fin
 # process of its own (a person is turning the bolts): polaralign.py's
 # stream file says so, not an activity line.
 BROADCAST = ("focus_check", "focus_sweep", "focus_walk", "focus_find", "focus_fit", "focus_verify",
-             "polar_measure", "polar_adjust", "polar_recheck", "lucky")
+             "polar_measure", "polar_adjust", "polar_recheck", "lucky", "live")
 # The steps of getting to a target, for the stream's between-targets card.
 ORDER = ["goto", "solve", "focus", "imaging"]
 

@@ -14,6 +14,7 @@ import argparse
 import time
 from pathlib import Path
 
+import activity
 import skywatch
 import snap
 from camera import Camera, luminance
@@ -31,6 +32,12 @@ def run_active(since=0.0, seconds=45):
     return any(p.stat().st_mtime > since and time.time() - p.stat().st_mtime < seconds for p in logs)
 
 
+def video_active():
+    """Whether a lucky-imaging video (lucky.py, ./ty moon) has the camera:
+    it keeps no frames.jsonl for run_active to see."""
+    return any(activity.PHASES.get(e.get("what")) == "lucky" for e in activity.now())
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--every", type=float, default=10, help="seconds between frames")
@@ -43,9 +50,9 @@ def main():
 
     end = time.monotonic() + args.minutes * 60
     began_at = time.time() if args.after_run else 0.0
-    with Camera(gain=args.gain) as cam:
+    with Camera(gain=args.gain) as cam, activity.doing("Live view", f"{args.exposure:g} s every {args.every:g} s"):
         while time.monotonic() < end:
-            if run_active(began_at):
+            if run_active(began_at) or video_active():
                 print("An imaging run has started; live view stopping.")
                 return
             began = time.monotonic()
