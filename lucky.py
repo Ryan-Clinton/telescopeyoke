@@ -5,6 +5,7 @@ whole Moon night through it; this is the engine underneath.
 
     ./lucky.py capture Moon --frames 1000 --exposure 0.01 --gain 100 --roi X Y W H
     ./lucky.py stack frames/lucky/Moon-20261024-0210.ser --keep 5 10 20 40
+    ./lucky.py picture frames/lucky/Moon-*.fits    draw the stacks' pictures again
 
 `capture` takes the frames back to back in the camera's video mode and
 writes them as one SER file, the format every planetary stacker reads, with
@@ -441,9 +442,26 @@ def stack(frames, keeps=KEEPS, points=True, local=True, in_colour=False, report=
     return results, done
 
 
+def grey_moon(image):
+    """A colour stack with its three colours brought to one level over the
+    lit surface, which is near enough grey: the camera's green pixels take
+    in more light than its red and blue, so unbalanced the Moon came out
+    green (30 October 2026: red 116, green 147, blue 93 on the disc).
+    A one-colour picture is returned as it is."""
+    image = np.asarray(image, dtype=np.float32)
+    if image.ndim != 3:
+        return image
+    level = image.mean(axis=-1)
+    lit = level > 0.25 * np.percentile(level, 99.9)
+    means = np.array([np.median(image[..., c][lit]) if lit.any() else image[..., c].mean() for c in range(3)])
+    return image * (means.mean() / np.maximum(means, 1e-6))
+
+
 def picture(image, path):
-    """An 8-bit picture of a stack, black to the brightest surface."""
+    """An 8-bit picture of a stack, black to the brightest surface, a colour
+    one balanced to a grey Moon."""
     from PIL import Image
+    image = grey_moon(image)
     low, high = np.percentile(image, [0.5, 99.95])
     scaled = np.clip((image - low) / max(high - low, 1e-6), 0, 1) ** (1 / 1.4)
     out = Image.fromarray((scaled * 255).astype(np.uint8))
@@ -554,8 +572,9 @@ def capture(target, frames, exposure, gain, roi=None, depth=8):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0],
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("command", choices=["capture", "stack"])
-    ap.add_argument("target", help="capture: the object's name; stack: the SER file")
+    ap.add_argument("command", choices=["capture", "stack", "picture"])
+    ap.add_argument("target", nargs="+",
+                    help="capture: the object's name; stack: the SER file; picture: stacks' FITS files to draw again")
     ap.add_argument("--frames", type=int, default=1000, help="capture: frames in the video")
     ap.add_argument("--exposure", type=float, default=0.01, help="capture: seconds a frame")
     ap.add_argument("--gain", type=int, default=100)
@@ -569,6 +588,12 @@ def main():
                     help="stack: the detail picture from the greens filled in, or every pixel balanced")
     ap.add_argument("--then-stack", action="store_true", help="capture: stack it straight after")
     args = ap.parse_args()
+    if args.command == "picture":
+        from astropy.io import fits
+        for name in args.target:
+            print(picture(fits.getdata(name), Path(name).with_suffix(".jpg")))
+        return
+    args.target = args.target[0]
     if args.command == "capture":
         path = capture(args.target, args.frames, args.exposure, args.gain, roi=args.roi, depth=args.depth)
         if args.then_stack:

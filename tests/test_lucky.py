@@ -83,6 +83,20 @@ def test_the_detail_picture_is_the_greens_filled_in_so_the_colour_pattern_does_n
     assert np.allclose(rgb[2:-2, 2:-2, 0], 4000) and np.allclose(rgb[2:-2, 2:-2, 2], 100)
 
 
+def test_a_colour_stack_is_drawn_as_a_grey_moon_not_a_green_one(tmp_path):
+    from PIL import Image
+    image = np.zeros((40, 40, 3), np.float32)
+    image[10:30, 10:30] = (116, 147, 93)          # the disc as stacked on 30 October 2026
+    balanced = lucky.grey_moon(image)
+    assert np.allclose(balanced[20, 20], balanced[20, 20].mean(), rtol=1e-3)
+    assert np.allclose(balanced[0, 0], 0)
+    drawn = np.asarray(Image.open(lucky.picture(image, tmp_path / "moon.jpg"))).astype(float)
+    r, g, b = drawn[20, 20]
+    assert abs(r - g) < 6 and abs(b - g) < 6
+    flat = np.ones((8, 8), np.float32)
+    assert lucky.grey_moon(flat) is not None and lucky.grey_moon(flat).shape == (8, 8)
+
+
 def test_every_pixel_balanced_to_the_green_s_level():
     mosaic = np.zeros((8, 8), np.uint16)
     mosaic[0::2, 0::2] = 2000
