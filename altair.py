@@ -81,6 +81,27 @@ def _serial(lib, device):
         handle.Close()
 
 
+REPLUG_WAIT = 15.0        # seconds for the camera to come back after the library's replug
+
+
+def replug(lib, device, wait=REPLUG_WAIT, sleep=time.sleep):
+    """The library's replug: the camera dropped from USB and found again, as
+    if its lead were pulled and pushed back. On 30 October 2026, behind a
+    hub, a lost frame left the camera refusing its first setting (0x8000ffff)
+    at every speed, until it was replugged. True once a camera is back."""
+    try:
+        if lib.Altaircam.Replug(device.id) <= 0:
+            return False
+    except (AttributeError, lib.HRESULTException):
+        return False
+    end = time.monotonic() + wait
+    while time.monotonic() < end:
+        if cameras(lib):
+            return True
+        sleep(0.5)
+    return False
+
+
 def choose(lib, wanted=None):
     """The one camera to use. None plugged in is a refusal; so are several,
     unless config.toml names one by its serial number. Never the first of
@@ -136,7 +157,7 @@ class AltairCamera:
         self._last = None             # (stamp, arrival) of the last good frame
         self._offsets = deque(maxlen=20)   # arrival minus stamp, for recent good frames
 
-    def _open(self):
+    def _open(self, replugged=False):
         lib, camera = self.lib, SETTINGS["camera"]
         device = choose(lib, camera.get("serial"))
         self.name = device.displayname
@@ -168,7 +189,10 @@ class AltairCamera:
             handle.StartPullModeWithCallback(self._callback, self)
         except lib.HRESULTException as problem:
             self.close()
-            raise CameraError(f"the camera would not be set up: {_reason(problem)}")
+            if not replugged and replug(lib, device):
+                return self._open(replugged=True)
+            raise CameraError(f"the camera would not be set up: {_reason(problem)}"
+                              + (" (even after a replug by the library)" if replugged else ""))
 
     def _size(self):
         """(width, height) of the frames the camera will now send. With

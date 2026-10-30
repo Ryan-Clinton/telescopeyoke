@@ -33,6 +33,9 @@ class World:
         self.shifted = False      # hand the 12 bits over at the top of the 16
         self.obeys_cancel = True  # a cancelled exposure delivers nothing
         self.unplug = False       # report a disconnect instead of a frame
+        self.stuck = False        # refuse every setting (0x8000ffff) until replugged
+        self.replugs = 0          # times the library's replug was asked for
+        self.replug_fixes = True  # the replug clears being stuck
         self.level = 1000         # value the next frame is filled with
         self.stamps = True        # frames carry the camera's clock; False: always 0
         self.clock_rate = 1.0     # how fast that clock runs against the real one
@@ -82,7 +85,9 @@ def fake_sdk(world):
             if option == lib.ALTAIRCAM_OPTION_FLUSH:
                 self.held.clear()
 
-        def put_AutoExpoEnable(self, on): pass
+        def put_AutoExpoEnable(self, on):
+            if world.stuck:
+                raise HRESULTException(0x8000ffff)
         def put_eSize(self, index): pass
         def put_ExpoTime(self, microseconds): self.exposure = microseconds
         def put_ExpoAGain(self, gain): self.gain = gain
@@ -174,6 +179,13 @@ def fake_sdk(world):
         @staticmethod
         def Version():
             return "fake"
+
+        @staticmethod
+        def Replug(camera_id):
+            world.replugs += 1
+            if world.replug_fixes:
+                world.stuck = False
+            return 1
 
     lib.HRESULTException, lib.Altaircam = HRESULTException, Altaircam
     lib.AltaircamFrameInfoV3 = AltaircamFrameInfoV3
@@ -1047,3 +1059,19 @@ def test_a_usbmon_capture_tells_a_frame_never_sent_from_one_never_asked_for():
     assert found["asked"] == 3 and found["completed"] == 1 and found["errors"] == {"-32": 1}
     assert found["still_waiting"] == 1 and found["received_mb"] == 0.0
     assert camera_test.usb_report(sent, 9)["asked"] == 0
+
+
+def test_a_stuck_camera_is_replugged_by_the_library_once(world, monkeypatch):
+    """30 October 2026: behind a hub, after a lost frame, every opening was
+    refused with 0x8000ffff at every speed until the camera was replugged."""
+    monkeypatch.setattr(camera, "BACKEND", "altair")
+    monkeypatch.setattr(altair, "wait_for", lambda seconds: 0.3)
+    use_sdk(world, monkeypatch)
+    world.stuck = True
+    with camera.Camera(gain=1500) as cam:
+        assert cam.handle is not None
+    assert world.replugs == 1 and not world.stuck
+    world.stuck, world.replug_fixes = True, False
+    with pytest.raises(altair.CameraError, match="even after a replug"):
+        camera.Camera(gain=1500)
+    assert world.replugs == 2

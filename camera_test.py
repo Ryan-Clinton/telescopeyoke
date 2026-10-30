@@ -1048,7 +1048,13 @@ def run(args):
     if args.banding:
         return banding_trial(args.exposure or 16.0, args.gain, min(args.frames or 2, 2), args.keep_best)
     if args.speed_ladder:
-        result = speed_ladder(args.exposure or 16.0, args.gain, args.frames or 3, args.keep_best, speeds=args.speeds)
+        try:
+            result = speed_ladder(args.exposure or 16.0, args.gain, args.frames or 3, args.keep_best,
+                                  speeds=args.speeds)
+        except Exception as problem:          # a camera that will not open is a result too (30 October 2026)
+            keep_fault({"exposure_s": args.exposure or 16.0, "frames": args.frames or 3, "speeds": args.speeds,
+                        "failed_to_open": str(problem)}, args.note)
+            raise
         keep_fault(result, args.note)
         return result
     if args.usb_report:
