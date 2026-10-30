@@ -95,10 +95,14 @@ setting, and whether the USB 3 link power states U1 and U2 are in use).
   failed at speed 0 within two minutes, three times, on different ports,
   the fan stopping and the hub's light flashing: the camera lost its power,
   or the hub shut its port. With the new 1 m lead from the laptop to the hub
-  and the old 1 m lead to the camera, speed 0 kept 50 of 50. If the hub
-  takes its power from the laptop, a 3 m lead carrying the hub and the
-  camera both would drop the voltage most; a bad new 1 m lead to the camera
-  would also fit. Swapping one lead at a time would tell which.
+  and the old 1 m lead to the camera, speed 0 kept 50 of 50. The hub has its
+  own power supply (the person, 30 Oct), so the camera's power comes from
+  it through the lead to the camera, not down the 3 m lead; and the 3 m lead
+  ran every direct test that morning, keeping every speed 0 frame. That
+  leaves the new 1 m lead as the camera's lead (it kept 21 of 21 straight
+  from the laptop on 26 Oct), or the 3 m lead and the hub together at
+  5 Gb/s. The 3 m lead to the hub with the old 1 m lead to the camera would
+  tell which.
 - **The camera's USB chip itself can stop answering.** On 30 Oct at 17:15,
   behind a hub, the kernel's own requests for the camera's descriptor timed
   out (error -110) through a reset and four tries to find it again. That is
