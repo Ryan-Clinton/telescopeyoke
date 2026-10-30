@@ -223,6 +223,15 @@ def night_over(st):
     return bool(steps) and all(s.get("status") in ("done", "failed", "skipped") for s in steps)
 
 
+def night_ending(st, between, active):
+    """Whether to show the end-of-night card: no run imaging, nothing else
+    worth going on air for (a lucky-imaging video of the Moon, focusing, polar
+    alignment), no next step due, and the schedule run to its end. On 30
+    October 2026 a Moon video went out under the card, because a video keeps
+    no run status and the last schedule was long over."""
+    return not imaging(st) and not active and not between and night_over(st)
+
+
 def observatory(now=None):
     """("focus" | "polar", its state) while a focus run or a polar alignment
     is worth showing (running, a person turning the bolts between rounds,
@@ -843,7 +852,7 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                 if tones is not None and segment == "focus":
                     tones.hear(segment_state)
             between = not imaging(st) and runner_alive() and due_soon(st, now)
-            ending = not imaging(st) and not between and night_over(st)
+            ending = night_ending(st, between, active)
             action, quiet_since = decide(process is not None, st, quiet_since, now, between, ending, active)
             mode = segment or ("imaging" if imaging(st) else ("between" if between else
                                                               ("end" if ending else "imaging")))

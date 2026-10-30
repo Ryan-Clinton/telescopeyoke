@@ -165,6 +165,13 @@ def test_the_next_step_due_soon_and_the_night_over_come_from_the_schedule():
     assert stream.night_over(over) and not stream.night_over(soon) and not stream.night_over({})
 
 
+def test_a_moon_video_is_shown_not_the_end_card_after_the_schedule_is_over():
+    over = {"name": "Moon", "age": 9000, "schedule": {"steps": [{"label": "a", "status": "done"}]}}
+    assert stream.night_ending(over, between=False, active=False)
+    assert not stream.night_ending(over, between=False, active=True)        # a lucky-imaging video going on
+    assert not stream.night_ending(dict(over, age=5), between=False, active=False)
+
+
 def test_it_goes_down_to_720p_only_when_it_keeps_falling_behind():
     assert stream.speed("frame=1\nspeed=0.98x\nprogress=continue\nspeed=0.79x\n") == 0.79
     assert stream.speed("speed=N/A\n") is None
