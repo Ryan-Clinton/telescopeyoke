@@ -58,6 +58,7 @@ setting, and whether the USB 3 link power states U1 and U2 are in use).
 | 30 Oct 17:13 | Same | 50 × 16 s at speed 2 | Opened normally by itself, then the same error at 17:15. The library's replug (new in `altair.py`) was tried |
 | 30 Oct 17:15:04 to 17:15:46 | Same | | **The camera stopped answering USB itself.** The kernel: `device descriptor read/8, error -110` (timed out), a reset, a disconnect, then four tries to find it again, each timing out, and two more from 17:16:02. It was gone from USB until the person cut its power with the hub's port button |
 | 30 Oct 17:16:23 | Same, after the hub's port button was pressed twice | | **Back** at 5000 Mb/s: cutting the camera's power brought it back where the library's replug (a software reset) could not |
+| 30 Oct 17:18 to 17:20 | Same | 50 × 16 s at **speed 0** | **Failed at once.** About a minute in, the person heard the camera's fan stop and saw the hub's light change from steady to flashing; the kernel then timed out reading the camera (error -110) through seven resets, and it dropped off USB. Speed 0 had never failed plugged straight in. The camera losing power behind this hub fits best: the hub's own supply, if any, is not known |
 
 ## What is ruled out
 
@@ -87,6 +88,10 @@ setting, and whether the USB 3 link power states U1 and U2 are in use).
 
 ## What is known
 
+- **This hub does not work with this camera.** Behind the USB 3.2 hub on
+  30 Oct it failed at speed 0 too, within a minute, with its fan stopping
+  and the hub's light flashing: the camera lost its power, or the hub shut
+  its port. So the hub results below say more about the hub than the fault.
 - **The camera's USB chip itself can stop answering.** On 30 Oct at 17:15,
   behind a hub, the kernel's own requests for the camera's descriptor timed
   out (error -110) through a reset and four tries to find it again. That is
