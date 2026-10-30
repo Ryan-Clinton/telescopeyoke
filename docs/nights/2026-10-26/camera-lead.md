@@ -39,3 +39,5 @@ isopropyl alcohol at 02:35). So if it is damp, it took between about 46 and
 cold night, then again each day, to see whether it fails and recovers.
 Coming in, the camera can be sealed in a bag until it is warm, so no dew
 forms on it indoors.
+
+Again after a cold night, 30 October 2026: 8 of 8 at speed 2 ([the record](../2026-10-30/camera-speed.md)).
