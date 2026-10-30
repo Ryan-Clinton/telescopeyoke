@@ -25,7 +25,7 @@ found that afternoon:
 |---|---|---|---|
 | 3 m lead | new 1 m lead | **failed within 2 minutes, three times** (two laptop ports, two hub ports) | failed |
 | new 1 m lead | old 1 m lead | **50 of 50** | **50 of 50** |
-| old 1 m lead | new 1 m lead | **50 of 50** | 720 frames (about 5 hours) running from 18:37 |
+| old 1 m lead | new 1 m lead | **50 of 50** | **720 of 720** at speed 2, 18:37 to 22:53 |
 | none: the 3 m lead straight into the camera | | every frame, all day | lost at 10:46, kept from 11:02 (the fault) |
 
 - **Use the two 1 m leads behind the hub, either way round. Never the 3 m
@@ -95,6 +95,7 @@ setting, and whether the USB 3 link power states U1 and U2 are in use).
 | 30 Oct 17:28:44 to 17:46 | The leads re-arranged: the **new 1 m lead from the laptop to the hub**, the **old 1 m lead from the hub to the camera**; hub on laptop port 2-1, the camera on the hub's port 1 (2-1.1) | 50 × 16 s at **speed 0** | **50 of 50**, no USB error |
 | 30 Oct 17:46 to 18:07 | Same | 50 × 16 s at **speed 2** | **50 of 50**, no USB error |
 | 30 Oct 18:11 to 18:29 | The 1 m leads swapped: the **old 1 m from the laptop to the hub**, the **new 1 m from the hub to the camera** (2-1.1) | 50 × 16 s at speed 0 | **50 of 50**, no USB error: the new 1 m lead feeds the camera fine, so the failures were the **3 m lead to the hub** |
+| 30 Oct 18:37 to 22:53 | Same; from about 20:00 the focuser's Nano was on the hub too, and its motor turned several times during the run | 720 × 16 s at **speed 2** | **720 of 720**, no USB error in the kernel log: the longest speed 2 run yet without a loss, 4 h 16 min |
 
 ## What is ruled out
 
@@ -196,8 +197,8 @@ In order. Each says what it needs.
 
 1. **Stay at speed 0 for imaging.** It costs about a second a frame.
 2. **Through a powered USB 3 hub.** Done on 30 Oct (above): on the 1 m leads
-   speed 2 kept 50 of 50, and a 720-frame run of about 5 hours at speed 2
-   began at 18:37. If speed 2 holds through the hub for whole nights, power
+   speed 2 kept 50 of 50, and then 720 of 720 over 4 h 16 min (18:37 to
+   22:53), with the focuser on the hub as well. If speed 2 holds through the hub for whole nights, power
    or signal conditioning moves up the list of causes.
 3. **The ports, one at a time.** The same 50 frames of 16 s at speed 2 on
    each of the laptop's USB 3 ports in turn; the fault log records which.
