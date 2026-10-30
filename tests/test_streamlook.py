@@ -353,10 +353,12 @@ def test_a_moon_video_shows_its_newest_frame_and_not_the_last_runs_figures(tmp_p
     s = streamlook.from_status(stale, now=1792800000.0)
     assert s["lucky"] and round(s["last_age"]) == 3 and s["stage"] is None and s["next"] is None
     assert streamlook.live_state(s)[0] == "● LIVE"
-    c = streamlook.Canvas()
-    streamlook.sky_area(c, s, None, Image.open(latest).convert("RGB"))
+    shown, empty = streamlook.Canvas(), streamlook.Canvas()
+    streamlook.sky_area(shown, s, None, Image.open(latest).convert("RGB"))
+    streamlook.sky_area(empty, s, None, None)
     x, y, w, h = streamlook.STACK_BOX
-    assert c.image.getpixel((x + w // 2, y + h // 2))[0] > 100       # the frame, not the empty panel
+    middle = (x + w // 2, y + h // 2 + 40)            # below the empty panel's words
+    assert shown.image.getpixel(middle) != empty.image.getpixel(middle)      # the frame, not the empty panel       # the frame, not the empty panel
 
 
 def test_the_live_view_goes_on_air_with_its_newest_frame(tmp_path, monkeypatch):
@@ -377,10 +379,12 @@ def test_the_live_view_goes_on_air_with_its_newest_frame(tmp_path, monkeypatch):
     monkeypatch.setattr(streamlook, "live_now", lambda: True)
     s = streamlook.from_status({"name": "M31", "age": 9000, "accepted": 50}, now=1792800000.0)
     assert s["live"] and round(s["last_age"]) == 2 and streamlook.live_state(s)[0] == "● LIVE"
-    c = streamlook.Canvas()
-    streamlook.sky_area(c, s, None, Image.open(latest).convert("RGB"))
+    shown, empty = streamlook.Canvas(), streamlook.Canvas()
+    streamlook.sky_area(shown, s, None, Image.open(latest).convert("RGB"))
+    streamlook.sky_area(empty, s, None, None)
     x, y, w, h = streamlook.STACK_BOX
-    assert c.image.getpixel((x + w // 2, y + h // 2))[0] > 100
+    middle = (x + w // 2, y + h // 2 + 40)            # below the empty panel's words
+    assert shown.image.getpixel(middle) != empty.image.getpixel(middle)      # the frame, not the empty panel
     # It gives the camera up to a Moon video, which keeps no frames.jsonl.
     monkeypatch.setattr(activity, "now", lambda: [{"what": "Taking a lucky-imaging video"}])
     assert liveview.video_active()
