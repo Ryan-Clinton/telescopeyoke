@@ -61,6 +61,7 @@ setting, and whether the USB 3 link power states U1 and U2 are in use).
 | 30 Oct 17:18 to 17:20 | Same | 50 × 16 s at **speed 0** | **Failed at once.** About a minute in, the person heard the camera's fan stop and saw the hub's light change from steady to flashing; the kernel then timed out reading the camera (error -110) through seven resets, and it dropped off USB. Speed 0 had never failed plugged straight in. The camera losing power behind this hub fits best: the hub's own supply, if any, is not known |
 | 30 Oct 17:22:53 | The same hub moved to laptop port 2-1 (which passed direct at 14:40), the camera on the hub's port 4 (2-1.4) | 50 × 16 s at speed 0 | **The same failure**, two minutes in: at 17:24:57 the kernel reset the camera and timed out reading it (error -110). Stopped there. Other laptop and hub ports, same result: it is the hub, or the camera's power through it |
 | 30 Oct 17:28:44 to 17:46 | The leads re-arranged: the **new 1 m lead from the laptop to the hub**, the **old 1 m lead from the hub to the camera**; hub on laptop port 2-1, the camera on the hub's port 1 (2-1.1) | 50 × 16 s at **speed 0** | **50 of 50**, no USB error |
+| 30 Oct 17:46 to 18:07 | Same | 50 × 16 s at **speed 2** | **50 of 50**, no USB error |
 
 ## What is ruled out
 
