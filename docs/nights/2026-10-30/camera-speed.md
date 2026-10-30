@@ -55,3 +55,23 @@ Each lost frame never came at all (none within 108 s of a 16 s exposure).
   at 03:20 for when the fault came back.
 - Next: speed 0 at 60, 120 and 300 s frames, the lengths guiding will need
   (the guide camera is on its way).
+
+## Long frames, indoors, 30 October 11:02 to 12:31
+
+Five frames each of 60, 120 and 300 s, for the exposures guiding will
+allow. They were meant for speed 0, but `--speed-ladder` ignored `--speeds`
+and tried speed 2 first, so they ran at **speed 2**, an hour after speed 2
+had lost every 16 s frame:
+
+| Frames | Speed 2 |
+|---|---|
+| 5 × 60 s | **5 of 5** |
+| 5 × 120 s | **5 of 5** |
+| 5 × 300 s | **5 of 5** |
+
+- Fifteen long frames at speed 2 all arrived, 30 to 90 minutes after the
+  16 s frames at speed 2 were all lost. The fault came and went within the
+  morning, indoors, with nothing changed: more evidence that it is
+  intermittent, and that a pass at speed 2 says nothing about the next test.
+- `--speed-ladder` now takes `--speeds` (only those are tried), with a test.
+

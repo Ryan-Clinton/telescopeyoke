@@ -930,6 +930,24 @@ def test_the_speed_ladder_keeps_the_fastest_speed_that_loses_no_frame(monkeypatc
     assert tried[-3:] == [(0, 16)] * 3
 
 
+def test_the_speed_ladder_tries_only_the_speeds_asked_for(monkeypatch):
+    """30 October 2026: --speeds 0 was asked for and the frames were taken at Speed 2."""
+    import camera_test
+    tried = []
+
+    class Cam:
+        def __init__(self, gain): pass
+        def __enter__(self): return self
+        def __exit__(self, *exc): return False
+        def settings(self, speed=None):
+            tried.append(speed)
+        def frame(self, seconds):
+            return np.zeros((4, 4), np.uint16), {}
+    monkeypatch.setattr(camera_test, "Camera", Cam)
+    answer = camera_test.speed_ladder(60, 1500, frames=2, say=lambda s: None, speeds=[0])
+    assert tried == [0] and answer["best"] == 0 and [r["speed"] for r in answer["speeds"]] == [0]
+
+
 def test_the_speed_ladder_changes_nothing_when_no_speed_keeps_its_frames(monkeypatch):
     import camera_test
 
