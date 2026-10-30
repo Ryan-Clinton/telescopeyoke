@@ -88,3 +88,18 @@ The same five frames each, now at speed 0, the setting in use:
 - Guided exposures of one to five minutes arrive at speed 0, so guiding
   needs no change to the main camera's readout.
 
+
+## 16 s at speed 2 again, 30 October 14:40
+
+The camera was unplugged at 14:31 and plugged back in, then the 16 s test
+was run again at speed 2 alone (`--speeds 2`):
+
+| Frames | Speed 2 |
+|---|---|
+| 8 × 16 s | **8 of 8** |
+
+- At 16 s, speed 2 lost every frame at 10:30 and kept every frame at 14:40.
+  The fault is not about the length of the frame: it comes and goes.
+- The camera was unplugged and plugged back in just before this pass, so the
+  fault may clear when the camera is power-cycled. That is not yet tested.
+- The camera stays at speed 0.
