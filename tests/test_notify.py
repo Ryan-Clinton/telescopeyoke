@@ -68,3 +68,27 @@ def test_every_message_is_kept_on_the_laptop_as_well(bot, tmp_path, monkeypatch)
     notify.send("M31-P8: 4 unexplained candidates", post=lambda url, **k: Reply())
     kept = [json.loads(line) for line in (tmp_path / "sent.jsonl").read_text().splitlines()]
     assert kept[0]["text"].startswith("M31-P8") and kept[0]["sent"] == 1
+
+
+def test_a_finished_stack_sends_its_picture(monkeypatch, tmp_path):
+    """30 October 2026: "whenever the stacks finish send me the pics on Telegram"."""
+    import restack
+    sent = []
+    monkeypatch.setattr(notify, "send", lambda text, pictures=(), **kw: sent.append((text, list(pictures))) or 2)
+    picture = tmp_path / "Moon.best10.sharp.jpg"
+    assert notify.stack_ready("Moon, the best 100 of 1000 frames", picture) == 2
+    assert sent[-1] == ("Stack finished: Moon, the best 100 of 1000 frames", [(picture, "Moon, the best 100 of 1000 frames")])
+    session = tmp_path / "M34" / "20261030-025230"
+    restack.tell(session, {"stacked": 12, "total_exposure_s": 192})
+    assert sent[-1][0] == "Stack finished: M34, 12 frames, 3 min of light"
+    assert sent[-1][1][0][0] == session / "final.jpg"
+
+
+def test_the_command_sends_a_picture_after_its_message(monkeypatch, tmp_path):
+    import argparse
+    sent = []
+    monkeypatch.setattr(notify, "settings", lambda: ("token", "chat"))
+    monkeypatch.setattr(notify, "send", lambda text, pictures=(), **kw: sent.append((text, pictures)) or 2)
+    args = argparse.Namespace(test=False, text=["Stack", "finished"], picture=[str(tmp_path / "m.jpg")], json=False)
+    assert notify.run(args, say=lambda m: None) == {"sent": 2}
+    assert sent == [("Stack finished", [(str(tmp_path / "m.jpg"), "Stack finished")])]

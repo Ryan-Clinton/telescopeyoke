@@ -103,6 +103,13 @@ def send(text, pictures=(), animations=(), post=requests.post, say=print, sleep=
     return sent
 
 
+def stack_ready(what, picture, say=print, post=requests.post):
+    """A finished stack's picture to the person's phone (30 October 2026:
+    "whenever the stacks finish send me the pics on Telegram"). Returns how
+    many messages went; never raises."""
+    return send(f"Stack finished: {what}", pictures=[(picture, what)], post=post, say=say)
+
+
 SENT_LOG = config.DATA / "cache" / "sent.jsonl"
 
 
@@ -147,7 +154,8 @@ def run(args, say=print):
         raise interface.Refusal("INVALID_REQUEST", "No Telegram bot set up: put [telegram] token and chat in "
                                                    "config.toml (see ./notify.py --help).")
     text = "telescopeyoke: the alerts reach you." if args.test else " ".join(args.text)
-    sent = send(text, say=say)
+    pictures = [(path, " ".join(args.text)[:200]) for path in getattr(args, "picture", None) or []]
+    sent = send(text, pictures=pictures, say=say)
     if not sent:
         raise interface.Refusal("INVALID_REQUEST", "Telegram did not take the message: check the token and chat.")
     say("sent")
@@ -158,6 +166,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("text", nargs="*", help="the message")
     ap.add_argument("--test", action="store_true", help="a test message")
+    ap.add_argument("--picture", action="append", metavar="FILE", help="a picture to send after the message")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
     if not args.test and not args.text:

@@ -487,6 +487,11 @@ def stack_file(path, keeps=KEEPS, in_colour=False, publish=True, pixels="green")
     done["shown"] = shown
     (path.with_suffix(".stack.json")).write_text(json.dumps(done, indent=1), encoding="utf-8")
     progress("done", frames=done["frames"], kept=done["kept"][shown], points=done["alignment_points"], share=shown)
+    if publish:
+        import notify
+        notify.stack_ready(f"{path.with_suffix('').name}, the best {done['kept'][shown]} of {done['frames']} frames"
+                           + (" in colour" if in_colour else ""),
+                           path.with_name(path.with_suffix("").name + f".best{shown}.sharp.jpg"))
     return done
 
 

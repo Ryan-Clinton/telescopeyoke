@@ -267,6 +267,13 @@ def run(session, keep=0.85, say=print, workers=None, profile=False, discovery=Fa
     return stack_file if discovery else session / "final.jpg"
 
 
+def tell(session, summary):
+    """The finished picture to the person's phone, with what went into it."""
+    import notify
+    notify.stack_ready(f"{Path(session).parent.name}, {summary['stacked']} frames, "
+                       f"{summary['total_exposure_s'] / 60:.0f} min of light", Path(session) / "final.jpg")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("session", nargs="+",
@@ -299,14 +306,20 @@ def main():
                 + (["--discovery"] if args.discovery else [])
             folder = remote.restack(args.on, sessions, options)
             log = "discovery.json" if args.discovery else "restack.json"
-            return json.loads((folder / log).read_text(encoding="utf-8"))["summary"]
+            summary = json.loads((folder / log).read_text(encoding="utf-8"))["summary"]
+            if not args.discovery:
+                tell(folder, summary)
+            return summary
         picture = run(sessions if len(sessions) > 1 else sessions[0], args.keep,
                       workers=args.workers, profile=args.profile, discovery=args.discovery)
         if len(sessions) == 1 and not args.discovery:
             import patrol
             patrol.search_later(sessions[0])
         log = "discovery.json" if args.discovery else "restack.json"
-        return json.loads((picture.parent / log).read_text(encoding="utf-8"))["summary"]
+        summary = json.loads((picture.parent / log).read_text(encoding="utf-8"))["summary"]
+        if not args.discovery:
+            tell(picture.parent, summary)
+        return summary
 
     interface.main("restack", work, args.json)
 
