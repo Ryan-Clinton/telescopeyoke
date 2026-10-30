@@ -59,6 +59,7 @@ setting, and whether the USB 3 link power states U1 and U2 are in use).
 | 30 Oct 17:15:04 to 17:15:46 | Same | | **The camera stopped answering USB itself.** The kernel: `device descriptor read/8, error -110` (timed out), a reset, a disconnect, then four tries to find it again, each timing out, and two more from 17:16:02. It was gone from USB until the person cut its power with the hub's port button |
 | 30 Oct 17:16:23 | Same, after the hub's port button was pressed twice | | **Back** at 5000 Mb/s: cutting the camera's power brought it back where the library's replug (a software reset) could not |
 | 30 Oct 17:18 to 17:20 | Same | 50 × 16 s at **speed 0** | **Failed at once.** About a minute in, the person heard the camera's fan stop and saw the hub's light change from steady to flashing; the kernel then timed out reading the camera (error -110) through seven resets, and it dropped off USB. Speed 0 had never failed plugged straight in. The camera losing power behind this hub fits best: the hub's own supply, if any, is not known |
+| 30 Oct 17:22:53 | The same hub moved to laptop port 2-1 (which passed direct at 14:40), the camera on the hub's port 4 (2-1.4) | 50 × 16 s at speed 0 | **The same failure**, two minutes in: at 17:24:57 the kernel reset the camera and timed out reading it (error -110). Stopped there. Other laptop and hub ports, same result: it is the hub, or the camera's power through it |
 
 ## What is ruled out
 
