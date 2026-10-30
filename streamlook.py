@@ -257,9 +257,9 @@ PANEL_BOX = (MARGIN_X + 1274 + 24, MARGIN_Y + 50, WIDTH - 2 * MARGIN_X - 1274 - 
 
 def sky_area(c, s, stack, single):
     x, y, w, h = STACK_BOX
-    if (s.get("lucky") or s.get("live")) and single is not None:
-        # A lucky-imaging video or the live view: its newest frame is the
-        # picture, not an earlier run's stack beside it.
+    if single is not None and (s.get("lucky") or s.get("live") or stack is None):
+        # A lucky-imaging video, the live view, or a run with no stack yet:
+        # its newest frame is the picture, never an empty panel (30 October 2026).
         stack, single = single, None
     # The Moon is its own light: the sky stretch, which sets the black point
     # from the picture's background, turned it black (30 October 2026).

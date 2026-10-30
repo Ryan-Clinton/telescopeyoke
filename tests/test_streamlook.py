@@ -403,3 +403,15 @@ def test_the_moon_is_drawn_as_it_is_not_stretched_black():
     streamlook.sky_area(c, s, Image.new("RGB", (400, 300), (5, 5, 5)), moon)
     x, y, w, h = streamlook.STACK_BOX
     assert sum(c.image.getpixel((x + w // 2, y + h // 2))) > 450     # the bright disc, from the newest frame
+
+
+def test_a_new_run_shows_its_first_frame_before_there_is_a_stack():
+    """30 October 2026: M34 started under "The picture builds up after the first few exposures"."""
+    from PIL import Image
+    s = {"kind": "picture", "last_age": 3}
+    shown, empty = streamlook.Canvas(), streamlook.Canvas()
+    streamlook.sky_area(shown, s, None, Image.new("RGB", (400, 300), (180, 180, 180)))
+    streamlook.sky_area(empty, s, None, None)
+    x, y, w, h = streamlook.STACK_BOX
+    middle = (x + w // 2, y + h // 2 + 40)
+    assert shown.image.getpixel(middle) != empty.image.getpixel(middle)
