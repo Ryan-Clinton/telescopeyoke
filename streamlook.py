@@ -257,6 +257,8 @@ PANEL_BOX = (MARGIN_X + 1274 + 24, MARGIN_Y + 50, WIDTH - 2 * MARGIN_X - 1274 - 
 
 def sky_area(c, s, stack, single):
     x, y, w, h = STACK_BOX
+    if stack is None and s.get("lucky") and single is not None:
+        stack = single          # a lucky-imaging video: its newest frame is the picture until it is stacked
     if stack is None:
         c.box((x, y, x + w, y + h), "panel")
         c.text((x + w // 2, y + h // 2), "The picture builds up after the first few exposures",
@@ -1528,6 +1530,16 @@ def from_status(st, now=None, session=None):
          "next": (f"{upcoming['label'].split(',')[0]}" + (f" at {utc(upcoming['start'])}" if upcoming.get("start") else ""))
          if upcoming else None,
          "stage": stage(steps, now)}
+    if lucky_now():
+        # A lucky-imaging video keeps no run status: its own newest picture
+        # says how fresh it is, and the last run's figures and schedule are
+        # not tonight's (30 October 2026: "PAUSED · no new exposure for 8683 min").
+        import config
+        try:
+            s["last_age"] = now - (config.DATA / "web" / "latest.jpg").stat().st_mtime
+        except OSError:
+            s["last_age"] = None
+        s["exposure"], s["stage"], s["next"] = None, None, None
     import sky
     if (st.get("object_kind") or sky.object_kind(name)) == "moon":
         s["kind"], s["moon"], s["fwhm_arcsec"] = "moon", moon_now(now), None

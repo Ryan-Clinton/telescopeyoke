@@ -333,3 +333,27 @@ def test_the_moon_panel_says_where_the_lucky_imaging_has_got(tmp_path, monkeypat
     note.write_text(json.dumps({"stage": "stacking", "at": 1000.0, "done": 25, "frames": 400, "points": 742}))
     assert streamlook.lucky_stage(1010.0) == ("CORRECTING THE ATMOSPHERE", "25 / 400 · 742 alignment regions")
     assert streamlook.lucky_stage(5000.0) is None
+
+
+def test_a_moon_video_shows_its_newest_frame_and_not_the_last_runs_figures(tmp_path, monkeypatch):
+    """30 October 2026: the stream showed an empty picture, "PAUSED · no new
+    exposure for 8683 min" and an old schedule while a Moon video was taken."""
+    import os
+    import config
+    from PIL import Image
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    (tmp_path / "web").mkdir()
+    latest = tmp_path / "web" / "latest.jpg"
+    Image.new("RGB", (40, 30), (200, 200, 200)).save(latest)
+    os.utime(latest, (1792800000.0 - 3, 1792800000.0 - 3))
+    monkeypatch.setattr(streamlook, "moon_now", lambda now: dict(MOON_NOW))
+    monkeypatch.setattr(streamlook, "lucky_now", lambda: True)
+    stale = {"name": "Moon", "age": 521032, "exposure": 0.02, "accepted": 199, "object_kind": "moon",
+             "schedule": {"steps": [{"label": "M31, 30 min", "status": "done"}]}}
+    s = streamlook.from_status(stale, now=1792800000.0)
+    assert s["lucky"] and round(s["last_age"]) == 3 and s["stage"] is None and s["next"] is None
+    assert streamlook.live_state(s)[0] == "● LIVE"
+    c = streamlook.Canvas()
+    streamlook.sky_area(c, s, None, Image.open(latest).convert("RGB"))
+    x, y, w, h = streamlook.STACK_BOX
+    assert c.image.getpixel((x + w // 2, y + h // 2))[0] > 100       # the frame, not the empty panel
