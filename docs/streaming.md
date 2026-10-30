@@ -43,8 +43,9 @@ status page's own data:
   57% smaller stars", "FOCUS CHECK PASSED", "POLAR ALIGNMENT COMPLETE 9.6° →
   1.2°", or what went wrong in plain words (the curve rejected, focus sent
   back to the start, a picture that could not be plate-solved);
-- a card between targets (the next target, a checklist of the GoTo, plate
-  solve, focus and imaging) and one at the end of the night;
+- across the top of the picture for four seconds, what has just changed:
+  "NOW OBSERVING: THE MOON", "STACKING THE BEST FRAMES" (the director,
+  below);
 - a candidate's state without its place: "possible change detected",
   "second look", then the result, or "awaiting private review".
 
@@ -60,15 +61,76 @@ is ever shown.
     ./stream.py watch --install    run the watcher as a user service from boot (ty-stream)
     ./stream.py                    what it would do now, and why; sends nothing
     ./stream.py preview            every state at full and phone size, cache/stream-preview/
+    ./stream.py scenes             each of the director's scenes, cache/stream-scenes/
+    ./stream.py director           what it shows now and why (below)
 
 It is off unless `[stream] enabled` in `config.toml` (the Settings screen),
 with `[stream] service` "twitch", "youtube" or "custom", or several of them
 (below). The watcher goes on
-air when a run's newest frame is under two minutes old, or while the
-telescope is focusing or being polar aligned (below); stays on air between
-targets when the schedule's next step is due within 15 minutes, holds the
-end-of-night card for two minutes, and stops when nothing new has come for
-five. For each target it sets the Twitch title, category and tags.
+air when the camera has a picture under two minutes old, whatever takes it
+(a run, a Moon video, the live view), while a Moon video is stacked or made
+into the mineral Moon, or while the telescope is focusing or being polar
+aligned (below). It stays on air between targets when the schedule's next
+step is due within 15 minutes, stops at once when the night is over (the
+schedule run out and nothing else happening), and otherwise stops when
+nothing new has come for five. For each target it sets the Twitch title, category and tags.
+
+## What is on screen, and why: the director
+
+What the observatory is doing, and so what the stream shows, is decided in
+one place, `director.py`, and kept in `cache/broadcast.json` every two
+seconds. Before 31 October 2026 the stream read status.json, the activity
+lines, the newest picture's age, the schedule and the lucky imaging's file
+and worked it out afresh in several places. On 30 October the telescope was
+filming the Moon while the stream named the last run (M31), said "Tonight
+complete" and showed an empty picture.
+
+- **The target** is what the telescope was last aimed at,
+  `cache/target.json`: every GoTo writes it (`mount.py`), and so do a Moon
+  video (`moon.py`) and any lucky-imaging video (`lucky.py capture`). The
+  night's end clears it once the mount is parked (`schedule.py end`), and
+  so does `./stream.py director --clear`. A target older than 12 hours is
+  another night's. The newer of this and a run that is imaging names the
+  target. A run's status never names it once the telescope has been aimed
+  somewhere else, and its frame counts, star size, stack and "coming up"
+  are then left out.
+- **Target, programme and activity are kept apart**: the Moon, lunar lucky
+  imaging, capturing; M31-P3, nova patrol, imaging; WASP-12, exoplanet
+  transit, imaging; the Moon, mineral Moon, mineral processing.
+- **Which picture wins**, highest first:
+  1. focusing or polar alignment, which have their own looks;
+  2. a fresh frame from the camera (under two minutes old), whatever takes
+     it. During an imaging run of the target its stack is the big picture
+     with the frame inset, since the stack is made of those frames;
+  3. a Moon video being stacked or made into the mineral Moon: its last
+     frame, marked ● PROCESSING rather than paused;
+  4. the GoTo moving;
+  5. the end of the night, when the schedule has run out and nothing above
+     it is happening: the stream stops;
+  6. the current run's stack after its frames stop (cloud);
+  7. nothing.
+  The first three put the stream on air by themselves. The schedule never
+  outranks the camera.
+- **A change is announced** for four seconds in a band across the top of
+  the picture, never instead of it: "NOW OBSERVING: THE MOON" for a new
+  target; LUCKY IMAGING STARTED, STACKING THE BEST FRAMES, MINERAL COLOUR
+  PROCESSING, RESULT READY, CHECKING FOCUS, POLAR ALIGNMENT, IMAGING STARTED
+  or MOVING THE TELESCOPE for a new activity.
+
+To see why the stream shows what it shows:
+
+    ./stream.py director           the target, programme, activity, scene and picture, and what was left out
+    ./stream.py frame --director   the picture it would send, with that written over it (never sent)
+    ./stream.py scenes             every scene drawn from made-up examples, cache/stream-scenes/*.png
+
+For example, during a Moon video after an M31 run, it prints:
+
+    target:     Moon (moon)
+    programme:  lunar lucky imaging
+    activity:   capturing
+    scene:      moon_capture (priority 90, on air)
+    image:      latest, newest picture 1 s old
+    ignored:    status target M31: the telescope was aimed at Moon after it
 
 ## Focusing and polar alignment on air
 
@@ -125,6 +187,11 @@ keeps the old silent track. It takes effect when the stream next starts.
 ## The broadcast's running order
 
 A night on air runs in five parts, and each has its look:
+
+Since 30 October 2026 no card takes the place of what the telescope sees
+on air: the night-opens, between-targets and end-of-night cards below are
+still drawn by `./stream.py preview` but not sent, and the stream stops at
+once when the night is over.
 
 1. **The night opens.** The first time the stream goes on air in a night
    (none in the last twelve hours, `cache/stream-night.json`) it holds a
@@ -208,6 +275,11 @@ twitch-login` must have been run since they were added (20 October 2026).
 
 ## When something goes wrong
 
+- It shows the wrong target or the wrong picture: `./stream.py director`
+  says what it decided and what it left out and why, and `./stream.py
+  frame --director` draws it. A wrong target is usually a GoTo made outside
+  the project's commands: `./stream.py director --clear`, or a GoTo through
+  `./ty mount goto`, puts it right.
 - The picture freezes: the watcher logs a drawing error once and carries
   on; `journalctl --user -u ty-stream` shows it. Restart it after changing
   `stream-targets.toml`'s layout (on 20 October old code met new words and

@@ -314,7 +314,7 @@ def test_focusing_and_polar_alignment_are_told_apart_stage_by_stage():
     assert phase([{"what": "Focusing with the motor"}, {"what": "Checking the fitted focus"}]) == "focus_verify"
     assert phase([{"what": "Polar check"}]) == "polar_measure" and phase([{"what": "Polar recheck"}]) == "polar_recheck"
     assert {"focus_check", "focus_sweep", "focus_walk", "focus_find", "focus_fit", "focus_verify",
-            "polar_measure", "polar_adjust", "polar_recheck", "lucky", "live"} == set(activity.BROADCAST)
+            "polar_measure", "polar_adjust", "polar_recheck", "lucky", "live", "mineral"} == set(activity.BROADCAST)
     # A lucky-imaging video and its stack keep the stream on air (24 October 2026).
     assert phase([{"what": "Taking a lucky-imaging video"}]) == "lucky" == phase([{"what": "Stacking the lucky frames"}])
     # The between-targets card still has its four steps: every focus stage is "focus".

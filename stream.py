@@ -6,7 +6,11 @@
     ./stream.py watch --to F.mp4   the same into a file, to try it with no account and no key
     ./stream.py watch --install    run `watch` as a systemd user service, from boot; it idles while off
     ./stream.py frame              make one picture of what would be sent, as cache/stream-preview.jpg
+    ./stream.py frame --director   the same with the director's answer written over it, to see why
     ./stream.py preview            the new look (docs/stream-look.md) in each state, as cache/stream-preview/*.png
+    ./stream.py scenes             each of the director's scenes drawn, as cache/stream-scenes/*.png
+    ./stream.py director           what the stream shows now and why, and what it left out (director.py)
+    ./stream.py director --clear   forget the target the telescope was last aimed at
     ./stream.py twitch-login       once: let it set the Twitch channel's title, category and tags (twitch.py)
     ./stream.py key                paste the stream key in (not shown as typed); kept readable only by you
     ./stream.py key youtube        the same for one service, when streaming to more than one
@@ -39,9 +43,15 @@ as the services expect: silent, but for the focus tones while focusing
 video hardware where it has some (Intel Quick Sync, through VAAPI), so it
 does not take the processors the stacking needs.
 
-It starts when a run's newest frame is under START_S old, or while the
-telescope focuses or is polar aligned (observatory(): their own files, with
-a look of their own and the focus tones as the sound), and stops when
+What is going on, and so what is shown, is decided in one place,
+director.py, from the target the telescope was last aimed at, the activity
+lines, the newest picture's age, the lucky imaging's stage and the
+schedule; its answer is kept in cache/broadcast.json every LOOK_S.
+
+It starts when a run's newest frame is under START_S old, when the camera
+has a fresh picture whatever takes it, while a Moon video is stacked, or
+while the telescope focuses or is polar aligned (observatory(): their own
+files, with a look of their own and the focus tones as the sound), and stops when
 nothing new has come for STOP_S: cloud, the end of the night, or the
 telescope put away. YouTube makes and ends a broadcast by itself when its stream key
 has Auto-start and Auto-stop on; Twitch goes live when the stream arrives.
@@ -464,15 +474,22 @@ def frame(st, now=None, mode="imaging"):
     imaging, the stack with one exposure and the side panel; between
     targets, the card with what comes next; at the night's end, its
     summary; while focusing or polar aligning ("focus", "polar"), their
-    looks. Never anything that names the place."""
+    looks. What it shows is the director's answer (st["director"], worked
+    out here when not given). Never anything that names the place."""
+    import director
     import streamlook
     now = now or time.time()
+    if "director" not in st:
+        st = dict(st, director=director.direct(director.gather(st, now), director.last()))
     stack, single = pictures(st)
+    if not st["director"]["run_current"] and st["director"]["image"] != "stack":
+        stack = None                    # an earlier run's stack, of what the telescope has left
     if mode in ("focus", "polar"):
         import streamstory
         found = (streamlook.focus_stream_state if mode == "focus" else streamlook.polar_stream_state)(now)
         if found is not None:
-            state = {"kind": mode, "target": "", "now": now, mode: found}
+            state = {"kind": mode, "target": "", "now": now, mode: found,
+                     "headline": streamlook.headline_of(st["director"], now)}
             state["story"] = streamstory.plan(state, st, now)
             return streamlook.compose(state).image
         mode = "imaging"                # gone between looking and drawing: what was there before
@@ -820,27 +837,31 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
     composer = Composer(draw=lambda st, now, mode: frame(st, now, mode).resize(size)
                         if size != (WIDTH, HEIGHT) else frame(st, now, mode))
     tick = clock()
-    segment, segment_state, active, looked_at, tones = None, None, False, -1e9, None
+    import director
+    segment, segment_state, directed, looked_at, tones = None, None, None, -1e9, None
     try:
         while True:
             st, now = status(), clock()
             if now - looked_at >= LOOK_S:
                 # Focusing or polar alignment going on: read from their files, not every picture.
-                segment, segment_state, active = broadcasting(now)
+                segment, segment_state, _ = broadcasting(now)
+                # What is going on and what is shown, decided once (director.py)
+                # and kept in cache/broadcast.json: on air whenever the camera
+                # has a fresh picture, whatever takes it, and the night over
+                # only when nothing is happening, whatever the schedule says.
+                directed = director.update(st, now, segment)
                 looked_at = now
                 if tones is not None and segment == "focus":
                     tones.hear(segment_state)
-            # On air whenever the camera has a fresh picture, whatever takes it
-            # (a run, a Moon video, the live view): what the scope sees is shown.
-            active = active or seeing(now)
+            active = directed["on_air"]
             between = not imaging(st) and runner_alive() and due_soon(st, now)
-            ending = night_ending(st, between, active)
+            ending = directed["scene"] == "end" and night_ending(st, between, active)
             action, quiet_since = decide(process is not None, st, quiet_since, now, between, ending, active)
             # What the telescope sees, in the usual layout: no card ever takes
             # its place (no night-opens plan, no between-targets steps; 30
             # October 2026).
             mode = segment or "imaging"
-            composer.view = (st, mode)
+            composer.view = (dict(st, director=directed), mode)
             if action == "start":
                 if now < retry_at:
                     sleep(1)
@@ -983,10 +1004,14 @@ def install(say=print, run=subprocess.run, home=None):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("action", nargs="?", choices=["watch", "frame", "preview", "key", "twitch-login"])
+    ap.add_argument("action", nargs="?",
+                    choices=["watch", "frame", "preview", "scenes", "director", "key", "twitch-login"])
     ap.add_argument("service", nargs="?", choices=sorted(NAMES), help="with key: whose key it is")
     ap.add_argument("--to", help="with watch: stream into this file instead, to try it")
     ap.add_argument("--install", action="store_true", help="with watch: run it as a systemd user service")
+    ap.add_argument("--director", action="store_true",
+                    help="with frame: write the director's answer over the picture (kept here, never sent)")
+    ap.add_argument("--clear", action="store_true", help="with director: forget the target last aimed at")
     args = ap.parse_args(argv)
     if args.action == "watch" and args.install:
         return install()
@@ -1007,9 +1032,28 @@ def main(argv=None):
         import streamlook
         streamlook.preview(config.DATA / "cache" / "stream-preview", WEB)
         return
+    if args.action == "scenes":
+        import streamlook
+        streamlook.scenes(config.DATA / "cache" / "stream-scenes")
+        return
+    if args.action == "director":
+        import director
+        if args.clear:
+            director.clear()
+            print("No target now: the next GoTo, Moon video or imaging run names one.")
+            return
+        print(director.report(director.direct(director.gather(status()), director.last())))
+        return
     if args.action == "frame":
+        import director
+        import streamlook
         PREVIEW.parent.mkdir(parents=True, exist_ok=True)
-        frame(status()).save(PREVIEW, quality=90)
+        st = status()
+        st = dict(st, director=director.direct(director.gather(st), director.last()))
+        picture = frame(st)
+        if args.director:
+            picture = streamlook.debug_overlay(picture, director.report(st["director"]))
+        picture.save(PREVIEW, quality=90)
         print(f"saved {PREVIEW}")
         return
     s, st = settings(), status()

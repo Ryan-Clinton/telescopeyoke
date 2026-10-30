@@ -257,6 +257,8 @@ def run(args, scope=None, cam=None, site=None, say=print):
     import shoot
     site = site or config.load()["site"]
     _rig = shoot.hold_the_rig("Moon")
+    import director
+    director.aim("Moon", "moon")            # the stream names the Moon from now, not the last run
     white = 2 ** config.hardware()["camera"]["bit_depth"] - 1
     if args.focus_check:
         if scope is None:

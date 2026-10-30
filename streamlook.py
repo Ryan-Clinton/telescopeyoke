@@ -215,6 +215,8 @@ def utc(t, seconds=False):
 def live_state(s):
     """(words, colour) for how fresh the last exposure is."""
     age, exposure = s.get("last_age"), s.get("exposure") or 0
+    if s.get("processing"):
+        return "● PROCESSING", "live"
     if age is None:
         return None, None
     if age < max(30, 2 * exposure):
@@ -257,7 +259,7 @@ PANEL_BOX = (MARGIN_X + 1274 + 24, MARGIN_Y + 50, WIDTH - 2 * MARGIN_X - 1274 - 
 
 def sky_area(c, s, stack, single):
     x, y, w, h = STACK_BOX
-    if single is not None and (s.get("lucky") or s.get("live") or stack is None):
+    if single is not None and (s.get("show_latest") or s.get("lucky") or s.get("live") or stack is None):
         # A lucky-imaging video, the live view, or a run with no stack yet:
         # its newest frame is the picture, never an empty panel (30 October 2026).
         stack, single = single, None
@@ -271,7 +273,7 @@ def sky_area(c, s, stack, single):
         return
     shown = fit(look(shrunk(stack, (w, h)), "stack"), (w, h))
     age = s.get("last_age") or 0
-    if age > 120:
+    if age > 120 and not s.get("processing"):
         # Paused: a little dimmer and greyer, so it reads as waiting, not broken.
         grey = shown.convert("L").convert("RGB")
         shown = Image.blend(Image.blend(shown, grey, 0.4), Image.new("RGB", shown.size, (0, 0, 0)), 0.25)
@@ -281,7 +283,7 @@ def sky_area(c, s, stack, single):
     pw, ph = round(stack.width * scale), round(stack.height * scale)
     x, y, w, h = x + (w - pw) // 2, y + (h - ph) // 2, pw, ph
     line = (s.get("story") or {}).get("line")
-    if line:
+    if line and not s.get("headline"):           # the headline has the top of the picture for its seconds
         # LOOK CLOSELY, or the presenter, for a few seconds across the top of the picture.
         under = plate(c, (x, y, x + w, y + 92), 0.72)
         c.wrap((x + 24, y + 14), line, "sans", 24, w - 48, "text", on=under, gap=1.25)
@@ -462,8 +464,9 @@ def moon_figures(s):
     rows = []
     if m.get("illumination") is not None:
         rows.append((f"{m['illumination']}%", "ILLUMINATED"))
-    if m.get("age_days") is not None and m["illumination"] < 97:
-        rows.append((f"{m['age_days']:.1f} DAYS", "LUNAR AGE"))
+    if m.get("distance_km"):
+        # The age is in the line under the programme (moon_tonight).
+        rows.append((f"{m['distance_km']:,.0f} KM", "AWAY"))
     elif m.get("size_deg"):
         rows.append((f"{m['size_deg']:.2f}°", "APPARENT SIZE"))
     if m.get("altitude") is not None:
@@ -572,8 +575,13 @@ def programme(c, s, x, y, width):
             return c.wrap((x, y), t.get("baseline_words", ""), "sans", 20, width, "secondary", on="panel")
         return light_curve(c, t, x, y + 28, width, 170, s["now"])
     if kind == "moon":
-        y = c.wrap((x, y), "EXPLORING THE MOON", "bold", 28, width, "accent", on="panel")
-        y = c.wrap((x, y + 6), moon_words(s.get("lucky")), "sans", 24, width, "text", on="panel") + 10
+        y = c.wrap((x, y), "THE MOON", "bold", 28, width, "accent", on="panel")
+        if s.get("live"):
+            y = c.wrap((x, y + 6), "LIVE VIEW", "bold", 20, width, "live", on="panel")
+            y = c.wrap((x, y + 2), "What the telescope sees now: a fresh frame every few seconds, nothing stacked.",
+                       "sans", 24, width, "text", on="panel") + 10
+        else:
+            y = c.wrap((x, y + 6), moon_words(s.get("lucky")), "sans", 24, width, "text", on="panel") + 10
         if s.get("lucky_stage"):
             title, figures = s["lucky_stage"]
             y = c.wrap((x, y), title, "bold", 20, width, "live", on="panel")
@@ -1036,6 +1044,7 @@ def compose(state, stack=None, single=None):
         c.text((WIDTH - MARGIN_X, MARGIN_Y), "● LIVE", "bold", 22, "live", anchor="ra")
         (focus_layout if state["kind"] == "focus" else polar_layout)(c, state)
         footer(c, state)
+        headline_band(c, state)
         return c
     if state["kind"] == "between":
         between(c, state, stack)
@@ -1049,8 +1058,44 @@ def compose(state, stack=None, single=None):
     sky_area(c, state, stack, single)
     side_panel(c, state)
     footer(c, state)
+    headline_band(c, state)
     c.crawl = (state.get("story") or {}).get("crawl")
     return c
+
+
+def headline_of(directed, now):
+    """The director's headline words while they are due, else None."""
+    h = (directed or {}).get("headline")
+    return h["words"] if h and now < h.get("until", 0) else None
+
+
+def headline_band(c, s):
+    """"NOW OBSERVING: THE MOON", "STACKING THE BEST FRAMES": a band across
+    the top of the picture for the few seconds after the target or the
+    activity changes (director.HEADLINE_S). Over the picture, never instead
+    of it: the picture stays what the camera sees (30 October 2026)."""
+    words = s.get("headline")
+    if not words:
+        return
+    x, y, w, _ = STACK_BOX
+    under = plate(c, (x, y, x + w, y + 84), 0.78)
+    c.text((x + w // 2, y + 42), words, "bold", 40, "accent", on=under, anchor="mm")
+
+
+def debug_overlay(picture, report):
+    """The director's answer written over a copy of the picture, for a
+    person working out why the stream shows what it shows; never sent."""
+    from PIL import ImageDraw
+    out = picture.copy()
+    draw = ImageDraw.Draw(out)
+    lines = report.splitlines()
+    f = font("mono", 20)
+    width = max(draw.textlength(line, font=f) for line in lines) + 40
+    box = (40, 140, 40 + int(width), 140 + 28 * len(lines) + 30)
+    draw.rectangle(box, fill=(0, 0, 0), outline=COLOURS["attention"], width=3)
+    for i, line in enumerate(lines):
+        draw.text((box[0] + 20, box[1] + 15 + 28 * i), line, font=f, fill=COLOURS["text"])
+    return out
 
 
 # --- examples for the preview -----------------------------------------------------
@@ -1451,9 +1496,11 @@ def moon_now(now):
         return {}
 
 
-LUCKY_STAGES = {"centring": "FINDING THE MOON", "capturing": "CAPTURING FRAMES",
-                "ranking": "FINDING THE SHARPEST MOMENTS", "stacking": "CORRECTING THE ATMOSPHERE",
-                "done": "RESULT READY"}
+LUCKY_STAGES = {"centring": "FINDING THE MOON", "capturing": "CAPTURING THE SHARPEST MOMENTS",
+                "ranking": "RANKING EVERY FRAME", "stacking": "CORRECTING THE ATMOSPHERE",
+                "done": "RESULT READY", "mineral": "REVEALING THE MOON'S SUBTLE COLOUR"}
+# The director's programmes that are a lucky-imaging video or made from one.
+LUCKY_PROGRAMMES = ("lunar lucky imaging", "mineral Moon")
 
 
 def lucky_stage(now, fresh=120):
@@ -1476,6 +1523,9 @@ def lucky_stage(now, fresh=120):
             f" · {p['points']} alignment regions" if p.get("points") else "")
     elif stage == "done":
         words = f"best {p.get('kept', 0):,} of {p.get('frames', 0):,} frames"
+    elif stage == "mineral":
+        videos = p.get("videos", 0)
+        words = f"{videos} colour video{'s' if videos != 1 else ''} · checking the colour repeats from video to video"
     else:
         words = "centring the disc from its own picture"
     return LUCKY_STAGES[stage], words
@@ -1500,9 +1550,13 @@ def lucky_now():
 
 
 def from_status(st, now=None, session=None):
-    """The picture's state from web/status.json, as stream.py reads it."""
+    """The picture's state from web/status.json, as stream.py reads it, and
+    from the director's answer (st["director"], director.py) where there is
+    one: it names the target, says whether the run's figures are the
+    target's, and which picture is the main one."""
     now = now or time.time()
-    name = st.get("name") or ""
+    d = st.get("director")
+    name = (d["target"] or "") if d else (st.get("name") or "")
     series = st.get("series") or {}
     fwhm = [f for f, ok in zip(series.get("fwhm") or [], series.get("accepted") or []) if f and ok]
     try:
@@ -1519,22 +1573,34 @@ def from_status(st, now=None, session=None):
          "next": (f"{upcoming['label'].split(',')[0]}" + (f" at {utc(upcoming['start'])}" if upcoming.get("start") else ""))
          if upcoming else None,
          "stage": stage(steps, now)}
-    if lucky_now() or live_now():
-        # A lucky-imaging video or the live view keeps no run status: its own newest picture
-        # says how fresh it is, and the last run's figures and schedule are
-        # not tonight's (30 October 2026: "PAUSED · no new exposure for 8683 min").
+    live, lucky = (d["activity"] == "live view" and not d["run_current"], d["programme"] in LUCKY_PROGRAMMES) \
+        if d else (live_now(), lucky_now())
+    if lucky or live or (d and not d["run_current"]):
+        # A lucky-imaging video or the live view keeps no run status, and a run
+        # the telescope has left is not what it sees: the newest picture says
+        # how fresh it is, and the last run's figures and schedule are not
+        # tonight's (30 October 2026: "PAUSED · no new exposure for 8683 min").
         import config
         try:
             s["last_age"] = now - (config.DATA / "web" / "latest.jpg").stat().st_mtime
         except OSError:
             s["last_age"] = None
         s["exposure"], s["stage"], s["next"] = None, None, None
-        s["combined"] = s["kept"] = None
-        s["live"] = live_now()
+        s["combined"] = s["kept"] = s["captured"] = s["integration_s"] = s["fwhm_arcsec"] = None
+        s["live"] = live
+    if d:
+        import director
+        s["show_latest"] = d["image"] == "latest"
+        # A Moon video being stacked or made into the mineral Moon: the camera is
+        # done with, so its last frame is not a paused one.
+        s["processing"] = d["priority"] == director.PRIORITY["processing"]
+        s["headline"] = headline_of(d, now)
+        s["programme_words"], s["activity_words"] = d["programme"], d["activity"]
     import sky
-    if (st.get("object_kind") or sky.object_kind(name)) == "moon":
+    kind = (d["target_kind"] if d else None) or st.get("object_kind") or sky.object_kind(name)
+    if kind == "moon":
         s["kind"], s["moon"], s["fwhm_arcsec"] = "moon", moon_now(now), None
-        s["lucky"] = lucky_now()
+        s["lucky"] = lucky
         s["lucky_stage"] = lucky_stage(now) if s["lucky"] else None
         s["story"] = told(s, st, now)
         return s
@@ -1715,3 +1781,39 @@ def polar_stream_state(now=None, path=None):
                     "failed": "The measurement failed",
                     "measured": "Measured"}.get(stage, "")
     return out
+
+
+def scenes(out, now=None, say=print):
+    """Each of the director's scenes (director.examples) drawn as the stream
+    would draw it, as OUT/NAME.png, on made-up pictures: a grey disc for
+    the Moon, the example star field for the rest. Focusing and polar
+    alignment are drawn by `preview`."""
+    import director
+    from PIL import ImageDraw
+    now = now or time.time()
+    out.mkdir(parents=True, exist_ok=True)
+    disc = Image.new("RGB", (1200, 900), (0, 0, 0))
+    ImageDraw.Draw(disc).ellipse((250, 50, 1050, 850), fill=(185, 185, 180))
+    stack, single = example_pictures()
+    drawn = {}
+    for name, given in director.examples(now).items():
+        d = director.direct(given)
+        if d["scene"] in ("focus", "polar"):
+            continue
+        s = scene_state(given, d, now)
+        picture = disc if s["kind"] == "moon" else single
+        canvas = compose(s, stack if d["image"] == "stack" else None, picture if d["image"] != "none" else None)
+        canvas.image.save(out / f"{name}.png")
+        drawn[name] = (d, canvas)
+        say(f"{out / (name + '.png')}  {d['scene']}")
+    return drawn
+
+
+def scene_state(given, d, now):
+    """The picture's state for one of director.examples, without reading the
+    real night's files: its newest picture's age and lucky stage as given."""
+    s = from_status(dict(given["status"], director=d), now)
+    s["last_age"] = d["image_age"]
+    if s.get("lucky") and given.get("lucky") in LUCKY_STAGES:
+        s["lucky_stage"] = (LUCKY_STAGES[given["lucky"]], "example figures")
+    return s

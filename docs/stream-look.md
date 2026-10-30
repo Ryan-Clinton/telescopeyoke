@@ -347,13 +347,30 @@ name, so "Moon-Copernicus" is still the Moon). The first object with its own
 mode, so a figure that means nothing for it is never shown (24 October 2026:
 a Moon run's panel said STAR SIZE 9.3″):
 
-> **EXPLORING THE MOON**
+> **THE MOON**
 > Hundreds of short exposures are combined to make the surface cleaner and more detailed.
 > TONIGHT'S MOON · Waxing · 97% illuminated · 12.9 days after new Moon
 
-While a lucky-imaging video is taken or stacked (`lucky.py`, activity phase
-`lucky`), the words say instead that short exposures freeze steadier moments
-and the sharpest fifth are combined afterwards. The Moon's state comes from
+It is the Moon whenever the telescope was last aimed at it
+(`director.py`), not only when the last run's name says so. In the live
+view, **LIVE VIEW** and "What the telescope sees now: a fresh frame every
+few seconds, nothing stacked." While a lucky-imaging video is taken or
+stacked (`lucky.py`, activity phase `lucky`), the words say instead that
+short exposures freeze steadier moments and the sharpest fifth are
+combined afterwards, and under them where it has got (`web/lucky.json`):
+
+| Stage | Title | Figures |
+|---|---|---|
+| centring | FINDING THE MOON | centring the disc from its own picture |
+| capturing | CAPTURING THE SHARPEST MOMENTS | 846 / 2,000 · 31 a second · 8 ms exposures |
+| ranking | RANKING EVERY FRAME | 1,200 / 2,000 |
+| stacking | CORRECTING THE ATMOSPHERE | 400 / 2,000 · 742 alignment regions |
+| done | RESULT READY | best 400 of 2,000 frames |
+| mineral (`mineral.py`, phase `mineral`) | REVEALING THE MOON'S SUBTLE COLOUR | 3 colour videos · checking the colour repeats from video to video |
+
+While a video is stacked or made into the mineral Moon the camera is done
+with: the header says ● PROCESSING, and its last frame stays the picture,
+neither greyed nor called paused. The Moon's state comes from
 `sky.moon_state` at the site, worked out live: never from
 `stream-targets.toml`. Its LOOK CLOSELY lines follow the phase
 (`streamstory.moon_notices`): from 90 % lit, short shadows, rays and maria;
@@ -379,7 +396,7 @@ The Moon (`moon_figures`), in this order, as many as fit:
 | Figure | From | Shown as |
 |---|---|---|
 | Illuminated | `sky.moon_state` | **97%** ILLUMINATED |
-| Lunar age, or apparent size from 97 % lit | `sky.moon_state` | **6.1 DAYS** LUNAR AGE / **0.54°** APPARENT SIZE |
+| Distance (the age is in the line under the programme) | `sky.moon_state` | **371,200 KM** AWAY |
 | Altitude | `sky.moon_state` | **31°** ALTITUDE |
 | Frames kept, keep rate | as deep sky | **7 / 7** FRAMES KEPT, **100%** KEEP RATE |
 
@@ -409,6 +426,12 @@ few seconds and then fade:
 
   It then dissolves into the normal layout over 400 ms.
 - **Science captions** became the presenter's lines and chapters: see "The story".
+- **Headline, 4 s**, when the target or the activity changes
+  (`director.headline`, drawn by `streamlook.headline_band`): "NOW
+  OBSERVING: THE MOON", "LUCKY IMAGING STARTED", "STACKING THE BEST FRAMES",
+  "MINERAL COLOUR PROCESSING", "RESULT READY". A band across the top of the
+  picture, over it and never instead of it; the presenter's line waits
+  until it has gone.
 - **Tonight ribbon, 10 s, every 15 minutes** and during every between-targets
   card:
 
@@ -552,7 +575,13 @@ and `!polar` answer from the same files as the focus and polar looks.
 
 ## What wins the screen
 
-When two things want the same space, the one higher in this list wins
+Which picture is the main one, and which target it is, is the director's
+answer (`director.py`; the order is in [streaming.md](streaming.md#what-is-on-screen-and-why-the-director)):
+focusing or polar alignment, then a fresh frame from the camera, then a
+Moon video being processed, then the GoTo, then a stopped run's stack. A
+stale run's stack or figures never outrank the camera's fresh frame.
+
+Within the picture, when two things want the same space, the one higher in this list wins
 (`streamlook.PRIORITY`):
 
 1. a problem or failure;
@@ -571,6 +600,7 @@ The footer says so, worded calmly:
 | under 30 s, or under twice the exposure length | ● LIVE | live |
 | up to 120 s | ● WAITING FOR NEXT EXPOSURE | secondary |
 | over 120 s | PAUSED · no new exposure for 2 min | attention |
+| a Moon video being stacked or made into the mineral Moon | ● PROCESSING | live |
 
 When the paused state is shown and the status page's checks show the
 camera and mount connected, it adds "telescope still connected". It says
@@ -828,6 +858,16 @@ registered for the channel), and the chat's read-only commands
   - stops as now otherwise.
 - The fallback from 1080p to 720p happens on a slow `speed=` report and is
   logged.
+- The director (`tests/test_director.py`): a matrix of fresh frame, target
+  aimed at, old run and schedule, each with its scene and target (a fresh
+  Moon frame after an M31 run, with the schedule run out, is the Moon live,
+  never the end); target, programme and activity apart; focusing over the
+  fresh frame; a paused run keeping its stack; the headline on a change and
+  gone after its seconds; an answer that cannot be worked out never
+  stopping the stream.
+- Every scene drawn as a viewer sees it (`streamlook.scenes`): the Moon's
+  scenes show THE MOON, the disc and not a black box, none of the old
+  run's figures, and PROCESSING rather than PAUSED while stacking.
 
 ## Still to decide
 

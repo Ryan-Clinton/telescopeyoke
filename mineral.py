@@ -78,6 +78,7 @@ from pathlib import Path
 import numpy as np
 from scipy import ndimage
 
+import activity
 import config
 import lucky
 import lunar
@@ -733,9 +734,12 @@ def _written(out, facts, stems, geometry, placed, strength, say):
     return jpg, facts
 
 
+@activity.during("Making the mineral Moon", lambda a: f"from {len(a['stems'])} videos")
 def run(stems, details=None, strength="standard", slope="bright", send=True):
     """The command: make it, and send the picture to the person's phone
-    (not with `send` off, for a run made only to compare)."""
+    (not with `send` off, for a run made only to compare). The stream says
+    so while it is made (lucky.json's "mineral" stage)."""
+    lucky.progress("mineral", videos=len(stems))
     jpg, facts = mineral_file(stems, details=details, strength=strength, slope=slope)
     if not send:
         return jpg, facts

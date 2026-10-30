@@ -620,9 +620,11 @@ def write_notes(path, notes):
 
 @activity.during("Taking a lucky-imaging video", "{target}")
 def capture(target, frames, exposure, gain, roi=None, depth=8):
+    import director
     import shoot
     from camera import Camera
     _rig = shoot.hold_the_rig(f"{target} video")
+    director.aim(target)                    # the stream names what is filmed, not the last run
     path = OUT / f"{target.replace(' ', '')}-{datetime.now():%Y%m%d-%H%M%S}.ser"
     cam = Camera(gain=gain)
     if not hasattr(cam, "video"):

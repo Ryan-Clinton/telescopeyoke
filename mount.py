@@ -792,6 +792,10 @@ class Mount:
             self.save_clock(site)
         offset = json.loads(CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
         plan = plan_goto(name, site)
+        import director
+        # What the telescope is aimed at, for the stream (director.py); a
+        # file only, never an error, and nothing about the move.
+        director.aim(name)
         target = find_target(name)
         if any(aim_off):
             target = offset_target(target, *aim_off)

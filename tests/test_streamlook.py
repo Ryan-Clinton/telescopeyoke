@@ -301,12 +301,13 @@ def test_the_moon_is_shown_as_the_moon_never_with_a_star_size(monkeypatch):
     s = streamlook.from_status(status, now=1792800000.0)
     assert s["kind"] == "moon" and s["fwhm_arcsec"] is None
     labels = [label for _, label in streamlook.figures_for(s)]
-    assert labels[:3] == ["ILLUMINATED", "APPARENT SIZE", "ALTITUDE"] and "STAR SIZE" not in labels
+    assert labels[:3] == ["ILLUMINATED", "AWAY", "ALTITUDE"] and "STAR SIZE" not in labels
+    assert streamlook.figures_for(s)[1] == ("371,200 KM", "AWAY")
     assert "KEEP RATE" in labels
-    # Away from full, the Moon's age; a session named only "Moon-Copernicus" is still the Moon.
+    # The age is in the line under the programme; a session named only "Moon-Copernicus" is still the Moon.
     monkeypatch.setattr(streamlook, "moon_now", lambda now: dict(MOON_NOW, illumination=34, age_days=6.1))
     s = streamlook.from_status(dict(status, name="Moon-Copernicus", object_kind=None), now=1792800000.0)
-    assert s["kind"] == "moon" and streamlook.figures_for(s)[1] == ("6.1 DAYS", "LUNAR AGE")
+    assert s["kind"] == "moon" and streamlook.figures_for(s)[1] == ("371,200 KM", "AWAY")
     assert streamlook.moon_tonight(s["moon"]) == ("TONIGHT'S MOON · Waxing · 34% illuminated · "
                                                  "6.1 days after new Moon")
     # Deep sky is as it was.
@@ -329,7 +330,7 @@ def test_the_moon_panel_says_where_the_lucky_imaging_has_got(tmp_path, monkeypat
     note = tmp_path / "web" / "lucky.json"
     note.write_text(json.dumps({"stage": "capturing", "at": 1000.0, "done": 846, "frames": 2000,
                                 "fps": 31.0, "exposure": 0.008}))
-    assert streamlook.lucky_stage(1010.0) == ("CAPTURING FRAMES", "846 / 2,000 · 31 a second · 8 ms exposures")
+    assert streamlook.lucky_stage(1010.0) == ("CAPTURING THE SHARPEST MOMENTS", "846 / 2,000 · 31 a second · 8 ms exposures")
     note.write_text(json.dumps({"stage": "stacking", "at": 1000.0, "done": 25, "frames": 400, "points": 742}))
     assert streamlook.lucky_stage(1010.0) == ("CORRECTING THE ATMOSPHERE", "25 / 400 · 742 alignment regions")
     assert streamlook.lucky_stage(5000.0) is None

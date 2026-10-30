@@ -300,6 +300,9 @@ def end(say=print, send=None, run=subprocess.run, now=None, home=None):
             go_home(home)
             state = mount_state(run) or {}
         parked = bool(state.get("at_home"))
+        if parked:
+            import director
+            director.clear()                # parked: the stream names no target now
         words = (f"Observation is over. Tonight: {got}. The telescope is parked at home (by its axis readouts)."
                  if parked else
                  f"Observation is over. Tonight: {got}. The telescope could NOT be parked: it is still "
