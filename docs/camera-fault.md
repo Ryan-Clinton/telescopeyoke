@@ -62,6 +62,7 @@ setting, and whether the USB 3 link power states U1 and U2 are in use).
 | 30 Oct 17:22:53 | The same hub moved to laptop port 2-1 (which passed direct at 14:40), the camera on the hub's port 4 (2-1.4) | 50 × 16 s at speed 0 | **The same failure**, two minutes in: at 17:24:57 the kernel reset the camera and timed out reading it (error -110). Stopped there. Other laptop and hub ports, same result: it is the hub, or the camera's power through it |
 | 30 Oct 17:28:44 to 17:46 | The leads re-arranged: the **new 1 m lead from the laptop to the hub**, the **old 1 m lead from the hub to the camera**; hub on laptop port 2-1, the camera on the hub's port 1 (2-1.1) | 50 × 16 s at **speed 0** | **50 of 50**, no USB error |
 | 30 Oct 17:46 to 18:07 | Same | 50 × 16 s at **speed 2** | **50 of 50**, no USB error |
+| 30 Oct 18:11 to 18:29 | The 1 m leads swapped: the **old 1 m from the laptop to the hub**, the **new 1 m from the hub to the camera** (2-1.1) | 50 × 16 s at speed 0 | **50 of 50**, no USB error: the new 1 m lead feeds the camera fine, so the failures were the **3 m lead to the hub** |
 
 ## What is ruled out
 
@@ -99,11 +100,11 @@ setting, and whether the USB 3 link power states U1 and U2 are in use).
   and the old 1 m lead to the camera, speed 0 kept 50 of 50. The hub has its
   own power supply (the person, 30 Oct), so the camera's power comes from
   it through the lead to the camera, not down the 3 m lead; and the 3 m lead
-  ran every direct test that morning, keeping every speed 0 frame. That
-  leaves the new 1 m lead as the camera's lead (it kept 21 of 21 straight
-  from the laptop on 26 Oct), or the 3 m lead and the hub together at
-  5 Gb/s. The 3 m lead to the hub with the old 1 m lead to the camera would
-  tell which.
+  ran every direct test that morning, keeping every speed 0 frame. With the two 1 m
+  leads swapped (the new one now to the camera) it kept 50 of 50 again, so
+  **the 3 m lead to the hub was the cause**: fine straight into the camera
+  all morning, but not with the hub at 5 Gb/s. Behind the hub, use the 1 m
+  leads.
 - **The camera's USB chip itself can stop answering.** On 30 Oct at 17:15,
   behind a hub, the kernel's own requests for the camera's descriptor timed
   out (error -110) through a reset and four tries to find it again. That is
