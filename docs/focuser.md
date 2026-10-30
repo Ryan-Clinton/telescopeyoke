@@ -337,15 +337,19 @@ With the camera on the drawtube, the motor turned the focuser outward:
 two moves of 64 half-steps (felt on the other knob as a small turn each),
 then five of 512, 2,688 half-steps in all, and the person judged the knob
 went over half a turn uphill without a stop. Two things had changed since
-21–22 October, so either may be the cure:
+21–22 October; the test below settled which:
 
 - The person found a group of six bent pins on the far side of the board
   that may have been touching each other, and straightened them.
 - The Nano was plugged into the powered USB 3.2 hub (Realtek `0bda:0411`,
   its own supply) instead of the laptop.
 
-A move outward with the Nano back on the laptop's own port would tell
-them apart. The walk-in's move back out now goes out past the best by the gears'
+The same evening, half a turn out (2,048 half-steps) with the Nano back on
+the laptop's own port, pins straightened, moved the drawtube only a tiny
+amount before it stuck; back on the hub, the same move went the whole half
+turn. **The hub is the fix: keep the Nano on the powered hub.** The
+laptop's port cannot give the 28BYJ-48 enough current to lift the
+drawtube with the camera on, which fits everything since 19 October. The walk-in's move back out now goes out past the best by the gears'
 slack and then in to it: a move of only the few half-steps it had gone
 past was lost in the slack before the drawtube rose.
 
