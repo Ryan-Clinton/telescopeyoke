@@ -968,3 +968,26 @@ def test_a_video_comes_back_to_back_from_part_of_the_sensor_and_the_camera_is_pu
         assert (cam.width, cam.height) == (WIDTH, HEIGHT)
         data, _ = cam.frame(0.01)
         assert data.shape == (HEIGHT, WIDTH)
+
+
+def test_each_video_frame_is_freed_as_soon_as_it_is_let_go(sdk, world):
+    """30 October 2026: frames pulled through ctypes.cast waited for the
+    garbage collector, and a Moon video grew to 18.5 GB and was killed."""
+    import gc
+    import weakref
+    with altair.AltairCamera() as cam:
+        pulled = []
+        real = cam._pull
+
+        def pull():
+            data, info = real()
+            pulled.append(weakref.ref(data))
+            return data, info
+        cam._pull = pull
+        gc.disable()
+        try:
+            for mosaic, _, _ in cam.video(0.001, 6):
+                del mosaic
+        finally:
+            gc.enable()
+    assert len(pulled) == 6 and all(r() is None for r in pulled[:-1])

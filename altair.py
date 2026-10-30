@@ -305,8 +305,12 @@ class AltairCamera:
         camera says about it (its sequence number and timestamp)."""
         data = np.empty((self.height, self.width), dtype=np.uint16)
         # The wrapper declares the buffer as a C string pointer, so the array's
-        # own memory is handed over as one; the library writes the frame into it.
-        buffer = ctypes.cast((ctypes.c_ubyte * data.nbytes).from_buffer(data), ctypes.c_char_p)
+        # own memory is handed over as one, by its address; the library writes
+        # the frame into it. Not ctypes.cast, whose result and source refer to
+        # each other: every frame then waits for the garbage collector, and on
+        # 30 October 2026 a Moon video's 24 MB frames piled up to 18.5 GB in
+        # 1018 frames before the system killed it.
+        buffer = ctypes.c_char_p(data.ctypes.data)
         info = self.lib.AltaircamFrameInfoV3()
         self.handle.PullImageV3(buffer, 0, 16, -1, info)   # -1: rows packed with no padding
         return data, info
