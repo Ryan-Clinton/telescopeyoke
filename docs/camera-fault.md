@@ -52,7 +52,11 @@ setting, and whether the USB 3 link power states U1 and U2 are in use).
 | 30 Oct 14:31 | | Unplugged by hand | |
 | 30 Oct 14:37 | Plugged into port 2-1 | | |
 | 30 Oct 14:40 | Same | 8 × 16 s at speed 2 | **8 of 8** |
-| 30 Oct 16:43 | Behind a USB 3.2 hub (Realtek 0bda:0411, says it is self-powered) on port 2-5, the camera on 2-5.1 at 5000 Mb/s | | Not yet tested |
+| 30 Oct 16:43 | Behind a USB 3.2 hub (Realtek 0bda:0411, says it is self-powered) on port 2-5, the camera on 2-5.1 at 5000 Mb/s | | |
+| 30 Oct 17:09 | Same | 50 × 16 s at speed 2 | After about 2 minutes the camera refused its first setting (`put_AutoExpoEnable`) when reopened: SDK error **0x8000FFFF**, never seen before |
+| 30 Oct 17:11 and 17:12 | Same | 2 s at speed 2, then 3 × 2 s at speed 0 | **Would not open at either speed**, same error. No USB error in the kernel log |
+| 30 Oct 17:13 | Same | 50 × 16 s at speed 2 | Opened normally by itself, then the same error at 17:15. The library's replug (new in `altair.py`) was tried |
+| 30 Oct 17:15:04 to 17:15:46 | Same | | **The camera stopped answering USB itself.** The kernel: `device descriptor read/8, error -110` (timed out), a reset, a disconnect, then four tries to find it again, each timing out. It was gone from USB until unplugged by hand |
 
 ## What is ruled out
 
@@ -81,6 +85,13 @@ setting, and whether the USB 3 link power states U1 and U2 are in use).
   10:47 and gone by 11:02 with the camera plugged in throughout.
 
 ## What is known
+
+- **The camera's USB chip itself can stop answering.** On 30 Oct at 17:15,
+  behind a hub, the kernel's own requests for the camera's descriptor timed
+  out (error -110) through a reset and four tries to find it again. That is
+  below every program and library: the camera's USB 3 side had stopped
+  responding at all. It is the strongest sign yet that the fault is in the
+  camera's USB 3 electronics (or, this once, the hub between).
 
 - **The faster the readout, the more it fails.** Speed 0 has never lost a
   frame, through every fault. Speed 1 has lost 16 s frames and kept 2 s ones.
