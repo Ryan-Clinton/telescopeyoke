@@ -25,7 +25,9 @@ core functions ───┼── --json (interface.py envelope)
   The Moon has its own path, with no stars involved: `moon.py` centres the
   disc from the picture (`lunar.py`) and holds it there between bursts, and
   `lucky.py` takes the fast video (`altair.py`'s video mode) and stacks it
-  part by part on alignment points.
+  part by part on alignment points. `mineral.py` turns several colour stacks
+  into the mineral Moon, with `lunar.py` placing the named seas on the
+  picture for its check.
 - `agent.py` gathers read-only facts for programs; `interface.py` defines the
   envelope, error codes and states.
 

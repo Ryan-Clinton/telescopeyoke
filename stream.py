@@ -649,7 +649,6 @@ def bandwidth_test(target, device=None, run=subprocess.run, seconds=TEST_S):
     if target is None:
         return (WIDTH, HEIGHT)
     progress = PROGRESS.with_name("stream-bandwidth.txt")
-    rate = BITRATE[(WIDTH, HEIGHT)]
     try:
         run(["ffmpeg", "-loglevel", "error", "-y", "-progress", str(progress), "-re", "-f", "lavfi",
              "-i", f"testsrc2=size={WIDTH}x{HEIGHT}:rate={FPS}", "-f", "lavfi",
@@ -821,7 +820,7 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
     composer = Composer(draw=lambda st, now, mode: frame(st, now, mode).resize(size)
                         if size != (WIDTH, HEIGHT) else frame(st, now, mode))
     tick = clock()
-    segment, segment_state, active, looked_at, tones, opening = None, None, False, -1e9, None, None
+    segment, segment_state, active, looked_at, tones = None, None, False, -1e9, None
     try:
         while True:
             st, now = status(), clock()
@@ -857,8 +856,6 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                     f"({hidden(' '.join([target] if isinstance(target, str) else target), stream_keys)})")
                 PROGRESS.parent.mkdir(parents=True, exist_ok=True)
                 PROGRESS.write_text("")
-                if to is None and opening_due(now):
-                    opening = Opening(now)
                 listen = os.pipe() if s["tones"] and os.name == "posix" else None
                 process, reports, drops, frames = run(
                     command(target, device, size, audio_fd=listen and listen[0]), stdin=subprocess.PIPE,

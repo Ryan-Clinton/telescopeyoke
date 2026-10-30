@@ -4,6 +4,9 @@
     ./ty moon                    the full disc: centred, exposed, a video, stacked
     ./ty moon --dry-run          what it would do, and whether the Moon is up
     ./ty moon --frames 2000 --bursts 4 --keep 5 10 20 40 --colour
+    ./ty moon --mineral          the detail video, then three 16-bit colour videos
+                                 with the disc moved across the sensor, then the
+                                 mineral Moon from them (mineral.py)
 
 It goes to the Moon, finds the disc in the camera's own picture and centres
 it from that (plate solving needs stars, and there are none beside a bright
@@ -45,6 +48,7 @@ TEST_MOVE = 5.0          # arcminutes east, then north, for the first centring's
 CENTRED = 0.04           # within this share of the radius of the middle is centred
 HEADROOM = 3e9           # bytes of disk always left free
 FIRST_EXPOSURE = 0.005
+MINERAL_LEVEL = 0.55      # the colour videos put the bright surface this far up: well clear of clipping
 
 
 def free_disk(path=None):
@@ -153,6 +157,95 @@ class Session:
         return disc
 
 
+def video(s, cam, path, frames, bursts_wanted, exposure, region, depth, matrix, white, say):
+    """One video in bursts, the Moon put back in the middle of the region
+    between them; its notes written beside it. Returns the notes."""
+    writer, bursts = None, []
+    per = max(1, frames // bursts_wanted)
+    try:
+        for b in range(bursts_wanted):
+            count = per if b < bursts_wanted - 1 else frames - per * (bursts_wanted - 1)
+            with activity.doing("Taking a lucky-imaging video", f"burst {b + 1} of {bursts_wanted}"):
+                writer, came = lucky.capture_into(cam, path, count, exposure, roi=region, depth=depth,
+                                                  writer=writer)
+            last = came.pop("last")
+            bursts.append(came)
+            say(f"burst {b + 1}: {came['frames']} frames, {came['fps']} a second, {came['dropped']} dropped")
+            if b < bursts_wanted - 1 and last is not None:
+                # The lunar hold: the disc found in the region, put back in its middle.
+                found = lunar.find_disc(lucky.green(last))
+                if found is None:
+                    say("disc not found after the burst (cloud?): carrying on without a correction")
+                    continue
+                down, right = lunar.offset(found, last.shape)
+                if np.hypot(down, right) > CENTRED * found["r"]:
+                    east, north = lunar.correction(matrix, down, right)
+                    s.aim = [s.aim[0] + east, s.aim[1] + north]
+                    s.go()
+                    s.log.append({"hold": b + 1, "down": round(down), "right": round(right), "aim": list(s.aim)})
+    finally:
+        if writer:
+            writer.close()
+    took = sum(b["seconds"] for b in bursts)
+    notes = {"target": "Moon", "moon": lunar.state(s.site), "exposure": exposure, "gain": s.cam.gain,
+             "roi": region, "depth": depth, "white_level": white if depth > 8 else 255,
+             "frames": writer.count if writer else 0, "bursts": bursts,
+             "fps": round(sum(b["frames"] for b in bursts) / max(took, 1e-6), 1),
+             "dropped": sum(b["dropped"] for b in bursts), "centring": s.log, "aim": s.aim}
+    lucky.write_notes(path, notes)
+    say(f"{notes['frames']} frames at {notes['fps']} a second ({notes['dropped']} dropped): {path}")
+    return notes
+
+
+def dither_steps(count, room):
+    """Where each colour video puts the disc across the sensor, pixels right
+    of the middle: spread over 80 % of the `room` either side, so a pattern
+    of the sensor's (its flat's errors, a colour gradient) lands on a
+    different part of the Moon in each video and fails to repeat."""
+    if count < 2 or room <= 0:
+        return [0.0] * count
+    return [float(v) for v in np.linspace(-0.8 * room, 0.8 * room, count)]
+
+
+def colour_videos(s, cam, stamp, args, exposure, shape, matrix, white, say):
+    """The mineral Moon's colour: `args.colour_videos` 16-bit videos (the
+    camera's 12 bits whole: the Moon's colours are a step or two of 8 bits),
+    exposed lower so that nothing clips, each with the disc somewhere else
+    on the sensor. Returns their notes."""
+    level = exposure * MINERAL_LEVEL / lunar.TARGET_LEVEL
+    start = list(s.aim)
+    _, disc = s.look(exposure)
+    if disc is None:
+        raise SystemExit("The Moon was lost before the colour videos: cloud?")
+    room = (shape[1] - lunar.roi(disc, shape)[2]) / 2
+    out = []
+    for n, right in enumerate(dither_steps(args.colour_videos, room)):
+        east, north = lunar.correction(matrix, 0.0, -right)
+        s.aim = [start[0] + east, start[1] + north]
+        s.go()
+        _, disc = s.look(level)
+        if disc is None:
+            say(f"colour video {n + 1}: no Moon (cloud?), skipped")
+            continue
+        region = lunar.roi(disc, shape) if not args.full_frame else None
+        side = (region[2], region[3]) if region else (shape[1], shape[0])
+        frames = frames_that_fit(args.colour_frames, side[0] * side[1] * 2, free_disk())
+        if frames < min(20, args.colour_frames):
+            say(f"colour video {n + 1}: no room on the disk, skipped")
+            continue
+        path = lucky.OUT / f"Moon-{stamp}-colour{n + 1}.ser"
+        say(f"colour video {n + 1} of {args.colour_videos}: {level * 1000:.1f} ms, 16-bit, disc {right:+.0f} px "
+            f"across the sensor")
+        notes = video(s, cam, path, frames, 2, level, region, 16, matrix, white, say)
+        notes["dither_px"] = right
+        lucky.write_notes(path, notes)
+        out.append({"video": str(path), **notes})
+    s.aim = start
+    if not out:
+        raise SystemExit("No colour video was taken: cloud, or no room on the disk.")
+    return out
+
+
 @activity.during("Imaging the Moon", "{args.frames} frames")
 def run(args, scope=None, cam=None, site=None, say=print):
     import shoot
@@ -205,47 +298,28 @@ def run(args, scope=None, cam=None, site=None, say=print):
         raise SystemExit(f"Only {frames} frames fit on the disk: free some space first.")
     say(f"Moon centred; {exposure * 1000:.1f} ms at gain {cam.gain}, region {side_px[0]}x{side_px[1]} px; "
         f"{frames} frames in {args.bursts} bursts")
-    path = lucky.OUT / f"Moon-{datetime.now():%Y%m%d-%H%M%S}.ser"
-    writer, bursts = None, []
-    per = max(1, frames // args.bursts)
+    stamp = f"{datetime.now():%Y%m%d-%H%M%S}"
+    path = lucky.OUT / f"Moon-{stamp}.ser"
     try:
-        for b in range(args.bursts):
-            count = per if b < args.bursts - 1 else frames - per * (args.bursts - 1)
-            with activity.doing("Taking a lucky-imaging video", f"burst {b + 1} of {args.bursts}"):
-                writer, came = lucky.capture_into(cam, path, count, exposure, roi=region, depth=args.depth,
-                                                  writer=writer)
-            last = came.pop("last")
-            bursts.append(came)
-            say(f"burst {b + 1}: {came['frames']} frames, {came['fps']} a second, {came['dropped']} dropped")
-            if b < args.bursts - 1 and last is not None:
-                # The lunar hold: the disc found in the region, put back in its middle.
-                found = lunar.find_disc(lucky.green(last))
-                if found is None:
-                    say("disc not found after the burst (cloud?): carrying on without a correction")
-                    continue
-                down, right = lunar.offset(found, last.shape)
-                if np.hypot(down, right) > CENTRED * found["r"]:
-                    east, north = lunar.correction(matrix, down, right)
-                    s.aim = [s.aim[0] + east, s.aim[1] + north]
-                    s.go()
-                    s.log.append({"hold": b + 1, "down": round(down), "right": round(right), "aim": list(s.aim)})
+        notes = video(s, cam, path, frames, args.bursts, exposure, region, args.depth, matrix, white, say)
+        if args.mineral:
+            colours = colour_videos(s, cam, stamp, args, exposure, shape, matrix, white, say)
     finally:
-        if writer:
-            writer.close()
         close = getattr(cam, "close", None)
         if close:
             close()
-    took = sum(b["seconds"] for b in bursts)
-    notes = {"target": "Moon", "moon": lunar.state(site), "exposure": exposure, "gain": cam.gain, "roi": region,
-             "depth": args.depth, "frames": writer.count if writer else 0, "bursts": bursts,
-             "fps": round(sum(b["frames"] for b in bursts) / max(took, 1e-6), 1),
-             "dropped": sum(b["dropped"] for b in bursts), "centring": s.log, "aim": s.aim}
-    lucky.write_notes(path, notes)
-    say(f"{notes['frames']} frames at {notes['fps']} a second ({notes['dropped']} dropped): {path}")
+    if args.mineral:
+        notes["colour_videos"] = [c["video"] for c in colours]
     if args.no_stack:
         return {"video": str(path), **notes}
     done = lucky.stack_file(path, keeps=args.keep, in_colour=args.colour, pixels=args.pixels)
-    return {"video": str(path), **notes, "stack": done}
+    if not args.mineral:
+        return {"video": str(path), **notes, "stack": done}
+    import mineral
+    for c in colours:
+        lucky.stack_file(c["video"], keeps=(10, 40), in_colour=True, publish=False, flat=True)
+    jpg, facts = mineral.run([c["video"] for c in colours], details=[path], strength=args.strength)
+    return {"video": str(path), **notes, "stack": done, "mineral": str(jpg), "mineral_facts": facts}
 
 
 def parse(argv=None):
@@ -265,6 +339,11 @@ def parse(argv=None):
                     help="arcminutes off the Moon's centre to aim at first")
     ap.add_argument("--focus-check", metavar="STAR", help="measure focus on this star field first")
     ap.add_argument("--no-stack", action="store_true", help="take the video only")
+    ap.add_argument("--mineral", action="store_true",
+                    help="a mineral Moon: the detail video, then 16-bit colour videos, then mineral.py")
+    ap.add_argument("--colour-videos", type=int, default=3, help="--mineral: colour videos, the disc moved between")
+    ap.add_argument("--colour-frames", type=int, default=200, help="--mineral: frames in each colour video")
+    ap.add_argument("--strength", default="standard", help="--mineral: mild, standard, strong, auto or a number")
     ap.add_argument("--dry-run", action="store_true", help="say what it would do; nothing moves")
     return ap.parse_args(argv)
 

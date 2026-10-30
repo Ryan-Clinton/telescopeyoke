@@ -103,6 +103,82 @@ whole-frame alignment. It is not built on this engine yet.
 Never the Sun: nothing here knows whether a solar filter is fitted, and
 `mount.py` refuses to point near it.
 
+## The mineral Moon (mineral.py)
+
+    ./ty moon --mineral                       take the videos for it and make it
+    ./ty lucky mineral COLOUR.ser ... [--detail DETAIL.ser] [--strength mild|standard|strong|auto|N]
+    ./ty lucky stack VIDEO.ser --colour --flat   a colour stack divided by the flat
+
+The Moon's colours are real but faint, a percent or two either way. On
+spacecraft maps the bluer seas are richer in titanium and the browner ones
+poorer, and fresh ground is bluer than old. A colour camera's three broad,
+overlapping filters cannot measure titanium or iron, though (Earth and
+Space Science 2023, doi:10.1029/2022EA002710). So the mineral Moon is
+enhanced colour that goes with composition and maturity, and is never read
+as an abundance.
+
+**Taking it (`./ty moon --mineral`).** First the usual detail video (8-bit,
+fast). Then `--colour-videos` (3) colour videos of `--colour-frames` (200)
+each. They are 16-bit, holding the camera's 12 bits whole, with the SER
+header saying 12. In 8 bits the Moon's colours are only a step or two of
+the scale. They are exposed to 55 % of the scale rather than 72 % so that
+nothing clips, and the disc is put somewhere else across the sensor in each
+(`dither_steps`). A pattern of the sensor's, from a flat's error or a
+colour gradient, then lands on a different part of the Moon each time and
+fails the repeat test below. Each colour video is stacked with `--flat`,
+the flat from `calibrate.py flat` cut to the video's region. Each colour's
+response changing slowly across the sensor would otherwise be turned up
+with the rest. Then the mineral Moon is made from them. Turning the camera
+in the focuser between nights does the same for rotation. That needs
+hands, and the check below compares nights.
+
+**Making it.** For each colour stack:
+
+1. Red and blue are moved onto green, undoing the air's spread.
+2. Pixels within 80 % of the white level are left out of that stack, fading
+   out over 12 pixels. The white level is from the stack's record or the
+   SER header's depth, never from the file's 8 or 16 bits.
+3. The colour is worked out on 2×2 blocks, as log ratios of each colour to
+   the three's mean.
+4. The slope across the disc is taken off, fitted to the bright uplands only.
+
+Across the stacks, each pixel's blue-against-orange is compared from video
+to video. Colour less than 2 standard errors from nothing is turned down
+in proportion. The result is turned up by a stated factor: mild 8,
+standard 15, strong 25, a number, or auto (the strongest 1 % to 35 % of
+the brightness).
+
+**What it writes**, beside the first colour video as `NAME-mineral`:
+
+| File | What |
+|---|---|
+| `.jpg`, `.fits` | Blue against orange only: the safe picture |
+| `-full.jpg` | Every colour kept: exploratory, as the camera's green-magenta tint may not all be gone |
+| `-natural.jpg` | The colour as it is, on the sharpened detail |
+| `-ratios.fits` | log B/R, R/G and B/G after calibration |
+| `-ratio-br.jpg` | log B/R as grey, brighter bluer |
+| `-confidence.jpg` | Green robust; amber faint, near the limb or terminator (Sun or view under 15°), or not repeated; red clipped or off the Moon |
+| `-difference.fits` | The first two videos' blue-orange, one less the other |
+| `.json` | The colour as measured (the strongest 1 %, the spread) and the factor it was turned up by, each video's white level, clipping and flat, how well the videos agree two by two, the picture's orientation, and the check against the seas |
+
+**The check against the seas.** `lunar.orientation` is the IAU model of
+the Moon's pole and prime meridian (Archinal et al. 2011). `lunar.view`
+turns it into the point under us and the point under the Sun. `fit_turn`
+finds how the picture lies on the sky: the turn from where the terminator
+is, and which way round from the seas, which must come out darker than the
+uplands once the light's angle is allowed for. That puts every named sea
+on the picture. Spacecraft colour maps say Mare Tranquillitatis is bluer
+than Mare Serenitatis and than the uplands (NASA's Galileo colour Moon).
+The json says whether this picture agrees, by how much, and to how many
+standard errors across the videos.
+
+Not done:
+
+- **Correcting the colour for the light's angle.** It would need each of
+  this camera's colours' phase reddening, which has not been measured.
+- **A full comparison against a spacecraft map.** The check uses named
+  seas, not a registered map.
+
 ## The first result, 24 October 2026
 
 The 97 %-lit Moon, 31° up through thin haze: 300 frames of 20 ms at gain
@@ -127,3 +203,10 @@ picture back within reach of the new stacker.
 Not yet tried on the sky: `./ty moon` itself (centring, the lunar hold,
 the automatic exposure and region), the local frame choice, and readout
 speeds faster than Speed 0 for short frames.
+
+## The first mineral Moon, 30 October 2026
+
+Three 8-bit videos of the 80 %-lit waning Moon, 2,513 frames
+([the record](nights/2026-10-30/mineral-moon.md)). Mare Tranquillitatis came
+out bluer than Mare Serenitatis by 2.0 % (11 standard errors) and than the
+uplands by 2.3 % (3.3), as the spacecraft maps have it.

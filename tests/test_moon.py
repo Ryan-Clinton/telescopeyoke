@@ -140,3 +140,26 @@ def test_the_dry_run_says_what_it_would_do(monkeypatch, capsys):
     monkeypatch.setattr(moon, "free_disk", lambda path=None: 200e9)
     out = moon.plan(moon.parse(["--frames", "1000"]), config.example()["site"])
     assert out["frames"] == 1000 and out["region_px"] > 2000 and 0 <= out["moon"]["illumination"] <= 100
+
+
+def test_a_mineral_moon_adds_16_bit_colour_videos_exposed_lower_with_the_disc_moved_across(rig):
+    moon.save_calibration("west", PER_ARCMIN)
+    sky = Sky()
+    out = moon.run(moon.parse(["--frames", "20", "--bursts", "1", "--mineral", "--colour-videos", "3",
+                               "--colour-frames", "10", "--no-stack"]), Scope(sky), Cam(sky),
+                   config.example()["site"], say=lambda line: None)
+    videos = out["colour_videos"]
+    assert len(videos) == 3
+    notes = [json.loads(moon.Path(v).with_suffix(".json").read_text()) for v in videos]
+    assert all(n["depth"] == 16 and n["white_level"] == 4095 for n in notes)
+    assert all(lucky.ser_facts(v)[0] == 12 for v in videos)          # the header says the camera's 12 bits
+    assert all(n["exposure"] < out["exposure"] for n in notes)        # lower: nothing clips
+    lefts = [n["roi"][0] for n in notes]
+    assert lefts == sorted(lefts) and lefts[-1] - lefts[0] > 100       # the disc somewhere else on the sensor each time
+    steps = [n["dither_px"] for n in notes]
+    assert steps[1] == 0 and steps[0] == pytest.approx(-steps[2]) and steps[2] > 0
+
+
+def test_dither_steps_spread_across_the_room():
+    assert moon.dither_steps(1, 500) == [0.0]
+    assert moon.dither_steps(3, 100) == [-80.0, 0.0, 80.0]

@@ -41,7 +41,7 @@ import struct
 import sys
 import time
 import warnings
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
@@ -90,14 +90,17 @@ class SerWriter:
     """Frames written one at a time, 8 bits (the default: half the disk, and
     the Moon is exposed well up the scale) or 16; the count in the header is
     put right when it is closed. 12-bit frames are scaled to 8 by dropping
-    their bottom four bits."""
+    their bottom four bits, or kept whole in 16-bit words with the header
+    saying 12."""
 
     def __init__(self, path, width, height, instrument="", depth=8, white=4095):
         self.path, self.width, self.height, self.count = Path(path), width, height, 0
         self.depth, self.shift = depth, max(0, int(white).bit_length() - 8) if depth == 8 else 0
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.file = open(self.path, "wb")
-        self.file.write(ser_header(width, height, 0, depth=depth, instrument=instrument))
+        # a 16-bit video says the camera's own bits (12): its white level is then known from it
+        self.file.write(ser_header(width, height, 0, depth=8 if depth == 8 else int(white).bit_length(),
+                                   instrument=instrument))
 
     def frame_bytes(self):
         return self.width * self.height * (1 if self.depth == 8 else 2)
@@ -136,6 +139,17 @@ def read_ser(path):
         frames = whole
     data = np.memmap(path, dtype=dtype, mode="r", offset=SER_HEADER, shape=(frames, height, width))
     return data, colour
+
+
+def ser_facts(path):
+    """(bit depth, UTC start time) from a SER file's header: the depth says
+    the camera's top value (12 for 12-bit values kept in 16-bit words)."""
+    with open(path, "rb") as f:
+        head = f.read(SER_HEADER)
+    depth = struct.unpack("<i", head[34:38])[0]
+    ticks = struct.unpack("<q", head[170:178])[0]
+    when = datetime(1, 1, 1, tzinfo=timezone.utc) + timedelta(microseconds=ticks // 10) if ticks > 0 else None
+    return depth, when
 
 
 # --- a frame as a picture ---------------------------------------------------------
@@ -474,164 +488,65 @@ def picture(image, path, balance=True):
     return path
 
 
-MINERAL_SPREAD = 0.35     # the strongest colour on the disc after turning it up, as a share of the brightness
-COLOUR_BLUR = 4.0         # pixels the colour is smoothed over: its noise is far coarser than the detail's
+class Flattened:
+    """A video's frames each divided by the flat (calibrate.py flat) cut to
+    the part of the sensor the video read: for the mineral Moon, whose 0.5 %
+    colours a flat's slow changes of each colour's response across the
+    sensor would swamp once turned up."""
+
+    def __init__(self, frames, flat):
+        self.frames, self.flat = frames, np.asarray(flat, dtype=np.float32)
+        self.shape = frames.shape
+
+    def __len__(self):
+        return len(self.frames)
+
+    def __getitem__(self, i):
+        return np.asarray(self.frames[i], dtype=np.float32) / self.flat
 
 
-def _middle(image, size=1024):
-    """The middle of a picture, where the Moon is, for lining things up."""
-    h, w = image.shape[:2]
-    y, x = max(0, (h - size) // 2), max(0, (w - size) // 2)
-    return image[y:y + size, x:x + size]
-
-
-def channels_lined_up(rgb):
-    """Red and blue moved onto green: low in the sky the air spreads the
-    colours a pixel or two apart, which turned up shows as coloured rims."""
-    rgb = np.asarray(rgb, dtype=np.float32)
-    out = rgb.copy()
-    for c in (0, 2):
-        out[..., c] = ndimage.shift(rgb[..., c], phase_shift(_middle(rgb[..., 1]), _middle(rgb[..., c])),
-                                    order=1, mode="nearest")
-    return out
-
-
-def unclipped(image, ceiling=None, margin=0.8):
-    """Where no colour of a stack came near the top of the camera's range
-    (`ceiling`; none given, nothing counts as clipped): a clipped green turns
-    the colour magenta when it is turned up (30 October 2026: the 01:55
-    video was overexposed, every colour at 255 over the bright side). Well
-    short of the top, as a stack averages frames that clipped with ones the
-    seeing blurred below it: that video's brightest crater stacked to 237
-    of 255 at half its true brightness."""
-    image = np.asarray(image, dtype=np.float32)
-    brightest = image.max(axis=-1) if image.ndim == 3 else image
-    return np.ones(brightest.shape, bool) if ceiling is None else brightest < margin * ceiling
-
-
-def flattened(tint, where):
-    """`tint` with a flat slope across the disc taken off each colour: on 30
-    October 2026 red against green rose 2.3 % from the terminator to the limb
-    in both videos alike, five times the minerals' own 0.5 %, and turned up
-    it painted one side green and the other magenta."""
-    yy, xx = np.indices(where.shape)
-    if where.sum() < 3:
-        return tint
-    rows = np.c_[np.ones(where.sum()), xx[where], yy[where]]
-    out = tint.copy()
-    for k in range(tint.shape[-1]):
-        a, bx, by = np.linalg.lstsq(rows, tint[..., k][where], rcond=None)[0]
-        out[..., k] = tint[..., k] - (a + bx * xx + by * yy)
-    return out
-
-
-def blue_to_orange(tint):
-    """Only the part of `tint` running from blue to orange (red against
-    blue), where the Moon's minerals show: the titanium-rich seas bluer,
-    the iron-rich ones browner. Green against magenta is this camera's, not
-    the Moon's: its greens fill in from twice the pixels and clip first, and
-    on 30 October 2026 that axis, turned up, painted the highlands magenta
-    and the seas green."""
-    half = (tint[..., 0] - tint[..., 2]) / 2
-    return np.stack([half, np.zeros_like(half), -half], -1)
-
-
-FEATHER = 12.0            # pixels over which a stack fades out towards where it clipped
-
-
-def feathered(good, width=FEATHER):
-    """A 0-1 weight from `good`, fading to nothing a little inside its edge:
-    a hard edge left blotches where one stack dropped out and the others,
-    a touch darker or brighter, took over (30 October 2026)."""
-    if good.all():
-        return good.astype(np.float32)
-    inside = ndimage.binary_erosion(good, iterations=int(width), border_value=1)
-    return ndimage.gaussian_filter(inside.astype(np.float32), width / 2, mode="nearest")
-
-
-def mineral(colours, details, spread=MINERAL_SPREAD, blur=COLOUR_BLUR, ceiling=None):
-    """A "mineral Moon": the detail of `details` (stacks, any number,
-    averaged then sharpened) coloured by `colours` (RGB stacks, averaged)
-    with the Moon's faint colour turned up until its strongest reaches
-    `spread` of the brightness. Pixels a stack clipped are left out of it.
-    Everything is lined up on the first detail picture. Returns (picture,
-    how far the colour was turned up)."""
-    def level(a):
-        return np.asarray(a, dtype=np.float32).mean(axis=-1) if np.ndim(a) == 3 else np.asarray(a, np.float32)
-
-    def onto(a, shift):
-        return ndimage.shift(a, shift, order=1, mode="nearest")
-    base = level(details[0])
-    lit = base > 0.08 * np.percentile(base, 99.9)
-    detail, counted, brightest = np.zeros_like(base), np.zeros_like(base), np.zeros_like(base)
-    for d in details:
-        good = unclipped(d, ceiling)
-        d = level(d)
-        d = d / max(np.median(d[lit & good]) if (lit & good).any() else d.mean(), 1e-6)
-        shift = whole_shift(base, d)
-        weight = onto(feathered(good), shift)
-        moved = onto(d, shift)
-        detail += moved * weight
-        counted += weight
-        brightest = np.maximum(brightest, moved)
-    # where every stack clipped, the brightest of them is the nearest the
-    # truth: their average sat a grey blob in the brightest craters
-    blend = np.clip(counted, 0, 1)
-    detail = sharpen(blend * detail / np.maximum(counted, 1e-6) + (1 - blend) * brightest)
-    colour_sum, weights = np.zeros(base.shape + (3,), np.float32), np.zeros_like(base)
-    for c in colours:
-        good = unclipped(c, ceiling)
-        c = channels_lined_up(np.asarray(c, dtype=np.float32))
-        means = np.array([np.median(c[..., k][lit & good]) for k in range(3)])
-        c = c / np.maximum(means, 1e-6)
-        shift = whole_shift(base, level(c))
-        weight = onto(feathered(good), shift)
-        colour_sum += np.stack([onto(c[..., k], shift) for k in range(3)], -1) * weight[..., None]
-        weights += weight
-    grey = colour_sum.mean(axis=-1, keepdims=True)
-    tint = np.where(weights[..., None] > 0.5, colour_sum / np.maximum(grey, 1e-6) - 1, 0)
-    tint = blue_to_orange(flattened(tint, lit & (weights > 0.5)))
-    tint = np.stack([ndimage.gaussian_filter(tint[..., k], blur) for k in range(3)], -1)
-    inner = ndimage.binary_erosion(lit & (weights > 0.5), iterations=int(4 * blur) + 1)    # rims kept out
-    tint *= ndimage.gaussian_filter(inner.astype(np.float32), blur)[..., None]
-    reach = float(np.percentile(np.abs(tint[inner]), 99)) if inner.any() else 0.0
-    gain = spread / reach if reach > 1e-6 else 1.0
-    return np.clip(detail[..., None] * (1 + gain * tint), 0, None), gain
-
-
-def mineral_file(stems, out=None):
-    """The mineral Moon from lucky stacks named by their stem (the SER file
-    without .ser): colour from each one's largest share, detail from the
-    share it showed. Writes STEM-mineral.fits and .jpg beside the first."""
+def flat_for(path, shape):
+    """The flat for a video (its notes say the part of the sensor it read),
+    cut to that part; None when there is no flat for this camera setup.
+    Refused when the flat and the video cannot be made to match."""
+    import stacking
     from astropy.io import fits
-    colours, details = [], []
-    for stem in stems:
-        stem = Path(str(stem).removesuffix(".ser"))
-        done = json.loads(stem.with_suffix(".stack.json").read_text(encoding="utf-8"))
-        largest = max(done["kept"], key=float)
-        colours.append(fits.getdata(stem.with_name(f"{stem.name}.best{largest}.fits")))
-        details.append(fits.getdata(stem.with_name(f"{stem.name}.best{done['shown']}.fits")))
-        print(f"{stem.name}: colour from the best {largest} %, detail from the best {done['shown']} %", flush=True)
-    ceiling = 255.0 if max(float(np.max(c)) for c in colours) <= 255.5 else 65535.0    # 8- or 16-bit videos
-    image, gain = mineral(colours, details, ceiling=ceiling)
-    out = Path(out or Path(str(stems[0]).removesuffix(".ser")).with_name(Path(str(stems[0])).name.removesuffix(".ser")
-                                                                         + "-mineral.fits"))
-    fits.PrimaryHDU(image.astype(np.float32)).writeto(out, overwrite=True)
-    jpg = picture(image, out.with_suffix(".jpg"), balance=False)
-    print(f"colour turned up {gain:.0f} times: {jpg}", flush=True)
-    return jpg, gain
+    where = stacking.master_path("flat")
+    if not where.exists():
+        return None, None
+    flat = fits.getdata(where).astype(np.float32)
+    notes = Path(path).with_suffix(".json")
+    roi = json.loads(notes.read_text(encoding="utf-8")).get("roi") if notes.exists() else None
+    if roi:
+        x, y, w, h = roi
+        if x % 2 or y % 2:
+            raise SystemExit(f"{path}: its region starts on an odd pixel, so the flat's colours would not line up")
+        flat = flat[y:y + h, x:x + w]
+    if flat.shape != tuple(shape):
+        raise SystemExit(f"{path}: the flat ({where.name}) is {flat.shape[::-1]}, the video {tuple(shape)[::-1]}")
+    return np.maximum(flat, 1e-3), where
 
 
 @activity.during("Stacking the lucky frames", "{path}")
-def stack_file(path, keeps=KEEPS, in_colour=False, publish=True, pixels="green"):
+def stack_file(path, keeps=KEEPS, in_colour=False, publish=True, pixels="green", flat=False):
     """Stack a SER file for each share in `keeps`, keep every result beside
     it (unsharpened and sharpened, FITS and a picture), and show the sharpest
-    on the status page. Returns what was done, with the share shown."""
+    on the status page. With `flat`, each frame is divided by the flat
+    first. Returns what was done, with the share shown."""
     from astropy.io import fits
     path = Path(path)
     frames, code = read_ser(path)
     if code != SER_RGGB:
         raise SystemExit(f"{path}: only RGGB colour videos are read (colour ID {code})")
+    depth = ser_facts(path)[0]
+    white = 2 ** (config.hardware()["camera"]["bit_depth"] if depth >= 16 else depth) - 1
+    flat_path = None
+    if flat:
+        cut, flat_path = flat_for(path, frames.shape[1:])
+        if cut is None:
+            print("no flat for this camera setup (./calibrate.py flat): stacked without one", flush=True)
+        else:
+            frames = Flattened(frames, cut)
     print(f"{path.name}: {len(frames)} frames of {frames.shape[2]}x{frames.shape[1]}; "
           f"stacking the best {', '.join(f'{k:g}' for k in keeps)} %", flush=True)
     results, done = stack(frames, keeps=keeps, in_colour=in_colour, report=lambda line: print(line, flush=True),
@@ -652,6 +567,8 @@ def stack_file(path, keeps=KEEPS, in_colour=False, publish=True, pixels="green")
             snap.label("lucky stack", f"best {done['kept'][shown]} of {done['frames']} frames, "
                        f"{done['alignment_points']} alignment points", name="stack")
     done["shown"] = shown
+    done["white_level"] = white
+    done["flat"] = str(flat_path) if flat_path else None
     (path.with_suffix(".stack.json")).write_text(json.dumps(done, indent=1), encoding="utf-8")
     progress("done", frames=done["frames"], kept=done["kept"][shown], points=done["alignment_points"], share=shown)
     if publish:
@@ -737,6 +654,9 @@ def main():
     ap.add_argument("--pixels", choices=("green", "all"), default="green",
                     help="stack: the detail picture from the greens filled in, or every pixel balanced")
     ap.add_argument("--then-stack", action="store_true", help="capture: stack it straight after")
+    ap.add_argument("--flat", action="store_true", help="stack: divide each frame by the flat first (for colour)")
+    ap.add_argument("--detail", nargs="+", metavar="SER", help="mineral: stacked videos for the detail (default: the colour ones)")
+    ap.add_argument("--strength", default="standard", help="mineral: mild, standard, strong, auto, or a number")
     args = ap.parse_args()
     if args.command == "picture":
         from astropy.io import fits
@@ -744,17 +664,16 @@ def main():
             print(picture(fits.getdata(name), Path(name).with_suffix(".jpg")))
         return
     if args.command == "mineral":
-        jpg, gain = mineral_file(args.target)
-        import notify
-        notify.stack_ready(f"Mineral Moon from {len(args.target)} videos, colour turned up {gain:.0f} times", jpg)
+        import mineral
+        mineral.run(args.target, details=args.detail, strength=args.strength)
         return
     args.target = args.target[0]
     if args.command == "capture":
         path = capture(args.target, args.frames, args.exposure, args.gain, roi=args.roi, depth=args.depth)
         if args.then_stack:
-            stack_file(path, keeps=args.keep, in_colour=args.colour, pixels=args.pixels)
+            stack_file(path, keeps=args.keep, in_colour=args.colour, pixels=args.pixels, flat=args.flat)
     else:
-        stack_file(args.target, keeps=args.keep, in_colour=args.colour, pixels=args.pixels)
+        stack_file(args.target, keeps=args.keep, in_colour=args.colour, pixels=args.pixels, flat=args.flat)
 
 
 if __name__ == "__main__":

@@ -5,7 +5,6 @@ import json
 import numpy as np
 
 import liveview
-import lunar
 
 
 class Scope:
