@@ -330,6 +330,22 @@ asked for the move back to be tried rather than assumed impossible, so a
 walk-in that ends past its best now makes that one move out, measures, and
 says whether the drawtube rose (`back_out` in its result). On 23 October 2026 a `--motor` sweep on guessed sizes, stopped twice part way, left the drawtube about an inch from the line and lost the night ([the record](nights/2026-10-23/focus-runaway.md)): the sweep is now refused, and every move is held within `[focuser] travel`.
 
+### 30 October 2026, evening: it lifts again
+
+With the camera on the drawtube, the motor turned the focuser outward:
+two moves of 64 half-steps (felt on the other knob as a small turn each),
+then five of 512, 2,688 half-steps in all, and the person judged the knob
+went over half a turn uphill without a stop. Two things had changed since
+21–22 October, so either may be the cure:
+
+- The person found a group of six bent pins on the far side of the board
+  that may have been touching each other, and straightened them.
+- The Nano was plugged into the powered USB 3.2 hub (Realtek `0bda:0411`,
+  its own supply) instead of the laptop.
+
+A move outward with the Nano back on the laptop's own port would tell
+them apart.
+
 ### Finding where the turn is lost (`./focuser.py load-test`)
 
 In daylight, on the telescope with the camera on: the blacked stick and the
