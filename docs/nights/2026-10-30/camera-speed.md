@@ -28,10 +28,30 @@ The ladder stops at the fastest speed that keeps every frame, so speeds 1 and
 - It is a short test: the lost frames came partway through a night's run
   before.
 
-**Decision, 03:20:** back to readout speed 2 (`readout_speed = 2` in
+**Decision, 03:20:** back to readout speed 2 (superseded at 10:30 the same day, [below](#the-fault-back-indoors-30-october-1030)) (`readout_speed = 2` in
 config.toml) until the fault reappears, on the person's word. If a run loses
 frames again, go back to 0 with `camera_test.py --speed-ladder --keep-best`.
 
 At 02:59 one of the laptop's USB controllers dropped for a moment, taking the
 camera and the focuser with it ("the camera was unplugged" ended the M34 run);
 both came back. The test above ran after it.
+
+## The fault back, indoors, 30 October 10:30
+
+The same test the next morning, the camera indoors in the warm, having come
+in from the night:
+
+| Test | Result |
+|---|---|
+| `camera_test.py --speed-ladder --exposure 16 --frames 8` | speed 2: **0 of 8**; speed 1: **0 of 8**; speed 0: **8 of 8** |
+
+Each lost frame never came at all (none within 108 s of a 16 s exposure).
+
+- Eight hours after 8 of 8 at speed 2 outside, the same camera lost every
+  frame at speeds 2 and 1, warm and dry. So cold is not what brings the
+  fault on: it came in the warm. The fault is intermittent, from one test
+  to the next, as on 26 October.
+- **Decision:** back to readout speed 0 (`readout_speed = 0`), as agreed
+  at 03:20 for when the fault came back.
+- Next: speed 0 at 60, 120 and 300 s frames, the lengths guiding will need
+  (the guide camera is on its way).
