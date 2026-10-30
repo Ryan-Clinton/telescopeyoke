@@ -75,3 +75,16 @@ had lost every 16 s frame:
   intermittent, and that a pass at speed 2 says nothing about the next test.
 - `--speed-ladder` now takes `--speeds` (only those are tried), with a test.
 
+## Long frames at speed 0, 30 October 12:31 to 13:22
+
+The same five frames each, now at speed 0, the setting in use:
+
+| Frames | Speed 0 |
+|---|---|
+| 5 × 60 s | **5 of 5** |
+| 5 × 120 s | **5 of 5** |
+| 5 × 300 s | **5 of 5** |
+
+- Guided exposures of one to five minutes arrive at speed 0, so guiding
+  needs no change to the main camera's readout.
+
