@@ -32,10 +32,15 @@ def run_active(since=0.0, seconds=45):
     return any(p.stat().st_mtime > since and time.time() - p.stat().st_mtime < seconds for p in logs)
 
 
+# The activity lines of a lucky-imaging video that has the camera; stacking
+# one does not use it.
+VIDEO = ("Taking a lucky-imaging video", "Imaging the Moon")
+
+
 def video_active():
     """Whether a lucky-imaging video (lucky.py, ./ty moon) has the camera:
     it keeps no frames.jsonl for run_active to see."""
-    return any(activity.PHASES.get(e.get("what")) == "lucky" for e in activity.now())
+    return any(e.get("what") in VIDEO for e in activity.now())
 
 
 def main():

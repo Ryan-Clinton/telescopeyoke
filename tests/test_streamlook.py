@@ -384,5 +384,5 @@ def test_the_live_view_goes_on_air_with_its_newest_frame(tmp_path, monkeypatch):
     # It gives the camera up to a Moon video, which keeps no frames.jsonl.
     monkeypatch.setattr(activity, "now", lambda: [{"what": "Taking a lucky-imaging video"}])
     assert liveview.video_active()
-    monkeypatch.setattr(activity, "now", lambda: [{"what": "Live view"}])
-    assert not liveview.video_active()
+    monkeypatch.setattr(activity, "now", lambda: [{"what": "Live view"}, {"what": "Stacking the lucky frames"}])
+    assert not liveview.video_active()                  # a stack in the background leaves the camera free
