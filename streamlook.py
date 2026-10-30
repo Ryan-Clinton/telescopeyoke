@@ -257,15 +257,19 @@ PANEL_BOX = (MARGIN_X + 1274 + 24, MARGIN_Y + 50, WIDTH - 2 * MARGIN_X - 1274 - 
 
 def sky_area(c, s, stack, single):
     x, y, w, h = STACK_BOX
-    if stack is None and (s.get("lucky") or s.get("live")) and single is not None:
-        # A lucky-imaging video or the live view: its newest frame is the picture.
-        stack = single
+    if (s.get("lucky") or s.get("live")) and single is not None:
+        # A lucky-imaging video or the live view: its newest frame is the
+        # picture, not an earlier run's stack beside it.
+        stack, single = single, None
+    # The Moon is its own light: the sky stretch, which sets the black point
+    # from the picture's background, turned it black (30 October 2026).
+    look = (lambda p, role: p) if s.get("kind") == "moon" else (lambda p, role: display(p, role=role))
     if stack is None:
         c.box((x, y, x + w, y + h), "panel")
         c.text((x + w // 2, y + h // 2), "The picture builds up after the first few exposures",
                "sans", 25, "secondary", on="panel", anchor="mm")
         return
-    shown = fit(display(shrunk(stack, (w, h)), role="stack"), (w, h))
+    shown = fit(look(shrunk(stack, (w, h)), "stack"), (w, h))
     age = s.get("last_age") or 0
     if age > 120:
         # Paused: a little dimmer and greyer, so it reads as waiting, not broken.
@@ -291,7 +295,7 @@ def sky_area(c, s, stack, single):
     if single is not None:
         iw, ih = 300, 200
         ix, iy = x + w - iw - 20, y + h - ih - 20
-        c.image.paste(fit(display(shrunk(single, (iw, ih)), role="single"), (iw, ih)), (ix, iy))
+        c.image.paste(fit(look(shrunk(single, (iw, ih)), "single"), (iw, ih)), (ix, iy))
         c.box((ix, iy, ix + iw, iy + ih), None, outline="secondary", width=2, radius=4)
         under = plate(c, (ix, iy - 32, ix + iw, iy - 4), 0.7)
         exposure = s.get("exposure")
@@ -1550,6 +1554,7 @@ def from_status(st, now=None, session=None):
         except OSError:
             s["last_age"] = None
         s["exposure"], s["stage"], s["next"] = None, None, None
+        s["combined"] = s["kept"] = None
         s["live"] = live_now()
     import sky
     if (st.get("object_kind") or sky.object_kind(name)) == "moon":

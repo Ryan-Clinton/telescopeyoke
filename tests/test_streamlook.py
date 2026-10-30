@@ -390,3 +390,16 @@ def test_the_live_view_goes_on_air_with_its_newest_frame(tmp_path, monkeypatch):
     assert liveview.video_active()
     monkeypatch.setattr(activity, "now", lambda: [{"what": "Live view"}, {"what": "Stacking the lucky frames"}])
     assert not liveview.video_active()                  # a stack in the background leaves the camera free
+
+
+def test_the_moon_is_drawn_as_it_is_not_stretched_black():
+    """30 October 2026: the sky stretch set its black point from a frame the
+    Moon filled, and the stream showed a black box."""
+    from PIL import Image, ImageDraw
+    moon = Image.new("RGB", (400, 300), (0, 0, 0))
+    ImageDraw.Draw(moon).ellipse((60, 10, 340, 290), fill=(190, 190, 185))
+    s = {"kind": "moon", "lucky": True, "last_age": 2}
+    c = streamlook.Canvas()
+    streamlook.sky_area(c, s, Image.new("RGB", (400, 300), (5, 5, 5)), moon)
+    x, y, w, h = streamlook.STACK_BOX
+    assert sum(c.image.getpixel((x + w // 2, y + h // 2))) > 450     # the bright disc, from the newest frame
