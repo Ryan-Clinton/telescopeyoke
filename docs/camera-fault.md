@@ -56,7 +56,8 @@ setting, and whether the USB 3 link power states U1 and U2 are in use).
 | 30 Oct 17:09 | Same | 50 × 16 s at speed 2 | After about 2 minutes the camera refused its first setting (`put_AutoExpoEnable`) when reopened: SDK error **0x8000FFFF**, never seen before |
 | 30 Oct 17:11 and 17:12 | Same | 2 s at speed 2, then 3 × 2 s at speed 0 | **Would not open at either speed**, same error. No USB error in the kernel log |
 | 30 Oct 17:13 | Same | 50 × 16 s at speed 2 | Opened normally by itself, then the same error at 17:15. The library's replug (new in `altair.py`) was tried |
-| 30 Oct 17:15:04 to 17:15:46 | Same | | **The camera stopped answering USB itself.** The kernel: `device descriptor read/8, error -110` (timed out), a reset, a disconnect, then four tries to find it again, each timing out. It was gone from USB until unplugged by hand |
+| 30 Oct 17:15:04 to 17:15:46 | Same | | **The camera stopped answering USB itself.** The kernel: `device descriptor read/8, error -110` (timed out), a reset, a disconnect, then four tries to find it again, each timing out, and two more from 17:16:02. It was gone from USB until the person cut its power with the hub's port button |
+| 30 Oct 17:16:23 | Same, after the hub's port button was pressed twice | | **Back** at 5000 Mb/s: cutting the camera's power brought it back where the library's replug (a software reset) could not |
 
 ## What is ruled out
 
