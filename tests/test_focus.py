@@ -793,7 +793,7 @@ def test_a_walk_in_past_its_best_tries_the_one_move_back_out():
     """24 October 2026: it ended 24 half-steps inside the best, 2.55 against
     2.16; the person asked for the move back to be tried, not assumed."""
     tube = Drawtube(best=-300, slope=40, sharp=1.6, reach=600, noise=0.02)
-    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet)
+    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet, slack=0)
     inward, last = tube.moves[:-1], tube.moves[-1]
     assert all(step < 0 for step in inward) and last == result["back_out"]["steps"] > 0
     assert result["back_out"]["lifted"] and result["ended_at"] == result["best_at"]
@@ -804,6 +804,22 @@ def test_a_walk_in_past_its_best_tries_the_one_move_back_out():
     tube = Stuck(best=-300, slope=40, sharp=1.6, reach=600, noise=0.02)
     result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet)
     assert not result["back_out"]["lifted"] and result["ended_at"] < result["best_at"]
+
+
+def test_the_move_back_out_takes_up_the_gears_slack_first():
+    """30 October 2026: the motor lifted the drawtube with the camera on, but
+    a move back of only the steps past the best is lost in the gears' slack.
+    Out past the best by the slack, then in to it, lands on the best."""
+    tube = Drawtube(best=-300, slack=128, slope=40, sharp=1.6, reach=600, noise=0.02)
+    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet, slack=128)
+    steps = result["back_out"]["steps"]
+    assert tube.moves[-2:] == [steps + 128, -128]
+    assert result["back_out"]["lifted"] and result["ended_at"] == result["best_at"] == tube.at
+    assert abs(tube.tube - tube.best) <= 16
+
+    tube = Drawtube(best=-300, slack=128, slope=40, sharp=1.6, reach=600, noise=0.02)
+    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet, slack=0)      # the old way
+    assert not result["back_out"]["lifted"]
 
 
 def test_walking_in_stops_on_a_reading_that_stays_empty_and_never_jumps():
@@ -848,7 +864,7 @@ def test_walking_in_from_doughnuts_comes_in_until_the_stars_measure():
     no HFR measures, and the walk-in refused to start."""
     tube = Drawtube(best=-1200, slope=40, sharp=1.6, reach=400, noise=0.02)
     rings = lambda frames: 10 + abs(tube.tube - tube.best) / 20
-    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet, ring=rings)
+    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet, slack=0, ring=rings)
     assert all(step < 0 for step in tube.moves[:-1]) and tube.moves[-1] == result["back_out"]["steps"]
     assert abs(result["best_at"] + 1200) <= 32
 
@@ -865,7 +881,7 @@ def test_walking_in_keeps_small_steps_past_the_best():
     """21 October 2026: a bad reading past the best (3.73 after 2.85) went
     back to 32-step moves and the run ended 80 half-steps inside focus."""
     tube = Drawtube(best=-300, slope=40, sharp=2.0, reach=600, noise=0.02)
-    focus.walk_in(tube, tube.read, usual=2.0, say=quiet)
+    focus.walk_in(tube, tube.read, usual=2.0, say=quiet, slack=0)
     past = [step for step, at in zip(tube.moves, itertools.accumulate(tube.moves)) if at < -300]
     assert past and all(-step <= 16 for step in past)
 

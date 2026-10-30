@@ -1150,7 +1150,7 @@ def find_stars(motor, read, usual, say=progress, stride=2048, turns=2, ring=None
 
 def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, closest=8, switch=8.0, near=1.5,
             close=1.15, most=160, tries=3, patience=3, spike=1.8, ring=None, ring_step=128, ring_most=4096,
-            live=None, back_out=True):
+            live=None, back_out=True, slack=None):
     """Focus from a little outside it, moving only inward, a few half-steps
     at a time, measuring after each, until the stars have been worse three times
     running after their best; returns {"best_hfr", "best_at", "ended_at",
@@ -1172,7 +1172,13 @@ def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, clo
     drawtube: 24 October 2026, it ended 24 half-steps inside the best (2.55
     against 2.16), and the person asked for that move to be tried rather
     than assumed impossible. The result gains "back_out": {"steps", "hfr",
-    "lifted"}, and "ended_at" and "ended_hfr" are where it then is."""
+    "lifted"}, and "ended_at" and "ended_hfr" are where it then is. The move
+    back goes out past the best by the gears' `slack` (the measured
+    backlash, or BACKLASH) and then in to it, so the slack is taken up both
+    ways and the drawtube is left resting on the gears' inward side: a move
+    of only the 24 to 48 half-steps it had gone past was lost in the slack
+    before the drawtube could rise. On 30 October 2026 the motor lifted the
+    drawtube with the camera on over half a turn, so it is worth trying."""
     def reading():
         for _ in range(tries):
             hfr = sample(read, SWEEP_FRAMES, usual)["hfr"]
@@ -1243,7 +1249,12 @@ def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, clo
     result = {"best_hfr": best, "best_at": best_at, "ended_at": at, "ended_hfr": now, "readings": readings}
     if back_out and now is not None and at < best_at:
         steps = best_at - at
-        motor.move(steps)
+        slack = focuser_settings()["backlash"] if slack is None else slack
+        live.stage("lifting back")
+        say(f"  out {steps + slack} past the best, then in {slack} to it, to take up the gears' slack")
+        motor.move(steps + slack)
+        if slack:
+            motor.move(-slack)
         back = reading()
         lifted = back is not None and back < 0.9 * now
         say(f"  back out {steps} to the best: HFR {back if back is not None else 'none'} "
@@ -1475,7 +1486,8 @@ def run_motor(args, mode="focus"):
         port = focuser.find_port()
         print(f"Would turn the focuser on {port} inward only, 64, 32 then 16 half-steps at a time at {WALK_MS} ms a "
               f"half-step, {SWEEP_FRAMES} frames after each, until the stars have been worse three times after their "
-              "best. Start it a little outside focus, where the stars still measure. The mount does not move.")
+              "best, then back out past the best by the gears' slack and in to it. Start it a little outside focus, "
+              "where the stars still measure. The mount does not move.")
         return {"would_move": True, "port": port, "usual_hfr": round(usual, 2), "walk_ms": WALK_MS}
     if args.dry_run:
         port = focuser.find_port()
