@@ -927,6 +927,7 @@ def test_the_speed_ladder_keeps_the_fastest_speed_that_loses_no_frame(monkeypatc
     answer = camera_test.speed_ladder(16, 1500, frames=3, keep=True, say=lambda s: None)
     assert answer["best"] == 0 and saved == {("camera", "readout_speed"): 0}
     assert [r["arrived"] for r in answer["speeds"]] == [0, 0, 3]
+    assert [r.get("tried") for r in answer["speeds"]] == [1, 1, None]
     assert tried[-3:] == [(0, 16)] * 3
 
 

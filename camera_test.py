@@ -459,8 +459,10 @@ def speed_ladder(exposure, gain, frames=3, keep=False, say=print, speeds=None):
                     cam.frame(exposure)
                     arrived += 1
             except Exception as problem:
-                say(f"  speed {level}: {arrived} of {frames} arrived ({problem})")
-                rows.append({"speed": level, "arrived": arrived, "failed": str(problem)})
+                # the first frame lost ends that speed: on 30 October 2026 "0 of 8" was read as eight lost
+                say(f"  speed {level}: frame {arrived + 1} of {frames} lost ({problem}); "
+                    f"{arrived} arrived before it, the rest not tried")
+                rows.append({"speed": level, "arrived": arrived, "tried": arrived + 1, "failed": str(problem)})
                 continue
             say(f"  speed {level}: {frames} of {frames} arrived")
             rows.append({"speed": level, "arrived": arrived})

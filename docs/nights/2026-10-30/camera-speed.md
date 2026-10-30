@@ -1,5 +1,7 @@
 # Speed 2 after a night outside, 30 October 2026
 
+The whole fault, all dates, is in [camera-fault.md](../../camera-fault.md).
+
 At 03:09, after a night outside (the Moon in colour and M34, 23:30 to 03:00),
 with the camera still on the scope in the garden:
 
@@ -28,7 +30,7 @@ The ladder stops at the fastest speed that keeps every frame, so speeds 1 and
 - It is a short test: the lost frames came partway through a night's run
   before.
 
-**Decision, 03:20:** back to readout speed 2 (superseded at 10:30 the same day, [below](#the-fault-back-indoors-30-october-1030)) (`readout_speed = 2` in
+**Decision, 03:20:** back to readout speed 2 (superseded at 10:46 the same day, [below](#the-fault-back-indoors-30-october-1046)) (`readout_speed = 2` in
 config.toml) until the fault reappears, on the person's word. If a run loses
 frames again, go back to 0 with `camera_test.py --speed-ladder --keep-best`.
 
@@ -36,19 +38,23 @@ At 02:59 one of the laptop's USB controllers dropped for a moment, taking the
 camera and the focuser with it ("the camera was unplugged" ended the M34 run);
 both came back. The test above ran after it.
 
-## The fault back, indoors, 30 October 10:30
+## The fault back, indoors, 30 October 10:46
 
 The same test the next morning, the camera indoors in the warm, having come
-in from the night:
+in from the night (unplugged at 03:18, plugged into the laptop's port 2-5 at
+10:45:40):
 
 | Test | Result |
 |---|---|
-| `camera_test.py --speed-ladder --exposure 16 --frames 8` | speed 2: **0 of 8**; speed 1: **0 of 8**; speed 0: **8 of 8** |
+| `camera_test.py --speed-ladder --exposure 16 --frames 8` | speed 2: **first frame lost**; speed 1: **first frame lost**; speed 0: **8 of 8** |
 
-Each lost frame never came at all (none within 108 s of a 16 s exposure).
+The lost frames never came at all (none within 108 s of a 16 s exposure).
+The test stops a speed at its first lost frame, so at speeds 2 and 1 one
+frame each was tried, not eight: it printed "0 of 8", which read as eight
+lost. It now says how many it tried.
 
 - Eight hours after 8 of 8 at speed 2 outside, the same camera lost every
-  frame at speeds 2 and 1, warm and dry. So cold is not what brings the
+  frame it tried at speeds 2 and 1, warm and dry. So cold is not what brings the
   fault on: it came in the warm. The fault is intermittent, from one test
   to the next, as on 26 October.
 - **Decision:** back to readout speed 0 (`readout_speed = 0`), as agreed
@@ -60,8 +66,9 @@ Each lost frame never came at all (none within 108 s of a 16 s exposure).
 
 Five frames each of 60, 120 and 300 s, for the exposures guiding will
 allow. They were meant for speed 0, but `--speed-ladder` ignored `--speeds`
-and tried speed 2 first, so they ran at **speed 2**, an hour after speed 2
-had lost every 16 s frame:
+and tried speed 2 first, so they ran at **speed 2**, about a quarter of an
+hour after speed 2 had lost a 16 s frame, with the camera plugged in
+throughout:
 
 | Frames | Speed 2 |
 |---|---|
@@ -69,8 +76,8 @@ had lost every 16 s frame:
 | 5 × 120 s | **5 of 5** |
 | 5 × 300 s | **5 of 5** |
 
-- Fifteen long frames at speed 2 all arrived, 30 to 90 minutes after the
-  16 s frames at speed 2 were all lost. The fault came and went within the
+- Fifteen long frames at speed 2 all arrived, starting about 15 minutes
+  after a 16 s frame at speed 2 was lost. The fault came and went within the
   morning, indoors, with nothing changed: more evidence that it is
   intermittent, and that a pass at speed 2 says nothing about the next test.
 - `--speed-ladder` now takes `--speeds` (only those are tried), with a test.
@@ -91,15 +98,15 @@ The same five frames each, now at speed 0, the setting in use:
 
 ## 16 s at speed 2 again, 30 October 14:40
 
-The camera was unplugged at 14:31 and plugged back in, then the 16 s test
+The camera was unplugged at 14:31 and plugged into port 2-1 at 14:37, then the 16 s test
 was run again at speed 2 alone (`--speeds 2`):
 
 | Frames | Speed 2 |
 |---|---|
 | 8 × 16 s | **8 of 8** |
 
-- At 16 s, speed 2 lost every frame at 10:30 and kept every frame at 14:40.
+- At 16 s, speed 2 lost a frame at 10:46 and kept every frame at 14:40.
   The fault is not about the length of the frame: it comes and goes.
-- The camera was unplugged and plugged back in just before this pass, so the
-  fault may clear when the camera is power-cycled. That is not yet tested.
+- It does not need the camera unplugged to clear: it had already gone by
+  11:02, with the camera plugged in from 10:45 to 14:31.
 - The camera stays at speed 0.

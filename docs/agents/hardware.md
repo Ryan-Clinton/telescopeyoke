@@ -61,8 +61,8 @@ What was seen:
   comes back before its shutter could have closed.
 - **Readout speed 2, the highest and the camera's own setting, is the
   quickest.** For a 1 s exposure a frame took 17.3 s at speed 0, 11.7 s at
-  speed 1 and 8.7 s at speed 2. `[camera] readout_speed` is therefore left
-  unset. Grain was not compared: the sensor was in room light and burnt out.
+  speed 1 and 8.7 s at speed 2. `[camera] readout_speed` was therefore left
+  unset, until the lost-frame fault: it is 0 now ([camera-fault.md](../camera-fault.md)). Grain was not compared: the sensor was in room light and burnt out.
 - **The slow frames are the camera on USB 2, not INDI.** Triggered one at a
   time, a 0.1 s exposure arrives in 3.5 s and a 1 s exposure in 8.7 s,
   much as through INDI on Linux (about 4 s plus five times the exposure).

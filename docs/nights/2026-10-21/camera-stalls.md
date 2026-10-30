@@ -1,6 +1,7 @@
 # 21 October 2026: the camera stalls on a warm camera and a short lead
 
-For Altair ticket #3470 ([docs/banding.md](../../banding.md)).
+For Altair ticket #3470 ([docs/banding.md](../../banding.md)). The whole fault, all dates, is in
+[camera-fault.md](../../camera-fault.md).
 
 The camera had been **indoors all day**. It went out at about 23:00, so it
 was warm for the whole of this. INDI driver (`indi_altair_ccd`), on Ubuntu.
