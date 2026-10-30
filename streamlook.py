@@ -694,22 +694,6 @@ def between(c, s, stack):
         ribbon(c, s["tonight"], HEIGHT - MARGIN_Y - 70)
 
 
-def end_card(c, s, stack):
-    e = s["end"]
-    if stack is not None:
-        c.image.paste(fit(display(shrunk(stack, (900, 640))), (900, 640)), (WIDTH - MARGIN_X - 900, 220))
-    x, y = MARGIN_X + 40, 160
-    c.text((x, y), "THE NIGHT'S RESULT", "bold", 24, "secondary")
-    c.text((x, y + 40), "TONIGHT COMPLETE", "bold", 48, "text")
-    y += 130
-    width = (WIDTH - MARGIN_X - 900 - 40) - x if stack is not None else WIDTH - MARGIN_X - x
-    for line in e["lines"]:
-        if y > HEIGHT - MARGIN_Y - 130:
-            break                     # what does not fit is left off, never drawn over the footer
-        y = c.wrap((x, y), line, "sans", 28, width, "text", gap=1.25) + 12
-    c.text((x, HEIGHT - MARGIN_Y - 60), "TELESCOPEYOKE", "bold", 26, "accent")
-
-
 def open_card(c, s, stack):
     """The night opens: tonight's plan, before anything else on air."""
     if stack is not None:
@@ -1057,9 +1041,6 @@ def compose(state, stack=None, single=None):
         between(c, state, stack)
         footer(c, state)
         return c
-    if state["kind"] == "end":
-        end_card(c, state, stack)
-        return c
     if state["kind"] == "open":
         open_card(c, state, stack)
         footer(c, state)
@@ -1124,12 +1105,6 @@ def examples(now=None):
                                 ("M31 P6 second look", "open")]},
         "candidate": {**patrol, "patrol": {**patrol["patrol"], "possible": 1},
                       "candidate": {"stage": "second"}},
-        "end": {"kind": "end", "target": "M31", "now": now,
-                "end": {"lines": ["6 fields observed: M31-P1, M31-P2, M31-P3, M31-P5, M31-P6, WASP-12",
-                                  "742 frames kept", "8 M31 panels searched", "no possible changes",
-                                  "sharpest focus tonight: HFR 2.19",
-                                  "polar alignment: 9.6° → 1.2° from the pole in 5 rounds",
-                                  "next: 3 candidates open for a person to check"]}},
         "open": {"kind": "open", "target": "", "now": now, "open": {"lines": [
             ("THE SKY", "forecast GO, 20% cloud on average"), ("CLEAR SPELL", "21:00 to 03:00 UTC, about 6 h"),
             ("DARK", "astronomical darkness from 18:50 to 04:40 UTC"),

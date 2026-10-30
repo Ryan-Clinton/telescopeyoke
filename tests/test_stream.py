@@ -2,6 +2,7 @@
 goes, what is in the picture, and that the stream key never shows."""
 import config
 import stream
+import streamlook
 
 
 def test_it_starts_when_a_run_is_imaging_and_stops_after_quiet():
@@ -149,13 +150,15 @@ def test_the_settings_form_can_choose_both():
     assert stream.services({"service": config.checked("stream", "service", "youtube+twitch")}) == ["youtube", "twitch"]
 
 
-def test_it_stays_on_air_between_targets_and_holds_the_end_card():
+def test_it_stays_on_air_between_targets_and_stops_at_once_when_the_night_is_over():
+    """No end-of-night card: its figures came from the last run's status and
+    were often another night's (30 October 2026)."""
     quiet = {"name": "WASP-12", "age": 400}
     action, since = stream.decide(True, quiet, None, 0, between=True)
     assert action == "carry on"
     assert stream.decide(True, quiet, 0, 10 * stream.STOP_S, between=True)[0] == "carry on"
-    assert stream.decide(True, quiet, 0, stream.END_S - 1, ending=True)[0] == "carry on"
-    assert stream.decide(True, quiet, 0, stream.END_S, ending=True)[0] == "stop"
+    assert stream.decide(True, quiet, None, 0, ending=True)[0] == "stop"
+    assert not hasattr(stream, "end_lines") and not hasattr(streamlook, "end_card")
 
 
 def test_the_next_step_due_soon_and_the_night_over_come_from_the_schedule():
@@ -165,7 +168,7 @@ def test_the_next_step_due_soon_and_the_night_over_come_from_the_schedule():
     assert stream.night_over(over) and not stream.night_over(soon) and not stream.night_over({})
 
 
-def test_a_moon_video_is_shown_not_the_end_card_after_the_schedule_is_over():
+def test_a_moon_video_keeps_the_stream_on_after_the_schedule_is_over():
     over = {"name": "Moon", "age": 9000, "schedule": {"steps": [{"label": "a", "status": "done"}]}}
     assert stream.night_ending(over, between=False, active=False)
     assert not stream.night_ending(over, between=False, active=True)        # a lucky-imaging video going on
@@ -417,33 +420,6 @@ def test_the_night_opens_card_draws(monkeypatch):
     monkeypatch.setattr(stream, "pictures", lambda st=None: (None, None))
     picture = stream.frame({"night_brief": brief()}, 1000.0, "open")
     assert picture.size == (stream.WIDTH, stream.HEIGHT)
-
-
-def test_the_night_s_result_adds_focus_polar_and_what_is_next(monkeypatch, tmp_path):
-    import json
-    import time
-
-    import focus
-    import polaralign
-    now = time.time()
-    monkeypatch.setattr(focus, "RUNS_FILE", tmp_path / "runs.jsonl")
-    (tmp_path / "runs.jsonl").write_text(json.dumps({"saved": now - 3600, "best_hfr": 2.19}) + "\n")
-    monkeypatch.setattr(polaralign, "STREAM_FILE", tmp_path / "polar.json")
-    (tmp_path / "polar.json").write_text(json.dumps({"stage": "complete", "updated": now, "ended": now - 3600,
-                                                     "rounds": [{"total_deg": 9.6, "measured": now - 4000},
-                                                                {"total_deg": 1.2, "measured": now - 3600}]}))
-    st = {"discovery": {"sessions": [{"field": "M31-P5", "kept": 40}, {"field": "M31-P6", "kept": 30,
-                                                                       "unexplained": 1}],
-                        "open_candidates": 3}}
-    lines = stream.end_lines(st, now)
-    assert lines[0] == "2 fields observed: M31-P5, M31-P6" and lines[1] == "70 frames kept"
-    assert "1 possible change, kept for checking" in lines
-    assert "sharpest focus tonight: HFR 2.19" in lines
-    assert "polar alignment: 9.6° → 1.2° from the pole in 2 rounds" in lines
-    assert lines[-1] == "next: 3 candidates open for a person to check"
-    (tmp_path / "runs.jsonl").unlink()
-    (tmp_path / "polar.json").unlink()
-    assert stream.end_lines({}, now) == ["0 fields observed", "0 frames kept", "no possible changes"]
 
 
 def test_a_moon_step_on_the_plan_opens_with_the_moon():

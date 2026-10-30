@@ -76,7 +76,6 @@ BREAKS = 3              # the stream breaking off this often within BREAKS_S at 
 BREAKS_S = 600
 TEST_S = 20             # Twitch's bandwidth test at the start: seconds of 1080p sent and not shown
 BETWEEN_S = 15 * 60     # stay on air between targets when the next step is due within this
-END_S = 120             # the end-of-night card is held this long
 MEASURE_S = 300         # a transit's light curve is measured again this often
 START_S = 120           # a run whose newest frame is younger than this is imaging
 LOOK_S = 2              # how often the focus and polar files are looked at while watching
@@ -224,11 +223,12 @@ def night_over(st):
 
 
 def night_ending(st, between, active):
-    """Whether to show the end-of-night card: no run imaging, nothing else
-    worth going on air for (a lucky-imaging video of the Moon, focusing, polar
-    alignment), no next step due, and the schedule run to its end. On 30
-    October 2026 a Moon video went out under the card, because a video keeps
-    no run status and the last schedule was long over."""
+    """Whether the night is done with the stream: no run imaging, nothing else
+    worth going on air for (a lucky-imaging video of the Moon, the live view,
+    focusing, polar alignment), no next step due, and the schedule run to its
+    end. The stream then stops at once: there is no end-of-night card, whose
+    figures came from the last run's status and were often another night's
+    (30 October 2026)."""
     return not imaging(st) and not active and not between and night_over(st)
 
 
@@ -265,8 +265,8 @@ def decide(streaming, st, quiet_since, now, between=False, ending=False, active=
     """("start" | "stop" | "carry on", quiet_since): start when a run is
     imaging, or when the observatory is focusing or polar aligning
     (`active`); carry on between targets while the schedule has more due
-    (`between`); hold the end card for END_S once the night is over
-    (`ending`); otherwise stop once nothing new has come for STOP_S."""
+    (`between`); stop at once when the night is over (`ending`); otherwise
+    stop once nothing new has come for STOP_S."""
     if imaging(st) or active:
         return ("carry on" if streaming else "start"), None
     if not streaming:
@@ -275,7 +275,7 @@ def decide(streaming, st, quiet_since, now, between=False, ending=False, active=
     if between:
         return "carry on", quiet_since
     if ending:
-        return ("stop" if now - quiet_since >= END_S else "carry on"), quiet_since
+        return "stop", quiet_since
     return ("stop" if now - quiet_since >= STOP_S else "carry on"), quiet_since
 
 
@@ -300,43 +300,6 @@ def pictures(st=None):
     except OSError:
         pass
     return stack, single
-
-
-def end_lines(st, now=None):
-    """The night's result: what was imaged and its figures, counted from
-    tonight's sessions only, then tonight's focus and polar alignment from
-    their own files, and the candidates still open for a person to check."""
-    import streamlook
-    now = now or time.time()
-    discovery = st.get("discovery") or {}
-    sessions = discovery.get("sessions") or []
-    fields = list(dict.fromkeys(s["field"] for s in sessions))
-    lines = [f"{len(fields)} fields observed" + (": " + ", ".join(fields[:6]) + (" …" if len(fields) > 6 else "")
-                                                if fields else ""),
-             f"{sum(s.get('kept') or 0 for s in sessions) + (st.get('accepted') or 0)} frames kept"]
-    for m in discovery.get("mosaics", []):
-        done = sum(p.get("state") == "done" for p in m["panels"])
-        lines.append(f"{done} {m['name']} panels searched")
-    possible = sum(1 for s in sessions if s.get("unexplained"))
-    lines.append(f"{possible} possible change{'s' if possible != 1 else ''}, kept for checking" if possible
-                 else "no possible changes")
-    try:
-        import focus
-        best = streamlook.tonight_best(None, now, focus.RUNS_FILE)
-        if best is not None:
-            lines.append(f"sharpest focus tonight: HFR {best:.2f}")
-        polar = streamlook.polar_stream_state(now)
-        rounds = (polar or {}).get("rounds") or []
-        if rounds:
-            lines.append(f"polar alignment: {rounds[0]['total_deg']:.1f}° → {rounds[-1]['total_deg']:.1f}° "
-                         f"from the pole in {len(rounds)} round{'s' if len(rounds) != 1 else ''}"
-                         if len(rounds) > 1 else f"polar alignment: {rounds[0]['total_deg']:.1f}° from the pole")
-    except Exception:                  # a figure not found is left out, never guessed
-        pass
-    still = discovery.get("open_candidates")
-    if still:
-        lines.append(f"next: {still} candidate{'s' if still != 1 else ''} open for a person to check")
-    return lines
 
 
 OPEN_S = 60               # the night-opens card is held this long when the stream first goes on air
@@ -498,8 +461,6 @@ def frame(st, now=None, mode="imaging"):
         state = {"kind": "open", "target": "", "now": now, "open": {"lines": open_lines(st["night_brief"], st)}}
     elif mode == "between":
         state = between_state(st, now)
-    elif mode == "end":
-        state = {"kind": "end", "target": st.get("name") or "", "now": now, "end": {"lines": end_lines(st, now)}}
     else:
         state = streamlook.from_status(st, now, session_of(st))
     canvas = streamlook.compose(state, stack, single)
@@ -854,9 +815,8 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
             between = not imaging(st) and runner_alive() and due_soon(st, now)
             ending = night_ending(st, between, active)
             action, quiet_since = decide(process is not None, st, quiet_since, now, between, ending, active)
-            mode = segment or ("imaging" if imaging(st) else ("between" if between else
-                                                              ("end" if ending else "imaging")))
-            if opening is not None and opening.showing(now) and mode != "end":
+            mode = segment or ("between" if between and not imaging(st) else "imaging")
+            if opening is not None and opening.showing(now):
                 # The night opens: tonight's plan before anything else, once a night.
                 st, mode = dict(st, night_brief=opening.brief), "open"
             composer.view = (st, mode)
@@ -886,8 +846,8 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                     tones = Tones(listen[1]).start()
                 passed_on(process, stream_keys, say)
             elif action == "stop":
-                say(f"{time.strftime('%H:%M')} nothing new for {(END_S if ending else STOP_S) // 60} minutes: "
-                    "stream stopped")
+                say(f"{time.strftime('%H:%M')} " + ("the night is over" if ending else
+                                                     f"nothing new for {STOP_S // 60} minutes") + ": stream stopped")
                 process.stdin.close()
                 tones = quiet(tones)
                 process.wait(timeout=30)

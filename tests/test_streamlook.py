@@ -20,7 +20,7 @@ def drawn():
 
 
 def test_each_state_draws_a_full_picture(drawn):
-    assert {"patrol", "transit", "between", "candidate", "end", "science", "coming-up", "explain-stacking",
+    assert {"patrol", "transit", "between", "candidate", "science", "coming-up", "explain-stacking",
             "explain-subtraction", "explain-nova", "explain-transit"} <= set(drawn)
     for canvas in drawn.values():
         assert canvas.image.size == (streamlook.WIDTH, streamlook.HEIGHT)
