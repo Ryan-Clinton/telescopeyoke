@@ -6,6 +6,12 @@ since 2026-10-06, indoors only so far), a USB webcam, Ubuntu 26.04.
 
 Quirks worth knowing before changing code:
 
+- **The camera goes through a powered USB 3.2 hub on two 1 m leads** (from
+  30 October 2026). The 3 m lead from the laptop to the hub made the camera
+  drop off USB within two minutes, even at readout speed 0; the hub's port
+  button brings a dropped camera back. Details: `docs/camera-fault.md`,
+  "Hubs and leads".
+
 - **The handset answers serial commands while still on its version screen,**
   and then moves the mount by wrong amounts. Its clock shows year 2022 until
   set up; `mount.py` refuses on that.

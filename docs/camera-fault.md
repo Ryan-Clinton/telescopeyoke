@@ -12,8 +12,40 @@ link stays at 5000 Mb/s. When it happens the frame is lost, not just late:
 none has come within 108 s of a 16 s exposure.
 
 **What is in use now:** readout speed 0 (`[camera] readout_speed = 0`), the
-slowest, which has never lost a frame. It costs about a second more per frame
-than speed 2.
+slowest, which has never lost a frame plugged in as below. It costs about a
+second more per frame than speed 2.
+
+## Hubs and leads: how to plug the camera in
+
+From 30 October 2026 the camera goes through a powered USB 3.2 hub (Realtek
+0bda:0411, its own power supply, a power button for each port). What was
+found that afternoon:
+
+| Laptop to hub | Hub to camera | Speed 0, 16 s | Speed 2, 16 s |
+|---|---|---|---|
+| 3 m lead | new 1 m lead | **failed within 2 minutes, three times** (two laptop ports, two hub ports) | failed |
+| new 1 m lead | old 1 m lead | **50 of 50** | **50 of 50** |
+| old 1 m lead | new 1 m lead | **50 of 50** | 720 frames (about 5 hours) running from 18:37 |
+| none: the 3 m lead straight into the camera | | every frame, all day | lost at 10:46, kept from 11:02 (the fault) |
+
+- **Use the two 1 m leads behind the hub, either way round. Never the 3 m
+  lead from the laptop to the hub.** The 3 m lead works straight into the
+  camera, but not into the hub. USB 3 is designed for about 3 m a lead and
+  the hub re-sends the signal, so it is that lead's length into the hub's
+  input, not the total. More reach between the laptop and the hub needs an
+  active (powered) USB 3 extension, not a longer plain lead.
+- **What the failure looks like.** About a minute or two in, the camera's
+  fan stops and the hub's light goes from steady to flashing. The program
+  reports "the camera would not be set up: SDK error 0x8000ffff" at any
+  speed; the kernel log shows `device descriptor read/8, error -110` and
+  resets, then the camera drops off USB.
+- **How to get it back.** Press the camera's port button on the hub twice
+  (off, then on): the light goes steady and the fan spins up. The library's
+  own replug (a software reset, which `altair.py` now tries once) could not
+  bring it back; cutting its power did.
+- **The lost-frame fault is separate.** It came and went plugged straight
+  in, with no hub. The hub results below say what the hub and leads do, not
+  what causes that fault.
 
 ## How to read the speed test
 
@@ -163,13 +195,10 @@ setting, and whether the USB 3 link power states U1 and U2 are in use).
 In order. Each says what it needs.
 
 1. **Stay at speed 0 for imaging.** It costs about a second a frame.
-2. **Through a powered USB 3 hub.** The camera is on a USB 3.2 hub now (16:43,
-   30 Oct) that says it is self-powered; whether its own supply is plugged
-   in is for the person to say.
-   `camera_test.py --speed-ladder --speeds 2 --exposure 16 --frames 50
-   --note "powered hub, port 2-5"`. If speed 2 holds through the hub, power
-   or signal conditioning moves up the list. Needs the person's go: it runs
-   the camera for about 20 minutes.
+2. **Through a powered USB 3 hub.** Done on 30 Oct (above): on the 1 m leads
+   speed 2 kept 50 of 50, and a 720-frame run of about 5 hours at speed 2
+   began at 18:37. If speed 2 holds through the hub for whole nights, power
+   or signal conditioning moves up the list of causes.
 3. **The ports, one at a time.** The same 50 frames of 16 s at speed 2 on
    each of the laptop's USB 3 ports in turn; the fault log records which.
    Needs the person's hands to move the plug.
