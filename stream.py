@@ -222,24 +222,6 @@ def night_over(st):
     return bool(steps) and all(s.get("status") in ("done", "failed", "skipped") for s in steps)
 
 
-EYEPIECE = True    # the stream is the newest camera frame, full screen, with no cards
-
-
-def latest_age(now=None):
-    """Seconds since the camera's newest picture (web/latest.jpg), or None."""
-    try:
-        return (now or time.time()) - (WEB / "latest.jpg").stat().st_mtime
-    except OSError:
-        return None
-
-
-def seeing(now=None):
-    """Whether the camera has a fresh picture: something to show through the
-    eyepiece, whatever is taking it (a run, a Moon video, the live view)."""
-    age = latest_age(now)
-    return age is not None and age < START_S
-
-
 def night_ending(st, between, active):
     """Whether the night is done with the stream: no run imaging, nothing else
     worth going on air for (a lucky-imaging video of the Moon, the live view,
@@ -309,14 +291,10 @@ def pictures(st=None):
     """The stack and the newest single frame; no stack when status.json
     says web/stack.jpg is an earlier run's (serve.stack_status)."""
     stack = single = None
-    if ((st or {}).get("stack") or {}).get("current") is not False:
-        try:
+    try:
+        if ((st or {}).get("stack") or {}).get("current") is not False:
             with Image.open(WEB / "stack.jpg") as im:
                 stack = im.convert("RGB")
-        except OSError:
-            pass
-    try:
-        # Read on its own: no stack must never cost the newest frame.
         with Image.open(WEB / "latest.jpg") as im:
             single = im.convert("RGB")
     except OSError:
@@ -471,11 +449,6 @@ def frame(st, now=None, mode="imaging"):
     import streamlook
     now = now or time.time()
     stack, single = pictures(st)
-    if EYEPIECE:
-        # What the telescope sees now, and nothing else (30 October 2026).
-        age = latest_age(now)
-        caption = st.get("name") if imaging(st) else ""
-        return streamlook.eyepiece(single, now, fresh=age is not None and age < START_S, caption=caption).image
     if mode in ("focus", "polar"):
         import streamstory
         found = (streamlook.focus_stream_state if mode == "focus" else streamlook.polar_stream_state)(now)
@@ -839,8 +812,6 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                 looked_at = now
                 if tones is not None and segment == "focus":
                     tones.hear(segment_state)
-            # On air whenever the camera sees something, whatever is taking the picture.
-            active = active or (EYEPIECE and seeing(now))
             between = not imaging(st) and runner_alive() and due_soon(st, now)
             ending = night_ending(st, between, active)
             action, quiet_since = decide(process is not None, st, quiet_since, now, between, ending, active)

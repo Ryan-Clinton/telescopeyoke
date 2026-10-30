@@ -694,25 +694,6 @@ def between(c, s, stack):
         ribbon(c, s["tonight"], HEIGHT - MARGIN_Y - 70)
 
 
-def eyepiece(single, now, fresh=True, caption=""):
-    """The stream as looking through the eyepiece (30 October 2026: "what
-    the scope is seeing", no cards): the newest camera frame filling the
-    screen, a bright object such as the Moon as it is and a starfield
-    through the sky stretch, with one quiet line along the bottom."""
-    c = Canvas()
-    c.image.paste(Image.new("RGB", (WIDTH, HEIGHT), (0, 0, 0)), (0, 0))
-    if single is not None:
-        bright = float((np.asarray(single.convert("L")) > 128).mean()) > 0.02
-        picture = shrunk(single, (WIDTH, HEIGHT))
-        c.image.paste(fit(picture if bright else display(picture, role="single"), (WIDTH, HEIGHT)), (0, 0))
-    line = "TELESCOPEYOKE · live from the telescope" + (f" · {caption}" if caption else "") + f" · {utc(now, seconds=True)}"
-    under = plate(c, (MARGIN_X - 12, HEIGHT - MARGIN_Y - 40, MARGIN_X + 14 * len(line) + 12, HEIGHT - MARGIN_Y), 0.55)
-    c.text((MARGIN_X, HEIGHT - MARGIN_Y - 34), line, "mono", 22, "text", on=under)
-    if fresh:
-        c.text((WIDTH - MARGIN_X, MARGIN_Y), "● LIVE", "bold", 22, "live", anchor="ra")
-    return c
-
-
 def open_card(c, s, stack):
     """The night opens: tonight's plan, before anything else on air."""
     if stack is not None:

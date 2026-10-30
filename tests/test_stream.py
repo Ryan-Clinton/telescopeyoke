@@ -428,24 +428,3 @@ def test_a_moon_step_on_the_plan_opens_with_the_moon():
     assert lines["TONIGHT: THE MOON"] == ("34% lit, waxing · coming up: close-up imaging → frame selection → "
                                           "final stack")
     assert "TONIGHT: THE MOON" not in dict(stream.open_lines(brief(), {}))
-
-
-def test_the_stream_is_what_the_telescope_sees_full_screen_with_no_cards(tmp_path, monkeypatch):
-    """30 October 2026: "like looking through the eyepiece of the telescope,
-    not night complete cards and stitching image cards"."""
-    import os
-    from PIL import Image, ImageDraw
-    monkeypatch.setattr(stream, "WEB", tmp_path)
-    moon = Image.new("RGB", (1360, 912), (0, 0, 0))
-    ImageDraw.Draw(moon).ellipse((380, 60, 980, 860), fill=(200, 200, 195))
-    moon.save(tmp_path / "latest.jpg")
-    now = (tmp_path / "latest.jpg").stat().st_mtime + 3
-    assert stream.seeing(now) and not stream.seeing(now + stream.START_S)
-    over = {"name": "M31", "age": 90000, "schedule": {"steps": [{"label": "M31", "status": "done"}]}}
-    picture = stream.frame(over, now, mode="between")
-    assert picture.size == (stream.WIDTH, stream.HEIGHT)
-    assert sum(picture.getpixel((stream.WIDTH // 2, stream.HEIGHT // 2))) > 450      # the Moon, mid-screen
-    # A fresh picture keeps the stream on air even with the schedule long over; none, and it stops.
-    assert not stream.night_ending(over, between=False, active=stream.seeing(now))
-    os.utime(tmp_path / "latest.jpg", (now - 3600, now - 3600))
-    assert stream.night_ending(over, between=False, active=stream.seeing(now))
