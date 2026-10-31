@@ -413,10 +413,6 @@ loose. A lead off or a short reads as no temperature. A BME280 would need
 A5 for its clock, so adding one moves the resistor's supply end to A1 to
 A3, in `SUPPLY` in the firmware.
 
-The firmware also answers `:L1`, `:L0` and `:P` (milliseconds) for a
-timing light on D13 (`./camera_test.py --timed-light --light nano`); the
-camera's tests use the laptop's screen instead, and nothing is wired there.
-
 Still to come: `camera_test.py --cooldown` and the night's log recording
 the camera's temperature and the dew margin measured at the telescope. Later, the same readings can move the focus as the night cools.
 

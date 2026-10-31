@@ -457,14 +457,9 @@ class AltairCamera:
             header["READSPD"] = (int(self.handle.get_Speed()), "readout speed")
         except self.lib.HRESULTException:
             pass
-        # How the camera timed it: what it says it really exposed for, and
-        # how long after the trigger the frame came back. 31 October 2026:
+        # How long after the trigger the frame came back. 31 October 2026:
         # at speed 2 a 16 s frame comes back after 20.5 s when healthy and
         # 10.3 s in the fault, so a run shows when the camera changes state.
-        try:
-            header["REALEXP"] = (self.handle.get_RealExpoTime() / 1e6, "exposure the camera reports, s")
-        except (self.lib.HRESULTException, AttributeError):
-            pass
         if getattr(self, "back_s", None) is not None:
             header["TY_BACK"] = (self.back_s, "s from trigger to the frame arriving")
         return data, header

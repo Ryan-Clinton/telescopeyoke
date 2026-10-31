@@ -11,8 +11,7 @@
     ./camera_test.py --electrons --gains 900 1500   cap off, an even light: electrons per ADU at each gain
     ./camera_test.py --probe            cap on, while it loses frames: everything about that state (camera_probe.py)
     ./camera_test.py --timed-light      cap off, facing the laptop's screen in a dark room: how long the sensor
-                                        really gathers light at each speed, from timed flashes (--light NAME: a Hue light,
-                                        --light nano: the focuser Nano's D13, timed by its own clock)
+                                        really gathers light at each speed, from timed flashes (--light NAME: a Hue light)
     ./camera_test.py --scan             the same light: where each exposure really starts and ends, a flash moved through it
     ./camera_test.py --timed-light --repeat 3 --between replug   again after the camera is closed, or dropped from USB
 
@@ -534,8 +533,8 @@ def timed_runs(args, camera=None, lights=None, say=print):
     up in (31 October 2026: speed 2 sent a 16 s frame back after 20.5 s in
     the morning and after 10.3 s from 17:28)."""
     import camera_probe
-    lights = lights or {"nano": camera_probe.NanoLight}
-    light = (lights[args.light]() if args.light in lights else
+    lights = lights or {}
+    light =(lights[args.light]() if args.light in lights else
              camera_probe.HueLight(args.light) if args.light else camera_probe.Screen())
     measure = camera_probe.scan if args.scan else camera_probe.timed_light
     runs = []
@@ -664,8 +663,7 @@ def main():
                     help="frames per mode for --throughput (default 4), per set for --cooldown (20), "
                          "per setting for --gain-sweep (1)")
     ap.add_argument("--gain", type=int, default=1500)
-    ap.add_argument("--light", help="with --timed-light or --scan: \"nano\" (the focuser Nano's D13, pulses timed "
-                                    "by its own clock) or a Hue light's name, instead of the laptop's screen")
+    ap.add_argument("--light", help="with --timed-light or --scan: a Hue light's name, instead of the laptop's screen")
     ap.add_argument("--repeat", type=int, default=1,
                     help="with --timed-light or --scan: how many times, with --between done in between")
     ap.add_argument("--between", choices=["nothing", "reopen", "replug"], default="reopen",

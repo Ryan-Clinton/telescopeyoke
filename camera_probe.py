@@ -375,15 +375,10 @@ def gathered(cam, seconds, wait=None):
 
 def pulsed(cam, seconds, switch, start, length, timer=None):
     """One exposure with the light on from `start` to `start + length`
-    seconds after it is asked for, and off otherwise. A light that can time
-    its own pulse (the Nano's, by its own clock) is asked for one at
-    `start`; any other is switched on and off by this computer's clock."""
+    seconds after it is asked for, and off otherwise."""
     import threading
     timer = timer or threading.Timer
-    if hasattr(switch, "pulse"):
-        on, off = timer(start, switch.pulse, [length]), timer(0, lambda: None)
-    else:
-        on, off = timer(start, switch, [True]), timer(start + length, switch, [False])
+    on, off = timer(start, switch, [True]), timer(start + length, switch, [False])
     on.start()
     off.start()
     try:
@@ -524,27 +519,6 @@ def scan_words(row):
         return f"speed {row['speed']}: no window found (frames lost, or no flash seen)"
     return (f"speed {row['speed']}: gathers from {row['starts_s']:g} s to {row['ends_s']:g} s after the "
             f"exposure is asked for, {row['gathers_s']:g} s")
-
-
-class NanoLight:
-    """The focuser's Nano as the light: D13 (its own LED, or one wired
-    there) switched on or off, and pulses timed by the Nano's own clock."""
-
-    def __init__(self, port=None):
-        import focuser
-        self.nano = focuser.Focuser.open(port, full=False, ms=None)
-
-    def __call__(self, on):
-        self.nano.light(on)
-
-    def pulse(self, seconds):
-        self.nano.pulse(max(1, round(seconds * 1000)))
-
-    def close(self):
-        try:
-            self.nano.light(False)
-        finally:
-            self.nano.close()
 
 
 def timed_words(row):

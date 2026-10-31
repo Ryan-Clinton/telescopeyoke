@@ -393,12 +393,12 @@ in another), so the camera's own readable settings are compared instead.
    the black level; the probe needs light on the sensor to answer it, so
    the next time the fault shows, the cap comes off before `./camera_test.py
    --probe` is run again.
-2. **Every frame says how the camera timed it** (from 31 October): the
-   FITS header's `REALEXP` (the exposure the camera says it really used,
-   `get_RealExpoTime`) and `TY_BACK` (seconds from the trigger to the frame
-   arriving: 20.5 for a healthy 16 s frame at speed 2, 10.3 in the fault).
-   So an ordinary night's frames show when the camera changes state, and
-   whether the camera itself knows its exposure was cut short.
+2. **Every frame says when it came back** (from 31 October): the FITS
+   header's `TY_BACK`, seconds from the trigger to the frame arriving: 20.5
+   for a healthy 16 s frame at speed 2, 10.3 in the fault. So an ordinary
+   night's frames show when the camera changes state. (What the camera
+   reports as its real exposure is only the time asked, so it is read once
+   in the probe's settings, not stamped on every frame.)
 3. **Every setting, in both states** (from 31 October): the probe reads
    every setting the camera will give (the named readings and every
    readable option) before it starts and after it ends, and lists those
@@ -427,10 +427,7 @@ in another), so the camera's own readable settings are compared instead.
    Each measurement keeps the camera's timing settings beside it (the
    exposure asked and reported, the speed, `HZ`, the frame rate, the
    trigger mode, bandwidth).
-   - The laptop's screen is the light. (`--light nano` also exists, D13
-     on the focuser's Nano timed by its own clock, but nothing is to be
-     bought or hung in front of the telescope for it: the screen's timing,
-     to about 1 % on a 2 s flash, is enough.)
+   - The laptop's screen is the light (`--light NAME`: a Hue light).
    - **Where the window is:** `./camera_test.py --scan` moves a 1 s flash
      through an 8 s exposure and past its end, 1 s at a time, at each
      speed, and reports when the sensor starts and stops gathering after
