@@ -6,13 +6,18 @@ details are in the dated night files linked from each entry.
 **The camera:** Altair Hypercam 183C (Sony IMX183 colour), firmware 1.4.1
 (January 2017), on USB 3. The camera is Gary's. Altair support ticket #3470.
 
-**The fault:** the camera takes an exposure, but the frame never comes down
-the USB lead. There is no USB disconnect or reset in the kernel log, and the
-link stays at 5000 Mb/s. When it happens the frame is lost, not just late:
-none has come within 108 s of a 16 s exposure.
+**The fault:** at speeds 1 and 2 the camera sends each frame back far too
+soon, and the software, which takes a frame back before its shutter could
+have closed for a stray from an earlier exposure, throws it away and waits
+in vain: the frame is counted lost. Found on 31 October 2026 from the USB
+traffic recorded in the fault (below, "What the recording showed"); until
+then it looked as if the frame never came down the lead. There is no USB
+disconnect or reset in the kernel log, and the link stays at 5000 Mb/s.
 
 **What is in use now:** readout speed 2 (`[camera] readout_speed = 2`) since
-31 October 2026, after 2,160 frames of 16 s at speed 2 without a loss. It is
+31 October 2026, after 2,160 frames of 16 s at speed 2 kept (the count
+said no loss, but a lost frame tried again and kept was not counted, so
+some may have been: below). It is
 left at 2 on purpose while the fault is studied: a lost frame is not
 covered over by dropping to a slower speed by itself. Each frame's FITS
 header says the speed it was read at (`READSPD`). Speed 0 has never lost a
@@ -128,6 +133,44 @@ setting, and whether the USB 3 link power states U1 and U2 are in use).
   kept at 14:40; 60 to 300 s frames passed at speed 2 in between.
 - **Needing a power cycle to clear it.** On 30 Oct it was lost at about
   10:47 and gone by 11:02 with the camera plugged in throughout.
+
+## What the recording showed, 31 October 2026
+
+At 17:28, after the camera, the focuser's Nano and a thermistor on the
+camera's body had been rewired and put back on the telescope, indoors at
+about 20 °C on the body, a check of 8 frames of 16 s at speed 2 lost the
+first. The probe ran by itself (`cache/camera-probes/20261031-172833/`,
+`probe.json` with the USB traffic and the controller's trace):
+
+| In the fault | Result |
+|---|---|
+| 0.5 s and 1 s frames | kept |
+| 1.5, 2, 4, 8 and 16 s frames | lost |
+| 2048 × 1536 and 512 × 512 frames of 1.5 s | lost: the frame's size does not matter |
+| Video, 20 × 0.05 s | 20 of 20 |
+| A 16 s frame waited for 300 s | never kept |
+| Speed 1 | lost; speed 0: kept, 21 s after the trigger |
+| Port and link | 5000 Mb/s, U0, nothing in the kernel log, before and after |
+
+The USB traffic says what "lost" is. A whole frame (39.7 MB) came down the
+lead for every exposure, lost ones included, but early: measured from the
+camera's last control request to its first data, a 16 s frame came after
+**10.3 s**, where at speed 0 in the fault, and at speed 2 in the healthy
+run of the morning, it comes after **20.5 s**: about half. The shorter
+exposures came after 0.44, 0.75, 1.07, 1.39 and 2.66 s for 0.5, 1, 1.5, 2
+and 4 s, about 0.63 of the exposure each. A frame back before 0.9 of its
+exposure is refused by `altair.py` as a stray, so every one from about
+1.5 s up was thrown away and the wait ran out. In the fault, then, the
+camera's timing at speeds 1 and 2 runs about twice as fast: the exposure
+ends early, or the frame is sent before it is taken.
+
+The morning's healthy run (720 of 720 at speed 2, recorded) shows the
+same thing at its very start: two frames back after 10.3 s, each followed
+by the 108 s wait, and then 20.5 s frames once the camera had been closed
+and opened again by the third try. The run's count said 720 of 720
+because a frame lost and tried again was not counted. From 31 October
+every try again is said in the log, and the loss names the frame that came
+back too soon and when.
 
 ## What is known
 
@@ -248,7 +291,7 @@ In order. Each says what it needs.
 
 ## For Altair (ticket #3470)
 
-The camera is Gary's, and the ticket is his to answer. In short:
+The camera is Gary's; the ticket is ours, and paying for a repair would be his call. In short:
 
 | | |
 |---|---|
@@ -258,6 +301,7 @@ The camera is Gary's, and the ticket is his to answer. In short:
 | USB 2 mode | 2 s and 16 s frames arrive |
 | USB 3, speed 0 | every frame has arrived, in every test since 23 Oct |
 | USB 3, speed 2 | frames lost at times, as short as 2 s; the link stays at 5000 Mb/s, no disconnect |
+| What a lost frame is | in the fault the frame comes back in about half the time: a 16 s frame after 10.3 s instead of 20.5 s, at speeds 1 and 2, not 0 (USB recorded, 31 Oct) |
 | Started | 04:59 on 20 Oct 2026, at dawn after a cold night |
 | Comes and goes | gone 26 Oct; back 30 Oct 10:46; gone again by 11:02, nothing touched |
 | Firmware | 1.4.1 (January 2017) |

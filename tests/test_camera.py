@@ -32,6 +32,7 @@ class World:
         self.delays = []          # ...or one figure per exposure, used up in turn
         self.silent = False       # never deliver a frame
         self.loses = None         # or loses(handle): True to lose this exposure (the fault's state)
+        self.hurries = None       # or the share of the exposure after which the frame comes back
         self.shifted = False      # hand the 12 bits over at the top of the 16
         self.obeys_cancel = True  # a cancelled exposure delivers nothing
         self.unplug = False       # report a disconnect instead of a frame
@@ -130,6 +131,8 @@ def fake_sdk(world):
             taken = time.monotonic() + self.exposure / 1e6    # when the shutter closes
             delay = world.delays.pop(0) if world.delays else world.delay
             delay = max(delay, self.exposure / 1e6)   # the shutter has to close first
+            if world.hurries:
+                delay = world.hurries * self.exposure / 1e6
             if world.silent or (world.loses and world.loses(self)):
                 return
             roi = getattr(self, "roi", (0, 0, 0, 0))[2:]
@@ -1146,6 +1149,21 @@ def test_the_first_lost_frame_starts_the_probe_once_and_keeps_the_speed(sdk, wor
                 cam.frame(0.05)
         assert cam.handle.get_Speed() == 2
     assert probed == [0.05]
+
+
+def test_a_frame_back_too_soon_is_named_and_every_retry_is_said(sdk, world, capsys):
+    """31 October 2026: in the fault a 16 s frame came back after 10.3 s,
+    was turned away as too soon to be the one asked for, and was counted
+    lost; the retries that followed said nothing, so a run that lost its
+    first frame twice still read 720 of 720."""
+    world.hurries = 0.5
+    altair.wait_for = lambda seconds: 1.0
+    with altair.AltairCamera() as cam:
+        with pytest.raises(IndiError, match=r"came back after 0\.\d s, too soon to be it"):
+            cam.frame(1.0)
+        assert cam.early and cam.early[0] < 0.9
+    said = capsys.readouterr().err
+    assert said.count("trying again") == 2 and "too soon" in said
 
 
 def test_without_the_setting_a_lost_frame_starts_no_probe(sdk, world, monkeypatch):

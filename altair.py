@@ -292,6 +292,7 @@ class AltairCamera:
         started, began = datetime.now(timezone.utc), time.perf_counter()
         handle.Trigger(1)
         give_up = began + (wait or wait_for(seconds))
+        self.early = []         # seconds after the trigger of each frame too soon to be this one
         while True:
             with self._changed:
                 arrived = self._changed.wait_for(lambda: self._ready or self._failure,
@@ -308,9 +309,15 @@ class AltairCamera:
             landed = time.perf_counter()
             data, info = self._pull()
             # (The 50 ms is slack for timing; a focusing exposure is shorter.)
-            if landed - began >= 0.9 * seconds - 0.05 and not self._older(info, began):
+            older = self._older(info, began)
+            if landed - began >= 0.9 * seconds - 0.05 and not older:
                 self._learn(info, landed)
                 break
+            if not older:
+                # 31 October 2026: in the fault, a 16 s frame came back after
+                # 10.3 s instead of the usual 20.5, at speeds 1 and 2 only, and
+                # was turned away here; it is named, not taken.
+                self.early.append(round(landed - began, 1))
         with self._changed:
             self._waiting = False
         if failure or not arrived:
@@ -321,8 +328,10 @@ class AltairCamera:
             except lib.HRESULTException:
                 pass
             self._discard()
+            soon = (f"; one came back after {self.early[0]:g} s, too soon to be it"
+                    if self.early else "")
             raise CameraError(failure or f"no frame within {wait or wait_for(seconds):.0f} s "
-                                         f"of a {seconds:g} s exposure")
+                                         f"of a {seconds:g} s exposure{soon}")
         return self._normalise(data), started
 
     def _pull(self):
@@ -418,6 +427,9 @@ class AltairCamera:
                     problem = CameraError(_reason(problem))
                 if attempt == 2 or "unplugged" in str(problem):
                     raise problem
+                # Said, never silent: on 31 October 2026 a run's first frame was
+                # lost twice and kept on the third try, and its count said 720 of 720.
+                print(f"camera: {problem}; trying again", file=sys.stderr, flush=True)
                 if attempt == 0 and SETTINGS["camera"].get("probe_on_loss") and not self.probed:
                     self.probed = True
                     try:
