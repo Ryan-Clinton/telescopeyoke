@@ -1,0 +1,86 @@
+AltairCapture Diagnose, 31 October 2026 23:21 GMT (About > Diagnose > Copy)
+Camera open in AltairCapture, live view at the defaults, on the powered USB hub.
+
+Computer                                 HP HP ZBook 15 G4, 103C_5336AN
+OS                                       Windows 11 Pro
+Version                                  26H2 26300.9457
+CPU                                      Intel(R) Core(TM) i7-7700HQ CPU @ 2.80GHz
+Cores                                    4
+Threads                                  8
+Memory                                   24G
+Display                                  GDI, 8 Bits
+Software                                 AltairCapture, x64, 4.12.31589.20260531
+SDK                                      altaircam.dll, 60.31589.20260531
+Camera Model                             ALTAIRH183C
+Path                                     USBROOT(0)#USB(17)#USB(1)
+Connection                               Generic SuperSpeed USB Hub[Microsoft;10.0.26100.9444;20260903;Standard USB HUBs;USB\VID_0BDA&PID_0411&REV_0004]
+Connection                               USB Root Hub (USB 3.0)[Microsoft;10.0.26100.9444;20260903;Standard USB HUBs;USB\ROOT_HUB30&VID8086&PIDA12F&REV0031]
+Connection                               Intel(R) USB 3.0 eXtensible Host Controller - 1.0 (Microsoft)[Microsoft;10.0.26100.9444;20260903;Generic USB xHCI Host Controller;PCI\VEN_8086&DEV_A12F&SUBSYS_8275103C&REV_31]
+Connection                               Pci Bus[AMD;21.10.0.1;20210202;AMD;ACPI\VEN_PNP&DEV_0A08]
+USB                                      0x16d0/0x0c77
+Revision                                 0x0001
+Camera Id                                AA170607163620183C3F044F2CA0F74
+Production Date                          20170607
+Hardware Version                         1.0
+Firmware Version                         1.4.1.20170111
+FPGA Version                             1.1
+MCU Version                              N/A
+Sensor                                   CMOS, Rolling Shutter, Color
+Pixel Size                               (2.400, 2.400) µm
+DDR Frame Buffer                         No
+Hardware ISP                             No
+ROI                                      Software
+LUT                                      Software
+Sharpen                                  Software
+Denoise                                  No
+RAW                                      Yes
+Trigger                                  Software, Single
+Realtime                                 Yes
+Still Image Capture                      Yes
+Still Image Width                        5440
+Still Image Height                       3648
+Video Width                              5440
+Video Height                             3648
+Pixel Format                             RGGB8
+Policy (Auto Exposure)                   Exposure Preferred
+Maximum Exposure Time (Auto Exposure)    350ms
+Maximum Gain (Auto Exposure)             500%
+Threshold (Auto Exposure)                5
+Percent (Auto Exposure)                  0
+Damping (Auto Exposure:Exposure Time)    0
+Damping (Auto Exposure:Gain)             0
+Overexposure (Auto Exposure)             Minimum
+ROI                                      No
+Flip Horizontal                          No
+Flip Vertical                            No
+Rotate                                   0
+Auto Exposure                            No
+White Balance                            0, 0, 0
+Black Balance                            0, 0, 0
+Histogram                                (0, 0, 0, 0), (255, 255, 255, 255)
+Hue                                      0, [-180, 0, 180]
+Saturation                               128, [0, 128, 255]
+Brightness                               0, [-255, 0, 255]
+Contrast                                 0, [-255, 0, 255]
+Gamma                                    1.00, [0.20, 1.00, 1.80]
+Frame Speed                              2, [0, 2]
+Power Frequency (Anti-flicker)           DC
+Monochrome                               No
+Digital Binning                          Yes
+Flat Field Correction                    No
+Dark Field Correction                    No
+Fixed Pattern Noise Correction           No
+Dynamic Defect Pixel Correction          Disable
+Sharpen                                  Disable
+Fan                                      1, [0, 1]
+Negative                                 No
+Mechanical Shutter                       No
+Length of Frame Buffer (Frontend)        4
+Length of Frame Buffer (Backend)         3
+Exposure Time                            10ms [264µs, 16m40s]
+Actual Exposure Time                     10ms
+Line Length                              2320 (Pixel Clock)
+Gain                                     1.00
+Received Packets                         1104
+Frame                                    29
+Frame Rate                               0.0
