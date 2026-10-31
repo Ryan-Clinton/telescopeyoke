@@ -43,8 +43,7 @@ been driven yet.
 > **New to motorised telescopes?** Start with
 > **[From box to first galaxy](docs/first-night.md)**: a first night, step by
 > step, with no knowledge of polar alignment, RA and Dec, plate solving or
-> astrophotography assumed. Then
-> [What telescopeyoke just did for you](docs/how-it-all-works.md) explains it.
+> astrophotography assumed.
 
 > **Looking for testers.** So far it has run on one telescope: the author's
 > EQ3 Pro. If you have an EQ3, EQ5, HEQ5 or EQ6 with a SynScan handset, on
@@ -546,7 +545,6 @@ plan the night → GoTo → photograph → plate-solve (ASTAP) → correct → p
 | Page | What is in it |
 |---|---|
 | [From box to first galaxy](docs/first-night.md) | A first night for someone who knows none of the words: assemble, point north, switch on, align, focus, GoTo, picture. Says which steps are proven on a real mount. |
-| [What telescopeyoke just did for you](docs/how-it-all-works.md) | The astronomy and the engineering behind each of those steps, for afterwards. |
 | [Calibrating a mount, in order](docs/calibration.md) | Level roughly, polar-align, find the true home and mark it, measure the pointing each side, and check that the mount really turns. |
 | [The TelescopeYoke observatory](docs/observatory.md) | The whole system on one page: observe, measure, discover, operate, reason, share; the safety rule; what it has learnt from real nights. |
 | [Looking for something new](docs/discovery.md) | The discovery station: novae in M31 and M33, comets in spacecraft pictures, transits, public alerts; its recent proofs. Operational; no find of its own yet. |

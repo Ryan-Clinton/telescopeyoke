@@ -9,8 +9,7 @@ You have a Sky-Watcher telescope on a motorised mount with a SynScan
 handset, a camera, and a laptop. You want a picture of a galaxy. You do not
 need to know what RA, Dec, polar alignment, plate solving or HFR mean
 tonight. Each step below says what to do, what you should see, and, folded
-away, what it was for. [What telescopeyoke just did for you](how-it-all-works.md)
-explains all of it afterwards, when you have a picture to show for it.
+away, what it was for.
 
 **How much of this has been done for real.** This project is young and says
 so. On the author's EQ3, 150 mm Newtonian and Hypercam, under real stars:
@@ -324,5 +323,4 @@ feet's marks where they are.
 Tonight you polar-aligned an equatorial mount, measured its home position,
 focused by half-flux radius, planned by altitude and moonlight, plate-solved
 a GoTo and stacked calibrated sub-exposures. You did not need any of those
-words to do it. When you want them:
-[What telescopeyoke just did for you](how-it-all-works.md).
+words to do it.

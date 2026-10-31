@@ -220,7 +220,7 @@ plate_solving = [
     "Before imaging, the software works out exactly where the telescope points by matching the stars in a picture to a star catalogue.",
 ]
 # Also the cards shown while the telescope focuses (stream.py's focus segment).
-# From docs/how-it-all-works.md ("Focus") and docs/focuser.md.
+# From docs/focuser.md.
 focus = [
     "A small motor on the focuser turns it in steps far finer than a hand can, and the software judges focus by the stars' size.",
     "HFR, the half-flux radius, is the radius of the circle holding half a star's light. Smaller is sharper: about 2 pixels is good focus here.",
@@ -233,7 +233,7 @@ focus = [
     "Focus is only changed when it needs it: a quick check first, and if the stars are as small as usual it is left alone.",
 ]
 # The cards shown while the mount is polar aligned (stream.py's polar segment).
-# From docs/how-it-all-works.md ("Polar alignment") and docs/calibration.md.
+# From docs/calibration.md.
 polar = [
     "The sky turns about one point near Polaris, the celestial pole. The mount's polar axis has to point there for it to follow the stars.",
     "Polaris is not exactly at the pole: it is about two thirds of a degree away, so aiming at Polaris alone is not quite enough.",
