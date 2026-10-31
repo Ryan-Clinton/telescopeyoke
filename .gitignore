@@ -10,6 +10,7 @@ __pycache__/
 cache/
 frames/
 web/
+clips/
 # Each field's kept reference stack (reference.py): pictures of the sky from here
 reference/
 candidates/

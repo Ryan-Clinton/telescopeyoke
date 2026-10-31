@@ -132,6 +132,84 @@ explainers = [
 ]
 method = []
 
+# Each programme as a mission (mission.py): its goal in one plain sentence,
+# the open question while it is unanswered ({figures} are tonight's own,
+# and the _plain question is asked when the figure is not known), and the
+# channel's title while it runs. Real questions only: nothing here is
+# suspense the measurement cannot settle.
+[missions.lucky]
+title = "LUCKY IMAGING · THE MOON"
+goal = "Freeze the shimmer of the air to see the Moon's finest detail."
+question = "How many of these {frames} frames will be sharp enough to keep?"
+question_plain = "How sharp will the air let the Moon be tonight?"
+stream_title = "LIVE: freezing the air's shimmer to see the Moon's finest detail"
+
+[missions.mineral]
+title = "MINERAL MOON"
+goal = "Reveal colour differences in the Moon's surface that are normally too faint to see."
+question = "Will the colour repeat as the Moon moves across the camera?"
+stream_title = "LIVE: can an amateur telescope reveal the Moon's hidden colour?"
+
+[missions.live]
+title = "THE MOON · LIVE VIEW"
+goal = "Show the Moon as the telescope sees it, a fresh picture every few seconds."
+stream_title = "LIVE: the Moon through a 150 mm telescope, as it happens"
+
+[missions.patrol]
+title = "NOVA PATROL · {target}"
+goal = "Find a star that wasn't there before."
+question = "Is there a new star in this field tonight?"
+question_possible = "Will anything survive the second look?"
+stream_title = "LIVE: searching {target} for a star that wasn't there before"
+
+[missions.transit]
+title = "PLANET TRANSIT · {target}"
+goal = "Measure a planet crossing in front of its star."
+question = "Will the star dim by the expected {depth} %?"
+question_plain = "Will the star dim as the planet crosses it?"
+stream_title = "LIVE: trying to measure a planet crossing another star"
+
+[missions.picture]
+title = "BUILDING A PICTURE · {target}"
+goal = "Build a deep picture of {target}, one exposure at a time."
+question = "How much fainter detail will each extra exposure bring out?"
+stream_title = "LIVE: imaging {target}, one exposure at a time"
+
+[missions.focus]
+title = "FOCUS"
+goal = "Make the stars as small as possible."
+question = "Can it reach the usual best of {usual} HFR?"
+question_plain = "How small can the stars get tonight?"
+
+[missions.polar]
+title = "POLAR ALIGNMENT"
+goal = "Get the mount's axis pointing at the sky's pole."
+question = "Can it get both axes under the drift limit?"
+
+[missions.comet]
+title = "COMET HUNT"
+goal = "Search today's spacecraft pictures of the Sun for a comet."
+question = "A known comet, an artefact, or something unexplained?"
+
+# TelescopeYoke's voice (narrator.py): a sentence now and then over the
+# stream's sound, first person, calm, plain about what is not known. Each is
+# filled with the measured state; nothing else is said.
+[voice]
+opening = "Hello. This is TelescopeYoke, a small automatic observatory. Tonight's work is on screen."
+moving = "I'm moving the telescope to {target}."
+centring = "I'm centring {target}, by matching the stars in the picture to a catalogue."
+observing = "I've reached {target}."
+capturing = "Lucky imaging has started: hundreds of very short exposures, to freeze the moments when the air is steady."
+stacking = "I'm lining up and combining the sharpest frames now."
+mineral = "I'm measuring the Moon's colour from the videos, and checking that it repeats."
+done = "The result is ready."
+focus = "I'm checking the focus. Smaller stars mean sharper pictures."
+polar = "I'm polar aligning the mount, so that it can follow the stars."
+imaging = "Imaging has started."
+decision = "{situation}, so I'm {action}. {why}"
+status = "Still working: the aim tonight is to {goal}."
+question = "The open question: {question}"
+
 # How the telescope works: HOW IT WORKS and THE TELESCOPE cards, for any programme.
 [stories]
 stacking = [

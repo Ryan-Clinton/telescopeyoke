@@ -448,6 +448,94 @@ few seconds and then fade:
   · 5 fields done". Finally "Last target before dawn", when the schedule's
   last step is running.
 
+## The mission: what, why, how far, and what is still unknown
+
+The director says what the telescope is doing. A stranger also needs to
+know what it is trying to achieve, how far it has got and whether it will
+work. `mission.py` makes each programme a mission, from the curated words
+in `stream-targets.toml` (`[missions.NAME]`) and the measured state only:
+
+| Mission | Goal | The open question |
+|---|---|---|
+| lucky (the Moon) | Freeze the shimmer of the air to see the Moon's finest detail. | How many of these 2,000 frames will be sharp enough to keep? |
+| mineral | Reveal colour differences in the Moon's surface that are normally too faint to see. | Will the colour repeat as the Moon moves across the camera? |
+| patrol | Find a star that wasn't there before. | Is there a new star in this field tonight? / Will anything survive the second look? |
+| transit | Measure a planet crossing in front of its star. | Will the star dim by the expected 1.4 %? |
+| picture | Build a deep picture of M31, one exposure at a time. | How much fainter detail will each extra exposure bring out? |
+| focus | Make the stars as small as possible. | Can it reach the usual best of 2.3 HFR? |
+| polar | Get the mount's axis pointing at the sky's pole. | Can it get both axes under the drift limit? |
+
+The figures in a question are tonight's own. A question whose figure is
+not known is asked without it, and a question already answered is not
+asked. It is real uncertainty, not suspense.
+
+**Three timescales.**
+
+- Every 12 s, across the top between the name and the live marker: one of
+  WHAT (THE MOON), WHY (the goal), NOW (the activity) and NEXT (the next
+  milestone or target) in turn (`mission.context`). Someone arriving knows
+  within a quarter of a minute what they are watching.
+- Every minute or two, the story's chapters below.
+- Every few minutes, SO FAR TONIGHT and RAW → RESULT.
+
+**In the panel**, under the object (whose plain-words line gives way to the
+goal), during NOW:
+
+```
+MISSION
+Reveal colour differences in the Moon's surface that are normally too faint to see.
+STEP 2 OF 5
+✓ Find the Moon
+● Capture colour video 2 of 3
+○ Check the colour repeats
+Will the colour repeat as the Moon moves across the camera?
+```
+
+A long list (the patrol's eight fields) shows the step before, the one
+under way and the next; the panel map shows them all. The figures are kept
+below it: the mission is added to the panel, nothing is taken out (30
+October 2026).
+
+**Milestones come from what was measured**: the lucky imaging's stages and
+the colour videos taken (`web/lucky.json`, `lucky.progress("colour", done,
+videos)`), the patrol's fields, the transit's times (before, crossing,
+after), the focus run's and polar alignment's own steps.
+
+**Confidence, never stronger than the measurement** (`mission.confidence`):
+
+| Label | When |
+|---|---|
+| PRELIMINARY | a possible change seen once; a mineral result from one video |
+| NEEDS SECOND LOOK | a candidate's second look under way |
+| AWAITING REVIEW | it passed the automatic checks; a person looks first |
+| REJECTED | the checks found it known, an asteroid or an artefact |
+| CONSISTENT | the mineral Moon's sea colours the same way round in every video and without any one of them |
+| DOES NOT AGREE | the colour came out the other way from the spacecraft maps: kept, not claimed |
+| NOT SEEN TONIGHT | the seas compared were dark, clipped or out of sight |
+
+The mineral Moon's result is `mineral.check_seas`'s own: "Tranquillitatis
+bluer than Serenitatis: agrees, by 2.0 %, in 3 of 3 videos".
+
+**TELESCOPEYOKE DECISION.** When the telescope decides something by
+itself, the panel says so for 40 s (`director.decide`): what it saw, the
+ACTION and the WHY. The Moon drifting between bursts ("The Moon has drifted
+73 pixels in the picture" → "Re-centring it before the next burst" → "The
+same part of the Moon has to stay inside the camera's fast region"), the
+Moon moved across the sensor between colour videos, and a patrol's second
+look. This shows the automation instead of hiding it in a terminal.
+
+**RAW → RESULT.** Once something has been made, a chapter of the clock
+shows one raw frame above what was made of it, each labelled with its
+measured count: ONE 16 S EXPOSURE ↓ 40 STACKED · 11 MIN; ONE RAW FRAME ↓
+THE SHARPEST 400 OF 2,000 COMBINED; ONE RAW FRAME ↓ MINERAL MOON · 3 COLOUR
+VIDEOS (`mission.reveal`). It is in the panel, so the picture is never
+covered.
+
+**The opening** is a line over the picture as the stream goes on air,
+"TELESCOPEYOKE LIVE · TONIGHT: MINERAL MOON", for 10 s
+(`director.opening`), then straight on. No card takes the place of the
+picture.
+
 ## The story: a presenter, not a ticker
 
 The panel and the picture above are correct, but they are an instrument
@@ -459,11 +547,17 @@ are watching, why it matters, what has happened and what comes next.
 because a ticker becomes wallpaper.
 
 **The broadcast clock.** From the stream's start, round and round (`CLOCK`,
-4½ minutes):
+about 5½ minutes):
 
 ```
-NOW 45 s · SCIENCE 25 s · NOW 45 s · HOW IT WORKS 25 s · NOW 45 s · TONIGHT 20 s · NOW 45 s · COMING UP 20 s
+NOW 45 s · SCIENCE 25 s · NOW 45 s · HOW IT WORKS 25 s · NOW 45 s · SO FAR TONIGHT 20 s · NOW 45 s · COMING UP 20 s · NOW 45 s · RAW → RESULT 20 s
 ```
+
+RAW → RESULT is skipped (NOW stays) until something has been made. SO FAR
+TONIGHT adds the lucky imaging's and the mineral Moon's results to the
+night's fields and frames, with their confidence. HOW IT WORKS takes its
+card from the topic the chat voted for, when there is a vote ("HOW IT
+WORKS · CHOSEN BY CHAT").
 
 During NOW the panel shows the programme as it is: the light curve, the
 panel map. In the other chapters the programme's place in the panel shows
@@ -565,6 +659,18 @@ curated words and measured figures, so that a curious viewer can dig deeper
 without the picture filling up: `!what`, `!target`, `!next`, `!focus`,
 `!polar`, `!telescope`, `!camera`, `!nova`, `!transit` and `!help`. `!focus`
 and `!polar` answer from the same files as the focus and polar looks.
+From the mission: `!why` (the goal and the open question), `!progress`
+(step n of m, and the next), `!result` (tonight's result and its
+confidence, or that it is still being measured), `!moon` (tonight's Moon
+and what to look for) and `!candidate` (whether a possible change is being
+checked, and how sure it is; never where).
+
+`!vote TOPIC` chooses what HOW IT WORKS explains next (stacking, focus,
+polar, telescope, discovery, solving): each viewer has one vote, the last
+counting, for 15 min. `!vote M33` for one of tonight's planned targets is
+noted and `!next` says "The chat would like M33 next; a person decides":
+a vote never moves the telescope. Twitch's own polls and channel points
+need an Affiliate channel, so the chat's own vote stands in for them.
 
 - No command moves or changes anything, and an unknown command gets no
   answer.
@@ -824,13 +930,28 @@ title, category and tags set for each target (`twitch.py`, through an app
 registered for the channel), and the chat's read-only commands
 (`streamchat.py`). Still not done:
 
-- The same for YouTube's title and category.
+- The same for YouTube's title and category: setting them needs the
+  YouTube Data API, with an OAuth client made in Google's console and a
+  sign-in by the person. Twitch's title asks the mission's question
+  ("LIVE: can an amateur telescope reveal the Moon's hidden colour?").
 - Music. The track is silent except for the focus tones while the telescope
   focuses (`docs/streaming.md`, "The sound").
 - Sending to YouTube and Twitch at once. That is a change to `stream.py`'s
   output, not to the picture.
 
 ## Tests
+
+- The mission (`tests/test_mission.py`): every programme has a goal; a
+  question carries only tonight's known figures and is dropped once
+  answered; milestones from the measured stages, colour videos, fields and
+  transit times; confidence labels no stronger than the measurement; WHAT,
+  WHY, NOW and NEXT in turn; the reveal and recap from measured counts; the
+  panel drawn with the mission and the figures kept; a decision taking the
+  panel for its seconds; the 9:16 picture with the Moon not stretched to
+  black; the narrator's sentences, its gaps and silence when speech cannot
+  be made; clips cut once a moment has played out, from the right pieces;
+  the chat's `!why`, `!progress`, `!result`, `!candidate` and votes that
+  never move anything; the Twitch title asking the mission's question.
 
 - `frame()` draws without error from a fixture status for each state:
   - a transit (in each of its three panel states);

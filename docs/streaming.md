@@ -275,6 +275,52 @@ through VAAPI). At the start it runs Twitch's bandwidth test; it drops to
 720p only on sustained trouble (a minute behind, dropped frames, or three
 breaks in ten minutes), never on a blip.
 
+### The voice
+
+TelescopeYoke speaks now and then over the stream's sound (`narrator.py`):
+a sentence when something happens, never a running commentary. On a target
+reached ("I've reached the Moon."), a GoTo setting off, a stage begun
+("I'm lining up and combining the sharpest frames now."), a result, and a
+decision ("The Moon has drifted 73 pixels in the picture, so I'm
+re-centring it before the next burst. The same part of the Moon has to stay
+inside the camera's fast region."). With nothing happening, at most every 6
+min, the mission and its open question. Never two within 20 s.
+
+Every sentence is a template in `stream-targets.toml` (`[voice]`) filled
+with the measured state: first person, calm, plain about what is not known.
+The speech is made by gTTS (as the house alerts are), on its own thread,
+and mixed into the same sound as the focus tones; if it cannot be made (no
+network), nothing is said and the pictures never wait. `[stream] narration
+= false` in config.toml turns it off; it takes effect when the stream next
+starts.
+
+## Clips of the big moments
+
+Every moment of the night (a target reached, a stage begun, a result, a
+decision, the stream going on air) is kept in `cache/events.jsonl` by the
+director. While on air, ffmpeg also writes what it sends into a rolling
+ten-minute buffer (`cache/stream-buffer/`, 10 s pieces, overwritten as it
+goes). A minute after each moment, `clips.py` joins the pieces from 20 s
+before it to 60 s after into `clips/DATE-TIME-WORDS.mp4`, without encoding
+again. Moments less than a minute apart share a clip, and the newest 40
+clips are kept. They are material for highlights, Shorts and a
+"previously" at the start of the next night. `[stream] clips = false`
+turns it off.
+
+## The phones' picture (9:16)
+
+`./stream.py frame --vertical` draws the 9:16 picture as
+`cache/stream-vertical.jpg`, and `./stream.py scenes` draws each scene that
+way too (`NAME-vertical.png`). It is simpler than the main picture: the
+camera's picture large, the target, the mission, where it has got, its
+open question and the live marker, with no figures or panel.
+
+YouTube's vertical live shows it in the Shorts feed. Once its stream key is
+kept (`./stream.py key youtube-vertical`, from YouTube Studio's vertical
+live stream), `stream.py watch` sends it alongside the main feed whenever
+that is on air. It has its own ffmpeg and its own drawing thread, so it
+never holds up the main feed, and it stops with it.
+
 ## The chat
 
 `streamchat.py` answers a few commands in the Twitch chat, from the same
@@ -282,6 +328,7 @@ curated words and measured figures, at most one reply every 3 s and each
 command once in 30 s:
 
     !what  !target  !next  !focus  !polar  !telescope  !camera  !nova  !transit  !help
+    !why  !progress  !result  !moon  !candidate  !vote TOPIC
 
 `!focus` says what the focus run is doing (its stage, position, current and
 best HFR against the start and the usual best) or how tonight's last one
@@ -289,8 +336,10 @@ ended; `!polar` how far tonight's polar alignment has got (picture n of 3,
 waiting for an adjustment, the error now, the rounds and where it began, and
 the drift limit it aims for). Both read the same files as the picture.
 
-Viewers can ask the observatory what it is doing; nothing they type can move
-or change anything. It needs the chat permissions, so `./stream.py
+The mission's commands and `!vote` are described in docs/stream-look.md
+("Chat"). Viewers can ask the observatory what it is doing and choose what
+it explains next; nothing they type can move or change anything, and a
+vote for a target is only passed on to the person. It needs the chat permissions, so `./stream.py
 twitch-login` must have been run since they were added (20 October 2026).
 
 ## When something goes wrong

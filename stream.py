@@ -8,7 +8,9 @@
     ./stream.py frame              make one picture of what would be sent, as cache/stream-preview.jpg
     ./stream.py frame --director   the same with the director's answer written over it, to see why
     ./stream.py preview            the new look (docs/stream-look.md) in each state, as cache/stream-preview/*.png
-    ./stream.py scenes             each of the director's scenes drawn, as cache/stream-scenes/*.png
+    ./stream.py scenes             each of the director's scenes drawn, as cache/stream-scenes/*.png (and 9:16)
+    ./stream.py frame --vertical   the 9:16 picture for phones, as cache/stream-vertical.jpg
+    ./stream.py key youtube-vertical  YouTube's vertical live key: the 9:16 picture is sent too
     ./stream.py director           what the stream shows now and why, and what it left out (director.py)
     ./stream.py director --clear   forget the target the telescope was last aimed at
     ./stream.py twitch-login       once: let it set the Twitch channel's title, category and tags (twitch.py)
@@ -77,7 +79,8 @@ PREVIEW = config.DATA / "cache" / "stream-preview.jpg"   # not web/: that goes o
 PROGRESS = config.DATA / "cache" / "stream-progress.txt"   # ffmpeg's own speed reports
 WIDTH, HEIGHT = 1920, 1080
 FALLBACK = (1280, 720)  # when the upload cannot keep up with 1080p
-BITRATE = {(1920, 1080): "5000k", (1280, 720): "3000k"}
+BITRATE = {(1920, 1080): "5000k", (1280, 720): "3000k", (1080, 1920): "4000k"}
+VERTICAL = (1080, 1920)  # the phones' picture (YouTube's vertical live), sent when it has its own key
 FPS = 30                # frames a second sent, as the services expect
 INPUT_FPS = 10          # pictures a second handed to ffmpeg, which repeats each up to FPS
 FADE = 3                # pictures in a crossfade: 300 ms
@@ -93,16 +96,19 @@ STOP_S = 300            # no new frame for this long: stop streaming
 INGEST = {
     "youtube": "rtmp://a.rtmp.youtube.com/live2/{key}",
     "twitch": "rtmp://live.twitch.tv/app/{key}",
+    "youtube-vertical": "rtmp://a.rtmp.youtube.com/live2/{key}",
 }
 
 
-NAMES = {"youtube": "YouTube", "twitch": "Twitch", "custom": "the custom address"}
+NAMES = {"youtube": "YouTube", "twitch": "Twitch", "custom": "the custom address",
+         "youtube-vertical": "YouTube's vertical live"}
 
 
 def settings():
     found = config.hardware().get("stream", {})
     return {"enabled": bool(found.get("enabled", False)), "service": found.get("service", "youtube"),
-            "url": found.get("url", ""), "tones": bool(found.get("focus_tones", True))}
+            "url": found.get("url", ""), "tones": bool(found.get("focus_tones", True)),
+            "narration": bool(found.get("narration", True)), "clips": bool(found.get("clips", True))}
 
 
 def services(s):
@@ -510,7 +516,7 @@ def encoder(device=None, size=(WIDTH, HEIGHT)):
     INPUT_FPS a second and go out at FPS, each repeated."""
     rate = BITRATE[size]
     common = ["-b:v", rate, "-maxrate", rate, "-bufsize", f"{2 * int(rate[:-1])}k", "-g", str(FPS * 2)]
-    scale = f"scale={size[0]}:{size[1]}," if size != (WIDTH, HEIGHT) else ""
+    scale = f"scale={size[0]}:{size[1]}," if size not in ((WIDTH, HEIGHT), VERTICAL) else ""
     if device is not None:
         return ["-vaapi_device", str(device), "-vf", f"fps={FPS},{scale}format=nv12,hwupload",
                 "-c:v", "h264_vaapi", *common]
@@ -518,23 +524,27 @@ def encoder(device=None, size=(WIDTH, HEIGHT)):
             "-tune", "stillimage", *common]
 
 
-def command(target, device=None, size=(WIDTH, HEIGHT), audio_fd=None):
+def command(target, device=None, size=(WIDTH, HEIGHT), audio_fd=None, record=False, picture=(WIDTH, HEIGHT)):
     """ffmpeg taking raw pictures on its input and sending them to `target`
     (an rtmp:// address, a file to try it, or a list of addresses),
     reporting its speed in PROGRESS. Several are fed from one encoding by
     the tee muxer, each with onfail=ignore so one failing leaves the rest.
     The sound is silence, or with `audio_fd` raw sound read from that
-    descriptor (Tones: the focus run's tones)."""
+    descriptor (Tones: the focus run's tones and the narrator). With
+    `record`, what is sent is also written to the clips' rolling buffer
+    (clips.py)."""
     sound = (["-f", "s16le", "-ar", str(TONE_RATE), "-ac", "1", "-i", f"pipe:{audio_fd}"] if audio_fd is not None
              else ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"])
     targets = [target] if isinstance(target, str) else list(target)
-    if len(targets) > 1:
+    if len(targets) > 1 or record:
+        import clips
+        sent = [f"[f=flv:onfail=ignore]{t}" if t.startswith("rtmp") else f"[onfail=ignore]{t}" for t in targets]
         out = ["-map", "0:v", "-map", "1:a", "-flags", "+global_header", "-f", "tee",
-               "|".join(f"[f=flv:onfail=ignore]{t}" for t in targets)]
+               "|".join(sent + ([clips.output()] if record else []))]
     else:
         out = ["-f", "flv", targets[0]] if targets[0].startswith("rtmp") else [targets[0]]
     return ["ffmpeg", "-loglevel", "error", "-y", "-progress", str(PROGRESS), "-stats_period", "5",
-            "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{WIDTH}x{HEIGHT}", "-r", str(INPUT_FPS), "-i", "-",
+            "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{picture[0]}x{picture[1]}", "-r", str(INPUT_FPS), "-i", "-",
             *sound, *encoder(device, size), "-c:a", "aac", "-b:a", "64k", "-ar", "44100", "-ac", "2",
             "-shortest", *out]
 
@@ -584,6 +594,11 @@ class Tones:
             samples = focus.waveform("tone", focus.pitch(fraction))
         with self.lock:
             self.queue = np.concatenate([self.queue, (0.4 * 32767 * samples).astype(np.int16)])
+
+    def add(self, samples):
+        """Queue any sound (the narrator's voice), -1..1 at TONE_RATE."""
+        with self.lock:
+            self.queue = np.concatenate([self.queue, (0.8 * 32767 * np.clip(samples, -1, 1)).astype(np.int16)])
 
     def chunk(self, n):
         """The next `n` samples: queued sound, then silence."""
@@ -786,6 +801,66 @@ class Composer:
         self.stopped.set()
 
 
+def frame_vertical(st, now=None, mode="imaging"):
+    """The 9:16 picture (streamlook.vertical): the camera's newest picture,
+    or the stack while a run is imaging, with the mission's words."""
+    import director
+    import streamlook
+    now = now or time.time()
+    if "director" not in st:
+        st = dict(st, director=director.direct(director.gather(st, now), director.last()))
+    stack, single = pictures(st)
+    d = st["director"]
+    picture = stack if d["image"] == "stack" and d["run_current"] else single
+    state = streamlook.from_status(st, now, session_of(st))
+    if mode in ("focus", "polar"):
+        state = dict(state, kind=mode)
+    return streamlook.vertical(state, picture).image
+
+
+class VerticalFeed:
+    """The phones' picture, sent alongside the main one to YouTube's
+    vertical live with its own key (./stream.py key youtube-vertical): its
+    own ffmpeg and its own Composer, so it never holds up the main feed,
+    and it stops with it. Silent."""
+
+    def __init__(self, address, device=None, run=subprocess.Popen):
+        self.composer = Composer(draw=frame_vertical)
+        self.process = run(command(address, device, VERTICAL, picture=VERTICAL), stdin=subprocess.PIPE,
+                           stderr=subprocess.DEVNULL)
+        self.stopped = False
+        import threading
+        self.thread = threading.Thread(target=self.run, daemon=True)
+        self.thread.start()
+
+    def run(self):
+        shown, tick = None, time.monotonic()
+        while not self.stopped:
+            shown = self.composer.next(shown)
+            if shown is not None:
+                try:
+                    self.process.stdin.write(shown)
+                except (BrokenPipeError, OSError, ValueError):
+                    return                     # gone: the main feed carries on alone
+            tick = max(tick + 1 / INPUT_FPS, time.monotonic() - 1)
+            time.sleep(max(0.0, tick - time.monotonic()))
+
+    def stop(self):
+        self.stopped = True
+        self.composer.stop()
+        try:
+            self.process.stdin.close()
+            self.process.wait(timeout=30)
+        except Exception:
+            pass
+
+
+def vertical_address():
+    """YouTube's vertical live address, when it has a key of its own; else None."""
+    found = key("youtube-vertical", alone=False)
+    return INGEST["youtube-vertical"].format(key=found) if found else None
+
+
 def passed_on(process, keys, say=print):
     """Pass ffmpeg's own messages on, on their own thread, with every key
     taken out: its errors name the address, key and all (a tee destination
@@ -838,7 +913,8 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                         if size != (WIDTH, HEIGHT) else frame(st, now, mode))
     tick = clock()
     import director
-    segment, segment_state, directed, looked_at, tones = None, None, None, -1e9, None
+    segment, segment_state, directed, looked_at, tones, voice = None, None, None, -1e9, None, None
+    phones = None             # the 9:16 feed, while on air with a vertical key
     try:
         while True:
             st, now = status(), clock()
@@ -851,8 +927,10 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                 # only when nothing is happening, whatever the schedule says.
                 directed = director.update(st, now, segment)
                 looked_at = now
-                if tones is not None and segment == "focus":
+                if tones is not None and segment == "focus" and s["tones"]:
                     tones.hear(segment_state)
+                if process is not None:
+                    side_jobs(st, directed, now, voice if tones is not None else None, s["clips"] and to is None, say)
             active = directed["on_air"]
             between = not imaging(st) and runner_alive() and due_soon(st, now)
             ending = directed["scene"] == "end" and night_ending(st, between, active)
@@ -862,6 +940,8 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
             # October 2026).
             mode = segment or "imaging"
             composer.view = (dict(st, director=directed), mode)
+            if phones is not None:
+                phones.composer.view = composer.view
             if action == "start":
                 if now < retry_at:
                     sleep(1)
@@ -877,14 +957,23 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                     f"({hidden(' '.join([target] if isinstance(target, str) else target), stream_keys)})")
                 PROGRESS.parent.mkdir(parents=True, exist_ok=True)
                 PROGRESS.write_text("")
-                listen = os.pipe() if s["tones"] and os.name == "posix" else None
+                listen = os.pipe() if (s["tones"] or s["narration"]) and os.name == "posix" else None
                 process, reports, drops, frames = run(
-                    command(target, device, size, audio_fd=listen and listen[0]), stdin=subprocess.PIPE,
+                    command(target, device, size, audio_fd=listen and listen[0], record=s["clips"] and to is None),
+                    stdin=subprocess.PIPE,
                     stderr=subprocess.PIPE, **({"pass_fds": (listen[0],)} if listen else {})), [], [], []
                 if listen:
                     os.close(listen[0])                 # ffmpeg has its own copy
                     tones = Tones(listen[1]).start()
+                    if s["narration"]:
+                        import narrator
+                        voice = narrator.Narrator(tones.add)
                 passed_on(process, stream_keys, say)
+                opening(st, directed, now)
+                upright = vertical_address() if to is None else None
+                if upright and phones is None:
+                    phones = VerticalFeed(upright, device)
+                    say(f"{time.strftime('%H:%M')} and the 9:16 picture to YouTube's vertical live")
             elif action == "stop":
                 say(f"{time.strftime('%H:%M')} " + ("the night is over" if ending else
                                                      f"nothing new for {STOP_S // 60} minutes") + ": stream stopped")
@@ -892,12 +981,16 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                 tones = quiet(tones)
                 process.wait(timeout=30)
                 process, quiet_since, shown = None, None, None
+                if phones is not None:
+                    phones, _ = None, phones.stop()
             if process is not None and twitch_on and chatting is None:
                 chatting = chat(say)
-            if process is not None and twitch_on and imaging(st) \
-                    and st.get("name") != announced:
-                announced = st.get("name")
-                announce(st, now, say)
+            # The channel's title follows the mission (the target and its
+            # programme), never focusing or polar alignment.
+            programme = (directed["target"], directed["programme"]) if directed["target"] and not segment else None
+            if process is not None and twitch_on and programme and programme != announced:
+                announced = programme
+                announce(dict(st, director=directed), now, say)
             if process is not None:
                 if imaging(st) and now - measured_at > MEASURE_S:
                     measuring, measured_at = measure_transit(st, measuring, say), now
@@ -951,9 +1044,50 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
     finally:
         composer.stop()
         quiet(tones)
+        if phones is not None:
+            phones.stop()
         if process is not None:
             process.stdin.close()
             process.wait(timeout=30)
+
+
+def opening(st, directed, now):
+    """As the stream goes on air: TELESCOPEYOKE LIVE and tonight's mission,
+    a line across the top for a few seconds, then straight on with the
+    picture (director.opening). Never a card in place of the picture."""
+    try:
+        import director
+        import streamlook
+        m = streamlook.from_status(dict(st, director=directed), now).get("mission")
+        director.opening("TELESCOPEYOKE LIVE" + (f" · TONIGHT: {m['title']}" if m else ""), now)
+        director.event("TELESCOPEYOKE LIVE", now)
+    except Exception:
+        pass
+
+
+_CUTTING = {"thread": None}
+
+
+def side_jobs(st, directed, now, voice, clipping, say=print):
+    """Every LOOK_S while on air: the narrator's turn and cutting the clips
+    that are due, neither ever holding up a picture."""
+    import threading
+    if voice is not None:
+        try:
+            import streamlook
+            voice.tick(streamlook.from_status(dict(st, director=directed), now).get("mission"), now)
+        except Exception:
+            pass
+    if clipping and not (_CUTTING["thread"] and _CUTTING["thread"].is_alive()):
+        import clips
+
+        def cut():
+            try:
+                clips.cut_due(say=say)
+            except Exception as error:
+                say(f"clips: {error}")
+        _CUTTING["thread"] = threading.Thread(target=cut, daemon=True)
+        _CUTTING["thread"].start()
 
 
 def quiet(tones):
@@ -1012,6 +1146,8 @@ def main(argv=None):
     ap.add_argument("--director", action="store_true",
                     help="with frame: write the director's answer over the picture (kept here, never sent)")
     ap.add_argument("--clear", action="store_true", help="with director: forget the target last aimed at")
+    ap.add_argument("--vertical", action="store_true",
+                    help="with frame: the 9:16 picture for phones, as cache/stream-vertical.jpg")
     args = ap.parse_args(argv)
     if args.action == "watch" and args.install:
         return install()
@@ -1050,6 +1186,12 @@ def main(argv=None):
         PREVIEW.parent.mkdir(parents=True, exist_ok=True)
         st = status()
         st = dict(st, director=director.direct(director.gather(st), director.last()))
+        if args.vertical:
+            out = config.DATA / "cache" / "stream-vertical.jpg"
+            out.parent.mkdir(parents=True, exist_ok=True)
+            frame_vertical(st).save(out, quality=90)
+            print(f"saved {out}")
+            return
         picture = frame(st)
         if args.director:
             picture = streamlook.debug_overlay(picture, director.report(st["director"]))

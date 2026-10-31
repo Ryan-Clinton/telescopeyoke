@@ -58,6 +58,11 @@ def describe(state, targets=None):
     else:
         title = f"Live telescope: imaging {name}, one exposure at a time"
         extra = []
+    m = state.get("mission") or {}
+    if m.get("stream_title"):
+        # The night's question sells it (stream-targets.toml [missions]); focusing
+        # and polar alignment are chapters of it and never change it.
+        title = m["stream_title"]
     title = f"{title} | {SITE}"
     tags = [t for t in BASE_TAGS + extra if " " not in t and len(t) <= 25][:10]
     return title[:140], tags

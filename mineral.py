@@ -741,6 +741,8 @@ def run(stems, details=None, strength="standard", slope="bright", send=True):
     so while it is made (lucky.json's "mineral" stage)."""
     lucky.progress("mineral", videos=len(stems))
     jpg, facts = mineral_file(stems, details=details, strength=strength, slope=slope)
+    lucky.progress("done", kind="mineral", videos=facts.get("videos", len(stems)), seas=facts.get("seas", []),
+                   picture=str(jpg))
     if not send:
         return jpg, facts
     import notify

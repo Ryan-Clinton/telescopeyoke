@@ -200,6 +200,10 @@ class Canvas:
             y += int(size * gap)
         return y
 
+    def measure(self, words, kind, size):
+        """How wide `words` would be drawn, in pixels."""
+        return int(self.draw.textlength(words, font=font(kind, size)))
+
     def box(self, rect, colour, outline=None, width=1, radius=10):
         fill = COLOURS[colour] if isinstance(colour, str) else colour
         line = COLOURS[outline] if isinstance(outline, str) else outline
@@ -232,8 +236,28 @@ def header(c, s):
     words, colour = live_state(s)
     if words:
         c.text((WIDTH - MARGIN_X, MARGIN_Y), words, "bold", 22, colour, anchor="ra")
-    if s.get("stage"):
+    if s.get("context"):
+        context_line(c, s["context"], name[2] + 220, WIDTH - MARGIN_X - 360)
+    elif s.get("stage"):
         c.text((WIDTH // 2, MARGIN_Y + 2), s["stage"], "sans", 20, "secondary", anchor="ma")
+
+
+def context_line(c, context, left, right):
+    """WHAT, WHY, NOW or NEXT (mission.context) across the top, centred
+    between `left` and `right`, smaller if it would not fit."""
+    label, words = context
+    for size in (21, 19, 17, 15):
+        lw, ww = c.measure(label, "bold", size), c.measure(words, "sans", size)
+        if lw + 12 + ww <= right - left:
+            break
+    else:
+        while words and lw + 12 + c.measure(words + "…", "sans", size) > right - left:
+            words = words[:-1]
+        words += "…"
+        ww = c.measure(words, "sans", size)
+    x = (left + right - (lw + 12 + ww)) // 2
+    c.text((x, MARGIN_Y + 2), label, "bold", size, "accent")
+    c.text((x + lw + 12, MARGIN_Y + 2), words, "sans", size, "text")
 
 
 def footer(c, s):
@@ -428,9 +452,8 @@ def about(c, s, x, y, width):
     c.text((x, y), s["target"], "bold", 60, "text", on="panel")
     y += 76
     if entry.get("common"):
-        c.text((x, y), entry["common"].upper(), "bold", 26, "secondary", on="panel")
-        y += 40
-    if entry.get("words"):
+        y = c.wrap((x, y), entry["common"].upper(), "bold", 26, width, "secondary", on="panel", gap=1.2) + 6
+    if entry.get("words") and not s.get("mission"):        # with a mission, its goal says why
         y = c.wrap((x, y + 6), entry["words"], "sans", 25, width, "text", on="panel") + 4
     facts = " · ".join(str(f) for f in (entry.get("distance"),
                                          f"magnitude {entry['magnitude']}" if entry.get("magnitude") else None) if f)
@@ -575,6 +598,13 @@ def programme(c, s, x, y, width):
             return c.wrap((x, y), t.get("baseline_words", ""), "sans", 20, width, "secondary", on="panel")
         return light_curve(c, t, x, y + 28, width, 170, s["now"])
     if kind == "moon":
+        if s.get("mission") and not s.get("live"):
+            # The mission says what and why; the method is told in the story's chapters.
+            if s.get("lucky_stage"):
+                title, figures = s["lucky_stage"]
+                y = c.wrap((x, y), title, "bold", 20, width, "live", on="panel")
+                y = c.wrap((x, y + 2), figures, "mono", 18, width, "secondary", on="panel") + 12
+            return y
         y = c.wrap((x, y), "THE MOON", "bold", 28, width, "accent", on="panel")
         if s.get("live"):
             y = c.wrap((x, y + 6), "LIVE VIEW", "bold", 20, width, "live", on="panel")
@@ -587,7 +617,7 @@ def programme(c, s, x, y, width):
             y = c.wrap((x, y), title, "bold", 20, width, "live", on="panel")
             y = c.wrap((x, y + 2), figures, "mono", 18, width, "secondary", on="panel") + 10
         tonight = moon_tonight(s.get("moon") or {})
-        if tonight:
+        if tonight and not s.get("mission"):
             y = c.wrap((x, y), tonight, "mono", 18, width, "secondary", on="panel") + 10
         return y
     if kind == "picture":
@@ -655,12 +685,88 @@ def side_panel(c, s):
     width = w - 56
     top = about(c, s, inner, y + 26, width)
     story = s.get("story") or {}
-    if story.get("card") and story.get("chapter") != "NOW":
+    if s.get("decision"):
+        top = decision_card(c, s["decision"], inner, top, width)
+    elif story.get("chapter") == "RESULT" and s.get("reveal"):
+        top = reveal_card(c, s["reveal"], inner, top, width)
+        return                            # the two pictures take the panel for these seconds
+    elif story.get("card") and story.get("chapter") != "NOW":
         top = chapter_card(c, story["card"], inner, top, width)
     else:
         top = programme(c, s, inner, top, width)
+        if s.get("mission"):
+            top = mission_block(c, s["mission"], inner, top, width, y + h - len(figures_for(s)) * FIGURE_ROW - 40)
     # The programme comes first; the figures take what room is left (PRIORITY).
     figures(c, s, inner, max(top + 10, y + h - 3 * FIGURE_ROW - 10), y + h - 10)
+
+
+def decision_card(c, d, x, y, width):
+    """TELESCOPEYOKE DECISION (director.decide): what it saw, what it is
+    doing and why, for director.DECISION_S: the automation made visible."""
+    y = c.wrap((x, y), "TELESCOPEYOKE DECISION", "bold", 24, width, "accent", on="panel") + 4
+    y = c.wrap((x, y), d["situation"], "sans", 23, width, "text", on="panel") + 8
+    for label, words in (("ACTION", d["action"]), ("WHY", d["why"])):
+        y = c.wrap((x, y), label, "bold", 18, width, "secondary", on="panel", gap=1.2)
+        y = c.wrap((x, y), words, "sans", 22, width, "text", on="panel") + 8
+    return y
+
+
+def reveal_card(c, r, x, y, width, height=210):
+    """RAW → RESULT: one raw frame above what was made of it, each labelled
+    with its measured count (mission.reveal)."""
+    y = c.wrap((x, y), "RAW → RESULT", "bold", 26, width, "accent", on="panel") + 6
+    for label, path, arrow in ((r["before"], r["before_path"], True), (r["after"], r["after_path"], False)):
+        try:
+            with Image.open(path) as im:
+                picture = fit(display(shrunk(im.convert("RGB"), (width, height))), (width, height),
+                              fill=COLOURS["panel"])
+            c.image.paste(picture, (x, y))
+        except OSError:
+            c.box((x, y, x + width, y + height), "background")
+        y += height + 6
+        y = c.wrap((x, y), label, "bold", 18, width, "text", on="panel", gap=1.2)
+        if arrow:
+            c.text((x + width // 2, y), "↓", "bold", 30, "accent", on="panel", anchor="ma")
+            y += 40
+    return y
+
+
+MARKS = {"done": ("✓", "live"), "now": ("●", "accent"), "failed": ("✗", "attention")}
+
+
+def mission_block(c, m, x, y, width, bottom):
+    """The mission (mission.py): its goal, its milestones, the open question
+    and how sure a result is. Only what fits above `bottom`: the goal
+    first, then the question, then the milestones (a long list shortened
+    to the ones about now), then the confidence."""
+    def fits(lines, size, gap=1.3):
+        return y + int(lines * size * gap) + 8 <= bottom
+    if not fits(2, 22):
+        return y
+    y = c.wrap((x, y), "MISSION", "bold", 18, width, "secondary", on="panel", gap=1.1)
+    y = c.wrap((x, y + 2), m["goal"], "sans", 22, width, "text", on="panel") + 8
+    if m.get("confidence") and fits(2, 20):
+        label, why = m["confidence"]
+        y = c.wrap((x, y), f"CONFIDENCE: {label}", "bold", 20, width,
+                   "attention" if label in ("REJECTED", "DOES NOT AGREE") else "live", on="panel")
+        if m.get("result") and fits(2, 19):
+            y = c.wrap((x, y + 2), m["result"], "mono", 17, width, "secondary", on="panel")
+        y += 8
+    steps = m.get("steps") or []
+    if len(steps) > 3:                    # the step before, the one under way and the next: the rest rotate on
+        at = next((i for i, (_, st) in enumerate(steps) if st == "now"), sum(st == "done" for _, st in steps))
+        steps = steps[max(0, min(at - 1, len(steps) - 3)):max(0, min(at - 1, len(steps) - 3)) + 3]
+        y = c.wrap((x, y), f"STEP {min(at + 1, len(m['steps']))} OF {len(m['steps'])}", "bold", 16, width,
+                   "secondary", on="panel", gap=1.4)
+    for label, state in steps:
+        if not fits(1, 20) or not fits(2, 20) and m.get("question"):
+            break
+        mark, colour = MARKS.get(state, ("○", "secondary"))
+        c.text((x, y), f"{mark}  {label}", "sans", 20, colour, on="panel")
+        y += 28
+    if m.get("question") and fits(2, 21):
+        y = c.wrap((x, y + 6), m["question"], "bold", 21, width, "accent", on="panel")
+    return y + 8
 
 
 def ribbon(c, steps, y):
@@ -1060,6 +1166,55 @@ def compose(state, stack=None, single=None):
     footer(c, state)
     headline_band(c, state)
     c.crawl = (state.get("story") or {}).get("crawl")
+    return c
+
+
+VERTICAL = (1080, 1920)
+
+
+def vertical(state, picture=None):
+    """The 9:16 picture for phones (YouTube's vertical live, in the Shorts
+    feed): the camera's picture large, and only the target, the mission,
+    where it has got and its open question. No figures, no panel: the
+    full 16:9 picture carries those."""
+    w, h = VERTICAL
+    c = Canvas(w, h)
+    m = state.get("mission") or {}
+    c.text((w // 2, 70), "TELESCOPEYOKE · LIVE", "bold", 30, "accent", anchor="ma")
+    target = "THE MOON" if state.get("kind") == "moon" else (state.get("target") or "").upper()
+    if state.get("kind") in ("focus", "polar"):
+        target = {"focus": "FOCUSING", "polar": "POLAR ALIGNMENT"}[state["kind"]]
+    if target:
+        c.text((w // 2, 130), target, "bold", 76, "text", anchor="ma")
+    else:
+        c.text((w // 2, 140), "Between observations", "sans", 48, "secondary", anchor="ma")
+    box = (40, 320, w - 80, w - 80)
+    if picture is not None:
+        # The Moon as it is (as sky_area shows it); the sky stretched as the main picture's.
+        shown = shrunk(picture, box[2:]) if state.get("kind") == "moon" else display(shrunk(picture, box[2:]))
+        c.image.paste(fit(shown, box[2:]), box[:2])
+    else:
+        c.box((box[0], box[1], box[0] + box[2], box[1] + box[3]), "panel")
+    y = box[1] + box[3] + 50
+    if m.get("title"):
+        y = c.wrap((60, y), m["title"], "bold", 40, w - 120, "accent") + 6
+    now_step = next((label for label, st in m.get("steps") or [] if st == "now"), None)
+    stage = (state.get("lucky_stage") or (None, None))[0]
+    if now_step or stage:
+        y = c.wrap((60, y), (now_step or stage.title()), "sans", 38, w - 120, "text") + 16
+    if m.get("question"):
+        y = c.wrap((60, y + 10), m["question"], "bold", 44, w - 120, "text", gap=1.25) + 16
+    progress = state.get("lucky_stage") and state["lucky_stage"][1]
+    if progress and y < h - 220:
+        c.wrap((60, y + 10), progress.split(" · ")[0], "mono", 34, w - 120, "secondary")
+    words, colour = live_state(state)
+    if words:
+        c.text((w // 2, h - 120), words, "bold", 34, colour, anchor="ma")
+    headline = state.get("headline")
+    if headline:
+        y0 = 236
+        plate(c, (0, y0, w, y0 + 64))
+        c.text((w // 2, y0 + 12), headline, "bold", 34, "accent", anchor="ma")
     return c
 
 
@@ -1498,7 +1653,8 @@ def moon_now(now):
 
 LUCKY_STAGES = {"centring": "FINDING THE MOON", "capturing": "CAPTURING THE SHARPEST MOMENTS",
                 "ranking": "RANKING EVERY FRAME", "stacking": "CORRECTING THE ATMOSPHERE",
-                "done": "RESULT READY", "mineral": "REVEALING THE MOON'S SUBTLE COLOUR"}
+                "done": "RESULT READY", "mineral": "REVEALING THE MOON'S SUBTLE COLOUR",
+                "colour": "CAPTURING THE MOON'S COLOUR"}
 # The director's programmes that are a lucky-imaging video or made from one.
 LUCKY_PROGRAMMES = ("lunar lucky imaging", "mineral Moon")
 
@@ -1521,6 +1677,11 @@ def lucky_stage(now, fresh=120):
     elif stage in ("ranking", "stacking"):
         words = f"{p.get('done', 0):,} / {p.get('frames', 0):,}" + (
             f" · {p['points']} alignment regions" if p.get("points") else "")
+    elif stage == "colour":
+        words = f"colour video {p.get('done', 1)} of {p.get('videos', 3)} · 16-bit, exposed so nothing clips"
+    elif stage == "done" and p.get("kind") == "mineral":
+        import mission
+        words = mission.result_words("mineral", p) or f"from {p.get('videos', 0)} colour videos"
     elif stage == "done":
         words = f"best {p.get('kept', 0):,} of {p.get('frames', 0):,} frames"
     elif stage == "mineral":
@@ -1550,6 +1711,29 @@ def lucky_now():
 
 
 def from_status(st, now=None, session=None):
+    """The picture's state (`picture_state`) with the mission it is part of
+    (mission.py) and the WHAT / WHY / NOW / NEXT line across the top."""
+    s = picture_state(st, now, session)
+    return with_mission(s, s["now"])
+
+
+def with_mission(s, now, lucky=None):
+    """`s` with its mission and context line added; neither ever stops the picture."""
+    try:
+        import director
+        import mission
+        s["mission"] = mission.of(s, now, lucky)
+        s["context"] = mission.context(s["mission"], s, now)
+        s["reveal"] = mission.reveal(s, now)
+        s["decision"] = director.decision(now)
+        if s.get("story", {}).get("chapter") == "RESULT" and not s["reveal"]:
+            s["story"] = dict(s["story"], chapter="NOW", card=None)
+    except Exception:
+        s["mission"], s["context"], s["reveal"], s["decision"] = None, None, None, None
+    return s
+
+
+def picture_state(st, now=None, session=None):
     """The picture's state from web/status.json, as stream.py reads it, and
     from the director's answer (st["director"], director.py) where there is
     one: it names the target, says whether the run's figures are the
@@ -1804,6 +1988,7 @@ def scenes(out, now=None, say=print):
         picture = disc if s["kind"] == "moon" else single
         canvas = compose(s, stack if d["image"] == "stack" else None, picture if d["image"] != "none" else None)
         canvas.image.save(out / f"{name}.png")
+        vertical(s, picture if d["image"] != "none" else None).image.save(out / f"{name}-vertical.png")
         drawn[name] = (d, canvas)
         say(f"{out / (name + '.png')}  {d['scene']}")
     return drawn
@@ -1814,6 +1999,13 @@ def scene_state(given, d, now):
     real night's files: its newest picture's age and lucky stage as given."""
     s = from_status(dict(given["status"], director=d), now)
     s["last_age"] = d["image_age"]
+    s["story"] = dict(s.get("story") or {}, chapter="NOW", card=None)   # the programme, not a chapter card
     if s.get("lucky") and given.get("lucky") in LUCKY_STAGES:
         s["lucky_stage"] = (LUCKY_STAGES[given["lucky"]], "example figures")
-    return s
+    return with_mission(s, now, EXAMPLE_LUCKY.get(given.get("lucky"), {}))
+
+
+# Made-up lucky.json for the scenes' missions: how far each has got.
+EXAMPLE_LUCKY = {"capturing": {"stage": "capturing", "done": 846, "frames": 2000},
+                 "stacking": {"stage": "stacking", "done": 300, "frames": 2000},
+                 "mineral": {"stage": "mineral", "videos": 3}}

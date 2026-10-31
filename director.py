@@ -66,6 +66,10 @@ import records
 
 TARGET_FILE = config.DATA / "cache" / "target.json"
 STATE_FILE = config.DATA / "cache" / "broadcast.json"
+EVENTS_FILE = config.DATA / "cache" / "events.jsonl"         # the night's moments, for clips and the narrator
+DECISIONS_FILE = config.DATA / "cache" / "decisions.jsonl"   # what the telescope decided, and why
+DECISION_S = 40           # a decision is shown in the side panel this long
+OPENING_S = 10            # the opening line when the stream goes on air
 FRESH_S = 120             # a newest picture younger than this is the camera seeing now
 TARGET_S = 12 * 3600      # safety net: a target nothing has cleared this long is another night's
 SLEW_S = 20 * 60          # a GoTo still "slewing" or "centring" after this never said how it ended
@@ -82,7 +86,7 @@ PROGRAMMES = {"moon": "lunar lucky imaging", "transit": "exoplanet transit", "pa
 ACTIVITIES = {"goto": "slewing", "solve": "plate solving", "focus": "focusing", "polar": "polar aligning",
               "imaging": "imaging", "live": "live view", "centring": "centring", "capturing": "capturing",
               "ranking": "ranking frames", "stacking": "stacking", "done": "result ready",
-              "mineral": "mineral processing", "lucky": "lucky imaging"}
+              "mineral": "mineral processing", "lucky": "lucky imaging", "colour": "capturing colour"}
 # How far the aim at the target has got, as what the stream may say of it:
 # moving to it, centring it, observing it, or nothing (it is not named).
 STATES = {"slewing": "moving", "centring": "centring", "reached": "observing", "centred": "observing",
@@ -307,7 +311,7 @@ def direct(given, before=None):
 
 def _moon_scene(activity):
     """The part of a Moon programme an activity is: live, capture, stack or mineral."""
-    return {"centring": "capture", "capturing": "capture", "ranking": "stack", "stacking": "stack",
+    return {"centring": "capture", "capturing": "capture", "colour": "capture", "ranking": "stack", "stacking": "stack",
             "done": "stack", "mineral": "mineral"}.get(activity, "live")
 
 
@@ -361,11 +365,85 @@ def update(st, now=None, procedure=False):
                   "programme": None, "activity": "unknown", "image": "stack", "image_age": None,
                   "run_current": True, "priority": 0, "on_air": bool(procedure) or stream.seeing(now),
                   "updated": now or time.time(), "headline": None, "ignored": [f"not worked out: {error}"]}
+    told = (answer.get("headline") or {}).get("words")
+    if told and told != ((last() or {}).get("headline") or {}).get("words"):
+        event(told, answer["updated"], target=answer.get("target"))
     try:
         records.write(STATE_FILE, answer)
     except OSError:
         pass
     return answer
+
+
+def _append(path, record):
+    """One line more in a .jsonl file; never an error (a full disk must not stop anything)."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record) + "\n")
+    except (OSError, TypeError, ValueError):
+        pass
+
+
+def _tail(path, since):
+    """The records in a .jsonl file written at or after `since`, oldest first."""
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()[-200:]
+    except OSError:
+        return []
+    out = []
+    for line in lines:
+        try:
+            r = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(r, dict) and r.get("at", 0) >= since:
+            out.append(r)
+    return out
+
+
+def event(words, now=None, **more):
+    """A moment of the night (a target reached, a stage begun, a result, a
+    decision) in cache/events.jsonl: a clip is cut round it (clips.py) and
+    the narrator may say it (narrator.py)."""
+    _append(EVENTS_FILE, {"at": now or time.time(), "words": words, **more})
+
+
+def events(since):
+    return _tail(EVENTS_FILE, since)
+
+
+def decide(situation, action, why, now=None):
+    """The telescope has decided something on its own: what it saw, what
+    it is doing about it and why, in plain words, first person where it
+    reads naturally. Shown in the side panel as TELESCOPEYOKE DECISION for
+    DECISION_S, said by the narrator, and kept as an event. Never an error:
+    it is called from inside a video or a patrol."""
+    now = now or time.time()
+    _append(DECISIONS_FILE, {"at": now, "situation": situation, "action": action, "why": why})
+    event(f"DECISION: {action}", now, situation=situation, why=why)
+
+
+def decision(now=None):
+    """The newest decision made in the last DECISION_S, or None."""
+    now = now or time.time()
+    found = _tail(DECISIONS_FILE, now - DECISION_S)
+    return found[-1] if found else None
+
+
+def opening(words, now=None):
+    """The line across the top as the stream goes on air ("TELESCOPEYOKE
+    LIVE · TONIGHT: MINERAL MOON"), for OPENING_S: the opening is a line
+    over the picture, never a card in place of it."""
+    now = now or time.time()
+    answer = last()
+    if not answer:
+        return
+    answer["headline"] = {"words": words, "until": now + OPENING_S}
+    try:
+        records.write(STATE_FILE, answer)
+    except OSError:
+        pass
 
 
 def report(answer):

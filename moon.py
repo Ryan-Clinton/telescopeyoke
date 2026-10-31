@@ -179,6 +179,10 @@ def video(s, cam, path, frames, bursts_wanted, exposure, region, depth, matrix, 
                     continue
                 down, right = lunar.offset(found, last.shape)
                 if np.hypot(down, right) > CENTRED * found["r"]:
+                    import director
+                    director.decide(f"The Moon has drifted {np.hypot(down, right):.0f} pixels in the picture",
+                                    "Re-centring it before the next burst",
+                                    "The same part of the Moon has to stay inside the camera's fast region.")
                     east, north = lunar.correction(matrix, down, right)
                     s.aim = [s.aim[0] + east, s.aim[1] + north]
                     s.go()
@@ -225,7 +229,13 @@ def colour_videos(s, cam, stamp, args, exposure, shape, matrix, white, say):
         raise SystemExit("The Moon was lost before the colour videos: cloud?")
     _, _, w, h = lunar.roi(disc, shape)
     out = []
+    import director
     for n, (right, down) in enumerate(dither_steps(args.colour_videos, (shape[1] - w) / 2, (shape[0] - h) / 2)):
+        lucky.progress("colour", done=n + 1, videos=args.colour_videos)
+        if n:
+            director.decide(f"Colour video {n} of {args.colour_videos} is done",
+                            "Moving the Moon to another part of the camera",
+                            "A fault on the sensor then cannot stay attached to the same feature on the Moon.")
         east, north = lunar.correction(matrix, -down, -right)
         s.aim = [start[0] + east, start[1] + north]
         s.go()

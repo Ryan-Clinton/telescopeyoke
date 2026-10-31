@@ -6,8 +6,10 @@ story").
 `plan(state, now)` decides, for one picture:
 
 - the side panel's chapter, in a loose broadcast clock (CLOCK): NOW (the
-  programme as it is), then SCIENCE, HOW IT WORKS, TONIGHT and COMING UP in
-  turn, each for half a minute between spells of NOW;
+  programme and its mission, mission.py), then SCIENCE, HOW IT WORKS (the
+  chat's chosen topic first, streamchat.vote), SO FAR TONIGHT, COMING UP
+  and RAW → RESULT (once something has been made) in turn, each for about
+  half a minute between spells of NOW;
 - a LOOK CLOSELY or TELESCOPEYOKE line across the picture, between chapters;
 - a larger explainer drawn over the picture, every EXPLAINER_EVERY;
 - a slow crawl along the bottom, every CRAWL_EVERY.
@@ -24,7 +26,7 @@ from pathlib import Path
 
 # The broadcast clock: (chapter, seconds), round and round from the stream's start.
 CLOCK = [("NOW", 45), ("SCIENCE", 25), ("NOW", 45), ("HOW IT WORKS", 25), ("NOW", 45), ("TONIGHT", 20),
-         ("NOW", 45), ("COMING UP", 20)]
+         ("NOW", 45), ("COMING UP", 20), ("NOW", 45), ("RESULT", 20)]
 CYCLE = sum(s for _, s in CLOCK)
 LINE_EVERY, LINE_S = 90, 10           # a LOOK CLOSELY / TELESCOPEYOKE line, during NOW
 EXPLAINER_EVERY, EXPLAINER_S = 300, 12
@@ -160,7 +162,8 @@ def tonight_lines(s, live):
         lines.append("No confirmed new star yet: most nights find none, and that is still a result")
     if s.get("stage"):
         lines.append(s["stage"])
-    return lines
+    import mission
+    return lines + mission.so_far(s.get("now") or time.time())
 
 
 def coming_up(steps, now, targets):
@@ -275,11 +278,23 @@ def plan(s, live, now=None, story=None, targets=None):
         hunt = comet_hunt(now)
         if hunt:
             pool.append(comet_words(hunt))
-        text = story.pick(f"how-{s['kind']}", pool, slot)
-        out["card"] = ("HOW IT WORKS", [text]) if text else None
+        import streamchat
+        voted = streamchat.tally(now)
+        topic = streamchat.VOTE_TOPICS.get(voted[0][0]) if voted else None
+        if topic and stories.get(topic):
+            # The chat's choice (!vote): its pool first.
+            text = story.pick(f"how-voted-{topic}", stories[topic], slot)
+            out["card"] = ("HOW IT WORKS · CHOSEN BY CHAT", [text]) if text else None
+        else:
+            text = story.pick(f"how-{s['kind']}", pool, slot)
+            out["card"] = ("HOW IT WORKS", [text]) if text else None
     elif chapter == "TONIGHT":
         lines = tonight_lines(s, live)
-        out["card"] = ("TONIGHT", lines) if lines else None
+        out["card"] = ("SO FAR TONIGHT", lines) if lines else None
+    elif chapter == "RESULT":
+        # One raw frame and what has been made of it (mission.reveal), when something has.
+        import mission
+        out["card"] = ("RAW → RESULT", []) if s.get("reveal") or mission.reveal(s, now) else None
     elif chapter == "COMING UP":
         nxt = coming_up((live.get("schedule") or {}).get("steps") or [], now, targets)
         out["card"] = nxt if nxt else ("COMING UP", ["This is the last target tonight: it carries on until dawn."])
