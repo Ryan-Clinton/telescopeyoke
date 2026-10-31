@@ -54,6 +54,7 @@ COMMANDS = {
     "build_catalogue.py": ("local_write", {}, {}),
     "calibrate.py": ("hardware", {}, {}),
     "camera_setup.py": ("local_write", {"--check": "read_only"}, {}),
+    "camera_probe.py": ("read_only", {}, {}),     # run alone: only the black or white window camera_test.py --timed-light shines
     "camera_test.py": ("hardware", {}, DRY),
     "candidates.py": ("read_only", {"--dismiss": "local_write", "--reopen": "local_write"}, {}),
     "clouds.py": ("read_only", {}, {}),
