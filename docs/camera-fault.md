@@ -428,6 +428,12 @@ in another), so the camera's own readable settings are compared instead.
    exposure asked and reported, the speed, `HZ`, the frame rate, the
    trigger mode, bandwidth).
    - The laptop's screen is the light (`--light NAME`: a Hue light).
+     **No LED or other light driven by a microcontroller will be built or
+     bought for this.** It was suggested, for a clock independent of the
+     laptop, and turned down on 31 October: the laptop's clock is good to
+     well under a millisecond and the screen switches within about 1/60 s,
+     so a 2 s flash is timed to about 1 %, which is all these tests need.
+     The flashes the scan and the timed light use are the screen's.
    - **Where the window is:** `./camera_test.py --scan` moves a 1 s flash
      through an 8 s exposure and past its end, 1 s at a time, at each
      speed, and reports when the sensor starts and stops gathering after
