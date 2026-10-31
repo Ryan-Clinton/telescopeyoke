@@ -280,7 +280,7 @@ def test_no_focus_sweep_or_big_focuser_move(command):
 
 
 @pytest.mark.parametrize("command", [
-    "./focus.py --walk-in", "./focus.py --check", "./focus.py --report", "./focus.py --motor --dry-run",
+    "./focus.py --walk-in", "./focus.py --check", "./focus.py --motor --dry-run",
     "./focuser.py move 64", "./focuser.py move -16", "./focuser.py test", "grep -n motor focus.py",
     "./focus.py --walk-in --dry-run", "./ty focus --walk-in", "./focus.py --field", "./focus.py --minutes 5",
     "./focuser.py --ms 300 move 16", "./focus.py --motor --dry-run > log", "git log --grep focus",

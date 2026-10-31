@@ -57,7 +57,7 @@ The account of everything tried so far, feature by feature, is at the end:
 | 4 | Does `--exposure auto` pick the exposure that gathers most usable light? | Run the same target at 1, 2, 3 and 4 s; compare accepted integration time and star shape with what auto chose. | It chose 1 s twice, on roundness. Whether 2 s would have given a better picture despite the stretch is untested. |
 | 5 | Do four worker processes give the expected speed-up? | `./restack.py SESSION --profile` on 200 to 500 frames, with `--workers 1` and `--workers 4`. | 200 frames: 23.5 minutes before the rewrite, 3.9 minutes with four workers. |
 | 6 | Does the polar measurement repeat? | `./polaralign.py --repeat 5` with the bolts left alone. It prints each answer and their scatter. | Not yet run. Five rounds on 6 October gave 5.2°, 1.1°, 0.4°, 0.6°, 0.2°, but the bolts were turned between them. |
-| 7 | How quickly is a turn of the focuser heard on the USB 3 lead? | `./focus.py` on a rich field, then `./focus.py --report`: `feedback_s` on each level. Under about 1.2 s on levels 1 and 2 is the aim. | Not yet run. |
+| 7 | How quickly is a turn of the focuser heard on the USB 3 lead? | Dropped on 31 October 2026: its one-off command was taken out. `./focus.py` still prints `feedback_s` on each line. | Never run. |
 | 8 | How long is the shutter really open? | `./camera_test.py --timing` (cap on, any time), then `./camera_test.py --trail` on a field of bright stars away from the pole. | Run 13 October. Each second asked for added 0.63 s; a 10 s frame's trails showed the shutter open 6.4 s. It changes with the driver's Speed control (1.25, 0.86 and 0.63 s at Speed 0, 1 and 2). `camera.py` now asks for more by the measured share, and a 10 s frame's trails then showed 9.6 s. |
 | 9 | Does the sky's drift answer the Dec motor in proportion? | Dropped on 31 October 2026: its one-off command was taken out. | Never run. The three readings of 5 October (below) fit no one explanation. |
 | 10 | Is one pointing correction for each side of the meridian enough? | `./mount.py pointing`: plate solves at -4, -3, -2, -1, +1, +2, +3 and +4 hours. | Yes, 17 October 2026: seven plate solves at Dec +40°, four east and three west (the house hides the rest of the west), each within 0.25° of its side's average, twice: before and after home was marked. On 6 October the east side was 5.8° out in Dec and the west 0.2°, from one place each. |
@@ -202,7 +202,7 @@ order that wastes no setting-up ([why this order](calibration.md)). None has bee
 | Order | What | Command | Takes | Needs |
 |---|---|---|---|---|
 | 1 | Camera timing | `./camera_test.py --timing` | 3 minutes | Nothing: the cap can be on. Do it at dusk. |
-| 2 | Focus response on the USB 3 lead | `./focus.py --field`, then `./focus.py --report` | 10 minutes | A rich field. Turn through focus and back until "Focus good". |
+| 2 | Focus on the USB 3 lead | `./focus.py --field` | 10 minutes | A rich field. Turn through focus and back until "Focus good". |
 | 3 | Polar repeatability | `./mount.py goto NAME --solve` on a star east of south, then `./polaralign.py --step 12 --repeat 5` | 10 minutes | The bolts left alone throughout. |
 | 3a | What a turn of the azimuth bolts does (experiment 17) | Two half turns of one bolt, the same way, a measurement after each: `./polaralign.py --step 12 --turned 0.5 0` | 6 minutes | The bolts centred before the first measurement. |
 | 4 | Real exposure from star trails | `./camera_test.py --trail` | 1 minute | Where step 3 left it: bright stars, away from the pole. |
@@ -214,8 +214,8 @@ order that wastes no setting-up ([why this order](calibration.md)). None has bee
 
 Movement checking needs no step of its own: steps 3, 5, 8 and 9 are judged by
 their plate solves as they run, and each judgement goes into
-`cache/moved_log.jsonl`. Afterwards `./ty characterise` should read 9 or 10
-of 12, and the results go in the table above.
+`cache/moved_log.jsonl`. Afterwards `./ty characterise` should read 8 or 9
+of 11, and the results go in the table above.
 
 ## Polaris by day: what to isolate before searching again
 
@@ -485,7 +485,7 @@ used with a mouse.
 Written on 7 October 2026 to turn the first nights' surprises into
 measurements, and none of it yet run on the real mount or camera:
 `polaralign.py --repeat`, `camera_test.py --timing` and `--trail`,
-`mount.py pointing`, `focus.py --report` and
+`mount.py pointing` and
 `ty characterise`. The arithmetic of each is tested on made-up figures and
 on the simulated mount. `--trail` reads made-up trails about 4% short. The
 trail measure, the movement check and the pointing survey each have

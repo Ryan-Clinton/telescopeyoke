@@ -677,7 +677,7 @@ or "Measure again", that starts the application's action for it:
 |---|---|---|
 | How long a frame takes for the exposure asked | `camera_test.py --timing` | no |
 | How long the shutter is really open | `camera_test.py --trail` | yes: tracking stops for one frame |
-| How quickly focusing answers; the star size good focus comes to | `focus.py` | no |
+| The star size good focus comes to | `focus.py` | no |
 | Pointing error on each side | `mount.py sync` | no |
 | Where the home position really is | `mount.py findhome`; once measured, a second button, "Go there, to mark it", starts `mount.py truehome` | yes, both |
 | Whether one correction for each side is enough | `mount.py pointing` | yes |

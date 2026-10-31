@@ -64,7 +64,7 @@ COMMANDS = {
     "depth.py": ("local_write", {}, {}),
     "difference.py": ("local_write", {}, {}),
     "doctor.py": ("read_only", {}, {}),
-    "focus.py": ("hardware", {"--report": "read_only"}, DRY),
+    "focus.py": ("hardware", {}, DRY),
     "focuser.py": ("hardware", {}, {}),
     "forced.py": ("local_write", {}, {}),
     "horizon.py": ("hardware", {"--show": "read_only", "--forget": "local_write"}, DRY),

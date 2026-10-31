@@ -694,8 +694,7 @@ Known limits:
 Near term, the measurements the first nights showed are needed, each now
 one command (`./ty characterise` shows which have been made):
 
-- The click-and-tone focusing under real stars on the USB 3 lead, and how
-  quickly a turn is heard (`./focus.py`, then `./focus.py --report`).
+- The click-and-tone focusing under real stars on the USB 3 lead (`./focus.py`).
 - Whether the polar measurement repeats (`./polaralign.py --repeat 5`).
 - Whether one pointing correction for each side is enough (`./mount.py pointing`).
 - A phone panorama tied to the compass and compared with what the telescope sees.

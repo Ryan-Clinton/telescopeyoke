@@ -21,7 +21,6 @@ import mount
 import polaralign
 import polaris
 import simulator
-import tracking
 from simulator import SimulatedHandset
 from test_interface import valid
 
@@ -349,24 +348,6 @@ def test_the_new_mount_commands_say_what_they_would_do(monkeypatch, capsys, tmp_
     assert json.loads(capsys.readouterr().out)["errors"][0]["code"] == "MOTION_LOCKED"
 
 
-# --- focusing: how quickly it answered --------------------------------------------------------------
-
-def test_the_focus_report_gives_each_levels_timing(tmp_path, monkeypatch, capsys):
-    monkeypatch.setattr(focus, "FRAMES_FILE", tmp_path / "focus_frames.jsonl")
-    with pytest.raises(interface.Refusal):
-        focus.report()
-    frame = lambda level, capture, state="seeking": {
-        "level": level, "binning": 1 if level == 3 else 2, "state": state, "best_hfr": 2.1, "saved": time.time(),
-        "timing": {"capture_s": capture, "process_s": 0.1, "feedback_s": capture + 0.1, "cycle_s": capture + 0.15}}
-    lines = [frame(1, 0.7)] * 4 + [frame(2, 0.72)] * 5 + [frame(3, 1.0)] * 6 + [frame(3, 1.0, "good")]
-    focus.FRAMES_FILE.write_text("".join(json.dumps(line) + "\n" for line in lines), encoding="utf-8")
-    found = focus.report()
-    assert [(row["level"], row["frames"], row["binning"]) for row in found["levels"]] == [(1, 4, 2), (2, 5, 2), (3, 7, 1)]
-    assert found["levels"][0]["feedback_s"] == pytest.approx(0.8) and found["quick_levels_feel_live"]
-    assert found["ended"] == "good" and found["ended_on_level"] == 3
-    assert "heard within 0.82 s" in capsys.readouterr().out
-
-
 # --- the one view of it all ---------------------------------------------------------------------------
 
 @pytest.fixture
@@ -382,7 +363,7 @@ def rig(tmp_path, monkeypatch):
 
 def test_a_rig_nothing_is_known_about_says_how_to_measure_each_thing(rig):
     answer = valid(interface.run("characterise", agent.characterise), "characterise")["data"]
-    assert answer["measured"] == 0 and answer["of"] == len(answer["items"]) == 12
+    assert answer["measured"] == 0 and answer["of"] == len(answer["items"]) == 11
     # In the order the work is done: align, find home, point, then the rest.
     assert [item["action"] for item in answer["items"]][:6] == ["polar", "polar-repeat", "find-home", "sync", "sync",
                                                                  "pointing-survey"]
@@ -411,7 +392,7 @@ def test_what_has_been_measured_is_reported_with_its_value_and_age(rig):
                                            "saved": now}))
     answer = valid(interface.run("characterise", agent.characterise), "characterise")["data"]
     found = {item["what"]: item for item in answer["items"] if item["measured"]}
-    assert answer["measured"] == len(found) == 6 and answer["summary"] == "6 of 12 measured"
+    assert answer["measured"] == len(found) == 6 and answer["summary"] == "6 of 11 measured"
     assert found["Where the home position really is"]["value"] == "out by +0.40° on the RA axis and -2.95° on the Dec axis"
     assert found["How far the polar axis is from the pole"]["value"] == "0.2°"
     assert found["How far the polar axis is from the pole"]["age_days"] == pytest.approx(2.0, abs=0.1)

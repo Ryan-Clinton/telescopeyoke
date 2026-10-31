@@ -66,7 +66,6 @@ def test_ty_passes_the_same_scripts_as_ty_does():
     ("./mount.py status", "read_only"),
     ("./mount.py settime", "hardware"),
     ("./focus.py --motor", "hardware"),
-    ("./focus.py --report", "read_only"),
     ("./patrol.py m31-panels --plan", "read_only"),
     ("./patrol.py m31-panels", "hardware"),
     ("./patrol.py --sweep --all-history", "local_write"),

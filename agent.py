@@ -5,8 +5,6 @@ serial port, so it is always safe to call.
 One implementation, several ways in: the `ty` command, the read-only web API
 that serve.py offers, and the MCP server in mcp_server.py all call these.
 """
-import contextlib
-import io
 import json
 import time
 from pathlib import Path
@@ -155,7 +153,7 @@ def characterise():
     # The application's action that makes each measurement, where it has one
     # (console.ACTIONS); the skyline has a screen of its own.
     ACTION = {"./camera_test.py --timing": "camera-timing", "./camera_test.py --trail (stars needed)": "camera-trail",
-              "./focus.py, then ./focus.py --report": "focus", "a ./focus.py run that ends on \"Focus good\"": "focus",
+              "a ./focus.py run that ends on \"Focus good\"": "focus",
               "./mount.py sync on that side, or ./mount.py pointing": "sync", "./mount.py pointing": "pointing-survey",
               "./polaralign.py": "polar", "./polaralign.py --repeat 5": "polar-repeat",
               "./mount.py findhome": "find-home"}
@@ -196,14 +194,6 @@ def characterise():
                                  "each second asked"))
     items.append(line("How long the shutter is really open", "./camera_test.py --trail (stars needed)", trail,
                       trail and f"{trail['share_of_asked']:.0%} of the time asked"))
-    try:
-        with contextlib.redirect_stdout(io.StringIO()):
-            answered = focus.report()
-    except interface.Refusal:
-        answered = None
-    quick = [row["feedback_s"] for row in (answered or {}).get("levels", []) if row["level"] < 3 and row["feedback_s"]]
-    items.append(line("How quickly focusing answers a turn of the knob", "./focus.py, then ./focus.py --report",
-                      answered, f"heard within {max(quick):g} s on the quick levels" if quick else None))
     reached = focus.RUNS_FILE.exists() and focus.RUNS_FILE.stat().st_size > 0
     items.append(line("The star size good focus comes to", "a ./focus.py run that ends on \"Focus good\"",
                       value=f"{focus.usual_best():.2f} arcseconds" if reached else None,

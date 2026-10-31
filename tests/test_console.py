@@ -152,7 +152,7 @@ def test_the_night_is_reported_as_the_status_page_shows_it(desk):
 def test_rig_knowledge_says_how_each_measurement_is_started(desk):
     found = desk.json("/api/characterise")[1]["data"]
     by_action = {item["action"]: item for item in found["items"] if item["action"]}
-    assert found["of"] == len(found["items"]) == 12
+    assert found["of"] == len(found["items"]) == 11
     # Anything that moves the mount, or stops it following the sky, is a plan first.
     assert all(by_action[name]["plan"] for name in ("polar", "polar-repeat", "find-home", "pointing-survey",
                                                     "camera-trail"))
