@@ -351,12 +351,19 @@ PULSE = 2.0          # seconds a pulse of light lasts
 SETTLE = 1.0         # seconds for a light to settle before a steady frame
 
 
-def gathered(cam, seconds):
+def short_wait(seconds):
+    """How long a timed-light frame is waited for: long enough for speed
+    0's 1.28 times and its readout, not the 108 s a lost 16 s frame gets."""
+    return 2 * seconds + 10
+
+
+def gathered(cam, seconds, wait=None):
     """The mean light of one exposure, and whether it was kept, sent too
-    soon (and taken anyway, for its light), or not sent at all."""
+    soon (and taken anyway, for its light), or not sent at all. A frame
+    sent too soon is not waited on for long: twice the exposure and 10 s."""
     import numpy as np
     try:
-        data, _ = cam._expose(seconds)
+        data, _ = cam._expose(seconds, wait=wait or short_wait(seconds))
         return {"mean": float(np.mean(data)), "back_s": cam.back_s, "kept": True}
     except Exception as problem:
         early = getattr(cam, "early_frame", None)
@@ -368,10 +375,15 @@ def gathered(cam, seconds):
 
 def pulsed(cam, seconds, switch, start, length, timer=None):
     """One exposure with the light on from `start` to `start + length`
-    seconds after it is asked for, and off otherwise."""
+    seconds after it is asked for, and off otherwise. A light that can time
+    its own pulse (the Nano's, by its own clock) is asked for one at
+    `start`; any other is switched on and off by this computer's clock."""
     import threading
     timer = timer or threading.Timer
-    on, off = timer(start, switch, [True]), timer(start + length, switch, [False])
+    if hasattr(switch, "pulse"):
+        on, off = timer(start, switch.pulse, [length]), timer(0, lambda: None)
+    else:
+        on, off = timer(start, switch, [True]), timer(start + length, switch, [False])
     on.start()
     off.start()
     try:
@@ -418,7 +430,8 @@ def timed_light(cam, switch, seconds=12.0, pulse=PULSE, speeds=(0, 1, 2), say=pr
             sleep(SETTLE)
             early = pulsed(cam, seconds, switch, lead, pulse, timer)
             late = pulsed(cam, seconds, switch, seconds - lead - pulse, pulse, timer)
-            row = {"speed": level, "dark": dark, "steady": steady, "early_pulse": early, "late_pulse": late}
+            row = {"speed": level, "dark": dark, "steady": steady, "early_pulse": early, "late_pulse": late,
+                   "settings": timing_settings(cam)}
             means = [f["mean"] for f in (dark, steady, early, late)]
             if None not in means and means[2] - means[0] > 0:
                 row["gathered_s"] = round(pulse * (means[1] - means[0]) / (means[2] - means[0]), 2)
@@ -434,6 +447,104 @@ def timed_light(cam, switch, seconds=12.0, pulse=PULSE, speeds=(0, 1, 2), say=pr
     found["summary"] = "\n".join([f"Timed light, {seconds:g} s asked:"] + [timed_words(r) for r in found["speeds"]]
                                  + [f"Kept in {folder}"])
     return found
+
+
+TIMING_SETTINGS = ("ExpoTime", "RealExpoTime", "ExpTimeRange", "Speed", "HZ", "FrameRate", "option TRIGGER",
+                   "option PRECISE_FRAMERATE", "option MAX_PRECISE_FRAMERATE", "option BANDWIDTH")
+
+
+def timing_settings(cam):
+    """The camera's settings that bear on timing, kept beside each measurement."""
+    found = settings(cam)
+    return {key: found[key] for key in TIMING_SETTINGS if key in found}
+
+
+def scan(cam, switch, seconds=8.0, pulse=1.0, step=1.0, speeds=(0, 1, 2), say=print, folder=None,
+         sleep=time.sleep, timer=None):
+    """Where each exposure really starts and ends: one frame for each
+    place of a `pulse` s flash, moved through the exposure and past its
+    end (to 1.5 times the time asked) by `step` s, at each speed. The share
+    of the brightest flash each frame caught marks the window the sensor
+    gathered in: its start and end in seconds after the exposure was asked
+    for. A fixed scaling and a moved window shorten an exposure the same
+    way; this tells them apart."""
+    folder = Path(folder or PROBES / ("scan-" + datetime.now().strftime("%Y%m%d-%H%M%S")))
+    was = cam.handle.get_Speed()
+    found = {"seconds": seconds, "pulse_s": pulse, "step_s": step, "folder": str(folder), "speeds": []}
+    say(f"Scan: {seconds:g} s frames, a {pulse:g} s flash moved by {step:g} s, "
+        f"speeds {', '.join(map(str, speeds))}")
+    try:
+        for level in speeds:
+            cam.handle.put_Speed(level)
+            switch(False)
+            sleep(SETTLE)
+            dark = gathered(cam, seconds)
+            places, offset = [], 0.0
+            while offset < 1.5 * seconds:
+                places.append({"at_s": round(offset, 2), **pulsed(cam, seconds, switch, offset, pulse, timer)})
+                offset += step
+            row = {"speed": level, "dark": dark, "flashes": places, "settings": timing_settings(cam)}
+            row.update(window(dark, places, pulse))
+            found["speeds"].append(row)
+            say("  " + scan_words(row))
+    finally:
+        switch(False)
+        cam.handle.put_Speed(was)
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "scan.json").write_text(json.dumps(found, indent=1, default=str), encoding="utf-8")
+    found["summary"] = "\n".join([f"Scan, {seconds:g} s asked:"] + [scan_words(r) for r in found["speeds"]]
+                                 + [f"Kept in {folder}"])
+    return found
+
+
+def window(dark, places, pulse):
+    """The gathering window from a scan's frames. Each flash counts by the
+    share of the brightest flash's light its frame holds; the window runs
+    from the first flash's start to the last one's end, each trimmed by
+    the part of it the frame missed."""
+    if dark.get("mean") is None:
+        return {}
+    seen = [(p["at_s"], p["mean"] - dark["mean"]) for p in places if p.get("mean") is not None]
+    full = max((light for _, light in seen), default=0)
+    if full <= 0:
+        return {}
+    shares = [(at, max(0.0, min(1.0, light / full))) for at, light in seen]
+    caught = [(at, share) for at, share in shares if share >= 0.1]
+    if not caught:
+        return {}
+    (first, first_share), (last, last_share) = caught[0], caught[-1]
+    start = first + pulse * (1 - first_share)
+    end = last + pulse * last_share
+    return {"starts_s": round(start, 2), "ends_s": round(end, 2), "gathers_s": round(end - start, 2),
+            "shares": [[at, round(share, 2)] for at, share in shares]}
+
+
+def scan_words(row):
+    if "gathers_s" not in row:
+        return f"speed {row['speed']}: no window found (frames lost, or no flash seen)"
+    return (f"speed {row['speed']}: gathers from {row['starts_s']:g} s to {row['ends_s']:g} s after the "
+            f"exposure is asked for, {row['gathers_s']:g} s")
+
+
+class NanoLight:
+    """The focuser's Nano as the light: D13 (its own LED, or one wired
+    there) switched on or off, and pulses timed by the Nano's own clock."""
+
+    def __init__(self, port=None):
+        import focuser
+        self.nano = focuser.Focuser.open(port, full=False, ms=None)
+
+    def __call__(self, on):
+        self.nano.light(on)
+
+    def pulse(self, seconds):
+        self.nano.pulse(max(1, round(seconds * 1000)))
+
+    def close(self):
+        try:
+            self.nano.light(False)
+        finally:
+            self.nano.close()
 
 
 def timed_words(row):

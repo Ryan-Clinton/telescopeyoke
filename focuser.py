@@ -145,6 +145,24 @@ class Focuser:
                                "with ./focuser.py flash")
         return celsius(int(reply[2:]))
 
+    def light(self, on):
+        """The timing light on D13 on or off."""
+        order = ":L1" if on else ":L0"
+        reply = self.ask(order, 2)
+        if reply != f"OK {order[1:]}":
+            raise RuntimeError(f"the focuser answered {reply!r} to {order}: load the firmware "
+                               "with ./focuser.py flash")
+
+    def pulse(self, ms):
+        """The timing light on for exactly `ms` milliseconds by the Nano's own
+        clock; returns once it is off again."""
+        if not 1 <= ms <= 60000:
+            raise ValueError(f"a pulse is 1 to 60000 ms, not {ms}")
+        reply = self.ask(f":P{ms}", ms / 1000 + 2)
+        if reply != f"OK P{ms}":
+            raise RuntimeError(f"the focuser answered {reply!r} to a pulse of {ms} ms: load the firmware "
+                               "with ./focuser.py flash")
+
     def close(self):
         self.link.close()
 

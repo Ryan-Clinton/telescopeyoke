@@ -19,6 +19,12 @@
 //                 which is held high as their 5 V (31 October 2026: the 5V
 //                 terminal is the motor board's); focuser.py turns it into
 //                 degrees. About 1023 is no thermistor, about 0 a short.
+//   :L1, :L0   -> "OK L1", "OK L0": the light on D13 (the Nano's own LED, or
+//                 one wired there) on or off
+//   :P1500     -> "OK P1500" once the light has been on for exactly 1500 ms by
+//                 the Nano's own clock; 1 to 60000. A pulse of known length
+//                 for timing the camera's exposures (31 October 2026: a 12 s
+//                 exposure gathered light for 15.4 s at speed 0, 8.3 s at 2)
 //
 // The coils are off whenever the motor is still: the gearbox holds the shaft,
 // and a warm motor beside the tube spoils the seeing.
@@ -26,6 +32,7 @@
 const byte PINS[4] = {4, 5, 6, 7};
 const byte SENSE = A0;             // the thermistor and the resistor meet here
 const byte SUPPLY = A5;            // the resistor's other end: high from the start
+const byte LIGHT = 13;             // the timing light
 const byte HALF[8] = {0b0001, 0b0011, 0b0010, 0b0110,
                       0b0100, 0b1100, 0b1000, 0b1001};
 const long MOST = 40960;           // ten turns of the shaft: more is a mistake
@@ -87,6 +94,17 @@ void obey(const String &order) {
     for (byte i = 0; i < 16; i++) sum += analogRead(SENSE);
     Serial.print("T ");
     Serial.println(sum / 16);
+  } else if (order == ":L1" || order == ":L0") {
+    digitalWrite(LIGHT, order == ":L1");
+    Serial.println(order == ":L1" ? "OK L1" : "OK L0");
+  } else if (order.startsWith(":P") && order.length() > 2) {
+    long ms = order.substring(2).toInt();
+    if (ms < 1 || ms > 60000) { Serial.println("NO"); return; }
+    digitalWrite(LIGHT, HIGH);
+    delay(ms);
+    digitalWrite(LIGHT, LOW);
+    Serial.print("OK P");
+    Serial.println(ms);
   } else {
     Serial.println("NO");
   }
@@ -97,6 +115,8 @@ void setup() {
   coils(0);
   pinMode(SUPPLY, OUTPUT);
   digitalWrite(SUPPLY, HIGH);
+  pinMode(LIGHT, OUTPUT);
+  digitalWrite(LIGHT, LOW);
   Serial.begin(9600);
 }
 

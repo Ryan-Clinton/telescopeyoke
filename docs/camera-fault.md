@@ -258,7 +258,24 @@ gain 100, for a 12 s exposure:
 - **What follows for frames already taken:** EXPTIME has not been the time
   the sensor gathered light at any speed. At speed 0 a frame holds about
   1.28 times its EXPTIME; at speed 2 when healthy probably the same, and in
-  the fault about 0.69 times.
+  the fault about 0.69 times. Relative photometry (a star against the
+  others in the same frame, as the transits and Tabby's star use) is not
+  touched by this. What is: anything worked out from the exposure time
+  itself, such as how deep a night reached for its hours, and the middle
+  of each exposure, which assumes the shutter is open from the time the
+  frame was asked for for EXPTIME (a 16 s frame's middle could be off by
+  a second or two, far less than a transit's timing needs). The figures
+  of this table are estimates: two readings were doubtful and the flashes
+  were timed by the laptop, not by an independent clock.
+- **Two questions now, not one.** Why the exposure is scaled at every
+  speed (speed 0 too), and why speed 2 switches between two timings
+  (20.5 s and 10.3 s for a 16 s frame). The second may be a state the
+  camera comes up in when it is opened, not a failing part.
+- **No correction by a fixed factor.** A factor right for one state would
+  be badly wrong in the other. `altair.py` applies none. The INDI route's
+  `camera.shutter_share()` does (0.643 at speed 2, from the trails of 13
+  October); it is not in use while `[camera] backend = "altair"`, and is
+  not to be turned on for the same reason.
 
 ## What is known
 
@@ -407,6 +424,23 @@ in another), so the camera's own readable settings are compared instead.
    too soon is measured as well. A light's delay in switching is the same
    on and off, so it moves the flash without changing its length. Needs
    the fault for the faulty state, and the healthy state for the other.
+   Each measurement keeps the camera's timing settings beside it (the
+   exposure asked and reported, the speed, `HZ`, the frame rate, the
+   trigger mode, bandwidth).
+   - The laptop's screen is the light. (`--light nano` also exists, D13
+     on the focuser's Nano timed by its own clock, but nothing is to be
+     bought or hung in front of the telescope for it: the screen's timing,
+     to about 1 % on a 2 s flash, is enough.)
+   - **Where the window is:** `./camera_test.py --scan` moves a 1 s flash
+     through an 8 s exposure and past its end, 1 s at a time, at each
+     speed, and reports when the sensor starts and stops gathering after
+     the exposure is asked for. A scaled exposure and a moved one shorten
+     a frame alike; the scan tells them apart.
+   - **Again after each start:** `--repeat 3 --between reopen` (the camera
+     closed and opened again between runs) or `--between replug` (dropped
+     from USB and found again by Altair's library) shows whether the
+     timing is fixed or a state the camera comes up in. Cutting its power
+     needs hands: the hub's port button pressed twice, then the same run.
 5. **Image at speed 2 and watch.** From 31 October, so a night's imaging
    is itself the test. If frames are lost, it is seen at once (`./ty
    watch-run`) and the person decides whether to go back to speed 0.

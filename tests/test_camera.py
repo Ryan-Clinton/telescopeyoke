@@ -1159,6 +1159,73 @@ def test_the_probe_keeps_the_frame_sent_too_soon_and_every_setting_in_both_state
     assert "option FLUSH" not in found["settings_before"]
 
 
+class Lamp:
+    """A light the made-up camera sees: each switch noted with its time,
+    and a frame's level is 100 dark plus 1000 for each second it was on."""
+
+    def __init__(self):
+        self.switched = [(time.monotonic(), False)]
+
+    def __call__(self, on):
+        self.switched.append((time.monotonic(), on))
+
+    def lit(self, start, end):
+        on_for, edges = 0.0, self.switched + [(float("inf"), False)]
+        for (t, on), (t_next, _) in zip(edges, edges[1:]):
+            if on:
+                on_for += max(0.0, min(end, t_next) - max(start, t))
+        return round(100 + 1000 * on_for)
+
+    def close(self):
+        self.closed = True
+
+
+class TimedLamp(Lamp):
+    """The Nano's light: it times its own pulse."""
+
+    def pulse(self, seconds):
+        self(True)
+        time.sleep(seconds)
+        self(False)
+        self.pulses = getattr(self, "pulses", 0) + 1
+
+
+def test_the_scan_finds_where_each_speed_starts_and_stops_gathering(sdk, world, monkeypatch):
+    """31 October 2026: a shortened exposure could be scaled or moved; a
+    flash moved through it finds the window. Speeds 1 and 2 gather for half
+    the time asked here, from the start, as the fault; speed 0 for all of it.
+    The light times its own pulses, as the Nano's does."""
+    import camera_probe
+    lamp = TimedLamp()
+    world.hurries, world.lit = 0.5, lamp.lit
+    monkeypatch.setattr(camera_probe, "short_wait", lambda seconds: seconds + 0.5)
+    with altair.AltairCamera() as cam:
+        found = camera_probe.scan(cam, lamp, seconds=0.8, pulse=0.2, step=0.2, speeds=(0, 2),
+                                  say=lambda line: None, sleep=lambda s: None)
+    rows = {r["speed"]: r for r in found["speeds"]}
+    assert rows[0]["starts_s"] == pytest.approx(0.0, abs=0.08) and rows[0]["ends_s"] == pytest.approx(0.8, abs=0.1)
+    assert rows[2]["starts_s"] == pytest.approx(0.0, abs=0.08) and rows[2]["ends_s"] == pytest.approx(0.4, abs=0.1)
+    assert lamp.pulses == 12 and "gathers from" in found["summary"] and "ExpoTime" in rows[0]["settings"]
+
+
+def test_timed_runs_repeat_with_the_camera_opened_again_between(sdk, world, tmp_path, monkeypatch):
+    """The same measure each time the camera starts: whether the timing is
+    fixed, or a state the camera can come up in."""
+    import camera_test
+    monkeypatch.setattr(camera_test, "keep_fault", lambda *a, **k: None)
+    import camera_probe
+    lamp = Lamp()
+    world.lit = lamp.lit
+    monkeypatch.setattr(camera_probe, "short_wait", lambda seconds: seconds + 0.5)
+    args = types.SimpleNamespace(light="lamp", scan=False, timed_light=True, repeat=2, between="reopen",
+                                 exposure=0.6, gain=100, note="")
+    opened = len(sdk.Altaircam.opened)
+    found = camera_test.timed_runs(args, camera=lambda gain: altair.AltairCamera(), lights={"lamp": lambda: lamp},
+                                   say=lambda line: None)
+    assert [r["run"] for r in found["runs"]] == [1, 2] and found["runs"][1]["after"] == "reopen"
+    assert len(sdk.Altaircam.opened) - opened == 2 and lamp.closed
+
+
 def test_the_timed_light_measures_how_long_each_speed_gathers_light(sdk, world, monkeypatch):
     """31 October 2026: in the fault, speed 2 frames held 0.51 of speed 0's
     light, but speed 0 itself had not been timed. Flashes of known length
@@ -1178,6 +1245,7 @@ def test_the_timed_light_measures_how_long_each_speed_gathers_light(sdk, world, 
         return round(100 + 1000 * on_for)
     world.hurries, world.lit = 0.5, lit
     monkeypatch.setattr(altair, "wait_for", lambda seconds: seconds + 0.5)
+    monkeypatch.setattr(camera_probe, "short_wait", lambda seconds: seconds + 0.5)
     with altair.AltairCamera() as cam:
         cam.handle.put_Speed(2)
         found = camera_probe.timed_light(cam, switch, seconds=1.2, pulse=0.3, lead=0.1, say=lambda line: None,

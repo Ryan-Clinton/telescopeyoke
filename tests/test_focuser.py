@@ -331,6 +331,23 @@ def test_the_thermistor_s_reading_becomes_degrees():
     assert focuser.celsius(1023) is None and focuser.celsius(0) is None    # a lead off, a short
 
 
+def test_the_timing_light_is_switched_and_pulsed_by_the_nano_s_clock():
+    """31 October 2026: a light whose on-time the Nano times, for timing the
+    camera's exposures against a clock independent of the laptop."""
+    nano = Nano({":L1": "OK L1", ":L0": "OK L0", ":P1500": "OK P1500"})
+    lamp = focuser.Focuser(nano)
+    lamp.light(True)
+    lamp.light(False)
+    lamp.pulse(1500)
+    assert nano.sent == [":L1", ":L0", ":P1500"]
+    with pytest.raises(RuntimeError, match="flash"):
+        focuser.Focuser(Nano()).pulse(100)
+    with pytest.raises(ValueError):
+        lamp.pulse(0)
+    sketch = (focuser.SKETCH / "focuser.ino").read_text()
+    assert "const byte LIGHT = 13;" in sketch and 'order.startsWith(":P")' in sketch and "ms > 60000" in sketch
+
+
 def test_the_temperature_is_asked_for_and_an_old_firmware_is_an_error():
     nano = Nano({":T": "T 512"})
     assert focuser.Focuser(nano).temperature() == pytest.approx(25.0, abs=0.1)

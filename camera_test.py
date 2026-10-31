@@ -11,7 +11,10 @@
     ./camera_test.py --electrons --gains 900 1500   cap off, an even light: electrons per ADU at each gain
     ./camera_test.py --probe            cap on, while it loses frames: everything about that state (camera_probe.py)
     ./camera_test.py --timed-light      cap off, facing the laptop's screen in a dark room: how long the sensor
-                                        really gathers light at each speed, from timed flashes (--light NAME: a Hue light)
+                                        really gathers light at each speed, from timed flashes (--light NAME: a Hue light,
+                                        --light nano: the focuser Nano's D13, timed by its own clock)
+    ./camera_test.py --scan             the same light: where each exposure really starts and ends, a flash moved through it
+    ./camera_test.py --timed-light --repeat 3 --between replug   again after the camera is closed, or dropped from USB
 
 With [camera] backend = "altair" the camera is read through Altair's own
 library: --capabilities then shows the model, versions and how it is
@@ -524,6 +527,42 @@ def usb_report(lines, device):
             "received_mb": round(received / 1e6, 1), "longest_gap_s": round(max(gaps), 1) if gaps else None}
 
 
+def timed_runs(args, camera=None, lights=None, say=print):
+    """--timed-light or --scan, --repeat times, with the camera closed and
+    opened again, or replugged by Altair's library, between: whether the
+    timing is the same each time the camera starts, or a state it can come
+    up in (31 October 2026: speed 2 sent a 16 s frame back after 20.5 s in
+    the morning and after 10.3 s from 17:28)."""
+    import camera_probe
+    lights = lights or {"nano": camera_probe.NanoLight}
+    light = (lights[args.light]() if args.light in lights else
+             camera_probe.HueLight(args.light) if args.light else camera_probe.Screen())
+    measure = camera_probe.scan if args.scan else camera_probe.timed_light
+    runs = []
+    try:
+        with (camera or Camera)(gain=args.gain) as cam:
+            if not hasattr(cam, "_expose"):
+                raise interface.Refusal("INVALID_REQUEST", "The timed light needs [camera] backend = \"altair\".")
+            for n in range(max(1, args.repeat)):
+                if n and args.between != "nothing":
+                    cam.close()
+                    if args.between == "replug":
+                        import altair
+                        say("replugging the camera" if altair.replug(cam.lib, altair.choose(cam.lib))
+                            else "the library could not replug the camera; opened again instead")
+                    cam._open()
+                seconds = args.exposure or (8.0 if args.scan else 12.0)
+                found = measure(cam, light, seconds, say=say)
+                found["run"], found["after"] = n + 1, args.between if n else "opened"
+                runs.append(found)
+    finally:
+        light.close()
+    summary = "\n".join(f"Run {r['run']} ({r['after']}):\n{r['summary']}" for r in runs)
+    say(summary)
+    keep_fault({"timed": [r["folder"] for r in runs], "summary": summary}, args.note)
+    return {"runs": runs, "summary": summary}
+
+
 def speed_ladder(exposure, gain, frames=3, keep=False, say=print, speeds=None):
     """The fastest readout speed at which every one of `frames` exposures
     arrives, trying the fastest first and stopping at the first that keeps
@@ -588,6 +627,9 @@ def main():
     what.add_argument("--probe", action="store_true",
                       help="cap on: look at the camera from every side while it loses frames, about ten "
                            "minutes (camera_probe.py); --exposure is the one lost (default 16)")
+    what.add_argument("--scan", action="store_true",
+                      help="as --timed-light, but a 1 s flash moved through the exposure by 1 s: where the sensor "
+                           "starts and stops gathering at each speed; --exposure each frame (default 8)")
     what.add_argument("--timed-light", action="store_true",
                       help="cap off, the camera facing the light in a dark room: how long the sensor really "
                            "gathers light at speeds 0, 1 and 2, from flashes of known length (camera_probe.py); "
@@ -622,7 +664,13 @@ def main():
                     help="frames per mode for --throughput (default 4), per set for --cooldown (20), "
                          "per setting for --gain-sweep (1)")
     ap.add_argument("--gain", type=int, default=1500)
-    ap.add_argument("--light", help="with --timed-light: a Hue light's name, instead of the laptop's screen")
+    ap.add_argument("--light", help="with --timed-light or --scan: \"nano\" (the focuser Nano's D13, pulses timed "
+                                    "by its own clock) or a Hue light's name, instead of the laptop's screen")
+    ap.add_argument("--repeat", type=int, default=1,
+                    help="with --timed-light or --scan: how many times, with --between done in between")
+    ap.add_argument("--between", choices=["nothing", "reopen", "replug"], default="reopen",
+                    help="with --repeat: the camera closed and opened again, or dropped from USB and found again "
+                         "by Altair's library (replug), between the runs")
     ap.add_argument("--dry-run", action="store_true", help="say what it would do; no camera, no mount")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
@@ -1074,19 +1122,8 @@ def run(args):
             if not hasattr(cam, "_expose"):
                 raise interface.Refusal("INVALID_REQUEST", "The probe needs [camera] backend = \"altair\".")
             return camera_probe.probe(cam, args.exposure or 16.0)
-    if args.timed_light:
-        import camera_probe
-        light = camera_probe.HueLight(args.light) if args.light else camera_probe.Screen()
-        try:
-            with Camera(gain=args.gain) as cam:
-                if not hasattr(cam, "_expose"):
-                    raise interface.Refusal("INVALID_REQUEST", "The timed light needs [camera] backend = \"altair\".")
-                found = camera_probe.timed_light(cam, light, args.exposure or 12.0)
-        finally:
-            light.close()
-        print(found["summary"])
-        keep_fault({"timed_light": found["folder"], "summary": found["summary"]}, args.note)
-        return found
+    if args.timed_light or args.scan:
+        return timed_runs(args)
     if args.usb_report:
         lines = Path(args.usb_report).read_text(encoding="utf-8", errors="replace").splitlines()
         state = usb_state()
