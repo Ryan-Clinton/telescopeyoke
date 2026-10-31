@@ -521,6 +521,63 @@ def scan_words(row):
             f"exposure is asked for, {row['gathers_s']:g} s")
 
 
+def order_test(cam, seconds=16.0, speed=2, say=print):
+    """Whether the order the camera is told things in decides its timing
+    state (31 October 2026: in the fault speed 2 times its exposures as if
+    by speed 0's clock, half as long; when healthy, a 16 s frame at speed 2
+    comes back after 20.5 s, in the fault after 10.3 s). No light needed:
+    when each frame comes back tells the state. Four ways of setting the
+    same `speed` and exposure:
+      usual           the speed, then the time (as every frame is taken)
+      time first      the time, then the speed, the time not set again
+      stream stopped  the speed set with the camera's stream stopped and
+                      started again, as when it is opened
+      via speed 0     speed 0 and then `speed`, then the time"""
+    handle, found = cam.handle, {"seconds": seconds, "speed": speed, "ways": []}
+    was = handle.get_Speed()
+    say(f"Order test: {seconds:g} s frames at speed {speed}")
+
+    def usual():
+        handle.put_Speed(speed)
+        return gathered(cam, seconds)
+
+    def time_first():
+        handle.put_Speed(0)
+        handle.put_ExpoTime(max(1, round(seconds * 1e6)))
+        handle.put_Speed(speed)
+        try:
+            data, _ = cam._expose(seconds, wait=short_wait(seconds), set_time=False)
+            return {"back_s": cam.back_s, "kept": True}
+        except Exception as problem:
+            return {"back_s": cam.early[0] if getattr(cam, "early", None) else None, "kept": False,
+                    "problem": str(problem)}
+
+    def stream_stopped():
+        handle.Stop()
+        handle.put_Speed(speed)
+        handle.StartPullModeWithCallback(cam._callback, cam)
+        return gathered(cam, seconds)
+
+    def via_speed_0():
+        handle.put_Speed(0)
+        handle.put_Speed(speed)
+        return gathered(cam, seconds)
+    try:
+        for name, way in (("usual", usual), ("time first", time_first), ("stream stopped", stream_stopped),
+                          ("via speed 0", via_speed_0), ("usual again", usual)):
+            row = {"way": name, **{k: v for k, v in way().items() if k in ("back_s", "kept", "problem")}}
+            back = row.get("back_s")
+            row["state"] = (None if back is None else "short (the fault)" if back < 0.9 * seconds
+                            else "full")
+            found["ways"].append(row)
+            say(f"  {name}: back after {back if back is not None else '?'} s, {row['state'] or 'nothing came'}")
+    finally:
+        handle.put_Speed(was)
+    found["summary"] = "\n".join([f"Order test, {seconds:g} s at speed {speed}:"] +
+                                  [f"{r['way']}: {r['state'] or 'nothing came'}" for r in found["ways"]])
+    return found
+
+
 def timed_words(row):
     if "gathered_s" not in row:
         return f"speed {row['speed']}: not measured (a frame lost, or no light from the pulse)"

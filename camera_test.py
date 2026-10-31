@@ -11,6 +11,7 @@
     ./camera_test.py --probe            cap on, while it loses frames: everything about that state (camera_probe.py)
     ./camera_test.py --timed-light      cap off, facing the laptop's screen in a dark room: how long the sensor
                                         really gathers light at each speed, from timed flashes (--light NAME: a Hue light)
+    ./camera_test.py --order            cap on: whether the order speed and exposure are set in decides the timing state
     ./camera_test.py --scan             the same light: where each exposure really starts and ends, a flash moved through it
     ./camera_test.py --timed-light --repeat 3 --between replug   again after the camera is closed, or dropped from USB
 
@@ -622,6 +623,10 @@ def main():
     what.add_argument("--probe", action="store_true",
                       help="cap on: look at the camera from every side while it loses frames, about ten "
                            "minutes (camera_probe.py); --exposure is the one lost (default 16)")
+    what.add_argument("--order", action="store_true",
+                      help="cap on, while frames are lost: the same --exposure (default 16) at speed 2 set four "
+                           "ways (speed then time, time then speed, with the stream stopped, by way of speed 0): "
+                           "which come back in the fault's short time (camera_probe.py)")
     what.add_argument("--scan", action="store_true",
                       help="as --timed-light, but a 1 s flash moved through the exposure by 1 s: where the sensor "
                            "starts and stops gathering at each speed; --exposure each frame (default 8)")
@@ -1053,6 +1058,15 @@ def run(args):
             if not hasattr(cam, "_expose"):
                 raise interface.Refusal("INVALID_REQUEST", "The probe needs [camera] backend = \"altair\".")
             return camera_probe.probe(cam, args.exposure or 16.0)
+    if args.order:
+        import camera_probe
+        with Camera(gain=args.gain) as cam:
+            if not hasattr(cam, "_expose"):
+                raise interface.Refusal("INVALID_REQUEST", "The order test needs [camera] backend = \"altair\".")
+            found = camera_probe.order_test(cam, args.exposure or 16.0, (args.speeds or [2])[0])
+        print(found["summary"])
+        keep_fault({"order": found["ways"], "summary": found["summary"]}, args.note)
+        return found
     if args.timed_light or args.scan:
         return timed_runs(args)
     if args.usb_report:

@@ -430,7 +430,17 @@ in another), so the camera's own readable settings are compared instead.
    shortened, moved, or both. Then the same with `--repeat 3 --between
    reopen` and `--between replug`: whether the state survives the camera
    being started again. Needs the fault, and the person's time.
-2. **Done: keep the frame sent too soon, in the fault, and look at it.** With
+2. **The order the camera is told things in** (`./camera_test.py
+   --order`, cap on, about 3 minutes, needs the fault). The same 16 s at
+   speed 2 set four ways: the speed then the time (as every frame is
+   taken), the time then the speed, the speed set with the stream stopped
+   and started (as when the camera is opened), and by way of speed 0. When
+   each frame comes back says its state (10.3 s short, 20.5 s full). Our
+   own calls are the same in both states, in the same order every time
+   (`altair.py` sets the speed before the stream starts and the time before
+   each frame), so it is the camera or the library that differs; this asks
+   whether any order puts it right.
+3. **Done: keep the frame sent too soon, in the fault, and look at it.** With
    light on the camera (cap off, an even glow), the frame that comes back
    after 10.3 s of a 16 s exposure is kept instead of thrown away and set
    beside a good 16 s frame and a 10 s one. About 0.63 of the light: the
@@ -440,13 +450,13 @@ in another), so the camera's own readable settings are compared instead.
    Answered on 31 October (the light test, above): the early frames are
    real, shorter exposures. The probe keeps such a frame as
    `early-16s.fits` each time it runs.
-3. **Every frame says when it came back** (from 31 October): the FITS
+4. **Every frame says when it came back** (from 31 October): the FITS
    header's `TY_BACK`, seconds from the trigger to the frame arriving: 20.5
    for a healthy 16 s frame at speed 2, 10.3 in the fault. So an ordinary
    night's frames show when the camera changes state. (What the camera
    reports as its real exposure is only the time asked, so it is read once
    in the probe's settings, not stamped on every frame.)
-4. **Every setting, in both states** (from 31 October): the probe reads
+5. **Every setting, in both states** (from 31 October): the probe reads
    every setting the camera will give (the named readings and every
    readable option) before it starts and after it ends, and lists those
    that changed. One reading taken in the fault and one when healthy is
@@ -457,7 +467,7 @@ in another), so the camera's own readable settings are compared instead.
    sensor's own clock dividers and timing registers are not readable
    through Altair's library, and its USB requests are scrambled, so those
    stay with Altair.
-5. **A timed light** (`./camera_test.py --timed-light`, from 31 October):
+6. **A timed light** (`./camera_test.py --timed-light`, from 31 October):
    the laptop's own screen is the light, a window over the whole screen
    switched between black and white within a frame (about 1/60 s); `--light
    NAME` uses a Hue light instead, slower to switch (a tenth of a second or
@@ -491,10 +501,10 @@ in another), so the camera's own readable settings are compared instead.
      from USB and found again by Altair's library) shows whether the
      timing is fixed or a state the camera comes up in. Cutting its power
      needs hands: the hub's port button pressed twice, then the same run.
-6. **Image at speed 2 and watch.** From 31 October, so a night's imaging
+7. **Image at speed 2 and watch.** From 31 October, so a night's imaging
    is itself the test. If frames are lost, it is seen at once (`./ty
    watch-run`) and the person decides whether to go back to speed 0.
-7. **Through a powered USB 3 hub.** Done on 30 Oct (above): on the 1 m leads
+8. **Through a powered USB 3 hub.** Done on 30 Oct (above): on the 1 m leads
    speed 2 kept 50 of 50, and then 720 of 720 over 4 h 16 min (18:37 to
    22:53), with the focuser on the hub as well. But the control straight
    to the laptop on the 3 m lead, port 2-5, also kept 720 of 720 (22:57 to
@@ -502,10 +512,10 @@ in another), so the camera's own readable settings are compared instead.
    it. Those counts did not count a frame lost and kept on a retry, and the
    recorded run lost its first frame that way, twice. If speed 2 holds through the hub for whole nights, power
    or signal conditioning moves up the list of causes.
-8. **The ports, one at a time.** The same 50 frames of 16 s at speed 2 on
+9. **The ports, one at a time.** The same 50 frames of 16 s at speed 2 on
    each of the laptop's USB 3 ports in turn; the fault log records which.
    Needs the person's hands to move the plug.
-9. **Everything at once, the moment a frame is lost** (`camera_probe.py`,
+10. **Everything at once, the moment a frame is lost** (`camera_probe.py`,
    from 31 October 2026). With `[camera] probe_on_loss = true`, the first
    frame lost by any run (imaging, a speed test) is followed at once by
    about ten minutes of looking at the camera in that state, before it can
@@ -535,10 +545,10 @@ in another), so the camera's own readable settings are compared instead.
    temperature of its own; from that evening a thermistor on its body
    reads it through the focuser's Nano (`./focuser.py temp`): 20.3 °C just
    after the probe.
-10. **AltairCapture's Diagnose, on Windows, camera plugged straight in**, as
+11. **AltairCapture's Diagnose, on Windows, camera plugged straight in**, as
    Altair asks of support customers. Needs the Windows boot and AltairCapture
    installed.
-11. **Another Hypercam 183C on this laptop, or this one on another
+12. **Another Hypercam 183C on this laptop, or this one on another
    astronomy computer.** Needs a second camera or computer.
 
 ## For Altair (ticket #3470)
@@ -557,6 +567,7 @@ The camera is Gary's; the ticket is ours, and paying for a repair would be his c
 | The light in it | in the fault, against speed 0 in the same light: speed 2 frames hold 0.51 of it, speed 1 frames 0.67, scaled with the time asked from 0.5 to 8 s; the camera still reports the full exposure (31 Oct, cap off) |
 | Against a clock | timed flashes of light from a screen, 12 s asked, in the fault: speed 0 gathered 15.4 s (128 %), speed 1 10.4 s (86 %), speed 2 8.3 s (69 %), and a flash at 9 to 11 s did not reach the speed 2 frame (31 Oct) |
 | Where the exposure falls | a 1 s flash moved through 8 s exposures, in the fault: all speeds start gathering 0.4 to 0.5 s after the request; speed 0 stops at 10.7 s, speed 1 at 7.3 s, speed 2 at 5.5 s: 1.27, 0.86 and 0.63 of the time asked, speed 2 exactly half of speed 0 (31 Oct) |
+| In one line | in one state, which comes and goes, the exposure at speeds 1 and 2 is timed as if by speed 0's clock: a 1 s flash moved through 8 s exposures shows speed 2 gathering exactly half as long as speed 0, speed 1 two thirds, all starting 0.4 to 0.5 s after the request; the camera reports the time asked throughout. Is this a known behaviour of firmware 1.4.1 or of the library at these speeds? |
 | Started | 04:59 on 20 Oct 2026, at dawn after a cold night |
 | Comes and goes | gone 26 Oct; back 30 Oct 10:46; gone again by 11:02, nothing touched; back 31 Oct 17:28 just after the camera was handled and replugged, and still there after closing and opening it |
 | Firmware | 1.4.1 (January 2017) |

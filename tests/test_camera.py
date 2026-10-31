@@ -1217,6 +1217,21 @@ def test_the_timed_light_measures_how_long_each_speed_gathers_light(sdk, world, 
     assert "stopped before the end" in found["summary"] and switched[-1][1] is False
 
 
+def test_the_order_test_says_which_ways_of_setting_the_speed_come_back_short(sdk, world, monkeypatch):
+    """31 October 2026: does the order the speed and exposure are set in
+    decide the timing state? Here the made-up camera is in the fault
+    whatever the order: every way at speed 2 comes back short."""
+    import camera_probe
+    world.hurries = 0.5
+    monkeypatch.setattr(camera_probe, "short_wait", lambda seconds: seconds + 0.5)
+    with altair.AltairCamera() as cam:
+        cam.handle.put_Speed(0)
+        found = camera_probe.order_test(cam, seconds=0.4, speed=2, say=lambda line: None)
+        assert cam.handle.get_Speed() == 0                           # put back
+    assert [r["way"] for r in found["ways"]] == ["usual", "time first", "stream stopped", "via speed 0", "usual again"]
+    assert all(r["state"] == "short (the fault)" for r in found["ways"]) and "time first" in found["summary"]
+
+
 def test_each_frame_says_how_the_camera_timed_it(sdk, world):
     with altair.AltairCamera() as cam:
         _, header = cam.frame(0.2)

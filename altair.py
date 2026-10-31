@@ -279,9 +279,10 @@ class AltairCamera:
         except self.lib.HRESULTException:
             pass   # nothing to discard, or not supported: the count below still guards
 
-    def _expose(self, seconds, wait=None):
+    def _expose(self, seconds, wait=None, set_time=True):
         lib, handle = self.lib, self.handle
-        handle.put_ExpoTime(max(1, round(seconds * 1e6)))
+        if set_time:        # False only for camera_probe.order_test: the time is set before the speed there
+            handle.put_ExpoTime(max(1, round(seconds * 1e6)))
         handle.put_ExpoAGain(self.gain)
         with self._changed:
             self._waiting, self._ready, self._failure = False, 0, None
