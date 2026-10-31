@@ -399,7 +399,11 @@ end, at each speed (`cache/camera-probes/scan-20261031-210553/`).
   not have been seen.
 - **What the camera does differently in the two states.** The scan shows
   the exposure is timed as if by speed 0's clock in the fault; what sets it
-  right in the other state is not known.
+  right in the other state is not known. Not the order the speed and the
+  time are set in, not closing and opening the camera, and not five
+  seconds without power (31 October); the morning's healthy state came
+  after a night's run, and the fault has cleared by itself before (30
+  October, within a quarter of an hour).
 - **Whether speed 0 can ever fail.** It has not yet, in every test since
   23 Oct.
 
@@ -430,8 +434,14 @@ in another), so the camera's own readable settings are compared instead.
    shortened, moved, or both. Then the same with `--repeat 3 --between
    reopen` and `--between replug`: whether the state survives the camera
    being started again. Needs the fault, and the person's time.
-2. **The order the camera is told things in** (`./camera_test.py
-   --order`, cap on, about 3 minutes, needs the fault). The same 16 s at
+2. **Done 31 October, about 21:25: the order the camera is told things in**
+   (`./camera_test.py --order`, about 3 minutes, needs the fault). Every
+   way came back short, 10.4 s for 16 s: the speed then the time, the time
+   then the speed, the stream stopped and started, by way of speed 0. Then
+   the camera's power was cut at the hub's port button for five seconds
+   (back on USB at 21:29:40) and the test run again: every way still short.
+   Neither the order of our commands nor a power cut clears the state; it
+   held from at least 17:28 to 21:30. The same 16 s at
    speed 2 set four ways: the speed then the time (as every frame is
    taken), the time then the speed, the speed set with the stream stopped
    and started (as when the camera is opened), and by way of speed 0. When
