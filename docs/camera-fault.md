@@ -227,6 +227,39 @@ the frame sent too soon kept as a FITS file.
 - Still to see: the same test in the healthy state, where speed 2 should
   hold the same light as speed 0 if the fault is the whole story.
 
+## The timed light, 31 October 2026, evening
+
+The fault still there. The telescope, camera in it on the hub, pointed at
+the laptop's screen through kitchen roll; `./camera_test.py --timed-light`
+(`cache/camera-probes/timed-20261031-193822/`). The first run, at gain
+1500, was too bright (the steady frames white), but its flashes were not:
+at speed 2 the flash from 9 to 11 s of a 12 s exposure left the frame at
+exactly the dark level (1,043 against 1,044), so the exposure had stopped
+before 9 s; at speed 0 the same flash came through whole. Run again at
+gain 100, for a 12 s exposure:
+
+| Speed | Gathered light for | Of the time asked | The late flash |
+|---|---|---|---|
+| 0 | 15.4 s | 128 % | seen whole |
+| 1 | 10.4 s | 86 % | seen (but see below) |
+| 2 | 8.3 s | 69 % | not seen |
+
+- **Speed 0 is not right either: it exposes about 28 % long.** 13 October's
+  timing gave 1.25 s a second asked at speed 0, and the healthy speed 2
+  frame of the morning came back after 20.5 s for 16 s, about 1.28. So the
+  camera's timing is off at every speed, and in the fault speeds 1 and 2
+  go short.
+- **Against speed 0, speed 1 gathers 0.67 and speed 2 0.54**, as the light
+  test found (0.67 and 0.51): two ways of measuring agree.
+- **Two readings are doubtful.** Speed 1's late-flash frame holds nearly
+  the light of its steadily lit frame, and speed 2's dark frame five times
+  the others'. A light in the room that changed between frames would do
+  both; steady room light cancels out of the figures.
+- **What follows for frames already taken:** EXPTIME has not been the time
+  the sensor gathered light at any speed. At speed 0 a frame holds about
+  1.28 times its EXPTIME; at speed 2 when healthy probably the same, and in
+  the fault about 0.69 times.
+
 ## What is known
 
 - **Behind the hub, the leads decide it.** With the 3 m lead from the
@@ -438,6 +471,7 @@ The camera is Gary's; the ticket is ours, and paying for a repair would be his c
 | USB 3, speed 2 | frames lost at times, as short as 2 s; the link stays at 5000 Mb/s, no disconnect |
 | What a lost frame is | in the fault the frame comes back in about half the time: a 16 s frame after 10.3 s instead of 20.5 s, at speeds 1 and 2, not 0 (USB recorded, 31 Oct) |
 | The light in it | in the fault, against speed 0 in the same light: speed 2 frames hold 0.51 of it, speed 1 frames 0.67, scaled with the time asked from 0.5 to 8 s; the camera still reports the full exposure (31 Oct, cap off) |
+| Against a clock | timed flashes of light from a screen, 12 s asked, in the fault: speed 0 gathered 15.4 s (128 %), speed 1 10.4 s (86 %), speed 2 8.3 s (69 %), and a flash at 9 to 11 s did not reach the speed 2 frame (31 Oct) |
 | Started | 04:59 on 20 Oct 2026, at dawn after a cold night |
 | Comes and goes | gone 26 Oct; back 30 Oct 10:46; gone again by 11:02, nothing touched; back 31 Oct 17:28 just after the camera was handled and replugged, and still there after closing and opening it |
 | Firmware | 1.4.1 (January 2017) |
