@@ -191,6 +191,42 @@ because a frame lost and tried again was not counted. From 31 October
 every try again is said in the log, and the loss names the frame that came
 back too soon and when.
 
+## The light test, 31 October 2026, evening
+
+The fault was still there at 18:37 and 18:51. The cap was off, kitchen roll
+taped over the front, a room light; the probe ran twice, at 16 s (too
+bright: white) and at 4 s, the light then steady (the first and last 4 s
+frames read 464 and 453). Gain 1500, as always. Records:
+`cache/camera-probes/20261031-183704/` and `20261031-185138/`, each with
+the frame sent too soon kept as a FITS file.
+
+| Frame | Came back after | Mean light | Light a second asked |
+|---|---|---|---|
+| speed 2: 0.5, 1, 1.5, 2, 4, 8 s | 0.8, 1.1, 1.2, 1.5, 2.8, 5.3 s (the last four refused as too soon) | 58, 116, 173, 235, 464, 938 | 116, the same at every length |
+| speed 1: 4 s | 4.0 s (kept) | 611 | 153 |
+| speed 0: 4 s | 5.8 s (kept) | 908 | 227 |
+
+- **The exposures really are shorter.** Against speed 0's 4 s frame, a
+  speed 2 frame holds **0.51** of the light and a speed 1 frame **0.67**,
+  in the same light seconds apart. The speed 2 frames' light grows in step
+  with the time asked, from 0.5 to 8 s, so the whole exposure is scaled,
+  not a fixed part lost.
+- **Frames that were kept are short too.** The 0.5 and 1 s frames at speed
+  2 and the 4 s frame at speed 1 arrived late enough to pass, and hold the
+  same reduced light. So in this state frames have been accepted with too
+  little exposure, as the star trails of 13 October showed at speed 2.
+- **The camera does not know.** It reports the full time asked as its real
+  exposure (`get_RealExpoTime`: 16,000,000 µs for a 16 s frame sent after
+  10.4 s), and no setting it will read differs from the healthy state but
+  the exposure, the frame rate it is working out and its packet count.
+- **The light ratios sit a little below the timing ratios** (0.51 and 0.67
+  against 0.63 and 0.86, though 0.51 / 0.67 = 0.76 and 0.63 / 0.86 =
+  0.73). Speed 0 is the reference here, and whether speed 0 itself
+  exposes exactly the time asked is not known: the timed light (next
+  tests, 4) or the same test with the camera healthy would settle it.
+- Still to see: the same test in the healthy state, where speed 2 should
+  hold the same light as speed 0 if the fault is the whole story.
+
 ## What is known
 
 - **Behind the hub, the leads decide it.** With the 3 m lead from the
@@ -381,6 +417,7 @@ The camera is Gary's; the ticket is ours, and paying for a repair would be his c
 | USB 3, speed 0 | every frame has arrived, in every test since 23 Oct |
 | USB 3, speed 2 | frames lost at times, as short as 2 s; the link stays at 5000 Mb/s, no disconnect |
 | What a lost frame is | in the fault the frame comes back in about half the time: a 16 s frame after 10.3 s instead of 20.5 s, at speeds 1 and 2, not 0 (USB recorded, 31 Oct) |
+| The light in it | in the fault, against speed 0 in the same light: speed 2 frames hold 0.51 of it, speed 1 frames 0.67, scaled with the time asked from 0.5 to 8 s; the camera still reports the full exposure (31 Oct, cap off) |
 | Started | 04:59 on 20 Oct 2026, at dawn after a cold night |
 | Comes and goes | gone 26 Oct; back 30 Oct 10:46; gone again by 11:02, nothing touched; back 31 Oct 17:28 just after the camera was handled and replugged, and still there after closing and opening it |
 | Firmware | 1.4.1 (January 2017) |
