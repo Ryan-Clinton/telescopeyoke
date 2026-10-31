@@ -426,6 +426,10 @@ A stronger, solder-free drive for the Printables NEMA 17 bracket
   the focuser and a 3 × 5 mm slot for the motor's flatted shaft. On 31
   October the 4 × 5 metal one replaced the printed coupler on the 28BYJ-48:
   it fits both shafts well, with a grub screw on the motor shaft's flat.
+  The same afternoon the Nano went onto a screw-terminal board (IN1 to IN4
+  on D4 to D7 as before) and `./focuser.py test` turned the focuser a
+  quarter turn out and back, felt by hand; it was left 64 half-steps in
+  from where it stood.
   Two other couplers came with bores far too big. The gear slack has not
   been measured with it on (`./focus.py --measure-backlash`);
 - fixings: a Nano screw-terminal board and M3 screws.
