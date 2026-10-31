@@ -423,9 +423,11 @@ A stronger, solder-free drive for the Printables NEMA 17 bracket
 - the coupling: D20L25 elastic couplers, 4 × 5 and 5 × 6 mm (the focuser's
   shaft is not yet measured). The printed coupler's model
   (`Conector_Enfocador_SW_200P.stl`) has a 4.0 mm round bore 16 mm deep for
-  the focuser and a 3 × 5 mm slot for the motor's flatted shaft, and the
-  printed one fits; yet on 31 October the 4 × 5 metal one would not go on,
-  and two other couplers came with bores far too big;
+  the focuser and a 3 × 5 mm slot for the motor's flatted shaft. On 31
+  October the 4 × 5 metal one replaced the printed coupler on the 28BYJ-48:
+  it fits both shafts well, with a grub screw on the motor shaft's flat.
+  Two other couplers came with bores far too big. The gear slack has not
+  been measured with it on (`./focus.py --measure-backlash`);
 - fixings: a Nano screw-terminal board and M3 screws.
 
 For the camera's temperature (below) an M3 ring-lug 10 kΩ B3950 thermistor
