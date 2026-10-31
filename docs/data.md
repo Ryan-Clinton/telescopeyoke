@@ -12,7 +12,7 @@ asked to believe it.
 
 | Folder | What is in it |
 |---|---|
-| `frames/NAME/SESSION/` | One night of one target. `light-*.fits` are the raw frames, every one kept. `session.json` and `frames.json` say how they were taken and how each was judged; `restack.json` (or `discovery.json` for the search's own stack) which went into the stack; `final.fits` the stack; `depth.json` how faint it reaches; `candidates.json` and `difference.fits` what the subtraction found; `vetted.json` the evidence for each candidate; `patrol.json` the patrol's answer; `transit-*.json` and `variables-*.json` brightness measured through the night |
+| `frames/NAME/SESSION/` | One night of one target. `light-*.fits` are the raw frames, every one kept. `session.json` and `frames.json` say how they were taken and how each was judged; `restack.json` which went into the stack; `final.fits` the stack; `depth.json` how faint it reaches; `candidates.json` and `difference.fits` what the subtraction found; `vetted.json` the evidence for each candidate; `patrol.json` the patrol's answer; `transit-*.json` and `variables-*.json` brightness measured through the night |
 | `reference/NAME/` | Each field's references: `vN.fits` the stack and `vN.json` where it came from. A version is never replaced; a better one is the next number |
 | `candidates/NAME.json` | Every candidate a field has had, followed as one object from night to night, with each night's measurement or limit and any dismissal and its reason |
 | `reports/ID/` | A candidate's report packet: `report.json`, `report.txt`, `finding.png` |

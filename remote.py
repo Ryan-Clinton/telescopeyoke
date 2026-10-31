@@ -28,7 +28,7 @@ import stacking
 ROOT = Path(__file__).parent
 PLACE = "telescopeyoke-laptop/remote"     # under HOST's home folder
 PYTHONS = ("telescopeyoke/.venv/bin/python", "python3")
-BACK = ("final.fits", "final.jpg", "restack.json", "discovery.fits", "discovery.json")
+BACK = ("final.fits", "final.jpg", "restack.json")
 
 
 def ssh(host, command, **kwargs):
@@ -102,14 +102,13 @@ def restack(host, sessions, options, say=print):
     web.mkdir(exist_ok=True)
     rsync([f"{host}:{PLACE}/data/web/{folder.parent.name}-final.jpg"], f"{web}/", "--ignore-missing-args")
     # The record says where things are here, not there.
-    for name in ("restack.json", "discovery.json"):
-        record = folder / name
-        if record.exists():
-            text = record.read_text(encoding="utf-8")
-            home = ssh(host, "echo $HOME", capture_output=True, text=True).stdout.strip()
-            for there_data in (f"{home}/{PLACE}/data", "../data"):    # as restack.py was given them
-                text = text.replace(f'"{there_data}/', f'"{config.DATA}/')
-            record.write_text(text, encoding="utf-8")
+    record = folder / "restack.json"
+    if record.exists():
+        text = record.read_text(encoding="utf-8")
+        home = ssh(host, "echo $HOME", capture_output=True, text=True).stdout.strip()
+        for there_data in (f"{home}/{PLACE}/data", "../data"):    # as restack.py was given them
+            text = text.replace(f'"{there_data}/', f'"{config.DATA}/')
+        record.write_text(text, encoding="utf-8")
     say(f"brought back to {folder}")
     return folder
 

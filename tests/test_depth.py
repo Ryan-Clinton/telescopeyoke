@@ -259,7 +259,7 @@ def test_too_few_measurements_are_refused():
 
 def test_each_stack_keeps_its_own_record():
     assert depth.record_path("frames/M31/x/final.fits").name == "depth.json"
-    assert depth.record_path("frames/M31/x/discovery.fits").name == "discovery-depth.json"
+    assert depth.record_path("frames/M31/x/reference.fits").name == "reference-depth.json"
 
 
 def test_every_term_is_fitted_only_from_enough_independent_nights():

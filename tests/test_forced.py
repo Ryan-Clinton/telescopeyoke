@@ -43,7 +43,7 @@ def test_a_record_written_elsewhere_still_finds_its_stack(tmp_path):
     (folder / "final.fits").write_bytes(b"x")
     record = folder / "depth.json"
     assert forced.located(record, {"stack": "frames/M31/20261013-232632/final.fits"}) == folder / "final.fits"
-    assert forced.located(record, {"stack": "/nowhere/discovery.fits"}) is None
+    assert forced.located(record, {"stack": "/nowhere/other.fits"}) is None
 
 
 def test_the_light_above_the_reference_leaves_out_the_star_underneath(tmp_path, monkeypatch):

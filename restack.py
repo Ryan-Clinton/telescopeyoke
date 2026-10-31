@@ -7,7 +7,6 @@
     ./restack.py M27 --profile          also report where the time went
     ./restack.py M27 --all              every M27 session as one picture
     ./restack.py frames/M27/A frames/M27/B    these sessions as one picture
-    ./restack.py M31 --discovery        the stack that shows the faintest stars
     ./restack.py M31 --all --on desktop do the work on the desktop and bring the picture back
 
 shoot.py stacks as it goes so there is something to watch. This goes back
@@ -27,13 +26,6 @@ gain, and the camera must not have been turned in the focuser between
 them: frames that will not line up on the reference are left out. Frames
 taken after the mount has swung to the other side of the meridian come out
 upside down and are turned back automatically.
-
---discovery makes a different stack, for finding faint new stars rather
-than for looking at: every frame that passes the checks is a candidate,
-each is weighted for a faint star's signal-to-noise
-(stacking.point_weights), and the poorest are left out where they would
-lower it. It is written as discovery.fits, with discovery.json, and the
-picture and final.fits are left as they were.
 """
 import argparse
 import json
@@ -95,7 +87,7 @@ def _field(session):
 
 
 @activity.during("Quality pass", lambda a: f"{_field(a['session'])}: restacking every frame, keeping the best")
-def run(session, keep=0.85, say=print, workers=None, profile=False, discovery=False):
+def run(session, keep=0.85, say=print, workers=None, profile=False):
     """Stack one session, or a list of sessions into one picture."""
     sessions = [Path(s) for s in session] if isinstance(session, (list, tuple)) else [Path(session)]
     several = len(sessions) > 1
@@ -141,8 +133,7 @@ def run(session, keep=0.85, say=print, workers=None, profile=False, discovery=Fa
                 q["file"] = f"{path.parent.name}/{path.name}"
             frames.append(q)
             timings.add(spent)
-        # The discovery stack chooses its own frames, by weight, below.
-        chosen = select(frames, 1.0 if discovery else keep)
+        chosen = select(frames, keep)
         if not chosen:
             raise SystemExit("No frame had enough stars to stack.")
         best = chosen[0]
@@ -181,12 +172,7 @@ def run(session, keep=0.85, say=print, workers=None, profile=False, discovery=Fa
                 timings.add(spent)
                 if info["residual"] is not None:
                     residuals.append(info["residual"])
-            if discovery:
-                weights = stacking.point_weights(chosen)
-                say(f"discovery stack: {sum(1 for w in weights if w)} of {len(chosen)} frames "
-                    "raise a faint star's signal-to-noise")
-            else:
-                weights = [stacking.weight(f, best) for f in chosen]
+            weights = [stacking.weight(f, best) for f in chosen]
             if several:
                 # A frame from another session that found few of the reference's
                 # stars has not lined up (the camera was turned, or it is a
@@ -227,25 +213,24 @@ def run(session, keep=0.85, say=print, workers=None, profile=False, discovery=Fa
     rows, cols = final.covered()
     trimmed = stacked.shape[0] - (rows.stop - rows.start), stacked.shape[1] - (cols.stop - cols.start)
     stacked = stacked[rows, cols]
-    stack_file = session / ("discovery.fits" if discovery else "final.fits")
+    stack_file = session / "final.fits"
     with timings.phase("finish the picture"):
         stacking.write_stack(stack_file, stacked,
                              {"EXPTIME": total, "NFRAMES": len(chosen), "GAIN": gain})
         name = session.parent.name
-        if not discovery:
-            image = Image.fromarray(process.process(stacked, background=process.sky_for(name)))
-            image = process.mark(image, stacked, name, say)
-            (config.DATA / "web").mkdir(exist_ok=True)
-            image.save(session / "final.jpg", quality=93)
-            image.save(config.DATA / "web" / f"{name}-final.jpg", quality=93)
-    records.write(session / ("discovery.json" if discovery else "restack.json"),
+        image = Image.fromarray(process.process(stacked, background=process.sky_for(name)))
+        image = process.mark(image, stacked, name, say)
+        (config.DATA / "web").mkdir(exist_ok=True)
+        image.save(session / "final.jpg", quality=93)
+        image.save(config.DATA / "web" / f"{name}-final.jpg", quality=93)
+    records.write(session / "restack.json",
         {"kept": [f["file"] for f in chosen], "frames": frames,
          "summary": {"captured": len(frames), "stacked": len(chosen),
                      "left_out": len(frames) - len(chosen), "total_exposure_s": total,
                      "sessions": [str(s) for s in sessions],
                      "median_residual_px": round(float(np.median(residuals)), 3) if residuals else None,
                      "seconds": round(time.perf_counter() - began, 1),
-                     "picture": None if discovery else str(session / "final.jpg"),
+                     "picture": str(session / "final.jpg"),
                      "stack": str(stack_file)}},
         stamp=True)
     say(f"{len(frames)} captured, {len(chosen)} stacked, {len(frames) - len(chosen)} left out; "
@@ -257,14 +242,11 @@ def run(session, keep=0.85, say=print, workers=None, profile=False, discovery=Fa
             f"{max(residuals):.2f})")
     if any(trimmed):
         say(f"edges only some frames reached were trimmed off: {trimmed[0]} rows and {trimmed[1]} columns")
-    if discovery:
-        say(f"saved {stack_file} and discovery.json")
-    else:
-        say(f"saved {session / 'final.fits'}, final.jpg and web/{name}-final.jpg")
+    say(f"saved {session / 'final.fits'}, final.jpg and web/{name}-final.jpg")
     if profile:
         say("Where the time went (work is summed over the workers):")
         say(timings.report(time.perf_counter() - began))
-    return stack_file if discovery else session / "final.jpg"
+    return session / "final.jpg"
 
 
 def tell(session, summary):
@@ -285,8 +267,6 @@ def main():
     ap.add_argument("--workers", type=int,
                     help="worker processes (default: one per processor core)")
     ap.add_argument("--profile", action="store_true", help="report where the time went")
-    ap.add_argument("--discovery", action="store_true",
-                    help="the stack that shows the faintest stars, as discovery.fits (picture untouched)")
     ap.add_argument("--on", metavar="HOST",
                     help="do the work on another computer, named in ~/.ssh/config (remote.py), and bring the "
                          "picture back here")
@@ -302,23 +282,18 @@ def main():
             sessions = [find_session(name) for name in args.session]
         if args.on:
             import remote
-            options = [f"--keep={args.keep}"] + (["--profile"] if args.profile else []) \
-                + (["--discovery"] if args.discovery else [])
+            options = [f"--keep={args.keep}"] + (["--profile"] if args.profile else [])
             folder = remote.restack(args.on, sessions, options)
-            log = "discovery.json" if args.discovery else "restack.json"
-            summary = json.loads((folder / log).read_text(encoding="utf-8"))["summary"]
-            if not args.discovery:
-                tell(folder, summary)
+            summary = json.loads((folder / "restack.json").read_text(encoding="utf-8"))["summary"]
+            tell(folder, summary)
             return summary
         picture = run(sessions if len(sessions) > 1 else sessions[0], args.keep,
-                      workers=args.workers, profile=args.profile, discovery=args.discovery)
-        if len(sessions) == 1 and not args.discovery:
+                      workers=args.workers, profile=args.profile)
+        if len(sessions) == 1:
             import patrol
             patrol.search_later(sessions[0])
-        log = "discovery.json" if args.discovery else "restack.json"
-        summary = json.loads((picture.parent / log).read_text(encoding="utf-8"))["summary"]
-        if not args.discovery:
-            tell(picture.parent, summary)
+        summary = json.loads((picture.parent / "restack.json").read_text(encoding="utf-8"))["summary"]
+        tell(picture.parent, summary)
         return summary
 
     interface.main("restack", work, args.json)

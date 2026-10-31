@@ -44,10 +44,10 @@ of the 13 October session, each stacked and measured the same way):
 | 608 s (38) | 17.29 | 16.80 | 17.20 |
 | 3232 s (202) | 17.91 | 17.02 | 17.59 |
 
-**A stack made for faint stars** (`restack.py --discovery`): every frame
-that passes the checks, each weighted for a faint star's signal-to-noise,
-transparency / (noise² x star width²), the poorest left out wherever they
-would lower it (`stacking.point_weights`):
+**A stack made for faint stars** (a one-off stacking option, since
+removed): every frame that passes the checks, each weighted for a faint
+star's signal-to-noise, transparency / (noise² x star width²), the poorest
+left out wherever they would lower it:
 
 | Frames | Picture's stack, 50% found | Discovery stack, 50% found |
 |---|---|---|

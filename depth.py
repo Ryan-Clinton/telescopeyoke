@@ -831,7 +831,7 @@ def destripe_check(session, frames=5, per_frame=300, fwhm=4.0, seed=11, say=prin
 
 def record_path(stack):
     """Where a stack's measurement is kept: depth.json beside the picture's
-    final.fits, NAME-depth.json beside any other stack (discovery.fits)."""
+    final.fits, NAME-depth.json beside any other stack."""
     stack = Path(stack)
     return stack.parent / ("depth.json" if stack.name == "final.fits" else f"{stack.stem}-depth.json")
 

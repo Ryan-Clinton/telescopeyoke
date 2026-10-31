@@ -17,7 +17,7 @@ night's date (YYYYMMDD-HHMMSS, local evening to morning). For each
 
 - `session.json`, `frames.jsonl`: what was asked, frames taken and kept,
   why frames were dropped (`reason`).
-- `restack.json` or `discovery.json`: what went into the stack.
+- `restack.json`: what went into the stack.
 - `depth.json`: how deep (`mag_50`, the limit); compare with that target's
   other nights.
 - `patrol.json`, `vetted.json`: the search's answer and its candidates.
