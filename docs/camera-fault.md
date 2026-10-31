@@ -164,6 +164,25 @@ exposure is refused by `altair.py` as a stray, so every one from about
 camera's timing at speeds 1 and 2 runs about twice as fast: the exposure
 ends early, or the frame is sent before it is taken.
 
+**The same 0.63 was measured before the fault "started".** On 13 October
+2026, through INDI, each second asked for added 0.63 s to a frame at speed
+2, 0.86 s at speed 1 and 1.25 s at speed 0, and a 10 s frame's star trails
+showed the shutter open for 6.43 s (`cache/camera_timing.json`;
+`camera.shutter_share()` has asked INDI for longer since). In the fault on
+31 October the shares were 0.63 at speed 2, and at speed 0 a 16 s frame
+took 21 s, about 1.3 s a second, as on 13 October. In the healthy state
+on 31 October, speed 2 took 20.5 s, also about 1.3 s a second, like speed
+0. So the likeliest reading: the camera has two states at speeds 1 and 2.
+In one the exposure is timed right; in the other (13 October all night,
+and the fault since 20 October) it is cut to about 0.63 at speed 2, 0.86
+at speed 1, and the frame really is shorter (the trails). INDI took those
+short frames as they came; Altair's library route in `altair.py`, used
+since October 4 on Windows and later on the laptop, refuses a frame back
+before 0.9 of its exposure, so there the same state is a "lost" frame. Not
+yet shown: that INDI's lost and late frames of 20 to 22 October are the
+same state (INDI has its own waits), and when the laptop's runs moved from
+INDI to the library.
+
 The morning's healthy run (720 of 720 at speed 2, recorded) shows the
 same thing at its very start: two frames back after 10.3 s, each followed
 by the 108 s wait, and then 20.5 s frames once the camera had been closed
@@ -262,8 +281,9 @@ In order. Each says what it needs.
 1. **Keep the frame sent too soon, in the fault, and look at it.** With
    light on the camera (cap off, an even glow), the frame that comes back
    after 10.3 s of a 16 s exposure is kept instead of thrown away and set
-   beside a good 16 s frame and an 8 s one. About half the light: the
-   exposure itself ends early. The right light but sent early: the
+   beside a good 16 s frame and a 10 s one. About 0.63 of the light: the
+   exposure itself ends early, as the trails of 13 October showed, and the
+   fault is that state. The right light but sent early: the
    timing of the transfer only. Noise or stripes: the readout is broken.
    Needs the fault (it may still be there just after it shows) and a small
    change to the probe; about two minutes.
