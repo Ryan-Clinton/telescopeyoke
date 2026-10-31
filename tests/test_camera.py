@@ -96,6 +96,9 @@ def fake_sdk(world):
         def put_ExpoAGain(self, gain): self.gain = gain
         def put_Speed(self, level): self.speed = level
         def get_Speed(self): return self.speed
+        def get_ExpoTime(self): return self.exposure
+        def get_RealExpoTime(self): return self.exposure
+        def get_Option(self, option): return self.options.get(option, 0)
         def MaxSpeed(self): return 2
         def get_Size(self): return WIDTH, HEIGHT
         def get_FinalSize(self): return WIDTH // world.binning, HEIGHT // world.binning
@@ -131,7 +134,7 @@ def fake_sdk(world):
             taken = time.monotonic() + self.exposure / 1e6    # when the shutter closes
             delay = world.delays.pop(0) if world.delays else world.delay
             delay = max(delay, self.exposure / 1e6)   # the shutter has to close first
-            if world.hurries:
+            if world.hurries and self.speed > 0:      # the fault: speeds 1 and 2 only
                 delay = world.hurries * self.exposure / 1e6
             if world.silent or (world.loses and world.loses(self)):
                 return
@@ -1131,6 +1134,32 @@ def test_the_probe_looks_at_every_side_of_a_failing_camera(sdk, world, tmp_path)
     assert not found["last"]["arrived"]
     assert json.loads((tmp_path / "probe.json").read_text())["shortest_lost_s"] == 0.03
     assert "shortest lost 0.03 s, longest kept 0.02" in found["summary"] and "speed 0: kept" in found["summary"]
+
+
+def test_the_probe_keeps_the_frame_sent_too_soon_and_every_setting_in_both_states(sdk, world, tmp_path):
+    """31 October 2026, the fault as recorded: frames sent back at speeds 1
+    and 2 in about half the time, turned away as too soon. The probe keeps
+    one to be looked at, sets its light beside a good frame's, and reads
+    every setting the camera will give before and after."""
+    import camera_probe
+    world.hurries = 0.3
+    with altair.AltairCamera() as cam:
+        cam.handle.put_Speed(2)
+        found = camera_probe.probe(cam, 0.2, folder=tmp_path, say=lambda line: None,
+                                   take=lambda: {"usb": {"port": "2-5"}}, recorder=Recorded,
+                                   exposures=(0.2,), rois=(), video=(0.001, 2), long_wait=0.3)
+    early = found["still_lost"]["early"]
+    assert not found["still_lost"]["arrived"] and early["after_s"] < 0.15
+    assert (tmp_path / early["file"]).exists() and early["light"]["mean"] > 0
+    assert "sent too soon after" in found["summary"] and "speed 0 kept: mean" in found["summary"]
+    assert found["settings_before"]["Speed"] == 2 and "option TRIGGER" in found["settings_before"]
+    assert "option FLUSH" not in found["settings_before"]
+
+
+def test_each_frame_says_how_the_camera_timed_it(sdk, world):
+    with altair.AltairCamera() as cam:
+        _, header = cam.frame(0.2)
+    assert header["REALEXP"] == pytest.approx(0.2) and header["TY_BACK"] >= 0.2
 
 
 def test_the_first_lost_frame_starts_the_probe_once_and_keeps_the_speed(sdk, world, monkeypatch):

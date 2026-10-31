@@ -278,6 +278,17 @@ back too soon and when.
 
 In order. Each says what it needs.
 
+Three questions now lead, all about the camera's timing rather than its
+lead: is the exposure asked for read the same way at every speed and on
+both routes (INDI and Altair's library)? Does the camera really expose for
+only about 0.63 of the time at speed 2 in the fault? And what changes when
+it goes from one state to the other? Until they are answered, no repair or
+replacement is to be asked for on the strength of a USB fault: the frames
+cross the lead whole. The USB recording cannot answer the third by itself:
+the library scrambles its control requests differently each time the
+camera is opened (the same request read `5ff6` in one capture and `ece0`
+in another), so the camera's own readable settings are compared instead.
+
 1. **Keep the frame sent too soon, in the fault, and look at it.** With
    light on the camera (cap off, an even glow), the frame that comes back
    after 10.3 s of a 16 s exposure is kept instead of thrown away and set
@@ -285,12 +296,32 @@ In order. Each says what it needs.
    exposure itself ends early, as the trails of 13 October showed, and the
    fault is that state. The right light but sent early: the
    timing of the transfer only. Noise or stripes: the readout is broken.
-   Needs the fault (it may still be there just after it shows) and a small
-   change to the probe; about two minutes.
-2. **Image at speed 2 and watch.** From 31 October, so a night's imaging
+   Done by the probe from 31 October: it keeps the frame as
+   `early-16s.fits`, says when it came and its mean light, and sets that
+   beside the speed 0 frame of the same exposure. Cap on, both are only
+   the black level; the probe needs light on the sensor to answer it, so
+   the next time the fault shows, the cap comes off before `./camera_test.py
+   --probe` is run again.
+2. **Every frame says how the camera timed it** (from 31 October): the
+   FITS header's `REALEXP` (the exposure the camera says it really used,
+   `get_RealExpoTime`) and `TY_BACK` (seconds from the trigger to the frame
+   arriving: 20.5 for a healthy 16 s frame at speed 2, 10.3 in the fault).
+   So an ordinary night's frames show when the camera changes state, and
+   whether the camera itself knows its exposure was cut short.
+3. **Every setting, in both states** (from 31 October): the probe reads
+   every setting the camera will give (the named readings and every
+   readable option) before it starts and after it ends, and lists those
+   that changed. One reading taken in the fault and one when healthy is
+   the comparison of the two states.
+4. **A timed light** (needs parts): an LED on a spare pin of the focuser's
+   Nano, pointing into the camera, switched on for exactly a known time
+   within a long exposure, or flashed at a known rate, so the frame's light
+   measures how long the sensor really gathered it, at each speed, in both
+   states, without stars.
+5. **Image at speed 2 and watch.** From 31 October, so a night's imaging
    is itself the test. If frames are lost, it is seen at once (`./ty
    watch-run`) and the person decides whether to go back to speed 0.
-3. **Through a powered USB 3 hub.** Done on 30 Oct (above): on the 1 m leads
+6. **Through a powered USB 3 hub.** Done on 30 Oct (above): on the 1 m leads
    speed 2 kept 50 of 50, and then 720 of 720 over 4 h 16 min (18:37 to
    22:53), with the focuser on the hub as well. But the control straight
    to the laptop on the 3 m lead, port 2-5, also kept 720 of 720 (22:57 to
@@ -298,10 +329,10 @@ In order. Each says what it needs.
    it. Those counts did not count a frame lost and kept on a retry, and the
    recorded run lost its first frame that way, twice. If speed 2 holds through the hub for whole nights, power
    or signal conditioning moves up the list of causes.
-4. **The ports, one at a time.** The same 50 frames of 16 s at speed 2 on
+7. **The ports, one at a time.** The same 50 frames of 16 s at speed 2 on
    each of the laptop's USB 3 ports in turn; the fault log records which.
    Needs the person's hands to move the plug.
-5. **Everything at once, the moment a frame is lost** (`camera_probe.py`,
+8. **Everything at once, the moment a frame is lost** (`camera_probe.py`,
    from 31 October 2026). With `[camera] probe_on_loss = true`, the first
    frame lost by any run (imaging, a speed test) is followed at once by
    about ten minutes of looking at the camera in that state, before it can
@@ -331,10 +362,10 @@ In order. Each says what it needs.
    temperature of its own; from that evening a thermistor on its body
    reads it through the focuser's Nano (`./focuser.py temp`): 20.3 °C just
    after the probe.
-6. **AltairCapture's Diagnose, on Windows, camera plugged straight in**, as
+9. **AltairCapture's Diagnose, on Windows, camera plugged straight in**, as
    Altair asks of support customers. Needs the Windows boot and AltairCapture
    installed.
-7. **Another Hypercam 183C on this laptop, or this one on another
+10. **Another Hypercam 183C on this laptop, or this one on another
    astronomy computer.** Needs a second camera or computer.
 
 ## For Altair (ticket #3470)

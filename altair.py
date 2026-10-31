@@ -293,6 +293,8 @@ class AltairCamera:
         handle.Trigger(1)
         give_up = began + (wait or wait_for(seconds))
         self.early = []         # seconds after the trigger of each frame too soon to be this one
+        self.early_frame = None  # the last of them, kept to be looked at, never returned
+        self.back_s = None      # seconds from the trigger to the frame kept
         while True:
             with self._changed:
                 arrived = self._changed.wait_for(lambda: self._ready or self._failure,
@@ -312,12 +314,15 @@ class AltairCamera:
             older = self._older(info, began)
             if landed - began >= 0.9 * seconds - 0.05 and not older:
                 self._learn(info, landed)
+                self.back_s = round(landed - began, 2)
                 break
             if not older:
                 # 31 October 2026: in the fault, a 16 s frame came back after
                 # 10.3 s instead of the usual 20.5, at speeds 1 and 2 only, and
-                # was turned away here; it is named, not taken.
+                # was turned away here; it is named, not taken, and kept aside
+                # so its light can be measured against a good frame's.
                 self.early.append(round(landed - began, 1))
+                self.early_frame = data
         with self._changed:
             self._waiting = False
         if failure or not arrived:
@@ -452,6 +457,16 @@ class AltairCamera:
             header["READSPD"] = (int(self.handle.get_Speed()), "readout speed")
         except self.lib.HRESULTException:
             pass
+        # How the camera timed it: what it says it really exposed for, and
+        # how long after the trigger the frame came back. 31 October 2026:
+        # at speed 2 a 16 s frame comes back after 20.5 s when healthy and
+        # 10.3 s in the fault, so a run shows when the camera changes state.
+        try:
+            header["REALEXP"] = (self.handle.get_RealExpoTime() / 1e6, "exposure the camera reports, s")
+        except (self.lib.HRESULTException, AttributeError):
+            pass
+        if getattr(self, "back_s", None) is not None:
+            header["TY_BACK"] = (self.back_s, "s from trigger to the frame arriving")
         return data, header
 
     def video(self, seconds, count, roi=None, timeout=5.0):

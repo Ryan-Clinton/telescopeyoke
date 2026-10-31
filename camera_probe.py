@@ -12,10 +12,14 @@ minutes, before it can clear:
 
 1. where the camera is on USB, the USB controller's own state of each port
    (link state and errors, from debugfs), the camera's versions and
-   temperature, and the kernel's USB messages;
+   temperature, the kernel's USB messages, and every setting the camera
+   will tell (settings(): the exposure asked for and the one it says it
+   used, the speed, every readable option);
 2. a capture of the bus's traffic (usbmon) and of the USB controller's
    events (the xhci-hcd trace) for the whole probe;
-3. whether a frame is still lost at the speed it was lost at;
+3. whether a frame is still lost at the speed it was lost at, and if a
+   frame came back too soon to be it (31 October 2026: a 16 s frame after
+   10.3 s), when, and how much light it held; it is kept as early-16s.fits;
 4. the shortest exposure that is lost (23 October: 1 s arrived, 2 s did not);
 5. smaller frames, part of the sensor, at that exposure: is it the amount
    of data or the wait?
@@ -24,7 +28,8 @@ minutes, before it can clear:
 7. one frame waited for for five minutes: lost, or only late (21 October:
    some came about 35 s late);
 8. the same exposure at speeds 1 and 0;
-9. the state of step 1 again, and a last frame at the speed it was lost at.
+9. the state of step 1 again, which settings changed, and a last frame at
+   the speed it was lost at.
 
 Nothing here changes a setting that outlasts the probe: the camera is
 closed and opened again afterwards, as config.toml has it. Root is needed
@@ -113,15 +118,70 @@ class Recorder:
         return [name for _, _, name in self.running]
 
 
-def shot(cam, seconds, wait=None):
-    """One exposure, tried once: whether it arrived, and after how long."""
+def light(data):
+    """How much light a frame holds: its mean and median, raw numbers."""
+    import numpy as np
+    return {"mean": round(float(np.mean(data)), 1), "median": round(float(np.median(data)), 1)}
+
+
+def shot(cam, seconds, wait=None, keep=None):
+    """One exposure, tried once: whether it arrived, after how long, how
+    much light it held, and any frame that came back too soon to be it
+    (31 October 2026: in the fault a 16 s frame came back after 10.3 s),
+    with that frame's light too. With `keep`, a folder, the frame sent too
+    soon is saved there as early-SECONDS.fits to be looked at."""
     began = time.perf_counter()
     try:
-        cam._expose(seconds, wait=wait)
-        return {"seconds": seconds, "arrived": True, "after_s": round(time.perf_counter() - began, 1)}
+        data, _ = cam._expose(seconds, wait=wait)
+        row = {"seconds": seconds, "arrived": True, "after_s": round(time.perf_counter() - began, 1),
+               "light": light(data)}
     except Exception as problem:
-        return {"seconds": seconds, "arrived": False, "after_s": round(time.perf_counter() - began, 1),
-                "problem": str(problem)}
+        row = {"seconds": seconds, "arrived": False, "after_s": round(time.perf_counter() - began, 1),
+               "problem": str(problem)}
+    early = getattr(cam, "early_frame", None)
+    if getattr(cam, "early", None) and early is not None:
+        data = cam._normalise(early.copy())
+        row["early"] = {"after_s": cam.early[0], "light": light(data)}
+        if keep:
+            from astropy.io import fits
+            Path(keep).mkdir(parents=True, exist_ok=True)
+            name = f"early-{seconds:g}s.fits"
+            header = fits.Header()
+            header["EXPTIME"] = (float(seconds), "seconds asked for")
+            header["TY_BACK"] = (cam.early[0], "s from trigger to the frame arriving")
+            fits.PrimaryHDU(data, header).writeto(Path(keep) / name, overwrite=True)
+            row["early"]["file"] = name
+    return row
+
+
+def settings(cam):
+    """Every setting the camera will tell: the named readings (the exposure
+    asked for and the one it says it really used, the gain, the speed, the
+    frame's size and region, the frame rate) and every option that can be
+    read. Before and after the probe, and so in the fault and once it has
+    cleared: what is different between the camera's two states."""
+    handle, lib = cam.handle, cam.lib
+    found = {}
+    for name in ("get_ExpoTime", "get_RealExpoTime", "get_ExpTimeRange", "get_ExpoAGain", "get_Speed",
+                 "get_HZ", "get_Mode", "get_Size", "get_FinalSize", "get_eSize", "get_Roi", "get_RawFormat",
+                 "get_FrameRate", "get_Temperature", "get_AutoExpoEnable", "get_Negative"):
+        try:
+            value = getattr(handle, name)()
+            found[name[4:]] = list(value) if isinstance(value, tuple) else value
+        except Exception:
+            pass
+    # Writing these does something; reading them is not wanted either.
+    unsafe = ("FLUSH", "FACTORY", "DEVICE_RESET", "RELOAD", "SEQUENCER_EXPOTIME", "SEQUENCER_EXPOGAIN",
+              "EVENT_HARDWARE")
+    for name in sorted(n for n in dir(lib) if n.startswith("ALTAIRCAM_OPTION_")):
+        key = name[len("ALTAIRCAM_OPTION_"):]
+        if key in unsafe or not isinstance(getattr(lib, name), int) or getattr(lib, name) >= 0x1000:
+            continue
+        try:
+            found[f"option {key}"] = handle.get_Option(getattr(lib, name))
+        except Exception:
+            pass
+    return found
 
 
 def framed(cam, roi):
@@ -155,10 +215,11 @@ def probe(cam, seconds=16.0, folder=None, say=print, take=snapshot, recorder=Rec
     except Exception as problem:
         found["camera"] = {"problem": str(problem)}
     found["temperature_c"] = temperature(cam)
+    found["settings_before"] = settings(cam)
     usb = found["before"].get("usb") or {}
     bus = usb.get("port", "").split("-")[0] or None
     with recorder(folder, bus) as recording:
-        found["still_lost"] = shot(cam, seconds)
+        found["still_lost"] = shot(cam, seconds, keep=folder)
         say(f"  {seconds:g} s at speed {speed}: {words(found['still_lost'])}")
         found["exposures"] = []
         for s in exposures:
@@ -198,11 +259,15 @@ def probe(cam, seconds=16.0, folder=None, say=print, take=snapshot, recorder=Rec
             found["speeds"].append({"speed": level, **shot(cam, seconds)})
             say(f"  {seconds:g} s at speed {level}: {words(found['speeds'][-1])}")
         cam.handle.put_Speed(speed)
-        found["last"] = shot(cam, seconds)
+        found["last"] = shot(cam, seconds, keep=folder)
         say(f"  {seconds:g} s at speed {speed} again: {words(found['last'])}")
         found["captured"] = recording.files()
     found["after"] = take()
     found["temperature_after_c"] = temperature(cam)
+    found["settings_after"] = settings(cam)
+    found["settings_changed"] = {key: [found["settings_before"].get(key), value]
+                                 for key, value in found["settings_after"].items()
+                                 if found["settings_before"].get(key) != value}
     if "usbmon.txt" in found["captured"]:
         import camera_test
         device = device_number(usb.get("port"))
@@ -236,6 +301,20 @@ def words(row):
     return f"LOST ({row.get('problem', 'no frame')})"
 
 
+def light_line(found):
+    """The frame sent too soon against a good frame of the same exposure,
+    if both were seen: about 0.63 of the light would mean the exposure
+    itself was cut short (as star trails showed on 13 October 2026). Raw
+    means, black level included, so it only says something with light on
+    the sensor; cap on, both are the black level."""
+    early = (found.get("still_lost") or {}).get("early") or (found.get("last") or {}).get("early")
+    good = next((r for r in found.get("speeds", []) if r.get("arrived") and r.get("light")), None)
+    if not early or not good:
+        return None
+    return (f"sent too soon after {early['after_s']:g} s: mean {early['light']['mean']:g}; "
+            f"speed {good['speed']} kept: mean {good['light']['mean']:g}")
+
+
 def summary(found):
     """A few lines a person can read on their phone."""
     speed, seconds = found["speed"], found["lost_exposure_s"]
@@ -255,6 +334,10 @@ def summary(found):
     for row in found["speeds"]:
         lines.append(f"speed {row['speed']}: {'kept' if row['arrived'] else 'lost'}")
     lines.append(f"at the end, speed {speed}: {'kept' if found['last']['arrived'] else 'still lost'}")
+    if light_line(found):
+        lines.append(light_line(found))
+    if found.get("settings_changed"):
+        lines.append("settings changed: " + ", ".join(sorted(found["settings_changed"])))
     if found.get("usb_traffic"):
         t = found["usb_traffic"]
         lines.append(f"USB: {t['asked']} asked, {t['completed']} came back, {t['still_waiting']} left waiting")
