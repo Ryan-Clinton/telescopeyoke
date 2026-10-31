@@ -108,7 +108,7 @@ def settings():
     found = config.hardware().get("stream", {})
     return {"enabled": bool(found.get("enabled", False)), "service": found.get("service", "youtube"),
             "url": found.get("url", ""), "tones": bool(found.get("focus_tones", True)),
-            "narration": bool(found.get("narration", True)), "clips": bool(found.get("clips", True))}
+            "narration": bool(found.get("narration", False)), "clips": bool(found.get("clips", False))}
 
 
 def services(s):
