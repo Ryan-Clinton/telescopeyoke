@@ -282,7 +282,7 @@ def usable_area(new, ref, edge=EDGE, bright=BRIGHT, fwhm=4.8):
     saturate and never subtract cleanly. How far round a star is left out
     goes with the stars' width: a fixed 20 pixels was right on this rig's
     stacks and, on ZTF's sharper images, hid a real nova 17 pixels from a
-    bright star (AT2024koe, recover.py)."""
+    bright star (AT2024koe)."""
     covered = np.isfinite(new) & np.isfinite(ref)
     inside = ndimage.binary_erosion(covered, iterations=edge)
     flat = np.nan_to_num(ref - depth.background(np.nan_to_num(ref)))

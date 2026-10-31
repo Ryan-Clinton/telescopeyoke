@@ -650,7 +650,6 @@ def test_the_cooldown_keeps_a_line_a_step_and_counts_frames_that_never_arrive(mo
     monkeypatch.setattr(camera_test.config, "DATA", tmp_path)
     monkeypatch.setattr(camera_test, "outdoors", lambda: {"temp_c": 1.0, "dew_point_c": 0.5})
     monkeypatch.setattr(camera_test, "usb_link", lambda: {"port": "2-4", "mbps": 5000})
-    monkeypatch.setattr(camera_test, "ELECTRONS_FILE", tmp_path / "none.json")
     slept = []
     answer = camera_test.cooldown(16, 1500, frames=3, every_min=5, steps=2, note="3 m lead",
                                   say=lambda s: None, sleep=slept.append)
@@ -660,36 +659,6 @@ def test_the_cooldown_keeps_a_line_a_step_and_counts_frames_that_never_arrive(mo
     assert second["stripes_adu"] > first["stripes_adu"] and first["usb"]["port"] == "2-4"
     lines = (tmp_path / "cache").glob("cooldown-*.jsonl")
     assert len(next(lines).read_text().splitlines()) == 2
-
-
-def test_photon_transfer_finds_the_electrons_per_adu_it_was_given():
-    import camera_test
-    rng = np.random.default_rng(5)
-    k = 0.8                                                    # electrons per ADU
-    def flat(electrons):
-        return 300 + rng.poisson(electrons, (200, 300)) / k + rng.normal(0, 2, (200, 300))
-    pairs = [(flat(e), flat(e)) for e in (500, 1000, 2000, 4000, 8000)]
-    found, points = camera_test.photon_transfer(pairs)
-    assert found == pytest.approx(k, rel=0.05) and len(points) == 5
-
-
-def test_photon_transfer_refuses_frames_in_the_dark():
-    import camera_test
-    rng = np.random.default_rng(6)
-    dark = [(300 + rng.normal(0, 3, (200, 300)), 300 + rng.normal(0, 3, (200, 300))) for _ in range(4)]
-    with pytest.raises(Refusal, match="evenly lit"):
-        camera_test.photon_transfer(dark)
-
-
-def test_the_stripes_come_in_electrons_once_the_gain_is_measured(monkeypatch, tmp_path):
-    import camera_test
-    rng = np.random.default_rng(7)
-    frames = [striped(8, rng) for _ in range(2)]
-    monkeypatch.setattr(camera_test, "ELECTRONS_FILE", tmp_path / "e.json")
-    assert camera_test.sweep_point(frames, 1500)["stripes_e"] is None
-    (tmp_path / "e.json").write_text('{"1500": {"e_per_adu": 0.5}}')
-    q = camera_test.sweep_point(frames, 1500)
-    assert q["stripes_e"] == pytest.approx(q["stripes_adu"] * 0.5, abs=0.01)
 
 
 def test_a_cooldown_record_says_what_else_was_on_usb_and_whether_on_the_charger(tmp_path):

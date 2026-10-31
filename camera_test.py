@@ -8,7 +8,6 @@
     ./camera_test.py --timing           does a frame take as long as the exposure asked for?
     ./camera_test.py --trail            how long is the shutter really open? From a star's trail
     ./camera_test.py --cooldown --note "3 m lead, port 2-4"   cap on, outside: do the stripes grow as it cools?
-    ./camera_test.py --electrons --gains 900 1500   cap off, an even light: electrons per ADU at each gain
     ./camera_test.py --probe            cap on, while it loses frames: everything about that state (camera_probe.py)
     ./camera_test.py --timed-light      cap off, facing the laptop's screen in a dark room: how long the sensor
                                         really gathers light at each speed, from timed flashes (--light NAME: a Hue light)
@@ -620,9 +619,6 @@ def main():
                       help="every saved night's stripes beside its temperature, dew point and humidity")
     what.add_argument("--banding", action="store_true",
                       help="how strong the horizontal stripes are with the fan on and off and at two black levels")
-    what.add_argument("--electrons", action="store_true",
-                      help="cap off, an evenly lit field: electrons per ADU at each of --gains, for the stripes "
-                           "in electrons")
     what.add_argument("--probe", action="store_true",
                       help="cap on: look at the camera from every side while it loses frames, about ten "
                            "minutes (camera_probe.py); --exposure is the one lost (default 16)")
@@ -655,8 +651,7 @@ def main():
                     help="with --gain-sweep: each at each of these readout speeds (Speed 2 is put back after); "
                          "with --speed-ladder: only these")
     ap.add_argument("--exposures", type=float, nargs="+",
-                    help="with --gain-sweep: each gain at each of these exposures, seconds; with --electrons: "
-                         "a pair of frames at each (default 0.05 to 0.8 s)")
+                    help="with --gain-sweep: each gain at each of these exposures, seconds")
     ap.add_argument("--exposure", type=float,
                     help="seconds (default 2 for gains, 1 for throughput, 10 for --trail)")
     ap.add_argument("--frames", type=int,
@@ -846,76 +841,16 @@ def sweep_point(mosaics, gain=None):
     first frame's sky, grain, burnt pixels and stars, and the stripes as the
     median over all of them. `stripes` is against what the pixels' noise
     would give a row (1 is none); `stripes_adu` is the raw row-to-row
-    spread; `stripes_per_grain` is that spread over one pixel's sky grain;
-    `stripes_e` is it in electrons, once `--electrons` has measured this
-    gain (None until then). ADU are not comparable between gains (a higher
-    gain gives more ADU for the same electrons), so a sweep is judged on the
-    ratios, the electrons and what it finds, not on ADU."""
+    spread; `stripes_per_grain` is that spread over one pixel's sky grain.
+    ADU are not comparable between gains (a higher gain gives more ADU for
+    the same light), so a sweep is judged on the ratios and what it finds,
+    not on ADU."""
     q = measure(mosaics[0])
     q["stripes"] = round(float(np.median([banding(m) for m in mosaics])), 1)
     q["stripes_adu"] = round(float(np.median([np.std(row_stripes(m)) for m in mosaics])), 2)
     q["stripes_per_grain"] = round(q["stripes_adu"] / max(q["noise"], 1e-9), 3)
-    k = electrons_known(gain)
-    q["stripes_e"] = None if k is None else round(q["stripes_adu"] * k, 2)
     q["frames"] = len(mosaics)
     return q
-
-
-ELECTRONS_FILE = config.DATA / "cache" / "camera_electrons.json"
-
-
-def electrons_known(gain):
-    """Electrons per ADU at this gain, as --electrons last measured it."""
-    try:
-        return json.loads(ELECTRONS_FILE.read_text(encoding="utf-8"))[str(gain)]["e_per_adu"]
-    except (OSError, KeyError, TypeError, ValueError):
-        return None
-
-
-def photon_transfer(pairs):
-    """Electrons per ADU from pairs of frames of an evenly lit field, a pair
-    at each brightness: within a pair the light's own (Poisson) noise is
-    the only thing that differs, so half the variance of their difference
-    rises with the signal by 1/gain electrons per ADU. The slope of that
-    against the mean is 1/(e per ADU); the offset and any fixed pattern
-    cancel. Green pixels of the middle of the frame only, where the light is
-    most even. Returns (e_per_adu, the points)."""
-    points = []
-    for a, b in pairs:
-        h, w = a.shape
-        cut = (slice(h // 4, 3 * h // 4, 2), slice(w // 4 + 1, 3 * w // 4, 2))
-        x, y = a[cut].astype(np.float64), b[cut].astype(np.float64)
-        points.append((float((x.mean() + y.mean()) / 2), float(np.var(x - y) / 2)))
-    mean, var = np.array(points).T
-    if len(points) < 3 or np.ptp(mean) < 10 * np.sqrt(max(var.min(), 1.0)):
-        raise interface.Refusal("INVALID_REQUEST", "The frames hardly change in brightness with exposure: "
-                                "--electrons needs the cap off and an evenly lit field (a light panel, or a "
-                                "white cloth over the tube in daylight), not darkness.")
-    slope = np.polyfit(mean, var, 1)[0]
-    if slope <= 0:
-        raise interface.Refusal("INVALID_REQUEST", "The noise did not grow with the light; the field is not "
-                                "evenly lit, or the brightest frames are burnt out. Use shorter exposures.")
-    return round(float(1 / slope), 4), [{"mean_adu": round(m, 1), "var_adu2": round(v, 2)} for m, v in points]
-
-
-def electrons_trial(gains, exposures, say=print):
-    """Electrons per ADU at each gain (photon_transfer), kept for the gain
-    sweep and the cooldown to give the stripes in electrons."""
-    found = {}
-    try:
-        found = json.loads(ELECTRONS_FILE.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        pass
-    for gain in gains:
-        with Camera(gain=gain) as cam:
-            pairs = [(cam.frame(e)[0], cam.frame(e)[0]) for e in exposures]
-        k, points = photon_transfer(pairs)
-        found[str(gain)] = {"e_per_adu": k, "exposures_s": list(exposures), "points": points,
-                            "measured": time.strftime("%Y-%m-%d")}
-        say(f"  gain {gain}: {k:g} electrons per ADU")
-    ELECTRONS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    ELECTRONS_FILE.write_text(json.dumps(found, indent=1), encoding="utf-8")
-    return found
 
 
 def usb_link(devices=Path("/sys/bus/usb/devices")):
@@ -1062,8 +997,6 @@ def cooldown(exposure, gain, frames=20, every_min=10.0, steps=12, note="", say=p
             row = {"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "note": note, **conditions(cam, exposure, gain),
                    "camera_c": camera_temperature(cam), "outdoors": outdoors(),
                    **cooldown_step(cam, exposure, frames, say=say)}
-            k = electrons_known(gain)
-            row["stripes_e"] = None if k is None or row["stripes_adu"] is None else round(row["stripes_adu"] * k, 2)
             rows.append(row)
             with open(log, "a", encoding="utf-8") as f:
                 f.write(json.dumps(row) + "\n")
@@ -1131,8 +1064,6 @@ def run(args):
         found = usb_report(lines, device)
         print(json.dumps(found, indent=1))
         return found
-    if args.electrons:
-        return electrons_trial(args.gains, args.exposures or [0.05, 0.1, 0.2, 0.4, 0.8])
     if args.cooldown:
         return cooldown(args.exposure or 16.0, args.gain, args.frames or 20, args.every, args.steps, args.note)
     if args.throughput:

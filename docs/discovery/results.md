@@ -263,7 +263,7 @@ new night, 13 October as the reference):
   every stack of a field, and with `--difference` the light above the
   reference there, without the galaxy or the faint stars underneath:
   patrols follow candidates up that way.
-- **A real nova, recovered** (`recover.py`). Fakes prove the pipeline finds
+- **A real nova, recovered** (a one-off check, its script since removed). Fakes prove the pipeline finds
   what was put there; the test that matters is something nobody put
   there. AT2024koe (M31N 2024-06a) erupted on 8 June 2024 in M31's outer
   disc, peaked at 16.2 on 12 June and was 19.5 by 3 July. From ZTF's public

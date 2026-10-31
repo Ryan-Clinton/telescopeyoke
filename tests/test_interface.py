@@ -402,12 +402,6 @@ def test_a_report_packet_matches_its_schema():
     valid(interface.run("report", lambda: report.assemble("M31", candidate([SEEN]), None, RECORDS, None)), "report")
 
 
-def test_a_recovery_matches_its_schema():
-    valid(interface.run("recover", lambda: {
-        "name": "AT2024koe", "ra": 10.3229, "dec": 40.96525, "band": "ZTF zr", "reference_image": "a",
-        "new_image": "b", "candidates": 4, "fading_peaks": 11, "recovered": True, "kind": "measured",
-        "arcsec_off": 0.27, "score": 10.8, "mag": 19.42, "rank": 1, "as_strong_fading": 11}), "recover")
-
 
 def test_a_sweep_matches_the_patrol_schema(tmp_path, monkeypatch):
     import patrol
