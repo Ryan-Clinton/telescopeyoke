@@ -258,7 +258,6 @@ def run(args, scope=None, cam=None, site=None, say=print):
     site = site or config.load()["site"]
     _rig = shoot.hold_the_rig("Moon")
     import director
-    director.aim("Moon", "moon")            # the stream names the Moon from now, not the last run
     white = 2 ** config.hardware()["camera"]["bit_depth"] - 1
     if args.focus_check:
         if scope is None:
@@ -288,6 +287,7 @@ def run(args, scope=None, cam=None, site=None, say=print):
     if disc is None:
         raise SystemExit("No Moon in the frame: cloud, or the GoTo is far off "
                          "(./ty mount goto Moon --aim-off EAST NORTH to bring it in).")
+    director.mark("Moon", "centred", confirmed="camera")    # the disc is in the frame: observed
     shape = image.shape
     matrix = load_calibration(s.side())
     if matrix is None:

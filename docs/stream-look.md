@@ -351,8 +351,10 @@ a Moon run's panel said STAR SIZE 9.3″):
 > Hundreds of short exposures are combined to make the surface cleaner and more detailed.
 > TONIGHT'S MOON · Waxing · 97% illuminated · 12.9 days after new Moon
 
-It is the Moon whenever the telescope was last aimed at it
-(`director.py`), not only when the last run's name says so. In the live
+It is the Moon whenever the telescope was last aimed at it and got there
+(`director.py`), not only when the last run's name says so; while the GoTo
+is still moving the headline says MOVING TO THE MOON, and a GoTo that
+failed or landed far off names no target. In the live
 view, **LIVE VIEW** and "What the telescope sees now: a fresh frame every
 few seconds, nothing stacked." While a lucky-imaging video is taken or
 stacked (`lucky.py`, activity phase `lucky`), the words say instead that
@@ -862,7 +864,9 @@ registered for the channel), and the chat's read-only commands
   aimed at, old run and schedule, each with its scene and target (a fresh
   Moon frame after an M31 run, with the schedule run out, is the Moon live,
   never the end); target, programme and activity apart; focusing over the
-  fresh frame; a paused run keeping its stack; the headline on a change and
+  fresh frame; a paused run keeping its stack; a target named as observed
+  only once reached (slewing, centring, reached, centred, off, failed, and
+  a GoTo whose process was killed), each announced once; the headline on a change and
   gone after its seconds; an answer that cannot be worked out never
   stopping the stream.
 - Every scene drawn as a viewer sees it (`streamlook.scenes`): the Moon's

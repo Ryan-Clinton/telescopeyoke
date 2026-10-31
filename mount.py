@@ -134,6 +134,9 @@ PULSE_LONGEST = 10.0        # seconds: its longest; a bigger miss is re-centred 
 # Fixed-rate stages for closing in on an axis angle: (rate 1-9, stop within °).
 STAGES = ((8, 2.0), (6, 0.25), (4, 0.03))
 SLEW_TIMEOUT = 150
+# Commands that send the tube away from whatever it was aimed at (not to a
+# named object): the stream stops naming a target (director.py).
+AWAY = ("zenith", "home", "point", "pointing", "findhome", "truehome", "directions")
 
 
 def handset_firmware(raw):
@@ -793,9 +796,24 @@ class Mount:
         offset = json.loads(CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
         plan = plan_goto(name, site)
         import director
-        # What the telescope is aimed at, for the stream (director.py); a
-        # file only, never an error, and nothing about the move.
-        director.aim(name)
+        # What the telescope is aimed at, for the stream (director.py): a
+        # file only, never an error, and nothing about the move. A small
+        # move about a target already reached (a dither, centring the Moon)
+        # is not a new one.
+        again = any(aim_off) and director.observing(name)
+        if not again:
+            director.aim(name)
+        outcome = "failed"      # until the mount says it has arrived
+        try:
+            outcome = self._goto_target(name, site, solve, aim_off, plan, offset)
+        finally:
+            if not again or outcome == "failed":
+                self.arrived(name, site, aim_off, outcome)
+
+    def _goto_target(self, name, site, solve, aim_off, plan, offset):
+        """goto_target's move: "reached" once the mount has arrived, or
+        "centred" once a plate solve has found the object in the middle."""
+        import director
         target = find_target(name)
         if any(aim_off):
             target = offset_target(target, *aim_off)
@@ -819,7 +837,8 @@ class Mount:
             if solve and not self.can_solve:
                 print("  (demo: no camera, so no plate solve)")
             if not solve or not self.can_solve:
-                return
+                return "reached"
+            director.mark(name, "centring")
             # After a slew the gears take a while to bite again and the stars
             # streak, which the solver cannot handle. Wait, and try twice.
             time.sleep(SETTLE)
@@ -829,7 +848,7 @@ class Mount:
                 miss = self.measure_miss(target, site)
             if miss is None:
                 self.say("Could not plate-solve the frame; aim left uncorrected.")
-                return
+                return "reached"
             self.say(f"  off by {miss[0] * 60:+.1f}' in hour angle, {miss[1] * 60:+.1f}' in Dec")
             if last is not None:
                 import moved
@@ -840,10 +859,39 @@ class Mount:
             last = miss
             if max(abs(miss[0]), abs(miss[1])) < CENTRED:
                 self.say("  centred")
-                return
+                return "centred"
             error = [error[0] + miss[0], error[1] + miss[1]]
             save_pointing_error(error, west)
         self.say("  still not centred after 4 tries")
+        return "reached"
+
+    def arrived(self, name, site, aim_off, outcome):
+        """Tell the stream (director.py) how a GoTo to `name` ended: an
+        arrival is "reached" only if the mount's own reading of where it
+        points is within director.NEAR_DEG of the object, else "off". Reads
+        the mount, never moves it, and is never an error."""
+        try:
+            import director
+            miss = None
+            if outcome == "reached":
+                try:
+                    miss = self.distance_from(offset_target(find_target(name), *aim_off), site)
+                except Exception:        # an unanswered read: the arrival stands unchecked
+                    miss = None
+                if miss is not None and miss > director.NEAR_DEG:
+                    outcome = "off"
+            director.mark(name, outcome, confirmed={"centred": "plate solve"}.get(outcome) or (
+                "mount" if outcome == "reached" and miss is not None else None), miss_deg=miss)
+        except Exception:                # the GoTo's own outcome, or its error, goes on regardless
+            pass
+
+    def distance_from(self, target, site):
+        """Degrees on the sky between where the mount says it points (allowing
+        for its clock and the plate-solved pointing error) and `target`."""
+        hour_angle, dec, _ = where(target, site)
+        pointing = load_pointing_error(self.west())
+        here_ha, here_dec = self.true_hour_angle(site), wrap(self.radec()[1]) + pointing[1]
+        return math.hypot(wrap(here_ha - hour_angle) * math.cos(math.radians(dec)), here_dec - dec)
 
     def where_really(self, ra_hint, dec_hint, radius=30, exposure=1.0):
         """Photograph the sky and plate-solve it. Returns the J2000 position
@@ -1499,6 +1547,9 @@ def act(args, site):
     mount = Mount(args.port, watch=not args.no_watch, demo=args.demo)
     if args.record:
         mount.record(args.record)
+    if args.command in AWAY:
+        import director
+        director.clear()        # the telescope leaves its target: the stream names none
     try:
         if args.command == "stop":
             mount.stop()

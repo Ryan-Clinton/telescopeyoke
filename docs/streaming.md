@@ -44,8 +44,8 @@ status page's own data:
   1.2°", or what went wrong in plain words (the curve rejected, focus sent
   back to the start, a picture that could not be plate-solved);
 - across the top of the picture for four seconds, what has just changed:
-  "NOW OBSERVING: THE MOON", "STACKING THE BEST FRAMES" (the director,
-  below);
+  "MOVING TO THE MOON", "NOW OBSERVING: THE MOON" once it is there,
+  "STACKING THE BEST FRAMES" (the director, below);
 - a candidate's state without its place: "possible change detected",
   "second look", then the result, or "awaiting private review".
 
@@ -86,14 +86,33 @@ filming the Moon while the stream named the last run (M31), said "Tonight
 complete" and showed an empty picture.
 
 - **The target** is what the telescope was last aimed at,
-  `cache/target.json`: every GoTo writes it (`mount.py`), and so do a Moon
-  video (`moon.py`) and any lucky-imaging video (`lucky.py capture`). The
-  night's end clears it once the mount is parked (`schedule.py end`), and
-  so does `./stream.py director --clear`. A target older than 12 hours is
-  another night's. The newer of this and a run that is imaging names the
-  target. A run's status never names it once the telescope has been aimed
-  somewhere else, and its frame counts, star size, stack and "coming up"
-  are then left out.
+  `cache/target.json`: every GoTo writes it (`mount.py`), and so does any
+  lucky-imaging video (`lucky.py capture`). The newer of this and a run
+  that is imaging names the target. A run's status never names it once the
+  telescope has been aimed somewhere else, and its frame counts, star size,
+  stack and "coming up" are then left out.
+- **A GoTo asked for is not a GoTo done.** The record says how far the aim
+  has got, and the stream says only that much:
+
+  | State | Written when | The stream |
+  |---|---|---|
+  | slewing | the GoTo sets off | MOVING TO THE MOON |
+  | centring | it is plate-solving to centre (`--solve`) | CENTRING THE MOON |
+  | reached | the mount says it has arrived, and its own reading of where it points is within 2° of the object (shown by the mount) | NOW OBSERVING: THE MOON |
+  | centred | a plate solve found the object in the middle, or a Moon video found the disc in its frame (shown by the camera) | NOW OBSERVING: THE MOON |
+  | filming | a lucky-imaging video of something no GoTo went to: the person aimed it | NOW OBSERVING |
+  | off | the mount reads more than 2° from the object | names no target |
+  | failed | the GoTo was refused, timed out or stopped, or still "slewing" 20 min later (its process killed) | names no target |
+
+  A small move about a target already reached (a dither, centring the
+  Moon) leaves the record as it is. `./stream.py director` says which state
+  it is in and what showed it.
+- **The target stays** until something else is aimed at: another GoTo; the
+  mount sent home, to the zenith or to a position (`mount.py home`,
+  `zenith`, `point` and the surveys clear it as they start); the night's
+  end once the mount is parked (`schedule.py end`); or `./stream.py
+  director --clear`. A record nothing cleared is dropped after 12 hours, as
+  a safety net only.
 - **Target, programme and activity are kept apart**: the Moon, lunar lucky
   imaging, capturing; M31-P3, nova patrol, imaging; WASP-12, exoplanet
   transit, imaging; the Moon, mineral Moon, mineral processing.
@@ -126,6 +145,7 @@ To see why the stream shows what it shows:
 For example, during a Moon video after an M31 run, it prints:
 
     target:     Moon (moon)
+    aim:        centred, shown by the camera
     programme:  lunar lucky imaging
     activity:   capturing
     scene:      moon_capture (priority 90, on air)

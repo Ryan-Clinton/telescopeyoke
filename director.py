@@ -12,11 +12,24 @@ the telescope was filming the Moon while the stream named the last run
 fixed as it was seen. Now:
 
 - what the telescope is aimed at is its own record, cache/target.json, set
-  by every GoTo (mount.py), a Moon video (moon.py) and any lucky-imaging
-  video (lucky.py capture), and cleared when the night is ended and the
-  mount parked (schedule.py end). The newer of it and a run that is imaging
-  names the target: a run's status never names it once the telescope has
-  been aimed somewhere else;
+  by every GoTo (mount.py) and any lucky-imaging video (lucky.py capture).
+  It says how far the aim has got (STATES): a GoTo writes "slewing" as it
+  sets off, "centring" while it plate-solves, and how it ended: "centred"
+  by the plate solve, "reached" when the mount's own reading of where it
+  points is within NEAR_DEG of the target, "off" when it is further, and
+  "failed" when the GoTo was refused, timed out or stopped. A Moon video
+  that finds the disc in its frame makes it "centred" by the camera. Only
+  a target the telescope has reached is named as observed ("NOW
+  OBSERVING"); one it is moving to is "MOVING TO"; a failed or off one is
+  not named at all. The newer of it and a run that is imaging names the
+  target: a run's status never names it once the telescope has been aimed
+  somewhere else;
+- the target stays until something else is aimed at: another GoTo, the
+  mount sent home, to the zenith or to a position (mount.py), the night
+  ended and the mount parked (schedule.py end), or `./stream.py director
+  --clear`. TARGET_S is only a safety net for a record nothing cleared,
+  and a GoTo that never said how it ended (its process killed) counts as
+  failed after SLEW_S;
 - `direct` takes everything once and gives one answer: the scene, the
   target, the programme, the activity, the picture, a headline when one of
   those has just changed, and what it left out and why;
@@ -54,7 +67,9 @@ import records
 TARGET_FILE = config.DATA / "cache" / "target.json"
 STATE_FILE = config.DATA / "cache" / "broadcast.json"
 FRESH_S = 120             # a newest picture younger than this is the camera seeing now
-TARGET_S = 12 * 3600      # a target aimed at longer ago than this is another night's
+TARGET_S = 12 * 3600      # safety net: a target nothing has cleared this long is another night's
+SLEW_S = 20 * 60          # a GoTo still "slewing" or "centring" after this never said how it ended
+NEAR_DEG = 2.0            # the mount reading within this of the target is "reached"; further is "off"
 HEADLINE_S = 4            # a change of target or activity is announced over the picture this long
 
 PRIORITY = {"focus": 100, "polar": 100, "live": 90, "processing": 80, "slew": 70, "stack": 60,
@@ -68,40 +83,97 @@ ACTIVITIES = {"goto": "slewing", "solve": "plate solving", "focus": "focusing", 
               "imaging": "imaging", "live": "live view", "centring": "centring", "capturing": "capturing",
               "ranking": "ranking frames", "stacking": "stacking", "done": "result ready",
               "mineral": "mineral processing", "lucky": "lucky imaging"}
+# How far the aim at the target has got, as what the stream may say of it:
+# moving to it, centring it, observing it, or nothing (it is not named).
+STATES = {"slewing": "moving", "centring": "centring", "reached": "observing", "centred": "observing",
+          "filming": "observing", "imaging": "observing", "failed": None, "off": None}
 HEADLINES = {"capturing": "LUCKY IMAGING STARTED", "stacking": "STACKING THE BEST FRAMES",
              "mineral": "MINERAL COLOUR PROCESSING", "done": "RESULT READY", "focus": "CHECKING FOCUS",
              "polar": "POLAR ALIGNMENT", "imaging": "IMAGING STARTED", "goto": "MOVING THE TELESCOPE"}
 
 
-def aim(name, kind=None, now=None):
-    """The telescope is being aimed at `name`: it is the target until another
-    is aimed at, the night ends or it is cleared. Never an error: this is
-    called from inside a GoTo, and a full disk must not stop the move."""
+def aim(name, kind=None, now=None, state="slewing", confirmed=None):
+    """The telescope is being aimed at `name` (a GoTo setting off, unless
+    `state` says otherwise): it is the target until another is aimed at,
+    the mount is sent elsewhere, the night ends or it is cleared. Never an
+    error: this is called from inside a GoTo, and a full disk must not stop
+    the move."""
     try:
         import sky
-        records.write(TARGET_FILE, {"name": name, "kind": kind or sky.object_kind(name),
-                                    "set_at": now or time.time()})
+        now = now or time.time()
+        records.write(TARGET_FILE, {"name": name, "kind": kind or sky.object_kind(name), "set_at": now,
+                                    "state": state, "state_at": now, "confirmed": confirmed})
     except Exception:            # anything at all: the GoTo goes on without it
         pass
 
 
+def mark(name, state, confirmed=None, miss_deg=None, now=None):
+    """How the aim at `name` has got on: "centring", "centred", "reached",
+    "off" or "failed", and what showed it ("mount", "plate solve",
+    "camera"), with how far the mount read from it. A target not already
+    aimed at is aimed at now. Never an error, like `aim`."""
+    try:
+        now = now or time.time()
+        t = _read()
+        if not t or t.get("name") != name:
+            aim(name, now=now, state=state, confirmed=confirmed)
+            t = _read()
+        t.update(state=state, state_at=now, confirmed=confirmed or (t.get("confirmed") if state in
+                                                                       ("centred", "reached", "filming") else None))
+        if miss_deg is not None:
+            t["miss_deg"] = round(miss_deg, 2)
+        records.write(TARGET_FILE, t)
+    except Exception:
+        pass
+
+
+def observing(name, now=None):
+    """Whether the telescope has reached `name` and is there: a small move
+    about it (a dither, centring the Moon) is not a new target. Never an
+    error: a GoTo asks it before moving."""
+    try:
+        t = aimed(now)
+        return bool(t) and t["name"] == name and STATES.get(t.get("state")) == "observing"
+    except Exception:            # a damaged record: a new target, and the GoTo goes on
+        return False
+
+
+def filming(name):
+    """A video of `name` is being taken where the telescope points: it stays
+    as the GoTo left it if that was `name`, else the person has aimed it
+    there themselves and it is observed as they say."""
+    if not observing(name):
+        aim(name, state="filming")
+
+
 def clear():
-    """Nothing is the target any more (the mount parked, or cleared by hand)."""
+    """Nothing is the target any more (the mount parked or sent elsewhere,
+    or cleared by hand)."""
     try:
         TARGET_FILE.unlink()
     except OSError:
         pass
 
 
-def aimed(now=None):
-    """{"name", "kind", "set_at"} of the target the telescope was last aimed
-    at tonight, or None."""
+def _read():
     try:
         t = json.loads(TARGET_FILE.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return None
-    if not isinstance(t, dict) or not t.get("name") or (now or time.time()) - t.get("set_at", 0) > TARGET_S:
+    return t if isinstance(t, dict) and t.get("name") else None
+
+
+def aimed(now=None):
+    """{"name", "kind", "set_at", "state", "state_at", "confirmed"} of the
+    target the telescope was last aimed at tonight, or None. A GoTo that
+    never said how it ended is "failed"."""
+    now = now or time.time()
+    t = _read()
+    if not t or now - t.get("set_at", 0) > TARGET_S:
         return None
+    t.setdefault("state", "reached")       # written before the states were kept
+    if t["state"] in ("slewing", "centring") and now - t.get("state_at", t["set_at"]) > SLEW_S:
+        t["state"] = "failed"
     return t
 
 
@@ -163,19 +235,30 @@ def direct(given, before=None):
     run_name = st.get("name") or None
     run_at = now - st["age"] if run_name and isinstance(st.get("age"), (int, float)) else None
     aimed_at = given.get("target")
+    if aimed_at:
+        aimed_at = dict({"state": "reached"}, **aimed_at)
     # A run is still on while it images, or while its process runs it (paused by cloud).
     run_on = bool(run_name) and (bool(given.get("run_imaging")) or st.get("running") is True)
     # The newer of what was last aimed at and a run that is on names the target.
     if run_on and (aimed_at is None or (run_at or 0) >= aimed_at["set_at"]):
         name, kind = run_name, st.get("object_kind") or sky.object_kind(run_name)
+        state, confirmed = "imaging", "camera"
+    elif aimed_at and STATES.get(aimed_at["state"]) is None:
+        # Not reached: no target is named, rather than one the telescope may not be on.
+        ignored.append(f"aimed at {aimed_at['name']}: " + (
+            f"the mount reads {aimed_at['miss_deg']:.1f}° from it" if aimed_at["state"] == "off"
+            and aimed_at.get("miss_deg") is not None else "the GoTo did not get there"))
+        name = kind = state = confirmed = None
     elif aimed_at:
         name, kind = aimed_at["name"], aimed_at.get("kind") or sky.object_kind(aimed_at["name"])
+        state, confirmed = aimed_at["state"], aimed_at.get("confirmed")
     else:
-        name, kind = None, None
+        name = kind = state = confirmed = None
     run_current = run_on and name == run_name
     if run_name and not run_current:
         ignored.append(f"status target {run_name}: " + (
-            f"the telescope was aimed at {name} after it" if name else "its run has ended"))
+            f"the telescope was aimed at {name} after it" if name else
+            "the telescope was aimed elsewhere after it" if aimed_at else "its run has ended"))
     if run_current and aimed_at and aimed_at["name"] != name:
         ignored.append(f"aimed at {aimed_at['name']}: the {run_name} run has imaged since")
 
@@ -213,7 +296,8 @@ def direct(given, before=None):
         programme = "live view"
     else:
         programme = PROGRAMMES.get(family) if name else None
-    answer = {"scene": scene, "target": name, "target_kind": kind, "programme": programme,
+    answer = {"scene": scene, "target": name, "target_kind": kind, "target_state": state,
+              "confirmed": confirmed, "programme": programme,
               "activity": ACTIVITIES.get(activity, activity) if activity else ("live view" if fresh else "idle"),
               "image": image, "image_age": None if age is None else round(age, 1), "run_current": run_current,
               "priority": PRIORITY[room], "on_air": PRIORITY[room] >= ON_AIR, "updated": now, "ignored": ignored}
@@ -235,15 +319,19 @@ def target_words(name, kind):
 
 
 def headline(answer, activity, before):
-    """{"words", "until"} announcing a new target ("NOW OBSERVING: THE MOON")
-    or a new activity ("STACKING THE BEST FRAMES") for HEADLINE_S, carried
-    on from `before` until then; None when nothing has just changed."""
+    """{"words", "until"} announcing a target, as far as the aim at it has
+    got ("MOVING TO THE MOON", "CENTRING THE MOON", "NOW OBSERVING: THE
+    MOON"), or a new activity ("STACKING THE BEST FRAMES") for HEADLINE_S,
+    carried on from `before` until then; None when nothing has just changed."""
     now = answer["updated"]
     before = before or {}
     held = before.get("headline")
-    if answer["target"] and answer["target"] != before.get("target"):
-        return {"words": f"NOW OBSERVING: {target_words(answer['target'], answer['target_kind'])}",
-                "until": now + HEADLINE_S}
+    stage = STATES.get(answer.get("target_state"))
+    if answer["target"] and stage and (answer["target"], stage) != (
+            before.get("target"), STATES.get(before.get("target_state"))):
+        words = target_words(answer["target"], answer["target_kind"])
+        return {"words": {"moving": f"MOVING TO {words}", "centring": f"CENTRING {words}"}.get(
+            stage, f"NOW OBSERVING: {words}"), "until": now + HEADLINE_S}
     if answer["activity"] != before.get("activity") and _phase_of(activity) in HEADLINES and before:
         return {"words": HEADLINES[_phase_of(activity)], "until": now + HEADLINE_S}
     if held and now < held.get("until", 0):
@@ -269,6 +357,7 @@ def update(st, now=None, procedure=False):
     except Exception as error:
         import stream
         answer = {"scene": "unknown", "target": st.get("name"), "target_kind": st.get("object_kind"),
+                  "target_state": None, "confirmed": None,
                   "programme": None, "activity": "unknown", "image": "stack", "image_age": None,
                   "run_current": True, "priority": 0, "on_air": bool(procedure) or stream.seeing(now),
                   "updated": now or time.time(), "headline": None, "ignored": [f"not worked out: {error}"]}
@@ -284,6 +373,9 @@ def report(answer):
     and what was left out and why."""
     lines = ["STREAM DIRECTOR", "",
              f"target:     {answer['target'] or 'none'}" + (f" ({answer['target_kind']})" if answer['target'] else ""),
+             f"aim:        {answer.get('target_state') or 'none'}" + (
+                 f", shown by the {answer['confirmed']}" if answer.get("confirmed") else
+                 ", not checked" if answer.get("target_state") else ""),
              f"programme:  {answer['programme'] or 'none'}",
              f"activity:   {answer['activity']}",
              f"scene:      {answer['scene']} (priority {answer['priority']}, "
@@ -305,7 +397,7 @@ def examples(now):
     m31 = dict(old_m31, age=10, running=True)
     old_moon = {"name": "Moon", "age": 9000, "accepted": 199, "object_kind": "moon", "running": False,
                 "stack": {"current": True}}
-    moon = {"name": "Moon", "kind": "moon", "set_at": now - 600}
+    moon = {"name": "Moon", "kind": "moon", "set_at": now - 600, "state": "centred", "confirmed": "camera"}
     base = {"now": now, "procedure": None, "lucky": None, "between": False, "schedule_over": False,
             "transit": False, "run_imaging": False}
     return {
@@ -313,11 +405,14 @@ def examples(now):
         "moon-capture": dict(base, status=old_m31, target=moon, phase="lucky", lucky="capturing", image_age=1),
         "moon-stack": dict(base, status=old_m31, target=moon, phase="lucky", lucky="stacking", image_age=400),
         "moon-mineral": dict(base, status=old_m31, target=moon, phase="mineral", lucky="mineral", image_age=900),
-        "deep-sky-stack": dict(base, status=m31, target={"name": "M31", "kind": "deep_sky", "set_at": now - 3600},
+        "deep-sky-stack": dict(base, status=m31, target={"name": "M31", "kind": "deep_sky", "set_at": now - 3600,
+                                                              "state": "centred", "confirmed": "plate solve"},
                                phase="imaging", image_age=10, run_imaging=True),
-        "deep-sky-live": dict(base, status=old_moon, target={"name": "M31", "kind": "deep_sky", "set_at": now - 60},
+        "deep-sky-live": dict(base, status=old_moon, target={"name": "M31", "kind": "deep_sky", "set_at": now - 60,
+                                                                "state": "reached", "confirmed": "mount"},
                               phase="live", image_age=2),
-        "slew": dict(base, status=old_m31, target={"name": "M33", "kind": "deep_sky", "set_at": now - 5},
+        "slew": dict(base, status=old_m31, target={"name": "M33", "kind": "deep_sky", "set_at": now - 5,
+                                                         "state": "slewing"},
                      phase="goto", image_age=None),
         "focus": dict(base, status=old_m31, target=None, phase="focus_walk", image_age=2, procedure="focus"),
         "end": dict(base, status=old_m31, target=None, phase=None, image_age=7200, schedule_over=True),

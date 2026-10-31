@@ -18,9 +18,9 @@ def given(status=None, target=None, phase=None, image_age=None, run_imaging=Fals
             "procedure": procedure, "transit": False}
 
 
-def aimed(name, ago):
+def aimed(name, ago, state="reached", **more):
     import sky
-    return {"name": name, "kind": sky.object_kind(name), "set_at": NOW - ago}
+    return dict({"name": name, "kind": sky.object_kind(name), "set_at": NOW - ago, "state": state}, **more)
 
 
 M31_OLD = {"name": "M31", "age": 9000, "accepted": 50, "running": False, "stack": {"current": True}}
@@ -86,10 +86,70 @@ def test_the_target_is_aimed_kept_for_the_night_and_cleared(tmp_path, monkeypatc
     monkeypatch.setattr(director, "TARGET_FILE", tmp_path / "target.json")
     assert director.aimed(NOW) is None
     director.aim("Moon", now=NOW)
-    assert director.aimed(NOW + 60) == {"name": "Moon", "kind": "moon", "set_at": NOW}
-    assert director.aimed(NOW + director.TARGET_S + 1) is None           # another night's
+    assert director.aimed(NOW + 60) == {"name": "Moon", "kind": "moon", "set_at": NOW, "state": "slewing",
+                                        "state_at": NOW, "confirmed": None}
+    director.mark("Moon", "reached", confirmed="mount", miss_deg=0.123, now=NOW + 30)
+    t = director.aimed(NOW + 60)
+    assert (t["state"], t["confirmed"], t["miss_deg"], t["set_at"]) == ("reached", "mount", 0.12, NOW)
+    assert director.observing("Moon", NOW + 60) and not director.observing("M31", NOW + 60)
+    assert director.aimed(NOW + director.TARGET_S + 1) is None           # the safety net only
     director.clear()
     assert director.aimed(NOW + 60) is None
+
+
+def test_a_damaged_target_record_never_stops_a_goto(tmp_path, monkeypatch):
+    monkeypatch.setattr(director, "TARGET_FILE", tmp_path / "target.json")
+    (tmp_path / "target.json").write_text('{"name": "Moon", "set_at": "yesterday"}')
+    assert director.observing("Moon") is False
+
+
+def test_a_goto_that_never_said_how_it_ended_counts_as_failed(tmp_path, monkeypatch):
+    monkeypatch.setattr(director, "TARGET_FILE", tmp_path / "target.json")
+    director.aim("Moon", now=NOW)
+    assert director.aimed(NOW + 60)["state"] == "slewing"
+    assert director.aimed(NOW + director.SLEW_S + 1)["state"] == "failed"   # its process was killed
+
+
+def test_a_video_keeps_the_gotos_word_or_takes_the_persons(tmp_path, monkeypatch):
+    monkeypatch.setattr(director, "TARGET_FILE", tmp_path / "target.json")
+    director.aim("Jupiter")
+    director.mark("Jupiter", "centred", confirmed="plate solve")
+    director.filming("Jupiter")
+    assert (director.aimed()["state"], director.aimed()["confirmed"]) == ("centred", "plate solve")
+    director.filming("Saturn")                    # aimed by hand: observed as the person says
+    assert (director.aimed()["name"], director.aimed()["state"]) == ("Saturn", "filming")
+
+
+@pytest.mark.parametrize("state, more, named, words", [
+    ("slewing", {}, "Moon", "MOVING TO THE MOON"),
+    ("centring", {}, "Moon", "CENTRING THE MOON"),
+    ("reached", {"confirmed": "mount"}, "Moon", "NOW OBSERVING: THE MOON"),
+    ("centred", {"confirmed": "camera"}, "Moon", "NOW OBSERVING: THE MOON"),
+    ("failed", {}, None, None),
+    ("off", {"miss_deg": 6.4}, None, None),
+])
+def test_a_target_is_only_observed_once_the_telescope_has_got_there(state, more, named, words):
+    """A GoTo asked for is not a GoTo done: the stream never says it is
+    observing what the telescope was only sent to."""
+    d = director.direct(given(M31_OLD, aimed("Moon", 30, state, **more), "goto", None))
+    assert d["target"] == named
+    assert (d["headline"] or {}).get("words") == words
+    if named is None:
+        assert any(why.startswith("aimed at Moon: ") for why in d["ignored"])
+    if state == "off":
+        assert "6.4°" in " ".join(d["ignored"])
+
+
+def test_moving_centring_then_observing_are_each_announced_once():
+    told = []
+    before = None
+    for i, state in enumerate(["slewing", "slewing", "centring", "centred", "centred"]):
+        d = director.direct(dict(given(M31_OLD, aimed("Moon", 30, state), "goto", None),
+                                 now=NOW + i * (director.HEADLINE_S + 1)), before)
+        if d["headline"] and d["headline"] != (before or {}).get("headline"):
+            told.append(d["headline"]["words"])
+        before = d
+    assert told == ["MOVING TO THE MOON", "CENTRING THE MOON", "NOW OBSERVING: THE MOON"]
 
 
 def test_update_writes_the_answer_and_the_report_says_what_it_left_out(tmp_path, monkeypatch):
@@ -99,7 +159,8 @@ def test_update_writes_the_answer_and_the_report_says_what_it_left_out(tmp_path,
     d = director.update(M31_OLD, NOW)
     assert director.last()["scene"] == d["scene"] == "moon_live"
     report = director.report(d)
-    for words in ("target:     Moon", "scene:      moon_live", "status target M31", "schedule run to its end"):
+    for words in ("target:     Moon", "aim:        reached", "scene:      moon_live", "status target M31",
+                  "schedule run to its end"):
         assert words in report
 
 

@@ -119,6 +119,70 @@ def test_goto_lands_on_the_target(scope):
     assert mount.wrap(scope.radec()[1]) == pytest.approx(dec, abs=0.1)
 
 
+def high_star():
+    return max(mount.STARS, key=lambda name: mount.where(
+        mount.find_target(name), SITE)[2] if abs(mount.where(mount.find_target(name), SITE)[0]) < 75 else -99)
+
+
+@pytest.fixture
+def target_file(tmp_path, monkeypatch):
+    import director
+    monkeypatch.setattr(director, "TARGET_FILE", tmp_path / "target.json")
+    return director
+
+
+def test_a_goto_tells_the_stream_it_got_there_only_once_the_mount_reads_so(scope, target_file):
+    scope.zenith(SITE)
+    target = high_star()
+    told = []
+    real_goto = scope.goto
+    scope.goto = lambda ra, dec: (told.append(target_file.aimed()["state"]), real_goto(ra, dec))
+    scope.goto_target(target, SITE)
+    t = target_file.aimed()
+    assert told == ["slewing"]                                  # while it moved: going there, not there
+    assert (t["name"], t["state"], t["confirmed"]) == (target, "reached", "mount") and t["miss_deg"] < 0.3
+
+
+def test_a_goto_that_fails_or_lands_far_off_names_no_target(scope, target_file):
+    scope.zenith(SITE)
+    target = high_star()
+    real_goto = scope.goto
+
+    def refused(ra, dec):
+        raise mount.Refusal("SLEW_TIMED_OUT", "stopped")
+    scope.goto = refused
+    with pytest.raises(mount.Refusal):
+        scope.goto_target(target, SITE)
+    assert target_file.aimed()["state"] == "failed"
+    scope.goto = real_goto
+    scope.distance_from = lambda aimed, site: 7.5          # the mount reads well away from it
+    scope.goto_target(target, SITE)
+    assert (target_file.aimed()["state"], target_file.aimed()["miss_deg"]) == ("off", 7.5)
+    scope.distance_from = lambda aimed, site: 1 / 0        # an unanswered read: arrived, unchecked
+    scope.goto_target(target, SITE)
+    assert (target_file.aimed()["state"], target_file.aimed()["confirmed"]) == ("reached", None)
+    scope.arrived(target, SITE, (0.0, 0.0), "centred")
+    assert (target_file.aimed()["state"], target_file.aimed()["confirmed"]) == ("centred", "plate solve")
+
+
+def test_a_small_move_about_a_target_reached_is_not_a_new_target(scope, target_file):
+    scope.zenith(SITE)
+    target = high_star()
+    scope.goto_target(target, SITE)
+    first = target_file.aimed()
+    scope.goto_target(target, SITE, aim_off=(30.0, -24.0))      # a dither
+    assert target_file.aimed() == first
+
+
+def test_sending_the_mount_away_from_its_target_names_none(scope, target_file, monkeypatch):
+    import sys
+    target_file.aim("Vega")
+    monkeypatch.setattr(sys, "argv", ["mount.py", "--demo", "zenith"])
+    mount.main()
+    assert target_file.aimed() is None
+    assert {"zenith", "home", "point"} <= set(mount.AWAY) and "goto" not in mount.AWAY
+
+
 def test_a_goto_with_an_offset_aims_that_far_off_the_target(scope):
     """shoot.py --dither aims a little off the target between frames."""
     scope.zenith(SITE)
