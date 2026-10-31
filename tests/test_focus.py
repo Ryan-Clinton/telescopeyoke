@@ -1080,13 +1080,12 @@ def test_stars_gone_near_the_start_stop_the_sweep_and_go_back(monkeypatch):
 @pytest.mark.parametrize("stop", ["ctrl-c", "sigterm"])
 @pytest.mark.parametrize("moved", [320, -320])
 def test_a_run_stopped_part_way_goes_back_to_where_it_started(monkeypatch, capsys, stop, moved):
-    import os
     import signal
 
     def run(motor, read, usual, **k):
         motor.move(moved)
         if stop == "sigterm":
-            os.kill(os.getpid(), signal.SIGTERM)
+            signal.raise_signal(signal.SIGTERM)
             time.sleep(1)
         raise KeyboardInterrupt
     import focuser
@@ -1130,13 +1129,12 @@ def test_measuring_the_focuser_stays_inside_the_travel(monkeypatch, capsys, flag
 def test_a_walk_in_stopped_part_way_stays_where_it_is(monkeypatch, capsys, stop):
     """A walk-in moves inward only: stopped, it never turns the drawtube out
     to go home, and keeps the way in it has made."""
-    import os
     import signal
 
     def walk(drive, read, usual, **k):
         drive.move(-96)
         if stop == "sigterm":
-            os.kill(os.getpid(), signal.SIGTERM)
+            signal.raise_signal(signal.SIGTERM)
             time.sleep(1)
         raise KeyboardInterrupt
     import focuser
