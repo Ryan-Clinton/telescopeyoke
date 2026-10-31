@@ -314,6 +314,11 @@ the frame sent too soon kept as a FITS file.
 
 In order. Each says what it needs.
 
+The aim now is why the exposure is scaled, not how to stop the timeout
+it causes. The check that refuses a frame back before 0.9 of its exposure
+stays: taking those frames would hide the fault, not mend it, and the
+light test showed that frames it lets through can be short as well.
+
 Three questions now lead, all about the camera's timing rather than its
 lead: is the exposure asked for read the same way at every speed and on
 both routes (INDI and Altair's library)? Does the camera really expose for
@@ -348,12 +353,27 @@ in another), so the camera's own readable settings are compared instead.
    every setting the camera will give (the named readings and every
    readable option) before it starts and after it ends, and lists those
    that changed. One reading taken in the fault and one when healthy is
-   the comparison of the two states.
-4. **A timed light** (needs parts): an LED on a spare pin of the focuser's
-   Nano, pointing into the camera, switched on for exactly a known time
-   within a long exposure, or flashed at a known rate, so the frame's light
-   measures how long the sensor really gathered it, at each speed, in both
-   states, without stars.
+   the comparison of the two states: `./camera_test.py --probe` run by hand
+   while healthy gives the second (it says the fault had already cleared,
+   and keeps the settings). Among them are the readout clock setting (`HZ`),
+   the frame rate the camera works out, and the exposure range; the
+   sensor's own clock dividers and timing registers are not readable
+   through Altair's library, and its USB requests are scrambled, so those
+   stay with Altair.
+4. **A timed light** (`./camera_test.py --timed-light`, from 31 October):
+   the laptop's own screen is the light, a window over the whole screen
+   switched between black and white within a frame (about 1/60 s); `--light
+   NAME` uses a Hue light instead, slower to switch (a tenth of a second or
+   more). The camera, cap off, faces the screen through kitchen roll in a
+   dark room. At each of speeds 0, 1 and 2, four 12 s exposures: dark, the
+   light on throughout, a 2 s flash starting 1 s in, and a 2 s flash ending
+   1 s before the time asked. The steady frame over the early flash (both
+   less the dark) times 2 s is how long the sensor gathered light, against
+   a clock rather than against speed 0; the late flash says whether the
+   exposure was still running at the end of the time asked. A frame sent
+   too soon is measured as well. A light's delay in switching is the same
+   on and off, so it moves the flash without changing its length. Needs
+   the fault for the faulty state, and the healthy state for the other.
 5. **Image at speed 2 and watch.** From 31 October, so a night's imaging
    is itself the test. If frames are lost, it is seen at once (`./ty
    watch-run`) and the person decides whether to go back to speed 0.

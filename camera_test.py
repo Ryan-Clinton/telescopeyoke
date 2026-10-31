@@ -10,6 +10,8 @@
     ./camera_test.py --cooldown --note "3 m lead, port 2-4"   cap on, outside: do the stripes grow as it cools?
     ./camera_test.py --electrons --gains 900 1500   cap off, an even light: electrons per ADU at each gain
     ./camera_test.py --probe            cap on, while it loses frames: everything about that state (camera_probe.py)
+    ./camera_test.py --timed-light      cap off, facing the laptop's screen in a dark room: how long the sensor
+                                        really gathers light at each speed, from timed flashes (--light NAME: a Hue light)
 
 With [camera] backend = "altair" the camera is read through Altair's own
 library: --capabilities then shows the model, versions and how it is
@@ -586,6 +588,10 @@ def main():
     what.add_argument("--probe", action="store_true",
                       help="cap on: look at the camera from every side while it loses frames, about ten "
                            "minutes (camera_probe.py); --exposure is the one lost (default 16)")
+    what.add_argument("--timed-light", action="store_true",
+                      help="cap off, the camera facing the light in a dark room: how long the sensor really "
+                           "gathers light at speeds 0, 1 and 2, from flashes of known length (camera_probe.py); "
+                           "--exposure each frame (default 12)")
     what.add_argument("--usb-report", metavar="CAPTURE",
                       help="what a usbmon text capture taken during a test says of the camera's bulk transfers")
     what.add_argument("--speed-ladder", action="store_true",
@@ -616,6 +622,7 @@ def main():
                     help="frames per mode for --throughput (default 4), per set for --cooldown (20), "
                          "per setting for --gain-sweep (1)")
     ap.add_argument("--gain", type=int, default=1500)
+    ap.add_argument("--light", help="with --timed-light: a Hue light's name, instead of the laptop's screen")
     ap.add_argument("--dry-run", action="store_true", help="say what it would do; no camera, no mount")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
@@ -1067,6 +1074,19 @@ def run(args):
             if not hasattr(cam, "_expose"):
                 raise interface.Refusal("INVALID_REQUEST", "The probe needs [camera] backend = \"altair\".")
             return camera_probe.probe(cam, args.exposure or 16.0)
+    if args.timed_light:
+        import camera_probe
+        light = camera_probe.HueLight(args.light) if args.light else camera_probe.Screen()
+        try:
+            with Camera(gain=args.gain) as cam:
+                if not hasattr(cam, "_expose"):
+                    raise interface.Refusal("INVALID_REQUEST", "The timed light needs [camera] backend = \"altair\".")
+                found = camera_probe.timed_light(cam, light, args.exposure or 12.0)
+        finally:
+            light.close()
+        print(found["summary"])
+        keep_fault({"timed_light": found["folder"], "summary": found["summary"]}, args.note)
+        return found
     if args.usb_report:
         lines = Path(args.usb_report).read_text(encoding="utf-8", errors="replace").splitlines()
         state = usb_state()

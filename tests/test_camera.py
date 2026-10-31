@@ -33,6 +33,7 @@ class World:
         self.silent = False       # never deliver a frame
         self.loses = None         # or loses(handle): True to lose this exposure (the fault's state)
         self.hurries = None       # or the share of the exposure after which the frame comes back
+        self.lit = None           # or lit(start, end): a frame's level from a light switched in that span
         self.shifted = False      # hand the 12 bits over at the top of the 16
         self.obeys_cancel = True  # a cancelled exposure delivers nothing
         self.unplug = False       # report a disconnect instead of a frame
@@ -139,6 +140,8 @@ def fake_sdk(world):
             if world.silent or (world.loses and world.loses(self)):
                 return
             roi = getattr(self, "roi", (0, 0, 0, 0))[2:]
+            opened = time.monotonic()      # the sensor gathers light from here
+            gathers = (world.hurries if world.hurries and self.speed > 0 else 1) * self.exposure / 1e6
 
             def deliver():
                 time.sleep(delay)
@@ -149,7 +152,7 @@ def fake_sdk(world):
                 else:
                     # Stamped by the camera's own clock, which starts somewhere arbitrary.
                     stamp = round((1234.5 + taken * world.clock_rate) * 1e6) if world.stamps else 0
-                    data = frame_of(level, world.binning)
+                    data = frame_of(world.lit(opened, opened + gathers) if world.lit else level, world.binning)
                     if any(roi):
                         data = data[:roi[1], :roi[0]].copy()
                     self.held.append((data << (4 if world.shifted else 0), mine, stamp))
@@ -1154,6 +1157,38 @@ def test_the_probe_keeps_the_frame_sent_too_soon_and_every_setting_in_both_state
     assert "sent too soon after" in found["summary"] and "speed 0 kept: mean" in found["summary"]
     assert found["settings_before"]["Speed"] == 2 and "option TRIGGER" in found["settings_before"]
     assert "option FLUSH" not in found["settings_before"]
+
+
+def test_the_timed_light_measures_how_long_each_speed_gathers_light(sdk, world, monkeypatch):
+    """31 October 2026: in the fault, speed 2 frames held 0.51 of speed 0's
+    light, but speed 0 itself had not been timed. Flashes of known length
+    time each speed against a clock. Here speeds 1 and 2 gather for half the
+    time asked, as in the fault, and speed 0 for all of it."""
+    import camera_probe
+    switched = [(time.monotonic(), False)]
+
+    def switch(on):
+        switched.append((time.monotonic(), on))
+
+    def lit(start, end):           # 100 dark, 1000 more for each second the light was on
+        on_for, edges = 0.0, switched + [(float("inf"), False)]
+        for (t, on), (t_next, _) in zip(edges, edges[1:]):
+            if on:
+                on_for += max(0.0, min(end, t_next) - max(start, t))
+        return round(100 + 1000 * on_for)
+    world.hurries, world.lit = 0.5, lit
+    monkeypatch.setattr(altair, "wait_for", lambda seconds: seconds + 0.5)
+    with altair.AltairCamera() as cam:
+        cam.handle.put_Speed(2)
+        found = camera_probe.timed_light(cam, switch, seconds=1.2, pulse=0.3, lead=0.1, say=lambda line: None,
+                                         folder=None, sleep=lambda s: None)
+        assert cam.handle.get_Speed() == 2                    # put back
+    rows = {r["speed"]: r for r in found["speeds"]}
+    assert rows[0]["share_of_asked"] == pytest.approx(1.0, abs=0.1) and rows[0]["late_pulse_share"] > 0.7
+    for level in (1, 2):
+        assert rows[level]["share_of_asked"] == pytest.approx(0.5, abs=0.1)
+        assert rows[level]["late_pulse_share"] < 0.3 and rows[level]["steady"]["sent_too_soon"]
+    assert "stopped before the end" in found["summary"] and switched[-1][1] is False
 
 
 def test_each_frame_says_how_the_camera_timed_it(sdk, world):

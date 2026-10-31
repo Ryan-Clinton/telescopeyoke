@@ -345,6 +345,190 @@ def summary(found):
     return "\n".join(lines)
 
 
+# --- the timed light ---------------------------------------------------------------
+
+PULSE = 2.0          # seconds a pulse of light lasts
+SETTLE = 1.0         # seconds for a light to settle before a steady frame
+
+
+def gathered(cam, seconds):
+    """The mean light of one exposure, and whether it was kept, sent too
+    soon (and taken anyway, for its light), or not sent at all."""
+    import numpy as np
+    try:
+        data, _ = cam._expose(seconds)
+        return {"mean": float(np.mean(data)), "back_s": cam.back_s, "kept": True}
+    except Exception as problem:
+        early = getattr(cam, "early_frame", None)
+        if getattr(cam, "early", None) and early is not None:
+            return {"mean": float(np.mean(cam._normalise(early.copy()))), "back_s": cam.early[0],
+                    "kept": False, "sent_too_soon": True}
+        return {"mean": None, "kept": False, "problem": str(problem)}
+
+
+def pulsed(cam, seconds, switch, start, length, timer=None):
+    """One exposure with the light on from `start` to `start + length`
+    seconds after it is asked for, and off otherwise."""
+    import threading
+    timer = timer or threading.Timer
+    on, off = timer(start, switch, [True]), timer(start + length, switch, [False])
+    on.start()
+    off.start()
+    try:
+        return gathered(cam, seconds)
+    finally:
+        on.cancel()
+        off.cancel()
+        on.join()
+        off.join()
+        switch(False)
+
+
+def timed_light(cam, switch, seconds=12.0, pulse=PULSE, speeds=(0, 1, 2), say=print, folder=None,
+                sleep=time.sleep, timer=None, lead=1.0):
+    """How long the sensor really gathers light at each readout speed,
+    against a clock, not against another speed (31 October 2026: in the
+    fault, speed 2 frames held 0.51 of speed 0's light, but whether speed
+    0 was exactly right was not known).
+
+    `switch(on)` turns a light the camera sees on or off: the laptop's
+    screen, or a Hue light. At each speed, four exposures of `seconds`:
+    dark, the light on throughout, the light on for `pulse` seconds early
+    in the exposure (from `lead` s), and the same pulse late (ending `lead`
+    s before the time asked). The steady frame over the early pulse, both less the
+    dark, times `pulse`, is how long the sensor gathered light; the late
+    pulse over the early one says whether the exposure still ran at the
+    end of the time asked (1) or had already stopped (0). A frame sent too
+    soon is measured too. The light's own delay in switching is the same
+    on and off, so it shifts the pulse but leaves its length."""
+    folder = Path(folder or PROBES / ("timed-" + datetime.now().strftime("%Y%m%d-%H%M%S")))
+    was = cam.handle.get_Speed()
+    found = {"seconds": seconds, "pulse_s": pulse, "folder": str(folder), "speeds": []}
+    say(f"Timed light: {seconds:g} s frames, a {pulse:g} s pulse, speeds {', '.join(map(str, speeds))}")
+    try:
+        for level in speeds:
+            cam.handle.put_Speed(level)
+            switch(False)
+            sleep(SETTLE)
+            dark = gathered(cam, seconds)
+            switch(True)
+            sleep(SETTLE)
+            steady = gathered(cam, seconds)
+            switch(False)
+            sleep(SETTLE)
+            early = pulsed(cam, seconds, switch, lead, pulse, timer)
+            late = pulsed(cam, seconds, switch, seconds - lead - pulse, pulse, timer)
+            row = {"speed": level, "dark": dark, "steady": steady, "early_pulse": early, "late_pulse": late}
+            means = [f["mean"] for f in (dark, steady, early, late)]
+            if None not in means and means[2] - means[0] > 0:
+                row["gathered_s"] = round(pulse * (means[1] - means[0]) / (means[2] - means[0]), 2)
+                row["share_of_asked"] = round(row["gathered_s"] / seconds, 3)
+                row["late_pulse_share"] = round((means[3] - means[0]) / (means[2] - means[0]), 2)
+            found["speeds"].append(row)
+            say("  " + timed_words(row))
+    finally:
+        switch(False)
+        cam.handle.put_Speed(was)
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "timed-light.json").write_text(json.dumps(found, indent=1, default=str), encoding="utf-8")
+    found["summary"] = "\n".join([f"Timed light, {seconds:g} s asked:"] + [timed_words(r) for r in found["speeds"]]
+                                 + [f"Kept in {folder}"])
+    return found
+
+
+def timed_words(row):
+    if "gathered_s" not in row:
+        return f"speed {row['speed']}: not measured (a frame lost, or no light from the pulse)"
+    soon = " (sent too soon)" if row["steady"].get("sent_too_soon") else ""
+    end = ("still gathering at the end" if row["late_pulse_share"] > 0.7 else
+           "stopped before the end" if row["late_pulse_share"] < 0.3 else "partly gathering at the end")
+    return (f"speed {row['speed']}: gathered for {row['gathered_s']:g} s, {row['share_of_asked']:.0%} of the "
+            f"time asked{soon}; {end} (late pulse {row['late_pulse_share']:g} of the early one)")
+
+
+class Screen:
+    """The laptop's screen as the light: a window over the whole screen,
+    black or white on a line sent to it, redrawn within a frame (about
+    1/60 s); kept from dimming while it is up."""
+
+    def __init__(self, start=subprocess.Popen, sleep=time.sleep):
+        import shutil
+        import sys
+        command = [sys.executable, str(Path(__file__).resolve()), "screen"]
+        if shutil.which("gnome-session-inhibit"):
+            command = ["gnome-session-inhibit", "--inhibit", "idle", "--reason", "camera timed light"] + command
+        self.process = start(command, stdin=subprocess.PIPE, text=True)
+        sleep(3)                  # the window is up and full screen
+
+    def __call__(self, on):
+        self.process.stdin.write("on\n" if on else "off\n")
+        self.process.stdin.flush()
+
+    def close(self):
+        try:
+            self.process.stdin.write("quit\n")
+            self.process.stdin.close()
+        except OSError:
+            pass
+        try:
+            self.process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            self.process.kill()
+            self.process.wait()
+
+
+class HueLight:
+    """A Hue light as the light, switched with no fade; put back as it was."""
+
+    def __init__(self, name):
+        import alert
+        s = alert.settings()
+        self.bridge = alert.Bridge(s.get("hue_address"), s.get("hue_key"))
+        self.light = alert.find_light(self.bridge, name)
+        self.before = alert.state_of(self.light)
+
+    def __call__(self, on):
+        body = {"on": {"on": on}, "dynamics": {"duration": 0}}
+        if on:
+            body["dimming"] = {"brightness": 100.0}
+        self.bridge.put(self.light["id"], body)
+
+    def close(self):
+        self.bridge.put(self.light["id"], self.before)
+
+
+def show_screen():
+    """The window Screen drives: full screen, black until told "on"."""
+    import os
+    import sys
+    import gi
+    gi.require_version("Gtk", "3.0")
+    from gi.repository import GLib, Gtk
+    lit = [False]
+    window, area = Gtk.Window(title="camera timed light"), Gtk.DrawingArea()
+    window.add(area)
+
+    def draw(_, cr):
+        cr.set_source_rgb(*((1, 1, 1) if lit[0] else (0, 0, 0)))
+        cr.paint()
+    area.connect("draw", draw)
+
+    def read(*_):
+        line = sys.stdin.readline()
+        if line.strip() in ("", "quit"):
+            # Gtk.main_quit() left the process alive once the window had been
+            # shown (31 October 2026, Wayland), so it ends here outright.
+            os._exit(0)
+        lit[0] = line.strip() == "on"
+        area.queue_draw()
+        return True
+    GLib.io_add_watch(GLib.IOChannel.unix_new(sys.stdin.fileno()), GLib.PRIORITY_HIGH,
+                      GLib.IOCondition.IN | GLib.IOCondition.HUP, read)
+    window.fullscreen()
+    window.show_all()
+    Gtk.main()
+
+
 def after_loss(cam, seconds, problem, say=print):
     """Called by altair.py the first time a frame is lost while [camera]
     probe_on_loss is set: the probe, a line in the fault log, the person
@@ -361,3 +545,9 @@ def after_loss(cam, seconds, problem, say=print):
                             "summary": found["summary"]}, note="probe after a lost frame")
     notify.send(found["summary"], say=say)
     return found
+
+
+if __name__ == "__main__":
+    import sys
+    if sys.argv[1:] == ["screen"]:
+        show_screen()
