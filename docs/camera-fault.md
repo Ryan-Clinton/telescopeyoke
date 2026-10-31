@@ -217,13 +217,21 @@ back too soon and when.
   suggested on 26 Oct (the camera drying out after the dawn of 20 Oct); it
   is not ruled out, but it does not explain a change within 15 minutes
   indoors.
-- **Where it is.** Everything points at the camera's SuperSpeed path: the
-  same camera, computer and program work at USB 2 and fail at USB 3, and a
-  slower readout keeps it working. Ranked, as a guide to what to test, not
-  as measured odds:
+- **Where it is.** Until 31 October everything pointed at the camera's
+  SuperSpeed path: the same camera, computer and program work at USB 2 and
+  fail at USB 3, and a slower readout keeps it working. The recording made
+  in the fault moves it: whole frames came down the lead intact in size,
+  only too soon, so the lead and the link carry the data and it is the
+  camera's timing at speeds 1 and 2 that goes wrong. Ranked, as a guide to
+  what to test, not as measured odds:
+  0. The camera's timing at the fast readouts: the clock or setting its
+     FPGA or the sensor uses at speeds 1 and 2, or the firmware that sets
+     it (1.4.1, 2017). A clock running at twice its rate fits a frame back
+     in half the time, speed 0 unaffected, and a state that holds through
+     closing and opening the camera and clears by itself.
   1. The camera's USB 3 bridge chip or its high-speed signal path on the
-     board. It fits the link staying at 5000 Mb/s while frames stop, and a
-     state that comes and goes with nothing touched.
+     board. It fits the link staying at 5000 Mb/s, but not frames arriving
+     whole and early.
   2. The camera's USB 3 socket or its solder joints. Holding the lead up
      and down changed nothing, cleaning changed nothing, and the link never
      dropped to USB 2, which makes a bent or loose contact less likely, but
@@ -235,8 +243,15 @@ back too soon and when.
      one for hangs, e.g. QHY's 183C manual).
   5. How the host's USB 3 port and controller treat a marginal device.
 - **Whether the first frames after the camera is opened matter.** At 10:46
-  the fault showed within minutes of the camera being plugged in; it has not
-  been seen to begin partway through a test that was passing.
+  on 30 October the fault showed within minutes of the camera being plugged
+  in. On 31 October it showed on the first frame of two runs: the morning's,
+  where closing and opening the camera cleared it on the third try, and
+  the 17:28 check, where it did not, even after the probe's own close and
+  open. It has not been seen to begin partway through a test that was
+  passing, though until 31 October a frame lost and kept on a retry would
+  not have been seen.
+- **Whether the frame sent early is a real, shorter exposure.** Not yet
+  looked at: `altair.py` throws it away (next tests, 1).
 - **Whether speed 0 can ever fail.** It has not yet, in every test since
   23 Oct.
 
@@ -244,20 +259,29 @@ back too soon and when.
 
 In order. Each says what it needs.
 
-1. **Image at speed 2 and watch.** From 31 October, so a night's imaging
+1. **Keep the frame sent too soon, in the fault, and look at it.** With
+   light on the camera (cap off, an even glow), the frame that comes back
+   after 10.3 s of a 16 s exposure is kept instead of thrown away and set
+   beside a good 16 s frame and an 8 s one. About half the light: the
+   exposure itself ends early. The right light but sent early: the
+   timing of the transfer only. Noise or stripes: the readout is broken.
+   Needs the fault (it may still be there just after it shows) and a small
+   change to the probe; about two minutes.
+2. **Image at speed 2 and watch.** From 31 October, so a night's imaging
    is itself the test. If frames are lost, it is seen at once (`./ty
    watch-run`) and the person decides whether to go back to speed 0.
-2. **Through a powered USB 3 hub.** Done on 30 Oct (above): on the 1 m leads
+3. **Through a powered USB 3 hub.** Done on 30 Oct (above): on the 1 m leads
    speed 2 kept 50 of 50, and then 720 of 720 over 4 h 16 min (18:37 to
    22:53), with the focuser on the hub as well. But the control straight
    to the laptop on the 3 m lead, port 2-5, also kept 720 of 720 (22:57 to
    03:13), and 720 of 720 again (03:13 to 07:29) and a third time with the USB traffic recorded (08:49 to 13:05): the fault was away that night, so the hub is not shown to cure
-   it. If speed 2 holds through the hub for whole nights, power
+   it. Those counts did not count a frame lost and kept on a retry, and the
+   recorded run lost its first frame that way, twice. If speed 2 holds through the hub for whole nights, power
    or signal conditioning moves up the list of causes.
-3. **The ports, one at a time.** The same 50 frames of 16 s at speed 2 on
+4. **The ports, one at a time.** The same 50 frames of 16 s at speed 2 on
    each of the laptop's USB 3 ports in turn; the fault log records which.
    Needs the person's hands to move the plug.
-4. **Everything at once, the moment a frame is lost** (`camera_probe.py`,
+5. **Everything at once, the moment a frame is lost** (`camera_probe.py`,
    from 31 October 2026). With `[camera] probe_on_loss = true`, the first
    frame lost by any run (imaging, a speed test) is followed at once by
    about ten minutes of looking at the camera in that state, before it can
@@ -283,10 +307,14 @@ In order. Each says what it needs.
    passwordless sudo; without it the captures are left out. Two things
    still need hands: pressing the hub's port button twice (does cutting
    the power clear it?) and warming the camera gently with a hairdryer.
-5. **AltairCapture's Diagnose, on Windows, camera plugged straight in**, as
+   First caught on 31 October at 17:28 (above). The camera reports no
+   temperature of its own; from that evening a thermistor on its body
+   reads it through the focuser's Nano (`./focuser.py temp`): 20.3 °C just
+   after the probe.
+6. **AltairCapture's Diagnose, on Windows, camera plugged straight in**, as
    Altair asks of support customers. Needs the Windows boot and AltairCapture
    installed.
-6. **Another Hypercam 183C on this laptop, or this one on another
+7. **Another Hypercam 183C on this laptop, or this one on another
    astronomy computer.** Needs a second camera or computer.
 
 ## For Altair (ticket #3470)
@@ -303,7 +331,7 @@ The camera is Gary's; the ticket is ours, and paying for a repair would be his c
 | USB 3, speed 2 | frames lost at times, as short as 2 s; the link stays at 5000 Mb/s, no disconnect |
 | What a lost frame is | in the fault the frame comes back in about half the time: a 16 s frame after 10.3 s instead of 20.5 s, at speeds 1 and 2, not 0 (USB recorded, 31 Oct) |
 | Started | 04:59 on 20 Oct 2026, at dawn after a cold night |
-| Comes and goes | gone 26 Oct; back 30 Oct 10:46; gone again by 11:02, nothing touched |
+| Comes and goes | gone 26 Oct; back 30 Oct 10:46; gone again by 11:02, nothing touched; back 31 Oct 17:28 just after the camera was handled and replugged, and still there after closing and opening it |
 | Firmware | 1.4.1 (January 2017) |
 
 ## What others have found
