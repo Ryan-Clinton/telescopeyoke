@@ -13,6 +13,7 @@
                                one fresh picture from the phone, to look at the focuser
                                on the telescope, the stick on the other knob: how
                                much of each turn reaches the focuser, each way
+    ./focuser.py temp          the thermistor's temperature, in °C
 
 Building and wiring it: docs/focuser.md. `./focus.py --motor` uses it to
 bring the stars to focus with nobody touching the telescope.
@@ -34,6 +35,11 @@ TURN = 4096                 # half-steps to one turn of the motor's shaft
 MOST = 10 * TURN            # the firmware refuses more in one order
 STEP_SECONDS = 0.020       # as the firmware's STEP_MS
 MOTOR_MS = 30              # what open() sets: on 20 October 2026 two coils at 10 ms could not push the drawtube out, at 30 ms they could
+# The thermistor (firmware/focuser, :T): a 10 kΩ B3950 NTC from A0 to GND,
+# under 10 kΩ from A0 to the 5 V the Nano holds on A5.
+FIXED_OHMS = 10_000         # the resistor
+NTC_OHMS = 10_000           # the thermistor at 25 °C
+NTC_BETA = 3950
 # A Nano clone usually has the old bootloader; a genuine one the new.
 BOARDS = ("arduino:avr:nano:cpu=atmega328old", "arduino:avr:nano:cpu=atmega328")
 
@@ -130,8 +136,28 @@ class Focuser:
             raise RuntimeError(f"the focuser answered {reply!r} to {order}: load the firmware "
                                "with ./focuser.py flash")
 
+    def temperature(self):
+        """The thermistor's temperature in °C, or None with no thermistor
+        on A0 or a short across it."""
+        reply = self.ask(":T", 2)
+        if not reply.startswith("T "):
+            raise RuntimeError(f"the focuser answered {reply!r} to :T: load the firmware "
+                               "with ./focuser.py flash")
+        return celsius(int(reply[2:]))
+
     def close(self):
         self.link.close()
+
+
+def celsius(reading):
+    """Degrees from the Nano's 0 to 1023 at A0: the thermistor's share of
+    the 5 V, so its resistance, then the B equation. None near either end,
+    where a lead is off (1023) or shorted (0)."""
+    import math
+    if not 5 <= reading <= 1018:
+        return None
+    ohms = FIXED_OHMS * reading / (1023 - reading)
+    return 1 / (1 / 298.15 + math.log(ohms / NTC_OHMS) / NTC_BETA) - 273.15
 
 
 def find_pointer(picture, marked=None):
@@ -547,7 +573,7 @@ def flash(port=None):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("command", choices=["flash", "test", "move", "angle", "bench", "load-test", "look"])
+    ap.add_argument("command", choices=["flash", "test", "move", "angle", "bench", "load-test", "look", "temp"])
     ap.add_argument("steps", nargs="?", type=int, help="for move: half-steps, minus for the other way")
     ap.add_argument("--pictures", nargs="+", help="for angle: the stick's angle in each picture")
     ap.add_argument("--watch", help="for bench: the camera looking down on the motor (a DroidCam "
@@ -575,6 +601,16 @@ def main(argv=None):
         if not args.watch:
             ap.error("look needs --watch, the camera to take the picture from")
         print(look(args.watch))
+        return
+    if args.command == "temp":
+        focuser = Focuser.open(args.port, full=False, ms=None)
+        try:
+            degrees = focuser.temperature()
+        finally:
+            focuser.close()
+        if degrees is None:
+            sys.exit("No temperature: the thermistor reads as off or shorted. Check A0, GND and A5.")
+        print(f"{degrees:.1f} °C")
         return
     if args.command == "move" and not args.steps:
         ap.error("move needs a number of half-steps")

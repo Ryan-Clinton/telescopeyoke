@@ -14,11 +14,18 @@
 //                 Moves are still counted in half-steps, two to a full step,
 //                 at the same speed through a turn (20 October 2026: the motor
 //                 could not push the drawtube out)
+//   :T         -> "T 512": the thermistor's reading, 0 to 1023, the average of
+//                 16. A 10 kOhm NTC from A0 to GND and 10 kOhm from A0 to A5,
+//                 which is held high as their 5 V (31 October 2026: the 5V
+//                 terminal is the motor board's); focuser.py turns it into
+//                 degrees. About 1023 is no thermistor, about 0 a short.
 //
 // The coils are off whenever the motor is still: the gearbox holds the shaft,
 // and a warm motor beside the tube spoils the seeing.
 
 const byte PINS[4] = {4, 5, 6, 7};
+const byte SENSE = A0;             // the thermistor and the resistor meet here
+const byte SUPPLY = A5;            // the resistor's other end: high from the start
 const byte HALF[8] = {0b0001, 0b0011, 0b0010, 0b0110,
                       0b0100, 0b1100, 0b1000, 0b1001};
 const long MOST = 40960;           // ten turns of the shaft: more is a mistake
@@ -75,6 +82,11 @@ void obey(const String &order) {
   } else if (order == ":F1" || order == ":F0") {
     full = order == ":F1";
     Serial.println(full ? "OK F1" : "OK F0");
+  } else if (order == ":T") {
+    long sum = 0;
+    for (byte i = 0; i < 16; i++) sum += analogRead(SENSE);
+    Serial.print("T ");
+    Serial.println(sum / 16);
   } else {
     Serial.println("NO");
   }
@@ -83,6 +95,8 @@ void obey(const String &order) {
 void setup() {
   for (byte i = 0; i < 4; i++) pinMode(PINS[i], OUTPUT);
   coils(0);
+  pinMode(SUPPLY, OUTPUT);
+  digitalWrite(SUPPLY, HIGH);
   Serial.begin(9600);
 }
 

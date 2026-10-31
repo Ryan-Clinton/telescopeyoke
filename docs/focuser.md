@@ -381,7 +381,7 @@ with the camera off:
 Its answer and pictures are kept like the bench's, in
 `cache/focuser-bench-DATE.json` and `cache/focuser-bench/`.
 
-## Temperature (planned, not built)
+## Temperature (the thermistor wired, the BME280 planned)
 
 The Hypercam 183C has no thermometer, and the cold, damp night of 17 October
 2026 brought stronger stripes and long frames that never arrived
@@ -395,7 +395,7 @@ and the share of hot pixels).
 | Part | Measures | Wiring | Notes |
 |---|---|---|---|
 | **BME280** breakout (temperature, humidity, pressure) | the air at the telescope, and so the dew point | I²C: SDA to A4, SCL to A5, GND, and 3.3 V or 5 V as the board says | Buy this first: it answers most of the question alone. Outside the Nano's box on short wires, never sealed in it, away from the motor; a small hood (a bottle cap) keeps dew off it. |
-| **10 kΩ NTC thermistor, B3950, 1 %** | the camera body | One leg to A0, the other to GND; a 10 kΩ resistor from A0 to 5 V | A flat head, metal tab, ring lug or bare epoxy bead, flat on the body near the front flange under aluminium tape. Not the magnetic kind (the body is not steel) nor the round steel tube (it barely touches). The 2 m lead can be cut short; its plug will not fit the Nano, so cut it off or use a matching socket. |
+| **10 kΩ NTC thermistor, B3950, 1 %** | the camera body | One leg to A0, the other to the A side's GND; a 10 kΩ resistor from A0 to A5, which the firmware holds high as its 5 V (the 5V terminal is the motor board's) | A flat head, metal tab, ring lug or bare epoxy bead, flat on the body near the front flange under aluminium tape. Not the magnetic kind (the body is not steel) nor the round steel tube (it barely touches). The 2 m lead can be cut short; its plug will not fit the Nano, so cut it off or use a matching socket. |
 
 No screw of the camera's own is needed. Altair publish no body screw sizes,
 and the body has no tripod hole: the only threads are the front T2
@@ -405,11 +405,16 @@ opening a camera that is not ours, so it is not done here. If a back-plate
 screw turns out to suit, a ring lug under it is slightly better contact
 than tape.
 
-What the software will need, written with its test before the parts are
-first used: a `:T` order in `focuser.ino` that answers with each reading;
-`focuser.py` reading it; and `camera_test.py --cooldown` and the night's
-log recording the camera's temperature and the dew margin measured at the
-telescope. Later, the same readings can move the focus as the night cools.
+**31 October 2026**: the thermistor is wired on the Nano's screw-terminal
+board as in the table, its plug cut off. The firmware's `:T` answers the
+average of 16 readings at A0, and `./focuser.py temp` turns that into
+degrees (B3950, 10 kΩ at 25 °C): 18.5 °C indoors, the ring lug hanging
+loose. A lead off or a short reads as no temperature. A BME280 would need
+A5 for its clock, so adding one moves the resistor's supply end to A1 to
+A3, in `SUPPLY` in the firmware.
+
+Still to come: `camera_test.py --cooldown` and the night's log recording
+the camera's temperature and the dew margin measured at the telescope. Later, the same readings can move the focus as the night cools.
 
 ### Parts ordered, 22 October 2026 (AliExpress, about a week to three weeks)
 

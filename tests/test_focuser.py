@@ -320,3 +320,22 @@ def test_a_move_stopped_with_ctrl_c_is_let_finish_and_its_answer_read():
     assert nano.waiting == b""          # its answer read, all of it
     motor.move(-300)                    # and the next move's answer is its own
     assert nano.sent == [":M+300", ":M-300"]
+
+
+def test_the_thermistor_s_reading_becomes_degrees():
+    """31 October 2026: a 10 kΩ B3950 NTC from A0 to GND under 10 kΩ from
+    A0 to A5. Equal resistances, half the 5 V: 25 °C."""
+    assert focuser.celsius(511.5) == pytest.approx(25.0)
+    assert focuser.celsius(788.5) == pytest.approx(0.0, abs=0.1)    # 33.6 kΩ, the B3950 at 0 °C
+    assert focuser.celsius(700) < focuser.celsius(511) < focuser.celsius(300)   # colder, more ohms, higher reading
+    assert focuser.celsius(1023) is None and focuser.celsius(0) is None    # a lead off, a short
+
+
+def test_the_temperature_is_asked_for_and_an_old_firmware_is_an_error():
+    nano = Nano({":T": "T 512"})
+    assert focuser.Focuser(nano).temperature() == pytest.approx(25.0, abs=0.1)
+    assert nano.sent == [":T"]
+    with pytest.raises(RuntimeError, match="flash"):
+        focuser.Focuser(Nano()).temperature()
+    sketch = (focuser.SKETCH / "focuser.ino").read_text()
+    assert 'order == ":T"' in sketch and "const byte SENSE = A0;" in sketch and "const byte SUPPLY = A5;" in sketch
