@@ -319,10 +319,6 @@ ACTIONS = {
                         "command": lambda p: ["mount.py", "pointing"],
                         "says": "The mount goes to eight places, four each side of the meridian, and plate-solves "
                                 "at each. The tube swings over the pole once. Watch it the first time."},
-    "creep-response": {"label": "Dec motor response", "uses": "mount", "moves": True,
-                       "command": lambda p: ["mount.py", "response"],
-                       "says": "Nothing slews. The Dec motor creeps at five rates in turn for about 35 minutes "
-                               "while the drift is measured, and is put back as it was."},
     "camera-timing": {"label": "Camera timing", "uses": "camera", "moves": False,
                       "command": lambda p: ["camera_test.py", "--timing"]},
     "camera-trail":  {"label": "Real exposure from star trails", "uses": "mount", "moves": True,
@@ -348,7 +344,7 @@ ACTIONS = {
 # it. These do not: they test or set up real equipment.
 NOT_IN_DEMO = ("camera-setup", "camera-capabilities", "camera-throughput", "camera-gain-sweep",
                # The pretend sky does not turn and the pretend camera keeps perfect time.
-               "camera-timing", "camera-trail", "creep-response", "pointing-survey", "find-home", "true-home",
+               "camera-timing", "camera-trail", "pointing-survey", "find-home", "true-home",
                "calibrate", "sync", "drift", "compensate",
                # Each demo command starts a fresh pretend mount at home, so there
                # is no "where it was pointing" for a landmark to be remembered at.
@@ -363,7 +359,7 @@ WORKSTATION = ("camera-setup", "camera-capabilities", "camera-throughput", "came
                "polar", "point", "landmark-remember", "landmark-check", "restack",
                "polaris-check", "polaris-find", "polaris-align",
                "drift", "compensate", "sync", "open-settings",
-               "polar-repeat", "pointing-survey", "creep-response", "camera-timing", "camera-trail",
+               "polar-repeat", "pointing-survey", "camera-timing", "camera-trail",
                "find-home", "true-home")
 # Orders that have a run move the mount or change its motors.
 MOVING_ORDERS = ("run-recentre", "run-assist-on", "run-assist-off")

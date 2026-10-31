@@ -161,6 +161,6 @@ night (`docs/discovery.md`).
 ## Not tonight unless asked
 
 Finding the true home (`findhome`, `truehome`, then marking the joints with
-paint, nail varnish or a scratch, never crayon or chalk), `pointing`,
-`response`: each is a calibration for a spare clear night, not part of
+paint, nail varnish or a scratch, never crayon or chalk) and `pointing`:
+each is a calibration for a spare clear night, not part of
 getting a picture.

@@ -29,7 +29,7 @@ overtaken.
 | Daytime Polaris | ❌ searched three times, not found; sensor blemishes were told from stars |
 | `findhome` and marking home | ✅ 17 October: from 10.66° out by eye to 0.19° on the marks |
 | Pointing survey | ✅ 17 October: one correction for each side is enough |
-| Landmark azimuth, creep response | 🧪 |
+| Landmark azimuth | 🧪 |
 | Checking the telescope really turned | ⚠️ one real record, and it caught a real fault |
 | Skyline | ✅ the telescope's own survey by day, 17 October: 28 bearings, one look checked by eye (the hedge at 120°); the north below the mount's reach and the low south-west near the setting Sun not measured. ⚠️ panoramas found, not tied to the compass |
 | Control without the handset | ⚠️ the Wi-Fi adapter read; nothing moved |
@@ -59,7 +59,7 @@ The account of everything tried so far, feature by feature, is at the end:
 | 6 | Does the polar measurement repeat? | `./polaralign.py --repeat 5` with the bolts left alone. It prints each answer and their scatter. | Not yet run. Five rounds on 6 October gave 5.2°, 1.1°, 0.4°, 0.6°, 0.2°, but the bolts were turned between them. |
 | 7 | How quickly is a turn of the focuser heard on the USB 3 lead? | `./focus.py` on a rich field, then `./focus.py --report`: `feedback_s` on each level. Under about 1.2 s on levels 1 and 2 is the aim. | Not yet run. |
 | 8 | How long is the shutter really open? | `./camera_test.py --timing` (cap on, any time), then `./camera_test.py --trail` on a field of bright stars away from the pole. | Run 13 October. Each second asked for added 0.63 s; a 10 s frame's trails showed the shutter open 6.4 s. It changes with the driver's Speed control (1.25, 0.86 and 0.63 s at Speed 0, 1 and 2). `camera.py` now asks for more by the measured share, and a 10 s frame's trails then showed 9.6 s. |
-| 9 | Does the sky's drift answer the Dec motor in proportion? | `./mount.py response`: five creeps, three measurements at each, about 35 minutes on one target. | Not yet run. The three readings of 5 October (below) fit no one explanation. |
+| 9 | Does the sky's drift answer the Dec motor in proportion? | Dropped on 31 October 2026: its one-off command was taken out. | Never run. The three readings of 5 October (below) fit no one explanation. |
 | 10 | Is one pointing correction for each side of the meridian enough? | `./mount.py pointing`: plate solves at -4, -3, -2, -1, +1, +2, +3 and +4 hours. | Yes, 17 October 2026: seven plate solves at Dec +40°, four east and three west (the house hides the rest of the west), each within 0.25° of its side's average, twice: before and after home was marked. On 6 October the east side was 5.8° out in Dec and the west 0.2°, from one place each. |
 | 11 | Does a stalled mount get caught, with no false alarms on a working one? | Run `./horizon.py --trace` and a `goto --solve` on a working mount and see that neither stops; the verdict of each comparison is in the survey's log. | One real record, by day, and it showed a fault: see 7 October 2026 below. By day on a working mount, 17 October 2026: the skyline survey's 109 looks, each checked, and none stopped it. By night, not yet run. |
 | 12 | How true is a panorama's skyline? | Tie a panorama to the compass with two marks (`./panorama.py`), then `./horizon.py --trace` to check it at the bearings where it bends. | Not yet run. |
@@ -188,8 +188,7 @@ M31 from a back garden, polar axis about 9 degrees out, USB 2 lead.
   -0.25. The Dec motor seems to respond about twice as strongly as assumed,
   but three readings do not fit one explanation. Not fixed; needs a
   controlled test (set a creep, measure, repeat) before the logic is changed.
-  That test is now `./mount.py response` (experiment 9); the logic is
-  unchanged until it has been run.
+  That test (experiment 9) was dropped; the logic is unchanged.
 - **Home after a drift correction:** went the wrong way twice because the
   direction test did not wait for the gears to take up. Fixed.
 - **Meridian:** the mount was already on the tube-over-pole side for both
@@ -198,7 +197,7 @@ M31 from a back garden, polar axis about 9 degrees out, USB 2 lead.
 ## The next clear night
 
 The measurements that put real figures into `./ty characterise`, in an
-order that wastes no setting-up ([why this order](calibration.md)). None has been made yet. About two and a half hours. No new feature is worth more than this night.
+order that wastes no setting-up ([why this order](calibration.md)). None has been made yet. About two hours. No new feature is worth more than this night.
 
 | Order | What | Command | Takes | Needs |
 |---|---|---|---|---|
@@ -212,12 +211,11 @@ order that wastes no setting-up ([why this order](calibration.md)). None has bee
 | 7 | Restart on the marks | Switch off and on with the marks lined up, ENTER through the handset's screens, `./mount.py settime` | 3 minutes | |
 | 8 | The true home, checked | `./mount.py findhome` again | 15 minutes | It should read within a tenth or two of a degree. |
 | 9 | Pointing each side, with home right | `./mount.py pointing` | 15 minutes | |
-| 10 | Dec motor response | `./mount.py goto NAME --solve`, then `./mount.py response` | 35 minutes | One target, left alone. Last, because it can be left to run. |
 
 Movement checking needs no step of its own: steps 3, 5, 8 and 9 are judged by
 their plate solves as they run, and each judgement goes into
-`cache/moved_log.jsonl`. Afterwards `./ty characterise` should read 10 or 11
-of 13, and the results go in the table above.
+`cache/moved_log.jsonl`. Afterwards `./ty characterise` should read 9 or 10
+of 12, and the results go in the table above.
 
 ## Polaris by day: what to isolate before searching again
 
@@ -487,7 +485,7 @@ used with a mouse.
 Written on 7 October 2026 to turn the first nights' surprises into
 measurements, and none of it yet run on the real mount or camera:
 `polaralign.py --repeat`, `camera_test.py --timing` and `--trail`,
-`mount.py response`, `mount.py pointing`, `focus.py --report` and
+`mount.py pointing`, `focus.py --report` and
 `ty characterise`. The arithmetic of each is tested on made-up figures and
 on the simulated mount. `--trail` reads made-up trails about 4% short. The
 trail measure, the movement check and the pointing survey each have

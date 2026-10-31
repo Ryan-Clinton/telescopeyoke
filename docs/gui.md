@@ -683,7 +683,6 @@ or "Measure again", that starts the application's action for it:
 | Whether one correction for each side is enough | `mount.py pointing` | yes |
 | How far the polar axis is from the pole | `polaralign.py` | yes |
 | How well that measurement repeats | `polaralign.py --repeat 5 --step 12` | yes |
-| How the drift answers the Dec motor | `mount.py response` | yes |
 | The skyline | none: the Horizon screen | |
 | That the telescope turns when the mount says it has | none: checked as other things run | |
 

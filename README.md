@@ -641,7 +641,7 @@ against the simulated rig and the tests.
 | Checking that the telescope really turned | not yet | not yet | ✅ |
 | Finding and marking the true home (`findhome`, `truehome`) | ✅ 17 October 2026: from 10.66° out by eye to 0.19° on the marks | ✅ | ✅ |
 | Pointing survey: one correction for each side | ✅ 17 October 2026 | ✅ | ✅ |
-| Polar repeatability, creep response | not yet | not yet | ✅ |
+| Polar repeatability | not yet | not yet | ✅ |
 | Discovery: subtraction, candidates, vetting | ⚠️ on real M31 stacks, with planted fakes; no find of our own yet | ✅ | ✅ a known nova found again in ZTF's archive images |
 | Comets in spacecraft pictures (`sungrazer.py`) | does not need them | ✅ 19 October 2026: a known Kreutz sungrazer found by the hunt itself in live CCOR-1 pictures | ✅ known comets found in archived LASCO pictures |
 | Lights, speaker and phone alerts (`alert.py`) | does not need them | ✅ cloud and rain alerts on a real light and speaker; the call that woke the author when a run stopped (20 October 2026) | ✅ |
@@ -697,8 +697,6 @@ one command (`./ty characterise` shows which have been made):
 - The click-and-tone focusing under real stars on the USB 3 lead, and how
   quickly a turn is heard (`./focus.py`, then `./focus.py --report`).
 - Whether the polar measurement repeats (`./polaralign.py --repeat 5`).
-- How the drift answers the Dec motor (`./mount.py response`), before
-  anything about the drift assist is changed.
 - Whether one pointing correction for each side is enough (`./mount.py pointing`).
 - A phone panorama tied to the compass and compared with what the telescope sees.
 - Daytime Polaris again, now the axis is 0.1° from the pole: the search looks

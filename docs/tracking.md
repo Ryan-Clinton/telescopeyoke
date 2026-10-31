@@ -25,17 +25,6 @@ at a rate that depends only on the hour angle. So:
 
 Before any of that is trusted, measure how the mount answers:
 
-- `./mount.py response` sets the Dec motor creeping at 0, -0.25, -0.5, -0.75
-  and -1 arcsecond a second in turn, waits a minute each time for the gears
-  to take it up, and measures the drift three times at each. It puts a
-  straight line through the fifteen readings and says what the drift is with
-  no creep, how much each arcsecond a second of creep changes it (it should
-  be exactly one), how far repeats at one creep sit from each other, and
-  whether any creep sits further off the line than the repeats explain:
-  slack, a dead zone, or a rate the handset rounds away. About 35 minutes on
-  one target; nothing is slewed, and the creep is put back afterwards. It
-  changes nothing about how the creep is chosen. `--rates` and `--repeats`
-  alter the sweep; the result is kept in `cache/creep_response.json`.
 - `./mount.py pointing` goes to eight hour angles at Dec +40°, four each side
   of the meridian, with no correction applied, plate-solves at each and
   records how far out the aim is. It says, for each side, the average error,
@@ -46,7 +35,7 @@ Before any of that is trusted, measure how the mount answers:
   left out; the tube swings over the pole once. `--hours` and `--dec` alter
   it; the result is kept in `cache/pointing_survey.json`.
 
-Neither has been run on the real mount yet.
+It was first run on the real mount on 17 October 2026 (`docs/validation.md`).
 
 What this cannot do: with the axis off the pole, the field still turns slowly
 about the target, and the gears' own periodic wobble is untouched. The

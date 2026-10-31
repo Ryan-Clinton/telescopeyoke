@@ -20,9 +20,6 @@
                           meanwhile cancel the drift it causes. After this,
                           every GoTo starts with the creep its part of the sky
                           needs. It slews about 25° twice to take its measure.
-    ./mount.py response   set the Dec motor creeping at five rates in turn and
-                          measure the drift at each, three times: does the sky
-                          answer in proportion? About 35 minutes; no slews.
     ./mount.py pointing   go to eight hour angles, four each side of the
                           meridian, plate-solve at each and say how far out
                           the aim is: is one correction for each side enough?
@@ -89,8 +86,7 @@ LAST_SOLVE = config.DATA / "cache" / "last_solve.json"
 FRAME_TRIES = 3   # pictures tried for one plate solve before the camera counts as gone
 # What has been learned about the drift, and the Dec creep now running.
 DRIFT_FILE = config.DATA / "cache" / "drift_model.json"
-# What `response` and `pointing` found, for looking at afterwards.
-RESPONSE_FILE = config.DATA / "cache" / "creep_response.json"
+# What `pointing` found, for looking at afterwards.
 SURVEY_FILE = config.DATA / "cache" / "pointing_survey.json"
 HOME_FILE = config.DATA / "cache" / "home_fit.json"      # what `findhome` found, for `truehome`
 HOME_FRESH = 2 * 3600     # seconds a home measurement may be acted on
@@ -100,7 +96,6 @@ HOME_FITS = 0.15
 # Degrees: leaving any one place out must not move the answer by more than
 # this, or it rests on that one place.
 HOME_SWAY = 0.1
-CREEPS = (0.0, -0.25, -0.5, -0.75, -1.0)    # arcseconds a second, for `response`
 # Hours from the meridian, for `pointing` and `findhome`: four each side, so
 # that one place can be doubted and the answer still checked against the rest.
 SURVEY_HOURS = (-4.0, -3.0, -2.0, -1.0, 1.0, 2.0, 3.0, 4.0)
@@ -419,49 +414,6 @@ class Mount:
                 # The Dec gears have slack, so a new rate takes a while to bite.
                 time.sleep(60)
         return residual, sigma
-
-    def creep_response(self, site, rates=CREEPS, repeats=3, bite=60):
-        """Set the Dec motor creeping at each rate in turn and measure the
-        Dec drift there `repeats` times. Returns tracking.response()'s
-        account with every measurement under "rows". The creep is put back
-        as it was. Nothing is slewed, and how the creep is chosen is not
-        changed by the answer."""
-        west, model = self.west(), self.drift_model(site)
-        before = model.creep or 0.0
-        rows = []
-        try:
-            for rate in rates:
-                actual = self.dec_creep(rate)
-                # The Dec gears have slack, so a new rate takes a while to bite.
-                self.say(f"Creep {actual:+.2f} arcsec/s: waiting {bite} s for the gears to take it up")
-                time.sleep(bite)
-                for n in range(repeats):
-                    drift = self.measure_drift(site)
-                    if drift is None:
-                        self.say("  no plate solve; left out")
-                        continue
-                    _, dec, sigma = drift
-                    rows.append({"creep": actual, "drift": round(dec, 3), "sigma": sigma and round(sigma, 3)})
-                    self.say(f"  {n + 1} of {repeats}: Dec drift {dec:+.2f}"
-                             + ("" if sigma is None else f" ±{sigma:.2f}") + " arcsec/s")
-        finally:
-            self.dec_creep(before)
-        found = tracking.response(rows, west)
-        if found is None:
-            raise Refusal("PLATE_SOLVE_FAILED", "Too few measurements to say anything: the sky would not "
-                          "solve at two different creeps.")
-        found.update(rows=rows, side=side_name(west), saved=time.time())
-        RESPONSE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        records.write(RESPONSE_FILE, found)
-        self.say(f"With no creep the aim drifts {found['natural_arcsec_s']:+.2f} arcsec/s in Dec. Each "
-                 f"arcsec/s of creep changes that by {found['per_unit']:+.2f} (it should be "
-                 f"{found['expected_per_unit']:+.0f}). "
-                 + ("The points lie on a straight line."
-                    if found["straight"] else
-                    f"The points do not lie on a straight line: one creep's average is "
-                    f"{found['off_line_arcsec_s']:.2f} arcsec/s off it, more than the repeats explain. "
-                    "The motor is not answering in proportion."))
-        return found
 
     def pointing_survey(self, site, hours=SURVEY_HOURS, dec=SURVEY_DEC, skyline=None):
         """Go to each hour angle at one declination, as the handset believes
@@ -1415,7 +1367,7 @@ def report(mount):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("command", choices=["status", "settime", "nudge", "zenith", "home", "stop", "goto", "point",
-                                       "sync", "drift", "compensate", "response", "pointing",
+                                       "sync", "drift", "compensate", "pointing",
                                        "findhome", "truehome",
                                        "sethome", "directions"])
     ap.add_argument("target", nargs="*",
@@ -1432,9 +1384,6 @@ def main():
     ap.add_argument("--dry-run", action="store_true",
                     help="check the move against the limits and say what it would do; "
                          "nothing moves and no hardware is needed")
-    ap.add_argument("--rates", type=float, nargs="+", default=list(CREEPS), metavar="RATE",
-                    help="with response: the creeps to try, in arcseconds a second")
-    ap.add_argument("--repeats", type=int, default=3, help="with response: measurements at each creep")
     ap.add_argument("--hours", type=float, nargs="+", default=list(SURVEY_HOURS), metavar="H",
                     help="with pointing and findhome: the hour angles to visit, in hours from the meridian (east is negative)")
     ap.add_argument("--dec", type=float, default=SURVEY_DEC, help="with pointing: the declination to visit them at")
@@ -1448,7 +1397,7 @@ def main():
 
     args.demo = args.demo or config.DEMO
     if args.demo and not config.DEMO:
-        if args.command in ("sync", "drift", "compensate", "response", "pointing", "findhome") and not args.dry_run:
+        if args.command in ("sync", "drift", "compensate", "pointing", "findhome") and not args.dry_run:
             ap.error(f"{args.command} needs the real camera; there is no demo of it")
         if args.command in ("sethome", "directions"):
             ap.error(f"{args.command} is for a real mount reached without its handset")
@@ -1488,12 +1437,6 @@ def dry_run(args, site):
             return {"would_move": False, "safe": True,
                     "warnings": ["Sets the handset's date, time and position from this computer. The handset "
                                  "must be at its main menu. Nothing moves."]}
-        if args.command == "response":
-            minutes = len(args.rates) * (1 + args.repeats * 2)
-            return {"would_move": False, "safe": True,
-                    "warnings": [f"No slews. The Dec motor creeps at up to {max(abs(r) for r in args.rates):g} "
-                                 f"arcseconds a second for about {minutes} minutes, so the target slides a "
-                                 "little in the frame; the creep is put back as it was at the end."]}
         if args.command == "truehome":
             return plan_true_home()
         if args.command in ("pointing", "findhome"):
@@ -1573,8 +1516,6 @@ def act(args, site):
                 mount.cancel_drift(site)
             elif args.command == "compensate":
                 mount.compensate(site)
-            elif args.command == "response":
-                mount.creep_response(site, args.rates, args.repeats)
             elif args.command == "pointing":
                 mount.pointing_survey(site, args.hours, args.dec, config.load().get("horizon"))
             elif args.command == "findhome":

@@ -152,10 +152,10 @@ def test_the_night_is_reported_as_the_status_page_shows_it(desk):
 def test_rig_knowledge_says_how_each_measurement_is_started(desk):
     found = desk.json("/api/characterise")[1]["data"]
     by_action = {item["action"]: item for item in found["items"] if item["action"]}
-    assert found["of"] == len(found["items"]) == 13
+    assert found["of"] == len(found["items"]) == 12
     # Anything that moves the mount, or stops it following the sky, is a plan first.
     assert all(by_action[name]["plan"] for name in ("polar", "polar-repeat", "find-home", "pointing-survey",
-                                                    "creep-response", "camera-trail"))
+                                                    "camera-trail"))
     assert console.moves("true-home", {})
     assert not by_action["camera-timing"]["plan"] and not by_action["focus"]["plan"]
     page = (PAGE / "index.html").read_text(encoding="utf-8")
@@ -323,7 +323,7 @@ def test_every_action_builds_exactly_its_command():
     assert tail("run-assist-on") == ["ty", "run", "assist-on"] and tail("run-assist-off") == ["ty", "run", "assist-off"]
     assert tail("polar-repeat") == ["polaralign.py", "--repeat", "5", "--step", "12"]
     assert tail("polar-repeat", {"step": 20}, dry_run=True) == ["polaralign.py", "--repeat", "5", "--step", "20", "--dry-run"]
-    assert tail("pointing-survey") == ["mount.py", "pointing"] and tail("creep-response") == ["mount.py", "response"]
+    assert tail("pointing-survey") == ["mount.py", "pointing"]
     assert tail("camera-timing") == ["camera_test.py", "--timing"]
     assert tail("find-home", dry_run=True) == ["mount.py", "findhome", "--dry-run"]
     assert tail("true-home") == ["mount.py", "truehome"]

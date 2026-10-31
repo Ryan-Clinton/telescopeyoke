@@ -125,7 +125,7 @@ def test_a_correction_that_changes_nothing_is_proof_from_the_plate_solve(evidenc
 
 @pytest.fixture
 def scope(tmp_path, monkeypatch):
-    for name in ("CLOCK_FILE", "POINTING_FILE", "DRIFT_FILE", "RESPONSE_FILE", "SURVEY_FILE", "LAST_SOLVE", "HOME_FILE"):
+    for name in ("CLOCK_FILE", "POINTING_FILE", "DRIFT_FILE", "SURVEY_FILE", "LAST_SOLVE", "HOME_FILE"):
         monkeypatch.setattr(mount, name, tmp_path / f"{name}.json")
     monkeypatch.setattr(mount, "LOCK_FILE", tmp_path / "MOTION_LOCKED")
     monkeypatch.setattr(mount, "SETTLE", 0)
@@ -257,36 +257,6 @@ def test_a_star_trails_length_is_read_from_the_frame():
     assert camera_test.trail_length(stars("M27"))[0] is None
 
 
-# --- how the drift answers the creep -----------------------------------------------------------
-
-def test_a_motor_that_answers_in_proportion_gives_a_straight_line():
-    rows = [{"creep": c, "drift": -1.30 + 1.0 * c + n} for c in mount.CREEPS for n in (-0.03, 0.0, 0.03)]
-    found = tracking.response(rows, west=False)
-    assert found["natural_arcsec_s"] == pytest.approx(-1.30, abs=0.01)
-    assert found["per_unit"] == pytest.approx(1.0, abs=0.01) and found["expected_per_unit"] == 1.0
-    assert found["straight"] and found["repeat_scatter_arcsec_s"] == pytest.approx(0.03, abs=0.005)
-    assert [g["measurements"] for g in found["by_creep"]] == [3] * 5
-
-
-def test_slack_in_the_gears_shows_as_points_off_the_line():
-    answer = lambda creep: -1.30 if abs(creep) < 0.6 else -1.30 + 2.0 * creep        # nothing, then too much
-    rows = [{"creep": c, "drift": answer(c) + n} for c in mount.CREEPS for n in (-0.03, 0.0, 0.03)]
-    found = tracking.response(rows, west=False)
-    assert not found["straight"] and found["off_line_arcsec_s"] > 0.3
-    assert tracking.response([{"creep": 0.0, "drift": -1.3}], west=False) is None      # one creep says nothing
-
-
-def test_the_sweep_sets_each_creep_measures_it_and_puts_the_creep_back(scope, monkeypatch):
-    scope.save_clock(SITE)
-    set_to = []
-    monkeypatch.setattr(scope, "dec_creep", lambda rate: set_to.append(rate) or rate)
-    monkeypatch.setattr(scope, "measure_drift", lambda site: (0.0, -1.3 + set_to[-1], 0.05))
-    found = scope.creep_response(SITE, rates=(0.0, -0.5, -1.0), repeats=2)
-    assert set_to == [0.0, -0.5, -1.0, 0.0]                        # and back to what it was
-    assert len(found["rows"]) == 6 and found["per_unit"] == pytest.approx(1.0) and found["straight"]
-    assert json.loads(mount.RESPONSE_FILE.read_text(encoding="utf-8"))["natural_arcsec_s"] == pytest.approx(-1.3)
-
-
 # --- how the pointing changes across the sky ------------------------------------------------------
 
 def test_the_survey_is_planned_east_first_and_leaves_out_what_is_too_low_or_hidden(tmp_path, monkeypatch):
@@ -366,13 +336,12 @@ def test_a_survey_on_a_mount_that_is_not_turning_is_stopped(scope, monkeypatch):
 
 def test_the_new_mount_commands_say_what_they_would_do(monkeypatch, capsys, tmp_path):
     monkeypatch.setattr(mount, "LOCK_FILE", tmp_path / "MOTION_LOCKED")
-    for command, moves in (("pointing", True), ("response", False)):
-        monkeypatch.setattr(sys, "argv", ["mount", "--demo", command, "--dry-run", "--json"])
-        with pytest.raises(SystemExit) as done:
-            mount.main()
-        answer = json.loads(capsys.readouterr().out)
-        assert done.value.code == 0 and answer["ok"] and answer["data"]["would_move"] is moves
-        assert answer["warnings"]
+    monkeypatch.setattr(sys, "argv", ["mount", "--demo", "pointing", "--dry-run", "--json"])
+    with pytest.raises(SystemExit) as done:
+        mount.main()
+    answer = json.loads(capsys.readouterr().out)
+    assert done.value.code == 0 and answer["ok"] and answer["data"]["would_move"] is True
+    assert answer["warnings"]
     mount.LOCK_FILE.write_text("testing")
     monkeypatch.setattr(sys, "argv", ["mount", "--demo", "pointing", "--dry-run", "--json"])
     with pytest.raises(SystemExit):
@@ -404,7 +373,7 @@ def test_the_focus_report_gives_each_levels_timing(tmp_path, monkeypatch, capsys
 def rig(tmp_path, monkeypatch):
     import horizon
     for module, name in ((camera_test, "TIMING_FILE"), (focus, "FRAMES_FILE"), (focus, "RUNS_FILE"),
-                         (mount, "POINTING_FILE"), (mount, "SURVEY_FILE"), (mount, "RESPONSE_FILE"), (mount, "HOME_FILE"),
+                         (mount, "POINTING_FILE"), (mount, "SURVEY_FILE"), (mount, "HOME_FILE"),
                          (polaralign, "POLAR_FILE"), (horizon, "RESULTS"), (moved, "MOVED_FILE"),
                          (moved, "LOG_FILE")):
         monkeypatch.setattr(module, name, tmp_path / f"{name}.json")
@@ -413,17 +382,17 @@ def rig(tmp_path, monkeypatch):
 
 def test_a_rig_nothing_is_known_about_says_how_to_measure_each_thing(rig):
     answer = valid(interface.run("characterise", agent.characterise), "characterise")["data"]
-    assert answer["measured"] == 0 and answer["of"] == len(answer["items"]) == 13
+    assert answer["measured"] == 0 and answer["of"] == len(answer["items"]) == 12
     # In the order the work is done: align, find home, point, then the rest.
     assert [item["action"] for item in answer["items"]][:6] == ["polar", "polar-repeat", "find-home", "sync", "sync",
                                                                  "pointing-survey"]
     assert all(not item["measured"] and item["value"] is None and item["how"] for item in answer["items"])
-    assert {"./camera_test.py --timing", "./polaralign.py --repeat 5", "./mount.py response",
+    assert {"./camera_test.py --timing", "./polaralign.py --repeat 5",
             "./mount.py pointing"} <= {item["how"] for item in answer["items"]}
     # Each names the application's action that measures it, where there is one.
     import console
     named = {item["action"] for item in answer["items"]} - {None}
-    assert named <= set(console.ACTIONS) and {"polar-repeat", "creep-response", "pointing-survey",
+    assert named <= set(console.ACTIONS) and {"polar-repeat", "pointing-survey",
                                               "camera-timing", "camera-trail"} <= named
     assert [item["what"] for item in answer["items"] if item["action"] is None] == [
         "That the telescope turns when the mount says it has", "The skyline of the place it stands"]
@@ -442,7 +411,7 @@ def test_what_has_been_measured_is_reported_with_its_value_and_age(rig):
                                            "saved": now}))
     answer = valid(interface.run("characterise", agent.characterise), "characterise")["data"]
     found = {item["what"]: item for item in answer["items"] if item["measured"]}
-    assert answer["measured"] == len(found) == 6 and answer["summary"] == "6 of 13 measured"
+    assert answer["measured"] == len(found) == 6 and answer["summary"] == "6 of 12 measured"
     assert found["Where the home position really is"]["value"] == "out by +0.40° on the RA axis and -2.95° on the Dec axis"
     assert found["How far the polar axis is from the pole"]["value"] == "0.2°"
     assert found["How far the polar axis is from the pole"]["age_days"] == pytest.approx(2.0, abs=0.1)
