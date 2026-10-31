@@ -283,6 +283,38 @@ gain 100, for a 12 s exposure:
   October); it is not in use while `[camera] backend = "altair"`, and is
   not to be turned on for the same reason.
 
+## The scan, 31 October 2026, night
+
+The fault still there (speed 2's frames sent too soon). The telescope at
+the laptop's screen through kitchen roll, gain 100, `./camera_test.py
+--scan`: 8 s exposures, a 1 s flash moved through each by 1 s and past its
+end, at each speed (`cache/camera-probes/scan-20261031-210553/`).
+
+| Speed | Starts gathering | Stops | Gathered | Of the time asked |
+|---|---|---|---|---|
+| 0 | 0.5 s after it is asked for | 10.7 s | 10.2 s | 1.27 |
+| 1 | 0.4 s | 7.3 s | 6.8 s | 0.86 |
+| 2 | 0.4 s | 5.5 s | 5.1 s | 0.63 |
+
+- **The window is shortened, not moved.** Every speed starts about half a
+  second after the exposure is asked for; only the end differs.
+- **The shares are 13 October's** (1.25, 0.86, 0.63 from timings and star
+  trails), so the camera was in this state that night as well.
+- **Against speed 0, speed 1 gathers two thirds and speed 2 exactly half**
+  (the dark frames, lit only by the black screen, keep the same ratios:
+  70.6, 47.5, 35.2). As if the exposure were timed with speed 0's clock
+  while the sensor reads at speed 1's or 2's. In the healthy state of the
+  morning, speed 2 took as long as speed 0 (20.5 s for 16 s, about 1.28).
+  So the likeliest mechanism: how the camera's firmware or Altair's
+  library sets the exposure timer for each readout speed, right in one
+  state and wrong in the other.
+- **A speed 1 frame can pass as kept and still be short:** they arrived
+  7.18 s after the trigger, just past the 7.15 s check, having gathered
+  6.8 s.
+- This answers the timed light's doubtful readings: the scan's figures
+  agree with it (8.3 of 12 s at speed 2 is 0.69; here 0.63, with 1 s
+  flashes resolving the end to a few tenths of a second).
+
 ## What is known
 
 - **The exposures really are shorter in the fault, and speed 0's are
@@ -365,11 +397,9 @@ gain 100, for a 12 s exposure:
   open. It has not been seen to begin partway through a test that was
   passing, though until 31 October a frame lost and kept on a retry would
   not have been seen.
-- **Whether the window is shortened, moved, or both.** The timed light
-  measures how long the sensor gathers, not when; the scan (next tests, 1)
-  says when it starts and stops after the exposure is asked for.
-- **How accurate the timed light's figures are.** Two of its readings were
-  doubtful; the scan repeats the measurement another way.
+- **What the camera does differently in the two states.** The scan shows
+  the exposure is timed as if by speed 0's clock in the fault; what sets it
+  right in the other state is not known.
 - **Whether speed 0 can ever fail.** It has not yet, in every test since
   23 Oct.
 
@@ -393,7 +423,7 @@ the library scrambles its control requests differently each time the
 camera is opened (the same request read `5ff6` in one capture and `ece0`
 in another), so the camera's own readable settings are compared instead.
 
-1. **The scan, at speeds 0, 1 and 2, while the fault is present**
+1. **Done 31 October (above): the scan, at speeds 0, 1 and 2, while the fault is present**
    (`./camera_test.py --scan`, the telescope at the laptop's screen through
    kitchen roll, room lights off, about 40 minutes). Where the sensor's
    window starts and ends after the exposure is asked for, at each speed:
@@ -526,6 +556,7 @@ The camera is Gary's; the ticket is ours, and paying for a repair would be his c
 | What a lost frame is | in the fault the frame comes back in about half the time: a 16 s frame after 10.3 s instead of 20.5 s, at speeds 1 and 2, not 0 (USB recorded, 31 Oct) |
 | The light in it | in the fault, against speed 0 in the same light: speed 2 frames hold 0.51 of it, speed 1 frames 0.67, scaled with the time asked from 0.5 to 8 s; the camera still reports the full exposure (31 Oct, cap off) |
 | Against a clock | timed flashes of light from a screen, 12 s asked, in the fault: speed 0 gathered 15.4 s (128 %), speed 1 10.4 s (86 %), speed 2 8.3 s (69 %), and a flash at 9 to 11 s did not reach the speed 2 frame (31 Oct) |
+| Where the exposure falls | a 1 s flash moved through 8 s exposures, in the fault: all speeds start gathering 0.4 to 0.5 s after the request; speed 0 stops at 10.7 s, speed 1 at 7.3 s, speed 2 at 5.5 s: 1.27, 0.86 and 0.63 of the time asked, speed 2 exactly half of speed 0 (31 Oct) |
 | Started | 04:59 on 20 Oct 2026, at dawn after a cold night |
 | Comes and goes | gone 26 Oct; back 30 Oct 10:46; gone again by 11:02, nothing touched; back 31 Oct 17:28 just after the camera was handled and replugged, and still there after closing and opening it |
 | Firmware | 1.4.1 (January 2017) |
