@@ -63,8 +63,7 @@ REASON    JSON for every command · ty · MCP · skills and specialist agents ·
 SHARE     status page · public live page · Twitch broadcast with a presenter and chat
 ```
 
-[The TelescopeYoke observatory](docs/observatory.md) puts the whole system
-on one page. What happened in its first 17 days, each recorded in
+What happened in its first 17 days, each recorded in
 [the validation record](docs/validation.md):
 
 - **3 October 2026:** first light; a GoTo from a home set 10° out by eye
@@ -238,8 +237,7 @@ not depend on the agent: the Sun and altitude limits, the motion lock, the
 handset's state, dry runs, moves checked against the camera, and hooks that
 refuse any attempt to work round them. The MCP server and web API are
 read-only, every agent action is logged, and a person asks for each move.
-[AGENTS.md](AGENTS.md) and [the observatory page](docs/observatory.md) have
-the detail.
+[AGENTS.md](AGENTS.md) has the detail.
 
 It learns from real nights: a comet split in two by a gap in the pictures
 became joined tracks and a checked verdict by noon the next day; a transit
@@ -546,7 +544,6 @@ plan the night → GoTo → photograph → plate-solve (ASTAP) → correct → p
 |---|---|
 | [From box to first galaxy](docs/first-night.md) | A first night for someone who knows none of the words: assemble, point north, switch on, align, focus, GoTo, picture. Says which steps are proven on a real mount. |
 | [Calibrating a mount, in order](docs/calibration.md) | Level roughly, polar-align, find the true home and mark it, measure the pointing each side, and check that the mount really turns. |
-| [The TelescopeYoke observatory](docs/observatory.md) | The whole system on one page: observe, measure, discover, operate, reason, share; the safety rule; what it has learnt from real nights. |
 | [Looking for something new](docs/discovery.md) | The discovery station: novae in M31 and M33, comets in spacecraft pictures, transits, public alerts; its recent proofs. Operational; no find of its own yet. |
 | [The live stream](docs/streaming.md) | Running the Twitch broadcast: what viewers see, the presenter, the chat's commands. [The design record](docs/stream-look.md) says why it looks as it does. |
 | [Alerts](docs/alerts.md) | The house's lights and speaker, the phone, and calling the person. |
