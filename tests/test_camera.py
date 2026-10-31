@@ -5,6 +5,7 @@ route to a made-up copy of Altair's wrapper."""
 import ctypes
 import io
 import json
+import sys
 import threading
 import time
 import types
@@ -822,6 +823,7 @@ def test_the_details_say_whether_a_low_power_mode_or_a_give_up_is_set(sdk, world
     assert "Low power:      on" in out and "Low power above:1000 ms" in out and "not reported" in out
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the INDI server is managed on Linux only (/proc)")
 def test_a_camera_plugged_in_after_the_server_started_is_noticed(tmp_path):
     """19 October 2026: the camera came back from another computer and the
     first frame waited two minutes on the old server's dead connection."""

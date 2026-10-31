@@ -8,7 +8,7 @@ import tonight
 def built(tmp_path):
     rep = tonight.build(config.example(), demo=True)
     page.write(rep, 5, tmp_path / "index.html")
-    return (tmp_path / "index.html").read_text(), tmp_path / "pictures.html"
+    return (tmp_path / "index.html").read_text(encoding="utf-8"), tmp_path / "pictures.html"
 
 
 def test_imaging_then_the_schedule_then_discovery(tmp_path):
@@ -20,7 +20,7 @@ def test_imaging_then_the_schedule_then_discovery(tmp_path):
 def test_the_pictures_have_a_page_of_their_own_in_the_same_style(tmp_path):
     html, pictures = built(tmp_path)
     assert pictures.exists() and 'href="pictures.html"' in html
-    other = pictures.read_text()
+    other = pictures.read_text(encoding="utf-8")
     assert html[html.index("<style>"):html.index("</style>")] in other and "status.json" in other
 
 

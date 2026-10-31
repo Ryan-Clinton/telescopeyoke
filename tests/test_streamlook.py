@@ -2,6 +2,7 @@
 inside the safe margins, reads clearly, and never names the place or shows
 a candidate's position."""
 import re
+import sys
 
 import numpy as np
 
@@ -27,6 +28,7 @@ def test_each_state_draws_a_full_picture(drawn):
         assert canvas.written
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="the stream is drawn on Linux, with its fonts")
 def test_every_word_is_inside_the_safe_margins(drawn):
     for name, canvas in drawn.items():
         for w in canvas.written:

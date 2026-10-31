@@ -1,6 +1,7 @@
 """Live streaming to YouTube or Twitch: when it starts and stops, where it
 goes, what is in the picture, and that the stream key never shows."""
 import config
+import sys
 import stream
 import streamlook
 
@@ -57,7 +58,7 @@ def test_the_key_is_kept_readable_only_by_its_owner(tmp_path, monkeypatch):
     assert not stream.keep_key("  \n")
     assert stream.keep_key(" live_123_abc \n")
     assert stream.key() == "live_123_abc"
-    assert (stream.KEY_FILE.stat().st_mode & 0o777) == 0o600
+    assert sys.platform == "win32" or (stream.KEY_FILE.stat().st_mode & 0o777) == 0o600   # Windows has no such modes
 
 
 def test_one_service_named_as_a_string_works_as_before(tmp_path, monkeypatch):
@@ -77,7 +78,7 @@ def test_several_services_each_have_their_own_key_and_the_old_one_is_twitch_s(tm
     assert stream.services(s) == ["youtube", "twitch"] == stream.services({"service": "youtube+twitch"})
     stream.keep_key("old-twitch-key")                       # the key kept before there were two
     stream.keep_key("yt-aaaa-bbbb", "youtube")
-    assert (stream.key_file("youtube").stat().st_mode & 0o777) == 0o600
+    assert sys.platform == "win32" or (stream.key_file("youtube").stat().st_mode & 0o777) == 0o600   # Windows has no such modes
     assert stream.key_file("youtube").name == "stream-key-youtube"
     found, left = stream.destinations(s)
     assert [(n, k) for n, _, k in found] == [("youtube", "yt-aaaa-bbbb"), ("twitch", "old-twitch-key")]

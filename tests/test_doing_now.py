@@ -149,13 +149,14 @@ def on_the_page(tmp_path, status):
     if not NODE:
         pytest.skip("no Node to run the page's script with")
     page.write(tonight.build(config.example(), demo=True), 5, tmp_path / "index.html")
-    html = (tmp_path / "index.html").read_text()
+    html = (tmp_path / "index.html").read_text(encoding="utf-8")
     script = re.findall(r"<script>(.*?)</script>", html, re.S)[0]
-    (tmp_path / "page.js").write_text(script)
-    (tmp_path / "harness.js").write_text(HARNESS)
-    (tmp_path / "status.json").write_text(json.dumps(status))
+    (tmp_path / "page.js").write_text(script, encoding="utf-8")
+    (tmp_path / "harness.js").write_text(HARNESS, encoding="utf-8")
+    (tmp_path / "status.json").write_text(json.dumps(status), encoding="utf-8")
     done = subprocess.run([NODE, str(tmp_path / "harness.js"), str(tmp_path / "page.js"),
-                           str(tmp_path / "status.json")], capture_output=True, text=True, timeout=60)
+                           str(tmp_path / "status.json")], capture_output=True, text=True, encoding="utf-8",
+                          timeout=60)
     assert done.returncode == 0, done.stderr
     return json.loads(done.stdout.strip().splitlines()[-1])
 

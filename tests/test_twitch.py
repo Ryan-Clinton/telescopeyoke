@@ -1,5 +1,6 @@
 """Setting the Twitch channel's title, category and tags from what the telescope is doing."""
 import types
+import sys
 
 import twitch
 
@@ -36,7 +37,7 @@ def test_it_sets_the_channel_and_signs_in_again_when_the_token_has_lapsed(tmp_pa
     assert [a for a, _ in sent] == ["Bearer old", "Bearer new"]
     assert sent[-1][1] == {"title": "A title", "game_id": twitch.SCIENCE, "tags": ["Astronomy"]}
     assert twitch._tokens()["refresh_token"] == "r2"
-    assert (twitch.TOKEN_FILE.stat().st_mode & 0o777) == 0o600
+    assert sys.platform == "win32" or (twitch.TOKEN_FILE.stat().st_mode & 0o777) == 0o600   # Windows has no such modes
     assert not any("new" in s or "r2" in s for s in said)           # tokens are never said
 
 
