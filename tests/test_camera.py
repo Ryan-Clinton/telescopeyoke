@@ -4,6 +4,7 @@ needs a camera: the INDI route talks to a made-up INDI client and the SDK
 route to a made-up copy of Altair's wrapper."""
 import ctypes
 import io
+import json
 import threading
 import time
 import types
@@ -30,6 +31,7 @@ class World:
         self.delay = 0.0          # seconds from trigger to the frame arriving
         self.delays = []          # ...or one figure per exposure, used up in turn
         self.silent = False       # never deliver a frame
+        self.loses = None         # or loses(handle): True to lose this exposure (the fault's state)
         self.shifted = False      # hand the 12 bits over at the top of the 16
         self.obeys_cancel = True  # a cancelled exposure delivers nothing
         self.unplug = False       # report a disconnect instead of a frame
@@ -128,8 +130,9 @@ def fake_sdk(world):
             taken = time.monotonic() + self.exposure / 1e6    # when the shutter closes
             delay = world.delays.pop(0) if world.delays else world.delay
             delay = max(delay, self.exposure / 1e6)   # the shutter has to close first
-            if world.silent:
+            if world.silent or (world.loses and world.loses(self)):
                 return
+            roi = getattr(self, "roi", (0, 0, 0, 0))[2:]
 
             def deliver():
                 time.sleep(delay)
@@ -140,7 +143,10 @@ def fake_sdk(world):
                 else:
                     # Stamped by the camera's own clock, which starts somewhere arbitrary.
                     stamp = round((1234.5 + taken * world.clock_rate) * 1e6) if world.stamps else 0
-                    self.held.append((frame_of(level, world.binning) << (4 if world.shifted else 0), mine, stamp))
+                    data = frame_of(level, world.binning)
+                    if any(roi):
+                        data = data[:roi[1], :roi[0]].copy()
+                    self.held.append((data << (4 if world.shifted else 0), mine, stamp))
                     self.callback(lib.ALTAIRCAM_EVENT_IMAGE, self.context)
             threading.Thread(target=deliver, daemon=True).start()
 
@@ -1084,3 +1090,87 @@ def test_a_stuck_camera_is_replugged_by_the_library_once(world, monkeypatch):
     with pytest.raises(altair.CameraError, match="even after a replug"):
         camera.Camera(gain=1500)
     assert world.replugs == 2
+
+
+# --- the probe while frames are lost (camera_probe.py) ------------------------------
+
+def a_failing_camera(world):
+    """The fault as on 23 October 2026: at speeds 1 and 2 exposures from
+    0.03 s (here) on never arrive, whole sensor or not; speed 0 keeps them."""
+    world.loses = lambda handle: handle.speed > 0 and handle.exposure >= 30000
+
+
+class Recorded:
+    def __init__(self, folder, bus):
+        self.bus = bus
+    def __enter__(self): return self
+    def __exit__(self, *exc): pass
+    def files(self): return []
+
+
+def test_the_probe_looks_at_every_side_of_a_failing_camera(sdk, world, tmp_path):
+    import camera_probe
+    a_failing_camera(world)
+    said = []
+    with altair.AltairCamera() as cam:
+        cam.handle.put_Speed(2)
+        found = camera_probe.probe(cam, 0.04, folder=tmp_path, say=said.append,
+                                   take=lambda: {"usb": {"port": "2-5"}}, recorder=Recorded,
+                                   exposures=(0.01, 0.02, 0.03, 0.05), rois=((16, 16),), video=(0.001, 5),
+                                   long_wait=0.5)
+        assert cam.handle.get_Speed() == 2 and (cam.width, cam.height) == (WIDTH, HEIGHT)    # put back
+    assert not found["still_lost"]["arrived"] and found["shortest_lost_s"] == 0.03
+    assert [r["arrived"] for r in found["exposures"]] == [True, True, False, False]
+    assert not found["smaller_frames"][0]["arrived"]
+    assert found["video"]["arrived"] == 5
+    assert not found["long_wait"]["arrived"] and found["long_wait"]["after_s"] >= 0.5
+    assert [(r["speed"], r["arrived"]) for r in found["speeds"]] == [(1, False), (0, True)]
+    assert not found["last"]["arrived"]
+    assert json.loads((tmp_path / "probe.json").read_text())["shortest_lost_s"] == 0.03
+    assert "shortest lost 0.03 s, longest kept 0.02" in found["summary"] and "speed 0: kept" in found["summary"]
+
+
+def test_the_first_lost_frame_starts_the_probe_once_and_keeps_the_speed(sdk, world, monkeypatch):
+    """31 October 2026: "if we get it to fail again we should do a lot more
+    poking around when it's in its failed state", automatically, and without
+    fixing it: the speed stays where it was."""
+    import camera_probe
+    monkeypatch.setitem(altair.SETTINGS["camera"], "probe_on_loss", True)
+    probed = []
+    monkeypatch.setattr(camera_probe, "after_loss", lambda cam, seconds, problem, say: probed.append(seconds))
+    monkeypatch.setitem(altair.SETTINGS["camera"], "readout_speed", 2)
+    a_failing_camera(world)
+    with altair.AltairCamera() as cam:
+        for _ in range(2):
+            with pytest.raises(IndiError):
+                cam.frame(0.05)
+        assert cam.handle.get_Speed() == 2
+    assert probed == [0.05]
+
+
+def test_without_the_setting_a_lost_frame_starts_no_probe(sdk, world, monkeypatch):
+    import camera_probe
+    monkeypatch.setattr(camera_probe, "after_loss", lambda *a, **k: pytest.fail("probed"))
+    a_failing_camera(world)
+    with altair.AltairCamera() as cam:
+        cam.handle.put_Speed(2)
+        with pytest.raises(IndiError):
+            cam.frame(0.05)
+
+
+def test_the_port_states_leave_out_ports_with_nothing_on_them():
+    import camera_probe
+
+    class Done:
+        def __init__(self, out, code=0):
+            self.stdout, self.returncode = out, code
+
+    def run(command, **kw):
+        if command[0] == "sudo":
+            return Done("/sys/kernel/debug/usb/xhci/0000:00:14.0/ports/port21 0x00001203 Speed=4 Link=U0 CCS PP PED\n"
+                        "/sys/kernel/debug/usb/xhci/0000:00:14.0/ports/port22 0x000002a0 Speed=0 Link=RxDetect PP\n")
+        return Done("Oct 31 usb 2-5: reset SuperSpeed USB device\nOct 31 something else\n")
+    seen = camera_probe.snapshot(run=run)
+    assert seen["ports"] == ["port21 0x00001203 Speed=4 Link=U0 CCS PP PED"]
+    assert seen["kernel_usb"] == ["Oct 31 usb 2-5: reset SuperSpeed USB device"]
+    assert camera_probe.sudo("true", run=lambda *a, **k: Done("", 1)) is None

@@ -9,6 +9,7 @@
     ./camera_test.py --trail            how long is the shutter really open? From a star's trail
     ./camera_test.py --cooldown --note "3 m lead, port 2-4"   cap on, outside: do the stripes grow as it cools?
     ./camera_test.py --electrons --gains 900 1500   cap off, an even light: electrons per ADU at each gain
+    ./camera_test.py --probe            cap on, while it loses frames: everything about that state (camera_probe.py)
 
 With [camera] backend = "altair" the camera is read through Altair's own
 library: --capabilities then shows the model, versions and how it is
@@ -582,6 +583,9 @@ def main():
     what.add_argument("--electrons", action="store_true",
                       help="cap off, an evenly lit field: electrons per ADU at each of --gains, for the stripes "
                            "in electrons")
+    what.add_argument("--probe", action="store_true",
+                      help="cap on: look at the camera from every side while it loses frames, about ten "
+                           "minutes (camera_probe.py); --exposure is the one lost (default 16)")
     what.add_argument("--usb-report", metavar="CAPTURE",
                       help="what a usbmon text capture taken during a test says of the camera's bulk transfers")
     what.add_argument("--speed-ladder", action="store_true",
@@ -1057,6 +1061,12 @@ def run(args):
             raise
         keep_fault(result, args.note)
         return result
+    if args.probe:
+        import camera_probe
+        with Camera(gain=args.gain) as cam:
+            if not hasattr(cam, "_expose"):
+                raise interface.Refusal("INVALID_REQUEST", "The probe needs [camera] backend = \"altair\".")
+            return camera_probe.probe(cam, args.exposure or 16.0)
     if args.usb_report:
         lines = Path(args.usb_report).read_text(encoding="utf-8", errors="replace").splitlines()
         state = usb_state()

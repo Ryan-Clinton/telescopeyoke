@@ -141,6 +141,7 @@ class AltairCamera:
         self.exposures = 0        # how many have been triggered
         self.binning = 1          # what the frames now arriving are binned by
         self.refuses_binning = False     # asked once and it failed: not asked again
+        self.probed = False       # camera_probe.py has run on this camera (once is enough)
         self._forget_clock()
         self._open()
 
@@ -278,7 +279,7 @@ class AltairCamera:
         except self.lib.HRESULTException:
             pass   # nothing to discard, or not supported: the count below still guards
 
-    def _expose(self, seconds):
+    def _expose(self, seconds, wait=None):
         lib, handle = self.lib, self.handle
         handle.put_ExpoTime(max(1, round(seconds * 1e6)))
         handle.put_ExpoAGain(self.gain)
@@ -290,7 +291,7 @@ class AltairCamera:
             self._waiting = True
         started, began = datetime.now(timezone.utc), time.perf_counter()
         handle.Trigger(1)
-        give_up = began + wait_for(seconds)
+        give_up = began + (wait or wait_for(seconds))
         while True:
             with self._changed:
                 arrived = self._changed.wait_for(lambda: self._ready or self._failure,
@@ -320,7 +321,7 @@ class AltairCamera:
             except lib.HRESULTException:
                 pass
             self._discard()
-            raise CameraError(failure or f"no frame within {wait_for(seconds):.0f} s "
+            raise CameraError(failure or f"no frame within {wait or wait_for(seconds):.0f} s "
                                          f"of a {seconds:g} s exposure")
         return self._normalise(data), started
 
@@ -402,7 +403,11 @@ class AltairCamera:
     def frame(self, seconds):
         """One exposure as (uint16 Bayer mosaic, FITS header). An exposure
         that fails is tried once more, then once more with the camera closed
-        and opened again."""
+        and opened again. With [camera] probe_on_loss, the first frame
+        lost is followed at once by camera_probe.py's look at the camera
+        in that state, before it can clear (31 October 2026: the fault
+        comes and goes, and hours spent making it happen found nothing);
+        the speed is not changed for the frames that follow."""
         lib = self.lib
         for attempt in range(3):
             try:
@@ -413,6 +418,14 @@ class AltairCamera:
                     problem = CameraError(_reason(problem))
                 if attempt == 2 or "unplugged" in str(problem):
                     raise problem
+                if attempt == 0 and SETTINGS["camera"].get("probe_on_loss") and not self.probed:
+                    self.probed = True
+                    try:
+                        import camera_probe
+                        camera_probe.after_loss(self, seconds, problem,
+                                                say=lambda line: print(line, file=sys.stderr, flush=True))
+                    except Exception as failed:
+                        print(f"camera: the probe failed: {failed}", file=sys.stderr, flush=True)
                 if attempt == 1:
                     self.close()
                     self._open()

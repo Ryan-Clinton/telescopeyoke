@@ -213,14 +213,32 @@ In order. Each says what it needs.
 3. **The ports, one at a time.** The same 50 frames of 16 s at speed 2 on
    each of the laptop's USB 3 ports in turn; the fault log records which.
    Needs the person's hands to move the plug.
-4. **usbmon during a lost frame.** It shows whether the laptop was waiting
-   on transfers the camera never answered (the camera never sent the frame)
-   or never asked (the program or firmware stopped). Loading usbmon and
-   reading its capture need root, so the person runs these two:
-   `sudo modprobe usbmon` and, during a test,
-   `sudo cat /sys/kernel/debug/usb/usbmon/2u > usbmon.txt`. Then
-   `camera_test.py --usb-report usbmon.txt` says what the capture shows for
-   the camera.
+4. **Everything at once, the moment a frame is lost** (`camera_probe.py`,
+   from 31 October 2026). With `[camera] probe_on_loss = true`, the first
+   frame lost by any run (imaging, a speed test) is followed at once by
+   about ten minutes of looking at the camera in that state, before it can
+   clear, and the person is told on their phone:
+   - the USB controller's state of each port (link state U0 to U3, error
+     flags), the camera's versions and temperature and the kernel's USB
+     messages, before and after;
+   - the bus's traffic (usbmon) and the controller's own events (the
+     xhci-hcd trace) throughout: whether the laptop was waiting on a frame
+     the camera never sent, or never asked for it;
+   - whether a frame is still lost; the shortest exposure lost, from
+     0.5 s to 8 s (23 October: 1 s arrived, 2 s did not);
+   - part of the sensor (2048 x 1536 and 512 x 512) at that exposure: the
+     amount of data or the wait;
+   - the camera's video mode, frames back to back;
+   - one frame waited for five minutes: lost, or only late;
+   - the same exposure at speeds 1 and 0, and a last one at the speed lost.
+
+   The readout speed is not changed for what follows: the fault is to be
+   seen, not covered over. Results in `cache/camera-probes/STAMP/`
+   (`probe.json`, `usbmon.txt`, `xhci-trace.txt`) and a line in the fault
+   log. `./camera_test.py --probe` runs it by hand. Root comes from
+   passwordless sudo; without it the captures are left out. Two things
+   still need hands: pressing the hub's port button twice (does cutting
+   the power clear it?) and warming the camera gently with a hairdryer.
 5. **AltairCapture's Diagnose, on Windows, camera plugged straight in**, as
    Altair asks of support customers. Needs the Windows boot and AltairCapture
    installed.
