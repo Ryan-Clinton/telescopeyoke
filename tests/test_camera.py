@@ -1166,6 +1166,8 @@ def test_the_scan_finds_where_each_speed_starts_and_stops_gathering(sdk, world, 
     assert rows[0]["starts_s"] == pytest.approx(0.0, abs=0.08) and rows[0]["ends_s"] == pytest.approx(0.8, abs=0.1)
     assert rows[2]["starts_s"] == pytest.approx(0.0, abs=0.08) and rows[2]["ends_s"] == pytest.approx(0.4, abs=0.1)
     assert len(lamp.switched) > 24 and "gathers from" in found["summary"] and "ExpoTime" in rows[0]["settings"]
+    flash = rows[0]["flashes"][3]
+    assert flash["flash_on_s"] == pytest.approx(0.6, abs=0.05) and flash["lasted_s"] == pytest.approx(0.2, abs=0.05)
 
 
 def test_timed_runs_repeat_with_the_camera_opened_again_between(sdk, world, tmp_path, monkeypatch):

@@ -277,6 +277,12 @@ gain 100, for a 12 s exposure:
   speed (speed 0 too), and why speed 2 switches between two timings
   (20.5 s and 10.3 s for a 16 s frame). The second may be a state the
   camera comes up in when it is opened, not a failing part.
+- **Frames already taken.** Each frame keeps EXPTIME as the time asked,
+  with READSPD and, from 31 October, TY_BACK beside it; nothing writes a
+  guessed real exposure. Frames at speed 2 from before 23 October (the
+  nights of 13 to 20 October, when the camera was very likely in the same
+  state: the trail test of 13 October) probably gathered about 0.63 of
+  their EXPTIME, frames at speed 0 since 23 October about 1.27 times it.
 - **No correction by a fixed factor.** A factor right for one state would
   be badly wrong in the other. `altair.py` applies none. The INDI route's
   `camera.shutter_share()` does (0.643 at speed 2, from the trails of 13
@@ -297,7 +303,12 @@ end, at each speed (`cache/camera-probes/scan-20261031-210553/`).
 | 2 | 0.4 s | 5.5 s | 5.1 s | 0.63 |
 
 - **The window is shortened, not moved.** Every speed starts about half a
-  second after the exposure is asked for; only the end differs.
+  second after the exposure is asked for; only the end differs. These
+  flashes were timed from the request, and the camera is triggered a little
+  after it (the exposure time is set and the pipes emptied first), so the
+  true start after the trigger is somewhat less than half a second; the
+  lengths are not affected. From 1 November the scan times each flash from
+  the trigger itself.
 - **The shares are 13 October's** (1.25, 0.86, 0.63 from timings and star
   trails), so the camera was in this state that night as well.
 - **Against speed 0, speed 1 gathers two thirds and speed 2 exactly half**
@@ -427,6 +438,11 @@ the library scrambles its control requests differently each time the
 camera is opened (the same request read `5ff6` in one capture and `ece0`
 in another), so the camera's own readable settings are compared instead.
 
+0. **AltairCapture on Windows, the same light comparison** (brief:
+   `docs/agents/windows-camera-test.md`). Whether Altair's own program
+   shows the half-length exposures at speed 2: if it does, the fault is
+   the camera's or Altair's, not this project's. Altair's Diagnose file in
+   the same sitting.
 1. **Done 31 October (above): the scan, at speeds 0, 1 and 2, while the fault is present**
    (`./camera_test.py --scan`, the telescope at the laptop's screen through
    kitchen roll, room lights off, about 40 minutes). Where the sensor's
@@ -472,8 +488,12 @@ in another), so the camera's own readable settings are compared instead.
    that changed. One reading taken in the fault and one when healthy is
    the comparison of the two states: `./camera_test.py --probe` run by hand
    while healthy gives the second (it says the fault had already cleared,
-   and keeps the settings). Among them are the readout clock setting (`HZ`),
-   the frame rate the camera works out, and the exposure range; the
+   and keeps the settings). Among them are the frame rate the camera works
+   out and the exposure range (`HZ` among them is the anti-flicker light
+   frequency, 60 Hz, 50 Hz or DC, not a clock, as an earlier version of
+   this page had it). The readout mode (integrate while reading or then
+   reading), bandwidth and precise frame rate options exist in Altair's
+   library but this camera does not answer them; the
    sensor's own clock dividers and timing registers are not readable
    through Altair's library, and its USB requests are scrambled, so those
    stay with Altair.
@@ -492,8 +512,8 @@ in another), so the camera's own readable settings are compared instead.
    on and off, so it moves the flash without changing its length. Needs
    the fault for the faulty state, and the healthy state for the other.
    Each measurement keeps the camera's timing settings beside it (the
-   exposure asked and reported, the speed, `HZ`, the frame rate, the
-   trigger mode, bandwidth).
+   exposure asked and reported, the speed, the frame rate, the trigger
+   mode).
    - The laptop's screen is the light (`--light NAME`: a Hue light).
      **No LED or other light driven by a microcontroller will be built or
      bought for this.** It was suggested, for a clock independent of the
@@ -578,12 +598,22 @@ The camera is Gary's; the ticket is ours, and paying for a repair would be his c
 | Against a clock | timed flashes of light from a screen, 12 s asked, in the fault: speed 0 gathered 15.4 s (128 %), speed 1 10.4 s (86 %), speed 2 8.3 s (69 %), and a flash at 9 to 11 s did not reach the speed 2 frame (31 Oct) |
 | Where the exposure falls | a 1 s flash moved through 8 s exposures, in the fault: all speeds start gathering 0.4 to 0.5 s after the request; speed 0 stops at 10.7 s, speed 1 at 7.3 s, speed 2 at 5.5 s: 1.27, 0.86 and 0.63 of the time asked, speed 2 exactly half of speed 0 (31 Oct) |
 | In one line | in one state, which comes and goes, the exposure at speeds 1 and 2 is timed as if by speed 0's clock: a 1 s flash moved through 8 s exposures shows speed 2 gathering exactly half as long as speed 0, speed 1 two thirds, all starting 0.4 to 0.5 s after the request; the camera reports the time asked throughout. Is this a known behaviour of firmware 1.4.1 or of the library at these speeds? |
+| Seen before | an Altair 183C Pro owner on SharpCap's forum, December 2023: exposures ending at 50-70 % of the time asked, recorded at full length (forums.sharpcap.co.uk, topic 7304); was it ever resolved? |
 | Started | 04:59 on 20 Oct 2026, at dawn after a cold night |
 | Comes and goes | gone 26 Oct; back 30 Oct 10:46; gone again by 11:02, nothing touched; back 31 Oct 17:28 just after the camera was handled and replugged, and still there after closing and opening it |
 | Firmware | 1.4.1 (January 2017) |
 
 ## What others have found
 
+- **The same symptom on another Altair 183C, 2023.** On SharpCap's forum
+  (["Altair 183C ascom driver"](https://forums.sharpcap.co.uk/viewtopic.php?t=7304),
+  29 December 2023), the owner of an Altair 183C Pro, using the native
+  driver, wrote that frames of 7.9 s were taken after about 5 s and frames
+  of 60 s after about 30 s, each recorded at the full time: "any exposure
+  only reaches 50-70%". The SharpCap developer had not seen it before and
+  suggested other leads, no hub and a lower USB speed. No cause or fix was
+  posted. A different program and a Pro model, but the same fingerprint:
+  short exposures recorded at full length.
 - **Altair's own advice for dropped frames.** Altair's help page on a black
   or halted preview names the Hypercam 183C's large frames, and says to
   lower the camera's USB frame-rate setting until it runs smoothly, use a

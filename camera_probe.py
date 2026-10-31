@@ -375,20 +375,34 @@ def gathered(cam, seconds, wait=None):
 
 def pulsed(cam, seconds, switch, start, length, timer=None):
     """One exposure with the light on from `start` to `start + length`
-    seconds after it is asked for, and off otherwise."""
+    seconds after it is asked for, and off otherwise. When the light was
+    really switched on and off is kept against the moment the camera was
+    triggered (flash_on_s, flash_off_s), not against when the exposure was
+    asked for: setting it up and emptying the pipes come between the two."""
     import threading
     timer = timer or threading.Timer
-    on, off = timer(start, switch, [True]), timer(start + length, switch, [False])
+    times = {}
+
+    def mark(lit):
+        times.setdefault("on" if lit else "off", time.perf_counter())
+        switch(lit)
+    on, off = timer(start, mark, [True]), timer(start + length, mark, [False])
     on.start()
     off.start()
     try:
-        return gathered(cam, seconds)
+        row = gathered(cam, seconds)
     finally:
         on.cancel()
         off.cancel()
         on.join()
         off.join()
         switch(False)
+    triggered = getattr(cam, "triggered", None)
+    if triggered is not None:
+        for edge in ("on", "off"):
+            if edge in times:
+                row[f"flash_{edge}_s"] = round(times[edge] - triggered, 3)
+    return row
 
 
 def timed_light(cam, switch, seconds=12.0, pulse=PULSE, speeds=(0, 1, 2), say=print, folder=None,
@@ -460,8 +474,10 @@ def scan(cam, switch, seconds=8.0, pulse=1.0, step=1.0, speeds=(0, 1, 2), say=pr
     place of a `pulse` s flash, moved through the exposure and past its
     end (to 1.5 times the time asked) by `step` s, at each speed. The share
     of the brightest flash each frame caught marks the window the sensor
-    gathered in: its start and end in seconds after the exposure was asked
-    for. A fixed scaling and a moved window shorten an exposure the same
+    gathered in: its start and end in seconds after the camera was
+    triggered (each flash timed from the trigger itself, 1 November 2026;
+    the scan of 31 October timed them from the request, a few tenths of a
+    second earlier). A fixed scaling and a moved window shorten an exposure the same
     way; this tells them apart."""
     folder = Path(folder or PROBES / ("scan-" + datetime.now().strftime("%Y%m%d-%H%M%S")))
     was = cam.handle.get_Speed()
@@ -476,7 +492,11 @@ def scan(cam, switch, seconds=8.0, pulse=1.0, step=1.0, speeds=(0, 1, 2), say=pr
             dark = gathered(cam, seconds)
             places, offset = [], 0.0
             while offset < 1.5 * seconds:
-                places.append({"at_s": round(offset, 2), **pulsed(cam, seconds, switch, offset, pulse, timer)})
+                frame = pulsed(cam, seconds, switch, offset, pulse, timer)
+                # Where the flash really fell, from the trigger, when it is known.
+                places.append({"at_s": frame.get("flash_on_s", round(offset, 2)),
+                               "lasted_s": round(frame["flash_off_s"] - frame["flash_on_s"], 3)
+                               if "flash_off_s" in frame and "flash_on_s" in frame else pulse, **frame})
                 offset += step
             row = {"speed": level, "dark": dark, "flashes": places, "settings": timing_settings(cam)}
             row.update(window(dark, places, pulse))
@@ -507,9 +527,10 @@ def window(dark, places, pulse):
     caught = [(at, share) for at, share in shares if share >= 0.1]
     if not caught:
         return {}
+    lasted = {p["at_s"]: p.get("lasted_s", pulse) for p in places}
     (first, first_share), (last, last_share) = caught[0], caught[-1]
-    start = first + pulse * (1 - first_share)
-    end = last + pulse * last_share
+    start = first + lasted.get(first, pulse) * (1 - first_share)
+    end = last + lasted.get(last, pulse) * last_share
     return {"starts_s": round(start, 2), "ends_s": round(end, 2), "gathers_s": round(end - start, 2),
             "shares": [[at, round(share, 2)] for at, share in shares]}
 
@@ -518,7 +539,7 @@ def scan_words(row):
     if "gathers_s" not in row:
         return f"speed {row['speed']}: no window found (frames lost, or no flash seen)"
     return (f"speed {row['speed']}: gathers from {row['starts_s']:g} s to {row['ends_s']:g} s after the "
-            f"exposure is asked for, {row['gathers_s']:g} s")
+            f"trigger, {row['gathers_s']:g} s")
 
 
 def order_test(cam, seconds=16.0, speed=2, say=print):

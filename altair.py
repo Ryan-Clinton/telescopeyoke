@@ -291,6 +291,7 @@ class AltairCamera:
             self.exposures += 1
             self._waiting = True
         started, began = datetime.now(timezone.utc), time.perf_counter()
+        self.triggered = began      # for timing a light against the trigger (camera_probe.pulsed)
         handle.Trigger(1)
         give_up = began + (wait or wait_for(seconds))
         self.early = []         # seconds after the trigger of each frame too soon to be this one
