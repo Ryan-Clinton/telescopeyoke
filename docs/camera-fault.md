@@ -96,7 +96,8 @@ setting, and whether the USB 3 link power states U1 and U2 are in use).
 | 30 Oct 17:46 to 18:07 | Same | 50 × 16 s at **speed 2** | **50 of 50**, no USB error |
 | 30 Oct 18:11 to 18:29 | The 1 m leads swapped: the **old 1 m from the laptop to the hub**, the **new 1 m from the hub to the camera** (2-1.1) | 50 × 16 s at speed 0 | **50 of 50**, no USB error: the new 1 m lead feeds the camera fine, so the failures were the **3 m lead to the hub** |
 | 30 Oct 18:37 to 22:53 | Same; from about 20:00 the focuser's Nano was on the hub too, and its motor turned several times during the run | 720 × 16 s at **speed 2** | **720 of 720**, no USB error in the kernel log: the longest speed 2 run yet without a loss, 4 h 16 min |
-| 30 Oct 22:57 to 31 Oct 03:13 | The control: the **3 m lead straight to the laptop**, no hub, laptop port 2-5 (where speed 2 lost a frame at 10:46) | 720 × 16 s at **speed 2** | **720 of 720**, no USB error: the fault stayed away direct as well, so the hub's 720 of 720 does not show the hub cures it. A second run of 720 started at 03:13 |
+| 30 Oct 22:57 to 31 Oct 03:13 | The control: the **3 m lead straight to the laptop**, no hub, laptop port 2-5 (where speed 2 lost a frame at 10:46) | 720 × 16 s at **speed 2** | **720 of 720**, no USB error: the fault stayed away direct as well, so the hub's 720 of 720 does not show the hub cures it |
+| 31 Oct 03:13 to 07:29 | Same, run again at once | 720 × 16 s at **speed 2** | **720 of 720**: 2,160 speed 2 frames in a row across the evening and night, hub and direct, without a loss |
 
 ## What is ruled out
 
@@ -201,7 +202,7 @@ In order. Each says what it needs.
    speed 2 kept 50 of 50, and then 720 of 720 over 4 h 16 min (18:37 to
    22:53), with the focuser on the hub as well. But the control straight
    to the laptop on the 3 m lead, port 2-5, also kept 720 of 720 (22:57 to
-   03:13): the fault was away that night, so the hub is not shown to cure
+   03:13), and 720 of 720 again (03:13 to 07:29): the fault was away that night, so the hub is not shown to cure
    it. If speed 2 holds through the hub for whole nights, power
    or signal conditioning moves up the list of causes.
 3. **The ports, one at a time.** The same 50 frames of 16 s at speed 2 on
