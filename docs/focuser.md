@@ -421,7 +421,10 @@ A stronger, solder-free drive for the Printables NEMA 17 bracket
   screw-terminal carrier board;
 - power: a 12 V 2 A supply with a 5.5 × 2.5 mm socket lead;
 - the coupling: D20L25 elastic couplers, 4 × 5 and 5 × 6 mm (the focuser's
-  shaft is not yet measured);
+  shaft is not yet measured). On 31 October the 4 × 5 one was nowhere near
+  fitting the focuser's shaft, so the "4 mm" above came from the printed
+  design and is wrong for this focuser; two other couplers came with bores
+  far too big;
 - fixings: a Nano screw-terminal board and M3 screws.
 
 For the camera's temperature (below) an M3 ring-lug 10 kΩ B3950 thermistor
