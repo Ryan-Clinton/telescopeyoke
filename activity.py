@@ -67,13 +67,8 @@ def _write(entries):
 
 
 def _alive(pid):
-    try:
-        os.kill(int(pid), 0)
-        return True
-    except PermissionError:
-        return True
-    except (OSError, ValueError):
-        return False
+    import host
+    return host.alive(pid)
 
 
 # One read-change-write at a time within a process: two threads doing it at

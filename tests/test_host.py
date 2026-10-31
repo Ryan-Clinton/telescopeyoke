@@ -373,3 +373,18 @@ def test_a_soft_frame_gets_a_second_try_averaged_in_blocks(monkeypatch):
     seen.clear()
     monkeypatch.setattr(solve, "astap", lambda *a: seen.append(1))
     assert solve.solve(np.ones((1600, 2000))) is None and seen == [1]
+
+
+def test_a_process_is_alive_until_it_ends_and_nothing_is_signalled():
+    """31 October 2026: os.kill(pid, 0) is a Ctrl-C on Windows, and every
+    Windows test run ended in one; host.alive asks without signalling."""
+    import subprocess
+    import sys
+    import host
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    try:
+        assert host.alive(child.pid) and host.alive(str(child.pid))
+    finally:
+        child.kill()
+        child.wait()
+    assert not host.alive(child.pid) and not host.alive(None) and not host.alive("x")

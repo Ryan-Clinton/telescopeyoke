@@ -133,13 +133,8 @@ def mark(index, **fields):
 
 
 def alive(pid):
-    try:
-        os.kill(int(pid), 0)
-        return True
-    except PermissionError:
-        return True
-    except (OSError, ValueError):
-        return False
+    import host
+    return host.alive(pid)
 
 
 def run(say=print, sleep=time.sleep, call=None, start=subprocess.run):

@@ -40,6 +40,34 @@ utf8_output()
 
 # --- the handset's serial lead ----------------------------------------------
 
+def alive(pid):
+    """Whether a process is still running. Not os.kill(pid, 0) on Windows,
+    where signal 0 is CTRL_C_EVENT: it interrupted the program asking (31
+    October 2026: every Windows test run on GitHub ended in a Ctrl-C)."""
+    try:
+        pid = int(pid)
+    except (TypeError, ValueError):
+        return False
+    if WINDOWS:
+        import ctypes
+        kernel = ctypes.windll.kernel32
+        handle = kernel.OpenProcess(0x1000, False, pid)    # PROCESS_QUERY_LIMITED_INFORMATION
+        if not handle:
+            return ctypes.GetLastError() == 5               # access denied: it exists
+        try:
+            code = ctypes.c_ulong()
+            return bool(kernel.GetExitCodeProcess(handle, ctypes.byref(code))) and code.value == 259   # STILL_ACTIVE
+        finally:
+            kernel.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+        return True
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+
+
 def serial_ports():
     """Every serial port seen, as (device, description) pairs."""
     if not WINDOWS:

@@ -219,10 +219,10 @@ def runner_alive():
     """Whether tonight's schedule runner is still going (schedule.py run)."""
     try:
         pid = int((config.DATA / "cache" / "schedule.runner").read_text().split()[0])
-        os.kill(pid, 0)
-        return True
     except (OSError, ValueError, IndexError):
         return False
+    import host
+    return host.alive(pid)
 
 
 def due_soon(st, now, within=BETWEEN_S):
