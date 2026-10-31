@@ -423,6 +423,10 @@ class AltairCamera:
         header["DATE-OBS"] = (started.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3], "UTC, start of exposure")
         header["BAYERPAT"] = self.pattern
         header["INSTRUME"] = self.name
+        try:
+            header["READSPD"] = (int(self.handle.get_Speed()), "readout speed")
+        except self.lib.HRESULTException:
+            pass
         return data, header
 
     def video(self, seconds, count, roi=None, timeout=5.0):

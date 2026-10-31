@@ -11,9 +11,12 @@ the USB lead. There is no USB disconnect or reset in the kernel log, and the
 link stays at 5000 Mb/s. When it happens the frame is lost, not just late:
 none has come within 108 s of a 16 s exposure.
 
-**What is in use now:** readout speed 0 (`[camera] readout_speed = 0`), the
-slowest, which has never lost a frame plugged in as below. It costs about a
-second more per frame than speed 2.
+**What is in use now:** readout speed 2 (`[camera] readout_speed = 2`) since
+31 October 2026, after 2,160 frames of 16 s at speed 2 without a loss. It is
+left at 2 on purpose while the fault is studied: a lost frame is not
+covered over by dropping to a slower speed by itself. Each frame's FITS
+header says the speed it was read at (`READSPD`). Speed 0 has never lost a
+frame plugged in as below, and costs about a second more per frame.
 
 ## Hubs and leads: how to plug the camera in
 
@@ -197,7 +200,9 @@ setting, and whether the USB 3 link power states U1 and U2 are in use).
 
 In order. Each says what it needs.
 
-1. **Stay at speed 0 for imaging.** It costs about a second a frame.
+1. **Image at speed 2 and watch.** From 31 October, so a night's imaging
+   is itself the test. If frames are lost, it is seen at once (`./ty
+   watch-run`) and the person decides whether to go back to speed 0.
 2. **Through a powered USB 3 hub.** Done on 30 Oct (above): on the 1 m leads
    speed 2 kept 50 of 50, and then 720 of 720 over 4 h 16 min (18:37 to
    22:53), with the focuser on the hub as well. But the control straight

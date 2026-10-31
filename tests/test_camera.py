@@ -476,6 +476,15 @@ def test_a_frame_nobody_asked_for_is_not_kept(sdk, world):
     assert data.max() == 223
 
 
+def test_each_frame_says_its_readout_speed(sdk, world):
+    """30 October 2026: speed 2 again while the fault is studied, so every
+    frame kept says which speed it was read at."""
+    with altair.AltairCamera() as cam:
+        cam.settings(speed=2)
+        _, header = cam.frame(0.01)
+    assert header["READSPD"] == 2
+
+
 def test_the_camera_still_works_after_a_time_out(sdk, world):
     with altair.AltairCamera() as cam:
         world.silent = True
