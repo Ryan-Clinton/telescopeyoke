@@ -302,3 +302,52 @@ def test_the_channel_title_asks_the_missions_question():
                                 "mission": {"stream_title": "LIVE: can an amateur telescope reveal the Moon's hidden colour?"}},
                                {"targets": {}})
     assert title.startswith("LIVE: can an amateur telescope reveal the Moon's hidden colour?")
+
+
+def test_a_stalled_speech_never_silences_the_narrator_for_good(data):
+    import threading
+
+    import narrator
+    clock, stuck = [NOW], threading.Event()
+    voice = narrator.Narrator(lambda samples: None, speak=lambda words: stuck.wait(5), clock=lambda: clock[0])
+    voice.say("first", NOW)                                       # its speech never comes back
+    voice.say("dropped", NOW + 1)
+    assert [w for _, w in voice.said] == ["first"]
+    voice.say("given up on the first", NOW + 2 * narrator.SPEECH_S + 1)
+    assert [w for _, w in voice.said] == ["first", "given up on the first"]
+    stuck.set()
+
+
+def test_a_clip_that_cannot_be_cut_is_tried_once_and_the_rest_still_are(data, monkeypatch):
+    import subprocess
+
+    import clips
+    monkeypatch.setattr(clips, "BUFFER", data / "buffer")
+    monkeypatch.setattr(clips, "DONE", data / "cache" / "clips-done.json")
+    clips.BUFFER.mkdir()
+    for i, ended in enumerate([NOW - 5, NOW + 50, NOW + 300]):
+        p = clips.BUFFER / f"seg{i:03d}.ts"
+        p.write_bytes(b"x")
+        os.utime(p, (ended, ended))
+    director.event("NOW OBSERVING: THE MOON", NOW)
+
+    def slow(cmd, **kw):
+        raise subprocess.TimeoutExpired(cmd, 120)
+    assert clips.cut_due(NOW + 200, say=lambda line: None, run=slow) == []
+    assert json.loads(clips.DONE.read_text()) == [str(NOW)]          # not tried again every look
+
+
+def test_a_dropped_vertical_feed_says_so_rather_than_drawing_on_for_nothing(monkeypatch):
+    import stream
+
+    class Gone:
+        stdin = type("In", (), {"write": lambda self, b: (_ for _ in ()).throw(BrokenPipeError()),
+                                "close": lambda self: None})()
+
+        def wait(self, timeout=None):
+            return 0
+    feed = stream.VerticalFeed("rtmp://y/live/v", run=lambda *a, **k: Gone())
+    feed.composer.ready = [b"x"]
+    feed.thread.join(5)
+    assert feed.dead is not None and feed.composer.stopped.is_set()
+    feed.stop()

@@ -140,8 +140,12 @@ def comet_hunt(now, data=None):
 
 
 def comet_words(hunt):
+    """The comet hunt's find, told as its mission (stream-targets.toml [missions.comet])."""
+    import mission
+    goal = mission.missions().get("comet", {}).get("goal")
     kind = f"a known {hunt['group']} sungrazing comet" if hunt["group"] == "Kreutz" else "a known comet"
-    return (f"On {hunt['day']} the comet hunt found {kind} by itself in {hunt['pictures']} pictures "
+    return (f"{'Mission: ' + goal[0].lower() + goal[1:] + ' ' if goal else ''}"
+            f"On {hunt['day']} the comet hunt found {kind} by itself in {hunt['pictures']} pictures "
             f"from the GOES-19 satellite: {hunt['seen']} of them, over {hunt['hours']:.0f} hours.")
 
 
@@ -162,8 +166,11 @@ def tonight_lines(s, live):
         lines.append("No confirmed new star yet: most nights find none, and that is still a result")
     if s.get("stage"):
         lines.append(s["stage"])
-    import mission
-    return lines + mission.so_far(s.get("now") or time.time())
+    try:
+        import mission
+        return lines + mission.so_far(s.get("now") or time.time())
+    except Exception:
+        return lines
 
 
 def coming_up(steps, now, targets):
@@ -279,7 +286,10 @@ def plan(s, live, now=None, story=None, targets=None):
         if hunt:
             pool.append(comet_words(hunt))
         import streamchat
-        voted = streamchat.tally(now)
+        try:
+            voted = streamchat.tally(now)
+        except Exception:
+            voted = []
         topic = streamchat.VOTE_TOPICS.get(voted[0][0]) if voted else None
         if topic and stories.get(topic):
             # The chat's choice (!vote): its pool first.
@@ -294,7 +304,11 @@ def plan(s, live, now=None, story=None, targets=None):
     elif chapter == "RESULT":
         # One raw frame and what has been made of it (mission.reveal), when something has.
         import mission
-        out["card"] = ("RAW → RESULT", []) if s.get("reveal") or mission.reveal(s, now) else None
+        try:
+            shown = s.get("reveal") or mission.reveal(s, now)
+        except Exception:
+            shown = None
+        out["card"] = ("RAW → RESULT", []) if shown else None
     elif chapter == "COMING UP":
         nxt = coming_up((live.get("schedule") or {}).get("steps") or [], now, targets)
         out["card"] = nxt if nxt else ("COMING UP", ["This is the last target tonight: it carries on until dawn."])

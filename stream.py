@@ -828,7 +828,7 @@ class VerticalFeed:
         self.composer = Composer(draw=frame_vertical)
         self.process = run(command(address, device, VERTICAL, picture=VERTICAL), stdin=subprocess.PIPE,
                            stderr=subprocess.DEVNULL)
-        self.stopped = False
+        self.stopped, self.dead = False, None     # when its ffmpeg went, if it has
         import threading
         self.thread = threading.Thread(target=self.run, daemon=True)
         self.thread.start()
@@ -841,7 +841,9 @@ class VerticalFeed:
                 try:
                     self.process.stdin.write(shown)
                 except (BrokenPipeError, OSError, ValueError):
-                    return                     # gone: the main feed carries on alone
+                    self.dead = time.time()    # gone: the main feed carries on, and watch starts it again
+                    self.composer.stop()
+                    return
             tick = max(tick + 1 / INPUT_FPS, time.monotonic() - 1)
             time.sleep(max(0.0, tick - time.monotonic()))
 
@@ -940,6 +942,12 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
             # October 2026).
             mode = segment or "imaging"
             composer.view = (dict(st, director=directed), mode)
+            if phones is not None and phones.dead and now - phones.dead >= 60 and process is not None:
+                phones.stop()
+                upright = vertical_address()
+                phones = VerticalFeed(upright, device) if upright else None
+                say(f"{time.strftime('%H:%M')} the 9:16 picture broke off: " + ("sending it again" if phones
+                                                                                  else "no key now, so not"))
             if phones is not None:
                 phones.composer.view = composer.view
             if action == "start":

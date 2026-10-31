@@ -704,8 +704,8 @@ def decision_card(c, d, x, y, width):
     """TELESCOPEYOKE DECISION (director.decide): what it saw, what it is
     doing and why, for director.DECISION_S: the automation made visible."""
     y = c.wrap((x, y), "TELESCOPEYOKE DECISION", "bold", 24, width, "accent", on="panel") + 4
-    y = c.wrap((x, y), d["situation"], "sans", 23, width, "text", on="panel") + 8
-    for label, words in (("ACTION", d["action"]), ("WHY", d["why"])):
+    y = c.wrap((x, y), str(d.get("situation") or ""), "sans", 23, width, "text", on="panel") + 8
+    for label, words in (("ACTION", str(d.get("action") or "")), ("WHY", str(d.get("why") or ""))):
         y = c.wrap((x, y), label, "bold", 18, width, "secondary", on="panel", gap=1.2)
         y = c.wrap((x, y), words, "sans", 22, width, "text", on="panel") + 8
     return y

@@ -22,6 +22,7 @@ import numpy as np
 
 STATUS_S = 6 * 60          # a line on the mission at most this often when nothing happens
 GAP_S = 20                 # never two sentences closer than this
+SPEECH_S = 30              # making one sentence's speech may take this long; after twice it, it is given up
 RATE = 22050               # the stream's sound (stream.TONE_RATE)
 
 
@@ -74,7 +75,11 @@ def speech(words):
 
         from gtts import gTTS
         mp3 = BytesIO()
-        gTTS(text=words, lang="en", tld="co.uk").write_to_fp(mp3)
+        try:
+            speaker = gTTS(text=words, lang="en", tld="co.uk", timeout=SPEECH_S)
+        except TypeError:          # an older gTTS without a timeout: Narrator.say's own limit stands
+            speaker = gTTS(text=words, lang="en", tld="co.uk")
+        speaker.write_to_fp(mp3)
         pcm = subprocess.run(["ffmpeg", "-loglevel", "error", "-i", "pipe:0", "-f", "s16le", "-ac", "1",
                               "-ar", str(RATE), "pipe:1"], input=mp3.getvalue(), capture_output=True,
                              timeout=60).stdout
@@ -90,7 +95,7 @@ class Narrator:
         self.sink, self.speak, self.clock, self.background = sink, speak, clock, background
         now = clock()
         self.seen, self.spoke, self.said_status = now, 0.0, now
-        self.busy = threading.Lock()
+        self.busy, self.began = threading.Lock(), 0.0
         self.said = []             # (at, words), for the tests and the log
 
     def tick(self, mission=None, now=None):
@@ -112,8 +117,12 @@ class Narrator:
 
     def say(self, words, now=None):
         if not self.busy.acquire(blocking=False):
-            return                 # still making the last one: this one is dropped, not queued
-        self.spoke = now or self.clock()
+            if (now or self.clock()) - self.began < 2 * SPEECH_S:
+                return             # still making the last one: this one is dropped, not queued
+            self.busy = threading.Lock()       # the last one stalled: given up, its thread left to end
+            self.busy.acquire()
+        self.spoke = self.began = now or self.clock()
+        busy = self.busy
         self.said.append((self.spoke, words))
 
         def run():
@@ -122,7 +131,7 @@ class Narrator:
                 if samples is not None:
                     self.sink(samples)
             finally:
-                self.busy.release()
+                busy.release()
         if self.background:
             threading.Thread(target=run, daemon=True).start()
         else:

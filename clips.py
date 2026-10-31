@@ -64,16 +64,16 @@ def due(events, now, done=()):
 
 
 def pieces(at, buffer=None):
-    """The buffer's pieces covering BEFORE_S before `at` to AFTER_S after, oldest first."""
+    """The buffer's pieces covering BEFORE_S before `at` to AFTER_S after,
+    oldest first; never the newest, which ffmpeg is still writing."""
     found = []
     for p in (buffer or BUFFER).glob("seg*.ts"):
         try:
-            ended = p.stat().st_mtime
+            found.append((p.stat().st_mtime, p))
         except OSError:
             continue
-        if at - BEFORE_S <= ended and ended - SEGMENT_S <= at + AFTER_S:
-            found.append((ended, p))
-    return [p for _, p in sorted(found)]
+    found = sorted(found)[:-1]
+    return [p for ended, p in found if at - BEFORE_S <= ended and ended - SEGMENT_S <= at + AFTER_S]
 
 
 def cut(event, run=subprocess.run, buffer=None, out=None):
@@ -85,10 +85,13 @@ def cut(event, run=subprocess.run, buffer=None, out=None):
     out.mkdir(parents=True, exist_ok=True)
     clip = out / f"{time.strftime('%Y%m%d-%H%M%S', time.localtime(event['at']))}-{slug(event['words'])}.mp4"
     listing = clip.with_suffix(".txt")
-    listing.write_text("".join(f"file '{p}'\n" for p in parts), encoding="utf-8")
+    quoted = (str(p).replace("'", "'\\''") for p in parts)
+    listing.write_text("".join(f"file '{p}'\n" for p in quoted), encoding="utf-8")
     try:
         done = run(["ffmpeg", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(listing),
                     "-c", "copy", str(clip)], capture_output=True, timeout=120)
+    except (OSError, subprocess.SubprocessError):
+        return None                # this one is lost; the next moments are still cut
     finally:
         listing.unlink(missing_ok=True)
     return clip if done.returncode == 0 else None
@@ -109,8 +112,8 @@ def cut_due(now=None, say=print, run=subprocess.run):
     done = _done()
     made = []
     for e in due(director.events(now - WRAP * SEGMENT_S), now, done):
+        done.add(str(e["at"]))     # tried once, whatever comes of it: never again every look
         clip = cut(e, run)
-        done.add(str(e["at"]))
         if clip:
             made.append(clip)
             say(f"{time.strftime('%H:%M')} clip kept: {Path(clip).name}")

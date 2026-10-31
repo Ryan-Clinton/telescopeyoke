@@ -290,7 +290,9 @@ Every sentence is a template in `stream-targets.toml` (`[voice]`) filled
 with the measured state: first person, calm, plain about what is not known.
 The speech is made by gTTS (as the house alerts are), on its own thread,
 and mixed into the same sound as the focus tones; if it cannot be made (no
-network), nothing is said and the pictures never wait. `[stream] narration
+network), nothing is said and the pictures never wait, and a sentence
+whose speech has not come back in a minute is given up so the next can be
+said. `[stream] narration
 = false` in config.toml turns it off; it takes effect when the stream next
 starts.
 
@@ -303,7 +305,8 @@ ten-minute buffer (`cache/stream-buffer/`, 10 s pieces, overwritten as it
 goes). A minute after each moment, `clips.py` joins the pieces from 20 s
 before it to 60 s after into `clips/DATE-TIME-WORDS.mp4`, without encoding
 again. Moments less than a minute apart share a clip, and the newest 40
-clips are kept. They are material for highlights, Shorts and a
+clips are kept. A clip that cannot be cut is tried once, never again at
+every look, and the piece ffmpeg is still writing is never used. They are material for highlights, Shorts and a
 "previously" at the start of the next night. `[stream] clips = false`
 turns it off.
 
@@ -319,7 +322,8 @@ YouTube's vertical live shows it in the Shorts feed. Once its stream key is
 kept (`./stream.py key youtube-vertical`, from YouTube Studio's vertical
 live stream), `stream.py watch` sends it alongside the main feed whenever
 that is on air. It has its own ffmpeg and its own drawing thread, so it
-never holds up the main feed, and it stops with it.
+never holds up the main feed, and it stops with it. If it breaks off, the
+main feed carries on and the 9:16 one is started again a minute later.
 
 ## The chat
 
