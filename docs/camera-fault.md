@@ -6,10 +6,14 @@ details are in the dated night files linked from each entry.
 **The camera:** Altair Hypercam 183C (Sony IMX183 colour), firmware 1.4.1
 (January 2017), on USB 3. The camera is Gary's. Altair support ticket #3470.
 
-**The fault:** at speeds 1 and 2 the camera sends each frame back far too
-soon, and the software, which takes a frame back before its shutter could
-have closed for a stray from an earlier exposure, throws it away and waits
-in vain: the frame is counted lost. Found on 31 October 2026 from the USB
+**The fault:** at speeds 1 and 2 the sensor gathers light for less than
+the time asked, and the frame arrives sooner than an exposure that long
+could. Two different measurements show the two halves: the light in the
+frame (the light test and the timed light, below) says how long the sensor
+gathered; when the frame came down the lead says only when it was sent.
+The software, which takes a frame back before its shutter could have
+closed for a stray from an earlier exposure, throws the early frame away
+and waits in vain, so it is counted lost. Found on 31 October 2026 from the USB
 traffic recorded in the fault (below, "What the recording showed"); until
 then it looked as if the frame never came down the lead. There is no USB
 disconnect or reset in the kernel log, and the link stays at 5000 Mb/s.
@@ -260,8 +264,10 @@ gain 100, for a 12 s exposure:
   1.28 times its EXPTIME; at speed 2 when healthy probably the same, and in
   the fault about 0.69 times. Relative photometry (a star against the
   others in the same frame, as the transits and Tabby's star use) is not
-  touched by this. What is: anything worked out from the exposure time
-  itself, such as how deep a night reached for its hours, and the middle
+  touched by this, and nor is a frame's depth: `depth.py` measures each
+  frame's limiting magnitude from the Gaia stars in it, not from EXPTIME.
+  What is: what is worked out from the exposure time itself, such as the
+  depth `depth.py --model` predicts for an hour of frames, and the middle
   of each exposure, which assumes the shutter is open from the time the
   frame was asked for for EXPTIME (a 16 s frame's middle could be off by
   a second or two, far less than a transit's timing needs). The figures
@@ -279,6 +285,14 @@ gain 100, for a 12 s exposure:
 
 ## What is known
 
+- **The exposures really are shorter in the fault, and speed 0's are
+  longer than asked.** Against a clock, a 12 s exposure gathered light for
+  about 15.4 s at speed 0, 10.4 s at speed 1 and 8.3 s at speed 2 (the
+  timed light, estimates). Speed 0 keeps every frame, but its exposures
+  are not the time asked either.
+- **Frames arrive whole.** In the fault, a full 39.7 MB frame came down the
+  lead for every exposure, lost ones included: the lead and the link carry
+  the data. What arrives early is a frame that was also exposed short.
 - **Behind the hub, the leads decide it.** With the 3 m lead from the
   laptop to the hub and the new 1 m lead from the hub to the camera, it
   failed at speed 0 within two minutes, three times, on different ports,
@@ -329,24 +343,20 @@ gain 100, for a 12 s exposure:
   only too soon, so the lead and the link carry the data and it is the
   camera's timing at speeds 1 and 2 that goes wrong. Ranked, as a guide to
   what to test, not as measured odds:
-  0. The camera's timing at the fast readouts: the clock or setting its
-     FPGA or the sensor uses at speeds 1 and 2, or the firmware that sets
-     it (1.4.1, 2017). A clock running at twice its rate fits a frame back
-     in half the time, speed 0 unaffected, and a state that holds through
+  1. The camera's exposure timing: the clock or settings its FPGA or the
+     sensor uses for each readout speed, or the firmware that sets them
+     (1.4.1, 2017). It fits every measurement: the light gathered is
+     scaled with the time asked at every speed (speed 0 long, 1 and 2
+     short), and at speeds 1 and 2 by more in a state that holds through
      closing and opening the camera and clears by itself.
-  1. The camera's USB 3 bridge chip or its high-speed signal path on the
-     board. It fits the link staying at 5000 Mb/s, but not frames arriving
-     whole and early.
-  2. The camera's USB 3 socket or its solder joints. Holding the lead up
-     and down changed nothing, cleaning changed nothing, and the link never
-     dropped to USB 2, which makes a bent or loose contact less likely, but
-     a joint that is marginal at 5 Gb/s would not show those signs.
-  3. The camera's firmware (1.4.1, 2017) and the library's USB transport.
-  4. The camera's own power: its USB 3 chip runs from the lead's 5 V, and a
-     tired regulator or capacitor could fail only at the fastest readout.
-     A powered hub would test this (other makers of IMX183 cameras suggest
-     one for hangs, e.g. QHY's 183C manual).
-  5. How the host's USB 3 port and controller treat a marginal device.
+  2. How that state is entered: something set differently when the camera
+     starts (the morning's run came right after the camera was closed and
+     opened; the evening's stayed wrong through it).
+  3. Less likely now, since whole frames cross the lead in the fault: the
+     camera's USB 3 bridge chip, its socket or solder joints, its power,
+     and the host's port. They explained "frames that never come", which
+     is not what happens. The one sign left for them is the camera that
+     stopped answering USB altogether behind the hub on 30 October.
 - **Whether the first frames after the camera is opened matter.** At 10:46
   on 30 October the fault showed within minutes of the camera being plugged
   in. On 31 October it showed on the first frame of two runs: the morning's,
@@ -355,8 +365,11 @@ gain 100, for a 12 s exposure:
   open. It has not been seen to begin partway through a test that was
   passing, though until 31 October a frame lost and kept on a retry would
   not have been seen.
-- **Whether the frame sent early is a real, shorter exposure.** Not yet
-  looked at: `altair.py` throws it away (next tests, 1).
+- **Whether the window is shortened, moved, or both.** The timed light
+  measures how long the sensor gathers, not when; the scan (next tests, 1)
+  says when it starts and stops after the exposure is asked for.
+- **How accurate the timed light's figures are.** Two of its readings were
+  doubtful; the scan repeats the measurement another way.
 - **Whether speed 0 can ever fail.** It has not yet, in every test since
   23 Oct.
 
@@ -380,26 +393,30 @@ the library scrambles its control requests differently each time the
 camera is opened (the same request read `5ff6` in one capture and `ece0`
 in another), so the camera's own readable settings are compared instead.
 
-1. **Keep the frame sent too soon, in the fault, and look at it.** With
+1. **The scan, at speeds 0, 1 and 2, while the fault is present**
+   (`./camera_test.py --scan`, the telescope at the laptop's screen through
+   kitchen roll, room lights off, about 40 minutes). Where the sensor's
+   window starts and ends after the exposure is asked for, at each speed:
+   shortened, moved, or both. Then the same with `--repeat 3 --between
+   reopen` and `--between replug`: whether the state survives the camera
+   being started again. Needs the fault, and the person's time.
+2. **Done: keep the frame sent too soon, in the fault, and look at it.** With
    light on the camera (cap off, an even glow), the frame that comes back
    after 10.3 s of a 16 s exposure is kept instead of thrown away and set
    beside a good 16 s frame and a 10 s one. About 0.63 of the light: the
    exposure itself ends early, as the trails of 13 October showed, and the
    fault is that state. The right light but sent early: the
    timing of the transfer only. Noise or stripes: the readout is broken.
-   Done by the probe from 31 October: it keeps the frame as
-   `early-16s.fits`, says when it came and its mean light, and sets that
-   beside the speed 0 frame of the same exposure. Cap on, both are only
-   the black level; the probe needs light on the sensor to answer it, so
-   the next time the fault shows, the cap comes off before `./camera_test.py
-   --probe` is run again.
-2. **Every frame says when it came back** (from 31 October): the FITS
+   Answered on 31 October (the light test, above): the early frames are
+   real, shorter exposures. The probe keeps such a frame as
+   `early-16s.fits` each time it runs.
+3. **Every frame says when it came back** (from 31 October): the FITS
    header's `TY_BACK`, seconds from the trigger to the frame arriving: 20.5
    for a healthy 16 s frame at speed 2, 10.3 in the fault. So an ordinary
    night's frames show when the camera changes state. (What the camera
    reports as its real exposure is only the time asked, so it is read once
    in the probe's settings, not stamped on every frame.)
-3. **Every setting, in both states** (from 31 October): the probe reads
+4. **Every setting, in both states** (from 31 October): the probe reads
    every setting the camera will give (the named readings and every
    readable option) before it starts and after it ends, and lists those
    that changed. One reading taken in the fault and one when healthy is
@@ -410,7 +427,7 @@ in another), so the camera's own readable settings are compared instead.
    sensor's own clock dividers and timing registers are not readable
    through Altair's library, and its USB requests are scrambled, so those
    stay with Altair.
-4. **A timed light** (`./camera_test.py --timed-light`, from 31 October):
+5. **A timed light** (`./camera_test.py --timed-light`, from 31 October):
    the laptop's own screen is the light, a window over the whole screen
    switched between black and white within a frame (about 1/60 s); `--light
    NAME` uses a Hue light instead, slower to switch (a tenth of a second or
@@ -444,10 +461,10 @@ in another), so the camera's own readable settings are compared instead.
      from USB and found again by Altair's library) shows whether the
      timing is fixed or a state the camera comes up in. Cutting its power
      needs hands: the hub's port button pressed twice, then the same run.
-5. **Image at speed 2 and watch.** From 31 October, so a night's imaging
+6. **Image at speed 2 and watch.** From 31 October, so a night's imaging
    is itself the test. If frames are lost, it is seen at once (`./ty
    watch-run`) and the person decides whether to go back to speed 0.
-6. **Through a powered USB 3 hub.** Done on 30 Oct (above): on the 1 m leads
+7. **Through a powered USB 3 hub.** Done on 30 Oct (above): on the 1 m leads
    speed 2 kept 50 of 50, and then 720 of 720 over 4 h 16 min (18:37 to
    22:53), with the focuser on the hub as well. But the control straight
    to the laptop on the 3 m lead, port 2-5, also kept 720 of 720 (22:57 to
@@ -455,10 +472,10 @@ in another), so the camera's own readable settings are compared instead.
    it. Those counts did not count a frame lost and kept on a retry, and the
    recorded run lost its first frame that way, twice. If speed 2 holds through the hub for whole nights, power
    or signal conditioning moves up the list of causes.
-7. **The ports, one at a time.** The same 50 frames of 16 s at speed 2 on
+8. **The ports, one at a time.** The same 50 frames of 16 s at speed 2 on
    each of the laptop's USB 3 ports in turn; the fault log records which.
    Needs the person's hands to move the plug.
-8. **Everything at once, the moment a frame is lost** (`camera_probe.py`,
+9. **Everything at once, the moment a frame is lost** (`camera_probe.py`,
    from 31 October 2026). With `[camera] probe_on_loss = true`, the first
    frame lost by any run (imaging, a speed test) is followed at once by
    about ten minutes of looking at the camera in that state, before it can
@@ -488,10 +505,10 @@ in another), so the camera's own readable settings are compared instead.
    temperature of its own; from that evening a thermistor on its body
    reads it through the focuser's Nano (`./focuser.py temp`): 20.3 °C just
    after the probe.
-9. **AltairCapture's Diagnose, on Windows, camera plugged straight in**, as
+10. **AltairCapture's Diagnose, on Windows, camera plugged straight in**, as
    Altair asks of support customers. Needs the Windows boot and AltairCapture
    installed.
-10. **Another Hypercam 183C on this laptop, or this one on another
+11. **Another Hypercam 183C on this laptop, or this one on another
    astronomy computer.** Needs a second camera or computer.
 
 ## For Altair (ticket #3470)
