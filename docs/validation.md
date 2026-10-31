@@ -12,9 +12,7 @@ tried, including figures later found to be wrong.
 
 As of 20 October 2026, on the author's EQ3 Pro, 150P and Hypercam 183C on
 Ubuntu. ✅ proven on real equipment, ⚠️ partly, 🧪 simulator and tests
-only, ❌ tried and not yet working. `docs/validation.toml` indexes these rows
-for the tests, which fail if a page still says something a row has
-overtaken.
+only, ❌ tried and not yet working.
 
 | What | Where it stands |
 |---|---|
