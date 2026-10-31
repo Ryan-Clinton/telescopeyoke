@@ -439,7 +439,17 @@ camera is opened (the same request read `5ff6` in one capture and `ece0`
 in another), so the camera's own readable settings are compared instead.
 
 0. **AltairCapture on Windows, the same light comparison** (brief:
-   `docs/agents/windows-camera-test.md`). Whether Altair's own program
+   `docs/agents/windows-camera-test.md`). Tried 31 October, 22:25 to
+   23:28 (`WINDOWS-RESULTS.md`, `altaircapture-diagnose-2026-10-31.txt`):
+   the project's `--order` test through Altair's Windows library gave 10.4 s
+   for every 16 s frame at speed 2, all five ways, as on Linux. In
+   AltairCapture itself (4.12, the same library), Trigger Mode, 8 s at
+   speed 0, gain 100: the progress bar reached 8 s and no frame came back,
+   twice; its live view had already frozen at frame 29. So Altair's own
+   program lost frames as well, but the camera was stuck by then and the
+   light comparison was not made. Still to do: the camera unplugged and
+   plugged in again, then AltairCapture first, Trigger Mode, 8 s at speeds
+   0, 2, 1 and 0. Whether Altair's own program
    shows the half-length exposures at speed 2: if it does, the fault is
    the camera's or Altair's, not this project's. Altair's Diagnose file in
    the same sitting.
@@ -599,6 +609,7 @@ The camera is Gary's; the ticket is ours, and paying for a repair would be his c
 | Where the exposure falls | a 1 s flash moved through 8 s exposures, in the fault: all speeds start gathering 0.4 to 0.5 s after the request; speed 0 stops at 10.7 s, speed 1 at 7.3 s, speed 2 at 5.5 s: 1.27, 0.86 and 0.63 of the time asked, speed 2 exactly half of speed 0 (31 Oct) |
 | In one line | in one state, which comes and goes, the exposure at speeds 1 and 2 is timed as if by speed 0's clock: a 1 s flash moved through 8 s exposures shows speed 2 gathering exactly half as long as speed 0, speed 1 two thirds, all starting 0.4 to 0.5 s after the request; the camera reports the time asked throughout. Is this a known behaviour of firmware 1.4.1 or of the library at these speeds? |
 | Seen before | an Altair 183C Pro owner on SharpCap's forum, December 2023: exposures ending at 50-70 % of the time asked, recorded at full length (forums.sharpcap.co.uk, topic 7304); was it ever resolved? |
+| Altair's own program | AltairCapture 4.12 with altaircam.dll 60.31589 on Windows 11 (31 Oct): two 8 s Trigger Mode frames at Frame Speed 0 never arrived, the live view frozen; Altair's Windows library gave the same short 16 s frames at speed 2 as on Linux. Diagnose output attached (`altaircapture-diagnose-2026-10-31.txt`) |
 | Started | 04:59 on 20 Oct 2026, at dawn after a cold night |
 | Comes and goes | gone 26 Oct; back 30 Oct 10:46; gone again by 11:02, nothing touched; back 31 Oct 17:28 just after the camera was handled and replugged, and still there after closing and opening it |
 | Firmware | 1.4.1 (January 2017) |
