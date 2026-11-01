@@ -31,7 +31,8 @@ packages=(python3-astropy python3-scipy python3-numpy python3-pil python3-reques
 # The application's own window: GTK with a WebKit view.
 packages+=(python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1)
 if ! $planner_only; then
-    packages+=(indi-bin astap-cli ffmpeg speech-dispatcher)
+    # uhubctl: ./camera_test.py --power-cycle cuts the camera's power at the hub's port
+    packages+=(indi-bin astap-cli ffmpeg speech-dispatcher uhubctl)
 fi
 
 echo "Installing: ${packages[*]}"
