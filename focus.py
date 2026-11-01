@@ -85,6 +85,9 @@ PERCENT = {1: 10.0, 2: 6.0, 3: 4.0}     # the smallest change each level calls a
 ENOUGH = 10         # stars in the middle of a full-size frame that make the rest not worth measuring
 SURE = 3            # readings in a row that settle a change of level
 WALK_MS = 40        # ms a half-step for --walk-in: the slowest and strongest tried on 19 October 2026
+GROWN = 1.05        # doughnuts count as grown only past this share of the last size
+STILL = 0.05        # stars within this share of the start ...
+STILL_AFTER = 512   # ... after this many half-steps in: the drawtube is not moving
 DROP = 0.85         # a walk-in counts readings past its best only once the stars are this far below the start
 HOLD = 5            # readings that must stay on the best before "Focus good"
 # Half-flux radius at good focus, in arcseconds: HFR 2 on the 150P with the
@@ -1137,6 +1140,16 @@ def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, clo
     of only the 24 to 48 half-steps it had gone past was lost in the slack
     before the drawtube could rise. On 30 October 2026 the motor lifted the
     drawtube with the camera on over half a turn, so it is worth trying."""
+    def still():
+        """The stars no different after STILL_AFTER half-steps in: the motor
+        turned and the drawtube did not move (1 November 2026: the knob
+        stayed put through three quarter-turn tests)."""
+        live.done("failed", "The stars did not change as the focuser turned: the drawtube is not moving.")
+        raise interface.Refusal("FOCUSER_NOT_MOVING", f"The stars did not change over {STILL_AFTER} half-steps "
+                                                      "(an eighth of a turn) in: the motor is turning but the "
+                                                      "drawtube is not moving. Check that the coupler grips the "
+                                                      "knob's shaft.")
+
     def reading():
         for _ in range(tries):
             hfr = sample(read, SWEEP_FRAMES, usual)["hfr"]
@@ -1155,7 +1168,7 @@ def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, clo
         live.reading(at, None, "doughnuts", ring=size)
         if size is not None:
             say(f"  start: doughnuts {size:.0f} px; in {ring_step} at a time until the stars measure")
-        grew = 0
+        grew, start_size = 0, size
         while size is not None and now is None and at > -ring_most:
             motor.move(-ring_step)
             at -= ring_step
@@ -1164,7 +1177,11 @@ def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, clo
                 was, size = size, ring(SWEEP_FRAMES)
                 live.reading(at, None, "doughnuts", ring=size)
                 say(f"  in {ring_step} (at {at:+d}): doughnuts {size if size is None else round(size)} px")
-                grew = grew + 1 if size is not None and size > was else 0
+                # Grown only by more than the reading's own scatter: on 1 November
+                # 2026, 58, 58 and 59 px ended a run as "grown".
+                grew = grew + 1 if size is not None and size > GROWN * was else 0
+                if size is not None and start_size and at <= -STILL_AFTER and abs(size / start_size - 1) < STILL:
+                    still()
                 if grew >= 2:
                     live.done("failed", "The doughnuts grew as the focuser went in: focus is the other way.")
                     raise interface.Refusal("NO_STARS", f"The doughnuts grew as it went in ({at:+d} half-steps "
@@ -1198,6 +1215,8 @@ def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, clo
             break
         readings.append((at, now))
         live.reading(at, now, "in")
+        if at <= -STILL_AFTER and all(abs(h / readings[0][1] - 1) < STILL for _, h in readings):
+            still()
         if now < best:
             best, best_at, worse = now, at, 0
         elif best < DROP * readings[0][1]:

@@ -1205,3 +1205,25 @@ def test_the_readings_are_spoken_as_numbers_unless_tones_are_asked_for(aid):
     said = [what for kind, what in Scope.log if kind == "said"]
     assert said and all(any(c.isdigit() for c in what) for what in said if what != "Exposure increasing.")
     assert not [what for kind, what in Scope.log if kind == "sound"]
+
+
+def test_a_drawtube_that_does_not_move_is_said_after_an_eighth_of_a_turn():
+    """1 November 2026: the motor turned and the knob did not; the stars read
+    9.75 to 9.99 for 384 half-steps and the walk-in never said why."""
+    class Slipping(Drawtube):
+        def move(self, steps):
+            self.moves.append(steps)               # the motor turns; the drawtube stays
+    tube = Slipping(best=-1200, slope=200, sharp=2.0, reach=6000, noise=0.05)
+    import interface
+    with pytest.raises(interface.Refusal, match="drawtube is not moving") as refused:
+        focus.walk_in(tube, tube.read, usual=2.3, say=quiet)
+    assert refused.value.code_name == "FOCUSER_NOT_MOVING"
+    assert -sum(tube.moves) <= focus.STILL_AFTER + 64
+
+
+def test_doughnuts_a_pixel_bigger_have_not_grown():
+    """1 November 2026: 58, 58 and 59 px ended a walk-in as "grown"."""
+    tube = Drawtube(best=-1500, slope=40, sharp=1.6, reach=400, noise=0.02)
+    sizes = iter([58, 58, 59, 59.5, 52, 46, 40, 34, 28, 22, 16, 12] + [10] * 40)
+    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet, slack=0, ring=lambda frames: next(sizes))
+    assert abs(result["best_at"] + 1500) <= 32

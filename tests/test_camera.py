@@ -402,7 +402,7 @@ def test_a_late_frame_never_answers_the_next_request(sdk, world):
     with altair.AltairCamera() as cam:
         # The first try and its retry both time out; their frames arrive 0.2
         # and 0.5 s into the 1 s exposure that follows.
-        world.delays, world.level = [0.8, 0.8, 0.8], 111
+        world.delays, world.level = [0.8, 0.8, 0.8, 0.8], 111
         with pytest.raises(IndiError):
             cam.frame(0.01)
         altair.wait_for = lambda seconds: 3.0
@@ -416,7 +416,7 @@ def late_frame_lands_near_the_end_of_the_next_exposure(cam, world):
     cancel, turns up 1.9 s into the 2 s exposure that follows: too late for
     "it came back before the shutter could have closed" to catch."""
     world.obeys_cancel = False
-    world.delays, world.level = [99, 99, 2.2], 111     # the third try's frame is the late one
+    world.delays, world.level = [99, 99, 99, 2.2], 111     # the last try's frame is the late one
     with pytest.raises(IndiError):
         cam.frame(0.01)
     altair.wait_for = lambda seconds: 6.0
@@ -1272,7 +1272,7 @@ def test_a_frame_back_too_soon_is_named_and_every_retry_is_said(sdk, world, caps
             cam.frame(1.0)
         assert cam.early and cam.early[0] < 0.9
     said = capsys.readouterr().err
-    assert said.count("trying again") == 2 and "too soon" in said
+    assert said.count("trying again") == 3 and "too soon" in said
 
 
 def test_without_the_setting_a_lost_frame_starts_no_probe(sdk, world, monkeypatch):

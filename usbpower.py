@@ -65,6 +65,15 @@ def ports(place, root=USB):
     return found
 
 
+def speed(hub, root=USB):
+    """A hub's link speed in Mb/s from the kernel (5000 for a USB 3 hub's
+    half, 480 for its USB 2 half), 0 where it cannot be read."""
+    try:
+        return int((Path(root) / hub / "speed").read_text().strip())
+    except (OSError, ValueError):
+        return 0
+
+
 def remember(place, path=None):
     path = Path(path or REMEMBERED)
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -120,7 +129,10 @@ def cycle(off=OFF_S, back=BACK_S, root=USB, run=subprocess.run, sleep=time.sleep
             uhubctl(hub, port, "off", run)
         sleep(off)
     finally:
-        for hub, port in reversed(switched):          # always given back, whatever went wrong
+        # Always given back, whatever went wrong, the USB 3 half first: on
+        # 1 November 2026, the USB 2 half switched on first, the camera came
+        # back at 480 Mb/s on it instead of 5000.
+        for hub, port in sorted(switched, key=lambda s: -speed(s[0], root)):
             try:
                 uhubctl(hub, port, "on", run)
             except PowerError as problem:

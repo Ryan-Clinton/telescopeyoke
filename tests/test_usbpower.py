@@ -61,6 +61,8 @@ def usb(tmp_path):
     root = tmp_path / "usb"
     hub(root, "1-5")
     hub(root, "2-5", peer="1-5")
+    (root / "1-5" / "speed").write_text("480\n")
+    (root / "2-5" / "speed").write_text("5000\n")
     plug(root, "2-5.1")
     return root
 
@@ -72,7 +74,7 @@ def test_cuts_both_halves_of_the_port_and_waits_for_the_camera(usb, tmp_path):
                            memory=tmp_path / "port.json", say=said.append)
     assert [c[1:] for c in fake.calls] == [
         ["-l", "2-5", "-p", "1", "-a", "off"], ["-l", "1-5", "-p", "1", "-a", "off"],
-        ["-l", "1-5", "-p", "1", "-a", "on"], ["-l", "2-5", "-p", "1", "-a", "on"]]
+        ["-l", "2-5", "-p", "1", "-a", "on"], ["-l", "1-5", "-p", "1", "-a", "on"]]
     assert found["back"] and found["ports"] == ["2-5.1", "1-5.1"] and found["off_s"] == 8
     assert 0 < found["back_after_s"] <= 1.5
     assert usbpower.remembered(tmp_path / "port.json") == "2-5.1"
@@ -127,3 +129,19 @@ def test_dry_run_switches_nothing(capsys):
     finally:
         sys.argv = argv
     assert "Cuts the camera's power at the hub" in capsys.readouterr().out
+
+
+def test_found_on_the_usb2_half_it_comes_back_on_usb3(tmp_path):
+    """1 November 2026: with the USB 2 half switched on first, the camera came
+    back at 480 Mb/s. The USB 3 half is always switched on first."""
+    root = tmp_path / "usb"
+    hub(root, "4-2")
+    hub(root, "3-2", peer="4-2")
+    (root / "3-2" / "speed").write_text("480\n")
+    (root / "4-2" / "speed").write_text("5000\n")
+    plug(root, "3-2.1")
+    fake = Hub(root, "3-2.1")
+    usbpower.cycle(root=root, run=fake.run, sleep=fake.sleep, clock=fake.clock,
+                   memory=tmp_path / "port.json", say=lambda _: None)
+    ons = [c[2] for c in fake.calls if c[-1] == "on"]
+    assert ons == ["4-2", "3-2"]

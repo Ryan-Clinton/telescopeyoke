@@ -435,7 +435,7 @@ class AltairCamera:
 
     def frame(self, seconds):
         """One exposure as (uint16 Bayer mosaic, FITS header). An exposure
-        that fails is tried once more, then once more with the camera closed
+        that fails is tried once more, then twice more with the camera closed
         and opened again. With [camera] probe_on_loss, the first frame
         lost is followed at once by camera_probe.py's look at the camera
         in that state, before it can clear (31 October 2026: the fault
@@ -448,7 +448,7 @@ class AltairCamera:
         drops off USB. The jam clears only that way (1 November 2026: twice
         in an hour at speeds 0 and 2), and until then it took a walk outside."""
         lib = self.lib
-        for attempt in range(3):
+        for attempt in range(4):        # the 4th: the first frame after opening again is often lost
             try:
                 data, started = self._expose(seconds)
                 break
@@ -456,7 +456,7 @@ class AltairCamera:
                 if isinstance(problem, lib.HRESULTException):
                     problem = CameraError(_reason(problem))
                 unplugged = "unplugged" in str(problem)
-                if attempt == 2 or (unplugged and not self._cycles_power()):
+                if attempt == 3 or (unplugged and not self._cycles_power()):
                     raise problem
                 # Said, never silent: on 31 October 2026 a run's first frame was
                 # lost twice and kept on the third try, and its count said 720 of 720.
