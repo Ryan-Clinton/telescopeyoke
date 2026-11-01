@@ -51,10 +51,10 @@ def describe(state, targets=None):
     kind = state.get("kind")
     if kind == "transit":
         title = f"Live telescope: timing a transit of the exoplanet {state['transit']['planet']}, as it happens"
-        extra = ["Exoplanet"]
+        extra = ["Exoplanet", "ExoplanetTransit"]
     elif kind == "patrol":
         title = f"Live telescope: nova patrol of the {name}, searching for new stars"
-        extra = ["Nova", "Galaxy"]
+        extra = ["Nova", "Galaxy", "Andromeda"] if target == "M31" else ["Nova", "Galaxy"]
     else:
         title = f"Live telescope: imaging {name}, one exposure at a time"
         extra = []
@@ -63,6 +63,12 @@ def describe(state, targets=None):
         # The night's question sells it (stream-targets.toml [missions]); focusing
         # and polar alignment are chapters of it and never change it.
         title = m["stream_title"]
+    if state.get("next"):
+        # Tonight's plan in the title, what comes next (schedule.py): on 1 November
+        # 2026 the person asked for the streams to be named after the night's plan.
+        later = str(state["next"]).replace(" UTC", "")
+        if len(f"{title} · then {later} | {SITE}") <= 140:
+            title = f"{title} · then {later}"
     title = f"{title} | {SITE}"
     tags = [t for t in BASE_TAGS + extra if " " not in t and len(t) <= 25][:10]
     return title[:140], tags

@@ -73,3 +73,13 @@ def test_unchanged_info_is_not_sent_again_and_too_many_waits(tmp_path, monkeypat
 def test_a_token_never_shows_in_what_is_said():
     tokens = {"access_token": "secret-access-123456", "refresh_token": "secret-refresh-123456"}
     assert "secret" not in twitch.redacted("failed with secret-access-123456 and secret-refresh-123456", tokens)
+
+
+def test_the_title_says_what_comes_next_in_tonight_s_plan():
+    """1 November 2026: the streams named after the night's plan."""
+    title, _ = twitch.describe({"kind": "patrol", "target": "M31",
+                                "next": "TOI-2046 b transit at 00:10 UTC"}, TARGETS)
+    assert title.endswith("· then TOI-2046 b transit at 00:10 | TelescopeYoke") and len(title) <= 140
+    long_next = "x" * 200
+    title, _ = twitch.describe({"kind": "patrol", "target": "M31", "next": long_next}, TARGETS)
+    assert long_next not in title and len(title) <= 140
