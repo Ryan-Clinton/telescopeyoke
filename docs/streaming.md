@@ -270,6 +270,16 @@ work as before whenever Twitch is among the destinations. YouTube starts
 and ends its broadcast itself when the stream key has Auto-start and
 Auto-stop on.
 
+**Keep YouTube's "Dual stream" off** (Studio, Live, Stream settings). On 1
+November 2026 it was on: YouTube took the stream ("Stream is healthy",
+Excellent, Public) and held the broadcast at "Preparing stream" for
+15 minutes, both previews spinning, never going live. Turning it off did
+not start it by itself; the stream had to reconnect (the watcher's ffmpeg
+stopped, and started again 30 s later), and the broadcast went live within
+a minute. The address to watch is `youtube.com/@TelescopeYoke/live`, which
+leads to the broadcast whenever the channel is live. A connection to
+YouTube's ingest is not the stream being on air: check that address.
+
 The video is encoded by the laptop's own video hardware (Intel Quick Sync,
 through VAAPI). At the start it runs Twitch's bandwidth test; it drops to
 720p only on sustained trouble (a minute behind, dropped frames, or three
