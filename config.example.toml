@@ -51,6 +51,9 @@ setup = "default"
 # With the "altair" backend only:
 # serial = "..."          which camera to use when more than one is plugged in
 # readout_speed = 1       the camera's readout speed level; unset leaves it as it is
+# power_cycle_on_jam = true   when a frame is lost twice, cut the camera's power at its
+#                         powered hub's port and give it back before trying again
+#                         (uhubctl; a hub that switches each port's power; Linux only)
 
 [mount]
 # The distance from one tripod foot to the next, in centimetres. With it, the

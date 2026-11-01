@@ -224,6 +224,23 @@ class AltairCamera:
             self._open()      # on the full sensor, as it always was
         return self.binning
 
+    def _cycles_power(self):
+        return bool(SETTINGS["camera"].get("power_cycle_on_jam")) and not host.WINDOWS
+
+    def _power_cycle(self):
+        """Cut the closed camera's power at the hub and give it back. True
+        once it is on USB again; False when that is not set up or not
+        possible, said, so the caller opens it again as before."""
+        if not self._cycles_power():
+            return False
+        import usbpower
+        say = lambda line: print(f"camera: {line}", file=sys.stderr, flush=True)
+        try:
+            return usbpower.cycle(say=say)["back"]
+        except usbpower.PowerError as problem:
+            say(f"could not cut its power: {problem}")
+            return False
+
     def close(self):
         handle, self.handle = self.handle, None
         if handle is None:
@@ -423,7 +440,13 @@ class AltairCamera:
         lost is followed at once by camera_probe.py's look at the camera
         in that state, before it can clear (31 October 2026: the fault
         comes and goes, and hours spent making it happen found nothing);
-        the speed is not changed for the frames that follow."""
+        the speed is not changed for the frames that follow.
+
+        With [camera] power_cycle_on_jam, the camera is not just opened again
+        the second time: its power is cut at the hub's port and given back
+        first (usbpower.py), as the hub's button does, and so too when it
+        drops off USB. The jam clears only that way (1 November 2026: twice
+        in an hour at speeds 0 and 2), and until then it took a walk outside."""
         lib = self.lib
         for attempt in range(3):
             try:
@@ -432,7 +455,8 @@ class AltairCamera:
             except (CameraError, lib.HRESULTException) as problem:
                 if isinstance(problem, lib.HRESULTException):
                     problem = CameraError(_reason(problem))
-                if attempt == 2 or "unplugged" in str(problem):
+                unplugged = "unplugged" in str(problem)
+                if attempt == 2 or (unplugged and not self._cycles_power()):
                     raise problem
                 # Said, never silent: on 31 October 2026 a run's first frame was
                 # lost twice and kept on the third try, and its count said 720 of 720.
@@ -445,8 +469,10 @@ class AltairCamera:
                                                 say=lambda line: print(line, file=sys.stderr, flush=True))
                     except Exception as failed:
                         print(f"camera: the probe failed: {failed}", file=sys.stderr, flush=True)
-                if attempt == 1:
+                if attempt == 1 or unplugged:
                     self.close()
+                    if not self._power_cycle() and unplugged:
+                        raise problem
                     self._open()
         header = fits.Header()
         header["EXPTIME"] = (float(seconds), "seconds")

@@ -1324,3 +1324,49 @@ def test_the_cooldown_reads_the_body_s_thermistor_and_the_time_since_power():
     class Done:
         stdout = "1793500000.0 PastieLaptop kernel: usb 2-1.1: Product: ALTAIRH183C\n"
     assert camera_test.since_plugged_in(run=lambda *a, **k: Done, now=1793500000.0 + 600) == 10.0
+
+
+def test_a_jammed_camera_has_its_power_cut_at_the_hub_and_carries_on(sdk, world, monkeypatch, capsys):
+    """1 November 2026: the jam cleared only when the camera's power was cut,
+    which took a walk outside to the hub's button. With power_cycle_on_jam the
+    second retry cuts it from the laptop first, and the run carries on."""
+    import usbpower
+    monkeypatch.setitem(altair.SETTINGS["camera"], "power_cycle_on_jam", True)
+    monkeypatch.setitem(altair.SETTINGS["camera"], "readout_speed", 2)
+    cut = []
+
+    def cycle(**_):
+        cut.append(True)
+        world.loses = None                      # the power cut clears the jam
+        return {"back": True}
+    monkeypatch.setattr(usbpower, "cycle", cycle)
+    a_failing_camera(world)
+    with altair.AltairCamera() as cam:
+        data, _ = cam.frame(0.05)
+    assert cut == [True] and data is not None
+    assert capsys.readouterr().err.count("trying again") == 2
+
+
+def test_without_the_setting_the_power_is_never_cut(sdk, world, monkeypatch):
+    import usbpower
+    monkeypatch.setattr(usbpower, "cycle", lambda **_: pytest.fail("power cut"))
+    a_failing_camera(world)
+    with altair.AltairCamera() as cam:
+        cam.handle.put_Speed(2)
+        with pytest.raises(IndiError):
+            cam.frame(0.05)
+
+
+def test_a_power_cut_that_cannot_be_made_falls_back_to_opening_it_again(sdk, world, monkeypatch, capsys):
+    import usbpower
+    monkeypatch.setitem(altair.SETTINGS["camera"], "power_cycle_on_jam", True)
+
+    def cycle(**_):
+        raise usbpower.PowerError("uhubctl is not installed")
+    monkeypatch.setattr(usbpower, "cycle", cycle)
+    a_failing_camera(world)
+    with altair.AltairCamera() as cam:
+        cam.handle.put_Speed(2)
+        with pytest.raises(IndiError):
+            cam.frame(0.05)
+    assert "could not cut its power: uhubctl is not installed" in capsys.readouterr().err
