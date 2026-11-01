@@ -77,34 +77,61 @@ January 2027) as "Item is defective or does not work", with the comment:
 
 ## What replaces it
 
-What the telescope needs from a hub:
+Budget: up to about £70 (the £20 refund plus £30 to £50). Facts checked on
+1 November 2026.
 
-1. A USB 2 side that stays up, for the Nano and the handset lead.
-2. Enough power for the camera's fan and the focuser's motor together.
-3. **Per-port power switching the laptop can command**, so the camera's jam
-   is still cleared without anyone going outside.
-4. Happy in the cold and damp outside.
+### Four separate requirements
 
-Budget: up to about £70 (the £20 refund plus £30 to £50). The laptop's own
-USB sockets cannot cut a port's power (checked with uhubctl on 1 November
-2026), so the hub has to.
+1. **A link that stays up:** the hub's own connection to the laptop, on both
+   its USB 2 and USB 3 sides.
+2. **Power:** enough for the camera's fan and the focuser's motor together.
+   A bigger adapter on the box does not prove better regulation inside;
+   what is known here is only that this 5 V / 2 A hub let the motor lift
+   where a laptop socket did not.
+3. **Remote power cut for the camera:** the laptop switching the camera
+   port's 5 V off and on (`usbpower.py`, through uhubctl), which cleared
+   every jam on 1 November. A port button pressed by hand is not this. Nor
+   is a hub that only cuts the data lines: uhubctl testers have found many
+   that leave the 5 V on. The laptop's own sockets cannot do it (checked
+   with uhubctl).
+4. **Outdoors:** cold, damp, leads moving.
 
-| Hub | Price | Power | Laptop can cut a port | Notes |
-|---|---|---|---|---|
-| **Amazon Basics 7-port USB 3.0, HU3770V1** (ASIN B00E6GX4BG) | £29.99 used on eBay, free post, 30-day returns | 12 V / 3 A adapter | Yes, on uhubctl's list | VIA VL812 chips (`2109:2811`), not Realtek. Seven ports, so the camera, the Nano, the handset and the guide camera all fit. uhubctl's only warning is about Raspberry Pis, not laptops. Check the label says HU3770V1: the later Amazon Basics U3-7HUB switches only one port |
-| StarTech HB31C2A2CB | £56.90 new (Amazon UK) | Adapter included | Partly | Two USB-A and two USB-C ports. Owners say a USB 3 device's power only goes off when every port is off, so a camera power cut would cut the Nano too |
-| RSHTECH RSH-ST10C-6 | £44.99 (Amazon UK) | 12 V / 5 A adapter | Yes, with catches | Same maker and the same Realtek USB 2 chip. Owners say switching works only from the USB 3 side, ports must first be on at the touch buttons, and one USB-C port ignores commands |
-| The same RSH-ST04 again | about £19.49 | 5 V / 2 A | Yes, as now | The reviews report the same faults |
-| Pegasus Astro USB Control Hub | £169 | 12–14 V, 8 A | Yes, through INDI | Built for telescopes, but out of budget. None used on eBay UK or Facebook Marketplace on 1 November 2026 |
+The jobs need not share one box. **The camera can be on its own**, straight
+into the laptop or on a hub of its own, **with the Nano and the handset on a
+separate powered USB 2 hub.** Then a hub dropping its USB 2 side cannot take
+the camera with it, and a camera power cut cannot take the focuser.
 
-Not suitable: the StarTech HB30A4AIB (£32) takes all its power from the
-laptop, and Atolla and Sabrent hubs are not known to switch port power.
+### Candidates under about £70
 
-**Recommended: the Amazon Basics HU3770V1.** It is the cheapest hub with a
-different chip, a 12 V supply and power switching uhubctl is known to
-handle. `usbpower.py` finds a hub by its ports, not its maker, so it should
-work unchanged; the first night it goes on, cut the camera's power with
-`./camera_test.py --power-cycle` and check the fan stops.
+| Hub | Price | 1. Chip | 2. Power | 3. Remote power cut | 4. Outdoors |
+|---|---|---|---|---|---|
+| **Lindy 43374**, 4-port USB 3.0 metal hub | £59.59 + £4.35 post (Comms Express; out of stock at Lindy) | VIA VL817 (seller's listing), not Realtek | External adapter included | **Unknown**: VL817 hubs can switch, but only if the maker wired the switches. Testable on arrival with uhubctl, within 30 days | Industrial: all-metal case, EMC protection, mounting brackets, short-circuit protection per port |
+| Amazon Basics HU3770V1, 7-port (ASIN B00E6GX4BG) | £29.99 used, eBay, 30-day returns | VIA VL812 | 12 V / 3 A | **On uhubctl's list** | Plastic. A 2013 design, bought used: its condition is unknown |
+| TP-Link UH720, 7-port | not checked | **Realtek RTS5411**, the same USB 2 chip that dropped 142 times | 12 V | **No.** uhubctl testers found it cuts only the data lines; the 5 V stays on | Plastic |
+| StarTech HB31C2A2CB | £56.90 (Amazon UK) | StarTech's own | Adapter included | Partly: a USB 3 device's power only goes off when every port is off | Plastic |
+| RSHTECH RSH-ST10C-6 | £44.99 | Realtek, the same USB 2 chip | 12 V / 5 A | Yes, with catches | Aluminium |
+
+Over budget or unsuitable:
+
+- **Pegasus Astro USB Control Hub:** £169. No used one on eBay UK or
+  Facebook Marketplace.
+- **Yepkit YKUSH3**, a USB 3 power switcher: €124.99, out of stock. Its
+  USB 2 sibling, the YKUSH at €59, cannot carry the camera.
+- **StarTech HB30A4AIB:** takes all its power from the laptop.
+
+### The choice
+
+- **If the remote power cut matters:** the Amazon Basics, the only one in
+  budget known to do it. Check its label says HU3770V1, and test it on
+  arrival. Or the Lindy, if it turns out to switch on arrival; return it
+  within 30 days if it does not.
+- **If not:** the Lindy, for the build and the different chip. The camera
+  goes straight into the laptop, and a jam means pulling its lead at the
+  scope.
+
+Whichever is bought, test it on arrival indoors, before any night that
+depends on it. Run `./camera_test.py --power-cycle` and see whether the
+camera's fan stops. Then run a long frame run with the Nano on the same hub.
 
 **With no hub,** the camera goes straight into a laptop USB-A socket. Plugged
 in that way it has never dropped off USB, including three 720-frame runs on
