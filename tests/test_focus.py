@@ -806,14 +806,6 @@ def test_a_walk_in_past_its_best_tries_the_one_move_back_out():
     assert not result["back_out"]["lifted"] and result["ended_at"] < result["best_at"]
 
 
-def test_a_walk_in_never_backs_out_unless_asked():
-    """1 November 2026: "you set it past the line and I walk it in": a walk-in
-    only ever moves inward."""
-    tube = Drawtube(best=-300, slope=40, sharp=1.6, reach=600, noise=0.02)
-    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet)
-    assert all(step < 0 for step in tube.moves) and "back_out" not in result
-
-
 def test_noise_far_from_focus_does_not_end_a_walk_in():
     """1 November 2026: set past the line by eye, the stars read 9.75 to 9.99
     for 384 half-steps, and three readings a hair above a noisy best ended the
@@ -883,7 +875,7 @@ def test_walking_in_from_doughnuts_comes_in_until_the_stars_measure():
     tube = Drawtube(best=-1200, slope=40, sharp=1.6, reach=400, noise=0.02)
     rings = lambda frames: 10 + abs(tube.tube - tube.best) / 20
     result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet, slack=0, ring=rings)
-    assert all(step < 0 for step in tube.moves) and "back_out" not in result
+    assert all(step < 0 for step in tube.moves[:-1]) and tube.moves[-1] == result["back_out"]["steps"]
     assert abs(result["best_at"] + 1200) <= 32
 
 

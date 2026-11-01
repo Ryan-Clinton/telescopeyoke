@@ -1108,7 +1108,7 @@ def find_stars(motor, read, usual, say=progress, stride=2048, turns=2, ring=None
 
 def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, closest=8, switch=8.0, near=1.5,
             close=1.15, most=160, tries=3, patience=3, spike=1.8, ring=None, ring_step=128, ring_most=4096,
-            live=None, back_out=False, slack=None):
+            live=None, back_out=True, slack=None):
     """Focus from a little outside it, moving only inward, a few half-steps
     at a time, measuring after each, until the stars have been worse three times
     running after their best; returns {"best_hfr", "best_at", "ended_at",
