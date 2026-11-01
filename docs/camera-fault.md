@@ -659,6 +659,7 @@ The camera is Gary's; the ticket is ours, and paying for a repair would be his c
 | Where the exposure falls | a 1 s flash moved through 8 s exposures, in the fault: all speeds start gathering 0.4 to 0.5 s after the request; speed 0 stops at 10.7 s, speed 1 at 7.3 s, speed 2 at 5.5 s: 1.27, 0.86 and 0.63 of the time asked, speed 2 exactly half of speed 0 (31 Oct) |
 | In one line | in one state, which comes and goes, the exposure at speeds 1 and 2 is timed as if by speed 0's clock: a 1 s flash moved through 8 s exposures shows speed 2 gathering exactly half as long as speed 0, speed 1 two thirds, all starting 0.4 to 0.5 s after the request; the camera reports the time asked throughout. Is this a known behaviour of firmware 1.4.1 or of the library at these speeds? |
 | Seen before | an Altair 183C Pro owner on SharpCap's forum, December 2023: exposures ending at 50-70 % of the time asked, recorded at full length (forums.sharpcap.co.uk, topic 7304); was it ever resolved? |
+| Sent to Altair | 1 Nov 2026 02:22 on #3470: the early frames, the timed light and scan, the state surviving reopening and a power cut, the same in Altair's library and AltairCapture, the cold night, the SharpCap report, and three questions |
 | Altair's own program | AltairCapture 4.12 with altaircam.dll 60.31589 on Windows 11 (31 Oct): two 8 s Trigger Mode frames at Frame Speed 0 never arrived, the live view frozen; Altair's Windows library gave the same short 16 s frames at speed 2 as on Linux. Diagnose output attached (`altaircapture-diagnose-2026-10-31.txt`) |
 | Started | 04:59 on 20 Oct 2026, at dawn after a cold night |
 | Comes and goes | gone 26 Oct; back 30 Oct 10:46; gone again by 11:02, nothing touched; back 31 Oct 17:28 just after the camera was handled and replugged, and still there after closing and opening it |
@@ -670,9 +671,12 @@ The camera is Gary's; the ticket is ours, and paying for a repair would be his c
 After the night of 1 November (the camera jamming at every speed, speed 0
 failing outside, focus fought for hours around it), a replacement is
 tempting: a used **ZWO ASI294MC Pro**, about £450 to £520 on eBay. Nothing
-is bought yet; the 183C is a friend's, and Altair's answer on #3470 (an
-update with the measurements above was written for it on 1 November) may
-still change things.
+is bought yet; the 183C is a friend's, and Altair's answer on #3470 may
+still change things: an update with the measurements above was sent on
+the ticket on 1 November at 02:22, asking whether this is a known fault of
+firmware 1.4.1 or the FPGA at the faster speeds, whether newer firmware
+exists, and whether it changes their view of the £30 inspection and a new
+board.
 
 What it would mean here, from its published specification:
 
