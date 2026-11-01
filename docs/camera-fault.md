@@ -517,6 +517,15 @@ in another), so the camera's own readable settings are compared instead.
    its supply sharing a ground with the camera (Altair raised a ground loop
    on 21 October), brings the fault on. Needs the person to plug and
    unplug the Nano.
+   **First half, 1 November 12:45:** the camera unpowered since about
+   02:30, still on the telescope under its bag outside, plugged in through
+   the hub (the hub's 1 m lead to the laptop, the old 1 m to the camera)
+   with the Nano unplugged since 02:27. The first frames, 1 s at the
+   start of the run, never came back (no frame within 18 s, twice), the
+   jammed state of the night before. So the camera jams from a cold start
+   with no Nano on USB at all: the Nano and its new driver are not needed
+   for the fault. The run was stopped; the second half (Nano in) is moot
+   unless the camera first runs cleanly without it.
 1. **Done 31 October (above): the scan, at speeds 0, 1 and 2, while the fault is present**
    (`./camera_test.py --scan`, the telescope at the laptop's screen through
    kitchen roll, room lights off, about 40 minutes). Where the sensor's
