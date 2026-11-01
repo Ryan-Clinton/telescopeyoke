@@ -22,6 +22,7 @@ import numpy as np
 
 STATUS_S = 6 * 60          # a line on the mission at most this often when nothing happens
 GAP_S = 20                 # never two sentences closer than this
+FRESH_S = 60             # an event held through the gap is said only while it is this new
 SPEECH_S = 30              # making one sentence's speech may take this long; after twice it, it is given up
 RATE = 22050               # the stream's sound (stream.TONE_RATE)
 
@@ -102,10 +103,12 @@ class Narrator:
         """Look at what has happened since last time and perhaps say one thing."""
         import director
         now = now or self.clock()
+        if now - self.spoke < GAP_S:
+            return None            # events since `seen` wait for the gap to end, not dropped
         fresh = director.events(self.seen)
         self.seen = now + 1e-6
-        if now - self.spoke < GAP_S:
-            return None
+        # Held through the gap, but never said once it is old news.
+        fresh = [e for e in fresh if now - e.get("at", now) <= FRESH_S]
         words = next((w for w in (sentence(e) for e in reversed(fresh)) if w), None)
         if words is None and now - self.said_status >= STATUS_S:
             words = status_line(mission)
@@ -124,11 +127,15 @@ class Narrator:
         self.spoke = self.began = now or self.clock()
         busy = self.busy
         self.said.append((self.spoke, words))
+        self.turn = getattr(self, "turn", 0) + 1
+        turn = self.turn
 
         def run():
             try:
                 samples = self.speak(words)
-                if samples is not None:
+                # A sentence given up on as stalled is never said late, after the
+                # telescope has moved on: only the newest one may be heard.
+                if samples is not None and turn == self.turn:
                     self.sink(samples)
             finally:
                 busy.release()

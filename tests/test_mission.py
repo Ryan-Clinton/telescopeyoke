@@ -60,7 +60,7 @@ def test_the_milestones_follow_what_has_been_measured():
     assert m["question"] == "Is there a new star in this field tonight?"
     patrol["patrol"]["possible"] = 1
     assert mission.of(patrol, NOW, {})["question"] == "Will anything survive the second look?"
-    transit = {"kind": "transit", "target": "WASP-12", "now": NOW,
+    transit = {"kind": "transit", "target": "WASP-12", "now": NOW, "last_age": 5, "exposure": 16,
                "transit": {"ingress": NOW + 600, "egress": NOW + 6600, "depth": 0.014}}
     m = mission.of(transit, NOW, {})
     assert m["steps"][0] == ("Measure the star before", "now") and m["question"] == \
@@ -107,7 +107,13 @@ def test_the_reveal_and_the_recap_use_the_measured_counts(data):
                                                               picture=str(data / "m.jpg"))))
     assert mission.reveal({"kind": "moon"}, NOW)["after"] == "MINERAL MOON · 3 COLOUR VIDEOS"
     assert "(consistent)" in mission.so_far(NOW)[1]
-    deep = mission.reveal({"kind": "picture", "combined": 40, "exposure": 16, "integration_s": 640}, NOW)
+    picture = {"kind": "picture", "target": "M31", "combined": 40, "exposure": 16, "integration_s": 640}
+    assert mission.reveal(picture, NOW) is None              # no note says the two pictures are of this run
+    (data / "web" / "latest.json").write_text(json.dumps({"kind": "newest frame"}))
+    (data / "web" / "stack.json").write_text(json.dumps({"target": "M42"}))
+    assert mission.reveal(picture, NOW) is None              # 1 November 2026: a stack of something else
+    (data / "web" / "stack.json").write_text(json.dumps({"target": "M31"}))
+    deep = mission.reveal(picture, NOW)
     assert (deep["before"], deep["after"]) == ("ONE 16 S EXPOSURE", "40 STACKED · 11 MIN")
 
 
@@ -142,6 +148,8 @@ def test_the_reveal_shows_one_raw_frame_and_what_was_made_of_it(data):
     from PIL import Image
     Image.new("RGB", (400, 300), (90, 90, 90)).save(data / "web" / "latest.jpg")
     Image.new("RGB", (400, 300), (200, 200, 200)).save(data / "web" / "stack.jpg")
+    (data / "web" / "latest.json").write_text(json.dumps({"kind": "newest frame"}))
+    (data / "web" / "stack.json").write_text(json.dumps({"target": "M31"}))
     s = {"kind": "picture", "target": "M31", "now": NOW, "combined": 40, "exposure": 16, "last_age": 5,
          "story": {"chapter": "RESULT", "card": ("RAW → RESULT", [])}}
     s = streamlook.with_mission(s, NOW, {})
@@ -333,8 +341,12 @@ def test_a_clip_that_cannot_be_cut_is_tried_once_and_the_rest_still_are(data, mo
 
     def slow(cmd, **kw):
         raise subprocess.TimeoutExpired(cmd, 120)
+    clips.TRIES.clear()
+    for look in range(clips.MOST_TRIES - 1):
+        assert clips.cut_due(NOW + 200, say=lambda line: None, run=slow) == []
+        assert json.loads(clips.DONE.read_text()) == []                # a passing failure: tried again
     assert clips.cut_due(NOW + 200, say=lambda line: None, run=slow) == []
-    assert json.loads(clips.DONE.read_text()) == [str(NOW)]          # not tried again every look
+    assert json.loads(clips.DONE.read_text()) == [str(NOW)]          # then let go, not tried every look
 
 
 def test_a_dropped_vertical_feed_says_so_rather_than_drawing_on_for_nothing(monkeypatch):
@@ -351,3 +363,41 @@ def test_a_dropped_vertical_feed_says_so_rather_than_drawing_on_for_nothing(monk
     feed.thread.join(5)
     assert feed.dead is not None and feed.composer.stopped.is_set()
     feed.stop()
+
+
+def test_an_event_in_the_narrator_s_gap_is_said_after_it_not_lost(data):
+    """1 November 2026: an event arriving during the 20 s gap was read and
+    dropped; it waits for the gap to end, and is said while still news."""
+    import narrator
+    heard, clock = [], [NOW]
+    voice = narrator.Narrator(heard.append, speak=lambda words: [len(words)], clock=lambda: clock[0],
+                              background=False)
+    director.event("NOW OBSERVING: THE MOON", NOW + 1, target="Moon")
+    assert voice.tick(None, NOW + 2) == "I've reached the Moon."
+    director.event("STACKING THE BEST FRAMES", NOW + 3)
+    assert voice.tick(None, NOW + 4) is None                       # in the gap: held
+    said = voice.tick(None, NOW + 2 + narrator.GAP_S + 1)
+    assert said and said.startswith("I'm lining up")
+
+
+def test_a_sentence_given_up_on_is_never_heard_late(data):
+    import threading
+
+    import narrator
+    heard, stuck = [], threading.Event()
+    voice = narrator.Narrator(heard.append, speak=lambda words: stuck.wait(5) and [words], clock=lambda: NOW)
+    voice.say("old news", NOW)
+    voice.say("new", NOW + 2 * narrator.SPEECH_S + 1)            # the first given up as stalled
+    stuck.set()
+    import time
+    time.sleep(0.3)
+    assert ["old news"] not in heard
+
+
+def test_a_transit_stage_with_no_frames_coming_in_says_it_is_only_expected(data):
+    """1 November 2026: the stages follow the clock; with cloud and no frames
+    the stream must not say the crossing is being measured."""
+    t = {"kind": "transit", "target": "WASP-12", "now": NOW + 1000, "last_age": 900, "exposure": 4,
+         "transit": {"ingress": NOW + 600, "egress": NOW + 6600, "depth": 0.014}}
+    steps = mission.milestones("transit", t) if hasattr(mission, "milestones") else mission.of(t, NOW + 1000, {})["steps"]
+    assert steps[1] == ("The planet crosses (expected: no frames coming in)", "now")

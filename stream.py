@@ -885,8 +885,29 @@ def passed_on(process, keys, say=print):
         for line in iter(pipe.readline, b""):
             text = line.decode("utf-8", "replace").rstrip()
             if text:
+                if lost_destination(text):
+                    process.lost_at = getattr(process, "lost_at", None) or time.time()
                 say(hidden(text, keys))
     threading.Thread(target=run, daemon=True).start()
+
+
+def lost_destination(line):
+    """Whether one of ffmpeg's lines says a tee destination has failed and the
+    stream goes on without it ("Slave muxer #1 failed: ..., continuing with
+    1/2 slaves"). With onfail=ignore the other service stays on air, but the
+    lost one never rejoins by itself."""
+    return "tee" in line.lower() and "slave" in line.lower() and "fail" in line.lower()
+
+
+REJOIN_S = 60          # a destination lost this long is brought back by starting the stream again
+REJOINS_PER_HOUR = 6   # at most: a service down for good must not keep breaking the other
+
+
+def rejoin_due(process, now, rejoins):
+    """Whether to start the stream again to bring a lost destination back."""
+    lost = getattr(process, "lost_at", None)
+    recent = [t for t in rejoins if now - t < 3600]
+    return lost is not None and now - lost >= REJOIN_S and len(recent) < REJOINS_PER_HOUR
 
 
 def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.Popen, wait=True):
@@ -918,6 +939,7 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
     size = (WIDTH, HEIGHT)
     process, quiet_since, shown, retry_at = None, None, None, 0.0
     reports, drops, frames, breaks, measuring, measured_at, announced = [], [], [], [], None, 0.0, None
+    rejoins = []          # when the stream was started again to bring a lost destination back
     tested = False
     chatting = None
     composer = Composer(draw=lambda st, now, mode: frame(st, now, mode).resize(size)
@@ -926,9 +948,20 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
     import director
     segment, segment_state, directed, looked_at, tones, voice = None, None, None, -1e9, None, None
     phones = None             # the 9:16 feed, while on air with a vertical key
+    reload, keys_looked_at = False, clock()
     try:
         while True:
             st, now = status(), clock()
+            if to is None and now - keys_looked_at >= KEYS_LOOK_S:
+                # A key or service changed in Settings takes effect without a
+                # restart by hand: the watcher starts again on the new ones.
+                keys_looked_at = now
+                fresh = settings()
+                again = [address for _, address, _ in destinations(fresh)[0]] if fresh["enabled"] else []
+                if again != target:
+                    say(f"{time.strftime('%H:%M')} the stream's services or keys have changed: starting again")
+                    reload = True
+                    break
             if now - looked_at >= LOOK_S:
                 # Focusing or polar alignment going on: read from their files, not every picture.
                 segment, segment_state, _ = broadcasting(now)
@@ -1015,11 +1048,21 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                 if shown is None:
                     sleep(0.2)                         # the first picture is still being drawn
                     continue
+                if rejoin_due(process, now, rejoins):
+                    # 1 November 2026: YouTube and Twitch go through one tee; a lost
+                    # one comes back only with a fresh start, a few seconds for both.
+                    say(f"{time.strftime('%H:%M')} a destination dropped off the stream: starting it again to "
+                        "bring it back")
+                    rejoins.append(now)
+                    ended(process, say)
+                    process, retry_at, tones = None, now + 5, quiet(tones)
+                    continue
                 try:
                     process.stdin.write(shown)
                 except (BrokenPipeError, OSError):
                     # Never a tight loop: wait, and the next try is a fresh start.
                     say(f"{time.strftime('%H:%M')} the stream broke off; trying again in 30 s")
+                    ended(process, say)
                     process, retry_at, tones = None, now + 30, quiet(tones)
                     breaks = [t for t in breaks if now - t <= BREAKS_S] + [now]
                     if size == (WIDTH, HEIGHT) and falling_behind([], now, breaks=breaks):
@@ -1066,6 +1109,28 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
         if process is not None:
             process.stdin.close()
             process.wait(timeout=30)
+    if reload:
+        return watch(to, say, sleep, clock, run, wait)
+
+
+KEYS_LOOK_S = 60      # how often a streaming watcher looks for changed services or keys
+
+
+def ended(process, say=print, wait=10):
+    """An ffmpeg that has broken off, finished with: its pipe closed, killed
+    if it is still there, waited for so it leaves no zombie behind, and how it
+    ended said. Never raises: the stream goes on to its next start."""
+    for step in (lambda: process.stdin.close(), lambda: process.kill()):
+        try:
+            step()
+        except (OSError, ValueError, AttributeError):
+            pass
+    try:
+        code = process.wait(timeout=wait)
+    except Exception:
+        code = None
+    say(f"{time.strftime('%H:%M')} ffmpeg ended ({'still running' if code is None else f'exit {code}'})")
+    return code
 
 
 def opening(st, directed, now):

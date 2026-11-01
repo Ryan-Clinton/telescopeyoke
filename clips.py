@@ -104,6 +104,10 @@ def tidy(out=None, keep=KEEP):
         p.unlink(missing_ok=True)
 
 
+MOST_TRIES = 3        # a clip that will not cut is tried on this many looks, then let go
+TRIES = {}            # tries so far of each moment not yet cut, by its time
+
+
 def cut_due(now=None, say=print, run=subprocess.run):
     """Cut every clip that is due (stream.py, on a thread of its own)."""
     import director
@@ -112,8 +116,14 @@ def cut_due(now=None, say=print, run=subprocess.run):
     done = _done()
     made = []
     for e in due(director.events(now - WRAP * SEGMENT_S), now, done):
-        done.add(str(e["at"]))     # tried once, whatever comes of it: never again every look
+        key = str(e["at"])
+        TRIES[key] = TRIES.get(key, 0) + 1
         clip = cut(e, run)
+        if clip or TRIES[key] >= MOST_TRIES:
+            # Kept, or tried MOST_TRIES times over as many looks: never again. A
+            # passing failure (a slow disk, a segment being rotated) gets another go.
+            done.add(key)
+            TRIES.pop(key, None)
         if clip:
             made.append(clip)
             say(f"{time.strftime('%H:%M')} clip kept: {Path(clip).name}")
