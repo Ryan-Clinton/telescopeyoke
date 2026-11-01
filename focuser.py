@@ -59,9 +59,15 @@ def find_port(port=None):
 class Focuser:
     """The Nano, once it runs firmware/focuser."""
 
-    def __init__(self, link):
+    def __init__(self, link, reversed=None):
         self.link = link
         self.step_seconds = STEP_SECONDS
+        # [focuser] reversed = true: the motor's wires are on in the other
+        # order, so plus would bring the drawtube in. 1 November 2026: after
+        # the move onto the screw-terminal board, every "in" went out.
+        if reversed is None:
+            reversed = bool(config.hardware().get("focuser", {}).get("reversed", False))
+        self.sign = -1 if reversed else 1
 
     @classmethod
     def open(cls, port=None, full=True, ms=MOTOR_MS):
@@ -100,8 +106,9 @@ class Focuser:
         if not steps or abs(steps) > MOST:
             raise ValueError(f"a move is 1 to {MOST} half-steps, not {steps}")
         wait = abs(steps) * self.step_seconds + 3
+        sent = steps * self.sign            # plus is always out, whichever way the wires are on
         try:
-            reply = self.ask(f":M{steps:+d}", wait)
+            reply = self.ask(f":M{sent:+d}", wait)
         except KeyboardInterrupt:
             # The Nano finishes a move once ordered: wait for its answer, so
             # whoever counts where the motor is can count this move, and the
@@ -110,7 +117,7 @@ class Focuser:
             while time.monotonic() < until and not self.link.read(1).endswith(b"\n"):
                 pass
             raise
-        if reply != f"OK {steps}":
+        if reply != f"OK {sent}":
             raise RuntimeError(f"the focuser answered {reply!r} to a move of {steps}")
 
     def speed(self, ms):

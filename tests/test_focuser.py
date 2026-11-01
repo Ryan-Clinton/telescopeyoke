@@ -343,3 +343,14 @@ def test_the_temperature_is_asked_for_and_an_old_firmware_is_an_error():
         focuser.Focuser(Nano()).temperature()
     sketch = (focuser.SKETCH / "focuser.ino").read_text()
     assert 'order == ":T"' in sketch and "const byte SENSE = A0;" in sketch and "const byte SUPPLY = A5;" in sketch
+
+
+def test_a_reversed_focuser_still_takes_plus_as_out():
+    """1 November 2026: the motor's wires went back on in the other order,
+    and every "in" went out. [focuser] reversed flips what is sent."""
+    nano = Nano()
+    motor = focuser.Focuser(nano, reversed=True)
+    motor.move(100)
+    motor.move(-40)
+    assert nano.sent == [":M-100", ":M+40"]
+    assert focuser.Focuser(Nano(), reversed=False).sign == 1
