@@ -83,3 +83,17 @@ def test_the_title_says_what_comes_next_in_tonight_s_plan():
     long_next = "x" * 200
     title, _ = twitch.describe({"kind": "patrol", "target": "M31", "next": long_next}, TARGETS)
     assert long_next not in title and len(title) <= 140
+
+
+def test_titles_lead_with_the_subject_and_tags_with_the_mission():
+    """1 November 2026: a searcher types "nova", "exoplanet transit" or a
+    planet's name; the titles now lead with what is observed, and each
+    mission's own tags come before the channel's general ones."""
+    import mission
+    patrol = mission.of({"kind": "patrol", "target": "M31", "now": 1e9, "patrol": {"panels": []}}, 1e9, {})
+    assert patrol["stream_title"].startswith("Nova hunt LIVE: Andromeda Galaxy (M31)")
+    transit = mission.of({"kind": "transit", "target": "TOI-2046", "now": 1e9, "last_age": 5, "exposure": 4,
+                          "transit": {"planet": "TOI-2046 b", "ingress": 1e9 + 600, "egress": 1e9 + 6000}}, 1e9, {})
+    assert transit["stream_title"] == "Exoplanet transit LIVE: timing TOI-2046 b crossing its star"
+    _, tags = twitch.describe({"kind": "transit", "target": "TOI-2046", "transit": {"planet": "TOI-2046 b"}}, TARGETS)
+    assert tags[0] == "Exoplanet" and "CitizenScience" in tags and len(tags) <= 10

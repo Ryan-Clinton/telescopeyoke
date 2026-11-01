@@ -142,38 +142,38 @@ title = "LUCKY IMAGING · THE MOON"
 goal = "Freeze the shimmer of the air to see the Moon's finest detail."
 question = "How many of these {frames} frames will be sharp enough to keep?"
 question_plain = "How sharp will the air let the Moon be tonight?"
-stream_title = "LIVE: freezing the air's shimmer to see the Moon's finest detail"
+stream_title = "Moon LIVE through a telescope: lucky imaging to freeze the air's shimmer"
 
 [missions.mineral]
 title = "MINERAL MOON"
 goal = "Reveal colour differences in the Moon's surface that are normally too faint to see."
 question = "Will the colour repeat as the Moon moves across the camera?"
-stream_title = "LIVE: can an amateur telescope reveal the Moon's hidden colour?"
+stream_title = "Moon LIVE through a telescope: can it reveal the Moon's hidden colours?"
 
 [missions.live]
 title = "THE MOON · LIVE VIEW"
 goal = "Show the Moon as the telescope sees it, a fresh picture every few seconds."
-stream_title = "LIVE: the Moon through a 150 mm telescope, as it happens"
+stream_title = "Moon LIVE through a 150 mm telescope, as it happens"
 
 [missions.patrol]
 title = "NOVA PATROL · {target}"
 goal = "Find a star that wasn't there before."
 question = "Is there a new star in this field tonight?"
 question_possible = "Will anything survive the second look?"
-stream_title = "LIVE: searching {target} for a star that wasn't there before"
+stream_title = "Nova hunt LIVE: {name}. Is there a star that wasn't there before?"
 
 [missions.transit]
 title = "PLANET TRANSIT · {target}"
 goal = "Measure a planet crossing in front of its star."
 question = "Will the star dim by the expected {depth} %?"
 question_plain = "Will the star dim as the planet crosses it?"
-stream_title = "LIVE: trying to measure a planet crossing another star"
+stream_title = "Exoplanet transit LIVE: timing {planet} crossing its star"
 
 [missions.picture]
 title = "BUILDING A PICTURE · {target}"
 goal = "Build a deep picture of {target}, one exposure at a time."
 question = "How much fainter detail will each extra exposure bring out?"
-stream_title = "LIVE: imaging {target}, one exposure at a time"
+stream_title = "{name} LIVE through a telescope, one exposure at a time"
 
 [missions.focus]
 title = "FOCUS"

@@ -51,13 +51,16 @@ def describe(state, targets=None):
     kind = state.get("kind")
     if kind == "transit":
         title = f"Live telescope: timing a transit of the exoplanet {state['transit']['planet']}, as it happens"
-        extra = ["Exoplanet", "ExoplanetTransit"]
+        extra = ["Exoplanet", "ExoplanetTransit", "CitizenScience", "SpaceScience"]
     elif kind == "patrol":
         title = f"Live telescope: nova patrol of the {name}, searching for new stars"
-        extra = ["Nova", "Galaxy", "Andromeda"] if target == "M31" else ["Nova", "Galaxy"]
+        extra = ["Nova", "Galaxy", "CitizenScience"] + (["Andromeda"] if target == "M31" else [])
+    elif kind in ("moon", "lucky", "live", "mineral"):
+        title = f"Live telescope: imaging {name}, one exposure at a time"
+        extra = ["Moon", "Lunar", "LuckyImaging"]
     else:
         title = f"Live telescope: imaging {name}, one exposure at a time"
-        extra = []
+        extra = ["DeepSky", "LiveImaging"]
     m = state.get("mission") or {}
     if m.get("stream_title"):
         # The night's question sells it (stream-targets.toml [missions]); focusing
@@ -70,7 +73,8 @@ def describe(state, targets=None):
         if len(f"{title} · then {later} | {SITE}") <= 140:
             title = f"{title} · then {later}"
     title = f"{title} | {SITE}"
-    tags = [t for t in BASE_TAGS + extra if " " not in t and len(t) <= 25][:10]
+    # The mission's own tags first, so the ten Twitch keeps say what this is.
+    tags = [t for t in extra + BASE_TAGS if " " not in t and len(t) <= 25][:10]
     return title[:140], tags
 
 

@@ -1037,7 +1037,11 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                 chatting = chat(say)
             # The channel's title follows the mission (the target and its
             # programme), never focusing or polar alignment.
-            programme = (directed["target"], directed["programme"]) if directed["target"] and not segment else None
+            # The plan's next step is part of it: a changed plan changes the title too.
+            upcoming = next((x.get("label") for x in ((st.get("schedule") or {}).get("steps") or [])
+                             if x.get("status") == "queued"), None)
+            programme = (directed["target"], directed["programme"], upcoming) \
+                if directed["target"] and not segment else None
             if process is not None and twitch_on and programme and programme != announced:
                 announced = programme
                 announce(dict(st, director=directed), now, say)

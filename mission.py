@@ -193,6 +193,17 @@ def result_words(key, lucky=None):
     return None
 
 
+def title_words(s, target):
+    """What a stream title may name: the target as given, its common name with
+    the catalogue name ("Andromeda Galaxy (M31)"), and a transit's planet.
+    Searchers type the subject, so the titles lead with it (1 November 2026)."""
+    import streamlook
+    entry = streamlook.targets().get("targets", {}).get(target, {})
+    name = f"{entry['common']} ({target})" if entry.get("common") and target else target
+    planet = (s.get("transit") or {}).get("planet") or target or "an exoplanet"
+    return {"target": target, "name": name, "planet": planet}
+
+
 def of(s, now=None, lucky=None):
     """The mission for a picture's state: {"key", "title", "goal", "steps",
     "question", "next", "confidence", "result", "stream_title"}, or None."""
@@ -209,7 +220,7 @@ def of(s, now=None, lucky=None):
             "goal": entry.get("goal", "").format(target=target),
             "steps": found, "question": question(key, s, lucky, entry), "next": upcoming,
             "confidence": confidence(key, lucky, s.get("candidate")), "result": result_words(key, lucky),
-            "stream_title": entry.get("stream_title", "").format(target=target) or None}
+            "stream_title": entry.get("stream_title", "").format(**title_words(s, target)) or None}
 
 
 def context(m, s, now):
