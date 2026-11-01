@@ -321,9 +321,11 @@ def test_a_focus_reading_is_heard_as_a_tone_higher_the_sharper():
 def test_the_sound_comes_from_a_pipe_when_there_are_tones_and_is_silent_otherwise():
     plain = " ".join(stream.command("rtmp://x/live/k"))
     assert "anullsrc" in plain and "pipe:" not in plain
-    piped = " ".join(stream.command("rtmp://x/live/k", audio_fd=7))
+    args = stream.command("rtmp://x/live/k", audio_fd=7)
+    piped = " ".join(args)
     assert f"-f s16le -ar {stream.TONE_RATE} -ac 1 -i pipe:7" in piped and "anullsrc" not in piped
-    assert "-ar 44100 -ac 2" in piped and piped.count("-i") == 2
+    # Counted as arguments: the scratch folder's random name can hold "-i".
+    assert "-ar 44100 -ac 2" in piped and args.count("-i") == 2
     both = stream.command(["rtmp://a/live/k", "rtmp://live.twitch.tv/app/k"], audio_fd=7)
     assert "-map 1:a" in " ".join(both)
 

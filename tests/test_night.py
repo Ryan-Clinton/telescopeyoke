@@ -313,11 +313,13 @@ def test_through_cloud_a_run_waits_for_the_stars_and_ends_at_dawn(night, monkeyp
     monkeypatch.setattr(shoot, "CLOUD_STOP", 5)
     monkeypatch.setattr(shoot, "NIGHT_CHECK", 0)
     monkeypatch.setattr(shoot, "BACKLOG", 10 ** 6)   # every frame judged live, as above
-    # Clear, sixteen frames of cloud, clear again. Long enough that five
-    # judged rejections in a row come even when a slow computer leaves some
-    # cloudy frames for later, unjudged (Windows CI, 16 October 2026).
-    Sky.pause, Sky.cloudy = 0.6, range(5, 21)
-    monkeypatch.setattr(shoot, "night_over", lambda name, site: "the Sun is -14° up" if Sky.taken >= 36 else None)
+    # Clear, forty frames of cloud, clear again. Frames are judged while
+    # the next are taken, so a slow computer judges them well behind the
+    # camera; sixteen cloudy frames were not always enough for five
+    # rejections in a row to be seen before the clear ones (Windows CI,
+    # 16 October and 1 November 2026).
+    Sky.pause, Sky.cloudy = 0.6, range(5, 45)
+    monkeypatch.setattr(shoot, "night_over", lambda name, site: "the Sun is -14° up" if Sky.taken >= 60 else None)
     monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "0", "--exposure", "2",
                                       "--no-recentre", "--no-restack", "--through-cloud"])
     summary = shoot.main()
