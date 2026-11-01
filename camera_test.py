@@ -47,6 +47,7 @@ import argparse
 import json
 import math
 from pathlib import Path
+import subprocess
 import time
 from xml.sax.saxutils import quoteattr
 
@@ -929,12 +930,43 @@ def conditions(cam, exposure, gain):
             "usb": usb_link(), "usb_devices": usb_devices(), "on_mains": on_mains()}
 
 
-def camera_temperature(cam):
-    """The camera's own thermometer in °C, where its library reports one."""
+def camera_temperature(cam, body=None):
+    """The camera's temperature in °C: its own thermometer where its library
+    reports one, or else the thermistor on its body read through the
+    focuser's Nano (`./focuser.py temp`, from 31 October 2026; this camera
+    has no thermometer). None when neither answers."""
     try:
         return round(cam.handle.get_Temperature() / 10, 1)
     except Exception:
+        pass
+    try:
+        return round((body or body_temperature)(), 1)
+    except Exception:
         return None
+
+
+def body_temperature():
+    """The thermistor on the camera's body, through the focuser's Nano."""
+    import focuser
+    nano = focuser.Focuser.open(full=False, ms=None)
+    try:
+        return nano.temperature()
+    finally:
+        nano.close()
+
+
+def since_plugged_in(run=subprocess.run, now=None):
+    """Minutes since the camera last appeared on USB (switched on, plugged
+    in or its power cut at the hub), from the kernel's log; None if not
+    found. With the camera's temperature: whether failures follow the cold
+    or the time since it was powered (1 November 2026)."""
+    try:
+        out = run(["journalctl", "-k", "-o", "short-unix", "--no-pager", "--since", "-24h", "--grep", "ALTAIRH183C"],
+                  capture_output=True, text=True, timeout=30).stdout
+        stamps = [float(line.split()[0]) for line in out.splitlines() if line[:1].isdigit()]
+    except (OSError, ValueError, subprocess.TimeoutExpired):
+        return None
+    return round(((now or time.time()) - stamps[-1]) / 60, 1) if stamps else None
 
 
 def cooldown_step(cam, exposure, frames, say=lambda line: None):
@@ -1000,7 +1032,7 @@ def cooldown(exposure, gain, frames=20, every_min=10.0, steps=12, note="", say=p
             if step:
                 sleep(every_min * 60)
             row = {"time": time.strftime("%Y-%m-%dT%H:%M:%S"), "note": note, **conditions(cam, exposure, gain),
-                   "camera_c": camera_temperature(cam), "outdoors": outdoors(),
+                   "camera_c": camera_temperature(cam), "powered_min": since_plugged_in(), "outdoors": outdoors(),
                    **cooldown_step(cam, exposure, frames, say=say)}
             rows.append(row)
             with open(log, "a", encoding="utf-8") as f:
@@ -1011,7 +1043,8 @@ def cooldown(exposure, gain, frames=20, every_min=10.0, steps=12, note="", say=p
                 f"dark +{row['dark_excess_adu']} ADU, hot {row['hot_ppm']} ppm  "
                 f"air {air.get('temp_c', '?')}°C dew {air.get('dew_point_c', '?')}°C "
                 f"(margin {air.get('dew_margin_c', '?')}°)  "
-                f"camera {row['camera_c'] if row['camera_c'] is not None else '?'}°C  "
+                f"camera {row['camera_c'] if row['camera_c'] is not None else '?'}°C, "
+                f"{row['powered_min'] if row['powered_min'] is not None else '?'} min since powered  "
                 f"usb {(row['usb'] or {}).get('port', '?')} {(row['usb'] or {}).get('mbps', '?')} Mb/s")
     return {"log": str(log), "steps": rows}
 

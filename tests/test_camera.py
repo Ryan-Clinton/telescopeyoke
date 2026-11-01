@@ -1301,3 +1301,22 @@ def test_the_port_states_leave_out_ports_with_nothing_on_them():
     assert seen["ports"] == ["port21 0x00001203 Speed=4 Link=U0 CCS PP PED"]
     assert seen["kernel_usb"] == ["Oct 31 usb 2-5: reset SuperSpeed USB device"]
     assert camera_probe.sudo("true", run=lambda *a, **k: Done("", 1)) is None
+
+
+def test_the_cooldown_reads_the_body_s_thermistor_and_the_time_since_power():
+    """1 November 2026: whether the failures follow the cold or the time
+    since the camera was powered. The camera has no thermometer, so the
+    thermistor on its body is read instead."""
+    import camera_test
+
+    class NoThermometer:
+        class handle:
+            @staticmethod
+            def get_Temperature():
+                raise OSError("none")
+    assert camera_test.camera_temperature(NoThermometer(), body=lambda: 6.14) == 6.1
+    assert camera_test.camera_temperature(NoThermometer(), body=lambda: 1 / 0) is None
+
+    class Done:
+        stdout = "1793500000.0 PastieLaptop kernel: usb 2-1.1: Product: ALTAIRH183C\n"
+    assert camera_test.since_plugged_in(run=lambda *a, **k: Done, now=1793500000.0 + 600) == 10.0

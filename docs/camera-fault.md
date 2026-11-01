@@ -24,8 +24,12 @@ said no loss, but a lost frame tried again and kept was not counted, so
 some may have been: below). It is
 left at 2 on purpose while the fault is studied: a lost frame is not
 covered over by dropping to a slower speed by itself. Each frame's FITS
-header says the speed it was read at (`READSPD`). Speed 0 has never lost a
-frame plugged in as below, and costs about a second more per frame.
+header says the speed it was read at (`READSPD`). On 1 November, outside
+at 6 °C, it was **speed 0** for the night (`readout_speed = 0`, the probe
+off), because speed 2 lost almost every frame; but speed 0 lost frames
+too, and the camera jammed until its power was cut, again and again.
+Speed 0 kept every frame from 23 to 31 October; it is no longer to be
+trusted for a run left to itself.
 
 ## Hubs and leads: how to plug the camera in
 
@@ -387,9 +391,11 @@ way only cutting its power clears.
   responding at all. It is the strongest sign yet that the fault is in the
   camera's USB 3 electronics (or, this once, the hub between).
 
-- **The faster the readout, the more it fails.** Speed 0 has never lost a
-  frame, through every fault. Speed 1 has lost 16 s frames and kept 2 s ones.
-  Speed 2 has lost frames as short as 2 s.
+- **The faster the readout, the more it fails.** Speed 0 lost no frame
+  from 23 to 31 October; outside and cold on 1 November it lost some,
+  16 s ones included, and the camera jammed at every speed. Speed 1 has
+  lost 16 s frames and kept 2 s ones. Speed 2 has lost frames as short as
+  1 s.
 - **USB 2 mode kept frames that USB 3 mode lost** on the same PC and port
   (23 Oct).
 - **It comes and goes,** over days (gone by 26 Oct) and within a quarter of
@@ -446,8 +452,14 @@ way only cutting its power clears.
   seconds without power (31 October); the morning's healthy state came
   after a night's run, and the fault has cleared by itself before (30
   October, within a quarter of an hour).
-- **Whether speed 0 can ever fail.** It has not yet, in every test since
-  23 Oct.
+- **Whether the cold or the time since power-on brings it on.** Speed 0
+  failed for the first time outside at 6 °C on 1 November; indoors and
+  warm it has failed at speeds 1 and 2 as well. Whether the failures
+  follow the camera's temperature, or the time since it was last powered,
+  or neither, is not known (next tests, the warm and cold run).
+- **Whether the jams and the short exposures are one fault.** The
+  exposure scaled at speeds 1 and 2, and the camera jamming at every speed
+  until its power is cut, may be two faults, not one.
 
 ## Next tests
 
@@ -484,6 +496,13 @@ in another), so the camera's own readable settings are compared instead.
    shows the half-length exposures at speed 2: if it does, the fault is
    the camera's or Altair's, not this project's. Altair's Diagnose file in
    the same sitting.
+0b. **Warm and cold, with the temperature and the time since power-on**
+   (`./camera_test.py --cooldown`, cap on). From 1 November each set of
+   frames also keeps the camera's body temperature from the thermistor
+   (the camera has none of its own) and the minutes since it last appeared
+   on USB. Run indoors from warm, then carried outside, the same lead,
+   hub and settings throughout: whether failures follow the temperature,
+   the time since it was powered, or neither. Needs the person's time.
 1. **Done 31 October (above): the scan, at speeds 0, 1 and 2, while the fault is present**
    (`./camera_test.py --scan`, the telescope at the laptop's screen through
    kitchen roll, room lights off, about 40 minutes). Where the sensor's
@@ -632,7 +651,7 @@ The camera is Gary's; the ticket is ours, and paying for a repair would be his c
 | Systems | Ubuntu (INDI, Altair's library) and Windows 11 (Altair's SDK 60.31589) |
 | Leads | four: 3 m, 1 m, a new one, and the 3 m again |
 | USB 2 mode | 2 s and 16 s frames arrive |
-| USB 3, speed 0 | every frame has arrived, in every test since 23 Oct |
+| USB 3, speed 0 | every frame arrived from 23 to 31 Oct; outside at 6 °C on 1 Nov it lost frames, 16 s ones included, and jammed until its power was cut |
 | USB 3, speed 2 | frames lost at times, as short as 2 s; the link stays at 5000 Mb/s, no disconnect |
 | What a lost frame is | in the fault the frame comes back in about half the time: a 16 s frame after 10.3 s instead of 20.5 s, at speeds 1 and 2, not 0 (USB recorded, 31 Oct) |
 | The light in it | in the fault, against speed 0 in the same light: speed 2 frames hold 0.51 of it, speed 1 frames 0.67, scaled with the time asked from 0.5 to 8 s; the camera still reports the full exposure (31 Oct, cap off) |
