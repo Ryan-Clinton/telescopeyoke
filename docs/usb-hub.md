@@ -106,6 +106,7 @@ the camera with it, and a camera power cut cannot take the focuser.
 | Hub | Price | 1. Chip | 2. Power | 3. Remote power cut | 4. Outdoors |
 |---|---|---|---|---|---|
 | **Lindy 43374**, 4-port USB 3.0 metal hub | £59.59 + £4.35 post (Comms Express; out of stock at Lindy) | VIA VL817 (seller's listing), not Realtek | External adapter included | **Unknown**: VL817 hubs can switch, but only if the maker wired the switches. Testable on arrival with uhubctl, within 30 days | Industrial: all-metal case, EMC protection, mounting brackets, short-circuit protection per port |
+| **Svbony SV241** (the plain one, not the Pro) | £43 (Rother Valley Optics, 30-day returns; £53.99 on eBay) | Not published | 12 V in, up to 10 A, also feeds six 12 V DC outputs (the mount can run from it) | **Not known; probably not.** The SV241 Pro (£125 to £139) switches its ports from software | Built for telescopes: 2 USB 3.1 ports for the camera, 1 USB 2 and 1 USB-C for the Nano and the handset, 2 power-only USB |
 | Amazon Basics HU3770V1, 7-port (ASIN B00E6GX4BG) | £29.99 used, eBay, 30-day returns | VIA VL812 | 12 V / 3 A | **On uhubctl's list** | Plastic. A 2013 design, bought used: its condition is unknown |
 | TP-Link UH720, 7-port | not checked | **Realtek RTS5411**, the same USB 2 chip that dropped 142 times | 12 V | **No.** uhubctl testers found it cuts only the data lines; the 5 V stays on | Plastic |
 | StarTech HB31C2A2CB | £56.90 (Amazon UK) | StarTech's own | Adapter included | Partly: a USB 3 device's power only goes off when every port is off | Plastic |
@@ -119,13 +120,23 @@ Over budget or unsuitable:
   USB 2 sibling, the YKUSH at €59, cannot carry the camera.
 - **StarTech HB30A4AIB:** takes all its power from the laptop.
 
+### The camera without the hub, 1 November 2026
+
+From 20:35 the camera went straight into the laptop (2-5, 5000 Mb/s). It
+did not jam, and the kernel logged no USB error on it to 21:14. In the
+same time the hub, still on the laptop with nothing but the Nano on it,
+dropped its USB 3 side again at 21:01. If jams stay away with no hub, the
+hub was making them worse, and a laptop-controlled power cut matters less
+than a hub that stays up.
+
 ### The choice
 
 - **If the remote power cut matters:** the Amazon Basics, the only one in
   budget known to do it. Check its label says HU3770V1, and test it on
   arrival. Or the Lindy, if it turns out to switch on arrival; return it
   within 30 days if it does not.
-- **If not:** the Lindy, for the build and the different chip. The camera
+- **If not:** the Svbony SV241 at £43, made for telescopes and the cheapest
+  here, or the Lindy, for its build and its different chip. The camera
   goes straight into the laptop, and a jam means pulling its lead at the
   scope.
 
