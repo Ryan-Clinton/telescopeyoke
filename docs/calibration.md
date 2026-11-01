@@ -102,7 +102,15 @@ figures exist, and not built:
   for the first part of a turn. If the kept figures show it (turns made
   after a reversal moving the axis less than turns continued the same way),
   the slack can be learned by itself and the advice can say "take up a
-  quarter turn, then half a turn more".
+  quarter turn, then half a turn more". **Measured on 1 November 2026**
+  (EQ3 Pro azimuth bolts, a half turn at a time, one bolt eased and the
+  other turned in): the two half turns that continued the way the last one
+  went moved the axis **0.94° and 0.98°**; the four that came straight
+  after a change of direction moved **0.67°, 0.42°, 0.53° and 0.55°**. So a
+  turn is worth about 1.9°, and about **0.45° (a quarter turn) is lost to
+  slack each time the direction changes**. The 1.5 turns that overshot the
+  pole that evening (3.3°, 2.2° a turn) went one way after a reversal had
+  already taken the slack up. Logs: `logs/polar-20261101*.log`.
 - **The 2° limit.** It is a fixed first figure. With the bolts' travel
   known, the choice between the bolts and the whole tripod could go by how
   much travel is left on that side.
