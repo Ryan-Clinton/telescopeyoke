@@ -665,6 +665,35 @@ The camera is Gary's; the ticket is ours, and paying for a repair would be his c
 | Speed 0 | kept every frame from 23 Oct to 31 Oct; outside on 1 Nov at 6 °C it lost 16 s frames and the first frames after each opening, and jammed until its power was cut |
 | Firmware | 1.4.1 (January 2017) |
 
+## A replacement being considered, 1 November 2026
+
+After the night of 1 November (the camera jamming at every speed, speed 0
+failing outside, focus fought for hours around it), a replacement is
+tempting: a used **ZWO ASI294MC Pro**, about £450 to £520 on eBay. Nothing
+is bought yet; the 183C is a friend's, and Altair's answer on #3470 (an
+update with the measurements above was written for it on 1 November) may
+still change things.
+
+What it would mean here, from its published specification:
+
+- **A bigger field:** a 4144 × 2822 sensor of 4.63 µm pixels, about
+  1.5° × 1.0° on the 150P (750 mm), against the 183C's 1.0° × 0.67°, at
+  about 1.27" a pixel. M31 fits better, and the patrol would need new
+  references for the new field.
+- **Cooled:** the sensor held at a set temperature (needs a 12 V supply of
+  about 3 A for the cooler, besides USB), so its temperature stops being a
+  variable and darks match from night to night.
+- **A USB 3 socket to the computer and a two-socket USB 2 hub on the
+  camera** for the other kit (the focuser's Nano, a guide camera), one lead
+  down from the telescope instead of the powered hub whose USB 2 side
+  dropped again and again on 1 November.
+- **Software:** ZWO cameras work through INDI (`indi_asi_ccd`), the route
+  `camera.py` already uses; `altair.py` would not be needed for it.
+
+Worth checking on a used one: that the 12 V lead comes with it, and the
+sensor window for condensation or hot pixels, the usual faults of used
+cooled cameras.
+
 ## What others have found
 
 - **The same symptom on another Altair 183C, 2023.** On SharpCap's forum
