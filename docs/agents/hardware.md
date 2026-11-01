@@ -10,7 +10,9 @@ Quirks worth knowing before changing code:
   30 October 2026). The 3 m lead from the laptop to the hub made the camera
   drop off USB within two minutes, even at readout speed 0; the hub's port
   button brings a dropped camera back. Details: `docs/camera-fault.md`,
-  "Hubs and leads".
+  "Hubs and leads". The hub itself (RSHTECH RSH-ST04) dropped off the
+  laptop 142 times on the night of 31 October and is being returned; its
+  record and the replacement are in `docs/usb-hub.md`.
 
 - **The handset answers serial commands while still on its version screen,**
   and then moves the mount by wrong amounts. Its clock shows year 2022 until
