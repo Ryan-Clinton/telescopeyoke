@@ -1317,6 +1317,10 @@ def test_the_cooldown_reads_the_body_s_thermistor_and_the_time_since_power():
     assert camera_test.camera_temperature(NoThermometer(), body=lambda: 6.14) == 6.1
     assert camera_test.camera_temperature(NoThermometer(), body=lambda: 1 / 0) is None
 
+    def no_nano():
+        raise SystemExit('No serial port matches "1a86".')
+    assert camera_test.camera_temperature(NoThermometer(), body=no_nano) is None
+
     class Done:
         stdout = "1793500000.0 PastieLaptop kernel: usb 2-1.1: Product: ALTAIRH183C\n"
     assert camera_test.since_plugged_in(run=lambda *a, **k: Done, now=1793500000.0 + 600) == 10.0

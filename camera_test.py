@@ -941,7 +941,7 @@ def camera_temperature(cam, body=None):
         pass
     try:
         return round((body or body_temperature)(), 1)
-    except Exception:
+    except (Exception, SystemExit):  # no Nano: focuser.Focuser.open exits
         return None
 
 
