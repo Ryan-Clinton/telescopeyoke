@@ -232,6 +232,9 @@ def test_a_whole_night(night, monkeypatch, capsys):
 def test_an_open_ended_run_stops_when_cloud_arrives(night, monkeypatch, capsys):
     _, folder = night
     monkeypatch.setattr(shoot, "CLOUD_STOP", 5)
+    # Every frame judged: on a slow computer (Windows CI) frames set aside
+    # for the quality pass are not judged live, and the count wandered.
+    monkeypatch.setattr(shoot, "BACKLOG", 10 ** 6)
     Sky.pause, Sky.cloudy = 0.6, range(9, 1000)    # clear for eight frames, then cloud for good
     monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "0", "--exposure", "2",
                                       "--no-recentre", "--no-restack"])
@@ -309,6 +312,7 @@ def test_through_cloud_a_run_waits_for_the_stars_and_ends_at_dawn(night, monkeyp
     _, folder = night
     monkeypatch.setattr(shoot, "CLOUD_STOP", 5)
     monkeypatch.setattr(shoot, "NIGHT_CHECK", 0)
+    monkeypatch.setattr(shoot, "BACKLOG", 10 ** 6)   # every frame judged live, as above
     # Clear, sixteen frames of cloud, clear again. Long enough that five
     # judged rejections in a row come even when a slow computer leaves some
     # cloudy frames for later, unjudged (Windows CI, 16 October 2026).
