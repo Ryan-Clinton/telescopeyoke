@@ -175,11 +175,15 @@ def test_the_bench_run_finds_the_step_and_the_slack(tmp_path):
 
 
 def test_the_watcher_takes_only_a_picture_made_after_it_was_asked(tmp_path):
-    import shutil, threading
+    import os, shutil, threading, time
     from PIL import Image
     Image.new("RGB", (8, 8), (1, 2, 3)).save(tmp_path / "old.jpg")
     kept = tmp_path / "kept.jpg"
     shutil.copyfile(tmp_path / "old.jpg", kept)
+    # Old for real: on Windows a file written a moment ago can carry a time a
+    # few milliseconds ahead of Python's clock, and pass for a new one.
+    old = time.time() - 60
+    os.utime(kept, (old, old))
     watcher = focuser.Watcher(kept, tmp_path)
     with pytest.raises(RuntimeError):
         watcher.picture(tmp_path / "a.jpg", wait=0.5)          # nothing new
