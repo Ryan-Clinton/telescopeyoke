@@ -1227,3 +1227,11 @@ def test_doughnuts_a_pixel_bigger_have_not_grown():
     sizes = iter([58, 58, 59, 59.5, 52, 46, 40, 34, 28, 22, 16, 12] + [10] * 40)
     result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet, slack=0, ring=lambda frames: next(sizes))
     assert abs(result["best_at"] + 1500) <= 32
+
+
+def test_doughnuts_are_stars_in_view_not_cloud():
+    """1 November 2026: a watch for clear sky read "no stars" from doughnuts a
+    quarter turn out of focus and missed a clear spell."""
+    assert "stars in view" in focus.verdict(None, 2.3, doughnut=58)
+    assert "cloud" in focus.verdict(None, 2.3)
+    assert focus.verdict(2.0, 2.3).startswith("good")

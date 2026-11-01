@@ -1319,8 +1319,10 @@ def measure_backlash(motor, read, usual, step, say=progress, increment=64, most=
 GOOD_ENOUGH = 1.1    # within this of the usual best, focus is left as it is
 
 
-def verdict(hfr, usual):
+def verdict(hfr, usual, doughnut=None):
     """What a reading says about focus, against the usual best."""
+    if hfr is None and doughnut:
+        return f"doughnuts {doughnut} px across: stars in view, well out of focus"
     if hfr is None:
         return "no stars measured: cloud, the cap, or far out of focus"
     if hfr <= GOOD_ENOUGH * usual:
@@ -1372,7 +1374,7 @@ def run_check(args):
             frames = Watched(cam, MOTOR_EXPOSURE)
             progress(f"camera open; checking focus: 3 frames of {MOTOR_EXPOSURE:g} s after one thrown away")
             frames.frame()                          # the first frame after opening can be stale
-            values = []
+            values, rings = [], []
             for n in range(3):
                 live.stage("measure", n + 1, 3)
                 lum = seen["lum"] = luminance(frames.frame()[0])
@@ -1383,6 +1385,13 @@ def run_check(args):
                 show(lum, line)
                 if value:
                     values.append(value)
+                else:
+                    # Doughnuts too wide for an HFR are still stars in a clear sky
+                    # (1 November 2026: a watch for clear sky that read only HFRs
+                    # missed a clear spell, the drawtube set a quarter turn out).
+                    found = measure(lum)
+                    if found:
+                        rings.append(found[2])
     except IndiError as problem:
         live.done("failed", "The camera stopped sending pictures, so the focus check could not finish.")
         raise hung(problem, frames) from None
@@ -1390,8 +1399,9 @@ def run_check(args):
         live.done("failed", "The focus check stopped before it finished.")
         raise
     hfr = float(np.median(values)) if values else None
+    doughnut = round(float(np.median(rings))) if hfr is None and rings else None
     good = hfr is not None and hfr <= GOOD_ENOUGH * usual
-    progress(f"Focus now: {verdict(hfr, usual)}.")
+    progress(f"Focus now: {verdict(hfr, usual, doughnut)}.")
     if hfr is None:
         live.done("failed", "No stars measured: cloud, the cap, or far out of focus.")
     else:
@@ -1399,7 +1409,7 @@ def run_check(args):
     if good:
         seen_good(hfr, scale)
     return {"hfr": hfr and round(hfr, 2), "hfr_arcsec": hfr and round(hfr * scale, 2),
-            "usual_hfr": round(usual, 2), "good": good}
+            "usual_hfr": round(usual, 2), "good": good, "doughnut_px": doughnut}
 
 
 class Settled:

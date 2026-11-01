@@ -166,3 +166,14 @@ def test_a_stream_file_that_cannot_be_written_never_stops_a_measurement(monkeypa
     monkeypatch.setattr(polaralign, "STREAM_FILE", tmp_path / "blocked" / "polar_stream.json")
     monkeypatch.setattr(polaralign, "_measure", lambda *a: (0.5, 0.5))
     assert polaralign.measure(None, {"latitude": 55}) == (0.5, 0.5)
+
+
+def test_turns_are_sized_by_the_most_a_turn_has_done(bolts):
+    """1 November 2026: turns from the middle of 0.58 to 1.64° a turn said
+    about 2 for 1.5°, a turn did 2.22° that night, and 1.5 turns overshot.
+    Sized by the most a turn has done, it falls short, never past the pole."""
+    for per_turn in (0.58, 0.75, 1.64, 2.22):
+        polaralign.learn({"azimuth_deg": 0.0, "altitude_deg": 0.0},
+                         {"azimuth_deg": -per_turn, "altitude_deg": 0.0}, (1.0, 0))
+    turns = polaralign.guidance(1.8, 0.0)["azimuth"]["turns"]
+    assert turns == pytest.approx(1.8 / 2.22, abs=0.01)

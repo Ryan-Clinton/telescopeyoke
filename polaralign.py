@@ -403,7 +403,11 @@ def guidance(azimuth, altitude, feet_apart_cm=None, cm_per_degree=None, degrees_
                "bolts": [first, second], "view": VIEW, "known": False}
         know = learned(axis)
         if know and abs(know["deg_per_turn"]) > 0.02:
-            turns = -error / know["deg_per_turn"]           # positive: the first bolt of the pair goes in
+            # Sized by the most a turn has ever moved it, so a turn that does more
+            # than usual cannot carry it past the pole: on 1 November 2026 the
+            # middle of 0.58 to 1.64° a turn asked for about 2 turns, a turn did
+            # 2.22° that night, and 1.5 turns overshot by 1.8°. Short is a top-up.
+            turns = -error / know["deg_per_turn"] * abs(know["deg_per_turn"]) / know["high"]
             goes_in = first if turns > 0 else second
             eases = second if turns > 0 else first
             least, most = abs(error) / know["high"], abs(error) / know["low"]
