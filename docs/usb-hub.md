@@ -75,6 +75,37 @@ January 2027) as "Item is defective or does not work", with the comment:
 > on two different cables and two laptop ports. USB 3 side also drops out.
 > Connected devices cut off mid-use.
 
+## Bought: the Svbony SV241
+
+Ordered on 1 November 2026 from svbonyuk.com for £39 (regular price £45). It
+ships from Svbony's warehouse in China. Cheaper elsewhere only on paper:
+Rother Valley Optics charges £43 plus £25 delivery to Northern Ireland, and
+Amazon UK £55.99.
+
+**Plan for it:**
+
+- **Power:** 12 V into its 5.5 × 2.5 mm input. A 5.5 × 2.1 plug fits but
+  sits loose, so use a 2.1-to-2.5 adapter lead. The mount runs from one of
+  its 12 V outputs (5.5 × 2.1, the EQ3 Pro's socket) on the supplied lead.
+  The supply must give at least 3 A, ideally 5 A. Which supply (the
+  mount's, or the 12 V one ordered from Alibaba) waits on their labels.
+- **USB:** its outputs only switch on once its USB lead to the laptop is
+  plugged in. The Nano and the handset go on it first. The camera stays
+  straight into the laptop until the box has proved itself.
+- **Mounting:** three tapped holes underneath (M4 and 1/4-inch), no foot in
+  the box. A small dovetail plate (about £10) puts it on the finder shoe.
+- **Test the day it arrives, indoors:**
+  1. The camera in each USB 3.1 port for a 20-minute frame run, checking
+     it arrives at 5000 Mb/s (`lsusb -t`).
+  2. The Nano and the handset on it for an hour, with `journalctl -k`
+     watched for disconnects.
+
+  A dead USB 3 port or any drop means a return. Three of its ten critical
+  Amazon reviews describe exactly that kind of dud.
+- **No power cut from the laptop.** Svbony confirms its ports are always
+  on, so a camera jam means pulling the camera's lead. The camera has not
+  jammed straight into the laptop since 20:35 on 1 November.
+
 ## What replaces it
 
 Budget: up to about £70 (the £20 refund plus £30 to £50). Facts checked on
