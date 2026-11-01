@@ -402,6 +402,19 @@ laptop started at 18:52. Logs in `logs/camera-evening*-20261101.log`.
   no resets in the kernel log; every 1 s frame arrived (a walk-in and the
   cloud checks), while the spoken focusing aid lost 3 frames of 0.05 s in
   its first minute. The hub is being returned (`usb-hub.md`).
+- **20:34 to 22:30 on the 3 m lead, speed 0:** the link stayed at
+  5000 Mb/s with no resets. Lost frames came back: the spoken aid (2 s
+  frames) gave 72 readings without a loss, but the polar alignment's
+  plate-solve frames lost a first try now and then, 1 to 5 a round over
+  nine rounds and 12 in the first three of five repeat rounds at about
+  22:20, each got on a retry; no measurement failed for want of a frame.
+  The automatic power cut said each time that it could not be made (no
+  hub port) and the camera was opened again instead, which was enough.
+- **"Would not be set up" (SDK error 0x8000ffff) when opened at once after
+  another program closed it:** twice, at 21:20 and 21:36, a command opening
+  the camera a second or two after the last one let go of it was refused;
+  the same command a few seconds later opened it normally. Not the jam:
+  no power cut was needed.
 
 So tonight speed 2 is in the fault from the start, and speed 0 jams within
 minutes of being opened but is cleared every time by a power cut, made from
