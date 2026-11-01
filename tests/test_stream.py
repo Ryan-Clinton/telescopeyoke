@@ -445,3 +445,14 @@ def test_a_fresh_picture_keeps_the_stream_on_air_and_no_stack_never_costs_it(tmp
     assert not stream.night_ending(over, between=False, active=stream.seeing(now))
     os.utime(tmp_path / "latest.jpg", (now - 3600, now - 3600))
     assert stream.night_ending(over, between=False, active=stream.seeing(now))
+
+
+def test_another_night_s_finished_schedule_does_not_end_tonight_s_stream():
+    """1 November 2026: a schedule from 20 October, all done, made every
+    pause between focusing and imaging look like the end of the night, and
+    the stream stopped and started ten times in an hour."""
+    import time as _time
+    now = _time.time()
+    old = {"schedule": {"steps": [{"status": "done", "start": now - 12 * 86400}]}}
+    tonight = {"schedule": {"steps": [{"status": "done", "start": now - 3600}]}}
+    assert not stream.night_over(old, now) and stream.night_over(tonight, now)

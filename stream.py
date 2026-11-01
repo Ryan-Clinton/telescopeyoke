@@ -93,6 +93,7 @@ MEASURE_S = 300         # a transit's light curve is measured again this often
 START_S = 120           # a run whose newest frame is younger than this is imaging
 LOOK_S = 2              # how often the focus and polar files are looked at while watching
 STOP_S = 300            # no new frame for this long: stop streaming
+SCHEDULE_OLD_S = 18 * 3600   # a schedule last started longer ago than this is another night's
 INGEST = {
     "youtube": "rtmp://a.rtmp.youtube.com/live2/{key}",
     "twitch": "rtmp://live.twitch.tv/app/{key}",
@@ -232,9 +233,17 @@ def due_soon(st, now, within=BETWEEN_S):
     return bool(upcoming) and (upcoming.get("status") == "running" or (upcoming.get("start") or now) - now <= within)
 
 
-def night_over(st):
-    """Whether tonight's schedule has run to its end."""
+def night_over(st, now=None):
+    """Whether tonight's schedule has run to its end. A schedule whose steps
+    all began more than SCHEDULE_OLD_S ago is another night's, and says
+    nothing about tonight (1 November 2026: one from 20 October, all done,
+    stopped the stream at every pause between focus and imaging steps,
+    ten times in an hour)."""
+    now = now or time.time()
     steps = (st.get("schedule") or {}).get("steps") or []
+    starts = [s.get("start") for s in steps if isinstance(s.get("start"), (int, float))]
+    if starts and now - max(starts) > SCHEDULE_OLD_S:
+        return False
     return bool(steps) and all(s.get("status") in ("done", "failed", "skipped") for s in steps)
 
 
