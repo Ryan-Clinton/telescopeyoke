@@ -85,17 +85,26 @@ What the telescope needs from a hub:
    is still cleared without anyone going outside.
 4. Happy in the cold and damp outside.
 
+Budget: up to about £70 (the £20 refund plus £30 to £50). The laptop's own
+USB sockets cannot cut a port's power (checked with uhubctl on 1 November
+2026), so the hub has to.
+
 | Hub | Price | Power | Laptop can cut a port | Notes |
 |---|---|---|---|---|
-| **Pegasus Astro USB Control Hub** (PEG-UCH) | £169 (First Light Optics, Rother Valley, Altair, 365 Astronomy) | 12–14 V DC in, up to 2.5 A a port, 8 A in all | Yes, through its own software and INDI (`indi_pegasus_uch`), not uhubctl | Six USB 3.1 ports, aluminium case, rated −40 to +85 °C. Built for telescopes. Needs a 12 V lead and a new path in `usbpower.py` |
-| RSHTECH RSH-ST10C-6 | £44.99 (Amazon UK) | 12 V / 5 A adapter | Yes, listed by uhubctl, with catches | Three hubs chained inside, with the same Realtek USB 2 chip. Owners say power switching works only from the USB 3 side, ports must first be switched on at the touch buttons, and one USB-C port ignores commands. Same maker |
-| The same RSH-ST04 again | about £19.49 | 5 V / 2 A | Yes, as now | Cheapest, and `usbpower.py` works as it is. But the reviews report the same faults, so a new unit could do the same |
+| **Amazon Basics 7-port USB 3.0, HU3770V1** (ASIN B00E6GX4BG) | £29.99 used on eBay, free post, 30-day returns | 12 V / 3 A adapter | Yes, on uhubctl's list | VIA VL812 chips (`2109:2811`), not Realtek. Seven ports, so the camera, the Nano, the handset and the guide camera all fit. uhubctl's only warning is about Raspberry Pis, not laptops. Check the label says HU3770V1: the later Amazon Basics U3-7HUB switches only one port |
+| StarTech HB31C2A2CB | £56.90 new (Amazon UK) | Adapter included | Partly | Two USB-A and two USB-C ports. Owners say a USB 3 device's power only goes off when every port is off, so a camera power cut would cut the Nano too |
+| RSHTECH RSH-ST10C-6 | £44.99 (Amazon UK) | 12 V / 5 A adapter | Yes, with catches | Same maker and the same Realtek USB 2 chip. Owners say switching works only from the USB 3 side, ports must first be on at the touch buttons, and one USB-C port ignores commands |
+| The same RSH-ST04 again | about £19.49 | 5 V / 2 A | Yes, as now | The reviews report the same faults |
+| Pegasus Astro USB Control Hub | £169 | 12–14 V, 8 A | Yes, through INDI | Built for telescopes, but out of budget. None used on eBay UK or Facebook Marketplace on 1 November 2026 |
 
-**Recommended: the Pegasus USB Control Hub.** It is the only one built for
-outdoor use at a telescope, its 12 V supply ends the weak-power problem, and
-astronomy software already drives its port switching. A used ZWO ASI294MC
-Pro (see `camera-fault.md`, "A replacement being considered") has a USB 2
-hub of its own, which would take the Nano off a separate hub altogether.
+Not suitable: the StarTech HB30A4AIB (£32) takes all its power from the
+laptop, and Atolla and Sabrent hubs are not known to switch port power.
+
+**Recommended: the Amazon Basics HU3770V1.** It is the cheapest hub with a
+different chip, a 12 V supply and power switching uhubctl is known to
+handle. `usbpower.py` finds a hub by its ports, not its maker, so it should
+work unchanged; the first night it goes on, cut the camera's power with
+`./camera_test.py --power-cycle` and check the fan stops.
 
 **With no hub,** the camera goes straight into a laptop USB-A socket. Plugged
 in that way it has never dropped off USB, including three 720-frame runs on
