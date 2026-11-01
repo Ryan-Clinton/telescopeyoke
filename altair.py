@@ -47,9 +47,13 @@ WATCHED = (("low_power", "LOW_POWERCONSUMPTION"), ("low_power_above_ms", "LOW_PO
 
 
 def wait_for(seconds):
-    """Longest wait for a frame. It is the INDI route's figure, kept as the
-    upper limit until the SDK's real timing has been measured."""
-    return 12 + 6 * seconds
+    """Longest wait for a frame. Measured through the SDK: a 16 s frame
+    comes back after about 20.5 s, and speed 0 in the fault gathers for
+    1.27 times the time asked (docs/camera-fault.md), so 10 s more than
+    half again the exposure is ample. It was the INDI route's 12 + 6 x
+    the exposure, 108 s for 16 s: on 1 November 2026 a jam took about seven
+    minutes over four tries to be said, while the person waited outside."""
+    return 10 + 1.5 * seconds
 
 
 def sdk():
