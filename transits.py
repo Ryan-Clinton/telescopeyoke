@@ -43,7 +43,8 @@ import interface
 import records
 
 ARCHIVE = "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
-QUERY = ("select pl_name,hostname,ra,dec,sy_vmag,pl_orbper,pl_tranmid,pl_trandur,pl_trandep "
+QUERY = ("select pl_name,hostname,ra,dec,sy_vmag,pl_orbper,pl_tranmid,pl_trandur,pl_trandep,"
+         "disc_year,pl_tranmiderr1,pl_orbpererr1 "
          "from pscomppars where pl_trandep>0.3 and sy_vmag<{faintest} and dec>-20 and pl_tranmid is not null "
          "and pl_orbper is not null and pl_trandur is not null")
 FRESH_DAYS = 7       # the planet list is fetched again after this long
@@ -67,7 +68,10 @@ def planets(get=requests.get, now=None):
     the copy kept this week."""
     path = store()
     now = now or time.time()
-    if not path.exists() or now - path.stat().st_mtime > FRESH_DAYS * 86400:
+    stale = not path.exists() or now - path.stat().st_mtime > FRESH_DAYS * 86400
+    if not stale and "pl_orbpererr1" not in path.read_text(encoding="utf-8").partition("\n")[0]:
+        stale = True      # kept before the timing's uncertainty was asked for (1 November 2026)
+    if stale:
         reply = get(ARCHIVE, timeout=120, params={"query": QUERY.format(faintest=FAINTEST), "format": "csv"})
         reply.raise_for_status()
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -78,10 +82,47 @@ def planets(get=requests.get, now=None):
             rows.append({"planet": r["pl_name"], "star": r["hostname"], "ra": float(r["ra"]), "dec": float(r["dec"]),
                          "v": float(r["sy_vmag"]) if r["sy_vmag"] else None, "period": float(r["pl_orbper"]),
                          "epoch": float(r["pl_tranmid"]), "hours": float(r["pl_trandur"]),
-                         "depth": float(r["pl_trandep"])})
+                         "depth": float(r["pl_trandep"]), "found": number(r.get("disc_year"), int),
+                         "epoch_err": number(r.get("pl_tranmiderr1")), "period_err": number(r.get("pl_orbpererr1"))})
         except (KeyError, ValueError):
             continue
     return rows
+
+
+def number(text, kind=float):
+    try:
+        return kind(float(text))
+    except (TypeError, ValueError):
+        return None
+
+
+def timing_minutes(p, middle):
+    """How well tonight's transit time is known, in minutes (one standard
+    deviation): the catalogue's uncertainty in its reference transit and in
+    the period, the second times the orbits since. None without them."""
+    if p.get("epoch_err") is None or p.get("period_err") is None:
+        return None
+    orbits = round((middle - p["epoch"]) / p["period"])
+    return round(math.hypot(p["epoch_err"], orbits * p["period_err"]) * 1440, 1)
+
+
+USEFUL_MIN = 5.0     # a transit time known no better than this is worth timing again
+WELL_KNOWN_MIN = 2.0
+
+
+def benefit(t):
+    """What a timing of this transit gives science, in words: the less well
+    its time is known tonight, the more one measurement adds. ExoClock
+    (exoclock.space) keeps these times up to date for ESA's Ariel mission."""
+    found = f", found {t['found']}" if t.get("found") else ""
+    sigma = t.get("timing_min")
+    if sigma is None:
+        return f"timing uncertainty not given{found}"
+    if sigma >= USEFUL_MIN:
+        return f"time known only to ±{sigma:g} min{found}: a timing tonight improves it"
+    if sigma >= WELL_KNOWN_MIN:
+        return f"time known to ±{sigma:g} min{found}: a timing helps"
+    return f"time known to ±{sigma:g} min{found}: well known, good practice"
 
 
 def transits_between(p, start_jd, end_jd):
@@ -114,7 +155,9 @@ def tonight(cfg, rows, deeper=DEEPER, now=None, say=print):
                                     mid=night.local(i).strftime("%H:%M"),
                                     end=night.local(len(jd) - 1 - int(np.argmax(inside[::-1]))).strftime("%H:%M"),
                                     altitude=round(float(alt[k][i]), 1),
-                                    exposure=4 if p["v"] < FULL_WELL else 16))
+                                    exposure=4 if p["v"] < FULL_WELL else 16,
+                                    timing_min=timing_minutes(p, middle)))
+                    out[-1]["benefit"] = benefit(out[-1])
     out.sort(key=lambda t: -t["depth"])
     return {"night": str(night.date), "deeper": deeper, "planets": len(rows), "bright_and_deep": len(usable),
             "transits": out, "kind": "inferred"}
@@ -457,6 +500,7 @@ def run(args, say=print):
         say(f"  {t['planet']:<14} {t['depth']:.2f}% deep, V {t['v']:.1f}, {t['start']} to {t['end']} "
             f"(middle {t['mid']}, {t['altitude']:.0f}° high), {t['exposure']} s frames: ./mount.py goto "
             f"{t['star'].replace(' ', '')}")
+        say(f"  {'':<14} science: {t['benefit']}")
     answer["before"] = before_the_night(answer["transits"])
     for line in answer["before"]:
         say(f"  before: {line}")

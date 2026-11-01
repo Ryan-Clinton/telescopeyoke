@@ -110,7 +110,18 @@ figures exist, and not built:
   turn is worth about 1.9°, and about **0.45° (a quarter turn) is lost to
   slack each time the direction changes**. The 1.5 turns that overshot the
   pole that evening (3.3°, 2.2° a turn) went one way after a reversal had
-  already taken the slack up. Logs: `logs/polar-20261101*.log`.
+  already taken the slack up. A quarter turn continuing the same way read
+  as nothing (0.3° east before and after), but five checks over the next
+  ten minutes with the bolts untouched read 0.19, 0.03, 0.00, 0.15 and
+  0.04° east (a scatter of 0.06°): it had moved about 0.2°, and the mount
+  settled into it after the check made just after the turn. So a check
+  made at once after a small turn can miss part of it, and the scatter of
+  a single measurement (0.06°) is small beside the half-turn figures above.
+  A "quarter turn" by hand on these small knobs is really 35 to 55° (the
+  person's own estimate), 0.1 to 0.15 of a turn: at 1.9° a turn, 0.2 to
+  0.3°. A second one the same way, measured a minute after the turn and
+  twice, moved it 0.28° (0.08° east to 0.2° west, both readings agreeing).
+  Logs: `logs/polar-20261101*.log`.
 - **The 2° limit.** It is a fixed first figure. With the bolts' travel
   known, the choice between the bolts and the whole tripod could go by how
   much travel is left on that side.

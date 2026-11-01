@@ -4,6 +4,8 @@ the depth and the timing put into it. Nothing here touches the network."""
 import datetime
 
 import numpy as np
+import math
+
 import pytest
 from astropy.time import Time
 
@@ -131,3 +133,16 @@ def test_a_transit_night_says_first_which_calibration_it_still_needs(tmp_path, m
     assert [n for n in needs if n.startswith("no ")] == ["no dark for 16 s at gain 1500: ./calibrate.py dark "
                                                          "--exposure 16 --gain 1500"]
     assert "--hold 5" in needs[-1] and transits.before_the_night([], gain=1500) == []
+
+
+def test_each_transit_says_how_well_its_time_is_known():
+    """1 November 2026: the person asked for the transits' benefit to science
+    in the night's list. The less well tonight's time is known, the more a
+    timing adds."""
+    p = {"epoch": 2459000.0, "period": 2.0, "epoch_err": 0.0005, "period_err": 0.00001}
+    sigma = transits.timing_minutes(p, 2459000.0 + 2.0 * 500)
+    assert sigma == pytest.approx(math.hypot(0.0005, 500 * 0.00001) * 1440, abs=0.1)
+    assert "a timing tonight improves it" in transits.benefit({"timing_min": 11.1, "found": 2022})
+    assert "well known" in transits.benefit({"timing_min": 0.8, "found": 2007})
+    assert "not given" in transits.benefit({"timing_min": None})
+    assert transits.timing_minutes({"epoch": 0, "period": 1, "epoch_err": None, "period_err": None}, 5) is None
