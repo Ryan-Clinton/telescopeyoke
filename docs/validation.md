@@ -332,7 +332,7 @@ was done, and the focuser was turned the wrong way by it. It now measures
 only stars within a third of the second brightest, and with that the reading
 fell from 11 to about 2 as the focuser was turned and the stars became
 points. The user asked for the numbers spoken and nothing else, which is
-`--numbers`. The plate solver would not take the soft stars at dusk either,
+`--numbers` (the default since 1 November 2026). The plate solver would not take the soft stars at dusk either,
 and now tries again on a frame averaged in blocks. Later the same night, with the focuser far out and no
 star left to find, it read 2.2 from specks of the sky's grain; a star must
 now stand out from the grain by 8 to count, and the rings are measured in

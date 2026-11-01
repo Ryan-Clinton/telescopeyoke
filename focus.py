@@ -3,7 +3,9 @@
 
     ./focus.py                 on stars: a click and a tone for every frame measured
     ./focus.py --quiet         no sound; the readings are printed and shown
-    ./focus.py --numbers       each reading spoken as a number, in place of the sounds
+    ./focus.py --tones         the click and rising tone for each reading, in place of
+                               the spoken number (the number is the default: 1 November
+                               2026, "all i hear are beeps i want numbers")
     ./focus.py --field         first slew to a bright star in a rich part of
                                the sky (this MOVES the telescope)
     ./focus.py --field --dry-run   say which star; nothing moves
@@ -1618,8 +1620,10 @@ def main():
     ap.add_argument("--exposure", type=float, default=0.05, help="starting exposure, seconds")
     ap.add_argument("--gain", type=int, default=300)
     ap.add_argument("--quiet", action="store_true", help="no sound from the laptop")
-    ap.add_argument("--numbers", action="store_true",
-                    help="say each reading as a number, in place of the click and tone")
+    ap.add_argument("--numbers", action="store_true", default=True,
+                    help="say each reading as a number (the default)")
+    ap.add_argument("--tones", dest="numbers", action="store_false",
+                    help="the click and rising tone for each reading, in place of the spoken number")
     ap.add_argument("--field", action="store_true",
                     help="first slew to a bright star in a rich part of the sky: MOVES the telescope")
     ap.add_argument("--dry-run", action="store_true",

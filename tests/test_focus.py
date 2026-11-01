@@ -258,7 +258,7 @@ THROUGH = [5.5] * 3 + [4.0] * 3 + [2.9] * 4 + [2.5] * 3 + [2.1] * 3 + [1.7] * 3 
 
 
 def test_a_whole_focusing_run_by_ear(aid):
-    reading = aid(THROUGH)
+    reading = aid(THROUGH, "--tones")
     words = [what for kind, what in Scope.log if kind == "said" and what != "Exposure increasing."]
     assert words == ["Level two.", "Level three. Fine focus.", "Minimum passed. Reverse slightly.",
                      "Best focus.", "Focus good. Hold."]
@@ -290,7 +290,7 @@ def test_a_binned_reading_is_given_in_full_size_pixels(aid):
 
 
 def test_the_next_exposure_starts_before_this_frame_is_heard(aid):
-    aid([4.0] * 4)
+    aid([4.0] * 4, "--tones")
     order = [entry for entry in Scope.log if entry[0] in ("exposing", "sound")]
     assert [kind for kind, _ in order] == ["exposing", "exposing", "sound", "exposing", "sound",
                                            "exposing", "sound", "sound"]
@@ -1186,3 +1186,12 @@ def test_a_walk_in_from_doughnuts_checks_the_collimation_on_them(monkeypatch, ca
     answer = json.loads(capsys.readouterr().out)
     assert answer["data"]["collimation"]["verdict"].startswith("off")
     assert json.loads((tmp_path / "collimation.jsonl").read_text())["source"] == "walk-in"
+
+
+def test_the_readings_are_spoken_as_numbers_unless_tones_are_asked_for(aid):
+    """1 November 2026, at the telescope: "all i hear are beeps i want
+    numbers". The number is the default; --tones brings back the sounds."""
+    aid([4.0] * 3)
+    said = [what for kind, what in Scope.log if kind == "said"]
+    assert said and all(any(c.isdigit() for c in what) for what in said if what != "Exposure increasing.")
+    assert not [what for kind, what in Scope.log if kind == "sound"]
