@@ -283,6 +283,28 @@ killed if need be and waited for (`stream.ended`), never left behind.
 the watcher reads the services and keys again; if they have changed it
 starts again on the new ones.
 
+**YouTube's title and description** are set by the stream as Twitch's
+are (`youtube.py`), once this laptop is signed in: the title as the
+stream gives it (leading with what is observed, "Exoplanet transit LIVE:
+timing TOI-2046 b crossing its star"), a description of tonight's plan
+from the schedule, what the observation is for, the kit and hashtags, the
+Science & Technology category, tags by mission, and the night's stack as
+the thumbnail (refused, and said, until the channel is phone-verified).
+Set again whenever the target, programme or the plan's next step changes.
+Setting it up, once:
+
+1. In Google Cloud (console.cloud.google.com), a project "TelescopeYoke"
+   with the YouTube Data API v3 switched on.
+2. An OAuth consent screen (External, the channel's owner as a test user)
+   and an OAuth client of the kind "TVs and limited input devices"; its
+   JSON downloaded.
+3. `./stream.py youtube-login --client FILE`: it gives a code to enter at
+   google.com/device, signed in as the channel's owner.
+
+The client and the tokens are kept in `~/.config/telescopeyoke/youtube.json`
+(readable only by the person). Until then, or whenever YouTube refuses,
+nothing is sent and the broadcast keeps what it had; the stream never waits.
+
 **Keep YouTube's "Dual stream" off** (Studio, Live, Stream settings). On 1
 November 2026 it was on: YouTube took the stream ("Stream is healthy",
 Excellent, Public) and held the broadcast at "Preparing stream" for

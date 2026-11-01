@@ -718,20 +718,36 @@ def measure_transit(st, running, say=print):
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def announce(st, now, say=print):
-    """Set the Twitch channel's title, category and tags for this run, on
-    its own thread: the feed never waits on Twitch."""
+def announce(st, now, say=print, twitch_on=True, youtube_on=False):
+    """Set the Twitch channel's title, category and tags for this run, and
+    the YouTube broadcast's title, description, tags and thumbnail when
+    signed in (youtube.py), on its own thread: the feed never waits on them."""
     import threading
+
+    import config
 
     import streamlook
     import twitch
 
     def run():
-        try:
-            title, tags = twitch.describe(streamlook.from_status(st, now, session_of(st)))
-            twitch.set_channel(title, tags, say=say)
-        except Exception as error:               # the stream goes on whatever Twitch says
-            say(f"The channel's info was left as it is: {error}")
+        state = streamlook.from_status(st, now, session_of(st))
+        title, tags = twitch.describe(state)
+        if twitch_on:
+            try:
+                twitch.set_channel(title, tags, say=say)
+            except Exception as error:           # the stream goes on whatever Twitch says
+                say(f"The channel's info was left as it is: {error}")
+        if youtube_on:
+            import youtube
+            state = dict(state, mission=state.get("mission") or {})
+            planet = (state.get("transit") or {}).get("planet")
+            science = (f"Timing the transit of the exoplanet {planet}: when it comes against the prediction "
+                       "refines its orbit; timings like this go to the ExoClock project, which keeps them up "
+                       "to date for ESA's Ariel mission.") if planet else None
+            yt_title, description, yt_tags = youtube.listing(title, state, youtube.plan_lines(st.get("schedule")),
+                                                             science)
+            youtube.set_broadcast(yt_title, description, yt_tags, thumbnail=config.DATA / "web" / "stack.jpg",
+                                  say=say)
     threading.Thread(target=run, daemon=True).start()
 
 
@@ -934,6 +950,8 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
     target = to or [address for _, address, _ in found]
     stream_keys = [k for _, _, k in found]
     twitch_on = to is None and "twitch" in names
+    import youtube
+    youtube_on = to is None and "youtube" in names and youtube.signed_in()
     device = working_device()
     say(f"Video encoding on {device or 'the processors (no working video hardware)'}")
     size = (WIDTH, HEIGHT)
@@ -1042,9 +1060,9 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                              if x.get("status") == "queued"), None)
             programme = (directed["target"], directed["programme"], upcoming) \
                 if directed["target"] and not segment else None
-            if process is not None and twitch_on and programme and programme != announced:
+            if process is not None and (twitch_on or youtube_on) and programme and programme != announced:
                 announced = programme
-                announce(dict(st, director=directed), now, say)
+                announce(dict(st, director=directed), now, say, twitch_on=twitch_on, youtube_on=youtube_on)
             if process is not None:
                 if imaging(st) and now - measured_at > MEASURE_S:
                     measuring, measured_at = measure_transit(st, measuring, say), now
@@ -1225,12 +1243,14 @@ def install(say=print, run=subprocess.run, home=None):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("action", nargs="?",
-                    choices=["watch", "frame", "preview", "scenes", "director", "key", "twitch-login"])
+                    choices=["watch", "frame", "preview", "scenes", "director", "key", "twitch-login",
+                             "youtube-login"])
     ap.add_argument("service", nargs="?", choices=sorted(NAMES), help="with key: whose key it is")
     ap.add_argument("--to", help="with watch: stream into this file instead, to try it")
     ap.add_argument("--install", action="store_true", help="with watch: run it as a systemd user service")
     ap.add_argument("--director", action="store_true",
                     help="with frame: write the director's answer over the picture (kept here, never sent)")
+    ap.add_argument("--client", help="with youtube-login: the OAuth client JSON from Google Cloud")
     ap.add_argument("--clear", action="store_true", help="with director: forget the target last aimed at")
     ap.add_argument("--vertical", action="store_true",
                     help="with frame: the 9:16 picture for phones, as cache/stream-vertical.jpg")
@@ -1242,6 +1262,12 @@ def main(argv=None):
     if args.action == "twitch-login":
         import twitch
         return 0 if twitch.login() else 1
+    if args.action == "youtube-login":
+        import youtube
+        if not args.client:
+            raise SystemExit("youtube-login needs --client FILE: the OAuth client's JSON from Google Cloud "
+                             "(docs/streaming.md, \"YouTube's title and description\")")
+        return 0 if youtube.login(args.client) else 1
     if args.service and args.action != "key":
         ap.error("a service is named only with key")
     if args.action == "key":
