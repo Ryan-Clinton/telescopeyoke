@@ -381,6 +381,19 @@ with the camera off:
 Its answer and pictures are kept like the bench's, in
 `cache/focuser-bench-DATE.json` and `cache/focuser-bench/`.
 
+**On 1 November 2026, evening, the knob did not turn at all.** With the
+Nano on the hub (3-2.2) and the drawtube set about a quarter turn out by
+hand, two walk-ins found the stars unchanged: HFR 9.75 to 9.99 over 384
+half-steps in, then doughnuts of 58, 58 and 59 px over 256. Three
+`./focuser.py test` quarter turns, watched at the telescope, left the knob
+still while the motor ran. So the motor turned and the knob did not, inward
+as well as out: the coupler slipping on the shaft, or the bracket, not a
+motor too weak to lift. Focus was then by hand with the spoken aid. A
+walk-in now stops with `FOCUSER_NOT_MOVING` when the stars are within 5 %
+of where they started after an eighth of a turn in, instead of walking on.
+The hub is being returned (`usb-hub.md`); without it the Nano goes on a
+laptop socket.
+
 ## Temperature (the thermistor wired, the BME280 planned)
 
 The Hypercam 183C has no thermometer, and the cold, damp night of 17 October

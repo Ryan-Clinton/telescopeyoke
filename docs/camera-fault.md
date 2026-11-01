@@ -55,7 +55,9 @@ found that afternoon:
   reports "the camera would not be set up: SDK error 0x8000ffff" at any
   speed; the kernel log shows `device descriptor read/8, error -110` and
   resets, then the camera drops off USB.
-- **How to get it back.** Cut its power at the hub. From 1 November 2026
+- **How to get it back.** Cut its power. Plugged straight into the laptop, as
+  from the evening of 1 November 2026 while the hub goes back (`usb-hub.md`),
+  that means pulling its lead. Behind a hub, from 1 November 2026
   the laptop does it: `./camera_test.py --power-cycle` turns the camera's
   hub port off for 8 s and on again (`usbpower.py`, through uhubctl; the
   hub switches each port's power on its own), and with
@@ -390,9 +392,22 @@ laptop started at 18:52. Logs in `logs/camera-evening*-20261101.log`.
   lost; the camera code cut the power by itself, the camera was back on
   USB at 19:43:11 and speed 0 then kept **20 of 20** 16 s frames, done at 19:50.
 
+- **20:16 to 20:34, the hub on USB-C:** the hub's USB 3 half dropped off
+  the laptop 35 times. From 20:22 the camera came back only at USB 2 speed
+  (480 Mb/s, as product `0c78`), sent no frames there, and two walk-ins
+  ended with it "hung". A power cut made then switched the USB 2 half on
+  first; `usbpower.py` now switches the USB 3 half on first, and the
+  camera has one more try after it is opened again.
+- **20:34 onward, the 3 m lead straight into laptop socket 2-5:** 5000 Mb/s,
+  no resets in the kernel log; every 1 s frame arrived (a walk-in and the
+  cloud checks), while the spoken focusing aid lost 3 frames of 0.05 s in
+  its first minute. The hub is being returned (`usb-hub.md`).
+
 So tonight speed 2 is in the fault from the start, and speed 0 jams within
-minutes of being opened but is cleared every time by a power cut, now made
-from the laptop. The jam no longer needs anyone at the hub.
+minutes of being opened but is cleared every time by a power cut, made from
+the laptop while the hub was there. The hub itself then failed, and the
+camera went straight into the laptop, where it has never dropped off USB
+but nothing can cut its power: a jam there means pulling its lead.
 
 ## What is known
 
