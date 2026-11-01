@@ -503,6 +503,20 @@ in another), so the camera's own readable settings are compared instead.
    on USB. Run indoors from warm, then carried outside, the same lead,
    hub and settings throughout: whether failures follow the temperature,
    the time since it was powered, or neither. Needs the person's time.
+0c. **The focuser's Nano unplugged, then plugged in with its motor powered
+   and still** (`./camera_test.py`, 720 × 16 s at speed 2, indoors, the
+   same lead and hub each time). From the kernel's log of when the Nano was
+   on USB: the four clean 720-frame runs of 30 and 31 October were made
+   with the Nano unplugged from 22:36 on 30 October to 13:46 on 31 October
+   (it was on the hub, and turned, only from 22:00 to 22:36 of the first
+   run, with the old motor driver). The Nano went back on at 17:02 and
+   17:25 on 31 October, after the TMC2209 driver and the thermistor were
+   wired in, and every test from 17:46 on has found the fault. It cannot be
+   the whole cause: the fault was present with no Nano on 22 October at
+   05:30 and on the desktop PC on 23 October. Whether the new driver, or
+   its supply sharing a ground with the camera (Altair raised a ground loop
+   on 21 October), brings the fault on. Needs the person to plug and
+   unplug the Nano.
 1. **Done 31 October (above): the scan, at speeds 0, 1 and 2, while the fault is present**
    (`./camera_test.py --scan`, the telescope at the laptop's screen through
    kitchen roll, room lights off, about 40 minutes). Where the sensor's
