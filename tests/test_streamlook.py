@@ -418,3 +418,16 @@ def test_a_new_run_shows_its_first_frame_before_there_is_a_stack():
     x, y, w, h = streamlook.STACK_BOX
     middle = (x + w // 2, y + h // 2 + 40)
     assert shown.image.getpixel(middle) != empty.image.getpixel(middle)
+
+
+def test_a_single_field_patrol_is_told_as_a_patrol(monkeypatch):
+    """1 November 2026: the M31 nova patrol (one field, named "M31") was told
+    on the stream as "Build a deep picture of M31, one exposure at a time"."""
+    discovery = {"sessions": [{"field": "M31", "finished": False, "unexplained": None}]}
+    patrol, candidate = streamlook.patrol_state("M31", discovery)
+    assert patrol["field"] == "Andromeda" and patrol["panels"][0]["state"] == "current" and candidate is None
+    status = {"name": "M31", "age": 5, "exposure": 16, "accepted": 10, "captured": 11, "integration": 160,
+              "discovery": discovery}
+    monkeypatch.setattr(streamlook, "transit_for", lambda name: None)
+    assert streamlook.from_status(status, now=1.0)["kind"] == "patrol"
+    assert streamlook.patrol_state("M42", discovery) == (None, None)

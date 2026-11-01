@@ -1559,6 +1559,14 @@ def patrol_state(name, discovery, now=None):
     now = now or time.time()
     field, _, number = name.partition("-P")
     mosaic = next((m for m in (discovery or {}).get("mosaics", []) if m["name"] == field), None)
+    if not number and any(s.get("field") == name and not s.get("finished")
+                          for s in (discovery or {}).get("sessions", [])):
+        # A single-field patrol (m31-novae): one panel, this one. On 1 November
+        # 2026 it was told on the stream as "Build a deep picture of M31".
+        sessions = [s for s in discovery["sessions"] if s.get("field") == name]
+        label = targets().get("targets", {}).get(name, {}).get("common", name).split()[0]
+        return ({"field": label, "panels": [{"id": name, "col": 0, "row": 0, "state": "current"}],
+                 "possible": sum(1 for s in sessions if s.get("unexplained")), "awaiting": None}, None)
     if mosaic is None or not number.isdigit():
         return None, None
     panels = []
