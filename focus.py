@@ -85,6 +85,7 @@ PERCENT = {1: 10.0, 2: 6.0, 3: 4.0}     # the smallest change each level calls a
 ENOUGH = 10         # stars in the middle of a full-size frame that make the rest not worth measuring
 SURE = 3            # readings in a row that settle a change of level
 WALK_MS = 40        # ms a half-step for --walk-in: the slowest and strongest tried on 19 October 2026
+DROP = 0.85         # a walk-in counts readings past its best only once the stars are this far below the start
 HOLD = 5            # readings that must stay on the best before "Focus good"
 # Half-flux radius at good focus, in arcseconds: HFR 2 on the 150P with the
 # 183C. A starting figure only. Once runs have ended on "Focus good", what
@@ -1107,7 +1108,7 @@ def find_stars(motor, read, usual, say=progress, stride=2048, turns=2, ring=None
 
 def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, closest=8, switch=8.0, near=1.5,
             close=1.15, most=160, tries=3, patience=3, spike=1.8, ring=None, ring_step=128, ring_most=4096,
-            live=None, back_out=True, slack=None):
+            live=None, back_out=False, slack=None):
     """Focus from a little outside it, moving only inward, a few half-steps
     at a time, measuring after each, until the stars have been worse three times
     running after their best; returns {"best_hfr", "best_at", "ended_at",
@@ -1199,7 +1200,11 @@ def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, clo
         live.reading(at, now, "in")
         if now < best:
             best, best_at, worse = now, at, 0
-        else:
+        elif best < DROP * readings[0][1]:
+            # Past focus only once the stars have clearly shrunk: on 1 November
+            # 2026 they read 9.75 to 9.99 for 384 half-steps, a noisy "best"
+            # of 9.75 then three readings a hair above it stopped the run a
+            # tenth of a turn in, from a start set past the line by eye.
             worse += 1
             if worse >= patience:
                 break
