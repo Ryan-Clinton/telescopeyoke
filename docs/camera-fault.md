@@ -326,6 +326,37 @@ end, at each speed (`cache/camera-probes/scan-20261031-210553/`).
   agree with it (8.3 of 12 s at speed 2 is 0.69; here 0.63, with 1 s
   flashes resolving the end to a few tenths of a second).
 
+## Outside, 1 November 2026, 00:00 to 01:10
+
+The telescope outside at the ralphie-side spot, clear overhead, the camera
+on the hub (2-1.1, then 2-5.1 after the hub's lead was moved), its body at
+**6.1 °C** by the thermistor at 01:10 (about 20 °C indoors earlier).
+
+- **00:14, speed 2:** the focus walk-in's 1 s frames were lost, and so were
+  1.5 and 2 s ones in the probe that followed
+  (`cache/camera-probes/20261101-001458/`). On 31 October, indoors, 1 s
+  frames at speed 2 had still been kept: outside, cold, the fault reached
+  shorter frames.
+- **00:17, speed 0:** after that probe was stopped part way, a check at
+  speed 0 lost its frame too (`20261101-001657/`): the camera jammed at
+  every speed, as AltairCapture's live view had on Windows. Five seconds
+  without power at the hub's port button cleared it: at 00:20 speed 0 kept
+  2 of 2 frames of 4 s, and `readout_speed = 0` was set for the night.
+- **00:21 onward, speed 0:** the first frame or two after the camera is
+  opened are often lost and a retry gets through (the walk-ins' logs,
+  `logs/walkin-20261101*.log`: 13 retries in seven runs); once, at 00:39,
+  three tries in a row failed (the camera "hung") and another power cut
+  cleared it. The probe that starts at the first loss was turned off for
+  the night (`probe_on_loss = false`): it held the camera ten minutes at a
+  time while the person stood outside, and the fault was already recorded.
+- **01:08, speed 0, 16 s frames:** the M31 patrol's first two frames were
+  each lost after waiting 108 s. **Speed 0 losing 16 s frames had not been
+  seen before** (every test since 23 October kept them).
+
+So outside and cold the fault is worse: speed 2 loses even 1 s frames, and
+speed 0, the speed that never failed, loses some, and the camera jams in a
+way only cutting its power clears.
+
 ## What is known
 
 - **The exposures really are shorter in the fault, and speed 0's are
@@ -612,6 +643,7 @@ The camera is Gary's; the ticket is ours, and paying for a repair would be his c
 | Altair's own program | AltairCapture 4.12 with altaircam.dll 60.31589 on Windows 11 (31 Oct): two 8 s Trigger Mode frames at Frame Speed 0 never arrived, the live view frozen; Altair's Windows library gave the same short 16 s frames at speed 2 as on Linux. Diagnose output attached (`altaircapture-diagnose-2026-10-31.txt`) |
 | Started | 04:59 on 20 Oct 2026, at dawn after a cold night |
 | Comes and goes | gone 26 Oct; back 30 Oct 10:46; gone again by 11:02, nothing touched; back 31 Oct 17:28 just after the camera was handled and replugged, and still there after closing and opening it |
+| Speed 0 | kept every frame from 23 Oct to 31 Oct; outside on 1 Nov at 6 °C it lost 16 s frames and the first frames after each opening, and jammed until its power was cut |
 | Firmware | 1.4.1 (January 2017) |
 
 ## What others have found
