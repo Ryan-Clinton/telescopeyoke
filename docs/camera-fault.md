@@ -55,10 +55,15 @@ found that afternoon:
   reports "the camera would not be set up: SDK error 0x8000ffff" at any
   speed; the kernel log shows `device descriptor read/8, error -110` and
   resets, then the camera drops off USB.
-- **How to get it back.** Press the camera's port button on the hub twice
-  (off, then on): the light goes steady and the fan spins up. The library's
-  own replug (a software reset, which `altair.py` now tries once) could not
-  bring it back; cutting its power did.
+- **How to get it back.** Cut its power at the hub. From 1 November 2026
+  the laptop does it: `./camera_test.py --power-cycle` turns the camera's
+  hub port off for 8 s and on again (`usbpower.py`, through uhubctl; the
+  hub switches each port's power on its own), and with
+  `power_cycle_on_jam = true` under `[camera]` the camera code does it by
+  itself when a frame is lost twice ([1 November, evening](#the-evening-of-1-november-2026)).
+  By hand, the camera's port button on the hub, pressed twice (off, then
+  on), does the same. The library's own replug (a software reset, which
+  `altair.py` tries once) could not bring it back; cutting its power did.
 - **The lost-frame fault is separate.** It came and went plugged straight
   in, with no hub. The hub results below say what the hub and leads do, not
   what causes that fault.
@@ -360,6 +365,34 @@ on the hub (2-1.1, then 2-5.1 after the hub's lead was moved), its body at
 So outside and cold the fault is worse: speed 2 loses even 1 s frames, and
 speed 0, the speed that never failed, loses some, and the camera jams in a
 way only cutting its power clears.
+
+## The evening of 1 November 2026
+
+The camera on the powered hub, the focuser's Nano not plugged in, the
+laptop started at 18:52. Logs in `logs/camera-evening*-20261101.log`.
+
+- **19:02, speed 2, short frames:** `--timing` kept every frame from 0.1 s
+  to 10 s (10 s took 13.4 s), none early.
+- **19:07, speed 2, 16 s, hub on 2-5.1:** two frames each came back after
+  **10.4 s** and were turned away as too soon (0.65 of the time asked, as at
+  12:53). The fault, at the first long frame of the evening.
+- **19:10, speed 0, 16 s:** no frame at all in 108 s: jammed.
+- **19:18, the first power cut from the laptop** (`--power-cycle`, both
+  halves of hub port 2-5 port 1): the kernel log has the camera gone at
+  19:18:29 and back at 19:18:41. Then speed 0 kept **5 of 5** 16 s frames.
+- **19:21, the hub moved to the laptop's USB-C port** (the camera on 4-2.1
+  at 5000 Mb/s): speed 2's 16 s frame came back after 10.4 s again. **The
+  laptop's port is not the cause.**
+- **19:26, speed 0 on USB-C:** a 1 s frame lost and retried, then a 16 s
+  frame lost after 108 s: jammed again, 10 minutes after the power cut.
+  Cut again from the laptop at 19:29 (gone 19:29:21, back 19:29:39).
+- **19:41, `power_cycle_on_jam` on:** the check's first two 1 s frames were
+  lost; the camera code cut the power by itself, the camera was back on
+  USB at 19:43:11 and speed 0 then kept **20 of 20** 16 s frames, done at 19:50.
+
+So tonight speed 2 is in the fault from the start, and speed 0 jams within
+minutes of being opened but is cleared every time by a power cut, now made
+from the laptop. The jam no longer needs anyone at the hub.
 
 ## What is known
 

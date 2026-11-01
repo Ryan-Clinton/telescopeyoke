@@ -20,8 +20,12 @@ lists before doing anything: `0403:6015` the handset lead, `16d0:0c77` the
 camera, `1a86:7523` (CH340) the motor focuser, which `doctor.py` does not
 check. The camera goes through the powered USB 3.2 hub (`0bda:0411`) on the
 two 1 m leads, never the 3 m lead into the hub; if the camera is missing or
-"would not be set up", its port button on the hub, pressed twice, brings it
-back (`docs/camera-fault.md`, "Hubs and leads"). The focuser's Nano goes on the hub too:
+"would not be set up", or jams (no frame at all), run
+`./camera_test.py --power-cycle`: it cuts the camera's power at its hub port
+from the laptop and gives it back, as the port button pressed twice does,
+with no one going outside; with `power_cycle_on_jam = true` the camera does
+it by itself after a frame is lost twice (`docs/camera-fault.md`, "Hubs and
+leads" and "The evening of 1 November 2026"). The focuser's Nano goes on the hub too:
 on the laptop's own port the motor cannot lift the drawtube with the camera
 on (`docs/focuser.md`, 30 October 2026). When what the person said disagrees with the list, ask that one
 question before acting. Reread what the person has said: do not ask what
