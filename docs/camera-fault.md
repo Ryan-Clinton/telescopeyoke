@@ -525,7 +525,11 @@ in another), so the camera's own readable settings are compared instead.
    jammed state of the night before. So the camera jams from a cold start
    with no Nano on USB at all: the Nano and its new driver are not needed
    for the fault. The run was stopped; the second half (Nano in) is moot
-   unless the camera first runs cleanly without it.
+   unless the camera first runs cleanly without it. After the camera's
+   power was cut at the hub's port button and restored (back on USB
+   12:51:06), the first 16 s frame at speed 2 came back after 10.4 s
+   (0.65 of the time asked): the short-exposure fault, the Nano still
+   unplugged.
 1. **Done 31 October (above): the scan, at speeds 0, 1 and 2, while the fault is present**
    (`./camera_test.py --scan`, the telescope at the laptop's screen through
    kitchen roll, room lights off, about 40 minutes). Where the sensor's
