@@ -393,7 +393,8 @@ def too_shallow(measured):
 
 
 MOST_RESIDUAL = 0.8     # pixels: a subtraction whose stars lined up worse than this is not searched
-MOST_FADING = 0.5       # fading peaks as a share of brightening ones, beyond which it is all leftovers
+MOST_FADING = 0.5       # fading peaks on stars as a share of brightening ones, beyond which it is all leftovers
+LEAST_ON_STARS = 5      # fewer fading peaks on stars than this is never taken for a misaligned subtraction
 
 
 def misaligned(found):
@@ -401,7 +402,16 @@ def misaligned(found):
     and the reference do not line up, every star leaves a bright and a dark
     leftover: on 18 October 2026 M33 lined up only to 1.75 px, and 16
     leftovers went to the person's phone as candidates, beside 33 fading
-    peaks. A real night has few fading peaks; leftovers come in both signs."""
+    peaks, 9 of them on stars.
+
+    The dark leftovers counted are those on the reference's stars
+    (fading_on_stars), not every fading peak: counting them all stopped
+    every M31 night from 17 October to 1 November 2026 (15, 56 and 63
+    fading peaks), and none of those sat within a star's width of a star.
+    They were the galaxy's own structure, rotated diffraction spikes and a
+    corner reached by fewer frames, which fade as often as they brighten
+    and say nothing about the alignment. A record from before that count
+    was kept is judged on all its fading peaks, as it was."""
     if not found or "candidates" not in found:
         return None
     residual = found.get("alignment_residual_px")
@@ -409,10 +419,14 @@ def misaligned(found):
         return (f"the subtraction did not line up: stars matched only to {residual:.2f} px (it needs under "
                 f"{MOST_RESIDUAL:g}), so its {len(found['candidates'])} candidates are leftovers of stars; "
                 "nothing reported")
-    fading, rising = found.get("fading_peaks") or 0, len(found["candidates"])
-    if fading >= 5 and fading > MOST_FADING * rising:
-        return (f"the subtraction left as many dark leftovers as bright ones ({fading} fading, {rising} "
-                "brightening): it did not match tonight's stack to the reference; nothing reported")
+    rising = len(found["candidates"])
+    if "fading_on_stars" in found:
+        fading, where = found["fading_on_stars"] or 0, " on stars"
+    else:
+        fading, where = found.get("fading_peaks") or 0, ""
+    if fading >= LEAST_ON_STARS and fading > MOST_FADING * rising:
+        return (f"the subtraction left as many dark leftovers{where} as bright ones ({fading} fading{where}, "
+                f"{rising} brightening): it did not match tonight's stack to the reference; nothing reported")
     return None
 
 

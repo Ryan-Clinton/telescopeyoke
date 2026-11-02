@@ -304,7 +304,11 @@ def test_a_subtraction_that_did_not_line_up_is_not_vetted_or_alerted(tmp_path):
     33 fading peaks, went to the phone as candidates."""
     session = tmp_path / "frames" / "M33" / "20261019-002602"
     session.mkdir(parents=True)
-    for found, why in (({"candidates": [{}] * 48, "alignment_residual_px": 1.75, "fading_peaks": 33}, "did not line up"),
+    for found, why in (({"candidates": [{}] * 48, "alignment_residual_px": 1.75, "fading_peaks": 33,
+                         "fading_on_stars": 11}, "did not line up"),
+                       ({"candidates": [{}] * 20, "alignment_residual_px": 0.3, "fading_peaks": 15,
+                         "fading_on_stars": 12}, "dark leftovers on stars"),
+                       # A record from before the count on stars was kept.
                        ({"candidates": [{}] * 20, "alignment_residual_px": 0.3, "fading_peaks": 15}, "dark leftovers")):
         ran = []
         chain = {"depth": lambda: {"zeropoint": 21.6, "completeness": {"all": {"mag_50": 17.3}}},
@@ -314,6 +318,20 @@ def test_a_subtraction_that_did_not_line_up_is_not_vetted_or_alerted(tmp_path):
         assert not patrol.unexplained(answer)
     good = {"candidates": [{}] * 2, "alignment_residual_px": 0.28, "fading_peaks": 1}
     assert patrol.misaligned(good) is None
+
+
+def test_a_galaxys_own_leftovers_do_not_stop_the_patrol():
+    """Every M31 night from 17 October to 1 November 2026 was stopped as
+    misaligned on fading peaks alone (15, 56 and 63 of them, beside 4, 6 and
+    27 candidates), though its stars lined up to 0.19 to 0.21 px and none of
+    those peaks sat on a star."""
+    for candidates, fading, residual in ((4, 15, 0.187), (6, 56, 0.215), (27, 63, 0.209)):
+        found = {"candidates": [{}] * candidates, "alignment_residual_px": residual, "fading_peaks": fading,
+                 "fading_on_stars": 0}
+        assert patrol.misaligned(found) is None
+    # A few on stars by chance, against many candidates, is not misalignment either.
+    found = {"candidates": [{}] * 12, "alignment_residual_px": 0.2, "fading_peaks": 30, "fading_on_stars": 4}
+    assert patrol.misaligned(found) is None
 
 
 def test_a_miss_with_no_limit_says_so_rather_than_none():

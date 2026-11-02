@@ -10,7 +10,10 @@ target = "M33"
 # gain 1500 (camera_test.py --gain-sweep), on a night the camera was failing
 # in the cold. Not fixed for good: rerun the sweep when the camera changes and
 # take what it measures.
-exposure = 32
+# 1 November 2026: the camera lost three 32 s frames in four (its fault,
+# docs/camera-fault.md) while 16 s frames came through all evening, so 16 s,
+# twice as many for the same light. Back to 32 s when the camera keeps them.
+exposure = 16
 gain = 1500
 
 minutes = 75
