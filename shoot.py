@@ -312,6 +312,8 @@ HOLD_GAIN = 0.7      # share of the miss each correction takes back: a guider's 
 HOLD_SETTLE = 3      # frames kept after a move before the next is judged
 HOLD_NO_BETTER = 3   # corrections in a row that leave the miss no smaller: the hold stops
 HOLD_MOST = 600.0    # seconds of moving in all, in one run: beyond it the hold stops
+HOLD_SLACK_RATIO = 1.5   # one Dec lesson this many times the other: the weaker lost its move to slack
+HOLD_SLACK_MOST = 4.0    # seconds: the most slack ever taken up in one reversal
 LEARNING = (("RA", +1), ("RA", -1), ("Dec", +1), ("Dec", -1))
 
 
@@ -352,6 +354,8 @@ class Hold:
         self.mark = 0               # how many frames had been kept at the last move
         self.columns = {}           # (axis name, sign) -> pixels of shift per second of move
         self.misses = []            # the miss before each correction
+        self.dec_slack = 0.0        # seconds of Dec move the gears' slack swallows on a reversal
+        self.dec_sign = None        # the way the Dec motor last turned
 
     @staticmethod
     def where(track, last=3):
@@ -378,8 +382,29 @@ class Hold:
             return True
         return math.hypot(*self.where(track)) > self.pixels
 
+    def learn_slack(self, say=print):
+        """The Dec gears' slack, from the two Dec lessons. With no tracking in
+        Dec the motor moves the frames as fast either way, so a lesson much
+        weaker than the other lost part of its move to slack on the reversal:
+        the weak direction is given the strong one's strength, and every Dec
+        reversal from now on starts with the slack taken up. 2 November 2026:
+        +Dec moved the frames 12.3 px a second and -Dec 2.0, the corrections
+        never closed the miss, and the hold gave up mid-transit."""
+        plus, minus = (float(np.hypot(*self.columns[("Dec", k)])) for k in (1, -1))
+        strong, weak = max(plus, minus), min(plus, minus)
+        if strong <= 0 or weak / strong > 1 / HOLD_SLACK_RATIO:
+            return
+        sign = 1 if plus >= minus else -1
+        self.columns[("Dec", -sign)] = -self.columns[("Dec", sign)]
+        self.dec_slack = min(HOLD_LEARN * (1 - weak / strong), HOLD_SLACK_MOST)
+        say(f"  hold: Dec gear slack about {self.dec_slack:.1f} s of move; taken up on each reversal")
+
     def move(self, name, sign, seconds):
         import mount
+        if name == "Dec":
+            if self.dec_sign is not None and sign != self.dec_sign:
+                seconds += self.dec_slack
+            self.dec_sign = sign
         if self.moved + seconds > HOLD_MOST:
             raise interface.Refusal("INVALID_REQUEST", f"the hold has moved {self.moved:.0f} s in all this run")
         self.pulse(mount.RA if name == "RA" else mount.DEC, sign * HOLD_RATE, seconds)
@@ -412,6 +437,7 @@ class Hold:
                 self.before = None
                 if self.lesson == len(LEARNING):
                     self.state = "hold"
+                    self.learn_slack(say)
                     say("  hold: learnt; holding from here")
                     self.mark = len(track)
                     return

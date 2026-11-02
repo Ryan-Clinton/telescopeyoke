@@ -18,8 +18,9 @@ class Sky:
     way can be stronger than the other, as when the handset replaces
     tracking with the move's rate instead of adding to it)."""
 
-    def __init__(self, strengths, drift=(0.4, -0.3)):
+    def __init__(self, strengths, drift=(0.4, -0.3), dec_slack=0.0):
         import numpy as np
+        self.dec_slack, self.dec_sign = dec_slack, None
         self.strengths = {k: np.array(v, float) for k, v in strengths.items()}
         self.drift = np.array(drift, float)
         self.offset = np.zeros(2)
@@ -36,7 +37,13 @@ class Sky:
     def pulse(self, axis, rate, seconds):
         import mount
         name = "RA" if axis == mount.RA else "Dec"
-        self.offset = self.offset + self.strengths[(name, 1 if rate > 0 else -1)] * seconds
+        sign = 1 if rate > 0 else -1
+        if name == "Dec":
+            # The gears' slack: a reversal moves nothing until it is taken up.
+            if self.dec_sign is not None and sign != self.dec_sign:
+                seconds = max(0.0, seconds - self.dec_slack)
+            self.dec_sign = sign
+        self.offset = self.offset + self.strengths[(name, sign)] * seconds
         self.moved.append((name, rate, seconds))
 
 
@@ -139,3 +146,18 @@ def test_drift_is_measured_from_the_first_frame_after_a_centring(monkeypatch):
     session.absorb(frame(3, (148.0, 99.0)))          # turned half round: far "from the reference"
     session.absorb(frame(4, (148.5, 99.0)))
     assert session.drift == 0.005                    # but only half a pixel since the centring
+
+
+def test_the_hold_learns_the_dec_slack_and_takes_it_up_on_each_reversal():
+    """2 November 2026: +Dec moved the frames 12.3 px a second and -Dec only
+    2.0 (gear slack eaten by the reversal); the hold's corrections never
+    closed the miss and it gave up mid-transit."""
+    import math
+    sky = Sky({("RA", 1): (3.0, 1.0), ("RA", -1): (-3.0, -1.0), ("Dec", 1): (-1.0, 3.0), ("Dec", -1): (1.0, -3.0)},
+              dec_slack=3.0)
+    hold = shoot.Hold(5.0, sky.pulse)
+    said = run_hold(sky, hold, frames=300)
+    assert hold.state == "hold" and 2.0 < hold.dec_slack < 4.0
+    assert any("slack" in s for s in said)
+    late = [math.hypot(x, y) for _, x, y in sky.shifts[-100:]]
+    assert max(late) < 10
