@@ -32,7 +32,13 @@ def _layer(name, box, transparent=False):
         "width": WIDTH, "height": HEIGHT, "format": "image/png",
         "transparent": str(transparent).lower()})
     r.raise_for_status()
-    return Image.open(io.BytesIO(r.content))
+    try:
+        return Image.open(io.BytesIO(r.content))
+    except OSError as error:
+        # The service sometimes answers with an error page instead of a
+        # picture (2 November 2026): said plainly, not as a traceback.
+        raise RuntimeError(f"the satellite service sent no picture of {name} just now "
+                           f"({r.headers.get('content-type', 'unknown')})") from error
 
 
 def coastline(box):
@@ -77,7 +83,10 @@ def update(site):
 
 
 if __name__ == "__main__":
-    here, clear = update(config.load()["site"])
+    try:
+        here, clear = update(config.load()["site"])
+    except (RuntimeError, requests.RequestException) as problem:
+        raise SystemExit(f"No satellite picture: {problem}. Try again in a few minutes.")
     verdict = "cloud" if here - clear > 20 else "probably clear" if here - clear < 10 else "thin or broken cloud"
     print(f"over the site: {here:.0f}, clear areas: {clear:.0f} -> {verdict}")
     print(f"saved {PICTURE}")
