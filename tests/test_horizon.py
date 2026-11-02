@@ -3,6 +3,7 @@ taking it from a phone panorama, and the planner keeping targets above it."""
 import json
 import math
 import shutil
+import time
 
 import numpy as np
 import pytest
@@ -533,3 +534,33 @@ def test_a_survey_set_aside_never_replaces_the_skyline_in_use(kept):
     assert horizon.RESULTS.read_text() == before
     assert aside.parent == horizon.RESULTS.parent and "not-used" in aside.name
     assert json.loads(aside.read_text())["not_used_because"].startswith("Not repeatable")
+
+
+def test_a_survey_cut_short_carries_on_from_where_it_stopped(tmp_path):
+    """2 November 2026: a survey stopped at its first look began again from nothing."""
+    start = sorted(range(0, 360, 30), key=horizon.side)
+    path = tmp_path / "partial.json"
+    whole = watcher()
+    complete, _ = horizon.trace(whole, start, low=20)
+
+    class Stopped(Exception):
+        pass
+    kept = []
+
+    def checkpoint(found):
+        horizon.keep_partial(found, [], True, path=path)
+        kept.append(len(found))
+        if len(found) == 5:
+            raise Stopped           # the camera jams, or it is stopped by hand
+    with pytest.raises(Stopped):
+        horizon.trace(watcher(), start, low=20, checkpoint=checkpoint)
+    done, looks = horizon.resumable(True, path=path)
+    assert len(done) == 5 and looks == []
+    again = watcher()
+    found, _ = horizon.trace(again, start, low=20, done=done)
+    assert {f["az"] for f in found} == {f["az"] for f in complete}
+    # The five already measured are not looked at again.
+    assert len(again.seen) == len(whole.seen) - 5
+    # Only a survey of the same kind, and only the same day.
+    assert horizon.resumable(False, path=path) is None
+    assert horizon.resumable(True, path=path, now=time.time() + horizon.RESUME_S + 1) is None

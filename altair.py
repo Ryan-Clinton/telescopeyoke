@@ -131,6 +131,22 @@ def choose(lib, wanted=None):
                   "serial = \"...\" under [camera] in config.toml.")
 
 
+def _terminated(signum, frame):
+    raise KeyboardInterrupt(f"stopped by signal {signum}")
+
+
+def stop_on_terminate():
+    """A plain kill (SIGTERM) ends a command the way Ctrl-C does, so the
+    camera is closed and the mount stopped on the way out. Without this a
+    kill ends Python at once and nothing is tidied up. Only from the main
+    thread, and never over a handler the command set itself."""
+    import signal
+    if threading.current_thread() is not threading.main_thread() or not hasattr(signal, "SIGTERM"):
+        return
+    if signal.getsignal(signal.SIGTERM) in (signal.SIG_DFL, None):
+        signal.signal(signal.SIGTERM, _terminated)
+
+
 class AltairCamera:
     def __init__(self, gain=300):
         self.gain = gain
@@ -147,13 +163,22 @@ class AltairCamera:
         self.refuses_binning = False     # asked once and it failed: not asked again
         self.probed = False       # camera_probe.py has run on this camera (once is enough)
         self._forget_clock()
-        self._open()
+        # One command at a time, and a second one told which (cameralock.py).
+        from cameralock import CameraLock
+        self.lock = CameraLock()
+        stop_on_terminate()
+        try:
+            self._open()
+        except BaseException:
+            self.lock.release()
+            raise
 
     def __enter__(self):
         return self
 
     def __exit__(self, *exc):
         self.close()
+        self.lock.release()
 
     # --- opening and closing ---------------------------------------------------
 

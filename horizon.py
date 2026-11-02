@@ -4,6 +4,7 @@
     ./horizon.py --trace         follow the top of whatever is in the way right round
     ./horizon.py --trace --daylight      the same by day: bright, even and sky-coloured means sky
     ./horizon.py --trace --fresh         start again, not from the skyline already measured
+                                 (nor from a survey cut short earlier the same day)
     ./horizon.py                 the older way: look on a fixed grid and report what is blocked
     ./horizon.py --step 20       degrees of bearing between the first looks
     ./horizon.py --show          the skyline now in use, as the planner sees it
@@ -56,6 +57,11 @@ ROOT = Path(__file__).parent
 # Each spot in the garden has its own skyline and pictures (config.SPOT).
 RESULTS = config.DATA / "cache" / (f"horizon-{config.SPOT}.json" if config.SPOT else "horizon.json")
 LOOKS = config.DATA / "horizon" / (config.SPOT or "") / "looks"     # each look's picture, marked up
+# A survey cut short keeps what it had measured here, after every bearing, and
+# the next --trace the same day carries on from it (2 November 2026: a survey
+# stopped at its first look over a camera that had jammed began again from nothing).
+PARTIAL = RESULTS.with_name(RESULTS.stem + ".partial.json")
+RESUME_S = 12 * 3600
 ALTITUDES = (25, 40, 55, 70)
 ENOUGH_STARS = 8
 STEADY = 5      # seconds for the tube to stop shaking before a frame of stars
@@ -728,12 +734,16 @@ def between(a, b):
     return (b - a) % 360 or 360
 
 
-def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, most=MOST):
+def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, most=MOST,
+          done=None, checkpoint=None):
     """Follow the top of what is in the way round the compass, starting from
     the given bearings and adding more only where the skyline needs them.
     `known` is a skyline measured before (see limit()): each bearing then
     starts at the height it gives, and bearings are added only where this
     survey and that one part company.
+    `done` are bearings already measured by a survey cut short (their
+    top_of() answers), not measured again; `checkpoint(found)` is called
+    after every bearing, so a survey stopped now can carry on later.
     Returns (one top_of() answer per bearing, in bearing order; warnings)."""
     found, warnings = {}, []
 
@@ -754,6 +764,8 @@ def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, mo
             near = min(near, key=lambda f: min((f["az"] - az) % 360, (az - f["az"]) % 360), default=None)
             guess, lower = near["clear"] if near else low, None
         found[az] = top_of(look, az, guess, low, top, fine, lower)
+        if checkpoint:
+            checkpoint(found)
 
     def off(az):
         """What is compared between neighbours: the top itself, or how far it
@@ -765,8 +777,10 @@ def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, mo
     if high is None:
         raise interface.Refusal("NO_SKY", f"No open sky seen even {top}° up. Is the cap off? At night "
                                 "this needs a clear sky.")
+    found.update({f["az"]: f for f in done or ()})
     for az in bearings:
-        measure(az)
+        if az not in found:
+            measure(az)
 
     # Check 2: more bearings where the skyline is not a straight line between
     # the ones it has: a sudden change between neighbours is a corner, and a
@@ -836,6 +850,24 @@ def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, mo
         warnings.append(f"{NOT_SAME} Going back to bearing {first['az']:g}° gave a different answer "
                         "from the first time. Did the mount slip, or the light change?")
     return [found[az] for az in sorted(found)], warnings
+
+
+def resumable(daylight, path=None, now=None):
+    """What a survey cut short today had measured: (its top_of() answers,
+    its looks), or None. Only the same kind of survey, within RESUME_S."""
+    try:
+        saved = json.loads(Path(path or PARTIAL).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if saved.get("daylight") != daylight or (now or time.time()) - saved.get("saved", 0) > RESUME_S:
+        return None
+    return saved.get("found") or None, saved.get("looks", [])
+
+
+def keep_partial(found, looks, daylight, path=None):
+    records.write(Path(path or PARTIAL), {"saved": time.time(), "daylight": daylight,
+                                          "found": list(found.values()), "looks": looks},
+                  default=lambda o: o.item() if hasattr(o, "item") else str(o))
 
 
 def skyline_from(found, low, known=None):
@@ -1078,9 +1110,21 @@ def run(args):
     exposure = args.exposure or (0.002 if args.daylight else 1.0)
     gain = args.gain or (100 if args.daylight else 2000)
     warnings = []
+    earlier = None if args.fresh else resumable(args.daylight) if args.trace else None
+    if args.fresh and PARTIAL.exists():
+        PARTIAL.unlink()
     with eye(site, exposure, gain, args.daylight, args.torch and not args.daylight) as look:
         if args.trace:
-            found, warnings = trace(look, bearings, low, known=known)
+            done = None
+            if earlier and earlier[0]:
+                done, looked = earlier
+                look.log[:0] = looked
+                print(f"Carrying on from the survey cut short earlier today: {len(done)} bearing(s) "
+                      "already measured are not looked at again (--fresh starts over).", flush=True)
+            found, warnings = trace(look, bearings, low, known=known, done=done,
+                                    checkpoint=lambda found: keep_partial(found, look.log, args.daylight))
+            if PARTIAL.exists():
+                PARTIAL.unlink()        # finished: nothing to carry on from
         else:
             if args.daylight:
                 # Sky high up first, so the exposure is set on sky and not on a wall.

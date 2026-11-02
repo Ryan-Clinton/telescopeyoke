@@ -59,6 +59,11 @@ in step.
 | `horizon.py --show` | the measured skyline as points (`az`, `alt`), the same with the margin on (`usable`), where it came from and when |
 | `horizon.py --forget` | throws the measured skyline away |
 | `horizon.py --trace --dry-run` | how many bearings, how many are within the limits now, minutes, and whether it would start from a known skyline |
+
+A `--trace` keeps what it has measured after every bearing
+(`cache/horizon[-SPOT].partial.json`). If it is cut short (a jam, a stop),
+the next `--trace` of the same kind (by day or by night) within 12 hours
+carries on from there and does not look at those bearings again; `--fresh` starts over.
 | `panorama.py use PICTURE` | finds the skyline in a phone panorama; writes `horizon/skyline.jpg` to look at |
 | `panorama.py move ACROSS,DOWN ...` | puts points of that line right |
 | `panorama.py mark ACROSS DOWN BEARING HEIGHT` | ties a place in the picture to the compass; `--landmark NAME` takes a remembered landmark's, `--telescope` asks the mount where it points (opens the serial port) |
@@ -160,5 +165,7 @@ not ready, `next`: the one thing the person has to do.
 Tonight's plan is `./schedule.py` (on the console, run in order by `./schedule.py run`). It changes while it runs: `./schedule.py next` ends the running step gracefully, `skip N`, `move N POS` and `add ... --at POS` reshape what is queued, with no restart. A step whose target is behind something at its start, middle or end, or is checked with no skyline measured, has a "!" line under it, and `./schedule.py fill` offers the discovery programme that fills a lost step, as one command. Why: [`docs/flexible-plans.md`](../flexible-plans.md).
 
 Room on the disk is `./storage.py` (free space here and on the storage disk set as `[storage] archive`); `--tidy` moves Moon videos whose pictures are made there, leaving links. `./ty moon` and each schedule step do it by themselves when the laptop has under 20 GB free, and `./schedule.py` warns when it is that low.
+
+Only one command at a time can have the main camera (`cameralock.py`, the lock in `cache/camera.lock`): a second is refused with `CAMERA_BUSY`, naming the process that has it and its command line. The lock goes when that command ends, however it ends. A plain `kill` of a command using the camera ends it as Ctrl-C does, so the camera is closed (and the mount stopped) on the way out.
 
 The guide camera (Altair GPCAM MT9M034M, USB `16d0:0b2a`) is `./guidecam.py`: with no action it finds and opens it; `snap --exposure S [--gain G] [--count N]` keeps frames under `frames/guide/` (never on the status page); `install` fetches the library it needs. This early GPCAM is opened only by the oaCapture project's libaltaircamlegacy 1.24 (in `vendor/altair-legacy/`): Altair's and ToupTek's current libraries, on Linux or Windows, do not list it (tested 2 November 2026). No guiding command yet: that waits for the guide scope.
