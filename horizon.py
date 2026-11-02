@@ -133,6 +133,16 @@ def keep(skyline, source, **more):
     return saved
 
 
+def set_aside(skyline, reason, **more):
+    """Keep a survey that must not be used, for looking into, beside the
+    skyline in use and never in its place. Returns where it went."""
+    path = RESULTS.with_name(f"{RESULTS.stem}.not-used-{time.strftime('%Y%m%d-%H%M%S')}.json")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    records.write(path, dict({"saved": time.time(), "not_used_because": reason,
+                              "skyline": sorted(skyline, key=lambda p: p["az"])}, **more))
+    return path
+
+
 MOVED_DOUBT = 3.0     # degrees added to a skyline worked out from another spot, not measured
 
 
@@ -416,7 +426,9 @@ def at_exposure(reference, metered, exposure):
 
 LONGER = 4          # a night look with no stars is tried again this many times longer
 LONGEST_S = 8.0     # but no longer than this
-GLARE_MOST = 0.25   # share of a survey's looks too bright to read above which nothing is kept
+GLARE_MOST = 0.25
+NOT_SAME = "Not repeatable:"   # check 4's warning: such a survey is set aside, never used
+REFERENCE_S = 300              # by day, the high sky is looked at again this often: it changes   # share of a survey's looks too bright to read above which nothing is kept
 
 
 def glare_share(log):
@@ -482,6 +494,16 @@ def eye(site, exposure, gain, daylight=False, torch=False):
             before = seen
 
     def look(az, alt):
+        if daylight and state["reference"] is not None and not state.get("refreshing") \
+                and time.time() - state["referenced"] > REFERENCE_S:
+            # The daytime sky brightens and turns as the Sun climbs: on 2
+            # November 2026 it was three times as bright minutes after the
+            # first look. The high sky is looked at again, where it was first.
+            state["reference"], state["refreshing"] = None, True
+            try:
+                look(*state["sky_at"])
+            finally:
+                state["refreshing"] = False
         try:
             plan = mount.plan_point(az, alt, site)
         except interface.Refusal as refusal:
@@ -503,6 +525,8 @@ def eye(site, exposure, gain, daylight=False, torch=False):
                 state["exposure"], _ = daylight_exposure(look.cam, state["exposure"])
                 state["reference"] = sky_reference(look.cam.frame(state["exposure"])[0])
                 state["metered"] = state["exposure"]
+                state["referenced"] = time.time()
+                state.setdefault("sky_at", (az, alt))
             # Every look starts at the high sky's exposure; only one that
             # burns out is metered again, here.
             state["exposure"] = state["metered"]
@@ -809,9 +833,8 @@ def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, mo
         same = is_sky(look(first["az"], first["clear"])) and \
             (first["state"] != "edge" or look(first["az"], first["shut"]) in (False, np.False_))
     if first and not same:
-        warnings.append(f"Going back to bearing {first['az']:g}° gave a different answer from "
-                        "the first time. Did the mount slip, or the light change? Do not "
-                        "trust this survey.")
+        warnings.append(f"{NOT_SAME} Going back to bearing {first['az']:g}° gave a different answer "
+                        "from the first time. Did the mount slip, or the light change?")
     return [found[az] for az in sorted(found)], warnings
 
 
@@ -819,27 +842,32 @@ def skyline_from(found, low, known=None):
     """A trace as a skyline (see limit()). With a skyline known before, its
     points are kept, each moved by what this survey found near it, so the
     detail a panorama gave survives a check by the telescope."""
-    points = []
+    points, unmeasured = [], []
     for f in found:
         top = height(f, low)
         if top is None:
             # Not measured (out of the mount's reach, or the Sun's glare) is
             # not open: left out, it took its neighbours' height, so a
-            # bearing nobody saw read as clear sky. Blocked until seen.
-            points.append({"az": f["az"], "alt": 90.0, "unmeasured": True})
+            # bearing nobody saw read as clear sky. What an earlier skyline
+            # says of it stands, marked not rechecked; with none, blocked.
+            unmeasured.append(f["az"])
             continue
-        point = {"az": f["az"], "alt": top}
+        point = {"az": f["az"], "alt": top, "by": "telescope"}
         if f["state"] == "open":
             point.update(alt=f["clear"], open=True)
         if f.get("doubt"):
             point["extra"] = CLEARANCE
         points.append(point)
+    if not known:
+        points += [{"az": az, "alt": 90.0, "unmeasured": True, "by": "nothing: not measured"} for az in unmeasured]
+        points.sort(key=lambda p: p["az"])
     # Where neighbours differ by a corner's worth, the corner is somewhere
     # between them: count the whole gap as blocked to the higher of the two.
     for a, b in zip(list(points), points[1:] + points[:1]):
         if len(points) > 1 and abs(a["alt"] - b["alt"]) > JUMP:
             lower, at = (a, a["az"] + 0.1) if a["alt"] < b["alt"] else (b, b["az"] - 0.1)
-            corner = {"az": round(at % 360, 1), "alt": max(a["alt"], b["alt"])}
+            corner = {"az": round(at % 360, 1), "alt": max(a["alt"], b["alt"]),
+                      "by": "a corner between two looks, put at the higher"}
             # Between two open bearings nothing was seen at all: they differ
             # only in how low the limits let each look (on 19 October 2026,
             # 20° at 180° and 30° at 225° before 17:00 UTC), and a corner
@@ -859,9 +887,19 @@ def skyline_from(found, low, known=None):
         for p in known:
             if p.get("unseen"):
                 # Past the edge of a panorama only the telescope has looked.
-                points.append({"az": p["az"], "alt": round(float(limit(looked, [p["az"]])[0]), 1)})
+                points.append({"az": p["az"], "alt": round(float(limit(looked, [p["az"]])[0]), 1),
+                               "by": "telescope, between looks"})
             elif not near(p["az"]):
-                points.append(dict(p, alt=round(p["alt"] + float(limit(shifts, [p["az"]])[0]), 1)))
+                moved_by = float(limit(shifts, [p["az"]])[0])
+                points.append(dict(p, alt=round(p["alt"] + moved_by, 1),
+                                   by=f"earlier skyline, moved {moved_by:+.1f}° by the looks nearby"))
+        for az in unmeasured:
+            here = [p for p in known if min(between(az, p["az"]), between(p["az"], az)) % 360 < FINEST]
+            if here and not any(p.get("unseen") for p in here):
+                points.append({"az": az, "alt": round(float(limit(known, [az])[0]), 1),
+                               "by": "earlier skyline, not rechecked"})
+            else:
+                points.append({"az": az, "alt": 90.0, "unmeasured": True, "by": "nothing: not measured"})
     return sorted(points, key=lambda p: p["az"])
 
 
@@ -1052,9 +1090,17 @@ def run(args):
         results = look.log
     if args.trace:
         blind = glare_share(results)
-        if blind > GLARE_MOST:
+        unrepeatable = [w for w in warnings if w.startswith(NOT_SAME)]
+        if blind > GLARE_MOST or unrepeatable:
+            # Kept for looking into, never in place of the skyline in use.
+            aside = set_aside(skyline_from(found, low, known), unrepeatable[0] if unrepeatable else
+                              f"{blind:.0%} of looks unread", looks=results, warnings=warnings, trace=found)
+            if unrepeatable:
+                raise interface.Refusal(
+                    "PLATE_SOLVE_FAILED", f"{unrepeatable[0]} Nothing has replaced the skyline in use; this "
+                    f"survey is in {aside.name} to look into.")
             raise interface.Refusal(
-                "NO_SKY", f"{blind:.0%} of the looks could not be read (the Sun's glare by day, cloud or an "
+                "NO_SKY", f"(kept to look into as {aside.name}) {blind:.0%} of the looks could not be read (the Sun's glare by day, cloud or an "
                 "unlit wall by night): nothing has been kept. By day, survey with the Sun higher and behind "
                 "the telescope or under an even overcast; by night, on a clear one.")
         skyline = skyline_from(found, low, known)
