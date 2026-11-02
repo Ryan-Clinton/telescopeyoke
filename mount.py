@@ -73,9 +73,16 @@ ROOT = Path(__file__).parent
 # holds until the handset is switched off.
 CLOCK_FILE = config.DATA / "cache" / "handset_clock.json"
 MIN_ALTITUDE = 20
-# Furthest from the meridian a GoTo may point, in hours. Beyond 6 h the tube
-# is under the pole and swings down towards the tripod legs.
+# Furthest from the meridian a GoTo may point, in hours. Beyond 6 h the
+# counterweight is above the tube, which is normal for this kind of mount;
+# what matters is where the tube, the camera and its lead meet a tripod leg.
+# 5.75 h was set on 3 October 2026, the first night, after a collision whose
+# cause was the handset clipped to the wrong leg, and was never measured. It
+# stays here in the code, never a setting (AGENTS.md): what the clearance test
+# (point --clearance-test, with the person watching) finds is put here.
 MAX_HOUR_ANGLE = 5.75
+# The clearance test may go this far, and no further, to find where it is.
+CLEARANCE_TEST_HOURS = 8.0
 # While this file exists, nothing that moves the mount will run. Its contents
 # say why. Delete it only once the cause has been dealt with.
 LOCK_FILE = ROOT / "MOTION_LOCKED"
@@ -723,12 +730,12 @@ class Mount:
         CLOCK_FILE.parent.mkdir(exist_ok=True)
         records.write(CLOCK_FILE, {"offset_deg": offset, "saved": time.time()}, indent=None)
 
-    def point(self, azimuth, altitude, site):
+    def point(self, azimuth, altitude, site, clearance_test=False):
         """Aim at a fixed direction, e.g. a distant rooftop, and hold there."""
         if not CLOCK_FILE.exists():
             # Reading the handset's clock needs no movement, so do it now.
             self.save_clock(site)
-        plan = plan_point(azimuth, altitude, site)
+        plan = plan_point(azimuth, altitude, site, clearance_test)
         offset = json.loads(CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
         hour_angle, dec = plan["hour_angle_hours"] * 15, plan["dec_deg"]
         print(f"bearing {azimuth:.0f}°, {altitude:.0f}° up: hour angle "
@@ -933,15 +940,17 @@ def direction(azimuth, altitude, site):
 NEAR_MERIDIAN = 0.33     # hours from the meridian inside which the handset's choice of side is not to be relied on
 
 
-def _plan(hour_angle, dec, altitude, label):
+def _plan(hour_angle, dec, altitude, label, limit=None):
     """The checks every aimed move must pass, and what the move would involve.
-    Raises a Refusal if it must not be made; needs no hardware."""
+    Raises a Refusal if it must not be made; needs no hardware. `limit` is
+    the hour-angle limit for this move: only the clearance test passes one."""
     if LOCK_FILE.exists():
         raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text(encoding='utf-8').strip()}")
-    if abs(hour_angle) > MAX_HOUR_ANGLE * 15:
+    limit = MAX_HOUR_ANGLE if limit is None else limit
+    if abs(hour_angle) > limit * 15:
         raise Refusal("TARGET_BEYOND_HOUR_ANGLE_LIMIT",
                       f"{label} is {abs(hour_angle) / 15:.1f} h from the meridian, beyond the "
-                      f"{MAX_HOUR_ANGLE} h limit; not slewing.")
+                      f"{limit} h limit; not slewing.")
     west = hour_angle > 0
     # From the plan alone the side the mount is on now is not known: a west
     # target is a swing over the pole only from the east side (18 October
@@ -995,12 +1004,20 @@ def behind(hour_angle, dec, altitude, site):
     return None
 
 
-def plan_point(azimuth, altitude, site):
-    """What pointing at a compass bearing and height would do, without moving."""
+def plan_point(azimuth, altitude, site, clearance_test=False):
+    """What pointing at a compass bearing and height would do, without moving.
+    With `clearance_test`, past the hour-angle limit up to
+    CLEARANCE_TEST_HOURS, to find with a person watching where the tube
+    really meets the tripod; never lower than MIN_ALTITUDE then."""
     if not 2 <= altitude <= 89:
         raise Refusal("ALTITUDE_OUT_OF_RANGE", "Altitude must be between 2° and 89°.")
+    if clearance_test and altitude < MIN_ALTITUDE:
+        raise Refusal("TARGET_BELOW_ALTITUDE_LIMIT", f"The clearance test goes no lower than {MIN_ALTITUDE}°.")
     hour_angle, dec = direction(azimuth, altitude, site)
-    plan = _plan(hour_angle, dec, altitude, "That")
+    plan = _plan(hour_angle, dec, altitude, "That", CLEARANCE_TEST_HOURS if clearance_test else None)
+    if clearance_test and abs(hour_angle) > MAX_HOUR_ANGLE * 15:
+        plan["warnings"] = plan.get("warnings", []) + [
+            f"Clearance test: {abs(hour_angle) / 15:.2f} h from the meridian, past the {MAX_HOUR_ANGLE} h limit."]
     return dict(plan, azimuth_deg=azimuth)
 
 
@@ -1393,7 +1410,12 @@ def main():
     ap.add_argument("--record", metavar="FOLDER",
                     help="with goto --solve: keep each solve frame and message there, "
                          "for replay.py to animate")
+    ap.add_argument("--clearance-test", action="store_true",
+                    help=f"with point: go past the hour-angle limit, up to {CLEARANCE_TEST_HOURS:g} h and no lower "
+                         f"than {MIN_ALTITUDE}°, to find with someone watching where the tube meets the tripod")
     args = ap.parse_args()
+    if args.clearance_test and args.command != "point":
+        ap.error("--clearance-test goes with point only")
 
     args.demo = args.demo or config.DEMO
     if args.demo and not config.DEMO:
@@ -1430,7 +1452,7 @@ def dry_run(args, site):
         if args.command == "goto":
             return plan_goto(" ".join(args.target), site)
         if args.command == "point":
-            return plan_point(float(args.target[0]), float(args.target[1]), site)
+            return plan_point(float(args.target[0]), float(args.target[1]), site, args.clearance_test)
         if args.command in ("status", "sync", "drift", "stop"):
             return {"would_move": False, "safe": True, "warnings": []}
         if args.command == "settime":
@@ -1507,7 +1529,7 @@ def act(args, site):
                 mount.goto_target(" ".join(args.target), site, solve=args.solve,
                                   aim_off=tuple(args.aim_off))
             elif args.command == "point":
-                mount.point(float(args.target[0]), float(args.target[1]), site)
+                mount.point(float(args.target[0]), float(args.target[1]), site, args.clearance_test)
             elif args.command == "home":
                 mount.home()
             elif args.command == "sync":
