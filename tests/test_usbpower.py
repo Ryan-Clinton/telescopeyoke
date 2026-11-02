@@ -3,6 +3,10 @@ import subprocess
 
 import pytest
 
+# The hub's ports are switched through Linux's own record of USB (names with
+# ":" in them, which Windows does not allow); the feature is Linux only.
+pytestmark = pytest.mark.skipif(os.name == "nt", reason="Linux only: sysfs and uhubctl")
+
 import usbpower
 
 

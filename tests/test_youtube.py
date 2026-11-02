@@ -1,4 +1,5 @@
 import json
+import os
 import time
 
 import pytest
@@ -93,7 +94,8 @@ def test_sign_in_with_a_device_code(signed):
     said = []
     assert youtube.login(client, say=said.append, post=lambda *a, **k: next(replies), sleep=lambda s: None)
     assert "ABC-DEF" in said[0] and youtube.signed_in()
-    assert oct(youtube.TOKEN_FILE.stat().st_mode & 0o777) == "0o600"
+    if os.name != "nt":                      # Windows has no such file modes
+        assert oct(youtube.TOKEN_FILE.stat().st_mode & 0o777) == "0o600"
 
 
 def test_a_long_title_loses_the_next_step_not_half_a_name():

@@ -5,6 +5,7 @@ route to a made-up copy of Altair's wrapper."""
 import ctypes
 import io
 import json
+import os
 import sys
 import threading
 import time
@@ -1326,6 +1327,7 @@ def test_the_cooldown_reads_the_body_s_thermistor_and_the_time_since_power():
     assert camera_test.since_plugged_in(run=lambda *a, **k: Done, now=1793500000.0 + 600) == 10.0
 
 
+@pytest.mark.skipif(os.name == "nt", reason="the hub's power is cut on Linux only")
 def test_a_jammed_camera_has_its_power_cut_at_the_hub_and_carries_on(sdk, world, monkeypatch, capsys):
     """1 November 2026: the jam cleared only when the camera's power was cut,
     which took a walk outside to the hub's button. With power_cycle_on_jam the
@@ -1357,6 +1359,7 @@ def test_without_the_setting_the_power_is_never_cut(sdk, world, monkeypatch):
             cam.frame(0.05)
 
 
+@pytest.mark.skipif(os.name == "nt", reason="the hub's power is cut on Linux only")
 def test_a_power_cut_that_cannot_be_made_falls_back_to_opening_it_again(sdk, world, monkeypatch, capsys):
     import usbpower
     monkeypatch.setitem(altair.SETTINGS["camera"], "power_cycle_on_jam", True)
