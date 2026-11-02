@@ -788,6 +788,10 @@ def skyline_from(found, low, known=None):
     for f in found:
         top = height(f, low)
         if top is None:
+            # Not measured (out of the mount's reach, or the Sun's glare) is
+            # not open: left out, it took its neighbours' height, so a
+            # bearing nobody saw read as clear sky. Blocked until seen.
+            points.append({"az": f["az"], "alt": 90.0, "unmeasured": True})
             continue
         point = {"az": f["az"], "alt": top}
         if f["state"] == "open":
