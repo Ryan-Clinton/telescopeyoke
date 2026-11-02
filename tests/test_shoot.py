@@ -105,3 +105,19 @@ def test_a_run_knows_when_the_disk_is_nearly_full(tmp_path, monkeypatch):
     assert shoot.disk_full(tmp_path / "not-made-yet")
     monkeypatch.setattr(shutil, "disk_usage", lambda p: real(p)._replace(free=50_000_000_000))
     assert not shoot.disk_full(tmp_path)
+
+
+def test_an_order_named_for_one_run_never_reaches_another(tmp_path, monkeypatch):
+    """1 November 2026: a "stop" timed for M33 was taken by the M31 run that
+    followed it."""
+    monkeypatch.setattr(shoot, "ORDERS", tmp_path / "run_order.txt")
+    shoot.tell("stop", run="M33")
+    assert shoot.order("M31") is None and shoot.ORDERS.exists()      # left for the run it names
+    assert shoot.order("M33") == "stop" and not shoot.ORDERS.exists()
+    shoot.tell("stop")
+    assert shoot.order("M31") == "stop"                                # unnamed: for whatever is running
+    shoot.tell("stop", run="M31")
+    import time
+    assert shoot.order("M31", now=time.time() + shoot.ORDER_STALE_S + 1) is None   # stale: never acted on
+    shoot.ORDERS.write_text("stop")                                    # the old plain form still works
+    assert shoot.order("M31") == "stop"

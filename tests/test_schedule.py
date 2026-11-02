@@ -101,8 +101,9 @@ def test_a_step_with_an_end_time_images_the_last_field_until_then(monkeypatch):
     ran = []
     ok = schedule.run(say=lambda s: None,
                       start=lambda cmd: (ran.append(cmd), types.SimpleNamespace(returncode=124))[1])
-    assert ok and ran[0][:2] == ["timeout", "--signal=INT"] and ran[0][3:] == ["./shoot.py", "M31-P4", "--frames", "0"]
-    assert 3400 < int(ran[0][2]) <= 3600 and schedule.load()["steps"][0]["status"] == "done"
+    assert ok and ran[0][:2] == ["timeout", "--signal=INT"] and ran[0][3:7] == ["./shoot.py", "M31-P4", "--frames", "0"]
+    assert ran[0][7] == "--minutes" and 56 < float(ran[0][8]) <= 60          # told its time, to end gracefully
+    assert 3400 + 900 < int(ran[0][2]) <= 3600 + 900 and schedule.load()["steps"][0]["status"] == "done"
 
 
 def test_a_step_with_an_end_time_already_past_is_skipped(monkeypatch):
@@ -266,3 +267,42 @@ def test_anything_driving_the_mount_or_camera_is_seen_however_it_was_started():
     assert schedule.driving(["/usr/bin/python3", "./mount.py", "findhome"])
     assert not schedule.driving(["python3", "./schedule.py", "guard"])
     assert not schedule.driving(["python3", "./ty", "night"])
+
+
+def test_the_plan_changes_while_it_runs_skip_move_and_insert():
+    """1 November 2026: every change of plan meant stopping the runner and
+    editing its file by hand."""
+    schedule.save({"steps": []})
+    for label in ("one", "two", "three"):
+        schedule.add(label, 1, ["true"])
+    assert schedule.skip("2") == "two"
+    assert schedule.move("three", 1) == "three"
+    assert [s["label"] for s in schedule.load()["steps"]] == ["three", "one", "two"]
+    with pytest.raises(SystemExit):
+        schedule.skip("two")                       # already left out
+    schedule.main(["add", "four", "1", "--at", "1", "--", "true"])
+    ran = []
+    schedule.run(say=lambda s: None, sleep=lambda s: None,
+                 start=lambda cmd: ran.append(cmd) or types.SimpleNamespace(returncode=0))
+    assert ran == [["true"]] * 3                    # four, three, one; two left out
+    assert [s["label"] for s in schedule.load()["steps"]][0] == "four"
+
+
+def test_a_step_with_an_end_time_tells_its_run_how_long_it_has(monkeypatch):
+    """The run finishes gracefully, picture and all; the hard stop is only a backstop."""
+    monkeypatch.setattr(schedule, "last_field", lambda: "M33")
+    schedule.save({"steps": []})
+    schedule.add("M81", 60, ["./shoot.py", "M81", "--frames", "0"], until="23:59")
+    ran = []
+    schedule.run(say=lambda s: None, sleep=lambda s: None,
+                 start=lambda cmd: ran.append(cmd) or types.SimpleNamespace(returncode=0))
+    command = ran[0]
+    assert command[0] == "timeout" and "--minutes" in command
+    minutes = float(command[command.index("--minutes") + 1])
+    assert int(command[2]) >= minutes * 60 + 899             # the hard stop comes later than the graceful one
+
+
+def test_next_ends_the_running_step_gracefully():
+    told = []
+    schedule.next_step(tell=lambda order: told.append(order) or {"note": "ok"})
+    assert told == ["stop"]

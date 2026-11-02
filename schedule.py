@@ -47,6 +47,7 @@ from pathlib import Path
 
 import activity
 import config
+import interface
 import records
 
 FILE = config.DATA / "cache" / "schedule.json"
@@ -126,6 +127,51 @@ def add(label, minutes, command, not_before_=None, pid=None, until=None):
     save(plan)
 
 
+def find(ref, plan):
+    """The index of a step by its number as the schedule shows it (1 is the
+    first) or by its id; a refusal if there is none."""
+    steps = plan["steps"]
+    if str(ref).isdigit() and 1 <= int(ref) <= len(steps):
+        return int(ref) - 1
+    for i, step in enumerate(steps):
+        if step.get("id", step["label"]) == ref or step["label"] == ref:
+            return i
+    raise interface.Refusal("INVALID_REQUEST", f"No step {ref} in tonight's schedule.")
+
+
+def skip(ref):
+    """A queued step left out, while the schedule runs: the runner reads the
+    plan again before every step (1 November 2026: changing the plan meant
+    stopping the runner and editing its file by hand)."""
+    plan = load()
+    i = find(ref, plan)
+    if plan["steps"][i]["status"] != "queued":
+        raise interface.Refusal("INVALID_REQUEST", f"Step {i + 1} is {plan['steps'][i]['status']}, not queued.")
+    plan["steps"][i].update(status="skipped", finished=time.time())
+    save(plan)
+    return plan["steps"][i]["label"]
+
+
+def move(ref, position):
+    """A queued step moved to `position` (1 is the first), among the rest."""
+    plan = load()
+    i = find(ref, plan)
+    if plan["steps"][i]["status"] != "queued":
+        raise interface.Refusal("INVALID_REQUEST", f"Step {i + 1} is {plan['steps'][i]['status']}, not queued.")
+    step = plan["steps"].pop(i)
+    plan["steps"].insert(max(0, min(int(position) - 1, len(plan["steps"]))), step)
+    save(plan)
+    return step["label"]
+
+
+def next_step(tell=None):
+    """End the step that is running now, gracefully: its run finishes after
+    the frame it is taking, keeps its picture and search, and the schedule
+    goes on to the next step."""
+    import shoot
+    return (tell or shoot.tell)("stop")
+
+
 def mark(index, **fields):
     plan = load()
     plan["steps"][index].update(fields)
@@ -194,6 +240,12 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run):
                 mark_id(step["id"], status="skipped", started=time.time(), finished=time.time())
                 say(f"{datetime.now():%H:%M} {step['label']}: skipped, {max(left, 0)} s left")
                 continue
+            if any(Path(c).name in ("shoot.py", "patrol.py") for c in command[:2]):
+                # The run is told its time and finishes gracefully, picture and all;
+                # the hard stop is a backstop only (1 November 2026: steps cut off
+                # mid-picture, and private timers that stopped the wrong run).
+                command = command + ["--minutes", f"{left / 60:.1f}"]
+                left += 900
             command = ["timeout", "--signal=INT", str(left)] + command
         say(f"{datetime.now():%H:%M} starting {step['label']}")
         ran = True
@@ -464,6 +516,13 @@ def main(argv=None):
     w.add_argument("label")
     w.add_argument("minutes", type=float)
     w.add_argument("pid", type=int)
+    a.add_argument("--at", type=int, metavar="N", help="put it at this place in the schedule (1 is the first)")
+    sk = sub.add_parser("skip", help="leave out a queued step, while the schedule runs")
+    sk.add_argument("step", help="its number as shown, or its label")
+    mv = sub.add_parser("move", help="move a queued step to another place")
+    mv.add_argument("step")
+    mv.add_argument("position", type=int)
+    sub.add_parser("next", help="end the step running now gracefully and go on to the next")
     sub.add_parser("run")
     sub.add_parser("clear")
     sub.add_parser("end")
@@ -479,9 +538,19 @@ def main(argv=None):
             args.not_before = before[before.index("--not-before") + 1]
         if "--until" in before:
             args.until = before[before.index("--until") + 1]
+        if "--at" in before:
+            args.at = int(before[before.index("--at") + 1])
         if not command:
             ap.error("add needs the command after --")
         add(args.label, args.minutes, command, args.not_before, until=args.until)
+        if args.at:
+            move(len(load()["steps"]), args.at)
+    elif args.action == "skip":
+        print(f"left out: {skip(args.step)}")
+    elif args.action == "move":
+        print(f"moved: {move(args.step, args.position)}")
+    elif args.action == "next":
+        print(next_step()["note"])
     elif args.action == "wait":
         add(args.label, args.minutes, None, pid=args.pid)
     elif args.action == "run":

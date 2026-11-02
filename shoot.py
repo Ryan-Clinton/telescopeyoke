@@ -257,23 +257,41 @@ def draw_stack(stacked, count, name, exposure, web, finish=True):
     return spent
 
 
-def tell(order):
-    """Leave an order for the run that is going."""
+ORDER_STALE_S = 600    # an order not taken within this long is for a run that has gone
+
+
+def tell(order, run=None):
+    """Leave an order for the run that is going, or with `run` (its target)
+    only for that run: on 1 November 2026 a "stop" timed for one run stopped
+    the next. An order older than ORDER_STALE_S is never acted on."""
     if order not in KNOWN_ORDERS:
         raise interface.Refusal("INVALID_REQUEST", f"Unknown order '{order}'. Known: "
                                 + ", ".join(KNOWN_ORDERS))
     ORDERS.parent.mkdir(exist_ok=True)
-    ORDERS.write_text(order, encoding="utf-8")
-    return {"order": order, "note": "The run acts on it after its next frame."}
+    ORDERS.write_text(json.dumps({"order": order, "run": run, "at": time.time()}), encoding="utf-8")
+    return {"order": order, "run": run, "note": "The run acts on it after its next frame."}
 
 
-def order():
-    """The order left for this run, if any; it is taken, so it acts once."""
+def order(name=None, now=None):
+    """The order left for this run, if any; it is taken, so it acts once. An
+    order named for another run is left for it, and a stale one thrown away."""
     if not ORDERS.exists():
         return None
-    found = ORDERS.read_text(encoding="utf-8").strip()
-    ORDERS.unlink()
-    return found if found in KNOWN_ORDERS else None
+    text = ORDERS.read_text(encoding="utf-8").strip()
+    try:
+        left = json.loads(text)
+    except ValueError:
+        left = {"order": text, "run": None, "at": None}      # as written before 1 November 2026
+    if not isinstance(left, dict):
+        left = {"order": text, "run": None, "at": None}
+    now = time.time() if now is None else now
+    if left.get("at") is not None and now - left["at"] > ORDER_STALE_S:
+        ORDERS.unlink(missing_ok=True)
+        return None
+    if left.get("run") and name and left["run"] != name:
+        return None
+    ORDERS.unlink(missing_ok=True)
+    return left.get("order") if left.get("order") in KNOWN_ORDERS else None
 
 
 def recentre(target, aim_off=(0.0, 0.0)):
@@ -951,7 +969,7 @@ def image(args, session, exposure, moving, holding, tracker):
                         # the others cannot be lined up, so collect() waits for it.
                         waiting.append((pool.submit(stacking.live_frame,
                                                     *session.job(index, mosaic, header)), time.time()))
-                    asked = order()
+                    asked = order(args.name)
                     if asked:
                         print(f"  told to {asked}", flush=True)
                     if disk_full(session.folder):

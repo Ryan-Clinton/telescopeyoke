@@ -156,3 +156,5 @@ not ready, `next`: the one thing the person has to do.
 - With `--json`, stdout holds exactly one JSON document; anything else is on stderr.
 - Exit code 0 means `ok: true`.
 - Human-readable output may change freely; the JSON only changes with `schema_version`.
+
+Tonight's plan is `./schedule.py` (on the console, run in order by `./schedule.py run`). It changes while it runs: `./schedule.py next` ends the running step gracefully, `skip N`, `move N POS` and `add ... --at POS` reshape what is queued, with no restart. Why and what is still to build: [`docs/flexible-plans.md`](../flexible-plans.md).
