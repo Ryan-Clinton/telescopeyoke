@@ -394,7 +394,7 @@ def test_another_height_adds_doubt_where_its_skyline_differs():
 def test_a_torch_along_the_tube_tells_a_wall_from_cloud():
     """Stars alone cannot: no stars is a house or it is cloud. Lit by the
     torch it is in the way, however many "stars" a burnt-out frame claims;
-    dark with no stars it is cloud, and the garden is open that way."""
+    dark with no stars it cannot be told, and is never taken for open sky."""
     sky = {"view": "sky", "stars": 40, "share": 1.0}
     none = {"view": "blocked", "stars": 0, "share": 0.0}
     assert horizon.read_torch(sky, 51, 0.0, None) == dict(sky, level=51.0)
@@ -410,10 +410,10 @@ def test_a_torch_along_the_tube_tells_a_wall_from_cloud():
     burnt = horizon.read_torch(dict(sky, stars=6780), 4094, 0.9, None)      # a 3 s frame of the same wall
     assert burnt["view"] == "blocked" and burnt["lit"]
     cloud = horizon.read_torch(none, 60, 0.0, 51)
-    assert cloud["view"] == "sky" and cloud["cloud"]
+    assert cloud["view"] == "unknown" and cloud["share"] == 0.0
     # Before any frame of stars has said how dark the sky is, only a burnt
     # frame can be called lit.
-    assert horizon.read_torch(none, 400, 0.0, None)["view"] == "sky"
+    assert horizon.read_torch(none, 400, 0.0, None)["view"] == "unknown"
 
 
 def test_the_profile_prints_a_bearing_blocked_as_far_up_as_it_looked():
@@ -441,3 +441,95 @@ def test_a_wall_seen_from_further_away_is_lower_and_from_nearer_higher():
 def test_moving_a_skyline_needs_a_distance_all_round():
     with pytest.raises(interface.Refusal):
         horizon.moved([{"az": 0.0, "alt": 30.0}], 5, 90, [(0, 90, 10)])
+
+
+def test_a_survey_mostly_too_bright_to_read_is_not_kept():
+    seen = [{"az": 0, "alt": 75, "open": True}, {"az": 30, "alt": 66, "open": False}]
+    glare = [{"az": a, "alt": 20, "open": None, "glare": True} for a in (120, 150, 180)]
+    refused = [{"az": 90, "alt": 10, "open": None}]               # out of the mount's reach: not counted
+    assert horizon.glare_share(seen + refused) == 0.0
+    assert horizon.glare_share(seen + glare + refused) == pytest.approx(0.6)
+    assert horizon.glare_share(seen + glare) > horizon.GLARE_MOST
+    assert horizon.glare_share([]) == 0.0
+    # A night look that could not be told counts the same as glare.
+    assert horizon.glare_share(seen + [{"az": 9, "alt": 40, "open": None, "unread": True}]) == pytest.approx(1 / 3)
+
+
+def test_a_bearing_not_measured_is_blocked_not_open():
+    # 2 November 2026: what could not be seen was taken for sky. A bearing
+    # the survey could not measure must never borrow its neighbours' sky.
+    found = [{"az": 0, "state": "open", "clear": 20, "shut": None},
+             {"az": 90, "state": "unreachable", "clear": None, "shut": None},
+             {"az": 180, "state": "open", "clear": 20, "shut": None},
+             {"az": 270, "state": "open", "clear": 20, "shut": None}]
+    skyline = horizon.skyline_from(found, 20)
+    assert any(p.get("unmeasured") and p["az"] == 90 for p in skyline)
+    assert horizon.limit(skyline, [90])[0] == 90                 # nothing planned where nothing was seen
+    assert horizon.limit(skyline, [225])[0] == pytest.approx(20)   # between two measured bearings: as measured
+
+
+def test_a_look_it_could_not_read_is_tried_again_before_anything_is_kept():
+    # 2 November 2026: unread looks were taken for sky. Now a bearing that
+    # could not be read is looked at again once the rest is done: what
+    # cleared (cloud gone, the Sun moved on) is measured, what did not is
+    # kept as not measured.
+    first_time = {90}
+    log = []
+
+    def look(az, alt):
+        if az == 150 or az in first_time:
+            first_time.discard(az)
+            log.append({"az": az, "alt": alt, "open": None, "glare": True})
+            return None
+        log.append({"az": az, "alt": alt, "open": alt > 30})
+        return alt > 30
+    look.log = log
+    found, warnings = horizon.trace(look, sorted(range(0, 360, 30), key=horizon.side), low=20)
+    state = {f["az"]: f["state"] for f in found}
+    assert state[90] in ("edge", "open") and state[150] == "unreachable"
+    assert any("still unread at 150°" in w for w in warnings)
+    skyline = horizon.skyline_from(found, 20)
+    assert horizon.limit(skyline, [150])[0] == 90                # never seen: nothing planned there
+    blind = [e for e in log if e.get("glare") and not e.get("resolved")]
+    assert blind and all(e["az"] == 150 for e in blind)          # only what never cleared counts against it
+    assert all(e.get("resolved") for e in log if e["az"] == 90 and e.get("glare"))
+
+
+@pytest.mark.parametrize("angle", [0, 30, 45, 60, 90, 135, 180, 270])
+def test_a_top_in_the_frame_is_read_the_same_however_the_camera_is_turned(angle):
+    # A roof whose top is a quarter of a frame below the middle. Things in
+    # the way stand on the ground, so the sky's side is up whatever way the
+    # camera sits on the mount; the height comes out within 0.15 of a frame
+    # (a tenth of a degree), far inside the planner's 2° margin.
+    rows, cols = 640, 960
+    y, x = np.indices((rows, cols))
+    turn = math.radians(angle)
+    up = (rows / 2 - y) * math.cos(turn) + (x - cols / 2) * math.sin(turn)
+    seen = horizon.read_day(np.where(up > -0.25 * rows, 1300, 250).astype(np.uint16), 1300)
+    assert seen["view"] == "edge" and seen["offset"] == pytest.approx(-0.25, abs=0.15)
+
+
+def test_each_point_says_what_measured_it_and_a_panorama_stands_where_the_telescope_could_not_look():
+    known = [{"az": az, "alt": 30.0} for az in range(0, 360, 10)]
+    known[9] = {"az": 90, "alt": 50.0}                          # the panorama saw a roof at 90°
+    found = [{"az": 0, "state": "open", "clear": 20, "shut": None},
+             {"az": 90, "state": "unreachable", "clear": None, "shut": None},
+             {"az": 180, "state": "edge", "clear": 35, "shut": 34},
+             {"az": 270, "state": "open", "clear": 20, "shut": None}]
+    skyline = horizon.skyline_from(found, 20, known)
+    at = {p["az"]: p for p in skyline}
+    assert at[180]["by"] == "telescope" and at[180]["alt"] == 35
+    assert at[90]["alt"] == 50.0 and at[90]["by"] == "earlier skyline, not rechecked"   # not pushed to 90°
+    assert any(p["by"].startswith("earlier skyline, moved") for p in skyline)
+    # With nothing known before, the same bearing is blocked and says so.
+    alone = {p["az"]: p for p in horizon.skyline_from(found, 20)}
+    assert alone[90]["alt"] == 90.0 and alone[90]["by"] == "nothing: not measured"
+
+
+def test_a_survey_set_aside_never_replaces_the_skyline_in_use(kept):
+    horizon.keep([{"az": 0, "alt": 30}], "telescope")
+    before = horizon.RESULTS.read_text()
+    aside = horizon.set_aside([{"az": 0, "alt": 20}], "Not repeatable: the mount slipped")
+    assert horizon.RESULTS.read_text() == before
+    assert aside.parent == horizon.RESULTS.parent and "not-used" in aside.name
+    assert json.loads(aside.read_text())["not_used_because"].startswith("Not repeatable")

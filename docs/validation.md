@@ -531,7 +531,26 @@ focuser not touched since the stars.
   "burnt", never sky; each look starts at the high sky's exposure and one
   that burns out is metered again where it points, its brightness compared
   with the high sky's for the same time; one still burnt out at the shortest
-  exposure is left out as glare. Not yet run again on the real mount.
+  exposure is left out as glare. The rule since: what a survey cannot read
+  is never open sky. A bearing it could not measure goes into the skyline
+  blocked and marked unmeasured, not filled from its neighbours; a dark
+  night look with no stars is tried again 4 times longer, then counted as
+  unknown, not cloud; every bearing with an unread look is looked at again
+  once the rest is done (cloud drifts, the Sun moves on, a wall stays); and
+  a survey with more than a quarter of its looks still unread keeps
+  nothing. A survey that fails its last check (back at the first bearing it
+  reads differently: the mount slipped or the light changed) or reads too
+  little is set aside as `cache/horizon-SPOT.not-used-TIME.json` to look
+  into, never in place of the skyline in use. By day the high sky is looked
+  at again every 5 minutes, where it was first, since it brightens as the
+  Sun climbs. Every skyline point now says what measured it: the telescope,
+  an earlier skyline moved by the looks nearby, a corner put between two
+  looks, or nothing; a bearing the telescope could not look at keeps an
+  earlier skyline's height, marked not rechecked, and with none is blocked.
+  How a top in the frame is read was checked with the camera turned to
+  eight angles: the right side every time, within 0.15 of a frame (a tenth
+  of a degree). The re-referencing by day is not covered by a test (it
+  needs the mount); none of this has yet run on the real mount.
 - **`horizon.py --trace --daylight`** made three looks, all at bearing 0°,
   72° to 75° up, all read as open sky under cloud, before rain stopped it.
   No skyline was kept.
