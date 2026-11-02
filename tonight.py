@@ -27,6 +27,22 @@ ROOT = Path(__file__).parent
 
 # --- gathering ---------------------------------------------------------------
 
+FOG_VISIBILITY_M = 1000   # the Met Office's fog
+FOG_DEW_GAP = 0.5         # degrees: air this close to its dew point ...
+FOG_WIND = 5              # km/h: ... and this still, mist and fog form
+
+
+def foggy(h):
+    """Whether fog is likely in this forecast hour: the visibility forecast
+    under a kilometre or, without one, saturated air with hardly any wind.
+    2 November 2026: fog came in at 20:40 (Gary, half a mile away: "I can see
+    nothing"), and the forecast had said only "dew likely"; its cloud cover
+    does not count fog at the ground."""
+    if h.get("visibility") is not None:
+        return h["visibility"] < FOG_VISIBILITY_M
+    return h["temp"] - h["dew_point"] <= FOG_DEW_GAP and (h["wind"] or 0) <= FOG_WIND
+
+
 def weather_report(night, lat, lon, source=feeds):
     """Hourly conditions through the night plus a go/no-go verdict."""
     w = source.weather(lat, lon)
@@ -53,16 +69,20 @@ def weather_report(night, lat, lon, source=feeds):
             "wind": w["wind_speed_10m"][i], "gust": w["wind_gusts_10m"][i],
             # Where it blows from, in degrees: shelter on one side is no help from another.
             "wind_from": (w.get("wind_direction_10m") or [None] * len(t))[i],
+            # Metres; None from a source without it (the demo).
+            "visibility": (w.get("visibility") or [None] * len(t))[i],
             "seeing": near and near["seeing"],
             "transparency": near and near["transparency"],
         })
     if not hours:
         return None
 
-    # Longest run of consecutive mostly-clear, dry hours.
+    for h in hours:
+        h["fog"] = foggy(h)
+    # Longest run of consecutive mostly-clear, dry, fog-free hours.
     best, run = [], []
     for h in hours:
-        clear = h["cloud"] <= 30 and h["rain_chance"] < 30 and h["rain_mm"] == 0
+        clear = h["cloud"] <= 30 and h["rain_chance"] < 30 and h["rain_mm"] == 0 and not h["fog"]
         run = run + [h] if clear else []
         if len(run) > len(best):
             best = run
@@ -77,6 +97,12 @@ def weather_report(night, lat, lon, source=feeds):
         notes.append(f"gusts to {gust:.0f} km/h will shake the scope")
     elif gust >= 25:
         notes.append(f"breezy, gusts to {gust:.0f} km/h")
+    fog = [h for h in hours if h["fog"]]
+    if fog:
+        seen = [h["visibility"] for h in fog if h["visibility"] is not None]
+        notes.append(f"fog likely from {fog[0]['time']:%H:%M}"
+                     + (f" (visibility down to {min(seen) / 1000:.1f} km)" if seen else
+                        " (air at its dew point with hardly any wind)"))
     damp = [h for h in hours if h["temp"] - h["dew_point"] <= 2]
     if damp:
         notes.append(f"dew likely from {damp[0]['time']:%H:%M}; cover the laptop")

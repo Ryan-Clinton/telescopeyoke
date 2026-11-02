@@ -49,7 +49,7 @@ def _get(url, **params):
 WEATHER_VARS = (
     "cloud_cover,cloud_cover_low,cloud_cover_mid,cloud_cover_high,"
     "precipitation,precipitation_probability,temperature_2m,dew_point_2m,"
-    "relative_humidity_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m"
+    "relative_humidity_2m,wind_speed_10m,wind_gusts_10m,wind_direction_10m,visibility"
 )
 
 

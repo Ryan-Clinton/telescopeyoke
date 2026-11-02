@@ -520,3 +520,22 @@ def test_a_feeds_own_encoding_is_kept():
     text = '<?xml version="1.0" encoding="UTF-8"?><rss><channel><item><title>It’s a crèche</title>' \
            '<pubDate>Thu, 29 Oct 2026 18:00:00 +0000</pubDate></item></channel></rss>'
     assert feeds.read_rss(text.encode("utf-8"), "Universe Today")[0]["title"] == "It’s a crèche"
+
+
+def test_fog_is_forecast_from_the_visibility_or_still_saturated_air():
+    """2 November 2026: fog came in and the forecast said only "dew likely"."""
+    hour = {"temp": 2.0, "dew_point": 1.9, "wind": 2.0, "visibility": None}
+    assert tonight.foggy(hour)                                   # saturated and still
+    assert not tonight.foggy(dict(hour, wind=12.0))              # a breeze keeps fog off
+    assert tonight.foggy(dict(hour, visibility=400))             # the visibility forecast decides
+    assert not tonight.foggy(dict(hour, visibility=20000))
+
+
+def test_a_foggy_night_says_so_and_fog_is_not_clear(monkeypatch):
+    import demo
+    w = demo.weather(0, 0)
+    w["visibility"] = [300.0] * len(w["time"])
+    monkeypatch.setattr(demo, "weather", lambda lat, lon: w)
+    report = tonight.build(config.example(), demo=True)["weather"]
+    assert any(n.startswith("fog likely") and "0.3 km" in n for n in report["notes"])
+    assert report["clear_hours"] == 0
