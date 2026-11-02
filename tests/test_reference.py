@@ -87,3 +87,40 @@ def test_a_stack_from_before_the_candidate_is_clean(data, monkeypatch):
                                                     "verdict": "unexplained: worth a person's eyes"}])
     candidates.save(book)
     assert reference.make("M31")["held_back"] == []
+
+
+def test_locate_keeps_the_references_solve_for_its_footprint(data, monkeypatch):
+    """A reference made before depth.py kept its solve gets one: the solve
+    is kept in its depth record, and footprint.py then places the frame by
+    it, turned as solved, instead of at the catalogue's centre."""
+    import numpy as np
+    from astropy.io import fits
+    from astropy.wcs import WCS
+
+    import depth
+    import footprint
+    measured(data, "20261013-232632", 17.6)
+    reference.make("M31")
+    path = reference.newest("M31")
+    fits.writeto(path, np.zeros((40, 60), dtype=np.float32), overwrite=True)
+    scale = 0.66 / 3600
+
+    def solver(lum, name):
+        w = WCS(naxis=2)
+        w.wcs.ctype = ["RA---TAN", "DEC--TAN"]
+        w.wcs.crval = [10.70, 41.30]
+        w.wcs.crpix = [(lum.shape[1] + 1) / 2, (lum.shape[0] + 1) / 2]
+        w.wcs.cd = np.array([[0, -scale], [scale, 0]])         # turned a quarter
+        return w
+    kept = reference.locate("M31", solver=solver)
+    assert kept["width_px"] == 60 and kept["height_px"] == 40
+    record = json.loads(depth.record_path(path).read_text())
+    assert record["footprint"]["ra"] == 10.7 and record["zeropoint"] == 23.1    # the measurement kept with it
+    fp = footprint.of_reference("M31")
+    assert fp["source"].startswith("plate solve") and fp["across"] == [0.0, 1.0]
+    assert footprint.of_field("M31") == [fp]
+
+
+def test_locate_without_a_reference_is_refused(data):
+    with pytest.raises(interface.Refusal):
+        reference.locate("M33")

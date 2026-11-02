@@ -32,12 +32,15 @@ is `docs/agents/setup-routine.md` step 6b.
      (when it was last done, and what the notes say it found). One marked NOT up
      while clear is said once as skipped tonight.
    - One line: the free time after the programmes, and the big targets
-     for it from `best_tonight` (name, size, best time): the person
-     likes objects that fill the frame.
-   - One line per `other_fields` item: a fresh patrol field the
-     programmes do not watch (its `field`, size, best time and direction),
-     saying whether a reference is kept (none: tonight only makes it,
-     later nights search it) and naming any `supernova` in it (the
+     for it from `best_tonight` (name with any `with`, what it is in a
+     few words, its `frame_share` or `panels`, best time). The person
+     asked for objects that fill the frame (14 October 2026). Say one
+     with `nights_imaged` 0 is new, and a repeat adds to its stack.
+   - One line per `other_fields` item, in its order (best value first):
+     a fresh patrol field the programmes do not watch (its `field`, size,
+     best time and direction), with its `why` in a few words: whether a
+     reference is kept (none: tonight only makes it, later nights search
+     it), when it was last watched, and any `supernova` in it (the
      reference will then hold it). Say plainly what the field can catch:
      novae in M31 and M33 only; elsewhere a supernova watch.
    - One line per `supernovae` item (bright ones on the Rochester list, up

@@ -429,77 +429,181 @@ def in_the_clear(plan, clear):
 
 
 FIELD_MIN_ARCMIN = 8     # a galaxy smaller than this is a few pixels of a 60' frame: little to patrol
-NEAR_DEG = 0.5           # a galaxy this close to a field's centre is in that field's frame
-MOSAIC_DEG = 1.5         # ... or this close to a mosaic's centre (M31's 4 x 2 panels)
+BIG_SHARE = 0.25         # of the frame's width: "fills a decent proportion of the frame" (said 14 October 2026)
+CADENCE_DAYS = 20        # a supernova stays within about a magnitude of its peak some three weeks:
+                         # a galaxy unwatched this long may have had one come and go unseen
 
 
 def _key(name):
     return (name or "").replace(" ", "").upper()
 
 
-def _near(a, b, within=NEAR_DEG):
-    """Whether two (ra, dec) places in degrees are within `within` degrees."""
-    import math
-    ra1, d1, ra2, d2 = map(math.radians, (*a, *b))
-    c = math.sin(d1) * math.sin(d2) + math.cos(d1) * math.cos(d2) * math.cos(ra1 - ra2)
-    return math.degrees(math.acos(max(-1.0, min(1.0, c)))) <= within
+def _days_since(when, now):
+    return None if when is None else max(0.0, (now - when.timestamp()) / 86400)
 
 
-def _placed(names):
-    """{name: (ra, dec)} for each field name the catalogue or a watch places;
-    a mosaic panel (M31-P3) by its mosaic's centre."""
+def watched_footprints():
+    """Every frame the discovery programmes take, as footprints (footprint.py):
+    a mosaic's panels from its plan, a field's from its reference's solve or
+    at the catalogue's centre, a star's at its place."""
+    import tomllib
+
+    import footprint
     import starwatch
-    out = {}
-    for name in names:
-        found = next((s for s in starwatch.STARS.values() if s["name"] == name), None)
-        for look in (name, re.sub(r"-P\d+$", "", name)):
-            try:
-                found = found or mount.find_target(look)
-            except (interface.Refusal, Exception):
-                continue
-        if found:
-            out[name] = (found["ra"], found["dec"])
+    out = []
+    for path in PROGRAMMES.glob("*.toml"):
+        p = tomllib.loads(path.read_text(encoding="utf-8"))
+        if p.get("mosaic"):
+            out += footprint.of_mosaic(p["mosaic"], p.get("grid", "1x1"))
+            continue
+        star = next((s for s in starwatch.STARS.values() if s["name"] == p.get("target")), None)
+        if star and not footprint.of_reference(star["name"]):
+            out.append(footprint.nominal(star["ra"], star["dec"]))
+        elif p.get("target"):
+            out += footprint.of_field(p["target"])
     return out
 
 
-def other_fields(rep, limit=4, data=None):
-    """Galaxies up in darkness tonight that no discovery programme watches,
-    big enough to patrol, best first: fresh fields for a supernova watch.
-    Each says the field to patrol (a kept reference's field when the galaxy
-    lies in one, as M81 in M81-M82), whether a reference is kept (none:
-    tonight's stack becomes it, and only later nights are searched) and any
-    bright supernova listed in it now (then the reference holds the
-    supernova: its fading is measured later, not its arrival). A galaxy in a
-    programme's field (M110 in M31's) is left out. 2 November 2026: asked
-    "can we not do fresh patrols on anything else?", the outlook had only
-    the programmes."""
-    import tomllib
+def kept_references():
+    """{field: footprint} for each field with a usable reference kept: a
+    numbered version whose picture is on disk (reference.newest), not merely
+    a folder. Placed by the reference's own plate solve when kept, else at
+    the catalogue's centre."""
+    import footprint
+    import reference
+    root = config.DATA / "reference"
+    out = {}
+    for d in sorted(root.iterdir()) if root.is_dir() else []:
+        path = reference.newest(d.name) if d.is_dir() else None
+        if path is not None and path.is_file():
+            placed = footprint.of_field(d.name)
+            if placed:
+                out[d.name] = placed[0]
+    return out
+
+
+def other_fields(rep, limit=4, data=None, now=None):
+    """Galaxies up in darkness tonight that no discovery programme's frames
+    hold, big enough to patrol: fresh fields for a supernova watch, ranked
+    by what a watch there adds tonight, with the reasons.
+
+    The value of a field is the product of: whether it can be searched
+    tonight (a reference kept) or only gives its reference (half); how long
+    since it was watched, up to CADENCE_DAYS (watched last night adds
+    little: a supernova there would have been seen); how much of the galaxy
+    the frame holds (a galaxy wider than the frame loses what falls
+    outside); and how well placed it is tonight (the planner's score).
+    No galaxy distances are kept, so its supernova rate is not ranked.
+
+    Footprints are the camera's rectangle, turned as solved (footprint.py):
+    a galaxy whose centre lies in a programme's frame (M110 in M31's mosaic)
+    is left out, and one lying in a kept reference's frame (M81 in M81-M82)
+    is offered as that field. A bright supernova listed in it now is named:
+    the reference then holds it, its fading measured, not its arrival.
+    2 November 2026: asked "can we not do fresh patrols on anything else?",
+    the outlook had only the programmes."""
+    import footprint
+    import mosaic
+    now = now or time.time()
     data = data or config.DATA
-    reach = {}
-    for path in PROGRAMMES.glob("*.toml"):
-        p = tomllib.loads(path.read_text(encoding="utf-8"))
-        field = p.get("target") or p.get("mosaic")
-        reach[field] = max(reach.get(field, 0), MOSAIC_DEG if p.get("mosaic") else NEAR_DEG)
-    watched = [(at, reach[name]) for name, at in _placed(reach).items()]
-    folder = data / "reference"
-    kept = _placed([d.name for d in folder.iterdir() if d.is_dir()] if folder.is_dir() else [])
+    watched = watched_footprints()
+    kept = kept_references()
+    frame_width = mosaic.field()[0]
     active = {_key(s["name"]): s for s in rep.get("supernovae", [])}
     out, taken = [], set()
     for t in rep["targets"]:
-        if "galaxy" not in t["kind"] or (t.get("size") or 0) < FIELD_MIN_ARCMIN:
+        size = t.get("size") or 0
+        if "galaxy" not in t["kind"] or size < FIELD_MIN_ARCMIN:
             continue
-        here = (t["ra"], t["dec"])
-        if any(_near(here, w, within) for w, within in watched):
+        if any(footprint.contains(fp, t["ra"], t["dec"]) for fp in watched):
             continue
-        field = next((name for name, at in kept.items() if _near(here, at)), t["id"])
+        field = next((name for name, fp in kept.items() if footprint.contains(fp, t["ra"], t["dec"])), t["id"])
+        field = t["id"] if field == stacking.folder_name(t["id"]) else field    # its own reference: NGC2403
         if field in taken:
             continue
         taken.add(field)
+        reference = stacking.folder_name(field) in kept
+        days = _days_since(last_run([field], data), now)
+        stale = 1.0 if days is None else min(days, CADENCE_DAYS) / CADENCE_DAYS
+        held = min(1.0, frame_width * 60 / size)
+        placed = max(0.0, min(1.0, (t.get("score") or 0) / 100))
+        value = (1.0 if reference else 0.5) * stale * held * placed
+        why = ["reference kept: searched tonight" if reference else "no reference: tonight's stack becomes it",
+               "never watched" if days is None else f"last watched {days:.0f} days ago",
+               "the whole galaxy in the frame" if held >= 1 else f"the frame holds {held:.0%} of its length",
+               f"planner score {t.get('score')}"]
         names = {_key(t["id"]), _key(t.get("alt_id"))} - {""}
         sn = next((active[n] for n in names if n in active), None)
-        out.append(dict(_target(t), field=field, size_arcmin=round(t["size"], 1), reference=field in kept,
-                        supernova=sn["id"] if sn else None,
+        if sn:
+            why.append(f"{sn['id']} in it now: the reference will hold it")
+        out.append(dict(_target(t), field=field, size_arcmin=round(size, 1), reference=reference,
+                        supernova=sn["id"] if sn else None, days_since_watched=days and round(days, 1),
+                        value=round(value, 3), why=why,
                         command=f"./patrol.py {field!r}" if " " in field else f"./patrol.py {field}"))
+    out.sort(key=lambda f: -f["value"])
+    return out[:limit]
+
+
+def history(name, data=None, now=None):
+    """(nights imaged, days since the last) for a target, from its session folders."""
+    base = (data or config.DATA) / "frames" / stacking.folder_name(name)
+    nights = {s.name[:8] for s in base.glob("*/") if re.fullmatch(r"\d{8}-\d{6}", s.name)
+              and ((s / "final.fits").is_file() or any(s.glob("light-*.fits")))}
+    return len(nights), _days_since(last_run([name], data), now or time.time())
+
+
+def _sky_apart(a, b):
+    """Degrees between two catalogue entries."""
+    import math
+    ra1, d1, ra2, d2 = map(math.radians, (a["ra"], a["dec"], b["ra"], b["dec"]))
+    c = math.sin(d1) * math.sin(d2) + math.cos(d1) * math.cos(d2) * math.cos(ra1 - ra2)
+    return math.degrees(math.acos(max(-1.0, min(1.0, c))))
+
+
+def _span(group):
+    """Arcminutes from the far edge of one object to the far edge of
+    another, across the widest pair of a group; one object's own size."""
+    return max([o["size"] for o in group] + [_sky_apart(a, b) * 60 + (a["size"] + b["size"]) / 2
+                                             for i, a in enumerate(group) for b in group[i + 1:]])
+
+
+def big_targets(rep, limit=5, data=None, now=None):
+    """The night's best targets that fill a decent share of the frame
+    (BIG_SHARE of its width or more), in the planner's order, each with the
+    share it fills, the mosaic it needs when bigger than the frame, and how
+    often it has been imaged already: new ones are said as new, a repeat
+    as adding to its stack. Objects that share one frame are taken
+    together: the Double Cluster's two 14' halves fill the frame between
+    them, as M81 and M82 do. Their sizes are added for the share filled
+    (two small ones far apart fill little), and the span from the far edge
+    of one to the far edge of the other sets the framing."""
+    import mosaic
+    width, height = mosaic.field()
+    targets = [t for t in rep["targets"] if t.get("size")]
+    out, used = [], set()
+    for t in targets:
+        if t["id"] in used:
+            continue
+        group, same = [t], set()
+        for o in targets:                    # each one added only if the whole group still fits the frame
+            if o["id"] in used or o is t:
+                continue
+            if any(_sky_apart(m, o) * 60 < (m["size"] + o["size"]) / 2 for m in group):
+                same.add(o["id"])            # overlapping: the same thing under another entry (C14, h and chi Persei)
+            elif _span(group + [o]) <= width * 60:
+                group.append(o)
+        span = _span(group)
+        share = min(span, sum(o["size"] for o in group)) / 60 / width     # what the objects fill, not the gap
+        if share < BIG_SHARE:
+            continue
+        used.update([o["id"] for o in group] + list(same))
+        across = t.get("minor") if len(group) == 1 else max(o["size"] for o in group)   # a pair is long and thin
+        columns, rows = mosaic.suggest(dict(t, size=span, minor=across), width, height)
+        nights, days = history(t["id"], data, now)
+        out.append(dict(_target(t), size_arcmin=round(span, 1), frame_share=round(min(share, 1.0), 2),
+                        panels=None if columns * rows == 1 else f"{columns}x{rows}",
+                        nights_imaged=nights, days_since_imaged=days and round(days, 1),
+                        **{"with": [o["id"] for o in group[1:]]}))
         if len(out) >= limit:
             break
     return out
@@ -527,8 +631,7 @@ def night(demo=False):
         "discovery": in_the_clear(discovery_tonight(demo),
                                   [w["clear_from"], w["clear_to"]] if w and w["clear_hours"] else None),
         "best_now": [_target(t) for t in rep["targets"] if t["now"]][:3],
-        "best_tonight": [dict(_target(t), size_arcmin=t.get("size") and round(t["size"], 1))
-                         for t in rep["targets"][:5]],
+        "best_tonight": big_targets(rep, data=None if not demo else config.DATA),
         "other_fields": other_fields(rep, data=None if not demo else config.DATA),
         "supernovae": [dict(_target(s), mag=s["mag"], type=s["type"], last_seen=s["last_seen"], peak_mag=s["peak_mag"])
                        for s in rep.get("supernovae", [])],

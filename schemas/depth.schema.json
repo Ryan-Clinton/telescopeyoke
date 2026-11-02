@@ -40,6 +40,17 @@
   },
   "properties": {
     "zeropoint": {"type": "number", "description": "G magnitude of one unit of aperture flux in this stack."},
+    "footprint": {
+      "type": "object",
+      "description": "The stack's plate solve: the centre (degrees) at the image's centre, the CD matrix (degrees a pixel, east and north) and the image's size, so where the frame lies and how it is turned are known without solving again (footprint.py). Absent from measurements made before 2 November 2026; ./reference.py NAME --locate adds it to a reference.",
+      "required": ["ra", "dec", "cd", "width_px", "height_px"],
+      "properties": {
+        "ra": {"type": "number"}, "dec": {"type": "number"},
+        "cd": {"type": "array", "items": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
+               "minItems": 2, "maxItems": 2},
+        "width_px": {"type": "integer"}, "height_px": {"type": "integer"}
+      }
+    },
     "zeropoint_error": {"type": "number"},
     "calibration_scatter": {"type": "number", "description": "Spread of the calibration stars about the zero point, magnitudes."},
     "calibration_stars": {"type": "integer"},

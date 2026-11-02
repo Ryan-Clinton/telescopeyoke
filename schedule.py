@@ -37,6 +37,7 @@ asked for this; it moves the mount only home, through mount.py and its
 motion lock, and only once a night.
 """
 import argparse
+import functools
 import json
 import os
 import subprocess
@@ -74,14 +75,55 @@ def save(plan):
     records.write(FILE, plan)
 
 
-def not_before(hhmm, now):
-    """The next time it is `hhmm` (local), as unix seconds: tonight, or after
-    midnight if that time has already gone today by more than six hours.
+SUN_SET = -0.833           # degrees: the Sun's centre at sunset, refraction and its radius allowed for
+
+
+def _site():
+    return (config.load() if config.FILE.exists() and not config.DEMO else config.example())["site"]
+
+
+def last_sunset(now, site=None):
+    """When the Sun last set (unix seconds) if it is down at `now`, or None
+    while it is up. Looked for over the day before, five minutes at a time."""
+    return _last_sunset(int(now // 300) * 300, json.dumps(site or _site(), sort_keys=True))
+
+
+@functools.lru_cache(maxsize=32)
+def _last_sunset(now, site_text):
+    import numpy as np
+    from astropy import units as u
+    from astropy.coordinates import AltAz, EarthLocation, get_sun
+    from astropy.time import Time
+    site = json.loads(site_text)
+    here = EarthLocation(lat=site["latitude"] * u.deg, lon=site["longitude"] * u.deg,
+                         height=site.get("elevation_m", 0) * u.m)
+    stamps = now - np.arange(0, 86400 + 1, 300)[::-1]
+    times = Time(stamps, format="unix")
+    alt = get_sun(times).transform_to(AltAz(obstime=times, location=here)).alt.deg
+    if alt[-1] > SUN_SET:
+        return None
+    up = np.nonzero(alt > SUN_SET)[0]
+    return float(stamps[up[-1] + 1]) if len(up) else float(stamps[0])
+
+
+def not_before(when, now, sunset=last_sunset):
+    """A step's clock time as unix seconds. "YYYY-MM-DD HH:MM" is that
+    moment. "HH:MM" belongs to the observing night: in darkness, the night
+    began at the last sunset, so a time gone since then is tonight's and
+    already past (the step goes at once), and any other is the next time it
+    comes (07:05 at 19:05 is tomorrow's dawn); in daylight it is the next
+    time it comes, for the night ahead.
     2 November 2026: a dawn flat at 07:05, added at 19:05, was put at 07:05
-    that morning under the old twelve hours, and would have run in the dark."""
-    hour, minute = (int(v) for v in hhmm.split(":"))
-    moment = datetime.fromtimestamp(now).replace(hour=hour, minute=minute, second=0, microsecond=0)
-    if moment.timestamp() < now - 6 * 3600:
+    that morning by the old rule (gone by more than twelve hours means
+    tomorrow), and a 22:10 asked for at 01:00 would have waited 21 hours."""
+    when = when.strip()
+    if " " in when or "T" in when:
+        return datetime.fromisoformat(when.replace(" ", "T")).timestamp()
+    hour, minute = (int(v) for v in when.split(":"))
+    began = sunset(now)
+    anchor = now if began is None else began
+    moment = datetime.fromtimestamp(anchor).replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if moment.timestamp() < anchor:
         moment += timedelta(days=1)
     return moment.timestamp()
 
@@ -444,8 +486,8 @@ def main(argv=None):
     a = sub.add_parser("add")
     a.add_argument("label")
     a.add_argument("minutes", type=float)
-    a.add_argument("--not-before", metavar="HH:MM")
-    a.add_argument("--until", metavar="HH:MM", help="end the step then, whatever it is doing")
+    a.add_argument("--not-before", metavar="HH:MM", help="tonight's clock time (in darkness, one gone since sunset goes at once), or YYYY-MM-DD HH:MM")
+    a.add_argument("--until", metavar="HH:MM", help="end the step then, whatever it is doing; as --not-before")
     a.add_argument("command", nargs=argparse.REMAINDER)
     w = sub.add_parser("wait")
     w.add_argument("label")

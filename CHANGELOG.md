@@ -6,6 +6,21 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+- **Fresh fields placed by the real frame and ranked by what they add**
+  (`ty night`, `footprint.py`): a galaxy is in a programme's field when
+  its centre lies in the camera's rectangle (solved, from a mosaic's
+  plan, or nominal), not within a fixed circle; a reference counts only
+  when a version is kept; fields are ranked by reference, days since
+  watched, share in the frame and placing, with their reasons.
+  `depth.py` keeps its plate solve, and `reference.py NAME --locate`
+  adds one to an older reference. `best_tonight` takes the big targets,
+  with objects in one frame together (the Double Cluster) and how often
+  each was imaged ([discovery](docs/discovery.md), step 7).
+- **Schedule times by the observing night** (`schedule.py`): in darkness
+  a clock time gone since sunset is tonight's and goes at once, any
+  other is the next one; in daylight the next one; or a full date. It
+  replaces a six-hour guess.
+
 - **Which satellite made a streak** (`streak.py`, `ty streak`): finds a
   straight streak in a frame, plate-solves the frame and places every active
   satellite from CelesTrak's orbits (SGP4) through the exposure; one that

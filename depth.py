@@ -111,6 +111,14 @@ def plate(lum, name):
     return wcs_from(found, lum.shape)
 
 
+def footprint_of(wcs, shape):
+    """The solve kept with a measurement, so the stack's place and turn on
+    the sky are known later without solving again (footprint.py)."""
+    return {"ra": round(float(wcs.wcs.crval[0]), 6), "dec": round(float(wcs.wcs.crval[1]), 6),
+            "cd": [[float(v) for v in row] for row in wcs.wcs.cd],
+            "width_px": int(shape[1]), "height_px": int(shape[0])}
+
+
 def wcs_from(found, shape):
     """A WCS from a plate solve: the solve's centre at the image's centre."""
     w = WCS(naxis=2)
@@ -586,7 +594,7 @@ def run(args, say=print):
     say(f"{len(catalogue)} Gaia stars in the field")
     record = measure(lum, wcs, catalogue, plant_stars=args.plant or args.sweep, trials=args.trials)
     record.update(stack=str(stack), object=name, exposure_s=header.get("EXPTIME"),
-                  frames=header.get("NFRAMES"))
+                  frames=header.get("NFRAMES"), footprint=footprint_of(wcs, lum.shape))
     report(record, say)
     if args.sweep:
         session = stack.parent

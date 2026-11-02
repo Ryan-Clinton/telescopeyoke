@@ -586,32 +586,130 @@ def test_tonights_discovery_matches_its_schema(tmp_path):
     valid(interface.run("discovery", lambda: agent.discovery(now=4.1e9, hours=1e6, data=tmp_path)), "discovery")
 
 
+def _galaxy(id_, ra, dec, size, score, kind="galaxy"):
+    return {"id": id_, "alt_id": "", "name": "", "kind": kind, "ra": ra, "dec": dec, "size": size, "minor": None,
+            "score": score, "now": True, "best": None, "best_alt": 60.0, "direction": "S",
+            "start": None, "end": None, "tags": []}
+
+
+def _keep_reference(root, name, footprint=None):
+    """A usable reference as reference.py keeps one: v1.json naming v1.fits, and its depth record."""
+    import stacking
+    folder = root / "reference" / stacking.folder_name(name)
+    folder.mkdir(parents=True)
+    (folder / "v1.fits").write_bytes(b"")
+    (folder / "v1.json").write_text(json.dumps({"version": 1, "file": str(folder / "v1.fits")}))
+    (folder / "v1-depth.json").write_text(json.dumps({"footprint": footprint} if footprint else {}))
+
+
 def test_other_fields_offer_fresh_galaxies_beyond_the_programmes(tmp_path, monkeypatch):
     """A night full of galaxies the programmes do not watch offers them as
-    fresh patrol fields: a kept reference's field by its name, a bright
-    supernova flagged, and neither a programme's own field (M110 sits in
-    M31's) nor a galaxy too small to patrol."""
+    fresh patrol fields: one inside a kept reference's solved frame by that
+    field's name, a bright supernova flagged, and neither a galaxy in a
+    programme's frames (M110 sits in M31's mosaic) nor one too small to patrol."""
     import json as _json
-    (tmp_path / "reference" / "M81-M82").mkdir(parents=True)
-    real = mount.find_target
-    monkeypatch.setattr(mount, "find_target", lambda name: {"ra": 148.93, "dec": 69.37} if name == "M81-M82"
-                        else real(name))                          # the pair's framing, between them
-
-    def galaxy(id_, ra, dec, size, score):
-        return {"id": id_, "alt_id": "", "name": "", "kind": "galaxy", "ra": ra, "dec": dec, "size": size,
-                "score": score, "now": True, "best": None, "best_alt": 60.0, "direction": "S",
-                "start": None, "end": None, "tags": []}
-    rep = {"targets": [galaxy("M110", 10.092, 41.685, 16.2, 90),          # in M31's frame
-                       galaxy("M81", 148.888, 69.065, 21.6, 88),          # in the kept M81-M82 field
-                       galaxy("M82", 148.968, 69.680, 11.0, 86),          # the same field again
-                       galaxy("NGC 7331", 339.267, 34.416, 9.3, 64),
-                       galaxy("NGC 7814", 0.812, 16.146, 5.5, 60),        # too small
-                       galaxy("NGC 2403", 114.214, 65.603, 21.9, 58)],
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    # M81-M82's reference, solved between the pair, its long side north-south: both galaxies in it.
+    scale = 0.66 / 3600
+    _keep_reference(tmp_path, "M81-M82", {"ra": 148.93, "dec": 69.37, "cd": [[0, -scale], [scale, 0]],
+                                          "width_px": 5496, "height_px": 3672})
+    rep = {"targets": [_galaxy("M110", 10.092, 41.685, 16.2, 90),          # in M31's mosaic
+                       _galaxy("M81", 148.888, 69.065, 21.6, 88),          # in the kept M81-M82 frame
+                       _galaxy("M82", 148.968, 69.680, 11.0, 86),          # the same frame again
+                       _galaxy("NGC 7331", 339.267, 34.416, 9.3, 64),
+                       _galaxy("NGC 7814", 0.812, 16.146, 5.5, 60),        # too small
+                       _galaxy("NGC 2403", 114.214, 65.603, 21.9, 58)],
            "supernovae": [{"id": "SN 2026aaiv", "name": "NGC 7331"}]}
     fields = agent.other_fields(rep, data=tmp_path)
     assert [f["field"] for f in fields] == ["M81-M82", "NGC 7331", "NGC 2403"]
     assert [f["reference"] for f in fields] == [True, False, False]
     assert fields[1]["supernova"] == "SN 2026aaiv" and fields[1]["command"] == "./patrol.py 'NGC 7331'"
-    assert fields[0]["command"] == "./patrol.py M81-M82"
+    assert fields[0]["command"] == "./patrol.py M81-M82" and "reference kept: searched tonight" in fields[0]["why"]
     schema = _json.loads((Path(__file__).resolve().parent.parent / "schemas" / "night.schema.json").read_text())
     jsonschema.validate(fields, schema["properties"]["other_fields"])
+
+
+def test_a_reference_folder_with_nothing_kept_is_not_a_reference(tmp_path, monkeypatch):
+    """An empty or half-made folder under reference/ is not a usable
+    reference: the galaxy is offered under its own name, to be made."""
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    (tmp_path / "reference" / "NGC2403").mkdir(parents=True)          # as reference.py names it, but empty
+    fields = agent.other_fields({"targets": [_galaxy("NGC 2403", 114.214, 65.603, 21.9, 58)]}, data=tmp_path)
+    assert fields[0]["field"] == "NGC 2403" and fields[0]["reference"] is False
+
+
+def test_the_frame_is_a_rectangle_turned_as_solved():
+    """A place 0.45 degrees east of the centre is inside a frame whose 1.0
+    degree side runs east-west, and outside the same frame turned a quarter
+    (its 0.67 degree side east-west): a circle could tell neither."""
+    import footprint
+    flat = footprint.make(100.0, 0.0, 1.0, 0.67, (1, 0), (0, 1), "test")
+    turned = footprint.make(100.0, 0.0, 1.0, 0.67, (0, 1), (-1, 0), "test")
+    assert footprint.contains(flat, 100.45, 0.0) and not footprint.contains(turned, 100.45, 0.0)
+    assert footprint.contains(turned, 100.0, 0.45) and not footprint.contains(flat, 100.0, 0.45)
+    scale = 0.66 / 3600
+    solved = footprint.from_solve({"ra": 100.0, "dec": 0.0, "cd": [[-scale, 0], [0, scale]],
+                                   "width_px": 5496, "height_px": 3672})
+    assert abs(solved["width_deg"] - 1.0076) < 1e-3 and footprint.contains(solved, 100.45, 0.0)
+    assert not footprint.contains(solved, 100.0, 0.4)
+
+
+def test_a_field_unwatched_and_searchable_ranks_above_one_watched_last_night(tmp_path, monkeypatch):
+    """Value, not the planner's order: a galaxy with a reference kept and
+    not watched for a month comes before a better-placed one watched last
+    night (a supernova there would have been seen), and one that only
+    makes its reference tonight counts half."""
+    import time as _time
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    now = _time.time()
+    _keep_reference(tmp_path, "NGC 2403")
+    old = tmp_path / "frames" / "NGC2403" / _time.strftime("%Y%m%d-%H%M%S", _time.localtime(now - 30 * 86400))
+    recent = tmp_path / "frames" / "NGC891" / _time.strftime("%Y%m%d-%H%M%S", _time.localtime(now - 86400))
+    for d in (old, recent):
+        d.mkdir(parents=True)
+        (d / "light-0001.fits").write_bytes(b"")
+    rep = {"targets": [_galaxy("NGC 891", 35.639, 42.349, 13.5, 95),       # watched yesterday
+                       _galaxy("NGC 7331", 339.267, 34.416, 9.3, 80),      # never, no reference
+                       _galaxy("NGC 2403", 114.214, 65.603, 21.9, 60)]}    # a month ago, reference kept
+    fields = agent.other_fields(rep, data=tmp_path, now=now)
+    assert [f["field"] for f in fields] == ["NGC 2403", "NGC 7331", "NGC 891"]
+    assert fields[0]["days_since_watched"] == 30.0 and fields[1]["days_since_watched"] is None
+    assert fields[2]["value"] < 0.1 and "last watched 1 days ago" in fields[2]["why"]
+
+
+def test_best_tonight_is_the_big_targets_with_what_they_fill_and_their_history(tmp_path, monkeypatch):
+    """The Double Cluster or Orion's nebula when they are up: objects that
+    fill a quarter of the frame or more (the Double Cluster as one pair), in the planner's order, with the
+    mosaic a big one needs; the small (the Ring) left out; one imaged before
+    says so."""
+    import time as _time
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    now = _time.time()
+    done = tmp_path / "frames" / "M42" / _time.strftime("%Y%m%d-%H%M%S", _time.localtime(now - 2 * 86400))
+    done.mkdir(parents=True)
+    (done / "final.fits").write_bytes(b"")
+    rep = {"targets": [_galaxy("M57", 283.396, 33.029, 1.4, 99, kind="planetary nebula"),
+                       _galaxy("M42", 83.822, -5.391, 85.0, 90, kind="nebula"),
+                       _galaxy("NGC 869", 34.75, 57.13, 14.4, 85, kind="open cluster"),
+                       _galaxy("NGC 884", 35.58, 57.15, 14.4, 84, kind="open cluster"),
+                       _galaxy("C014", 35.17, 57.14, 30.0, 83, kind="open cluster")]}     # the pair's own entry
+    rep["targets"] += [_galaxy("NGC 7000", 314.7, 44.3, 120.0, 70, kind="nebula"),
+                       _galaxy("NGC 6826", 296.2, 50.525, 2.3, 60, kind="planetary nebula"),   # two small ones in
+                       _galaxy("NGC 6811", 294.34, 46.38, 4.5, 59, kind="open cluster")]       # different frames
+    best = agent.big_targets(rep, data=tmp_path, now=now)
+    assert [b["id"] for b in best] == ["M42", "NGC 869", "NGC 7000"]
+    assert best[0]["panels"] is not None and best[0]["frame_share"] == 1.0 and best[0]["with"] == []
+    assert best[0]["nights_imaged"] == 1 and best[0]["days_since_imaged"] == 2.0
+    assert best[1]["with"] == ["NGC 884"] and best[1]["panels"] is None        # the Double Cluster, one frame
+    assert best[1]["nights_imaged"] == 0 and best[1]["days_since_imaged"] is None
+    assert 0.4 < best[1]["frame_share"] < 0.6          # two 14.4' halves: neither is a quarter alone
+    schema = json.loads((Path(__file__).resolve().parent.parent / "schemas" / "night.schema.json").read_text())
+    jsonschema.validate(best, schema["properties"]["best_tonight"])
+
+
+def test_two_small_objects_sharing_a_frame_are_not_a_big_target(tmp_path, monkeypatch):
+    """Two 3' galaxies at opposite ends of one frame fill little of it: the
+    share is what the objects cover, not the gap between them."""
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    rep = {"targets": [_galaxy("A", 100.0, 0.0, 3.0, 80), _galaxy("B", 100.8, 0.0, 3.0, 79)]}
+    assert agent.big_targets(rep, data=tmp_path) == []

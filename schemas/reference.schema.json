@@ -28,6 +28,8 @@
     "name": {"type": "string"},
     "versions": {"type": "array", "items": {"$ref": "#/$defs/version"}},
     "made": {"$ref": "#/$defs/version"},
+    "footprint": {"type": "object", "required": ["ra", "dec", "cd", "width_px", "height_px"],
+                  "description": "With --locate: the newest reference's plate solve, kept with its depth record (depth.schema.json footprint)."},
     "measured": {"type": "array", "items": {"type": "object", "required": ["stack", "mag_50"]}},
     "fields": {"type": "array", "items": {"type": "object", "required": ["name", "versions", "newest"]}}
   }

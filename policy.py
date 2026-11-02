@@ -102,6 +102,7 @@ COMMANDS = {
     # watch sends video to a public service while a run images; frame and the
     # default view send nothing.
     "stream.py": ("read_only", {"watch": "external", "frame": "local_write", "preview": "local_write", "key": "local_write", "twitch-login": "external"}, {"--to": "local_write"}),
+    "youtube.py": ("external", {"status": "external", "open": "external"}, {}),
     "schedule.py": ("read_only", {"run": "hardware", "add": "local_write", "wait": "local_write",
                                   "clear": "local_write", "end": "hardware", "guard": "hardware"}, {}),
     "serve.py": ("local_write", {}, {}),            # the status page: read-only to its visitors

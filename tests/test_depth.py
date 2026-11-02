@@ -357,3 +357,20 @@ def test_the_destripe_check_answers_in_its_schema(tmp_path):
     answer = interface.run("depth-destripe-check", lambda: depth.destripe_check(session, 2, 80, say=lambda s: None))
     schema = json.loads((config.ROOT / "schemas" / "depth-destripe-check.schema.json").read_text(encoding="utf-8"))
     jsonschema.validate(json.loads(json.dumps(answer["data"])), schema)
+
+
+def test_a_measurement_keeps_its_plate_solve_as_the_footprint():
+    """depth.py keeps the solve it makes, in the shape its schema gives, so
+    the stack's frame is placed later without solving again (footprint.py)."""
+    import json as _json
+    from pathlib import Path
+
+    import jsonschema as _jsonschema
+
+    import footprint
+    w = depth.wcs_from({"ra": 23.46, "dec": 30.66, "cd": [[-0.000183, 0.0], [0.0, 0.000183]]}, (3672, 5496))
+    kept = depth.footprint_of(w, (3672, 5496))
+    schema = _json.loads((Path(__file__).resolve().parent.parent / "schemas" / "depth.schema.json").read_text())
+    _jsonschema.validate(kept, schema["properties"]["footprint"])
+    fp = footprint.from_solve(kept)
+    assert abs(fp["width_deg"] - 1.006) < 0.01 and abs(fp["height_deg"] - 0.672) < 0.01

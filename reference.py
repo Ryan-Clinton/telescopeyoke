@@ -4,6 +4,7 @@
     ./reference.py M31                  what is kept for M31, and what could be
     ./reference.py M31 --make           keep the deepest measured M31 stack as its reference
     ./reference.py M31 --make --from frames/M31/20261013-232632
+    ./reference.py M31 --locate         keep where the reference's frame lies on the sky
     ./reference.py --list
 
 A reference is a stack whose depth.py measurement is kept beside it: the
@@ -150,6 +151,23 @@ def make(name, source=None, force=False):
     return record
 
 
+def locate(name, solver=None):
+    """Plate-solve the newest reference and keep the solve in its depth
+    record, so footprint.py knows where its frame lies and how it is turned.
+    For references made before depth.py kept its solve (2 November 2026)."""
+    from astropy.io import fits
+    path = newest(name)
+    if path is None or not path.is_file():
+        raise interface.Refusal("NO_SESSION", f"No reference kept for {name}: ./reference.py {name} --make")
+    record_file = depth.record_path(path)
+    record = json.loads(record_file.read_text(encoding="utf-8")) if record_file.is_file() else {}
+    lum = depth.brightness(fits.getdata(path))
+    wcs = (solver or depth.plate)(lum, name)
+    record["footprint"] = depth.footprint_of(wcs, lum.shape)
+    records.write(record_file, record)
+    return record["footprint"]
+
+
 def sessions_used(name):
     """Every session folder a kept reference of this field was made from."""
     used = set()
@@ -170,6 +188,11 @@ def run(args, say=print):
         return answer
     if not args.name:
         raise interface.Refusal("INVALID_REQUEST", "Name a field, or use --list.")
+    if getattr(args, "locate", False):
+        where = locate(args.name)
+        say(f"{args.name}: centre RA {where['ra']:.4f}, Dec {where['dec']:+.4f}, "
+            f"{where['width_px']} x {where['height_px']} px; kept with its depth record")
+        return {"name": args.name, "versions": kept(args.name), "footprint": where}
     if args.make:
         record = make(args.name, args.source, args.force)
         say(f"{args.name} v{record['version']}: {record['source']}, half of planted stars found at "
@@ -192,6 +215,8 @@ def main():
     ap.add_argument("--from", dest="source", help="with --make: this stack instead of the deepest")
     ap.add_argument("--force", action="store_true",
                     help="with --make: even if the stack could contain an open candidate")
+    ap.add_argument("--locate", action="store_true",
+                    help="plate-solve the newest reference and keep where its frame lies (footprint.py)")
     ap.add_argument("--list", action="store_true", help="every field with a reference")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()

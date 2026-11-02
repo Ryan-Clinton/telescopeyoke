@@ -6,6 +6,7 @@ import types
 
 import pytest
 
+import config
 import schedule
 
 ENDED, TOLD = [], []
@@ -150,6 +151,7 @@ class Clock:
 
 def test_the_night_ends_parked_and_told_when_the_last_step_has_run_in_the_morning(monkeypatch):
     monkeypatch.setattr(schedule, "datetime", Clock(6))
+    monkeypatch.setattr(schedule, "busy", lambda: False)     # not this machine's own processes (a live console counts)
     schedule.save({"steps": []})
     schedule.add("one", 1, ["true"])
     assert schedule.run(say=lambda s: None, start=lambda cmd: types.SimpleNamespace(returncode=0))
@@ -256,10 +258,34 @@ def test_anything_driving_the_mount_or_camera_is_seen_however_it_was_started():
     assert not schedule.driving(["python3", "./ty", "night"])
 
 
-def test_a_dawn_time_added_in_the_evening_is_the_next_morning():
+def test_a_clock_time_belongs_to_the_observing_night_begun_at_sunset():
+    """No hours-gone threshold: in darkness the night began at sunset, so a
+    time gone since then goes at once and any other is the next one; in
+    daylight a time is the next one, for the night ahead."""
     from datetime import datetime
-    evening = datetime(2026, 11, 2, 19, 5).timestamp()
-    assert datetime.fromtimestamp(schedule.not_before("07:05", evening)) == datetime(2026, 11, 3, 7, 5)
-    assert datetime.fromtimestamp(schedule.not_before("22:10", evening)) == datetime(2026, 11, 2, 22, 10)
-    morning = datetime(2026, 11, 3, 1, 0).timestamp()
-    assert datetime.fromtimestamp(schedule.not_before("00:30", morning)) == datetime(2026, 11, 3, 0, 30)  # just gone: at once
+
+    def at(text, now, dusk):
+        return datetime.fromtimestamp(schedule.not_before(text, now.timestamp(),
+                                                          sunset=lambda _: dusk and dusk.timestamp()))
+    dusk = datetime(2026, 11, 2, 16, 40)
+    evening, small_hours = datetime(2026, 11, 2, 19, 5), datetime(2026, 11, 3, 1, 0)
+    assert at("07:05", evening, dusk) == datetime(2026, 11, 3, 7, 5)          # dawn flat: tomorrow morning
+    assert at("22:10", evening, dusk) == datetime(2026, 11, 2, 22, 10)
+    assert at("00:30", small_hours, dusk) == datetime(2026, 11, 3, 0, 30)     # just gone: at once
+    assert at("22:10", small_hours, dusk) == datetime(2026, 11, 2, 22, 10)    # gone tonight: at once, not 21 h on
+    assert at("07:05", small_hours, dusk) == datetime(2026, 11, 3, 7, 5)      # the same dawn all night
+    morning = datetime(2026, 11, 3, 11, 0)                                     # the Sun up: the night ahead
+    assert at("16:30", morning, None) == datetime(2026, 11, 3, 16, 30)
+    assert at("07:05", morning, None) == datetime(2026, 11, 4, 7, 5)
+    assert at("2026-11-05 02:30", evening, dusk) == datetime(2026, 11, 5, 2, 30)   # a date says it outright
+
+
+def test_the_last_sunset_is_found_from_the_sun():
+    """At the example site the Sun sets about 16:30 UTC in early November."""
+    from datetime import datetime, timezone
+    site = config.example()["site"]
+    night = datetime(2026, 11, 2, 21, 0, tzinfo=timezone.utc).timestamp()
+    noon = datetime(2026, 11, 2, 12, 0, tzinfo=timezone.utc).timestamp()
+    dusk = schedule.last_sunset(night, site)
+    assert dusk is not None and abs(dusk - datetime(2026, 11, 2, 16, 35, tzinfo=timezone.utc).timestamp()) < 3600
+    assert schedule.last_sunset(noon, site) is None

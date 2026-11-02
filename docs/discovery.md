@@ -162,7 +162,34 @@ What a person does; everything else is automatic.
 7. Fresh fields: `./ty night` lists under `other_fields` the big galaxies
    up tonight that no programme watches, and `./patrol.py FIELD` patrols
    any of them. Its first night only makes the reference; later nights
-   are searched. Outside M31 and M33 this is a supernova watch, not a nova
+   are searched. A programme "watches" a galaxy when the galaxy's centre
+   lies in one of its frames: the camera's rectangle, placed by the
+   reference's own plate solve (`./reference.py NAME --locate`; `depth.py`
+   keeps the solve of every stack it measures), by a mosaic's plan, or at
+   the catalogue centre turned as at the last solve (`footprint.py`). A
+   reference counts only when a numbered version is kept with its
+   picture, not because a folder exists. The fields are ranked by what
+   a watch adds tonight, each with its reasons (`why`): searchable tonight
+   (a reference kept) or only giving its reference (half); days since it
+   was watched, up to 20, since a supernova stays near its peak about
+   three weeks, so a field watched last night adds little; how much of
+   the galaxy the frame holds; and how well placed it is. No galaxy
+   distances are kept, so the supernova rate is not ranked.
+
+   On 2 November 2026 at 19:50, with the real site and data, the old
+   list was M81-M82, NGC 7331, NGC 2683, NGC 147 in the planner's order
+   (no reasons). The new one is NGC 2683, NGC 147, NGC 891, M74, all
+   never watched. M81-M82 was watched at 02:51 that morning, and NGC
+   7331 was being patrolled at 19:48, so each would add the least.
+   `best_tonight` was the planner's top five (M39, M45, M81, M82, NGC 869),
+   with M82 counted separately and the Double Cluster as one 14' half.
+   It is now M39 (0.33 of the frame, never imaged), M45 (a 3x5 mosaic,
+   imaged once, 20 days ago), M81 with M82 (one frame, 0.55), NGC 869
+   with NGC 884 (the Double Cluster in one frame, never imaged) and M31
+   (a 4x6 mosaic, 8 nights). Both lists come from `tonight.py`'s targets,
+   which are kept above the measured skyline and its margin in darkness;
+   the mount's own limits are checked when a GoTo is asked for
+   (`mount.py --dry-run`), not here. Outside M31 and M33 this is a supernova watch, not a nova
    hunt: novae in M81 peak near magnitude 20, beyond this rig's G 17-18
    ([design](discovery/design.md), the table of programmes). A field with a bright supernova in it now (NGC
    7331 with SN 2026aaiv, November 2026) gets a reference holding that

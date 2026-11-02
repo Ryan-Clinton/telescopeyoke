@@ -71,23 +71,35 @@
       }
     },
     "best_tonight": {
-      "description": "The five best targets of the whole night by the planner's score (tonight.py), up now or later, each with its size in arcminutes.",
-      "type": "array",
-      "items": {
-        "type": "object"
-      }
-    },
-    "other_fields": {
-      "description": "Galaxies up in darkness tonight that no discovery programme watches, 8 arcmin or larger, best first: fresh patrol fields. field is what to patrol (a kept reference's field when the galaxy lies in one); reference false means tonight's stack becomes the reference and only later nights are searched; supernova names a bright one listed in it now, which the reference will then contain.",
+      "description": "Up to five of the night's best targets (tonight.py's order) that fill a quarter of the frame's width or more, the size the person asked for on 14 October 2026; objects sharing one frame taken together (the Double Cluster); each with the share of the frame's width it fills, the mosaic grid it needs when bigger than the frame, and how often it has been imaged already (a new one is said as new, a repeat as adding to its stack).",
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["id", "field", "size_arcmin", "reference", "supernova", "command", "best_time", "best_altitude_deg", "direction"],
+        "required": ["id", "size_arcmin", "frame_share", "panels", "with", "nights_imaged", "days_since_imaged", "best_time", "direction"],
+        "properties": {
+          "size_arcmin": {"type": "number"},
+          "frame_share": {"type": "number", "description": "What it fills of the frame's width, at most 1: its length, or with others in the same frame their lengths added."},
+          "with": {"type": "array", "items": {"type": "string"}, "description": "Others in the same frame, taken with it (NGC 884 with NGC 869, the Double Cluster); size_arcmin is then the span from the far edge of one to the far edge of the other."},
+          "panels": {"type": ["string", "null"], "description": "Columns x rows of the smallest mosaic that covers it (mosaic.py), null when one frame does."},
+          "nights_imaged": {"type": "integer"},
+          "days_since_imaged": {"type": ["number", "null"]}
+        }
+      }
+    },
+    "other_fields": {
+      "description": "Galaxies up in darkness tonight, 8 arcmin or larger, whose centres lie in no discovery programme's frame (the camera's rectangle, footprint.py): fresh patrol fields, ranked by value: searchable tonight (a usable reference kept) or not (half), days since watched up to 20 (a supernova stays near its peak about three weeks), the share of the galaxy the frame holds, and the planner's score. field is what to patrol (a kept reference's field when the galaxy lies in its frame); reference false means tonight's stack becomes the reference and only later nights are searched; supernova names a bright one listed in it now, which the reference will then contain; why gives the reasons in words.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "field", "size_arcmin", "reference", "supernova", "days_since_watched", "value", "why", "command", "best_time", "best_altitude_deg", "direction"],
         "properties": {
           "field": {"type": "string"},
           "size_arcmin": {"type": "number"},
           "reference": {"type": "boolean"},
           "supernova": {"type": ["string", "null"]},
+          "days_since_watched": {"type": ["number", "null"], "description": "Since the field's newest session; null if never."},
+          "value": {"type": "number", "minimum": 0, "maximum": 1},
+          "why": {"type": "array", "items": {"type": "string"}},
           "command": {"type": "string"}
         }
       }
