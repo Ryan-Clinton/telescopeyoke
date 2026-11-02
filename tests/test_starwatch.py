@@ -52,6 +52,8 @@ def test_following_the_star_runs_the_patrol_on_it_and_a_plan_measures_nothing(da
     asked = []
     answer = starwatch.look("tabby", plan=True, say=lambda *_: None, patrol_run=lambda a: asked.append(a) or {"p": 1})
     assert asked[0].programme == "tabby" and asked[0].minutes == starwatch.MINUTES and answer["patrol"] == {"p": 1}
+    # The telescope goes on once the frames are in; the search never holds it (2 November 2026).
+    assert asked[0].release and not asked[0].wait
     import patrol
     assert patrol.programme("tabby")["exposure"] == 4 and patrol.programme("tabby")["target"] == "Tabby"
     target = mount.find_target("tabby")

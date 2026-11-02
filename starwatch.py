@@ -135,8 +135,12 @@ def look(key, minutes=MINUTES, plan=False, dry_run=False, say=print, patrol_run=
     brokers.keep_target(s["name"], s["ra"], s["dec"], {"kept_by": "starwatch.py", "id": s["id"]})
     patrol_run = patrol_run or (lambda a: patrol.run(a, say))
     began = __import__("time").time()
+    # The telescope is let go once the frames are in, as every patrol does: the
+    # search runs on in the background. On 2 November 2026 the search of
+    # Tabby's field waited 8 minutes on a catalogue server with the telescope
+    # held, and the night's next target stood still.
     done = patrol_run(_argparse.Namespace(programme=s["programme"], plan=plan, minutes=minutes, analyse=None, sweep=False,
-                                          all_history=False, dry_run=dry_run, json=False))
+                                          all_history=False, dry_run=dry_run, json=False, release=True, wait=False))
     if plan or dry_run:
         return {"star": s["id"], "name": s["name"], "patrol": done, "kind": "inferred"}
     session = (done.get("analysis") or {}).get("session") or (
