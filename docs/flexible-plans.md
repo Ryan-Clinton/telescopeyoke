@@ -61,9 +61,12 @@ every hitch came from changing the plan.
    list. Its daylight skyline of 2 November was set aside (every look burnt
    out in the low Sun, `docs/validation.md`), so steps from there are
    checked against the blocked list only until it is measured again.
-
-## Still to build
-
-6. **A lost step filled.** When a step fails or is skipped, the planner
-   offers the best target for the time left from tonight's discovery list,
-   already checked against the skyline, as one command to take it.
+6. **A lost step filled.** `./schedule.py fill` finds the first gap in the
+   schedule from now (a wait of 10 minutes or more before a step that keeps
+   to the clock, or the open time after the last step) and offers the first
+   of tonight's discovery programmes, in the order they come best, that is
+   up for the whole of it, fits it, has not been done tonight, and whose
+   path is clear by item 5, as one `./schedule.py add ... --at N` command.
+   `skip` makes the same offer, and so does the call that fetches the
+   person when a step has failed its tries. It offers; the person, or I,
+   take it with that one command.

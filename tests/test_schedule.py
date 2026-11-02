@@ -9,7 +9,7 @@ import pytest
 import schedule
 
 ENDED, TOLD = [], []
-REAL_END, REAL_STATE = schedule.end, schedule.mount_state
+REAL_END, REAL_STATE, REAL_FILL = schedule.end, schedule.mount_state, schedule.fill
 
 
 @pytest.fixture(autouse=True)
@@ -22,6 +22,7 @@ def no_real_mount(monkeypatch):
     monkeypatch.setattr(schedule, "end", lambda **k: ENDED.append(k) or True)
     monkeypatch.setattr(notify, "send", lambda text, **k: TOLD.append(text))
     monkeypatch.setattr(schedule, "mount_state", lambda run=None: pytest.fail("the real mount was asked"))
+    monkeypatch.setattr(schedule, "fill", lambda *a, **k: None)     # tonight's real sky is not worked out
 
 
 def test_the_times_follow_from_a_running_step_and_a_step_not_before():
@@ -299,7 +300,9 @@ def test_a_step_with_an_end_time_tells_its_run_how_long_it_has(monkeypatch):
     command = ran[0]
     assert command[0] == "timeout" and "--minutes" in command
     minutes = float(command[command.index("--minutes") + 1])
-    assert int(command[2]) >= minutes * 60 + 899             # the hard stop comes later than the graceful one
+    # The hard stop comes 15 minutes after the graceful one; the minutes are
+    # given to a tenth, so they can round up by as much as 3 seconds.
+    assert int(command[2]) >= minutes * 60 - 3 + 900
 
 
 def test_next_ends_the_running_step_gracefully():
@@ -369,3 +372,65 @@ def test_the_schedule_shows_a_warning_under_a_step_still_to_come(monkeypatch):
                                                        "behind": [{"at": step["start"], "az": 336.0,
                                                                    "alt": 60.0, "limit": 68.0}]})
     assert len(said) == 3 and said[2].strip().startswith("! TOI-2046 is behind something")
+
+
+# --- a lost step filled ----------------------------------------------------------
+
+HOUR = 3600.0
+
+
+def programme(name, field, minutes, opens, closes):
+    iso = lambda t: __import__("datetime").datetime.fromtimestamp(t).astimezone().isoformat()
+    return {"programme": name, "field": field, "minutes": minutes, "command": f"./patrol.py {name}",
+            "window": [iso(opens), iso(closes)], "in_clear": None}
+
+
+def test_the_gap_a_lost_step_leaves_is_found_before_a_step_on_the_clock():
+    now = 1000 * HOUR
+    at = lambda t: __import__("datetime").datetime.fromtimestamp(t).strftime("%H:%M")
+    plan = {"steps": [{"label": "TOI-2046 b", "minutes": 60, "status": "failed", "command": ["./shoot.py", "TOI-2046"],
+                       "started": now - 600, "finished": now - 60},
+                      {"label": "M81", "minutes": 60, "status": "queued", "command": ["./shoot.py", "M81"],
+                       "not_before": at(now + 2 * HOUR)}]}
+    start, end, place = schedule.gap(plan, now)
+    assert start == now and end == pytest.approx(now + 2 * HOUR, abs=60) and place == 2
+    # Nothing on the clock: the time after the last step is open.
+    start, end, place = schedule.gap({"steps": []}, now)
+    assert (start, end, place) == (now, None, 1)
+
+
+def test_a_lost_step_is_filled_from_the_discovery_list_with_one_command():
+    now = 1000 * HOUR
+    at = lambda t: __import__("datetime").datetime.fromtimestamp(t).strftime("%H:%M")
+    plan = {"steps": [{"label": "M31 novae", "minutes": 30, "status": "done", "command": ["./patrol.py", "m31-novae"],
+                       "started": now - 3 * HOUR, "finished": now - 2 * HOUR},
+                      {"label": "M81", "minutes": 60, "status": "queued", "command": ["./shoot.py", "M81"],
+                       "not_before": at(now + 2 * HOUR)}]}
+    listing = [programme("tabby", "Tabby", 10, now - HOUR, now + 5 * 60),       # sets before it would finish
+               programme("m31-novae", "M31", 30, now - HOUR, now + 6 * HOUR),    # done tonight already
+               programme("m33-novae", "M33", 150, now - HOUR, now + 6 * HOUR),   # longer than the gap
+               programme("ngc7000", "NGC 7000", 45, now - HOUR, now + 6 * HOUR),  # behind the house
+               programme("m33-short", "M33", 75, now - HOUR, now + 6 * HOUR)]
+    # agent.discovery_tonight() gives datetimes; ty night --json gives the same as text.
+    listing[-1]["window"] = [__import__("datetime").datetime.fromisoformat(t) for t in listing[-1]["window"]]
+    behind = lambda step: {"behind": [1] if "ngc7000" in step["command"][1] else []}
+    offer = REAL_FILL(plan, now, programmes=listing, check=behind)
+    assert offer["command"] == ["./patrol.py", "m33-short"] and offer["at"] == 2 and offer["minutes"] == 75
+    assert offer["words"].startswith('./schedule.py add "M33: m33-short, filling a lost step" 75 --at 2 -- ./patrol.py')
+    assert schedule.fill_words(offer).startswith("To fill the time from ")
+    # Nothing fits: said so plainly.
+    assert REAL_FILL(plan, now, programmes=listing[:3], check=behind) is None
+    assert schedule.fill_words(None).startswith("Nothing from tonight's discovery list fits")
+
+
+def test_a_failed_step_fetches_the_person_with_the_offer(monkeypatch):
+    monkeypatch.setattr(schedule, "fill", lambda *a, **k: {"label": "M33", "minutes": 75, "start": 0.0,
+                                                          "words": "./schedule.py add M33 75 --at 2 -- ./patrol.py m33-novae"})
+    monkeypatch.setattr(schedule, "RETRIES", 0)
+    plan = {"steps": [{"id": "a", "label": "a", "minutes": 1, "status": "queued", "command": ["false"]}]}
+    monkeypatch.setattr(schedule, "load", lambda: json.loads(json.dumps(plan)))
+    monkeypatch.setattr(schedule, "mark_id", lambda step_id, **f: plan["steps"][0].update(f))
+    called = []
+    assert schedule.run(say=lambda *_: None, sleep=lambda s: None, call=called.append,
+                        start=lambda c: types.SimpleNamespace(returncode=1)) is False
+    assert called and "./schedule.py add M33 75 --at 2" in called[0]

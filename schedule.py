@@ -9,6 +9,7 @@ each is expected to start and finish, for the console to show.
                                           more of whatever was imaged last, until then
     ./schedule.py wait "M31 novae" 30 PID  a step already running elsewhere, by its process id
     ./schedule.py run                     run the queued steps, one after the other
+    ./schedule.py fill                    what from tonight's discovery list fills the first gap
     ./schedule.py clear                   start a new schedule
     ./schedule.py end                     the night is over: park the mount and tell the person
     ./schedule.py guard                   the same, if a night's imaging has stopped and it is morning
@@ -275,8 +276,12 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run):
             sleep(RETRY_S)
             continue
         if not ok:
+            try:
+                offer = fill_words(fill())
+            except Exception as problem:    # the offer is a help: the person is fetched all the same
+                offer = f"No offer to fill the time: {problem.__class__.__name__}: {problem}"
             (call or fetch)(f"The telescope needs you: {step['label']} stopped with an error"
-                            + (f", and again after {RETRIES} more tries." if RETRIES else "."))
+                            + (f", and again after {RETRIES} more tries. " if RETRIES else ". ") + offer)
             return False
 
 
@@ -576,6 +581,80 @@ def settings():
     return config.load() if config.FILE.exists() and not config.DEMO else config.example()
 
 
+FILL_GAP_S = 600       # a wait between steps shorter than this is not worth filling
+FILL_OPEN_S = 4 * 3600  # how far ahead to look when nothing queued keeps to the clock
+
+
+def gap(plan=None, now=None):
+    """The first stretch of the schedule from now with nothing to do: (start,
+    end, the 1-based place a step would go to fill it), end None when nothing
+    queued after it keeps to the clock. None when the plan has no such gap."""
+    now = time.time() if now is None else now
+    steps = view(plan, now)["steps"]
+    free = now
+    for place, s in enumerate(steps, 1):
+        if s["status"] in ("done", "failed", "skipped"):
+            continue
+        if s["status"] == "queued" and s["start"] - free >= FILL_GAP_S:
+            return free, s["start"], place
+        free = max(free, s["end"])
+    return free, None, len(steps) + 1
+
+
+def fill(plan=None, now=None, programmes=None, check=None):
+    """What to put in the time a lost step leaves: the first of tonight's
+    discovery programmes (in the order they come best) that is up at the
+    start of the gap, fits it, has not been done tonight, and whose path is
+    clear of everything known to be in the way. Returns {"label", "minutes",
+    "command", "at", "words": the one command that takes it} or None.
+    `programmes` and `check` stand in for agent.discovery_tonight() and
+    path() (for the tests). 1 November 2026: when TOI-2046 b went behind the
+    house, the telescope waited for a person to choose what next."""
+    plan = load() if plan is None else plan
+    now = time.time() if now is None else now
+    found = gap(plan, now)
+    if not found:
+        return None
+    start, end, place = found
+    room = (end - start) / 60 if end else FILL_OPEN_S / 60
+    if programmes is None:
+        import agent
+        programmes = agent.discovery_tonight()
+    done = " ".join(" ".join(s.get("command") or []) for s in plan["steps"] if s.get("status") == "done")
+    cfg = None
+    for p in programmes:
+        if not p.get("command") or not p.get("minutes") or p["minutes"] > room:
+            continue
+        window = p.get("in_clear") or p.get("window")
+        if not window:
+            continue
+        opens, closes = (t.timestamp() if hasattr(t, "timestamp") else datetime.fromisoformat(t).timestamp()
+                         for t in window)
+        if not (opens <= start and start + 60 * p["minutes"] <= closes):
+            continue
+        if p["programme"] in done:
+            continue
+        step = {"command": p["command"].split(), "start": start, "end": start + 60 * p["minutes"]}
+        if check is None:
+            cfg = cfg or settings()
+        checked = (check or (lambda s: path(s, cfg)))(step)
+        if checked and checked["behind"]:
+            continue
+        label = f"{p['field']}: {p['programme']}, filling a lost step"
+        words = (f"./schedule.py add \"{label}\" {p['minutes']:g} --at {place} -- {p['command']}")
+        return {"label": label, "minutes": p["minutes"], "command": p["command"].split(), "at": place,
+                "start": start, "words": words}
+    return None
+
+
+def fill_words(offer):
+    """The offer said to a person, or that nothing fits."""
+    if not offer:
+        return "Nothing from tonight's discovery list fits the time left."
+    return (f"To fill the time from {datetime.fromtimestamp(offer['start']):%H:%M}: {offer['label']} "
+            f"({offer['minutes']:g} min): {offer['words']}")
+
+
 def fetch(words):
     subprocess.run([sys.executable, str(config.ROOT / "alert.py"), "call", words])
 
@@ -619,6 +698,7 @@ def main(argv=None):
     mv.add_argument("step")
     mv.add_argument("position", type=int)
     sub.add_parser("next", help="end the step running now gracefully and go on to the next")
+    sub.add_parser("fill", help="the discovery programme that best fills the first gap, as one command")
     sub.add_parser("run")
     sub.add_parser("clear")
     sub.add_parser("end")
@@ -650,8 +730,11 @@ def main(argv=None):
             print(f"! {words}")
     elif args.action == "skip":
         print(f"left out: {skip(args.step)}")
+        print(fill_words(fill()))
     elif args.action == "move":
         print(f"moved: {move(args.step, args.position)}")
+    elif args.action == "fill":
+        print(fill_words(fill()))
     elif args.action == "next":
         print(next_step()["note"])
     elif args.action == "wait":
