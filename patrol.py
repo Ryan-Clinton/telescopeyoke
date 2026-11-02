@@ -700,6 +700,10 @@ def run(args, say=print):
         return sweep(args.all_history, say=say, dry_run=args.dry_run)
     if args.analyse:
         session = Path(args.analyse)
+        if not (session / "final.fits").is_file() and any(session.glob("light-*.fits")):
+            # A patrol run with --release leaves its picture to be made here.
+            import restack
+            restack.run(session, say=say)
         result = analyse(args.analyse, say)
         # A panel's first night becomes its reference whichever way it was
         # imaged: through the patrol or by shoot.py alone (18 October 2026,
@@ -783,7 +787,7 @@ def run(args, say=print):
         began = time.time()
         stopped = None
         for cmd in plans[name]:
-            if behind and Path(cmd[1]).name == "shoot.py":
+            if (behind or getattr(args, "release", False)) and Path(cmd[1]).name == "shoot.py":
                 cmd = [*cmd, "--no-restack"]       # the final picture is made in the background
             say("$ " + " ".join(Path(c).name if c.endswith(".py") else c for c in cmd[1:]))
             # Through sys.stdout as it stands: with --json that is stderr, and
@@ -808,6 +812,13 @@ def run(args, say=print):
         if behind:
             say(f"  {name}: its picture and search go on in the background; on to the next panel")
             finishing.append(pool.submit(finish_panel, name, session))
+            continue
+        if getattr(args, "release", False):
+            # The telescope is let go as soon as the frames are in: the picture and
+            # the search are made in the background and anything unexplained is
+            # said there, as ever; its second look is a step of its own (1 November
+            # 2026: the search held the telescope while the next target waited).
+            answer["fields"].append({"field": name, "searching": finish_later(session, say)})
             continue
         entry = finish_panel(name, session)
         if unexplained(entry["analysis"]):
@@ -907,6 +918,25 @@ def is_panel(field):
     return re.match(r".+-P\d+$", field) is not None
 
 
+def finish_later(session, say=print, start=None):
+    """The final picture and the search of a session just taken, in the
+    background at low priority (patrol.py --analyse, which makes the picture
+    first): the patrol returns and the telescope goes on to its next target.
+    Its lines in the session's patrol.log."""
+    session = Path(session)
+    if config.DEMO:
+        return None
+    start = start or subprocess.Popen
+    lowly = {"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS} if os.name == "nt" else \
+        {"preexec_fn": lambda: os.nice(10), "start_new_session": True}
+    with open(session / "patrol.log", "w", encoding="utf-8") as log:
+        start([sys.executable, str(ROOT / "patrol.py"), "--analyse", str(session)], stdout=log,
+              stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, **lowly)
+    say(f"{session.parent.name}: the picture and the search go on in the background, the telescope is free: "
+        f"{session / 'patrol.log'}")
+    return str(session / "patrol.log")
+
+
 def search_later(session, say=print, start=subprocess.Popen):
     """Search a session just stacked, in the background at low priority so
     the next target is not kept waiting: patrol.py --analyse, its lines in
@@ -972,6 +1002,9 @@ def main():
     ap.add_argument("--plan", action="store_true", help="readiness and what it would do; moves nothing")
     ap.add_argument("--minutes", type=float, help="how long to image (default: the programme's)")
     ap.add_argument("--analyse", metavar="SESSION", help="only look for anything new in a session already taken")
+    ap.add_argument("--release", action="store_true",
+                    help="let the telescope go once the frames are in: the picture and the search are made in the "
+                         "background (a second look is then a step of its own)")
     ap.add_argument("--sweep", action="store_true", help=f"search every session of the last {SWEEP_DAYS} days "
                     "not yet searched")
     ap.add_argument("--all-history", action="store_true", help="with --sweep: every session kept")

@@ -492,3 +492,25 @@ def test_the_second_look_always_says_what_became_of_the_alert():
     assert "could not judge the 4 candidate(s): the GoTo back to it failed" in said({"stopped": "the GoTo back to it failed"})
     assert patrol.second_look_said("M31-P8", {"alerted": []}, none_back, send=lambda *a, **k: sent.append(a)) is None
     assert len(sent) == 3
+
+
+def test_with_release_the_telescope_is_let_go_once_the_frames_are_in(tmp_path, monkeypatch):
+    """1 November 2026: the search held the telescope while the next target
+    waited; with --release the picture and search go on in the background."""
+    monkeypatch.setattr(patrol, "readiness", lambda p: [])
+    monkeypatch.setattr(patrol, "first_goto", lambda name: None)
+    monkeypatch.setattr(config, "load", config.example)
+    ran, started = [], []
+    monkeypatch.setattr(patrol.subprocess, "run",
+                        lambda cmd, **kw: ran.append(cmd) or type("Done", (), {"returncode": 0})())
+    monkeypatch.setattr(patrol, "newest_session", lambda name, after: tmp_path)
+    monkeypatch.setattr(patrol, "analyse", lambda *a, **k: pytest.fail("searched in the foreground"))
+    monkeypatch.setattr(patrol.config, "DEMO", False)
+    monkeypatch.setattr(patrol.subprocess, "Popen", lambda cmd, **kw: started.append(cmd))
+    args = argparse.Namespace(programme="m31-novae", analyse=None, minutes=None, plan=False, dry_run=False,
+                              release=True)
+    answer = patrol.run(args, say=lambda *_: None)
+    shoot = next(c for c in ran if c[1].endswith("shoot.py"))
+    assert "--no-restack" in shoot
+    assert answer["fields"][0]["searching"].endswith("patrol.log")
+    assert started and "--analyse" in started[0]
