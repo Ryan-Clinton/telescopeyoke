@@ -57,6 +57,7 @@ import snap
 import stacking
 import tracking
 from camera import Camera, stretch
+from indi import IndiError as CameraError
 
 ROOT = Path(__file__).parent
 WEB = config.DATA / "web"
@@ -71,6 +72,8 @@ ORDERS = config.DATA / "cache" / "run_order.txt"
 KNOWN_ORDERS = ("stop", "recentre", "assist-on", "assist-off")
 RETAKE_GIVE_UP = 3  # with --frames N, no more retakes after this many rejected frames in a row
 CLOUD_STOP = 20     # with --frames 0, stop after this many rejected frames in a row
+JAM_REOPENS = 3     # a jammed camera is opened again this many times in a row before the run stops
+JAM_WAIT_S = 20     # seconds before it is opened again
 PREVIEW_EVERY = 3.0  # seconds between updates of the picture on the web page
 FINISH_FROM = 5      # accepted frames before the live picture is finished like the final one
 BACKLOG = 8         # frames allowed to wait for the live stack before it skips some
@@ -801,6 +804,7 @@ def image(args, session, exposure, moving, holding, tracker):
     print(f"{session.name}: {args.frames or 'an open-ended run of'} frames of {exposure:g} s at gain {args.gain}; "
           f"calibration: {session.calibration.describe()}; {workers} workers", flush=True)
     index, since_centre, since_dither, started = 0, 0, 0, time.monotonic()
+    jams = 0          # times in a row the camera was opened again without a frame
     if getattr(args, "dither_first", False):
         args.dither = args.dither or 10 ** 9      # a dither before the first frame, then none unless asked
         since_dither = args.dither
@@ -896,9 +900,15 @@ def image(args, session, exposure, moving, holding, tracker):
                     print(f"  hold: the mount would not move ({problem}); the hold is off", flush=True)
                     holding.state = "off"
             tracker.waiting()
+            jammed = None
             with Camera(gain=args.gain) as cam:
                 while more():
-                    mosaic, header = cam.frame(exposure)
+                    try:
+                        mosaic, header = cam.frame(exposure)
+                    except CameraError as problem:
+                        jammed = problem          # the camera is closed on the way out of this block
+                        break
+                    jams = 0
                     index += 1
                     tracker.took(index)
                     since_centre += 1
@@ -942,6 +952,18 @@ def image(args, session, exposure, moving, holding, tracker):
                         break
                     if args.assist and moving and len(session.track) >= live.get("shoot.assist_every", ASSIST_EVERY):
                         break
+            if jammed is not None:
+                # A jammed camera is opened again and the run goes on in the same
+                # session: on 1 November 2026 a jam ended a transit run, and its
+                # restart began a new session from frame 0 ("i dont think we should
+                # restart at square 1 and the code should handle it more gracefully").
+                jams += 1
+                if jams > JAM_REOPENS:
+                    raise jammed
+                print(f"  the camera stopped sending frames ({jammed}); opening it again in {JAM_WAIT_S} s, "
+                      f"the run goes on ({jams} of {JAM_REOPENS})", flush=True)
+                tracker.pause()
+                time.sleep(JAM_WAIT_S)
         collect(everything=True)
 
     session.finish()
