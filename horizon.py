@@ -354,8 +354,9 @@ def read_torch(seen, level, burnt, dark):
     burnt out at 3 s, where 6780 "stars" were counted. Bright with no stars
     is blocked: a tree read 312 at 3 s against 61. Bright with stars is sky
     all the same, since stars do not shine through a wall: that is thin
-    cloud. Dark with no stars is cloud, and is taken for open sky: the
-    survey is of what stands in the garden.
+    cloud. Dark with no stars is cloud or an unlit wall, and cannot be told:
+    it is "unknown", never open sky (2 November 2026: what a survey could
+    not see was taken for sky).
 
     The first survey on the real mount called the whole southern sky blocked
     to 75°, every look reading the same 420. The motors had stopped being
@@ -369,7 +370,7 @@ def read_torch(seen, level, burnt, dark):
     if seen["view"] == "blocked":
         if dark and level >= LIT * dark:
             return dict(seen, share=0.0, lit=True)
-        return dict(seen, view="sky", share=1.0, cloud=True)
+        return dict(seen, view="unknown", share=0.0, cloud=True)
     return seen
 
 
@@ -420,8 +421,8 @@ def glare_share(log):
     """The share of a survey's looks left out as too bright to read. A survey
     that could not see most of the sky has no skyline to keep: on 2 November
     2026 one with every frame burnt out kept a skyline of nothing but sky."""
-    made = [entry for entry in log if entry.get("open") is not None or entry.get("glare")]
-    return sum(1 for entry in made if entry.get("glare")) / len(made) if made else 0.0
+    made = [entry for entry in log if entry.get("open") is not None or entry.get("glare") or entry.get("unread")]
+    return sum(1 for entry in made if entry.get("glare") or entry.get("unread")) / len(made) if made else 0.0
 
 
 def daylight_exposure(cam, exposure=0.002):
@@ -537,8 +538,12 @@ def eye(site, exposure, gain, daylight=False, torch=False):
                         "where the mount says it is. Nothing has been kept. Watch one move to see that the "
                         "tube turns, and try again when the sky is clear.")
                 detail += (f", level {level:.0f}: lit by the torch" if seen.get("lit")
-                           else f", level {level:.0f}: dark, so cloud" if seen.get("cloud")
+                           else f", level {level:.0f}: dark with no stars, cloud or wall" if seen.get("cloud")
                            else f", level {level:.0f}")
+                if seen["view"] == "unknown":
+                    print(f"bearing {az:>5g}°, {alt:>4g}° up: cannot tell ({detail}), left out", flush=True)
+                    log.append({"az": az, "alt": alt, "open": None, "unread": True})
+                    return None
         # The handset saying it went there is not proof: the picture must change.
         turned = moved.separation(*last, az, alt) if last else 0.0
         last[:] = [az, alt]
@@ -875,8 +880,8 @@ def main():
     ap.add_argument("--trace", action="store_true", help="follow the top of what is in the way")
     ap.add_argument("--daylight", action="store_true", help="tell sky from wall by the look of it, not by stars")
     ap.add_argument("--torch", action="store_true",
-                    help="by night, with a torch fixed along the tube: what it lights is in the way, "
-                         "and a dark frame with no stars is cloud")
+                    help="by night, with a torch fixed along the tube: what it lights is in the way; "
+                         "a dark frame with no stars cannot be told and is left out")
     ap.add_argument("--fresh", action="store_true", help="with --trace: do not start from the skyline already measured")
     ap.add_argument("--show", action="store_true", help="print the skyline in use; nothing moves")
     ap.add_argument("--move-from", metavar="SPOT",
@@ -1019,8 +1024,9 @@ def run(args):
         blind = glare_share(results)
         if blind > GLARE_MOST:
             raise interface.Refusal(
-                "NO_SKY", f"{blind:.0%} of the looks were too bright to read (the Sun's glare): nothing has "
-                "been kept. Survey with the Sun higher and behind the telescope, or under an even overcast.")
+                "NO_SKY", f"{blind:.0%} of the looks could not be read (the Sun's glare by day, cloud or an "
+                "unlit wall by night): nothing has been kept. By day, survey with the Sun higher and behind "
+                "the telescope or under an even overcast; by night, on a clear one.")
         skyline = skyline_from(found, low, known)
         source = "telescope" if not known or kept["source"] == "telescope" else "panorama+telescope"
         saved = keep(skyline, source, looks=results, warnings=warnings, trace=found,
