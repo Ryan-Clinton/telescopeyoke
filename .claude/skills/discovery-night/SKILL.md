@@ -11,7 +11,8 @@ The night is `docs/discovery.md`, "Running a discovery night"; the patrol
 is `docs/agents/setup-routine.md` step 6b.
 
 0. Asked for the outlook or tonight's plan ("how's tonight looking"): run
-   `./ty night` once (3 seconds) and answer from it straight away. That is
+   `./ty night` once (3 seconds) and `./transits.py` beside it, and answer
+   from them straight away. That is
    the whole job: no patrol or starwatch plans, no reading docs or code, no
    other commands. The patrol plans only mean anything once it is dark;
    they belong to setup, step 1. Never fix or change code while answering:
@@ -28,6 +29,9 @@ is `docs/agents/setup-routine.md` step 6b.
    - One line for the `news` events (in-the-sky.org) that fall on tonight or
      the night planned: a Moon or planet approach or an occultation. The
      headlines only when asked for the news.
+   - One line per whole transit from `./transits.py`: planet, depth, V,
+     its window and middle altitude, and whether the timing is wanted.
+     Say any clash with a programme's go time. None, one line saying so.
    - Only if `skyline_measured` is false: one line saying so.
 
 1. `./patrol.py m31-panels --plan` (or `m31-novae`, `m33-novae`): read it
