@@ -462,7 +462,6 @@ def test_a_field_behind_the_measured_skyline_is_not_up(monkeypatch):
 def test_each_programme_says_when_it_last_ran(tmp_path):
     # 2 November 2026: M31 and M33 were patrolled the night before and the
     # outlook could not say so.
-    from datetime import timezone
     done = tmp_path / "frames" / "M33" / "20261102-020454"
     done.mkdir(parents=True)
     (done / "final.fits").write_bytes(b"")
