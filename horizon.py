@@ -284,6 +284,14 @@ def read_day(mosaic, reference):
     the high sky's brightness."""
     if not isinstance(reference, dict):
         reference = {"level": float(reference), "grain": 0.0, "blue": None}
+    burnt = burnt_share(mosaic)
+    if burnt >= BURNT_DAY:
+        # Burnt out is the brightest and smoothest a frame can be, so it
+        # would always score as sky: on 2 November 2026 a whole survey with
+        # the morning Sun low in the east read 297% of the high sky in every
+        # direction, walls and all. It says only that the exposure is too
+        # long for this view.
+        return {"view": "burnt", "share": 0.0, "level": round(burnt, 2), "mask": None}
     level, grain, blue = squares(mosaic)
     level = level / max(reference["level"], 1.0)
     bright = np.clip((level - SKY_LEVEL / 2) / (SKY_LEVEL / 2), 0, 1)
@@ -389,6 +397,22 @@ def marked(mosaic, mask, note):
     return image
 
 
+BURNT_DAY = 0.5   # share of a daytime frame burnt out that leaves nothing to read
+
+
+def burnt_share(mosaic):
+    """The share of a raw frame at or near full brightness."""
+    from camera import WHITE
+    return float((np.asarray(mosaic) >= 0.98 * WHITE).mean())
+
+
+def at_exposure(reference, metered, exposure):
+    """The high sky's reference as it would read at another exposure: raw
+    values go with the light and the time, so a view metered again because
+    it burnt out is still compared with the same high sky."""
+    return dict(reference, level=reference["level"] * exposure / metered)
+
+
 def daylight_exposure(cam, exposure=0.002):
     """An exposure that puts the sky near a third of full brightness, and that
     brightness. Called with the telescope looking at sky high up."""
@@ -421,7 +445,7 @@ def eye(site, exposure, gain, daylight=False, torch=False):
     if not mount.CLOCK_FILE.exists():
         scope.save_clock(site)
     offset = json.loads(mount.CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
-    state = {"exposure": exposure, "reference": None}
+    state = {"exposure": exposure, "reference": None, "metered": exposure}
     log = []
     import moved
     watch, last = moved.Watch(daylight=daylight), []      # what the last look saw, and where it was
@@ -431,9 +455,10 @@ def eye(site, exposure, gain, daylight=False, torch=False):
         """A frame once the tube has stopped shaking: two running that read
         the same, or the one in hand when STEADY_DAY is up."""
         began, before = time.time(), None
+        reference = at_exposure(state["reference"], state["metered"], state["exposure"])
         while True:
             mosaic, _ = look.cam.frame(state["exposure"])
-            seen = read_day(mosaic, state["reference"])
+            seen = read_day(mosaic, reference)
             waited = time.time() - began
             if waited >= STEADY_DAY or (before and before["view"] == seen["view"]
                                         and abs(before["share"] - seen["share"]) <= 0.05
@@ -462,8 +487,24 @@ def eye(site, exposure, gain, daylight=False, torch=False):
                 # what sky looks like today.
                 state["exposure"], _ = daylight_exposure(look.cam, state["exposure"])
                 state["reference"] = sky_reference(look.cam.frame(state["exposure"])[0])
+                state["metered"] = state["exposure"]
+            # Every look starts at the high sky's exposure; only one that
+            # burns out is metered again, here.
+            state["exposure"] = state["metered"]
             mosaic, seen = by_day()
+            if seen["view"] == "burnt":
+                try:
+                    state["exposure"], _ = daylight_exposure(look.cam, state["exposure"])
+                    mosaic, seen = by_day()
+                except interface.Refusal:
+                    pass        # too bright even at the shortest exposure: the Sun's glare
+            if seen["view"] == "burnt":
+                print(f"bearing {az:>5g}°, {alt:>4g}° up: too bright to tell (glare), left out", flush=True)
+                log.append({"az": az, "alt": alt, "open": None, "glare": True})
+                return None
             detail = f"{seen['share']:.0%} sky, brightness {seen['level']:.0%} of the high sky"
+            if state["exposure"] != state["metered"]:
+                detail += f", metered again at {state['exposure'] * 1000:.2g} ms"
         else:
             time.sleep(STEADY)   # let the tube stop shaking
             mosaic, _ = look.cam.frame(state["exposure"])

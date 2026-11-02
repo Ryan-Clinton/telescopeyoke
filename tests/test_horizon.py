@@ -54,6 +54,30 @@ def test_a_daytime_frame_is_read_square_by_square():
     assert horizon.read_day(low_roof.T, 1300)["offset"] == pytest.approx(-0.25 * 640 / 960, abs=0.05)
 
 
+def test_a_burnt_out_daytime_frame_is_never_sky():
+    # 2 November 2026: with the Sun low, every look came back burnt out and
+    # was read as sky, walls and all. Burnt out says only "too bright to read".
+    from camera import WHITE
+    burnt = frame(WHITE)
+    seen = horizon.read_day(burnt, 1300)
+    assert seen["view"] == "burnt" and seen["share"] == 0.0
+    # A bright patch in a frame of sky is still sky: only a frame mostly burnt is unread.
+    patch = frame(1300)
+    patch[:100] = WHITE
+    assert horizon.read_day(patch, 1300)["view"] == "sky"
+
+
+def test_a_view_metered_again_is_compared_with_the_same_high_sky():
+    today = {"level": 1300.0, "grain": 0.01, "blue": None}
+    # A tenth of the time: the high sky would read a tenth as bright.
+    shorter = horizon.at_exposure(today, 0.002, 0.0002)
+    assert shorter["level"] == pytest.approx(130.0) and today["level"] == 1300.0
+    # The same reading of 250: at a tenth of the time it is sky twice as
+    # bright as the high sky; at the high sky's own time it is a wall.
+    assert horizon.read_day(frame(250), shorter)["view"] == "sky"
+    assert horizon.read_day(frame(250), today)["view"] == "blocked"
+
+
 def test_branches_against_the_sky_are_not_sky_and_colour_only_tips_the_balance():
     rng = np.random.default_rng(1)
     # Blue sky: the blue pixels of each colour cell twice the red ones.

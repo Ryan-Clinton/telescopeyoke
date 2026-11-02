@@ -519,6 +519,19 @@ focuser not touched since the stars.
   lay outside 3° of where the tube pointed at home, or the focus is out; the
   frames cannot say which. The search spends about a quarter of its looks
   re-testing those three blemishes, which it could learn to leave alone.
+- **`horizon.py --trace --daylight` from ralphie-side, 2 November 2026,
+  08:39-08:50**, with the Sun just risen in the east-south-east: 38 looks
+  over 12 bearings, every one read as sky. After the first, metered high in
+  the north, nearly every frame was burnt out (297% of the high sky, the
+  ceiling), and burnt out scored as bright, smooth sky; the pictures in
+  `horizon/ralphie-side/looks/` show flat glare with nothing to read. The
+  skyline it kept was set aside unused
+  (`cache/horizon-ralphie-side.not-used-20261102.json`), so the planner still
+  has no skyline for this spot. Since then a mostly burnt-out frame is
+  "burnt", never sky; each look starts at the high sky's exposure and one
+  that burns out is metered again where it points, its brightness compared
+  with the high sky's for the same time; one still burnt out at the shortest
+  exposure is left out as glare. Not yet run again on the real mount.
 - **`horizon.py --trace --daylight`** made three looks, all at bearing 0°,
   72° to 75° up, all read as open sky under cloud, before rain stopped it.
   No skyline was kept.
