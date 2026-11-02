@@ -20,7 +20,8 @@ is `docs/agents/setup-routine.md` step 6b.
    shape, nothing more:
    - One line: the verdict, the clear spell, when the Moon sets, the dew.
    - One line per `discovery` item, in its order: the programme, its
-     `best_in_clear` time ("go about"), its length. One marked NOT up
+     `best_in_clear` time ("go about"), its length, and its `last_run`
+     (when it was last done). One marked NOT up
      while clear is said once as skipped tonight.
    - One line: the free time after the programmes, for a big target.
    - One line per `supernovae` item (bright ones on the Rochester list, up

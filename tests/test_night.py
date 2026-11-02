@@ -457,3 +457,18 @@ def test_a_field_behind_the_measured_skyline_is_not_up(monkeypatch):
     cfg["horizon"]["skyline"] = [{"az": float(az), "alt": 89.0} for az in range(0, 360, 10)]
     monkeypatch.setattr(agent, "_site", lambda demo: cfg)
     assert all(p["window"] is None for p in agent.discovery_tonight(demo=True))
+
+
+def test_each_programme_says_when_it_last_ran(tmp_path):
+    # 2 November 2026: M31 and M33 were patrolled the night before and the
+    # outlook could not say so.
+    from datetime import timezone
+    done = tmp_path / "frames" / "M33" / "20261102-020454"
+    done.mkdir(parents=True)
+    (done / "final.fits").write_bytes(b"")
+    (tmp_path / "frames" / "M33" / "20261103-210000").mkdir()      # started, nothing kept
+    (tmp_path / "frames" / "M33" / "combined").mkdir()
+    when = agent.last_run(["M33"], data=tmp_path)
+    assert when.tzinfo is not None and when.astimezone().strftime("%Y%m%d-%H%M%S") == "20261102-020454"
+    assert agent.last_run(["M31"], data=tmp_path) is None
+    assert all("last_run" in p for p in agent.night(demo=True)["discovery"])

@@ -6,6 +6,7 @@ One implementation, several ways in: the `ty` command, the read-only web API
 that serve.py offers, and the MCP server in mcp_server.py all call these.
 """
 import json
+import re
 import time
 from pathlib import Path
 
@@ -381,9 +382,35 @@ def discovery_tonight(demo=False):
                      "window": [seen["start"], seen["end"]] if seen else None,
                      "best_time": seen["best"] if seen else None,
                      "best_altitude_deg": seen["best_alt"] if seen else None,
-                     "direction": seen["direction"] if seen else None})
+                     "direction": seen["direction"] if seen else None,
+                     "last_run": last_run(programme_fields(path.stem, p))})
     plan.sort(key=lambda r: (r["best_time"] is None, r["best_time"] or 0))
     return plan
+
+
+def programme_fields(name, p):
+    """The fields a programme images: its target, or its mosaic's panels."""
+    if not p.get("mosaic"):
+        return [p.get("target")]
+    import patrol
+    try:
+        return patrol.fields(dict(p, name=name), keep=False)
+    except Exception:
+        return [p["mosaic"]]
+
+
+def last_run(fields, data=None):
+    """When a programme last imaged any of its fields (UTC), from the newest
+    session folder holding a picture or frames; None if never. The folder
+    names are the local time each session started."""
+    from datetime import datetime, timezone
+    base = (data or config.DATA) / "frames"
+    names = [s.name for f in fields if f for s in (base / stacking.folder_name(f)).glob("*/")
+             if re.fullmatch(r"\d{8}-\d{6}", s.name)
+             and ((s / "final.fits").is_file() or any(s.glob("light-*.fits")))]
+    if not names:
+        return None
+    return datetime.strptime(max(names), "%Y%m%d-%H%M%S").astimezone(timezone.utc)
 
 
 def in_the_clear(plan, clear):
@@ -675,7 +702,8 @@ def context(demo=False):
                 when += (f"; in the clear {p['in_clear'][0]:%H:%M}-{p['in_clear'][1]:%H:%M}, "
                          f"go about {p['best_in_clear']:%H:%M}" if p["in_clear"] else "; NOT up while clear")
             length = f"{p['minutes']} min{' a panel' if p['mosaic'] else ''}"
-            lines += [f"  {p['programme']} ({p['field']}, {length}): {when}; {p['command']}"]
+            last = f"last run {p['last_run']:%d %b %H:%M}" if p.get("last_run") else "never run"
+            lines += [f"  {p['programme']} ({p['field']}, {length}): {when}; {last}; {p['command']}"]
         lines += [""]
         for s in tonight["supernovae"]:
             lines += [f"Supernova: {s['id']} in {s['name']}, mag {s['mag']:g} ({s['last_seen']}), "
