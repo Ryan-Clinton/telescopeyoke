@@ -20,7 +20,19 @@ been done.
 Steps 2 to 4 have run on the real mount: polar alignment (13 and 17
 October 2026), finding and marking home (17 October: 10.66° out by eye,
 0.19° on the marks) and the pointing survey (17 October). Polar
-repeatability (`--repeat`) and step 5's check by night are still to be run.
+repeatability (`--repeat 3`, 0.06° to 0.11° scatter) ran on 2 November;
+step 5's check by night is still to be run.
+
+**Stickered baseline, ralphie-side, 2 November 2026, 18:43.** The feet were
+set by turning the whole tripod (bolts left centred), each turn checked with
+`./polaralign.py --step 25 --repeat 3` from near Deneb, then stickers put
+under all three feet. With the stickers on: **0.28° west of north, 1.55°
+too low** (1.5° from the pole), scatter 0.11°. Azimuth is right on the
+marks; the height is still to be set by the latitude scale or the north
+leg's length, which does not move the feet. On these tiles a turn of the
+whole tripod is jumpy: about 3 cm a foot moved it anything from 0.2° to
+2.2°, so the feet can do about half a degree and the bolts the rest. A later
+night back on the stickers is checked against this.
 What follows is how each works.
 
 ## 1. Level, roughly

@@ -242,8 +242,8 @@ def test_targets_too_low_or_too_far_round_are_refused(scope, monkeypatch):
     monkeypatch.setattr(mount, "where", lambda target, site, when=None: (30.0, 20.0, 12.0))
     with pytest.raises(SystemExit, match="only 12° up"):
         scope.goto_target("Vega", SITE)
-    monkeypatch.setattr(mount, "where", lambda target, site, when=None: (100.0, 60.0, 45.0))
-    with pytest.raises(SystemExit, match="beyond the 5.75 h limit"):
+    monkeypatch.setattr(mount, "where", lambda target, site, when=None: (120.0, 60.0, 45.0))
+    with pytest.raises(SystemExit, match="beyond the 7.5 h limit"):
         scope.goto_target("Vega", SITE)
     assert scope.axes() == pytest.approx([90, SITE["latitude"]], abs=0.2)  # never moved
 
@@ -553,7 +553,7 @@ def test_a_plate_solve_gives_up_when_the_camera_never_sends_a_picture(scope, mon
 
 
 def test_the_clearance_test_alone_goes_past_the_hour_angle_limit_and_only_so_far(scope, monkeypatch):
-    """3 November 2026: 5.75 h was a first-night guess; the clearance test,
+    """2 November 2026: 5.75 h was a first-night guess; the clearance test,
     with the person watching, finds where the tube really meets the tripod."""
     monkeypatch.setattr(mount, "MAX_HOUR_ANGLE", 5.75)
 

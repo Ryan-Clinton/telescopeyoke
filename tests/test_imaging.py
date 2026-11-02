@@ -175,7 +175,7 @@ def test_polar_alignment_checks_all_three_positions_before_moving(tmp_path, monk
         polaralign.positions(-15.0, 30.0, False, site, skyline=tree)
     assert "blocked" in refused.value.message and "--step" in refused.value.message
     assert len(polaralign.positions(-15.0, 30.0, False, site, step=10, skyline=tree)) == 3
-    for start, dec, code in ((-50.0, 30.0, "TARGET_BEYOND_HOUR_ANGLE_LIMIT"),     # would end 6.7 h out
+    for start, dec, code in ((-80.0, 60.0, "TARGET_BEYOND_HOUR_ANGLE_LIMIT"),     # would end 8.7 h out
                              (-20.0, -10.0, "TARGET_BELOW_ALTITUDE_LIMIT"),       # ends too low
                              (-15.0, 85.0, "INVALID_REQUEST")):                   # at the pole: nothing to see
         with pytest.raises(interface.Refusal) as refusal:

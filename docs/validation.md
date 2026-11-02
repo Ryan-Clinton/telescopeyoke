@@ -582,6 +582,14 @@ focuser not touched since the stars.
   north to 7.5° and 72-75° at 300-330°, 36-45° from east to south-south-west,
   open from 30-36° in the west-south-west and west. Side-of-pole recording
   not yet run on the real mount.
+- **Mount clearance past 6 h, 2 November 2026, about 17:15**, with the
+  person beside the mount: `./mount.py point --clearance-test` to 6.0, 6.5,
+  7.0 and 7.5 h from the meridian on each side at Dec +40° (32° down to 21°
+  up). The camera, its lead and the counterweights stayed clear of the legs
+  at every step (the counterweights 22 cm away at the closest, the camera
+  level and well clear at 7.5 h), and the way back home was clear. The
+  hour-angle limit, 5.75 h since the first night's collision (whose cause
+  was the handset clipped to a leg), is now 7.5 h.
 - **The movement check's first real record** came from those looks, and it
   was nearly wrong. Going by "stars", it found 60 specks in each of two
   bright frames 3° apart, and 47% of them were in the same place: the

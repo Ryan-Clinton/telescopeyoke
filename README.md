@@ -598,7 +598,7 @@ The laptop cannot see what the telescope is about to hit.
 - **Never point near the Sun.** `mount.py point` refuses within 40° of it
   while it is up; `goto` only knows night-sky objects.
 - Creating a file called `MOTION_LOCKED` in this folder blocks all movement.
-- `mount.py` will not go below 20° altitude or more than 5.75 hours from the
+- `mount.py` will not go below 20° altitude or more than 7.5 hours from the
   meridian.
 - **The status page (`serve.py`) is read-only on purpose.** It is served to
   the whole home network with no login, which is fine for pictures and

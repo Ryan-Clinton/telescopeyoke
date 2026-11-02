@@ -270,7 +270,7 @@ def test_the_survey_is_planned_east_first_and_leaves_out_what_is_too_low_or_hidd
         mount.plan_survey(SITE, hours=(-5, -4, 1, 2), dec=5.0)
     assert "east side" in refused.value.message
     with pytest.raises(interface.Refusal) as refused:
-        mount.plan_survey(SITE, hours=(-7, -1, 1, 2))
+        mount.plan_survey(SITE, hours=(-8, -1, 1, 2))
     assert refused.value.code_name == "TARGET_BEYOND_HOUR_ANGLE_LIMIT"
     mount.LOCK_FILE.write_text("testing")
     with pytest.raises(interface.Refusal) as refused:

@@ -109,8 +109,9 @@ a motor's creep rate. `mount.py stop` is always allowed.
    when it starts, runs only the fixed commands in its table, and moves the
    mount only after a person confirms a plan. Do not loosen any of those,
    and do not give it a way to listen on the network.
-3. **Limits stay in the code:** minimum altitude 20°, at most 5.75 h from the
-   meridian, 40° from the Sun, and refusal when the handset is not set up.
+3. **Limits stay in the code:** minimum altitude 20°, at most 7.5 h from the
+   meridian (measured clear of the tripod on 2 November 2026; it was 5.75 h
+   before), 40° from the Sun, and refusal when the handset is not set up.
    Without a handset (`direct.py`) the same refusals stand in for it: no
    movement until home has been recorded, and no GoTo until a person has
    watched which way the Dec motor turns. Never record either for the user.

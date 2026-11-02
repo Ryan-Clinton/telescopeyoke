@@ -76,11 +76,15 @@ MIN_ALTITUDE = 20
 # Furthest from the meridian a GoTo may point, in hours. Beyond 6 h the
 # counterweight is above the tube, which is normal for this kind of mount;
 # what matters is where the tube, the camera and its lead meet a tripod leg.
-# 5.75 h was set on 3 October 2026, the first night, after a collision whose
-# cause was the handset clipped to the wrong leg, and was never measured. It
-# stays here in the code, never a setting (AGENTS.md): what the clearance test
-# (point --clearance-test, with the person watching) finds is put here.
-MAX_HOUR_ANGLE = 5.75
+# It was 5.75 h from 3 October 2026, the first night, after a collision whose
+# cause was the handset clipped to the wrong leg, and was never measured. On
+# 2 November 2026 the clearance test (point --clearance-test), the person
+# beside the mount, went to 6.0, 6.5, 7.0 and 7.5 h each side at Dec +40°
+# (32° down to 21° up): the camera, its lead and the counterweights stayed
+# clear of the legs at every step, the counterweights 22 cm away at the
+# closest. With the 20° floor, nothing further round is any lower. It stays
+# here in the code, never a setting (AGENTS.md).
+MAX_HOUR_ANGLE = 7.5
 # The clearance test may go this far, and no further, to find where it is.
 CLEARANCE_TEST_HOURS = 8.0
 # While this file exists, nothing that moves the mount will run. Its contents
