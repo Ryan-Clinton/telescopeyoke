@@ -96,6 +96,7 @@ COMMANDS = {
     "replay.py": ("local_write", {}, {}),
     "report.py": ("local_write", {}, {}),
     "restack.py": ("local_write", {}, {}),
+    "storage.py": ("read_only", {"--tidy": "local_write"}, DRY),    # moves finished Moon videos to the storage disk
     "runwatch.py": ("read_only", {}, {}),
     # run starts the queued steps, moves included, each when its time comes:
     # hardware, asked for like a patrol; the rest only change the plan.
