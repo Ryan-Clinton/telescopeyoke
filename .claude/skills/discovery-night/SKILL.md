@@ -11,8 +11,13 @@ The night is `docs/discovery.md`, "Running a discovery night"; the patrol
 is `docs/agents/setup-routine.md` step 6b.
 
 0. Asked for the outlook or tonight's plan ("how's tonight looking"): run
-   `./ty night` once (3 seconds) and `./transits.py` beside it, and answer
-   from them straight away. That is
+   `./ty night` once (3 seconds), `./transits.py` and `./ty candidates`
+   beside it, and read the last night's notes
+   (`~/ryanclinton.uk/notes/DATE.md`): what was patrolled, looked at a
+   second time and ruled out. Answer from all of them straight away. A
+   candidate the notes rule out is dismissed at once (`python3
+   candidates.py FIELD --dismiss ID --reason ... --note ...`), never
+   planned for. That is
    the whole job: no patrol or starwatch plans, no reading docs or code, no
    other commands. The patrol plans only mean anything once it is dark;
    they belong to setup, step 1. Never fix or change code while answering:
@@ -21,7 +26,7 @@ is `docs/agents/setup-routine.md` step 6b.
    - One line: the verdict, the clear spell, when the Moon sets, the dew.
    - One line per `discovery` item, in its order: the programme, its
      `best_in_clear` time ("go about"), its length, and its `last_run`
-     (when it was last done). One marked NOT up
+     (when it was last done, and what the notes say it found). One marked NOT up
      while clear is said once as skipped tonight.
    - One line: the free time after the programmes, for a big target.
    - One line per `supernovae` item (bright ones on the Rochester list, up
