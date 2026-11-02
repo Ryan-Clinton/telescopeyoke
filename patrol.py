@@ -1012,14 +1012,20 @@ def main():
     ap.add_argument("--minutes", type=float, help="how long to image (default: the programme's)")
     ap.add_argument("--analyse", metavar="SESSION", help="only look for anything new in a session already taken")
     ap.add_argument("--release", action="store_true",
-                    help="let the telescope go once the frames are in: the picture and the search are made in the "
-                         "background (a second look is then a step of its own)")
+                    help="let the telescope go once the frames are in (the default): the picture and the search are "
+                         "made in the background, and a second look is a step of its own")
+    ap.add_argument("--wait", action="store_true",
+                    help="hold the telescope for the search instead, and take a second look at once if anything "
+                         "is unexplained")
     ap.add_argument("--sweep", action="store_true", help=f"search every session of the last {SWEEP_DAYS} days "
                     "not yet searched")
     ap.add_argument("--all-history", action="store_true", help="with --sweep: every session kept")
     ap.add_argument("--dry-run", action="store_true", help="every step as it would be run; nothing moved or taken")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
+    # Released unless asked to wait: on 1 November 2026 the schedule sat seven
+    # minutes while a search held the telescope it did not need.
+    args.release = not args.wait
     if not args.programme and not args.analyse and not args.sweep:
         ap.error("name a programme, or --analyse SESSION, or --sweep")
     if args.all_history and not args.sweep:
