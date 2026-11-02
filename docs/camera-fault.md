@@ -416,6 +416,25 @@ laptop started at 18:52. Logs in `logs/camera-evening*-20261101.log`.
   the same command a few seconds later opened it normally. Not the jam:
   no power cut was needed.
 
+- **22:51 to 02:30, speed 0, the 3 m lead straight into socket 2-5, no hub,
+  5000 Mb/s throughout:** frames lost, each retried, in every run, and worse
+  the longer the frame:
+
+  | Run | Frame | Frames | Lost | Jams |
+  |---|---|---|---|---|
+  | M31 patrol, 22:51 | 16 s | 90 | 14 (13 %) | 0 |
+  | TOI-2046 transit, 00:00 | 4 s | 42 | 9 | 1 at 00:11 (four in a row: the run ended; a new run cleared it) |
+  | M33, 00:36 | 32 s | 1 | 3 of 4 (75 %) | stopped, back to 16 s |
+  | M33, 00:41 | 16 s | 80 | 24 (23 %) | 2, each cleared by opening the camera again |
+  | M31 second look, 01:33 | 16 s | 58 | 1 (2 %) | 0 |
+  | M33, 02:03 | 16 s | 12 so far | 8 | 0 |
+
+  A lost frame is never short now (speed 0): it simply never comes. Since
+  the night of 1 November a jam is handled in the run (`shoot.py` opens the
+  camera again, up to three times, and the frames go on into the same
+  session), and a frame is given 10 s + 1.5 x its exposure before it counts
+  as lost (it was 12 + 6 x, 108 s for 16 s).
+
 So tonight speed 2 is in the fault from the start, and speed 0 jams within
 minutes of being opened but is cleared every time by a power cut, made from
 the laptop while the hub was there. The hub itself then failed, and the
@@ -748,10 +767,12 @@ The camera is Gary's; the ticket is ours, and paying for a repair would be his c
 | In one line | in one state, which comes and goes, the exposure at speeds 1 and 2 is timed as if by speed 0's clock: a 1 s flash moved through 8 s exposures shows speed 2 gathering exactly half as long as speed 0, speed 1 two thirds, all starting 0.4 to 0.5 s after the request; the camera reports the time asked throughout. Is this a known behaviour of firmware 1.4.1 or of the library at these speeds? |
 | Seen before | an Altair 183C Pro owner on SharpCap's forum, December 2023: exposures ending at 50-70 % of the time asked, recorded at full length (forums.sharpcap.co.uk, topic 7304); was it ever resolved? |
 | Sent to Altair | 1 Nov 2026 02:22 on #3470: the early frames, the timed light and scan, the state surviving reopening and a power cut, the same in Altair's library and AltairCapture, the cold night, the SharpCap report, and three questions |
+| Update drafted | 2 Nov 2026 about 02:30, for the person to send on #3470: speed 2 short on every port and through or without the hub; speed 0 losing 4, 16 and 32 s frames (more the longer the frame) straight into the laptop; four jams in a night, cleared by opening the camera again or cutting its power at the hub, not by the SDK's Replug; and three questions (newer firmware, a known hardware fault and its repair, what else to run) |
 | Altair's own program | AltairCapture 4.12 with altaircam.dll 60.31589 on Windows 11 (31 Oct): two 8 s Trigger Mode frames at Frame Speed 0 never arrived, the live view frozen; Altair's Windows library gave the same short 16 s frames at speed 2 as on Linux. Diagnose output attached (`altaircapture-diagnose-2026-10-31.txt`) |
 | Started | 04:59 on 20 Oct 2026, at dawn after a cold night |
 | Comes and goes | gone 26 Oct; back 30 Oct 10:46; gone again by 11:02, nothing touched; back 31 Oct 17:28 just after the camera was handled and replugged, and still there after closing and opening it |
-| Speed 0 | kept every frame from 23 Oct to 31 Oct; outside on 1 Nov at 6 °C it lost 16 s frames and the first frames after each opening, and jammed until its power was cut |
+| Speed 0 | kept every frame from 23 Oct to 31 Oct; outside on 1 Nov at 6 °C it lost 16 s frames and the first frames after each opening, and jammed until its power was cut; on the night of 1 to 2 Nov, plugged straight into the laptop at 5000 Mb/s, it lost 2 to 23 % of 16 s frames, 3 of 4 32 s frames and some 4 s ones, and jammed four times (frames never arrive; opening it again or cutting its power clears it) |
+| Not the laptop's port, not the hub | 1 Nov evening: the same short 16 s frames at speed 2 on two USB-A sockets and on USB-C, behind a powered hub and straight in |
 | Firmware | 1.4.1 (January 2017) |
 
 ## A replacement being considered, 1 November 2026
