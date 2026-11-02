@@ -112,13 +112,11 @@ def test_residue_is_listed_but_never_alerted():
     lone_real = cand(10.60, 41.10, 0.80)
     explained = dict(cand(10.50, 41.00, 0.01), verdict="known variable V1 (EW)")
     evidence = group + [lone_low, lone_real, explained]
-    assert vet.residue(evidence, cut=0.22) == 4
+    assert vet.residue(evidence, cut=0.22) == 3
     assert all(e["verdict"].startswith("probably residue: one of 3 within 2 arcminutes") for e in group)
-    assert lone_low["verdict"] == "probably residue: real-or-bogus 0.04, below its cut of 0.22"
-    assert lone_real["verdict"] == vet.UNEXPLAINED                 # still worth a person's eyes, and alerted
+    # A lone one is alerted whatever the classifier says: one real nova in
+    # twenty falls below its cut, and every real one must reach the phone.
+    assert lone_low["verdict"] == lone_real["verdict"] == vet.UNEXPLAINED
     assert explained["verdict"].startswith("known variable")
     import patrol
-    assert patrol.unexplained({"vet": {"candidates": evidence}}) == [lone_real]
-    # With no model trained, only a group is set aside.
-    alone = cand(10.70, 41.30, None)
-    assert vet.residue([alone], cut=None) == 0 and alone["verdict"] == vet.UNEXPLAINED
+    assert patrol.unexplained({"vet": {"candidates": evidence}}) == [lone_low, lone_real]

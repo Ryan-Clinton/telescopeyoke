@@ -279,10 +279,10 @@ def residue(evidence, cut):
     """Unexplained candidates that are most likely what the subtraction left,
     relabelled so they are listed but no one is woken for them: three or
     more within 2 arcminutes (novae do not come in groups; a bad patch of
-    the subtraction does), or a real-or-bogus score below the model's cut
-    (which keeps 95% of planted stars). On 1 to 2 November 2026 every alert
-    of the night was one of these: four together in M31, six in two groups
-    in M33, all rated 0.00 to 0.16. Returns how many were relabelled."""
+    the subtraction does). The real-or-bogus score is not used here: its cut
+    keeps 95% of planted stars, so one real nova in twenty would miss its
+    alert, and the person wants every one (2 November 2026). `cut` is kept
+    for the record. Returns how many were relabelled."""
     def apart(a, b):
         return 3600 * math.hypot((a["ra"] - b["ra"]) * math.cos(math.radians(a["dec"])), a["dec"] - b["dec"])
     changed = 0
@@ -292,11 +292,7 @@ def residue(evidence, cut):
         group = 1 + sum(1 for o in evidence if o is not e and apart(e, o) <= CLUSTER_ARCSEC)
         if group >= CLUSTER_N:
             e["verdict"] = f"{RESIDUE}: one of {group} within 2 arcminutes, a flaw in the subtraction"
-        elif cut is not None and e.get("real_bogus") is not None and e["real_bogus"] < cut:
-            e["verdict"] = f"{RESIDUE}: real-or-bogus {e['real_bogus']:.2f}, below its cut of {cut:.2f}"
-        else:
-            continue
-        changed += 1
+            changed += 1
     return changed
 
 
@@ -347,8 +343,8 @@ def vet(record, checks, half_scores=None, ref=None, zeropoint=None, radius=4.0):
 def classify(evidence, session, ref, fwhm):
     """Each candidate's probability of being real, from realbogus.py's model
     if one has been trained, as advice in its evidence and clues: a low one
-    is said here; residue() then lists one below the cut as probably residue,
-    kept but not alerted. Returns the model's cut, or None."""
+    is said, never acted on: a real nova below the cut must still be
+    alerted. Returns the model's cut, or None."""
     import realbogus
     kept = realbogus.load()
     if kept is None or not evidence or not (session / "difference.fits").exists():
