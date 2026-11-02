@@ -464,3 +464,5 @@ instead of the ULN2003, and `focuser.py` and `focus.py` counting full steps
 × microsteps instead of 28BYJ-48 half-steps, each with its test, before the
 first use on the sky.
 
+
+A printable degree dial for the focus knob is `./focusdial.py --diameter MM` (default 40): a strip for the knob's rim and a disc for its end, at true size with a 50 mm check bar, saved as `web/focus-dial.svg` and served by the status page. One degree on a 40 mm knob is about the f/5 critical focus zone.
