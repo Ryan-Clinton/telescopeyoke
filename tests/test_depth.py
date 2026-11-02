@@ -389,3 +389,12 @@ def test_a_sky_at_or_below_zero_is_not_a_measurement():
     offset was taken off, and read as 46.13 mag per square arcsecond."""
     import depth
     assert depth.DARKEST_SKY < 46.13
+
+
+def test_a_depth_record_with_no_sky_figure_is_kept():
+    """1 November 2026: the sky at or below zero is None, and the record must
+    still be written (the search stopped on the schema)."""
+    import json
+    from pathlib import Path
+    schema = json.loads((Path(__file__).parent.parent / "schemas" / "depth.schema.json").read_text())
+    assert "null" in schema["properties"]["sky_mag_per_arcsec2"]["type"]
