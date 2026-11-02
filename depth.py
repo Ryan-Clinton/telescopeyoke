@@ -132,7 +132,9 @@ def field(wcs, shape):
     return float(centre[0]), float(centre[1]), math.degrees(apart) * 1.05
 
 
-GAIA_MIRRORS = (GAIA_URL, "https://vizier.cfa.harvard.edu/viz-bin/asu-tsv")
+# The mirrors CDS listed during its cybersecurity incident of late October 2026, working ones first.
+GAIA_MIRRORS = (GAIA_URL, "https://vizier.idia.ac.za/viz-bin/asu-tsv", "http://vizier.china-vo.org/viz-bin/asu-tsv",
+                "http://vizier.nao.ac.jp/viz-bin/asu-tsv", "https://vizier.cfa.harvard.edu/viz-bin/asu-tsv")
 
 
 def covering(store, ra, dec, radius, faintest):
@@ -174,10 +176,14 @@ def gaia(ra, dec, radius, faintest=FAINTEST, get=None):
         failures = []
         for url in GAIA_MIRRORS:
             try:
-                reply = get(url, timeout=60, params={
+                reply = get(url, timeout=(10, 120), params={
                     "-source": "I/355/gaiadr3", "-c": f"{ra:.5f} {dec:+.5f}", "-c.rd": f"{radius:.3f}",
                     "-out": "RA_ICRS,DE_ICRS,Gmag,BP-RP", "-out.max": "200000", "Gmag": f"<{faintest:g}"})
                 reply.raise_for_status()
+                if not len(read_tsv(reply.text)):
+                    # A mirror that answers with no stars (China-VO, 2 November 2026) is
+                    # not believed: Gaia has stars in every field; never kept.
+                    raise requests.RequestException("answered with no stars")
                 break
             except requests.RequestException as problem:
                 failures.append(f"{url.split('/')[2]}: {type(problem).__name__}")

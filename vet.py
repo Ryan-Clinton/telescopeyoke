@@ -99,7 +99,8 @@ def read_skybot(text):
     return out
 
 
-VIZIER_MIRRORS = (VIZIER_URL, "https://vizier.cfa.harvard.edu/viz-bin/asu-tsv")
+VIZIER_MIRRORS = (VIZIER_URL, "https://vizier.idia.ac.za/viz-bin/asu-tsv", "http://vizier.china-vo.org/viz-bin/asu-tsv",
+                  "http://vizier.nao.ac.jp/viz-bin/asu-tsv", "https://vizier.cfa.harvard.edu/viz-bin/asu-tsv")
 VSX_KEPT_DAYS = 30      # VSX for a field is fetched again after this long
 
 
@@ -127,7 +128,7 @@ def variables(ra, dec, radius_deg, get=None):
         failures = []
         for url in VIZIER_MIRRORS:
             try:
-                reply = get(url, timeout=60, params={
+                reply = get(url, timeout=(10, 120), params={
                     "-source": "B/vsx/vsx", "-c": f"{ra:.5f} {dec:+.5f}", "-c.rd": f"{radius_deg:.3f}",
                     "-out": "Name,RAJ2000,DEJ2000,Type", "-out.max": "50000"})
                 reply.raise_for_status()
