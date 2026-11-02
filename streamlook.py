@@ -1861,7 +1861,7 @@ def picture_state(st, now=None, session=None):
     p = transit_for(name)
     if p:
         s["kind"], s["transit"] = "transit", transit_state(p, session, now)
-        s["target_at"] = target_place(session, p["ra"], p["dec"])
+        s["target_at"] = target_place(session, p["ra"], p["dec"]) if "ra" in p and "dec" in p else None
         s["story"] = told(s, st, now)
         return s
     patrol, candidate = patrol_state(name, st.get("discovery"), now)
