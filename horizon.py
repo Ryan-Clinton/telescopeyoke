@@ -414,6 +414,8 @@ def at_exposure(reference, metered, exposure):
     return dict(reference, level=reference["level"] * exposure / metered)
 
 
+LONGER = 4          # a night look with no stars is tried again this many times longer
+LONGEST_S = 8.0     # but no longer than this
 GLARE_MOST = 0.25   # share of a survey's looks too bright to read above which nothing is kept
 
 
@@ -422,7 +424,8 @@ def glare_share(log):
     that could not see most of the sky has no skyline to keep: on 2 November
     2026 one with every frame burnt out kept a skyline of nothing but sky."""
     made = [entry for entry in log if entry.get("open") is not None or entry.get("glare") or entry.get("unread")]
-    return sum(1 for entry in made if entry.get("glare") or entry.get("unread")) / len(made) if made else 0.0
+    blind = [entry for entry in made if (entry.get("glare") or entry.get("unread")) and not entry.get("resolved")]
+    return len(blind) / len(made) if made else 0.0
 
 
 def daylight_exposure(cam, exposure=0.002):
@@ -528,6 +531,16 @@ def eye(site, exposure, gain, daylight=False, torch=False):
                 level = float(np.median(mosaic))
                 starry = seen["view"] != "blocked"
                 seen = read_torch(seen, level, float((mosaic >= 0.98 * WHITE).mean()), state.get("dark"))
+                if seen["view"] == "unknown" and not seen.get("lit"):
+                    # Try harder first: a longer frame shows stars through
+                    # thin cloud, where a wall stays starless.
+                    longer = min(state["exposure"] * LONGER, LONGEST_S)
+                    mosaic, _ = look.cam.frame(longer)
+                    lum = luminance(mosaic)
+                    again = read_night(skywatch.star_places(lum), lum.shape)
+                    if again["view"] != "blocked":
+                        seen = dict(again, level=round(float(np.median(mosaic)), 1), longer_s=longer)
+                        detail = f"{again['stars']} stars at {longer:g} s"
                 if starry and not seen.get("lit"):
                     state["dark"] = min(state.get("dark") or level, level)
                 if overcast(alt, seen):
@@ -758,6 +771,23 @@ def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, mo
     else:
         warnings.append(f"The skyline is ragged: it stopped adding bearings at {most}. Run it again "
                         "to carry on from this one.")
+
+    # Check 2b: where a look could not be read (glare, or dark with no
+    # stars), look again once the rest is done. Cloud drifts and the Sun
+    # moves on; a wall is still there.
+    log = getattr(look, "log", [])
+    unread = {e["az"] for e in log if e.get("glare") or e.get("unread")} & set(found)
+    first = len(log)
+    for az in sorted(unread, key=side):
+        measure(az)
+    still = sorted({e["az"] for e in log[first:] if e.get("glare") or e.get("unread")})
+    for e in log[:first]:
+        if (e.get("glare") or e.get("unread")) and e["az"] not in still:
+            e["resolved"] = True        # read the second time: not counted against the survey
+    if unread:
+        warnings.append(f"Looked again where it could not tell ({len(unread)} bearing(s)); "
+                        + (f"still unread at {', '.join(f'{az:g}°' for az in still)}: kept as not measured."
+                           if still else "all read the second time."))
 
     # Check 3: sky well above each top. A bright wall can pass for sky, and
     # branches or wires can hang over a roof.
