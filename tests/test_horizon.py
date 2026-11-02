@@ -564,3 +564,36 @@ def test_a_survey_cut_short_carries_on_from_where_it_stopped(tmp_path):
     # Only a survey of the same kind, and only the same day.
     assert horizon.resumable(False, path=path) is None
     assert horizon.resumable(True, path=path, now=time.time() + horizon.RESUME_S + 1) is None
+
+
+def test_a_lone_opening_between_high_tops_is_kept_in_doubt_and_said():
+    """2 November 2026: 97.5° read open to 20° between tops near 40°."""
+    gap = lambda az: 10 if 95 <= az <= 100 else 40 if 60 <= az <= 135 else garden(az)
+    start = sorted(set(range(0, 360, 30)) | {90, 97.5, 105}, key=horizon.side)
+    found, warnings = horizon.trace(watcher(gap, in_view=1.5), start, low=20)
+    lone = next(f for f in found if f["az"] == 97.5)
+    assert lone["state"] == "open" and lone.get("doubt")
+    assert any(w.startswith("Bearing 97.5°: open down to 20°") for w in warnings)
+    skyline = horizon.skyline_from(found, 20)
+    assert next(p for p in skyline if p["az"] == 97.5)["extra"] == horizon.CLEARANCE
+
+
+def test_the_repeat_check_is_made_off_the_meridian_and_says_when_the_tube_changed_sides():
+    assert not horizon.off_meridian(0) and not horizon.off_meridian(170) and horizon.off_meridian(60)
+    start = sorted(range(0, 360, 30), key=horizon.side)
+    look = watcher()
+    horizon.trace(look, start, low=20)
+    assert look.seen[-1][0] == 30           # back to 30°, not to due north
+
+    # The second visit lands somewhere else, from the other side of the pole.
+    visits = {}
+
+    def drifting(az, alt):
+        visits[az] = visits.get(az, 0) + 1
+        moved = az == 30 and visits[az] > 1
+        drifting.log.append({"az": az, "alt": alt, "over": moved})
+        return alt > (45 if moved else garden(az))
+    drifting.log = []
+    _, warnings = horizon.trace(drifting, start, low=20)
+    repeat = [w for w in warnings if w.startswith(horizon.NOT_SAME)]
+    assert repeat and "other side of the pole" in repeat[0]

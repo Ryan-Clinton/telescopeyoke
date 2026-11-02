@@ -524,6 +524,15 @@ def eye(site, exposure, gain, daylight=False, torch=False):
                    dec - error[1])
         # Stars need following; a rooftop needs the mount to hold still.
         scope.tracking(not daylight)
+        # Where the mount says it is, and which side of the pole the tube came
+        # over: by day nothing checks the pointing, and on the meridian the
+        # mount may take either side, whose pointing differs by degrees
+        # (6 October 2026: 5.8° in Dec on one side, 0.2° on the other).
+        try:
+            ra_axis, dec_axis = scope.axes()
+            where = {"axes": [round(ra_axis, 2), round(dec_axis, 2)], "over": dec_axis > 90}
+        except Exception:
+            where = {}
         if daylight:
             if state["reference"] is None:
                 # The first look is at sky high up: it sets the exposure and
@@ -545,7 +554,7 @@ def eye(site, exposure, gain, daylight=False, torch=False):
                     pass        # too bright even at the shortest exposure: the Sun's glare
             if seen["view"] == "burnt":
                 print(f"bearing {az:>5g}°, {alt:>4g}° up: too bright to tell (glare), left out", flush=True)
-                log.append({"az": az, "alt": alt, "open": None, "glare": True})
+                log.append(dict({"az": az, "alt": alt, "open": None, "glare": True}, **where))
                 return None
             detail = f"{seen['share']:.0%} sky, brightness {seen['level']:.0%} of the high sky"
             if state["exposure"] != state["metered"]:
@@ -585,7 +594,7 @@ def eye(site, exposure, gain, daylight=False, torch=False):
                            else f", level {level:.0f}")
                 if seen["view"] == "unknown":
                     print(f"bearing {az:>5g}°, {alt:>4g}° up: cannot tell ({detail}), left out", flush=True)
-                    log.append({"az": az, "alt": alt, "open": None, "unread": True})
+                    log.append(dict({"az": az, "alt": alt, "open": None, "unread": True}, **where))
                     return None
         # The handset saying it went there is not proof: the picture must change.
         turned = moved.separation(*last, az, alt) if last else 0.0
@@ -602,7 +611,7 @@ def eye(site, exposure, gain, daylight=False, torch=False):
         LOOKS.mkdir(parents=True, exist_ok=True)
         marked(mosaic, mask, f"{az:g} / {alt:g}: {seen['view']}").save(
             LOOKS / f"{len(log) + 1:03d}-az{az:g}-alt{alt:g}.jpg", quality=80)
-        log.append(dict({"az": az, "alt": alt, "open": seen["view"] != "blocked"}, **seen))
+        log.append(dict({"az": az, "alt": alt, "open": seen["view"] != "blocked"}, **seen, **where))
         print(f"bearing {az:>5g}°, {alt:>4g}° up: {seen['view']} ({detail})", flush=True)
         return answer
 
@@ -719,6 +728,11 @@ def top_of(look, az, guess, low, top=TOP, fine=FINE, or_else=None):
     return {"az": az, "state": "edge", "shut": shut, "clear": clear}
 
 
+def off_meridian(az, margin=30):
+    """At least `margin` degrees of bearing from due north and due south."""
+    return min(az % 180, 180 - az % 180) >= margin
+
+
 def is_sky(seen):
     """Whether a look's answer is plain open sky."""
     return seen is not None and not isinstance(seen, float) and bool(seen)
@@ -827,6 +841,20 @@ def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, mo
                         + (f"still unread at {', '.join(f'{az:g}°' for az in still)}: kept as not measured."
                            if still else "all read the second time."))
 
+    # Check 2c: open right down to the lowest look between neighbours whose
+    # tops are well up. It can be a real gap between houses, or a lit wall
+    # read as sky (2 November 2026: 97.5° and 172.5° open to 20° between tops
+    # near 40°, the pictures plain blurs). Kept, but in doubt, and said.
+    ring = sorted(az for az in found if found[az]["state"] in ("open", "edge"))
+    for i, az in enumerate(ring if len(ring) > 2 else ()):
+        f, before, after = found[az], found[ring[i - 1]], found[ring[(i + 1) % len(ring)]]
+        if f["state"] == "open" and all(n["state"] == "edge" and n["clear"] > f["clear"] + JUMP
+                                        for n in (before, after)):
+            f["doubt"] = True
+            warnings.append(f"Bearing {az:g}°: open down to {f['clear']:g}° between tops at "
+                            f"{before['clear']:g}° ({before['az']:g}°) and {after['clear']:g}° "
+                            f"({after['az']:g}°). A gap, or a lit wall read as sky? Look that way yourself.")
+
     # Check 3: sky well above each top. A bright wall can pass for sky, and
     # branches or wires can hang over a roof.
     for az in sorted(found, key=side):
@@ -839,7 +867,12 @@ def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, mo
 
     # Check 4: back to the start. If the first bearing no longer looks the
     # same, the mount slipped or the light changed while going round.
-    first = next((found[az] for az in bearings if found[az]["state"] in ("open", "edge")), None)
+    # A bearing well off the meridian: on it the mount may come at the same
+    # place from either side of the pole, and the two sides point degrees
+    # apart (2 November 2026: due north read blocked at 72° and later sky).
+    measured = [az for az in bearings if found[az]["state"] in ("open", "edge")]
+    first = next((found[az] for az in measured if off_meridian(az)),
+                 found[measured[0]] if measured else None)
     if first and first.get("in_view"):
         again = look(first["az"], first["clear"])
         same = isinstance(again, float) and abs(again - first["clear"]) <= 1
@@ -847,8 +880,12 @@ def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, mo
         same = is_sky(look(first["az"], first["clear"])) and \
             (first["state"] != "edge" or look(first["az"], first["shut"]) in (False, np.False_))
     if first and not same:
+        sides = {e.get("over") for e in log if e["az"] == first["az"] and "over" in e}
+        why = (" The tube came at it from the other side of the pole the second time, and the mount's "
+               "pointing differs between the sides." if len(sides) > 1 else
+               " Did the mount slip, or the light change?")
         warnings.append(f"{NOT_SAME} Going back to bearing {first['az']:g}° gave a different answer "
-                        "from the first time. Did the mount slip, or the light change?")
+                        "from the first time." + why)
     return [found[az] for az in sorted(found)], warnings
 
 

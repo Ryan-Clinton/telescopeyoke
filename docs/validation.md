@@ -554,6 +554,26 @@ focuser not touched since the stars.
 - **`horizon.py --trace --daylight`** made three looks, all at bearing 0°,
   72° to 75° up, all read as open sky under cloud, before rain stopped it.
   No skyline was kept.
+- **`horizon.py --trace --daylight` from ralphie-side, 2 November 2026,
+  15:59-16:32**, the Sun low in the south-west: 102 looks over 24 bearings,
+  none burnt out or unread, and the fixes above all worked: no glare read as
+  sky, the high sky re-referenced as it dimmed. It kept nothing: its last
+  check, back at due north 72° up, read sky (76% of the high sky) where the
+  first look had read blocked (17%), and the survey was set aside
+  (`cache/horizon-ralphie-side.not-used-20261102-163232.json`). The light
+  alone does not explain it: 75° up beside it read the same both times
+  relative to the high sky, and 7.5° found a top at 75°. Due north is on the
+  meridian, where the mount may come over either side of the pole, and its
+  pointing differs between the sides by degrees; which side it took each
+  time was not recorded. Since then every look records the mount's axes and
+  which side the tube came over, the last check is made at a bearing at
+  least 30° off the meridian, and its warning says when the tube changed
+  sides. Two bearings, 97.5° and 172.5°, read open to 20° between tops near
+  40°; the pictures are plain blurs (by day the garden is far out of focus),
+  so a gap and a lit wall look alike. Such a lone opening is now kept in
+  doubt (15° added) with a warning to look that way. Not yet run on the real
+  mount since. A survey cut short now carries on the same day from what it
+  had measured.
 - **The movement check's first real record** came from those looks, and it
   was nearly wrong. Going by "stars", it found 60 specks in each of two
   bright frames 3° apart, and 47% of them were in the same place: the
