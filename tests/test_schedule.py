@@ -56,11 +56,22 @@ def test_steps_run_in_order_and_a_failure_stops_and_fetches_the_person():
     schedule.add("two", 1, ["false"])
     schedule.add("three", 1, ["true"])
     ran, called = [], []
-    ok = schedule.run(say=lambda s: None, call=called.append,
+    ok = schedule.run(say=lambda s: None, call=called.append, sleep=lambda s: None,
                       start=lambda cmd: (ran.append(cmd), types.SimpleNamespace(returncode=0 if cmd == ["true"] else 1))[1])
     statuses = [s["status"] for s in schedule.load()["steps"]]
-    assert not ok and ran == [["true"], ["false"]] and statuses == ["done", "failed", "queued"]
-    assert called and "two" in called[0]
+    assert not ok and ran == [["true"]] + [["false"]] * (1 + schedule.RETRIES) and statuses == ["done", "failed", "queued"]
+    assert called and "two" in called[0] and "again after" in called[0]
+
+
+def test_a_failed_step_is_tried_again_before_anyone_is_called():
+    """1 November 2026: the camera jammed on a transit and the person was
+    called; starting the same step again cleared it."""
+    schedule.save({"steps": []})
+    schedule.add("transit", 250, ["shoot"])
+    codes, called = iter([1, 0]), []
+    ok = schedule.run(say=lambda s: None, call=called.append, sleep=lambda s: None,
+                      start=lambda cmd: types.SimpleNamespace(returncode=next(codes)))
+    assert not called and schedule.load()["steps"][0]["status"] == "done"
 
 
 def test_a_step_already_running_elsewhere_is_waited_for():
@@ -130,7 +141,7 @@ def test_a_step_that_cannot_start_fails_and_fetches_the_person():
     schedule.save({"steps": []})
     schedule.add("GoTo", 3, ["no-such-program-anywhere"])
     called = []
-    assert schedule.run(say=lambda s: None, call=called.append) is False
+    assert schedule.run(say=lambda s: None, call=called.append, sleep=lambda s: None) is False
     assert schedule.load()["steps"][0]["status"] == "failed" and called
 
 
@@ -150,6 +161,7 @@ class Clock:
 
 def test_the_night_ends_parked_and_told_when_the_last_step_has_run_in_the_morning(monkeypatch):
     monkeypatch.setattr(schedule, "datetime", Clock(6))
+    monkeypatch.setattr(schedule, "busy", lambda: False)    # not this computer's own running imaging (1 November 2026)
     schedule.save({"steps": []})
     schedule.add("one", 1, ["true"])
     assert schedule.run(say=lambda s: None, start=lambda cmd: types.SimpleNamespace(returncode=0))

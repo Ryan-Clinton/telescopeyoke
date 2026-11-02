@@ -137,6 +137,10 @@ def alive(pid):
     return host.alive(pid)
 
 
+RETRIES = 2       # a failed step is started again this many times before the person is fetched
+RETRY_S = 30      # seconds between
+
+
 def run(say=print, sleep=time.sleep, call=None, start=subprocess.run):
     """The queued steps in order. A step given by process id is waited for;
     the rest are started here, each when the one before has ended and not
@@ -207,8 +211,19 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run):
         ok = done.returncode == 0 or (step.get("until") and done.returncode == 124)
         mark_id(step["id"], status="done" if ok else "failed", finished=time.time(), exit=done.returncode)
         say(f"{datetime.now():%H:%M} {step['label']} {'done' if ok else f'failed (exit {done.returncode})'}")
+        if not ok and step.get("tries", 0) < RETRIES:
+            # Tried again by itself before anyone is fetched: on 1 November 2026
+            # the camera jammed on a transit, the person was called, and the
+            # same step started again cleared it ("i would rather that was
+            # tried b4 i got notified").
+            tries = step.get("tries", 0) + 1
+            mark_id(step["id"], status="queued", tries=tries)
+            say(f"{datetime.now():%H:%M} trying {step['label']} again ({tries} of {RETRIES}) in {RETRY_S} s")
+            sleep(RETRY_S)
+            continue
         if not ok:
-            (call or fetch)(f"The telescope needs you: {step['label']} stopped with an error.")
+            (call or fetch)(f"The telescope needs you: {step['label']} stopped with an error"
+                            + (f", and again after {RETRIES} more tries." if RETRIES else "."))
             return False
 
 
