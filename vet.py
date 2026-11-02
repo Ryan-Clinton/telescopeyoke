@@ -270,6 +270,36 @@ def verdict(e):
     return UNEXPLAINED
 
 
+RESIDUE = "probably residue"
+CLUSTER_ARCSEC = 120.0   # this close together ...
+CLUSTER_N = 3            # ... this many candidates are one flaw in the subtraction, not that many novae
+
+
+def residue(evidence, cut):
+    """Unexplained candidates that are most likely what the subtraction left,
+    relabelled so they are listed but no one is woken for them: three or
+    more within 2 arcminutes (novae do not come in groups; a bad patch of
+    the subtraction does), or a real-or-bogus score below the model's cut
+    (which keeps 95% of planted stars). On 1 to 2 November 2026 every alert
+    of the night was one of these: four together in M31, six in two groups
+    in M33, all rated 0.00 to 0.16. Returns how many were relabelled."""
+    def apart(a, b):
+        return 3600 * math.hypot((a["ra"] - b["ra"]) * math.cos(math.radians(a["dec"])), a["dec"] - b["dec"])
+    changed = 0
+    for e in evidence:
+        if e["verdict"] != UNEXPLAINED:
+            continue
+        group = 1 + sum(1 for o in evidence if o is not e and apart(e, o) <= CLUSTER_ARCSEC)
+        if group >= CLUSTER_N:
+            e["verdict"] = f"{RESIDUE}: one of {group} within 2 arcminutes, a flaw in the subtraction"
+        elif cut is not None and e.get("real_bogus") is not None and e["real_bogus"] < cut:
+            e["verdict"] = f"{RESIDUE}: real-or-bogus {e['real_bogus']:.2f}, below its cut of {cut:.2f}"
+        else:
+            continue
+        changed += 1
+    return changed
+
+
 def clues(e):
     """What does not explain a candidate but bears on it."""
     out = []
@@ -317,7 +347,8 @@ def vet(record, checks, half_scores=None, ref=None, zeropoint=None, radius=4.0):
 def classify(evidence, session, ref, fwhm):
     """Each candidate's probability of being real, from realbogus.py's model
     if one has been trained, as advice in its evidence and clues: a low one
-    is said, never acted on. Returns the model's cut, or None."""
+    is said here; residue() then lists one below the cut as probably residue,
+    kept but not alerted. Returns the model's cut, or None."""
     import realbogus
     kept = realbogus.load()
     if kept is None or not evidence or not (session / "difference.fits").exists():
@@ -379,6 +410,7 @@ def run(args, say=print):
             half_scores = each_half(record, ref, ref_wcs, paths, name, say)
     evidence = vet(record, checks, half_scores, ref, zeropoint, radius=max(record.get("fwhm_px", 4.0), 2.0))
     cut = classify(evidence, session, ref, record.get("fwhm_px", 4.8))
+    residue(evidence, cut)
     left = [e for e in evidence if e["verdict"] == UNEXPLAINED]
     summary = {"session": str(session), "candidates": evidence, "unexplained": len(left),
                "asked": sorted(checks), "halves_checked": half_scores is not None,

@@ -100,3 +100,25 @@ def test_a_whole_vetting_reads_gaia_with_its_colour_column(tmp_path, monkeypatch
     monkeypatch.setattr(depth, "gaia", lambda *a: np.array([[10.7, 41.3 + 0.5 / 3600, 18.2, 0.9]]))
     answer = vet.run(argparse.Namespace(session=str(session), offline=False, no_halves=True), say=lambda *_: None)
     assert "gaia" in answer["asked"] and "Gaia star G 18.2" in answer["candidates"][0]["clues"][0]
+
+
+def test_residue_is_listed_but_never_alerted():
+    # 1 to 2 November 2026: every alert of the night was subtraction residue,
+    # four together in M31, all rated 0.03 to 0.05 by the classifier.
+    def cand(ra, dec, rb):
+        return {"ra": ra, "dec": dec, "real_bogus": rb, "verdict": vet.UNEXPLAINED}
+    group = [cand(11.0036, 41.5758, 0.9), cand(11.0235, 41.5810, 0.9), cand(11.0060, 41.5569, 0.9)]
+    lone_low = cand(10.70, 41.30, 0.04)
+    lone_real = cand(10.60, 41.10, 0.80)
+    explained = dict(cand(10.50, 41.00, 0.01), verdict="known variable V1 (EW)")
+    evidence = group + [lone_low, lone_real, explained]
+    assert vet.residue(evidence, cut=0.22) == 4
+    assert all(e["verdict"].startswith("probably residue: one of 3 within 2 arcminutes") for e in group)
+    assert lone_low["verdict"] == "probably residue: real-or-bogus 0.04, below its cut of 0.22"
+    assert lone_real["verdict"] == vet.UNEXPLAINED                 # still worth a person's eyes, and alerted
+    assert explained["verdict"].startswith("known variable")
+    import patrol
+    assert patrol.unexplained({"vet": {"candidates": evidence}}) == [lone_real]
+    # With no model trained, only a group is set aside.
+    alone = cand(10.70, 41.30, None)
+    assert vet.residue([alone], cut=None) == 0 and alone["verdict"] == vet.UNEXPLAINED
