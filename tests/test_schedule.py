@@ -254,3 +254,12 @@ def test_anything_driving_the_mount_or_camera_is_seen_however_it_was_started():
     assert schedule.driving(["/usr/bin/python3", "./mount.py", "findhome"])
     assert not schedule.driving(["python3", "./schedule.py", "guard"])
     assert not schedule.driving(["python3", "./ty", "night"])
+
+
+def test_a_dawn_time_added_in_the_evening_is_the_next_morning():
+    from datetime import datetime
+    evening = datetime(2026, 11, 2, 19, 5).timestamp()
+    assert datetime.fromtimestamp(schedule.not_before("07:05", evening)) == datetime(2026, 11, 3, 7, 5)
+    assert datetime.fromtimestamp(schedule.not_before("22:10", evening)) == datetime(2026, 11, 2, 22, 10)
+    morning = datetime(2026, 11, 3, 1, 0).timestamp()
+    assert datetime.fromtimestamp(schedule.not_before("00:30", morning)) == datetime(2026, 11, 3, 0, 30)  # just gone: at once

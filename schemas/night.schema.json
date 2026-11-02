@@ -12,7 +12,9 @@
     "spot",
     "skyline_measured",
     "discovery",
-    "best_now"
+    "best_now",
+    "best_tonight",
+    "other_fields"
   ],
   "properties": {
     "site": {
@@ -66,6 +68,28 @@
       "type": "array",
       "items": {
         "type": "object"
+      }
+    },
+    "best_tonight": {
+      "description": "The five best targets of the whole night by the planner's score (tonight.py), up now or later, each with its size in arcminutes.",
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "other_fields": {
+      "description": "Galaxies up in darkness tonight that no discovery programme watches, 8 arcmin or larger, best first: fresh patrol fields. field is what to patrol (a kept reference's field when the galaxy lies in one); reference false means tonight's stack becomes the reference and only later nights are searched; supernova names a bright one listed in it now, which the reference will then contain.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "field", "size_arcmin", "reference", "supernova", "command", "best_time", "best_altitude_deg", "direction"],
+        "properties": {
+          "field": {"type": "string"},
+          "size_arcmin": {"type": "number"},
+          "reference": {"type": "boolean"},
+          "supernova": {"type": ["string", "null"]},
+          "command": {"type": "string"}
+        }
       }
     },
     "supernovae": {

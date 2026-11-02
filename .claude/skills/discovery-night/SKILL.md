@@ -23,12 +23,23 @@ is `docs/agents/setup-routine.md` step 6b.
    they belong to setup, step 1. Never fix or change code while answering:
    if something is broken, say so in a line at the end. Answer in this
    shape, nothing more:
-   - One line: the verdict, the clear spell, when the Moon sets, the dew.
+   - One line: the verdict, the clear spell, when the Moon rises or sets,
+     the dew. When the person is out with stars in view, their sky beats
+     the forecast: give each programme's `best_time` where `best_in_clear`
+     is empty, and say the forecast once, not as a reason to skip.
    - One line per `discovery` item, in its order: the programme, its
      `best_in_clear` time ("go about"), its length, and its `last_run`
      (when it was last done, and what the notes say it found). One marked NOT up
      while clear is said once as skipped tonight.
-   - One line: the free time after the programmes, for a big target.
+   - One line: the free time after the programmes, and the big targets
+     for it from `best_tonight` (name, size, best time): the person
+     likes objects that fill the frame.
+   - One line per `other_fields` item: a fresh patrol field the
+     programmes do not watch (its `field`, size, best time and direction),
+     saying whether a reference is kept (none: tonight only makes it,
+     later nights search it) and naming any `supernova` in it (the
+     reference will then hold it). Say plainly what the field can catch:
+     novae in M31 and M33 only; elsewhere a supernova watch.
    - One line per `supernovae` item (bright ones on the Rochester list, up
      tonight): its name, host galaxy, magnitude and date, best time and
      direction. None, no line.

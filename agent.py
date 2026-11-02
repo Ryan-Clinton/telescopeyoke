@@ -428,6 +428,83 @@ def in_the_clear(plan, clear):
     return plan
 
 
+FIELD_MIN_ARCMIN = 8     # a galaxy smaller than this is a few pixels of a 60' frame: little to patrol
+NEAR_DEG = 0.5           # a galaxy this close to a field's centre is in that field's frame
+MOSAIC_DEG = 1.5         # ... or this close to a mosaic's centre (M31's 4 x 2 panels)
+
+
+def _key(name):
+    return (name or "").replace(" ", "").upper()
+
+
+def _near(a, b, within=NEAR_DEG):
+    """Whether two (ra, dec) places in degrees are within `within` degrees."""
+    import math
+    ra1, d1, ra2, d2 = map(math.radians, (*a, *b))
+    c = math.sin(d1) * math.sin(d2) + math.cos(d1) * math.cos(d2) * math.cos(ra1 - ra2)
+    return math.degrees(math.acos(max(-1.0, min(1.0, c)))) <= within
+
+
+def _placed(names):
+    """{name: (ra, dec)} for each field name the catalogue or a watch places;
+    a mosaic panel (M31-P3) by its mosaic's centre."""
+    import starwatch
+    out = {}
+    for name in names:
+        found = next((s for s in starwatch.STARS.values() if s["name"] == name), None)
+        for look in (name, re.sub(r"-P\d+$", "", name)):
+            try:
+                found = found or mount.find_target(look)
+            except (interface.Refusal, Exception):
+                continue
+        if found:
+            out[name] = (found["ra"], found["dec"])
+    return out
+
+
+def other_fields(rep, limit=4, data=None):
+    """Galaxies up in darkness tonight that no discovery programme watches,
+    big enough to patrol, best first: fresh fields for a supernova watch.
+    Each says the field to patrol (a kept reference's field when the galaxy
+    lies in one, as M81 in M81-M82), whether a reference is kept (none:
+    tonight's stack becomes it, and only later nights are searched) and any
+    bright supernova listed in it now (then the reference holds the
+    supernova: its fading is measured later, not its arrival). A galaxy in a
+    programme's field (M110 in M31's) is left out. 2 November 2026: asked
+    "can we not do fresh patrols on anything else?", the outlook had only
+    the programmes."""
+    import tomllib
+    data = data or config.DATA
+    reach = {}
+    for path in PROGRAMMES.glob("*.toml"):
+        p = tomllib.loads(path.read_text(encoding="utf-8"))
+        field = p.get("target") or p.get("mosaic")
+        reach[field] = max(reach.get(field, 0), MOSAIC_DEG if p.get("mosaic") else NEAR_DEG)
+    watched = [(at, reach[name]) for name, at in _placed(reach).items()]
+    folder = data / "reference"
+    kept = _placed([d.name for d in folder.iterdir() if d.is_dir()] if folder.is_dir() else [])
+    active = {_key(s["name"]): s for s in rep.get("supernovae", [])}
+    out, taken = [], set()
+    for t in rep["targets"]:
+        if "galaxy" not in t["kind"] or (t.get("size") or 0) < FIELD_MIN_ARCMIN:
+            continue
+        here = (t["ra"], t["dec"])
+        if any(_near(here, w, within) for w, within in watched):
+            continue
+        field = next((name for name, at in kept.items() if _near(here, at)), t["id"])
+        if field in taken:
+            continue
+        taken.add(field)
+        names = {_key(t["id"]), _key(t.get("alt_id"))} - {""}
+        sn = next((active[n] for n in names if n in active), None)
+        out.append(dict(_target(t), field=field, size_arcmin=round(t["size"], 1), reference=field in kept,
+                        supernova=sn["id"] if sn else None,
+                        command=f"./patrol.py {field!r}" if " " in field else f"./patrol.py {field}"))
+        if len(out) >= limit:
+            break
+    return out
+
+
 def night(demo=False):
     """Tonight in brief: the verdict, when it is dark and clear, the Moon,
     and the discovery programmes' fields first, then the best targets."""
@@ -450,6 +527,9 @@ def night(demo=False):
         "discovery": in_the_clear(discovery_tonight(demo),
                                   [w["clear_from"], w["clear_to"]] if w and w["clear_hours"] else None),
         "best_now": [_target(t) for t in rep["targets"] if t["now"]][:3],
+        "best_tonight": [dict(_target(t), size_arcmin=t.get("size") and round(t["size"], 1))
+                         for t in rep["targets"][:5]],
+        "other_fields": other_fields(rep, data=None if not demo else config.DATA),
         "supernovae": [dict(_target(s), mag=s["mag"], type=s["type"], last_seen=s["last_seen"], peak_mag=s["peak_mag"])
                        for s in rep.get("supernovae", [])],
         "news": rep.get("news", []),

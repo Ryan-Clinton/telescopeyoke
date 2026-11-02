@@ -584,3 +584,34 @@ def test_tonights_discovery_matches_its_schema(tmp_path):
     import test_discovery_view
     test_discovery_view.session(tmp_path, "M31-P6", "20991017-233312")
     valid(interface.run("discovery", lambda: agent.discovery(now=4.1e9, hours=1e6, data=tmp_path)), "discovery")
+
+
+def test_other_fields_offer_fresh_galaxies_beyond_the_programmes(tmp_path, monkeypatch):
+    """A night full of galaxies the programmes do not watch offers them as
+    fresh patrol fields: a kept reference's field by its name, a bright
+    supernova flagged, and neither a programme's own field (M110 sits in
+    M31's) nor a galaxy too small to patrol."""
+    import json as _json
+    (tmp_path / "reference" / "M81-M82").mkdir(parents=True)
+    real = mount.find_target
+    monkeypatch.setattr(mount, "find_target", lambda name: {"ra": 148.93, "dec": 69.37} if name == "M81-M82"
+                        else real(name))                          # the pair's framing, between them
+
+    def galaxy(id_, ra, dec, size, score):
+        return {"id": id_, "alt_id": "", "name": "", "kind": "galaxy", "ra": ra, "dec": dec, "size": size,
+                "score": score, "now": True, "best": None, "best_alt": 60.0, "direction": "S",
+                "start": None, "end": None, "tags": []}
+    rep = {"targets": [galaxy("M110", 10.092, 41.685, 16.2, 90),          # in M31's frame
+                       galaxy("M81", 148.888, 69.065, 21.6, 88),          # in the kept M81-M82 field
+                       galaxy("M82", 148.968, 69.680, 11.0, 86),          # the same field again
+                       galaxy("NGC 7331", 339.267, 34.416, 9.3, 64),
+                       galaxy("NGC 7814", 0.812, 16.146, 5.5, 60),        # too small
+                       galaxy("NGC 2403", 114.214, 65.603, 21.9, 58)],
+           "supernovae": [{"id": "SN 2026aaiv", "name": "NGC 7331"}]}
+    fields = agent.other_fields(rep, data=tmp_path)
+    assert [f["field"] for f in fields] == ["M81-M82", "NGC 7331", "NGC 2403"]
+    assert [f["reference"] for f in fields] == [True, False, False]
+    assert fields[1]["supernova"] == "SN 2026aaiv" and fields[1]["command"] == "./patrol.py 'NGC 7331'"
+    assert fields[0]["command"] == "./patrol.py M81-M82"
+    schema = _json.loads((Path(__file__).resolve().parent.parent / "schemas" / "night.schema.json").read_text())
+    jsonschema.validate(fields, schema["properties"]["other_fields"])

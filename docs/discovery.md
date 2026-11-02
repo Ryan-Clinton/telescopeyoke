@@ -159,6 +159,18 @@ What a person does; everything else is automatic.
    transients worth a look tonight.
 6. Old nights are searched again with `./patrol.py --sweep` (the last 3
    days) or `--sweep --all-history` after an improvement.
+7. Fresh fields: `./ty night` lists under `other_fields` the big galaxies
+   up tonight that no programme watches, and `./patrol.py FIELD` patrols
+   any of them. Its first night only makes the reference; later nights
+   are searched. Outside M31 and M33 this is a supernova watch, not a nova
+   hunt: novae in M81 peak near magnitude 20, beyond this rig's G 17-18
+   ([design](discovery/design.md), the table of programmes). A field with a bright supernova in it now (NGC
+   7331 with SN 2026aaiv, November 2026) gets a reference holding that
+   supernova: the Rochester list explains it on later nights, and the
+   subtraction then sees it fade rather than arrive, which takes nothing
+   away from a new one elsewhere in the galaxy. A survey picture from
+   before it went off would need a different telescope's stars matched to
+   ours, which the subtraction does not do.
 
 What is kept, and what has to be kept to reproduce a find, is in
 [data.md](data.md).

@@ -76,10 +76,12 @@ def save(plan):
 
 def not_before(hhmm, now):
     """The next time it is `hhmm` (local), as unix seconds: tonight, or after
-    midnight if that time has already gone today by more than twelve hours."""
+    midnight if that time has already gone today by more than six hours.
+    2 November 2026: a dawn flat at 07:05, added at 19:05, was put at 07:05
+    that morning under the old twelve hours, and would have run in the dark."""
     hour, minute = (int(v) for v in hhmm.split(":"))
     moment = datetime.fromtimestamp(now).replace(hour=hour, minute=minute, second=0, microsecond=0)
-    if moment.timestamp() < now - 12 * 3600:
+    if moment.timestamp() < now - 6 * 3600:
         moment += timedelta(days=1)
     return moment.timestamp()
 

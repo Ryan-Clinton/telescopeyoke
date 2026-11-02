@@ -96,7 +96,7 @@ def readiness(p):
         hours = (time.time() - when) / 3600
         stale = hours > FOCUS_STALE
         items.append({"what": "focus", "ok": not stale, "stops": False,
-                      "detail": f"last focused {hours:.1f} h ago" + ("; focus first (focus.py --motor)" if stale else "")})
+                      "detail": f"last focused {hours:.1f} h ago" + ("; focus first (focus.py --walk-in)" if stale else "")})
     else:
         items.append({"what": "focus", "ok": False, "stops": False, "detail": "never measured; focus first"})
     # What the last measured stack of this field reached, at its star size
