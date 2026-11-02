@@ -17,7 +17,7 @@ and the next step that fits that sky starts now, without asking.
 status` (which only reads) say what is plugged in, whether the handset is
 past its start-up screens, and where the axes are. Name every device `lsusb`
 lists before doing anything: `0403:6015` the handset lead, `16d0:0c77` the
-camera, `1a86:7523` (CH340) the motor focuser, which `doctor.py` does not
+camera, `16d0:0b2a` the guide camera (`./guidecam.py`), `1a86:7523` (CH340) the motor focuser, which `doctor.py` does not
 check. **Since 1 November 2026 there is no hub:** the RSH-ST04 kept
 dropping off the laptop and is being returned (`docs/usb-hub.md`). The
 camera goes on the 3 m lead straight into a laptop USB-A socket, where it

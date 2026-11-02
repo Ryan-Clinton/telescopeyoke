@@ -30,6 +30,7 @@ rig's state shows is done tonight (say which, and why).
    |-------------|--------------------------------------|
    | `0403:6015` | FTDI lead to the SynScan handset     |
    | `16d0:0c77` | Altair 183C camera                   |
+   | `16d0:0b2a` | Altair GPCAM guide camera (`./guidecam.py`) |
    | `1a86:7523` | CH340: the motor focuser             |
 
    Anything else on the list that is not the laptop's own (webcam,
