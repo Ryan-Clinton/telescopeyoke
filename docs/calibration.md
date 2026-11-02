@@ -52,7 +52,9 @@ six rounds took the axis from 3.3° to 0.1° (13 October 2026), once the
 measurement took out the handset's own movement of the Dec axis
 ([validation](validation.md#night-of-13-october-2026)). `--repeat 5`,
 with the bolts left alone, gives the scatter of the measurement itself,
-which says what a reading of 0.1° is worth. That has not been run yet.
+which says what a reading of 0.1° is worth. On 1 November five checks
+with the bolts alone scattered 0.06°, and on 2 November `--repeat 3` gave
+0.06° to 0.11° ([validation](validation.md#2-november-2026)).
 Each round tonight, the picture being taken and the advice are also kept in
 `cache/polar_stream.json` for the live stream's polar look
 ([streaming.md](streaming.md#focusing-and-polar-alignment-on-air)).
@@ -240,6 +242,28 @@ the judgement is recorded and stops nothing: the first real frames showed
 the optics' own marks passing for a view that had not changed.
 `./mount.py nudge`, a 5° tip from home and back,
 is the check for a person standing beside it.
+
+## Polar alignment, 2 November 2026
+
+At ralphie-side, before the stickered baseline above:
+
+- **17:40, from Deneb, the tripod not yet moved** (`--step 12`): 0.8° out,
+  0.8° low and 0.3° west.
+- **The tripod moved off a tile crack** (`--step 25 --repeat 3`): 1.5° out,
+  1.2° west and 1.3° high.
+- **Altitude by a leg:** about 2 cm on one leg moved the altitude 2.7°,
+  roughly 1.3° a centimetre.
+- **Azimuth by the feet:** on the tiles, 6.7 cm a foot moved the axis 2.1°,
+  about 3.2 cm for each degree. The configured `tripod_cm_per_degree` is
+  2.3 (measured on grass on 15 October).
+
+## Dark frames, 2 November 2026
+
+The 16 s darks at gain 1500 failed at 15:51 in daylight: the first frame
+read 4094 of 4095. Daylight leaks past the cap on the tube through the open
+mirror cell. Darks need full dark, or a cap on the camera itself. Only 1 s
+and 4 s darks at gain 1500 exist; the M31 and M33 patrols shoot 16 s, so
+they have no matching darks yet (record: [validation](validation.md#2-november-2026)).
 
 ## The handset's clock
 

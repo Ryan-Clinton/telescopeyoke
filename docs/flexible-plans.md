@@ -58,9 +58,12 @@ every hitch came from changing the plan.
    is behind something, or that is checked without a skyline, and `add`
    says the same as the step goes in. From ralphie-side the house corner
    that took TOI-2046 b (bearings 333-340° to 70°) is in the spot's blocked
-   list. Its daylight skyline of 2 November was set aside (every look burnt
-   out in the low Sun, `docs/validation.md`), so steps from there are
-   checked against the blocked list only until it is measured again.
+   list. The morning's daylight survey of 2 November was set aside (every
+   look burnt out in the low Sun, `docs/validation.md`); the afternoon's
+   survey was kept on the person's eye check
+   (`horizon.py --use-aside`), so steps from there are checked against that
+   skyline as well as the blocked list. It is too cautious in the
+   south-west gap (bearings 210-228°) until a morning survey measures it.
 6. **A lost step filled.** `./schedule.py fill` finds the first gap in the
    schedule from now (a wait of 10 minutes or more before a step that keeps
    to the clock, or the open time after the last step) and offers the first

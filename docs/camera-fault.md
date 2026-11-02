@@ -56,8 +56,10 @@ found that afternoon:
   speed; the kernel log shows `device descriptor read/8, error -110` and
   resets, then the camera drops off USB.
 - **How to get it back.** Cut its power. Plugged straight into the laptop, as
-  from the evening of 1 November 2026 while the hub goes back (`usb-hub.md`),
-  that means pulling its lead. Behind a hub, from 1 November 2026
+  from the evening of 1 November 2026 (the hub has been returned,
+  `usb-hub.md`), try the software steps first
+  ([the list](#the-evening-of-1-november-2026)), and pull the lead last.
+  Behind a hub, from 1 November 2026
   the laptop does it: `./camera_test.py --power-cycle` turns the camera's
   hub port off for 8 s and on again (`usbpower.py`, through uhubctl; the
   hub switches each port's power on its own), and with
@@ -401,7 +403,7 @@ laptop started at 18:52. Logs in `logs/camera-evening*-20261101.log`.
 - **20:34 onward, the 3 m lead straight into laptop socket 2-5:** 5000 Mb/s,
   no resets in the kernel log; every 1 s frame arrived (a walk-in and the
   cloud checks), while the spoken focusing aid lost 3 frames of 0.05 s in
-  its first minute. The hub is being returned (`usb-hub.md`).
+  its first minute. The hub was returned (`usb-hub.md`).
 - **20:34 to 22:30 on the 3 m lead, speed 0:** the link stayed at
   5000 Mb/s with no resets. Lost frames came back: the spoken aid (2 s
   frames) gave 72 readings without a loss, but the polar alignment's
@@ -439,7 +441,30 @@ So tonight speed 2 is in the fault from the start, and speed 0 jams within
 minutes of being opened but is cleared every time by a power cut, made from
 the laptop while the hub was there. The hub itself then failed, and the
 camera went straight into the laptop, where it has never dropped off USB
-but nothing can cut its power: a jam there means pulling its lead.
+but nothing can cut its power. The hub has since been returned to Amazon.
+A jam there gets software steps first, and hands last:
+
+1. A command refused with `CAMERA_BUSY` names the process holding the
+   camera (`cameralock.py`). Stop a stale one with a plain `kill` and wait
+   until it is gone.
+2. A command that is retrying is recovering: `altair.py`'s `frame()` tries
+   again, closes and reopens the camera, then tries twice more. Let it
+   finish.
+3. A fresh open: `./snap.py --exposure 0.01 --gain 100`.
+4. Only then hands: pulling the lead.
+
+## The afternoon of 2 November 2026
+
+- **15:56, a stale owner.** A dark run stopped by killing only its wrapper
+  left `calibrate.py` holding the camera. The skyline survey then got "would
+  not be set up" (SDK error 0x8000ffff). The next survey opened the camera
+  but got no frame, even at 0.002 s. A fresh `./snap.py` open cleared it at
+  once: a 10 ms frame in 2 s, median 378.
+- **Single lost frames** during the survey and during polar alignment at
+  about 17:50 recovered by themselves.
+- **Since then:** `cameralock.py` gives the camera one owner at a time, and
+  a second command is refused with `CAMERA_BUSY` naming the holder; SIGTERM
+  now closes the camera before the program ends.
 
 ## What is known
 
@@ -787,6 +812,11 @@ the ticket on 1 November at 02:22, asking whether this is a known fault of
 firmware 1.4.1 or the FPGA at the faster speeds, whether newer firmware
 exists, and whether it changes their view of the £30 inspection and a new
 board.
+
+The person's view on money for a repair (2 November): a second-hand board
+only if it costs about £100 or less; anything more goes towards a better
+used camera. Altair's reply of 2 November at 14:40 (probably a memory or
+chip failure, and checking for a board) is in the table above.
 
 What it would mean here, from its published specification:
 

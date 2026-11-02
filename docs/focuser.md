@@ -431,6 +431,12 @@ the camera's temperature and the dew margin measured at the telescope. Later, th
 
 ### Parts ordered, 22 October 2026 (AliExpress, about a week to three weeks)
 
+**Arrived 2 November 2026:** all the NEMA 17 parts: the motor with its
+4-wire lead, two TMC2209 drivers, one expansion board, the 12 V supply with
+its socket lead, and the M3 screws. The bracket (Printables 436129) is with
+a 3D-printing contact, ready about Thursday 5 November. No firmware is
+written until the drive is being fitted.
+
 A stronger, solder-free drive for the Printables NEMA 17 bracket
 ([model 436129](https://www.printables.com/model/436129)), about £32 in all:
 

@@ -6,6 +6,27 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+- **19 October to 2 November 2026: new commands and changes** (what was
+  proven is in `docs/validation.md`):
+  - `usbpower.py`: cuts the camera's power at a hub that switches each port
+    (the hub itself has since been returned).
+  - `youtube.py`: the YouTube broadcast, on air 1 November.
+  - `storage.py`: tidies before each step; `schedule.py show` warns when
+    space is short.
+  - `guidecam.py`: opens the guide camera through libaltaircamlegacy 1.24.
+  - `cameralock.py`: one owner of the camera, and a second command is
+    refused with `CAMERA_BUSY` naming it; SIGTERM now closes the camera.
+  - `focusdial.py`: a printable dial for the focus knob.
+  - `vet.py`: only clusters of 3 or more candidates within 120″ are set
+    aside as residue; a lone candidate is always alerted.
+  - `schedule.py`: `next`, `skip`, `move` and `fill`, and gap filling.
+  - `horizon.py`: a survey carries on after being cut short; records the
+    side of the pole; repeat check off the meridian; a lone opening is put
+    at the lower neighbouring top; `--use-aside` keeps a set-aside survey
+    on a person's word.
+  - `mount.py point --clearance-test`; the hour-angle limit is 7.5 h, up
+    from 5.75 h.
+
 - **Which satellite made a streak** (`streak.py`, `ty streak`): finds a
   straight streak in a frame, plate-solves the frame and places every active
   satellite from CelesTrak's orbits (SGP4) through the exposure; one that

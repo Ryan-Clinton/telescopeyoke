@@ -26,6 +26,11 @@ the end.
 
 ## Recent proofs
 
+- **1-2 November 2026, M31 and M33:** the subtraction fix cut false
+  candidates from 23 to 5, and the second looks found none real; `vet.py`
+  now sets aside only clusters of 3 or more as residue
+  ([results](discovery/results.md#m31-and-m33-patrols-1-and-2-november-2026)).
+
 - **19 October 2026, GOES-19 CCOR-1:** the six-hourly comet hunt found a
   known Kreutz sungrazer by itself in 74 pictures, followed it for seven
   hours across a 45-minute gap, and matched it to the Sungrazer Project's
