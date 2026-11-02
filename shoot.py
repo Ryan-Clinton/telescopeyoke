@@ -107,7 +107,8 @@ class Session:
         self.calibration = stacking.Calibration(exposure, gain)
         self.reference, self.stack = None, None
         self.accepted, self.log = [], []
-        self.drift = 0.0   # how far the newest frame was from the first, in frame heights
+        self.drift = 0.0   # how far the newest frame was from the first since the last centring, in frame heights
+        self.origin = None  # the shift of that first frame: drift is measured from it
         self.track = []    # (time, x shift, y shift) of accepted frames since the last trim
         self.shifts = []   # the same for every accepted frame of the run
         self.timings = stacking.Timings()
@@ -129,7 +130,15 @@ class Session:
                 if self.reference is None:
                     self.reference = result["reference"]
                     self.stack = stacking.Stack(frame.shape)
-                self.drift = float(np.hypot(*entry["shift"])) / frame.shape[0]
+                # Measured from the first frame since the last centring, not from the
+                # reference: a GoTo past the meridian swings the tube over the pole and
+                # the frames come back turned half round, a huge "shift" from the
+                # reference with the target dead centre. 2 November 2026: NGC 7331 was
+                # re-centred every four frames after the flip, with the aim steady to 1'.
+                if self.origin is None:
+                    self.origin = tuple(entry["shift"])
+                self.drift = float(np.hypot(entry["shift"][0] - self.origin[0],
+                                            entry["shift"][1] - self.origin[1])) / frame.shape[0]
                 self.track.append((taken or time.time(), *entry["shift"]))
                 self.shifts.append((taken or time.time(), *entry["shift"]))   # never cleared: the hold's
                 self.stack.add(frame)
@@ -892,14 +901,14 @@ def image(args, session, exposure, moving, holding, tracker):
                 aim = dither_offset(rng)
                 print(f"  dithering: re-centring {aim[0]:+.1f}' east, {aim[1]:+.1f}' north of {args.name}", flush=True)
                 recentre(args.name, aim)
-                session.drift, since_centre, since_dither = 0.0, 0, 0
+                session.drift, session.origin, since_centre, since_dither = 0.0, None, 0, 0
                 session.track.clear()
             elif moving and (session.drift > DRIFT_LIMIT or due):
                 told["recentre"] = False
                 collect(everything=True)
                 print(f"  drifted {session.drift * 100:.0f}% of the frame; re-centring", flush=True)
                 recentre(args.name)
-                session.drift, since_centre = 0.0, 0
+                session.drift, session.origin, since_centre = 0.0, None, 0
                 session.track.clear()   # the slew, not drift, moved the next frames
                 if holding and holding.state != "off":
                     holding.reset()     # a GoTo may have swung the tube over the pole

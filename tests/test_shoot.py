@@ -116,3 +116,26 @@ def test_the_quality_pass_runs_in_the_background_and_frees_the_telescope(tmp_pat
     assert cmd[1].endswith("restack.py") and cmd[2] == str(tmp_path)
     assert kw["stdin"] is shoot.subprocess.DEVNULL and (tmp_path / "restack.log").exists()
     assert "telescope is free" in said[0]
+
+
+def test_drift_is_measured_from_the_first_frame_after_a_centring(monkeypatch):
+    """2 November 2026: a re-centre past the meridian swung the tube over the
+    pole; the frames came back turned half round, a big "shift" from the
+    reference with the target centred, and NGC 7331 was re-centred every
+    four frames."""
+    import numpy as np
+    session = shoot.Session("Drift test", 16, 1500, save=False)
+    monkeypatch.setattr(session, "publish", lambda: None)
+    monkeypatch.setattr(shoot.stacking, "append_log", lambda *a: None)
+
+    def frame(index, shift):
+        entry = {"index": index, "accepted": True, "shift": shift, "fwhm": 5.2, "roundness": 0.9, "stars": 300,
+                 "flux": 1.0, "background": 8.0, "noise": 40.0}
+        return {"entry": entry, "frame": np.zeros((100, 150)), "reference": "ref", "timings": {}}
+    session.absorb(frame(1, (0.0, 0.0)))
+    session.absorb(frame(2, (3.0, 4.0)))
+    assert session.drift == 0.05                     # 5 px of a 100 px frame: real drift
+    session.drift, session.origin = 0.0, None        # re-centred, and swung over the pole
+    session.absorb(frame(3, (148.0, 99.0)))          # turned half round: far "from the reference"
+    session.absorb(frame(4, (148.5, 99.0)))
+    assert session.drift == 0.005                    # but only half a pixel since the centring
