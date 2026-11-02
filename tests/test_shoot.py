@@ -105,3 +105,14 @@ def test_a_run_knows_when_the_disk_is_nearly_full(tmp_path, monkeypatch):
     assert shoot.disk_full(tmp_path / "not-made-yet")
     monkeypatch.setattr(shutil, "disk_usage", lambda p: real(p)._replace(free=50_000_000_000))
     assert not shoot.disk_full(tmp_path)
+
+
+def test_the_quality_pass_runs_in_the_background_and_frees_the_telescope(tmp_path):
+    """2 November 2026: processing goes on in the background while the scope
+    does the next job; the pass held it after every run."""
+    started, said = [], []
+    shoot.restack_later(tmp_path, start=lambda cmd, **kw: started.append((cmd, kw)), say=said.append)
+    cmd, kw = started[0]
+    assert cmd[1].endswith("restack.py") and cmd[2] == str(tmp_path)
+    assert kw["stdin"] is shoot.subprocess.DEVNULL and (tmp_path / "restack.log").exists()
+    assert "telescope is free" in said[0]

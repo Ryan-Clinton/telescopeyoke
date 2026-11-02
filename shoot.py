@@ -549,6 +549,26 @@ def short_changed(taken, exposure):
     return typical if typical < 0.97 * exposure else None
 
 
+def restack_later(folder, start=subprocess.Popen, say=lambda line: print(line, flush=True)):
+    """The quality pass (restack.py, which then searches the session) in the
+    background at low priority, so the run ends as soon as its frames are in
+    and the telescope goes on to the next step. 2 November 2026: the
+    person had said many times that processing goes on in the background
+    while the scope does the next job; the pass and the search still held
+    it after every run. Its lines go to the session's restack.log."""
+    folder = Path(folder)
+    lowly = {"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS} if os.name == "nt" else \
+        {"preexec_fn": lambda: os.nice(19), "start_new_session": True}
+    try:
+        with open(folder / "restack.log", "w", encoding="utf-8") as log:
+            start([sys.executable, str(ROOT / "restack.py"), str(folder)], cwd=ROOT, stdout=log,
+                  stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, **lowly)
+        say(f"The quality pass and the search go on in the background ({folder / 'restack.log'}); "
+            "the telescope is free.")
+    except OSError as problem:
+        say(f"  (the quality pass would not start in the background: {problem}; restack.py {folder} later)")
+
+
 LIVE_MINUTES = 120  # how long the live view carries on after cloud has stopped a run
 
 
@@ -963,10 +983,15 @@ def image(args, session, exposure, moving, holding, tracker):
     if told["cloud"] and not args.no_live and not config.DEMO:
         watch_on()
     if session.save and not args.no_restack:
-        print("\nQuality pass over the raw frames:")
-        restack.run(session.folder, profile=args.profile)
-        import patrol
-        patrol.search_later(session.folder)
+        if os.environ.get("TY_PATROL") or args.profile:
+            # A patrol holding the telescope for its search (--wait) needs the
+            # picture before it searches; a profile wants the timings here.
+            print("\nQuality pass over the raw frames:")
+            restack.run(session.folder, profile=args.profile)
+            import patrol
+            patrol.search_later(session.folder)
+        else:
+            restack_later(session.folder)
     print(f"Session folder: {session.folder}")
     final = session.folder / "final.jpg"
     return {"target": session.name, "folder": str(session.folder), "exposure_s": exposure,
