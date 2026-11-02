@@ -413,6 +413,17 @@ def at_exposure(reference, metered, exposure):
     return dict(reference, level=reference["level"] * exposure / metered)
 
 
+GLARE_MOST = 0.25   # share of a survey's looks too bright to read above which nothing is kept
+
+
+def glare_share(log):
+    """The share of a survey's looks left out as too bright to read. A survey
+    that could not see most of the sky has no skyline to keep: on 2 November
+    2026 one with every frame burnt out kept a skyline of nothing but sky."""
+    made = [entry for entry in log if entry.get("open") is not None or entry.get("glare")]
+    return sum(1 for entry in made if entry.get("glare")) / len(made) if made else 0.0
+
+
 def daylight_exposure(cam, exposure=0.002):
     """An exposure that puts the sky near a third of full brightness, and that
     brightness. Called with the telescope looking at sky high up."""
@@ -1001,6 +1012,11 @@ def run(args):
             sweep(look, step)
         results = look.log
     if args.trace:
+        blind = glare_share(results)
+        if blind > GLARE_MOST:
+            raise interface.Refusal(
+                "NO_SKY", f"{blind:.0%} of the looks were too bright to read (the Sun's glare): nothing has "
+                "been kept. Survey with the Sun higher and behind the telescope, or under an even overcast.")
         skyline = skyline_from(found, low, known)
         source = "telescope" if not known or kept["source"] == "telescope" else "panorama+telescope"
         saved = keep(skyline, source, looks=results, warnings=warnings, trace=found,
