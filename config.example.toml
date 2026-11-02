@@ -119,3 +119,8 @@ manage_server = false
 # [telegram]
 # token = "123456:ABC..."
 # chat = "123456789"
+
+[storage]
+# A folder on a bigger disk where finished Moon videos are moved, leaving a
+# link behind, when the data disk runs low (./storage.py). Empty: never moved.
+archive = ""

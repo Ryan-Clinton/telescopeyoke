@@ -367,6 +367,7 @@ def test_the_schedule_shows_a_warning_under_a_step_still_to_come(monkeypatch):
                        "started": 0.0, "finished": 600.0},
                       {"label": "TOI-2046 b", "minutes": 60, "status": "queued", "command": ["./shoot.py", "TOI-2046"]}]}
     monkeypatch.setattr(schedule, "load", lambda: plan)
+    monkeypatch.setattr(schedule.storage, "words", lambda: None)     # whatever this computer's disk holds
     said = []
     schedule.show(say=said.append, check=lambda step: {"target": "TOI-2046", "skyline": True, "points": [],
                                                        "behind": [{"at": step["start"], "az": 336.0,

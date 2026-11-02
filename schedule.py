@@ -50,6 +50,7 @@ import activity
 import config
 import interface
 import records
+import storage
 
 FILE = config.DATA / "cache" / "schedule.json"
 RUNNER = config.DATA / "cache" / "schedule.runner"     # the process id of `schedule.py run` while it runs
@@ -275,6 +276,14 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
                 command = command + ["--minutes", f"{left / 60:.1f}"]
                 left += 900
             command = ["timeout", "--signal=INT", str(left)] + command
+        try:
+            if storage.words():
+                # Room first: finished Moon videos go to the storage disk.
+                storage.tidy(say=say)
+                if storage.words():
+                    say(f"{datetime.now():%H:%M} {storage.words()}")
+        except Exception as problem:     # room is a help: the step runs all the same
+            say(f"{datetime.now():%H:%M} disk not checked: {problem.__class__.__name__}: {problem}")
         say(f"{datetime.now():%H:%M} starting {step['label']}")
         ran = True
         mark_id(step["id"], status="running", started=time.time())
@@ -689,7 +698,15 @@ def show(say=print, check=None):
     """The schedule, with a line under each step still to come whose target
     is in the way of something, or unchecked for want of a skyline."""
     cfg = None
-    for s in view()["steps"]:
+    steps = view()["steps"]
+    if any(s.get("status") == "queued" for s in steps):
+        try:
+            low = storage.words()
+        except OSError:
+            low = None
+        if low:
+            say(f"! {low}; ./storage.py --tidy moves finished Moon videos to the storage disk")
+    for s in steps:
         when = lambda t: datetime.fromtimestamp(t).strftime("%H:%M") if t else "--:--"
         done = "" if s["progress"] is None else f" {round(100 * s['progress'])}%"
         say(f"{when(s['start'])}-{when(s['end'])}  {s['status']:8}{done:>5}  {s['label']}")

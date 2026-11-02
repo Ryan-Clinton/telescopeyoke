@@ -158,3 +158,5 @@ not ready, `next`: the one thing the person has to do.
 - Human-readable output may change freely; the JSON only changes with `schema_version`.
 
 Tonight's plan is `./schedule.py` (on the console, run in order by `./schedule.py run`). It changes while it runs: `./schedule.py next` ends the running step gracefully, `skip N`, `move N POS` and `add ... --at POS` reshape what is queued, with no restart. A step whose target is behind something at its start, middle or end, or is checked with no skyline measured, has a "!" line under it, and `./schedule.py fill` offers the discovery programme that fills a lost step, as one command. Why: [`docs/flexible-plans.md`](../flexible-plans.md).
+
+Room on the disk is `./storage.py` (free space here and on the storage disk set as `[storage] archive`); `--tidy` moves Moon videos whose pictures are made there, leaving links. `./ty moon` and each schedule step do it by themselves when the laptop has under 20 GB free, and `./schedule.py` warns when it is that low.
