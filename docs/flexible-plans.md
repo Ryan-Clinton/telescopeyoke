@@ -70,3 +70,10 @@ every hitch came from changing the plan.
    `skip` makes the same offer, and so does the call that fetches the
    person when a step has failed its tries. It offers; the person, or I,
    take it with that one command.
+7. **A runner takes up new code between steps.** `./schedule.py run` is one
+   long process; when `schedule.py` changes on disk it starts again with the
+   new code before its next step, the same process, plan and log. On 2
+   November 2026 the runner started at 02:03 ran M81 and M82 and SN 2026sqf
+   with the code from before steps were told their time: both were cut off
+   at their end time by the backstop, unstacked, and stacked in the morning
+   with `restack.py`.

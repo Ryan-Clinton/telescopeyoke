@@ -189,20 +189,46 @@ RETRIES = 2       # a failed step is started again this many times before the pe
 RETRY_S = 30      # seconds between
 
 
-def run(say=print, sleep=time.sleep, call=None, start=subprocess.run):
+SOURCE = Path(__file__).resolve()
+
+
+def restart():
+    """The runner started again in its own process, with the code on disk now."""
+    os.execv(sys.executable, [sys.executable, str(SOURCE), "run"])
+
+
+def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=None):
     """The queued steps in order. A step given by process id is waited for;
     the rest are started here, each when the one before has ended and not
     before its time. The plan is read again before every step and each step
     found by its id, so steps can be added, moved or dropped while it runs
     (20 October 2026: a step added mid-night needed the runner restarting,
-    since it worked from the plan it had read at the start, by position)."""
+    since it worked from the plan it had read at the start, by position).
+    With `reload` (restart() from the command line), a runner whose own
+    code has changed on disk starts again with it between steps: on 2
+    November 2026 a runner started at 02:03 ran M81 and SN 2026sqf with the
+    code from before steps were told their time, and both were cut off
+    unstacked."""
     try:
         RUNNER.parent.mkdir(parents=True, exist_ok=True)
         RUNNER.write_text(str(os.getpid()), encoding="utf-8")
     except OSError:
         pass
     ran = False
+    try:
+        loaded = SOURCE.stat().st_mtime
+    except OSError:
+        loaded = None
     while True:
+        if reload and loaded is not None:
+            try:
+                now_ = SOURCE.stat().st_mtime
+            except OSError:
+                now_ = loaded
+            if now_ != loaded:
+                say(f"{datetime.now():%H:%M} schedule.py has changed: starting again with the new code")
+                reload()
+                return True
         plan = load()
         steps = plan["steps"]
         for step in steps:
@@ -740,7 +766,7 @@ def main(argv=None):
     elif args.action == "wait":
         add(args.label, args.minutes, None, pid=args.pid)
     elif args.action == "run":
-        sys.exit(0 if run() else 1)
+        sys.exit(0 if run(reload=restart) else 1)
     elif args.action == "clear":
         save({"steps": [], "made": time.time()})
     elif args.action == "end":

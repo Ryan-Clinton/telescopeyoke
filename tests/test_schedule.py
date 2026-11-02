@@ -72,7 +72,7 @@ def test_a_failed_step_is_tried_again_before_anyone_is_called():
     codes, called = iter([1, 0]), []
     ok = schedule.run(say=lambda s: None, call=called.append, sleep=lambda s: None,
                       start=lambda cmd: types.SimpleNamespace(returncode=next(codes)))
-    assert not called and schedule.load()["steps"][0]["status"] == "done"
+    assert ok and not called and schedule.load()["steps"][0]["status"] == "done"
 
 
 def test_a_step_already_running_elsewhere_is_waited_for():
@@ -434,3 +434,25 @@ def test_a_failed_step_fetches_the_person_with_the_offer(monkeypatch):
     assert schedule.run(say=lambda *_: None, sleep=lambda s: None, call=called.append,
                         start=lambda c: types.SimpleNamespace(returncode=1)) is False
     assert called and "./schedule.py add M33 75 --at 2" in called[0]
+
+
+def test_a_runner_whose_code_has_changed_starts_again_between_steps(monkeypatch, tmp_path):
+    source = tmp_path / "schedule.py"
+    source.write_text("old")
+    monkeypatch.setattr(schedule, "SOURCE", source)
+    monkeypatch.setattr(schedule, "FILE", tmp_path / "schedule.json")
+    monkeypatch.setattr(schedule, "RUNNER", tmp_path / "schedule.runner")
+    schedule.add("first", 1, ["true"])
+    schedule.add("second", 1, ["true"])
+    restarted, ran = [], []
+
+    def step(command):
+        ran.append(command)
+        os.utime(source, (source.stat().st_mtime + 10,) * 2)    # the code is changed during the first step
+        return types.SimpleNamespace(returncode=0)
+    assert schedule.run(say=lambda s: None, sleep=lambda s: None, start=step, reload=lambda: restarted.append(1))
+    assert ran == [["true"]] and restarted == [1]
+    assert [s["status"] for s in schedule.load()["steps"]] == ["done", "queued"]
+    # Without reload (as in every other test), the runner never restarts.
+    monkeypatch.setattr(schedule, "SOURCE", tmp_path / "gone.py")
+    assert schedule.run(say=lambda s: None, sleep=lambda s: None, start=step) and len(ran) == 2
