@@ -157,4 +157,4 @@ not ready, `next`: the one thing the person has to do.
 - Exit code 0 means `ok: true`.
 - Human-readable output may change freely; the JSON only changes with `schema_version`.
 
-Tonight's plan is `./schedule.py` (on the console, run in order by `./schedule.py run`). It changes while it runs: `./schedule.py next` ends the running step gracefully, `skip N`, `move N POS` and `add ... --at POS` reshape what is queued, with no restart. Why and what is still to build: [`docs/flexible-plans.md`](../flexible-plans.md).
+Tonight's plan is `./schedule.py` (on the console, run in order by `./schedule.py run`). It changes while it runs: `./schedule.py next` ends the running step gracefully, `skip N`, `move N POS` and `add ... --at POS` reshape what is queued, with no restart. A step whose target is behind something at its start, middle or end, or is checked with no skyline measured, has a "!" line under it. Why and what is still to build: [`docs/flexible-plans.md`](../flexible-plans.md).

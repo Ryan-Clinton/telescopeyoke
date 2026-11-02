@@ -50,12 +50,20 @@ every hitch came from changing the plan.
    and the schedule moves on; `--wait` holds the telescope for an immediate
    second look as before.
 
+5. **The path checked before a target is planned.** Each step still to come
+   that points at something (`shoot.py NAME`, `patrol.py PROGRAMME`, a
+   `goto NAME`) has its target's bearing and height at the step's start,
+   middle and end checked against the floor, the spot's blocked list and its
+   measured skyline. `./schedule.py` prints a line under a step whose target
+   is behind something, or that is checked without a skyline, and `add`
+   says the same as the step goes in. From ralphie-side the house corner
+   that took TOI-2046 b (bearings 333-340° to 70°) is in the spot's blocked
+   list. Its daylight skyline of 2 November was set aside (every look burnt
+   out in the low Sun, `docs/validation.md`), so steps from there are
+   checked against the blocked list only until it is measured again.
+
 ## Still to build
 
-5. **The path checked before a target is planned.** Each target's track
-   through its step (bearing and height at its start, middle and end)
-   checked against the spot's measured skyline and anything else known to
-   be in the way, with a warning when the spot has none measured.
 6. **A lost step filled.** When a step fails or is skipped, the planner
    offers the best target for the time left from tonight's discovery list,
    already checked against the skyline, as one command to take it.

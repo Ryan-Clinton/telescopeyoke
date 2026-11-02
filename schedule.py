@@ -125,6 +125,7 @@ def add(label, minutes, command, not_before_=None, pid=None, until=None):
                           "pid": pid, "status": "running" if pid else "queued",
                           "started": time.time() if pid else None, "finished": None})
     save(plan)
+    return step_id
 
 
 def find(ref, plan):
@@ -492,15 +493,110 @@ def last_field():
     return max(sessions, key=lambda d: d.stat().st_mtime).parent.name if sessions else None
 
 
+def step_target(command):
+    """The object a step points the telescope at, by name, from its command:
+    shoot.py NAME, patrol.py PROGRAMME (its programme's target) or a goto
+    NAME. None when it names none ({last}, a park, a survey)."""
+    words = list(command or [])
+    for i, word in enumerate(words):
+        script = Path(word).name
+        after = words[i + 1] if i + 1 < len(words) else None
+        if script in ("shoot.py", "patrol.py") and after and not after.startswith(("-", "{")):
+            if script == "patrol.py":
+                import patrol
+                return patrol.programme(after).get("target")
+            return after
+        if word == "goto" and after and not after.startswith("-"):
+            return after
+    return None
+
+
+def path(step, settings, find=None, where=None):
+    """Where a step's target is at its start, middle and end, against what is
+    in the way: the floor, the blocked list and the spot's measured skyline.
+    `step` is one of view()'s steps. Returns None for a step with no target,
+    else {"target", "points": [{"at", "alt", "az", "limit"}], "behind": the
+    points under their limit, "skyline": whether one is measured here}.
+    1 November 2026: TOI-2046 b was planned from a spot with no skyline, and
+    the corner of the house took the whole transit."""
+    name = step_target(step.get("command"))
+    if not name or step.get("start") is None or step.get("end") is None:
+        return None
+    import horizon
+    find = find or (lambda n: __import__("mount").find_target(n))
+    try:
+        target = find(name)
+    except interface.Refusal:
+        return None
+    where = where or altaz(settings["site"])
+    view_ = settings.get("horizon", {})
+    floor = float(view_.get("min_altitude", 0))
+    points = []
+    for at in (step["start"], (step["start"] + step["end"]) / 2, step["end"]):
+        alt, az = where(target["ra"], target["dec"], at)
+        limit = max(floor, horizon.in_the_way(view_, az))
+        points.append({"at": at, "alt": round(alt, 1), "az": round(az, 1), "limit": round(limit, 1)})
+    return {"target": name, "points": points, "behind": [p for p in points if p["alt"] < p["limit"]],
+            "skyline": bool(view_.get("skyline"))}
+
+
+def altaz(site):
+    """(altitude, azimuth) in degrees of a fixed RA and Dec at a unix time."""
+    def at(ra, dec, unix):
+        import mount
+        from astropy import units as u
+        from astropy.coordinates import AltAz, SkyCoord
+        from astropy.time import Time
+        when = Time(unix, format="unix")
+        seen = SkyCoord(ra=ra * u.deg, dec=dec * u.deg).transform_to(
+            AltAz(obstime=when, location=mount.location(site)))
+        return float(seen.alt.deg), float(seen.az.deg)
+    return at
+
+
+def path_words(checked):
+    """One line on a step's path, or None when nothing is in its way and the
+    spot's skyline is measured."""
+    if not checked:
+        return None
+    when = lambda t: datetime.fromtimestamp(t).strftime("%H:%M")
+    if checked["behind"]:
+        p = checked["behind"][0]
+        return (f"{checked['target']} is behind something at {when(p['at'])}: bearing {p['az']:.0f}°, "
+                f"{p['alt']:.0f}° up, where the view starts at {p['limit']:.0f}°"
+                + ("" if checked["skyline"] else " (no skyline measured at this spot)"))
+    if not checked["skyline"]:
+        low = min(checked["points"], key=lambda p: p["alt"] - p["limit"])
+        return (f"no skyline measured at this spot: {checked['target']} is checked against the blocked "
+                f"list only (lowest {low['alt']:.0f}° up at bearing {low['az']:.0f}°)")
+    return None
+
+
+def settings():
+    return config.load() if config.FILE.exists() and not config.DEMO else config.example()
+
+
 def fetch(words):
     subprocess.run([sys.executable, str(config.ROOT / "alert.py"), "call", words])
 
 
-def show(say=print):
+def show(say=print, check=None):
+    """The schedule, with a line under each step still to come whose target
+    is in the way of something, or unchecked for want of a skyline."""
+    cfg = None
     for s in view()["steps"]:
         when = lambda t: datetime.fromtimestamp(t).strftime("%H:%M") if t else "--:--"
         done = "" if s["progress"] is None else f" {round(100 * s['progress'])}%"
         say(f"{when(s['start'])}-{when(s['end'])}  {s['status']:8}{done:>5}  {s['label']}")
+        if s.get("status") in ("queued", "running") and s.get("command"):
+            try:
+                if check is None:
+                    cfg = cfg or settings()
+                words = path_words((check or (lambda step: path(step, cfg)))(s))
+            except Exception as problem:    # the check is a help: the schedule shows all the same
+                words = f"path not checked: {problem.__class__.__name__}: {problem}"
+            if words:
+                say(f"             ! {words}")
 
 
 def main(argv=None):
@@ -542,9 +638,16 @@ def main(argv=None):
             args.at = int(before[before.index("--at") + 1])
         if not command:
             ap.error("add needs the command after --")
-        add(args.label, args.minutes, command, args.not_before, until=args.until)
+        added = add(args.label, args.minutes, command, args.not_before, until=args.until)
         if args.at:
             move(len(load()["steps"]), args.at)
+        step = next((s for s in view()["steps"] if s.get("id") == added), None)
+        try:
+            words = path_words(path(step, settings())) if step else None
+        except Exception as problem:     # the check is a help: the step is added all the same
+            words = f"path not checked: {problem.__class__.__name__}: {problem}"
+        if words:
+            print(f"! {words}")
     elif args.action == "skip":
         print(f"left out: {skip(args.step)}")
     elif args.action == "move":

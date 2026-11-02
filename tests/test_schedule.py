@@ -306,3 +306,66 @@ def test_next_ends_the_running_step_gracefully():
     told = []
     schedule.next_step(tell=lambda order: told.append(order) or {"note": "ok"})
     assert told == ["stop"]
+
+
+# --- a target's path against what is in the way --------------------------------
+
+def test_a_step_names_its_target_from_its_command():
+    assert schedule.step_target(["./shoot.py", "M33", "--minutes", "30"]) == "M33"
+    assert schedule.step_target(["./patrol.py", "m33-novae", "--release"]) == "M33"     # the programme's target
+    assert schedule.step_target(["./ty", "mount", "goto", "Vega", "--solve"]) == "Vega"
+    assert schedule.step_target(["./shoot.py", "{last}", "--frames", "0"]) is None
+    assert schedule.step_target(["./horizon.py", "--trace", "--daylight"]) is None
+    assert schedule.step_target(None) is None
+
+
+def path_of(alt_az, horizon):
+    """A step from 0 to 3600 s, its target where `alt_az` says at each time."""
+    step = {"command": ["./shoot.py", "TOI-2046"], "start": 0.0, "end": 3600.0}
+    return schedule.path(step, {"site": {}, "horizon": horizon},
+                         find=lambda name: {"ra": 0.0, "dec": 0.0},
+                         where=lambda ra, dec, at: alt_az[at])
+
+
+def test_a_target_behind_the_house_is_said_before_its_step():
+    # 1 November 2026: the house corner, bearings 333-340 up to 68 degrees,
+    # took the whole of TOI-2046 b's transit.
+    house = {"min_altitude": 20, "blocked": [{"from": 333, "to": 340, "altitude": 68}],
+             "skyline": [{"az": 0, "alt": 30}, {"az": 180, "alt": 30}], "margin": 2}
+    checked = path_of({0.0: (60.0, 336.0), 1800.0: (58.0, 338.0), 3600.0: (55.0, 342.0)}, house)
+    assert [p["at"] for p in checked["behind"]] == [0.0, 1800.0]
+    words = schedule.path_words(checked)
+    assert words.startswith("TOI-2046 is behind something at") and "bearing 336°, 60° up" in words
+    assert "where the view starts at 68°" in words and "no skyline" not in words
+
+
+def test_a_clear_path_says_nothing_and_an_unmeasured_spot_says_so():
+    measured = {"min_altitude": 20, "skyline": [{"az": 0, "alt": 30}, {"az": 180, "alt": 30}], "margin": 2}
+    high = {0.0: (60.0, 90.0), 1800.0: (62.0, 100.0), 3600.0: (61.0, 110.0)}
+    assert schedule.path_words(path_of(high, measured)) is None
+    words = schedule.path_words(path_of(high, {"min_altitude": 20}))
+    assert words.startswith("no skyline measured at this spot") and "lowest 60° up" in words
+    # Under the floor, with no skyline: behind, and said to be unmeasured.
+    low = {0.0: (15.0, 200.0), 1800.0: (12.0, 210.0), 3600.0: (9.0, 220.0)}
+    assert schedule.path_words(path_of(low, {"min_altitude": 20})).endswith("(no skyline measured at this spot)")
+
+
+def test_a_step_with_no_target_or_an_unknown_one_is_not_checked():
+    assert schedule.path({"command": ["./schedule.py", "end"], "start": 0.0, "end": 1.0}, {}) is None
+
+    def unknown(name):
+        raise schedule.interface.Refusal("TARGET_UNKNOWN", "no")
+    step = {"command": ["./shoot.py", "Nowhere"], "start": 0.0, "end": 1.0}
+    assert schedule.path(step, {"site": {}}, find=unknown) is None
+
+
+def test_the_schedule_shows_a_warning_under_a_step_still_to_come(monkeypatch):
+    plan = {"steps": [{"label": "done one", "minutes": 10, "status": "done", "command": ["./shoot.py", "M33"],
+                       "started": 0.0, "finished": 600.0},
+                      {"label": "TOI-2046 b", "minutes": 60, "status": "queued", "command": ["./shoot.py", "TOI-2046"]}]}
+    monkeypatch.setattr(schedule, "load", lambda: plan)
+    said = []
+    schedule.show(say=said.append, check=lambda step: {"target": "TOI-2046", "skyline": True, "points": [],
+                                                       "behind": [{"at": step["start"], "az": 336.0,
+                                                                   "alt": 60.0, "limit": 68.0}]})
+    assert len(said) == 3 and said[2].strip().startswith("! TOI-2046 is behind something")
