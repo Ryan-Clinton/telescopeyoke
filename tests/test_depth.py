@@ -357,3 +357,28 @@ def test_the_destripe_check_answers_in_its_schema(tmp_path):
     answer = interface.run("depth-destripe-check", lambda: depth.destripe_check(session, 2, 80, say=lambda s: None))
     schema = json.loads((config.ROOT / "schemas" / "depth-destripe-check.schema.json").read_text(encoding="utf-8"))
     jsonschema.validate(json.loads(json.dumps(answer["data"])), schema)
+
+
+def test_a_kept_field_that_covers_the_circle_is_used_without_vizier(tmp_path, monkeypatch):
+    """1 November 2026: VizieR was down and the M31 search failed for stars
+    already kept from earlier nights, pointed a little differently."""
+    import numpy as np
+    import requests
+
+    import depth
+    import interface
+    monkeypatch.setattr(depth.config, "DATA", tmp_path)
+    store = tmp_path / "cache" / "gaia"
+    store.mkdir(parents=True)
+    rows = "\n".join(f"{10.6 + i * 0.01:.5f}\t{41.2 + i * 0.01:+.5f}\t{15 + i * 0.1:.2f}\t0.8" for i in range(40))
+    (store / "10.684_+41.269_0.62_19.5_colour.tsv").write_text(
+        "#c\nRA_ICRS\tDE_ICRS\tGmag\tBP-RP\ndeg\tdeg\tmag\tmag\n-----\t-----\t-----\t-----\n" + rows)
+
+    def down(*a, **k):
+        raise requests.ConnectTimeout("VizieR is down")
+    stars = depth.gaia(10.70, 41.28, 0.30, get=down)
+    assert len(stars) and np.all(np.hypot((stars[:, 0] - 10.70) * np.cos(np.radians(41.28)),
+                                          stars[:, 1] - 41.28) <= 0.30)
+    with pytest.raises(interface.Refusal, match="could not be fetched") as refused:
+        depth.gaia(30.0, 10.0, 0.3, get=down)                     # nothing kept covers it
+    assert "cfa.harvard.edu" in refused.value.message

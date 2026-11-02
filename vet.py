@@ -99,14 +99,49 @@ def read_skybot(text):
     return out
 
 
-def variables(ra, dec, radius_deg):
-    """Known variable stars in a circle, from VSX: (name, ra, dec, type)."""
-    reply = requests.get(VIZIER_URL, timeout=120, params={
-        "-source": "B/vsx/vsx", "-c": f"{ra:.5f} {dec:+.5f}", "-c.rd": f"{radius_deg:.3f}",
-        "-out": "Name,RAJ2000,DEJ2000,Type", "-out.max": "50000"})
-    reply.raise_for_status()
+VIZIER_MIRRORS = (VIZIER_URL, "https://vizier.cfa.harvard.edu/viz-bin/asu-tsv")
+VSX_KEPT_DAYS = 30      # VSX for a field is fetched again after this long
+
+
+def variables(ra, dec, radius_deg, get=None):
+    """Known variable stars in a circle, from VSX: (name, ra, dec, type).
+    Kept on disk for VSX_KEPT_DAYS, with any kept circle that holds this one
+    used instead; VizieR's mirror tried when Strasbourg does not answer
+    (1 November 2026: VizieR down, the night's search stopped)."""
+    import time
+
+    import config
+    get = get or requests.get
+    store = config.DATA / "cache" / "vsx"
+    text = None
+    for kept in sorted(store.glob("*.tsv")) if store.exists() else []:
+        try:
+            cra, cdec, cradius = (float(x) for x in kept.stem.split("_")[:3])
+        except ValueError:
+            continue
+        apart = math.hypot((ra - cra) * math.cos(math.radians(dec)), dec - cdec)
+        if apart + radius_deg <= cradius and time.time() - kept.stat().st_mtime < VSX_KEPT_DAYS * 86400:
+            text = kept.read_text(encoding="utf-8")
+            break
+    if text is None:
+        failures = []
+        for url in VIZIER_MIRRORS:
+            try:
+                reply = get(url, timeout=60, params={
+                    "-source": "B/vsx/vsx", "-c": f"{ra:.5f} {dec:+.5f}", "-c.rd": f"{radius_deg:.3f}",
+                    "-out": "Name,RAJ2000,DEJ2000,Type", "-out.max": "50000"})
+                reply.raise_for_status()
+                text = reply.text
+                break
+            except requests.RequestException as problem:
+                failures.append(f"{url.split('/')[2]}: {type(problem).__name__}")
+        if text is None:
+            raise interface.Refusal("REMOTE_FAILED", "The known variable stars (VSX) could not be fetched ("
+                                    + "; ".join(failures) + "). Search again when VizieR answers.")
+        store.mkdir(parents=True, exist_ok=True)
+        (store / f"{ra:.3f}_{dec:+.3f}_{radius_deg:.2f}.tsv").write_text(text, encoding="utf-8")
     out = []
-    lines = [l for l in reply.text.splitlines() if l.strip() and not l.startswith("#")]
+    lines = [l for l in text.splitlines() if l.strip() and not l.startswith("#")]
     for line in lines[3:]:
         cells = line.split("\t")
         try:

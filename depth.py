@@ -132,16 +132,59 @@ def field(wcs, shape):
     return float(centre[0]), float(centre[1]), math.degrees(apart) * 1.05
 
 
-def gaia(ra, dec, radius, faintest=FAINTEST):
+GAIA_MIRRORS = (GAIA_URL, "https://vizier.cfa.harvard.edu/viz-bin/asu-tsv")
+
+
+def covering(store, ra, dec, radius, faintest):
+    """A circle already fetched that holds this one whole: (path, its centre
+    and radius), or None. A field imaged night after night is pointed a
+    little differently each time; on 1 November 2026 the cache, keyed to a
+    thousandth of a degree, missed and the search needed VizieR while it was
+    down, for stars it already had."""
+    best = None
+    for kept in store.glob(f"*_{faintest:g}_colour.tsv") if store.exists() else []:
+        try:
+            cra, cdec, cradius = (float(x) for x in kept.name.split("_")[:3])
+        except ValueError:
+            continue
+        cosd = math.cos(math.radians((dec + cdec) / 2))
+        apart = math.hypot((ra - cra) * cosd, dec - cdec)
+        if apart + radius <= cradius and (best is None or cradius < best[3]):
+            best = (kept, cra, cdec, cradius)
+    return best
+
+
+def gaia(ra, dec, radius, faintest=FAINTEST, get=None):
     """Gaia DR3 stars in a circle, as an array of (ra, dec, G, BP-RP), the
-    colour NaN where Gaia has none. Kept on disk: a field is fetched once."""
+    colour NaN where Gaia has none. Kept on disk: a field is fetched once, and
+    any kept circle that holds this one is used instead of fetching again.
+    VizieR's mirror is tried when Strasbourg does not answer; with neither,
+    a plain refusal, never a traceback."""
+    get = get or requests.get
     store = config.DATA / "cache" / "gaia"
     path = store / f"{ra:.3f}_{dec:+.3f}_{radius:.2f}_{faintest:g}_colour.tsv"
     if not path.exists():
-        reply = requests.get(GAIA_URL, timeout=120, params={
-            "-source": "I/355/gaiadr3", "-c": f"{ra:.5f} {dec:+.5f}", "-c.rd": f"{radius:.3f}",
-            "-out": "RA_ICRS,DE_ICRS,Gmag,BP-RP", "-out.max": "200000", "Gmag": f"<{faintest:g}"})
-        reply.raise_for_status()
+        held = covering(store, ra, dec, radius, faintest)
+        if held:
+            rows = read_tsv(held[0].read_text(encoding="utf-8"))
+            if len(rows):
+                cosd = math.cos(math.radians(dec))
+                inside = np.hypot((rows[:, 0] - ra) * cosd, rows[:, 1] - dec) <= radius
+                return rows[inside]
+        failures = []
+        for url in GAIA_MIRRORS:
+            try:
+                reply = get(url, timeout=60, params={
+                    "-source": "I/355/gaiadr3", "-c": f"{ra:.5f} {dec:+.5f}", "-c.rd": f"{radius:.3f}",
+                    "-out": "RA_ICRS,DE_ICRS,Gmag,BP-RP", "-out.max": "200000", "Gmag": f"<{faintest:g}"})
+                reply.raise_for_status()
+                break
+            except requests.RequestException as problem:
+                failures.append(f"{url.split('/')[2]}: {type(problem).__name__}")
+        else:
+            raise interface.Refusal("REMOTE_FAILED", "Gaia's stars could not be fetched for this field ("
+                                    + "; ".join(failures) + "), and none kept cover it. Search again when "
+                                    "VizieR answers: ./patrol.py --analyse SESSION")
         store.mkdir(parents=True, exist_ok=True)
         path.write_text(reply.text, encoding="utf-8")
     return read_tsv(path.read_text(encoding="utf-8"))
