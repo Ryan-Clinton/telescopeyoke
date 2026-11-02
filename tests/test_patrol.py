@@ -514,3 +514,14 @@ def test_with_release_the_telescope_is_let_go_once_the_frames_are_in(tmp_path, m
     assert "--no-restack" in shoot
     assert answer["fields"][0]["searching"].endswith("patrol.log")
     assert started and "--analyse" in started[0]
+
+
+def test_readiness_says_when_there_is_no_dark_for_the_frames(tmp_path, monkeypatch):
+    """1 November 2026: M33's 16 s frames had only a bias, and the sensor's
+    edge glow showed on the stream."""
+    import stacking
+    monkeypatch.setattr(stacking, "master_path", lambda kind, *a: tmp_path / f"{kind}-none.fits")
+    monkeypatch.setattr(patrol, "sky_now", lambda p: [])
+    items = patrol.readiness({"target": "M33", "exposure": 16, "gain": 1500, "minutes": 30})
+    dark = next(i for i in items if i["what"] == "dark")
+    assert not dark["ok"] and not dark["stops"] and "--exposure 16 --gain 1500" in dark["detail"]

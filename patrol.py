@@ -91,6 +91,15 @@ def readiness(p):
                              f"{owner}'s ({ref}) where it overlaps; tonight's stack becomes the panel's own"
                              if ref else f"none kept: tonight's stack can become one "
                                          f"(./reference.py {p['target']} --make)")})
+    # A dark of the frames' own length takes the sensor's edge glow out of the
+    # picture: on 1 November 2026 M33's 16 s frames had only a bias, and the
+    # stream showed a purple glow round three edges. Said, never a stop.
+    import stacking
+    dark = stacking.master_path("dark", p["exposure"], p["gain"]).exists()
+    items.append({"what": "dark", "ok": dark, "stops": False, "kind": "inferred",
+                  "detail": "kept" if dark else f"none for {p['exposure']:g} s at gain {p['gain']}: "
+                                                f"./calibrate.py dark --exposure {p['exposure']:g} --gain {p['gain']} "
+                                                "(the cap on, about 5 minutes)"})
     when = focus.last_focused()
     if when is not None:
         hours = (time.time() - when) / 3600
