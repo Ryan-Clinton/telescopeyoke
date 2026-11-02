@@ -382,3 +382,10 @@ def test_a_kept_field_that_covers_the_circle_is_used_without_vizier(tmp_path, mo
     with pytest.raises(interface.Refusal, match="could not be fetched") as refused:
         depth.gaia(30.0, 10.0, 0.3, get=down)                     # nothing kept covers it
     assert "cfa.harvard.edu" in refused.value.message
+
+
+def test_a_sky_at_or_below_zero_is_not_a_measurement():
+    """1 November 2026: the stack's sky was -58 after a bias above the camera's
+    offset was taken off, and read as 46.13 mag per square arcsecond."""
+    import depth
+    assert depth.DARKEST_SKY < 46.13

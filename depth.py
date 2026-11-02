@@ -133,6 +133,7 @@ def field(wcs, shape):
 
 
 # The mirrors CDS listed during its cybersecurity incident of late October 2026, working ones first.
+DARKEST_SKY = 23.0   # mag per square arcsecond: fainter than any real night sky
 GAIA_MIRRORS = (GAIA_URL, "https://vizier.idia.ac.za/viz-bin/asu-tsv", "http://vizier.china-vo.org/viz-bin/asu-tsv",
                 "http://vizier.nao.ac.jp/viz-bin/asu-tsv", "https://vizier.cfa.harvard.edu/viz-bin/asu-tsv")
 
@@ -558,7 +559,9 @@ def measure(lum, wcs, catalogue, plant_stars=False, trials=6, seed=7, finder=Non
         "fwhm_px": round(fwhm, 2), "fwhm_arcsec": round(fwhm * scale, 2),
         "scale_arcsec_per_px": round(scale, 3), "aperture_px": round(radius, 2),
         "sky_level": round(sky, 2),
-        "sky_mag_per_arcsec2": round(zp - 2.5 * math.log10(max(sky, 1e-9) / scale ** 2), 2),
+        # None when the stack's sky is at or below zero: the bias taken off was
+        # above tonight's camera offset (1 November 2026: -58, read as 46 mag).
+        "sky_mag_per_arcsec2": round(zp - 2.5 * math.log10(sky / scale ** 2), 2) if sky > 0 else None,
         "stars_detected": int(len(stars)),
         "limit_5sigma": limits,
         "share_of_image": {name: round(float((kinds == n).mean()), 3) for n, (name, _) in enumerate(REGIONS)},
@@ -685,7 +688,9 @@ def measurements(folder=None):
         r = json.loads(path.read_text(encoding="utf-8"))
         width, sky = r.get("fwhm_arcsec"), r.get("sky_mag_per_arcsec2")
         whole = r.get("completeness", {}).get("all", {}).get("mag_50")
-        if width and sky is not None and whole is not None and r.get("exposure_s"):
+        # A sky no real sky gives is a calibration fault, not a measurement:
+        # 1 November 2026's 46.13 came from a negative stack.
+        if width and sky is not None and sky <= DARKEST_SKY and whole is not None and r.get("exposure_s"):
             rows.append({"stack": r.get("stack", str(path.parent)), "session": str(path.parent),
                          "seconds": float(r["exposure_s"]),
                          "fwhm_arcsec": width, "sky": sky, "mag_50": whole})
@@ -889,7 +894,8 @@ def report(r, say=print):
     say(f"zero point {r['zeropoint']:.2f} ± {r['zeropoint_error']:.2f} (G) from "
         f"{r['calibration_stars']} Gaia stars, scatter {r['calibration_scatter']:.2f}")
     say(f"stars {r['fwhm_arcsec']:.1f}\" across ({r['fwhm_px']:.1f} px); "
-        f"sky {r['sky_mag_per_arcsec2']:.1f} mag per square arcsecond")
+        + (f"sky {r['sky_mag_per_arcsec2']:.1f} mag per square arcsecond" if r.get("sky_mag_per_arcsec2") is not None
+           else "sky not measured: the stack's background is at or below zero (the bias taken off is too high)"))
     for label, limit in r["limit_5sigma"].items():
         say(f"5-sigma limit on {label}: {limit:.2f} (a formula's figure)")
     for label, c in r.get("completeness", {}).items():
