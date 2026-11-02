@@ -67,7 +67,7 @@ COMMANDS = {
     "focus.py": ("hardware", {}, DRY),
     "focuser.py": ("hardware", {}, {}),
     "forced.py": ("local_write", {}, {}),
-    "horizon.py": ("hardware", {"--show": "read_only", "--forget": "local_write"}, DRY),
+    "horizon.py": ("hardware", {"--show": "read_only", "--forget": "local_write", "--use-aside": "local_write"}, DRY),
     "landmark.py": ("hardware", {"list": "read_only"}, DRY),
     "liveview.py": ("hardware", {}, {}),
     "live.py": ("local_write", {}, {}),           # settings a run going reads; moves nothing itself

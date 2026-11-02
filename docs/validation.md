@@ -571,9 +571,17 @@ focuser not touched since the stars.
   sides. Two bearings, 97.5° and 172.5°, read open to 20° between tops near
   40°; the pictures are plain blurs (by day the garden is far out of focus),
   so a gap and a lit wall look alike. Such a lone opening is now kept in
-  doubt (15° added) with a warning to look that way. Not yet run on the real
-  mount since. A survey cut short now carries on the same day from what it
-  had measured.
+  doubt with a warning to look that way. A survey cut short now carries on
+  the same day from what it had measured. Then the person outside looked:
+  the house is due north (the first look, blocked, was right), north-north-east
+  and south-south-west are open but not low, and neither due east nor due
+  south is open low down. So both lone openings were lit walls read as sky:
+  such an opening is now put at the lower of its neighbours' tops, not just
+  doubted. The survey was then kept on that word (`./horizon.py --use-aside
+  ... --checked "..."`): ralphie-side's first skyline, the house to 75° from
+  north to 7.5° and 72-75° at 300-330°, 36-45° from east to south-south-west,
+  open from 30-36° in the west-south-west and west. Side-of-pole recording
+  not yet run on the real mount.
 - **The movement check's first real record** came from those looks, and it
   was nearly wrong. Going by "stars", it found 60 specks in each of two
   bright frames 3° apart, and 47% of them were in the same place: the

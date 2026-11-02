@@ -58,6 +58,7 @@ in step.
 |---|---|
 | `horizon.py --show` | the measured skyline as points (`az`, `alt`), the same with the margin on (`usable`), where it came from and when |
 | `horizon.py --forget` | throws the measured skyline away |
+| `horizon.py --use-aside FILE --checked "WHAT"` | keeps a survey that was set aside (`cache/horizon-SPOT.not-used-TIME.json`) once a person has checked by eye what it doubted; their words are kept with it (`checked_by_eye`); refused without `--checked` |
 | `horizon.py --trace --dry-run` | how many bearings, how many are within the limits now, minutes, and whether it would start from a known skyline |
 
 A `--trace` keeps what it has measured after every bearing

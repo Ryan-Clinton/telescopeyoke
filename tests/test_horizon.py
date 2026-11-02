@@ -566,16 +566,19 @@ def test_a_survey_cut_short_carries_on_from_where_it_stopped(tmp_path):
     assert horizon.resumable(True, path=path, now=time.time() + horizon.RESUME_S + 1) is None
 
 
-def test_a_lone_opening_between_high_tops_is_kept_in_doubt_and_said():
+def test_a_lone_opening_between_high_tops_is_taken_as_blocked_to_the_lower_and_said():
     """2 November 2026: 97.5° read open to 20° between tops near 40°."""
     gap = lambda az: 10 if 95 <= az <= 100 else 40 if 60 <= az <= 135 else garden(az)
     start = sorted(set(range(0, 360, 30)) | {90, 97.5, 105}, key=horizon.side)
     found, warnings = horizon.trace(watcher(gap, in_view=1.5), start, low=20)
+    # The person outside said neither due east nor due south was open low:
+    # taken as blocked to the lower of its neighbours' tops.
     lone = next(f for f in found if f["az"] == 97.5)
-    assert lone["state"] == "open" and lone.get("doubt")
-    assert any(w.startswith("Bearing 97.5°: open down to 20°") for w in warnings)
-    skyline = horizon.skyline_from(found, 20)
-    assert next(p for p in skyline if p["az"] == 97.5)["extra"] == horizon.CLEARANCE
+    assert lone["state"] == "edge" and lone["read_open"] == 20 and lone.get("doubt")
+    assert lone["clear"] == min(f["clear"] for f in found if f["az"] in (90, 105))
+    assert any(w.startswith("Bearing 97.5°: read open down to 20°") for w in warnings)
+    point = next(p for p in horizon.skyline_from(found, 20) if p["az"] == 97.5)
+    assert point["alt"] == lone["clear"] and "extra" not in point and "read open" in point["by"]
 
 
 def test_the_repeat_check_is_made_off_the_meridian_and_says_when_the_tube_changed_sides():
@@ -597,3 +600,28 @@ def test_the_repeat_check_is_made_off_the_meridian_and_says_when_the_tube_change
     _, warnings = horizon.trace(drifting, start, low=20)
     repeat = [w for w in warnings if w.startswith(horizon.NOT_SAME)]
     assert repeat and "other side of the pole" in repeat[0]
+
+
+def test_a_survey_set_aside_is_kept_only_on_a_persons_word(monkeypatch, tmp_path):
+    """2 November 2026: the repeat look at due north disagreed; the person
+    outside said the house is due north and due east is not open low."""
+    monkeypatch.setattr(horizon, "RESULTS", tmp_path / "horizon.json")
+    gap = lambda az: 10 if 95 <= az <= 100 else 40 if 60 <= az <= 135 else garden(az)
+    start = sorted(set(range(0, 360, 30)) | {90, 97.5, 105}, key=horizon.side)
+    found, warnings = horizon.trace(watcher(gap, in_view=1.5), start, low=20)
+    for f in found:                 # as an older survey kept it, before lone openings were put right
+        if "read_open" in f:
+            f.update(state="open", clear=f.pop("read_open"), shut=None)
+            f.pop("doubt")
+    aside = horizon.set_aside(horizon.skyline_from(found, 20), "Not repeatable: due north", trace=found,
+                              looks=[], warnings=[])
+    with pytest.raises(interface.Refusal, match="--checked"):
+        horizon.use_aside(aside, None, 20, 2)
+    assert not horizon.RESULTS.exists()
+    kept = horizon.use_aside(aside, "house due north; east not open low", 20, 2)
+    saved = json.loads(horizon.RESULTS.read_text(encoding="utf-8"))
+    assert saved["checked_by_eye"] == "house due north; east not open low"
+    assert saved["was_set_aside"] == aside.name and saved["set_aside_because"].startswith("Not repeatable")
+    east = next(p for p in saved["skyline"] if p["az"] == 97.5)
+    assert east["alt"] >= 30 and "read open" in east["by"]
+    assert kept["usable"] is not None

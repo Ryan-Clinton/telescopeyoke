@@ -9,6 +9,8 @@
     ./horizon.py --step 20       degrees of bearing between the first looks
     ./horizon.py --show          the skyline now in use, as the planner sees it
     ./horizon.py --forget        throw the measured skyline away
+    ./horizon.py --use-aside FILE --checked "what you saw"
+                                 keep a survey that was set aside, once its doubts are checked by eye
     ./horizon.py --dry-run       say where it would look, without moving
 
 The quick way to get a skyline is a phone panorama (./panorama.py): no
@@ -728,6 +730,29 @@ def top_of(look, az, guess, low, top=TOP, fine=FINE, or_else=None):
     return {"az": az, "state": "edge", "shut": shut, "clear": clear}
 
 
+def lone_openings(found):
+    """A bearing open right down to the lowest look between neighbours whose
+    tops are well up is taken as blocked to the lower of those tops, in
+    doubt, and said. 2 November 2026: 97.5° and 172.5° read open to 20°
+    between tops near 40°, the pictures plain blurs, and the person outside
+    said neither due east nor due south is open low down: by day a lit wall
+    far out of focus reads as sky. `found` maps bearing to top_of()'s answer
+    and is changed in place; returns the warnings."""
+    warnings = []
+    ring = sorted(az for az in found if found[az]["state"] in ("open", "edge"))
+    for i, az in enumerate(ring if len(ring) > 2 else ()):
+        f, before, after = found[az], found[ring[i - 1]], found[ring[(i + 1) % len(ring)]]
+        if f["state"] == "open" and all(n["state"] == "edge" and n["clear"] > f["clear"] + JUMP
+                                        for n in (before, after)):
+            lower = min(before["clear"], after["clear"])
+            warnings.append(f"Bearing {az:g}°: read open down to {f['clear']:g}° between tops at "
+                            f"{before['clear']:g}° ({before['az']:g}°) and {after['clear']:g}° "
+                            f"({after['az']:g}°): taken as blocked to {lower:g}°, a lit wall being "
+                            "likelier than a gap. Look that way yourself.")
+            f.update(state="edge", shut=lower, clear=lower, doubt=True, read_open=f["clear"])
+    return warnings
+
+
 def off_meridian(az, margin=30):
     """At least `margin` degrees of bearing from due north and due south."""
     return min(az % 180, 180 - az % 180) >= margin
@@ -841,19 +866,7 @@ def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, mo
                         + (f"still unread at {', '.join(f'{az:g}°' for az in still)}: kept as not measured."
                            if still else "all read the second time."))
 
-    # Check 2c: open right down to the lowest look between neighbours whose
-    # tops are well up. It can be a real gap between houses, or a lit wall
-    # read as sky (2 November 2026: 97.5° and 172.5° open to 20° between tops
-    # near 40°, the pictures plain blurs). Kept, but in doubt, and said.
-    ring = sorted(az for az in found if found[az]["state"] in ("open", "edge"))
-    for i, az in enumerate(ring if len(ring) > 2 else ()):
-        f, before, after = found[az], found[ring[i - 1]], found[ring[(i + 1) % len(ring)]]
-        if f["state"] == "open" and all(n["state"] == "edge" and n["clear"] > f["clear"] + JUMP
-                                        for n in (before, after)):
-            f["doubt"] = True
-            warnings.append(f"Bearing {az:g}°: open down to {f['clear']:g}° between tops at "
-                            f"{before['clear']:g}° ({before['az']:g}°) and {after['clear']:g}° "
-                            f"({after['az']:g}°). A gap, or a lit wall read as sky? Look that way yourself.")
+    warnings += lone_openings(found)
 
     # Check 3: sky well above each top. A bright wall can pass for sky, and
     # branches or wires can hang over a roof.
@@ -870,7 +883,7 @@ def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, mo
     # A bearing well off the meridian: on it the mount may come at the same
     # place from either side of the pole, and the two sides point degrees
     # apart (2 November 2026: due north read blocked at 72° and later sky).
-    measured = [az for az in bearings if found[az]["state"] in ("open", "edge")]
+    measured = [az for az in bearings if found[az]["state"] in ("open", "edge") and "read_open" not in found[az]]
     first = next((found[az] for az in measured if off_meridian(az)),
                  found[measured[0]] if measured else None)
     if first and first.get("in_view"):
@@ -924,7 +937,10 @@ def skyline_from(found, low, known=None):
         point = {"az": f["az"], "alt": top, "by": "telescope"}
         if f["state"] == "open":
             point.update(alt=f["clear"], open=True)
-        if f.get("doubt"):
+        if "read_open" in f:
+            # Already put at its neighbours' lower top: no further margin.
+            point["by"] = f"telescope: read open to {f['read_open']:g}°, put at its neighbours' lower top"
+        elif f.get("doubt"):
             point["extra"] = CLEARANCE
         points.append(point)
     if not known:
@@ -1029,12 +1045,17 @@ def main():
                     help="with --move-from: how far the things in the way are from SPOT, by bearing, "
                          "e.g. 270-330:4 330-60:12 60-200:15 200-270:20")
     ap.add_argument("--forget", action="store_true", help="throw the measured skyline away; nothing moves")
+    ap.add_argument("--use-aside", metavar="FILE",
+                    help="keep a survey that was set aside, once a person has checked what it doubted; nothing moves")
+    ap.add_argument("--checked", metavar="WHAT",
+                    help="with --use-aside: what the person saw, in their words (kept with the skyline)")
     ap.add_argument("--exposure", type=float, help="seconds (default 1; by day it is found from the sky)")
     ap.add_argument("--gain", type=int, help="default 2000, or 100 by day")
     ap.add_argument("--dry-run", action="store_true", help="say where it would look; no camera, no mount")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
     name = "horizon.show" if args.show else "horizon.forget" if args.forget else \
+        "horizon.use_aside" if args.use_aside else \
         "horizon.move" if args.move_from else \
         "horizon.dry_run" if args.dry_run else "horizon"
     return interface.main(name, lambda: run(args), args.json)
@@ -1056,6 +1077,37 @@ def show(low, margin, in_use=True):
         print("\nThe planner is not using it: use_survey is off under [horizon] in config.toml.")
     return {"skyline": kept["skyline"], "usable": usable(kept["skyline"], low, margin), "source": kept["source"],
             "saved": kept["saved"], "margin": margin, "in_use": in_use}
+
+
+def use_aside(path, checked, low, margin):
+    """Keep a survey that was set aside, now that a person has looked at
+    what it doubted. Its first answer at each bearing stands, and a lone
+    opening is put at its neighbours' lower top as a survey now would.
+    2 November 2026: the afternoon survey's repeat look at due north read
+    sky where its first had read blocked; the person outside said the house
+    is due north, and that due east and due south are not open low down."""
+    if not checked:
+        raise interface.Refusal("INVALID_REQUEST", "Say what was checked by eye, with --checked \"...\": a set-aside "
+                                "survey is only kept on a person's word about what it doubted.")
+    if not path.exists():
+        path = RESULTS.parent / path.name
+    try:
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        found = {f["az"]: f for f in saved["trace"]}
+    except (OSError, ValueError, KeyError, TypeError):
+        raise interface.Refusal("INVALID_REQUEST", f"{path} is not a survey set aside by ./horizon.py --trace.")
+    warnings = list(saved.get("warnings", [])) + lone_openings(found)
+    trace_now = [found[az] for az in sorted(found)]
+    skyline = skyline_from(trace_now, low)
+    kept = keep(skyline, "telescope", looks=saved.get("looks", []), warnings=warnings, trace=trace_now,
+                blocked=skyline_blocked(trace_now), checked_by_eye=checked, was_set_aside=path.name,
+                set_aside_because=saved.get("not_used_because"))
+    print("\n" + profile(trace_now, low))
+    for warning in warnings:
+        print(f"\nCHECK: {warning}")
+    print(f"\nKept from {path.name}, on the word: {checked}. The planner uses it from now on, raised by "
+          f"{margin:g}°.")
+    return dict({k: v for k, v in kept.items() if k not in ("saved", "looks")}, usable=usable(skyline, low, margin))
 
 
 def move_from(spot, offset, distances, low, margin):
@@ -1095,6 +1147,8 @@ def run(args):
         return show(low, margin, cfg["horizon"]["use_survey"])
     if args.move_from:
         return move_from(args.move_from, args.offset, args.distances, low, margin)
+    if args.use_aside:
+        return use_aside(Path(args.use_aside), args.checked, low, margin)
     if args.forget:
         had = bool(measured())
         if RESULTS.exists():
