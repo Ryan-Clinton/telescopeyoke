@@ -660,6 +660,8 @@ def main():
     ap.add_argument("name", help="what it is a picture of; a catalogue name allows re-centring")
     ap.add_argument("--frames", type=int, default=60,
                     help="how many to take; 0 carries on until cloud stops it")
+    ap.add_argument("--minutes", type=float,
+                    help="stop after this many minutes of imaging, however many frames were lost on the way")
     ap.add_argument("--exposure", default="2",
                     help="seconds per frame, or 'auto' to test what the tracking allows")
     ap.add_argument("--gain", type=int, default=1500)
@@ -775,7 +777,17 @@ def hold_the_rig(name, path=None):
 
 
 def run(args):
-    _rig = hold_the_rig(args.name)     # kept open, so locked, for the whole run
+    rig = hold_the_rig(args.name)     # kept open, so locked, for the whole run
+    try:
+        return held(args)
+    finally:
+        # Let go as the run ends, however it ends: on 1 November 2026 a run
+        # stopped by a jammed camera kept the lock while anything still held
+        # its error, and the next run in the same process was refused.
+        rig.close()
+
+
+def held(args):
     moving = not args.no_recentre
     if moving:
         moving = recentre(args.name)
@@ -824,6 +836,14 @@ def image(args, session, exposure, moving, holding, tracker):
         until a run of frames in a row has been lost, which means cloud (or
         dawn, or dew) has ended the session."""
         if told["stop"]:
+            return False
+        if getattr(args, "minutes", None) and time.monotonic() - started >= 60 * args.minutes:
+            # The time a run was given, however many frames were lost on the way:
+            # on 1 November 2026 lost frames stretched a 75-minute patrol towards
+            # three hours and the plan's next targets.
+            if not told.get("timed"):
+                told["timed"] = True
+                print(f"  {args.minutes:g} minutes taken: finishing", flush=True)
             return False
         if args.frames:
             return index < args.frames + retakes(session.log, args.frames)

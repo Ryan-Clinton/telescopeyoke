@@ -25,7 +25,7 @@ def test_a_programme_is_read_from_its_file_and_a_bare_name_still_works():
 def test_it_points_with_mount_py_and_images_with_shoot_py():
     goto, shoot = patrol.steps({"target": "M31", "exposure": 16, "gain": 1500, "minutes": 30})
     assert goto[1].endswith("mount.py") and goto[2:] == ["goto", "M31"]
-    assert shoot[1].endswith("shoot.py") and shoot[2:] == ["M31", "--frames", "112", "--exposure", "16",
+    assert shoot[1].endswith("shoot.py") and shoot[2:] == ["M31", "--frames", "112", "--minutes", "33", "--exposure", "16",
                                                             "--gain", "1500"]
     dry = patrol.steps({"target": "M31", "exposure": 16, "gain": 1500, "minutes": 30}, dry_run=True)
     assert all(cmd[-1] == "--dry-run" for cmd in dry)

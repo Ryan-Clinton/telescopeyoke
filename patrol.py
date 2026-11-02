@@ -177,6 +177,8 @@ def steps(p, dry_run=False):
     extra = ["--dry-run"] if dry_run else []
     return [[sys.executable, str(ROOT / "mount.py"), "goto", p["target"], *extra],
             [sys.executable, str(ROOT / "shoot.py"), p["target"], "--frames", str(frames),
+             # The programme's time, kept to whatever the camera loses (1 November 2026).
+             "--minutes", f"{p['minutes'] * 1.1:g}",
              "--exposure", str(p["exposure"]), "--gain", str(p["gain"]),
              *(["--dither", str(p["dither"])] if p.get("dither") else []), *extra]]
 

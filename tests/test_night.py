@@ -491,5 +491,20 @@ def test_a_camera_that_stays_jammed_stops_the_run_after_a_few_tries(night, monke
     monkeypatch.setattr(FakeCamera, "frame", frame)
     monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "5", "--exposure", "2",
                                       "--no-recentre", "--no-restack"])
-    with pytest.raises((indi.IndiError, SystemExit)):
+    stopped = False
+    try:
         shoot.main()
+    except (indi.IndiError, SystemExit):
+        stopped = True      # caught, not kept: a kept error keeps the run's rig lock open for the next test
+    assert stopped
+
+
+def test_a_run_given_minutes_finishes_on_time_whatever_the_frame_count(night, monkeypatch, capsys):
+    """1 November 2026: lost frames stretched a 75-minute patrol towards three
+    hours and the plan's next targets."""
+    Sky.pause = 0.3
+    monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "500", "--minutes", "0.03", "--exposure", "2",
+                                      "--no-recentre", "--no-restack"])
+    summary = shoot.main()
+    assert "minutes taken: finishing" in capsys.readouterr().out
+    assert 0 < summary["captured"] < 500
