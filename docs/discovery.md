@@ -272,6 +272,12 @@ What a person does; everything else is automatic.
    does. The Minor Planet Center gives an observatory code only once
    measured asteroid positions from here have been sent, so there is no
    account to make for it yet.
+9. Radio SETI on any day, cloudy or not: `./seti.py` searches Breakthrough
+   Listen's open radio data for narrowband signals that drift as a
+   transmitter on a turning planet would, and keeps only those found in
+   every look at the target and none of the looks away from it
+   ([seti.md](seti.md)). Tabby's star is among the stars Green Bank
+   observed, so the optical watch and the radio search share a target.
 
 What is kept, and what has to be kept to reproduce a find, is in
 [data.md](data.md).

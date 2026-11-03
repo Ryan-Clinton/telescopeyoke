@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/seti.schema.json",
+  "title": "SETI",
+  "description": "data of: seti.py find TARGET --json (Breakthrough Listen's open-data looks at a target, by session, with any OFF looks between); seti.py search LOOK --from MHZ --to MHZ --json (the narrowband hits in one look's slice); seti.py cadence ON OFF ON OFF ON OFF --from --to --json (each hit of the first ON look labelled candidate, interference or unconfirmed). A candidate is something to check against known interference, never a signal from anyone. Nothing moves and nothing is written.",
+  "type": "object",
+  "anyOf": [
+    {"required": ["target", "looks", "sessions", "kind"]},
+    {"required": ["source", "from_mhz", "to_mhz", "channels", "channel_hz", "hit_count", "hits", "kind"]},
+    {"required": ["from_mhz", "to_mhz", "scans", "candidates", "interference", "unconfirmed", "events", "note", "kind"]}
+  ],
+  "$defs": {
+    "hit": {
+      "type": "object",
+      "required": ["frequency_mhz", "drift_hz_s", "snr"],
+      "properties": {
+        "channel": {"type": "integer"},
+        "frequency_mhz": {"type": "number", "description": "Where it was at the start of the look."},
+        "drift_hz_s": {"type": "number"},
+        "snr": {"type": "number", "description": "Its drift line's sum over the noise."}
+      }
+    }
+  },
+  "properties": {
+    "target": {"type": "string"},
+    "looks": {"type": "integer", "description": "find: the finest-resolution (.gpuspec.0000.h5) looks at the target."},
+    "sessions": {"type": "array", "items": {"type": "object",
+      "required": ["session", "scans", "complete", "command"],
+      "properties": {
+        "session": {"type": "string"},
+        "complete": {"type": "boolean", "description": "ON, OFF, ON, OFF, ON, OFF all listed."},
+        "command": {"type": ["string", "null"], "description": "The seti.py cadence line for the whole cadence, a 2 MHz slice at the centre."},
+        "scans": {"type": "array", "items": {"type": "object",
+          "required": ["target", "on", "mjd", "utc", "url", "size_gb", "centre_mhz"],
+          "properties": {"target": {"type": "string"}, "on": {"type": "boolean"}, "mjd": {"type": "number"},
+                         "utc": {"type": "string"}, "url": {"type": "string"}, "size_gb": {"type": "number"},
+                         "centre_mhz": {"type": "number"}, "telescope": {"type": ["string", "null"]}}}}}}},
+    "source": {"type": "string"},
+    "from_mhz": {"type": "number"},
+    "to_mhz": {"type": "number"},
+    "channels": {"type": "integer"},
+    "channel_hz": {"type": "number"},
+    "spectra": {"type": "integer"},
+    "seconds": {"type": "number"},
+    "tstart": {"type": "number", "description": "MJD of the look's start."},
+    "max_drift_hz_s": {"type": "number"},
+    "snr_min": {"type": "number"},
+    "fetched_mb": {"type": ["number", "null"], "description": "Megabytes read over the web for the slice; null for a file here."},
+    "hit_count": {"type": "integer"},
+    "hits": {"type": "array", "items": {"$ref": "#/$defs/hit"}},
+    "scans": {"type": "array", "items": {"type": "object",
+      "required": ["source", "on", "hit_count"],
+      "properties": {"source": {"type": "string"}, "target": {"type": "string"}, "on": {"type": "boolean"},
+                     "hit_count": {"type": "integer"}, "fetched_mb": {"type": ["number", "null"]}}}},
+    "candidates": {"type": "integer"},
+    "interference": {"type": "integer"},
+    "unconfirmed": {"type": "integer"},
+    "events": {"type": "array", "items": {"allOf": [{"$ref": "#/$defs/hit"}, {"type": "object",
+      "required": ["label", "in_on", "in_off"],
+      "properties": {"label": {"enum": ["candidate", "interference", "unconfirmed"]},
+                     "in_on": {"type": "array", "items": {"type": "boolean"}},
+                     "in_off": {"type": "array", "items": {"type": "boolean"}}}}]}},
+    "note": {"type": "string"},
+    "kind": {"enum": ["measured"]}
+  }
+}

@@ -12,6 +12,10 @@ proven is `docs/validation.md` ("Current conclusions").
   windows from a paper, starting with the transit windows of the
   companion proposed for Tabby's star in 2026
   ([discovery](docs/discovery.md), step 8).
+- **Radio SETI in Breakthrough Listen's open data** (`seti.py`): a
+  target's looks by cadence, a de-Doppler search of one look's slice read
+  over the web, and the ON-OFF test that labels each hit candidate,
+  interference or unconfirmed ([seti](docs/seti.md)).
 - **What a stack reaches, and who wants what measured** (`ty night`,
   `transits.py`, `build_catalogue.py`): the catalogue holds galaxies to
   magnitude 12 (1,660 objects, from 641), built from a pinned OpenNGC

@@ -432,6 +432,19 @@ def test_a_follow_matches_the_brokers_schema(tmp_path, monkeypatch):
         measure=lambda: [{"session": "s", "in_picture": True, "mag": None, "error": None, "limit": 18.2}])), "brokers")
 
 
+def test_the_radio_searchs_answers_match_their_schema():
+    import seti
+    from test_seti import Reply, looks, row
+    made = looks((3000, 0.3, 8.0), off_tone=(1000, 0.0, 9.0))
+    read = lambda source, low, high: made[int(source)]       # noqa: E731
+    valid(interface.run("seti", lambda: seti.cadence([str(k) for k in range(6)], 2249.99, 2250.0,
+                                                     say=lambda *_: None, read=read)), "seti")
+    valid(interface.run("seti", lambda: seti.look("0", 2249.99, 2250.0, say=lambda *_: None, read=read)[0]), "seti")
+    rows = [row("KIC8462852", 57895.42, 0), row("HIP1", 57895.43, 1)]
+    valid(interface.run("seti", lambda: seti.find("KIC8462852", get=lambda *a, **k: Reply({"data": rows}),
+                                                  say=lambda *_: None)), "seti")
+
+
 def test_a_sungrazer_look_matches_its_schema(tmp_path, monkeypatch):
     import config
     import sungrazer

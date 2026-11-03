@@ -28,6 +28,8 @@ case "${1:-}" in
 esac
 
 packages=(python3-astropy python3-scipy python3-numpy python3-pil python3-requests python3-serial python3-jsonschema python3-sgp4)
+# seti.py: Breakthrough Listen's files are HDF5 packed with bitshuffle.
+packages+=(python3-h5py python3-hdf5plugin)
 # The application's own window: GTK with a WebKit view.
 packages+=(python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1)
 if ! $planner_only; then
