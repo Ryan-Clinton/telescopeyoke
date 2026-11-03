@@ -913,49 +913,119 @@ def photometry(command):
     return bool(command) and command.startswith(("./starwatch.py", "./mount.py goto"))
 
 
-def recommend(discovery, clear, research=None, fog=False):
+SETUP_MINUTES = 20    # out of the house to the first field when nothing is set up: power, settime, the
+                      # focus walk-in and the first GoTo with its plate solve (an estimate from the nights
+                      # of October and November 2026 with the feet on their stickers; a moved tripod is longer)
+READY_WITHIN = 3600   # a plate solve this recent (seconds) means the telescope is out, aimed and working
+SLACK = 0.2           # the share of a marginal clear spell left unplanned: setup over-runs, cloud, fog
+SLACK_MIN = 10        # and never less than this many minutes
+FOLLOW_MINUTES = 10   # a second look at one mosaic panel holding a candidate: twice a panel's visit,
+                      # about 0.3 mag deeper (patrol.py --plan for M31-P4: G 16.9 in 5 min, 17.5 in 30)
+
+
+def ready(now=None):
+    """Whether the telescope is set up now: a plate solve in the last
+    READY_WITHIN seconds (mount.LAST_SOLVE). Asked at 23:00 with the kit
+    indoors, a plan starting at 23:00 is no plan (3 November 2026)."""
+    try:
+        return (now or time.time()) - mount.LAST_SOLVE.stat().st_mtime < READY_WITHIN
+    except OSError:
+        return False
+
+
+def recommend(discovery, clear, research=None, fog=False, now=None, is_ready=True, marginal=False,
+              followups=()):
     """What to do with tonight's clear spell, in order, said before the
-    detail: a programme inside a watch window tonight first, then a
-    research lead up tonight (docs/discovery.md, "What the project is
-    for"), then the programmes in the order their fields come best, each
-    only if it can finish in the clear time left (a mosaic takes the
-    panels that fit). Each field costs patrol.OVERHEAD on top of its
-    frames (the GoTo and the plate solve), each mosaic panel too. With fog
-    forecast a brightness measurement (photometry()) is left out unless a
-    watch window makes tonight count, and then it says so. Returns
-    {"clear_minutes", "steps": [{"what", "start", "minutes", "command",
-    "why"}], "left_out": [{"what", "why"}], "note"}. With no clear spell
-    forecast there are no steps and the note says to go by the sky itself.
+    detail. The plan starts from now, not from the forecast: the later of
+    the clear spell's start and `now`, plus SETUP_MINUTES when the
+    telescope is not ready (ready()). On a marginal night SLACK of the
+    spell is left unplanned. Then: a programme inside a watch window
+    tonight first; then a programme whose field holds a candidate seen on
+    more than one night (`followups`: {"candidate", "nights",
+    "programme"}), since a second clear look settles it; then a research
+    lead up tonight (docs/discovery.md, "What the project is for"); then
+    the programmes in the order their fields come best, each only if it
+    can finish in the time left (a mosaic takes the panels that fit). Each
+    field costs patrol.OVERHEAD on top of its frames (the GoTo and the
+    plate solve), each mosaic panel too. With fog forecast a brightness
+    measurement (photometry()) is left out unless a watch window makes
+    tonight count, and then it says so. Returns {"clear_minutes", "from",
+    "ready", "steps": [{"what", "start", "minutes", "command", "why"}],
+    "left_out": [{"what", "why"}], "note"}. With no clear spell, or none
+    left, there are no steps and the note says to go by the sky itself.
     3 November 2026: the outlook listed every programme for a one-hour
-    spell and chose none."""
+    spell and chose none; then, asked at 23:00 with nothing set up, it
+    said start at 23:00 and filled all sixty minutes."""
     import patrol
     if not clear:
-        return {"clear_minutes": None, "steps": [], "left_out": [],
-                "note": "no clear spell forecast: the research runs in the background; if the sky is clear "
-                        "where the telescope is, go by each programme's best time"}
-    cursor = [clear[0]]
-    steps, left = [], []
+        return {"clear_minutes": None, "from": None, "ready": is_ready, "steps": [], "left_out": [],
+                "note": "no clear spell forecast: if the sky is clear where the telescope is, go by each "
+                        "programme's best time"}
+    begin = clear[0]
+    if now is not None:
+        begin = max(begin, now + timedelta(minutes=0 if is_ready else SETUP_MINUTES))
+    usable = (clear[1] - begin).total_seconds() / 60
+    finish = clear[1] - timedelta(minutes=max(SLACK_MIN, SLACK * usable) if marginal else 0)
+    out = {"clear_minutes": round((clear[1] - clear[0]).total_seconds() / 60), "from": begin, "ready": is_ready,
+           "steps": [], "left_out": [], "note": None}
+    if finish <= begin:
+        out["note"] = (f"the clear spell ({clear[0]:%H:%M}-{clear[1]:%H:%M}) is "
+                       + ("over" if now is not None and now >= clear[1] else "too short from now")
+                       + (" to set up and finish anything" if not is_ready else " to finish anything")
+                       + ": if the sky is clear where the telescope is, go by the sky itself")
+        return out
+    cursor = [begin]
+    steps, left = out["steps"], out["left_out"]
     hazy = "fog forecast: a brightness measurement needs a steady sky"
+    taken = set()
 
     def take(what, window, minutes, command, why, panel=None):
         start = max(cursor[0], window[0])
-        fits = (min(window[1], clear[1]) - start).total_seconds() / 60
+        fits = (min(window[1], finish) - start).total_seconds() / 60
         if panel and fits < minutes:
             minutes = panel * int(fits // panel)
         if not minutes or fits < minutes:
             return False
         steps.append({"what": what, "start": start, "minutes": minutes, "command": command, "why": why})
         cursor[0] = start + timedelta(minutes=minutes)
+        taken.add(what)
         return True
 
     def watched(p):
         return any(w.get("tonight") for w in p.get("watch") or [])
+
+    def programme(p, why):
+        if fog and photometry(p["command"]):
+            left.append({"what": p["programme"], "why": hazy})
+            return
+        each = (p["minutes"] or 0) + patrol.OVERHEAD
+        total = each * (p.get("panels") or 1)
+        if not take(p["programme"], p["in_clear"], total, p["command"], why,
+                    panel=each if p.get("mosaic") else None):
+            left.append({"what": p["programme"], "why": f"needs {total:g} min with its GoTos, cannot finish "
+                                                          f"in the clear time left"})
 
     for p in discovery:
         if watched(p) and p.get("in_clear"):
             why = "inside a watch window tonight" + (f"; {hazy}" if fog and photometry(p["command"]) else "")
             if not take(p["programme"], p["in_clear"], (p["minutes"] or 10) + patrol.OVERHEAD, p["command"], why):
                 left.append({"what": p["programme"], "why": "no clear time left"})
+    for p in discovery:
+        held = [f for f in followups if f["programme"] == p["programme"]]
+        if not held or not p.get("in_clear") or p["programme"] in taken:
+            continue
+        if p.get("mosaic"):
+            # The panels that fit are chosen by their own priority and may
+            # not hold the candidate: its panel alone, longer, first.
+            for field in dict.fromkeys(f["field"] for f in held):
+                why = "a second look at " + ", ".join(f"{f['candidate']} (seen on {f['nights']} nights)"
+                                                     for f in held if f["field"] == field)
+                if not take(field, p["in_clear"], FOLLOW_MINUTES + patrol.OVERHEAD,
+                            f"./patrol.py {field} --minutes {FOLLOW_MINUTES}", why):
+                    left.append({"what": field, "why": "no clear time left"})
+        else:
+            programme(p, "a second look at " + ", ".join(f"{f['candidate']} (seen on {f['nights']} nights)"
+                                                        for f in held))
     for lead in (research or {}).get("observe_tonight") or []:
         if fog:
             left.append({"what": lead["star"], "why": hazy})
@@ -964,22 +1034,53 @@ def recommend(discovery, clear, research=None, fog=False):
         if not take(lead["star"], clear, 10 + patrol.OVERHEAD, lead["command"], why):
             left.append({"what": lead["star"], "why": "no clear time left"})
     for p in discovery:
-        if watched(p) and p.get("in_clear"):
+        if p["programme"] in taken or any(s["what"] == p["programme"] for s in left):
             continue
         if not p.get("in_clear"):
             left.append({"what": p["programme"], "why": "not up while clear" if p.get("window") else "not up tonight"})
             continue
-        if fog and photometry(p["command"]):
-            left.append({"what": p["programme"], "why": hazy})
+        programme(p, f"last run {p['last_run']:%d %b}" if p.get("last_run") else "never run")
+    return out
+
+
+def followups(discovery, found=None):
+    """The open candidates seen on more than one night, each with the
+    programme whose fields hold it: a second clear look at the field
+    settles it, which is worth more than a routine patrol elsewhere."""
+    import tomllib
+    import candidates as book
+    found = candidates()["candidates"] if found is None else found
+    holds = {}
+    for p in discovery:
+        path = PROGRAMMES / f"{p['programme']}.toml"
+        if path.exists():
+            for field in programme_fields(p["programme"], tomllib.loads(path.read_text(encoding="utf-8"))):
+                holds.setdefault(_key(field), p["programme"])
+    return [{"candidate": k["id"], "field": k["field"], "nights": book.nights_seen(k),
+             "programme": holds[_key(k["field"])]}
+            for k in found if book.nights_seen(k) > 1 and _key(k["field"]) in holds]
+
+
+def alternatives(big, rec, clear, most=2):
+    """Big targets up in the time the plan has, for a change from the
+    patrols or if the person would rather look than search: the first
+    `most` of best_tonight whose window overlaps it and that no step
+    already images."""
+    if not clear or not rec.get("from"):
+        return []
+    imaged = {s["what"].split("-")[0].upper() for s in rec["steps"]}
+    out = []
+    for b in big:
+        window = b.get("window") or [None, None]
+        if b["id"].upper() in imaged or not window[0] or window[1] < rec["from"] or window[0] > clear[1]:
             continue
-        each = (p["minutes"] or 0) + patrol.OVERHEAD
-        total = each * (p.get("panels") or 1)
-        last = f"last run {p['last_run']:%d %b}" if p.get("last_run") else "never run"
-        if not take(p["programme"], p["in_clear"], total, p["command"], last,
-                    panel=each if p.get("mosaic") else None):
-            left.append({"what": p["programme"], "why": f"needs {total:g} min with its GoTos, cannot finish in the clear"})
-    return {"clear_minutes": round((clear[1] - clear[0]).total_seconds() / 60), "steps": steps,
-            "left_out": left, "note": None}
+        out.append({"what": b["id"] + (" with " + ", ".join(b["with"]) if b.get("with") else ""),
+                    "about": b["what"], "size": f"{b['panels']} mosaic" if b.get("panels")
+                    else f"{b['frame_share']:g} of the frame", "best": b["best_time"],
+                    "new": not b.get("nights_imaged")})
+        if len(out) == most:
+            break
+    return out
 
 
 def night(demo=False):
@@ -991,6 +1092,15 @@ def night(demo=False):
     clear = clear_spell(w)
     research = _safe_research(demo)
     discovery = in_the_clear(discovery_tonight(demo), clear)
+    big = big_targets(rep, data=None if not demo else config.DATA)
+    now = None if demo or not clear else datetime.now(clear[0].tzinfo)
+    try:
+        held = followups(discovery, [] if demo else None)
+    except Exception:     # noqa: BLE001 - a broken candidate book must not take the plan with it
+        held = []
+    rec = recommend(discovery, clear, research, fog=foggy(w, clear), now=now, is_ready=demo or ready(),
+                    marginal=bool(w) and w["verdict"] != "GO", followups=held)
+    rec["alternatives"] = alternatives(big, rec, clear)
     return {
         "site": rep["site"], "date": rep["date"],
         "verdict": w["verdict"] if w else None,
@@ -1005,10 +1115,10 @@ def night(demo=False):
         "sky_brightness_mag_arcsec2": (rep["light_pollution"] or {}).get("sqm"),
         "spot": None if demo else config.SPOT,
         "skyline_measured": bool(_site(demo)["horizon"].get("skyline")),
-        "recommendation": recommend(discovery, clear, research, fog=foggy(w, clear)),
+        "recommendation": rec,
         "discovery": discovery,
         "best_now": [_target(t) for t in rep["targets"] if t["now"]][:3],
-        "best_tonight": big_targets(rep, data=None if not demo else config.DATA),
+        "best_tonight": big,
         "other_fields": other_fields(rep, data=None if not demo else config.DATA),
         "supernovae": [dict(_target(s), mag=s["mag"], type=s["type"], last_seen=s["last_seen"], peak_mag=s["peak_mag"])
                        for s in rep.get("supernovae", [])],
@@ -1035,95 +1145,76 @@ def _safe_research(demo):
                 "next_waiting": []}
 
 
-PAPERS_SHOWN = 2     # the newest unread on each topic the outlook gives in full; the rest are counted
+def tonight_event(n, darkness, now=None):
+    """Whether a sky event (in-the-sky.org) falls between now and the end
+    of tonight's darkness: tomorrow's conjunction is not tonight's."""
+    try:
+        when = datetime.fromisoformat(n["when"])
+        end = darkness["end"]
+        now = now or datetime.now(end.tzinfo if end else None)
+        if when.tzinfo is None and end is not None:
+            when = when.replace(tzinfo=end.tzinfo)
+        return now - timedelta(hours=1) <= when <= (end or now + timedelta(hours=12))
+    except (KeyError, TypeError, ValueError):
+        return False
 
 
 def outlook(demo=False, tonight=None, open_candidates=None):
-    """Tonight's outlook as plain text in the order the discovery-night
-    skill answers it, the recommendation first: ./ty night's answer
-    without its bulk (no abstract, no headline), so one quick command
-    gives the whole briefing. Candidates are only those seen on more than
-    one night (the rest are not yet interesting). Reads files and the
-    planner, as ./ty night."""
+    """Tonight's outlook as short plain text, for "what's interesting
+    tonight?": what to look at through the telescope, from now. The plan
+    first (recommendation(): from when it can start, one preferred order,
+    then the big targets as the other choice), then the sky, the
+    candidates worth a second look, and only what is up tonight: a
+    research lead that can be watched, supernovae, events today, AAVSO
+    priority stars as a count. The research queue and the papers are
+    `ty research`, not here (3 November 2026: the answer read as a
+    research bulletin and took too long). Reads files and the planner,
+    as ./ty night."""
     import candidates as book
     t = night(demo) if tonight is None else tonight
     hm = lambda x: f"{x:%H:%M}" if x else "--:--"   # noqa: E731
     out = []
     rec = t.get("recommendation") or {}
-    out.append(f"RECOMMENDATION ({rec['clear_minutes']} clear min):" if rec.get("clear_minutes")
-               else "RECOMMENDATION:")
-    for s in rec.get("steps", []):
-        out.append(f"  {hm(s['start'])} {s['what']} {s['minutes']:g} min ({s['why']}): {s['command']}")
-    for s in rec.get("left_out", []):
-        out.append(f"  not tonight: {s['what']} ({s['why']})")
-    if rec.get("note"):
-        out.append(f"  {rec['note']}")
+    clear = (f"clear {hm(t['clear_window'][0])}-{hm(t['clear_window'][1])}" if t["clear_window"] else "no clear spell")
+    if rec.get("steps"):
+        planned = sum(s["minutes"] for s in rec["steps"])
+        setup = "" if rec.get("ready", True) else f", after {SETUP_MINUTES} min to set up (nothing set up now)"
+        out.append(f"PLAN from {hm(rec['from'])}{setup}; {clear}, {planned:g} min of it planned:")
+        for s in rec["steps"]:
+            out.append(f"  {hm(s['start'])} {s['what']}, {s['minutes']:g} min ({s['why']}): {s['command']}")
+    else:
+        out.append(f"PLAN: {rec.get('note') or 'nothing fits'}")
+    for a in rec.get("alternatives") or []:
+        out.append(f"  OR {a['what']}: {a['about']}; {a['size']}, best {hm(a['best'])}"
+                   + ("; new" if a["new"] else "; adds to its stack"))
+    if rec.get("left_out"):
+        out.append("  not tonight: " + "; ".join(f"{s['what']} ({s['why']})" for s in rec["left_out"]))
     moon = t["moon"]
     moon_words = (f"Moon {moon['illumination']}%" + (f", rises {hm(moon['rise'])}" if moon.get("rise") else "")
                   + (f", sets {hm(moon['set'])}" if moon.get("set") else ""))
-    clear = (f"clear {hm(t['clear_window'][0])}-{hm(t['clear_window'][1])}" if t["clear_window"] else "no clear spell")
     out.append(f"SKY: {t['verdict']}, {clear}, {t['mean_cloud_percent']}% cloud; dark {hm(t['darkness']['start'])}-"
                f"{hm(t['darkness']['end'])}; {moon_words}; " + "; ".join(t["notes"]))
+    found = candidates()["candidates"] if open_candidates is None else open_candidates
+    again = [k for k in found if book.nights_seen(k) > 1]
+    planned = " ".join(s["why"] for s in rec.get("steps") or [])
+    for k in again:
+        out.append(f"CANDIDATE: {k['id']} in {k['field']}, seen on {book.nights_seen(k)} nights"
+                   + ("; in the plan" if k["id"] in planned else "; its field is not in the plan tonight"))
     rs = t.get("research") or {}
-    if rs.get("error"):
-        out.append(f"RESEARCH: unavailable ({rs['error']})")
-    else:
-        out.append(f"RESEARCH: {rs['waiting']} waiting, {rs['to_recheck']} to ask again, {rs['unexplained']} "
-                   f"unexplained, {rs['papers_unread']} papers unread")
-        for row in rs.get("next_waiting", []):
-            out.append(f"  next to look into: {row['star']} ({row['tier']}): {row['why_flagged']}")
-        for row in rs.get("intriguing", []):
-            out.append(f"  looked into: {row['star']}, {row['verdict']}"
-                       f"{'' if row['can_watch'] else ', cannot watch here'}: " + "; ".join(row["why_interesting"]))
-        for row in rs.get("observe_tonight", []):
-            out.append(f"  UP TONIGHT: {row['star']} ({row['verdict']}), best {row['best']}: {row['command']}")
-    out.append("PROGRAMMES:")
-    for p in t["discovery"]:
-        when = (f"go about {hm(p['best_in_clear'])}" if p.get("best_in_clear")
-                else f"best {hm(p['best_time'])}, not while clear" if p.get("window") else "not up")
-        length = f"{p['minutes']} min a panel x {p['panels']}" if p.get("mosaic") else f"{p['minutes']} min"
-        alt = f", {p['best_altitude_deg']:.0f}° {p['direction']}" if p.get("window") else ""
-        last = f"last {p['last_run']:%d %b %H:%M}" if p.get("last_run") else "never run"
-        out.append(f"  {p['programme']}: {when}{alt}, {length}, {last}")
-        for w in p.get("watch") or []:
-            out.append(f"    watch: {w['what']}: " + ("TONIGHT" if w.get("tonight")
-                                                     else "next " + " to ".join(w.get("next") or ["unknown"])))
-    out.append("BIG TARGETS:")
-    for b in t["best_tonight"]:
-        size = f"{b['panels']} mosaic" if b.get("panels") else f"{b['frame_share']:g} of the frame"
-        new = "new" if not b.get("nights_imaged") else f"adds to {b['nights_imaged']} night(s)"
-        out.append(f"  {b['id']}{' with ' + ', '.join(b['with']) if b.get('with') else ''}: {b['what']}; {size}, "
-                   f"best {hm(b['best_time'])}; {new}")
-    if t["other_fields"]:
-        out.append("FRESH FIELDS (a supernova watch):")
-    for f in t["other_fields"]:
-        out.append(f"  {f['field']}: {f['what']}; best {hm(f['best_time'])} {f['direction']}; " + "; ".join(f["why"][:2])
-                   + (f"; holds {f['supernova']}" if f.get("supernova") else ""))
+    for row in rs.get("observe_tonight", []):
+        out.append(f"LEAD UP TONIGHT: {row['star']} ({row['verdict']}), best {row['best']}: "
+                   + "; ".join(row.get("why_interesting") or []) + f": {row['command']}")
     for s in t["supernovae"]:
         out.append(f"SUPERNOVA: {s['id']} in {s['name']} ({s['type']}), mag {s['mag']:g} on {s['last_seen']}, "
                    f"best {hm(s['best_time'])} {s['direction']}")
-    for c in t["campaigns"]:
-        reach = c["range"][0] if c.get("range") else None
-        out.append(f"AAVSO: {c['id']} ({c['var_type']}, {reach}-{c['range'][1] if c.get('range') else '?'}), "
-                   f"{'/'.join(c['section'])}{' PRIORITY' if c.get('priority') else ''}; last measured "
-                   f"{c['days_since_measured']:.0f} d ago, cadence {c['cadence_days']:g} d; best {hm(c['best_time'])} "
-                   f"{c['direction']}")
-    for topic in t.get("papers") or []:
-        newest = sorted(topic["papers"], key=lambda p: p.get("submitted") or "", reverse=True)
-        for paper in newest[:PAPERS_SHOWN]:
-            out.append(f"PAPER ({topic['topic']}): {paper['id']} {paper['title']}: {paper['abstract']}")
-        if len(newest) > PAPERS_SHOWN:
-            out.append(f"  and {len(newest) - PAPERS_SHOWN} older unread on {topic['topic']}")
     for n in t.get("news") or []:
-        if n.get("kind") == "event":
+        if n.get("kind") == "event" and tonight_event(n, t["darkness"]):
             out.append(f"EVENT: {n['title']}")
+    if t["campaigns"]:
+        out.append(f"AAVSO: {len(t['campaigns'])} priority stars this camera can measure (./ty night lists them)")
     for s in t.get("sources") or []:
         if s.get("state") in ("stale", "unavailable"):
             out.append(f"STALE: {s['source']}, data from {s.get('fetched') or 'never'}")
-    found = candidates()["candidates"] if open_candidates is None else open_candidates
-    again = [k for k in found if book.nights_seen(k) > 1]
-    out.append(f"CANDIDATES: {len(found)} open, {len(again)} seen on more than one night"
-               + "".join(f"\n  {k['id']} ({k['field']}), {book.nights_seen(k)} nights" for k in again))
     if not t["skyline_measured"]:
         out.append("SKYLINE: not measured at this spot")
     return "\n".join(out)

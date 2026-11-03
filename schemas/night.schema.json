@@ -171,10 +171,14 @@
                      "next_waiting": {"type": "array"}, "error": {"type": "string"}}
     },
     "recommendation": {
-      "description": "What to do with tonight's clear spell, in order (agent.recommend): a programme inside a watch window tonight first, then a research lead up tonight, then the programmes as their fields come best, each only if it can finish in the clear time left with patrol.OVERHEAD per field or panel for the GoTo and plate solve (a mosaic takes the panels that fit); with fog forecast a brightness measurement is left out unless a watch window makes tonight count. left_out says why each other one is not taken; note is set when no clear spell is forecast.",
+      "description": "What to do with tonight's clear spell, from now, in order (agent.recommend): it starts at the later of the clear spell's start and now, plus agent.SETUP_MINUTES when the telescope is not set up (ready false: no plate solve in the last hour), and on a marginal night leaves agent.SLACK of the spell unplanned. A programme inside a watch window tonight first, then a second look at a candidate seen on more than one night (one mosaic panel alone, agent.FOLLOW_MINUTES), then a research lead up tonight, then the programmes as their fields come best, each only if it can finish in the clear time left with patrol.OVERHEAD per field or panel for the GoTo and plate solve (a mosaic takes the panels that fit); with fog forecast a brightness measurement is left out unless a watch window makes tonight count. left_out says why each other one is not taken; note is set when no clear spell is forecast.",
       "type": "object",
-      "required": ["clear_minutes", "steps", "left_out", "note"],
+      "required": ["clear_minutes", "from", "ready", "steps", "left_out", "note", "alternatives"],
       "properties": {"clear_minutes": {"type": ["integer", "null"]},
+                     "from": {"type": ["string", "null"], "description": "When the plan can start (local time, ISO 8601)."},
+                     "ready": {"type": "boolean", "description": "Whether the telescope is set up now (a plate solve in the last hour)."},
+                     "alternatives": {"type": "array", "description": "Big targets up in the plan's time, the other choice to the patrols: what, about, size, best, new.",
+                                      "items": {"type": "object", "required": ["what", "about", "size", "best", "new"]}},
                      "steps": {"type": "array", "items": {"type": "object",
                                "required": ["what", "start", "minutes", "command", "why"]}},
                      "left_out": {"type": "array", "items": {"type": "object", "required": ["what", "why"]}},

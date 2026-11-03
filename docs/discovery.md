@@ -230,18 +230,32 @@ What a person does; everything else is automatic.
 8. What the outlook gathers besides the programmes (`./ty night`, or
    `./ty outlook` for the same as short text, with `./transits.py` and
    `./brokers.py` beside it, the discovery-night skill). It leads with
-   `recommendation`: what to do with the clear spell, in order (a watch
-   window tonight, then a research lead up tonight, then the programmes as
+   `recommendation`: what to do with the clear spell from now. It starts
+   at the later of the clear spell's start and the time asked, plus
+   `agent.SETUP_MINUTES` (20, an estimate with the feet on their stickers)
+   when the telescope is not set up (no plate solve in the last hour), and
+   on a marginal night leaves `agent.SLACK` (a fifth, at least 10 minutes)
+   unplanned for setup over-runs, cloud and fog (3 November 2026: asked at
+   23:00 with nothing set up, it had said start at 23:00 and filled the
+   whole hour). In order: a watch
+   window tonight, then a second look at a candidate seen on more than one
+   night (a mosaic's panel alone for `agent.FOLLOW_MINUTES`, since the
+   panels that fit go by their own priority and may miss it), then a
+   research lead up tonight, then the programmes as
    their fields come best, each only if it can finish in the clear; a
    mosaic takes the panels that fit), each field and panel costing
    `patrol.OVERHEAD` (1.5 min: the GoTo and the plate solve) on top of its
    frames, and why each other one is left out. With fog forecast inside
    the clear spell (`fog_hours`), a
    brightness measurement (a star watch, a lead's look) is left out unless
-   a watch window makes tonight count.
+   a watch window makes tonight count. `alternatives` are the other
+   choice: big targets up in the plan's time that no step images. The
+   short text (`./ty outlook`) is for "what's interesting tonight?": the
+   plan, the other choice, the sky, the candidates, and only what is up
+   tonight; the research queue and the papers are `./ty research`.
    The clear spell runs to the end of its last clear hour (3 November
-   2026: a single clear hour had come out as no time at all). The research
-   line names the next leads waiting (`next_waiting`, why each was
+   2026: a single clear hour had come out as no time at all). The
+   research (`./ty research`, and `research` in `./ty night`) names the next leads waiting (`next_waiting`, why each was
    flagged) beside the most intriguing ones already looked into:
    - The catalogue (`data/targets.csv`, built by `build_catalogue.py` from
      OpenNGC's v20260501 release) holds what a stack reaches, not what the

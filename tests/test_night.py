@@ -586,10 +586,106 @@ def test_with_fog_forecast_a_brightness_measurement_is_left_out_unless_tonight_i
     assert [s["what"] for s in agent.recommend(plan, clear, fog=False)["steps"]] == ["dipper", "tabby", "m31-novae"]
 
 
-def test_the_outlook_is_short_and_leads_with_the_recommendation():
+def _plan_night():
+    from datetime import datetime
+    at = lambda h, m=0: datetime(2026, 11, 3, h, m) if h < 24 else datetime(2026, 11, 4, h - 24, m)  # noqa: E731
+    prog = lambda name, minutes, mosaic=False, panels=1: dict(  # noqa: E731
+        programme=name, field=name, minutes=minutes, mosaic=mosaic, panels=panels, command=f"./patrol.py {name}",
+        window=[at(20), at(27)], best_time=at(23), last_run=None, watch=[])
+    return at, [prog("m31-novae", 30), prog("m31-panels", 5, True, 8), prog("m33-novae", 75)]
+
+
+def _end(rec):
+    from datetime import timedelta
+    return max(s["start"] + timedelta(minutes=s["minutes"]) for s in rec["steps"])
+
+
+def test_asked_halfway_through_the_clear_spell_the_plan_starts_now():
+    # 3 November 2026: asked at 23:00, the outlook said start at 23:00.
+    at, plan = _plan_night()
+    clear = [at(23), at(25)]
+    rec = agent.recommend(agent.in_the_clear(plan, clear), clear, now=at(23, 40), is_ready=True)
+    assert rec["from"] == at(23, 40) and rec["steps"][0]["start"] == at(23, 40)
+    assert all(s["start"] >= at(23, 40) for s in rec["steps"])
+
+
+def test_with_nothing_set_up_the_plan_leaves_time_to_set_up():
+    at, plan = _plan_night()
+    clear = [at(23), at(25)]
+    early = agent.recommend(agent.in_the_clear(plan, clear), clear, now=at(22), is_ready=False)
+    assert early["from"] == at(23)                    # time to set up before the clear spell
+    late = agent.recommend(agent.in_the_clear(plan, clear), clear, now=at(23), is_ready=False)
+    assert late["from"] == at(23, agent.SETUP_MINUTES) and late["ready"] is False
+    assert late["steps"][0]["start"] == at(23, agent.SETUP_MINUTES)
+
+
+def test_a_cloudy_night_or_a_clear_spell_gone_plans_nothing_and_says_go_by_the_sky():
+    at, plan = _plan_night()
+    cloudy = agent.recommend(agent.in_the_clear(plan, None), None, now=at(22))
+    assert cloudy["steps"] == [] and "no clear spell" in cloudy["note"]
+    clear = [at(23), at(24)]
+    gone = agent.recommend(agent.in_the_clear(plan, clear), clear, now=at(24, 10))
+    assert gone["steps"] == [] and "over" in gone["note"] and "go by the sky" in gone["note"]
+    short = agent.recommend(agent.in_the_clear(plan, clear), clear, now=at(23, 45), is_ready=False)
+    assert short["steps"] == [] and "set up" in short["note"]
+
+
+def test_a_marginal_spell_is_not_filled_to_the_minute():
+    from datetime import timedelta
+    at, plan = _plan_night()
+    clear = [at(23), at(24)]
+    full = agent.recommend(agent.in_the_clear(plan, clear), clear, now=at(23))
+    kept = agent.recommend(agent.in_the_clear(plan, clear), clear, now=at(23), marginal=True)
+    assert _end(full) > at(23, 50)                       # an hour's work in an hour of sky
+    assert _end(kept) <= at(24) - timedelta(minutes=agent.SLACK_MIN)
+
+
+def test_a_candidate_seen_on_two_nights_gets_its_second_look_first():
+    import patrol
+    at, plan = _plan_night()
+    clear = [at(23), at(25)]
+    held = [{"candidate": "M31-P4-1", "field": "M31-P4", "nights": 2, "programme": "m31-panels"},
+            {"candidate": "M33-1", "field": "M33", "nights": 2, "programme": "m33-novae"}]
+    rec = agent.recommend(agent.in_the_clear(plan, clear), clear, now=at(23), followups=held)
+    first = rec["steps"][0]
+    # A mosaic's panels that fit go by their own priority: the candidate's panel alone, first.
+    assert first["what"] == "M31-P4" and "M31-P4-1" in first["why"]
+    assert first["command"] == f"./patrol.py M31-P4 --minutes {agent.FOLLOW_MINUTES}"
+    assert first["minutes"] == agent.FOLLOW_MINUTES + patrol.OVERHEAD
+    assert rec["steps"][1]["what"] == "m33-novae" and "M33-1" in rec["steps"][1]["why"]
+    without = agent.recommend(agent.in_the_clear(plan, clear), clear, now=at(23))
+    assert without["steps"][0]["what"] == "m31-novae"
+
+
+def test_ready_means_a_plate_solve_within_the_hour(tmp_path, monkeypatch):
+    import os
+    import mount
+    solve = tmp_path / "last_solve.json"
+    monkeypatch.setattr(mount, "LAST_SOLVE", solve)
+    assert not agent.ready()
+    solve.write_text("{}")
+    assert agent.ready()
+    old = solve.stat().st_mtime - 2 * agent.READY_WITHIN
+    os.utime(solve, (old, old))
+    assert not agent.ready()
+
+
+def test_only_tonights_events_are_said():
+    from datetime import datetime, timezone
+    now = datetime(2026, 11, 3, 23, tzinfo=timezone.utc)
+    dark = {"end": datetime(2026, 11, 4, 5, 30, tzinfo=timezone.utc)}
+    assert agent.tonight_event({"when": "2026-11-04T02:00:00+00:00"}, dark, now)
+    assert not agent.tonight_event({"when": "2026-11-04T19:00:00+00:00"}, dark, now)      # tomorrow
+    assert not agent.tonight_event({"when": "2026-11-03T13:00:00+00:00"}, dark, now)      # this morning
+
+
+def test_the_outlook_is_short_and_leads_with_the_plan():
+    # 3 November 2026: the answer to "what's interesting tonight?" read as a
+    # research bulletin; the queue and the papers are ./ty research.
     text = agent.outlook(demo=True, open_candidates=[])
-    assert text.startswith("RECOMMENDATION") and "PROGRAMMES:" in text and "CANDIDATES: 0 open" in text
-    assert len(text) < 20000
+    assert text.startswith("PLAN") and "SKY:" in text
+    assert "PAPER" not in text and "RESEARCH:" not in text and "next to look into" not in text
+    assert len(text) < 4000
     night = agent.night(demo=True)
     valid(interface.run("night", lambda: night), "night")
     assert all("panels" in p for p in night["discovery"])
