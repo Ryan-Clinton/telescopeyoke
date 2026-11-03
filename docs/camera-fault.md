@@ -55,10 +55,19 @@ found that afternoon:
   reports "the camera would not be set up: SDK error 0x8000ffff" at any
   speed; the kernel log shows `device descriptor read/8, error -110` and
   resets, then the camera drops off USB.
-- **How to get it back.** Press the camera's port button on the hub twice
-  (off, then on): the light goes steady and the fan spins up. The library's
-  own replug (a software reset, which `altair.py` now tries once) could not
-  bring it back; cutting its power did.
+- **How to get it back.** Cut its power. Plugged straight into the laptop, as
+  from the evening of 1 November 2026 (the hub has been returned,
+  `usb-hub.md`), try the software steps first
+  ([the list](#the-evening-of-1-november-2026)), and pull the lead last.
+  Behind a hub, from 1 November 2026
+  the laptop does it: `./camera_test.py --power-cycle` turns the camera's
+  hub port off for 8 s and on again (`usbpower.py`, through uhubctl; the
+  hub switches each port's power on its own), and with
+  `power_cycle_on_jam = true` under `[camera]` the camera code does it by
+  itself when a frame is lost twice ([1 November, evening](#the-evening-of-1-november-2026)).
+  By hand, the camera's port button on the hub, pressed twice (off, then
+  on), does the same. The library's own replug (a software reset, which
+  `altair.py` tries once) could not bring it back; cutting its power did.
 - **The lost-frame fault is separate.** It came and went plugged straight
   in, with no hub. The hub results below say what the hub and leads do, not
   what causes that fault.
@@ -360,6 +369,102 @@ on the hub (2-1.1, then 2-5.1 after the hub's lead was moved), its body at
 So outside and cold the fault is worse: speed 2 loses even 1 s frames, and
 speed 0, the speed that never failed, loses some, and the camera jams in a
 way only cutting its power clears.
+
+## The evening of 1 November 2026
+
+The camera on the powered hub, the focuser's Nano not plugged in, the
+laptop started at 18:52. Logs in `logs/camera-evening*-20261101.log`.
+
+- **19:02, speed 2, short frames:** `--timing` kept every frame from 0.1 s
+  to 10 s (10 s took 13.4 s), none early.
+- **19:07, speed 2, 16 s, hub on 2-5.1:** two frames each came back after
+  **10.4 s** and were turned away as too soon (0.65 of the time asked, as at
+  12:53). The fault, at the first long frame of the evening.
+- **19:10, speed 0, 16 s:** no frame at all in 108 s: jammed.
+- **19:18, the first power cut from the laptop** (`--power-cycle`, both
+  halves of hub port 2-5 port 1): the kernel log has the camera gone at
+  19:18:29 and back at 19:18:41. Then speed 0 kept **5 of 5** 16 s frames.
+- **19:21, the hub moved to the laptop's USB-C port** (the camera on 4-2.1
+  at 5000 Mb/s): speed 2's 16 s frame came back after 10.4 s again. **The
+  laptop's port is not the cause.**
+- **19:26, speed 0 on USB-C:** a 1 s frame lost and retried, then a 16 s
+  frame lost after 108 s: jammed again, 10 minutes after the power cut.
+  Cut again from the laptop at 19:29 (gone 19:29:21, back 19:29:39).
+- **19:41, `power_cycle_on_jam` on:** the check's first two 1 s frames were
+  lost; the camera code cut the power by itself, the camera was back on
+  USB at 19:43:11 and speed 0 then kept **20 of 20** 16 s frames, done at 19:50.
+
+- **20:16 to 20:34, the hub on USB-C:** the hub's USB 3 half dropped off
+  the laptop 35 times. From 20:22 the camera came back only at USB 2 speed
+  (480 Mb/s, as product `0c78`), sent no frames there, and two walk-ins
+  ended with it "hung". A power cut made then switched the USB 2 half on
+  first; `usbpower.py` now switches the USB 3 half on first, and the
+  camera has one more try after it is opened again.
+- **20:34 onward, the 3 m lead straight into laptop socket 2-5:** 5000 Mb/s,
+  no resets in the kernel log; every 1 s frame arrived (a walk-in and the
+  cloud checks), while the spoken focusing aid lost 3 frames of 0.05 s in
+  its first minute. The hub was returned (`usb-hub.md`).
+- **20:34 to 22:30 on the 3 m lead, speed 0:** the link stayed at
+  5000 Mb/s with no resets. Lost frames came back: the spoken aid (2 s
+  frames) gave 72 readings without a loss, but the polar alignment's
+  plate-solve frames lost a first try now and then, 1 to 5 a round over
+  nine rounds and 12 in the first three of five repeat rounds at about
+  22:20, each got on a retry; no measurement failed for want of a frame.
+  The automatic power cut said each time that it could not be made (no
+  hub port) and the camera was opened again instead, which was enough.
+- **"Would not be set up" (SDK error 0x8000ffff) when opened at once after
+  another program closed it:** twice, at 21:20 and 21:36, a command opening
+  the camera a second or two after the last one let go of it was refused;
+  the same command a few seconds later opened it normally. Not the jam:
+  no power cut was needed.
+
+- **22:51 to 02:30, speed 0, the 3 m lead straight into socket 2-5, no hub,
+  5000 Mb/s throughout:** frames lost, each retried, in every run, and worse
+  the longer the frame:
+
+  | Run | Frame | Frames | Lost | Jams |
+  |---|---|---|---|---|
+  | M31 patrol, 22:51 | 16 s | 90 | 14 (13 %) | 0 |
+  | TOI-2046 transit, 00:00 | 4 s | 42 | 9 | 1 at 00:11 (four in a row: the run ended; a new run cleared it) |
+  | M33, 00:36 | 32 s | 1 | 3 of 4 (75 %) | stopped, back to 16 s |
+  | M33, 00:41 | 16 s | 80 | 24 (23 %) | 2, each cleared by opening the camera again |
+  | M31 second look, 01:33 | 16 s | 58 | 1 (2 %) | 0 |
+  | M33, 02:03 | 16 s | 12 so far | 8 | 0 |
+
+  A lost frame is never short now (speed 0): it simply never comes. Since
+  the night of 1 November a jam is handled in the run (`shoot.py` opens the
+  camera again, up to three times, and the frames go on into the same
+  session), and a frame is given 10 s + 1.5 x its exposure before it counts
+  as lost (it was 12 + 6 x, 108 s for 16 s).
+
+So tonight speed 2 is in the fault from the start, and speed 0 jams within
+minutes of being opened but is cleared every time by a power cut, made from
+the laptop while the hub was there. The hub itself then failed, and the
+camera went straight into the laptop, where it has never dropped off USB
+but nothing can cut its power. The hub has since been returned to Amazon.
+A jam there gets software steps first, and hands last:
+
+1. A command refused with `CAMERA_BUSY` names the process holding the
+   camera (`cameralock.py`). Stop a stale one with a plain `kill` and wait
+   until it is gone.
+2. A command that is retrying is recovering: `altair.py`'s `frame()` tries
+   again, closes and reopens the camera, then tries twice more. Let it
+   finish.
+3. A fresh open: `./snap.py --exposure 0.01 --gain 100`.
+4. Only then hands: pulling the lead.
+
+## The afternoon of 2 November 2026
+
+- **15:56, a stale owner.** A dark run stopped by killing only its wrapper
+  left `calibrate.py` holding the camera. The skyline survey then got "would
+  not be set up" (SDK error 0x8000ffff). The next survey opened the camera
+  but got no frame, even at 0.002 s. A fresh `./snap.py` open cleared it at
+  once: a 10 ms frame in 2 s, median 378.
+- **Single lost frames** during the survey and during polar alignment at
+  about 17:50 recovered by themselves.
+- **Since then:** `cameralock.py` gives the camera one owner at a time, and
+  a second command is refused with `CAMERA_BUSY` naming the holder; SIGTERM
+  now closes the camera before the program ends.
 
 ## What is known
 
@@ -687,10 +792,13 @@ The camera is Gary's; the ticket is ours, and paying for a repair would be his c
 | In one line | in one state, which comes and goes, the exposure at speeds 1 and 2 is timed as if by speed 0's clock: a 1 s flash moved through 8 s exposures shows speed 2 gathering exactly half as long as speed 0, speed 1 two thirds, all starting 0.4 to 0.5 s after the request; the camera reports the time asked throughout. Is this a known behaviour of firmware 1.4.1 or of the library at these speeds? |
 | Seen before | an Altair 183C Pro owner on SharpCap's forum, December 2023: exposures ending at 50-70 % of the time asked, recorded at full length (forums.sharpcap.co.uk, topic 7304); was it ever resolved? |
 | Sent to Altair | 1 Nov 2026 02:22 on #3470: the early frames, the timed light and scan, the state surviving reopening and a power cut, the same in Altair's library and AltairCapture, the cold night, the SharpCap report, and three questions |
+| Sent to Altair, again | 2 Nov 2026 02:14 on #3470 (the person said to send it): speed 2 short on every port and through or without the hub; speed 0 losing 4, 16 and 32 s frames (more the longer the frame) straight into the laptop; four jams in a night, cleared by opening the camera again or cutting its power at the hub, not by the SDK's Replug; and three questions (newer firmware, a known hardware fault and its repair, what else to run) |
+| Altair's answer, 2 Nov 2026 14:40 | given the age of the camera and the intermittent fault, probably memory or other chip failure; replacing the whole board is usually the fix. They are checking whether a new board can be sourced, or an old one reprinted, and which is cheaper, warning that if a new board does not fit this old unit a new camera may cost less. No firmware offered. Ticket "Awaiting customer reply"; any repair is the owner's call |
 | Altair's own program | AltairCapture 4.12 with altaircam.dll 60.31589 on Windows 11 (31 Oct): two 8 s Trigger Mode frames at Frame Speed 0 never arrived, the live view frozen; Altair's Windows library gave the same short 16 s frames at speed 2 as on Linux. Diagnose output attached (`altaircapture-diagnose-2026-10-31.txt`) |
 | Started | 04:59 on 20 Oct 2026, at dawn after a cold night |
 | Comes and goes | gone 26 Oct; back 30 Oct 10:46; gone again by 11:02, nothing touched; back 31 Oct 17:28 just after the camera was handled and replugged, and still there after closing and opening it |
-| Speed 0 | kept every frame from 23 Oct to 31 Oct; outside on 1 Nov at 6 °C it lost 16 s frames and the first frames after each opening, and jammed until its power was cut |
+| Speed 0 | kept every frame from 23 Oct to 31 Oct; outside on 1 Nov at 6 °C it lost 16 s frames and the first frames after each opening, and jammed until its power was cut; on the night of 1 to 2 Nov, plugged straight into the laptop at 5000 Mb/s, it lost 2 to 23 % of 16 s frames, 3 of 4 32 s frames and some 4 s ones, and jammed four times (frames never arrive; opening it again or cutting its power clears it) |
+| Not the laptop's port, not the hub | 1 Nov evening: the same short 16 s frames at speed 2 on two USB-A sockets and on USB-C, behind a powered hub and straight in |
 | Firmware | 1.4.1 (January 2017) |
 
 ## A replacement being considered, 1 November 2026
@@ -704,6 +812,11 @@ the ticket on 1 November at 02:22, asking whether this is a known fault of
 firmware 1.4.1 or the FPGA at the faster speeds, whether newer firmware
 exists, and whether it changes their view of the £30 inspection and a new
 board.
+
+The person's view on money for a repair (2 November): a second-hand board
+only if it costs about £100 or less; anything more goes towards a better
+used camera. Altair's reply of 2 November at 14:40 (probably a memory or
+chip failure, and checking for a board) is in the table above.
 
 What it would mean here, from its published specification:
 

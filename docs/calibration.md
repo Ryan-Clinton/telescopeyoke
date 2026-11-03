@@ -20,7 +20,19 @@ been done.
 Steps 2 to 4 have run on the real mount: polar alignment (13 and 17
 October 2026), finding and marking home (17 October: 10.66° out by eye,
 0.19° on the marks) and the pointing survey (17 October). Polar
-repeatability (`--repeat`) and step 5's check by night are still to be run.
+repeatability (`--repeat 3`, 0.06° to 0.11° scatter) ran on 2 November;
+step 5's check by night is still to be run.
+
+**Stickered baseline, ralphie-side, 2 November 2026, 18:43.** The feet were
+set by turning the whole tripod (bolts left centred), each turn checked with
+`./polaralign.py --step 25 --repeat 3` from near Deneb, then stickers put
+under all three feet. With the stickers on: **0.28° west of north, 1.55°
+too low** (1.5° from the pole), scatter 0.11°. Azimuth is right on the
+marks; the height is still to be set by the latitude scale or the north
+leg's length, which does not move the feet. On these tiles a turn of the
+whole tripod is jumpy: about 3 cm a foot moved it anything from 0.2° to
+2.2°, so the feet can do about half a degree and the bolts the rest. A later
+night back on the stickers is checked against this.
 What follows is how each works.
 
 ## 1. Level, roughly
@@ -40,7 +52,9 @@ six rounds took the axis from 3.3° to 0.1° (13 October 2026), once the
 measurement took out the handset's own movement of the Dec axis
 ([validation](validation.md#night-of-13-october-2026)). `--repeat 5`,
 with the bolts left alone, gives the scatter of the measurement itself,
-which says what a reading of 0.1° is worth. That has not been run yet.
+which says what a reading of 0.1° is worth. On 1 November five checks
+with the bolts alone scattered 0.06°, and on 2 November `--repeat 3` gave
+0.06° to 0.11° ([validation](validation.md#2-november-2026)).
 Each round tonight, the picture being taken and the advice are also kept in
 `cache/polar_stream.json` for the live stream's polar look
 ([streaming.md](streaming.md#focusing-and-polar-alignment-on-air)).
@@ -102,7 +116,26 @@ figures exist, and not built:
   for the first part of a turn. If the kept figures show it (turns made
   after a reversal moving the axis less than turns continued the same way),
   the slack can be learned by itself and the advice can say "take up a
-  quarter turn, then half a turn more".
+  quarter turn, then half a turn more". **Measured on 1 November 2026**
+  (EQ3 Pro azimuth bolts, a half turn at a time, one bolt eased and the
+  other turned in): the two half turns that continued the way the last one
+  went moved the axis **0.94° and 0.98°**; the four that came straight
+  after a change of direction moved **0.67°, 0.42°, 0.53° and 0.55°**. So a
+  turn is worth about 1.9°, and about **0.45° (a quarter turn) is lost to
+  slack each time the direction changes**. The 1.5 turns that overshot the
+  pole that evening (3.3°, 2.2° a turn) went one way after a reversal had
+  already taken the slack up. A quarter turn continuing the same way read
+  as nothing (0.3° east before and after), but five checks over the next
+  ten minutes with the bolts untouched read 0.19, 0.03, 0.00, 0.15 and
+  0.04° east (a scatter of 0.06°): it had moved about 0.2°, and the mount
+  settled into it after the check made just after the turn. So a check
+  made at once after a small turn can miss part of it, and the scatter of
+  a single measurement (0.06°) is small beside the half-turn figures above.
+  A "quarter turn" by hand on these small knobs is really 35 to 55° (the
+  person's own estimate), 0.1 to 0.15 of a turn: at 1.9° a turn, 0.2 to
+  0.3°. A second one the same way, measured a minute after the turn and
+  twice, moved it 0.28° (0.08° east to 0.2° west, both readings agreeing).
+  Logs: `logs/polar-20261101*.log`.
 - **The 2° limit.** It is a fixed first figure. With the bolts' travel
   known, the choice between the bolts and the whole tripod could go by how
   much travel is left on that side.
@@ -209,6 +242,28 @@ the judgement is recorded and stops nothing: the first real frames showed
 the optics' own marks passing for a view that had not changed.
 `./mount.py nudge`, a 5° tip from home and back,
 is the check for a person standing beside it.
+
+## Polar alignment, 2 November 2026
+
+At ralphie-side, before the stickered baseline above:
+
+- **17:40, from Deneb, the tripod not yet moved** (`--step 12`): 0.8° out,
+  0.8° low and 0.3° west.
+- **The tripod moved off a tile crack** (`--step 25 --repeat 3`): 1.5° out,
+  1.2° west and 1.3° high.
+- **Altitude by a leg:** about 2 cm on one leg moved the altitude 2.7°,
+  roughly 1.3° a centimetre.
+- **Azimuth by the feet:** on the tiles, 6.7 cm a foot moved the axis 2.1°,
+  about 3.2 cm for each degree. The configured `tripod_cm_per_degree` is
+  2.3 (measured on grass on 15 October).
+
+## Dark frames, 2 November 2026
+
+The 16 s darks at gain 1500 failed at 15:51 in daylight: the first frame
+read 4094 of 4095. Daylight leaks past the cap on the tube through the open
+mirror cell. Darks need full dark, or a cap on the camera itself. Only 1 s
+and 4 s darks at gain 1500 exist; the M31 and M33 patrols shoot 16 s, so
+they have no matching darks yet (record: [validation](validation.md#2-november-2026)).
 
 ## The handset's clock
 

@@ -8,6 +8,11 @@ The camera's own fault (short exposures, jams) is a separate matter, in
 
 ## The hub
 
+**Returned to Amazon.** The RSH-ST04 below has gone back, so the camera is
+plugged straight into the laptop and nothing can cut its power from the
+laptop: `usbpower.py` and `power_cycle_on_jam` have no hub to work with
+until a hub that switches its ports is back.
+
 - **RSHTECH RSH-ST04**, 4-port powered USB 3.0 hub, aluminium, with a 1 m
   USB-B to USB-A/USB-C lead and a 5 V / 2 A mains adapter. Bought 22 October
   2026, £22.98. It arrived on 26 October and came into use on 30 October.

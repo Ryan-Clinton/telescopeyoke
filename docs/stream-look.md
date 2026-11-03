@@ -499,7 +499,11 @@ October 2026).
 **Milestones come from what was measured**: the lucky imaging's stages and
 the colour videos taken (`web/lucky.json`, `lucky.progress("colour", done,
 videos)`), the patrol's fields, the transit's times (before, crossing,
-after), the focus run's and polar alignment's own steps.
+after), the focus run's and polar alignment's own steps. The transit's
+stages follow the predicted times, so with no fresh frame (none kept in
+three exposures and a minute) the stage under way says "(expected: no
+frames coming in)": the clock says where the transit should be, not that
+it is being measured.
 
 **Confidence, never stronger than the measurement** (`mission.confidence`):
 
@@ -529,7 +533,11 @@ shows one raw frame above what was made of it, each labelled with its
 measured count: ONE 16 S EXPOSURE ↓ 40 STACKED · 11 MIN; ONE RAW FRAME ↓
 THE SHARPEST 400 OF 2,000 COMBINED; ONE RAW FRAME ↓ MINERAL MOON · 3 COLOUR
 VIDEOS (`mission.reveal`). It is in the panel, so the picture is never
-covered.
+covered. For a run's stack it is shown only when the notes beside the two
+pictures say they belong together (`mission.same_run`): `web/latest.json`
+a run's newest frame, `web/stack.json` a stack of the same target; a focus
+check or a look also writes `latest.jpg`, and would otherwise be shown
+beside a stack it has nothing to do with.
 
 **The opening** is a line over the picture as the stream goes on air,
 "TELESCOPEYOKE LIVE · TONIGHT: MINERAL MOON", for 10 s

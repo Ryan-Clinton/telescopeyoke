@@ -17,13 +17,26 @@ and the next step that fits that sky starts now, without asking.
 status` (which only reads) say what is plugged in, whether the handset is
 past its start-up screens, and where the axes are. Name every device `lsusb`
 lists before doing anything: `0403:6015` the handset lead, `16d0:0c77` the
-camera, `1a86:7523` (CH340) the motor focuser, which `doctor.py` does not
-check. The camera goes through the powered USB 3.2 hub (`0bda:0411`) on the
-two 1 m leads, never the 3 m lead into the hub; if the camera is missing or
-"would not be set up", its port button on the hub, pressed twice, brings it
-back (`docs/camera-fault.md`, "Hubs and leads"). The focuser's Nano goes on the hub too:
-on the laptop's own port the motor cannot lift the drawtube with the camera
-on (`docs/focuser.md`, 30 October 2026). When what the person said disagrees with the list, ask that one
+camera, `16d0:0b2a` the guide camera (`./guidecam.py`), `1a86:7523` (CH340) the motor focuser, which `doctor.py` does not
+check. **Since 1 November 2026 there is no hub:** the RSH-ST04 kept
+dropping off the laptop and has been returned to Amazon
+(`docs/usb-hub.md`). The camera goes on the 3 m lead straight into a laptop
+USB-A socket, where it has never dropped off USB and on 1 November kept
+every 1 s frame at 5000 Mb/s. With no hub nothing can cut its power, so a
+jam (no frame at all) gets software steps first, then hands: (a) a command
+refused with `CAMERA_BUSY` names the process holding the camera
+(`cameralock.py`); stop a stale one with a plain `kill` and wait until it is
+gone; (b) a command that is retrying is recovering (`altair.py`'s `frame()`
+tries again, closes and reopens, then tries twice more): let it finish; (c)
+a fresh open, `./snap.py --exposure 0.01 --gain 100`; (d) only then pull the
+lead and put it back. With a hub that switches each
+port's power, `./camera_test.py --power-cycle` does that from the laptop,
+and with `power_cycle_on_jam = true` the camera does it by itself after a
+frame is lost twice; without one, the setting only says it could not
+(`docs/camera-fault.md`, "The evening of 1 November 2026"). The focuser's
+Nano on a laptop socket can turn the focuser inward but not lift the
+drawtube outward (`docs/focuser.md`, 30 October 2026); on 1 November its
+motor turned and the knob did not, so focus was by hand with the spoken aid. When what the person said disagrees with the list, ask that one
 question before acting. Reread what the person has said: do not ask what
 it already answers.
 

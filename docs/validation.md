@@ -10,14 +10,14 @@ tried, including figures later found to be wrong.
 
 ## Current conclusions
 
-As of 20 October 2026, on the author's EQ3 Pro, 150P and Hypercam 183C on
+As of 2 November 2026, on the author's EQ3 Pro, 150P and Hypercam 183C on
 Ubuntu. ✅ proven on real equipment, ⚠️ partly, 🧪 simulator and tests
 only, ❌ tried and not yet working.
 
 | What | Where it stands |
 |---|---|
 | GoTo centred by plate solving | ✅ to about an arcminute, from 10° out |
-| Polar alignment | ✅ 3.3° to 0.1° over six rounds (13 October), with the handset's own Dec movement taken out; an earlier 5.2° to 0.2° was wrong for that reason. 17 October, the tripod not moved: 1.0° at the start, 0.5° after three adjustments. ⚠️ How well a reading repeats is not measured, nor why it moved between nights |
+| Polar alignment | ✅ 3.3° to 0.1° over six rounds (13 October), with the handset's own Dec movement taken out; an earlier 5.2° to 0.2° was wrong for that reason. 17 October, the tripod not moved: 1.0° at the start, 0.5° after three adjustments. Repeatability measured, 1-2 November: five checks with the bolts alone scattered 0.06°, and `--repeat 3` on 2 November gave 0.06-0.11°. Stickered baseline on ralphie-side; the 2 November figures are in [Calibration](calibration.md#polar-alignment-2-november-2026). ⚠️ Why a reading moved between nights is not known |
 | Focusing by star measurement | ✅ |
 | Motor focuser | ✅ the 150P to HFR 2.47 (15 October), 2.28, then 2.14 (17 October); the gears' slack is large, so it always finishes moving inward. Focus held from one night to the next (HFR 1.86 at the start on 17 October): it measures first now (`--check`). 18 October: the step-by-step hunt failed on noisy readings near focus and once ran five turns in; replaced by a fitted sweep through focus, not yet tried on the sky. 20 October: the motor no longer pushes the drawtube outward with the camera on, even on two coils ([docs/focuser.md](focuser.md)); a stronger or fresh drive is needed. 30 October: it lifted the drawtube outward with the camera on again, over half a turn, on the powered hub; on the laptop's own port it stuck after a tiny amount, so the hub's power is the fix ([docs/focuser.md](focuser.md#30-october-2026-evening-it-lifts-again)) |
 | Click, tone and focus levels | 🧪 |
@@ -29,14 +29,15 @@ only, ❌ tried and not yet working.
 | Pointing survey | ✅ 17 October: one correction for each side is enough |
 | Landmark azimuth | 🧪 |
 | Checking the telescope really turned | ⚠️ one real record, and it caught a real fault |
-| Skyline | ✅ the telescope's own survey by day, 17 October: 28 bearings, one look checked by eye (the hedge at 120°); the north below the mount's reach and the low south-west near the setting Sun not measured. ⚠️ panoramas found, not tied to the compass |
+| Skyline | ✅ the telescope's own survey by day, 17 October: 28 bearings, one look checked by eye (the hedge at 120°); the north below the mount's reach and the low south-west near the setting Sun not measured. ralphie-side, 2 November: a daylight skyline kept on the person's eye check (the house to 75° due north, 36-45° from east to south-south-west, open from 30-36° in the west-south-west and west); the south-west gap is probably lower than kept (see 2 November below). ⚠️ panoramas found, not tied to the compass |
 | Control without the handset | ⚠️ the Wi-Fi adapter read; nothing moved |
 | Windows | ⚠️ camera frames indoors; no mount driven; no whole night 🧪 |
 | Dark and flat frames, gain sweep | 🧪 |
 | Discovery pipeline | ⚠️ subtraction, vetting and planted fakes on real M31 stacks; a known nova found again in ZTF archive images; no transient of our own yet (`docs/discovery.md`) |
 | Comets in spacecraft pictures | ✅ known comets found in archived LASCO pictures; 19 October, the six-hourly hunt found a known Kreutz sungrazer by itself in 74 GOES-19 CCOR-1 pictures, followed it for 7 hours across a gap and matched it to the Sungrazer Project's report to about 2 pixels; SOHO's C3 showed it too (`docs/discovery/comet-hunt-2026-10-19`); false alarms beside CCOR-1's occulter arm stopped on 27 October by measuring each pixel's own noise (`docs/discovery/results.md`) |
 | Lights, speaker and phone alerts | ✅ cloud and rain alerts changed a Hue light and spoke on a Google speaker (before the watch was turned off on 16 October); the call at 04:59 on 20 October, when a transit run stopped, pulsed the house's lights, spoke and sent the phone message, and woke the person |
-| Live stream on Twitch | ✅ on air from 01:20 UTC on 20 October on the WASP-12 b run: 1080p, the title, category and tags set for each target, the presenter and the chat's commands; one 9-minute freeze when old code met new words (restarted). YouTube not yet tried |
+| Live stream on Twitch | ✅ on air from 01:20 UTC on 20 October on the WASP-12 b run: 1080p, the title, category and tags set for each target, the presenter and the chat's commands; one 9-minute freeze when old code met new words (restarted). YouTube went on air at 23:05 on 1 November with its title set automatically |
+| Guide camera | ⚠️ the GPCAM MT9M034M opens only through libaltaircamlegacy 1.24, by `./guidecam.py`; frames of 17, 151 and 255 at 1, 10 and 100 ms on 2 November. No guiding yet: it waits for the guide scope |
 | Exoplanet transit photometry | ⚠️ one attempt, WASP-12 b on 20 October: 973 frames, dimming of about the right size seen but not a detection: no baseline after the transit (cloud), and about 14 mmag per 40 s point (`docs/discovery/transit-wasp12b-2026-10-20`) |
 | Photometric hold (`shoot.py --hold`) | 🧪 built and reviewed 20 October; not yet run on the real mount |
 | The night's end: parked and told | 🧪 `schedule.py end` and the morning guard, built and reviewed 20 October; `mount.py home` itself proven, the whole not yet through a real night |
@@ -54,7 +55,7 @@ The account of everything tried so far, feature by feature, is at the end:
 | 3 | Does the quality pass beat the live stack and a plain stack? | `./compare.py` on the same 200 to 300 raw frames stacked three ways: star width, roundness, background noise, faint detail. | Partly: on 200 frames of M27, star width went from 8.4 to 6.9 px and roundness from 0.67 to 0.92 against the first-night stacker. |
 | 4 | Does `--exposure auto` pick the exposure that gathers most usable light? | Run the same target at 1, 2, 3 and 4 s; compare accepted integration time and star shape with what auto chose. | It chose 1 s twice, on roundness. Whether 2 s would have given a better picture despite the stretch is untested. |
 | 5 | Do four worker processes give the expected speed-up? | `./restack.py SESSION --profile` on 200 to 500 frames, with `--workers 1` and `--workers 4`. | 200 frames: 23.5 minutes before the rewrite, 3.9 minutes with four workers. |
-| 6 | Does the polar measurement repeat? | `./polaralign.py --repeat 5` with the bolts left alone. It prints each answer and their scatter. | Not yet run. Five rounds on 6 October gave 5.2°, 1.1°, 0.4°, 0.6°, 0.2°, but the bolts were turned between them. |
+| 6 | Does the polar measurement repeat? | `./polaralign.py --repeat 5` with the bolts left alone. It prints each answer and their scatter. | Run 1-2 November 2026: five checks with the bolts alone scattered 0.06° (1 November); `--repeat 3` on 2 November gave 0.06-0.11°. Five rounds on 6 October gave 5.2°, 1.1°, 0.4°, 0.6°, 0.2°, but the bolts were turned between them. |
 | 7 | How quickly is a turn of the focuser heard on the USB 3 lead? | Dropped on 31 October 2026: its one-off command was taken out. `./focus.py` still prints `feedback_s` on each line. | Never run. |
 | 8 | How long is the shutter really open? | `./camera_test.py --timing` (cap on, any time), then `./camera_test.py --trail` on a field of bright stars away from the pole. | Run 13 October. Each second asked for added 0.63 s; a 10 s frame's trails showed the shutter open 6.4 s. It changes with the driver's Speed control (1.25, 0.86 and 0.63 s at Speed 0, 1 and 2). `camera.py` now asks for more by the measured share, and a 10 s frame's trails then showed 9.6 s. |
 | 9 | Does the sky's drift answer the Dec motor in proportion? | Dropped on 31 October 2026: its one-off command was taken out. | Never run. The three readings of 5 October (below) fit no one explanation. |
@@ -522,9 +523,134 @@ focuser not touched since the stars.
   lay outside 3° of where the tube pointed at home, or the focus is out; the
   frames cannot say which. The search spends about a quarter of its looks
   re-testing those three blemishes, which it could learn to leave alone.
+### 2 November 2026
+
+- **`horizon.py --trace --daylight` from ralphie-side, 2 November 2026,
+  08:39-08:50**, with the Sun just risen in the east-south-east: 38 looks
+  over 12 bearings, every one read as sky. After the first, metered high in
+  the north, nearly every frame was burnt out (297% of the high sky, the
+  ceiling), and burnt out scored as bright, smooth sky; the pictures in
+  `horizon/ralphie-side/looks/` show flat glare with nothing to read. The
+  skyline it kept was set aside unused
+  (`cache/horizon-ralphie-side.not-used-20261102.json`), so the planner still
+  has no skyline for this spot. Since then a mostly burnt-out frame is
+  "burnt", never sky; each look starts at the high sky's exposure and one
+  that burns out is metered again where it points, its brightness compared
+  with the high sky's for the same time; one still burnt out at the shortest
+  exposure is left out as glare. The rule since: what a survey cannot read
+  is never open sky. A bearing it could not measure goes into the skyline
+  blocked and marked unmeasured, not filled from its neighbours; a dark
+  night look with no stars is tried again 4 times longer, then counted as
+  unknown, not cloud; every bearing with an unread look is looked at again
+  once the rest is done (cloud drifts, the Sun moves on, a wall stays); and
+  a survey with more than a quarter of its looks still unread keeps
+  nothing. A survey that fails its last check (back at the first bearing it
+  reads differently: the mount slipped or the light changed) or reads too
+  little is set aside as `cache/horizon-SPOT.not-used-TIME.json` to look
+  into, never in place of the skyline in use. By day the high sky is looked
+  at again every 5 minutes, where it was first, since it brightens as the
+  Sun climbs. Every skyline point now says what measured it: the telescope,
+  an earlier skyline moved by the looks nearby, a corner put between two
+  looks, or nothing; a bearing the telescope could not look at keeps an
+  earlier skyline's height, marked not rechecked, and with none is blocked.
+  How a top in the frame is read was checked with the camera turned to
+  eight angles: the right side every time, within 0.15 of a frame (a tenth
+  of a degree). The re-referencing by day is not covered by a test (it
+  needs the mount); none of this has yet run on the real mount.
 - **`horizon.py --trace --daylight`** made three looks, all at bearing 0°,
   72° to 75° up, all read as open sky under cloud, before rain stopped it.
   No skyline was kept.
+- **`horizon.py --trace --daylight` from ralphie-side, 2 November 2026,
+  15:59-16:32**, the Sun low in the south-west: 102 looks over 24 bearings,
+  none burnt out or unread, and the fixes above all worked: no glare read as
+  sky, the high sky re-referenced as it dimmed. It kept nothing: its last
+  check, back at due north 72° up, read sky (76% of the high sky) where the
+  first look had read blocked (17%), and the survey was set aside
+  (`cache/horizon-ralphie-side.not-used-20261102-163232.json`). The light
+  alone does not explain it: 75° up beside it read the same both times
+  relative to the high sky, and 7.5° found a top at 75°. Due north is on the
+  meridian, where the mount may come over either side of the pole, and its
+  pointing differs between the sides by degrees; which side it took each
+  time was not recorded. Since then every look records the mount's axes and
+  which side the tube came over, the last check is made at a bearing at
+  least 30° off the meridian, and its warning says when the tube changed
+  sides. Two bearings, 97.5° and 172.5°, read open to 20° between tops near
+  40°; the pictures are plain blurs (by day the garden is far out of focus),
+  so a gap and a lit wall look alike. Such a lone opening is now kept in
+  doubt with a warning to look that way. A survey cut short now carries on
+  the same day from what it had measured. Then the person outside looked:
+  the house is due north (the first look, blocked, was right), north-north-east
+  and south-south-west are open but not low, and neither due east nor due
+  south is open low down. So both lone openings were lit walls read as sky:
+  such an opening is now put at the lower of its neighbours' tops, not just
+  doubted. The survey was then kept on that word (`./horizon.py --use-aside
+  ... --checked "..."`): ralphie-side's first skyline, the house to 75° from
+  north to 7.5° and 72-75° at 300-330°, 36-45° from east to south-south-west,
+  open from 30-36° in the west-south-west and west. Side-of-pole recording
+  not yet run on the real mount.
+- **Mount clearance past 6 h, 2 November 2026, about 17:15**, with the
+  person beside the mount: `./mount.py point --clearance-test` to 6.0, 6.5,
+  7.0 and 7.5 h from the meridian on each side at Dec +40° (32° down to 21°
+  up). The camera, its lead and the counterweights stayed clear of the legs
+  at every step (the counterweights 22 cm away at the closest, the camera
+  level and well clear at 7.5 h), and the way back home was clear. The
+  hour-angle limit, 5.75 h since the first night's collision (whose cause
+  was the handset clipped to a leg), is now 7.5 h.
+- **The two low gaps, 16:47-16:53**, from the person's phone photos and
+  sky-map screenshots. The **south-west gap**, at bearings 210-228°, is open
+  to about 20° (±5°, from a phone photo), where the kept skyline says 54°,
+  because the survey avoided the low Sun there. The planner is too cautious
+  at those bearings until a morning survey measures them. The **north-east
+  gap**, at 40-55° low above the shed, is mostly beyond the mount's
+  hour-angle limit: 7.5 h reaches bearing 49° only at about 21° up.
+- **The Moon time-lapse, morning, not explained.** Picture 1 at 05:22 was a
+  blur; picture 2 at 06:02 was dimmer by about 80 times, with the Moon off
+  the frame. The notes said something was in the way at bearings 147-165°,
+  48-51° up. The kept skyline puts 36-45° there, so it does **not** explain
+  this. Cause unknown.
+- **Disk full at 06:12.** An 11.9 GB Moon `.ser` file filled the disk and
+  stopped time-lapse pictures 3 to 5. It was moved to `/mnt/storage` with a
+  link back, leaving 15 GB free. `storage.py` came from it: it tidies before
+  each step, and `schedule.py show` warns when space is short.
+- **Dark frames, 15:51:** the 16 s darks at gain 1500 were taken in
+  daylight and the first frame read 4094 of 4095: daylight gets past the
+  cap on the tube through the open mirror cell. Only 1 s and 4 s darks at
+  gain 1500 exist, and the M31 and M33 patrols shoot 16 s
+  ([calibration](calibration.md#dark-frames-2-november-2026)).
+- **Polar alignment:** `--repeat 3` gave scatter of 0.06-0.11°; the
+  tripod moves and the stickered baseline are in
+  [calibration](calibration.md#polar-alignment-2-november-2026).
+- **A stuck camera, 15:56:** a dark run stopped by killing only its wrapper
+  left `calibrate.py` holding the camera; the camera's own lock and a clean
+  close came from it ([camera-fault.md](camera-fault.md#the-afternoon-of-2-november-2026)).
+- **Guide camera:** the GPCAM MT9M034M opened only through
+  libaltaircamlegacy 1.24, by `./guidecam.py`, giving frames of 17, 151 and
+  255 at 1, 10 and 100 ms. No guiding yet: it waits for the guide scope.
+- **YouTube** went on air at 23:05 on 1 November with its title set
+  automatically.
+
+### 3 November 2026
+
+- **`horizon.py --trace --daylight` from ralphie-side, 3 November 2026,
+  08:45-09:42** ([the record](nights/2026-11-02/skyline-survey.md)): 184
+  looks; due south read blocked to 75° in frames 1-5% as bright as the high
+  sky, and it replaced the skyline checked by eye the day before. The
+  mount's axes show the 180° looks aimed about 30° from the 187.5° ones on
+  the same side of the pole: each look's pointing correction (+15.6° and
+  -14.3° in Dec, home not set since 20 October) is chosen by the target's
+  side of the meridian, not by the side the tube came over. The checked
+  skyline is back; a survey can no longer raise one checked by eye, a
+  jammed camera is reopened, and the stream stays off air for a survey.
+  Every corrected slew (GoTo and the survey) now reads the axes after it
+  and, if the tube came over the other side, goes again with that side's
+  correction; by day a look whose correction was never plate-solved on its
+  side (over 2°), or whose side changed twice, is not made; a bearing
+  blocked to the top of the survey is warned about; a replaced skyline is
+  kept as `horizon-SPOT.replaced-TIME.json`. Tested in the simulator; not
+  yet run on the real mount.
+
+### By day, 7 October 2026 (continued)
+
 - **The movement check's first real record** came from those looks, and it
   was nearly wrong. Going by "stars", it found 60 specks in each of two
   bright frames 3° apart, and 47% of them were in the same place: the
@@ -758,6 +884,8 @@ as cold, the flue is the likelier cause.
 **Long frames at Speed 2 again, either lead**, 26 October 2026 ([the record](nights/2026-10-26/camera-lead.md)): straight from the laptop's port 2-4 at 5000 Mb/s, cap on, the camera kept 3 of 3 and 8 of 8 16 s frames and 10 of 10 2 s frames at readout speed 2, where both older leads had kept none since 20 October. The old 3 m lead then kept the same 21 of 21 on the same port: the lead was not the cause, and the camera's fault comes and goes. `readout_speed` stays 0.
 
 **Speed 2 after a night outside**, 30 October 2026 ([the record](nights/2026-10-30/camera-speed.md)): at 03:09, after five hours outside at about 11.4 °C, dew point 7.7 °C, 78 % humidity (the forecast for the site), the speed ladder kept 8 of 8 16 s frames at readout speed 2; a mild night, so cold is still untested. Back to `readout_speed = 2` until the fault reappeared, which it did at 10:46 the same morning, indoors and warm: the first 16 s frame lost at speeds 2 and 1 (the test stops a speed at its first loss), 8 of 8 at speed 0. Back to `readout_speed = 0`; cold is not what brings it on. Long frames for guiding the same day: 5 each of 60, 120 and 300 s all arrived at speed 0, and at speed 2 too, about 15 minutes after speed 2 lost a 16 s frame, the camera plugged in throughout; at 14:40 speed 2 kept 8 of 8 16 s frames, so the fault comes and goes, is not about the length of the frame and clears without unplugging. The whole fault in one page: [camera-fault.md](camera-fault.md). **Through a powered USB 3.2 hub**, the same evening: with the 3 m lead from the laptop to the hub the camera dropped off USB within two minutes at speed 0, three times; on two 1 m leads, either way round, speed 0 kept 50 of 50, speed 2 kept 50 of 50, then 720 of 720 16 s frames at speed 2 over 4 h 16 min; but the 3 m lead straight to the laptop kept 720 of 720 too, 22:57 to 03:13, and again 03:13 to 07:29, and once more on 31 October 08:49 to 13:05 with every USB transfer recorded (2,880 speed 2 frames in a row without a loss), so the fault was simply away that night; but on 31 October at 17:28 it came back, and the USB traffic recorded in it showed a 16 s frame sent back after 10.3 s instead of 20.5 s and thrown away as too soon, and that the counts above did not count a frame lost and kept on a second try ([what the recording showed](camera-fault.md#what-the-recording-showed-31-october-2026)); that evening, with light on the sensor, the frames sent too soon held 0.51 (speed 2) and 0.67 (speed 1) of a speed 0 frame's light: the exposures really are cut short ([the light test](camera-fault.md#the-light-test-31-october-2026-evening)); timed against a clock with flashes from the laptop's screen, a 12 s exposure gathered light for 15.4 s at speed 0, 10.4 s at speed 1 and 8.3 s at speed 2 ([the timed light](camera-fault.md#the-timed-light-31-october-2026-evening)); and a flash moved through 8 s exposures showed every speed starting 0.4 to 0.5 s after the request and stopping at 10.7 s (speed 0), 7.3 s (1) and 5.5 s (2): shortened, not moved, speed 2 exactly half of speed 0 ([the scan](camera-fault.md#the-scan-31-october-2026-night)) ([hubs and leads](camera-fault.md#hubs-and-leads-how-to-plug-the-camera-in)).
+
+**The jam cleared from the laptop**, 1 November 2026, evening ([the record](camera-fault.md#the-evening-of-1-november-2026)): speed 2 sent its 16 s frames back after 10.4 s on the hub at laptop port 2-5 and again with the hub moved to the USB-C port, so the laptop's port is not the cause; speed 0 jammed (no frame in 108 s) twice in 20 minutes. Each time, cutting the camera's power at its hub port from the laptop (`./camera_test.py --power-cycle`, uhubctl; off 12 s and 18 s by the kernel log) cleared it, after which speed 0 kept 5 of 5 16 s frames; with `power_cycle_on_jam = true` the camera code made the cut by itself at 19:41 after a frame was lost twice, and speed 0 then kept 20 of 20 16 s frames. Later that evening the hub's USB 3 half dropped off the USB-C port 35 times and left the camera on USB 2, where it sent no frames; the camera went onto the 3 m lead straight into the laptop (every 1 s frame kept at 5000 Mb/s) and the hub is being returned ([the hub's record](usb-hub.md)). The motor focuser turned and the knob did not ([focuser.md](focuser.md#when-the-motor-cannot-lift-the-drawtube)).
 
 **The mineral Moon**, 30 October 2026 ([the record](nights/2026-10-30/mineral-moon.md), [how it is made](lucky-imaging.md#the-mineral-moon-mineralpy)): from three 8-bit videos of the night, `mineral.py` found the picture's orientation from the terminator and the seas (213°; the night's plate solve of M34, allowing for the meridian flip, gives 212.9°), and the check agreed with spacecraft maps: Mare Tranquillitatis bluer than Mare Serenitatis by 2.0 % and than the uplands by 2.3 %, in all three videos and with any one left out. Against Clementine's whole colour map the agreement is weak: rank correlation 0.38 over 2,739 cells of 2° (0.19 with the slope fitted on mapped highlands, so the brighter half stays). `./ty moon --mineral` (16-bit colour videos, the disc moved to the sensor's corners, flats) and `--compare-flats` are tested on made-up frames only.
 

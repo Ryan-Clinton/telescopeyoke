@@ -4,8 +4,9 @@ What exists and how to run it. Why it looks the way it does, and what is
 still to come, is in [stream-look.md](stream-look.md), the design record.
 
 On air since 20 October 2026 on Twitch, from the WASP-12 b transit run
-(`docs/validation.md`, "Live stream on Twitch"). YouTube is built as a
-destination, alone or beside Twitch, and not yet tried on air. The focus
+(`docs/validation.md`, "Live stream on Twitch"). On YouTube too, beside
+Twitch, since 1 November 2026 at 23:05, once YouTube's Dual stream was
+turned off (below): the M31 nova patrol went out on both together. The focus
 and polar alignment looks and the focus tones were built on 22 October
 2026 and have been seen only in the preview and the tests, not yet on air.
 
@@ -270,6 +271,50 @@ work as before whenever Twitch is among the destinations. YouTube starts
 and ends its broadcast itself when the stream key has Auto-start and
 Auto-stop on.
 
+**A destination that drops off comes back.** ffmpeg says when a tee
+destination fails ("Slave muxer #1 failed ..., continuing with 1/2
+slaves"); the other stays on air, and after a minute (`REJOIN_S`) the
+stream starts again so the lost one rejoins, a few seconds off air for
+both, at most six times an hour (`REJOINS_PER_HOUR`) so a service down for
+good does not keep breaking the other. An ffmpeg that breaks off is closed,
+killed if need be and waited for (`stream.ended`), never left behind.
+
+**Settings take effect without a restart.** Every minute (`KEYS_LOOK_S`)
+the watcher reads the services and keys again; if they have changed it
+starts again on the new ones.
+
+**YouTube's title and description** are set by the stream as Twitch's
+are (`youtube.py`), once this laptop is signed in: the title as the
+stream gives it (leading with what is observed, "Exoplanet transit LIVE:
+timing TOI-2046 b crossing its star"), a description of tonight's plan
+from the schedule, what the observation is for, the kit and hashtags, the
+Science & Technology category, tags by mission, and the night's stack as
+the thumbnail (refused, and said, until the channel is phone-verified).
+Set again whenever the target, programme or the plan's next step changes.
+Setting it up, once:
+
+1. In Google Cloud (console.cloud.google.com), a project "TelescopeYoke"
+   with the YouTube Data API v3 switched on.
+2. An OAuth consent screen (External, the channel's owner as a test user)
+   and an OAuth client of the kind "TVs and limited input devices"; its
+   JSON downloaded.
+3. `./stream.py youtube-login --client FILE`: it gives a code to enter at
+   google.com/device, signed in as the channel's owner.
+
+The client and the tokens are kept in `~/.config/telescopeyoke/youtube.json`
+(readable only by the person). Until then, or whenever YouTube refuses,
+nothing is sent and the broadcast keeps what it had; the stream never waits.
+
+**Keep YouTube's "Dual stream" off** (Studio, Live, Stream settings). On 1
+November 2026 it was on: YouTube took the stream ("Stream is healthy",
+Excellent, Public) and held the broadcast at "Preparing stream" for
+15 minutes, both previews spinning, never going live. Turning it off did
+not start it by itself; the stream had to reconnect (the watcher's ffmpeg
+stopped, and started again 30 s later), and the broadcast went live within
+a minute. The address to watch is `youtube.com/@TelescopeYoke/live`, which
+leads to the broadcast whenever the channel is live. A connection to
+YouTube's ingest is not the stream being on air: check that address.
+
 The video is encoded by the laptop's own video hardware (Intel Quick Sync,
 through VAAPI). At the start it runs Twitch's bandwidth test; it drops to
 720p only on sustained trouble (a minute behind, dropped frames, or three
@@ -284,7 +329,10 @@ reached ("I've reached the Moon."), a GoTo setting off, a stage begun
 decision ("The Moon has drifted 73 pixels in the picture, so I'm
 re-centring it before the next burst. The same part of the Moon has to stay
 inside the camera's fast region."). With nothing happening, at most every 6
-min, the mission and its open question. Never two within 20 s.
+min, the mission and its open question. Never two within 20 s; an event
+that comes during those 20 s waits for them to end and is said then, if it
+is still under a minute old (`FRESH_S`). A sentence given up on as stalled
+is never heard late: only the newest sentence's speech is played.
 
 Every sentence is a template in `stream-targets.toml` (`[voice]`) filled
 with the measured state: first person, calm, plain about what is not known.
@@ -305,8 +353,11 @@ ten-minute buffer (`cache/stream-buffer/`, 10 s pieces, overwritten as it
 goes). A minute after each moment, `clips.py` joins the pieces from 20 s
 before it to 60 s after into `clips/DATE-TIME-WORDS.mp4`, without encoding
 again. Moments less than a minute apart share a clip, and the newest 40
-clips are kept. A clip that cannot be cut is tried once, never again at
-every look, and the piece ffmpeg is still writing is never used. They are material for highlights, Shorts and a
+clips are kept. A clip that cannot be cut is tried on three looks
+(`clips.MOST_TRIES`), so a passing failure gets another go, then let go,
+never tried at every look; the piece ffmpeg is still writing is never used.
+The pieces are chosen by when ffmpeg finished writing each (2 s), with the
+clip's minute either side as margin. They are material for highlights, Shorts and a
 "previously" at the start of the next night. `[stream] clips = false`
 turns it off.
 
