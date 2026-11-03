@@ -548,12 +548,15 @@ def test_a_picture_of_one_star_among_many_is_labelled(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DATA", tmp_path)
     (tmp_path / "cache").mkdir()
     (tmp_path / "cache" / "transients.json").write_text(json.dumps(
-        {"Tabby": {"ra": 301.564392, "dec": 44.456839, "kept_by": "starwatch.py", "id": "KIC 8462852"}}))
+        {"Tabby": {"ra": 301.564392, "dec": 44.456839, "kept_by": "starwatch.py", "id": "KIC 8462852"},
+         "M81-M82": {"ra": 148.92, "dec": 69.37, "kind": "field"}}))
     ra, dec, text = process.point_of("Tabby")
     assert (ra, dec, text) == (301.564392, 44.456839, "Tabby's star (KIC 8462852)")
     assert process.point_of("Vega")[2] == "Vega"
     assert process.point_of("M31") is None and process.point_of("Saturn") is None
     assert process.point_of("no such thing") is None
+    # 3 November 2026: M81-M82, a two-galaxy field kept by name, came out with a star marker in empty sky.
+    assert process.point_of("M81-M82") is None
 
     rgb = np.zeros((300, 450, 3), dtype=np.float32)
     picture = Image.fromarray(np.zeros((300, 450, 3), dtype=np.uint8))

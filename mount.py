@@ -1318,7 +1318,9 @@ def find_target(name):
     if kept.exists():
         for key, t in json.loads(kept.read_text(encoding="utf-8")).items():
             if key.replace(" ", "").lower() == wanted:
-                return {"id": key, "alt_id": t.get("alt_id", ""), "name": "transient", "ra": t["ra"], "dec": t["dec"]}
+                # "kind": "field" marks a place kept by name that is not one star, as M81-M82.
+                return {"id": key, "alt_id": t.get("alt_id", ""), "name": "transient", "kind": t.get("kind"),
+                        "ra": t["ra"], "dec": t["dec"]}
     raise Refusal("TARGET_UNKNOWN", f"'{name}' is not in the catalogue.")
 
 

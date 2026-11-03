@@ -119,7 +119,7 @@ def point_of(name):
     """(ra, dec, label) for a target that is one star among many, so that its
     picture needs it pointed out: a bright star, a watched star such as
     Tabby's, an exoplanet's host or a followed transient. None for a galaxy,
-    nebula, cluster, planet or mosaic panel, which is plain to see, and for a
+    nebula, cluster, planet, mosaic panel or a field kept by name, which is plain to see, and for a
     name not known."""
     import interface
     import mount
@@ -129,6 +129,8 @@ def point_of(name):
     except interface.Refusal:      # no such object
         return None
     if target.get("name") not in ("star", "transient") and target.get("kind") != "double star":
+        return None
+    if target.get("kind") == "field":      # a place kept by name for a field (M81-M82): nothing to point at
         return None
     watched = next((s for s in starwatch.STARS.values() if s["name"].lower() == str(name).lower()), None)
     if watched:
