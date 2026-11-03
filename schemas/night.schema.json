@@ -171,7 +171,7 @@
                      "next_waiting": {"type": "array"}, "error": {"type": "string"}}
     },
     "recommendation": {
-      "description": "What to do with tonight's clear spell, in order (agent.recommend): a programme inside a watch window tonight first, then a research lead up tonight, then the programmes as their fields come best, each only if it can finish in the clear time left (a mosaic takes the panels that fit). left_out says why each other one is not taken; note is set when no clear spell is forecast.",
+      "description": "What to do with tonight's clear spell, in order (agent.recommend): a programme inside a watch window tonight first, then a research lead up tonight, then the programmes as their fields come best, each only if it can finish in the clear time left with patrol.OVERHEAD per field or panel for the GoTo and plate solve (a mosaic takes the panels that fit); with fog forecast a brightness measurement is left out unless a watch window makes tonight count. left_out says why each other one is not taken; note is set when no clear spell is forecast.",
       "type": "object",
       "required": ["clear_minutes", "steps", "left_out", "note"],
       "properties": {"clear_minutes": {"type": ["integer", "null"]},

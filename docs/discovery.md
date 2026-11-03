@@ -233,7 +233,12 @@ What a person does; everything else is automatic.
    `recommendation`: what to do with the clear spell, in order (a watch
    window tonight, then a research lead up tonight, then the programmes as
    their fields come best, each only if it can finish in the clear; a
-   mosaic takes the panels that fit), and why each other one is left out.
+   mosaic takes the panels that fit), each field and panel costing
+   `patrol.OVERHEAD` (1.5 min: the GoTo and the plate solve) on top of its
+   frames, and why each other one is left out. With fog forecast inside
+   the clear spell (`fog_hours`), a
+   brightness measurement (a star watch, a lead's look) is left out unless
+   a watch window makes tonight count.
    The clear spell runs to the end of its last clear hour (3 November
    2026: a single clear hour had come out as no time at all). The research
    line names the next leads waiting (`next_waiting`, why each was

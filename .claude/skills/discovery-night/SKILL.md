@@ -12,10 +12,16 @@ is `docs/agents/setup-routine.md` step 6b.
 
 0. Asked for the outlook or tonight's plan ("how's tonight looking"): one
    message of tool calls, all at once, then the answer:
-   - one Bash call in the background (`run_in_background`), logs in the
-     scratchpad: `./brokers.py & ./archive.py screen; ./seti.py sweep;
-     ./investigate.py; wait` (the cloudy-day skill's A and B, the leads
-     waiting, and the surveys' new transients, about a minute);
+   - one Bash call in the background (`run_in_background`), each job to
+     its own log in the scratchpad (`S`) and its exit status printed, so
+     one that fails is seen:
+     `(./brokers.py > $S/brokers.log 2>&1; echo "brokers exit $?") &
+     ./archive.py screen --batch 200 > $S/archive.log 2>&1; echo "archive exit $?";
+     ./seti.py sweep KIC8462852 --blocks 3 > $S/seti.log 2>&1; echo "seti exit $?";
+     ./investigate.py > $S/investigate.log 2>&1; echo "investigate exit $?"; wait`
+     (the cloudy-day skill's A and B, the leads waiting, and the surveys'
+     new transients). When it finishes, read the exit lines first: a
+     non-zero one is said, with its log's last lines, in the follow-up;
    - `./ty outlook` (3 seconds: `./ty night`'s answer as short text, the
      recommendation first, the candidates seen on more than one night,
      the newest two unread papers on each topic and a count of the rest);

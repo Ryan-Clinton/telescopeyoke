@@ -544,25 +544,46 @@ def test_the_recommendation_takes_what_can_finish_in_the_clear_and_says_why_the_
     # 3 November 2026: an hour of clear sky, and the outlook listed every
     # programme without choosing.
     from datetime import datetime
+    import patrol
     at = lambda h, m=0: datetime(2026, 11, 3, h, m) if h < 24 else datetime(2026, 11, 4, h - 24, m)  # noqa: E731
-    clear = [at(23), at(24)]
-    prog = lambda name, minutes, mosaic=False, panels=1, window=(at(22), at(27)), watch=():  dict(  # noqa: E731
-        programme=name, field=name, minutes=minutes, mosaic=mosaic, panels=panels, command=f"./patrol.py {name}",
-        window=list(window) if window else None, best_time=at(23), last_run=None, watch=list(watch))
+    clear = [at(23), at(24, 30)]
+    prog = lambda name, minutes, mosaic=False, panels=1, window=(at(22), at(27)), watch=(), command=None: dict(  # noqa: E731
+        programme=name, field=name, minutes=minutes, mosaic=mosaic, panels=panels,
+        command=command or f"./patrol.py {name}", window=list(window) if window else None, best_time=at(23),
+        last_run=None, watch=list(watch))
     plan = agent.in_the_clear([prog("m31-novae", 30), prog("m31-panels", 5, True, 8), prog("m33-novae", 75),
                                prog("tabby", 10, window=None),
                                prog("watched", 10, watch=[{"tonight": True}])], clear)
     lead = {"star": "KIC 2", "verdict": "unexplained, weak", "why_interesting": ["2 dips"],
             "command": "./mount.py goto 293.6600 +41.8700 --dry-run"}
     rec = agent.recommend(plan, clear, {"observe_tonight": [lead]})
+    o = patrol.OVERHEAD                                       # each field's GoTo and plate solve
     order = [(s["what"], s["minutes"]) for s in rec["steps"]]
-    assert order == [("watched", 10), ("KIC 2", 10), ("m31-novae", 30), ("m31-panels", 10)]   # two panels fit
-    assert rec["steps"][0]["start"] == at(23) and rec["steps"][-1]["start"] == at(23, 50)
+    # 90 min: 10 + 10 + 30 and their GoTos, then the panels that fit with theirs.
+    assert order == [("watched", 10 + o), ("KIC 2", 10 + o), ("m31-novae", 30 + o), ("m31-panels", 5 * (5 + o))]
+    assert rec["steps"][0]["start"] == at(23) and rec["steps"][1]["start"] == at(23, 11).replace(second=30)
     left = {s["what"]: s["why"] for s in rec["left_out"]}
     assert "cannot finish" in left["m33-novae"] and left["tabby"] == "not up tonight"
-    assert rec["clear_minutes"] == 60
+    assert rec["clear_minutes"] == 90
     none = agent.recommend(plan, None)
     assert none["steps"] == [] and "no clear spell" in none["note"]
+
+
+def test_with_fog_forecast_a_brightness_measurement_is_left_out_unless_tonight_is_a_window():
+    from datetime import datetime
+    clear = [datetime(2026, 11, 3, 23), datetime(2026, 11, 4, 1)]
+    prog = lambda name, command, watch=(): dict(  # noqa: E731
+        programme=name, field=name, minutes=10, mosaic=False, panels=1, command=command, window=list(clear),
+        best_time=clear[0], last_run=None, watch=list(watch))
+    plan = agent.in_the_clear([prog("tabby", "./starwatch.py tabby"), prog("m31-novae", "./patrol.py m31-novae"),
+                               prog("dipper", "./starwatch.py dipper", watch=[{"tonight": True}])], clear)
+    lead = {"star": "KIC 2", "verdict": "unexplained, weak", "why_interesting": [], "command": "./mount.py goto 1 +2"}
+    rec = agent.recommend(plan, clear, {"observe_tonight": [lead]}, fog=True)
+    assert [s["what"] for s in rec["steps"]] == ["dipper", "m31-novae"]
+    assert "steady sky" in rec["steps"][0]["why"]
+    left = {s["what"]: s["why"] for s in rec["left_out"]}
+    assert "fog" in left["tabby"] and "fog" in left["KIC 2"]
+    assert [s["what"] for s in agent.recommend(plan, clear, fog=False)["steps"]] == ["dipper", "tabby", "m31-novae"]
 
 
 def test_the_outlook_is_short_and_leads_with_the_recommendation():
@@ -572,3 +593,11 @@ def test_the_outlook_is_short_and_leads_with_the_recommendation():
     night = agent.night(demo=True)
     valid(interface.run("night", lambda: night), "night")
     assert all("panels" in p for p in night["discovery"])
+
+
+def test_fog_counts_only_inside_the_clear_spell():
+    from datetime import datetime
+    clear = [datetime(2026, 11, 3, 23), datetime(2026, 11, 4, 0)]
+    assert not agent.foggy({"fog_hours": [datetime(2026, 11, 4, 5)]}, clear)
+    assert agent.foggy({"fog_hours": [datetime(2026, 11, 3, 23)]}, clear)
+    assert not agent.foggy(None, clear) and not agent.foggy({"fog_hours": [clear[0]]}, None)

@@ -897,23 +897,45 @@ def clear_spell(w):
     return [w["clear_from"], w["clear_to"] + timedelta(hours=1)]
 
 
-def recommend(discovery, clear, research=None):
+def foggy(w, clear):
+    """Whether fog is forecast in any hour of the clear spell (tonight.py's
+    fog_hours: the air at its dew point with hardly any wind, or poor
+    visibility). 3 November 2026: fog was forecast for 05:00, after an
+    hour clear at 23:00."""
+    if not w or not clear:
+        return False
+    return any(clear[0] <= t < clear[1] for t in w.get("fog_hours") or [])
+
+
+def photometry(command):
+    """Whether a step measures a star's brightness (a star watch, a lead's
+    look), which fog spoils, rather than searching a field for a new star."""
+    return bool(command) and command.startswith(("./starwatch.py", "./mount.py goto"))
+
+
+def recommend(discovery, clear, research=None, fog=False):
     """What to do with tonight's clear spell, in order, said before the
     detail: a programme inside a watch window tonight first, then a
     research lead up tonight (docs/discovery.md, "What the project is
     for"), then the programmes in the order their fields come best, each
     only if it can finish in the clear time left (a mosaic takes the
-    panels that fit). Returns {"clear_minutes", "steps": [{"what",
-    "start", "minutes", "command", "why"}], "left_out": [{"what", "why"}],
-    "note"}. With no clear spell forecast there are no steps and the note
-    says to go by the sky itself. 3 November 2026: the outlook listed
-    every programme for a one-hour spell and chose none."""
+    panels that fit). Each field costs patrol.OVERHEAD on top of its
+    frames (the GoTo and the plate solve), each mosaic panel too. With fog
+    forecast a brightness measurement (photometry()) is left out unless a
+    watch window makes tonight count, and then it says so. Returns
+    {"clear_minutes", "steps": [{"what", "start", "minutes", "command",
+    "why"}], "left_out": [{"what", "why"}], "note"}. With no clear spell
+    forecast there are no steps and the note says to go by the sky itself.
+    3 November 2026: the outlook listed every programme for a one-hour
+    spell and chose none."""
+    import patrol
     if not clear:
         return {"clear_minutes": None, "steps": [], "left_out": [],
                 "note": "no clear spell forecast: the research runs in the background; if the sky is clear "
                         "where the telescope is, go by each programme's best time"}
     cursor = [clear[0]]
     steps, left = [], []
+    hazy = "fog forecast: a brightness measurement needs a steady sky"
 
     def take(what, window, minutes, command, why, panel=None):
         start = max(cursor[0], window[0])
@@ -931,12 +953,15 @@ def recommend(discovery, clear, research=None):
 
     for p in discovery:
         if watched(p) and p.get("in_clear"):
-            if not take(p["programme"], p["in_clear"], p["minutes"] or 10, p["command"],
-                        "inside a watch window tonight"):
+            why = "inside a watch window tonight" + (f"; {hazy}" if fog and photometry(p["command"]) else "")
+            if not take(p["programme"], p["in_clear"], (p["minutes"] or 10) + patrol.OVERHEAD, p["command"], why):
                 left.append({"what": p["programme"], "why": "no clear time left"})
     for lead in (research or {}).get("observe_tonight") or []:
+        if fog:
+            left.append({"what": lead["star"], "why": hazy})
+            continue
         why = f"research lead, {lead['verdict']}: " + "; ".join(lead.get("why_interesting") or [])
-        if not take(lead["star"], clear, 10, lead["command"], why):
+        if not take(lead["star"], clear, 10 + patrol.OVERHEAD, lead["command"], why):
             left.append({"what": lead["star"], "why": "no clear time left"})
     for p in discovery:
         if watched(p) and p.get("in_clear"):
@@ -944,11 +969,15 @@ def recommend(discovery, clear, research=None):
         if not p.get("in_clear"):
             left.append({"what": p["programme"], "why": "not up while clear" if p.get("window") else "not up tonight"})
             continue
-        total = (p["minutes"] or 0) * (p.get("panels") or 1)
+        if fog and photometry(p["command"]):
+            left.append({"what": p["programme"], "why": hazy})
+            continue
+        each = (p["minutes"] or 0) + patrol.OVERHEAD
+        total = each * (p.get("panels") or 1)
         last = f"last run {p['last_run']:%d %b}" if p.get("last_run") else "never run"
         if not take(p["programme"], p["in_clear"], total, p["command"], last,
-                    panel=p["minutes"] if p.get("mosaic") else None):
-            left.append({"what": p["programme"], "why": f"needs {total:g} min, cannot finish in the clear"})
+                    panel=each if p.get("mosaic") else None):
+            left.append({"what": p["programme"], "why": f"needs {total:g} min with its GoTos, cannot finish in the clear"})
     return {"clear_minutes": round((clear[1] - clear[0]).total_seconds() / 60), "steps": steps,
             "left_out": left, "note": None}
 
@@ -976,7 +1005,7 @@ def night(demo=False):
         "sky_brightness_mag_arcsec2": (rep["light_pollution"] or {}).get("sqm"),
         "spot": None if demo else config.SPOT,
         "skyline_measured": bool(_site(demo)["horizon"].get("skyline")),
-        "recommendation": recommend(discovery, clear, research),
+        "recommendation": recommend(discovery, clear, research, fog=foggy(w, clear)),
         "discovery": discovery,
         "best_now": [_target(t) for t in rep["targets"] if t["now"]][:3],
         "best_tonight": big_targets(rep, data=None if not demo else config.DATA),

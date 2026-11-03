@@ -122,6 +122,7 @@ def weather_report(night, lat, lon, source=feeds):
         "clear_from": best[0]["time"] if best else None,
         "clear_to": best[-1]["time"] if best else None,
         "clear_hours": len(best), "notes": notes, "hours": hours,
+        "fog_hours": [h["time"] for h in fog],
     }
 
 
