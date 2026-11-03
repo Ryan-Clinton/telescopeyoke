@@ -857,6 +857,28 @@ def _screen(targets, analyse_star, folder_of, path, batch, label, order, say=pri
     return record, len(todo)
 
 
+def backfill_binaries(record, get=requests.get):
+    """Leads kept by an earlier screen, before the catalogue checks, have no
+    `known_binary` at all (not even None): look each up in Villanova's
+    Kepler EB catalogue by KIC (one download, kept), so the coverage and
+    investigate.py's queue do not count known binaries as leads. Returns
+    how many were looked up and how many turned out known binaries."""
+    old = [k for k, v in record.items() if v.get("state") == "done" and "known_binary" not in v
+           and (v.get("real_dips") or v.get("possible_repeats"))]
+    if not old:
+        return 0, 0
+    try:
+        catalogue = villanova(get)
+    except (requests.RequestException, OSError, ValueError):
+        return 0, 0
+    found = 0
+    for k in old:
+        listed = catalogue.get(int(k))
+        record[k]["known_binary"] = f"Villanova Kepler EB catalogue, period {listed['period']:g} d" if listed else None
+        found += bool(listed)
+    return len(old), found
+
+
 def report(record, total, label, order, this_run=0, say=print):
     top = ranking(record)
     c = coverage(record, total)
@@ -884,6 +906,11 @@ def screen(batch, get=requests.get, say=print, keep=False, analyse_star=None, on
         return report(screened(), len(targets), "KIC", KEPLER_ORDER, say=say)
     record, ran = _screen(targets, lambda kic: analyse_star(kic, get, say=lambda *_: None), store, screened_file(),
                           batch, "KIC", KEPLER_ORDER, say, keep)
+    looked, binaries = backfill_binaries(record, get)
+    if looked:
+        import records
+        records.write(screened_file(), record, indent=None)
+        say(f"{looked} lead(s) from an earlier screen looked up in Villanova's EB catalogue: {binaries} known binaries")
     return report(record, len(targets), "KIC", KEPLER_ORDER, ran, say)
 
 

@@ -133,6 +133,18 @@ The first run, 3 November 2026: the 40 brightest (Kepler magnitude 5.0
 upward), all read, none Tabby-like; the most dip-like was KIC 7940959,
 one 1.4% dip on 0.18% scatter.
 
+The first 2,000 (on the desktop, finished 3 November 2026): all 2,000
+done, none failed, unavailable or excluded; one Tabby-like (KIC 6448574,
+two dips to 5.0% on 0.99% scatter, since looked into: a red giant,
+[docs/research/KIC-6448574.md](research/KIC-6448574.md)). 146 stars kept
+a dip; most were screened before the catalogue checks existed, so a run
+now looks any such lead up in Villanova's EB catalogue first
+(`backfill_binaries`): 5 were known binaries (KIC 3858884 among them,
+4 dips to 47.6%), leaving 141 leads. The deepest of those (KIC 7662831,
+13 dips to 33%; KIC 10338877, one of 20%) are on stars with 3 to 6%
+scatter, the large-amplitude variables a magnitude-limited list is full
+of, and go through `investigate.py` in turn.
+
 ## The cleaned flux and the raw
 
 PDCSAP is Kepler's cleaned light curve. The Kepler Archive Manual

@@ -414,3 +414,16 @@ def test_a_search_puts_the_most_tabby_like_first_and_says_what_it_could_not_have
     answer = archive.search([1, 2, 3], say=lambda *_: None)
     assert [s["kic"] for s in answer["stars"]] == [2, 1] and answer["stars"][0]["tabby_like"]
     assert answer["missed"] == [{"kic": 3, "why": "Kepler has no light curves of KIC 3."}]
+
+
+def test_leads_from_an_earlier_screen_are_looked_up_in_the_eb_catalogue(monkeypatch):
+    import archive
+    monkeypatch.setattr(archive, "villanova", lambda get=None: {3858884: {"period": 25.95}})
+    record = {"3858884": {"state": "done", "score": 236.0, "tabby_like": False, "real_dips": 4},
+              "7662831": {"state": "done", "score": 470.0, "tabby_like": False, "real_dips": 13},
+              "1": {"state": "done", "score": 1.0, "tabby_like": False, "real_dips": 2, "known_binary": None},
+              "2": {"state": "done", "score": 0.0, "tabby_like": False, "real_dips": 0}}
+    assert archive.backfill_binaries(record) == (2, 1)
+    assert "period 25.95" in record["3858884"]["known_binary"] and record["7662831"]["known_binary"] is None
+    assert not archive.is_lead(record["3858884"]) and archive.is_lead(record["7662831"])
+    assert archive.backfill_binaries(record) == (0, 0)                 # asked once
