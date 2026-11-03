@@ -119,6 +119,16 @@ Each star's light curves are deleted once screened unless it is
 Tabby-like (`--keep` keeps them all): the whole archive at about 7 MB a
 star would not fit. Its answer ranks everything screened so far.
 
+Each star ends in one state: done; failed (the fetch or the file went
+wrong: tried again at the start of later runs, oldest first, up to three
+times in all); unavailable (MAST has no light curve of it); or excluded,
+with why (fewer than 1,000 usable points). Every run, and `screen
+--report` alone, gives the coverage: how many of each of the 199,959,
+how many not yet, the Tabby-like, the leads, the known binaries, and the
+reasons with their counts. A record kept by an earlier version (a
+summary, or `missed`) is read as done or failed, and left as it is on
+disk until the next screen writes it.
+
 The first run, 3 November 2026: the 40 brightest (Kepler magnitude 5.0
 upward), all read, none Tabby-like; the most dip-like was KIC 7940959,
 one 1.4% dip on 0.18% scatter.

@@ -668,10 +668,53 @@ def screened_file():
     return config.DATA / "cache" / "kepler" / "screened.json"
 
 
-def screened():
+STATES = ("done", "failed", "unavailable", "excluded")
+RETRIES = 3          # a failed star is tried again on later runs, oldest first, this many times in all
+MIN_POINTS = 1000    # fewer usable points than this: excluded, too little light curve to judge
+
+
+def migrate(entry):
+    """One star's record in the current form, whatever form it was kept in:
+    the first screens kept a summary (done) or {"missed": why}, which was a
+    fetch that failed and is now tried again."""
+    if "state" in entry:
+        return entry
+    if "missed" in entry:
+        return {"state": "failed", "why": entry["missed"], "attempts": 1, "last": None}
+    return dict(entry, state="done")
+
+
+def screened(path=None):
+    """The screen's record, every entry migrated to the current form (read
+    only: an older screen still writing its own form is not disturbed)."""
     import json
-    path = screened_file()
-    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+    path = path or screened_file()
+    if not path.exists():
+        return {}
+    return {k: migrate(v) for k, v in json.loads(path.read_text(encoding="utf-8")).items()}
+
+
+def coverage(record, total):
+    """How far the screen has got: each state's count of the whole list,
+    the Tabby-like, the known binaries among the leads, and why stars were
+    excluded or failed, with counts."""
+    from collections import Counter
+    states = Counter(v["state"] for v in record.values())
+    done = [v for v in record.values() if v["state"] == "done"]
+    reasons = Counter(f"{v['state']}: {v.get('why', '')[:80]}" for v in record.values() if v["state"] != "done")
+    return {"total": total, **{s: states.get(s, 0) for s in STATES},
+            "not_yet": max(0, total - len(record)), "tabby_like": sum(1 for v in done if v.get("tabby_like")),
+            "leads": sum(1 for v in done if (v.get("real_dips") or v.get("possible_repeats")) and not v.get("known_binary")),
+            "known_binaries": sum(1 for v in done if v.get("known_binary")),
+            "reasons": dict(reasons.most_common(10))}
+
+
+def say_coverage(c, say=print):
+    say(f"coverage: {c['done']} done, {c['failed']} failed, {c['unavailable']} unavailable, {c['excluded']} "
+        f"excluded, {c['not_yet']} not yet, of {c['total']:,}; {c['tabby_like']} Tabby-like, {c['leads']} leads, "
+        f"{c['known_binaries']} known binaries")
+    for why, n in c["reasons"].items():
+        say(f"  {n:5d}  {why}")
 
 
 def _rank(r):
@@ -683,49 +726,96 @@ def _rank(r):
 
 def ranking(record, most=20):
     """Every star screened so far, in _rank's order."""
-    rows = [dict(v, kic=int(k)) for k, v in record.items() if "score" in v]
+    rows = [dict(v, kic=int(k)) for k, v in record.items() if v.get("state") == "done" and "score" in v]
     return sorted(rows, key=_rank)[:most]
 
 
-def screen(batch, get=requests.get, say=print, keep=False, analyse_star=None):
-    """The next `batch` Kepler stars not screened yet, brightest first, each
-    screened and its summary kept (cache/kepler/screened.json) as it is
-    done, so a run stopped part way, or the next run, goes on from there.
-    A star's light curves are deleted once screened unless it is
-    Tabby-like or `keep` (200,000 stars at 7 MB each would not fit)."""
+def summary(a):
+    """What the screen keeps of one star's answer."""
+    return {"state": "done", "score": a["score"], "tabby_like": a["tabby_like"], "real_dips": a["real_dips"],
+            "deepest_percent": a["deepest_percent"], "scatter_percent": a["scatter_percent"],
+            "sap_only": sum(d["verdict"] == "dip" for d in a.get("sap_only", [])),
+            "possible_repeats": a.get("possible_repeats", 0), "known_binary": a.get("known_binary")}
+
+
+def outcome(problem, attempts):
+    """The state a star is left in when its screen went wrong: unavailable
+    when the archive has no light curve of it, failed (tried again later)
+    when the fetch or the file went wrong."""
+    why = str(getattr(problem, "message", problem))[:200]
+    if isinstance(problem, interface.Refusal) and "has no" in why:
+        return {"state": "unavailable", "why": why}
+    from datetime import datetime, timezone
+    return {"state": "failed", "why": why, "attempts": attempts,
+            "last": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+
+
+def _screen(targets, analyse_star, folder_of, path, batch, label, order, say=print, keep=False):
+    """Screen the next `batch` of `targets`: first the failed ones still under
+    RETRIES attempts, oldest first, then those never screened, in the
+    list's order. Each answer is kept in `path` every ten stars, so a run
+    stopped part way, or the next run, carries on from there."""
     import shutil
     import records
-    analyse_star = analyse_star or analyse
-    record = screened()
-    todo = [k for k in target_list(get) if str(k) not in record][:batch]
-    say(f"{len(record)} screened before; screening {len(todo)} more, brightest first")
-    for n, kic in enumerate(todo, 1):
+    record = screened(path)
+    retry = sorted((k for k, v in record.items() if v["state"] == "failed" and v.get("attempts", 1) < RETRIES),
+                   key=lambda k: record[k].get("last") or "")
+    fresh = [str(k) for k in targets if str(k) not in record]
+    todo = (retry + fresh)[:batch]
+    say(f"{len(record)} screened before; screening {len(todo)} ({min(len(retry), batch)} tried again), {order}")
+    for n, key in enumerate(todo, 1):
+        star = int(key)
         try:
-            a = analyse_star(kic, get, say=lambda *_: None)
-            record[str(kic)] = {"score": a["score"], "tabby_like": a["tabby_like"], "real_dips": a["real_dips"],
-                                "deepest_percent": a["deepest_percent"], "scatter_percent": a["scatter_percent"],
-                                "sap_only": sum(d["verdict"] == "dip" for d in a.get("sap_only", [])),
-                                "possible_repeats": a.get("possible_repeats", 0), "known_binary": a.get("known_binary")}
-            if a["tabby_like"]:
-                say(f"  KIC {kic}: Tabby-like, {a['real_dips']} dip(s), deepest {a['deepest_percent']:.1f}%")
-            elif not keep:
-                shutil.rmtree(store(kic), ignore_errors=True)
+            a = analyse_star(star)
+            if a["points"] < MIN_POINTS:
+                record[key] = {"state": "excluded", "why": f"fewer than {MIN_POINTS} usable points ({a['points']})"}
+            else:
+                record[key] = summary(a)
+                if a["tabby_like"]:
+                    say(f"  {label} {star}: Tabby-like, {a['real_dips']} dip(s), deepest {a['deepest_percent']:.1f}%")
+            if not (keep or record[key].get("tabby_like")):
+                shutil.rmtree(folder_of(star), ignore_errors=True)
         except (requests.RequestException, OSError, ValueError, KeyError, interface.Refusal) as problem:
-            record[str(kic)] = {"missed": str(getattr(problem, "message", problem))[:200]}
+            record[key] = outcome(problem, record.get(key, {}).get("attempts", 0) + 1)
         if n % 10 == 0 or n == len(todo):
-            records.write(screened_file(), record, indent=None)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            records.write(path, record, indent=None)
+    return record, len(todo)
+
+
+def report(record, total, label, order, this_run=0, say=print):
     top = ranking(record)
-    say(f"{len(record)} screened in all; {sum(1 for v in record.values() if v.get('tabby_like'))} Tabby-like")
+    c = coverage(record, total)
+    say_coverage(c, say)
     for r in top[:10]:
-        say(f"  KIC {r['kic']:<10} score {r['score']:6.2f}  {r['real_dips']} dip(s), deepest {r['deepest_percent']:.2f}%,"
-            f" scatter {r['scatter_percent']}%{'  Tabby-like' if r['tabby_like'] else ''}")
-    return {"screened": len(record), "this_run": len(todo), "order": "brightest first (Kepler magnitude)",
-            "top": top, "kind": "measured"}
+        say(f"  {label} {r['kic']:<10} score {r['score']:6.2f}  {r['real_dips']} dip(s), deepest "
+            f"{r['deepest_percent']:.2f}%, scatter {r['scatter_percent']}%"
+            f"{', ' + str(r['possible_repeats']) + ' possible repeat(s)' if r.get('possible_repeats') else ''}"
+            f"{'  Tabby-like' if r['tabby_like'] else ''}{'  (' + r['known_binary'] + ')' if r.get('known_binary') else ''}")
+    return {"screened": len(record), "this_run": this_run, "order": order, "coverage": c, "top": top,
+            "kind": "measured"}
+
+
+KEPLER_ORDER = "brightest first (Kepler magnitude)"
+
+
+def screen(batch, get=requests.get, say=print, keep=False, analyse_star=None, only_report=False):
+    """The next `batch` Kepler stars, brightest first (_screen), kept in
+    cache/kepler/screened.json; then the coverage and the ranking. A
+    star's light curves are deleted once screened unless it is Tabby-like
+    or `keep` (200,000 stars at 7 MB each would not fit)."""
+    analyse_star = analyse_star or analyse
+    targets = target_list(get)
+    if only_report:
+        return report(screened(), len(targets), "KIC", KEPLER_ORDER, say=say)
+    record, ran = _screen(targets, lambda kic: analyse_star(kic, get, say=lambda *_: None), store, screened_file(),
+                          batch, "KIC", KEPLER_ORDER, say, keep)
+    return report(record, len(targets), "KIC", KEPLER_ORDER, ran, say)
 
 
 def run(args, say=print):
     if args.action == "screen":
-        return screen(args.batch, say=say, keep=args.keep)
+        return screen(args.batch, say=say, keep=args.keep, only_report=args.report)
     if args.action == "tess":
         answer = dict(analyse_tess(tic_number(args.star), say=say), kind="measured")
         say_star(answer, say)
@@ -744,6 +834,7 @@ def main():
     ap.add_argument("action", choices=("dips", "tess", "search", "screen"))
     ap.add_argument("--batch", type=int, default=100, help="screen: stars this run (default 100)")
     ap.add_argument("--keep", action="store_true", help="screen: keep every star's light curves")
+    ap.add_argument("--report", action="store_true", help="screen: only the coverage and the ranking so far")
     ap.add_argument("star", nargs="*", help="dips: the star (KIC 8462852, Tabby); search: a file or a comma list")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()

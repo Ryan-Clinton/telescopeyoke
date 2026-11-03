@@ -6,6 +6,7 @@ import io
 
 import numpy as np
 import pytest
+import requests
 
 import archive
 import config
@@ -178,14 +179,50 @@ def test_the_screen_goes_on_where_it_stopped_and_ranks_everything_screened(tmp_p
             raise archive.interface.Refusal("INVALID_REQUEST", "Kepler has no light curves of KIC 33.")
         deep = kic == 22
         return {"score": 30.0 if deep else 1.0, "tabby_like": deep, "real_dips": 1, "deepest_percent": 15.0 if deep else 1.2,
-                "scatter_percent": 0.03, "sap_only": []}
+                "scatter_percent": 0.03, "sap_only": [], "points": 50000}
     first = archive.screen(2, get=get, say=lambda *_: None, analyse_star=analyse)
     assert first["this_run"] == 2 and first["screened"] == 2 and [r["kic"] for r in first["top"]] == [22, 11]
     assert archive.store(22).exists() and not archive.store(11).exists()     # only a Tabby-like star's files kept
     second = archive.screen(5, get=get, say=lambda *_: None, analyse_star=analyse)
     assert second["this_run"] == 2 and second["screened"] == 4                 # 33 and 44; 11 once only
-    assert archive.screened()["33"] == {"missed": "Kepler has no light curves of KIC 33."}
+    assert archive.screened()["33"] == {"state": "unavailable", "why": "Kepler has no light curves of KIC 33."}
     assert [r["kic"] for r in second["top"]] == [22, 11, 44] and len(lists) == 1   # the list fetched once
+    c = second["coverage"]
+    assert (c["total"], c["done"], c["unavailable"], c["failed"], c["tabby_like"], c["not_yet"]) == (4, 3, 1, 0, 1, 0)
+
+
+def test_a_failed_star_is_tried_again_oldest_first_and_old_records_are_read_as_they_are(tmp_path, monkeypatch):
+    import json
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    monkeypatch.setattr(archive, "target_list", lambda get=None: [1, 2, 3, 4, 5])
+    path = archive.screened_file()
+    path.parent.mkdir(parents=True)
+    # The record as the first screens kept it: a summary, or "missed".
+    old = {"1": {"score": 0.0, "tabby_like": False, "real_dips": 0, "deepest_percent": 0.0, "scatter_percent": 0.02},
+           "2": {"missed": "HTTPSConnectionPool: Read timed out."},
+           "3": {"state": "failed", "why": "timed out", "attempts": 1, "last": "2026-11-03T09:00:00+00:00"},
+           "4": {"state": "failed", "why": "timed out", "attempts": 3, "last": "2026-11-03T08:00:00+00:00"}}
+    path.write_text(json.dumps(old))
+    assert archive.screened()["2"] == {"state": "failed", "why": "HTTPSConnectionPool: Read timed out.", "attempts": 1,
+                                       "last": None}
+    assert json.loads(path.read_text()) == old                 # reading changes nothing on disk
+    asked = []
+
+    def analyse(kic, get=None, say=None):
+        asked.append(kic)
+        if kic == 3:
+            raise requests.ConnectionError("still no answer")
+        return {"score": 0.0, "tabby_like": False, "real_dips": 0, "deepest_percent": 0.0, "scatter_percent": 0.02,
+                "sap_only": [], "points": 400 if kic == 5 else 50000}
+    answer = archive.screen(10, say=lambda *_: None, analyse_star=analyse)
+    assert asked == [2, 3, 5]                                  # the failed (never-timed first), not 4 (three tries), then 5
+    record = archive.screened()
+    assert record["2"]["state"] == "done" and record["3"]["attempts"] == 2 and record["3"]["state"] == "failed"
+    assert record["4"]["attempts"] == 3                        # given up on: left as it was
+    assert record["5"] == {"state": "excluded", "why": "fewer than 1000 usable points (400)"}
+    c = answer["coverage"]
+    assert (c["done"], c["failed"], c["excluded"], c["unavailable"]) == (2, 2, 1, 0)
+    assert archive.screen(10, say=lambda *_: None, analyse_star=analyse, only_report=True)["this_run"] == 0
 
 
 # The benchmark on real Kepler light curves, where a copy of them is kept
