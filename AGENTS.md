@@ -159,8 +159,8 @@ a motor's creep rate. `mount.py stop` is always allowed.
   may change (a field's candidate book) through `records.change`. Change a
   kept record's shape and its schema together, or the write is refused.
 - CI runs once a day (and by hand from the Actions tab), never on a push:
-  `ruff check .` (mistakes, not style) and the tests on Linux (Python 3.14)
-  and Windows (3.13). Nothing waits on it; the tests touching a change run
+  `ruff check .` (mistakes, not style) and the tests on Linux (Python 3.14).
+  No Windows job: Windows work waits until someone uses it there. Nothing waits on it; the tests touching a change run
   here before the push. `constraints-tested.txt` is a set of versions the
   tests once passed with, no longer checked.
 - What is proven on real hardware is recorded once, in `docs/validation.md`.

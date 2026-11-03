@@ -518,8 +518,9 @@ Done when, on real hardware:
 
 ### 8. CI and documents
 
-- Add `windows-latest` to the matrix in `.github/workflows/tests.yml`, on
-  Python 3.13, once a day (Linux runs 3.14). The Windows job
+- Taken out again on 3 Nov 2026: Windows waits until someone uses it
+  there, so CI has no Windows job. What it was: `windows-latest` in
+  `.github/workflows/tests.yml`, on Python 3.13. The Windows job
   runs `python -m pip install ".[test]"`, `python -m pytest -q`, then the
   demo commands in their Windows form: `python tonight.py --demo --top 5`,
   `python mount.py --demo zenith`, `.\ty.cmd capabilities --json` and

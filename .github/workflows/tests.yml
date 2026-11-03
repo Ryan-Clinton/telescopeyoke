@@ -2,7 +2,8 @@ name: tests
 
 # Once a day, and by hand (the Actions tab, "Run workflow"); never on a push.
 # The tests that touch a change run on the laptop before it is pushed; this
-# only catches what those cannot, chiefly Windows, within a day.
+# only catches what those cannot (a library update, a test missed), within a day.
+# No Windows job: Windows waits until someone runs it there (3 Nov 2026).
 on:
   schedule:
     - cron: "0 9 * * *"     # 09:00 UTC, after the night
@@ -29,22 +30,3 @@ jobs:
       - run: ./mount.py --demo zenith
       - run: ./ty capabilities --json
       - run: ./mount.py --demo zenith --dry-run --json
-
-  # No hardware here either: this shows the scripts start and the tests pass
-  # on Windows, not that a camera or mount has been used there.
-  windows:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-      - run: python -m pip install ".[test]"
-      # The installer is not run here (it would open the demo's window); this
-      # only shows that PowerShell can read it.
-      - run: powershell -NoProfile -Command "[scriptblock]::Create((Get-Content -Raw install.ps1)) | Out-Null"
-      - run: python -m pytest -q
-      - run: python tonight.py --demo --top 5
-      - run: python mount.py --demo zenith
-      - run: .\ty.cmd capabilities --json
-      - run: python mount.py --demo zenith --dry-run --json
