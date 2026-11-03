@@ -353,6 +353,10 @@ class Mount:
                 # On `came`'s side, aimed with the other side's correction:
                 # said as it is, never to be added to or kept.
                 return came, error, False
+            if load_pointing_error(came) == list(error):
+                # Both sides' corrections alike (none measured since the
+                # handset was set up, both zero): the aim stands as it is.
+                return came, error, True
             west, error = came, load_pointing_error(came)
             self.say(f"  the tube came over the {side_name(came)} side: aiming again with that "
                      f"side's correction ({error[1]:+.1f}° in Dec); it may swing over the pole again")

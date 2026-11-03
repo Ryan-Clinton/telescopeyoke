@@ -304,6 +304,10 @@ def test_a_slew_is_corrected_for_the_side_the_tube_really_came_over(scope):
     saved["sides"]["west"]["saved"] = 0
     mount.POINTING_FILE.write_text(json.dumps(saved), encoding="utf-8")
     assert not mount.pointing_measured(True) and mount.pointing_measured(False)
+    # Both sides alike (none measured since the handset was set up): no second slew.
+    mount.POINTING_FILE.unlink()
+    said.clear()
+    assert scope.aim(0.3, 40.0, SITE, 0.0) == (False, [0.0, 0.0], True) and not said
 
 
 def test_a_tube_that_changes_sides_twice_says_so_with_the_correction_it_used():
