@@ -199,8 +199,29 @@ side high up. It agrees with the midday survey: 210-217.5° high (51-54°),
 sky), and 270-315° read "open" in frames 3.5-5.4 times as bright as the
 high sky: the white house lit by the Sun. 225-262.5° was taken into the
 skyline in use, open to 20°, on that photo
-(`--use-aside ... --bearings 225-262.5`, with the change shown first); the
-west stays at 72-75°. The earlier "210-228°" for the photo was an estimate
+(`--use-aside ... --bearings 225-262.5`, with the change shown first).
+The photo faces the sunset glow, about 235°, and a phone's view is about
+70° wide: the white house is at its right edge, about 265-275° (an
+estimate), and 285-315° is outside it. So the west is **not** settled by
+eye: its 72-75° is the survey of 2 November, and the midday 20° there, in
+frames 3.5-5.4 times as bright as the high sky, is most likely the same
+white house lit by the Sun, but nobody has looked. It is not marked as
+checked; under the rules below the planner keeps the higher until two
+readings agree. The earlier "210-228°" for the photo was an estimate
 from the sky map and is not used. A frame far brighter than the high sky
 low down in the day is a lead for telling a lit wall from sky, now with
 one photo to check it against.
+
+## Readings, estimate and safe height (round of checks, 3 November)
+
+A point's trust is now what is kept with it (`trust`), never read from its
+description; between two points it is the weaker of the two
+(`horizon.trust_at`). Each point keeps its last five `readings`, an
+`estimate` (the reading most of them agree with) and `alt`, what the
+planner uses: when two telescope readings differ by more than 6°, the
+higher is used until two readings agree with each other and outnumber the
+rest (`horizon.settle`), so a wrong top is overturned by later surveys
+instead of kept for good. Each daylight look now records the parts of its
+score (`features`: brightness, smoothness, colour, blue, grain), so the
+weights can be tried against looks a person has labelled; the looks so far
+did not record colour, so no benchmark has been made of them.

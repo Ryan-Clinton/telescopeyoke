@@ -333,7 +333,14 @@ def read_day(mosaic, reference):
     mask = ndimage.median_filter(mask.astype(np.uint8), 3, mode="nearest").astype(bool)
     share = float(mask.mean())
     seen = {"view": "sky" if share >= MOSTLY else "blocked" if share <= 1 - MOSTLY else "edge",
-            "share": round(share, 2), "level": round(float(np.median(level)), 2), "mask": mask}
+            "share": round(share, 2), "level": round(float(np.median(level)), 2), "mask": mask,
+            # What the score was made from, kept with each look so the
+            # weights can be tried against looks a person has labelled
+            # (3 November 2026: a sunlit white wall scored as sky).
+            "features": {"bright": round(float(np.median(bright)), 3), "smooth": round(float(np.median(smooth)), 3),
+                         "colour": round(float(np.median(same)), 3),
+                         "blue": round(float(np.median(blue)), 3) if blue is not None else None,
+                         "grain": round(float(np.median(grain)), 4)}}
     if seen["view"] == "edge":
         seen["offset"] = round(towards_sky(mask), 2)
     return seen
@@ -1095,50 +1102,94 @@ def in_spans(az, spans):
 
 def trust(point, spans=None):
     """How much stands behind one skyline point: "eye" inside a span a person
-    checked, "telescope" for a top the telescope looked at itself, and
-    "inferred" for anything put there from other points (a corner between
-    looks, an earlier skyline moved by the looks nearby or not rechecked,
-    nothing measured)."""
+    checked, else the point's own "trust" as kept with it: "telescope" for a
+    top the telescope looked at, "inferred" for anything put there from
+    other points. Only a point saved before trust was kept is judged from
+    its description."""
     if in_spans(point["az"], spans):
         return "eye"
+    if point.get("trust") in TRUST:
+        return point["trust"]
     by = str(point.get("by", "telescope"))
     if by.startswith("telescope") and not by.startswith("telescope, between"):
         return "telescope"
     return "inferred"
 
 
+def trust_at(old, az, spans=None):
+    """The trust behind the skyline's height at a bearing: a point there, or
+    the weaker of the two points the height is drawn between. Trust is not
+    drawn between points as height is (an inferred corner next to a measured
+    top does not borrow the top's)."""
+    if in_spans(az, spans):
+        return "eye"
+    points = sorted(old, key=lambda q: q["az"])
+    here = [q for q in points if abs((q["az"] - az + 180) % 360 - 180) < 0.05]
+    if here:
+        return trust(here[0])
+    before = max((q for q in points if q["az"] < az), key=lambda q: q["az"], default=points[-1])
+    after = min((q for q in points if q["az"] > az), key=lambda q: q["az"], default=points[0])
+    return min(trust(before), trust(after), key=TRUST.get)
+
+
+READINGS_KEPT = 5     # a point's last readings, kept to settle a disagreement
+
+
+def settle(readings, by=EYE_DOUBT):
+    """(estimate, agreed): the reading most of a point's readings agree with
+    (within `by`), the newest of the largest group on a tie, and whether two
+    or more agree on it and outnumber any other group."""
+    groups = [[r for r in readings if abs(r - x) <= by] for x in readings]
+    sizes = [len(g) for g in groups]
+    best = max(range(len(readings)), key=lambda i: (sizes[i], i))
+    others = max((sizes[i] for i in range(len(readings)) if abs(readings[i] - readings[best]) > by), default=0)
+    return round(float(np.median(groups[best])), 1), sizes[best] >= 2 and sizes[best] > others
+
+
 def reconcile(skyline, kept, by=EYE_DOUBT):
     """(skyline, differ): a new survey's points weighed against the skyline
-    in use, point by point, never replaced wholesale. A point with less
-    behind it never replaces one with more (an inferred point never moves a
-    measured one, a survey never overrules a person's eye); one with more
-    replaces one with less; two alike within `by` degrees take the newer,
-    and two alike that differ more keep the higher, the safe one for the
-    planner. Each point keeps its "trust". `differ` lists the points more
-    than `by` apart and what was done ({"az", "read", "was", "kept"}).
+    in use, point by point, never replaced wholesale. Less trust never
+    replaces more (an inferred point never moves a measured one, a survey
+    never overrules a person's eye); more replaces less. Two alike keep
+    their readings: within `by` the newer is used; further apart, the
+    planner gets the higher, the safe one, until two readings agree with
+    each other and outnumber the rest, and then those win, so a wrong top
+    is overturned by later surveys rather than kept for good. Each point
+    keeps "alt" (what the planner uses), "estimate" (the best guess at the
+    real top), its last "readings" and its "trust". `differ` lists the
+    points more than `by` apart ({"az", "read", "was", "kept"}).
     3 November 2026: glare due south read a wall above 75°, and at midday a
-    bright west read as sky down to 20°; a single "checked" label on the
-    whole skyline had stood in for what the person had really looked at."""
+    sunlit white wall in the west read as sky down to 20°."""
     old = (kept or {}).get("skyline") or []
     spans = (kept or {}).get("checked_spans") or []
     if not old:
-        return [dict(q, trust=trust(q)) for q in skyline], []
-
-    def nearest(az):
-        return min(old, key=lambda q: min(between(az, q["az"]), between(q["az"], az)) % 360)
+        return [dict(q, trust=trust(q), estimate=q["alt"], readings=[q["alt"]]) for q in skyline], []
     out, differ = [], []
     for q in skyline:
         was = round(float(limit(old, [q["az"]])[0]), 1)
-        mine, theirs = TRUST[trust(q)], TRUST["eye"] if in_spans(q["az"], spans) else TRUST[trust(nearest(q["az"]))]
+        theirs_name = trust_at(old, q["az"], spans)
+        mine, theirs = TRUST[trust(q)], TRUST[theirs_name]
+        here = [p for p in old if abs((p["az"] - q["az"] + 180) % 360 - 180) < 0.05]
+        before = list((here[0].get("readings") if here else None) or [was])
         apart = abs(q["alt"] - was) > by
-        if mine < theirs or (mine == theirs and apart and was > q["alt"]):
-            name = next(k for k, v in TRUST.items() if v == theirs)
-            out.append({"az": q["az"], "alt": was, "trust": name,
-                        "by": f"kept ({name}); this survey read {q['alt']:g}°" + ("" if apart else ", close")})
+        if mine < theirs:
+            point = dict(here[0]) if here else {"az": q["az"], "alt": was, "estimate": was, "readings": before}
+            point.update(trust=theirs_name, by=f"kept ({theirs_name}); this survey read {q['alt']:g}°")
             kept_as = "the one in use"
-        else:
-            out.append(dict(q, trust=trust(q)))
+        elif mine > theirs or not apart:
+            readings = ([q["alt"]] if mine > theirs else before + [q["alt"]])[-READINGS_KEPT:]
+            point = dict(q, trust=trust(q), estimate=settle(readings, by)[0], readings=readings)
             kept_as = "this survey's"
+        else:
+            readings = (before + [q["alt"]])[-READINGS_KEPT:]
+            estimate, agreed = settle(readings, by)
+            safe = estimate if agreed else max(was, q["alt"])
+            point = dict(q, alt=safe, estimate=estimate, readings=readings, trust=trust(q),
+                         by=f"telescope: readings {', '.join(f'{r:g}' for r in readings)}; "
+                            + ("settled" if agreed else "not settled, the higher used"))
+            point.pop("open", None) if safe != q["alt"] else None
+            kept_as = "settled" if agreed else "the higher"
+        out.append(point)
         if apart:
             differ.append({"az": q["az"], "read": q["alt"], "was": was, "kept": kept_as})
     return out, differ

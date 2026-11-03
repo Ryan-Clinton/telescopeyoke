@@ -679,6 +679,38 @@ def test_a_survey_is_weighed_point_by_point_against_the_skyline_in_use():
     assert none == [] and alone[4]["trust"] == "inferred" and alone[0]["alt"] == 40.0
 
 
+def test_successive_surveys_overturn_a_wrong_top_and_keep_their_trust():
+    """A wrong high top (the aim 30° off, 3 November 2026) is overturned by
+    two later surveys that agree, not kept for good; a wrong low one (a sunlit
+    wall read as sky) never gets in alone; trust survives each pass."""
+    skyline = [{"az": az, "alt": 40.0, "by": "telescope", "trust": "telescope"} for az in range(0, 360, 30)]
+    skyline[6] = {"az": 180, "alt": 75.0, "by": "telescope", "trust": "telescope"}       # the wrong top
+    kept = {"skyline": skyline}
+    passes = []
+    for south, west in ((40.0, 20.0), (41.0, 72.0), (39.0, 72.0)):
+        new = [dict(q, alt=south if q["az"] == 180 else 20.0 if q["az"] == 270 and west == 20.0 else q["alt"],
+                    by="telescope", trust="telescope") for q in kept["skyline"]]
+        kept = {"skyline": horizon.reconcile(new, kept)[0]}
+        at = {q["az"]: q for q in kept["skyline"]}
+        passes.append((at[180]["alt"], at[270]["alt"]))
+        assert all(q["trust"] == "telescope" for q in kept["skyline"])
+    assert passes[0] == (75.0, 40.0)             # one reading against one: the higher for the planner
+    assert passes[1][0] == 40.5                  # two agree against one: settled at what they say
+    assert at[180]["estimate"] == 40.0 and at[270]["alt"] == 40.0
+    # A point kept with a description that does not start "telescope" keeps its stored trust.
+    assert horizon.trust({"az": 5, "alt": 30, "by": "kept (telescope); this survey read 20°", "trust": "telescope"}) \
+        == "telescope"
+
+
+def test_trust_between_points_is_the_weaker_of_the_two():
+    old = [{"az": 95, "alt": 40, "trust": "telescope"}, {"az": 110, "alt": 60, "trust": "inferred"},
+           {"az": 200, "alt": 30, "trust": "telescope"}]
+    assert horizon.trust_at(old, 100) == "inferred"           # drawn between a measured and an inferred point
+    assert horizon.trust_at(old, 95) == "telescope"           # a point there
+    assert horizon.trust_at(old, 100, [{"from": 90, "to": 105}]) == "eye"
+    assert horizon.settle([75.0, 40.0]) == (40.0, False) and horizon.settle([75.0, 40.0, 41.0]) == (40.5, True)
+
+
 def test_a_span_checked_by_eye_is_kept_and_a_taken_span_joins_safely(kept):
     horizon.keep([{"az": az, "alt": 54.0, "by": "telescope"} for az in range(0, 360, 15)], "telescope")
     horizon.check_span(horizon.span("350-10"), "house due north", 20, 2)
