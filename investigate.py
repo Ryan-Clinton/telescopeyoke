@@ -2,14 +2,16 @@
 """Look into a lead from the searches, by one fixed procedure, and say what
 it is: explained, an artefact, or unexplained, and how strongly.
 
-    ./investigate.py                  the top lead nobody has looked into yet
+    ./investigate.py                  an unfinished lead, else the top one nobody has looked into
     ./investigate.py KIC 7988797      a Kepler star
     ./investigate.py TIC 185336364    a TESS star
     ./investigate.py --json
 
 The leads are what the searches flag and nobody has looked into: the
-Kepler and TESS screens' stars with a dip left after archive.py's checks
-(Tabby-like first, then by score), and seti.py sweep's candidates. Each
+Kepler and TESS screens' leads by archive.is_lead (a dip left after the
+checks, a possible repeated eclipse or a short dip, not a known binary;
+Tabby-like first, then by score), and seti.py sweep's candidates (in every
+ON look and no OFF look; interference and unconfirmed hits never come here). Each
 one goes through the same steps, in order, each answer kept with where it
 came from and when it was asked:
 
@@ -23,18 +25,24 @@ came from and when it was asked:
      other stars' light in the aperture (Kepler's CROWDSAP) and a Gaia
      neighbour within 8" bright enough to make the dip itself if it went
      out; periodic dips (archive.py's own checks).
-  d. The verdict: "explained" (a catalogue or class accounts for it),
-     "artefact" (a check fails), "unexplained, weak" or "unexplained,
-     strong", with the reasons; and whether it is known to science
+  d. The verdict, with the reasons: "explained" (a catalogue names this
+     star's variability and every catalogue answered), "likely explained"
+     (a known class fits, such as a red giant, or a catalogue did not
+     answer), "artefact" (a check fails), "unexplained, weak" or
+     "unexplained, strong"; and whether it is known to science
      already (cited in KNOWN_PAPERS papers or more in SIMBAD).
   e. This telescope: whether the star is within variables.py's range and
      its dips deeper than twice a night's precision here, and how many
      dark hours it is up on the first night of each of the coming months.
 
 The report is docs/research/LEAD.md, every answer with its link and the
-date asked, and the record cache/research/LEAD.json; the next run takes
-the next lead. A SETI candidate is checked against the bands satellites
-use and for a drift of zero (a transmitter fixed to the ground). An
+date asked, and the record cache/research/LEAD.json. A lead whose
+checks went unanswered (a service down) is not finished: the next run
+asks again, before any new lead, up to RECHECKS tries in all. A SETI
+candidate is checked for the signs of interference (a satellite band, a
+drift of zero) and called "likely interference" with them: signs, not
+proof, until the same signal is checked in other sessions and against
+known transmitters. An
 "unexplained" verdict is the end of these checks, not a discovery: it is
 for a person to read the report, and for catalogue-researcher to look
 further, before anything is called new. Nothing here moves the mount or
@@ -122,6 +130,10 @@ def _get(get, url, **kw):
 def _asked(source, url, answer, error=None):
     """One step's answer, with where and when it was asked."""
     return {"source": source, "link": url, "asked": _today(), "answer": answer, "error": error}
+
+
+REPEAT = "possible repeated eclipse"     # archive.REPEAT, a dip that may repeat: still a lead
+RECHECKS = 3                             # a lead with a check unanswered is looked into again, this many times in all
 
 
 # --- a. already explained? ----------------------------------------------------------
@@ -334,7 +346,7 @@ def giant(star):
 def judge(star, checks):
     """The verdict on a star from its dips and the checks' answers."""
     explained, artefact, notes = [], [], []
-    real = [d for d in star["dips"] if d["verdict"] == "dip"]
+    real = [d for d in star["dips"] if d["verdict"] in ("dip", REPEAT)]
     deepest = max((d["depth_percent"] for d in real), default=0.0)
     s, v, eb, g = (checks[k]["answer"] for k in ("simbad", "vsx", "villanova", "gaia"))
     if eb:
@@ -372,8 +384,20 @@ def judge(star, checks):
         explained.append(f"a red giant (Gaia DR3 BP-RP {gstar['bp_rp']:.2f}, absolute G {gstar['abs_g']:+.1f}): "
                          f"giants this red vary by a few percent over days to weeks as they pulsate, which dips "
                          f"under {GIANT_DIP:g}% fit (Bányai et al. 2013, https://arxiv.org/abs/1309.1012)")
-    if explained:
+    # "explained" only when a catalogue names this star's own variability
+    # and every catalogue answered; a class-level argument (the red-giant
+    # rule) or a catalogue unanswered leaves it "likely explained".
+    named = [e for e in explained if not e.startswith("a red giant")]
+    if named and not unasked:
         verdict = "explained"
+    elif explained:
+        verdict = "likely explained"
+        why = []
+        if not named:
+            why.append("on the star's class (colour and luminosity), not a catalogue naming its variability")
+        if unasked:
+            why.append("not every catalogue answered (" + ", ".join(unasked) + ")")
+        notes.append("likely, not certain: " + "; ".join(why))
     elif artefact:
         verdict = "artefact"
     else:
@@ -460,9 +484,9 @@ def leads():
                             ("tess", config.DATA / "cache" / "tess" / "screened.json", "tic")):
         if not path.exists():
             continue
-        record = json.loads(path.read_text(encoding="utf-8"))
-        rows = [dict(v, **{key: int(k), "kind": kind}) for k, v in record.items()
-                if isinstance(v, dict) and v.get("real_dips")]
+        import archive
+        record = {k: archive.migrate(v) for k, v in json.loads(path.read_text(encoding="utf-8")).items()}
+        rows = [dict(v, **{key: int(k), "kind": kind}) for k, v in record.items() if archive.is_lead(v)]
         out += sorted(rows, key=lambda r: (not r.get("tabby_like"), -(r.get("score") or 0)))
     seti = []
     for path in sorted((config.DATA / "cache" / "seti").glob("*.json")):
@@ -470,13 +494,46 @@ def leads():
         target, session = path.stem.rsplit("-", 1) if "-" in path.stem else (path.stem, "")
         for block in kept.get("done", {}).values():
             for e in block.get("events", []):
+                if e.get("label", "candidate") != "candidate":      # interference and unconfirmed: diagnostics only
+                    continue
                 seti.append({"kind": "seti", "target": target, "session": session, **e})
     out += sorted(seti, key=lambda e: -e.get("snr", 0))
     return out
 
 
+def unanswered(record):
+    """The checks a kept record could not get an answer from (a service down),
+    which are asked again; a check that does not apply is not one of them."""
+    return [c["source"] for c in record.get("checks", {}).values()
+            if isinstance(c, dict) and str(c.get("error") or "").startswith("not answered")]
+
+
+def recheck(taken=None):
+    """Leads looked into with a check unanswered and fewer than RECHECKS
+    tries, oldest first: these come before new leads."""
+    taken = done() if taken is None else taken
+    due = [r for r in taken.values() if unanswered(r) and r.get("attempts", 1) < RECHECKS]
+    return sorted(due, key=lambda r: r.get("investigated") or "")
+
+
+def as_lead(record):
+    """A kept record back as the lead it was."""
+    kind, lead = record["kind"], record["lead"]
+    if kind == "kepler":
+        return {"kind": "kepler", "kic": int(lead.split("-")[1])}
+    if kind == "tess":
+        return {"kind": "tess", "tic": int(lead.split("-")[1])}
+    return None
+
+
 def next_lead():
+    """An unfinished investigation first (a check went unanswered), then the
+    top lead nobody has looked into."""
     taken = done()
+    for r in recheck(taken):
+        lead = as_lead(r)
+        if lead:
+            return lead
     return next((lead for lead in leads() if lead_id(lead) not in taken), None)
 
 
@@ -514,22 +571,32 @@ def investigate_star(lead, get=requests.get, say=print, star=None, other=None, c
 
 
 def investigate_seti(lead):
-    """A SETI candidate: the bands satellites use, and a drift of zero."""
+    """A SETI candidate (in every ON look, in no OFF look): the signs of
+    interference, each with its evidence. A sign is not proof: an allocated
+    band does not say which transmitter made it, and a drift of zero is what
+    a transmitter on the ground gives but is not proof of one. The verdict is
+    "likely interference" with the signs, or "unexplained, weak"; only the
+    same signal checked against a known transmitter or other sessions says more."""
     f = lead["frequency_mhz"]
     band = next((b for b in SATELLITE_BANDS if b[0] <= f <= b[1]), None)
-    artefact = []
+    signs = []
     if band:
-        artefact.append(f"{f:.6f} MHz is in {band[2]} ({band[0]:g} to {band[1]:g} MHz, ITU Radio Regulations Article 5)")
-    if abs(lead.get("drift_hz_s", 0.0)) < 1e-3:
-        artefact.append("a drift of zero: fixed to the ground, as the telescope is")
-    verdict = "artefact" if artefact else "unexplained, weak"
-    notes = [] if artefact else ["weak: one cadence only; the next step is the same star at another time "
-                                 "(Breakthrough Listen's other sessions, ./seti.py find)"]
+        signs.append(f"{f:.6f} MHz is in {band[2]} ({band[0]:g} to {band[1]:g} MHz, ITU Radio Regulations "
+                     f"Article 5): such transmitters are common there, though the band alone does not name one")
+    drift = lead.get("drift_hz_s", 0.0) or 0.0
+    if abs(drift) < 1e-3:
+        signs.append(f"a drift of {drift:g} Hz/s: what a transmitter fixed to the ground gives (Breakthrough "
+                     "Listen sets zero-drift hits aside for this reason, Enriquez et al. 2017), not proof of one")
+    seen = (f"seen in all {len(lead['in_on'])} ON looks and none of the {len(lead.get('in_off', []))} OFF looks"
+            if lead.get("in_on") else "passed the ON/OFF test")
+    verdict = "likely interference" if signs else "unexplained, weak"
+    notes = [seen + ".", "to settle it: the same frequency in another session of this star or a different star "
+             "(./seti.py find), and the known transmitters at that frequency"]
     return {"lead": lead_id(lead), "kind": "seti", "star": lead["target"], "frequency_mhz": f,
             "drift_hz_s": lead.get("drift_hz_s"), "snr": lead.get("snr"), "session": lead.get("session"),
             "checks": {"bands": _asked("ITU Radio Regulations, Article 5", "https://www.itu.int/pub/R-REG-RR",
                                        band and band[2])},
-            "verdict": verdict, "explained_by": [], "artefact_because": artefact, "notes": notes,
+            "verdict": verdict, "explained_by": [], "artefact_because": [], "likely_because": signs, "notes": notes,
             "known_to_science": False, "follow_up": {"can_watch": False,
                                                      "reasons": ["a radio signal: not for this optical telescope"]},
             "investigated": datetime.now(timezone.utc).isoformat(timespec="seconds"), "kind_of_answer": "measured"}
@@ -561,6 +628,8 @@ def report(r):
         lines.append(f"- explained: {why}")
     for why in r["artefact_because"]:
         lines.append(f"- artefact: {why}")
+    for why in r.get("likely_because", []):
+        lines.append(f"- sign of interference: {why}")
     for note in r["notes"]:
         lines.append(f"- {note}")
     lines += ["", "## This telescope", ""]
@@ -585,10 +654,15 @@ def investigate(words=(), get=requests.get, say=print):
     if lead is None:
         raise interface.Refusal("INVALID_REQUEST", "No lead is waiting: the screens have flagged nothing not yet "
                                                    "looked into. ./archive.py screen --batch 200 finds more.")
+    before = done().get(lead_id(lead))
     r = investigate_seti(lead) if lead["kind"] == "seti" else investigate_star(lead, get, say)
+    r["attempts"] = (before or {}).get("attempts", 1) + 1 if before else 1
+    left = unanswered(r)
+    if left and r["attempts"] >= RECHECKS:
+        r["notes"].append(f"given up asking {', '.join(left)} after {r['attempts']} tries: the verdict stands without it")
     path = keep(r)
     say(f"{r['star']}: {r['verdict']}")
-    for why in r["explained_by"] + r["artefact_because"] + r["notes"]:
+    for why in r["explained_by"] + r["artefact_because"] + r.get("likely_because", []) + r["notes"]:
         say(f"  {why}")
     say(f"  this telescope: {'can' if r['follow_up']['can_watch'] else 'cannot'} watch it")
     say(f"  report: {path.relative_to(ROOT) if path.is_relative_to(ROOT) else path}")
@@ -598,7 +672,7 @@ def investigate(words=(), get=requests.get, say=print):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("lead", nargs="*", help="KIC N or TIC N; none: the top lead nobody has looked into")
+    ap.add_argument("lead", nargs="*", help="KIC N or TIC N; none: an unfinished one, else the top lead nobody has looked into")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
     interface.main("investigate", lambda: investigate(args.lead), args.json)

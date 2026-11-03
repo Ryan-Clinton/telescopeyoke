@@ -33,9 +33,12 @@ C. **Papers:** `./literature.py --unread`. Read each abstract on Tabby's
    and what it means for the programmes (a new window goes into the
    programme's `[[watch]]`, with its source). Then mark them read
    (`./literature.py --read ID...`).
-D. **Investigate:** `./investigate.py` on the top lead nobody has looked
-   into yet (it picks it itself). Say its verdict (explained, artefact,
-   unexplained weak or strong) and why, whether it is known to science
+D. **Investigate:** `./investigate.py`, after A's batch has landed so its
+   new leads are in the queue (it picks itself: a lead with a check
+   unanswered first, then the top new one; run it again while `./ty
+   research` shows any waiting or to ask again). Say its verdict
+   (explained, likely explained, artefact, likely interference,
+   unexplained weak or strong) and why, "likely" with what is missing, whether it is known to science
    already, and whether this telescope can watch it; the report is
    `docs/research/LEAD.md`. An "unexplained" lead goes to
    `catalogue-researcher` before anything is called new. `./ty research`

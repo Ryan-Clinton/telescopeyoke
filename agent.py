@@ -83,21 +83,18 @@ def _read_json(path, empty=None):
         return empty
 
 
-def _screen_summary(name, path, targets_file):
-    """One star screen's coverage (archive.py screen): how many screened of
-    how many there are, how many could not be read, and the leads (stars
-    with a dip left after the checks), Tabby-like first."""
-    record = _read_json(path, {}) or {}
-    whole = None
-    if targets_file.exists():
-        whole = max(0, sum(1 for _ in targets_file.open(encoding="utf-8")) - 1)
-    read = {k: v for k, v in record.items() if isinstance(v, dict) and "score" in v}
-    failed = {k: v for k, v in record.items() if isinstance(v, dict) and "score" not in v}
-    leads = sorted(((k, v) for k, v in read.items() if v.get("real_dips")),
-                   key=lambda kv: (not kv[1].get("tabby_like"), -(kv[1].get("score") or 0)))
-    return {"survey": name, "screened": len(read), "failed": len(failed), "of": whole,
+def _screen_summary(name, kind):
+    """One star screen's coverage, from archive.py's own record and its own
+    definition of a lead (archive.is_lead): how many screened of how many
+    there are, how many failed, and the leads, in the screen's own order."""
+    import archive
+    record, whole = archive.status(kind)
+    c = archive.coverage(record, whole)
+    leads = sorted(((k, v) for k, v in record.items() if archive.is_lead(v)), key=lambda kv: archive._rank(kv[1]))
+    return {"survey": name, "screened": c["done"], "failed": c["failed"], "unavailable": c["unavailable"],
+            "excluded": c["excluded"], "of": whole,
             "covered_percent": round(100 * len(record) / whole, 3) if whole else None,
-            "tabby_like": sum(1 for v in read.values() if v.get("tabby_like")), "leads": len(leads),
+            "tabby_like": c["tabby_like"], "leads": c["leads"], "known_binaries": c["known_binaries"],
             "top_leads": [dict(v, star=k) for k, v in leads[:5]]}
 
 
@@ -111,8 +108,7 @@ def research(html=False):
     science (studied by others: SIMBAD cites it often). Reads files only;
     with `html`, also writes web/research.html for the 8080 page's server."""
     cache = config.DATA / "cache"
-    surveys = [_screen_summary("Kepler screen", cache / "kepler" / "screened.json", cache / "kepler" / "targets.csv"),
-               _screen_summary("TESS screen", cache / "tess" / "screened.json", cache / "tess" / "targets.csv")]
+    surveys = [_screen_summary("Kepler screen", "kepler"), _screen_summary("TESS screen", "tess")]
     seti = []
     for path in sorted((cache / "seti").glob("*.json")):
         kept = _read_json(path, {}) or {}
@@ -130,11 +126,12 @@ def research(html=False):
                            "known_to_science": r.get("known_to_science", False),
                            "can_watch": r.get("follow_up", {}).get("can_watch"),
                            "investigated": r.get("investigated"), "report": f"docs/research/{r['lead']}.md"})
-    waiting = 0
-    for s in surveys:
-        prefix = "KIC" if s["survey"].startswith("Kepler") else "TIC"
-        waiting += s["leads"] - sum(1 for r in looked if r["lead"].startswith(prefix + "-"))
-    waiting += sum(s["candidates"] for s in seti) - sum(1 for r in looked if r["lead"].startswith("SETI-"))
+    # investigate.py's own queue: the same leads it would take, and those
+    # it will look into again because a check went unanswered.
+    import investigate
+    kept = investigate.done()
+    waiting = sum(1 for lead in investigate.leads() if investigate.lead_id(lead) not in kept)
+    rechecks = len(investigate.recheck(kept))
     # literature.py's own rule: once anything is marked read, every paper
     # not marked; before that, only those of its last NIGHT_DAYS days.
     import feeds
@@ -150,13 +147,20 @@ def research(html=False):
                 unread += re.sub(r"v\d+$", "", p.get("id", "")) not in set(marked)
     count = lambda *labels: sum(1 for r in looked if r["verdict"] in labels)     # noqa: E731
     answer = {"surveys": surveys + seti,
-              "leads": {"waiting": max(0, waiting), "explained": count("explained"), "artefact": count("artefact"),
+              "leads": {"waiting": waiting, "to_recheck": rechecks, "explained": count("explained"),
+                        "likely_explained": count("likely explained"), "artefact": count("artefact"),
+                        "likely_interference": count("likely interference"),
                         "unexplained_weak": count("unexplained, weak"), "unexplained_strong": count("unexplained, strong"),
                         "known_to_science": sum(1 for r in looked if r["known_to_science"])},
               "investigated": sorted(looked, key=lambda r: r["investigated"] or "", reverse=True),
               "papers_unread": unread,
               "meaning": {"lead": "flagged by a search, not yet looked into",
-                          "explained": "a catalogue or known class accounts for it",
+                          "to_recheck": "looked into, but a catalogue did not answer: asked again next run",
+                          "explained": "a catalogue names this star's variability and every catalogue answered",
+                          "likely_explained": "a known class fits (a red giant, say) or a catalogue did not "
+                                              "answer: likely, not certain",
+                          "likely_interference": "a SETI candidate with signs of interference (a satellite band, "
+                                                 "no drift): signs, not proof",
                           "artefact": "a check failed: the data, the pipeline or a neighbour's light",
                           "unexplained": "every check made and nothing accounts for it: for a person to read, "
                                          "not a discovery",
@@ -187,7 +191,8 @@ def write_research_page(answer):
 table{{border-collapse:collapse;width:100%;margin:.5rem 0 1.5rem}}td,th{{border-bottom:1px solid #ccc;padding:.3rem .5rem;text-align:left}}
 @media (prefers-color-scheme: dark){{body{{background:#111;color:#eee}}a{{color:#9cf}}td,th{{border-color:#444}}}}</style></head><body>
 <h1>Research that needs no sky</h1>
-<p>Leads waiting: <b>{leads['waiting']}</b>. Looked into: {leads['explained']} explained, {leads['artefact']} artefacts,
+<p>Leads waiting: <b>{leads['waiting']}</b>, {leads['to_recheck']} to ask again. Looked into: {leads['explained']} explained,
+{leads['likely_explained']} likely explained, {leads['artefact']} artefacts, {leads['likely_interference']} likely interference,
 {leads['unexplained_weak']} unexplained (weak), <b>{leads['unexplained_strong']}</b> unexplained (strong); {leads['known_to_science']} known to science.
 Papers not yet read: {answer['papers_unread']}.</p>
 <h2>Surveys</h2><table><tr><th>Survey</th><th>Searched</th><th>Of</th><th>Covered</th><th>Failed</th><th>Leads</th></tr>{rows}</table>

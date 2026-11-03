@@ -6,6 +6,18 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+- **3 November 2026**: a lead's verdict says how sure it is: "explained"
+  needs a catalogue naming the star's variability with every catalogue
+  answering, else "likely explained" (KIC 6448574's red giant is now
+  this); a SETI candidate with a satellite band or no drift is "likely
+  interference" with the signs stated, never a proven artefact. A lead
+  whose checks went unanswered is looked into again before new ones (up
+  to three tries). One definition of a lead (`archive.is_lead`: possible
+  repeats and short TESS dips count, known binaries do not) serves the
+  screens, `investigate.py` and `ty research`, which now reads TESS's
+  real target files. SETI hits that are not candidates never reach the
+  queue ([docs/archive.md](docs/archive.md#looking-into-a-lead)).
+
 - **3 November 2026**: the setup routine's motor check (`./mount.py nudge`)
   is optional: `[mount] nudge_check`, "Motor check at setup" on the Settings
   screen; `./mount.py settime --dry-run` says whether it comes next.

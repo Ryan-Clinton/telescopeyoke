@@ -128,14 +128,63 @@ def test_the_next_lead_is_taken_without_being_told_and_one_looked_into_is_not_ta
     assert investigate.lead_id(investigate.next_lead()) == "KIC-111"
 
 
-def test_a_seti_candidate_in_a_satellite_band_or_with_no_drift_is_an_artefact():
-    r = investigate.investigate_seti({"kind": "seti", "target": "KIC8462852", "session": "S",
-                                      "frequency_mhz": 2266.8, "drift_hz_s": 0.31, "snr": 30.0})
-    assert r["verdict"] == "artefact" and "space operation" in r["artefact_because"][0]
+def test_a_seti_candidate_with_signs_of_interference_is_likely_interference_never_a_proven_artefact():
+    r = investigate.investigate_seti({"kind": "seti", "target": "KIC8462852", "session": "S", "in_on": [1, 1, 1],
+                                      "in_off": [0, 0, 0], "frequency_mhz": 2266.8, "drift_hz_s": 0.31, "snr": 30.0})
+    assert r["verdict"] == "likely interference" and not r["artefact_because"]
+    assert "space operation" in r["likely_because"][0] and "does not name one" in r["likely_because"][0]
+    assert "all 3 ON looks and none of the 3 OFF" in r["notes"][0] and "another session" in r["notes"][1]
     r = investigate.investigate_seti({"kind": "seti", "target": "X", "frequency_mhz": 1420.4, "drift_hz_s": 0.0, "snr": 12})
-    assert r["verdict"] == "artefact" and "fixed to the ground" in r["artefact_because"][0]
+    assert r["verdict"] == "likely interference" and "not proof" in r["likely_because"][0]
     r = investigate.investigate_seti({"kind": "seti", "target": "X", "frequency_mhz": 1420.4, "drift_hz_s": 0.2, "snr": 12})
-    assert r["verdict"] == "unexplained, weak"
+    assert r["verdict"] == "unexplained, weak" and not r["likely_because"]
+    r = investigate.investigate_seti({"kind": "seti", "target": "X", "frequency_mhz": 2266.8, "drift_hz_s": 0.0, "snr": 12})
+    assert "# X: likely interference" in investigate.report(r) and "- sign of interference:" in investigate.report(r)
+
+
+def test_a_catalogue_explanation_with_a_catalogue_unanswered_is_only_likely():
+    eb = {"period_days": 13.68}
+    assert investigate.judge(star([dip(5.0)]), checks(eb=eb))["verdict"] == "explained"
+    v = investigate.judge(star([dip(5.0)]), checks(eb=eb, errors=("VSX (via VizieR)",)))
+    assert v["verdict"] == "likely explained" and any("VSX (via VizieR)" in n for n in v["notes"])
+
+
+def test_only_seti_candidates_and_the_screens_own_leads_reach_the_queue(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    (tmp_path / "cache" / "kepler").mkdir(parents=True)
+    (tmp_path / "cache" / "kepler" / "screened.json").write_text(json.dumps({
+        "1": {"state": "done", "score": 1.0, "tabby_like": False, "real_dips": 0, "possible_repeats": 1},
+        "2": {"state": "done", "score": 2.0, "tabby_like": False, "real_dips": 2, "known_binary": "EB 3.1 d"},
+        "3": {"state": "failed", "why": "timeout", "attempts": 1}}))
+    (tmp_path / "cache" / "tess").mkdir(parents=True)
+    (tmp_path / "cache" / "tess" / "screened.json").write_text(json.dumps({
+        "9": {"state": "done", "score": 0.5, "tabby_like": False, "real_dips": 0, "short_real": 1}}))
+    (tmp_path / "cache" / "seti").mkdir(parents=True)
+    (tmp_path / "cache" / "seti" / "T-S.json").write_text(json.dumps({"blocks": [[1, 2]], "done": {"0": {"events": [
+        {"frequency_mhz": 1.0, "drift_hz_s": 0.1, "snr": 50.0, "label": "interference"},
+        {"frequency_mhz": 2.0, "drift_hz_s": 0.1, "snr": 40.0, "label": "unconfirmed"},
+        {"frequency_mhz": 3.0, "drift_hz_s": 0.1, "snr": 20.0, "label": "candidate"}]}}}))
+    order = [investigate.lead_id(lead) for lead in investigate.leads()]
+    assert order == ["KIC-1", "TIC-9", "SETI-T-3.000000"]    # a possible repeat and a short dip are leads; a known binary is not
+
+
+def test_an_investigation_with_a_check_unanswered_is_asked_again_before_new_leads_then_given_up(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    (tmp_path / "cache" / "kepler").mkdir(parents=True)
+    (tmp_path / "cache" / "kepler" / "screened.json").write_text(json.dumps({
+        "111": {"score": 3.0, "tabby_like": True, "real_dips": 1}, "222": {"score": 1.0, "tabby_like": False, "real_dips": 2}}))
+    (tmp_path / "cache" / "research").mkdir(parents=True)
+    down = {"vsx": {"source": "VSX (via VizieR)", "answer": None, "error": "not answered (HTTPError)"},
+            "villanova": {"source": "Villanova", "answer": None, "error": None}}
+    (tmp_path / "cache" / "research" / "KIC-111.json").write_text(json.dumps({
+        "lead": "KIC-111", "kind": "kepler", "checks": down, "investigated": "2026-11-03T14:00:00+00:00"}))
+    assert investigate.unanswered(json.loads((tmp_path / "cache" / "research" / "KIC-111.json").read_text())) == ["VSX (via VizieR)"]
+    assert investigate.lead_id(investigate.next_lead()) == "KIC-111"         # unfinished comes first
+    tess_na = {"villanova": {"source": "Villanova", "answer": None, "error": "a TESS star: not in it"}}
+    assert investigate.unanswered({"checks": tess_na}) == []                # not applying is not unanswered
+    (tmp_path / "cache" / "research" / "KIC-111.json").write_text(json.dumps({
+        "lead": "KIC-111", "kind": "kepler", "checks": down, "attempts": investigate.RECHECKS}))
+    assert investigate.lead_id(investigate.next_lead()) == "KIC-222"         # given up after RECHECKS tries
 
 
 def test_a_whole_investigation_keeps_its_record_and_report_and_matches_its_schema(tmp_path, monkeypatch):
@@ -177,12 +226,18 @@ def test_the_research_dashboard_counts_each_survey_and_each_lead_by_where_it_sta
     (kepler / "screened.json").write_text(json.dumps({
         "1": {"score": 3.0, "tabby_like": True, "real_dips": 2}, "2": {"score": 0.0, "tabby_like": False, "real_dips": 0},
         "3": {"missed": "timeout"}, "4": {"score": 1.0, "tabby_like": False, "real_dips": 1}}))
+    tess = tmp_path / "cache" / "tess"
+    tess.mkdir(parents=True)
+    (tess / "targets-s0014.json").write_text(json.dumps(list(range(100, 150))))     # what archive.py keeps
+    (tess / "screened.json").write_text(json.dumps({"100": {"state": "done", "score": 0.2, "tabby_like": False,
+                                                            "real_dips": 0, "possible_repeats": 1}}))
     (tmp_path / "cache" / "seti").mkdir(parents=True)
     (tmp_path / "cache" / "seti" / "KIC8462852-S.json").write_text(json.dumps({
         "blocks": [[1, 2]] * 308, "done": {"0": {"from_mhz": 1.0, "to_mhz": 3.9, "candidates": 0}}}))
     (tmp_path / "cache" / "research").mkdir(parents=True)
     (tmp_path / "cache" / "research" / "KIC-1.json").write_text(json.dumps({
-        "lead": "KIC-1", "star": "KIC 1", "verdict": "unexplained, weak", "known_to_science": False,
+        "lead": "KIC-1", "kind": "kepler", "star": "KIC 1", "verdict": "unexplained, weak", "known_to_science": False,
+        "checks": {"vsx": {"source": "VSX", "answer": None, "error": "not answered (HTTPError)"}},
         "follow_up": {"can_watch": False}, "investigated": "2026-11-03T14:00:00+00:00"}))
     (tmp_path / "feeds").mkdir()
     (tmp_path / "feeds" / "arxiv_tabby-s-star.json").write_text(json.dumps([{"id": "2610.34806v1"}, {"id": "2607.01234v2"}]))
@@ -192,10 +247,13 @@ def test_the_research_dashboard_counts_each_survey_and_each_lead_by_where_it_sta
     assert (k["screened"], k["failed"], k["of"], k["leads"], k["tabby_like"]) == (3, 1, 200, 2, 1)
     assert k["covered_percent"] == 2.0
     assert answer["surveys"][2]["searched"] == 1 and answer["surveys"][2]["of"] == 308
-    assert answer["leads"]["waiting"] == 1 and answer["leads"]["unexplained_weak"] == 1
+    t = answer["surveys"][1]
+    assert (t["screened"], t["of"], t["leads"], t["covered_percent"]) == (1, 50, 1, 2.0)    # a possible repeat is a lead
+    assert answer["leads"]["waiting"] == 2 and answer["leads"]["unexplained_weak"] == 1     # KIC-4 and TIC-100
+    assert answer["leads"]["to_recheck"] == 1
     assert answer["papers_unread"] == 1
     page = (tmp_path / "web" / "research.html").read_text(encoding="utf-8")
-    assert "Leads waiting: <b>1</b>" in page and "docs/research/KIC-1.md" in page
+    assert "Leads waiting: <b>2</b>, 1 to ask again" in page and "docs/research/KIC-1.md" in page
 
 
 def test_this_months_hours_are_tonights_not_a_night_already_gone():
@@ -214,9 +272,10 @@ def test_a_red_giants_shallow_dips_are_its_own_and_a_deep_one_is_not():
     red = {"g": 8.11, "ruwe": 1.19, "bp_rp": 1.6, "parallax_mas": 1.326, "parallax_over_error": 55.0,
            "abs_g": -1.28, "source_id": "2077618484452244480", "separation_arcsec": 0.19}
     v = investigate.judge(star([dip(3.2), dip(5.0)]), checks(gaia={"star": red, "class": None, "neighbours": []}))
-    assert v["verdict"] == "explained" and any("red giant" in r for r in v["explained_by"])
+    assert v["verdict"] == "likely explained" and any("red giant" in r for r in v["explained_by"])
+    assert any("on the star's class" in n for n in v["notes"])   # a class fits; no catalogue names its variability
     deep = investigate.judge(star([dip(15.0), dip(20.0)]), checks(gaia={"star": red, "class": None, "neighbours": []}))
-    assert deep["verdict"] != "explained"                    # far deeper than a giant's pulsation
+    assert deep["verdict"].startswith("unexplained")         # far deeper than a giant's pulsation
     dwarf = dict(red, abs_g=6.5)                              # as red, but on the main sequence
     assert investigate.judge(star([dip(5.0)]), checks(gaia={"star": dwarf, "class": None,
-                                                            "neighbours": []}))["verdict"] != "explained"
+                                                            "neighbours": []}))["verdict"] == "unexplained, weak"

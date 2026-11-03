@@ -206,18 +206,31 @@ and the papers on the star come before any claim.
 
 ## Looking into a lead
 
-`./investigate.py` takes the top lead nobody has looked into (a star the
-screens left a dip on, Tabby-like first; or a SETI sweep's candidate) and
+`./investigate.py` first looks again at any lead whose checks went
+unanswered (a service down; up to three tries, then the verdict stands
+without it and says so), then takes the top lead nobody has looked into.
+A lead is the screens' own (`archive.is_lead`: a dip left, a possible
+repeated eclipse or a short TESS dip, not a known binary; Tabby-like
+first) or a SETI sweep's candidate (every ON look, no OFF look;
+interference and unconfirmed hits stay in the sweep's record). It
 runs the same checks every time, each answer kept with its link and the
 date asked: SIMBAD's type and how often it is cited, VSX, Villanova's
 Kepler EB catalogue, Gaia DR3's variability class and RUWE, the star in
 TESS and in ZTF, then the dip in both fluxes, the aperture's crowding
 (CROWDSAP) and any Gaia neighbour within 8" bright enough to make the dip
-by going out altogether. The verdict is "explained", "artefact",
-"unexplained, weak" or "unexplained, strong" (two dips of 5% or more in
-both fluxes, on a star steady between them, with every catalogue
-answering), and "known to science" is said apart: a star cited 20 times
-or more is someone's already. A catalogue that does not answer is said
-so, and keeps the verdict weak. The report is `docs/research/LEAD.md`;
-`./ty research` counts every survey's coverage and each lead by where it
-stands, and `--html` writes `web/research.html` for the 8080 server.
+by going out altogether. The verdict is one of:
+
+| Verdict | Means |
+|---|---|
+| explained | a catalogue names this star's variability (Villanova EB, a VSX type, SIMBAD's class, Gaia's class) and every catalogue answered |
+| likely explained | a known class fits but no catalogue names the star's variability (the red-giant rule: Gaia colour and luminosity), or a catalogue did not answer |
+| artefact | a check fails: one flux only, the aperture's crowding, a neighbour bright enough, no dip left |
+| likely interference | a SETI candidate with a sign of interference (a satellite band, no drift), each stated: signs, not proof |
+| unexplained, weak / strong | nothing accounts for it; strong needs two dips of 5% or more in both fluxes, on a star steady between them, with every catalogue answering |
+
+"Known to science" is said apart: a star cited 20 times or more is
+someone's already. The report is `docs/research/LEAD.md`; `./ty
+research` reads the screens' own coverage (`archive.status`, the target
+files they keep) and investigate.py's own queue, so it counts the same
+leads, and says how many are waiting and how many will be asked again;
+`--html` writes `web/research.html` for the 8080 server.

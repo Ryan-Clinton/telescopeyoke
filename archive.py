@@ -742,6 +742,30 @@ def screened(path=None):
     return {k: migrate(v) for k, v in json.loads(path.read_text(encoding="utf-8")).items()}
 
 
+def is_lead(v):
+    """Whether a screened star is a lead: a dip left after the checks, a
+    possible repeated eclipse or a short dip left, and not a known binary.
+    The one definition, used by the coverage, investigate.py and ty research."""
+    return bool(v.get("state", "done") == "done" and (v.get("real_dips") or v.get("possible_repeats")
+                                                       or v.get("short_real")) and not v.get("known_binary"))
+
+
+def status(kind):
+    """A screen's coverage from its own record (`kepler` or `tess`), with the
+    whole list's size from the target files the screen keeps (None till fetched)."""
+    import json
+    folder = config.DATA / "cache" / kind
+    if kind == "kepler":
+        record, path = screened(), folder / "targets.csv"
+        total = len({row.split(",")[0] for row in path.read_text(encoding="utf-8").splitlines()[1:]}) \
+            if path.exists() else None
+    else:
+        record = screened(tess_screened_file())
+        sectors = sorted(folder.glob("targets-s*.json"))
+        total = len({t for f in sectors for t in json.loads(f.read_text(encoding="utf-8"))}) if sectors else None
+    return record, total
+
+
 def coverage(record, total):
     """How far the screen has got: each state's count of the whole list,
     the Tabby-like, the known binaries among the leads, and why stars were
@@ -751,9 +775,8 @@ def coverage(record, total):
     done = [v for v in record.values() if v["state"] == "done"]
     reasons = Counter(f"{v['state']}: {v.get('why', '')[:80]}" for v in record.values() if v["state"] != "done")
     return {"total": total, **{s: states.get(s, 0) for s in STATES},
-            "not_yet": max(0, total - len(record)), "tabby_like": sum(1 for v in done if v.get("tabby_like")),
-            "leads": sum(1 for v in done if (v.get("real_dips") or v.get("possible_repeats") or v.get("short_real"))
-                         and not v.get("known_binary")),
+            "not_yet": max(0, total - len(record)) if total is not None else None, "tabby_like": sum(1 for v in done if v.get("tabby_like")),
+            "leads": sum(1 for v in done if is_lead(v)),
             "known_binaries": sum(1 for v in done if v.get("known_binary")),
             "reasons": dict(reasons.most_common(10))}
 
