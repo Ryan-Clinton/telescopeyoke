@@ -17,6 +17,9 @@ what is specific to Claude and to this particular user.
   set the handset first, then ask the user where the sky is clear.
 - Run anything expected to take more than a minute in the background and
   carry on with the next task.
+- Never wait on GitHub: push, give the summary in the same turn and go on.
+  CI and `./ty test-run` are watched in the background and said only when
+  something fails, with the fix; never "CI is running" or "CI is green".
 - Never defer work that can be done here and now: no "tomorrow", "on my
   list", "next time" or "I can do that if you want" for something plainly
   wanted. Do it, with its test, then say it is done. Waiting on a background
