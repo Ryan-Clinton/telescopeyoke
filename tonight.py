@@ -237,6 +237,13 @@ def campaign_results(night, lat, lon, source=feeds, now=None):
     return out[:MOST_CAMPAIGNS]
 
 
+def literature_results():
+    """arXiv's papers of the last NIGHT_DAYS days on each topic watched
+    (literature.py), only the topics with any."""
+    import literature
+    return [t for t in literature.recent(literature.NIGHT_DAYS) if t["papers"]]
+
+
 def supernova_results(night, source=feeds):
     """The bright supernovae (feeds.supernovae) up here in the dark tonight,
     each with its window, brightest first."""
@@ -290,6 +297,7 @@ def build(cfg, date=None, offline=False, demo=False):
     results.sort(key=lambda r: -r["score"])
     supernovae = [] if offline else supernova_results(night, source)
     campaigns = [] if offline else campaign_results(night, lat, lon, source)
+    papers = [] if offline or demo else literature_results()
 
     now = datetime.now(night.tz)
     for t in results + supernovae + campaigns:
@@ -322,6 +330,7 @@ def build(cfg, date=None, offline=False, demo=False):
         "targets": results,
         "supernovae": supernovae,
         "campaigns": campaigns,
+        "papers": papers,
         "news": [] if offline else source.news(datetime.now(timezone.utc)) or [],
     }
     # How old each feed's data is: a copy kept because the source failed is

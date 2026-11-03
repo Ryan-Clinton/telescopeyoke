@@ -386,9 +386,27 @@ def discovery_tonight(demo=False):
                      "best_time": seen["best"] if seen else None,
                      "best_altitude_deg": seen["best_alt"] if seen else None,
                      "direction": seen["direction"] if seen else None,
-                     "last_run": last_run(programme_fields(path.stem, p))})
+                     "last_run": last_run(programme_fields(path.stem, p)),
+                     "watch": watches(p, night.times.jd[0], night.times.jd[-1])})
     plan.sort(key=lambda r: (r["best_time"] is None, r["best_time"] or 0))
     return plan
+
+
+def watches(p, start_jd, end_jd):
+    """A programme's dated events ([[watch]] in its file, each with its
+    source): whether tonight falls inside one of its windows, and the next
+    window after tonight. Tabby's proposed companion (2026) is the first."""
+    from astropy.time import Time
+    day = lambda jd: Time(jd, format="jd").datetime.strftime("%Y-%m-%d")
+    out = []
+    for w in p.get("watch", []):
+        spans = sorted(w.get("windows", []))
+        inside = next((s for s in spans if s[0] <= end_jd and s[1] >= start_jd), None)
+        later = next((s for s in spans if s[0] > end_jd), None)
+        out.append({"what": w["what"], "source": w["source"], "tonight": inside is not None,
+                    "window": [day(inside[0]), day(inside[1])] if inside else None,
+                    "next": [day(later[0]), day(later[1])] if later else None})
+    return out
 
 
 def programme_fields(name, p):
@@ -674,6 +692,7 @@ def night(demo=False):
                            days_since_measured=c["days_since_measured"], overdue=c["overdue"], note=c["note"],
                            link=c["link"])
                       for c in rep.get("campaigns", [])],
+        "papers": rep.get("papers", []),
         "news": rep.get("news", []),
         "sources": rep.get("sources", []),
     }

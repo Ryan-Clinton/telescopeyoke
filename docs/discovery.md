@@ -244,6 +244,25 @@ What a person does; everything else is automatic.
    Cluster). ExoClock listed WASP-11 b and HAT-P-16 b at low priority with
    their middles good to 0.3 minutes, and TOI-4153 b not at all.
 
+   - Papers (`./literature.py`, and `papers` in `ty night`): arXiv's
+     newest on Tabby's star, novae in M31 and M33, dipping and dimming
+     stars, technosignatures and SETI, and transit timing, asked once a
+     day. On 3 November 2026 its first run found two Tabby's star papers
+     the project had not known: Madurga-Favieres et al. (MNRAS 550,
+     stag1273, July 2026), a giant companion at 2.3 sigma with a 1.1%
+     deep, ~21 h transit, and Zhu & Liu (arXiv 2610.34806, 26 October
+     2026), which reads that transit as a planet with a ring.
+   - A programme's dated events (`[[watch]]` in its file, with the paper
+     it comes from): `ty night` says when tonight is inside a window and
+     when the next one is. Tabby's file holds the companion's windows
+     from the paper's Table 1: 18-23 October 2026 (the authors'
+     likeliest; the star was measured on 17 October, the evening before
+     it opened, and not again until 2 November), 14-16 January 2027 and
+     28 February to 2 March 2027. A 1.1% dip needs each night's level to
+     about 0.3%; the two nights measured so far differ by 0.22 mag, far
+     more than that, so the level between nights has to be made steady
+     (`precision.py`) before January's window means anything.
+
    Accounts held since 3 November 2026: the AAVSO Target Tool and Lasair
    (their keys in `~/.config/telescopeyoke/`, readable by their owner
    only), OccultWatcher Cloud (its predictions are read on its site) and

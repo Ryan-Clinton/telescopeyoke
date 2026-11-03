@@ -33,6 +33,7 @@ SOURCES = {
     "supernovae": ("Rochester active supernovae", "https://www.rochesterastronomy.org/snimages/snactive.html"),
     "comets": ("COBS and JPL Horizons", "https://cobs.si"),
     "aavso": ("AAVSO Target Tool", "https://targettool.aavso.org"),
+    "arxiv": ("arXiv", "https://arxiv.org"),
 }
 # What each feed gave this run: fresh from the source, a copy kept within
 # its time, an old copy kept because the source failed, or nothing.

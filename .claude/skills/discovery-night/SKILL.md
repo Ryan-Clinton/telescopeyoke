@@ -1,6 +1,6 @@
 ---
 name: discovery-night
-description: Plan and run a night hunting for novae and other new transients, with Tabby's star and exoplanet transits fitted in. Use when the person asks for tonight's outlook or plan, asks what to do tonight, asks to patrol M31 or M33, look for novae, or run a discovery night.
+description: Plan and run a night hunting for novae, new transients and strange stars (Tabby's star and its proposed companion's transit windows, AAVSO campaigns, exoplanet transits), with the week's papers on them and on SETI. Use when the person asks for tonight's outlook or plan, asks what to do tonight, asks to patrol M31 or M33, look for novae, or run a discovery night.
 compatibility: telescopeyoke at the telescope, set up and focused (nightly-setup), with a reference for each field or a first night to make one
 allowed-tools: Bash(./ty night) Bash(./ty night --json) Bash(./patrol.py * --plan) Bash(./starwatch.py * --plan) Bash(./ty candidates *) Bash(./ty watch-run --once)
 ---
@@ -47,6 +47,13 @@ is `docs/agents/setup-routine.md` step 6b.
    - One line per `supernovae` item (bright ones on the Rochester list, up
      tonight): its name, host galaxy, magnitude and date, best time and
      direction. None, no line.
+   - Any `discovery` item's `watch` with `tonight` true: its own line
+     first, as the night's reason (Tabby inside a window of its proposed
+     companion's transit: measure its level tonight and on the nights
+     either side). Otherwise the next window, said once with its dates.
+   - One line per `papers` topic with papers: the newest title, its date
+     and first author, and how many more. Tabby's star and SETI first.
+     A paper is something to read, never a result of ours.
    - One line for the `news` events (in-the-sky.org) that fall on tonight or
      the night planned: a Moon or planet approach or an occultation. The
      headlines only when asked for the news.

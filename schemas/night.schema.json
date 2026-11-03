@@ -60,7 +60,13 @@
           "direction": {"type": ["string", "null"]},
           "in_clear": {"type": ["array", "null"], "description": "The window cut to the forecast's clear spell; null when the field is not up while it is clear."},
           "best_in_clear": {"description": "When to take it: the best time inside the clear spell."},
-          "last_run": {"description": "When the programme last imaged any of its fields (UTC), from its newest session with a picture or frames; null if never."}
+          "last_run": {"description": "When the programme last imaged any of its fields (UTC), from its newest session with a picture or frames; null if never."},
+          "watch": {"type": "array", "description": "The programme's dated events, each from a paper ([[watch]] in its file): whether tonight is inside one of its windows, and the next window.",
+                    "items": {"type": "object", "required": ["what", "source", "tonight", "window", "next"],
+                              "properties": {"what": {"type": "string"}, "source": {"type": "string"},
+                                             "tonight": {"type": "boolean"},
+                                             "window": {"type": ["array", "null"], "description": "Tonight's window, first and last day (UTC)."},
+                                             "next": {"type": ["array", "null"], "description": "The next window after tonight, first and last day (UTC)."}}}}
         }
       }
     },
@@ -145,6 +151,13 @@
           "link": {"type": "string"}
         }
       }
+    },
+    "papers": {
+      "description": "arXiv's papers of the last 14 days on each topic watched (literature.py: Tabby's star, novae in M31 and M33, dipping stars, technosignatures and SETI, transit timing), only topics with any. To read, not results. Empty in the demo.",
+      "type": "array",
+      "items": {"type": "object", "required": ["topic", "papers"],
+                "properties": {"topic": {"type": "string"},
+                               "papers": {"type": "array", "items": {"type": "object", "required": ["id", "title", "authors", "submitted", "link"]}}}}
     },
     "sources": {
       "description": "Each outside feed this answer used, and how old its data is: fresh (fetched now), cached (a copy kept within max_age_hours), stale (an older copy, kept because the source failed: not tonight's data) or unavailable. Empty in the demo.",

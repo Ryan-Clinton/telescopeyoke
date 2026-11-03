@@ -6,6 +6,12 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+- **Papers and dated watches** (`literature.py`, `ty night`): arXiv's
+  newest on Tabby's star, M31/M33 novae, dipping stars, technosignatures
+  and transit timing, listed as `papers`; a programme's `[[watch]]`
+  windows from a paper, starting with the transit windows of the
+  companion proposed for Tabby's star in 2026
+  ([discovery](docs/discovery.md), step 8).
 - **What a stack reaches, and who wants what measured** (`ty night`,
   `transits.py`, `build_catalogue.py`): the catalogue holds galaxies to
   magnitude 12 (1,660 objects, from 641), built from a pinned OpenNGC

@@ -661,6 +661,22 @@ def test_the_frame_is_a_rectangle_turned_as_solved():
     assert not footprint.contains(solved, 100.0, 0.4)
 
 
+def test_a_programmes_dated_watch_says_when_tonight_is_inside_a_window_and_the_next_one():
+    from astropy.time import Time
+    p = {"watch": [{"what": "a transit", "source": "https://doi.org/x",
+                    "windows": [[2461332.2, 2461337.3], [2461419.8, 2461421.8]]}]}
+    night = Time("2026-10-20T18:00:00").jd
+    inside = agent.watches(p, night, night + 0.6)[0]
+    assert inside["tonight"] and inside["window"] == ["2026-10-18", "2026-10-23"]
+    assert inside["next"] == ["2027-01-14", "2027-01-16"]     # BJD 2461419.8 is 14 January 07:12 UTC
+    tonight = Time("2026-11-03T18:00:00").jd
+    out = agent.watches(p, tonight, tonight + 0.6)[0]
+    assert not out["tonight"] and out["window"] is None and out["next"][0] == "2027-01-14"
+    import tomllib
+    tabby = tomllib.loads((agent.PROGRAMMES / "tabby.toml").read_text(encoding="utf-8"))
+    assert tabby["watch"][0]["source"].endswith("stag1273")
+
+
 def test_each_recommendation_says_what_it_is_from_the_catalogue_alone():
     import sky
     targets = {t["id"]: t for t in sky.load_targets()}

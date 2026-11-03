@@ -13,3 +13,16 @@ minutes = 10
 
 # A dip lasts days; the patrol's halves-of-the-night check is not the test.
 both_halves = false
+
+# A giant companion proposed by Madurga-Favieres et al. 2026 (MNRAS 550,
+# stag1273, 6 July 2026; 2.3 sigma, not confirmed): one 1.1% deep, ~21 h
+# transit in TESS sector 15, and a period of 1030 to 1370 days. Its Table 1
+# leaves five windows for the next transit; 1 and 2 (April-May 2025) were
+# watched by LCO and narrowed, 3 is the authors' likeliest. Each window is
+# [first, last] in BJD (within minutes of JD, nothing for a days-wide
+# window). A night inside one is a night to measure the star's level; nights
+# either side give the level out of transit to set it against.
+[[watch]]
+what = "a transit of the proposed giant companion: 1.1% deep, about 21 hours"
+source = "https://doi.org/10.1093/mnras/stag1273"
+windows = [[2461332.2, 2461337.3], [2461419.8, 2461421.8], [2461464.8, 2461466.8]]

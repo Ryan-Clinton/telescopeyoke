@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/literature.schema.json",
+  "title": "Literature",
+  "description": "data of: literature.py --json, arXiv's newest papers on each topic the telescope watches or hopes to find (Tabby's star, novae in M31 and M33, dipping stars, technosignatures and SETI, transit timing). Something to read, not a result. Nothing moves.",
+  "type": "object",
+  "required": [
+    "days",
+    "topics",
+    "kind"
+  ],
+  "properties": {
+    "days": {
+      "type": "number"
+    },
+    "topics": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "topic",
+          "papers"
+        ],
+        "properties": {
+          "topic": {
+            "type": "string"
+          },
+          "papers": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "title",
+                "authors",
+                "submitted",
+                "link"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "authors": {
+                  "type": "string"
+                },
+                "submitted": {
+                  "type": "string",
+                  "description": "UTC, ISO 8601: when it reached arXiv."
+                },
+                "link": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "sources": {
+      "type": "array"
+    },
+    "kind": {
+      "enum": [
+        "inferred"
+      ]
+    }
+  }
+}
