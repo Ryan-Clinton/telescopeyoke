@@ -57,6 +57,20 @@
         "snr_min",
         "kind"
       ]
+    },
+    {
+      "required": [
+        "file",
+        "own_hits",
+        "injected",
+        "kind"
+      ]
+    },
+    {
+      "required": [
+        "files",
+        "kind"
+      ]
     }
   ],
   "$defs": {
@@ -346,6 +360,29 @@
           "only_ours",
           "only_turboseti"
         ]
+      }
+    },
+    "own_hits": {
+      "type": "integer"
+    },
+    "injected": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "snr",
+          "planted",
+          "found",
+          "completeness",
+          "drift_error_hz_s",
+          "false_hits"
+        ]
+      }
+    },
+    "files": {
+      "type": "array",
+      "items": {
+        "type": "object"
       }
     }
   }

@@ -286,8 +286,18 @@ def flatten(spectra, block=BLOCK):
         else:
             shape = np.full(n_f, level[0])
         rest = spectra[t] - shape
-        spread = 1.4826 * np.median(np.abs(rest - np.median(rest))) or 1.0
-        out[t] = rest / spread
+        # The noise too is measured block by block: near a coarse channel's
+        # edges the band rolls off and the noise with it, and one figure for
+        # the whole spectrum made hits of the quieter edges (3 November 2026,
+        # Tabby's 2017 data: four of five hits only this search found).
+        spread = np.array([1.4826 * np.median(np.abs(rest[a:a + block] - np.median(rest[a:a + block])))
+                           for a in starts])
+        spread[spread <= 0] = np.median(spread[spread > 0]) if (spread > 0).any() else 1.0
+        if len(spread) > 1:
+            noise = np.interp(every, centres, spread)
+        else:
+            noise = np.full(n_f, spread[0])
+        out[t] = rest / noise
     return out
 
 
@@ -315,16 +325,26 @@ def search(spectra, foff, tsamp, fch1, snr_min=SNR_MIN, max_drift=MAX_DRIFT, blo
             snr[:-k] = -np.inf
         better = snr > best
         best[better], best_k[better] = snr[better], k
+    # The slice's ends: a drift line starting there runs off the slice, so
+    # what lies within the widest drift of either end is not searched.
+    edge = most + WINDOW_CHANNELS
+    best[:edge] = best[n_f - edge:] = -np.inf
     over = np.flatnonzero(best >= snr_min)
-    hits, taken = [], np.zeros(n_f, bool)
-    for i in over[np.argsort(-best[over])]:
-        if taken[i]:
-            continue
-        reach = most + WINDOW_CHANNELS
-        taken[max(0, i - reach):i + reach + 1] = True
-        hits.append({"channel": int(i), "frequency_mhz": round(fch1 + i * foff, 6),
-                     "drift_hz_s": round(best_k[i] * foff * 1e6 / span, 4) if span else 0.0,
-                     "snr": round(float(best[i]), 1)})
+    # One hit for each run of bright channels no further apart than the
+    # widest drift: a burst of interference lights a wide run of them and is
+    # one hit, not one for every drift line (turboSETI keeps one top hit in
+    # each such window too).
+    reach = most + WINDOW_CHANNELS
+    hits, run = [], []
+    for i in list(over) + [None]:
+        if run and (i is None or i - run[-1] > reach):
+            top = max(run, key=lambda c: best[c])
+            hits.append({"channel": int(top), "frequency_mhz": round(fch1 + top * foff, 6),
+                         "drift_hz_s": round(best_k[top] * foff * 1e6 / span, 4) if span else 0.0,
+                         "snr": round(float(best[top]), 1), "width_channels": int(run[-1] - run[0] + 1)})
+            run = []
+        if i is not None:
+            run.append(i)
     return hits
 
 
@@ -470,6 +490,75 @@ def sweep(target, count=1, say=print, get=requests.get, run_cadence=None, block_
             "candidates_so_far": candidates[:MAX_LISTED], "kind": "measured"}
 
 
+# --- completeness: signals planted in real noise ---------------------------------
+
+INJECT_SNRS = (10, 12, 15, 20, 30, 50)   # the strengths planted, in times the noise of the summed line
+INJECT_COUNT = 40                        # signals planted at each strength
+
+
+def plant(spectra, tones, tsamp, width_hz):
+    """`spectra` with drifting tones added: (channel at the start, drift Hz/s,
+    height in raw units a spectrum), each on its nearest channel in time."""
+    out = spectra.copy()
+    for channel, drift, height in tones:
+        for t in range(out.shape[0]):
+            # foff is negative: a rising frequency moves to lower channels
+            at = int(round(channel - drift * t * tsamp / width_hz))
+            if 0 <= at < out.shape[1]:
+                out[t, at] += height
+    return out
+
+
+def inject(path, snrs=INJECT_SNRS, count=INJECT_COUNT, seed=0, say=print, read=read_slice):
+    """How complete the search is, and how clean, in a real look's own noise:
+    `count` drifting signals of each strength in `snrs` planted at random
+    places and drifts (away from the slice's ends and its own hits), the
+    look searched again, and each planted signal counted found when a hit
+    lies within its drift's reach with its drift within two steps. Hits
+    that are neither planted nor in the look before are false."""
+    s = read(path, -1e12, 1e12)
+    spectra, foff, tsamp, fch1 = s["spectra"], s["foff"], s["tsamp"], s["fch1"]
+    n_t, n_f = spectra.shape
+    width_hz, span = abs(foff) * 1e6, max(n_t - 1, 1) * tsamp
+    most = int(MAX_DRIFT * span / width_hz)
+    reach, step = most + WINDOW_CHANNELS, width_hz / span
+    before = search(spectra, foff, tsamp, fch1)
+    sigma = float(np.median(np.abs(np.diff(spectra, axis=1)))) / (0.6745 * math.sqrt(2))   # a spectrum's noise
+    rng = np.random.default_rng(seed)
+    rows = []
+    for snr in snrs:
+        busy = [h["channel"] for h in before]
+        tones = []
+        for _ in range(200 * count):              # random places, each clear of the others
+            if len(tones) == count:
+                break
+            c = int(rng.integers(2 * reach, n_f - 2 * reach))
+            if all(abs(c - b) > 2 * reach for b in busy):
+                drift = float(rng.uniform(-0.9, 0.9) * MAX_DRIFT)
+                tones.append((c, drift, snr * sigma / math.sqrt(n_t)))
+                busy.append(c)
+        hits = search(plant(spectra, tones, tsamp, width_hz), foff, tsamp, fch1)
+        found, errors, used = 0, [], set()
+        for c, drift, _ in tones:
+            h = next((h for h in hits if abs(h["channel"] - c) <= reach and id(h) not in used
+                      and abs(h["drift_hz_s"] - drift) <= 2 * step + 0.05 * abs(drift)), None)
+            if h:
+                found += 1
+                used.add(id(h))
+                errors.append(abs(h["drift_hz_s"] - drift))
+        old = [h for h in hits if any(abs(h["channel"] - b["channel"]) <= reach for b in before)]
+        false = len(hits) - len(used) - len(old)
+        planted = len(tones)
+        rows.append({"snr": snr, "planted": planted, "found": found, "completeness": round(found / max(planted, 1), 3),
+                     "drift_error_hz_s": round(float(np.median(errors)), 4) if errors else None,
+                     "false_hits": max(false, 0)})
+        say(f"  SNR {snr:>3}: {found} of {planted} found ({100 * found / max(planted, 1):.0f}%), "
+            f"drift off by {rows[-1]['drift_error_hz_s']} Hz/s at the median, {rows[-1]['false_hits']} false")
+    say(f"{Path(str(path)).name}: {len(before)} hit(s) of its own; signals planted in its noise, {count} at each strength")
+    return {"file": str(path), "own_hits": len(before), "injected": rows, "max_drift_hz_s": MAX_DRIFT,
+            "snr_min": SNR_MIN, "kind": "measured"}
+
+
 # --- the benchmark: the same slices through turboSETI ----------------------------
 # turboSETI (github.com/UCBerkeleySETI/turbo_seti) is Breakthrough Listen's
 # own narrowband search. It is not an Ubuntu package, so it lives in its own
@@ -555,6 +644,9 @@ def run(args, say=print):
         if len(args.what) != 1:
             raise interface.Refusal("INVALID_REQUEST", "sweep takes one target (KIC8462852).")
         return sweep(args.what[0], args.blocks, say=say)
+    if args.action == "inject":
+        return [inject(p, say=say) for p in args.what][-1] if len(args.what) == 1 else \
+            {"files": [inject(p, say=say) for p in args.what], "kind": "measured"}
     if args.action == "benchmark":
         return benchmark(args.what, say=say)
     if args.low is None or args.high is None:
@@ -569,7 +661,7 @@ def run(args, say=print):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("action", choices=("find", "search", "cadence", "sweep", "benchmark"))
+    ap.add_argument("action", choices=("find", "search", "cadence", "sweep", "benchmark", "inject"))
     ap.add_argument("what", nargs="+", help="find: a target; search: one look (file or URL); cadence: six looks")
     ap.add_argument("--from", dest="low", type=float, help="MHz: the bottom of the slice")
     ap.add_argument("--to", dest="high", type=float, help="MHz: the top of the slice")

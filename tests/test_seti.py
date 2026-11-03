@@ -227,3 +227,15 @@ def test_a_burst_that_lights_every_drift_line_near_it_is_one_hit():
     made[7, 1500:1560] += 60.0                 # one spectrum bright across 60 channels: a burst of interference
     hits = seti.search(made, FOFF, TSAMP, FCH1)
     assert len(hits) == 1 and 1400 < hits[0]["channel"] < 1660
+
+
+def test_signals_planted_in_noise_are_counted_found_and_false_hits_counted():
+    noise = {"spectra": spectra(seed=5), "fch1": FCH1, "foff": FOFF, "tsamp": TSAMP, "tstart": 0.0, "target": "N",
+             "fetched_mb": None}
+    answer = seti.inject("n", snrs=(5, 60), count=2, say=lambda *_: None, read=lambda *a: noise)
+    weak, strong = answer["injected"]
+    assert strong["found"] == strong["planted"] == 2 and strong["completeness"] == 1.0 and strong["drift_error_hz_s"] < 0.05
+    assert weak["found"] < 2                     # below the search's 10 times the noise
+    assert strong["false_hits"] == 0 and answer["own_hits"] == 0
+    from test_interface import valid
+    valid(interface.envelope("seti", answer), "seti")
