@@ -3,6 +3,7 @@ taking it from a phone panorama, and the planner keeping targets above it."""
 import json
 import math
 import shutil
+import time
 
 import numpy as np
 import pytest
@@ -52,6 +53,30 @@ def test_a_daytime_frame_is_read_square_by_square():
     assert horizon.read_day(low_roof[::-1], 1300)["offset"] == pytest.approx(-0.25, abs=0.05)
     # On its side, the frame is narrower that way: the same roof is a smaller share of its height off.
     assert horizon.read_day(low_roof.T, 1300)["offset"] == pytest.approx(-0.25 * 640 / 960, abs=0.05)
+
+
+def test_a_burnt_out_daytime_frame_is_never_sky():
+    # 2 November 2026: with the Sun low, every look came back burnt out and
+    # was read as sky, walls and all. Burnt out says only "too bright to read".
+    from camera import WHITE
+    burnt = frame(WHITE)
+    seen = horizon.read_day(burnt, 1300)
+    assert seen["view"] == "burnt" and seen["share"] == 0.0
+    # A bright patch in a frame of sky is still sky: only a frame mostly burnt is unread.
+    patch = frame(1300)
+    patch[:100] = WHITE
+    assert horizon.read_day(patch, 1300)["view"] == "sky"
+
+
+def test_a_view_metered_again_is_compared_with_the_same_high_sky():
+    today = {"level": 1300.0, "grain": 0.01, "blue": None}
+    # A tenth of the time: the high sky would read a tenth as bright.
+    shorter = horizon.at_exposure(today, 0.002, 0.0002)
+    assert shorter["level"] == pytest.approx(130.0) and today["level"] == 1300.0
+    # The same reading of 250: at a tenth of the time it is sky twice as
+    # bright as the high sky; at the high sky's own time it is a wall.
+    assert horizon.read_day(frame(250), shorter)["view"] == "sky"
+    assert horizon.read_day(frame(250), today)["view"] == "blocked"
 
 
 def test_branches_against_the_sky_are_not_sky_and_colour_only_tips_the_balance():
@@ -370,7 +395,7 @@ def test_another_height_adds_doubt_where_its_skyline_differs():
 def test_a_torch_along_the_tube_tells_a_wall_from_cloud():
     """Stars alone cannot: no stars is a house or it is cloud. Lit by the
     torch it is in the way, however many "stars" a burnt-out frame claims;
-    dark with no stars it is cloud, and the garden is open that way."""
+    dark with no stars it cannot be told, and is never taken for open sky."""
     sky = {"view": "sky", "stars": 40, "share": 1.0}
     none = {"view": "blocked", "stars": 0, "share": 0.0}
     assert horizon.read_torch(sky, 51, 0.0, None) == dict(sky, level=51.0)
@@ -386,10 +411,10 @@ def test_a_torch_along_the_tube_tells_a_wall_from_cloud():
     burnt = horizon.read_torch(dict(sky, stars=6780), 4094, 0.9, None)      # a 3 s frame of the same wall
     assert burnt["view"] == "blocked" and burnt["lit"]
     cloud = horizon.read_torch(none, 60, 0.0, 51)
-    assert cloud["view"] == "sky" and cloud["cloud"]
+    assert cloud["view"] == "unknown" and cloud["share"] == 0.0
     # Before any frame of stars has said how dark the sky is, only a burnt
     # frame can be called lit.
-    assert horizon.read_torch(none, 400, 0.0, None)["view"] == "sky"
+    assert horizon.read_torch(none, 400, 0.0, None)["view"] == "unknown"
 
 
 def test_the_profile_prints_a_bearing_blocked_as_far_up_as_it_looked():
@@ -417,6 +442,189 @@ def test_a_wall_seen_from_further_away_is_lower_and_from_nearer_higher():
 def test_moving_a_skyline_needs_a_distance_all_round():
     with pytest.raises(interface.Refusal):
         horizon.moved([{"az": 0.0, "alt": 30.0}], 5, 90, [(0, 90, 10)])
+
+
+def test_a_survey_mostly_too_bright_to_read_is_not_kept():
+    seen = [{"az": 0, "alt": 75, "open": True}, {"az": 30, "alt": 66, "open": False}]
+    glare = [{"az": a, "alt": 20, "open": None, "glare": True} for a in (120, 150, 180)]
+    refused = [{"az": 90, "alt": 10, "open": None}]               # out of the mount's reach: not counted
+    assert horizon.glare_share(seen + refused) == 0.0
+    assert horizon.glare_share(seen + glare + refused) == pytest.approx(0.6)
+    assert horizon.glare_share(seen + glare) > horizon.GLARE_MOST
+    assert horizon.glare_share([]) == 0.0
+    # A night look that could not be told counts the same as glare.
+    assert horizon.glare_share(seen + [{"az": 9, "alt": 40, "open": None, "unread": True}]) == pytest.approx(1 / 3)
+
+
+def test_a_bearing_not_measured_is_blocked_not_open():
+    # 2 November 2026: what could not be seen was taken for sky. A bearing
+    # the survey could not measure must never borrow its neighbours' sky.
+    found = [{"az": 0, "state": "open", "clear": 20, "shut": None},
+             {"az": 90, "state": "unreachable", "clear": None, "shut": None},
+             {"az": 180, "state": "open", "clear": 20, "shut": None},
+             {"az": 270, "state": "open", "clear": 20, "shut": None}]
+    skyline = horizon.skyline_from(found, 20)
+    assert any(p.get("unmeasured") and p["az"] == 90 for p in skyline)
+    assert horizon.limit(skyline, [90])[0] == 90                 # nothing planned where nothing was seen
+    assert horizon.limit(skyline, [225])[0] == pytest.approx(20)   # between two measured bearings: as measured
+
+
+def test_a_look_it_could_not_read_is_tried_again_before_anything_is_kept():
+    # 2 November 2026: unread looks were taken for sky. Now a bearing that
+    # could not be read is looked at again once the rest is done: what
+    # cleared (cloud gone, the Sun moved on) is measured, what did not is
+    # kept as not measured.
+    first_time = {90}
+    log = []
+
+    def look(az, alt):
+        if az == 150 or az in first_time:
+            first_time.discard(az)
+            log.append({"az": az, "alt": alt, "open": None, "glare": True})
+            return None
+        log.append({"az": az, "alt": alt, "open": alt > 30})
+        return alt > 30
+    look.log = log
+    found, warnings = horizon.trace(look, sorted(range(0, 360, 30), key=horizon.side), low=20)
+    state = {f["az"]: f["state"] for f in found}
+    assert state[90] in ("edge", "open") and state[150] == "unreachable"
+    assert any("still unread at 150°" in w for w in warnings)
+    skyline = horizon.skyline_from(found, 20)
+    assert horizon.limit(skyline, [150])[0] == 90                # never seen: nothing planned there
+    blind = [e for e in log if e.get("glare") and not e.get("resolved")]
+    assert blind and all(e["az"] == 150 for e in blind)          # only what never cleared counts against it
+    assert all(e.get("resolved") for e in log if e["az"] == 90 and e.get("glare"))
+
+
+@pytest.mark.parametrize("angle", [0, 30, 45, 60, 90, 135, 180, 270])
+def test_a_top_in_the_frame_is_read_the_same_however_the_camera_is_turned(angle):
+    # A roof whose top is a quarter of a frame below the middle. Things in
+    # the way stand on the ground, so the sky's side is up whatever way the
+    # camera sits on the mount; the height comes out within 0.15 of a frame
+    # (a tenth of a degree), far inside the planner's 2° margin.
+    rows, cols = 640, 960
+    y, x = np.indices((rows, cols))
+    turn = math.radians(angle)
+    up = (rows / 2 - y) * math.cos(turn) + (x - cols / 2) * math.sin(turn)
+    seen = horizon.read_day(np.where(up > -0.25 * rows, 1300, 250).astype(np.uint16), 1300)
+    assert seen["view"] == "edge" and seen["offset"] == pytest.approx(-0.25, abs=0.15)
+
+
+def test_each_point_says_what_measured_it_and_a_panorama_stands_where_the_telescope_could_not_look():
+    known = [{"az": az, "alt": 30.0} for az in range(0, 360, 10)]
+    known[9] = {"az": 90, "alt": 50.0}                          # the panorama saw a roof at 90°
+    found = [{"az": 0, "state": "open", "clear": 20, "shut": None},
+             {"az": 90, "state": "unreachable", "clear": None, "shut": None},
+             {"az": 180, "state": "edge", "clear": 35, "shut": 34},
+             {"az": 270, "state": "open", "clear": 20, "shut": None}]
+    skyline = horizon.skyline_from(found, 20, known)
+    at = {p["az"]: p for p in skyline}
+    assert at[180]["by"] == "telescope" and at[180]["alt"] == 35
+    assert at[90]["alt"] == 50.0 and at[90]["by"] == "earlier skyline, not rechecked"   # not pushed to 90°
+    assert any(p["by"].startswith("earlier skyline, moved") for p in skyline)
+    # With nothing known before, the same bearing is blocked and says so.
+    alone = {p["az"]: p for p in horizon.skyline_from(found, 20)}
+    assert alone[90]["alt"] == 90.0 and alone[90]["by"] == "nothing: not measured"
+
+
+def test_a_survey_set_aside_never_replaces_the_skyline_in_use(kept):
+    horizon.keep([{"az": 0, "alt": 30}], "telescope")
+    before = horizon.RESULTS.read_text()
+    aside = horizon.set_aside([{"az": 0, "alt": 20}], "Not repeatable: the mount slipped")
+    assert horizon.RESULTS.read_text() == before
+    assert aside.parent == horizon.RESULTS.parent and "not-used" in aside.name
+    assert json.loads(aside.read_text())["not_used_because"].startswith("Not repeatable")
+
+
+def test_a_survey_cut_short_carries_on_from_where_it_stopped(tmp_path):
+    """2 November 2026: a survey stopped at its first look began again from nothing."""
+    start = sorted(range(0, 360, 30), key=horizon.side)
+    path = tmp_path / "partial.json"
+    whole = watcher()
+    complete, _ = horizon.trace(whole, start, low=20)
+
+    class Stopped(Exception):
+        pass
+    kept = []
+
+    def checkpoint(found):
+        horizon.keep_partial(found, [], True, path=path)
+        kept.append(len(found))
+        if len(found) == 5:
+            raise Stopped           # the camera jams, or it is stopped by hand
+    with pytest.raises(Stopped):
+        horizon.trace(watcher(), start, low=20, checkpoint=checkpoint)
+    done, looks = horizon.resumable(True, path=path)
+    assert len(done) == 5 and looks == []
+    again = watcher()
+    found, _ = horizon.trace(again, start, low=20, done=done)
+    assert {f["az"] for f in found} == {f["az"] for f in complete}
+    # The five already measured are not looked at again.
+    assert len(again.seen) == len(whole.seen) - 5
+    # Only a survey of the same kind, and only the same day.
+    assert horizon.resumable(False, path=path) is None
+    assert horizon.resumable(True, path=path, now=time.time() + horizon.RESUME_S + 1) is None
+
+
+def test_a_lone_opening_between_high_tops_is_taken_as_blocked_to_the_lower_and_said():
+    """2 November 2026: 97.5° read open to 20° between tops near 40°."""
+    gap = lambda az: 10 if 95 <= az <= 100 else 40 if 60 <= az <= 135 else garden(az)
+    start = sorted(set(range(0, 360, 30)) | {90, 97.5, 105}, key=horizon.side)
+    found, warnings = horizon.trace(watcher(gap, in_view=1.5), start, low=20)
+    # The person outside said neither due east nor due south was open low:
+    # taken as blocked to the lower of its neighbours' tops.
+    lone = next(f for f in found if f["az"] == 97.5)
+    assert lone["state"] == "edge" and lone["read_open"] == 20 and lone.get("doubt")
+    assert lone["clear"] == min(f["clear"] for f in found if f["az"] in (90, 105))
+    assert any(w.startswith("Bearing 97.5°: read open down to 20°") for w in warnings)
+    point = next(p for p in horizon.skyline_from(found, 20) if p["az"] == 97.5)
+    assert point["alt"] == lone["clear"] and "extra" not in point and "read open" in point["by"]
+
+
+def test_the_repeat_check_is_made_off_the_meridian_and_says_when_the_tube_changed_sides():
+    assert not horizon.off_meridian(0) and not horizon.off_meridian(170) and horizon.off_meridian(60)
+    start = sorted(range(0, 360, 30), key=horizon.side)
+    look = watcher()
+    horizon.trace(look, start, low=20)
+    assert look.seen[-1][0] == 30           # back to 30°, not to due north
+
+    # The second visit lands somewhere else, from the other side of the pole.
+    visits = {}
+
+    def drifting(az, alt):
+        visits[az] = visits.get(az, 0) + 1
+        moved = az == 30 and visits[az] > 1
+        drifting.log.append({"az": az, "alt": alt, "over": moved})
+        return alt > (45 if moved else garden(az))
+    drifting.log = []
+    _, warnings = horizon.trace(drifting, start, low=20)
+    repeat = [w for w in warnings if w.startswith(horizon.NOT_SAME)]
+    assert repeat and "other side of the pole" in repeat[0]
+
+
+def test_a_survey_set_aside_is_kept_only_on_a_persons_word(monkeypatch, tmp_path):
+    """2 November 2026: the repeat look at due north disagreed; the person
+    outside said the house is due north and due east is not open low."""
+    monkeypatch.setattr(horizon, "RESULTS", tmp_path / "horizon.json")
+    gap = lambda az: 10 if 95 <= az <= 100 else 40 if 60 <= az <= 135 else garden(az)
+    start = sorted(set(range(0, 360, 30)) | {90, 97.5, 105}, key=horizon.side)
+    found, warnings = horizon.trace(watcher(gap, in_view=1.5), start, low=20)
+    for f in found:                 # as an older survey kept it, before lone openings were put right
+        if "read_open" in f:
+            f.update(state="open", clear=f.pop("read_open"), shut=None)
+            f.pop("doubt")
+    aside = horizon.set_aside(horizon.skyline_from(found, 20), "Not repeatable: due north", trace=found,
+                              looks=[], warnings=[])
+    with pytest.raises(interface.Refusal, match="--checked"):
+        horizon.use_aside(aside, None, 20, 2)
+    assert not horizon.RESULTS.exists()
+    kept = horizon.use_aside(aside, "house due north; east not open low", 20, 2)
+    saved = json.loads(horizon.RESULTS.read_text(encoding="utf-8"))
+    assert saved["checked_by_eye"] == "house due north; east not open low"
+    assert saved["was_set_aside"] == aside.name and saved["set_aside_because"].startswith("Not repeatable")
+    east = next(p for p in saved["skyline"] if p["az"] == 97.5)
+    assert east["alt"] >= 30 and "read open" in east["by"]
+    assert kept["usable"] is not None
 
 
 def test_a_jammed_camera_is_reopened_and_the_frame_asked_for_again():
@@ -447,15 +655,43 @@ def test_a_jammed_camera_is_reopened_and_the_frame_asked_for_again():
         stuck.frame(1)
 
 
-def test_a_survey_never_raises_a_skyline_a_person_checked_by_eye():
-    """3 November 2026: glare due south read as a wall above 75°."""
-    checked = {"checked_by_eye": "due south not open low", "skyline": [{"az": az, "alt": 36.0}
-                                                                       for az in range(0, 360, 15)]}
+def test_a_skyline_checked_by_eye_stands_where_a_survey_differs_and_only_there():
+    """3 November 2026: glare due south read a wall above 75°, and at midday
+    the sunlit house in the west read as sky down to 20°."""
+    checked = {"checked_by_eye": "due south not open low; house in the west",
+               "skyline": [{"az": az, "alt": 72.0 if 285 <= az <= 330 else 36.0} for az in range(0, 360, 15)]}
     new = [{"az": 165, "alt": 40.0}, {"az": 180, "alt": 90.0}, {"az": 195, "alt": 38.0},
-           {"az": 270, "alt": 90.0, "open": True}]
-    assert horizon.above_checked(new, checked) == [180]
-    assert horizon.above_checked(new, dict(checked, checked_by_eye=None)) == []    # nobody looked: kept as before
-    assert horizon.above_checked(new, {}) == []
+           {"az": 300, "alt": 20.0, "open": True}]
+    skyline, differ = horizon.keep_checked(new, checked)
+    assert [d["az"] for d in differ] == [180, 300]
+    at = {p["az"]: p for p in skyline}
+    assert at[165]["alt"] == 40.0 and at[195]["alt"] == 38.0              # agreeing bearings taken
+    assert at[180]["alt"] == 36.0 and at[300]["alt"] == 72.0 and "not taken" in at[300]["by"]
+    assert horizon.keep_checked(new, dict(checked, checked_by_eye=None)) == (new, [])   # nobody looked
+    assert horizon.keep_checked(new, {}) == (new, [])
+
+
+def test_a_recheck_that_differs_with_the_mount_in_the_same_place_costs_one_bearing():
+    log = [{"az": 30, "alt": 45, "axes": [344.59, 68.59]}, {"az": 30, "alt": 44.6, "axes": [343.75, 68.37]}]
+    assert not horizon.slipped(log, 30)
+    log[-1]["axes"] = [343.7, 98.4]                                         # 30° off in Dec: it slipped
+    assert horizon.slipped(log, 30)
+    assert horizon.slipped([{"az": 30, "alt": 45}], 30)                     # axes not recorded: cannot say
+
+
+def test_bearings_a_person_has_looked_at_are_taken_from_a_survey_set_aside(kept):
+    horizon.keep([{"az": az, "alt": 54.0} for az in range(0, 360, 15)], "telescope", checked_by_eye="first look")
+    found = [{"az": az, "state": "open" if 225 <= az <= 262.5 else "edge", "clear": 20 if 225 <= az <= 262.5 else 50,
+              "shut": None if 225 <= az <= 262.5 else 49} for az in range(0, 360, 15)]
+    aside = horizon.set_aside(horizon.skyline_from(found, 20), "test", trace=found, looks=[], warnings=[])
+    horizon.use_aside(aside, "photo of the SW gap", 20, 2, horizon.span("225-262.5"))
+    saved = json.loads(horizon.RESULTS.read_text(encoding="utf-8"))
+    at = {p["az"]: p["alt"] for p in saved["skyline"]}
+    assert at[240] == 20 and at[90] == 54.0 and "photo of the SW gap" in saved["checked_by_eye"]
+    assert "first look" in saved["checked_by_eye"]
+    with pytest.raises(interface.Refusal):
+        horizon.span("south-west")
+
 
 
 def test_by_day_a_look_aimed_by_a_guess_is_not_made():

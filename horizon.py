@@ -4,10 +4,13 @@
     ./horizon.py --trace         follow the top of whatever is in the way right round
     ./horizon.py --trace --daylight      the same by day: bright, even and sky-coloured means sky
     ./horizon.py --trace --fresh         start again, not from the skyline already measured
+                                 (nor from a survey cut short earlier the same day)
     ./horizon.py                 the older way: look on a fixed grid and report what is blocked
     ./horizon.py --step 20       degrees of bearing between the first looks
     ./horizon.py --show          the skyline now in use, as the planner sees it
     ./horizon.py --forget        throw the measured skyline away
+    ./horizon.py --use-aside FILE --checked "what you saw"
+                                 keep a survey that was set aside, once its doubts are checked by eye
     ./horizon.py --dry-run       say where it would look, without moving
 
 The quick way to get a skyline is a phone panorama (./panorama.py): no
@@ -56,6 +59,11 @@ ROOT = Path(__file__).parent
 # Each spot in the garden has its own skyline and pictures (config.SPOT).
 RESULTS = config.DATA / "cache" / (f"horizon-{config.SPOT}.json" if config.SPOT else "horizon.json")
 LOOKS = config.DATA / "horizon" / (config.SPOT or "") / "looks"     # each look's picture, marked up
+# A survey cut short keeps what it had measured here, after every bearing, and
+# the next --trace the same day carries on from it (2 November 2026: a survey
+# stopped at its first look over a camera that had jammed began again from nothing).
+PARTIAL = RESULTS.with_name(RESULTS.stem + ".partial.json")
+RESUME_S = 12 * 3600
 ALTITUDES = (25, 40, 55, 70)
 ENOUGH_STARS = 8
 STEADY = 5      # seconds for the tube to stop shaking before a frame of stars
@@ -300,6 +308,14 @@ def read_day(mosaic, reference):
     the high sky's brightness."""
     if not isinstance(reference, dict):
         reference = {"level": float(reference), "grain": 0.0, "blue": None}
+    burnt = burnt_share(mosaic)
+    if burnt >= BURNT_DAY:
+        # Burnt out is the brightest and smoothest a frame can be, so it
+        # would always score as sky: on 2 November 2026 a whole survey with
+        # the morning Sun low in the east read 297% of the high sky in every
+        # direction, walls and all. It says only that the exposure is too
+        # long for this view.
+        return {"view": "burnt", "share": 0.0, "level": round(burnt, 2), "mask": None}
     level, grain, blue = squares(mosaic)
     level = level / max(reference["level"], 1.0)
     bright = np.clip((level - SKY_LEVEL / 2) / (SKY_LEVEL / 2), 0, 1)
@@ -362,8 +378,9 @@ def read_torch(seen, level, burnt, dark):
     burnt out at 3 s, where 6780 "stars" were counted. Bright with no stars
     is blocked: a tree read 312 at 3 s against 61. Bright with stars is sky
     all the same, since stars do not shine through a wall: that is thin
-    cloud. Dark with no stars is cloud, and is taken for open sky: the
-    survey is of what stands in the garden.
+    cloud. Dark with no stars is cloud or an unlit wall, and cannot be told:
+    it is "unknown", never open sky (2 November 2026: what a survey could
+    not see was taken for sky).
 
     The first survey on the real mount called the whole southern sky blocked
     to 75°, every look reading the same 420. The motors had stopped being
@@ -377,7 +394,7 @@ def read_torch(seen, level, burnt, dark):
     if seen["view"] == "blocked":
         if dark and level >= LIT * dark:
             return dict(seen, share=0.0, lit=True)
-        return dict(seen, view="sky", share=1.0, cloud=True)
+        return dict(seen, view="unknown", share=0.0, cloud=True)
     return seen
 
 
@@ -403,6 +420,38 @@ def marked(mosaic, mask, note):
         image.paste(Image.new("RGB", image.size, (255, 40, 90)), mask=shade)
     ImageDraw.Draw(image).text((8, 6), note, fill=(255, 190, 60))
     return image
+
+
+BURNT_DAY = 0.5   # share of a daytime frame burnt out that leaves nothing to read
+
+
+def burnt_share(mosaic):
+    """The share of a raw frame at or near full brightness."""
+    from camera import WHITE
+    return float((np.asarray(mosaic) >= 0.98 * WHITE).mean())
+
+
+def at_exposure(reference, metered, exposure):
+    """The high sky's reference as it would read at another exposure: raw
+    values go with the light and the time, so a view metered again because
+    it burnt out is still compared with the same high sky."""
+    return dict(reference, level=reference["level"] * exposure / metered)
+
+
+LONGER = 4          # a night look with no stars is tried again this many times longer
+LONGEST_S = 8.0     # but no longer than this
+GLARE_MOST = 0.25
+NOT_SAME = "Not repeatable:"   # check 4's warning: such a survey is set aside, never used
+REFERENCE_S = 300              # by day, the high sky is looked at again this often: it changes   # share of a survey's looks too bright to read above which nothing is kept
+
+
+def glare_share(log):
+    """The share of a survey's looks left out as too bright to read. A survey
+    that could not see most of the sky has no skyline to keep: on 2 November
+    2026 one with every frame burnt out kept a skyline of nothing but sky."""
+    made = [entry for entry in log if entry.get("open") is not None or entry.get("glare") or entry.get("unread")]
+    blind = [entry for entry in made if (entry.get("glare") or entry.get("unread")) and not entry.get("resolved")]
+    return len(blind) / len(made) if made else 0.0
 
 
 def daylight_exposure(cam, exposure=0.002):
@@ -437,7 +486,7 @@ def eye(site, exposure, gain, daylight=False, torch=False):
     if not mount.CLOCK_FILE.exists():
         scope.save_clock(site)
     offset = json.loads(mount.CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
-    state = {"exposure": exposure, "reference": None}
+    state = {"exposure": exposure, "reference": None, "metered": exposure}
     log = []
     import moved
     watch, last = moved.Watch(daylight=daylight), []      # what the last look saw, and where it was
@@ -447,9 +496,10 @@ def eye(site, exposure, gain, daylight=False, torch=False):
         """A frame once the tube has stopped shaking: two running that read
         the same, or the one in hand when STEADY_DAY is up."""
         began, before = time.time(), None
+        reference = at_exposure(state["reference"], state["metered"], state["exposure"])
         while True:
             mosaic, _ = look.cam.frame(state["exposure"])
-            seen = read_day(mosaic, state["reference"])
+            seen = read_day(mosaic, reference)
             waited = time.time() - began
             if waited >= STEADY_DAY or (before and before["view"] == seen["view"]
                                         and abs(before["share"] - seen["share"]) <= 0.05
@@ -458,6 +508,16 @@ def eye(site, exposure, gain, daylight=False, torch=False):
             before = seen
 
     def look(az, alt):
+        if daylight and state["reference"] is not None and not state.get("refreshing") \
+                and time.time() - state["referenced"] > REFERENCE_S:
+            # The daytime sky brightens and turns as the Sun climbs: on 2
+            # November 2026 it was three times as bright minutes after the
+            # first look. The high sky is looked at again, where it was first.
+            state["reference"], state["refreshing"] = None, True
+            try:
+                look(*state["sky_at"])
+            finally:
+                state["refreshing"] = False
         try:
             plan = mount.plan_point(az, alt, site)
         except interface.Refusal as refusal:
@@ -477,14 +537,41 @@ def eye(site, exposure, gain, daylight=False, torch=False):
             return None
         # Stars need following; a rooftop needs the mount to hold still.
         scope.tracking(not daylight)
+        # Where the mount says it is, and which side of the pole the tube came
+        # over: by day nothing checks the pointing, and on the meridian the
+        # mount may take either side, whose pointing differs by degrees
+        # (6 October 2026: 5.8° in Dec on one side, 0.2° on the other).
+        try:
+            ra_axis, dec_axis = scope.axes()
+            where = {"axes": [round(ra_axis, 2), round(dec_axis, 2)], "over": dec_axis > 90}
+        except Exception:
+            where = {}
         if daylight:
             if state["reference"] is None:
                 # The first look is at sky high up: it sets the exposure and
                 # what sky looks like today.
                 state["exposure"], _ = daylight_exposure(look.cam, state["exposure"])
                 state["reference"] = sky_reference(look.cam.frame(state["exposure"])[0])
+                state["metered"] = state["exposure"]
+                state["referenced"] = time.time()
+                state.setdefault("sky_at", (az, alt))
+            # Every look starts at the high sky's exposure; only one that
+            # burns out is metered again, here.
+            state["exposure"] = state["metered"]
             mosaic, seen = by_day()
+            if seen["view"] == "burnt":
+                try:
+                    state["exposure"], _ = daylight_exposure(look.cam, state["exposure"])
+                    mosaic, seen = by_day()
+                except interface.Refusal:
+                    pass        # too bright even at the shortest exposure: the Sun's glare
+            if seen["view"] == "burnt":
+                print(f"bearing {az:>5g}°, {alt:>4g}° up: too bright to tell (glare), left out", flush=True)
+                log.append(dict({"az": az, "alt": alt, "open": None, "glare": True}, **where))
+                return None
             detail = f"{seen['share']:.0%} sky, brightness {seen['level']:.0%} of the high sky"
+            if state["exposure"] != state["metered"]:
+                detail += f", metered again at {state['exposure'] * 1000:.2g} ms"
         else:
             time.sleep(STEADY)   # let the tube stop shaking
             mosaic, _ = look.cam.frame(state["exposure"])
@@ -496,6 +583,16 @@ def eye(site, exposure, gain, daylight=False, torch=False):
                 level = float(np.median(mosaic))
                 starry = seen["view"] != "blocked"
                 seen = read_torch(seen, level, float((mosaic >= 0.98 * WHITE).mean()), state.get("dark"))
+                if seen["view"] == "unknown" and not seen.get("lit"):
+                    # Try harder first: a longer frame shows stars through
+                    # thin cloud, where a wall stays starless.
+                    longer = min(state["exposure"] * LONGER, LONGEST_S)
+                    mosaic, _ = look.cam.frame(longer)
+                    lum = luminance(mosaic)
+                    again = read_night(skywatch.star_places(lum), lum.shape)
+                    if again["view"] != "blocked":
+                        seen = dict(again, level=round(float(np.median(mosaic)), 1), longer_s=longer)
+                        detail = f"{again['stars']} stars at {longer:g} s"
                 if starry and not seen.get("lit"):
                     state["dark"] = min(state.get("dark") or level, level)
                 if overcast(alt, seen):
@@ -506,8 +603,12 @@ def eye(site, exposure, gain, daylight=False, torch=False):
                         "where the mount says it is. Nothing has been kept. Watch one move to see that the "
                         "tube turns, and try again when the sky is clear.")
                 detail += (f", level {level:.0f}: lit by the torch" if seen.get("lit")
-                           else f", level {level:.0f}: dark, so cloud" if seen.get("cloud")
+                           else f", level {level:.0f}: dark with no stars, cloud or wall" if seen.get("cloud")
                            else f", level {level:.0f}")
+                if seen["view"] == "unknown":
+                    print(f"bearing {az:>5g}°, {alt:>4g}° up: cannot tell ({detail}), left out", flush=True)
+                    log.append(dict({"az": az, "alt": alt, "open": None, "unread": True}, **where))
+                    return None
         # The handset saying it went there is not proof: the picture must change.
         turned = moved.separation(*last, az, alt) if last else 0.0
         last[:] = [az, alt]
@@ -523,7 +624,7 @@ def eye(site, exposure, gain, daylight=False, torch=False):
         LOOKS.mkdir(parents=True, exist_ok=True)
         marked(mosaic, mask, f"{az:g} / {alt:g}: {seen['view']}").save(
             LOOKS / f"{len(log) + 1:03d}-az{az:g}-alt{alt:g}.jpg", quality=80)
-        log.append(dict({"az": az, "alt": alt, "open": seen["view"] != "blocked"}, **seen))
+        log.append(dict({"az": az, "alt": alt, "open": seen["view"] != "blocked"}, **seen, **where))
         print(f"bearing {az:>5g}°, {alt:>4g}° up: {seen['view']} ({detail})", flush=True)
         return answer
 
@@ -679,6 +780,34 @@ def top_of(look, az, guess, low, top=TOP, fine=FINE, or_else=None):
     return {"az": az, "state": "edge", "shut": shut, "clear": clear}
 
 
+def lone_openings(found):
+    """A bearing open right down to the lowest look between neighbours whose
+    tops are well up is taken as blocked to the lower of those tops, in
+    doubt, and said. 2 November 2026: 97.5° and 172.5° read open to 20°
+    between tops near 40°, the pictures plain blurs, and the person outside
+    said neither due east nor due south is open low down: by day a lit wall
+    far out of focus reads as sky. `found` maps bearing to top_of()'s answer
+    and is changed in place; returns the warnings."""
+    warnings = []
+    ring = sorted(az for az in found if found[az]["state"] in ("open", "edge"))
+    for i, az in enumerate(ring if len(ring) > 2 else ()):
+        f, before, after = found[az], found[ring[i - 1]], found[ring[(i + 1) % len(ring)]]
+        if f["state"] == "open" and all(n["state"] == "edge" and n["clear"] > f["clear"] + JUMP
+                                        for n in (before, after)):
+            lower = min(before["clear"], after["clear"])
+            warnings.append(f"Bearing {az:g}°: read open down to {f['clear']:g}° between tops at "
+                            f"{before['clear']:g}° ({before['az']:g}°) and {after['clear']:g}° "
+                            f"({after['az']:g}°): taken as blocked to {lower:g}°, a lit wall being "
+                            "likelier than a gap. Look that way yourself.")
+            f.update(state="edge", shut=lower, clear=lower, doubt=True, read_open=f["clear"])
+    return warnings
+
+
+def off_meridian(az, margin=30):
+    """At least `margin` degrees of bearing from due north and due south."""
+    return min(az % 180, 180 - az % 180) >= margin
+
+
 def is_sky(seen):
     """Whether a look's answer is plain open sky."""
     return seen is not None and not isinstance(seen, float) and bool(seen)
@@ -694,12 +823,16 @@ def between(a, b):
     return (b - a) % 360 or 360
 
 
-def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, most=MOST):
+def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, most=MOST,
+          done=None, checkpoint=None):
     """Follow the top of what is in the way round the compass, starting from
     the given bearings and adding more only where the skyline needs them.
     `known` is a skyline measured before (see limit()): each bearing then
     starts at the height it gives, and bearings are added only where this
     survey and that one part company.
+    `done` are bearings already measured by a survey cut short (their
+    top_of() answers), not measured again; `checkpoint(found)` is called
+    after every bearing, so a survey stopped now can carry on later.
     Returns (one top_of() answer per bearing, in bearing order; warnings)."""
     found, warnings = {}, []
 
@@ -720,6 +853,8 @@ def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, mo
             near = min(near, key=lambda f: min((f["az"] - az) % 360, (az - f["az"]) % 360), default=None)
             guess, lower = near["clear"] if near else low, None
         found[az] = top_of(look, az, guess, low, top, fine, lower)
+        if checkpoint:
+            checkpoint(found)
 
     def off(az):
         """What is compared between neighbours: the top itself, or how far it
@@ -731,8 +866,10 @@ def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, mo
     if high is None:
         raise interface.Refusal("NO_SKY", f"No open sky seen even {top}° up. Is the cap off? At night "
                                 "this needs a clear sky.")
+    found.update({f["az"]: f for f in done or ()})
     for az in bearings:
-        measure(az)
+        if az not in found:
+            measure(az)
 
     # Check 2: more bearings where the skyline is not a straight line between
     # the ones it has: a sudden change between neighbours is a corner, and a
@@ -762,6 +899,25 @@ def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, mo
         warnings.append(f"The skyline is ragged: it stopped adding bearings at {most}. Run it again "
                         "to carry on from this one.")
 
+    # Check 2b: where a look could not be read (glare, or dark with no
+    # stars), look again once the rest is done. Cloud drifts and the Sun
+    # moves on; a wall is still there.
+    log = getattr(look, "log", [])
+    unread = {e["az"] for e in log if e.get("glare") or e.get("unread")} & set(found)
+    first = len(log)
+    for az in sorted(unread, key=side):
+        measure(az)
+    still = sorted({e["az"] for e in log[first:] if e.get("glare") or e.get("unread")})
+    for e in log[:first]:
+        if (e.get("glare") or e.get("unread")) and e["az"] not in still:
+            e["resolved"] = True        # read the second time: not counted against the survey
+    if unread:
+        warnings.append(f"Looked again where it could not tell ({len(unread)} bearing(s)); "
+                        + (f"still unread at {', '.join(f'{az:g}°' for az in still)}: kept as not measured."
+                           if still else "all read the second time."))
+
+    warnings += lone_openings(found)
+
     # Check 3: sky well above each top. A bright wall can pass for sky, and
     # branches or wires can hang over a roof.
     for az in sorted(found, key=side):
@@ -774,18 +930,71 @@ def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, mo
 
     # Check 4: back to the start. If the first bearing no longer looks the
     # same, the mount slipped or the light changed while going round.
-    first = next((found[az] for az in bearings if found[az]["state"] in ("open", "edge")), None)
+    # A bearing well off the meridian: on it the mount may come at the same
+    # place from either side of the pole, and the two sides point degrees
+    # apart (2 November 2026: due north read blocked at 72° and later sky).
+    measured = [az for az in bearings if found[az]["state"] in ("open", "edge") and "read_open" not in found[az]]
+    first = next((found[az] for az in measured if off_meridian(az)),
+                 found[measured[0]] if measured else None)
     if first and first.get("in_view"):
         again = look(first["az"], first["clear"])
         same = isinstance(again, float) and abs(again - first["clear"]) <= 1
     elif first:
         same = is_sky(look(first["az"], first["clear"])) and \
             (first["state"] != "edge" or look(first["az"], first["shut"]) in (False, np.False_))
-    if first and not same:
-        warnings.append(f"Going back to bearing {first['az']:g}° gave a different answer from "
-                        "the first time. Did the mount slip, or the light change? Do not "
-                        "trust this survey.")
+    if first and not same and not slipped(log, first["az"]):
+        # The mount came back to the same place: the light changed there, as
+        # it does on a top at the look's own height. That bearing keeps what
+        # the skyline in use says; the rest stands (3 November 2026: one
+        # recheck at 30°, an edge then sky with the axes alike, set a whole
+        # survey of 136 looks aside).
+        f = found[first["az"]]
+        f.update(state="unreachable", unrepeatable=True)
+        warnings.append(f"Bearing {first['az']:g}° read differently the second time with the mount in the "
+                        "same place (the light changed): left as the skyline in use has it.")
+    elif first and not same:
+        sides = {e.get("over") for e in log if e["az"] == first["az"] and "over" in e}
+        why = (" The tube came at it from the other side of the pole the second time, and the mount's "
+               "pointing differs between the sides." if len(sides) > 1 else
+               " Did the mount slip, or the light change?")
+        warnings.append(f"{NOT_SAME} Going back to bearing {first['az']:g}° gave a different answer "
+                        "from the first time." + why)
     return [found[az] for az in sorted(found)], warnings
+
+
+SLIP_DEG = 1.0      # axes this far apart for one bearing and height: the mount is not where it was
+
+
+def slipped(log, az):
+    """Whether the mount's axes disagree between two looks at one bearing and
+    height (the first look and the recheck), or cannot say (not recorded)."""
+    looks = [e for e in log if e["az"] == az and e.get("axes")]
+    if len(looks) < 2:
+        return True
+    last = looks[-1]
+    same = [e for e in looks[:-1] if abs(e["alt"] - last["alt"]) <= 1]
+    if not same:
+        return True
+    a, b = same[0]["axes"], last["axes"]
+    return any(abs((x - y + 180) % 360 - 180) > SLIP_DEG for x, y in zip(a, b))
+
+
+def resumable(daylight, path=None, now=None):
+    """What a survey cut short today had measured: (its top_of() answers,
+    its looks), or None. Only the same kind of survey, within RESUME_S."""
+    try:
+        saved = json.loads(Path(path or PARTIAL).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if saved.get("daylight") != daylight or (now or time.time()) - saved.get("saved", 0) > RESUME_S:
+        return None
+    return saved.get("found") or None, saved.get("looks", [])
+
+
+def keep_partial(found, looks, daylight, path=None):
+    records.write(Path(path or PARTIAL), {"saved": time.time(), "daylight": daylight,
+                                          "found": list(found.values()), "looks": looks},
+                  default=lambda o: o.item() if hasattr(o, "item") else str(o))
 
 
 TRUSTED_GUESS = 2.0     # degrees: a correction borrowed from the other side is trusted by day up to this
@@ -808,23 +1017,35 @@ def skyline_from(found, low, known=None):
     """A trace as a skyline (see limit()). With a skyline known before, its
     points are kept, each moved by what this survey found near it, so the
     detail a panorama gave survives a check by the telescope."""
-    points = []
+    points, unmeasured = [], []
     for f in found:
         top = height(f, low)
         if top is None:
+            # Not measured (out of the mount's reach, or the Sun's glare) is
+            # not open: left out, it took its neighbours' height, so a
+            # bearing nobody saw read as clear sky. What an earlier skyline
+            # says of it stands, marked not rechecked; with none, blocked.
+            unmeasured.append(f["az"])
             continue
-        point = {"az": f["az"], "alt": top}
+        point = {"az": f["az"], "alt": top, "by": "telescope"}
         if f["state"] == "open":
             point.update(alt=f["clear"], open=True)
-        if f.get("doubt"):
+        if "read_open" in f:
+            # Already put at its neighbours' lower top: no further margin.
+            point["by"] = f"telescope: read open to {f['read_open']:g}°, put at its neighbours' lower top"
+        elif f.get("doubt"):
             point["extra"] = CLEARANCE
         points.append(point)
+    if not known:
+        points += [{"az": az, "alt": 90.0, "unmeasured": True, "by": "nothing: not measured"} for az in unmeasured]
+        points.sort(key=lambda p: p["az"])
     # Where neighbours differ by a corner's worth, the corner is somewhere
     # between them: count the whole gap as blocked to the higher of the two.
     for a, b in zip(list(points), points[1:] + points[:1]):
         if len(points) > 1 and abs(a["alt"] - b["alt"]) > JUMP:
             lower, at = (a, a["az"] + 0.1) if a["alt"] < b["alt"] else (b, b["az"] - 0.1)
-            corner = {"az": round(at % 360, 1), "alt": max(a["alt"], b["alt"])}
+            corner = {"az": round(at % 360, 1), "alt": max(a["alt"], b["alt"]),
+                      "by": "a corner between two looks, put at the higher"}
             # Between two open bearings nothing was seen at all: they differ
             # only in how low the limits let each look (on 19 October 2026,
             # 20° at 180° and 30° at 225° before 17:00 UTC), and a corner
@@ -844,25 +1065,45 @@ def skyline_from(found, low, known=None):
         for p in known:
             if p.get("unseen"):
                 # Past the edge of a panorama only the telescope has looked.
-                points.append({"az": p["az"], "alt": round(float(limit(looked, [p["az"]])[0]), 1)})
+                points.append({"az": p["az"], "alt": round(float(limit(looked, [p["az"]])[0]), 1),
+                               "by": "telescope, between looks"})
             elif not near(p["az"]):
-                points.append(dict(p, alt=round(p["alt"] + float(limit(shifts, [p["az"]])[0]), 1)))
+                moved_by = float(limit(shifts, [p["az"]])[0])
+                points.append(dict(p, alt=round(p["alt"] + moved_by, 1),
+                                   by=f"earlier skyline, moved {moved_by:+.1f}° by the looks nearby"))
+        for az in unmeasured:
+            here = [p for p in known if min(between(az, p["az"]), between(p["az"], az)) % 360 < FINEST]
+            if here and not any(p.get("unseen") for p in here):
+                points.append({"az": az, "alt": round(float(limit(known, [az])[0]), 1),
+                               "by": "earlier skyline, not rechecked"})
+            else:
+                points.append({"az": az, "alt": 90.0, "unmeasured": True, "by": "nothing: not measured"})
     return sorted(points, key=lambda p: p["az"])
 
 
 EYE_DOUBT = JUMP     # degrees above a skyline a person checked by eye before a survey is doubted
 
 
-def above_checked(skyline, kept, by=EYE_DOUBT):
-    """The bearings where a new survey puts the top more than `by` degrees
-    above the skyline in use, when that one was checked by a person's eye.
-    3 November 2026: the daylight survey read the glare due south as a wall
-    above 75°, over the skyline checked the day before, and would have
-    taken M33 off the night's plan."""
+def keep_checked(skyline, kept, by=EYE_DOUBT):
+    """(skyline, differ): a new survey's skyline, except at the bearings
+    where it is more than `by` degrees above or below a skyline a person
+    checked by eye; there the checked height stands, and `differ` lists them
+    ({"az", "read", "checked"}) for the person to look at. Nothing checked:
+    the survey's skyline as it is. 3 November 2026: in the morning glare due
+    south read as a wall above 75°; at midday the sunlit house wall in the
+    west read as sky down to 20°. Each was a few bearings, and each had set
+    a whole survey aside, or would have planned behind the house."""
     if not kept or not kept.get("checked_by_eye") or not kept.get("skyline"):
-        return []
-    return [p["az"] for p in skyline if not p.get("open")
-            and p["alt"] - float(limit(kept["skyline"], [p["az"]])[0]) > by]
+        return list(skyline), []
+    out, differ = [], []
+    for p in skyline:
+        was = round(float(limit(kept["skyline"], [p["az"]])[0]), 1)
+        if abs(p["alt"] - was) > by:
+            differ.append({"az": p["az"], "read": p["alt"], "checked": was})
+            out.append({"az": p["az"], "alt": was, "by": f"checked by eye; this survey read {p['alt']:g}°, not taken"})
+        else:
+            out.append(p)
+    return out, differ
 
 
 def skyline_blocked(found):
@@ -910,8 +1151,8 @@ def main():
     ap.add_argument("--trace", action="store_true", help="follow the top of what is in the way")
     ap.add_argument("--daylight", action="store_true", help="tell sky from wall by the look of it, not by stars")
     ap.add_argument("--torch", action="store_true",
-                    help="by night, with a torch fixed along the tube: what it lights is in the way, "
-                         "and a dark frame with no stars is cloud")
+                    help="by night, with a torch fixed along the tube: what it lights is in the way; "
+                         "a dark frame with no stars cannot be told and is left out")
     ap.add_argument("--fresh", action="store_true", help="with --trace: do not start from the skyline already measured")
     ap.add_argument("--show", action="store_true", help="print the skyline in use; nothing moves")
     ap.add_argument("--move-from", metavar="SPOT",
@@ -922,12 +1163,20 @@ def main():
                     help="with --move-from: how far the things in the way are from SPOT, by bearing, "
                          "e.g. 270-330:4 330-60:12 60-200:15 200-270:20")
     ap.add_argument("--forget", action="store_true", help="throw the measured skyline away; nothing moves")
+    ap.add_argument("--use-aside", metavar="FILE",
+                    help="keep a survey that was set aside, once a person has checked what it doubted; nothing moves")
+    ap.add_argument("--bearings", metavar="FROM-TO",
+                    help="with --use-aside: take only these bearings (clockwise, as 225-262.5) from the "
+                         "set-aside survey into the skyline in use")
+    ap.add_argument("--checked", metavar="WHAT",
+                    help="with --use-aside: what the person saw, in their words (kept with the skyline)")
     ap.add_argument("--exposure", type=float, help="seconds (default 1; by day it is found from the sky)")
     ap.add_argument("--gain", type=int, help="default 2000, or 100 by day")
     ap.add_argument("--dry-run", action="store_true", help="say where it would look; no camera, no mount")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
     name = "horizon.show" if args.show else "horizon.forget" if args.forget else \
+        "horizon.use_aside" if args.use_aside else \
         "horizon.move" if args.move_from else \
         "horizon.dry_run" if args.dry_run else "horizon"
     return interface.main(name, lambda: run(args), args.json)
@@ -949,6 +1198,73 @@ def show(low, margin, in_use=True):
         print("\nThe planner is not using it: use_survey is off under [horizon] in config.toml.")
     return {"skyline": kept["skyline"], "usable": usable(kept["skyline"], low, margin), "source": kept["source"],
             "saved": kept["saved"], "margin": margin, "in_use": in_use}
+
+
+def span(text):
+    """(from, to) bearings from "FROM-TO", or None."""
+    if not text:
+        return None
+    try:
+        a, b = (float(v) for v in text.split("-"))
+    except ValueError:
+        raise interface.Refusal("INVALID_REQUEST", f"--bearings takes FROM-TO in degrees, as 225-262.5, not {text!r}.")
+    return a % 360, b % 360
+
+
+def within(az, bearings):
+    a, b = bearings
+    return (az - a) % 360 <= (b - a) % 360
+
+
+def use_aside(path, checked, low, margin, bearings=None):
+    """Keep a survey that was set aside, now that a person has looked at
+    what it doubted. Its first answer at each bearing stands, and a lone
+    opening is put at its neighbours' lower top as a survey now would.
+    2 November 2026: the afternoon survey's repeat look at due north read
+    sky where its first had read blocked; the person outside said the house
+    is due north, and that due east and due south are not open low down."""
+    if not checked:
+        raise interface.Refusal("INVALID_REQUEST", "Say what was checked by eye, with --checked \"...\": a set-aside "
+                                "survey is only kept on a person's word about what it doubted.")
+    if not path.exists():
+        path = RESULTS.parent / path.name
+    try:
+        saved = json.loads(path.read_text(encoding="utf-8"))
+        found = {f["az"]: f for f in saved["trace"]}
+    except (OSError, ValueError, KeyError, TypeError):
+        raise interface.Refusal("INVALID_REQUEST", f"{path} is not a survey set aside by ./horizon.py --trace.")
+    warnings = list(saved.get("warnings", [])) + lone_openings(found)
+    trace_now = [found[az] for az in sorted(found)]
+    skyline = skyline_from(trace_now, low)
+    if bearings:
+        # Only those bearings, on the person's word; the rest as it is in use.
+        current = measured()
+        if not current:
+            raise interface.Refusal("INVALID_REQUEST", "No skyline is in use to take bearings into.")
+        taken = [dict(p, by=f"{p.get('by', 'telescope')}; taken from {path.name} on the word: {checked}")
+                 for p in skyline if within(p["az"], bearings)]
+        if not taken:
+            raise interface.Refusal("INVALID_REQUEST", f"{path.name} has nothing between {bearings[0]:g}° and "
+                                    f"{bearings[1]:g}°.")
+        skyline = sorted([p for p in current["skyline"] if not within(p["az"], bearings)] + taken,
+                         key=lambda p: p["az"])
+        words = "; ".join(w for w in (current.get("checked_by_eye"), f"{bearings[0]:g}-{bearings[1]:g}°: {checked}") if w)
+        kept = keep(skyline, current.get("source", "telescope"), looks=current.get("looks", []),
+                    warnings=current.get("warnings", []), trace=current.get("trace", []),
+                    blocked=current.get("blocked", []), checked_by_eye=words)
+        print(f"Took {len(taken)} point(s) at {bearings[0]:g}-{bearings[1]:g}° from {path.name}, on the word: "
+              f"{checked}. The rest of the skyline in use is unchanged.")
+        return dict({k: v for k, v in kept.items() if k not in ("saved", "looks", "trace")},
+                    usable=usable(skyline, low, margin))
+    kept = keep(skyline, "telescope", looks=saved.get("looks", []), warnings=warnings, trace=trace_now,
+                blocked=skyline_blocked(trace_now), checked_by_eye=checked, was_set_aside=path.name,
+                set_aside_because=saved.get("not_used_because"))
+    print("\n" + profile(trace_now, low))
+    for warning in warnings:
+        print(f"\nCHECK: {warning}")
+    print(f"\nKept from {path.name}, on the word: {checked}. The planner uses it from now on, raised by "
+          f"{margin:g}°.")
+    return dict({k: v for k, v in kept.items() if k not in ("saved", "looks")}, usable=usable(skyline, low, margin))
 
 
 def move_from(spot, offset, distances, low, margin):
@@ -988,6 +1304,8 @@ def run(args):
         return show(low, margin, cfg["horizon"]["use_survey"])
     if args.move_from:
         return move_from(args.move_from, args.offset, args.distances, low, margin)
+    if args.use_aside:
+        return use_aside(Path(args.use_aside), args.checked, low, margin, span(args.bearings))
     if args.forget:
         had = bool(measured())
         if RESULTS.exists():
@@ -1040,12 +1358,24 @@ def run(args):
     exposure = args.exposure or (0.002 if args.daylight else 1.0)
     gain = args.gain or (100 if args.daylight else 2000)
     warnings = []
+    earlier = None if args.fresh else resumable(args.daylight) if args.trace else None
+    if args.fresh and PARTIAL.exists():
+        PARTIAL.unlink()
     with eye(site, exposure, gain, args.daylight, args.torch and not args.daylight) as look:
         if args.trace:
+            done = None
+            if earlier and earlier[0]:
+                done, looked = earlier
+                look.log[:0] = looked
+                print(f"Carrying on from the survey cut short earlier today: {len(done)} bearing(s) "
+                      "already measured are not looked at again (--fresh starts over).", flush=True)
             import activity
             # Says so, so the stream stays off air for it (director.py).
             with activity.doing("Surveying the skyline", "by daylight" if args.daylight else "by night"):
-                found, warnings = trace(look, bearings, low, known=known)
+                found, warnings = trace(look, bearings, low, known=known, done=done,
+                                        checkpoint=lambda found: keep_partial(found, look.log, args.daylight))
+            if PARTIAL.exists():
+                PARTIAL.unlink()        # finished: nothing to carry on from
         else:
             if args.daylight:
                 # Sky high up first, so the exposure is set on sky and not on a wall.
@@ -1054,25 +1384,42 @@ def run(args):
             sweep(look, step)
         results = look.log
     if args.trace:
+        blind = glare_share(results)
+        unrepeatable = [w for w in warnings if w.startswith(NOT_SAME)]
+        if blind > GLARE_MOST or unrepeatable:
+            # Kept for looking into, never in place of the skyline in use.
+            aside = set_aside(skyline_from(found, low, known), unrepeatable[0] if unrepeatable else
+                              f"{blind:.0%} of looks unread", looks=results, warnings=warnings, trace=found)
+            if unrepeatable:
+                raise interface.Refusal(
+                    "PLATE_SOLVE_FAILED", f"{unrepeatable[0]} Nothing has replaced the skyline in use; this "
+                    f"survey is in {aside.name} to look into.")
+            raise interface.Refusal(
+                "NO_SKY", f"(kept to look into as {aside.name}) {blind:.0%} of the looks could not be read (the Sun's glare by day, cloud or an "
+                "unlit wall by night): nothing has been kept. By day, survey with the Sun higher and behind "
+                "the telescope or under an even overcast; by night, on a clear one.")
         to_top = [f["az"] for f in found if f["state"] == "blocked" and (f.get("shut") or 0) >= TOP]
         if to_top:
             warnings.append("Blocked as far up as it looked at " + ", ".join(f"{az:g}°" for az in to_top)
                             + f": a wall to {TOP}° is possible, but so is a telescope aimed somewhere else. "
                             "Look that way yourself.")
-        skyline = skyline_from(found, low, known)
-        higher = above_checked(skyline, kept)
-        if higher:
-            aside = set_aside(skyline, f"higher than the skyline checked by eye at {len(higher)} bearing(s)",
-                              looks=results, warnings=warnings, trace=found, higher_at=higher)
-            print("\n" + profile(found, low))
-            print(f"\nNot kept: it puts the top more than {EYE_DOUBT:g}° above the skyline checked by eye "
-                  f"({kept['checked_by_eye']}) at " + ", ".join(f"{az:g}°" for az in higher)
-                  + f". The checked skyline stays in use; this survey is in {aside.name}, to keep with "
-                  "--use-aside once someone has looked.", flush=True)
-            return {"kept": False, "set_aside": aside.name, "higher_at": higher}, warnings
+        measured_now = skyline_from(found, low, known)
+        skyline, differ = keep_checked(measured_now, kept)
+        more = {}
+        if differ:
+            # The whole survey kept aside too, so a bearing a person has
+            # looked at can be taken from it (--use-aside FILE --bearings).
+            aside = set_aside(measured_now, f"differs from the skyline checked by eye at {len(differ)} point(s)",
+                              looks=results, warnings=warnings, trace=found, differ=differ)
+            more = {"checked_by_eye": kept["checked_by_eye"], "not_taken": differ, "survey_file": aside.name}
+            warnings.append(
+                f"More than {EYE_DOUBT:g}° from the skyline checked by eye at "
+                + ", ".join(f"{d['az']:g}° (read {d['read']:g}°, checked {d['checked']:g}°)" for d in differ)
+                + f": the checked heights stand there. Once you have looked, take bearings from it with "
+                f"./horizon.py --use-aside {aside.name} --bearings FROM-TO --checked \"what you saw\".")
         source = "telescope" if not known or kept["source"] == "telescope" else "panorama+telescope"
         saved = keep(skyline, source, looks=results, warnings=warnings, trace=found,
-                     blocked=skyline_blocked(found))
+                     blocked=skyline_blocked(found), **more)
         print("\n" + profile(found, low))
         for warning in warnings:
             print(f"\nCHECK: {warning}")
