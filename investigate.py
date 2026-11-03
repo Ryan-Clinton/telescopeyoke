@@ -6,6 +6,7 @@ it is: explained, an artefact, or unexplained, and how strongly.
     ./investigate.py KIC 7988797      a Kepler star
     ./investigate.py TIC 185336364    a TESS star
     ./investigate.py --json
+    ./investigate.py --summary        the most intriguing leads looked into: docs/research/README.md
 
 The leads are what the searches flag and nobody has looked into: the
 Kepler and TESS screens' leads by archive.is_lead (a dip left after the
@@ -134,6 +135,10 @@ def _asked(source, url, answer, error=None):
 
 REPEAT = "possible repeated eclipse"     # archive.REPEAT, a dip that may repeat: still a lead
 RECHECKS = 3                             # a lead with a check unanswered is looked into again, this many times in all
+RECHECK_AFTER_HOURS = 24                 # ...no sooner than this after the last try: a service down now is often down all day
+GIANT_MIN_HOURS = 24.0                   # a giant's pulsation takes days to weeks: a dip shorter than this is not its own
+CONTRAST_ROUTINE = 5.0                   # deepest dip under this many times the star's own scatter: within its variability
+TIERS = ("tabby-like", "unusual", "routine")   # the queue's order; a routine lead gets the catalogues only
 
 
 # --- a. already explained? ----------------------------------------------------------
@@ -346,7 +351,9 @@ def giant(star):
 def judge(star, checks):
     """The verdict on a star from its dips and the checks' answers."""
     explained, artefact, notes = [], [], []
-    real = [d for d in star["dips"] if d["verdict"] in ("dip", REPEAT)]
+    real = [dict(d, kind=d.get("kind") or ("repeat" if d["verdict"] == REPEAT else "long")) for d in star["dips"]
+            if d["verdict"] in ("dip", REPEAT)]
+    real += [dict(d, kind="short") for d in star.get("short_dips", []) if d["verdict"] == "dip"]
     deepest = max((d["depth_percent"] for d in real), default=0.0)
     s, v, eb, g = (checks[k]["answer"] for k in ("simbad", "vsx", "villanova", "gaia"))
     if eb:
@@ -378,9 +385,11 @@ def judge(star, checks):
     known = bool(s and (s["papers"] or 0) >= KNOWN_PAPERS)
     if known:
         notes.append(f"known to science: SIMBAD lists {s['papers']} papers on {s['name']}")
-    unasked = [checks[k]["source"] for k in ("simbad", "vsx", "villanova", "gaia") if checks[k]["error"]]
+    unasked = [checks[k]["source"] for k in ("simbad", "vsx", "villanova", "gaia")
+               if str(checks[k]["error"] or "").startswith("not answered")]
     gstar = (g or {}).get("star") or {}
-    if real and giant(gstar) and deepest < GIANT_DIP:
+    slow = [d for d in real if (d.get("hours") or 0) >= GIANT_MIN_HOURS]
+    if real and giant(gstar) and deepest < GIANT_DIP and len(slow) == len(real):
         explained.append(f"a red giant (Gaia DR3 BP-RP {gstar['bp_rp']:.2f}, absolute G {gstar['abs_g']:+.1f}): "
                          f"giants this red vary by a few percent over days to weeks as they pulsate, which dips "
                          f"under {GIANT_DIP:g}% fit (Bányai et al. 2013, https://arxiv.org/abs/1309.1012)")
@@ -416,8 +425,12 @@ def judge(star, checks):
             notes.append("weak because " + "; ".join(why))
     if unasked:
         notes.append("not answered: " + ", ".join(unasked) + " (asked again next run)")
+    if real and giant(gstar) and deepest < GIANT_DIP and len(slow) < len(real):
+        notes.append(f"a red giant, but {len(real) - len(slow)} dip(s) shorter than {GIANT_MIN_HOURS:g} h: too quick "
+                     "for its pulsation, so the giant does not explain them")
+    kinds = {k: sum(d["kind"] == k for d in real) for k in ("long", "repeat", "short")}
     return {"verdict": verdict, "explained_by": explained, "artefact_because": artefact, "notes": notes,
-            "known_to_science": known, "deepest_percent": deepest, "dips": len(real)}
+            "known_to_science": known, "deepest_percent": deepest, "dips": len(real), "dip_kinds": kinds}
 
 
 # --- e. this telescope ----------------------------------------------------------------
@@ -460,7 +473,14 @@ def lead_id(lead):
         return f"KIC-{lead['kic']}"
     if lead["kind"] == "tess":
         return f"TIC-{lead['tic']}"
-    return f"SETI-{lead['target']}-{lead['frequency_mhz']:.6f}"
+    return f"SETI-{lead['target']}-{lead.get('session') or 'unknown'}-{lead['frequency_mhz']:.6f}"
+
+
+def signal_id(lead):
+    """What links SETI detections that may be one signal: the target and the
+    frequency to the kHz, whatever session saw it (drift moves a signal by
+    well under a kHz over a cadence)."""
+    return f"{lead['target']}-{lead['frequency_mhz']:.3f}"
 
 
 def records_dir():
@@ -475,6 +495,25 @@ def done():
     return out
 
 
+def contrast(v):
+    """How far the deepest dip stands out from the star's own scatter."""
+    scatter = v.get("scatter_percent") or 0
+    return round((v.get("deepest_percent") or 0) / scatter, 1) if scatter else None
+
+
+def tier(v):
+    """How interesting a screened lead is, apart from its detection score: a
+    Tabby-like star first; then an unusual one (a dip standing CONTRAST_ROUTINE
+    times above the star's own scatter, a possible repeat, a short dip);
+    routine is a dip within a variable star's usual swing."""
+    if v.get("tabby_like"):
+        return "tabby-like"
+    c = contrast(v)
+    if v.get("possible_repeats") or v.get("short_real") or c is None or c >= CONTRAST_ROUTINE:
+        return "unusual"
+    return "routine"
+
+
 def leads():
     """Every lead the searches have flagged, best first: Kepler's and TESS's
     stars with a dip left (Tabby-like first, then by score), then SETI
@@ -486,8 +525,9 @@ def leads():
             continue
         import archive
         record = {k: archive.migrate(v) for k, v in json.loads(path.read_text(encoding="utf-8")).items()}
-        rows = [dict(v, **{key: int(k), "kind": kind}) for k, v in record.items() if archive.is_lead(v)]
-        out += sorted(rows, key=lambda r: (not r.get("tabby_like"), -(r.get("score") or 0)))
+        rows = [dict(v, **{key: int(k), "kind": kind, "tier": tier(v), "contrast": contrast(v)})
+                for k, v in record.items() if archive.is_lead(v)]
+        out += sorted(rows, key=lambda r: (TIERS.index(r["tier"]), -(r["contrast"] or 1e9), -(r.get("score") or 0)))
     seti = []
     for path in sorted((config.DATA / "cache" / "seti").glob("*.json")):
         kept = json.loads(path.read_text(encoding="utf-8"))
@@ -496,7 +536,8 @@ def leads():
             for e in block.get("events", []):
                 if e.get("label", "candidate") != "candidate":      # interference and unconfirmed: diagnostics only
                     continue
-                seti.append({"kind": "seti", "target": target, "session": session, **e})
+                seti.append({"kind": "seti", "target": target, "session": session, **e,
+                             "signal": signal_id({"target": target, **e})})
     out += sorted(seti, key=lambda e: -e.get("snr", 0))
     return out
 
@@ -509,10 +550,19 @@ def unanswered(record):
 
 
 def recheck(taken=None):
-    """Leads looked into with a check unanswered and fewer than RECHECKS
-    tries, oldest first: these come before new leads."""
+    """Leads looked into with a check unanswered, fewer than RECHECKS tries
+    and at least RECHECK_AFTER_HOURS since the last, oldest first: these
+    come before new leads."""
     taken = done() if taken is None else taken
-    due = [r for r in taken.values() if unanswered(r) and r.get("attempts", 1) < RECHECKS]
+    now = datetime.now(timezone.utc)
+
+    def rested(r):
+        try:
+            then = datetime.fromisoformat(r.get("investigated") or "")
+        except ValueError:
+            return True
+        return (now - then).total_seconds() >= RECHECK_AFTER_HOURS * 3600
+    due = [r for r in taken.values() if unanswered(r) and r.get("attempts", 1) < RECHECKS and rested(r)]
     return sorted(due, key=lambda r: r.get("investigated") or "")
 
 
@@ -524,6 +574,26 @@ def as_lead(record):
     if kind == "tess":
         return {"kind": "tess", "tic": int(lead.split("-")[1])}
     return None
+
+
+def ask(name, ra, dec, lead, get, say, other=None):
+    """One check by its key in the record."""
+    if name == "simbad":
+        return simbad(ra, dec, get)
+    if name == "vsx":
+        return vsx(ra, dec, get)
+    if name == "villanova":
+        return villanova(lead["kic"], get) if lead["kind"] == "kepler" else \
+            _asked("Villanova Kepler EB catalogue", VILLANOVA.format(kic=""), None, error="a TESS star: not in it")
+    if name == "gaia":
+        return gaia(ra, dec, get)
+    if name == "ztf":
+        return ztf(ra, dec, get)
+    return other if other is not None else other_mission(lead, say)
+
+
+LIGHT = ("simbad", "vsx", "villanova", "gaia")          # a routine lead: the catalogues only
+FULL = LIGHT + ("ztf", "other_mission")
 
 
 def next_lead():
@@ -549,23 +619,35 @@ def parse_lead(words):
 
 # --- the procedure -----------------------------------------------------------------
 
-def investigate_star(lead, get=requests.get, say=print, star=None, other=None, cfg=None):
+def investigate_star(lead, get=requests.get, say=print, star=None, other=None, cfg=None, before=None):
     """Steps a to e on one star; the record and the report's text."""
-    star = star or (kepler_star(lead["kic"]) if lead["kind"] == "kepler" else tess_star(lead["tic"]))
+    before = before or {}
+    star = star or before.get("star_record") or (kepler_star(lead["kic"]) if lead["kind"] == "kepler"
+                                                 else tess_star(lead["tic"]))
     ra, dec = float(star["ra"]), float(star["dec"])
-    say(f"{star['star']}: {star['real_dips']} dip(s) left, deepest {star['deepest_percent']:.1f}%; asking the catalogues")
-    checks = {"simbad": simbad(ra, dec, get), "vsx": vsx(ra, dec, get),
-              "villanova": villanova(lead["kic"], get) if lead["kind"] == "kepler" else
-              _asked("Villanova Kepler EB catalogue", VILLANOVA.format(kic=""), None, error="a TESS star: not in it"),
-              "gaia": gaia(ra, dec, get), "ztf": ztf(ra, dec, get),
-              "other_mission": other if other is not None else other_mission(lead, say)}
+    level = lead.get("tier") or before.get("tier") or "unusual"
+    names = LIGHT if level == "routine" else FULL
+    kept = {k: c for k, c in before.get("checks", {}).items()
+            if not str(c.get("error") or "").startswith("not answered")}
+    say(f"{star['star']}: {star['real_dips']} dip(s) left, deepest {star['deepest_percent']:.1f}%; "
+        f"{'asking again only what went unanswered' if kept else 'asking the catalogues'}")
+    checks = {k: kept[k] if k in kept else ask(k, ra, dec, lead, get, say, other) for k in names}
+    for k in FULL:
+        checks.setdefault(k, _asked(k, "", None, error="not asked: a routine lead gets the catalogues only"))
     verdict = judge(star, checks)
     watch = follow_up(star, verdict["deepest_percent"], cfg)
     return {"lead": lead_id(lead), "kind": lead["kind"], "star": star["star"], "ra": ra, "dec": dec,
             "mag": star.get("mag"), "mag_band": star.get("mag_band"), "crowdsap": star.get("crowdsap"),
             "light_curve": {"source": star.get("source"), "scatter_percent": star.get("scatter_percent"),
                             "trend": star.get("trend"),
-                            "dips": [d for d in star["dips"] if d["verdict"] == "dip"][:20]},
+                            "dips": [d for d in star["dips"] if d["verdict"] == "dip"][:20],
+                            "short_dips": [d for d in star.get("short_dips", []) if d["verdict"] == "dip"][:20]},
+            "tier": level, "contrast": contrast(star),
+            "star_record": dict({k: star.get(k) for k in ("star", "ra", "dec", "mag", "mag_band", "crowdsap",
+                                                          "real_dips", "deepest_percent", "tabby_like",
+                                                          "scatter_percent", "source", "trend")},
+                                dips=[d for d in star["dips"] if d["verdict"] in ("dip", REPEAT)],
+                                short_dips=[d for d in star.get("short_dips", []) if d["verdict"] == "dip"]),
             "checks": checks, **verdict, "follow_up": watch,
             "investigated": datetime.now(timezone.utc).isoformat(timespec="seconds"), "kind_of_answer": "measured"}
 
@@ -592,7 +674,7 @@ def investigate_seti(lead):
     verdict = "likely interference" if signs else "unexplained, weak"
     notes = [seen + ".", "to settle it: the same frequency in another session of this star or a different star "
              "(./seti.py find), and the known transmitters at that frequency"]
-    return {"lead": lead_id(lead), "kind": "seti", "star": lead["target"], "frequency_mhz": f,
+    return {"lead": lead_id(lead), "signal": signal_id(lead), "kind": "seti", "star": lead["target"], "frequency_mhz": f,
             "drift_hz_s": lead.get("drift_hz_s"), "snr": lead.get("snr"), "session": lead.get("session"),
             "checks": {"bands": _asked("ITU Radio Regulations, Article 5", "https://www.itu.int/pub/R-REG-RR",
                                        band and band[2])},
@@ -655,7 +737,7 @@ def investigate(words=(), get=requests.get, say=print):
         raise interface.Refusal("INVALID_REQUEST", "No lead is waiting: the screens have flagged nothing not yet "
                                                    "looked into. ./archive.py screen --batch 200 finds more.")
     before = done().get(lead_id(lead))
-    r = investigate_seti(lead) if lead["kind"] == "seti" else investigate_star(lead, get, say)
+    r = investigate_seti(lead) if lead["kind"] == "seti" else investigate_star(lead, get, say, before=before)
     r["attempts"] = (before or {}).get("attempts", 1) + 1 if before else 1
     left = unanswered(r)
     if left and r["attempts"] >= RECHECKS:
@@ -670,11 +752,81 @@ def investigate(words=(), get=requests.get, say=print):
     return r
 
 
+INTEREST = ("unexplained, strong", "unexplained, weak", "likely explained", "likely interference",
+            "explained", "artefact")       # most intriguing first
+
+
+def intriguing(taken=None, most=5):
+    """The leads looked into, most intriguing first: by verdict (what is
+    still unexplained before what is likely understood), then tier, then
+    how far the dips stand out from the star's own scatter. Each with why
+    it is interesting, what explanations remain and what would settle it."""
+    taken = done() if taken is None else taken
+    rows = sorted(taken.values(), key=lambda r: (INTEREST.index(r["verdict"]) if r.get("verdict") in INTEREST else 9,
+                                                 TIERS.index(r["tier"]) if r.get("tier") in TIERS else 1,
+                                                 -(r.get("contrast") or 0)))
+    out = []
+    for r in rows[:most]:
+        kinds = r.get("dip_kinds") or {}
+        why = [f"{r.get('dips', 0)} dip(s) left, deepest {r.get('deepest_percent', 0):.1f}%"
+               + (f", {r['contrast']:g} times the star's own scatter" if r.get("contrast") else "")]
+        if kinds.get("short"):
+            why.append(f"{kinds['short']} short (2-minute) dip(s): not a slow variable's swing")
+        if kinds.get("repeat"):
+            why.append(f"{kinds['repeat']} possible repeat(s): an eclipse no catalogue lists?")
+        if r.get("tier") == "tabby-like":
+            why.append("Tabby-like: steady between irregular dips")
+        left = r.get("explained_by", []) + r.get("artefact_because", []) + r.get("likely_because", [])
+        out.append({"lead": r["lead"], "star": r.get("star"), "verdict": r["verdict"], "tier": r.get("tier"),
+                    "why_interesting": why, "explanations": left, "open": unanswered(r),
+                    "notes": r.get("notes", []), "can_watch": (r.get("follow_up") or {}).get("can_watch"),
+                    "watch_because": (r.get("follow_up") or {}).get("reasons", []),
+                    "known_to_science": r.get("known_to_science", False), "report": f"docs/research/{r['lead']}.md"})
+    return out
+
+
+def write_summary(rows, total, reports=REPORTS):
+    """docs/research/README.md: the most intriguing leads looked into."""
+    lines = ["# The most intriguing leads", "",
+             f"Written by `./investigate.py --summary` on {_today()}, from the {total} lead(s) looked into so far, "
+             "most intriguing first: still unexplained before likely understood, then how far the dips stand out "
+             "from the star's own scatter. None of this is a discovery: each is a lead and its checks.", ""]
+    for n, r in enumerate(rows, 1):
+        lines += [f"## {n}. {r['star']}: {r['verdict']}", "",
+                  "- Why it is interesting: " + "; ".join(r["why_interesting"]),
+                  "- What could explain it: " + ("; ".join(r["explanations"]) or "nothing found yet")]
+        if r["open"]:
+            lines.append("- Still to ask: " + ", ".join(r["open"]))
+        lines += [f"- {n_}" for n_ in r["notes"]]
+        lines.append(f"- This telescope: {'can' if r['can_watch'] else 'cannot'} watch it ("
+                     + "; ".join(r["watch_because"]) + ")")
+        if r["known_to_science"]:
+            lines.append("- Known to science already: read the papers before anything else")
+        lines += [f"- The report: [{r['lead']}.md]({r['lead']}.md)", ""]
+    reports.mkdir(parents=True, exist_ok=True)
+    (reports / "README.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return reports / "README.md"
+
+
+def summary():
+    taken = done()
+    rows = intriguing(taken)
+    path = write_summary(rows, len(taken))
+    for r in rows:
+        print(f"{r['star']}: {r['verdict']} ({r['tier']}); " + "; ".join(r["why_interesting"]))
+    return {"intriguing": rows, "looked_into": len(taken), "report": str(path.relative_to(ROOT)
+                                                                         if path.is_relative_to(ROOT) else path)}
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("lead", nargs="*", help="KIC N or TIC N; none: an unfinished one, else the top lead nobody has looked into")
+    ap.add_argument("--summary", action="store_true", help="the most intriguing leads looked into: docs/research/README.md")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
+    if args.summary:                     # a page for people: plain text, no --json
+        summary()
+        return
     interface.main("investigate", lambda: investigate(args.lead), args.json)
 
 

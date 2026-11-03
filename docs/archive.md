@@ -219,12 +219,26 @@ and the papers on the star come before any claim.
 ## Looking into a lead
 
 `./investigate.py` first looks again at any lead whose checks went
-unanswered (a service down; up to three tries, then the verdict stands
-without it and says so), then takes the top lead nobody has looked into.
+unanswered (a service down), at least a day after the last try and up to
+three tries in all, asking only the sources that failed and keeping the
+star's light curve and every answer already had; after the third the
+verdict stands without it and says so. Then it takes the top lead nobody
+has looked into. The queue is ordered by how interesting a lead is, not
+by its detection score: Tabby-like first, then "unusual" (the deepest dip
+at least five times the star's own scatter, a possible repeat, or a short
+TESS dip), then "routine" (a dip within a variable star's usual swing),
+each by that contrast. A routine lead gets the catalogues only (SIMBAD,
+VSX, Villanova, Gaia), not the slower ZTF and other-mission checks.
 A lead is the screens' own (`archive.is_lead`: a dip left, a possible
 repeated eclipse or a short TESS dip, not a known binary; Tabby-like
 first) or a SETI sweep's candidate (every ON look, no OFF look;
-interference and unconfirmed hits stay in the sweep's record). It
+interference and unconfirmed hits stay in the sweep's record). A SETI
+lead is one detection, named by target, session and frequency; its
+`signal` (target and frequency to the kHz) links detections in different
+sessions that may be the same signal. A star's dips are judged by kind:
+long (the 30-minute search), possible repeats, and short TESS dips (the
+2-minute pass); the red-giant rule explains only dips of a day or more,
+since a giant's pulsation takes days to weeks. It
 runs the same checks every time, each answer kept with its link and the
 date asked: SIMBAD's type and how often it is cited, VSX, Villanova's
 Kepler EB catalogue, Gaia DR3's variability class and RUWE, the star in
@@ -246,3 +260,8 @@ research` reads the screens' own coverage (`archive.status`, the target
 files they keep) and investigate.py's own queue, so it counts the same
 leads, and says how many are waiting and how many will be asked again;
 `--html` writes `web/research.html` for the 8080 server.
+`./investigate.py --summary` writes
+[docs/research/README.md](research/README.md): the leads looked into,
+most intriguing first (still unexplained before likely understood, then
+tier and contrast), each with why it is interesting, what could explain
+it, what is still to ask and whether this telescope can watch it.

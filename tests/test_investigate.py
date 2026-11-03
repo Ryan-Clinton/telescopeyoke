@@ -121,7 +121,7 @@ def test_the_next_lead_is_taken_without_being_told_and_one_looked_into_is_not_ta
     (tmp_path / "cache" / "seti" / "KIC8462852-AGBT17A_999_68.json").write_text(json.dumps({"blocks": [[1, 2]], "done": {
         "0": {"events": [{"frequency_mhz": 2266.8, "drift_hz_s": 0.0, "snr": 30.0, "label": "candidate"}]}}}))
     order = [investigate.lead_id(lead) for lead in investigate.leads()]
-    assert order == ["KIC-222", "KIC-111", "SETI-KIC8462852-2266.800000"]       # Tabby-like first; no dip, no lead
+    assert order == ["KIC-222", "KIC-111", "SETI-KIC8462852-AGBT17A_999_68-2266.800000"]       # Tabby-like first; no dip, no lead
     assert investigate.lead_id(investigate.next_lead()) == "KIC-222"
     (tmp_path / "cache" / "research").mkdir(parents=True)
     (tmp_path / "cache" / "research" / "KIC-222.json").write_text("{}")
@@ -165,7 +165,7 @@ def test_only_seti_candidates_and_the_screens_own_leads_reach_the_queue(tmp_path
         {"frequency_mhz": 2.0, "drift_hz_s": 0.1, "snr": 40.0, "label": "unconfirmed"},
         {"frequency_mhz": 3.0, "drift_hz_s": 0.1, "snr": 20.0, "label": "candidate"}]}}}))
     order = [investigate.lead_id(lead) for lead in investigate.leads()]
-    assert order == ["KIC-1", "TIC-9", "SETI-T-3.000000"]    # a possible repeat and a short dip are leads; a known binary is not
+    assert order == ["KIC-1", "TIC-9", "SETI-T-S-3.000000"]    # a possible repeat and a short dip are leads; a known binary is not
 
 
 def test_an_investigation_with_a_check_unanswered_is_asked_again_before_new_leads_then_given_up(tmp_path, monkeypatch):
@@ -177,7 +177,7 @@ def test_an_investigation_with_a_check_unanswered_is_asked_again_before_new_lead
     down = {"vsx": {"source": "VSX (via VizieR)", "answer": None, "error": "not answered (HTTPError)"},
             "villanova": {"source": "Villanova", "answer": None, "error": None}}
     (tmp_path / "cache" / "research" / "KIC-111.json").write_text(json.dumps({
-        "lead": "KIC-111", "kind": "kepler", "checks": down, "investigated": "2026-11-03T14:00:00+00:00"}))
+        "lead": "KIC-111", "kind": "kepler", "checks": down, "investigated": "2026-11-01T14:00:00+00:00"}))
     assert investigate.unanswered(json.loads((tmp_path / "cache" / "research" / "KIC-111.json").read_text())) == ["VSX (via VizieR)"]
     assert investigate.lead_id(investigate.next_lead()) == "KIC-111"         # unfinished comes first
     tess_na = {"villanova": {"source": "Villanova", "answer": None, "error": "a TESS star: not in it"}}
@@ -238,7 +238,7 @@ def test_the_research_dashboard_counts_each_survey_and_each_lead_by_where_it_sta
     (tmp_path / "cache" / "research" / "KIC-1.json").write_text(json.dumps({
         "lead": "KIC-1", "kind": "kepler", "star": "KIC 1", "verdict": "unexplained, weak", "known_to_science": False,
         "checks": {"vsx": {"source": "VSX", "answer": None, "error": "not answered (HTTPError)"}},
-        "follow_up": {"can_watch": False}, "investigated": "2026-11-03T14:00:00+00:00"}))
+        "follow_up": {"can_watch": False}, "investigated": "2026-11-01T14:00:00+00:00"}))
     (tmp_path / "feeds").mkdir()
     (tmp_path / "feeds" / "arxiv_tabby-s-star.json").write_text(json.dumps([{"id": "2610.34806v1"}, {"id": "2607.01234v2"}]))
     (tmp_path / "cache" / "literature-read.json").write_text(json.dumps(["2607.01234"]))
@@ -279,3 +279,67 @@ def test_a_red_giants_shallow_dips_are_its_own_and_a_deep_one_is_not():
     dwarf = dict(red, abs_g=6.5)                              # as red, but on the main sequence
     assert investigate.judge(star([dip(5.0)]), checks(gaia={"star": dwarf, "class": None,
                                                             "neighbours": []}))["verdict"] == "unexplained, weak"
+
+
+def test_a_recheck_waits_a_day_and_asks_only_what_went_unanswered(tmp_path, monkeypatch):
+    import datetime
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    (tmp_path / "cache" / "research").mkdir(parents=True)
+    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    down = {"vsx": {"source": "VSX (via VizieR)", "answer": None, "error": "not answered (HTTPError)"}}
+    (tmp_path / "cache" / "research" / "KIC-5.json").write_text(json.dumps({
+        "lead": "KIC-5", "kind": "kepler", "checks": down, "investigated": now}))
+    assert investigate.recheck() == []                                    # tried just now: not yet
+    asked = []
+    monkeypatch.setattr(investigate, "ask", lambda name, *a, **k: asked.append(name) or investigate._asked(name, "", {"x": 1}))
+    s = star([dip(5.0)])
+    kept = {k: investigate._asked(k, "https://kept", None) for k in investigate.FULL if k != "vsx"}
+    before = {"checks": dict(kept, vsx=down["vsx"]), "star_record": s}
+    monkeypatch.setattr(investigate, "ask", lambda name, *a, **k: asked.append(name) or investigate._asked(name, "", None))
+    r = investigate.investigate_star({"kind": "kepler", "kic": 1234567}, before=before, cfg=config.example())
+    assert asked == ["vsx"] and r["checks"]["simbad"]["link"] == "https://kept"
+
+
+def test_a_short_tess_dip_is_judged_and_a_giant_does_not_explain_it():
+    red = {"g": 8.1, "ruwe": 1.0, "bp_rp": 2.0, "parallax_mas": 1.3, "parallax_over_error": 55.0, "abs_g": -1.3,
+           "source_id": "1", "separation_arcsec": 0.1}
+    s = dict(star([]), short_dips=[dict(dip(3.0), hours=0.3)], real_dips=0)
+    v = investigate.judge(s, checks(gaia={"star": red, "class": None, "neighbours": []}))
+    assert v["dips"] == 1 and v["dip_kinds"]["short"] == 1 and v["verdict"].startswith("unexplained")
+    assert any("too quick for its pulsation" in n for n in v["notes"])
+    rep = dict(star([dict(dip(4.0), verdict=investigate.REPEAT)]), real_dips=0)
+    assert investigate.judge(rep, checks())["dip_kinds"]["repeat"] == 1
+
+
+def test_leads_are_queued_by_how_far_they_stand_out_not_by_score(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    (tmp_path / "cache" / "kepler").mkdir(parents=True)
+    (tmp_path / "cache" / "kepler" / "screened.json").write_text(json.dumps({
+        "1": {"score": 470.0, "tabby_like": False, "real_dips": 13, "deepest_percent": 33.0, "scatter_percent": 3.0},
+        "2": {"score": 2.0, "tabby_like": False, "real_dips": 1, "deepest_percent": 1.7, "scatter_percent": 0.1},
+        "3": {"score": 10.0, "tabby_like": True, "real_dips": 2, "deepest_percent": 5.0, "scatter_percent": 1.0},
+        "4": {"score": 30.0, "tabby_like": False, "real_dips": 1, "deepest_percent": 4.0, "scatter_percent": 4.0}}))
+    got = [(investigate.lead_id(lead), lead["tier"]) for lead in investigate.leads()]
+    assert got == [("KIC-3", "tabby-like"), ("KIC-2", "unusual"), ("KIC-1", "unusual"), ("KIC-4", "routine")]
+
+
+def test_seti_detections_in_two_sessions_are_two_leads_of_one_signal():
+    a = {"kind": "seti", "target": "T", "session": "S1", "frequency_mhz": 1500.00012}
+    b = dict(a, session="S2", frequency_mhz=1500.00031)
+    assert investigate.lead_id(a) != investigate.lead_id(b) and investigate.signal_id(a) == investigate.signal_id(b)
+
+
+def test_the_summary_puts_the_unexplained_first_and_says_why_each_is_interesting(tmp_path):
+    taken = {"KIC-1": {"lead": "KIC-1", "star": "KIC 1", "verdict": "likely explained", "tier": "tabby-like",
+                       "contrast": 5.1, "dips": 2, "deepest_percent": 5.0, "explained_by": ["a red giant"],
+                       "checks": {"vsx": {"source": "VSX", "error": "not answered (HTTPError)"}},
+                       "follow_up": {"can_watch": False, "reasons": ["too bright"]}},
+             "KIC-2": {"lead": "KIC-2", "star": "KIC 2", "verdict": "unexplained, weak", "tier": "unusual",
+                       "contrast": 17.0, "dips": 1, "deepest_percent": 1.7, "dip_kinds": {"short": 1},
+                       "follow_up": {"can_watch": True, "reasons": ["in range"]}}}
+    rows = investigate.intriguing(taken)
+    assert [r["lead"] for r in rows] == ["KIC-2", "KIC-1"] and rows[1]["open"] == ["VSX"]
+    assert any("short" in w for w in rows[0]["why_interesting"])
+    text = investigate.write_summary(rows, 2, reports=tmp_path).read_text()
+    assert "## 1. KIC 2: unexplained, weak" in text and "Still to ask: VSX" in text and "not a discovery" not in text
+    assert "None of this is a discovery" in text

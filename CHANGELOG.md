@@ -6,6 +6,15 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+- **3 November 2026**: `investigate.py` judges short TESS dips and
+  possible repeats as leads in their own right (the red-giant rule only
+  for dips of a day or more); queues leads by tier and contrast against
+  the star's own scatter rather than detection score, with a lighter check
+  for routine ones; retries a failed source a day later, asking only it;
+  names a SETI lead by its session too, with a `signal` linking sessions;
+  and `--summary` writes the most intriguing leads to
+  [docs/research/README.md](docs/research/README.md).
+
 - **3 November 2026**: a lead's verdict says how sure it is: "explained"
   needs a catalogue naming the star's variability with every catalogue
   answering, else "likely explained" (KIC 6448574's red giant is now
