@@ -286,6 +286,37 @@ def test_a_tess_sector_is_read_and_binned_to_keplers_cadence(tmp_path):
     assert archive.calendar(1730.21, archive.BTJD) == "2019-09-03"
 
 
+def test_the_two_minute_pass_finds_a_dip_too_short_for_the_bins():
+    rng = np.random.default_rng(4)
+    t = 1700.0 + np.arange(0, 20, 2 / 1440)
+    f = 1 + rng.normal(0, 0.0025, len(t))                         # 0.25% a 2-minute point
+    f[np.abs(t - 1705.0) < 10 / 1440] -= 0.015                     # 20 minutes, 1.5% deep
+    f = dip(t, f, 1712.0, 0.03, fall=0.3, rise=0.6)               # and a long one both passes see
+    native = {"t": t, "f": f, "sap": f, "pdc_raw": f, "sap_raw": f, "q": np.zeros(len(t), int),
+              "quarter": np.full(len(t), 15)}
+    curve = archive.binned(native)
+    long_dips, _ = archive.find_dips(curve["t"], curve["f"], curve["q"], curve["quarter"], archive.BTJD)
+    assert [round(d["middle"]) for d in long_dips if d["verdict"] == "dip"] == [1712]
+    short, scatter = archive.short_dips(native, long_dips)
+    assert [round(d["middle"], 2) for d in short] == [1705.0] and short[0]["verdict"] == "dip"
+    assert scatter == pytest.approx(0.0025, rel=0.15)
+
+
+def test_a_tess_sector_is_screened_with_the_same_states(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    monkeypatch.setattr(archive, "tess_targets", lambda sector: [101, 102, 103])
+
+    def analyse(tic):
+        if tic == 102:
+            raise archive.interface.Refusal("INVALID_REQUEST", "TESS has no SPOC light curves of TIC 102.")
+        return {"score": 0.0, "tabby_like": False, "real_dips": 0, "deepest_percent": 0.0, "scatter_percent": 0.1,
+                "sap_only": [], "points": 30000, "short_real": 1 if tic == 103 else 0}
+    answer = archive.tess_screen(5, 14, say=lambda *_: None, analyse_star=analyse)
+    c = answer["coverage"]
+    assert (c["total"], c["done"], c["unavailable"], c["leads"]) == (3, 2, 1, 1)
+    assert answer["top"][0]["kic"] == 103 and archive.tess_screened_file().exists()
+
+
 def test_tess_stars_are_named_as_people_write_them():
     assert archive.tic_number("TIC 185336364") == archive.tic_number("Tabby") == 185336364
     with pytest.raises(archive.interface.Refusal):

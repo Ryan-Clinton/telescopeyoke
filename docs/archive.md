@@ -175,6 +175,26 @@ long by their fit. SAP's depth is measured against the light either
 side of the dip: TESS's raw flux drifts with scattered light within a
 sector, and against the sector's median the same dip read 0.35%.
 
+TESS is searched at two cadences. The 30-minute bins carry the same rules
+as Kepler, for dips of hours and days. A second pass at the native 2
+minutes looks for dips too short for the bins (an occultation, a small
+body's transit): three points in a row (six minutes), each three times
+the 2-minute scatter below the level, with no other floor; those inside
+a 30-minute dip are the same dip and left out. A short dip alone makes a
+star a lead, and its catalogue check (VSX by position: a TESS star has no
+KIC) is asked. On Tabby's star the 2-minute scatter is 0.25%, and the
+pass finds nothing beyond the 2019 transit.
+
+    ./archive.py tess-screen --batch 200 --sector 14
+
+`tess-screen` screens a sector's 2-minute SPOC targets (MAST's list of
+them, through astroquery, kept in `cache/tess/targets-sNNNN.json`) in
+TIC order, with the same states, retries and coverage as `screen`, kept
+in `cache/tess/screened.json`. Sector 14 is first: it looked at Cygnus
+and Lyra, where Kepler did. It has 19,977 such targets; the first run (3
+November 2026, ten stars) did all ten, none Tabby-like, two leads (TIC
+7584971, one 1.06% dip on 0.17% scatter, the deepest).
+
 ## What it cannot see
 
 Dips shallower than 1%: the exocomets Rappaport et al. (2018) found round

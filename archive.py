@@ -9,6 +9,8 @@ telescope's measurements instead of our own nights.
     ./archive.py search stars.txt        each KIC number in the file (one a line), most Tabby-like first
     ./archive.py search 8462852,7106205
     ./archive.py screen --batch 500      the next 500 Kepler stars not yet screened, brightest first
+    ./archive.py screen --report         how far the screen has got, and its ranking
+    ./archive.py tess-screen --batch 200 --sector 14     the same on a TESS sector's 2-minute stars
 
 `screen` works through every star Kepler watched (about 200,000, NASA's
 Exoplanet Archive's list, brightest first), keeping each one's answer in
@@ -341,11 +343,38 @@ def binned(curve, minutes=BIN_MINUTES):
     return {n: np.array(v) for n, v in out.items()}
 
 
-def analyse_tess(tic, say=print):
-    """One star's answer from its TESS sectors."""
-    curve = binned(read(tess_fetch(tic, say)))
-    return dict(_answer(curve, BTJD, joined=False), star=f"TIC {tic}", tic=tic, mission="TESS",
-                source=f"https://mast.stsci.edu/portal/Mashup/Clients/Mast/Portal.html?searchQuery=TIC%20{tic}")
+SHORT_RUN = 3        # the 2-minute pass: three points in a row (6 minutes)...
+                     # ...each DIP_SIGMA times the 2-minute scatter down, no other floor
+
+
+def short_dips(native, long_dips):
+    """The TESS 2-minute pass: dips too short for the 30-minute bins (a
+    flare's opposite, an occultation, a small body's transit), found at the
+    native cadence with SHORT_RUN points and the 2-minute scatter's floor.
+    Those inside a 30-minute dip are the same dip, and left out."""
+    found, scatter = find_dips(native["t"], native["f"], native["q"], native["quarter"], BTJD,
+                               run=SHORT_RUN, depth=0.0)
+    covered = [(d["start"], d["end"]) for d in long_dips]
+    return [d for d in found if not any(a <= d["middle"] <= b for a, b in covered)], scatter
+
+
+def analyse_tess(tic, say=print, variables=None):
+    """One star's answer from its TESS sectors: the dips in 30-minute bins
+    (Kepler's cadence, the same rules) and, apart, the short dips at the
+    native 2 minutes; a lead with its catalogue checks (VSX by position)."""
+    paths = tess_fetch(tic, say)
+    native = read(paths)
+    answer = _answer(binned(native), BTJD, joined=False)
+    short, short_scatter = short_dips(native, answer["dips"])
+    answer = dict(answer, star=f"TIC {tic}", tic=tic, mission="TESS", short_dips=short,
+                  short_real=sum(d["verdict"] == "dip" for d in short),
+                  short_scatter_percent=None if short_scatter is None else round(100 * short_scatter, 3),
+                  source=f"https://mast.stsci.edu/portal/Mashup/Clients/Mast/Portal.html?searchQuery=TIC%20{tic}")
+    lead = answer["real_dips"] or answer["possible_repeats"] or answer["short_real"]   # short ones alone make a lead too
+    if not lead:
+        return dict(answer, catalogues=None, known_binary=None)
+    checks = catalogue_checks(None, position(paths), variables=variables)
+    return dict(answer, catalogues=checks, known_binary=checks["known_binary"])
 
 
 def _runs(mask):
@@ -354,16 +383,19 @@ def _runs(mask):
     return list(zip(np.flatnonzero(edges == 1), np.flatnonzero(edges == -1) - 1))
 
 
-def find_dips(t, f, q, quarter, zero=BKJD):
+def find_dips(t, f, q, quarter, zero=BKJD, run=DIP_RUN, depth=DIP_DEPTH):
     """The dips in one light curve, each with its verdict (see the module's
-    words), and the curve's scatter."""
+    words), and the curve's scatter. `run` points in a row at least, each
+    below the level by DIP_SIGMA times the scatter and by `depth` at least
+    (the TESS 2-minute pass gives its own: SHORT_RUN, and no floor but its
+    scatter's)."""
     good = np.isfinite(f) & (q == 0)
     tg, fg, quarter_g = t[good], f[good], quarter[good]
-    if len(fg) < DIP_RUN:
+    if len(fg) < run:
         return [], None
     level = np.median(fg)
     scatter = 1.4826 * np.median(np.abs(fg - level))
-    below = fg < level - max(DIP_SIGMA * scatter, DIP_DEPTH)
+    below = fg < level - max(DIP_SIGMA * scatter, depth)
     # A run may not jump a gap or a quarter's change.
     breaks = np.flatnonzero((np.diff(tg) > GAP_DAYS) | (np.diff(quarter_g) != 0))
     dips = []
@@ -372,10 +404,10 @@ def find_dips(t, f, q, quarter, zero=BKJD):
         pieces = [(first, last)] if not inside else \
             [(a, b) for a, b in zip([first] + [i + 1 for i in inside], inside + [last])]
         for a, b in pieces:
-            if b - a + 1 < DIP_RUN:
+            if b - a + 1 < run:
                 continue
             # Widen to where the light comes back near the level.
-            back = level - max(scatter, BACK * DIP_DEPTH)
+            back = level - max(scatter, BACK * depth)
             while a > 0 and fg[a - 1] < back and a - 1 not in breaks:
                 a -= 1
             while b < len(fg) - 1 and fg[b + 1] < back and b not in breaks:
@@ -522,14 +554,15 @@ def catalogue_checks(kic, where, get=requests.get, variables=None):
     import vet
     variables = variables or vet.variables
     checks = {"villanova": None, "vsx": [], "known_binary": None, "asked": []}
-    try:
-        listed = villanova(get).get(kic) if kic else None
-        checks["asked"].append("Villanova Kepler EB catalogue")
-        if listed:
-            checks["villanova"] = listed
-            checks["known_binary"] = f"Villanova Kepler EB catalogue, period {listed['period']:g} d"
-    except (requests.RequestException, OSError, ValueError):
-        pass
+    if kic:                                          # a TESS star has no KIC to look up: VSX alone
+        try:
+            listed = villanova(get).get(kic)
+            checks["asked"].append("Villanova Kepler EB catalogue")
+            if listed:
+                checks["villanova"] = listed
+                checks["known_binary"] = f"Villanova Kepler EB catalogue, period {listed['period']:g} d"
+        except (requests.RequestException, OSError, ValueError):
+            pass
     if where:
         try:
             near = variables(where[0], where[1], VSX_WITHIN / 3600)
@@ -594,6 +627,11 @@ def say_star(answer, say=print):
             f"asymmetry {d['asymmetry']:+.2f}  {d['verdict']}, {d.get('seen_in', 'PDCSAP')}"
             f"{' (period ' + str(d['period_days']) + ' d)' if 'period_days' in d else ''}"
             f"{' (' + str(d['separation_days']) + ' d apart: a period or a multiple of it)' if 'separation_days' in d else ''}")
+    for d in answer.get("short_dips", []):
+        say(f"  short (2-minute pass): {d['date']} (BTJD {d['middle']:.3f})  {d['depth_percent']:.2f}% deep, "
+            f"{d['hours'] * 60:.0f} min, {d['verdict']}")
+    if answer.get("mission") == "TESS":
+        say(f"  2-minute pass: scatter {answer.get('short_scatter_percent')}%, {answer.get('short_real', 0)} short dip(s) left")
     checks = answer.get("catalogues")
     if checks:
         vsx = ", ".join(f"{v['name']} ({v['type']})" for v in checks["vsx"]) or "nothing within 10\""
@@ -704,7 +742,8 @@ def coverage(record, total):
     reasons = Counter(f"{v['state']}: {v.get('why', '')[:80]}" for v in record.values() if v["state"] != "done")
     return {"total": total, **{s: states.get(s, 0) for s in STATES},
             "not_yet": max(0, total - len(record)), "tabby_like": sum(1 for v in done if v.get("tabby_like")),
-            "leads": sum(1 for v in done if (v.get("real_dips") or v.get("possible_repeats")) and not v.get("known_binary")),
+            "leads": sum(1 for v in done if (v.get("real_dips") or v.get("possible_repeats") or v.get("short_real"))
+                         and not v.get("known_binary")),
             "known_binaries": sum(1 for v in done if v.get("known_binary")),
             "reasons": dict(reasons.most_common(10))}
 
@@ -721,7 +760,8 @@ def _rank(r):
     """Tabby-like first; the leads before the known binaries; then the dips'
     score, then possible repeated eclipses (still leads till a catalogue
     says otherwise)."""
-    return (not r["tabby_like"], bool(r.get("known_binary")), -r["score"], -r.get("possible_repeats", 0))
+    return (not r["tabby_like"], bool(r.get("known_binary")), -r["score"],
+            -(r.get("possible_repeats", 0) + r.get("short_real", 0)))
 
 
 def ranking(record, most=20):
@@ -735,7 +775,8 @@ def summary(a):
     return {"state": "done", "score": a["score"], "tabby_like": a["tabby_like"], "real_dips": a["real_dips"],
             "deepest_percent": a["deepest_percent"], "scatter_percent": a["scatter_percent"],
             "sap_only": sum(d["verdict"] == "dip" for d in a.get("sap_only", [])),
-            "possible_repeats": a.get("possible_repeats", 0), "known_binary": a.get("known_binary")}
+            "possible_repeats": a.get("possible_repeats", 0), "known_binary": a.get("known_binary"),
+            "short_real": a.get("short_real", 0)}
 
 
 def outcome(problem, attempts):
@@ -813,7 +854,46 @@ def screen(batch, get=requests.get, say=print, keep=False, analyse_star=None, on
     return report(record, len(targets), "KIC", KEPLER_ORDER, ran, say)
 
 
+def tess_targets(sector):
+    """The stars TESS took 2-minute SPOC light curves of in a sector, by TIC
+    number, kept once asked (MAST, through astroquery)."""
+    import json
+    import records
+    path = config.DATA / "cache" / "tess" / f"targets-s{sector:04d}.json"
+    if path.exists():
+        return json.loads(path.read_text(encoding="utf-8"))
+    from astroquery.mast import Observations
+    found = Observations.query_criteria(obs_collection="TESS", dataproduct_type="timeseries", provenance_name="SPOC",
+                                        t_exptime=[119, 121], sequence_number=sector)
+    tics = sorted({int(n) for n in found["target_name"] if str(n).isdigit()})
+    path.parent.mkdir(parents=True, exist_ok=True)
+    records.write(path, tics, indent=None)
+    return tics
+
+
+def tess_screened_file():
+    return config.DATA / "cache" / "tess" / "screened.json"
+
+
+TESS_SECTOR = 14     # Cygnus and Lyra, where Kepler looked: the first sector screened
+
+
+def tess_screen(batch, sector=TESS_SECTOR, say=print, keep=False, analyse_star=None, only_report=False):
+    """The next `batch` of a sector's 2-minute TESS stars (in TIC order),
+    screened as `screen` does Kepler's, with the same states and coverage,
+    kept in cache/tess/screened.json."""
+    analyse_star = analyse_star or (lambda tic: analyse_tess(tic, say=lambda *_: None))
+    targets = tess_targets(sector)
+    order = f"sector {sector}'s 2-minute targets, in TIC order"
+    if only_report:
+        return report(screened(tess_screened_file()), len(targets), "TIC", order, say=say)
+    record, ran = _screen(targets, analyse_star, tess_store, tess_screened_file(), batch, "TIC", order, say, keep)
+    return report(record, len(targets), "TIC", order, ran, say)
+
+
 def run(args, say=print):
+    if args.action == "tess-screen":
+        return tess_screen(args.batch, args.sector, say=say, keep=args.keep, only_report=args.report)
     if args.action == "screen":
         return screen(args.batch, say=say, keep=args.keep, only_report=args.report)
     if args.action == "tess":
@@ -831,7 +911,8 @@ def run(args, say=print):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("action", choices=("dips", "tess", "search", "screen"))
+    ap.add_argument("action", choices=("dips", "tess", "search", "screen", "tess-screen"))
+    ap.add_argument("--sector", type=int, default=TESS_SECTOR, help=f"tess-screen: the sector (default {TESS_SECTOR})")
     ap.add_argument("--batch", type=int, default=100, help="screen: stars this run (default 100)")
     ap.add_argument("--keep", action="store_true", help="screen: keep every star's light curves")
     ap.add_argument("--report", action="store_true", help="screen: only the coverage and the ranking so far")
