@@ -76,6 +76,26 @@ whole slice, band shape and all, where this search takes the band's
 shape out first. That is a difference in method to be measured on real
 data, not a fault in either.
 
+On real data (3 November 2026): Tabby's star, Green Bank, 25 May 2017,
+2266.75 to 2269.60 MHz, one ON look (scan 31) and one OFF (scan 32),
+the same saved slices through both searches at SNR 10 and 4 Hz/s.
+
+| Look | this search | turboSETI | both |
+|---|---|---|---|
+| OFF (scan 32) | 2 | 2 | 2 |
+| ON (scan 31) | 61 | 10 | 5 |
+
+Outside one burst of interference at 2266.79 to 2266.91 MHz, turboSETI
+found nothing this search missed; this search found 5 more, weak (SNR
+11 to 19), four within 0.02 MHz of the slice's lower edge and one by
+the burst: the edge of a slice is still where it is least sure. In the
+burst it keeps 51 separate hits where turboSETI keeps 5: turboSETI
+folds a burst 110 kHz wide into fewer hits, and on the brightest the
+two drifts differ by about 0.07 Hz/s (more than the two steps the
+comparison allows). The whole cadence of that slice (all six looks,
+880 MB read in 23 minutes) gave no candidate: 13 hits of the first ON
+look were in an OFF look too, and 98 were not in every ON look.
+
 ## Tabby's star
 
 KIC 8462852 was observed by Green Bank in May 2017, among other times;
