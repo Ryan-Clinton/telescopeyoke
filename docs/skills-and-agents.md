@@ -127,7 +127,11 @@ cannot be forgotten by a blacklist.
    "focus now?"; "the tripod moved" loads `polar-align` without a slew.
 3. **`allowed-tools` only pre-approves.** In a skill it lets the listed
    tools run without a prompt; it removes nothing. A skill's
-   `allowed-tools` lists only `read_only` commands (tested). Restriction is
+   `allowed-tools` lists only `read_only` and `local_write` commands
+   (looking, and this computer's own records and caches; never the rig or
+   a message), and a `*` in one is tried with every word that raises any
+   script's class, so `./brokers.py *` is refused for letting in
+   `--follow` (tested). Restriction is
    an agent's `tools` and `disallowedTools`, a skill's `disallowed-tools`,
    and the hooks.
 4. **Agents never start a physical action**, and are given the fewest tools
@@ -421,7 +425,8 @@ judged by what they measured, not what they were meant to do.
 - `tests/test_skills.py`: valid frontmatter; `name` matching the folder;
   descriptions under 1024 characters; every `./COMMAND` a skill names
   exists and every flag it uses is in that command's `--help`; every
-  command in an `allowed-tools` is `read_only` by `policy.py`; the four
+  command in an `allowed-tools` is `read_only` or `local_write` by
+  `policy.py`, whatever its `*` stands for; the four
   manual skills have `disable-model-invocation: true`; every agent has
   `maxTurns`; none has both a web tool and Bash, and none that reads the
   web has Read; no agent but `docs-keeper` has Edit or Write.

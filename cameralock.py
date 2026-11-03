@@ -19,11 +19,19 @@ PATH = config.DATA / "cache" / "camera.lock"
 _HELD = {}          # path -> [open file, how many CameraLocks of this process share it]
 
 
+WIN_LOCK_AT = 1 << 20     # the byte locked on Windows; the text is one short line
+
+
 def _try_lock(handle):
     """True if this open file now holds the lock, False if another does."""
     if sys.platform == "win32":
         import msvcrt
         try:
+            # Always the same byte, past the text: Windows locks a byte range, and
+            # one at wherever the file then ended let a second command lock its
+            # own byte, think it held the camera, and be refused writing its name
+            # over the first one's; holder() still reads the text before it.
+            handle.seek(WIN_LOCK_AT)
             msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
             return True
         except OSError:

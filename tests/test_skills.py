@@ -82,11 +82,18 @@ def test_every_command_and_option_a_skill_names_exists(path):
 
 
 @pytest.mark.parametrize("path", SKILLS, ids=ids(SKILLS))
-def test_a_skill_pre_approves_only_what_is_read_only(path):
+def test_a_skill_pre_approves_nothing_that_moves_the_rig_or_reaches_outside(path):
+    """Looking, and writing this computer's own records (a screen's cache, a
+    lead's report): never the mount, focuser or camera, never a message.
+    A * stands for anything, so every word that raises any script's class
+    is tried in its place: ./brokers.py * would let in --follow."""
     fields, _ = split(path)
+    raising = {"X", *(word for _, worse, _ in policy.COMMANDS.values() for word in worse)}
     for rule in re.findall(r"Bash\(([^)]+)\)", fields.get("allowed-tools", "")):
-        command = rule.replace("*", "X")
-        assert policy.classify_text(command) in (None, "read_only"), f"{path.parent.name} pre-approves {rule}"
+        for word in raising if "*" in rule else {"X"}:
+            command = rule.replace("*", word)
+            assert policy.classify_text(command) in (None, "read_only", "local_write"), \
+                f"{path.parent.name} pre-approves {rule}, which lets in {command}"
     assert not re.search(r"(^|\s)Bash(\s|$)", fields.get("allowed-tools", "")), "never all of Bash"
 
 

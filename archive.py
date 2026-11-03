@@ -159,7 +159,7 @@ def fetch(kic, get=requests.get, say=print):
         reply.raise_for_status()
         part = folder / (url.rsplit("/", 1)[1] + ".part")
         part.write_bytes(reply.content)
-        part.rename(folder / url.rsplit("/", 1)[1])
+        part.replace(folder / url.rsplit("/", 1)[1])
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(FETCHING) as pool:
         list(pool.map(one, urls))
@@ -320,7 +320,7 @@ def tess_fetch(tic, say=print):
     for path in done["Local Path"]:
         source = Path(path)
         if source.exists() and source.parent != folder:
-            source.rename(folder / source.name)
+            source.replace(folder / source.name)
     import shutil
     shutil.rmtree(folder / "mastDownload", ignore_errors=True)
     if len(list(folder.glob("*_lc.fits"))) < len(products):
