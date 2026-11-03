@@ -225,3 +225,18 @@ instead of kept for good. Each daylight look now records the parts of its
 score (`features`: brightness, smoothness, colour, blue, grain), so the
 weights can be tried against looks a person has labelled; the looks so far
 did not record colour, so no benchmark has been made of them.
+
+## The targeted recheck, 14:06-14:14
+
+`./horizon.py --trace --daylight --only 30,45,52.5,165,270`, 17 looks:
+
+| Bearing | This time | Readings now | Used |
+|---|---|---|---|
+| 30° | top at 51.3°, then 51.6° | repeatable this time | 54° (checked by eye) |
+| 45° | open to 30° | 33°, 30° (two surveys agree) | 30° |
+| 52.5° | open to 20° | 20°, 20° (settled) | 20° |
+| 165° | top at 32.8° | 42°, 54°, 32.8° (no two agree) | 54°, the higher |
+| 270° | top at 35.2° (an edge, not a lone opening) | 33°, 32°, 35.2° | 35.2° |
+
+The west at 315° was not rechecked; 165° needs a fourth reading, best with
+the Sun elsewhere.
