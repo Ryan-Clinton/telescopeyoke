@@ -222,6 +222,8 @@ def crawl_text(s, live, now, targets):
         parts.append(f"{s.get('target')} nova patrol")
     elif s.get("kind") == "transit":
         parts.append(f"{s['transit']['planet']} transit")
+    elif s.get("kind") == "watch":
+        parts.append(f"{s['watch']['star']}: is it dimming tonight?")
     else:
         parts.append(f"imaging {s.get('target')}")
     parts += tonight_lines(s, live)[:2]
@@ -242,6 +244,9 @@ def host_line(s):
                 if s.get("lucky") else "TELESCOPEYOKE · I'm taking short exposures of the Moon and combining them.")
     if s.get("kind") == "patrol":
         return f"TELESCOPEYOKE · I'm searching this part of {name} for any star that wasn't here before."
+    if s.get("kind") == "watch":
+        return (f"TELESCOPEYOKE · I'm measuring how bright {s['watch']['star']} is tonight, "
+                "against the stars around it.")
     exposure = s.get("exposure")
     return (f"TELESCOPEYOKE · I'm building a deeper picture of {name}"
             + (f": another {exposure:g} s exposure is on its way." if exposure else "."))

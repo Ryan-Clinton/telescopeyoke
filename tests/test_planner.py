@@ -407,8 +407,11 @@ def test_tracing_leaves_out_what_the_mount_may_not_reach():
     assert found[0]["clear"] >= 50
     south = next(f for f in found if f["az"] == 180)
     assert {w["altitude"] for w in horizon.skyline_blocked(found)} == {south["clear"]}
-    # What could not be looked at is not in the skyline at all, blocked or open.
-    assert 270 not in [p["az"] for p in horizon.skyline_from(found, 20)]
+    # What could not be looked at is never open: with nothing measured before,
+    # it is in the skyline blocked and says so (2 November 2026: what a survey
+    # could not see was taken for sky).
+    west = [p for p in horizon.skyline_from(found, 20) if p["az"] == 270]
+    assert west == [{"az": 270, "alt": 90.0, "unmeasured": True, "by": "nothing: not measured"}]
 
 
 def test_the_week_is_seven_nights_running_each_with_a_verdict_or_none():

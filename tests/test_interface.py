@@ -123,7 +123,7 @@ def test_scenario_reject_below_horizon(quiet, monkeypatch):
 
 
 def test_scenario_refuse_beyond_hour_angle(quiet, monkeypatch):
-    sky(monkeypatch, 105.0, 45.0)
+    sky(monkeypatch, 120.0, 45.0)      # 8 h: past the 7.5 h limit measured clear on 2 November 2026
     error = refusal(lambda: mount.plan_goto("M81", SITE))
     assert error["code"] == SCENARIOS["refuse_beyond_hour_angle"]["expected_error"]
 

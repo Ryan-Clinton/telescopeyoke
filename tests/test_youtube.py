@@ -162,3 +162,17 @@ def test_a_ready_broadcast_on_an_arriving_stream_is_started(signed):
     get, post, sent = youtube_sky([stream("S1", "active")], [cast("B", "ready", "S1")])
     assert youtube.ensure_broadcast("t", "d", say=lambda s: None, get=get, post=post) == "B"
     assert [(name, params["broadcastStatus"]) for name, params, _ in sent] == [("transition", "live")]
+
+
+def test_before_the_stream_starts_a_broadcast_is_opened_on_the_channels_stream(signed):
+    """The broadcast must wait for the stream: auto-start acts when the
+    stream begins, and one made after sat at "ready" (2 November 2026)."""
+    youtube._keep({"refresh_token": "r", "access_token": "a", "expires_at": time.time() + 3600})
+    get, post, sent = youtube_sky([stream("Default", "ready"), stream("S1", "inactive")],
+                                  [cast("old1", "complete", "S1"), cast("old2", "complete", "S1")])
+    assert youtube.ensure_broadcast("t", "d", say=lambda s: None, get=get, post=post, before_start=True) == "NEW"
+    assert sent[1][0] == "bind" and sent[1][1]["streamId"] == "S1"
+    # Already one waiting: nothing new, and it is not started by hand.
+    get, post, sent = youtube_sky([stream("S1", "inactive")], [cast("B", "ready", "S1")])
+    assert youtube.ensure_broadcast("t", "d", say=lambda s: None, get=get, post=post, before_start=True) == "B"
+    assert not sent

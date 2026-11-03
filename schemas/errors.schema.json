@@ -14,10 +14,12 @@
     "code": {
       "enum": [
         "ALTITUDE_OUT_OF_RANGE",
+        "CAMERA_BUSY",
         "CAMERA_NOT_CONNECTED",
         "DEMO_UNSUPPORTED",
         "GOTO_REFUSED",
         "MOUNT_NOT_MOVING",
+        "FOCUSER_NOT_MOVING",
         "HANDSET_NOT_ANSWERING",
         "HANDSET_NOT_SET_UP",
         "HANDSET_NOT_SUPPORTED",

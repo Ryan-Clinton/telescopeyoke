@@ -45,10 +45,10 @@ def _lucky(now):
 
 def key_of(s, lucky=None):
     """Which mission a picture's state (streamlook.from_status) is: lucky,
-    mineral, live, patrol, transit, picture, focus or polar; None when the
+    mineral, live, patrol, transit, watch, picture, focus or polar; None when the
     telescope is doing nothing a viewer can follow."""
     kind = s.get("kind")
-    if kind in ("focus", "polar", "patrol", "transit"):
+    if kind in ("focus", "polar", "patrol", "transit", "watch"):
         return kind
     if kind == "moon":
         lucky = lucky or {}
@@ -59,6 +59,13 @@ def key_of(s, lucky=None):
     if kind == "picture" and s.get("target"):
         return "picture"
     return None
+
+
+def measuring(s):
+    """Whether frames are coming in now: the newest kept within three of its
+    exposures and a minute. Unknown counts as not."""
+    age, exposure = s.get("last_age"), s.get("exposure") or 0
+    return age is not None and age <= 3 * exposure + 60
 
 
 def _steps(labels, at, done=False):
@@ -99,7 +106,12 @@ def steps(key, s, lucky=None):
         if not t.get("ingress"):
             return []
         at = 0 if now < t["ingress"] else 1 if now <= t["egress"] else 2
-        return _steps(["Measure the star before", "The planet crosses", "Measure the star after", "Result"], at)
+        labels = ["Measure the star before", "The planet crosses", "Measure the star after", "Result"]
+        if not measuring(s):
+            # The clock says where the transit should be, not that it is being measured
+            # (1 November 2026): with no fresh frame the stage says so.
+            labels[at] += " (expected: no frames coming in)"
+        return _steps(labels, at)
     if key == "focus":
         return list((s.get("focus") or {}).get("steps") or [])
     if key == "polar":
@@ -181,6 +193,17 @@ def result_words(key, lucky=None):
     return None
 
 
+def title_words(s, target):
+    """What a stream title may name: the target as given, its common name with
+    the catalogue name ("Andromeda Galaxy (M31)"), and a transit's planet.
+    Searchers type the subject, so the titles lead with it (1 November 2026)."""
+    import streamlook
+    entry = streamlook.targets().get("targets", {}).get(target, {})
+    name = f"{entry['common']} ({target})" if entry.get("common") and target else target
+    planet = (s.get("transit") or {}).get("planet") or target or "an exoplanet"
+    return {"target": target, "name": name, "planet": planet}
+
+
 def of(s, now=None, lucky=None):
     """The mission for a picture's state: {"key", "title", "goal", "steps",
     "question", "next", "confidence", "result", "stream_title"}, or None."""
@@ -197,7 +220,7 @@ def of(s, now=None, lucky=None):
             "goal": entry.get("goal", "").format(target=target),
             "steps": found, "question": question(key, s, lucky, entry), "next": upcoming,
             "confidence": confidence(key, lucky, s.get("candidate")), "result": result_words(key, lucky),
-            "stream_title": entry.get("stream_title", "").format(target=target) or None}
+            "stream_title": entry.get("stream_title", "").format(**title_words(s, target)) or None}
 
 
 def context(m, s, now):
@@ -218,6 +241,20 @@ def context(m, s, now):
 REVEAL_S = 3 * 3600       # a lucky or mineral result is shown as tonight's for this long
 
 
+def same_run(web, target):
+    """Whether web/latest.jpg is a frame of the run going now and web/stack.jpg
+    that run's stack, from the notes written beside them (snap.label): a
+    RAW → RESULT pair is never a frame of one thing beside a stack of another
+    (a focus check or a look writes latest.jpg too)."""
+    def note(name):
+        try:
+            return json.loads((web / f"{name}.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+    raw, stack = note("latest"), note("stack")
+    return raw.get("kind") == "newest frame" and bool(target) and stack.get("target") == target
+
+
 def reveal(s, now, lucky_file=None):
     """{"before", "after", "before_path", "after_path"}: one raw frame and
     what was made of it, for the RESULT chapter; None when nothing has been
@@ -235,7 +272,8 @@ def reveal(s, now, lucky_file=None):
     if s.get("kind") == "moon" and done and p.get("frames"):
         return {"before": "ONE RAW FRAME", "after": f"THE SHARPEST {p.get('kept', 0):,} OF {p['frames']:,} COMBINED",
                 "before_path": str(raw), "after_path": str(web / "stack.jpg")}
-    if s.get("kind") in ("picture", "patrol", "transit") and (s.get("combined") or 0) > 1:
+    if s.get("kind") in ("picture", "patrol", "transit") and (s.get("combined") or 0) > 1 \
+            and same_run(web, s.get("target")):
         exposure = f"{s['exposure']:g} S " if s.get("exposure") else ""
         minutes = f" · {s['integration_s'] / 60:.0f} MIN" if s.get("integration_s") else ""
         return {"before": f"ONE {exposure}EXPOSURE", "after": f"{s['combined']:,} STACKED{minutes}",

@@ -5,6 +5,7 @@ route to a made-up copy of Altair's wrapper."""
 import ctypes
 import io
 import json
+import os
 import sys
 import threading
 import time
@@ -402,7 +403,7 @@ def test_a_late_frame_never_answers_the_next_request(sdk, world):
     with altair.AltairCamera() as cam:
         # The first try and its retry both time out; their frames arrive 0.2
         # and 0.5 s into the 1 s exposure that follows.
-        world.delays, world.level = [0.8, 0.8, 0.8], 111
+        world.delays, world.level = [0.8, 0.8, 0.8, 0.8], 111
         with pytest.raises(IndiError):
             cam.frame(0.01)
         altair.wait_for = lambda seconds: 3.0
@@ -416,7 +417,7 @@ def late_frame_lands_near_the_end_of_the_next_exposure(cam, world):
     cancel, turns up 1.9 s into the 2 s exposure that follows: too late for
     "it came back before the shutter could have closed" to catch."""
     world.obeys_cancel = False
-    world.delays, world.level = [99, 99, 2.2], 111     # the third try's frame is the late one
+    world.delays, world.level = [99, 99, 99, 2.2], 111     # the last try's frame is the late one
     with pytest.raises(IndiError):
         cam.frame(0.01)
     altair.wait_for = lambda seconds: 6.0
@@ -1272,7 +1273,7 @@ def test_a_frame_back_too_soon_is_named_and_every_retry_is_said(sdk, world, caps
             cam.frame(1.0)
         assert cam.early and cam.early[0] < 0.9
     said = capsys.readouterr().err
-    assert said.count("trying again") == 2 and "too soon" in said
+    assert said.count("trying again") == 3 and "too soon" in said
 
 
 def test_without_the_setting_a_lost_frame_starts_no_probe(sdk, world, monkeypatch):
@@ -1324,3 +1325,51 @@ def test_the_cooldown_reads_the_body_s_thermistor_and_the_time_since_power():
     class Done:
         stdout = "1793500000.0 PastieLaptop kernel: usb 2-1.1: Product: ALTAIRH183C\n"
     assert camera_test.since_plugged_in(run=lambda *a, **k: Done, now=1793500000.0 + 600) == 10.0
+
+
+@pytest.mark.skipif(os.name == "nt", reason="the hub's power is cut on Linux only")
+def test_a_jammed_camera_has_its_power_cut_at_the_hub_and_carries_on(sdk, world, monkeypatch, capsys):
+    """1 November 2026: the jam cleared only when the camera's power was cut,
+    which took a walk outside to the hub's button. With power_cycle_on_jam the
+    second retry cuts it from the laptop first, and the run carries on."""
+    import usbpower
+    monkeypatch.setitem(altair.SETTINGS["camera"], "power_cycle_on_jam", True)
+    monkeypatch.setitem(altair.SETTINGS["camera"], "readout_speed", 2)
+    cut = []
+
+    def cycle(**_):
+        cut.append(True)
+        world.loses = None                      # the power cut clears the jam
+        return {"back": True}
+    monkeypatch.setattr(usbpower, "cycle", cycle)
+    a_failing_camera(world)
+    with altair.AltairCamera() as cam:
+        data, _ = cam.frame(0.05)
+    assert cut == [True] and data is not None
+    assert capsys.readouterr().err.count("trying again") == 2
+
+
+def test_without_the_setting_the_power_is_never_cut(sdk, world, monkeypatch):
+    import usbpower
+    monkeypatch.setattr(usbpower, "cycle", lambda **_: pytest.fail("power cut"))
+    a_failing_camera(world)
+    with altair.AltairCamera() as cam:
+        cam.handle.put_Speed(2)
+        with pytest.raises(IndiError):
+            cam.frame(0.05)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="the hub's power is cut on Linux only")
+def test_a_power_cut_that_cannot_be_made_falls_back_to_opening_it_again(sdk, world, monkeypatch, capsys):
+    import usbpower
+    monkeypatch.setitem(altair.SETTINGS["camera"], "power_cycle_on_jam", True)
+
+    def cycle(**_):
+        raise usbpower.PowerError("uhubctl is not installed")
+    monkeypatch.setattr(usbpower, "cycle", cycle)
+    a_failing_camera(world)
+    with altair.AltairCamera() as cam:
+        cam.handle.put_Speed(2)
+        with pytest.raises(IndiError):
+            cam.frame(0.05)
+    assert "could not cut its power: uhubctl is not installed" in capsys.readouterr().err

@@ -550,7 +550,7 @@ def eye(site, exposure, gain, daylight=False, torch=False):
         # (6 October 2026: 5.8° in Dec on one side, 0.2° on the other).
         try:
             ra_axis, dec_axis = scope.axes()
-            where = {"axes": [round(ra_axis, 2), round(dec_axis, 2)], "over": dec_axis > 90}
+            where = {"axes": [round(ra_axis, 2), round(dec_axis, 2)], "over": mount.over_pole(dec_axis)}
         except Exception:
             where = {}
         if daylight:

@@ -255,8 +255,8 @@ def test_targets_too_low_or_too_far_round_are_refused(scope, monkeypatch):
     monkeypatch.setattr(mount, "where", lambda target, site, when=None: (30.0, 20.0, 12.0))
     with pytest.raises(SystemExit, match="only 12° up"):
         scope.goto_target("Vega", SITE)
-    monkeypatch.setattr(mount, "where", lambda target, site, when=None: (100.0, 60.0, 45.0))
-    with pytest.raises(SystemExit, match="beyond the 5.75 h limit"):
+    monkeypatch.setattr(mount, "where", lambda target, site, when=None: (120.0, 60.0, 45.0))
+    with pytest.raises(SystemExit, match="beyond the 7.5 h limit"):
         scope.goto_target("Vega", SITE)
     assert scope.axes() == pytest.approx([90, SITE["latitude"]], abs=0.2)  # never moved
 
@@ -618,3 +618,32 @@ def test_a_plate_solve_gives_up_when_the_camera_never_sends_a_picture(scope, mon
     monkeypatch.setattr(camera, "Camera", Gone)
     with pytest.raises(IndiError):
         scope.where_really(10, 20)
+
+
+def test_the_clearance_test_alone_goes_past_the_hour_angle_limit_and_only_so_far(scope, monkeypatch):
+    """2 November 2026: 5.75 h was a first-night guess; the clearance test,
+    with the person watching, finds where the tube really meets the tripod."""
+    monkeypatch.setattr(mount, "MAX_HOUR_ANGLE", 5.75)
+
+    def hours(az, alt):
+        try:
+            return abs(mount.direction(az, alt, SITE)[0]) / 15
+        except mount.Refusal:       # near the Sun at the hour the tests run
+            return 0.0
+    past = next((az, alt) for alt in range(25, 60, 5) for az in range(5, 90, 5) if 6.2 < hours(az, alt) < 7.5)
+    beyond = next((az, alt) for alt in range(20, 60, 5) for az in range(5, 90, 5) if hours(az, alt) > 8.2)
+    with pytest.raises(mount.Refusal) as refused:
+        mount.plan_point(*past, SITE)
+    assert refused.value.code_name == "TARGET_BEYOND_HOUR_ANGLE_LIMIT"
+    plan = mount.plan_point(*past, SITE, clearance_test=True)
+    assert any(w.startswith("Clearance test:") for w in plan["warnings"])
+    with pytest.raises(mount.Refusal, match="8.0 h limit"):
+        mount.plan_point(*beyond, SITE, clearance_test=True)
+    with pytest.raises(mount.Refusal) as low:
+        mount.plan_point(past[0], 15, SITE, clearance_test=True)
+    assert low.value.code_name == "TARGET_BELOW_ALTITUDE_LIMIT"
+    # Pointing there on the simulated mount gets there and holds still.
+    scope.point(*past, SITE, clearance_test=True)
+    with pytest.raises(mount.Refusal):
+        scope.point(*past, SITE)
+

@@ -33,7 +33,10 @@ ERRORS = {
     "GOTO_REFUSED": (True, "The handset would not accept the GoTo."),
     "MOUNT_NOT_MOVING": (False, "The mount says it moved and the camera says it did not. Watch one small "
                                 "move; if the tube does not turn, switch the mount off and on."),
+    "FOCUSER_NOT_MOVING": (False, "The focuser's motor turns and the stars do not change. Watch "
+                                  "./focuser.py test: if the knob stays still, the coupler is slipping."),
     "PLATE_SOLVE_FAILED": (True, "Usual causes: cloud, focus, too few stars. Take a frame and look."),
+    "CAMERA_BUSY": (True, "Another command has the camera: let it finish, or stop it, then try again."),
     "CAMERA_NOT_CONNECTED": (False, "Plug in the camera. Through INDI, start its driver; on Windows, "
                                     "see what doctor.py says about the camera."),
     "NO_STARS": (True, "No stars in the frame: cloud, the cap, or far out of focus. Look at "

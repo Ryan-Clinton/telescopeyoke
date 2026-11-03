@@ -14,6 +14,8 @@
     ./camera_test.py --order            cap on: whether the order speed and exposure are set in decides the timing state
     ./camera_test.py --scan             the same light: where each exposure really starts and ends, a flash moved through it
     ./camera_test.py --timed-light --repeat 3 --between replug   again after the camera is closed, or dropped from USB
+    ./camera_test.py --power-cycle      the camera jammed: cut its power at the hub's port and give it back,
+                                        as the hub's button does (usbpower.py); --off SECONDS without power
 
 With [camera] backend = "altair" the camera is read through Altair's own
 library: --capabilities then shows the model, versions and how it is
@@ -640,6 +642,10 @@ def main():
     what.add_argument("--speed-ladder", action="store_true",
                       help="cap on: the fastest readout speed at which every --frames exposure of --exposure s "
                            "arrives (default 3 of 16 s); --keep-best sets it in config.toml")
+    what.add_argument("--power-cycle", action="store_true",
+                      help="cut the camera's power at the powered hub's port for --off seconds (default 8) and "
+                           "give it back, as pressing the hub's port button twice does: what clears the jam "
+                           "(usbpower.py, through uhubctl)")
     what.add_argument("--cooldown", action="store_true",
                       help="cap on: the stripes, failed frames and timing every few minutes as the camera cools, "
                            "with the air temperature, dew point and USB port")
@@ -667,6 +673,8 @@ def main():
     ap.add_argument("--light", help="with --timed-light or --scan: a Hue light's name, instead of the laptop's screen")
     ap.add_argument("--repeat", type=int, default=1,
                     help="with --timed-light or --scan: how many times, with --between done in between")
+    ap.add_argument("--off", type=float, default=None, metavar="SECONDS",
+                    help="with --power-cycle: how long the camera is without power (default 8)")
     ap.add_argument("--between", choices=["nothing", "reopen", "replug"], default="reopen",
                     help="with --repeat: the camera closed and opened again, or dropped from USB and found again "
                          "by Altair's library (replug), between the runs")
@@ -1054,6 +1062,13 @@ def run(args):
         return stripes_in(args.stripes)
     if getattr(args, "stripes_weather", False):
         return stripes_weather()
+    if getattr(args, "dry_run", False) and getattr(args, "power_cycle", False):
+        import usbpower
+        place = usbpower.find() or usbpower.remembered()
+        note = (f"Cuts the camera's power at the hub ({place or 'not seen yet'}) for "
+                f"{args.off or usbpower.OFF_S:g} s and gives it back. No frames; the mount is not touched.")
+        print("Would not move the mount. " + note)
+        return {"would_move": False, "safe": True, "camera_place": place}, [note]
     if getattr(args, "dry_run", False):
         note = ("Stops the mount following the sky for one frame of "
                 f"{args.exposure or 10.0:g} s, so the stars trail, and starts it following again. Nothing is slewed."
@@ -1111,6 +1126,12 @@ def run(args):
         found = usb_report(lines, device)
         print(json.dumps(found, indent=1))
         return found
+    if args.power_cycle:
+        import usbpower
+        try:
+            return usbpower.cycle(off=args.off or usbpower.OFF_S)
+        except usbpower.PowerError as problem:
+            raise interface.Refusal("CAMERA_NOT_CONNECTED", str(problem))
     if args.cooldown:
         return cooldown(args.exposure or 16.0, args.gain, args.frames or 20, args.every, args.steps, args.note)
     if args.throughput:

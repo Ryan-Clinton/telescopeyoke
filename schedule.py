@@ -9,6 +9,7 @@ each is expected to start and finish, for the console to show.
                                           more of whatever was imaged last, until then
     ./schedule.py wait "M31 novae" 30 PID  a step already running elsewhere, by its process id
     ./schedule.py run                     run the queued steps, one after the other
+    ./schedule.py fill                    what from tonight's discovery list fills the first gap
     ./schedule.py clear                   start a new schedule
     ./schedule.py end                     the night is over: park the mount and tell the person
     ./schedule.py guard                   the same, if a night's imaging has stopped and it is morning
@@ -48,7 +49,9 @@ from pathlib import Path
 
 import activity
 import config
+import interface
 import records
+import storage
 
 FILE = config.DATA / "cache" / "schedule.json"
 RUNNER = config.DATA / "cache" / "schedule.runner"     # the process id of `schedule.py run` while it runs
@@ -168,6 +171,52 @@ def add(label, minutes, command, not_before_=None, pid=None, until=None):
                           "pid": pid, "status": "running" if pid else "queued",
                           "started": time.time() if pid else None, "finished": None})
     save(plan)
+    return step_id
+
+
+def find(ref, plan):
+    """The index of a step by its number as the schedule shows it (1 is the
+    first) or by its id; a refusal if there is none."""
+    steps = plan["steps"]
+    if str(ref).isdigit() and 1 <= int(ref) <= len(steps):
+        return int(ref) - 1
+    for i, step in enumerate(steps):
+        if step.get("id", step["label"]) == ref or step["label"] == ref:
+            return i
+    raise interface.Refusal("INVALID_REQUEST", f"No step {ref} in tonight's schedule.")
+
+
+def skip(ref):
+    """A queued step left out, while the schedule runs: the runner reads the
+    plan again before every step (1 November 2026: changing the plan meant
+    stopping the runner and editing its file by hand)."""
+    plan = load()
+    i = find(ref, plan)
+    if plan["steps"][i]["status"] != "queued":
+        raise interface.Refusal("INVALID_REQUEST", f"Step {i + 1} is {plan['steps'][i]['status']}, not queued.")
+    plan["steps"][i].update(status="skipped", finished=time.time())
+    save(plan)
+    return plan["steps"][i]["label"]
+
+
+def move(ref, position):
+    """A queued step moved to `position` (1 is the first), among the rest."""
+    plan = load()
+    i = find(ref, plan)
+    if plan["steps"][i]["status"] != "queued":
+        raise interface.Refusal("INVALID_REQUEST", f"Step {i + 1} is {plan['steps'][i]['status']}, not queued.")
+    step = plan["steps"].pop(i)
+    plan["steps"].insert(max(0, min(int(position) - 1, len(plan["steps"]))), step)
+    save(plan)
+    return step["label"]
+
+
+def next_step(tell=None):
+    """End the step that is running now, gracefully: its run finishes after
+    the frame it is taking, keeps its picture and search, and the schedule
+    goes on to the next step."""
+    import shoot
+    return (tell or shoot.tell)("stop")
 
 
 def mark(index, **fields):
@@ -181,20 +230,52 @@ def alive(pid):
     return host.alive(pid)
 
 
-def run(say=print, sleep=time.sleep, call=None, start=subprocess.run):
+BACKSTOP_S = 240   # a step told its end time is stopped this long after it, whatever it is doing
+                   # (was 900: on 2 November 2026 the M31 panels ran 10 minutes into the transit's time)
+RETRIES = 2       # a failed step is started again this many times before the person is fetched
+RETRY_S = 30      # seconds between
+
+
+SOURCE = Path(__file__).resolve()
+
+
+def restart():
+    """The runner started again in its own process, with the code on disk now."""
+    os.execv(sys.executable, [sys.executable, str(SOURCE), "run"])
+
+
+def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=None):
     """The queued steps in order. A step given by process id is waited for;
     the rest are started here, each when the one before has ended and not
     before its time. The plan is read again before every step and each step
     found by its id, so steps can be added, moved or dropped while it runs
     (20 October 2026: a step added mid-night needed the runner restarting,
-    since it worked from the plan it had read at the start, by position)."""
+    since it worked from the plan it had read at the start, by position).
+    With `reload` (restart() from the command line), a runner whose own
+    code has changed on disk starts again with it between steps: on 2
+    November 2026 a runner started at 02:03 ran M81 and SN 2026sqf with the
+    code from before steps were told their time, and both were cut off
+    unstacked."""
     try:
         RUNNER.parent.mkdir(parents=True, exist_ok=True)
         RUNNER.write_text(str(os.getpid()), encoding="utf-8")
     except OSError:
         pass
     ran = False
+    try:
+        loaded = SOURCE.stat().st_mtime
+    except OSError:
+        loaded = None
     while True:
+        if reload and loaded is not None:
+            try:
+                now_ = SOURCE.stat().st_mtime
+            except OSError:
+                now_ = loaded
+            if now_ != loaded:
+                say(f"{datetime.now():%H:%M} schedule.py has changed: starting again with the new code")
+                reload()
+                return True
         plan = load()
         steps = plan["steps"]
         for step in steps:
@@ -234,7 +315,21 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run):
                 mark_id(step["id"], status="skipped", started=time.time(), finished=time.time())
                 say(f"{datetime.now():%H:%M} {step['label']}: skipped, {max(left, 0)} s left")
                 continue
+            if any(Path(c).name in ("shoot.py", "patrol.py") for c in command[:2]):
+                # The run is told its time and finishes gracefully, picture and all;
+                # the hard stop is a backstop only (1 November 2026: steps cut off
+                # mid-picture, and private timers that stopped the wrong run).
+                command = command + ["--minutes", f"{left / 60:.1f}"]
+                left += BACKSTOP_S
             command = ["timeout", "--signal=INT", str(left)] + command
+        try:
+            if storage.words():
+                # Room first: finished Moon videos go to the storage disk.
+                storage.tidy(say=say)
+                if storage.words():
+                    say(f"{datetime.now():%H:%M} {storage.words()}")
+        except Exception as problem:     # room is a help: the step runs all the same
+            say(f"{datetime.now():%H:%M} disk not checked: {problem.__class__.__name__}: {problem}")
         say(f"{datetime.now():%H:%M} starting {step['label']}")
         ran = True
         mark_id(step["id"], status="running", started=time.time())
@@ -251,8 +346,23 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run):
         ok = done.returncode == 0 or (step.get("until") and done.returncode == 124)
         mark_id(step["id"], status="done" if ok else "failed", finished=time.time(), exit=done.returncode)
         say(f"{datetime.now():%H:%M} {step['label']} {'done' if ok else f'failed (exit {done.returncode})'}")
+        if not ok and step.get("tries", 0) < RETRIES:
+            # Tried again by itself before anyone is fetched: on 1 November 2026
+            # the camera jammed on a transit, the person was called, and the
+            # same step started again cleared it ("i would rather that was
+            # tried b4 i got notified").
+            tries = step.get("tries", 0) + 1
+            mark_id(step["id"], status="queued", tries=tries)
+            say(f"{datetime.now():%H:%M} trying {step['label']} again ({tries} of {RETRIES}) in {RETRY_S} s")
+            sleep(RETRY_S)
+            continue
         if not ok:
-            (call or fetch)(f"The telescope needs you: {step['label']} stopped with an error.")
+            try:
+                offer = fill_words(fill())
+            except Exception as problem:    # the offer is a help: the person is fetched all the same
+                offer = f"No offer to fill the time: {problem.__class__.__name__}: {problem}"
+            (call or fetch)(f"The telescope needs you: {step['label']} stopped with an error"
+                            + (f", and again after {RETRIES} more tries. " if RETRIES else ". ") + offer)
             return False
 
 
@@ -469,15 +579,192 @@ def last_field():
     return max(sessions, key=lambda d: d.stat().st_mtime).parent.name if sessions else None
 
 
+def step_target(command):
+    """The object a step points the telescope at, by name, from its command:
+    shoot.py NAME, patrol.py PROGRAMME (its programme's target) or a goto
+    NAME. None when it names none ({last}, a park, a survey)."""
+    words = list(command or [])
+    for i, word in enumerate(words):
+        script = Path(word).name
+        after = words[i + 1] if i + 1 < len(words) else None
+        if script in ("shoot.py", "patrol.py") and after and not after.startswith(("-", "{")):
+            if script == "patrol.py":
+                import patrol
+                return patrol.programme(after).get("target")
+            return after
+        if word == "goto" and after and not after.startswith("-"):
+            return after
+    return None
+
+
+def path(step, settings, find=None, where=None):
+    """Where a step's target is at its start, middle and end, against what is
+    in the way: the floor, the blocked list and the spot's measured skyline.
+    `step` is one of view()'s steps. Returns None for a step with no target,
+    else {"target", "points": [{"at", "alt", "az", "limit"}], "behind": the
+    points under their limit, "skyline": whether one is measured here}.
+    1 November 2026: TOI-2046 b was planned from a spot with no skyline, and
+    the corner of the house took the whole transit."""
+    name = step_target(step.get("command"))
+    if not name or step.get("start") is None or step.get("end") is None:
+        return None
+    import horizon
+    find = find or (lambda n: __import__("mount").find_target(n))
+    try:
+        target = find(name)
+    except interface.Refusal:
+        return None
+    where = where or altaz(settings["site"])
+    view_ = settings.get("horizon", {})
+    floor = float(view_.get("min_altitude", 0))
+    points = []
+    for at in (step["start"], (step["start"] + step["end"]) / 2, step["end"]):
+        alt, az = where(target["ra"], target["dec"], at)
+        limit = max(floor, horizon.in_the_way(view_, az))
+        points.append({"at": at, "alt": round(alt, 1), "az": round(az, 1), "limit": round(limit, 1)})
+    return {"target": name, "points": points, "behind": [p for p in points if p["alt"] < p["limit"]],
+            "skyline": bool(view_.get("skyline"))}
+
+
+def altaz(site):
+    """(altitude, azimuth) in degrees of a fixed RA and Dec at a unix time."""
+    def at(ra, dec, unix):
+        import mount
+        from astropy import units as u
+        from astropy.coordinates import AltAz, SkyCoord
+        from astropy.time import Time
+        when = Time(unix, format="unix")
+        seen = SkyCoord(ra=ra * u.deg, dec=dec * u.deg).transform_to(
+            AltAz(obstime=when, location=mount.location(site)))
+        return float(seen.alt.deg), float(seen.az.deg)
+    return at
+
+
+def path_words(checked):
+    """One line on a step's path, or None when nothing is in its way and the
+    spot's skyline is measured."""
+    if not checked:
+        return None
+    when = lambda t: datetime.fromtimestamp(t).strftime("%H:%M")
+    if checked["behind"]:
+        p = checked["behind"][0]
+        return (f"{checked['target']} is behind something at {when(p['at'])}: bearing {p['az']:.0f}°, "
+                f"{p['alt']:.0f}° up, where the view starts at {p['limit']:.0f}°"
+                + ("" if checked["skyline"] else " (no skyline measured at this spot)"))
+    if not checked["skyline"]:
+        low = min(checked["points"], key=lambda p: p["alt"] - p["limit"])
+        return (f"no skyline measured at this spot: {checked['target']} is checked against the blocked "
+                f"list only (lowest {low['alt']:.0f}° up at bearing {low['az']:.0f}°)")
+    return None
+
+
+def settings():
+    return config.load() if config.FILE.exists() and not config.DEMO else config.example()
+
+
+FILL_GAP_S = 600       # a wait between steps shorter than this is not worth filling
+FILL_OPEN_S = 4 * 3600  # how far ahead to look when nothing queued keeps to the clock
+
+
+def gap(plan=None, now=None):
+    """The first stretch of the schedule from now with nothing to do: (start,
+    end, the 1-based place a step would go to fill it), end None when nothing
+    queued after it keeps to the clock. None when the plan has no such gap."""
+    now = time.time() if now is None else now
+    steps = view(plan, now)["steps"]
+    free = now
+    for place, s in enumerate(steps, 1):
+        if s["status"] in ("done", "failed", "skipped"):
+            continue
+        if s["status"] == "queued" and s["start"] - free >= FILL_GAP_S:
+            return free, s["start"], place
+        free = max(free, s["end"])
+    return free, None, len(steps) + 1
+
+
+def fill(plan=None, now=None, programmes=None, check=None):
+    """What to put in the time a lost step leaves: the first of tonight's
+    discovery programmes (in the order they come best) that is up at the
+    start of the gap, fits it, has not been done tonight, and whose path is
+    clear of everything known to be in the way. Returns {"label", "minutes",
+    "command", "at", "words": the one command that takes it} or None.
+    `programmes` and `check` stand in for agent.discovery_tonight() and
+    path() (for the tests). 1 November 2026: when TOI-2046 b went behind the
+    house, the telescope waited for a person to choose what next."""
+    plan = load() if plan is None else plan
+    now = time.time() if now is None else now
+    found = gap(plan, now)
+    if not found:
+        return None
+    start, end, place = found
+    room = (end - start) / 60 if end else FILL_OPEN_S / 60
+    if programmes is None:
+        import agent
+        programmes = agent.discovery_tonight()
+    done = " ".join(" ".join(s.get("command") or []) for s in plan["steps"] if s.get("status") == "done")
+    cfg = None
+    for p in programmes:
+        if not p.get("command") or not p.get("minutes") or p["minutes"] > room:
+            continue
+        window = p.get("in_clear") or p.get("window")
+        if not window:
+            continue
+        opens, closes = (t.timestamp() if hasattr(t, "timestamp") else datetime.fromisoformat(t).timestamp()
+                         for t in window)
+        if not (opens <= start and start + 60 * p["minutes"] <= closes):
+            continue
+        if p["programme"] in done:
+            continue
+        step = {"command": p["command"].split(), "start": start, "end": start + 60 * p["minutes"]}
+        if check is None:
+            cfg = cfg or settings()
+        checked = (check or (lambda s: path(s, cfg)))(step)
+        if checked and checked["behind"]:
+            continue
+        label = f"{p['field']}: {p['programme']}, filling a lost step"
+        words = (f"./schedule.py add \"{label}\" {p['minutes']:g} --at {place} -- {p['command']}")
+        return {"label": label, "minutes": p["minutes"], "command": p["command"].split(), "at": place,
+                "start": start, "words": words}
+    return None
+
+
+def fill_words(offer):
+    """The offer said to a person, or that nothing fits."""
+    if not offer:
+        return "Nothing from tonight's discovery list fits the time left."
+    return (f"To fill the time from {datetime.fromtimestamp(offer['start']):%H:%M}: {offer['label']} "
+            f"({offer['minutes']:g} min): {offer['words']}")
+
+
 def fetch(words):
     subprocess.run([sys.executable, str(config.ROOT / "alert.py"), "call", words])
 
 
-def show(say=print):
-    for s in view()["steps"]:
+def show(say=print, check=None):
+    """The schedule, with a line under each step still to come whose target
+    is in the way of something, or unchecked for want of a skyline."""
+    cfg = None
+    steps = view()["steps"]
+    if any(s.get("status") == "queued" for s in steps):
+        try:
+            low = storage.words()
+        except OSError:
+            low = None
+        if low:
+            say(f"! {low}; ./storage.py --tidy moves finished Moon videos to the storage disk")
+    for s in steps:
         when = lambda t: datetime.fromtimestamp(t).strftime("%H:%M") if t else "--:--"
         done = "" if s["progress"] is None else f" {round(100 * s['progress'])}%"
         say(f"{when(s['start'])}-{when(s['end'])}  {s['status']:8}{done:>5}  {s['label']}")
+        if s.get("status") in ("queued", "running") and s.get("command"):
+            try:
+                if check is None:
+                    cfg = cfg or settings()
+                words = path_words((check or (lambda step: path(step, cfg)))(s))
+            except Exception as problem:    # the check is a help: the schedule shows all the same
+                words = f"path not checked: {problem.__class__.__name__}: {problem}"
+            if words:
+                say(f"             ! {words}")
 
 
 def main(argv=None):
@@ -493,6 +780,14 @@ def main(argv=None):
     w.add_argument("label")
     w.add_argument("minutes", type=float)
     w.add_argument("pid", type=int)
+    a.add_argument("--at", type=int, metavar="N", help="put it at this place in the schedule (1 is the first)")
+    sk = sub.add_parser("skip", help="leave out a queued step, while the schedule runs")
+    sk.add_argument("step", help="its number as shown, or its label")
+    mv = sub.add_parser("move", help="move a queued step to another place")
+    mv.add_argument("step")
+    mv.add_argument("position", type=int)
+    sub.add_parser("next", help="end the step running now gracefully and go on to the next")
+    sub.add_parser("fill", help="the discovery programme that best fills the first gap, as one command")
     sub.add_parser("run")
     sub.add_parser("clear")
     sub.add_parser("end")
@@ -508,13 +803,33 @@ def main(argv=None):
             args.not_before = before[before.index("--not-before") + 1]
         if "--until" in before:
             args.until = before[before.index("--until") + 1]
+        if "--at" in before:
+            args.at = int(before[before.index("--at") + 1])
         if not command:
             ap.error("add needs the command after --")
-        add(args.label, args.minutes, command, args.not_before, until=args.until)
+        added = add(args.label, args.minutes, command, args.not_before, until=args.until)
+        if args.at:
+            move(len(load()["steps"]), args.at)
+        step = next((s for s in view()["steps"] if s.get("id") == added), None)
+        try:
+            words = path_words(path(step, settings())) if step else None
+        except Exception as problem:     # the check is a help: the step is added all the same
+            words = f"path not checked: {problem.__class__.__name__}: {problem}"
+        if words:
+            print(f"! {words}")
+    elif args.action == "skip":
+        print(f"left out: {skip(args.step)}")
+        print(fill_words(fill()))
+    elif args.action == "move":
+        print(f"moved: {move(args.step, args.position)}")
+    elif args.action == "fill":
+        print(fill_words(fill()))
+    elif args.action == "next":
+        print(next_step()["note"])
     elif args.action == "wait":
         add(args.label, args.minutes, None, pid=args.pid)
     elif args.action == "run":
-        sys.exit(0 if run() else 1)
+        sys.exit(0 if run(reload=restart) else 1)
     elif args.action == "clear":
         save({"steps": [], "made": time.time()})
     elif args.action == "end":

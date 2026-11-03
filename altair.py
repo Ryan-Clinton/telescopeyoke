@@ -47,9 +47,13 @@ WATCHED = (("low_power", "LOW_POWERCONSUMPTION"), ("low_power_above_ms", "LOW_PO
 
 
 def wait_for(seconds):
-    """Longest wait for a frame. It is the INDI route's figure, kept as the
-    upper limit until the SDK's real timing has been measured."""
-    return 12 + 6 * seconds
+    """Longest wait for a frame. Measured through the SDK: a 16 s frame
+    comes back after about 20.5 s, and speed 0 in the fault gathers for
+    1.27 times the time asked (docs/camera-fault.md), so 10 s more than
+    half again the exposure is ample. It was the INDI route's 12 + 6 x
+    the exposure, 108 s for 16 s: on 1 November 2026 a jam took about seven
+    minutes over four tries to be said, while the person waited outside."""
+    return 10 + 1.5 * seconds
 
 
 def sdk():
@@ -127,6 +131,22 @@ def choose(lib, wanted=None):
                   "serial = \"...\" under [camera] in config.toml.")
 
 
+def _terminated(signum, frame):
+    raise KeyboardInterrupt(f"stopped by signal {signum}")
+
+
+def stop_on_terminate():
+    """A plain kill (SIGTERM) ends a command the way Ctrl-C does, so the
+    camera is closed and the mount stopped on the way out. Without this a
+    kill ends Python at once and nothing is tidied up. Only from the main
+    thread, and never over a handler the command set itself."""
+    import signal
+    if threading.current_thread() is not threading.main_thread() or not hasattr(signal, "SIGTERM"):
+        return
+    if signal.getsignal(signal.SIGTERM) in (signal.SIG_DFL, None):
+        signal.signal(signal.SIGTERM, _terminated)
+
+
 class AltairCamera:
     def __init__(self, gain=300):
         self.gain = gain
@@ -143,13 +163,22 @@ class AltairCamera:
         self.refuses_binning = False     # asked once and it failed: not asked again
         self.probed = False       # camera_probe.py has run on this camera (once is enough)
         self._forget_clock()
-        self._open()
+        # One command at a time, and a second one told which (cameralock.py).
+        from cameralock import CameraLock
+        self.lock = CameraLock()
+        stop_on_terminate()
+        try:
+            self._open()
+        except BaseException:
+            self.lock.release()
+            raise
 
     def __enter__(self):
         return self
 
     def __exit__(self, *exc):
         self.close()
+        self.lock.release()
 
     # --- opening and closing ---------------------------------------------------
 
@@ -223,6 +252,23 @@ class AltairCamera:
             self.close()
             self._open()      # on the full sensor, as it always was
         return self.binning
+
+    def _cycles_power(self):
+        return bool(SETTINGS["camera"].get("power_cycle_on_jam")) and not host.WINDOWS
+
+    def _power_cycle(self):
+        """Cut the closed camera's power at the hub and give it back. True
+        once it is on USB again; False when that is not set up or not
+        possible, said, so the caller opens it again as before."""
+        if not self._cycles_power():
+            return False
+        import usbpower
+        say = lambda line: print(f"camera: {line}", file=sys.stderr, flush=True)
+        try:
+            return usbpower.cycle(say=say)["back"]
+        except usbpower.PowerError as problem:
+            say(f"could not cut its power: {problem}")
+            return False
 
     def close(self):
         handle, self.handle = self.handle, None
@@ -418,21 +464,28 @@ class AltairCamera:
 
     def frame(self, seconds):
         """One exposure as (uint16 Bayer mosaic, FITS header). An exposure
-        that fails is tried once more, then once more with the camera closed
+        that fails is tried once more, then twice more with the camera closed
         and opened again. With [camera] probe_on_loss, the first frame
         lost is followed at once by camera_probe.py's look at the camera
         in that state, before it can clear (31 October 2026: the fault
         comes and goes, and hours spent making it happen found nothing);
-        the speed is not changed for the frames that follow."""
+        the speed is not changed for the frames that follow.
+
+        With [camera] power_cycle_on_jam, the camera is not just opened again
+        the second time: its power is cut at the hub's port and given back
+        first (usbpower.py), as the hub's button does, and so too when it
+        drops off USB. The jam clears only that way (1 November 2026: twice
+        in an hour at speeds 0 and 2), and until then it took a walk outside."""
         lib = self.lib
-        for attempt in range(3):
+        for attempt in range(4):        # the 4th: the first frame after opening again is often lost
             try:
                 data, started = self._expose(seconds)
                 break
             except (CameraError, lib.HRESULTException) as problem:
                 if isinstance(problem, lib.HRESULTException):
                     problem = CameraError(_reason(problem))
-                if attempt == 2 or "unplugged" in str(problem):
+                unplugged = "unplugged" in str(problem)
+                if attempt == 3 or (unplugged and not self._cycles_power()):
                     raise problem
                 # Said, never silent: on 31 October 2026 a run's first frame was
                 # lost twice and kept on the third try, and its count said 720 of 720.
@@ -445,8 +498,10 @@ class AltairCamera:
                                                 say=lambda line: print(line, file=sys.stderr, flush=True))
                     except Exception as failed:
                         print(f"camera: the probe failed: {failed}", file=sys.stderr, flush=True)
-                if attempt == 1:
+                if attempt == 1 or unplugged:
                     self.close()
+                    if not self._power_cycle() and unplugged:
+                        raise problem
                     self._open()
         header = fits.Header()
         header["EXPTIME"] = (float(seconds), "seconds")

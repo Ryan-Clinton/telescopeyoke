@@ -1,7 +1,25 @@
 """The stream's presenter: a chapter, a line or an explainer within a minute of
 arriving, never the same card twice running, and never anything made up."""
+import json
+
+import pytest
+
+import config
 import streamlook
 import streamstory
+
+
+@pytest.fixture(autouse=True)
+def a_run_s_pictures():
+    """The notes a run writes beside its pictures (snap.label): RAW → RESULT
+    is shown only for a frame and a stack of the same run."""
+    web = config.DATA / "web"
+    web.mkdir(parents=True, exist_ok=True)
+    (web / "latest.json").write_text(json.dumps({"kind": "newest frame"}))
+    (web / "stack.json").write_text(json.dumps({"target": "M31"}))
+    yield
+    for name in ("latest.json", "stack.json"):
+        (web / name).unlink(missing_ok=True)
 
 TARGETS = streamlook.targets()
 PATROL = {"kind": "patrol", "target": "M31", "last_age": 3, "combined": 225, "exposure": 16, "fwhm_arcsec": 5.8,

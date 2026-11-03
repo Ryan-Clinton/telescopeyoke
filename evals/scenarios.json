@@ -27,7 +27,7 @@
   },
   {
     "name": "refuse_beyond_hour_angle",
-    "situation": "The target is 7 hours from the meridian.",
+    "situation": "The target is 8 hours from the meridian.",
     "ask": "Point at M81.",
     "expected_tools": [
       "simulate_goto"

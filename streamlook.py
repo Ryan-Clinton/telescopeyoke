@@ -281,6 +281,66 @@ STACK_BOX = (MARGIN_X, MARGIN_Y + 50, 1274, 870)        # x, y, width, height
 PANEL_BOX = (MARGIN_X + 1274 + 24, MARGIN_Y + 50, WIDTH - 2 * MARGIN_X - 1274 - 24, 870)
 
 
+MARK_RADIUS = 26           # px on the stream: a ring round the star, clear of it
+_PLACES = {}
+
+
+def target_place(session, ra, dec):
+    """Where the transit's star is in the night's stack, as shares of its
+    width and height, from the plate solution the measurement keeps
+    (variables-BIN.json: every measured star's sky place and pixel place);
+    None until there is one. Never a guess: on 1 November 2026 the picture's
+    centre was a faint star beside the one being measured."""
+    import json
+    import math
+    if session is None:
+        return None
+    kept = sorted(Path(session).glob("variables-*.json"))
+    if not kept:
+        return None
+    stamp = kept[0].stat().st_mtime
+    if _PLACES.get(str(kept[0]), (None,))[0] == stamp:
+        return _PLACES[str(kept[0])][1]
+    place = None
+    try:
+        record = json.loads(kept[0].read_text(encoding="utf-8"))
+        cosd = math.cos(math.radians(dec))
+        near = min(range(len(record["stars"])), key=lambda i: math.hypot(
+            (record["stars"][i][0] - ra) * cosd, record["stars"][i][1] - dec))
+        star = record["stars"][near]
+        if math.hypot((star[0] - ra) * cosd, star[1] - dec) * 3600 <= 10:     # within 10": the same star
+            from astropy.io import fits
+            first = next(iter(sorted(Path(session).glob("*.fits"))), None)
+            head = fits.getheader(first) if first else {}
+            width, height = head.get("NAXIS1"), head.get("NAXIS2")
+            if width and height:
+                x, y = record["xy"][near]
+                place = (x / width, y / height)
+    except (OSError, ValueError, KeyError, IndexError):
+        place = None
+    _PLACES[str(kept[0])] = (stamp, place)
+    return place
+
+
+def mark_target(c, s, box):
+    """A ring round the star a transit run is measuring, and its name beside
+    it, so a viewer knows which of the stars it is (1 November 2026: "a wee
+    circle on the star in question"), placed from the measurement's own
+    plate solution (target_place); none until it has one."""
+    from PIL import ImageDraw
+    if not s.get("target_at"):
+        return
+    x, y, w, h = box
+    cx, cy = x + round(s["target_at"][0] * w), y + round(s["target_at"][1] * h)
+    draw = ImageDraw.Draw(c.image)
+    r = MARK_RADIUS
+    draw.ellipse((cx - r, cy - r, cx + r, cy + r), outline=COLOURS["accent"], width=3)
+    planet = (s.get("transit") or {}).get("planet") or s.get("target") or ""
+    if planet:
+        under = plate(c, (cx + r + 8, cy - 18, cx + r + 30 + 14 * len(planet), cy + 18), 0.6)
+        c.text((cx + r + 18, cy - 14), planet, "bold", 22, "accent", on=under)
+
+
 def sky_area(c, s, stack, single):
     x, y, w, h = STACK_BOX
     if single is not None and (s.get("show_latest") or s.get("lucky") or s.get("live") or stack is None):
@@ -306,6 +366,8 @@ def sky_area(c, s, stack, single):
     scale = min(w / stack.width, h / stack.height)
     pw, ph = round(stack.width * scale), round(stack.height * scale)
     x, y, w, h = x + (w - pw) // 2, y + (h - ph) // 2, pw, ph
+    if s.get("kind") == "transit":
+        mark_target(c, s, (x, y, w, h))
     line = (s.get("story") or {}).get("line")
     if line and not s.get("headline"):           # the headline has the top of the picture for its seconds
         # LOOK CLOSELY, or the presenter, for a few seconds across the top of the picture.
@@ -619,6 +681,14 @@ def programme(c, s, x, y, width):
         tonight = moon_tonight(s.get("moon") or {})
         if tonight and not s.get("mission"):
             y = c.wrap((x, y), tonight, "mono", 18, width, "secondary", on="panel") + 10
+        return y
+    if kind == "watch":
+        w = s["watch"]
+        c.text((x, y), "STAR WATCH", "bold", 28, "accent", on="panel")
+        c.text((x, y + 36), f"{w['star']} ({w['id']})", "bold", 20, "secondary", on="panel")
+        y = c.wrap((x, y + 70), "A star that sometimes dims by up to a fifth, at times nobody can predict. "
+                   "Tonight's brightness is measured against the stars around it, to catch a dip as it starts.",
+                   "sans", 24, width, "text", on="panel") + 10
         return y
     if kind == "picture":
         c.text((x, y), "BUILDING A PICTURE", "bold", 28, "accent", on="panel")
@@ -1559,6 +1629,14 @@ def patrol_state(name, discovery, now=None):
     now = now or time.time()
     field, _, number = name.partition("-P")
     mosaic = next((m for m in (discovery or {}).get("mosaics", []) if m["name"] == field), None)
+    if not number and any(s.get("field") == name and not s.get("finished")
+                          for s in (discovery or {}).get("sessions", [])):
+        # A single-field patrol (m31-novae): one panel, this one. On 1 November
+        # 2026 it was told on the stream as "Build a deep picture of M31".
+        sessions = [s for s in discovery["sessions"] if s.get("field") == name]
+        label = targets().get("targets", {}).get(name, {}).get("common", name).split()[0]
+        return ({"field": label, "panels": [{"id": name, "col": 0, "row": 0, "state": "current"}],
+                 "possible": sum(1 for s in sessions if s.get("unexplained")), "awaiting": None}, None)
     if mosaic is None or not number.isdigit():
         return None, None
     panels = []
@@ -1791,6 +1869,16 @@ def picture_state(st, now=None, session=None):
     p = transit_for(name)
     if p:
         s["kind"], s["transit"] = "transit", transit_state(p, session, now)
+        s["target_at"] = target_place(session, p["ra"], p["dec"]) if "ra" in p and "dec" in p else None
+        s["story"] = told(s, st, now)
+        return s
+    import starwatch
+    watched = next((w for w in starwatch.STARS.values() if w["name"] == name), None)
+    if watched:
+        # A star watched for dips (Tabby's star) is measured, not searched for
+        # anything new: on 2 November 2026 it was told on the stream as a
+        # nova patrol, "Find a star that wasn't there before".
+        s["kind"], s["watch"] = "watch", {"star": watched["aka"].split(",")[0], "id": watched["id"]}
         s["story"] = told(s, st, now)
         return s
     patrol, candidate = patrol_state(name, st.get("discovery"), now)

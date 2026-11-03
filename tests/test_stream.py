@@ -458,3 +458,34 @@ def test_another_night_s_finished_schedule_does_not_end_tonight_s_stream():
     old = {"schedule": {"steps": [{"status": "done", "start": now - 12 * 86400}]}}
     tonight = {"schedule": {"steps": [{"status": "done", "start": now - 3600}]}}
     assert not stream.night_over(old, now) and stream.night_over(tonight, now)
+
+
+def test_a_lost_destination_is_seen_and_brought_back_a_few_times_an_hour():
+    """1 November 2026: with onfail=ignore a service that dropped off stayed off
+    while the other went on; the stream starts again to bring it back, but not
+    without limit, so one down for good does not keep breaking the other."""
+    import stream
+    assert stream.lost_destination("[tee @ 0x55] Slave muxer #1 failed: Broken pipe, continuing with 1/2 slaves.")
+    assert not stream.lost_destination("frame=  100 fps= 30")
+
+    class P:
+        lost_at = 1000.0
+    assert not stream.rejoin_due(P(), 1000 + stream.REJOIN_S - 1, [])
+    assert stream.rejoin_due(P(), 1000 + stream.REJOIN_S, [])
+    assert not stream.rejoin_due(P(), 5000, [4000 + i for i in range(stream.REJOINS_PER_HOUR)])
+    assert not stream.rejoin_due(object(), 5000, [])
+
+
+def test_an_ffmpeg_that_broke_off_is_reaped_not_left_behind():
+    import stream
+    calls = []
+
+    class Gone:
+        stdin = type("In", (), {"close": lambda self: calls.append("close")})()
+        def kill(self): calls.append("kill")
+        def wait(self, timeout=None):
+            calls.append("wait")
+            return -9
+    said = []
+    assert stream.ended(Gone(), said.append) == -9
+    assert calls == ["close", "kill", "wait"] and "exit -9" in said[0]

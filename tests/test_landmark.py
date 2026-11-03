@@ -144,8 +144,8 @@ def test_it_refuses_before_moving(scope, monkeypatch):
 
 
 def test_a_landmark_beyond_the_meridian_limit_is_refused(scope):
-    # Low and due east from home is six hours from the meridian: outside the limit.
-    kept("gable", ra_axis=0.0, dec_axis=12.0)
+    # Low in the north-east, over eight hours from the meridian: outside the limit.
+    kept("gable", ra_axis=-40.0, dec_axis=12.0)
     with pytest.raises(interface.Refusal) as refusal:
         landmark.check("gable", scope, SITE, cam_class=Camera)
     # In the morning the Sun is low in the east too, and is refused first.

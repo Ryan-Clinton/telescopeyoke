@@ -244,7 +244,8 @@ def state(get=requests.get, post=requests.post):
 OPEN = ("created", "ready", "testStarting", "testing", "liveStarting", "live")
 
 
-def ensure_broadcast(title, description, say=print, get=requests.get, post=requests.post, clock=time.time):
+def ensure_broadcast(title, description, say=print, get=requests.get, post=requests.post, clock=time.time,
+                     before_start=False):
     """A broadcast open on the stream YouTube is receiving: the one already
     there, or a new public one bound to it that starts by itself. Returns
     its id, or None (not signed in, no stream arriving, or YouTube said
@@ -252,19 +253,30 @@ def ensure_broadcast(title, description, say=print, get=requests.get, post=reque
     stream stops after five quiet minutes) and does not always open the
     next: on 2 November 2026 every broadcast was "complete" while the
     laptop sent a healthy stream, the fourth night the channel showed
-    nothing."""
+    nothing.
+
+    With `before_start`, called just before the stream starts sending: the
+    stream is the one the channel's broadcasts are bound to, arriving or
+    not, so the new broadcast is waiting when the stream begins, which is
+    the moment YouTube's auto-start acts on. A broadcast made while the
+    stream was already arriving sat at "ready" until the stream restarted."""
     try:
         token = _access(post)
         if not token:
             return None
         found = state(get, post)
-        arriving = [x["id"] for x in found["streams"] if x["status"] == "active"]
+        if before_start:
+            bound = [b["bound"] for b in found["broadcasts"] if b["bound"]]
+            ours = max(set(bound), key=bound.count) if bound else None
+            arriving = [ours] if ours else [x["id"] for x in found["streams"]][:1]
+        else:
+            arriving = [x["id"] for x in found["streams"] if x["status"] == "active"]
         if not arriving:
             return None
         auth = {"Authorization": f"Bearer {token}"}
         for b in found["broadcasts"]:
             if b["life"] in OPEN and b["bound"] in arriving:
-                if b["life"] == "ready":
+                if b["life"] == "ready" and not before_start:
                     # Auto-start waits for the stream to begin, and one already
                     # arriving never does: start it now.
                     went = post(f"{API}/liveBroadcasts/transition", params={"broadcastStatus": "live",

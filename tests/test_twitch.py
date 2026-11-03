@@ -73,3 +73,27 @@ def test_unchanged_info_is_not_sent_again_and_too_many_waits(tmp_path, monkeypat
 def test_a_token_never_shows_in_what_is_said():
     tokens = {"access_token": "secret-access-123456", "refresh_token": "secret-refresh-123456"}
     assert "secret" not in twitch.redacted("failed with secret-access-123456 and secret-refresh-123456", tokens)
+
+
+def test_the_title_says_what_comes_next_in_tonight_s_plan():
+    """1 November 2026: the streams named after the night's plan."""
+    title, _ = twitch.describe({"kind": "patrol", "target": "M31",
+                                "next": "TOI-2046 b transit at 00:10 UTC"}, TARGETS)
+    assert title.endswith("· then TOI-2046 b transit at 00:10 | TelescopeYoke") and len(title) <= 140
+    long_next = "x" * 200
+    title, _ = twitch.describe({"kind": "patrol", "target": "M31", "next": long_next}, TARGETS)
+    assert long_next not in title and len(title) <= 140
+
+
+def test_titles_lead_with_the_subject_and_tags_with_the_mission():
+    """1 November 2026: a searcher types "nova", "exoplanet transit" or a
+    planet's name; the titles now lead with what is observed, and each
+    mission's own tags come before the channel's general ones."""
+    import mission
+    patrol = mission.of({"kind": "patrol", "target": "M31", "now": 1e9, "patrol": {"panels": []}}, 1e9, {})
+    assert patrol["stream_title"].startswith("Nova hunt LIVE: Andromeda Galaxy (M31)")
+    transit = mission.of({"kind": "transit", "target": "TOI-2046", "now": 1e9, "last_age": 5, "exposure": 4,
+                          "transit": {"planet": "TOI-2046 b", "ingress": 1e9 + 600, "egress": 1e9 + 6000}}, 1e9, {})
+    assert transit["stream_title"] == "Exoplanet transit LIVE: timing TOI-2046 b crossing its star"
+    _, tags = twitch.describe({"kind": "transit", "target": "TOI-2046", "transit": {"planet": "TOI-2046 b"}}, TARGETS)
+    assert tags[0] == "Exoplanet" and "CitizenScience" in tags and len(tags) <= 10

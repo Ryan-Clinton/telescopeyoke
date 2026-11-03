@@ -718,20 +718,60 @@ def measure_transit(st, running, say=print):
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def announce(st, now, say=print):
-    """Set the Twitch channel's title, category and tags for this run, on
-    its own thread: the feed never waits on Twitch."""
+def open_youtube_first(st, now, say=print, wait=20):
+    """Open a YouTube broadcast before the stream starts sending, so its
+    auto-start fires when the stream begins (youtube.ensure_broadcast). At
+    most `wait` seconds: the stream never waits longer on YouTube.
+    2 November 2026: the fourth night the channel showed nothing."""
     import threading
+
+    import youtube
+
+    def run():
+        try:
+            youtube.ensure_broadcast(f"{st.get('name') or 'The telescope'} LIVE | TelescopeYoke",
+                                     "Live from a 150 mm telescope in a back garden.", say=say, before_start=True)
+        except Exception:
+            pass
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    worker.join(wait)
+
+
+def announce(st, now, say=print, twitch_on=True, youtube_on=False):
+    """Set the Twitch channel's title, category and tags for this run, and
+    the YouTube broadcast's title, description, tags and thumbnail when
+    signed in (youtube.py), on its own thread: the feed never waits on them."""
+    import threading
+
+    import config
 
     import streamlook
     import twitch
 
     def run():
-        try:
-            title, tags = twitch.describe(streamlook.from_status(st, now, session_of(st)))
-            twitch.set_channel(title, tags, say=say)
-        except Exception as error:               # the stream goes on whatever Twitch says
-            say(f"The channel's info was left as it is: {error}")
+        state = streamlook.from_status(st, now, session_of(st))
+        title, tags = twitch.describe(state)
+        if twitch_on:
+            try:
+                twitch.set_channel(title, tags, say=say)
+            except Exception as error:           # the stream goes on whatever Twitch says
+                say(f"The channel's info was left as it is: {error}")
+        if youtube_on:
+            import youtube
+            state = dict(state, mission=state.get("mission") or {})
+            planet = (state.get("transit") or {}).get("planet")
+            science = (f"Timing the transit of the exoplanet {planet}: when it comes against the prediction "
+                       "refines its orbit; timings like this go to the ExoClock project, which keeps them up "
+                       "to date for ESA's Ariel mission.") if planet else None
+            yt_title, description, yt_tags = youtube.listing(title, state, youtube.plan_lines(st.get("schedule")),
+                                                             science)
+            for _ in range(10):         # the stream takes a minute or two to reach YouTube
+                if youtube.ensure_broadcast(yt_title, description, say=say):
+                    break
+                time.sleep(30)
+            youtube.set_broadcast(yt_title, description, yt_tags, thumbnail=config.DATA / "web" / "stack.jpg",
+                                  say=say)
     threading.Thread(target=run, daemon=True).start()
 
 
@@ -885,8 +925,29 @@ def passed_on(process, keys, say=print):
         for line in iter(pipe.readline, b""):
             text = line.decode("utf-8", "replace").rstrip()
             if text:
+                if lost_destination(text):
+                    process.lost_at = getattr(process, "lost_at", None) or time.time()
                 say(hidden(text, keys))
     threading.Thread(target=run, daemon=True).start()
+
+
+def lost_destination(line):
+    """Whether one of ffmpeg's lines says a tee destination has failed and the
+    stream goes on without it ("Slave muxer #1 failed: ..., continuing with
+    1/2 slaves"). With onfail=ignore the other service stays on air, but the
+    lost one never rejoins by itself."""
+    return "tee" in line.lower() and "slave" in line.lower() and "fail" in line.lower()
+
+
+REJOIN_S = 60          # a destination lost this long is brought back by starting the stream again
+REJOINS_PER_HOUR = 6   # at most: a service down for good must not keep breaking the other
+
+
+def rejoin_due(process, now, rejoins):
+    """Whether to start the stream again to bring a lost destination back."""
+    lost = getattr(process, "lost_at", None)
+    recent = [t for t in rejoins if now - t < 3600]
+    return lost is not None and now - lost >= REJOIN_S and len(recent) < REJOINS_PER_HOUR
 
 
 def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.Popen, wait=True):
@@ -913,11 +974,14 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
     target = to or [address for _, address, _ in found]
     stream_keys = [k for _, _, k in found]
     twitch_on = to is None and "twitch" in names
+    import youtube
+    youtube_on = to is None and "youtube" in names and youtube.signed_in()
     device = working_device()
     say(f"Video encoding on {device or 'the processors (no working video hardware)'}")
     size = (WIDTH, HEIGHT)
     process, quiet_since, shown, retry_at = None, None, None, 0.0
     reports, drops, frames, breaks, measuring, measured_at, announced = [], [], [], [], None, 0.0, None
+    rejoins = []          # when the stream was started again to bring a lost destination back
     tested = False
     chatting = None
     composer = Composer(draw=lambda st, now, mode: frame(st, now, mode).resize(size)
@@ -926,9 +990,20 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
     import director
     segment, segment_state, directed, looked_at, tones, voice = None, None, None, -1e9, None, None
     phones = None             # the 9:16 feed, while on air with a vertical key
+    reload, keys_looked_at = False, clock()
     try:
         while True:
             st, now = status(), clock()
+            if to is None and now - keys_looked_at >= KEYS_LOOK_S:
+                # A key or service changed in Settings takes effect without a
+                # restart by hand: the watcher starts again on the new ones.
+                keys_looked_at = now
+                fresh = settings()
+                again = [address for _, address, _ in destinations(fresh)[0]] if fresh["enabled"] else []
+                if again != target:
+                    say(f"{time.strftime('%H:%M')} the stream's services or keys have changed: starting again")
+                    reload = True
+                    break
             if now - looked_at >= LOOK_S:
                 # Focusing or polar alignment going on: read from their files, not every picture.
                 segment, segment_state, _ = broadcasting(now)
@@ -970,6 +1045,8 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                         composer.ready = []
                 doing = {"focus": "focusing", "polar": "polar aligning"}.get(segment) \
                     or (f"imaging {st.get('name')}" if imaging(st) else "at work")
+                if youtube_on and to is None:
+                    open_youtube_first(st, now, say)
                 say(f"{time.strftime('%H:%M')} {doing}: streaming {size[0]}x{size[1]} to "
                     f"{to or ' and '.join(NAMES[n] for n in names)} "
                     f"({hidden(' '.join([target] if isinstance(target, str) else target), stream_keys)})")
@@ -1005,10 +1082,14 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                 chatting = chat(say)
             # The channel's title follows the mission (the target and its
             # programme), never focusing or polar alignment.
-            programme = (directed["target"], directed["programme"]) if directed["target"] and not segment else None
-            if process is not None and twitch_on and programme and programme != announced:
+            # The plan's next step is part of it: a changed plan changes the title too.
+            upcoming = next((x.get("label") for x in ((st.get("schedule") or {}).get("steps") or [])
+                             if x.get("status") == "queued"), None)
+            programme = (directed["target"], directed["programme"], upcoming) \
+                if directed["target"] and not segment else None
+            if process is not None and (twitch_on or youtube_on) and programme and programme != announced:
                 announced = programme
-                announce(dict(st, director=directed), now, say)
+                announce(dict(st, director=directed), now, say, twitch_on=twitch_on, youtube_on=youtube_on)
             if process is not None:
                 if imaging(st) and now - measured_at > MEASURE_S:
                     measuring, measured_at = measure_transit(st, measuring, say), now
@@ -1016,11 +1097,21 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                 if shown is None:
                     sleep(0.2)                         # the first picture is still being drawn
                     continue
+                if rejoin_due(process, now, rejoins):
+                    # 1 November 2026: YouTube and Twitch go through one tee; a lost
+                    # one comes back only with a fresh start, a few seconds for both.
+                    say(f"{time.strftime('%H:%M')} a destination dropped off the stream: starting it again to "
+                        "bring it back")
+                    rejoins.append(now)
+                    ended(process, say)
+                    process, retry_at, tones = None, now + 5, quiet(tones)
+                    continue
                 try:
                     process.stdin.write(shown)
                 except (BrokenPipeError, OSError):
                     # Never a tight loop: wait, and the next try is a fresh start.
                     say(f"{time.strftime('%H:%M')} the stream broke off; trying again in 30 s")
+                    ended(process, say)
                     process, retry_at, tones = None, now + 30, quiet(tones)
                     breaks = [t for t in breaks if now - t <= BREAKS_S] + [now]
                     if size == (WIDTH, HEIGHT) and falling_behind([], now, breaks=breaks):
@@ -1067,6 +1158,28 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
         if process is not None:
             process.stdin.close()
             process.wait(timeout=30)
+    if reload:
+        return watch(to, say, sleep, clock, run, wait)
+
+
+KEYS_LOOK_S = 60      # how often a streaming watcher looks for changed services or keys
+
+
+def ended(process, say=print, wait=10):
+    """An ffmpeg that has broken off, finished with: its pipe closed, killed
+    if it is still there, waited for so it leaves no zombie behind, and how it
+    ended said. Never raises: the stream goes on to its next start."""
+    for step in (lambda: process.stdin.close(), lambda: process.kill()):
+        try:
+            step()
+        except (OSError, ValueError, AttributeError):
+            pass
+    try:
+        code = process.wait(timeout=wait)
+    except Exception:
+        code = None
+    say(f"{time.strftime('%H:%M')} ffmpeg ended ({'still running' if code is None else f'exit {code}'})")
+    return code
 
 
 def opening(st, directed, now):
@@ -1157,12 +1270,14 @@ def install(say=print, run=subprocess.run, home=None):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("action", nargs="?",
-                    choices=["watch", "frame", "preview", "scenes", "director", "key", "twitch-login"])
+                    choices=["watch", "frame", "preview", "scenes", "director", "key", "twitch-login",
+                             "youtube-login"])
     ap.add_argument("service", nargs="?", choices=sorted(NAMES), help="with key: whose key it is")
     ap.add_argument("--to", help="with watch: stream into this file instead, to try it")
     ap.add_argument("--install", action="store_true", help="with watch: run it as a systemd user service")
     ap.add_argument("--director", action="store_true",
                     help="with frame: write the director's answer over the picture (kept here, never sent)")
+    ap.add_argument("--client", help="with youtube-login: the OAuth client JSON from Google Cloud")
     ap.add_argument("--clear", action="store_true", help="with director: forget the target last aimed at")
     ap.add_argument("--vertical", action="store_true",
                     help="with frame: the 9:16 picture for phones, as cache/stream-vertical.jpg")
@@ -1174,6 +1289,12 @@ def main(argv=None):
     if args.action == "twitch-login":
         import twitch
         return 0 if twitch.login() else 1
+    if args.action == "youtube-login":
+        import youtube
+        if not args.client:
+            raise SystemExit("youtube-login needs --client FILE: the OAuth client's JSON from Google Cloud "
+                             "(docs/streaming.md, \"YouTube's title and description\")")
+        return 0 if youtube.login(args.client) else 1
     if args.service and args.action != "key":
         ap.error("a service is named only with key")
     if args.action == "key":
