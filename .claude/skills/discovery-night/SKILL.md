@@ -2,7 +2,7 @@
 name: discovery-night
 description: Plan and run a night hunting for novae, new transients and strange stars (Tabby's star and its proposed companion's transit windows, AAVSO campaigns, exoplanet transits), with the week's papers on them and on SETI. Use when the person asks for tonight's outlook or plan, asks what to do tonight, asks to patrol M31 or M33, look for novae, or run a discovery night.
 compatibility: telescopeyoke at the telescope, set up and focused (nightly-setup), with a reference for each field or a first night to make one
-allowed-tools: Bash(./ty night) Bash(./ty night --json) Bash(./patrol.py * --plan) Bash(./starwatch.py * --plan) Bash(./ty candidates *) Bash(./ty watch-run --once)
+allowed-tools: Bash(./ty night) Bash(./ty night --json) Bash(./ty research) Bash(./ty research *) Bash(./ty context) Bash(./patrol.py * --plan) Bash(./starwatch.py * --plan) Bash(./ty candidates) Bash(./ty candidates *) Bash(./ty watch-run --once) Bash(./transits.py) Bash(./transits.py *) Bash(./brokers.py) Bash(./brokers.py *) Bash(./literature.py *) Bash(./archive.py screen *) Bash(./seti.py sweep *) Bash(./investigate.py) Bash(./investigate.py *)
 ---
 
 # Discovery night
