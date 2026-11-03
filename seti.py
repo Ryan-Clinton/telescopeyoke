@@ -223,6 +223,24 @@ def channels(fch1, foff, nchans, low, high):
     return first, last
 
 
+def blank_dc(spectra, first, per):
+    """Blank the receiver's spike at the middle of each coarse channel (the
+    "DC bin": one channel of every `per`, made by the instrument, not the
+    sky), with the mean of the channels either side. `first` is the slice's
+    first channel in the whole file. Both this search and turboSETI found it
+    at 2268.1641 and 1473.6328 MHz in Tabby's looks, each a coarse channel's
+    middle (3 November 2026)."""
+    n_f = spectra.shape[1]
+    if per >= n_f + first or per < 4:
+        centre = per // 2 - first
+        spikes = [centre] if 0 < centre < n_f - 1 else []
+    else:
+        spikes = [c - first for c in range(per // 2, first + n_f, per) if first < c < first + n_f - 1]
+    for c in spikes:
+        spectra[:, c] = (spectra[:, c - 1] + spectra[:, c + 1]) / 2
+    return spikes
+
+
 def read_slice(source, low, high):
     """One look's spectra between low and high MHz: (time, channel) and its header."""
     h5py = _h5()
@@ -238,7 +256,13 @@ def read_slice(source, low, high):
         fch1, foff, nchans = float(attrs["fch1"]), float(attrs["foff"]), int(attrs.get("nchans", data.shape[-1]))
         first, last = channels(fch1, foff, nchans, low, high)
         spectra = np.asarray(data[:, 0, first:last], dtype=np.float64)
+        # A slice saved here keeps where it sat in its file and its coarse
+        # channels' width, so its spikes are blanked in the same places.
+        per = int(attrs.get("coarse_channel", (data.chunks or data.shape)[-1]))
+        whole_first = int(attrs.get("first_channel", 0)) + first
+    blank_dc(spectra, whole_first, per)
     return {"spectra": spectra, "fch1": fch1 + first * foff, "foff": foff, "tsamp": float(attrs["tsamp"]),
+            "first_channel": whole_first, "coarse_channel": per,
             "tstart": float(attrs.get("tstart", 0.0)), "target": str(attrs.get("source_name", "")),
             "fetched_mb": round(remote.fetched / 1e6, 1) if remote else None}
 
@@ -257,7 +281,8 @@ def save(s, path):
         header = {"fch1": s["fch1"], "foff": s["foff"], "nchans": n_f, "tsamp": s["tsamp"], "tstart": s["tstart"],
                   "nbits": 32, "nifs": 1, "data_type": 1, "telescope_id": 6, "machine_id": 10,
                   "source_name": s["target"] or "unknown", "src_raj": 0.0, "src_dej": 0.0,
-                  "az_start": 0.0, "za_start": 0.0, "ibeam": 0, "nbeams": 1}
+                  "az_start": 0.0, "za_start": 0.0, "ibeam": 0, "nbeams": 1,
+                  "first_channel": s.get("first_channel", 0), "coarse_channel": s.get("coarse_channel", n_f)}
         for key, value in header.items():
             data.attrs[key] = value
     return path

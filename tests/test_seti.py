@@ -239,3 +239,13 @@ def test_signals_planted_in_noise_are_counted_found_and_false_hits_counted():
     assert strong["false_hits"] == 0 and answer["own_hits"] == 0
     from test_interface import valid
     valid(interface.envelope("seti", answer), "seti")
+
+
+def test_the_spike_at_each_coarse_channels_middle_is_blanked():
+    made = spectra(seed=6)
+    made[:, 2048] += 500.0                      # the receiver's DC bin, 4096-channel coarse channels
+    spikes = seti.blank_dc(made, 0, 4096)
+    assert spikes == [2048] and seti.search(made, FOFF, TSAMP, FCH1) == []
+    part = spectra(seed=7)
+    part[:, 48] += 500.0                         # a slice starting at channel 2000 of the file
+    assert seti.blank_dc(part, 2000, 4096) == [48]
