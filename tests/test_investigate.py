@@ -379,10 +379,10 @@ def test_pulling_the_research_copies_the_desktops_records_and_reports_only(tmp_p
 
     def run(cmd, **kw):
         calls.append(cmd)
-        return subprocess.CompletedProcess(cmd, 0 if "cache/tess/" not in cmd[2] else 23)
+        return subprocess.CompletedProcess(cmd, 0 if "cache/tess/" not in cmd[-2] else 23)
     got = agent.pull_research(run=run, say=lambda *_: None)
-    assert all(c[:2] == ["rsync", "-a"] and "--delete" not in c for c in calls)
-    assert calls[0][2] == "desktop:telescopeyoke-laptop/research/data-research/cache/kepler/screened.json"
+    assert all(c[:3] == ["rsync", "-a", "--update"] and "--delete" not in c for c in calls)
+    assert calls[0][-2] == "desktop:telescopeyoke-laptop/research/data-research/cache/kepler/screened.json"
     assert "cache/tess/" not in got and "cache/research/" in got and got[-1] == "docs/research/"
 
 
@@ -404,3 +404,13 @@ def test_vsx_skips_a_mirror_sending_empty_pages_and_never_calls_that_none():
         return Reply("")
     r = investigate.vsx(301.56436, 44.45689, get=empty)
     assert r["answer"] is None and r["error"].startswith("not answered")  # asked again next run, not "not in VSX"
+
+
+def test_a_try_within_a_day_of_the_last_is_the_same_outage_and_not_counted():
+    from datetime import datetime, timedelta, timezone
+    now = datetime(2026, 11, 3, 22, 0, tzinfo=timezone.utc)
+    hour_ago = {"attempts": 1, "investigated": (now - timedelta(hours=1)).isoformat()}
+    day_ago = {"attempts": 1, "investigated": (now - timedelta(hours=25)).isoformat()}
+    assert investigate._tries(None, now) == 1
+    assert investigate._tries(hour_ago, now) == 1
+    assert investigate._tries(day_ago, now) == 2

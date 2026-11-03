@@ -109,18 +109,19 @@ def pull_research(run=subprocess.run, say=print):
     """Bring the desktop's research records here (`ty research --pull`):
     the screens' records, the SETI sweeps, the investigations and their
     reports, so the briefing and the night plan count what the desktop
-    found. Copies only; never deletes here. Returns what came."""
+    found. Copies only, never deletes here, and never over a newer copy here
+    (one asked again on this computer). Returns what came."""
     got = []
     for path in PULLED:
         where = config.DATA / path
         where.parent.mkdir(parents=True, exist_ok=True)
-        done = run(["rsync", "-a", f"{RESEARCH_HOST}:{RESEARCH_PLACE}/data-research/{path}", str(where)],
+        done = run(["rsync", "-a", "--update", f"{RESEARCH_HOST}:{RESEARCH_PLACE}/data-research/{path}", str(where)],
                    capture_output=True, text=True, timeout=600)
         if done.returncode == 0:
             got.append(path)
     reports = ROOT / "docs" / "research"
     reports.mkdir(parents=True, exist_ok=True)
-    done = run(["rsync", "-a", f"{RESEARCH_HOST}:{RESEARCH_PLACE}/docs/research/", str(reports) + "/"],
+    done = run(["rsync", "-a", "--update", f"{RESEARCH_HOST}:{RESEARCH_PLACE}/docs/research/", str(reports) + "/"],
                capture_output=True, text=True, timeout=600)
     if done.returncode == 0:
         got.append("docs/research/")

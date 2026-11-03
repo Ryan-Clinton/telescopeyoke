@@ -222,7 +222,9 @@ and the papers on the star come before any claim.
 unanswered (a service down), at least a day after the last try and up to
 three tries in all, asking only the sources that failed and keeping the
 star's light curve and every answer already had; after the third the
-verdict stands without it and says so. Then it takes the top lead nobody
+verdict stands without it and says so. A lead asked again by name
+(`./investigate.py KIC N`) sooner than a day after its last try is the
+same outage, so that try is not counted. Then it takes the top lead nobody
 has looked into. The queue is ordered by how interesting a lead is, not
 by its detection score: Tabby-like first, then "unusual" (the deepest dip
 at least five times the star's own scatter, a possible repeat, or a short
@@ -265,7 +267,8 @@ files they keep) and investigate.py's own queue, so it counts the same
 leads, and says how many are waiting and how many will be asked again;
 `--html` writes `web/research.html` for the 8080 server.
 The big screens and the investigations run on the desktop; `./ty research
---pull` first copies its records and reports here (never deleting any),
+--pull` first copies its records and reports here (never deleting any,
+nor copying over a newer one asked again here),
 so the briefing and the night plan count what it found.
 `./investigate.py --summary` writes
 [docs/research/README.md](research/README.md): the leads looked into,

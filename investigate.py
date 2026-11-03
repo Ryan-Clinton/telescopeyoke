@@ -737,6 +737,22 @@ def keep(r, reports=REPORTS):
     return reports / f"{r['lead']}.md"
 
 
+def _tries(before, now=None):
+    """The tries a lead has had, this one included. A try sooner than
+    RECHECK_AFTER_HOURS after the last is the same outage asked again (3
+    November 2026: VizieR down all day, and retries by hand used up two of
+    the brightest leads' three tries in an hour), so it does not count."""
+    if not before:
+        return 1
+    tries = before.get("attempts", 1)
+    try:
+        then = datetime.fromisoformat(before.get("investigated") or "")
+    except ValueError:
+        return tries + 1
+    now = now or datetime.now(timezone.utc)
+    return tries + 1 if (now - then).total_seconds() >= RECHECK_AFTER_HOURS * 3600 else tries
+
+
 def investigate(words=(), get=requests.get, say=print):
     lead = parse_lead(words) or next_lead()
     if lead is None:
@@ -744,7 +760,7 @@ def investigate(words=(), get=requests.get, say=print):
                                                    "looked into. ./archive.py screen --batch 200 finds more.")
     before = done().get(lead_id(lead))
     r = investigate_seti(lead) if lead["kind"] == "seti" else investigate_star(lead, get, say, before=before)
-    r["attempts"] = (before or {}).get("attempts", 1) + 1 if before else 1
+    r["attempts"] = _tries(before)
     left = unanswered(r)
     if left and r["attempts"] >= RECHECKS:
         r["notes"].append(f"given up asking {', '.join(left)} after {r['attempts']} tries: the verdict stands without it")
