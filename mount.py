@@ -1486,7 +1486,8 @@ def dry_run(args, site):
         if args.command == "settime":
             return {"would_move": False, "safe": True,
                     "warnings": ["Sets the handset's date, time and position from this computer. The handset "
-                                 "must be at its main menu. Nothing moves.", nudge_step()]}
+                                 "must be at its main menu. Nothing moves.",
+                                 nudge_step(config.example() if args.demo else None)]}
         if args.command == "truehome":
             return plan_true_home()
         if args.command in ("pointing", "findhome"):
