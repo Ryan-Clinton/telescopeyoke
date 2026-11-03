@@ -417,3 +417,31 @@ def test_a_wall_seen_from_further_away_is_lower_and_from_nearer_higher():
 def test_moving_a_skyline_needs_a_distance_all_round():
     with pytest.raises(interface.Refusal):
         horizon.moved([{"az": 0.0, "alt": 30.0}], 5, 90, [(0, 90, 10)])
+
+
+def test_a_jammed_camera_is_reopened_and_the_frame_asked_for_again():
+    """3 November 2026: one 'no frame' ended the daylight survey."""
+    from indi import IndiError
+    opened, said = [], []
+
+    class Cam:
+        def __init__(self):
+            opened.append(self)
+            self.closed = False
+
+        def frame(self, seconds):
+            if len(opened) < 3:
+                raise IndiError("no frame within 10 s")
+            return "frame", seconds
+
+        def close(self):
+            self.closed = True
+
+    cam = horizon.Reopening(Cam, say=said.append)
+    assert cam.frame(0.01) == ("frame", 0.01)
+    assert len(opened) == 3 and opened[0].closed and opened[1].closed and len(said) == 2
+    stuck = horizon.Reopening(lambda: type("Stuck", (), {"frame": lambda self, s: (_ for _ in ()).throw(
+        IndiError("no frame")), "close": lambda self: None})(), say=said.append, tries=2)
+    import pytest
+    with pytest.raises(IndiError):
+        stuck.frame(1)

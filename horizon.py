@@ -508,15 +508,54 @@ def eye(site, exposure, gain, daylight=False, torch=False):
 
     look.log = log
     try:
-        with Camera(gain=gain) as cam:
+        cam = Reopening(lambda: Camera(gain=gain))
+        try:
             look.cam = cam
             if LOOKS.exists():
                 for old in LOOKS.glob("*.jpg"):     # the last survey's pictures
                     old.unlink()
             yield look
+        finally:
+            cam.close()
     except BaseException:
         scope.stop()
         raise
+
+
+JAM_TRIES = 4        # frames tried in a row, reopening the camera between, before a survey gives up
+
+
+class Reopening:
+    """The camera, reopened after a frame that never comes (the 183C's jam,
+    docs/camera-fault.md) and the frame asked for again, as the imaging runs
+    do. 3 November 2026: one jam ended the daylight survey, and the schedule's
+    retries were all that brought it back."""
+
+    def __init__(self, opener, say=None, tries=JAM_TRIES):
+        self.opener, self.tries = opener, tries
+        self.say = say or (lambda text: print(text, flush=True))
+        self.cam = opener()
+
+    def frame(self, *args, **kwargs):
+        from indi import IndiError
+        for attempt in range(self.tries):
+            try:
+                return self.cam.frame(*args, **kwargs)
+            except IndiError as problem:
+                if attempt == self.tries - 1:
+                    raise
+                self.say(f"camera: {problem}; reopening it and trying again")
+                self.close()
+                self.cam = self.opener()
+
+    def close(self):
+        try:
+            self.cam.close()
+        except Exception:
+            pass          # it is being closed whatever it says
+
+    def __getattr__(self, name):
+        return getattr(self.cam, name)
 
 
 def side(az):
