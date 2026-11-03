@@ -37,11 +37,13 @@ Nothing here moves the mount or uses the camera, and nothing is written.
 """
 import argparse
 import io
+import re
 import math
 from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import requests
+from urllib.parse import unquote
 
 import interface
 
@@ -72,7 +74,7 @@ def _session(url):
 
 
 def _scan(row, on):
-    return {"target": row["target"], "on": on, "mjd": row["mjd"], "utc": _utc(row["mjd"]), "url": row["url"],
+    return {"target": str(row["target"]).removeprefix("DIAG_"), "on": on, "mjd": row["mjd"], "utc": _utc(row["mjd"]), "url": row["url"],
             "size_gb": round(row["size"] / 1e9, 2), "centre_mhz": round(float(row["center_freq"]), 3),
             "telescope": row.get("telescope")}
 
@@ -83,11 +85,37 @@ def query(get=requests.get, **params):
     return reply.json().get("data") or []
 
 
+_LOOK = re.compile(r'href="([^"]*guppi_(\d+)_(\d+)_(.+?)_(\d{4})\.gpuspec\.0000\.h5)"')
+
+
+def _bare(name):
+    """A target's name as compared: DIAG_ (a diagnostic look) taken off, any case."""
+    return str(name).removeprefix("DIAG_").upper()
+
+
+def folder(on, get=requests.get):
+    """Every finest-resolution look in the session folder an ON look is in,
+    from the server's own listing: its target from the file's name (DIAG_
+    taken off), its time from the name's MJD and seconds, and the size and
+    band of the ON look (the same receiver and set-up all session)."""
+    base = on["url"].rsplit("/", 1)[0] + "/"
+    reply = get(base, timeout=TIMEOUT, headers=HEADERS)
+    reply.raise_for_status()
+    out = []
+    for name, mjd, seconds, target, _ in _LOOK.findall(reply.text):
+        target = unquote(target).removeprefix("DIAG_")
+        out.append(dict(on, target=target, mjd=int(mjd) + int(seconds) / 86400, url=base + name))
+    return out
+
+
 def find(target, get=requests.get, say=print):
     """The finest-resolution looks at `target`, by session, each session
     with the OFF looks taken between and after them where the archive lists
     them; `complete` when ON, OFF, ON, OFF, ON, OFF are all there."""
-    rows = [r for r in query(get, target=target) if str(r.get("url", "")).endswith(FINE)]
+    # The archive matches the name anywhere (KIC8462852 brings KIC8462852_OFF
+    # too) and files some looks as DIAG_ NAME: only the name itself is ON.
+    rows = [r for r in query(get, target=target) if str(r.get("url", "")).endswith(FINE)
+            and _bare(r["target"]) == _bare(target)]
     sessions = {}
     for r in rows:
         sessions.setdefault(_session(r["url"]), []).append(r)
@@ -95,14 +123,16 @@ def find(target, get=requests.get, say=print):
     for name, ons in sorted(sessions.items()):
         ons.sort(key=lambda r: r["mjd"])
         first, last = ons[0]["mjd"], ons[-1]["mjd"]
+        # The archive is asked by target only, and an OFF look is filed under
+        # its own target (KIC8462852_OFF, or another star), so the OFF looks
+        # are read from the session's own folder: every look there between
+        # and just after the ON looks that is not the target.
         try:
-            near = query(get, **{"time-start": first - CADENCE_DAYS, "time-end": last + CADENCE_DAYS})
+            near = folder(ons[0], get)
         except (requests.RequestException, ValueError):
             near = []
-        # Kept only if really from the same session, in the window, and of another target:
-        # an archive that ignores the time asked for gives nothing wrong, only nothing.
-        offs = [r for r in near if str(r.get("url", "")).endswith(FINE) and _session(r["url"]) == name
-                and r.get("target") != ons[0]["target"] and first - CADENCE_DAYS <= r["mjd"] <= last + CADENCE_DAYS]
+        offs = [r for r in near if _bare(r["target"]) != _bare(target)
+                and first - CADENCE_DAYS <= r["mjd"] <= last + CADENCE_DAYS]
         scans = sorted([_scan(r, True) for r in ons] + [_scan(r, False) for r in offs], key=lambda s: s["mjd"])
         pattern = "".join("A" if s["on"] else "B" for s in scans)
         out.append({"session": name, "scans": scans, "complete": "ABABAB" in pattern,

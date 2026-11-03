@@ -90,8 +90,8 @@ def test_a_cadence_is_six_looks_and_a_slice_must_be_inside_the_band():
 
 
 class Reply:
-    def __init__(self, body):
-        self.body = body
+    def __init__(self, body, text=""):
+        self.body, self.text = body, text
 
     def json(self):
         return self.body
@@ -102,19 +102,29 @@ class Reply:
 
 def row(target, mjd, scan, session="AGBT17A_999_67"):
     return {"target": target, "mjd": mjd, "size": 15561148516, "center_freq": 2269.6, "telescope": "GBT",
-            "url": f"https://bldata.berkeley.edu/pipeline/{session}/holding/spliced_guppi_{scan}_{target}.gpuspec.0000.h5"}
+            "url": f"https://bldata.berkeley.edu/pipeline/{session}/holding/"
+                   f"spliced_blc20_guppi_57895_{int(round((mjd - 57895) * 86400))}_DIAG_{target}_{scan:04d}.gpuspec.0000.h5"}
+
+
+def listing(rows):
+    """A session folder's page, as the server lists it."""
+    return "".join(f'<a href="{r["url"].rsplit("/", 1)[1]}">x</a>' for r in rows)
 
 
 def test_find_groups_the_looks_by_session_and_puts_the_off_looks_between():
     ons = [row("KIC8462852", 57895.420 + k * 0.0076, k) for k in (0, 2, 4)]
-    offs = [row(f"HIP{k}", 57895.420 + k * 0.0076, k) for k in (1, 3, 5)] + [row("HIP9", 57895.43, 9, "OTHER")]
+    offs = [row("KIC8462852_OFF", 57895.420 + k * 0.0076, k) for k in (1, 3, 5)]
+    later = [row("HIP9", 57896.5, 9)]                       # the same folder, a day on: not this cadence
     coarse = dict(ons[0], url=ons[0]["url"].replace("0000.h5", "0002.h5"))
 
     def get(url, params=None, timeout=None, headers=None):
-        return Reply({"data": ons + [coarse] if "target" in params else ons + offs})
+        if params:                                       # the archive, asked by target: it matches the name anywhere
+            return Reply({"data": [dict(r, target="DIAG_" + r["target"]) for r in ons + offs] + [coarse]})
+        return Reply(None, listing(ons + offs + later))  # the session's folder
     answer = seti.find("KIC8462852", get=get, say=lambda *_: None)
     assert answer["looks"] == 3
     s = answer["sessions"][0]
     assert [sc["on"] for sc in s["scans"]] == [True, False, True, False, True, False]
-    assert s["complete"] and s["command"].startswith("./seti.py cadence ") and "OTHER" not in s["command"]
+    assert [sc["target"] for sc in s["scans"]][:2] == ["KIC8462852", "KIC8462852_OFF"]
+    assert s["complete"] and s["command"].startswith("./seti.py cadence ") and "HIP9" not in s["command"]
     assert s["scans"][0]["size_gb"] == 15.56
