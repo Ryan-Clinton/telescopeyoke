@@ -63,6 +63,23 @@ After both fixes Tabby's star is the only Tabby-like one of the 53; next
 come KIC 7987514 (nine dips, the deepest 2.6%) and KIC 7988797. KIC 1255 b
 and KIC 3542116 give nothing: their dips are shallower than the 1% floor.
 
+## Two dips alike, and the catalogues
+
+Two dips alike in depth and length, both symmetric, may be one eclipse
+seen twice, the rest of its eclipses just under the floor: they are
+marked "possible repeated eclipse", their separation a period or a
+multiple of it, and kept in the ranking as a lead. Two are not proof of a
+period, so nothing is set aside on the light curve alone: any star with a
+dip left or a possible repeat is looked up in the Villanova Kepler
+eclipsing binary catalogue (its own table, 2,920 binaries over 59 pages
+of keplerebs.villanova.edu, read once and kept in
+`cache/kepler/villanova.json`) and in VSX by position (within 10", as
+`vet.py` asks it). A star either lists as an eclipsing binary is a "known
+eclipsing binary" with the catalogue's period or type, and ranks after
+the leads; anything else stays a lead. Which catalogues answered is said:
+on 3 November 2026 KIC 9221398 came back as the Villanova catalogue's
+13.7875-day binary, and VSX did not answer in its time.
+
 ## The benchmark on real light curves
 
 Tabby's dips must be found, known eclipsing binaries must come out
@@ -80,7 +97,7 @@ pytest -q tests/test_archive.py -k benchmark`) and skips without one.
 | KIC 8129189 | binary, 53.647 d, eclipses 21.6% and 2.1%, eccentric | periodic, 53.637 d; no dip left |
 | KIC 10274244 | binary, 13.684 d, eclipse 19.2% | periodic, 13.649 d |
 | KIC 5795648 | binary, 4.553 d, eclipse 2.3% | periodic, 4.536 d |
-| KIC 9221398 | binary, 13.788 d, eclipse 1.19% | two 1.32% dips 827.25 days apart (60 periods): one eclipse seen twice |
+| KIC 9221398 | binary, 13.788 d, eclipse 1.19% | two 1.32% dips 827.25 days apart (60 periods): a possible repeated eclipse, and the catalogue check names it a known binary |
 | KIC 4035675 | binary, 2.874 d, eclipse 3.8% | no dip left: its 2.1% scatter |
 | KIC 7684873, 5990753 | binaries, eclipses 0.04% and 0.00% | nothing: under the 1% floor, as they should be |
 | KIC 7849605, 7850078, 7917803 | quiet | nothing |

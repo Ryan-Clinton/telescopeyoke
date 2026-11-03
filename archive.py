@@ -96,7 +96,12 @@ PERIOD_TOLERANCE = 0.02   # an interval within this share of a whole multiple
 LIKE_DEPTH = 0.3          # depths within this share of their mean are alike
 PAIR_DEPTH = 0.1          # two dips this alike in depth...
 PAIR_HOURS = 0.2          # ...and in length...
-PAIR_SYMMETRIC = 0.3      # ...each this symmetric, are one eclipse seen twice
+PAIR_SYMMETRIC = 0.3      # ...each this symmetric, may be one eclipse seen twice
+REPEAT = "possible repeated eclipse"
+VILLANOVA = "https://keplerebs.villanova.edu/?page={page}"     # the Kepler EB catalogue's table, 50 a page
+VILLANOVA_ROWS = 50
+VSX_WITHIN = 10.0         # arcseconds from the star for a VSX entry to be it
+BINARY_TYPES = ("E", "EA", "EB", "EW", "ELL")   # VSX's eclipsing and ellipsoidal types (EA/DM and the like start so)
 VARIABLE = 0.05           # dips over this share of the good points: the star's own variability
 DEEP = 0.05               # a dip this deep makes a star Tabby-like...
 QUIET = 0.01              # ...when its light is otherwise this steady (scatter): Tabby's is 0.03%. KIC
@@ -444,26 +449,98 @@ def _periodic(dips):
             for d in group:
                 d["verdict"] = "periodic"
                 d["period_days"] = round(period, 4)
-    # Two dips the same in depth and length, both symmetric, are one eclipse
-    # seen twice (the rest of its eclipses just under the floor): KIC
-    # 9221398, a 13.79-day binary with 1.19% eclipses, showed two 1.32%
-    # dips 827 days apart, 60 of its periods. The gap is the period at most.
-    left = [d for d in clean if d["verdict"] != "periodic" and abs(d["asymmetry"]) <= PAIR_SYMMETRIC]
+    # Two dips the same in depth and length, both symmetric, may be one
+    # eclipse seen twice (the rest of its eclipses just under the floor):
+    # KIC 9221398, a 13.79-day binary with 1.19% eclipses, showed two 1.32%
+    # dips 827 days apart, 60 of its periods. Two are not proof of a period,
+    # so they are only marked, their separation a period or a multiple of
+    # it, and the star's catalogue checks decide (catalogue_checks).
+    left = [d for d in clean if d["verdict"] not in ("periodic", REPEAT) and abs(d["asymmetry"]) <= PAIR_SYMMETRIC]
     for i, a in enumerate(left):
         for b in left[i + 1:]:
-            if b["verdict"] == "periodic" or a["verdict"] == "periodic":
+            if REPEAT in (a["verdict"], b["verdict"]):
                 continue
             if abs(a["depth_percent"] - b["depth_percent"]) <= PAIR_DEPTH * a["depth_percent"] \
                     and abs(a["hours"] - b["hours"]) <= PAIR_HOURS * max(a["hours"], b["hours"]):
                 for d in (a, b):
-                    d["verdict"] = "periodic"
-                    d["period_days"] = round(abs(b["middle"] - a["middle"]), 4)
+                    d["verdict"] = REPEAT
+                    d["separation_days"] = round(abs(b["middle"] - a["middle"]), 4)
 
 
 def score(dips):
     """How Tabby-like the dips left make a star: deep and lopsided count most."""
     real = [d for d in dips if d["verdict"] == "dip"]
     return round(sum(d["depth_percent"] * (1 + abs(d["asymmetry"])) for d in real), 2)
+
+
+def villanova(get=requests.get):
+    """The Villanova Kepler eclipsing binary catalogue (Kirk et al. 2016,
+    keplerebs.villanova.edu), by KIC number: {kic: {period, morph}}. Read
+    page by page from its own table once, then kept."""
+    import json
+    import records
+    path = config.DATA / "cache" / "kepler" / "villanova.json"
+    if path.exists():
+        return {int(k): v for k, v in json.loads(path.read_text(encoding="utf-8")).items()}
+    out, page, total = {}, 1, None
+    while True:
+        reply = get(VILLANOVA.format(page=page), timeout=TIMEOUT)
+        reply.raise_for_status()
+        text = reply.text
+        if total is None:
+            found = re.search(r"of ([\d,]+) results", text)
+            total = int(found.group(1).replace(",", "")) if found else None
+        rows = re.findall(r'overview/\?k=(\d+)">\d+</a></td>\s*(?:<td>\s*</td>\s*)*<td>([\d.]+)</td>'
+                          r'(?:\s*<td>[^<]*</td>){3}\s*<td>([\d.]+)</td>', re.sub(r"\s+", " ", text))
+        for kic, period, morph in rows:
+            out[int(kic)] = {"period": float(period), "morph": float(morph)}
+        pages = -(-total // VILLANOVA_ROWS) if total else page
+        if page >= pages or not rows:
+            break
+        page += 1
+    if out:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        records.write(path, {str(k): v for k, v in out.items()}, indent=None)
+    return out
+
+
+def position(paths):
+    """The star's RA and Dec (degrees) from its light curve's header."""
+    from astropy.io import fits
+    for path in paths:
+        header = fits.getheader(path, 0)
+        if "RA_OBJ" in header:
+            return float(header["RA_OBJ"]), float(header["DEC_OBJ"])
+    return None
+
+
+def catalogue_checks(kic, where, get=requests.get, variables=None):
+    """What independent catalogues say of a star before any dip of it is
+    set aside: the Villanova Kepler eclipsing binary catalogue (by KIC) and
+    VSX (by position, within VSX_WITHIN). A binary in either is a known
+    eclipsing binary with its period; anything else stays a lead."""
+    import vet
+    variables = variables or vet.variables
+    checks = {"villanova": None, "vsx": [], "known_binary": None, "asked": []}
+    try:
+        listed = villanova(get).get(kic) if kic else None
+        checks["asked"].append("Villanova Kepler EB catalogue")
+        if listed:
+            checks["villanova"] = listed
+            checks["known_binary"] = f"Villanova Kepler EB catalogue, period {listed['period']:g} d"
+    except (requests.RequestException, OSError, ValueError):
+        pass
+    if where:
+        try:
+            near = variables(where[0], where[1], VSX_WITHIN / 3600)
+            checks["asked"].append("VSX")
+            checks["vsx"] = [{"name": v["name"], "type": v["type"]} for v in near]
+            binary = next((v for v in near if v["type"].split("/")[0].split("+")[0].rstrip(":") in BINARY_TYPES), None)
+            if binary and not checks["known_binary"]:
+                checks["known_binary"] = f"VSX {binary['name']}, type {binary['type']}"
+        except (requests.RequestException, OSError, ValueError):
+            pass
+    return checks
 
 
 def _answer(curve, zero, joined=True):
@@ -483,14 +560,28 @@ def _answer(curve, zero, joined=True):
             "deepest_percent": max((d["depth_percent"] for d in real), default=0.0),
             "tabby_like": scatter is not None and scatter <= QUIET
                           and any(d["depth_percent"] >= 100 * DEEP for d in real),
+            "possible_repeats": sum(d["verdict"] == REPEAT for d in dips),
             "score": score(dips)}
 
 
-def analyse(kic, get=requests.get, say=print):
-    """One star's answer from its Kepler quarters."""
+def checked(answer, kic, where, get=requests.get, variables=None):
+    """The catalogue checks, asked only of a lead: a star with a dip left or
+    a possible repeated eclipse. A known binary's possible repeats are its
+    eclipses; its other dips stay, said beside the catalogue's word."""
+    if not (answer["real_dips"] or answer["possible_repeats"]):
+        return dict(answer, catalogues=None, known_binary=None)
+    checks = catalogue_checks(kic, where, get, variables)
+    return dict(answer, catalogues=checks, known_binary=checks["known_binary"])
+
+
+def analyse(kic, get=requests.get, say=print, variables=None):
+    """One star's answer from its Kepler quarters, a lead with its catalogue
+    checks."""
     padded = f"{kic:09d}"
-    return dict(_answer(read(fetch(kic, get, say)), BKJD), star=f"KIC {kic}", kic=kic, mission="Kepler",
-                source=MAST.format(group=padded[:4], kic=padded))
+    paths = fetch(kic, get, say)
+    answer = dict(_answer(read(paths), BKJD), star=f"KIC {kic}", kic=kic, mission="Kepler",
+                  source=MAST.format(group=padded[:4], kic=padded))
+    return checked(answer, kic, position(paths), get, variables)
 
 
 def say_star(answer, say=print):
@@ -501,7 +592,13 @@ def say_star(answer, say=print):
         sap = "" if d.get("sap_depth_percent") is None else f", SAP {d['sap_depth_percent']:.2f}%"
         say(f"  {d['date']} ({'BTJD' if answer.get('mission') == 'TESS' else 'BKJD'} {d['middle']:.2f})  {d['depth_percent']:5.2f}% deep{sap}, {d['hours']:.1f} h, "
             f"asymmetry {d['asymmetry']:+.2f}  {d['verdict']}, {d.get('seen_in', 'PDCSAP')}"
-            f"{' (period ' + str(d['period_days']) + ' d)' if 'period_days' in d else ''}")
+            f"{' (period ' + str(d['period_days']) + ' d)' if 'period_days' in d else ''}"
+            f"{' (' + str(d['separation_days']) + ' d apart: a period or a multiple of it)' if 'separation_days' in d else ''}")
+    checks = answer.get("catalogues")
+    if checks:
+        vsx = ", ".join(f"{v['name']} ({v['type']})" for v in checks["vsx"]) or "nothing within 10\""
+        say(f"  catalogues ({', '.join(checks['asked']) or 'none answered'}): "
+            f"{answer['known_binary'] or 'not a known binary: still a lead'}; VSX: {vsx}")
     real_sap = [d for d in answer.get("sap_only", []) if d["verdict"] == "dip"]
     if real_sap:
         say(f"  {len(real_sap)} dip(s) in SAP only (PDC took them out: the spacecraft's, until shown otherwise): "
@@ -537,7 +634,7 @@ def search(numbers, get=requests.get, say=print):
         answer = {k: v for k, v in answer.items() if k != "dips"} | {
             "dips": [d for d in answer["dips"] if d["verdict"] == "dip"]}
         found.append(answer)
-    found.sort(key=lambda a: (not a["tabby_like"], -a["score"]))
+    found.sort(key=_rank)
     say(f"{len(found)} stars read, {len(missed)} not had; {sum(a['tabby_like'] for a in found)} Tabby-like")
     for a in found[:20]:
         say(f"  {a['star']:<14} score {a['score']:6.2f}  {a['real_dips']} dip(s), deepest {a['deepest_percent']:.2f}%"
@@ -577,10 +674,17 @@ def screened():
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
 
 
+def _rank(r):
+    """Tabby-like first; the leads before the known binaries; then the dips'
+    score, then possible repeated eclipses (still leads till a catalogue
+    says otherwise)."""
+    return (not r["tabby_like"], bool(r.get("known_binary")), -r["score"], -r.get("possible_repeats", 0))
+
+
 def ranking(record, most=20):
-    """Every star screened so far, Tabby-like first, then by score."""
+    """Every star screened so far, in _rank's order."""
     rows = [dict(v, kic=int(k)) for k, v in record.items() if "score" in v]
-    return sorted(rows, key=lambda r: (not r["tabby_like"], -r["score"]))[:most]
+    return sorted(rows, key=_rank)[:most]
 
 
 def screen(batch, get=requests.get, say=print, keep=False, analyse_star=None):
@@ -600,7 +704,8 @@ def screen(batch, get=requests.get, say=print, keep=False, analyse_star=None):
             a = analyse_star(kic, get, say=lambda *_: None)
             record[str(kic)] = {"score": a["score"], "tabby_like": a["tabby_like"], "real_dips": a["real_dips"],
                                 "deepest_percent": a["deepest_percent"], "scatter_percent": a["scatter_percent"],
-                                "sap_only": sum(d["verdict"] == "dip" for d in a.get("sap_only", []))}
+                                "sap_only": sum(d["verdict"] == "dip" for d in a.get("sap_only", [])),
+                                "possible_repeats": a.get("possible_repeats", 0), "known_binary": a.get("known_binary")}
             if a["tabby_like"]:
                 say(f"  KIC {kic}: Tabby-like, {a['real_dips']} dip(s), deepest {a['deepest_percent']:.1f}%")
             elif not keep:

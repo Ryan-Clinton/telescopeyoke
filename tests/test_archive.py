@@ -47,14 +47,57 @@ def test_an_eclipse_that_repeats_is_periodic_not_a_dipper():
     assert archive.score(found) == 0
 
 
-def test_two_dips_alike_and_symmetric_are_one_eclipse_seen_twice():
+def test_two_dips_alike_and_symmetric_are_a_possible_repeated_eclipse():
     t, f, q, quarter = curve()
     f = dip(t, f, 20.0, 0.013, fall=0.25, rise=0.25)
     f = dip(t, f, 75.1, 0.013, fall=0.25, rise=0.25)
     f = dip(t, f, 50.0, 0.08, fall=0.3, rise=1.5)          # and one like neither: a Tabby dip stays
     found, _ = archive.find_dips(t, f, q, quarter)
     verdicts = {round(d["middle"]): d["verdict"] for d in found}
-    assert verdicts == {20: "periodic", 75: "periodic", 50: "dip"}
+    assert verdicts == {20: archive.REPEAT, 75: archive.REPEAT, 50: "dip"}
+    assert [d["separation_days"] for d in found if d["verdict"] == archive.REPEAT] == [pytest.approx(55.1, abs=0.03)] * 2
+
+
+PAGE = """<p>Showing 1 to 50 of 52 results</p><table><tr class="odd">
+								<td><a href="/overview/?k={kic}">{kic}</a></td>
+
+								<td>{period}</td>
+								<td>0.0000001</td>
+								<td>54964.696236</td>
+								<td>0.013589</td>
+								<td>{morph}</td>
+								<td>78.7688</td></tr></table>"""
+
+
+def test_the_binary_catalogue_is_read_from_its_own_table_and_kept(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    asked = []
+
+    def get(url, timeout=None):
+        asked.append(url)
+        page = int(url.rsplit("=", 1)[1])
+        return Reply(text=PAGE.format(kic=9221398 if page == 1 else 8129189,
+                                      period="13.7875200" if page == 1 else "53.6470815", morph="0.04"))
+    listed = archive.villanova(get)
+    assert listed == {9221398: {"period": 13.78752, "morph": 0.04}, 8129189: {"period": 53.6470815, "morph": 0.04}}
+    assert asked == ["https://keplerebs.villanova.edu/?page=1", "https://keplerebs.villanova.edu/?page=2"]
+    assert archive.villanova(get=None) == listed                            # kept
+
+
+def test_a_possible_repeat_is_a_known_binary_only_when_a_catalogue_says_so(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    monkeypatch.setattr(archive, "villanova", lambda get=None: {9221398: {"period": 13.78752, "morph": 0.04}})
+    answer = {"real_dips": 0, "possible_repeats": 2}
+    known = archive.checked(answer, 9221398, (290.0, 45.0), variables=lambda ra, dec, r: [])
+    assert known["known_binary"] == "Villanova Kepler EB catalogue, period 13.7875 d"
+    by_vsx = archive.checked(answer, 1, (290.0, 45.0), variables=lambda ra, dec, r: [
+        {"name": "V2083 Cyg", "type": "EA/DM", "ra": 290.0, "dec": 45.0}])
+    assert by_vsx["known_binary"] == "VSX V2083 Cyg, type EA/DM"
+    lead = archive.checked(answer, 1, (290.0, 45.0), variables=lambda ra, dec, r: [
+        {"name": "V1 Cyg", "type": "ROT", "ra": 290.0, "dec": 45.0}])
+    assert lead["known_binary"] is None and lead["catalogues"]["vsx"] == [{"name": "V1 Cyg", "type": "ROT"}]
+    quiet = archive.checked({"real_dips": 0, "possible_repeats": 0}, 1, None, variables=None)
+    assert quiet["catalogues"] is None                                       # nothing to check: nothing asked
 
 
 def test_a_dip_at_a_gap_is_an_edge():
