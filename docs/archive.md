@@ -229,6 +229,10 @@ at least five times the star's own scatter, a possible repeat, or a short
 TESS dip), then "routine" (a dip within a variable star's usual swing),
 each by that contrast. A routine lead gets the catalogues only (SIMBAD,
 VSX, Villanova, Gaia), not the slower ZTF and other-mission checks.
+VSX comes through VizieR, from CDS or any of its mirrors (Harvard, Cape
+Town, Tokyo, Pune, Beijing), each given 10 seconds to answer the call; a
+mirror that sends an empty page has not answered, so VSX is asked again
+later rather than taken as listing nothing.
 A lead is the screens' own (`archive.is_lead`: a dip left, a possible
 repeated eclipse or a short TESS dip, not a known binary; Tabby-like
 first) or a SETI sweep's candidate (every ON look, no OFF look;

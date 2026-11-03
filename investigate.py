@@ -68,10 +68,13 @@ import records
 ROOT = Path(__file__).parent
 REPORTS = ROOT / "docs" / "research"
 TIMEOUT = 90
+CONNECT_TIMEOUT = 10     # a service that has not even answered the call by then is down: try the next mirror
 HEADERS = {"User-Agent": "telescopeyoke/0.1 (personal research: looking into a light curve's dips)"}
 
 SIMBAD = ("https://simbad.cds.unistra.fr/simbad/sim-tap/sync", "https://simbad.harvard.edu/simbad/sim-tap/sync")
-VIZIER = ("https://vizier.cds.unistra.fr/viz-bin/asu-tsv", "https://vizier.cfa.harvard.edu/viz-bin/asu-tsv")
+VIZIER = tuple(f"https://{host}/viz-bin/asu-tsv" for host in (   # CDS and its mirrors, tried in turn
+    "vizier.cds.unistra.fr", "vizier.cfa.harvard.edu", "vizier.idia.ac.za", "vizier.nao.ac.jp",
+    "vizier.iucaa.in", "vizier.china-vo.org"))
 GAIA = "https://gea.esac.esa.int/tap-server/tap/sync"
 ZTF = "https://irsa.ipac.caltech.edu/cgi-bin/ZTF/nph_light_curves"
 VILLANOVA = "https://keplerebs.villanova.edu/overview/?k={kic}"
@@ -123,7 +126,7 @@ def _today():
 
 
 def _get(get, url, **kw):
-    reply = get(url, timeout=TIMEOUT, headers=HEADERS, **kw)
+    reply = get(url, timeout=(CONNECT_TIMEOUT, TIMEOUT), headers=HEADERS, **kw)
     reply.raise_for_status()
     return reply
 
@@ -175,7 +178,10 @@ def vsx(ra, dec, get=requests.get):
             continue
         lines = [ln for ln in text.splitlines() if ln.strip() and not ln.startswith("#")]
         dashes = next((k for k, ln in enumerate(lines) if ln.startswith("-")), None)   # the rows come after it
-        rows = [ln.split("\t") for ln in lines[dashes + 1:]] if dashes is not None else []
+        if dashes is None:      # no table at all (a mirror sending empty pages): not an answer, never "none"
+            last = ValueError("no table in the reply")
+            continue
+        rows = [ln.split("\t") for ln in lines[dashes + 1:]]
         answer = None if not rows else {"name": rows[0][0].strip(), "type": rows[0][1].strip(),
                                         "period": rows[0][2].strip() if len(rows[0]) > 2 else ""}
         return _asked("VSX (via VizieR)", f"https://www.aavso.org/vsx/index.php?view=results.get&coords={ra}+{dec}"

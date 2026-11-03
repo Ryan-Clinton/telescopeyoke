@@ -1,6 +1,7 @@
 """The research director: a lead taken without being told which, every
 check's answer kept with its source, the verdict by fixed rules, and the
 dashboard counting each survey and lead. Nothing touches the network."""
+import requests
 import json
 from datetime import date
 
@@ -383,3 +384,23 @@ def test_pulling_the_research_copies_the_desktops_records_and_reports_only(tmp_p
     assert all(c[:2] == ["rsync", "-a"] and "--delete" not in c for c in calls)
     assert calls[0][2] == "desktop:telescopeyoke-laptop/research/data-research/cache/kepler/screened.json"
     assert "cache/tess/" not in got and "cache/research/" in got and got[-1] == "docs/research/"
+
+
+def test_vsx_skips_a_mirror_sending_empty_pages_and_never_calls_that_none():
+    asked = []
+
+    def get(url, params=None, timeout=None, headers=None):
+        asked.append(url)
+        assert timeout[0] == investigate.CONNECT_TIMEOUT          # a dead mirror is left in seconds, not minutes
+        if "unistra" in url:
+            raise requests.ConnectTimeout("down")
+        if "harvard" in url:
+            return Reply("")                                      # 200 with nothing in it
+        return Reply("#\nName\tType\tPeriod\n----\t----\t----\nKIC 8462852\tROT/DIP\t\n")
+    r = investigate.vsx(301.56436, 44.45689, get=get)
+    assert r["answer"] == {"name": "KIC 8462852", "type": "ROT/DIP", "period": ""} and len(asked) == 3
+
+    def empty(url, params=None, timeout=None, headers=None):
+        return Reply("")
+    r = investigate.vsx(301.56436, 44.45689, get=empty)
+    assert r["answer"] is None and r["error"].startswith("not answered")  # asked again next run, not "not in VSX"

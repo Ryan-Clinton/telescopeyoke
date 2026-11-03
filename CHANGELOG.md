@@ -6,6 +6,9 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+- **3 November 2026**: VSX is asked of every VizieR mirror in turn, a
+  dead one left after 10 seconds, and an empty page is no longer read as
+  "not in VSX" ([archive](docs/archive.md)).
 - **3 November 2026**: a fresh session sees the research. `./ty context`
   opens with the mission (discovery first; strange stars and SETI wanted)
   and gives the research queue, the most intriguing leads and any
