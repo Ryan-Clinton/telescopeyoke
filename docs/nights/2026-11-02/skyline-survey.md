@@ -189,3 +189,18 @@ with the skyline in use (36-54°) or with the midday survey at 210-217.5°
 was never checked by eye: the 72-75° in use there is the survey of
 2 November, and the midday survey's 20° may be a sunlit wall or may be
 right.
+
+**The south-west photo, looked at again.** `horizon/ralphie-side/sightings/PXL_20261102_164757958.jpg`
+(2 November 16:47, toward the sunset glow, the telescope in the frame)
+shows trees standing high on the left, a low gap over the fence and the
+distant houses in the middle, and a white rendered house filling the right
+side high up. It agrees with the midday survey: 210-217.5° high (51-54°),
+225-262.5° open to 20° in frames 41-56% as bright as the high sky (real low
+sky), and 270-315° read "open" in frames 3.5-5.4 times as bright as the
+high sky: the white house lit by the Sun. 225-262.5° was taken into the
+skyline in use, open to 20°, on that photo
+(`--use-aside ... --bearings 225-262.5`, with the change shown first); the
+west stays at 72-75°. The earlier "210-228°" for the photo was an estimate
+from the sky map and is not used. A frame far brighter than the high sky
+low down in the day is a lead for telling a lit wall from sky, now with
+one photo to check it against.
