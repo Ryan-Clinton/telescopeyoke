@@ -220,3 +220,10 @@ def test_a_sweep_carries_on_from_the_last_block_searched_and_keeps_every_candida
     assert second["candidates_so_far"][0]["block"] == 1
     from test_interface import valid
     valid(interface.envelope("seti", second), "seti")
+
+
+def test_a_burst_that_lights_every_drift_line_near_it_is_one_hit():
+    made = spectra(seed=4)
+    made[7, 1500:1560] += 60.0                 # one spectrum bright across 60 channels: a burst of interference
+    hits = seti.search(made, FOFF, TSAMP, FCH1)
+    assert len(hits) == 1 and 1400 < hits[0]["channel"] < 1660

@@ -293,8 +293,10 @@ def flatten(spectra, block=BLOCK):
 
 def search(spectra, foff, tsamp, fch1, snr_min=SNR_MIN, max_drift=MAX_DRIFT, block=BLOCK):
     """The hits in one look: each drift line whose sum is snr_min times its
-    noise, the best drift for each channel, neighbours merged. A hit's
-    frequency is where it was at the start of the look."""
+    noise, the best drift for each channel, and only the strongest within
+    the widest drift searched of it (as turboSETI keeps its top hits): one
+    strong burst lights every drift line near it, and is one hit, not
+    dozens. A hit's frequency is where it was at the start of the look."""
     n_t, n_f = spectra.shape
     flat = flatten(spectra, block)
     width_hz = abs(foff) * 1e6
@@ -318,7 +320,7 @@ def search(spectra, foff, tsamp, fch1, snr_min=SNR_MIN, max_drift=MAX_DRIFT, blo
     for i in over[np.argsort(-best[over])]:
         if taken[i]:
             continue
-        reach = abs(best_k[i]) + WINDOW_CHANNELS
+        reach = most + WINDOW_CHANNELS
         taken[max(0, i - reach):i + reach + 1] = True
         hits.append({"channel": int(i), "frequency_mhz": round(fch1 + i * foff, 6),
                      "drift_hz_s": round(best_k[i] * foff * 1e6 / span, 4) if span else 0.0,
