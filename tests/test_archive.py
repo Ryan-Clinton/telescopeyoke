@@ -384,6 +384,9 @@ def test_a_stars_quarters_are_fetched_once_kept_and_each_put_on_its_own_level(tm
     paths = archive.fetch(1234567, get, say=lambda *_: None)
     assert len(paths) == 2 and asked[0].endswith("/0012/001234567/")
     assert archive.fetch(1234567, get=None, say=lambda *_: None) == paths       # kept: no second fetch
+    (archive.store(1234567) / archive.COMPLETE).unlink()                      # as a fetch broken part way leaves it
+    asked.clear()
+    assert archive.fetch(1234567, get, say=lambda *_: None) == paths and len(asked) == 3     # fetched whole again
     lc = archive.read(paths)
     assert np.nanmedian(lc["f"][lc["quarter"] == 1]) == 1.0 and np.nanmedian(lc["f"][lc["quarter"] == 2]) == 1.0
     assert np.isnan(lc["f"][len(t) + 5])                                         # a flagged point is not used

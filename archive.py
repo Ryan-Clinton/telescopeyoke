@@ -79,6 +79,7 @@ BKJD = 2454833.0     # Kepler's times are BJD minus this
 TABBY = 8462852
 TIMEOUT = 120
 FETCHING = 8         # a star's quarters fetched at once
+COMPLETE = "complete"     # written in a star's folder once every file is in
 TARGETS = "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
 TARGET_QUERY = "select distinct kepid, kepmag from keplerstellar where kepmag is not null order by kepmag"
 
@@ -141,7 +142,11 @@ def fetch(kic, get=requests.get, say=print):
     """The star's light-curve files, from the copy kept or from MAST."""
     folder = store(kic)
     kept = sorted(folder.glob("*_llc.fits"))
-    if kept:
+    # A copy counts only once every quarter is in (the COMPLETE mark): a
+    # fetch broken part way (MAST reset the line, 3 November 2026) left
+    # some, which would have been taken for the whole light curve. A copy
+    # without the mark is fetched again.
+    if kept and (folder / COMPLETE).exists():
         return kept
     urls = files(kic, get)
     if not urls:
@@ -158,6 +163,7 @@ def fetch(kic, get=requests.get, say=print):
     from concurrent.futures import ThreadPoolExecutor
     with ThreadPoolExecutor(FETCHING) as pool:
         list(pool.map(one, urls))
+    (folder / COMPLETE).write_text(f"{len(urls)} quarters\n", encoding="utf-8")
     return sorted(folder.glob("*_llc.fits"))
 
 
@@ -299,7 +305,7 @@ def tess_fetch(tic, say=print):
     """The star's SPOC 2-minute light curves, from the copy kept or MAST."""
     folder = tess_store(tic)
     kept = sorted(folder.glob("*_lc.fits"))
-    if kept:
+    if kept and (folder / COMPLETE).exists():
         return kept
     from astroquery.mast import Observations
     found = Observations.query_criteria(target_name=str(tic), obs_collection="TESS", dataproduct_type="timeseries",
@@ -317,6 +323,9 @@ def tess_fetch(tic, say=print):
             source.rename(folder / source.name)
     import shutil
     shutil.rmtree(folder / "mastDownload", ignore_errors=True)
+    if len(list(folder.glob("*_lc.fits"))) < len(products):
+        raise OSError(f"only part of TIC {tic}'s sectors came: fetch it again")
+    (folder / COMPLETE).write_text(f"{len(products)} sectors\n", encoding="utf-8")
     return sorted(folder.glob("*_lc.fits"))
 
 
