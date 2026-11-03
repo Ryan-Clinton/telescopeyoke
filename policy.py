@@ -47,6 +47,7 @@ COMMANDS = {
     "agent.py": ("read_only", {}, {}),
     "agentlog.py": ("read_only", {}, {}),
     "alert.py": ("external", {"--test": "external"}, DRY),
+    "archive.py": ("local_write", {}, {}),           # fetches Kepler light curves from MAST into cache/
     "app.py": ("hardware", {}, {}),                 # the application drives the rig on request
     # it fetches the alerts first, plan or not
     "brokers.py": ("local_write", {"--follow": "hardware"},

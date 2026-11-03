@@ -409,6 +409,19 @@ def test_a_sweep_matches_the_patrol_schema(tmp_path, monkeypatch):
     valid(interface.run("patrol", lambda: patrol.sweep(True, say=lambda *_: None)), "patrol")
 
 
+def test_an_archive_answer_matches_its_schema(tmp_path, monkeypatch):
+    import numpy as np
+    import archive
+    from test_archive import curve, dip
+    t, f, q, quarter = curve()
+    f = dip(t, f, 40.0, 0.10, fall=0.5, rise=2.0)
+    monkeypatch.setattr(archive, "fetch", lambda kic, get=None, say=None: [])
+    monkeypatch.setattr(archive, "read", lambda paths: {"t": t, "f": f, "q": q, "quarter": quarter})
+    one = valid(interface.run("archive", lambda: dict(archive.analyse(8462852), kind="measured")), "archive")["data"]
+    assert one["tabby_like"] and one["dips"][0]["verdict"] == "dip" and np.isfinite(one["score"])
+    valid(interface.run("archive", lambda: archive.search([8462852], say=lambda *_: None)), "archive")
+
+
 def test_a_brokers_answer_matches_its_schema():
     import brokers
     from test_brokers import NOW, REPORTED, get

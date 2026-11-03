@@ -16,6 +16,11 @@ proven is `docs/validation.md` ("Current conclusions").
   target's looks by cadence, a de-Doppler search of one look's slice read
   over the web, and the ON-OFF test that labels each hit candidate,
   interference or unconfirmed ([seti](docs/seti.md)).
+- **Searching Kepler's archive for stars like Tabby's** (`archive.py`):
+  a star's dips in its Kepler light curve from MAST, each checked for
+  edges, gaps, spacecraft events, periodicity and variability; it finds
+  Tabby's D792, D1519 and the 2013 complex, and ranks many stars by how
+  Tabby-like they are ([archive](docs/archive.md)).
 - **What a stack reaches, and who wants what measured** (`ty night`,
   `transits.py`, `build_catalogue.py`): the catalogue holds galaxies to
   magnitude 12 (1,660 objects, from 641), built from a pinned OpenNGC

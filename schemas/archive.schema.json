@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/archive.schema.json",
+  "title": "Archive",
+  "description": "data of: archive.py dips STAR --json, one star's dips in its Kepler light curve (MAST), each with its verdict after the artefact checks; and of archive.py search FILE_OR_IDS --json, each star's dips left, the most Tabby-like first. Nothing moves.",
+  "type": "object",
+  "anyOf": [
+    {"required": ["star", "kic", "quarters", "points", "scatter_percent", "dips", "real_dips", "deepest_percent", "tabby_like", "score", "source", "kind"]},
+    {"required": ["stars", "missed", "kind"]}
+  ],
+  "$defs": {
+    "dip": {
+      "type": "object",
+      "required": ["middle", "depth_percent", "verdict"],
+      "properties": {
+        "start": {"type": "number", "description": "BKJD: BJD minus 2454833."},
+        "middle": {"type": "number", "description": "BKJD of the faintest point."},
+        "end": {"type": "number"},
+        "date": {"type": "string", "description": "The faintest point's day, UTC."},
+        "depth_percent": {"type": "number"},
+        "hours": {"type": "number"},
+        "asymmetry": {"type": "number", "description": "-1 to 1: positive when the recovery is slower than the fall."},
+        "points": {"type": "integer"},
+        "flags": {"type": "integer", "description": "Kepler quality flags (attitude tweak, safe mode, coarse or Earth point, momentum dump, manual exclude) near the faintest point."},
+        "verdict": {"enum": ["dip", "edge", "spacecraft", "periodic", "variability"], "description": "dip: left after the checks; edge: faintest at a quarter's end or a gap; spacecraft: a short dip on a quality flag; periodic: like dips at whole multiples of one interval (an eclipsing binary or planet); variability: dips over much of the curve."},
+        "period_days": {"type": "number"}
+      }
+    },
+    "star": {
+      "type": "object",
+      "required": ["star", "kic", "dips", "real_dips", "deepest_percent", "tabby_like", "score"],
+      "properties": {
+        "star": {"type": "string"},
+        "kic": {"type": "integer"},
+        "quarters": {"type": "integer"},
+        "points": {"type": "integer"},
+        "scatter_percent": {"type": ["number", "null"], "description": "The light curve's robust scatter (1.4826 x median absolute deviation)."},
+        "dips": {"type": "array", "items": {"$ref": "#/$defs/dip"}},
+        "real_dips": {"type": "integer"},
+        "deepest_percent": {"type": "number"},
+        "tabby_like": {"type": "boolean", "description": "A dip left that is at least 5% deep."},
+        "score": {"type": "number", "description": "The dips left, each its depth in percent times (1 + |asymmetry|), added."},
+        "source": {"type": "string"}
+      }
+    }
+  },
+  "properties": {
+    "star": {"type": "string"},
+    "kic": {"type": "integer"},
+    "quarters": {"type": "integer"},
+    "points": {"type": "integer"},
+    "scatter_percent": {"type": ["number", "null"]},
+    "dips": {"type": "array", "items": {"$ref": "#/$defs/dip"}},
+    "real_dips": {"type": "integer"},
+    "deepest_percent": {"type": "number"},
+    "tabby_like": {"type": "boolean"},
+    "score": {"type": "number"},
+    "source": {"type": "string"},
+    "stars": {"type": "array", "items": {"$ref": "#/$defs/star"}},
+    "missed": {"type": "array", "items": {"type": "object", "required": ["kic", "why"],
+                                          "properties": {"kic": {"type": "integer"}, "why": {"type": "string"}}}},
+    "kind": {"enum": ["measured"]}
+  }
+}
