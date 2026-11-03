@@ -655,20 +655,48 @@ def test_a_jammed_camera_is_reopened_and_the_frame_asked_for_again():
         stuck.frame(1)
 
 
-def test_a_skyline_checked_by_eye_stands_where_a_survey_differs_and_only_there():
+def test_a_survey_is_weighed_point_by_point_against_the_skyline_in_use():
     """3 November 2026: glare due south read a wall above 75°, and at midday
-    the sunlit house in the west read as sky down to 20°."""
-    checked = {"checked_by_eye": "due south not open low; house in the west",
-               "skyline": [{"az": az, "alt": 72.0 if 285 <= az <= 330 else 36.0} for az in range(0, 360, 15)]}
-    new = [{"az": 165, "alt": 40.0}, {"az": 180, "alt": 90.0}, {"az": 195, "alt": 38.0},
-           {"az": 300, "alt": 20.0, "open": True}]
-    skyline, differ = horizon.keep_checked(new, checked)
-    assert [d["az"] for d in differ] == [180, 300]
-    at = {p["az"]: p for p in skyline}
-    assert at[165]["alt"] == 40.0 and at[195]["alt"] == 38.0              # agreeing bearings taken
-    assert at[180]["alt"] == 36.0 and at[300]["alt"] == 72.0 and "not taken" in at[300]["by"]
-    assert horizon.keep_checked(new, dict(checked, checked_by_eye=None)) == (new, [])   # nobody looked
-    assert horizon.keep_checked(new, {}) == (new, [])
+    a bright west read as sky down to 20°."""
+    old = [{"az": az, "alt": 72.0 if 285 <= az <= 330 else 36.0, "by": "telescope"} for az in range(0, 360, 15)]
+    old[12]["by"] = "earlier skyline, not rechecked"                         # 180°: inferred
+    kept = {"skyline": old, "checked_spans": [{"from": 172.5, "to": 187.5, "words": "south not open low"}]}
+    new = [{"az": 165, "alt": 40.0, "by": "telescope"},                      # close: the newer taken
+           {"az": 180, "alt": 90.0, "by": "telescope"},                      # against the person's eye
+           {"az": 300, "alt": 20.0, "open": True, "by": "telescope"},       # telescope against telescope, lower
+           {"az": 45, "alt": 50.0, "by": "telescope"},                       # telescope against telescope, higher
+           {"az": 90, "alt": 60.0, "by": "earlier skyline, moved +24.0° by the looks nearby"}]   # inferred
+    skyline, differ = horizon.reconcile(new, kept)
+    at = {q["az"]: q for q in skyline}
+    assert at[165]["alt"] == 40.0 and at[165]["trust"] == "telescope"
+    assert at[180]["alt"] == 36.0 and at[180]["trust"] == "eye"             # the eye stands
+    assert at[300]["alt"] == 72.0                                            # alike and apart: the higher
+    assert at[45]["alt"] == 50.0                                             # alike and apart: the higher
+    assert at[90]["alt"] == 36.0                                             # inferred never moves measured
+    assert {d["az"] for d in differ} == {180, 300, 45, 90}
+    # Nothing in use: the survey as it is, each point with its trust.
+    alone, none = horizon.reconcile(new, {})
+    assert none == [] and alone[4]["trust"] == "inferred" and alone[0]["alt"] == 40.0
+
+
+def test_a_span_checked_by_eye_is_kept_and_a_taken_span_joins_safely(kept):
+    horizon.keep([{"az": az, "alt": 54.0, "by": "telescope"} for az in range(0, 360, 15)], "telescope")
+    horizon.check_span(horizon.span("350-10"), "house due north", 20, 2)
+    assert horizon.measured()["checked_spans"][0]["words"] == "house due north"
+    found = [{"az": az, "state": "open" if 225 <= az <= 255 else "edge", "clear": 20 if 225 <= az <= 255 else 50,
+              "shut": None if 225 <= az <= 255 else 49} for az in range(0, 360, 15)]
+    aside = horizon.set_aside(horizon.skyline_from(found, 20), "test", trace=found, looks=[], warnings=[])
+    before = horizon.RESULTS.read_text()
+    shown = horizon.use_aside(aside, "photo", 20, 2, horizon.span("225-255"), dry_run=True)
+    assert horizon.RESULTS.read_text() == before and shown["changes"]          # shown, not kept
+    assert all(b < a for _, a, b in shown["changes"] if 225 <= _ <= 255)
+    horizon.use_aside(aside, "photo", 20, 2, horizon.span("225-255"))
+    saved = horizon.measured()
+    at = {q["az"]: q for q in saved["skyline"]}
+    assert at[240]["alt"] == 20 and at[240]["trust"] == "eye"
+    assert at[224.9]["alt"] == 54.0 and at[255.1]["alt"] == 54.0              # the joins open nothing
+    assert [s["words"] for s in saved["checked_spans"]] == ["house due north", "photo"]
+    assert float(horizon.limit(saved["skyline"], [270])[0]) == 54.0          # outside the span: unchanged
 
 
 def test_a_recheck_that_differs_with_the_mount_in_the_same_place_costs_one_bearing():
@@ -688,6 +716,7 @@ def test_bearings_a_person_has_looked_at_are_taken_from_a_survey_set_aside(kept)
     saved = json.loads(horizon.RESULTS.read_text(encoding="utf-8"))
     at = {p["az"]: p["alt"] for p in saved["skyline"]}
     assert at[240] == 20 and at[90] == 54.0 and "photo of the SW gap" in saved["checked_by_eye"]
+    assert saved["checked_spans"][-1] == {"from": 225.0, "to": 262.5, "words": "photo of the SW gap"}
     assert "first look" in saved["checked_by_eye"]
     with pytest.raises(interface.Refusal):
         horizon.span("south-west")

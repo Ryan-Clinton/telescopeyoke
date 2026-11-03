@@ -943,15 +943,16 @@ def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, mo
         same = is_sky(look(first["az"], first["clear"])) and \
             (first["state"] != "edge" or look(first["az"], first["shut"]) in (False, np.False_))
     if first and not same and not slipped(log, first["az"]):
-        # The mount came back to the same place: the light changed there, as
-        # it does on a top at the look's own height. That bearing keeps what
+        # The mount's axes came back alike: no slip seen, though that proves
+        # the mechanics, not the optics. That bearing, unrepeatable, keeps what
         # the skyline in use says; the rest stands (3 November 2026: one
         # recheck at 30°, an edge then sky with the axes alike, set a whole
         # survey of 136 looks aside).
         f = found[first["az"]]
         f.update(state="unreachable", unrepeatable=True)
-        warnings.append(f"Bearing {first['az']:g}° read differently the second time with the mount in the "
-                        "same place (the light changed): left as the skyline in use has it.")
+        warnings.append(f"Bearing {first['az']:g}° read differently the second time, with the mount's axes "
+                        "alike (no slip seen; the light, or the reading of a top at the look's own height): "
+                        "unrepeatable, left as the skyline in use has it.")
     elif first and not same:
         sides = {e.get("over") for e in log if e["az"] == first["az"] and "over" in e}
         why = (" The tube came at it from the other side of the pole the second time, and the mount's "
@@ -1084,26 +1085,84 @@ def skyline_from(found, low, known=None):
 EYE_DOUBT = JUMP     # degrees above a skyline a person checked by eye before a survey is doubted
 
 
-def keep_checked(skyline, kept, by=EYE_DOUBT):
-    """(skyline, differ): a new survey's skyline, except at the bearings
-    where it is more than `by` degrees above or below a skyline a person
-    checked by eye; there the checked height stands, and `differ` lists them
-    ({"az", "read", "checked"}) for the person to look at. Nothing checked:
-    the survey's skyline as it is. 3 November 2026: in the morning glare due
-    south read as a wall above 75°; at midday the sunlit house wall in the
-    west read as sky down to 20°. Each was a few bearings, and each had set
-    a whole survey aside, or would have planned behind the house."""
-    if not kept or not kept.get("checked_by_eye") or not kept.get("skyline"):
-        return list(skyline), []
+TRUST = {"inferred": 1, "telescope": 2, "eye": 3}
+
+
+def in_spans(az, spans):
+    """Whether a bearing lies in one of the spans a person checked by eye."""
+    return any(within(az, (s["from"], s["to"])) for s in spans or [])
+
+
+def trust(point, spans=None):
+    """How much stands behind one skyline point: "eye" inside a span a person
+    checked, "telescope" for a top the telescope looked at itself, and
+    "inferred" for anything put there from other points (a corner between
+    looks, an earlier skyline moved by the looks nearby or not rechecked,
+    nothing measured)."""
+    if in_spans(point["az"], spans):
+        return "eye"
+    by = str(point.get("by", "telescope"))
+    if by.startswith("telescope") and not by.startswith("telescope, between"):
+        return "telescope"
+    return "inferred"
+
+
+def reconcile(skyline, kept, by=EYE_DOUBT):
+    """(skyline, differ): a new survey's points weighed against the skyline
+    in use, point by point, never replaced wholesale. A point with less
+    behind it never replaces one with more (an inferred point never moves a
+    measured one, a survey never overrules a person's eye); one with more
+    replaces one with less; two alike within `by` degrees take the newer,
+    and two alike that differ more keep the higher, the safe one for the
+    planner. Each point keeps its "trust". `differ` lists the points more
+    than `by` apart and what was done ({"az", "read", "was", "kept"}).
+    3 November 2026: glare due south read a wall above 75°, and at midday a
+    bright west read as sky down to 20°; a single "checked" label on the
+    whole skyline had stood in for what the person had really looked at."""
+    old = (kept or {}).get("skyline") or []
+    spans = (kept or {}).get("checked_spans") or []
+    if not old:
+        return [dict(q, trust=trust(q)) for q in skyline], []
+
+    def nearest(az):
+        return min(old, key=lambda q: min(between(az, q["az"]), between(q["az"], az)) % 360)
     out, differ = [], []
-    for p in skyline:
-        was = round(float(limit(kept["skyline"], [p["az"]])[0]), 1)
-        if abs(p["alt"] - was) > by:
-            differ.append({"az": p["az"], "read": p["alt"], "checked": was})
-            out.append({"az": p["az"], "alt": was, "by": f"checked by eye; this survey read {p['alt']:g}°, not taken"})
+    for q in skyline:
+        was = round(float(limit(old, [q["az"]])[0]), 1)
+        mine, theirs = TRUST[trust(q)], TRUST["eye"] if in_spans(q["az"], spans) else TRUST[trust(nearest(q["az"]))]
+        apart = abs(q["alt"] - was) > by
+        if mine < theirs or (mine == theirs and apart and was > q["alt"]):
+            name = next(k for k, v in TRUST.items() if v == theirs)
+            out.append({"az": q["az"], "alt": was, "trust": name,
+                        "by": f"kept ({name}); this survey read {q['alt']:g}°" + ("" if apart else ", close")})
+            kept_as = "the one in use"
         else:
-            out.append(p)
+            out.append(dict(q, trust=trust(q)))
+            kept_as = "this survey's"
+        if apart:
+            differ.append({"az": q["az"], "read": q["alt"], "was": was, "kept": kept_as})
     return out, differ
+
+
+def compare(before, after, low, margin, step=FINEST):
+    """Rows (bearing, usable from before, after) wherever what the planner
+    may use changes by more than half a degree."""
+    rows = []
+    for az in np.arange(0, 360, step / 2):
+        a = round(max(float(limit(before, [az], margin)[0]), low), 1)
+        b = round(max(float(limit(after, [az], margin)[0]), low), 1)
+        if abs(a - b) > 0.5:
+            rows.append((float(az), a, b))
+    return rows
+
+
+def print_compare(rows):
+    if not rows:
+        print("The planner's usable skyline does not change.")
+        return
+    print("Where the planner's usable skyline changes (usable from, before -> after):")
+    for az, a, b in rows:
+        print(f"  {az:>6g}°  {a:>5.1f}° -> {b:>5.1f}°  {'lower' if b < a else 'higher'}")
 
 
 def skyline_blocked(found):
@@ -1165,6 +1224,9 @@ def main():
     ap.add_argument("--forget", action="store_true", help="throw the measured skyline away; nothing moves")
     ap.add_argument("--use-aside", metavar="FILE",
                     help="keep a survey that was set aside, once a person has checked what it doubted; nothing moves")
+    ap.add_argument("--check-span", action="store_true",
+                    help="with --bearings and --checked: mark the skyline in use there as checked by eye, "
+                         "so no survey replaces it there; nothing moves")
     ap.add_argument("--bearings", metavar="FROM-TO",
                     help="with --use-aside: take only these bearings (clockwise, as 225-262.5) from the "
                          "set-aside survey into the skyline in use")
@@ -1216,7 +1278,35 @@ def within(az, bearings):
     return (az - a) % 360 <= (b - a) % 360
 
 
-def use_aside(path, checked, low, margin, bearings=None):
+def edges(old, taken, bearings):
+    """Points just outside each end of a span taken into a skyline, at the
+    higher of the two tops meeting there, so the join opens no gap that
+    neither skyline saw (as a corner between two looks is put)."""
+    out = []
+    for end, outward in ((bearings[0], -0.1), (bearings[1], 0.1)):
+        inside = float(limit(taken, [end])[0])
+        outside = float(limit(old, [(end + outward) % 360])[0])
+        out.append({"az": round((end + outward) % 360, 1), "alt": round(max(inside, outside), 1),
+                    "by": "a corner where a taken span meets the skyline in use, put at the higher",
+                    "trust": "inferred"})
+    return out
+
+
+def check_span(bearings, checked, low, margin):
+    """Mark the skyline in use between two bearings as checked by a
+    person's eye, as it stands: no survey replaces it there."""
+    current = measured()
+    if not current or not bearings or not checked:
+        raise interface.Refusal("INVALID_REQUEST", "--check-span needs a skyline in use, --bearings FROM-TO "
+                                "and --checked \"what you saw\".")
+    spans = list(current.get("checked_spans") or []) + [{"from": bearings[0], "to": bearings[1], "words": checked}]
+    current["checked_spans"] = spans
+    records.write(RESULTS, current)
+    print(f"{bearings[0]:g}-{bearings[1]:g}° marked as checked by eye: {checked}.")
+    return {"checked_spans": spans}
+
+
+def use_aside(path, checked, low, margin, bearings=None, dry_run=False):
     """Keep a survey that was set aside, now that a person has looked at
     what it doubted. Its first answer at each bearing stands, and a lone
     opening is put at its neighbours' lower top as a survey now would.
@@ -1241,17 +1331,22 @@ def use_aside(path, checked, low, margin, bearings=None):
         current = measured()
         if not current:
             raise interface.Refusal("INVALID_REQUEST", "No skyline is in use to take bearings into.")
-        taken = [dict(p, by=f"{p.get('by', 'telescope')}; taken from {path.name} on the word: {checked}")
+        taken = [dict(p, trust="eye", by=f"{p.get('by', 'telescope')}; taken from {path.name} on the word: {checked}")
                  for p in skyline if within(p["az"], bearings)]
         if not taken:
             raise interface.Refusal("INVALID_REQUEST", f"{path.name} has nothing between {bearings[0]:g}° and "
                                     f"{bearings[1]:g}°.")
-        skyline = sorted([p for p in current["skyline"] if not within(p["az"], bearings)] + taken,
-                         key=lambda p: p["az"])
+        skyline = sorted([p for p in current["skyline"] if not within(p["az"], bearings)] + taken
+                         + edges(current["skyline"], taken, bearings), key=lambda p: p["az"])
+        spans = list(current.get("checked_spans") or []) + [{"from": bearings[0], "to": bearings[1], "words": checked}]
+        print_compare(compare(current["skyline"], skyline, low, margin))
+        if dry_run:
+            print("Dry run: nothing kept.")
+            return {"would_take": len(taken), "changes": compare(current["skyline"], skyline, low, margin)}
         words = "; ".join(w for w in (current.get("checked_by_eye"), f"{bearings[0]:g}-{bearings[1]:g}°: {checked}") if w)
         kept = keep(skyline, current.get("source", "telescope"), looks=current.get("looks", []),
                     warnings=current.get("warnings", []), trace=current.get("trace", []),
-                    blocked=current.get("blocked", []), checked_by_eye=words)
+                    blocked=current.get("blocked", []), checked_by_eye=words, checked_spans=spans)
         print(f"Took {len(taken)} point(s) at {bearings[0]:g}-{bearings[1]:g}° from {path.name}, on the word: "
               f"{checked}. The rest of the skyline in use is unchanged.")
         return dict({k: v for k, v in kept.items() if k not in ("saved", "looks", "trace")},
@@ -1305,7 +1400,9 @@ def run(args):
     if args.move_from:
         return move_from(args.move_from, args.offset, args.distances, low, margin)
     if args.use_aside:
-        return use_aside(Path(args.use_aside), args.checked, low, margin, span(args.bearings))
+        return use_aside(Path(args.use_aside), args.checked, low, margin, span(args.bearings), args.dry_run)
+    if args.check_span:
+        return check_span(span(args.bearings), args.checked, low, margin)
     if args.forget:
         had = bool(measured())
         if RESULTS.exists():
@@ -1404,19 +1501,19 @@ def run(args):
                             + f": a wall to {TOP}° is possible, but so is a telescope aimed somewhere else. "
                             "Look that way yourself.")
         measured_now = skyline_from(found, low, known)
-        skyline, differ = keep_checked(measured_now, kept)
-        more = {}
+        skyline, differ = reconcile(measured_now, kept)
+        more = {k: kept[k] for k in ("checked_by_eye", "checked_spans") if kept.get(k)}
         if differ:
             # The whole survey kept aside too, so a bearing a person has
             # looked at can be taken from it (--use-aside FILE --bearings).
-            aside = set_aside(measured_now, f"differs from the skyline checked by eye at {len(differ)} point(s)",
+            aside = set_aside(measured_now, f"differs from the skyline in use at {len(differ)} point(s)",
                               looks=results, warnings=warnings, trace=found, differ=differ)
-            more = {"checked_by_eye": kept["checked_by_eye"], "not_taken": differ, "survey_file": aside.name}
+            more.update(differ=differ, survey_file=aside.name)
             warnings.append(
-                f"More than {EYE_DOUBT:g}° from the skyline checked by eye at "
-                + ", ".join(f"{d['az']:g}° (read {d['read']:g}°, checked {d['checked']:g}°)" for d in differ)
-                + f": the checked heights stand there. Once you have looked, take bearings from it with "
-                f"./horizon.py --use-aside {aside.name} --bearings FROM-TO --checked \"what you saw\".")
+                f"More than {EYE_DOUBT:g}° from the skyline in use at "
+                + ", ".join(f"{d['az']:g}° (read {d['read']:g}°, was {d['was']:g}°: {d['kept']} kept)" for d in differ)
+                + f". Once you have looked, take bearings from it with ./horizon.py --use-aside {aside.name} "
+                "--bearings FROM-TO --checked \"what you saw\" (--dry-run first shows the change).")
         source = "telescope" if not known or kept["source"] == "telescope" else "panorama+telescope"
         saved = keep(skyline, source, looks=results, warnings=warnings, trace=found,
                      blocked=skyline_blocked(found), **more)

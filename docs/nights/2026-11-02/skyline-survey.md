@@ -165,3 +165,27 @@ with the mount's axes where they were costs only that bearing; against a
 skyline checked by eye, a bearing more than 6° off either way keeps the
 checked height and the rest is kept; `--use-aside FILE --bearings FROM-TO
 --checked "..."` takes the bearings a person has looked at.
+
+## Trust by point (later the same day)
+
+Each skyline point now carries its `trust`: `eye` inside a span a person
+checked (`checked_spans`, set with `./horizon.py --check-span --bearings
+FROM-TO --checked "..."`), `telescope` for a top the telescope looked at,
+`inferred` for corners, moved or unrechecked points. A survey is weighed
+point by point (`horizon.reconcile`): less trust never replaces more, more
+replaces less, and two telescope readings more than 6° apart keep the
+higher. `--use-aside ... --bearings` marks what it takes as checked, joins
+it at the higher top at each end, prints what the planner may use before
+and after, and with `--dry-run` keeps nothing. A recheck that differs with
+the axes alike is recorded as unrepeatable with no slip seen, not as a
+change of light.
+
+The person's words of 2 November 16:46 were marked as spans: house due
+north (352.5-7.5°), NNE clear but not low (15-30°), due east not open low
+(82.5-97.5°), due south not open low (172.5-187.5°), SSW clear but not low
+(195-210°). The south-west photo (210-228° open to about 20°) does not agree
+with the skyline in use (36-54°) or with the midday survey at 210-217.5°
+(51-54°); they agree only at 225°, too little to take. The west 270-315°
+was never checked by eye: the 72-75° in use there is the survey of
+2 November, and the midday survey's 20° may be a sunlit wall or may be
+right.
