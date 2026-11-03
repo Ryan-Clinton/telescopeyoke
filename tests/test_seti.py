@@ -195,3 +195,28 @@ def test_turbosetis_table_is_read():
 """
     assert seti.read_dat(dat) == [{"drift_hz_s": 0.497123, "snr": 31.2, "frequency_mhz": 2249.994412},
                                   {"drift_hz_s": 0.0, "snr": 12.5, "frequency_mhz": 2249.991618}]
+
+
+def test_a_sweep_carries_on_from_the_last_block_searched_and_keeps_every_candidate(tmp_path, monkeypatch):
+    import config
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    ons = [row("KIC8462852", 57895.420 + k * 0.0076, k) for k in (0, 2, 4)]
+    offs = [row("KIC8462852_OFF", 57895.420 + k * 0.0076, k) for k in (1, 3, 5)]
+
+    def get(url, params=None, timeout=None, headers=None):
+        return Reply({"data": ons}) if params else Reply(None, listing(ons + offs))
+    asked = []
+
+    def run_cadence(low, high):
+        asked.append(low)
+        events = [{"label": "candidate", "frequency_mhz": low + 1, "drift_hz_s": 0.3, "snr": 20.0}] if low == 2003.0 else []
+        return {"candidates": len(events), "interference": 2, "unconfirmed": 1, "events": events}
+    blocks = [(2000.0, 2002.9), (2003.0, 2005.9), (2006.0, 2008.9)]
+    first = seti.sweep("KIC8462852", 2, say=lambda *_: None, get=get, run_cadence=run_cadence, block_list=blocks)
+    assert asked == [2000.0, 2003.0] and first["searched"] == 2 and first["blocks"] == 3
+    assert [c["frequency_mhz"] for c in first["candidates_so_far"]] == [2004.0]
+    second = seti.sweep("KIC8462852", 5, say=lambda *_: None, get=get, run_cadence=run_cadence)
+    assert asked == [2000.0, 2003.0, 2006.0] and second["searched"] == 3       # only the block not yet done
+    assert second["candidates_so_far"][0]["block"] == 1
+    from test_interface import valid
+    valid(interface.envelope("seti", second), "seti")

@@ -47,6 +47,17 @@ compared with known interference and with the published searches of the
 same data (Breakthrough Listen's own papers list their candidates for
 these targets). Every candidate examined so far has turned out to be ours.
 
+## The sweep
+
+`./seti.py sweep KIC8462852 --blocks N` searches the target's whole
+cadence N blocks further than the runs before got, one block at a time:
+each block is one chunk of the files (one coarse channel of 1,048,576
+channels, 2.93 MHz), so a block is read in the fewest pieces. Tabby's
+25 May 2017 cadence is 308 blocks, 1818 to 2721 MHz. Each block's answer
+is kept (`cache/seti/TARGET-SESSION.json`), so the band is covered over
+many cloudy days, and every candidate found in any block is listed with
+it. The cloudy-day skill starts a few blocks each time.
+
 ## Checked against turboSETI
 
 `./seti.py search` and `cadence` take `--keep DIR` to save each slice

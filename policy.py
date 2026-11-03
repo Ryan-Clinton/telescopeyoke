@@ -117,7 +117,7 @@ COMMANDS = {
                      {"--plan": "read_only", "--dry-run": "read_only"}),
     "streak.py": ("local_write", {}, {}),           # keeps CelesTrak's orbits in cache/
     "stitch.py": ("local_write", {}, {}),           # the mosaic of every night; --on stacks on the person's own desktop
-    "seti.py": ("read_only", {}, {}),               # reads Breakthrough Listen's open data; writes nothing
+    "seti.py": ("local_write", {}, {}),             # reads Breakthrough Listen's open data; sweep keeps its progress in cache/, --keep the slices
     "sungrazer.py": ("local_write", {}, {}),
     "tonight.py": ("read_only", {}, {}),
     "tour.py": ("local_write", {}, {}),

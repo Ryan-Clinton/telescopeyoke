@@ -6,6 +6,12 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+- **Research that needs no sky, run by itself** (`seti.py sweep`,
+  `seti.py benchmark`, `literature.py --unread`, the cloudy-day and
+  discovery-night skills): the radio search of Tabby's star's Green Bank
+  cadence carried on block by block, checked against turboSETI on the
+  same slices; papers listed until read, with their abstracts; remote
+  reads take only the bytes asked for ([SETI](docs/seti.md)).
 - **Papers and dated watches** (`literature.py`, `ty night`): arXiv's
   newest on Tabby's star, M31/M33 novae, dipping stars, technosignatures
   and transit timing, listed as `papers`; a programme's `[[watch]]`

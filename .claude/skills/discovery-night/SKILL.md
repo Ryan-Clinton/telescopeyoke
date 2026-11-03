@@ -11,6 +11,9 @@ The night is `docs/discovery.md`, "Running a discovery night"; the patrol
 is `docs/agents/setup-routine.md` step 6b.
 
 0. Asked for the outlook or tonight's plan ("how's tonight looking"): start
+   the research that needs no sky in the background, as the cloudy-day
+   skill's A and B (`./archive.py screen`, `./seti.py sweep`), and say
+   their results when they land; start
    `./brokers.py` in the background (about a minute: the surveys' new
    transients bright enough and up here tonight), run `./ty night` once
    (3 seconds), `./transits.py` and `./ty candidates` beside it, and read the last night's notes
@@ -51,9 +54,11 @@ is `docs/agents/setup-routine.md` step 6b.
      first, as the night's reason (Tabby inside a window of its proposed
      companion's transit: measure its level tonight and on the nights
      either side). Otherwise the next window, said once with its dates.
-   - One line per `papers` topic with papers: the newest title, its date
-     and first author, and how many more. Tabby's star and SETI first.
-     A paper is something to read, never a result of ours.
+   - One line per `papers` paper on Tabby's star, dipping stars or SETI
+     (its `abstract` read): what it claims, how sure (its own words), and
+     what it changes for a programme; one line for how many others. A
+     paper is something to read, never a result of ours. Once said, mark
+     them read (`./literature.py --read ID...`).
    - One line for the `news` events (in-the-sky.org) that fall on tonight or
      the night planned: a Moon or planet approach or an occultation. The
      headlines only when asked for the news.

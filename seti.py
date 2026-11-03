@@ -40,6 +40,7 @@ writes, and only the slices.
 """
 import argparse
 import io
+import json
 import math
 import os
 import re
@@ -52,7 +53,9 @@ from urllib.parse import unquote
 import numpy as np
 import requests
 
+import config
 import interface
+import records
 
 API = "https://seti.berkeley.edu/opendata/api/query-files"
 FINE = ".gpuspec.0000.h5"       # the finest frequency product of a Green Bank look
@@ -403,6 +406,68 @@ def cadence(sources, low, high, say=print, read=read_slice, keep=None):
             "note": note, "kind": "measured"}
 
 
+# --- the sweep: a cadence searched block by block, carried on from run to run -----
+
+def blocks(source):
+    """The file's blocks as (from, to) MHz, lowest first: each is one chunk
+    of its HDF5 data (for Green Bank's finest product, one coarse channel of
+    1,048,576 channels, 2.93 MHz), so a slice that keeps inside one is read
+    in the fewest pieces. A channel is left off each side of a block."""
+    h5py = _h5()
+    handle = io.BufferedReader(Remote(source), buffer_size=1 << 16) if str(source).startswith("http") else source
+    with h5py.File(handle, "r") as f:
+        data = f["data"]
+        fch1, foff = float(data.attrs["fch1"]), float(data.attrs["foff"])
+        nchans, per = data.shape[-1], (data.chunks or data.shape)[-1]
+    out = []
+    for start in range(0, nchans, per):
+        a, b = fch1 + (start + 1) * foff, fch1 + (min(start + per, nchans) - 2) * foff
+        out.append((round(min(a, b), 6), round(max(a, b), 6)))
+    return sorted(out)
+
+
+def sweep_store(target, session):
+    return config.DATA / "cache" / "seti" / f"{target}-{session}.json"
+
+
+def sweep(target, count=1, say=print, get=requests.get, run_cadence=None, block_list=None):
+    """Search the target's first whole cadence `count` blocks further than
+    the runs before got, keeping each block's answer, so the whole band is
+    covered over many runs (cloudy days): what is done, and every candidate
+    found so far."""
+    found = find(target, get=get, say=lambda *_: None)
+    session = next((s for s in found["sessions"] if s["complete"]), None)
+    if not session:
+        raise interface.Refusal("INVALID_REQUEST", f"No whole ON-OFF cadence of {target} is listed.")
+    pattern = "".join("A" if sc["on"] else "B" for sc in session["scans"])
+    urls = [sc["url"] for sc in session["scans"][pattern.index("ABABAB"):][:6]]
+    path = sweep_store(target, session["session"])
+    kept = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"blocks": None, "done": {}}
+    if not kept["blocks"]:
+        kept["blocks"] = [list(b) for b in (block_list or blocks(urls[0]))]
+    run_cadence = run_cadence or (lambda low, high: cadence(urls, low, high, say=lambda *_: None))
+    todo = [k for k in range(len(kept["blocks"])) if str(k) not in kept["done"]][:count]
+    for k in todo:
+        low, high = kept["blocks"][k]
+        answer = run_cadence(low, high)
+        kept["done"][str(k)] = {"from_mhz": low, "to_mhz": high, "candidates": answer["candidates"],
+                                "interference": answer["interference"], "unconfirmed": answer["unconfirmed"],
+                                "events": [e for e in answer["events"] if e["label"] == "candidate"],
+                                "searched": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+        path.parent.mkdir(parents=True, exist_ok=True)
+        records.write(path, kept)
+        say(f"  block {k + 1} of {len(kept['blocks'])}, {low:.3f} to {high:.3f} MHz: {answer['candidates']} "
+            f"candidate(s), {answer['interference']} interference, {answer['unconfirmed']} unconfirmed")
+    done = kept["done"]
+    candidates = [dict(e, block=int(k)) for k, d in done.items() for e in d["events"]]
+    covered = sum(d["to_mhz"] - d["from_mhz"] for d in done.values())
+    say(f"{target}, session {session['session']}: {len(done)} of {len(kept['blocks'])} blocks searched "
+        f"({covered:.1f} MHz), {len(candidates)} candidate(s) so far")
+    return {"target": target, "session": session["session"], "blocks": len(kept["blocks"]), "searched": len(done),
+            "searched_mhz": round(covered, 3), "this_run": [kept["done"][str(k)] | {"block": k} for k in todo],
+            "candidates_so_far": candidates[:MAX_LISTED], "kind": "measured"}
+
+
 # --- the benchmark: the same slices through turboSETI ----------------------------
 # turboSETI (github.com/UCBerkeleySETI/turbo_seti) is Breakthrough Listen's
 # own narrowband search. It is not an Ubuntu package, so it lives in its own
@@ -484,6 +549,10 @@ def run(args, say=print):
         if len(args.what) != 1:
             raise interface.Refusal("INVALID_REQUEST", "find takes one target, as Breakthrough Listen names it (KIC8462852).")
         return find(args.what[0], say=say)
+    if args.action == "sweep":
+        if len(args.what) != 1:
+            raise interface.Refusal("INVALID_REQUEST", "sweep takes one target (KIC8462852).")
+        return sweep(args.what[0], args.blocks, say=say)
     if args.action == "benchmark":
         return benchmark(args.what, say=say)
     if args.low is None or args.high is None:
@@ -498,10 +567,11 @@ def run(args, say=print):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("action", choices=("find", "search", "cadence", "benchmark"))
+    ap.add_argument("action", choices=("find", "search", "cadence", "sweep", "benchmark"))
     ap.add_argument("what", nargs="+", help="find: a target; search: one look (file or URL); cadence: six looks")
     ap.add_argument("--from", dest="low", type=float, help="MHz: the bottom of the slice")
     ap.add_argument("--to", dest="high", type=float, help="MHz: the top of the slice")
+    ap.add_argument("--blocks", type=int, default=1, help="sweep: blocks of 2.9 MHz to search this run (default 1)")
     ap.add_argument("--keep", help="search, cadence: save each slice read in this folder (for benchmark)")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
