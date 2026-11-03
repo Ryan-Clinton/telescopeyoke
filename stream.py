@@ -943,8 +943,9 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                 if process is not None:
                     side_jobs(st, directed, now, voice if tones is not None else None, s["clips"] and to is None, say)
             active = directed["on_air"]
-            between = not imaging(st) and runner_alive() and due_soon(st, now)
-            ending = directed["scene"] == "end" and night_ending(st, between, active)
+            surveying = directed["scene"] == "skyline"       # never streamed (director.py)
+            between = not surveying and not imaging(st) and runner_alive() and due_soon(st, now)
+            ending = surveying or (directed["scene"] == "end" and night_ending(st, between, active))
             action, quiet_since = decide(process is not None, st, quiet_since, now, between, ending, active)
             # What the telescope sees, in the usual layout: no card ever takes
             # its place (no night-opens plan, no between-targets steps; 30

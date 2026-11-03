@@ -209,7 +209,10 @@ def gather(st, now=None, procedure=False):
         lucky = p.get("stage") if now - p.get("at", 0) <= FRESH_S else None
     except (OSError, ValueError, AttributeError):
         lucky = None
-    return {"now": now, "status": st, "target": aimed(now), "phase": activity.phase(),
+    entries = activity.now()
+    return {"now": now, "status": st, "target": aimed(now), "phase": activity.phase(entries),
+            # A skyline survey, whatever its GoTos and frames say in between (horizon.py).
+            "skyline": any(activity.PHASES.get(e.get("what")) == "skyline" for e in entries),
             "image_age": stream.latest_age(now), "lucky": lucky, "procedure": procedure,
             "run_imaging": stream.imaging(st), "between": not stream.imaging(st) and stream.runner_alive()
             and stream.due_soon(st, now), "schedule_over": stream.night_over(st),
@@ -274,6 +277,10 @@ def direct(given, before=None):
     family = _family(name, kind, given) if name else None
     if given.get("procedure"):
         scene, image, room = given["procedure"], "procedure", given["procedure"]
+    elif given.get("skyline"):
+        # 3 November 2026: the daylight survey's frames of glare, roofs and
+        # wall went out live as the "sky". It is never on air by itself.
+        scene, image, room = "skyline", "none", "idle"
     elif fresh:
         stacked = run_current and phase not in ("lucky", "live", "mineral")
         scene, image, room = f"{family or 'sky'}_{'stack' if stacked else _moon_scene(activity)}", \

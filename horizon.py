@@ -951,7 +951,10 @@ def run(args):
     warnings = []
     with eye(site, exposure, gain, args.daylight, args.torch and not args.daylight) as look:
         if args.trace:
-            found, warnings = trace(look, bearings, low, known=known)
+            import activity
+            # Says so, so the stream stays off air for it (director.py).
+            with activity.doing("Surveying the skyline", "by daylight" if args.daylight else "by night"):
+                found, warnings = trace(look, bearings, low, known=known)
         else:
             if args.daylight:
                 # Sky high up first, so the exposure is set on sky and not on a wall.

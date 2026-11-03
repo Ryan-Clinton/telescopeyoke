@@ -58,6 +58,15 @@ def test_target_programme_and_activity_are_kept_apart():
     assert (patrol["target"], patrol["programme"], patrol["activity"]) == ("M31-P3", "nova patrol", "imaging")
 
 
+def test_a_skyline_survey_is_never_on_air_whatever_its_frames_or_goto_say():
+    """3 November 2026: the daylight skyline survey's frames went out live."""
+    import activity
+    assert activity.PHASES["Surveying the skyline"] == "skyline"
+    for phase in ("skyline", "goto", None):
+        d = director.direct(dict(given(M31_OLD, None, phase, 2), skyline=True))
+        assert d["scene"] == "skyline" and d["on_air"] is False
+
+
 def test_focusing_and_polar_alignment_outrank_the_fresh_frame():
     d = director.direct(given(M31_OLD, aimed("M31", 60), "focus_walk", 2, procedure="focus"))
     assert d["scene"] == "focus" and d["image"] == "procedure" and d["priority"] > director.PRIORITY["live"]
