@@ -238,10 +238,10 @@ def campaign_results(night, lat, lon, source=feeds, now=None):
 
 
 def literature_results():
-    """arXiv's papers of the last NIGHT_DAYS days on each topic watched
+    """arXiv's papers not yet marked read on each topic watched
     (literature.py), only the topics with any."""
     import literature
-    return [t for t in literature.recent(literature.NIGHT_DAYS) if t["papers"]]
+    return [t for t in literature.unread() if t["papers"]]
 
 
 def supernova_results(night, source=feeds):

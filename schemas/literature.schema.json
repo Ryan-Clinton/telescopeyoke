@@ -5,13 +5,15 @@
   "description": "data of: literature.py --json, arXiv's newest papers on each topic the telescope watches or hopes to find (Tabby's star, novae in M31 and M33, dipping stars, technosignatures and SETI, transit timing). Something to read, not a result. Nothing moves.",
   "type": "object",
   "required": [
-    "days",
-    "topics",
     "kind"
   ],
   "properties": {
     "days": {
-      "type": "number"
+      "type": [
+        "number",
+        "null"
+      ],
+      "description": "Papers of the last this many days; null for --unread (however old)."
     },
     "topics": {
       "type": "array",
@@ -52,6 +54,9 @@
                 },
                 "link": {
                   "type": "string"
+                },
+                "abstract": {
+                  "type": "string"
                 }
               }
             }
@@ -66,6 +71,13 @@
       "enum": [
         "inferred"
       ]
+    },
+    "marked_read": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "--read: the arXiv numbers marked read."
     }
   }
 }

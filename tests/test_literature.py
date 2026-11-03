@@ -42,3 +42,17 @@ def test_each_topics_recent_papers_are_listed_and_the_old_left_out(tmp_path, mon
     literature.recent(30, now=now, get=None, topics=["Tabby's star"])      # kept a day: not asked again
     assert {r["source"]: r["state"] for r in feeds.freshness()}["arXiv"] == "cached"
     valid(interface.envelope("literature", {"days": 30, "topics": found, "kind": "inferred"}), "literature")
+
+
+def test_a_paper_stays_listed_until_it_is_marked_read_however_old(tmp_path, monkeypatch):
+    import config
+    monkeypatch.setattr(feeds, "CACHE", tmp_path)
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    get = lambda url, params=None, timeout=None, headers=None: Reply()          # noqa: E731
+    now = datetime(2026, 11, 3, tzinfo=timezone.utc)
+    first = literature.unread(now=now, get=get, topics=["Tabby's star"])[0]["papers"]
+    assert [p["id"] for p in first] == ["2607.01234v1"]          # before any marking: the last 14 days only
+    assert first[0]["abstract"] == ""
+    literature.mark_read(["2607.01234"])                         # read, under any version
+    later = literature.unread(now=datetime(2027, 6, 1, tzinfo=timezone.utc), get=get, topics=["Tabby's star"])
+    assert [p["id"] for p in later[0]["papers"]] == ["2501.00001v1"]     # the old one, never read, still listed
