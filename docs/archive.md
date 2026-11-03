@@ -63,6 +63,23 @@ After both fixes Tabby's star is the only Tabby-like one of the 53; next
 come KIC 7987514 (nine dips, the deepest 2.6%) and KIC 7988797. KIC 1255 b
 and KIC 3542116 give nothing: their dips are shallower than the 1% floor.
 
+## Screening every star Kepler watched
+
+    ./archive.py screen --batch 500
+    ssh desktop 'cd ~/telescopeyoke-laptop && ./archive.py screen --batch 5000'   # big batches
+
+`screen` takes the stars Kepler watched (199,959 rows in NASA's Exoplanet
+Archive's Kepler stellar table, brightest first), skips those already
+screened, and keeps each answer in `cache/kepler/screened.json` every ten
+stars, so a run stopped part way, or the next one, carries on from there.
+Each star's light curves are deleted once screened unless it is
+Tabby-like (`--keep` keeps them all): the whole archive at about 7 MB a
+star would not fit. Its answer ranks everything screened so far.
+
+The first run, 3 November 2026: the 40 brightest (Kepler magnitude 5.0
+upward), all read, none Tabby-like; the most dip-like was KIC 7940959,
+one 1.4% dip on 0.18% scatter.
+
 ## The cleaned flux and the raw
 
 PDCSAP is Kepler's cleaned light curve. The Kepler Archive Manual

@@ -47,6 +47,16 @@ def test_an_eclipse_that_repeats_is_periodic_not_a_dipper():
     assert archive.score(found) == 0
 
 
+def test_two_dips_alike_and_symmetric_are_one_eclipse_seen_twice():
+    t, f, q, quarter = curve()
+    f = dip(t, f, 20.0, 0.013, fall=0.25, rise=0.25)
+    f = dip(t, f, 75.1, 0.013, fall=0.25, rise=0.25)
+    f = dip(t, f, 50.0, 0.08, fall=0.3, rise=1.5)          # and one like neither: a Tabby dip stays
+    found, _ = archive.find_dips(t, f, q, quarter)
+    verdicts = {round(d["middle"]): d["verdict"] for d in found}
+    assert verdicts == {20: "periodic", 75: "periodic", 50: "dip"}
+
+
 def test_a_dip_at_a_gap_is_an_edge():
     t, f, q, quarter = curve()
     f = dip(t, f, 49.9, 0.05, fall=0.3, rise=0.3)
@@ -103,6 +113,36 @@ def test_a_dip_only_the_cleaning_shows_is_said_to_be_pdcsap_only():
     alone = archive.seen_in_sap(dips, {"t": t, "sap": sap, "quarter": quarter}, sap_dips)
     assert [(round(d["middle"]), d["seen_in"]) for d in dips] == [(40, "both"), (70, "PDCSAP only")]
     assert [(round(d["middle"]), d["seen_in"]) for d in alone] == [(20, "SAP only")]
+
+
+def test_the_screen_goes_on_where_it_stopped_and_ranks_everything_screened(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DATA", tmp_path)
+
+    class Listed:
+        text = "kepid,kepmag\n11,9.0\n22,9.5\n11,9.6\n33,10.0\n44,11.0\n"
+
+        def raise_for_status(self):
+            pass
+    lists = []
+
+    def get(url, params=None, timeout=None):
+        lists.append(params["query"])
+        return Listed()
+
+    def analyse(kic, get=None, say=None):
+        (archive.store(kic)).mkdir(parents=True, exist_ok=True)
+        if kic == 33:
+            raise archive.interface.Refusal("INVALID_REQUEST", "Kepler has no light curves of KIC 33.")
+        deep = kic == 22
+        return {"score": 30.0 if deep else 1.0, "tabby_like": deep, "real_dips": 1, "deepest_percent": 15.0 if deep else 1.2,
+                "scatter_percent": 0.03, "sap_only": []}
+    first = archive.screen(2, get=get, say=lambda *_: None, analyse_star=analyse)
+    assert first["this_run"] == 2 and first["screened"] == 2 and [r["kic"] for r in first["top"]] == [22, 11]
+    assert archive.store(22).exists() and not archive.store(11).exists()     # only a Tabby-like star's files kept
+    second = archive.screen(5, get=get, say=lambda *_: None, analyse_star=analyse)
+    assert second["this_run"] == 2 and second["screened"] == 4                 # 33 and 44; 11 once only
+    assert archive.screened()["33"] == {"missed": "Kepler has no light curves of KIC 33."}
+    assert [r["kic"] for r in second["top"]] == [22, 11, 44] and len(lists) == 1   # the list fetched once
 
 
 def test_stars_are_named_as_people_write_them():

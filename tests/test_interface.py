@@ -421,6 +421,9 @@ def test_an_archive_answer_matches_its_schema(tmp_path, monkeypatch):
     one = valid(interface.run("archive", lambda: dict(archive.analyse(8462852), kind="measured")), "archive")["data"]
     assert one["tabby_like"] and one["dips"][0]["verdict"] == "dip" and np.isfinite(one["score"])
     valid(interface.run("archive", lambda: archive.search([8462852], say=lambda *_: None)), "archive")
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    monkeypatch.setattr(archive, "target_list", lambda get=None: [8462852])
+    valid(interface.run("archive", lambda: archive.screen(1, say=lambda *_: None)), "archive")
 
 
 def test_a_brokers_answer_matches_its_schema():

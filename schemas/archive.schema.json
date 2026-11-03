@@ -6,7 +6,8 @@
   "type": "object",
   "anyOf": [
     {"required": ["star", "kic", "quarters", "points", "scatter_percent", "dips", "real_dips", "deepest_percent", "tabby_like", "score", "source", "kind"]},
-    {"required": ["stars", "missed", "kind"]}
+    {"required": ["stars", "missed", "kind"]},
+    {"required": ["screened", "this_run", "order", "top", "kind"]}
   ],
   "$defs": {
     "dip": {
@@ -70,6 +71,14 @@
     "stars": {"type": "array", "items": {"$ref": "#/$defs/star"}},
     "missed": {"type": "array", "items": {"type": "object", "required": ["kic", "why"],
                                           "properties": {"kic": {"type": "integer"}, "why": {"type": "string"}}}},
+    "screened": {"type": "integer", "description": "screen: Kepler stars screened so far, in all runs."},
+    "this_run": {"type": "integer"},
+    "order": {"type": "string", "description": "The order stars are taken in."},
+    "top": {"type": "array", "description": "screen: every star screened so far, Tabby-like first, then by score; at most 20.",
+            "items": {"type": "object", "required": ["kic", "score", "tabby_like", "real_dips", "deepest_percent"],
+                      "properties": {"kic": {"type": "integer"}, "score": {"type": "number"}, "tabby_like": {"type": "boolean"},
+                                     "real_dips": {"type": "integer"}, "deepest_percent": {"type": "number"},
+                                     "scatter_percent": {"type": ["number", "null"]}, "sap_only": {"type": "integer"}}}},
     "kind": {"enum": ["measured"]}
   }
 }

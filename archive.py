@@ -7,6 +7,13 @@ telescope's measurements instead of our own nights.
     ./archive.py dips Tabby --json
     ./archive.py search stars.txt        each KIC number in the file (one a line), most Tabby-like first
     ./archive.py search 8462852,7106205
+    ./archive.py screen --batch 500      the next 500 Kepler stars not yet screened, brightest first
+
+`screen` works through every star Kepler watched (about 200,000, NASA's
+Exoplanet Archive's list, brightest first), keeping each one's answer in
+cache/kepler/screened.json as it goes, so each run carries on where the
+last stopped; big batches belong on the desktop:
+    ssh desktop 'cd ~/telescopeyoke-laptop && ./archive.py screen --batch 5000'
 
 Kepler watched about 150,000 stars in Cygnus and Lyra every 30 minutes
 from 2009 to 2013. Its light curves are public at MAST (the Mikulski
@@ -68,6 +75,9 @@ MAST = "https://archive.stsci.edu/missions/kepler/lightcurves/{group}/{kic}/"
 BKJD = 2454833.0     # Kepler's times are BJD minus this
 TABBY = 8462852
 TIMEOUT = 120
+FETCHING = 8         # a star's quarters fetched at once
+TARGETS = "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
+TARGET_QUERY = "select distinct kepid, kepmag from keplerstellar where kepmag is not null order by kepmag"
 
 DIP_RUN = 3          # points in a row (variables.DIP_RUN), 30 minutes apart
 DIP_SIGMA = 3.0      # times the usual scatter below the level (variables.DIP_SIGMA)
@@ -83,6 +93,9 @@ BACK = 0.25          # a dip is widened to where the light is back within this s
 SUSPECT = 1 | 2 | 4 | 8 | 32 | 128    # attitude tweak, safe mode, coarse point, Earth point, momentum dump, manual exclude
 PERIOD_TOLERANCE = 0.02   # an interval within this share of a whole multiple
 LIKE_DEPTH = 0.3          # depths within this share of their mean are alike
+PAIR_DEPTH = 0.1          # two dips this alike in depth...
+PAIR_HOURS = 0.2          # ...and in length...
+PAIR_SYMMETRIC = 0.3      # ...each this symmetric, are one eclipse seen twice
 VARIABLE = 0.05           # dips over this share of the good points: the star's own variability
 DEEP = 0.05               # a dip this deep makes a star Tabby-like...
 QUIET = 0.01              # ...when its light is otherwise this steady (scatter): Tabby's is 0.03%. KIC
@@ -127,12 +140,16 @@ def fetch(kic, get=requests.get, say=print):
         raise interface.Refusal("INVALID_REQUEST", f"Kepler has no long-cadence light curves of KIC {kic}.")
     folder.mkdir(parents=True, exist_ok=True)
     say(f"fetching {len(urls)} quarters of KIC {kic} from MAST")
-    for url in urls:
+
+    def one(url):
         reply = get(url, timeout=TIMEOUT)
         reply.raise_for_status()
         part = folder / (url.rsplit("/", 1)[1] + ".part")
         part.write_bytes(reply.content)
         part.rename(folder / url.rsplit("/", 1)[1])
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(FETCHING) as pool:
+        list(pool.map(one, urls))
     return sorted(folder.glob("*_llc.fits"))
 
 
@@ -330,6 +347,20 @@ def _periodic(dips):
             for d in group:
                 d["verdict"] = "periodic"
                 d["period_days"] = round(period, 4)
+    # Two dips the same in depth and length, both symmetric, are one eclipse
+    # seen twice (the rest of its eclipses just under the floor): KIC
+    # 9221398, a 13.79-day binary with 1.19% eclipses, showed two 1.32%
+    # dips 827 days apart, 60 of its periods. The gap is the period at most.
+    left = [d for d in clean if d["verdict"] != "periodic" and abs(d["asymmetry"]) <= PAIR_SYMMETRIC]
+    for i, a in enumerate(left):
+        for b in left[i + 1:]:
+            if b["verdict"] == "periodic" or a["verdict"] == "periodic":
+                continue
+            if abs(a["depth_percent"] - b["depth_percent"]) <= PAIR_DEPTH * a["depth_percent"] \
+                    and abs(a["hours"] - b["hours"]) <= PAIR_HOURS * max(a["hours"], b["hours"]):
+                for d in (a, b):
+                    d["verdict"] = "periodic"
+                    d["period_days"] = round(abs(b["middle"] - a["middle"]), 4)
 
 
 def score(dips):
@@ -413,7 +444,80 @@ def search(numbers, get=requests.get, say=print):
     return {"stars": found, "missed": missed, "kind": "measured"}
 
 
+def target_list(get=requests.get):
+    """Every star Kepler watched, brightest first (NASA's Exoplanet Archive,
+    its Kepler stellar table), as KIC numbers; kept once fetched."""
+    import csv
+    import io
+    path = config.DATA / "cache" / "kepler" / "targets.csv"
+    if not path.exists():
+        reply = get(TARGETS, params={"query": TARGET_QUERY, "format": "csv"}, timeout=300)
+        reply.raise_for_status()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(reply.text, encoding="utf-8")
+    seen, out = set(), []
+    for row in csv.DictReader(io.StringIO(path.read_text(encoding="utf-8"))):
+        kic = int(row["kepid"])
+        if kic not in seen:                  # a star in several deliveries: its first (brightest) row
+            seen.add(kic)
+            out.append(kic)
+    return out
+
+
+def screened_file():
+    return config.DATA / "cache" / "kepler" / "screened.json"
+
+
+def screened():
+    import json
+    path = screened_file()
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+
+
+def ranking(record, most=20):
+    """Every star screened so far, Tabby-like first, then by score."""
+    rows = [dict(v, kic=int(k)) for k, v in record.items() if "score" in v]
+    return sorted(rows, key=lambda r: (not r["tabby_like"], -r["score"]))[:most]
+
+
+def screen(batch, get=requests.get, say=print, keep=False, analyse_star=None):
+    """The next `batch` Kepler stars not screened yet, brightest first, each
+    screened and its summary kept (cache/kepler/screened.json) as it is
+    done, so a run stopped part way, or the next run, goes on from there.
+    A star's light curves are deleted once screened unless it is
+    Tabby-like or `keep` (200,000 stars at 7 MB each would not fit)."""
+    import shutil
+    import records
+    analyse_star = analyse_star or analyse
+    record = screened()
+    todo = [k for k in target_list(get) if str(k) not in record][:batch]
+    say(f"{len(record)} screened before; screening {len(todo)} more, brightest first")
+    for n, kic in enumerate(todo, 1):
+        try:
+            a = analyse_star(kic, get, say=lambda *_: None)
+            record[str(kic)] = {"score": a["score"], "tabby_like": a["tabby_like"], "real_dips": a["real_dips"],
+                                "deepest_percent": a["deepest_percent"], "scatter_percent": a["scatter_percent"],
+                                "sap_only": sum(d["verdict"] == "dip" for d in a.get("sap_only", []))}
+            if a["tabby_like"]:
+                say(f"  KIC {kic}: Tabby-like, {a['real_dips']} dip(s), deepest {a['deepest_percent']:.1f}%")
+            elif not keep:
+                shutil.rmtree(store(kic), ignore_errors=True)
+        except (requests.RequestException, OSError, ValueError, KeyError, interface.Refusal) as problem:
+            record[str(kic)] = {"missed": str(getattr(problem, "message", problem))[:200]}
+        if n % 10 == 0 or n == len(todo):
+            records.write(screened_file(), record, indent=None)
+    top = ranking(record)
+    say(f"{len(record)} screened in all; {sum(1 for v in record.values() if v.get('tabby_like'))} Tabby-like")
+    for r in top[:10]:
+        say(f"  KIC {r['kic']:<10} score {r['score']:6.2f}  {r['real_dips']} dip(s), deepest {r['deepest_percent']:.2f}%,"
+            f" scatter {r['scatter_percent']}%{'  Tabby-like' if r['tabby_like'] else ''}")
+    return {"screened": len(record), "this_run": len(todo), "order": "brightest first (Kepler magnitude)",
+            "top": top, "kind": "measured"}
+
+
 def run(args, say=print):
+    if args.action == "screen":
+        return screen(args.batch, say=say, keep=args.keep)
     if args.action == "dips":
         answer = dict(analyse(kic_number(args.star), say=say), kind="measured")
         say_star(answer, say)
@@ -425,7 +529,9 @@ def run(args, say=print):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("action", choices=("dips", "search"))
+    ap.add_argument("action", choices=("dips", "search", "screen"))
+    ap.add_argument("--batch", type=int, default=100, help="screen: stars this run (default 100)")
+    ap.add_argument("--keep", action="store_true", help="screen: keep every star's light curves")
     ap.add_argument("star", nargs="*", help="dips: the star (KIC 8462852, Tabby); search: a file or a comma list")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
