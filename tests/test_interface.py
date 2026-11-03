@@ -413,7 +413,14 @@ def test_a_brokers_answer_matches_its_schema():
     import brokers
     from test_brokers import NOW, REPORTED, get
     valid(interface.run("brokers", lambda: brokers.search(config.example(), 5, 17.5, say=lambda *_: None, get=get,
-                                                          reported=REPORTED, now=NOW)), "brokers")
+                                                          reported=REPORTED, now=NOW,
+                                                          lasair=lambda oid, mag: {"class": "SN", "matched": "NGC 1",
+                                                                                   "matched_type": "galaxy",
+                                                                                   "separation_arcsec": 3.0,
+                                                                                   "distance_mpc": 90.0,
+                                                                                   "distance_modulus": 34.8,
+                                                                                   "absolute_mag": -18.4,
+                                                                                   "link": "https://x"})), "brokers")
 
 
 def test_a_follow_matches_the_brokers_schema(tmp_path, monkeypatch):

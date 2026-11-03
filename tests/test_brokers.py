@@ -46,8 +46,25 @@ def get(url, timeout=None, params=None):
 
 
 @pytest.fixture(autouse=True)
-def quick(monkeypatch):
+def quick(monkeypatch, tmp_path):
     monkeypatch.setattr(brokers, "PAUSE", 0)
+    monkeypatch.delenv("TY_LASAIR_TOKEN", raising=False)
+    monkeypatch.setattr(brokers, "LASAIR_TOKEN_FILE", tmp_path / "no-token")
+
+
+def test_lasair_says_what_it_sits_on_and_how_bright_that_makes_it():
+    calls = []
+
+    def sherlock(url, params=None, timeout=None, headers=None):
+        calls.append(headers)
+        return Reply({"classifications": {"ZTF26x": ["SN", "possibly associated with NGC3441"]},
+                      "crossmatches": [{"catalogue_object_id": "NGC3441", "catalogue_object_type": "galaxy",
+                                        "separationArcsec": 12.4, "distance": 94.664, "direct_distance": None}]})
+    c = brokers.context("ZTF26x", 16.8, get=sherlock, token="T")
+    assert calls == [{"Authorization": "Token T"}]
+    assert c["class"] == "SN" and c["matched"] == "NGC3441" and c["distance_modulus"] == 34.88
+    assert c["absolute_mag"] == -18.1                       # a supernova near its peak
+    assert brokers.context("ZTF26x", 16.8, get=sherlock) is None      # no token: not asked
 
 
 def test_only_what_is_bright_enough_and_up_here_is_kept():

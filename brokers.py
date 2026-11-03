@@ -57,7 +57,10 @@ uses the camera.
 import argparse
 import datetime
 import json
+import math
+import os
 import time
+from pathlib import Path
 
 import numpy as np
 import requests
@@ -68,6 +71,13 @@ import interface
 import records
 
 ALERCE = "https://api.alerce.online/ztf/v1/objects"
+# Lasair's Sherlock (lasair-ztf.lsst.ac.uk): what each ZTF object sits on,
+# from its own catalogue matching: a galaxy (with the galaxy and its
+# distance), a star, a nucleus. Asked only with a Lasair token, kept in
+# LASAIR_TOKEN_FILE or TY_LASAIR_TOKEN.
+SHERLOCK = "https://lasair-ztf.lsst.ac.uk/api/sherlock/object/"
+LASAIR_OBJECT = "https://lasair-ztf.lsst.ac.uk/objects/{oid}/"
+LASAIR_TOKEN_FILE = Path(os.path.expanduser("~/.config/telescopeyoke/lasair-token"))
 EXPLORER = "https://alerce.online/object/{oid}"
 TNS_SEARCH = "https://www.wis-tns.org/search?ra={ra:.5f}&decl={dec:.5f}&radius=5&coords_unit=arcsec"
 MOST = 200               # objects asked for: the classifier's surest first
@@ -198,7 +208,46 @@ def follow(oid, minutes, plan=False, dry_run=False, say=print, get=requests.get,
     return answer
 
 
-def search(cfg, days, brighter, say=print, get=requests.get, reported=None, now=None, unreported=False):
+def lasair_token():
+    """The Lasair token, or None."""
+    if os.environ.get("TY_LASAIR_TOKEN"):
+        return os.environ["TY_LASAIR_TOKEN"].strip()
+    try:
+        return LASAIR_TOKEN_FILE.read_text(encoding="utf-8").strip() or None
+    except OSError:
+        return None
+
+
+def context(oid, mag, get=requests.get, token=None):
+    """What Lasair's Sherlock says the object sits on: its class (SN: by a
+    galaxy; NT: on a galaxy's nucleus; VS: a variable star; AGN; CV), the
+    galaxy or star it is matched to and how far off, and with the galaxy's
+    distance, the object's absolute magnitude (a supernova near its peak is
+    -17 to -19.5; a nova -6 to -10). None without a token or an answer."""
+    token = token or lasair_token()
+    if not token:
+        return None
+    try:
+        reply = get(SHERLOCK, params={"objectId": oid, "lite": "true"}, timeout=60,
+                    headers={"Authorization": f"Token {token}"})
+        reply.raise_for_status()
+        body = reply.json()
+    except (requests.RequestException, ValueError):
+        return None
+    kind = (body.get("classifications", {}).get(oid) or [None])[0]
+    match = (body.get("crossmatches") or [{}])[0]
+    mpc = match.get("direct_distance") or match.get("distance")
+    modulus = round(5 * math.log10(mpc * 1e5), 2) if mpc else None
+    return {"class": kind, "matched": match.get("catalogue_object_id"),
+            "matched_type": match.get("catalogue_object_type"),
+            "separation_arcsec": match.get("separationArcsec"),
+            "distance_mpc": round(mpc, 1) if mpc else None, "distance_modulus": modulus,
+            "absolute_mag": round(mag - modulus, 1) if modulus is not None and mag is not None else None,
+            "link": LASAIR_OBJECT.format(oid=oid)}
+
+
+def search(cfg, days, brighter, say=print, get=requests.get, reported=None, now=None, unreported=False,
+           lasair=None):
     """The answer: the alerts worth a look from here tonight; with
     `unreported`, the bright ones on neither Rochester list, up or not."""
     import sky
@@ -243,6 +292,8 @@ def search(cfg, days, brighter, say=print, get=requests.get, reported=None, now=
                        "reported": name, "tns": "not asked: check by hand",
                        "links": {"alerce": EXPLORER.format(oid=o["oid"]),
                                  "tns": TNS_SEARCH.format(ra=o["meanra"], dec=o["meandec"])}})
+    for p in picked:
+        p["lasair"] = (lasair or context)(p["oid"], p["mag"])
     picked.sort(key=lambda p: (p["reported"] is not None, p["mag"]))
     answer = {"broker": "ALeRCE", "unreported": unreported, "days": days, "brighter": brighter, "asked": len(objects),
               "not_up": down, "too_faint": faint, "bogus": bogus, "already_reported": known, "worth_a_look": picked,
@@ -260,6 +311,12 @@ def search(cfg, days, brighter, say=print, get=requests.get, reported=None, now=
         say(f"  {p['oid']}  {p['ra']:.5f} {p['dec']:+.5f}  {p['band']} {p['mag']:.2f}"
             f"{', brightening' if p['brightening'] else ''}  {up_here}"
             f"  {'reported as ' + p['reported'] if p['reported'] else 'not on the Rochester lists'}")
+        c = p["lasair"]
+        if c and c["class"]:
+            near = f" {c['matched']} ({c['matched_type']}), {c['separation_arcsec']:g}\" off" if c["matched"] else ""
+            absolute = f"; at {c['distance_mpc']:g} Mpc that is magnitude {c['absolute_mag']:+.1f}" \
+                if c["absolute_mag"] is not None else ""
+            say(f"    Lasair: {c['class']}{near}{absolute}")
     if picked:
         say("Check the Transient Name Server (the links in --json) before calling anything new. Imaging one is "
             "your decision: ./mount.py goto RA DEC, then ./shoot.py.")

@@ -49,6 +49,11 @@
           "minutes_up": {"type": "integer"},
           "reported": {"type": ["string", "null"], "description": "A Rochester-listed nova or supernova at the place."},
           "tns": {"type": "string"},
+          "lasair": {"type": ["object", "null"], "description": "What Lasair's Sherlock says it sits on (null without a Lasair token): class (SN, NT, VS, AGN, CV, ...), the matched galaxy or star, how far off, the galaxy's distance and the object's absolute magnitude from it.",
+                     "properties": {"class": {"type": ["string", "null"]}, "matched": {"type": ["string", "null"]},
+                                    "matched_type": {"type": ["string", "null"]}, "separation_arcsec": {"type": ["number", "null"]},
+                                    "distance_mpc": {"type": ["number", "null"]}, "distance_modulus": {"type": ["number", "null"]},
+                                    "absolute_mag": {"type": ["number", "null"]}, "link": {"type": "string"}}},
           "links": {"type": "object", "additionalProperties": {"type": "string"}}
         }
       }

@@ -223,7 +223,12 @@ What a person does; everything else is automatic.
      middle may be out (the ephemeris's epoch and period errors carried to
      tonight). The transits ExoClock wants timed come first.
    - The surveys' new transients (`./brokers.py`, ALeRCE): about a minute,
-     so it runs in the background and its line comes when it lands.
+     so it runs in the background and its line comes when it lands. Each
+     one left also carries what Lasair's Sherlock says it sits on (a
+     galaxy, a nucleus, a star), the galaxy's distance and so the
+     object's absolute magnitude: a supernova near its peak is -17 to
+     -19.5. Lasair needs a token, kept in
+     `~/.config/telescopeyoke/lasair-token` (or `TY_LASAIR_TOKEN`).
    - Comets to magnitude 12 (was 11), ten at most, each with how fast it
      moves (`motion_arcsec_min`), which sets the longest frame that keeps
      it sharp.
@@ -239,11 +244,15 @@ What a person does; everything else is automatic.
    Cluster). ExoClock listed WASP-11 b and HAT-P-16 b at low priority with
    their middles good to 0.3 minutes, and TOI-4153 b not at all.
 
-   Not asked, and why: Fink sorts the same ZTF alerts ALeRCE does; Lasair,
-   the Transient Name Server's interface for programs, the Minor Planet
-   Center's observatory code and OccultWatcher each need an account or a
-   registration of the person's own, and asteroid timings need the
-   timing this rig has not yet shown.
+   Accounts held since 3 November 2026: the AAVSO Target Tool and Lasair
+   (their keys in `~/.config/telescopeyoke/`, readable by their owner
+   only), OccultWatcher Cloud (its predictions are read on its site) and
+   the Transient Name Server (waiting on its administrators; its key for
+   programs will let `brokers.py` ask it whether a transient is
+   reported). Not asked: Fink, which sorts the same ZTF alerts ALeRCE
+   does. The Minor Planet Center gives an observatory code only once
+   measured asteroid positions from here have been sent, so there is no
+   account to make for it yet.
 
 What is kept, and what has to be kept to reproduce a find, is in
 [data.md](data.md).
