@@ -368,3 +368,18 @@ def test_the_night_and_the_briefing_carry_the_research_and_a_lead_up_tonight(tmp
     text = agent.context()
     assert "Mission" in text and "weird and wonderful" in text
     assert "1 unexplained after the checks" in text and "UP TONIGHT: KIC 2" in text
+
+
+def test_pulling_the_research_copies_the_desktops_records_and_reports_only(tmp_path, monkeypatch):
+    import subprocess
+    import agent
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    calls = []
+
+    def run(cmd, **kw):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0 if "cache/tess/" not in cmd[2] else 23)
+    got = agent.pull_research(run=run, say=lambda *_: None)
+    assert all(c[:2] == ["rsync", "-a"] and "--delete" not in c for c in calls)
+    assert calls[0][2] == "desktop:telescopeyoke-laptop/research/data-research/cache/kepler/screened.json"
+    assert "cache/tess/" not in got and "cache/research/" in got and got[-1] == "docs/research/"

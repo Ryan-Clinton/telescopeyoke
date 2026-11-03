@@ -7,6 +7,7 @@ that serve.py offers, and the MCP server in mcp_server.py all call these.
 """
 import json
 import re
+import subprocess
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -98,7 +99,36 @@ def _screen_summary(name, kind):
             "top_leads": [dict(v, star=k) for k, v in leads[:5]]}
 
 
-def research(html=False):
+RESEARCH_HOST = "desktop"                          # where the big screens and investigations run
+RESEARCH_PLACE = "telescopeyoke-laptop/research"   # its folder there; data in data-research/ (TY_DATA)
+PULLED = ("cache/kepler/screened.json", "cache/kepler/targets.csv", "cache/kepler/villanova.json",
+          "cache/tess/", "cache/seti/", "cache/research/")
+
+
+def pull_research(run=subprocess.run, say=print):
+    """Bring the desktop's research records here (`ty research --pull`):
+    the screens' records, the SETI sweeps, the investigations and their
+    reports, so the briefing and the night plan count what the desktop
+    found. Copies only; never deletes here. Returns what came."""
+    got = []
+    for path in PULLED:
+        where = config.DATA / path
+        where.parent.mkdir(parents=True, exist_ok=True)
+        done = run(["rsync", "-a", f"{RESEARCH_HOST}:{RESEARCH_PLACE}/data-research/{path}", str(where)],
+                   capture_output=True, text=True, timeout=600)
+        if done.returncode == 0:
+            got.append(path)
+    reports = ROOT / "docs" / "research"
+    reports.mkdir(parents=True, exist_ok=True)
+    done = run(["rsync", "-a", f"{RESEARCH_HOST}:{RESEARCH_PLACE}/docs/research/", str(reports) + "/"],
+               capture_output=True, text=True, timeout=600)
+    if done.returncode == 0:
+        got.append("docs/research/")
+    say(f"pulled from {RESEARCH_HOST}: " + (", ".join(got) or "nothing (not reachable?)"))
+    return got
+
+
+def research(html=False, pull=False):
     """The research that needs no sky, in one view (`ty research`): how much
     of each survey has been searched (the Kepler and TESS screens, each SETI
     sweep), the leads they flagged, what investigate.py made of the ones it
@@ -107,6 +137,7 @@ def research(html=False):
     artefact (looked into), unexplained after the checks, and known to
     science (studied by others: SIMBAD cites it often). Reads files only;
     with `html`, also writes web/research.html for the 8080 page's server."""
+    pulled = pull_research() if pull else None
     cache = config.DATA / "cache"
     surveys = [_screen_summary("Kepler screen", "kepler"), _screen_summary("TESS screen", "tess")]
     seti = []
@@ -165,6 +196,8 @@ def research(html=False):
                           "unexplained": "every check made and nothing accounts for it: for a person to read, "
                                          "not a discovery",
                           "known_to_science": "others have studied it (SIMBAD cites it 20 times or more)"}}
+    if pulled is not None:
+        answer["pulled"] = pulled
     if html:
         answer["page"] = str(write_research_page(answer))
     return answer

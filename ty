@@ -87,6 +87,7 @@ def main():
     ap.add_argument("--now", action="store_true", help="for targets: only those up now")
     ap.add_argument("--frames", type=int, default=0, help="for session: include the last N frames")
     ap.add_argument("--html", action="store_true", help="for research: also write web/research.html")
+    ap.add_argument("--pull", action="store_true", help="for research: first bring the desktop's research records here")
     args = ap.parse_args()
 
     import agent
@@ -112,7 +113,7 @@ def main():
         "characterise": agent.characterise,
         "candidates": agent.candidates,
         "discovery": agent.discovery,
-        "research": lambda: agent.research(args.html),
+        "research": lambda: agent.research(args.html, args.pull),
         "spot": lambda: agent.set_spot(args.name) if args.name else agent.spots(),
         "run": lambda: __import__("shoot").tell(args.name or ""),
     }[args.command]

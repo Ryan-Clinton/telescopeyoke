@@ -17,6 +17,7 @@
               "properties": {"waiting": {"type": "integer"}, "to_recheck": {"type": "integer"}, "explained": {"type": "integer"}, "likely_explained": {"type": "integer"}, "likely_interference": {"type": "integer"}, "artefact": {"type": "integer"},
                              "unexplained_weak": {"type": "integer"}, "unexplained_strong": {"type": "integer"},
                              "known_to_science": {"type": "integer"}}},
+    "pulled": {"type": "array", "items": {"type": "string"}, "description": "with --pull: what came from the desktop"},
     "investigated": {"type": "array", "items": {"type": "object", "required": ["lead", "star", "verdict", "known_to_science", "report"]}},
     "papers_unread": {"type": "integer"},
     "meaning": {"type": "object", "additionalProperties": {"type": "string"}},

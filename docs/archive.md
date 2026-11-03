@@ -260,6 +260,9 @@ research` reads the screens' own coverage (`archive.status`, the target
 files they keep) and investigate.py's own queue, so it counts the same
 leads, and says how many are waiting and how many will be asked again;
 `--html` writes `web/research.html` for the 8080 server.
+The big screens and the investigations run on the desktop; `./ty research
+--pull` first copies its records and reports here (never deleting any),
+so the briefing and the night plan count what it found.
 `./investigate.py --summary` writes
 [docs/research/README.md](research/README.md): the leads looked into,
 most intriguing first (still unexplained before likely understood, then
