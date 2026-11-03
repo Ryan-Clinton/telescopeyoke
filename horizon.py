@@ -139,6 +139,16 @@ def keep(skyline, source, **more):
     return saved
 
 
+def set_aside(skyline, reason, **more):
+    """Keep a survey that must not be used, for looking into, beside the
+    skyline in use and never in its place. Returns where it went."""
+    path = RESULTS.with_name(f"{RESULTS.stem}.not-used-{time.strftime('%Y%m%d-%H%M%S')}.json")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    records.write(path, dict({"saved": time.time(), "not_used_because": reason,
+                              "skyline": sorted(skyline, key=lambda p: p["az"])}, **more))
+    return path
+
+
 MOVED_DOUBT = 3.0     # degrees added to a skyline worked out from another spot, not measured
 
 
