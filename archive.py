@@ -643,7 +643,8 @@ def say_star(answer, say=print):
         say(f"  2-minute pass: scatter {answer.get('short_scatter_percent')}%, {answer.get('short_real', 0)} short dip(s) left")
     checks = answer.get("catalogues")
     if checks:
-        vsx = ", ".join(f"{v['name']} ({v['type']})" for v in checks["vsx"]) or "nothing within 10\""
+        vsx = ("did not answer" if "VSX" not in checks["asked"]
+               else ", ".join(f"{v['name']} ({v['type']})" for v in checks["vsx"]) or "nothing within 10\"")
         say(f"  catalogues ({', '.join(checks['asked']) or 'none answered'}): "
             f"{answer['known_binary'] or 'not a known binary: still a lead'}; VSX: {vsx}")
     real_sap = [d for d in answer.get("sap_only", []) if d["verdict"] == "dip"]

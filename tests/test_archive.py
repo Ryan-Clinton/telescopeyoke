@@ -100,6 +100,15 @@ def test_a_possible_repeat_is_a_known_binary_only_when_a_catalogue_says_so(tmp_p
     quiet = archive.checked({"real_dips": 0, "possible_repeats": 0}, 1, None, variables=None)
     assert quiet["catalogues"] is None                                       # nothing to check: nothing asked
 
+    def down(ra, dec, r):
+        raise requests.ConnectTimeout("CDS not answering")
+    silent = archive.checked(answer, 1, (290.0, 45.0), variables=down)
+    assert silent["catalogues"]["asked"] == ["Villanova Kepler EB catalogue"] and silent["known_binary"] is None
+    lines = []
+    archive.say_star(dict(silent, star="KIC 1", quarters=17, points=1, scatter_percent=0.1, dips=[], tabby_like=False,
+                          sap_only=[], trend={}), lines.append)
+    assert any("VSX: did not answer" in line for line in lines)
+
 
 def test_a_dip_at_a_gap_is_an_edge():
     t, f, q, quarter = curve()
