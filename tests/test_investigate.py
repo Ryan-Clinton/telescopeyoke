@@ -343,3 +343,28 @@ def test_the_summary_puts_the_unexplained_first_and_says_why_each_is_interesting
     text = investigate.write_summary(rows, 2, reports=tmp_path).read_text()
     assert "## 1. KIC 2: unexplained, weak" in text and "Still to ask: VSX" in text and "not a discovery" not in text
     assert "None of this is a discovery" in text
+
+
+def test_the_night_and_the_briefing_carry_the_research_and_a_lead_up_tonight(tmp_path, monkeypatch):
+    import datetime
+    import agent
+    import feeds
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    monkeypatch.setattr(feeds, "CACHE", tmp_path / "feeds")
+    (tmp_path / "cache" / "research").mkdir(parents=True)
+    (tmp_path / "cache" / "research" / "KIC-2.json").write_text(json.dumps({
+        "lead": "KIC-2", "kind": "kepler", "star": "KIC 2", "verdict": "unexplained, weak", "tier": "unusual",
+        "contrast": 12.0, "dips": 2, "deepest_percent": 6.0, "ra": 293.66, "dec": 41.87, "mag": 12.0,
+        "follow_up": {"can_watch": True, "reasons": ["in range"]}, "investigated": "2026-11-01T10:00:00+00:00"}))
+    r = agent.research_tonight(cfg=config.example(), today=datetime.date(2026, 11, 3))
+    assert r["unexplained"] == 1 and r["intriguing"][0]["star"] == "KIC 2"
+    up = r["observe_tonight"][0]                                   # +42°: up after dark in November
+    assert up["dark_hours_up"] > 0 and "--dry-run" in up["command"]
+    monkeypatch.setattr(agent, "night", lambda demo=False: {
+        "verdict": "GO", "clear_window": None, "darkness": {"start": datetime.datetime(2026, 11, 3, 18),
+                                                            "end": datetime.datetime(2026, 11, 4, 6)},
+        "moon": {"illumination": 50}, "spot": "x", "skyline_measured": True, "discovery": [], "supernovae": [],
+        "best_now": [], "research": r})
+    text = agent.context()
+    assert "Mission" in text and "weird and wonderful" in text
+    assert "1 unexplained after the checks" in text and "UP TONIGHT: KIC 2" in text

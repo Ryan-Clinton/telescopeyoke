@@ -28,6 +28,16 @@ is `docs/agents/setup-routine.md` step 6b.
    they belong to setup, step 1. Answer first; if something is broken, say
    so in a line at the end and fix it afterwards, in the background. Answer in this
    shape, nothing more:
+   - Before choosing anything, weigh the research against the sky, in
+     `docs/discovery.md`'s order ("What the project is for"): a watch
+     window tonight first; then any `research.observe_tonight` lead (still
+     unexplained or only likely explained, watchable, up tonight), said
+     with why it is interesting (`why_interesting`) and what one look
+     would settle (whether the dips go on), and planned before the routine
+     patrol; then the programmes. Say the research queue in one line
+     (`research`: waiting, to ask again, unexplained) with the most
+     intriguing lead, and start `./investigate.py` in the background
+     while any lead waits.
    - One line: the verdict, the clear spell, when the Moon rises or sets,
      the dew. When the person is out with stars in view, their sky beats
      the forecast: give each programme's `best_time` where `best_in_clear`

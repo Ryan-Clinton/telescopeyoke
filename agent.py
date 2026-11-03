@@ -791,6 +791,42 @@ def big_targets(rep, limit=5, data=None, now=None):
     return out
 
 
+FOLLOW_VERDICTS = ("unexplained, strong", "unexplained, weak", "likely explained")   # worth a look of our own
+
+
+def research_tonight(demo=False, cfg=None, today=None):
+    """The research in the night's terms: the queue (ty research's numbers),
+    the most intriguing leads looked into, and those this telescope can
+    watch that are up in tonight's dark hours, still not settled
+    (FOLLOW_VERDICTS), most intriguing first. Reads files only, and the
+    planner's sky for tonight."""
+    if demo:
+        return {"waiting": 0, "to_recheck": 0, "unexplained": 0, "papers_unread": 0, "intriguing": [],
+                "observe_tonight": []}
+    import investigate
+    r = research()
+    top = investigate.intriguing(most=5)
+    taken = investigate.done()
+    cfg = cfg or (config.load() if config.FILE.exists() else config.example())
+    tonight = []
+    for row in top:
+        rec = taken.get(row["lead"], {})
+        if not row["can_watch"] or row["verdict"] not in FOLLOW_VERDICTS or rec.get("ra") is None:
+            continue
+        up = investigate.follow_up({"star": rec["star"], "ra": rec["ra"], "dec": rec["dec"], "mag": rec.get("mag")},
+                                   rec.get("deepest_percent", 0.0), cfg, months=1, today=today)["up"]
+        if up and up[0]["dark_hours_up"] > 0:
+            tonight.append(dict(row, dark_hours_up=up[0]["dark_hours_up"], best=up[0]["best"],
+                                command=f"./mount.py goto {rec['ra']:.4f} {rec['dec']:+.4f} --dry-run"))
+    leads = r["leads"]
+    return {"waiting": leads["waiting"], "to_recheck": leads["to_recheck"],
+            "unexplained": leads["unexplained_weak"] + leads["unexplained_strong"], "papers_unread": r["papers_unread"],
+            "surveys": [{"survey": x["survey"], "covered_percent": x.get("covered_percent")} for x in r["surveys"]],
+            "intriguing": [{k: row[k] for k in ("lead", "star", "verdict", "tier", "why_interesting", "can_watch")}
+                           for row in top[:3]],
+            "observe_tonight": tonight}
+
+
 def night(demo=False):
     """Tonight in brief: the verdict, when it is dark and clear, the Moon,
     and the discovery programmes' fields first, then the best targets."""
@@ -825,7 +861,18 @@ def night(demo=False):
         "papers": rep.get("papers", []),
         "news": rep.get("news", []),
         "sources": rep.get("sources", []),
+        "research": _safe_research(demo),
     }
+
+
+def _safe_research(demo):
+    """research_tonight, or why it could not be had: the night's plan never
+    fails for the archive's sake."""
+    try:
+        return research_tonight(demo)
+    except Exception as problem:     # noqa: BLE001 - a broken record must not take the plan with it
+        return {"error": f"{type(problem).__name__}: {problem}", "waiting": None, "to_recheck": None,
+                "unexplained": None, "papers_unread": None, "intriguing": [], "observe_tonight": []}
 
 
 def targets(limit=10, kind=None, now=False, demo=False):
@@ -1051,7 +1098,12 @@ def observing(demo=False):
 def context(demo=False):
     """A short plain-text briefing for a model starting a session."""
     caps, now = capabilities(), status()
-    lines = [f"telescopeyoke {VERSION}", ""]
+    lines = [f"telescopeyoke {VERSION}", "",
+             "Mission (docs/discovery.md, \"What the project is for\"): discovery first. New transients and "
+             "novae with the telescope; strange stars (Tabby's star, dippers) and radio SETI in the archives; "
+             "the person wants the weird and wonderful, so a research lead this telescope can watch tonight "
+             "comes before a routine patrol. Plan with ./ty night (its research section) and the "
+             "discovery-night skill; on a cloudy day, the cloudy-day skill.", ""]
     try:
         tonight = night(demo)
         window = ""
@@ -1085,6 +1137,23 @@ def context(demo=False):
         if tonight["best_now"]:
             lines += ["Best now: " + ", ".join(f"{t['id']} ({t['score']:.0f})"
                                                for t in tonight["best_now"]), ""]
+        rs = tonight.get("research") or {}
+        if rs.get("error"):
+            lines += [f"Research: unavailable ({rs['error']})", ""]
+        elif not demo:
+            cover = "; ".join(f"{x['survey']} {x['covered_percent']}%" for x in rs.get("surveys", [])
+                              if x.get("covered_percent") is not None)
+            lines += ["Research (./ty research, docs/research/README.md):",
+                      f"  {rs['waiting']} lead(s) waiting, {rs['to_recheck']} to ask again, {rs['unexplained']} "
+                      f"unexplained after the checks; {rs['papers_unread']} paper(s) unread." + (f" Covered: {cover}."
+                                                                                                if cover else "")]
+            for row in rs.get("intriguing", []):
+                tier = f" ({row['tier']})" if row.get("tier") else ""
+                lines += [f"  {row['star']}: {row['verdict']}{tier}: " + "; ".join(row["why_interesting"])]
+            for row in rs.get("observe_tonight", []):
+                lines += [f"  UP TONIGHT: {row['star']} ({row['verdict']}), {row['dark_hours_up']:g} dark hours, "
+                          f"best {row['best']}: {row['command']}"]
+            lines += [""]
     except Exception as problem:   # the briefing should survive a planner failure
         lines += [f"Night: unavailable ({problem})", ""]
     lines += ["Hardware:",

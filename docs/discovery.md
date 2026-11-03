@@ -24,6 +24,29 @@ asks for another look when that would settle a question. It hands the
 person evidence, not guesses. Written 16 October 2026 from the sources at
 the end.
 
+## What the project is for
+
+One mission, two instruments. The telescope hunts what changes in the sky
+(novae in M31 and M33, supernovae, new transients, the timing of
+exoplanet transits, Tabby's star's level); the archives hunt what is
+strange in data already taken (Kepler's and TESS's light curves for
+Tabby-like dippers, Breakthrough Listen's Green Bank data for radio
+technosignatures). The person is drawn to the weird and wonderful
+(SETI@home, Tabby's star), so the two are weighed together each night,
+in this order:
+
+1. A watch window tonight (Tabby's proposed companion's transit).
+2. A research lead still unexplained (or only likely explained) that this
+   telescope can watch and is up tonight (`./ty night`'s `research`,
+   `observe_tonight`): one look says whether the behaviour goes on.
+3. The discovery programmes and transits, as planned.
+4. Everything without the sky (the screens, the SETI sweep, the papers,
+   the investigations) runs beside it on the desktop, every night and
+   every cloudy day.
+
+A fresh session gets this from `./ty context` (the mission, the research
+queue, the most intriguing leads and any up tonight) and `./ty night`.
+
 ## Recent proofs
 
 - **19 October 2026, GOES-19 CCOR-1:** the six-hourly comet hunt found a

@@ -6,6 +6,15 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+- **3 November 2026**: a fresh session sees the research. `./ty context`
+  opens with the mission (discovery first; strange stars and SETI wanted)
+  and gives the research queue, the most intriguing leads and any
+  watchable lead up tonight; `./ty night` has a `research` section
+  (`observe_tonight` with a dry-run GoTo each), and the discovery-night
+  skill weighs it before the programmes. Two fresh-session scenarios,
+  clear and cloudy, in `evals/scenarios.json`
+  ([docs/discovery.md](docs/discovery.md#what-the-project-is-for)).
+
 - **3 November 2026**: `investigate.py` judges short TESS dips and
   possible repeats as leads in their own right (the red-giant rule only
   for dips of a day or more); queues leads by tier and contrast against
