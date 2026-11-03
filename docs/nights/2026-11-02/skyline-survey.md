@@ -140,3 +140,22 @@ the meridian the second slew may swing the tube over the pole again.
    rather than record a wall to the top?
 4. Should a survey that disagrees with the last one at many bearings always
    be set aside, even when nobody checked the old one by eye?
+
+## Again at midday, home set
+
+At about 11:20 the person set the mount's home again (it had been well off)
+and restarted it; `./mount.py settime` retired the old corrections, so the
+survey ran with none (both sides zero). 11:23-12:22, the Sun in the south
+about 19° up: 136 looks, one camera jam recovered by reopening. Set aside:
+back at 30°, 45° up read an edge (28% of the high sky) the first time and
+sky (39%) the second, a top that close to the look's height.
+
+Against the skyline checked by eye: the south-west 225-262.5° read open to
+20°, as the person's photo showed (the checked skyline says 54°, because
+the survey of 2 November avoided the low Sun there). But 270-315° read open
+down to 20°, in frames up to five times as bright as the high sky, where
+the house stands to 72-75°: the house wall lit by the Sun scored as sky.
+Nothing was kept; `cache/horizon-ralphie-side.not-used-20261103-122252.json`.
+A sunlit wall reading as sky is not yet caught: brightness cannot tell it
+(the sky near the Sun read 440% too), and colour carries only 0.2 of the
+score.
