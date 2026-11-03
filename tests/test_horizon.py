@@ -445,3 +445,14 @@ def test_a_jammed_camera_is_reopened_and_the_frame_asked_for_again():
     import pytest
     with pytest.raises(IndiError):
         stuck.frame(1)
+
+
+def test_a_survey_never_raises_a_skyline_a_person_checked_by_eye():
+    """3 November 2026: glare due south read as a wall above 75°."""
+    checked = {"checked_by_eye": "due south not open low", "skyline": [{"az": az, "alt": 36.0}
+                                                                       for az in range(0, 360, 15)]}
+    new = [{"az": 165, "alt": 40.0}, {"az": 180, "alt": 90.0}, {"az": 195, "alt": 38.0},
+           {"az": 270, "alt": 90.0, "open": True}]
+    assert horizon.above_checked(new, checked) == [180]
+    assert horizon.above_checked(new, dict(checked, checked_by_eye=None)) == []    # nobody looked: kept as before
+    assert horizon.above_checked(new, {}) == []

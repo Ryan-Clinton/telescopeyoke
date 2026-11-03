@@ -813,6 +813,21 @@ def skyline_from(found, low, known=None):
     return sorted(points, key=lambda p: p["az"])
 
 
+EYE_DOUBT = JUMP     # degrees above a skyline a person checked by eye before a survey is doubted
+
+
+def above_checked(skyline, kept, by=EYE_DOUBT):
+    """The bearings where a new survey puts the top more than `by` degrees
+    above the skyline in use, when that one was checked by a person's eye.
+    3 November 2026: the daylight survey read the glare due south as a wall
+    above 75°, over the skyline checked the day before, and would have
+    taken M33 off the night's plan."""
+    if not kept or not kept.get("checked_by_eye") or not kept.get("skyline"):
+        return []
+    return [p["az"] for p in skyline if not p.get("open")
+            and p["alt"] - float(limit(kept["skyline"], [p["az"]])[0]) > by]
+
+
 def skyline_blocked(found):
     """Turn a trace into config.toml's blocked list. Each bearing speaks for
     the ground halfway to its neighbours, and is blocked up to the lowest
@@ -1003,6 +1018,16 @@ def run(args):
         results = look.log
     if args.trace:
         skyline = skyline_from(found, low, known)
+        higher = above_checked(skyline, kept)
+        if higher:
+            aside = set_aside(skyline, f"higher than the skyline checked by eye at {len(higher)} bearing(s)",
+                              looks=results, warnings=warnings, trace=found, higher_at=higher)
+            print("\n" + profile(found, low))
+            print(f"\nNot kept: it puts the top more than {EYE_DOUBT:g}° above the skyline checked by eye "
+                  f"({kept['checked_by_eye']}) at " + ", ".join(f"{az:g}°" for az in higher)
+                  + f". The checked skyline stays in use; this survey is in {aside.name}, to keep with "
+                  "--use-aside once someone has looked.", flush=True)
+            return {"kept": False, "set_aside": aside.name, "higher_at": higher}, warnings
         source = "telescope" if not known or kept["source"] == "telescope" else "panorama+telescope"
         saved = keep(skyline, source, looks=results, warnings=warnings, trace=found,
                      blocked=skyline_blocked(found))
