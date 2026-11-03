@@ -8,6 +8,7 @@ that serve.py offers, and the MCP server in mcp_server.py all call these.
 import json
 import re
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import config
@@ -134,12 +135,19 @@ def research(html=False):
         prefix = "KIC" if s["survey"].startswith("Kepler") else "TIC"
         waiting += s["leads"] - sum(1 for r in looked if r["lead"].startswith(prefix + "-"))
     waiting += sum(s["candidates"] for s in seti) - sum(1 for r in looked if r["lead"].startswith("SETI-"))
-    unread, read_ids = 0, set(_read_json(cache / "literature-read.json", []) or [])
+    # literature.py's own rule: once anything is marked read, every paper
+    # not marked; before that, only those of its last NIGHT_DAYS days.
     import feeds
+    import literature
+    marked = _read_json(cache / "literature-read.json", None)
+    since = (datetime.now(timezone.utc) - timedelta(days=literature.NIGHT_DAYS)).isoformat()
+    unread = 0
     for path in sorted(feeds.CACHE.glob("arxiv_*.json")):
         for p in _read_json(path, []) or []:
-            if re.sub(r"v\d+$", "", p.get("id", "")) not in read_ids:
-                unread += 1
+            if marked is None:
+                unread += p.get("submitted", "") >= since[:19]
+            else:
+                unread += re.sub(r"v\d+$", "", p.get("id", "")) not in set(marked)
     count = lambda *labels: sum(1 for r in looked if r["verdict"] in labels)     # noqa: E731
     answer = {"surveys": surveys + seti,
               "leads": {"waiting": max(0, waiting), "explained": count("explained"), "artefact": count("artefact"),
