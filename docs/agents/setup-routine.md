@@ -72,6 +72,11 @@ answer. Never send them out, or keep them waiting, on the forecast's word.
 
 ## 3. See that the motors really turn
 
+Optional: taken only when `[mount] nudge_check` is on (the Settings screen:
+"Motor check at setup"). `./mount.py settime --dry-run` says which. Off since
+3 November 2026, at the person's wish: it had never failed, and it kept them
+out in the cold; then go from step 2 straight to focus.
+
 They stand beside it, clear of the bar.
 
     ./mount.py nudge

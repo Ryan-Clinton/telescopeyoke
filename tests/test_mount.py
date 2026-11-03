@@ -85,6 +85,19 @@ def test_a_nudge_is_planned_and_locked_like_any_other_move(tmp_path, monkeypatch
     assert json.loads(capsys.readouterr().out)["errors"][0]["code"] == "MOTION_LOCKED"
 
 
+def test_the_motor_check_can_be_turned_off_and_settime_says_which(monkeypatch, capsys):
+    import config
+    import sys
+    assert config.example()["mount"]["nudge_check"] is True
+    assert "./mount.py nudge" in mount.nudge_step({"mount": {}})
+    assert "straight to focus" in mount.nudge_step({"mount": {"nudge_check": False}})
+    assert config.checked("mount", "nudge_check", False) is False
+    monkeypatch.setattr(sys, "argv", ["mount", "--demo", "settime", "--dry-run", "--json"])
+    with pytest.raises(SystemExit):
+        mount.main()
+    assert any("./mount.py nudge" in w for w in json.loads(capsys.readouterr().out)["warnings"])
+
+
 def test_zenith_puts_the_tube_on_the_meridian_at_the_sites_latitude(scope):
     scope.zenith(SITE)
     ra_axis, dec_axis = scope.axes()

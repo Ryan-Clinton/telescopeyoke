@@ -1486,7 +1486,7 @@ def dry_run(args, site):
         if args.command == "settime":
             return {"would_move": False, "safe": True,
                     "warnings": ["Sets the handset's date, time and position from this computer. The handset "
-                                 "must be at its main menu. Nothing moves."]}
+                                 "must be at its main menu. Nothing moves.", nudge_step()]}
         if args.command == "truehome":
             return plan_true_home()
         if args.command in ("pointing", "findhome"):
@@ -1527,6 +1527,15 @@ def dry_run(args, site):
     for warning in result["warnings"]:
         print(f"Note: {warning}")
     return 0
+
+
+def nudge_step(cfg=None):
+    """What the setup routine does after settime: the motor check (the nudge),
+    or straight on to focus when it is turned off ([mount] nudge_check)."""
+    if (cfg or config.hardware())["mount"].get("nudge_check", True):
+        return "Next in the setup routine: the motor check, ./mount.py nudge, with someone watching."
+    return ("The motor check (the nudge) is off in the settings ([mount] nudge_check): after asking where "
+            "it is clear, go straight to focus.")
 
 
 def act(args, site):

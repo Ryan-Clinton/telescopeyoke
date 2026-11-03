@@ -6,6 +6,9 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+- **3 November 2026**: the setup routine's motor check (`./mount.py nudge`)
+  is optional: `[mount] nudge_check`, "Motor check at setup" on the Settings
+  screen; `./mount.py settime --dry-run` says whether it comes next.
 - **A lead looked into without being told which** (`investigate.py`,
   `ty research`): the searches' top lead nobody has looked into goes
   through the same checks each time (SIMBAD, VSX, Villanova's Kepler

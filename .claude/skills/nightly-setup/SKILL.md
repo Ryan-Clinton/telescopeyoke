@@ -60,9 +60,11 @@ project's commands refuse what is unsafe.
 
 1. `./ty mount settime` once the handset is at its main menu.
 2. Ask where the sky is clear, and choose every star from the answer.
-3. `./ty mount nudge`, and ask whether they saw it tip and come back. If
-   the screen says it moved and they say it did not, the motors stalled:
-   power-cycle and back to 1.
+3. Only if the settime dry run says the motor check is on (`[mount]
+   nudge_check`, off since 3 Nov 2026): `./ty mount nudge`, and ask whether
+   they saw it tip and come back. If the screen says it moved and they say
+   it did not, the motors stalled: power-cycle and back to 1. Off: straight
+   to focus.
 4. Focus: the `focus` skill. It measures first (`./focus.py --check`, 15
    seconds) and says the level; it focuses only if that is soft or the
    person asks.

@@ -69,7 +69,8 @@ DEFAULTS = {
                "backend": "altair" if sys.platform == "win32" else "indi"},
     # link: "handset" (a serial lead to the SynScan handset), or with no handset
     # "wifi" (the SynScan Wi-Fi adapter) or "eqdir" (an EQDIR lead).
-    "mount": {"serial_match": "FTDI", "link": "handset"},
+    # nudge_check: whether the setup routine's motor check (./mount.py nudge) is a step.
+    "mount": {"serial_match": "FTDI", "link": "handset", "nudge_check": True},
     "indi": {"port": 7624, "manage_server": False},
     # focus_tones: the focus run's tones in the live stream's sound (stream.Tones).
     "stream": {"focus_tones": True},
@@ -220,6 +221,11 @@ SETTINGS = (
     ("mount", "latitude_degrees_per_mark", "Latitude scale: degrees per mark", "number",
      "What one mark on the mount's latitude scale is worth, measured during polar alignment. With it, "
      "raising or lowering the axis is also said in marks.", {"min": 0.2, "max": 10, "optional": True}),
+    ("mount", "nudge_check", "Motor check at setup (the nudge)", "yesno",
+     "A step of the setup routine: from home the tube tips 5° and back while you watch, to see that the "
+     "motors really turn (on 6 October 2026 they stalled while the handset said they had moved). Off: the "
+     "routine goes from asking where it is clear straight to focus. ./mount.py nudge still works when asked for.",
+     {}),
     ("scope", "aperture_mm", "Aperture", "number", "Millimetres.", {"min": 10, "max": 2000}),
     ("scope", "focal_length_mm", "Focal length", "number",
      "Millimetres. The plate solver works out the field of view from this and the sensor.", {"min": 50, "max": 20000}),

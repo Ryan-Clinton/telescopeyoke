@@ -171,7 +171,7 @@ one front door, the same checks. The rest (`patrol.py`, `polaralign.py`,
 - **Does:** `docs/agents/setup-routine.md` in order: what is plugged in
   (`./doctor.py --offline`, `./ty mount status`; `lsusb` on Ubuntu, the
   device list `doctor.py` prints on Windows); the night's dry runs indoors;
-  `settime`; where it is clear; `nudge`, and whether they saw it; GoTo a
+  `settime`; where it is clear; `nudge` (when `[mount] nudge_check` is on), and whether they saw it; GoTo a
   rich field and `./ty focus --motor`; polar alignment only if the tripod
   moved; the first target. One short line at a time, only what needs their
   hands or eyes. Each `hardware` step under rule 2.

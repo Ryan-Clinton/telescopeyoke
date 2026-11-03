@@ -565,7 +565,7 @@ and a read-only web API and MCP server offer the same information. Start with
 1. Set the mount in the home position, power on, and take the handset to its
    main menu.
 2. `./mount.py nudge` while you stand beside it: the tube tips 5° and comes
-   back. Then `./mount.py zenith` to measure the handset's clock.
+   back (optional: the setting "Motor check at setup", `[mount] nudge_check`). Then `./mount.py zenith` to measure the handset's clock.
 3. Focus: `./focus.py --scene` on something distant in daylight, then
    `./focus.py` on stars. Turn the focuser and listen for the tone to rise: go on
    until "Minimum passed", come back, and stop at "Focus good. Hold".
