@@ -188,6 +188,46 @@ def test_the_real_benchmark_quiet_stars_give_nothing(kic):
     assert not [d for d in dips if d["verdict"] == "dip"]
 
 
+def test_a_tess_sector_is_read_and_binned_to_keplers_cadence(tmp_path):
+    from astropy.io import fits
+    t = 1730.0 + np.arange(0, 2, 2 / 1440)                         # two days of 2-minute points
+    flux = np.full(len(t), 5000.0)
+    flags = np.zeros(len(t), int)
+    flags[:29] = 32                                                # a momentum dump over the first bin and most of the next
+    columns = [fits.Column(name="TIME", format="D", array=t), fits.Column(name="PDCSAP_FLUX", format="E", array=flux),
+               fits.Column(name="SAP_FLUX", format="E", array=flux * 1.1), fits.Column(name="QUALITY", format="J", array=flags)]
+    primary = fits.PrimaryHDU()
+    primary.header["SECTOR"] = 15
+    path = tmp_path / "tess-s0015_lc.fits"
+    fits.HDUList([primary, fits.BinTableHDU.from_columns(columns)]).writeto(path)
+    curve = archive.binned(archive.read([path]))
+    assert len(curve["t"]) == 96 and set(curve["quarter"].tolist()) == {15}        # 30-minute bins
+    assert np.isnan(curve["f"][0]) and curve["q"][0] == 32 and curve["f"][2] == 1.0 and curve["q"][2] == 0
+    assert archive.calendar(1730.21, archive.BTJD) == "2019-09-03"
+
+
+def test_tess_stars_are_named_as_people_write_them():
+    assert archive.tic_number("TIC 185336364") == archive.tic_number("Tabby") == 185336364
+    with pytest.raises(archive.interface.Refusal):
+        archive.tic_number("Vega")
+
+
+def test_the_real_benchmark_tess_finds_the_2019_transit_of_tabbys_star():
+    """Madurga-Favieres et al. (MNRAS 550, stag1273, 2026): one symmetric
+    1.1% transit about 21 hours long in TESS sector 15."""
+    import os
+    from pathlib import Path
+    root = os.environ.get("TY_TESS_CACHE")
+    paths = sorted((Path(root) / "185336364").glob("*_lc.fits")) if root else []
+    if not paths:
+        pytest.skip("no kept TESS light curves of TIC 185336364 (set TY_TESS_CACHE)")
+    curve = archive.binned(archive.read(paths))
+    dips, _ = archive.find_dips(curve["t"], curve["f"], curve["q"], curve["quarter"], archive.BTJD)
+    left = [d for d in dips if d["verdict"] == "dip"]
+    assert [d["date"] for d in left] == ["2019-09-03"]
+    assert left[0]["depth_percent"] == pytest.approx(1.2, abs=0.2) and abs(left[0]["asymmetry"]) < 0.3
+
+
 def test_stars_are_named_as_people_write_them():
     assert archive.kic_number(["KIC", "8462852"]) == archive.kic_number("KIC8462852") == 8462852
     assert archive.kic_number("Tabby") == 8462852

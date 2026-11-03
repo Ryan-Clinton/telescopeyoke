@@ -6,6 +6,7 @@
   "type": "object",
   "anyOf": [
     {"required": ["star", "kic", "quarters", "points", "scatter_percent", "dips", "real_dips", "deepest_percent", "tabby_like", "score", "source", "kind"]},
+    {"required": ["star", "tic", "mission", "quarters", "points", "scatter_percent", "dips", "real_dips", "deepest_percent", "tabby_like", "score", "source", "kind"]},
     {"required": ["stars", "missed", "kind"]},
     {"required": ["screened", "this_run", "order", "top", "kind"]}
   ],
@@ -56,7 +57,9 @@
   "properties": {
     "star": {"type": "string"},
     "kic": {"type": "integer"},
-    "quarters": {"type": "integer"},
+    "tic": {"type": "integer", "description": "archive.py tess: the star's TESS Input Catalog number."},
+    "mission": {"enum": ["Kepler", "TESS"], "description": "Kepler: times are BKJD (BJD - 2454833), quarters; TESS: BTJD (BJD - 2457000), sectors, 2-minute points binned to 30."},
+    "quarters": {"type": "integer", "description": "Kepler's quarters, or TESS's sectors."},
     "points": {"type": "integer"},
     "scatter_percent": {"type": ["number", "null"]},
     "dips": {"type": "array", "items": {"$ref": "#/$defs/dip"}},

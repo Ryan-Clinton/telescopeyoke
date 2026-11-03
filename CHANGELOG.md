@@ -26,7 +26,11 @@ proven is `docs/validation.md` ("Current conclusions").
   a star's dips in its Kepler light curve from MAST, each checked for
   edges, gaps, spacecraft events, periodicity and variability; it finds
   Tabby's D792, D1519 and the 2013 complex, and ranks many stars by how
-  Tabby-like they are ([archive](docs/archive.md)).
+  Tabby-like they are. Each dip is measured in SAP too, the long-term
+  fading is measured with the quarters joined at their edges, `screen`
+  works through every star Kepler watched, a benchmark on real binaries
+  and quiet stars checks it, and `tess` runs the same on TESS sectors
+  (it finds the 2019 transit of Tabby's star) ([archive](docs/archive.md)).
 - **What a stack reaches, and who wants what measured** (`ty night`,
   `transits.py`, `build_catalogue.py`): the catalogue holds galaxies to
   magnitude 12 (1,660 objects, from 641), built from a pinned OpenNGC

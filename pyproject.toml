@@ -26,6 +26,8 @@ dependencies = [
 test = ["pytest>=8"]
 # seti.py only: Breakthrough Listen's files are HDF5 packed with bitshuffle.
 seti = ["h5py>=3.8", "hdf5plugin>=4.0"]
+# archive.py tess only: TESS's light curves from MAST.
+archive = ["astroquery>=0.4.6"]
 
 [project.urls]
 Homepage = "https://ryan-clinton.github.io/telescopeyoke/"

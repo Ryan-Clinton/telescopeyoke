@@ -115,7 +115,8 @@ basis vectors made from quiet stars, corrects sudden drops in a pixel's
 sensitivity, and corrects for crowding, and that "in most cases" it keeps
 planet transits and other astrophysical signals. So every dip is measured
 in the raw SAP flux too: Tabby's four are in both, at like depths (D792
-14.3% in PDCSAP, 15.1% in SAP; D1519 20.7% and 20.5%). A dip in one only
+14.3% in PDCSAP, 14.8% in SAP; D1519 20.7% and 20.6%, SAP measured
+against the light either side of each dip). A dip in one only
 is the pipeline's doing until shown otherwise.
 
 The cleaning, and putting each quarter on its own level, take out slow
@@ -125,11 +126,33 @@ each roll), Tabby's SAP flux falls 2.6% over the four years (-1.1% a
 year), against the about 3% Montet & Simon (2016) measured; the PDCSAP
 flux joined the same way shows +0.6%: the cleaning took the fading out.
 
+## TESS
+
+    ./archive.py tess TIC 185336364      or: tess Tabby, tess KIC 8462852 (by the TIC's own cross-match)
+
+TESS has watched nearly the whole sky in 27-day sectors since 2018, so it
+reaches the stars Kepler never saw. `tess` reads a star's SPOC 2-minute
+light curves from MAST (through astroquery, installed with the
+distribution's `python3-astroquery`), keeps them under `cache/tess/TIC/`,
+bins them to Kepler's 30 minutes, and runs the same search and checks;
+times are BTJD (BJD minus 2457000). The long-term trend is not measured:
+sectors years apart cannot be joined at their edges.
+
+On Tabby's star (TIC 185336364; sectors 14, 15, 41, 54 and 55; 5,959
+binned points, scatter 0.086%) it finds one dip, on 3 September 2019
+(BTJD 1730.21): 1.28% deep in PDCSAP and in SAP, 16.5 hours, nearly
+symmetric (asymmetry -0.15). That is the single symmetric transit in
+sector 15 that Madurga-Favieres et al. (MNRAS 550, stag1273, published 6
+July 2026) put down to a giant companion, about 1.1% deep and 21 hours
+long by their fit. SAP's depth is measured against the light either
+side of the dip: TESS's raw flux drifts with scattered light within a
+sector, and against the sector's median the same dip read 0.35%.
+
 ## What it cannot see
 
 Dips shallower than 1%: the exocomets Rappaport et al. (2018) found round
 KIC 3542116 are about 0.1% deep, and a search for those needs a lower
-floor and a model of the comet's shape. Stars Kepler did not watch: TESS
-covers the whole sky in 27-day sectors, and is the next archive to add.
+floor and a model of the comet's shape. A dip longer than a TESS sector,
+or falling in its mid-sector gap.
 An odd light curve here is a reason to look, not a discovery: VSX, SIMBAD
 and the papers on the star come before any claim.

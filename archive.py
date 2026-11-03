@@ -5,6 +5,7 @@ telescope's measurements instead of our own nights.
 
     ./archive.py dips KIC 8462852        Tabby's star: its dips, each with depth, length and shape
     ./archive.py dips Tabby --json
+    ./archive.py tess TIC 185336364      the same search on its TESS sectors (also: tess Tabby, tess KIC 8462852)
     ./archive.py search stars.txt        each KIC number in the file (one a line), most Tabby-like first
     ./archive.py search 8462852,7106205
     ./archive.py screen --batch 500      the next 500 Kepler stars not yet screened, brightest first
@@ -164,11 +165,12 @@ def read(paths):
     for path in paths:
         with fits.open(path, memmap=False) as hdul:
             data = hdul[1].data
-            number = hdul[0].header.get("QUARTER", -1)
+            header = hdul[0].header
+            number = header.get("QUARTER", header.get("SECTOR", -1))      # Kepler's quarter, TESS's sector
             time = np.array(data["TIME"], float)
             pdc = np.array(data["PDCSAP_FLUX"], float)
             sap = np.array(data["SAP_FLUX"], float) if "SAP_FLUX" in data.columns.names else np.full(len(time), np.nan)
-            flags = np.array(data["SAP_QUALITY"], int)
+            flags = np.array(data["SAP_QUALITY" if "SAP_QUALITY" in data.columns.names else "QUALITY"], int)
         keep = np.isfinite(time)
         good = keep & np.isfinite(pdc) & (flags == 0)
         if not good.any():
@@ -225,14 +227,19 @@ def seen_in_sap(dips, curve, sap_dips):
     focus changes, thermal changes, and sudden drops in a pixel's
     sensitivity (Kepler Archive Manual, section 2.3.1.2), so a dip in one
     and not the other is the pipeline's doing until shown otherwise."""
-    t, sap, quarter = curve["t"], curve["sap"], curve["quarter"]
+    t, sap = curve["t"], curve["sap"]
     for d in dips:
         span = (t >= d["start"]) & (t <= d["end"]) & np.isfinite(sap)
-        if not span.any():
+        # SAP drifts within a quarter (and much more within a TESS sector, with
+        # scattered light): its level is the light just either side of the dip.
+        wide = max(1.0, d["end"] - d["start"])
+        beside = ((t >= d["start"] - wide) & (t < d["start"]) | (t > d["end"]) & (t <= d["end"] + wide)) \
+            & np.isfinite(sap)
+        if not span.any() or not beside.any():
             d["sap_depth_percent"], d["seen_in"] = None, "PDCSAP only"
             continue
-        level = np.nanmedian(sap[quarter == quarter[span][0]])
-        depth = 100 * (level - np.nanmin(sap[span]))
+        level = np.median(sap[beside])
+        depth = 100 * (level - np.nanmin(sap[span])) / level
         d["sap_depth_percent"] = round(float(depth), 2)
         d["seen_in"] = "both" if depth >= 0.5 * d["depth_percent"] else "PDCSAP only"
     covered = [(d["start"], d["end"]) for d in dips]
@@ -241,9 +248,99 @@ def seen_in_sap(dips, curve, sap_dips):
     return alone
 
 
-def calendar(bkjd):
+def calendar(day, zero=BKJD):
     from astropy.time import Time
-    return Time(bkjd + BKJD, format="jd").datetime.strftime("%Y-%m-%d")
+    return Time(day + zero, format="jd").datetime.strftime("%Y-%m-%d")
+
+
+# --- TESS ------------------------------------------------------------------------
+# TESS has watched nearly the whole sky in 27-day sectors since 2018. Its
+# SPOC light curves (2-minute cadence, PDCSAP and SAP as Kepler's) come from
+# MAST through astroquery, are kept under cache/tess/TIC/, and are binned to
+# Kepler's 30 minutes so the same dip rules hold. Times are BTJD: BJD minus
+# BTJD.
+
+BTJD = 2457000.0
+TESS_TABBY = 185336364     # TIC: Tabby's star (the TIC's cross-match to KIC 8462852)
+BIN_MINUTES = 30
+
+
+def tic_number(words):
+    """The TIC number in 'TIC 185336364', or Tabby's; a KIC star by the TIC's
+    own cross-match."""
+    text = " ".join(words) if isinstance(words, (list, tuple)) else str(words)
+    if text.strip().lower() in ("tabby", "tabby's star", "boyajian's star"):
+        return TESS_TABBY
+    if text.strip().upper().startswith("KIC"):
+        from astroquery.mast import Catalogs
+        kic = kic_number(text)
+        rows = Catalogs.query_criteria(catalog="TIC", KIC=str(kic))
+        if not len(rows):
+            raise interface.Refusal("INVALID_REQUEST", f"The TIC has no star matched to KIC {kic}.")
+        return int(rows["ID"][0])
+    found = re.search(r"(\d{6,10})", text)
+    if not found:
+        raise interface.Refusal("INVALID_REQUEST", f"No TIC number in {text!r}: give it as TIC 185336364.")
+    return int(found.group(1))
+
+
+def tess_store(tic):
+    return config.DATA / "cache" / "tess" / str(tic)
+
+
+def tess_fetch(tic, say=print):
+    """The star's SPOC 2-minute light curves, from the copy kept or MAST."""
+    folder = tess_store(tic)
+    kept = sorted(folder.glob("*_lc.fits"))
+    if kept:
+        return kept
+    from astroquery.mast import Observations
+    found = Observations.query_criteria(target_name=str(tic), obs_collection="TESS", dataproduct_type="timeseries",
+                                        provenance_name="SPOC", t_exptime=[119, 121])
+    if not len(found):
+        raise interface.Refusal("INVALID_REQUEST", f"TESS has no SPOC light curves of TIC {tic}.")
+    products = Observations.get_product_list(found)
+    products = Observations.filter_products(products, productSubGroupDescription="LC")
+    say(f"fetching {len(products)} TESS sectors of TIC {tic} from MAST")
+    folder.mkdir(parents=True, exist_ok=True)
+    done = Observations.download_products(products, download_dir=str(folder), cache=False)
+    for path in done["Local Path"]:
+        source = Path(path)
+        if source.exists() and source.parent != folder:
+            source.rename(folder / source.name)
+    import shutil
+    shutil.rmtree(folder / "mastDownload", ignore_errors=True)
+    return sorted(folder.glob("*_lc.fits"))
+
+
+def binned(curve, minutes=BIN_MINUTES):
+    """A light curve put into bins of `minutes`: the median of each bin's
+    usable points, the bin's quality flags joined, its quarter or sector."""
+    t = curve["t"]
+    if not len(t):
+        return curve
+    width = minutes / 1440
+    index = np.floor((t - t.min()) / width).astype(int)
+    keys = np.unique(index)
+    out = {n: [] for n in curve}
+    for k in keys:
+        inside = index == k
+        out["t"].append(t[inside].mean())
+        for n in ("f", "sap", "pdc_raw", "sap_raw"):
+            values = curve[n][inside]
+            out[n].append(np.nanmedian(values) if np.isfinite(values).any() else np.nan)
+        flags = curve["q"][inside]
+        usable = np.isfinite(curve["f"][inside])
+        out["q"].append(int(np.bitwise_or.reduce(flags & SUSPECT)) if not usable.any() else 0)
+        out["quarter"].append(curve["quarter"][inside][0])
+    return {n: np.array(v) for n, v in out.items()}
+
+
+def analyse_tess(tic, say=print):
+    """One star's answer from its TESS sectors."""
+    curve = binned(read(tess_fetch(tic, say)))
+    return dict(_answer(curve, BTJD, joined=False), star=f"TIC {tic}", tic=tic, mission="TESS",
+                source=f"https://mast.stsci.edu/portal/Mashup/Clients/Mast/Portal.html?searchQuery=TIC%20{tic}")
 
 
 def _runs(mask):
@@ -252,7 +349,7 @@ def _runs(mask):
     return list(zip(np.flatnonzero(edges == 1), np.flatnonzero(edges == -1) - 1))
 
 
-def find_dips(t, f, q, quarter):
+def find_dips(t, f, q, quarter, zero=BKJD):
     """The dips in one light curve, each with its verdict (see the module's
     words), and the curve's scatter."""
     good = np.isfinite(f) & (q == 0)
@@ -296,7 +393,7 @@ def find_dips(t, f, q, quarter):
         spacecraft = bool(flags) and total * 24 < SHORT_HOURS
         verdict = "edge" if edge else "spacecraft" if spacecraft else "dip"
         out.append({"start": round(float(start), 3), "middle": round(float(middle), 3), "end": round(float(end), 3),
-                    "date": calendar(float(middle)),
+                    "date": calendar(float(middle), zero),
                     "depth_percent": round(float(100 * (level - fg[low])), 2),
                     "hours": round(float(total * 24), 1),
                     "asymmetry": round(float((rise - fall) / total), 2) if total > 0 else 0.0,
@@ -369,40 +466,46 @@ def score(dips):
     return round(sum(d["depth_percent"] * (1 + abs(d["asymmetry"])) for d in real), 2)
 
 
-def analyse(kic, get=requests.get, say=print):
-    """One star's answer."""
-    curve = read(fetch(kic, get, say))
-    dips, scatter = find_dips(curve["t"], curve["f"], curve["q"], curve["quarter"])
-    sap_dips, _ = find_dips(curve["t"], curve["sap"], curve["q"], curve["quarter"])
+def _answer(curve, zero, joined=True):
+    """The dips, the SAP check, the trend and the verdict on one light curve.
+    `joined`: the quarters follow one another, so they can be joined at
+    their edges for the trend (Kepler's; not TESS's sectors, years apart)."""
+    dips, scatter = find_dips(curve["t"], curve["f"], curve["q"], curve["quarter"], zero)
+    sap_dips, _ = find_dips(curve["t"], curve["sap"], curve["q"], curve["quarter"], zero)
     sap_only = seen_in_sap(dips, curve, sap_dips)
     real = [d for d in dips if d["verdict"] == "dip"]
-    padded = f"{kic:09d}"
-    return {"star": f"KIC {kic}", "kic": kic, "quarters": int(len(set(curve["quarter"].tolist()))),
+    return {"quarters": int(len(set(curve["quarter"].tolist()))),
             "points": int(np.isfinite(curve["f"]).sum()),
             "scatter_percent": None if scatter is None else round(100 * scatter, 3),
             "dips": dips, "real_dips": len(real), "sap_only": sap_only,
-            "trend": {"sap": trend(curve["t"], curve["sap_raw"], curve["quarter"]),
-                      "pdcsap": trend(curve["t"], curve["pdc_raw"], curve["quarter"])},
+            "trend": {"sap": trend(curve["t"], curve["sap_raw"], curve["quarter"]) if joined else None,
+                      "pdcsap": trend(curve["t"], curve["pdc_raw"], curve["quarter"]) if joined else None},
             "deepest_percent": max((d["depth_percent"] for d in real), default=0.0),
             "tabby_like": scatter is not None and scatter <= QUIET
                           and any(d["depth_percent"] >= 100 * DEEP for d in real),
-            "score": score(dips),
-            "source": MAST.format(group=padded[:4], kic=padded)}
+            "score": score(dips)}
+
+
+def analyse(kic, get=requests.get, say=print):
+    """One star's answer from its Kepler quarters."""
+    padded = f"{kic:09d}"
+    return dict(_answer(read(fetch(kic, get, say)), BKJD), star=f"KIC {kic}", kic=kic, mission="Kepler",
+                source=MAST.format(group=padded[:4], kic=padded))
 
 
 def say_star(answer, say=print):
-    say(f"{answer['star']}: {answer['quarters']} quarters, {answer['points']} points, scatter "
+    say(f"{answer['star']}: {answer['quarters']} {'sectors' if answer.get('mission') == 'TESS' else 'quarters'}, {answer['points']} points, scatter "
         f"{answer['scatter_percent']}%; {answer['real_dips']} dip(s) left of {len(answer['dips'])} found"
         f"{', Tabby-like' if answer['tabby_like'] else ''}")
     for d in answer["dips"]:
         sap = "" if d.get("sap_depth_percent") is None else f", SAP {d['sap_depth_percent']:.2f}%"
-        say(f"  {d['date']} (BKJD {d['middle']:.2f})  {d['depth_percent']:5.2f}% deep{sap}, {d['hours']:.1f} h, "
+        say(f"  {d['date']} ({'BTJD' if answer.get('mission') == 'TESS' else 'BKJD'} {d['middle']:.2f})  {d['depth_percent']:5.2f}% deep{sap}, {d['hours']:.1f} h, "
             f"asymmetry {d['asymmetry']:+.2f}  {d['verdict']}, {d.get('seen_in', 'PDCSAP')}"
             f"{' (period ' + str(d['period_days']) + ' d)' if 'period_days' in d else ''}")
     real_sap = [d for d in answer.get("sap_only", []) if d["verdict"] == "dip"]
     if real_sap:
         say(f"  {len(real_sap)} dip(s) in SAP only (PDC took them out: the spacecraft's, until shown otherwise): "
-            + ", ".join(f"BKJD {d['middle']:.1f} {d['depth_percent']:.1f}%" for d in real_sap[:6]))
+            + ", ".join(f"day {d['middle']:.1f} {d['depth_percent']:.1f}%" for d in real_sap[:6]))
     for name, tr in (answer.get("trend") or {}).items():
         if tr:
             say(f"  long-term ({name.upper()}, quarters joined at their edges): {tr['percent_per_year']:+.2f}% a "
@@ -518,6 +621,10 @@ def screen(batch, get=requests.get, say=print, keep=False, analyse_star=None):
 def run(args, say=print):
     if args.action == "screen":
         return screen(args.batch, say=say, keep=args.keep)
+    if args.action == "tess":
+        answer = dict(analyse_tess(tic_number(args.star), say=say), kind="measured")
+        say_star(answer, say)
+        return answer
     if args.action == "dips":
         answer = dict(analyse(kic_number(args.star), say=say), kind="measured")
         say_star(answer, say)
@@ -529,7 +636,7 @@ def run(args, say=print):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("action", choices=("dips", "search", "screen"))
+    ap.add_argument("action", choices=("dips", "tess", "search", "screen"))
     ap.add_argument("--batch", type=int, default=100, help="screen: stars this run (default 100)")
     ap.add_argument("--keep", action="store_true", help="screen: keep every star's light curves")
     ap.add_argument("star", nargs="*", help="dips: the star (KIC 8462852, Tabby); search: a file or a comma list")
