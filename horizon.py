@@ -831,7 +831,7 @@ def between(a, b):
 
 
 def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, most=MOST,
-          done=None, checkpoint=None):
+          done=None, checkpoint=None, fill=True):
     """Follow the top of what is in the way round the compass, starting from
     the given bearings and adding more only where the skyline needs them.
     `known` is a skyline measured before (see limit()): each bearing then
@@ -881,7 +881,7 @@ def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, mo
     # Check 2: more bearings where the skyline is not a straight line between
     # the ones it has: a sudden change between neighbours is a corner, and a
     # top standing off the line through its neighbours is a chimney or a tree.
-    while len(found) < most:
+    while fill and len(found) < most:
         ring = sorted(az for az in found if height(found[az], low) is not None)
         n, extra = len(ring), {}
         for i in range(n if n > 1 else 0):
@@ -903,8 +903,9 @@ def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, mo
         for az in sorted(extra, key=side)[:most - len(found)]:
             measure(az, extra[az])
     else:
-        warnings.append(f"The skyline is ragged: it stopped adding bearings at {most}. Run it again "
-                        "to carry on from this one.")
+        if fill:
+            warnings.append(f"The skyline is ragged: it stopped adding bearings at {most}. Run it again "
+                            "to carry on from this one.")
 
     # Check 2b: where a look could not be read (glare, or dark with no
     # stars), look again once the rest is done. Cloud drifts and the Sun
@@ -1135,10 +1136,23 @@ def trust_at(old, az, spans=None):
 READINGS_KEPT = 5     # a point's last readings, kept to settle a disagreement
 
 
+def altitudes(readings):
+    """A point's readings as (altitude, survey) pairs, the last from each
+    survey only: readings from one survey are not independent of each
+    other. Plain numbers (kept before surveys were named) count apart."""
+    pairs = [(r["alt"], r.get("survey")) if isinstance(r, dict) else (float(r), None) for r in readings or []]
+    last = {}
+    for i, (alt, survey) in enumerate(pairs):
+        last[survey if survey is not None else f"#{i}"] = (i, alt)
+    return [alt for _, alt in sorted(last.values())]
+
+
 def settle(readings, by=EYE_DOUBT):
     """(estimate, agreed): the reading most of a point's readings agree with
     (within `by`), the newest of the largest group on a tie, and whether two
-    or more agree on it and outnumber any other group."""
+    or more agree on it and outnumber any other group. One reading per
+    survey counts (altitudes())."""
+    readings = altitudes(readings)
     groups = [[r for r in readings if abs(r - x) <= by] for x in readings]
     sizes = [len(g) for g in groups]
     best = max(range(len(readings)), key=lambda i: (sizes[i], i))
@@ -1146,7 +1160,7 @@ def settle(readings, by=EYE_DOUBT):
     return round(float(np.median(groups[best])), 1), sizes[best] >= 2 and sizes[best] > others
 
 
-def reconcile(skyline, kept, by=EYE_DOUBT):
+def reconcile(skyline, kept, by=EYE_DOUBT, survey=None):
     """(skyline, differ): a new survey's points weighed against the skyline
     in use, point by point, never replaced wholesale. Less trust never
     replaces more (an inferred point never moves a measured one, a survey
@@ -1163,29 +1177,36 @@ def reconcile(skyline, kept, by=EYE_DOUBT):
     old = (kept or {}).get("skyline") or []
     spans = (kept or {}).get("checked_spans") or []
     if not old:
-        return [dict(q, trust=trust(q), estimate=q["alt"], readings=[q["alt"]]) for q in skyline], []
+        return [dict(q, trust=trust(q), estimate=q["alt"], readings=[{"alt": q["alt"], "survey": survey}])
+                for q in skyline], []
     out, differ = [], []
     for q in skyline:
         was = round(float(limit(old, [q["az"]])[0]), 1)
         theirs_name = trust_at(old, q["az"], spans)
         mine, theirs = TRUST[trust(q)], TRUST[theirs_name]
         here = [p for p in old if abs((p["az"] - q["az"] + 180) % 360 - 180) < 0.05]
-        before = list((here[0].get("readings") if here else None) or [was])
+        # Readings build up on the nearest point within half a step: a
+        # survey that adds bearings where the skyline bends lands a little
+        # differently each time (3 November 2026: corners at 44.9° and 52.4°).
+        close = sorted((p for p in old if abs((p["az"] - q["az"] + 180) % 360 - 180) <= FINEST / 2),
+                       key=lambda p: abs((p["az"] - q["az"] + 180) % 360 - 180))
+        before = list((close[0].get("readings") if close else None) or [{"alt": was, "survey": None}])
+        reading = {"alt": q["alt"], "survey": survey}
         apart = abs(q["alt"] - was) > by
         if mine < theirs:
             point = dict(here[0]) if here else {"az": q["az"], "alt": was, "estimate": was, "readings": before}
             point.update(trust=theirs_name, by=f"kept ({theirs_name}); this survey read {q['alt']:g}°")
             kept_as = "the one in use"
         elif mine > theirs or not apart:
-            readings = ([q["alt"]] if mine > theirs else before + [q["alt"]])[-READINGS_KEPT:]
+            readings = ([reading] if mine > theirs else before + [reading])[-READINGS_KEPT:]
             point = dict(q, trust=trust(q), estimate=settle(readings, by)[0], readings=readings)
             kept_as = "this survey's"
         else:
-            readings = (before + [q["alt"]])[-READINGS_KEPT:]
+            readings = (before + [reading])[-READINGS_KEPT:]
             estimate, agreed = settle(readings, by)
             safe = estimate if agreed else max(was, q["alt"])
             point = dict(q, alt=safe, estimate=estimate, readings=readings, trust=trust(q),
-                         by=f"telescope: readings {', '.join(f'{r:g}' for r in readings)}; "
+                         by=f"telescope: readings {', '.join(f'{r:g}' for r in altitudes(readings))}; "
                             + ("settled" if agreed else "not settled, the higher used"))
             point.pop("open", None) if safe != q["alt"] else None
             kept_as = "settled" if agreed else "the higher"
@@ -1275,6 +1296,9 @@ def main():
     ap.add_argument("--forget", action="store_true", help="throw the measured skyline away; nothing moves")
     ap.add_argument("--use-aside", metavar="FILE",
                     help="keep a survey that was set aside, once a person has checked what it doubted; nothing moves")
+    ap.add_argument("--only", metavar="AZ,AZ,...",
+                    help="with --trace: look again at these bearings only, adding none, and change the skyline "
+                         "in use only there")
     ap.add_argument("--check-span", action="store_true",
                     help="with --bearings and --checked: mark the skyline in use there as checked by eye, "
                          "so no survey replaces it there; nothing moves")
@@ -1462,6 +1486,13 @@ def run(args):
         return {"forgotten": had}
     step = args.step or 30
     bearings = sorted(range(0, 360, step), key=side)
+    if args.only:
+        if not args.trace:
+            raise interface.Refusal("INVALID_REQUEST", "--only goes with --trace.")
+        try:
+            bearings = sorted({float(v) % 360 for v in args.only.split(",")}, key=side)
+        except ValueError:
+            raise interface.Refusal("INVALID_REQUEST", f"--only takes bearings in degrees, as 30,45,165: not {args.only!r}.")
     kept = measured() if args.trace and not args.fresh else {}
     known = kept.get("skyline")
     if args.dry_run:
@@ -1506,7 +1537,9 @@ def run(args):
     exposure = args.exposure or (0.002 if args.daylight else 1.0)
     gain = args.gain or (100 if args.daylight else 2000)
     warnings = []
-    earlier = None if args.fresh else resumable(args.daylight) if args.trace else None
+    earlier = None if args.fresh or args.only else resumable(args.daylight) if args.trace else None
+    if args.only and not known:
+        raise interface.Refusal("INVALID_REQUEST", "--only looks again at bearings of a skyline in use; there is none.")
     if args.fresh and PARTIAL.exists():
         PARTIAL.unlink()
     with eye(site, exposure, gain, args.daylight, args.torch and not args.daylight) as look:
@@ -1521,7 +1554,8 @@ def run(args):
             # Says so, so the stream stays off air for it (director.py).
             with activity.doing("Surveying the skyline", "by daylight" if args.daylight else "by night"):
                 found, warnings = trace(look, bearings, low, known=known, done=done,
-                                        checkpoint=lambda found: keep_partial(found, look.log, args.daylight))
+                                        checkpoint=lambda found: keep_partial(found, look.log, args.daylight),
+                                        fill=not args.only)
             if PARTIAL.exists():
                 PARTIAL.unlink()        # finished: nothing to carry on from
         else:
@@ -1552,7 +1586,18 @@ def run(args):
                             + f": a wall to {TOP}° is possible, but so is a telescope aimed somewhere else. "
                             "Look that way yourself.")
         measured_now = skyline_from(found, low, known)
-        skyline, differ = reconcile(measured_now, kept)
+        survey = time.strftime("%Y%m%d-%H%M")
+        if args.only:
+            # Only the bearings looked at, as the telescope measured them;
+            # everything else stays exactly as it is in use.
+            looked = [float(b) for b in bearings]
+            near = lambda az: any(abs((az - b + 180) % 360 - 180) <= FINEST / 2 for b in looked)
+            measured_now = [q for q in measured_now if near(q["az"]) and trust(q) == "telescope"]
+            redone, differ = reconcile(measured_now, kept, survey=survey)
+            skyline = sorted([p for p in known if not any(abs((p["az"] - q["az"] + 180) % 360 - 180) < 0.05
+                                                           for q in redone)] + redone, key=lambda p: p["az"])
+        else:
+            skyline, differ = reconcile(measured_now, kept, survey=survey)
         more = {k: kept[k] for k in ("checked_by_eye", "checked_spans") if kept.get(k)}
         if differ:
             # The whole survey kept aside too, so a bearing a person has

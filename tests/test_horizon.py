@@ -769,3 +769,19 @@ def test_a_replaced_skyline_is_kept_beside_the_new_one(kept):
     horizon.keep([{"az": 0, "alt": 40}], "telescope")
     old = list(horizon.RESULTS.parent.glob(f"{horizon.RESULTS.stem}.replaced-*.json"))
     assert len(old) == 1 and json.loads(old[0].read_text())["skyline"][0]["alt"] == 30
+
+
+def test_readings_count_once_per_survey_and_a_targeted_trace_adds_no_bearings():
+    """Review, 3 November 2026: five readings from one survey are not five
+    measurements; and a look again at a few bearings must not sweep."""
+    one_survey = [{"alt": 40.0, "survey": "a"}, {"alt": 41.0, "survey": "a"}, {"alt": 75.0, "survey": "b"}]
+    assert horizon.altitudes(one_survey) == [41.0, 75.0] and horizon.settle(one_survey)[1] is False
+    assert horizon.settle(one_survey + [{"alt": 39.0, "survey": "c"}]) == (40.0, True)
+    assert horizon.altitudes([40.0, 41.0]) == [40.0, 41.0]                   # kept before surveys were named
+    look = watcher()
+    found, warnings = horizon.trace(look, [30, 165, 270], low=20, fill=False)
+    assert sorted(f["az"] for f in found) == [30, 165, 270] and not any("ragged" in w for w in warnings)
+    # A reading lands on the nearest point within half a step.
+    old = {"skyline": [{"az": 44.9, "alt": 54.0, "trust": "telescope", "readings": [{"alt": 54.0, "survey": "a"}]}]}
+    new, _ = horizon.reconcile([{"az": 45.0, "alt": 33.0, "by": "telescope", "trust": "telescope"}], old, survey="b")
+    assert [r["survey"] for r in new[0]["readings"]] == ["a", "b"]
