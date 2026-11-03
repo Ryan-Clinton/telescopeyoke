@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/investigate.schema.json",
+  "title": "Investigate",
+  "description": "data of: investigate.py [KIC N | TIC N] --json, one lead from the searches looked into by a fixed procedure: catalogues (SIMBAD, VSX, Villanova's Kepler EBs, Gaia DR3), other observations (the other mission, ZTF), the falsification checks (both fluxes, crowding, neighbours, periodic), the verdict, and whether this telescope can watch it. Nothing moves.",
+  "type": "object",
+  "required": ["lead", "kind", "star", "checks", "verdict", "explained_by", "artefact_because", "notes", "known_to_science", "follow_up", "investigated"],
+  "properties": {
+    "lead": {"type": "string", "description": "KIC-N, TIC-N or SETI-TARGET-MHZ: the report is docs/research/LEAD.md."},
+    "kind": {"enum": ["kepler", "tess", "seti"]},
+    "star": {"type": "string"},
+    "ra": {"type": "number"},
+    "dec": {"type": "number"},
+    "mag": {"type": ["number", "null"]},
+    "mag_band": {"type": ["string", "null"]},
+    "crowdsap": {"type": ["number", "null"], "description": "The share of the aperture's light that is the star's (Kepler/TESS header)."},
+    "light_curve": {"type": "object"},
+    "checks": {"type": "object", "additionalProperties": {
+      "type": "object", "required": ["source", "link", "asked", "answer", "error"],
+      "properties": {"source": {"type": "string"}, "link": {"type": "string"},
+                     "asked": {"type": "string", "description": "The date the source was asked."},
+                     "answer": {}, "error": {"type": ["string", "null"], "description": "Why the source gave no answer."}}}},
+    "verdict": {"enum": ["explained", "artefact", "unexplained, weak", "unexplained, strong"]},
+    "explained_by": {"type": "array", "items": {"type": "string"}},
+    "artefact_because": {"type": "array", "items": {"type": "string"}},
+    "notes": {"type": "array", "items": {"type": "string"}},
+    "known_to_science": {"type": "boolean", "description": "SIMBAD cites it 20 times or more: studied by others."},
+    "deepest_percent": {"type": "number"},
+    "dips": {"type": "integer"},
+    "follow_up": {"type": "object", "required": ["can_watch", "reasons"],
+                  "properties": {"can_watch": {"type": "boolean"}, "reasons": {"type": "array", "items": {"type": "string"}},
+                                 "up": {"type": "array"}}},
+    "investigated": {"type": "string"},
+    "report": {"type": "string"},
+    "kind_of_answer": {"enum": ["measured"]}
+  }
+}

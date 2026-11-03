@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/research.schema.json",
+  "title": "Research",
+  "description": "data of: ty research --json, the research that needs no sky: each survey's coverage (the Kepler and TESS screens, each SETI sweep), the leads by where they stand, the leads looked into with their verdicts, and the papers not yet read. Reads files only; --html also writes web/research.html.",
+  "type": "object",
+  "required": ["surveys", "leads", "investigated", "papers_unread", "meaning"],
+  "properties": {
+    "surveys": {"type": "array", "items": {"type": "object", "required": ["survey", "of", "covered_percent"],
+      "properties": {"survey": {"type": "string"}, "screened": {"type": "integer"}, "searched": {"type": "integer"},
+                     "failed": {"type": "integer", "description": "Stars that could not be read (asked again)."},
+                     "of": {"type": ["integer", "null"], "description": "The whole: stars in the target list, or blocks in the band."},
+                     "covered_percent": {"type": ["number", "null"]}, "tabby_like": {"type": "integer"},
+                     "leads": {"type": "integer"}, "top_leads": {"type": "array"},
+                     "searched_mhz": {"type": "number"}, "candidates": {"type": "integer"}}}},
+    "leads": {"type": "object", "required": ["waiting", "explained", "artefact", "unexplained_weak", "unexplained_strong", "known_to_science"],
+              "properties": {"waiting": {"type": "integer"}, "explained": {"type": "integer"}, "artefact": {"type": "integer"},
+                             "unexplained_weak": {"type": "integer"}, "unexplained_strong": {"type": "integer"},
+                             "known_to_science": {"type": "integer"}}},
+    "investigated": {"type": "array", "items": {"type": "object", "required": ["lead", "star", "verdict", "known_to_science", "report"]}},
+    "papers_unread": {"type": "integer"},
+    "meaning": {"type": "object", "additionalProperties": {"type": "string"}},
+    "page": {"type": "string", "description": "--html: the page written."}
+  }
+}

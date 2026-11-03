@@ -83,7 +83,8 @@ COMMANDS = {
     "planet.py": ("hardware", {"--restack": "local_write"}, DRY),
     "lucky.py": ("hardware", {"stack": "local_write", "picture": "local_write", "mineral": "local_write"}, {}),     # capture uses the camera; stack and picture only read files
     "moon.py": ("hardware", {}, DRY),                          # moves the mount and uses the camera
-    "lighttest.py": ("read_only", {}, {}),       # what a house light did to the sky, from a run's records
+    "investigate.py": ("local_write", {}, {}),     # asks the catalogues; keeps its record in cache/ and its report in docs/research/
+    "lighttest.py":("read_only", {}, {}),       # what a house light did to the sky, from a run's records
     "newhardware.py": ("read_only", {"--probe": "hardware", "--known": "local_write", "--watch": "local_write"}, {}),
     "precision.py": ("local_write", {}, {}),     # a night's frames measured every way; keeps its answer in the session
     "plant.py": ("local_write", {}, {}),

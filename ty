@@ -78,7 +78,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["capabilities", "status", "context", "doctor", "night",
                                         "targets", "target", "session", "observing", "run", "rigs",
-                                        "characterise", "candidates", "discovery", "spot"])
+                                        "characterise", "candidates", "discovery", "spot", "research"])
     ap.add_argument("name", nargs="?", help="object name, for 'target'; the order, for 'run'; a spot, for 'spot'")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--demo", action="store_true", help="made-up weather at the example site")
@@ -86,6 +86,7 @@ def main():
     ap.add_argument("--kind", help="for targets: galaxy, planet, globular ...")
     ap.add_argument("--now", action="store_true", help="for targets: only those up now")
     ap.add_argument("--frames", type=int, default=0, help="for session: include the last N frames")
+    ap.add_argument("--html", action="store_true", help="for research: also write web/research.html")
     args = ap.parse_args()
 
     import agent
@@ -111,6 +112,7 @@ def main():
         "characterise": agent.characterise,
         "candidates": agent.candidates,
         "discovery": agent.discovery,
+        "research": lambda: agent.research(args.html),
         "spot": lambda: agent.set_spot(args.name) if args.name else agent.spots(),
         "run": lambda: __import__("shoot").tell(args.name or ""),
     }[args.command]

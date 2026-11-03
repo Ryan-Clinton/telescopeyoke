@@ -183,3 +183,21 @@ floor and a model of the comet's shape. A dip longer than a TESS sector,
 or falling in its mid-sector gap.
 An odd light curve here is a reason to look, not a discovery: VSX, SIMBAD
 and the papers on the star come before any claim.
+
+## Looking into a lead
+
+`./investigate.py` takes the top lead nobody has looked into (a star the
+screens left a dip on, Tabby-like first; or a SETI sweep's candidate) and
+runs the same checks every time, each answer kept with its link and the
+date asked: SIMBAD's type and how often it is cited, VSX, Villanova's
+Kepler EB catalogue, Gaia DR3's variability class and RUWE, the star in
+TESS and in ZTF, then the dip in both fluxes, the aperture's crowding
+(CROWDSAP) and any Gaia neighbour within 8" bright enough to make the dip
+by going out altogether. The verdict is "explained", "artefact",
+"unexplained, weak" or "unexplained, strong" (two dips of 5% or more in
+both fluxes, on a star steady between them, with every catalogue
+answering), and "known to science" is said apart: a star cited 20 times
+or more is someone's already. A catalogue that does not answer is said
+so, and keeps the verdict weak. The report is `docs/research/LEAD.md`;
+`./ty research` counts every survey's coverage and each lead by where it
+stands, and `--html` writes `web/research.html` for the 8080 server.

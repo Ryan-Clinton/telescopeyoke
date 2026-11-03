@@ -6,6 +6,15 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+- **A lead looked into without being told which** (`investigate.py`,
+  `ty research`): the searches' top lead nobody has looked into goes
+  through the same checks each time (SIMBAD, VSX, Villanova's Kepler
+  EBs, Gaia DR3, TESS and ZTF, both fluxes, crowding, neighbours),
+  ending in a verdict with its reasons and whether this telescope can
+  watch it, reported in `docs/research/`; `ty research` shows each
+  survey's coverage and every lead by where it stands, and `--html`
+  writes `web/research.html`.
+
 - **Research that needs no sky, run by itself** (`seti.py sweep`,
   `seti.py benchmark`, `literature.py --unread`, the cloudy-day and
   discovery-night skills): the radio search of Tabby's star's Green Bank

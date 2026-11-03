@@ -13,7 +13,8 @@ is `docs/agents/setup-routine.md` step 6b.
 0. Asked for the outlook or tonight's plan ("how's tonight looking"): start
    the research that needs no sky in the background, as the cloudy-day
    skill's A and B (`./archive.py screen`, `./seti.py sweep`), and say
-   their results when they land; start
+   their results when they land (`./ty research` gives the surveys'
+   coverage and the leads waiting, in one line); start
    `./brokers.py` in the background (about a minute: the surveys' new
    transients bright enough and up here tonight), run `./ty night` once
    (3 seconds), `./transits.py` and `./ty candidates` beside it, and read the last night's notes

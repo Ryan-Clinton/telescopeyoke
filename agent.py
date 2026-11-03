@@ -75,6 +75,123 @@ def capabilities():
     }
 
 
+def _read_json(path, empty=None):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return empty
+
+
+def _screen_summary(name, path, targets_file):
+    """One star screen's coverage (archive.py screen): how many screened of
+    how many there are, how many could not be read, and the leads (stars
+    with a dip left after the checks), Tabby-like first."""
+    record = _read_json(path, {}) or {}
+    whole = None
+    if targets_file.exists():
+        whole = max(0, sum(1 for _ in targets_file.open(encoding="utf-8")) - 1)
+    read = {k: v for k, v in record.items() if isinstance(v, dict) and "score" in v}
+    failed = {k: v for k, v in record.items() if isinstance(v, dict) and "score" not in v}
+    leads = sorted(((k, v) for k, v in read.items() if v.get("real_dips")),
+                   key=lambda kv: (not kv[1].get("tabby_like"), -(kv[1].get("score") or 0)))
+    return {"survey": name, "screened": len(read), "failed": len(failed), "of": whole,
+            "covered_percent": round(100 * len(record) / whole, 3) if whole else None,
+            "tabby_like": sum(1 for v in read.values() if v.get("tabby_like")), "leads": len(leads),
+            "top_leads": [dict(v, star=k) for k, v in leads[:5]]}
+
+
+def research(html=False):
+    """The research that needs no sky, in one view (`ty research`): how much
+    of each survey has been searched (the Kepler and TESS screens, each SETI
+    sweep), the leads they flagged, what investigate.py made of the ones it
+    looked into, and the papers not yet read. Each lead is kept apart by
+    where it stands: a lead (flagged, not looked into), explained or an
+    artefact (looked into), unexplained after the checks, and known to
+    science (studied by others: SIMBAD cites it often). Reads files only;
+    with `html`, also writes web/research.html for the 8080 page's server."""
+    cache = config.DATA / "cache"
+    surveys = [_screen_summary("Kepler screen", cache / "kepler" / "screened.json", cache / "kepler" / "targets.csv"),
+               _screen_summary("TESS screen", cache / "tess" / "screened.json", cache / "tess" / "targets.csv")]
+    seti = []
+    for path in sorted((cache / "seti").glob("*.json")):
+        kept = _read_json(path, {}) or {}
+        done = kept.get("done", {})
+        blocks = len(kept.get("blocks") or [])
+        seti.append({"survey": f"SETI sweep {path.stem}", "searched": len(done), "of": blocks,
+                     "covered_percent": round(100 * len(done) / blocks, 2) if blocks else None,
+                     "searched_mhz": round(sum(d["to_mhz"] - d["from_mhz"] for d in done.values()), 3),
+                     "candidates": sum(d.get("candidates", 0) for d in done.values())})
+    looked = []
+    for path in sorted((cache / "research").glob("*.json")):
+        r = _read_json(path)
+        if r:
+            looked.append({"lead": r["lead"], "star": r["star"], "verdict": r["verdict"],
+                           "known_to_science": r.get("known_to_science", False),
+                           "can_watch": r.get("follow_up", {}).get("can_watch"),
+                           "investigated": r.get("investigated"), "report": f"docs/research/{r['lead']}.md"})
+    waiting = 0
+    for s in surveys:
+        prefix = "KIC" if s["survey"].startswith("Kepler") else "TIC"
+        waiting += s["leads"] - sum(1 for r in looked if r["lead"].startswith(prefix + "-"))
+    waiting += sum(s["candidates"] for s in seti) - sum(1 for r in looked if r["lead"].startswith("SETI-"))
+    unread, read_ids = 0, set(_read_json(cache / "literature-read.json", []) or [])
+    import feeds
+    for path in sorted(feeds.CACHE.glob("arxiv_*.json")):
+        for p in _read_json(path, []) or []:
+            if re.sub(r"v\d+$", "", p.get("id", "")) not in read_ids:
+                unread += 1
+    count = lambda *labels: sum(1 for r in looked if r["verdict"] in labels)     # noqa: E731
+    answer = {"surveys": surveys + seti,
+              "leads": {"waiting": max(0, waiting), "explained": count("explained"), "artefact": count("artefact"),
+                        "unexplained_weak": count("unexplained, weak"), "unexplained_strong": count("unexplained, strong"),
+                        "known_to_science": sum(1 for r in looked if r["known_to_science"])},
+              "investigated": sorted(looked, key=lambda r: r["investigated"] or "", reverse=True),
+              "papers_unread": unread,
+              "meaning": {"lead": "flagged by a search, not yet looked into",
+                          "explained": "a catalogue or known class accounts for it",
+                          "artefact": "a check failed: the data, the pipeline or a neighbour's light",
+                          "unexplained": "every check made and nothing accounts for it: for a person to read, "
+                                         "not a discovery",
+                          "known_to_science": "others have studied it (SIMBAD cites it 20 times or more)"}}
+    if html:
+        answer["page"] = str(write_research_page(answer))
+    return answer
+
+
+def write_research_page(answer):
+    """web/research.html: the same numbers as a plain page, each report linked
+    on GitHub (the reports are committed under docs/research/)."""
+    import html as escape
+    rows = "".join(
+        f"<tr><td>{escape.escape(s['survey'])}</td><td>{s.get('screened', s.get('searched', 0))}</td>"
+        f"<td>{s['of'] if s['of'] is not None else '?'}</td><td>{s['covered_percent'] if s['covered_percent'] is not None else '?'}%</td>"
+        f"<td>{s.get('failed', '')}</td><td>{s.get('leads', s.get('candidates', 0))}</td></tr>" for s in answer["surveys"])
+    looked = "".join(
+        f"<tr><td><a href=\"https://github.com/Ryan-Clinton/telescopeyoke/blob/main/{escape.escape(r['report'])}\">"
+        f"{escape.escape(r['star'])}</a></td><td>{escape.escape(r['verdict'])}</td>"
+        f"<td>{'yes' if r['known_to_science'] else 'no'}</td><td>{'yes' if r['can_watch'] else 'no'}</td>"
+        f"<td>{escape.escape((r['investigated'] or '')[:10])}</td></tr>" for r in answer["investigated"])
+    leads = answer["leads"]
+    meaning = "".join(f"<li><b>{escape.escape(k.replace('_', ' '))}</b>: {escape.escape(v)}</li>"
+                      for k, v in answer["meaning"].items())
+    page = f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Research</title><style>body{{font-family:system-ui,sans-serif;max-width:60rem;margin:1rem auto;padding:0 1rem;background:#fff;color:#111}}
+table{{border-collapse:collapse;width:100%;margin:.5rem 0 1.5rem}}td,th{{border-bottom:1px solid #ccc;padding:.3rem .5rem;text-align:left}}
+@media (prefers-color-scheme: dark){{body{{background:#111;color:#eee}}a{{color:#9cf}}td,th{{border-color:#444}}}}</style></head><body>
+<h1>Research that needs no sky</h1>
+<p>Leads waiting: <b>{leads['waiting']}</b>. Looked into: {leads['explained']} explained, {leads['artefact']} artefacts,
+{leads['unexplained_weak']} unexplained (weak), <b>{leads['unexplained_strong']}</b> unexplained (strong); {leads['known_to_science']} known to science.
+Papers not yet read: {answer['papers_unread']}.</p>
+<h2>Surveys</h2><table><tr><th>Survey</th><th>Searched</th><th>Of</th><th>Covered</th><th>Failed</th><th>Leads</th></tr>{rows}</table>
+<h2>Looked into</h2><table><tr><th>Star</th><th>Verdict</th><th>Known to science</th><th>This telescope can watch</th><th>When</th></tr>{looked}</table>
+<h2>What the words mean</h2><ul>{meaning}</ul></body></html>
+"""
+    path = config.DATA / "web" / "research.html"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(page, encoding="utf-8")
+    return path
+
+
 def candidates():
     """Every field's open candidates in one view, in the same shape as
     candidates.py's, each with its field; the most nights seen first; and
