@@ -99,14 +99,50 @@ def read_skybot(text):
     return out
 
 
-def variables(ra, dec, radius_deg):
-    """Known variable stars in a circle, from VSX: (name, ra, dec, type)."""
-    reply = requests.get(VIZIER_URL, timeout=120, params={
-        "-source": "B/vsx/vsx", "-c": f"{ra:.5f} {dec:+.5f}", "-c.rd": f"{radius_deg:.3f}",
-        "-out": "Name,RAJ2000,DEJ2000,Type", "-out.max": "50000"})
-    reply.raise_for_status()
+VIZIER_MIRRORS = (VIZIER_URL, "https://vizier.idia.ac.za/viz-bin/asu-tsv", "http://vizier.china-vo.org/viz-bin/asu-tsv",
+                  "http://vizier.nao.ac.jp/viz-bin/asu-tsv", "https://vizier.cfa.harvard.edu/viz-bin/asu-tsv")
+VSX_KEPT_DAYS = 30      # VSX for a field is fetched again after this long
+
+
+def variables(ra, dec, radius_deg, get=None):
+    """Known variable stars in a circle, from VSX: (name, ra, dec, type).
+    Kept on disk for VSX_KEPT_DAYS, with any kept circle that holds this one
+    used instead; VizieR's mirror tried when Strasbourg does not answer
+    (1 November 2026: VizieR down, the night's search stopped)."""
+    import time
+
+    import config
+    get = get or requests.get
+    store = config.DATA / "cache" / "vsx"
+    text = None
+    for kept in sorted(store.glob("*.tsv")) if store.exists() else []:
+        try:
+            cra, cdec, cradius = (float(x) for x in kept.stem.split("_")[:3])
+        except ValueError:
+            continue
+        apart = math.hypot((ra - cra) * math.cos(math.radians(dec)), dec - cdec)
+        if apart + radius_deg <= cradius and time.time() - kept.stat().st_mtime < VSX_KEPT_DAYS * 86400:
+            text = kept.read_text(encoding="utf-8")
+            break
+    if text is None:
+        failures = []
+        for url in VIZIER_MIRRORS:
+            try:
+                reply = get(url, timeout=(10, 120), params={
+                    "-source": "B/vsx/vsx", "-c": f"{ra:.5f} {dec:+.5f}", "-c.rd": f"{radius_deg:.3f}",
+                    "-out": "Name,RAJ2000,DEJ2000,Type", "-out.max": "50000"})
+                reply.raise_for_status()
+                text = reply.text
+                break
+            except requests.RequestException as problem:
+                failures.append(f"{url.split('/')[2]}: {type(problem).__name__}")
+        if text is None:
+            raise interface.Refusal("REMOTE_FAILED", "The known variable stars (VSX) could not be fetched ("
+                                    + "; ".join(failures) + "). Search again when VizieR answers.")
+        store.mkdir(parents=True, exist_ok=True)
+        (store / f"{ra:.3f}_{dec:+.3f}_{radius_deg:.2f}.tsv").write_text(text, encoding="utf-8")
     out = []
-    lines = [l for l in reply.text.splitlines() if l.strip() and not l.startswith("#")]
+    lines = [l for l in text.splitlines() if l.strip() and not l.startswith("#")]
     for line in lines[3:]:
         cells = line.split("\t")
         try:
@@ -234,6 +270,32 @@ def verdict(e):
     return UNEXPLAINED
 
 
+RESIDUE = "probably residue"
+CLUSTER_ARCSEC = 120.0   # this close together ...
+CLUSTER_N = 3            # ... this many candidates are one flaw in the subtraction, not that many novae
+
+
+def residue(evidence, cut):
+    """Unexplained candidates that are most likely what the subtraction left,
+    relabelled so they are listed but no one is woken for them: three or
+    more within 2 arcminutes (novae do not come in groups; a bad patch of
+    the subtraction does). The real-or-bogus score is not used here: its cut
+    keeps 95% of planted stars, so one real nova in twenty would miss its
+    alert, and the person wants every one (2 November 2026). `cut` is kept
+    for the record. Returns how many were relabelled."""
+    def apart(a, b):
+        return 3600 * math.hypot((a["ra"] - b["ra"]) * math.cos(math.radians(a["dec"])), a["dec"] - b["dec"])
+    changed = 0
+    for e in evidence:
+        if e["verdict"] != UNEXPLAINED:
+            continue
+        group = 1 + sum(1 for o in evidence if o is not e and apart(e, o) <= CLUSTER_ARCSEC)
+        if group >= CLUSTER_N:
+            e["verdict"] = f"{RESIDUE}: one of {group} within 2 arcminutes, a flaw in the subtraction"
+            changed += 1
+    return changed
+
+
 def clues(e):
     """What does not explain a candidate but bears on it."""
     out = []
@@ -281,7 +343,8 @@ def vet(record, checks, half_scores=None, ref=None, zeropoint=None, radius=4.0):
 def classify(evidence, session, ref, fwhm):
     """Each candidate's probability of being real, from realbogus.py's model
     if one has been trained, as advice in its evidence and clues: a low one
-    is said, never acted on. Returns the model's cut, or None."""
+    is said, never acted on: a real nova below the cut must still be
+    alerted. Returns the model's cut, or None."""
     import realbogus
     kept = realbogus.load()
     if kept is None or not evidence or not (session / "difference.fits").exists():
@@ -343,6 +406,7 @@ def run(args, say=print):
             half_scores = each_half(record, ref, ref_wcs, paths, name, say)
     evidence = vet(record, checks, half_scores, ref, zeropoint, radius=max(record.get("fwhm_px", 4.0), 2.0))
     cut = classify(evidence, session, ref, record.get("fwhm_px", 4.8))
+    residue(evidence, cut)
     left = [e for e in evidence if e["verdict"] == UNEXPLAINED]
     summary = {"session": str(session), "candidates": evidence, "unexplained": len(left),
                "asked": sorted(checks), "halves_checked": half_scores is not None,

@@ -393,7 +393,7 @@ Never the browser's own `confirm()` box. A card in the middle of the page:
 │  Hour angle  +0.42 h      Side  WEST                 │
 │                                                      │
 │  ✓ Above the 20° altitude limit                      │
-│  ✓ Within 5.75 h of the meridian                     │
+│  ✓ Within 7.5 h of the meridian                      │
 │  ✓ 94° from the Sun                                  │
 │  ⚠ The tube goes to the west side (a swing over the  │
 │    pole if it is on the east side now).              │

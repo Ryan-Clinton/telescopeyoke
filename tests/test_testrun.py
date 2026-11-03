@@ -53,6 +53,26 @@ def test_on_the_desktop_it_copies_the_checkout_then_runs_there(monkeypatch):
     assert answer["where"] == "desktop" and answer["failed"] == 1 and not answer["ok"]
 
 
+def test_the_copy_loses_what_has_left_the_checkout(tmp_path):
+    """1 November 2026: recover.py, taken out on 17 October, was still in the
+    desktop's copy and failed test_policy, as --delete with --files-from
+    deletes nothing. Only the listed files are let in, and the rest go."""
+    import shutil
+    import subprocess
+    if not shutil.which("rsync"):
+        pytest.skip("no rsync")
+    src, dst = tmp_path / "src", tmp_path / "dst"
+    for f in (src / "a.py", src / "tests" / "t[1].py", src / "ignored.log", dst / "recover.py",
+              dst / "tests" / "old.py"):
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text("x")
+    command = ["rsync", "-a", "--delete", "--delete-excluded", "--prune-empty-dirs", "--from0",
+               "--include=*/", "--include-from=-", "--exclude=*", "./", f"{dst}/"]
+    subprocess.run(command, cwd=src, input=testrun.rules(b"a.py\0tests/t[1].py\0"), check=True)
+    assert sorted(p.relative_to(dst).as_posix() for p in dst.rglob("*") if p.is_file()) == [
+        "a.py", "tests/t[1].py"]
+
+
 def test_a_run_that_did_not_happen_is_a_refusal():
     runner, _ = fake(["no tests ran"])
     with pytest.raises(interface.Refusal, match="did not run"):

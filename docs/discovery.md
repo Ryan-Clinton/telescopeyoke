@@ -49,6 +49,11 @@ queue, the most intriguing leads and any up tonight) and `./ty night`.
 
 ## Recent proofs
 
+- **1-2 November 2026, M31 and M33:** the subtraction fix cut false
+  candidates from 23 to 5, and the second looks found none real; `vet.py`
+  now sets aside only clusters of 3 or more as residue
+  ([results](discovery/results.md#m31-and-m33-patrols-1-and-2-november-2026)).
+
 - **19 October 2026, GOES-19 CCOR-1:** the six-hourly comet hunt found a
   known Kreutz sungrazer by itself in 74 pictures, followed it for seven
   hours across a 45-minute gap, and matched it to the Sungrazer Project's
@@ -330,7 +335,7 @@ ends with a scientific proof, not just working code.
 | 5 | The report packet. **`report.py` built 17 October 2026: 95 s for a real candidate. Since then: made at once for every unexplained candidate and sent to the person's phone (`notify.py`, Telegram), a second look at the field taken while the telescope is there, and the form filled in the browser by an agent for the person to send (`docs/agents/claiming.md`)** | under five minutes from a confirmed planted fake to a packet |
 | 6 | Public alerts (`brokers.py`). **Built 17 October 2026: ALeRCE's new transients, bright enough and up here tonight; the month's search run (its one real find was AT 2026aexm, already on the Transient Name Server)** | a real public transient observed; an unreported-transient search run over a past month of alerts |
 | 7 | Every session searched; old frames searched again on each improvement. **Built 17 October 2026: each new stack of a field with a reference is searched in the background; `patrol.py --sweep [--all-history]` for the rest** | every science picture checked automatically; a rerun finds fakes planted in old frames |
-| 8 | Real-or-bogus classifier; proposed follow-up. **Dismissal labels kept from 17 October 2026 (`candidates.py --dismiss`). `realbogus.py` built 17 October 2026: trained on stars planted in five M31 nights and on the peaks the subtraction left, tested night by night; its probability is in each vetted candidate's evidence, as advice ([results](discovery/results.md#real-or-bogus))** | a measured fall in false candidates; a candidate leads to a useful repeat |
+| 8 | Real-or-bogus classifier; proposed follow-up. **Dismissal labels kept from 17 October 2026 (`candidates.py --dismiss`). `realbogus.py` built 17 October 2026: trained on stars planted in five M31 nights and on the peaks the subtraction left, tested night by night; its probability is in each vetted candidate's evidence ([results](discovery/results.md#real-or-bogus)). Since 2 November 2026 an unexplained candidate that is one of three or more within 2 arcminutes is listed as "probably residue" and not alerted (novae do not come in groups; a bad patch of the subtraction does): that night four M31 alerts were one such group. The score itself still decides nothing: its cut keeps 95% of planted stars, and a real nova must never miss its alert. The classifier never trains on "probably residue"** | a measured fall in false candidates; a candidate leads to a useful repeat |
 | 9 | Variable stars, dippers like Tabby's star, and known exoplanet transits timed with the 150P. **Built 17 October 2026: `variables.py` (light curves from batches of each night's frames, against VSX, with any dip flagged), `starwatch.py tabby` (a nightly look at KIC 8462852, warning of a dip; since 3 November `archive.py` searches Kepler's light curves for other stars like it: [archive](archive.md)) and `transits.py` (tonight's whole transits from NASA's Exoplanet Archive; the depth and timing fitted from a night's frames)**. Since 20 October: `transits.py measure` gives a verdict before any fitted number, the calibration and timing checks, BJD_TDB and the exposure headroom; `precision.py` finds what limits a night's photometry; `shoot.py --hold PX` keeps the target on the same pixels | a first VSX submission; a transit timed against its prediction |
 | 10 | Several telescopes together: other people's telescopeyoke rigs sharing fields and confirming each other's candidates. **Needs other users first** | a candidate confirmed by another telescope |
 

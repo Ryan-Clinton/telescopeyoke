@@ -793,7 +793,7 @@ def test_a_walk_in_past_its_best_tries_the_one_move_back_out():
     """24 October 2026: it ended 24 half-steps inside the best, 2.55 against
     2.16; the person asked for the move back to be tried, not assumed."""
     tube = Drawtube(best=-300, slope=40, sharp=1.6, reach=600, noise=0.02)
-    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet, slack=0)
+    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet, slack=0, back_out=True)
     inward, last = tube.moves[:-1], tube.moves[-1]
     assert all(step < 0 for step in inward) and last == result["back_out"]["steps"] > 0
     assert result["back_out"]["lifted"] and result["ended_at"] == result["best_at"]
@@ -802,8 +802,18 @@ def test_a_walk_in_past_its_best_tries_the_one_move_back_out():
         def move(self, steps):
             super().move(steps) if steps < 0 else self.moves.append(steps)
     tube = Stuck(best=-300, slope=40, sharp=1.6, reach=600, noise=0.02)
-    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet)
+    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet, back_out=True)
     assert not result["back_out"]["lifted"] and result["ended_at"] < result["best_at"]
+
+
+def test_noise_far_from_focus_does_not_end_a_walk_in():
+    """1 November 2026: set past the line by eye, the stars read 9.75 to 9.99
+    for 384 half-steps, and three readings a hair above a noisy best ended the
+    run a tenth of a turn in. It walks on until the stars clearly shrink."""
+    tube = Drawtube(best=-1200, slope=200, sharp=2.0, reach=6000, noise=0.15)
+    tube.tube = tube.at = 0
+    result = focus.walk_in(tube, tube.read, usual=2.3, say=quiet)
+    assert abs(result["best_at"] - (-1200)) <= 160 and result["best_hfr"] < 3.0
 
 
 def test_the_move_back_out_takes_up_the_gears_slack_first():
@@ -811,14 +821,14 @@ def test_the_move_back_out_takes_up_the_gears_slack_first():
     a move back of only the steps past the best is lost in the gears' slack.
     Out past the best by the slack, then in to it, lands on the best."""
     tube = Drawtube(best=-300, slack=128, slope=40, sharp=1.6, reach=600, noise=0.02)
-    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet, slack=128)
+    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet, slack=128, back_out=True)
     steps = result["back_out"]["steps"]
     assert tube.moves[-2:] == [steps + 128, -128]
     assert result["back_out"]["lifted"] and result["ended_at"] == result["best_at"] == tube.at
     assert abs(tube.tube - tube.best) <= 16
 
     tube = Drawtube(best=-300, slack=128, slope=40, sharp=1.6, reach=600, noise=0.02)
-    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet, slack=0)      # the old way
+    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet, slack=0, back_out=True)      # the old way
     assert not result["back_out"]["lifted"]
 
 
@@ -1195,3 +1205,33 @@ def test_the_readings_are_spoken_as_numbers_unless_tones_are_asked_for(aid):
     said = [what for kind, what in Scope.log if kind == "said"]
     assert said and all(any(c.isdigit() for c in what) for what in said if what != "Exposure increasing.")
     assert not [what for kind, what in Scope.log if kind == "sound"]
+
+
+def test_a_drawtube_that_does_not_move_is_said_after_an_eighth_of_a_turn():
+    """1 November 2026: the motor turned and the knob did not; the stars read
+    9.75 to 9.99 for 384 half-steps and the walk-in never said why."""
+    class Slipping(Drawtube):
+        def move(self, steps):
+            self.moves.append(steps)               # the motor turns; the drawtube stays
+    tube = Slipping(best=-1200, slope=200, sharp=2.0, reach=6000, noise=0.05)
+    import interface
+    with pytest.raises(interface.Refusal, match="drawtube is not moving") as refused:
+        focus.walk_in(tube, tube.read, usual=2.3, say=quiet)
+    assert refused.value.code_name == "FOCUSER_NOT_MOVING"
+    assert -sum(tube.moves) <= focus.STILL_AFTER + 64
+
+
+def test_doughnuts_a_pixel_bigger_have_not_grown():
+    """1 November 2026: 58, 58 and 59 px ended a walk-in as "grown"."""
+    tube = Drawtube(best=-1500, slope=40, sharp=1.6, reach=400, noise=0.02)
+    sizes = iter([58, 58, 59, 59.5, 52, 46, 40, 34, 28, 22, 16, 12] + [10] * 40)
+    result = focus.walk_in(tube, tube.read, usual=2.0, say=quiet, slack=0, ring=lambda frames: next(sizes))
+    assert abs(result["best_at"] + 1500) <= 32
+
+
+def test_doughnuts_are_stars_in_view_not_cloud():
+    """1 November 2026: a watch for clear sky read "no stars" from doughnuts a
+    quarter turn out of focus and missed a clear spell."""
+    assert "stars in view" in focus.verdict(None, 2.3, doughnut=58)
+    assert "cloud" in focus.verdict(None, 2.3)
+    assert focus.verdict(2.0, 2.3).startswith("good")

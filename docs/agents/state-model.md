@@ -40,7 +40,7 @@ Defined in `interface.py`; `schemas/errors.schema.json` lists them.
 | `HANDSET_NOT_SET_UP` | no | Handset still shows its default date; it would move the mount wrongly. |
 | `TARGET_UNKNOWN` | no | Not in the catalogue. |
 | `TARGET_BELOW_ALTITUDE_LIMIT` | no | Under 20° up. |
-| `TARGET_BEYOND_HOUR_ANGLE_LIMIT` | no | More than 5.75 h from the meridian. |
+| `TARGET_BEYOND_HOUR_ANGLE_LIMIT` | no | More than 7.5 h from the meridian. |
 | `TARGET_NEAR_SUN` | no | Within 40° of the Sun while it is up. |
 | `ALTITUDE_OUT_OF_RANGE` | no | `point` needs 2° to 89°. |
 | `SLEW_TIMED_OUT` | yes | The mount was stopped. |

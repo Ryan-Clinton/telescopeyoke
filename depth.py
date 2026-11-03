@@ -140,16 +140,66 @@ def field(wcs, shape):
     return float(centre[0]), float(centre[1]), math.degrees(apart) * 1.05
 
 
-def gaia(ra, dec, radius, faintest=FAINTEST):
+# The mirrors CDS listed during its cybersecurity incident of late October 2026, working ones first.
+DARKEST_SKY = 23.0   # mag per square arcsecond: fainter than any real night sky
+GAIA_MIRRORS = (GAIA_URL, "https://vizier.idia.ac.za/viz-bin/asu-tsv", "http://vizier.china-vo.org/viz-bin/asu-tsv",
+                "http://vizier.nao.ac.jp/viz-bin/asu-tsv", "https://vizier.cfa.harvard.edu/viz-bin/asu-tsv")
+
+
+def covering(store, ra, dec, radius, faintest):
+    """A circle already fetched that holds this one whole: (path, its centre
+    and radius), or None. A field imaged night after night is pointed a
+    little differently each time; on 1 November 2026 the cache, keyed to a
+    thousandth of a degree, missed and the search needed VizieR while it was
+    down, for stars it already had."""
+    best = None
+    for kept in store.glob(f"*_{faintest:g}_colour.tsv") if store.exists() else []:
+        try:
+            cra, cdec, cradius = (float(x) for x in kept.name.split("_")[:3])
+        except ValueError:
+            continue
+        cosd = math.cos(math.radians((dec + cdec) / 2))
+        apart = math.hypot((ra - cra) * cosd, dec - cdec)
+        if apart + radius <= cradius and (best is None or cradius < best[3]):
+            best = (kept, cra, cdec, cradius)
+    return best
+
+
+def gaia(ra, dec, radius, faintest=FAINTEST, get=None):
     """Gaia DR3 stars in a circle, as an array of (ra, dec, G, BP-RP), the
-    colour NaN where Gaia has none. Kept on disk: a field is fetched once."""
+    colour NaN where Gaia has none. Kept on disk: a field is fetched once, and
+    any kept circle that holds this one is used instead of fetching again.
+    VizieR's mirror is tried when Strasbourg does not answer; with neither,
+    a plain refusal, never a traceback."""
+    get = get or requests.get
     store = config.DATA / "cache" / "gaia"
     path = store / f"{ra:.3f}_{dec:+.3f}_{radius:.2f}_{faintest:g}_colour.tsv"
     if not path.exists():
-        reply = requests.get(GAIA_URL, timeout=120, params={
-            "-source": "I/355/gaiadr3", "-c": f"{ra:.5f} {dec:+.5f}", "-c.rd": f"{radius:.3f}",
-            "-out": "RA_ICRS,DE_ICRS,Gmag,BP-RP", "-out.max": "200000", "Gmag": f"<{faintest:g}"})
-        reply.raise_for_status()
+        held = covering(store, ra, dec, radius, faintest)
+        if held:
+            rows = read_tsv(held[0].read_text(encoding="utf-8"))
+            if len(rows):
+                cosd = math.cos(math.radians(dec))
+                inside = np.hypot((rows[:, 0] - ra) * cosd, rows[:, 1] - dec) <= radius
+                return rows[inside]
+        failures = []
+        for url in GAIA_MIRRORS:
+            try:
+                reply = get(url, timeout=(10, 120), params={
+                    "-source": "I/355/gaiadr3", "-c": f"{ra:.5f} {dec:+.5f}", "-c.rd": f"{radius:.3f}",
+                    "-out": "RA_ICRS,DE_ICRS,Gmag,BP-RP", "-out.max": "200000", "Gmag": f"<{faintest:g}"})
+                reply.raise_for_status()
+                if not len(read_tsv(reply.text)):
+                    # A mirror that answers with no stars (China-VO, 2 November 2026) is
+                    # not believed: Gaia has stars in every field; never kept.
+                    raise requests.RequestException("answered with no stars")
+                break
+            except requests.RequestException as problem:
+                failures.append(f"{url.split('/')[2]}: {type(problem).__name__}")
+        else:
+            raise interface.Refusal("REMOTE_FAILED", "Gaia's stars could not be fetched for this field ("
+                                    + "; ".join(failures) + "), and none kept cover it. Search again when "
+                                    "VizieR answers: ./patrol.py --analyse SESSION")
         store.mkdir(parents=True, exist_ok=True)
         path.write_text(reply.text, encoding="utf-8")
     return read_tsv(path.read_text(encoding="utf-8"))
@@ -517,7 +567,9 @@ def measure(lum, wcs, catalogue, plant_stars=False, trials=6, seed=7, finder=Non
         "fwhm_px": round(fwhm, 2), "fwhm_arcsec": round(fwhm * scale, 2),
         "scale_arcsec_per_px": round(scale, 3), "aperture_px": round(radius, 2),
         "sky_level": round(sky, 2),
-        "sky_mag_per_arcsec2": round(zp - 2.5 * math.log10(max(sky, 1e-9) / scale ** 2), 2),
+        # None when the stack's sky is at or below zero: the bias taken off was
+        # above tonight's camera offset (1 November 2026: -58, read as 46 mag).
+        "sky_mag_per_arcsec2": round(zp - 2.5 * math.log10(sky / scale ** 2), 2) if sky > 0 else None,
         "stars_detected": int(len(stars)),
         "limit_5sigma": limits,
         "share_of_image": {name: round(float((kinds == n).mean()), 3) for n, (name, _) in enumerate(REGIONS)},
@@ -644,7 +696,9 @@ def measurements(folder=None):
         r = json.loads(path.read_text(encoding="utf-8"))
         width, sky = r.get("fwhm_arcsec"), r.get("sky_mag_per_arcsec2")
         whole = r.get("completeness", {}).get("all", {}).get("mag_50")
-        if width and sky is not None and whole is not None and r.get("exposure_s"):
+        # A sky no real sky gives is a calibration fault, not a measurement:
+        # 1 November 2026's 46.13 came from a negative stack.
+        if width and sky is not None and sky <= DARKEST_SKY and whole is not None and r.get("exposure_s"):
             rows.append({"stack": r.get("stack", str(path.parent)), "session": str(path.parent),
                          "seconds": float(r["exposure_s"]),
                          "fwhm_arcsec": width, "sky": sky, "mag_50": whole})
@@ -848,7 +902,8 @@ def report(r, say=print):
     say(f"zero point {r['zeropoint']:.2f} ± {r['zeropoint_error']:.2f} (G) from "
         f"{r['calibration_stars']} Gaia stars, scatter {r['calibration_scatter']:.2f}")
     say(f"stars {r['fwhm_arcsec']:.1f}\" across ({r['fwhm_px']:.1f} px); "
-        f"sky {r['sky_mag_per_arcsec2']:.1f} mag per square arcsecond")
+        + (f"sky {r['sky_mag_per_arcsec2']:.1f} mag per square arcsecond" if r.get("sky_mag_per_arcsec2") is not None
+           else "sky not measured: the stack's background is at or below zero (the bias taken off is too high)"))
     for label, limit in r["limit_5sigma"].items():
         say(f"5-sigma limit on {label}: {limit:.2f} (a formula's figure)")
     for label, c in r.get("completeness", {}).items():

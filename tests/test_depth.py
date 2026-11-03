@@ -374,3 +374,44 @@ def test_a_measurement_keeps_its_plate_solve_as_the_footprint():
     _jsonschema.validate(kept, schema["properties"]["footprint"])
     fp = footprint.from_solve(kept)
     assert abs(fp["width_deg"] - 1.006) < 0.01 and abs(fp["height_deg"] - 0.672) < 0.01
+
+
+def test_a_kept_field_that_covers_the_circle_is_used_without_vizier(tmp_path, monkeypatch):
+    """1 November 2026: VizieR was down and the M31 search failed for stars
+    already kept from earlier nights, pointed a little differently."""
+    import numpy as np
+    import requests
+
+    import depth
+    import interface
+    monkeypatch.setattr(depth.config, "DATA", tmp_path)
+    store = tmp_path / "cache" / "gaia"
+    store.mkdir(parents=True)
+    rows = "\n".join(f"{10.6 + i * 0.01:.5f}\t{41.2 + i * 0.01:+.5f}\t{15 + i * 0.1:.2f}\t0.8" for i in range(40))
+    (store / "10.684_+41.269_0.62_19.5_colour.tsv").write_text(
+        "#c\nRA_ICRS\tDE_ICRS\tGmag\tBP-RP\ndeg\tdeg\tmag\tmag\n-----\t-----\t-----\t-----\n" + rows)
+
+    def down(*a, **k):
+        raise requests.ConnectTimeout("VizieR is down")
+    stars = depth.gaia(10.70, 41.28, 0.30, get=down)
+    assert len(stars) and np.all(np.hypot((stars[:, 0] - 10.70) * np.cos(np.radians(41.28)),
+                                          stars[:, 1] - 41.28) <= 0.30)
+    with pytest.raises(interface.Refusal, match="could not be fetched") as refused:
+        depth.gaia(30.0, 10.0, 0.3, get=down)                     # nothing kept covers it
+    assert "cfa.harvard.edu" in refused.value.message
+
+
+def test_a_sky_at_or_below_zero_is_not_a_measurement():
+    """1 November 2026: the stack's sky was -58 after a bias above the camera's
+    offset was taken off, and read as 46.13 mag per square arcsecond."""
+    import depth
+    assert depth.DARKEST_SKY < 46.13
+
+
+def test_a_depth_record_with_no_sky_figure_is_kept():
+    """1 November 2026: the sky at or below zero is None, and the record must
+    still be written (the search stopped on the schema)."""
+    import json
+    from pathlib import Path
+    schema = json.loads((Path(__file__).parent.parent / "schemas" / "depth.schema.json").read_text())
+    assert "null" in schema["properties"]["sky_mag_per_arcsec2"]["type"]

@@ -454,3 +454,18 @@ evenly over the usable area; and anything unlike these five nights, until
 it is trained on more of them. A person's dismissals join the training as
 they come; train it again after new nights.
 
+## M31 and M33 patrols, 1 and 2 November 2026
+
+- **The M31 subtraction fix** took false candidates from 23 to 5 with
+  completeness unchanged. It came from three changes: negative sky, spike
+  angles (23.5° against 9°), and a gate for fading on stars.
+- **M31 second look:** it disproved all 7 of the first candidates.
+- **M33:** at 00:41 none; at 02:04, 8 candidates, all residue (real-or-bogus
+  0.00 to 0.16). The M31 residue group sits where the reference itself looks
+  flawed.
+- **The residue rule since 2 November:** `vet.py` sets aside as residue only
+  clusters of 3 or more candidates within 120″. A lone candidate is always
+  alerted, whatever its score.
+- **Catalogues:** CDS/VizieR was down (a cybersecurity incident). The IDIA
+  mirror works; the China-VO one returns empty answers.
+

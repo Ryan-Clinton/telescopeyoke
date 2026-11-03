@@ -48,6 +48,16 @@ def files():
     return b"\0".join(p for p in listed.split(b"\0") if p and (ROOT / p.decode()).is_file())
 
 
+def rules(listed):
+    """files()'s list as rsync include rules, each anchored at the top of
+    the copy ("/tests/test_mount.py"), wildcards in a name taken literally."""
+    def literal(path):
+        for c in (b"\\", b"*", b"?", b"["):
+            path = path.replace(c, b"\\" + c)
+        return b"/" + path
+    return b"\0".join(literal(p) for p in listed.split(b"\0") if p)
+
+
 def summary(output):
     """(counts, failures) from pytest's -q -rf output."""
     counts = {k: 0 for k in ("passed", "failed", "skipped", "errors")}
@@ -79,8 +89,13 @@ def run(args, say=print, runner=subprocess.run):
     else:
         python = remote.python_on(HOST)
         say(f"copying the checkout to {HOST}")
-        sent = runner(["rsync", "-a", "--delete", "--from0", "--files-from=-", "./", f"{HOST}:{PLACE}/"], cwd=ROOT,
-                      input=files())
+        # Each listed file is let in and everything else kept out, so that
+        # --delete-excluded takes away what has left the checkout: with
+        # --files-from, --delete deleted nothing, and recover.py, taken out
+        # on 17 October 2026, still failed test_policy on 1 November.
+        sent = runner(["rsync", "-a", "--delete", "--delete-excluded", "--prune-empty-dirs", "--from0",
+                       "--include=*/", "--include-from=-", "--exclude=*", "./", f"{HOST}:{PLACE}/"], cwd=ROOT,
+                      input=rules(files()))
         if sent.returncode:
             raise interface.Refusal("REMOTE_FAILED", f"Copying the checkout to {HOST} failed.")
         runner_python = python if python == "python3" else f"~/{python}"

@@ -598,7 +598,7 @@ The laptop cannot see what the telescope is about to hit.
 - **Never point near the Sun.** `mount.py point` refuses within 40° of it
   while it is up; `goto` only knows night-sky objects.
 - Creating a file called `MOTION_LOCKED` in this folder blocks all movement.
-- `mount.py` will not go below 20° altitude or more than 5.75 hours from the
+- `mount.py` will not go below 20° altitude or more than 7.5 hours from the
   meridian.
 - **The status page (`serve.py`) is read-only on purpose.** It is served to
   the whole home network with no login, which is fine for pictures and
@@ -619,7 +619,7 @@ against the simulated rig and the tests.
 | Night report and status page | ✅ | ✅ | ✅ |
 | Mount moves through the handset, `sync` | ✅ | ✅ | ✅ |
 | GoTo centred by plate solving | ✅ to about an arcminute, from 10° out | ✅ | ✅ |
-| Polar alignment from three plate solves | ✅ 3.3° to 0.1° over six rounds, with the corrected measurement; how well it repeats is not known | ✅ | ✅ |
+| Polar alignment from three plate solves | ✅ 3.3° to 0.1° over six rounds, with the corrected measurement; it repeats to 0.06-0.11° (2 November 2026) | ✅ | ✅ |
 | Imaging and stacking | ⚠️ runs of 48 and 207 frames; the newest fixes not yet rerun | ✅ | ✅ |
 | Focusing: measuring the stars | ✅ the reading fell from 11 to about 2 as focus was reached | ✅ | ✅ |
 | Focusing: click, tone and three levels | not yet | not yet | ✅ |
@@ -628,7 +628,7 @@ against the simulated rig and the tests.
 | Drift model and Dec correction | ⚠️ an earlier, cruder version only | ⚠️ the same | ✅ |
 | Daytime Polaris | ⚠️ searched three times, Polaris not found | ⚠️ the search only | ✅ |
 | Skyline from a phone panorama | does not need them | ⚠️ three real panoramas; not yet tied to the compass | ✅ |
-| The telescope's own skyline survey | ⚠️ by night, a torch trial only | ✅ by day, 17 October 2026: 28 bearings in 34 minutes, a look at the hedge checked by eye | ✅ |
+| The telescope's own skyline survey | ⚠️ by night, a torch trial only | ✅ by day, 17 October 2026: 28 bearings in 34 minutes, a look at the hedge checked by eye; 2 November, a second spot's skyline kept on the author's eye check, its south-west gap probably too high | ✅ |
 | Azimuth from a landmark | not yet | not yet | ✅ |
 | Control without the handset (Wi-Fi, EQDIR) | not yet | ⚠️ the Wi-Fi adapter read; nothing moved | ✅ |
 | The application window | not yet | ⚠️ opened on Ubuntu, in the demo only | ✅ |
@@ -636,11 +636,11 @@ against the simulated rig and the tests.
 | Checking that the telescope really turned | not yet | not yet | ✅ |
 | Finding and marking the true home (`findhome`, `truehome`) | ✅ 17 October 2026: from 10.66° out by eye to 0.19° on the marks | ✅ | ✅ |
 | Pointing survey: one correction for each side | ✅ 17 October 2026 | ✅ | ✅ |
-| Polar repeatability | not yet | not yet | ✅ |
+| Polar repeatability | ✅ 0.06-0.11° scatter, 1-2 November 2026 | ✅ | ✅ |
 | Discovery: subtraction, candidates, vetting | ⚠️ on real M31 stacks, with planted fakes; no find of our own yet | ✅ | ✅ a known nova found again in ZTF's archive images |
 | Comets in spacecraft pictures (`sungrazer.py`) | does not need them | ✅ 19 October 2026: a known Kreutz sungrazer found by the hunt itself in live CCOR-1 pictures | ✅ known comets found in archived LASCO pictures |
 | Lights, speaker and phone alerts (`alert.py`) | does not need them | ✅ cloud and rain alerts on a real light and speaker; the call that woke the author when a run stopped (20 October 2026) | ✅ |
-| Live stream on Twitch (`stream.py`) | ✅ on air 20 October 2026 on the WASP-12 b run | ✅ | ✅ |
+| Live stream on Twitch and YouTube (`stream.py`) | ✅ Twitch on air 20 October 2026 on the WASP-12 b run; YouTube on air 1 November 2026 | ✅ | ✅ |
 | Exoplanet transit photometry | ⚠️ one attempt (WASP-12 b): dimming seen, not a detection | ✅ | ✅ |
 | Photometric hold (`shoot.py --hold`) | not yet | not yet | ✅ |
 | The night's end: parked and told | not yet | ⚠️ `mount.py home` only | ✅ |

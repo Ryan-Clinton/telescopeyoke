@@ -161,3 +161,19 @@ def test_the_hold_learns_the_dec_slack_and_takes_it_up_on_each_reversal():
     assert any("slack" in s for s in said)
     late = [math.hypot(x, y) for _, x, y in sky.shifts[-100:]]
     assert max(late) < 10
+
+
+def test_an_order_named_for_one_run_never_reaches_another(tmp_path, monkeypatch):
+    """1 November 2026: a "stop" timed for M33 was taken by the M31 run that
+    followed it."""
+    monkeypatch.setattr(shoot, "ORDERS", tmp_path / "run_order.txt")
+    shoot.tell("stop", run="M33")
+    assert shoot.order("M31") is None and shoot.ORDERS.exists()      # left for the run it names
+    assert shoot.order("M33") == "stop" and not shoot.ORDERS.exists()
+    shoot.tell("stop")
+    assert shoot.order("M31") == "stop"                                # unnamed: for whatever is running
+    shoot.tell("stop", run="M31")
+    import time
+    assert shoot.order("M31", now=time.time() + shoot.ORDER_STALE_S + 1) is None   # stale: never acted on
+    shoot.ORDERS.write_text("stop")                                    # the old plain form still works
+    assert shoot.order("M31") == "stop"

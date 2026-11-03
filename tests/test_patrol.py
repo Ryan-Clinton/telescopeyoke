@@ -25,7 +25,7 @@ def test_a_programme_is_read_from_its_file_and_a_bare_name_still_works():
 def test_it_points_with_mount_py_and_images_with_shoot_py():
     goto, shoot = patrol.steps({"target": "M31", "exposure": 16, "gain": 1500, "minutes": 30})
     assert goto[1].endswith("mount.py") and goto[2:] == ["goto", "M31"]
-    assert shoot[1].endswith("shoot.py") and shoot[2:] == ["M31", "--frames", "112", "--exposure", "16",
+    assert shoot[1].endswith("shoot.py") and shoot[2:] == ["M31", "--frames", "112", "--minutes", "33", "--exposure", "16",
                                                             "--gain", "1500"]
     dry = patrol.steps({"target": "M31", "exposure": 16, "gain": 1500, "minutes": 30}, dry_run=True)
     assert all(cmd[-1] == "--dry-run" for cmd in dry)
@@ -304,7 +304,11 @@ def test_a_subtraction_that_did_not_line_up_is_not_vetted_or_alerted(tmp_path):
     33 fading peaks, went to the phone as candidates."""
     session = tmp_path / "frames" / "M33" / "20261019-002602"
     session.mkdir(parents=True)
-    for found, why in (({"candidates": [{}] * 48, "alignment_residual_px": 1.75, "fading_peaks": 33}, "did not line up"),
+    for found, why in (({"candidates": [{}] * 48, "alignment_residual_px": 1.75, "fading_peaks": 33,
+                         "fading_on_stars": 11}, "did not line up"),
+                       ({"candidates": [{}] * 20, "alignment_residual_px": 0.3, "fading_peaks": 15,
+                         "fading_on_stars": 12}, "dark leftovers on stars"),
+                       # A record from before the count on stars was kept.
                        ({"candidates": [{}] * 20, "alignment_residual_px": 0.3, "fading_peaks": 15}, "dark leftovers")):
         ran = []
         chain = {"depth": lambda: {"zeropoint": 21.6, "completeness": {"all": {"mag_50": 17.3}}},
@@ -314,6 +318,20 @@ def test_a_subtraction_that_did_not_line_up_is_not_vetted_or_alerted(tmp_path):
         assert not patrol.unexplained(answer)
     good = {"candidates": [{}] * 2, "alignment_residual_px": 0.28, "fading_peaks": 1}
     assert patrol.misaligned(good) is None
+
+
+def test_a_galaxys_own_leftovers_do_not_stop_the_patrol():
+    """Every M31 night from 17 October to 1 November 2026 was stopped as
+    misaligned on fading peaks alone (15, 56 and 63 of them, beside 4, 6 and
+    27 candidates), though its stars lined up to 0.19 to 0.21 px and none of
+    those peaks sat on a star."""
+    for candidates, fading, residual in ((4, 15, 0.187), (6, 56, 0.215), (27, 63, 0.209)):
+        found = {"candidates": [{}] * candidates, "alignment_residual_px": residual, "fading_peaks": fading,
+                 "fading_on_stars": 0}
+        assert patrol.misaligned(found) is None
+    # A few on stars by chance, against many candidates, is not misalignment either.
+    found = {"candidates": [{}] * 12, "alignment_residual_px": 0.2, "fading_peaks": 30, "fading_on_stars": 4}
+    assert patrol.misaligned(found) is None
 
 
 def test_a_miss_with_no_limit_says_so_rather_than_none():
@@ -474,3 +492,36 @@ def test_the_second_look_always_says_what_became_of_the_alert():
     assert "could not judge the 4 candidate(s): the GoTo back to it failed" in said({"stopped": "the GoTo back to it failed"})
     assert patrol.second_look_said("M31-P8", {"alerted": []}, none_back, send=lambda *a, **k: sent.append(a)) is None
     assert len(sent) == 3
+
+
+def test_with_release_the_telescope_is_let_go_once_the_frames_are_in(tmp_path, monkeypatch):
+    """1 November 2026: the search held the telescope while the next target
+    waited; with --release the picture and search go on in the background."""
+    monkeypatch.setattr(patrol, "readiness", lambda p: [])
+    monkeypatch.setattr(patrol, "first_goto", lambda name: None)
+    monkeypatch.setattr(config, "load", config.example)
+    ran, started = [], []
+    monkeypatch.setattr(patrol.subprocess, "run",
+                        lambda cmd, **kw: ran.append(cmd) or type("Done", (), {"returncode": 0})())
+    monkeypatch.setattr(patrol, "newest_session", lambda name, after: tmp_path)
+    monkeypatch.setattr(patrol, "analyse", lambda *a, **k: pytest.fail("searched in the foreground"))
+    monkeypatch.setattr(patrol.config, "DEMO", False)
+    monkeypatch.setattr(patrol.subprocess, "Popen", lambda cmd, **kw: started.append(cmd))
+    args = argparse.Namespace(programme="m31-novae", analyse=None, minutes=None, plan=False, dry_run=False,
+                              release=True)
+    answer = patrol.run(args, say=lambda *_: None)
+    shoot = next(c for c in ran if c[1].endswith("shoot.py"))
+    assert "--no-restack" in shoot
+    assert answer["fields"][0]["searching"].endswith("patrol.log")
+    assert started and "--analyse" in started[0]
+
+
+def test_readiness_says_when_there_is_no_dark_for_the_frames(tmp_path, monkeypatch):
+    """1 November 2026: M33's 16 s frames had only a bias, and the sensor's
+    edge glow showed on the stream."""
+    import stacking
+    monkeypatch.setattr(stacking, "master_path", lambda kind, *a: tmp_path / f"{kind}-none.fits")
+    monkeypatch.setattr(patrol, "sky_now", lambda p: [])
+    items = patrol.readiness({"target": "M33", "exposure": 16, "gain": 1500, "minutes": 30})
+    dark = next(i for i in items if i["what"] == "dark")
+    assert not dark["ok"] and not dark["stops"] and "--exposure 16 --gain 1500" in dark["detail"]

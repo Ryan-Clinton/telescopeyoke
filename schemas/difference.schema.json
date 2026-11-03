@@ -33,6 +33,9 @@
     "usable_share": {"type": "number", "description": "Share of the reference's pixels where candidates are trusted: covered by both, away from edges and bright stars."},
     "threshold": {"type": "number"},
     "fading_peaks": {"type": "integer"},
+    "fading_on_stars": {"type": "integer", "description": "Fading peaks within a star's width of a star of the reference: the dark half of what a misaligned star leaves. Many of them, against few candidates, means the two stacks did not line up."},
+    "sky_scale_new": {"type": ["number", "null"], "description": "Counts of glow above the sky that double the new stack's variance, measured from the stack; null where no rise could be measured and the sky's noise alone is used."},
+    "sky_scale_ref": {"type": ["number", "null"], "description": "The same for the reference."},
     "dipoles_left_out": {"type": "integer", "description": "Peaks with a dark partner beside them: misplaced stars, not new ones."},
     "planted": {
       "type": "object",

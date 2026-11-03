@@ -230,7 +230,8 @@ def train(plant_count=300, runs=2, say=print):
     for folder, record in found:
         vetted = folder / "vetted.json"
         skip = [(c["x"], c["y"]) for c in (json.loads(vetted.read_text(encoding="utf-8"))["candidates"]
-                                           if vetted.exists() else []) if c["verdict"].startswith("unexplained")]
+                                           if vetted.exists() else [])
+                if c["verdict"].startswith(("unexplained", "probably residue"))]   # never its own guesses as truth
         Xs, ys = [], []
         for run in range(runs):
             keep = subtraction_of(folder, record, plant_count, seed=100 + run)

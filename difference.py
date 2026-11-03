@@ -19,10 +19,14 @@ proper image subtraction (ZOGY: Zackay, Ofek and Gal-Yam 2016, the method
 ZTF uses): each image is blurred by the other's star shape, weighted by its
 own noise, so the difference is pure noise where nothing changed. Its
 matched-filter image scores each point by how likely a new star is there;
-the score is divided by the spread of the scores round it, so the brighter,
-noisier glow of a galaxy's core is judged against its own noise. Points
-scoring above 5 are the candidates, kept as candidates.json beside the new
-stack with the score image as difference.fits.
+the score is divided by its expected spread at each point, from each
+pixel's photon noise (the light that doubles the sky's variance measured
+from each stack, not read off its level, which the bias can leave below
+zero), so the brighter, noisier glow of a galaxy's core is judged against
+its own noise. The diffraction spikes of bright stars, which turn with the
+camera, are left out. Points scoring above 5 are the candidates, kept as
+candidates.json beside the new stack with the score image as
+difference.fits.
 
 The candidates are not vetted here: hot pixels, asteroids, variable stars
 and known transients are for vet.py (docs/discovery.md, phase 1). Nothing
@@ -124,6 +128,57 @@ def sky_noise(image):
     flat = image - depth.background(image)
     sample = flat[::3, ::3]
     return 1.4826 * float(np.median(np.abs(sample - np.median(sample))))
+
+
+SCALE_BLOCK = 32      # pixels: the squares the sky's noise is measured in, against the glow under them
+
+
+def sky_scale(image, light, block=SCALE_BLOCK):
+    """How much more glow, in counts, doubles the variance of the sky: the
+    sky's own light as photon noise sees it. Measured, not read off the sky
+    level: the level carries whatever the bias left (on 1 November 2026 the
+    master bias was above that night's camera offset and M31's sky sat at
+    -55, so a variance scaled by the level went negative over the galaxy
+    and the new stack's photon noise dropped out). Each square's spread is
+    set against the glow under it and a straight line fitted through the
+    medians. Where no rise can be measured, the sky's level if it is above
+    zero, or None."""
+    flat = image - light
+    h, w = image.shape[0] // block * block, image.shape[1] // block * block
+    if h == 0 or w == 0:
+        return None
+    pixels = flat[:h, :w].reshape(h // block, block, w // block, block).transpose(0, 2, 1, 3).reshape(-1, block * block)
+    under = light[:h, :w].reshape(h // block, block, w // block, block).mean(axis=(1, 3)).ravel()
+    spread = (1.4826 * np.median(np.abs(pixels - np.median(pixels, axis=1, keepdims=True)), axis=1)) ** 2
+    above = under - np.percentile(light, 5)
+    edges = np.unique(np.percentile(above, np.linspace(0, 99.5, 21)))
+    rows = [(np.median(above[inside]), np.median(spread[inside]))
+            for inside in ((above >= lo) & (above < hi) for lo, hi in zip(edges[:-1], edges[1:])) if inside.sum() >= 5]
+    rows = np.array(rows).reshape(-1, 2)
+    if len(rows) >= 3 and np.ptp(rows[:, 0]) > 0:
+        slope, at_sky = np.polyfit(rows[:, 0], rows[:, 1], 1)
+        # Only a glow spanning several times the sky's own noise can show
+        # a rise: in a field of stars on an even sky, the squares with more
+        # stars have both a little more "glow" and a wider spread, and the
+        # line through them means nothing. A rise of a tenth is a rise.
+        if (slope > 0 and at_sky > 0 and np.ptp(rows[:, 0]) > 5 * math.sqrt(at_sky)
+                and slope * np.ptp(rows[:, 0]) > 0.1 * at_sky):
+            return float(at_sky / slope)
+    # A picture with too little glow to measure a rise against (a field of
+    # stars on an even sky): the sky's level, when the bias left it above
+    # zero, as before the measurement.
+    level = float(np.percentile(light, 5))
+    return level if level > 0 else None
+
+
+def variance(flat, light, noise, scale):
+    """Each pixel's variance: the sky's, measured, raised where there is more
+    light, glow or star, to bring photon noise of its own. `scale` is the
+    light that doubles it (sky_scale); with none, the sky's alone."""
+    if not scale:
+        return np.full(flat.shape, noise ** 2, np.float32)
+    more = np.maximum(light - np.percentile(light, 5), 0) + np.maximum(flat, 0)
+    return (noise ** 2 * (1 + more / scale)).astype(np.float32)
 
 
 def convolve(image, kernel_hat):
@@ -295,6 +350,113 @@ def usable_area(new, ref, edge=EDGE, bright=BRIGHT, fwhm=4.8):
     return inside & ~out
 
 
+SPIKE_REACH = 250     # pixels: the longest diffraction spike looked for
+SPIKE_LEVEL = 0.3     # of the sky's noise: an arm brighter than its surroundings by this still leaves leftovers
+SPIKE_CLEAR = 5.0     # the spikes' angle is trusted when it stands this many spreads above the other angles
+SPIKE_MOST = 20       # the brightest stars measured for spikes
+
+
+def bright_centres(flat, level, most=SPIKE_MOST):
+    """The middles of the stars bright enough to be left out of the search
+    (usable_area's level), brightest first."""
+    labels, count = ndimage.label(flat > level)
+    if not count:
+        return np.zeros((0, 2))
+    index = np.arange(1, count + 1)
+    total = ndimage.sum_labels(flat, labels, index)
+    where = np.array(ndimage.center_of_mass(np.maximum(flat, 0), labels, index))[:, ::-1]
+    return where[np.argsort(-total)][:most]
+
+
+def _arms(flat, x, y, angle, radii, across=(0.0,)):
+    """The image sampled along the four arms of a cross at `angle` degrees
+    round (x, y): an array of (arm, offset across, radius)."""
+    out = []
+    for k in range(4):
+        a = math.radians(angle + 90 * k)
+        c, s = math.cos(a), math.sin(a)
+        for off in across:
+            xs, ys = x + radii * c - off * s, y + radii * s + off * c
+            out.append(ndimage.map_coordinates(flat, [ys, xs], order=1, mode="constant", cval=np.nan))
+    return np.array(out).reshape(4, len(across), len(radii))
+
+
+def spike_angle(flat, centres, fwhm, clear=SPIKE_CLEAR):
+    """The angle, in degrees from 0 to 90, of the diffraction spikes the
+    secondary's spider puts on bright stars, or None if none show. All four
+    arms of each star are followed out at every angle, the median along them
+    taken (a spike runs the whole way; a neighbouring star is a blip in it),
+    and the spikes are where that stands out from the other angles on the
+    brightest stars together."""
+    if len(centres) < 3:
+        return None
+    angles = np.arange(0.0, 90.0, 0.5)
+    radii = np.arange(4 * fwhm, 25 * fwhm, 1.0)
+    rows = []
+    for x, y in centres:
+        light = np.array([np.nanmedian(np.nanmean(_arms(flat, x, y, a, radii), axis=(0, 1))) for a in angles])
+        if not np.isfinite(light).all():
+            continue
+        spread = 1.4826 * np.median(np.abs(light - np.median(light))) + 1e-12
+        rows.append((light - np.median(light)) / spread)
+    if len(rows) < 3:
+        return None
+    together = np.mean(rows, axis=0)
+    together = (together - np.median(together)) / (1.4826 * np.median(np.abs(together - np.median(together))) + 1e-12)
+    best = int(np.argmax(together))
+    return float(angles[best]) if together[best] > clear else None
+
+
+def spike_mask(flat, centres, angle, fwhm, noise, reach=SPIKE_REACH, level=SPIKE_LEVEL):
+    """The diffraction spikes round each bright star, as a mask: each arm is
+    followed out as far as it is brighter than the sky beside it (the light
+    at 45 degrees to the spikes) by `level` times the sky's noise, and
+    covered a star and a half wide on each side."""
+    mask = np.zeros(flat.shape, bool)
+    if angle is None:
+        return mask
+    radii = np.arange(2 * fwhm, reach, 1.0)
+    across = (-1.0, 0.0, 1.0)
+    half = 1.5 * fwhm
+    yy, xx = np.indices(flat.shape)
+    for x, y in centres:
+        arm = np.nanmean(_arms(flat, x, y, angle, radii, across), axis=(0, 1))
+        beside = np.nanmean(_arms(flat, x, y, angle + 45, radii, across), axis=(0, 1))
+        above = ndimage.uniform_filter1d(np.nan_to_num(arm - beside), 9)
+        # From where it first stands out (a saturated core is as bright at
+        # every angle) out to where it fades into the sky: a star further
+        # along an arm is not more spike.
+        lit = above > level * noise
+        if not lit.any():
+            continue
+        start = int(np.argmax(lit))
+        faded = np.nonzero(~lit[start:])[0]
+        reached = start + (faded[0] if len(faded) else len(radii) - start)
+        length = radii[reached - 1] + 2 * fwhm
+        x0, x1 = int(max(x - length - half, 0)), int(min(x + length + half + 1, flat.shape[1]))
+        y0, y1 = int(max(y - length - half, 0)), int(min(y + length + half + 1, flat.shape[0]))
+        dx, dy = xx[y0:y1, x0:x1] - x, yy[y0:y1, x0:x1] - y
+        a = math.radians(angle)
+        along, side = dx * math.cos(a) + dy * math.sin(a), -dx * math.sin(a) + dy * math.cos(a)
+        mask[y0:y1, x0:x1] |= ((np.abs(along) <= length) & (np.abs(side) <= half)) | \
+                              ((np.abs(side) <= length) & (np.abs(along) <= half))
+    return mask
+
+
+def spikes(new_flat, ref_flat, fwhm, bright=BRIGHT):
+    """Where either night's diffraction spikes fall. The spider's spikes turn
+    with the camera: on 1 November 2026 M31's were at a different angle from
+    the reference's, every bright star left a bright and a dark cross, and
+    those crosses made most of the night's candidates and fading peaks.
+    Each night's spikes are found at their own angle and left out."""
+    mask = np.zeros(ref_flat.shape, bool)
+    for flat in (new_flat, ref_flat):
+        flat = np.nan_to_num(flat)
+        centres = bright_centres(flat, bright * np.percentile(flat, 99.99))
+        mask |= spike_mask(flat, centres, spike_angle(flat, centres, fwhm), fwhm, sky_noise(flat))
+    return mask
+
+
 # --- putting it together ---------------------------------------------------------
 
 def subtract(new, ref, new_wcs=None, ref_wcs=None, zeropoint=None, plant_count=0, seed=3, finder=None,
@@ -331,6 +493,7 @@ def subtract(new, ref, new_wcs=None, ref_wcs=None, zeropoint=None, plant_count=0
     filled = np.where(np.isfinite(new), new, np.nanmedian(new))
     glow_new, glow_ref = glow(filled), glow(ref)
     new_flat, ref_flat = filled - glow_new, ref - glow_ref
+    usable &= ~spikes(new_flat, ref_flat, fwhm)
     psf_ref = shape_of(ref_flat, stars_ref, radius)
     psf_new = shape_of(new_flat, finder(new_flat), radius)
     planted = None
@@ -346,8 +509,9 @@ def subtract(new, ref, new_wcs=None, ref_wcs=None, zeropoint=None, plant_count=0
     # Each pixel's variance: the sky's, measured, scaled up where there is
     # more light (glow or star) to bring photon noise of its own.
     noise_new, noise_ref = sky_noise(new_flat), sky_noise(ref_flat)
-    var_new = noise_new ** 2 * np.maximum(glow_new + np.maximum(new_flat, 0), 1e-6) / np.percentile(glow_new, 5)
-    var_ref = noise_ref ** 2 * np.maximum(glow_ref + np.maximum(ref_flat, 0), 1e-6) / np.percentile(glow_ref, 5)
+    scale_new, scale_ref = sky_scale(filled, glow_new), sky_scale(ref, glow_ref)
+    var_new = variance(new_flat, glow_new, noise_new, scale_new)
+    var_ref = variance(ref_flat, glow_ref, noise_ref, scale_ref)
     # The median distance between matched stars is 1.18 times the error on
     # each axis, for errors that are round and Gaussian.
     difference, score, noise_new, noise_ref = subtract_in_tiles(
@@ -357,6 +521,12 @@ def subtract(new, ref, new_wcs=None, ref_wcs=None, zeropoint=None, plant_count=0
     # variances do not know: the corrected score's own spread is taken out.
     sample = score[usable][::7]
     significance = score / (1.4826 * float(np.median(np.abs(sample - np.median(sample)))) + 1e-12)
+    # Dividing it further by its own spread round each point (local_spread),
+    # tried on 2 November 2026 on M31's stacks of 1 November and the two of
+    # 17 October, took their candidates from 7, 3 and 7 to 5, 1 and 1 but lost a
+    # tenth of the planted G 17 to 17.5 stars in the corner of 17 October's
+    # stack that fewer frames reached: those candidates are marked instead
+    # by how many fading peaks are as strong (as_strong_fading).
     x, y = peaks(significance, usable)
     # A star a fraction of a pixel out of place leaves a bright and a dark
     # lobe side by side; a new star has no dark partner.
@@ -366,7 +536,11 @@ def subtract(new, ref, new_wcs=None, ref_wcs=None, zeropoint=None, plant_count=0
     # The same search on the fading side finds what noise and imperfect
     # subtraction alone produce: how many fading peaks reach a candidate's
     # score says how many false ones that strong to expect.
-    fading = np.sort(significance[peaks(-significance, usable)[::-1]] * -1)
+    fx, fy = peaks(-significance, usable)
+    fading = np.sort(-significance[fy, fx])
+    # A star out of place leaves its dark leftover on the star itself; the
+    # leftovers of a galaxy's own structure, or of noise, fall anywhere.
+    on_stars = fading_on_stars(fx, fy, stars_ref, fwhm)
     candidates = []
     for cx, cy in zip(x, y):
         c = {"x": int(cx), "y": int(cy), "score": round(float(significance[cy, cx]), 1)}
@@ -384,7 +558,9 @@ def subtract(new, ref, new_wcs=None, ref_wcs=None, zeropoint=None, plant_count=0
               "alignment_residual_px": round(residual, 3), "flux_ratio": round(scale, 4),
               "fwhm_px": round(fwhm, 2), "noise_new": round(noise_new, 3), "noise_ref": round(noise_ref, 3),
               "usable_share": round(float(usable.mean()), 3), "threshold": THRESHOLD,
-              "fading_peaks": int(len(fading)), "dipoles_left_out": dipoles}
+              "fading_peaks": int(len(fading)), "fading_on_stars": on_stars, "dipoles_left_out": dipoles,
+              "sky_scale_new": None if scale_new is None else round(scale_new, 1),
+              "sky_scale_ref": None if scale_ref is None else round(scale_ref, 1)}
     if workings is not None:
         workings.update(significance=significance, usable=usable, ref=ref_flat, fwhm=fwhm,
                     planted=planted, wcs=ref_wcs)
@@ -397,6 +573,15 @@ def subtract(new, ref, new_wcs=None, ref_wcs=None, zeropoint=None, plant_count=0
         record["planted"] = curve(mags, found)
         record["false_candidates"] = int(len(candidates) - found.sum())
     return record, significance
+
+
+def fading_on_stars(x, y, stars, fwhm):
+    """How many fading peaks sit within a star's width of a star of the
+    reference: the dark half of what a misaligned star leaves."""
+    if not len(x) or not len(stars):
+        return 0
+    distance, _ = cKDTree(stars[:, :2]).query(np.c_[x, y], distance_upper_bound=fwhm)
+    return int(np.isfinite(distance).sum())
 
 
 def shape_of(flat, stars, radius):

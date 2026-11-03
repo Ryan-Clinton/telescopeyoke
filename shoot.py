@@ -57,6 +57,7 @@ import snap
 import stacking
 import tracking
 from camera import Camera, stretch
+from indi import IndiError as CameraError
 
 ROOT = Path(__file__).parent
 WEB = config.DATA / "web"
@@ -71,6 +72,8 @@ ORDERS = config.DATA / "cache" / "run_order.txt"
 KNOWN_ORDERS = ("stop", "recentre", "assist-on", "assist-off")
 RETAKE_GIVE_UP = 3  # with --frames N, no more retakes after this many rejected frames in a row
 CLOUD_STOP = 20     # with --frames 0, stop after this many rejected frames in a row
+JAM_REOPENS = 3     # a jammed camera is opened again this many times in a row before the run stops
+JAM_WAIT_S = 20     # seconds before it is opened again
 PREVIEW_EVERY = 3.0  # seconds between updates of the picture on the web page
 FINISH_FROM = 5      # accepted frames before the live picture is finished like the final one
 BACKLOG = 8         # frames allowed to wait for the live stack before it skips some
@@ -263,23 +266,41 @@ def draw_stack(stacked, count, name, exposure, web, finish=True):
     return spent
 
 
-def tell(order):
-    """Leave an order for the run that is going."""
+ORDER_STALE_S = 600    # an order not taken within this long is for a run that has gone
+
+
+def tell(order, run=None):
+    """Leave an order for the run that is going, or with `run` (its target)
+    only for that run: on 1 November 2026 a "stop" timed for one run stopped
+    the next. An order older than ORDER_STALE_S is never acted on."""
     if order not in KNOWN_ORDERS:
         raise interface.Refusal("INVALID_REQUEST", f"Unknown order '{order}'. Known: "
                                 + ", ".join(KNOWN_ORDERS))
     ORDERS.parent.mkdir(exist_ok=True)
-    ORDERS.write_text(order, encoding="utf-8")
-    return {"order": order, "note": "The run acts on it after its next frame."}
+    ORDERS.write_text(json.dumps({"order": order, "run": run, "at": time.time()}), encoding="utf-8")
+    return {"order": order, "run": run, "note": "The run acts on it after its next frame."}
 
 
-def order():
-    """The order left for this run, if any; it is taken, so it acts once."""
+def order(name=None, now=None):
+    """The order left for this run, if any; it is taken, so it acts once. An
+    order named for another run is left for it, and a stale one thrown away."""
     if not ORDERS.exists():
         return None
-    found = ORDERS.read_text(encoding="utf-8").strip()
-    ORDERS.unlink()
-    return found if found in KNOWN_ORDERS else None
+    text = ORDERS.read_text(encoding="utf-8").strip()
+    try:
+        left = json.loads(text)
+    except ValueError:
+        left = {"order": text, "run": None, "at": None}      # as written before 1 November 2026
+    if not isinstance(left, dict):
+        left = {"order": text, "run": None, "at": None}
+    now = time.time() if now is None else now
+    if left.get("at") is not None and now - left["at"] > ORDER_STALE_S:
+        ORDERS.unlink(missing_ok=True)
+        return None
+    if left.get("run") and name and left["run"] != name:
+        return None
+    ORDERS.unlink(missing_ok=True)
+    return left.get("order") if left.get("order") in KNOWN_ORDERS else None
 
 
 def recentre(target, aim_off=(0.0, 0.0)):
@@ -712,6 +733,8 @@ def main():
     ap.add_argument("name", help="what it is a picture of; a catalogue name allows re-centring")
     ap.add_argument("--frames", type=int, default=60,
                     help="how many to take; 0 carries on until cloud stops it")
+    ap.add_argument("--minutes", type=float,
+                    help="stop after this many minutes of imaging, however many frames were lost on the way")
     ap.add_argument("--exposure", default="2",
                     help="seconds per frame, or 'auto' to test what the tracking allows")
     ap.add_argument("--gain", type=int, default=1500)
@@ -827,7 +850,17 @@ def hold_the_rig(name, path=None):
 
 
 def run(args):
-    _rig = hold_the_rig(args.name)     # kept open, so locked, for the whole run
+    rig = hold_the_rig(args.name)     # kept open, so locked, for the whole run
+    try:
+        return held(args)
+    finally:
+        # Let go as the run ends, however it ends: on 1 November 2026 a run
+        # stopped by a jammed camera kept the lock while anything still held
+        # its error, and the next run in the same process was refused.
+        rig.close()
+
+
+def held(args):
     moving = not args.no_recentre
     if moving:
         moving = recentre(args.name)
@@ -856,6 +889,7 @@ def image(args, session, exposure, moving, holding, tracker):
     print(f"{session.name}: {args.frames or 'an open-ended run of'} frames of {exposure:g} s at gain {args.gain}; "
           f"calibration: {session.calibration.describe()}; {workers} workers", flush=True)
     index, since_centre, since_dither, started = 0, 0, 0, time.monotonic()
+    jams = 0          # times in a row the camera was opened again without a frame
     if getattr(args, "dither_first", False):
         args.dither = args.dither or 10 ** 9      # a dither before the first frame, then none unless asked
         since_dither = args.dither
@@ -875,6 +909,14 @@ def image(args, session, exposure, moving, holding, tracker):
         until a run of frames in a row has been lost, which means cloud (or
         dawn, or dew) has ended the session."""
         if told["stop"]:
+            return False
+        if getattr(args, "minutes", None) and time.monotonic() - started >= 60 * args.minutes:
+            # The time a run was given, however many frames were lost on the way:
+            # on 1 November 2026 lost frames stretched a 75-minute patrol towards
+            # three hours and the plan's next targets.
+            if not told.get("timed"):
+                told["timed"] = True
+                print(f"  {args.minutes:g} minutes taken: finishing", flush=True)
             return False
         if args.frames:
             return index < args.frames + retakes(session.log, args.frames)
@@ -951,9 +993,15 @@ def image(args, session, exposure, moving, holding, tracker):
                     print(f"  hold: the mount would not move ({problem}); the hold is off", flush=True)
                     holding.state = "off"
             tracker.waiting()
+            jammed = None
             with Camera(gain=args.gain) as cam:
                 while more():
-                    mosaic, header = cam.frame(exposure)
+                    try:
+                        mosaic, header = cam.frame(exposure)
+                    except CameraError as problem:
+                        jammed = problem          # the camera is closed on the way out of this block
+                        break
+                    jams = 0
                     index += 1
                     tracker.took(index)
                     since_centre += 1
@@ -976,7 +1024,7 @@ def image(args, session, exposure, moving, holding, tracker):
                         # the others cannot be lined up, so collect() waits for it.
                         waiting.append((pool.submit(stacking.live_frame,
                                                     *session.job(index, mosaic, header)), time.time()))
-                    asked = order()
+                    asked = order(args.name)
                     if asked:
                         print(f"  told to {asked}", flush=True)
                     if disk_full(session.folder):
@@ -997,6 +1045,18 @@ def image(args, session, exposure, moving, holding, tracker):
                         break
                     if args.assist and moving and len(session.track) >= live.get("shoot.assist_every", ASSIST_EVERY):
                         break
+            if jammed is not None:
+                # A jammed camera is opened again and the run goes on in the same
+                # session: on 1 November 2026 a jam ended a transit run, and its
+                # restart began a new session from frame 0 ("i dont think we should
+                # restart at square 1 and the code should handle it more gracefully").
+                jams += 1
+                if jams > JAM_REOPENS:
+                    raise jammed
+                print(f"  the camera stopped sending frames ({jammed}); opening it again in {JAM_WAIT_S} s, "
+                      f"the run goes on ({jams} of {JAM_REOPENS})", flush=True)
+                tracker.pause()
+                time.sleep(JAM_WAIT_S)
         collect(everything=True)
 
     session.finish()

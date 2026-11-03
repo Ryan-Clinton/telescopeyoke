@@ -61,7 +61,7 @@
     "scale_arcsec_per_px": {"type": "number"},
     "aperture_px": {"type": "number", "description": "Radius of the photometry aperture."},
     "sky_level": {"type": "number"},
-    "sky_mag_per_arcsec2": {"type": "number"},
+    "sky_mag_per_arcsec2": {"type": ["number", "null"], "description": "Null when the stack's sky is at or below zero (a bias above the camera's offset)."},
     "stars_detected": {"type": "integer"},
     "limit_5sigma": {"$ref": "#/$defs/byRegion"},
     "share_of_image": {"$ref": "#/$defs/byRegion"},

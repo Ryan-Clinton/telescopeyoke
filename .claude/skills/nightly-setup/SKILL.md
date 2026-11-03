@@ -31,6 +31,7 @@ says to skip.
    |-------------|--------------------------------------|
    | `0403:6015` | FTDI lead to the SynScan handset     |
    | `16d0:0c77` | Altair 183C camera                   |
+   | `16d0:0b2a` | Altair GPCAM guide camera (`./guidecam.py`) |
    | `1a86:7523` | CH340: the motor focuser             |
 
    Anything else on the list is named and left alone; no question about

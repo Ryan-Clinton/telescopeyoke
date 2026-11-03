@@ -91,6 +91,15 @@ def readiness(p):
                              f"{owner}'s ({ref}) where it overlaps; tonight's stack becomes the panel's own"
                              if ref else f"none kept: tonight's stack can become one "
                                          f"(./reference.py {p['target']} --make)")})
+    # A dark of the frames' own length takes the sensor's edge glow out of the
+    # picture: on 1 November 2026 M33's 16 s frames had only a bias, and the
+    # stream showed a purple glow round three edges. Said, never a stop.
+    import stacking
+    dark = stacking.master_path("dark", p["exposure"], p["gain"]).exists()
+    items.append({"what": "dark", "ok": dark, "stops": False, "kind": "inferred",
+                  "detail": "kept" if dark else f"none for {p['exposure']:g} s at gain {p['gain']}: "
+                                                f"./calibrate.py dark --exposure {p['exposure']:g} --gain {p['gain']} "
+                                                "(the cap on, about 5 minutes)"})
     when = focus.last_focused()
     if when is not None:
         hours = (time.time() - when) / 3600
@@ -177,6 +186,8 @@ def steps(p, dry_run=False):
     extra = ["--dry-run"] if dry_run else []
     return [[sys.executable, str(ROOT / "mount.py"), "goto", p["target"], *extra],
             [sys.executable, str(ROOT / "shoot.py"), p["target"], "--frames", str(frames),
+             # The programme's time, kept to whatever the camera loses (1 November 2026).
+             "--minutes", f"{p['minutes'] * 1.1:g}",
              "--exposure", str(p["exposure"]), "--gain", str(p["gain"]),
              *(["--dither", str(p["dither"])] if p.get("dither") else []), *extra]]
 
@@ -393,7 +404,8 @@ def too_shallow(measured):
 
 
 MOST_RESIDUAL = 0.8     # pixels: a subtraction whose stars lined up worse than this is not searched
-MOST_FADING = 0.5       # fading peaks as a share of brightening ones, beyond which it is all leftovers
+MOST_FADING = 0.5       # fading peaks on stars as a share of brightening ones, beyond which it is all leftovers
+LEAST_ON_STARS = 5      # fewer fading peaks on stars than this is never taken for a misaligned subtraction
 
 
 def misaligned(found):
@@ -401,7 +413,16 @@ def misaligned(found):
     and the reference do not line up, every star leaves a bright and a dark
     leftover: on 18 October 2026 M33 lined up only to 1.75 px, and 16
     leftovers went to the person's phone as candidates, beside 33 fading
-    peaks. A real night has few fading peaks; leftovers come in both signs."""
+    peaks, 9 of them on stars.
+
+    The dark leftovers counted are those on the reference's stars
+    (fading_on_stars), not every fading peak: counting them all stopped
+    every M31 night from 17 October to 1 November 2026 (15, 56 and 63
+    fading peaks), and none of those sat within a star's width of a star.
+    They were the galaxy's own structure, rotated diffraction spikes and a
+    corner reached by fewer frames, which fade as often as they brighten
+    and say nothing about the alignment. A record from before that count
+    was kept is judged on all its fading peaks, as it was."""
     if not found or "candidates" not in found:
         return None
     residual = found.get("alignment_residual_px")
@@ -409,10 +430,14 @@ def misaligned(found):
         return (f"the subtraction did not line up: stars matched only to {residual:.2f} px (it needs under "
                 f"{MOST_RESIDUAL:g}), so its {len(found['candidates'])} candidates are leftovers of stars; "
                 "nothing reported")
-    fading, rising = found.get("fading_peaks") or 0, len(found["candidates"])
-    if fading >= 5 and fading > MOST_FADING * rising:
-        return (f"the subtraction left as many dark leftovers as bright ones ({fading} fading, {rising} "
-                "brightening): it did not match tonight's stack to the reference; nothing reported")
+    rising = len(found["candidates"])
+    if "fading_on_stars" in found:
+        fading, where = found["fading_on_stars"] or 0, " on stars"
+    else:
+        fading, where = found.get("fading_peaks") or 0, ""
+    if fading >= LEAST_ON_STARS and fading > MOST_FADING * rising:
+        return (f"the subtraction left as many dark leftovers{where} as bright ones ({fading} fading{where}, "
+                f"{rising} brightening): it did not match tonight's stack to the reference; nothing reported")
     return None
 
 
@@ -684,6 +709,10 @@ def run(args, say=print):
         return sweep(args.all_history, say=say, dry_run=args.dry_run)
     if args.analyse:
         session = Path(args.analyse)
+        if not (session / "final.fits").is_file() and any(session.glob("light-*.fits")):
+            # A patrol run with --release leaves its picture to be made here.
+            import restack
+            restack.run(session, say=say)
         result = analyse(args.analyse, say)
         # A panel's first night becomes its reference whichever way it was
         # imaged: through the patrol or by shoot.py alone (18 October 2026,
@@ -767,7 +796,7 @@ def run(args, say=print):
         began = time.time()
         stopped = None
         for cmd in plans[name]:
-            if behind and Path(cmd[1]).name == "shoot.py":
+            if (behind or getattr(args, "release", False)) and Path(cmd[1]).name == "shoot.py":
                 cmd = [*cmd, "--no-restack"]       # the final picture is made in the background
             say("$ " + " ".join(Path(c).name if c.endswith(".py") else c for c in cmd[1:]))
             # Through sys.stdout as it stands: with --json that is stderr, and
@@ -792,6 +821,13 @@ def run(args, say=print):
         if behind:
             say(f"  {name}: its picture and search go on in the background; on to the next panel")
             finishing.append(pool.submit(finish_panel, name, session))
+            continue
+        if getattr(args, "release", False):
+            # The telescope is let go as soon as the frames are in: the picture and
+            # the search are made in the background and anything unexplained is
+            # said there, as ever; its second look is a step of its own (1 November
+            # 2026: the search held the telescope while the next target waited).
+            answer["fields"].append({"field": name, "searching": finish_later(session, say)})
             continue
         entry = finish_panel(name, session)
         if unexplained(entry["analysis"]):
@@ -891,6 +927,25 @@ def is_panel(field):
     return re.match(r".+-P\d+$", field) is not None
 
 
+def finish_later(session, say=print, start=None):
+    """The final picture and the search of a session just taken, in the
+    background at low priority (patrol.py --analyse, which makes the picture
+    first): the patrol returns and the telescope goes on to its next target.
+    Its lines in the session's patrol.log."""
+    session = Path(session)
+    if config.DEMO:
+        return None
+    start = start or subprocess.Popen
+    lowly = {"creationflags": subprocess.BELOW_NORMAL_PRIORITY_CLASS} if os.name == "nt" else \
+        {"preexec_fn": lambda: os.nice(10), "start_new_session": True}
+    with open(session / "patrol.log", "w", encoding="utf-8") as log:
+        start([sys.executable, str(ROOT / "patrol.py"), "--analyse", str(session)], stdout=log,
+              stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, **lowly)
+    say(f"{session.parent.name}: the picture and the search go on in the background, the telescope is free: "
+        f"{session / 'patrol.log'}")
+    return str(session / "patrol.log")
+
+
 def search_later(session, say=print, start=subprocess.Popen):
     """Search a session just stacked, in the background at low priority so
     the next target is not kept waiting: patrol.py --analyse, its lines in
@@ -956,12 +1011,21 @@ def main():
     ap.add_argument("--plan", action="store_true", help="readiness and what it would do; moves nothing")
     ap.add_argument("--minutes", type=float, help="how long to image (default: the programme's)")
     ap.add_argument("--analyse", metavar="SESSION", help="only look for anything new in a session already taken")
+    ap.add_argument("--release", action="store_true",
+                    help="let the telescope go once the frames are in (the default): the picture and the search are "
+                         "made in the background, and a second look is a step of its own")
+    ap.add_argument("--wait", action="store_true",
+                    help="hold the telescope for the search instead, and take a second look at once if anything "
+                         "is unexplained")
     ap.add_argument("--sweep", action="store_true", help=f"search every session of the last {SWEEP_DAYS} days "
                     "not yet searched")
     ap.add_argument("--all-history", action="store_true", help="with --sweep: every session kept")
     ap.add_argument("--dry-run", action="store_true", help="every step as it would be run; nothing moved or taken")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
+    # Released unless asked to wait: on 1 November 2026 the schedule sat seven
+    # minutes while a search held the telescope it did not need.
+    args.release = not args.wait
     if not args.programme and not args.analyse and not args.sweep:
         ap.error("name a programme, or --analyse SESSION, or --sweep")
     if args.all_history and not args.sweep:

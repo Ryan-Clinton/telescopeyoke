@@ -40,6 +40,7 @@ import numpy as np
 import activity
 import config
 import lucky
+import storage
 import lunar
 
 ROOT = Path(__file__).parent
@@ -311,6 +312,10 @@ def run(args, scope=None, cam=None, site=None, say=print):
     region = lunar.roi(disc, shape) if not args.full_frame else None
     side_px = (region[2], region[3]) if region else (shape[1], shape[0])
     frame_bytes = side_px[0] * side_px[1] * (1 if args.depth == 8 else 2)
+    if free_disk() < storage.LOW:
+        # Earlier videos, their pictures made, go to the storage disk first:
+        # on 2 November 2026 the third picture of a time-lapse found no room.
+        storage.tidy(say=say)
     frames = frames_that_fit(args.frames, frame_bytes, free_disk())
     if frames < min(50, args.frames):
         raise SystemExit(f"Only {frames} frames fit on the disk: free some space first.")

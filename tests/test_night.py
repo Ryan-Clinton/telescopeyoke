@@ -474,3 +474,54 @@ def test_each_programme_says_when_it_last_ran(tmp_path):
     assert when.tzinfo is not None and when.astimezone().strftime("%Y%m%d-%H%M%S") == "20261102-020454"
     assert agent.last_run(["M31"], data=tmp_path) is None
     assert all("last_run" in p for p in agent.night(demo=True)["discovery"])
+
+
+def test_a_jammed_camera_is_opened_again_and_the_run_goes_on_in_the_same_session(night, monkeypatch, capsys):
+    """1 November 2026: a jam ended a transit run, and its restart began a new
+    session from frame 0. The camera is opened again and the frames go on."""
+    import indi
+    _, folder = night
+    monkeypatch.setattr(shoot, "JAM_WAIT_S", 0)
+    taken, jammed = FakeCamera.frame, {"done": False}
+
+    def frame(self, seconds):
+        if Sky.taken == 2 and not jammed["done"]:
+            jammed["done"] = True
+            raise indi.IndiError("no frame within 16 s of a 4 s exposure")
+        return taken(self, seconds)
+
+    monkeypatch.setattr(FakeCamera, "frame", frame)
+    monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "5", "--exposure", "2",
+                                      "--no-recentre", "--no-restack"])
+    summary = shoot.main()
+    out = capsys.readouterr().out
+    assert "opening it again" in out and "the run goes on (1 of 3)" in out
+    assert summary["captured"] == 5 and len(list((folder / summary["folder"]).glob("light-*.fits"))) == 5
+
+
+def test_a_camera_that_stays_jammed_stops_the_run_after_a_few_tries(night, monkeypatch):
+    import indi
+    monkeypatch.setattr(shoot, "JAM_WAIT_S", 0)
+
+    def frame(self, seconds):
+        raise indi.IndiError("no frame within 16 s of a 4 s exposure")
+    monkeypatch.setattr(FakeCamera, "frame", frame)
+    monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "5", "--exposure", "2",
+                                      "--no-recentre", "--no-restack"])
+    stopped = False
+    try:
+        shoot.main()
+    except (indi.IndiError, SystemExit):
+        stopped = True      # caught, not kept: a kept error keeps the run's rig lock open for the next test
+    assert stopped
+
+
+def test_a_run_given_minutes_finishes_on_time_whatever_the_frame_count(night, monkeypatch, capsys):
+    """1 November 2026: lost frames stretched a 75-minute patrol towards three
+    hours and the plan's next targets."""
+    Sky.pause = 0.3
+    monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "500", "--minutes", "0.03", "--exposure", "2",
+                                      "--no-recentre", "--no-restack"])
+    summary = shoot.main()
+    assert "minutes taken: finishing" in capsys.readouterr().out
+    assert 0 < summary["captured"] < 500

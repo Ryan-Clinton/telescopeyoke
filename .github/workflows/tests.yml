@@ -2,7 +2,14 @@ name: tests
 
 on:
   push:
+    branches: [main]
   pull_request:
+
+# One run per change: a newer push cancels the run it replaces, rather than
+# letting a superseded run fail and send its email.
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   tests:

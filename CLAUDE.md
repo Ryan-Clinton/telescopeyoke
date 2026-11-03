@@ -54,6 +54,13 @@ what is specific to Claude and to this particular user.
 - Both of these sit inside AGENTS.md's rule that a person asks for each
   move: what the user asks for, or the one routine step their sky report
   fits, is the move. Neither ever stretches to a move they did not ask for.
+- The other way round: once the user has asked for a step, run it at once,
+  in the background, and keep it running; never wait for a second "go".
+  The focuser and the camera are not the mount: "start the walk-in" or
+  "how's the camera behaving?" is the go for that step and every retry of
+  it. A step that cannot start (cloud, no stars) is retried by me until it
+  can. On 1 November 2026 I waited for "go" on a walk-in already asked for
+  and the cloud came in.
 
 ## Commands
 

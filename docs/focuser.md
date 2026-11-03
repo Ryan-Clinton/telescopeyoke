@@ -381,6 +381,19 @@ with the camera off:
 Its answer and pictures are kept like the bench's, in
 `cache/focuser-bench-DATE.json` and `cache/focuser-bench/`.
 
+**On 1 November 2026, evening, the knob did not turn at all.** With the
+Nano on the hub (3-2.2) and the drawtube set about a quarter turn out by
+hand, two walk-ins found the stars unchanged: HFR 9.75 to 9.99 over 384
+half-steps in, then doughnuts of 58, 58 and 59 px over 256. Three
+`./focuser.py test` quarter turns, watched at the telescope, left the knob
+still while the motor ran. So the motor turned and the knob did not, inward
+as well as out: the coupler slipping on the shaft, or the bracket, not a
+motor too weak to lift. Focus was then by hand with the spoken aid. A
+walk-in now stops with `FOCUSER_NOT_MOVING` when the stars are within 5 %
+of where they started after an eighth of a turn in, instead of walking on.
+The hub is being returned (`usb-hub.md`); without it the Nano goes on a
+laptop socket.
+
 ## Temperature (the thermistor wired, the BME280 planned)
 
 The Hypercam 183C has no thermometer, and the cold, damp night of 17 October
@@ -418,6 +431,12 @@ the camera's temperature and the dew margin measured at the telescope. Later, th
 
 ### Parts ordered, 22 October 2026 (AliExpress, about a week to three weeks)
 
+**Arrived 2 November 2026:** all the NEMA 17 parts: the motor with its
+4-wire lead, two TMC2209 drivers, one expansion board, the 12 V supply with
+its socket lead, and the M3 screws. The bracket (Printables 436129) is with
+a 3D-printing contact, ready about Thursday 5 November. No firmware is
+written until the drive is being fitted.
+
 A stronger, solder-free drive for the Printables NEMA 17 bracket
 ([model 436129](https://www.printables.com/model/436129)), about £32 in all:
 
@@ -451,3 +470,5 @@ instead of the ULN2003, and `focuser.py` and `focus.py` counting full steps
 × microsteps instead of 28BYJ-48 half-steps, each with its test, before the
 first use on the sky.
 
+
+A printable degree dial for the focus knob is `./focusdial.py --diameter MM` (default 40): a strip for the knob's rim and a disc for its end, at true size with a 50 mm check bar, saved as `web/focus-dial.svg` and served by the status page. One degree on a 40 mm knob is about the f/5 critical focus zone.

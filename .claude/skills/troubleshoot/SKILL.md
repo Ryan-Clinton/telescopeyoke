@@ -30,6 +30,23 @@ reason (`./ty capabilities`), and that only a person removes it.
 The lead or the port first (`lsusb`), then whether INDI's driver is
 running (`./doctor.py --offline` says).
 
+**The camera sends no frames (a jam)**
+
+Never ask the person to unplug or touch anything until every software
+step has been tried, and say what each gave:
+
+1. Who has the camera: a command refused with `CAMERA_BUSY` names the
+   process holding it. A command thought stopped may still be running:
+   look for it (`ps -eo pid,args`), stop it with a plain `kill` (which
+   closes the camera as Ctrl-C does) and wait until it has gone.
+2. A command that is retrying is recovering: `frame()` tries again, then
+   closes and opens the camera, then tries twice more. Let it finish.
+3. A fresh open: `./snap.py --exposure 0.01 --gain 100`, one frame. On
+   2 November 2026 this cleared a jam in 2 s after a request to unplug it
+   had already been made.
+4. Only then a power cut: `usbpower.py`, if a hub that switches its ports
+   is in use, or the person's hands.
+
 **A plate solve failed**
 
 In this order: cloud (ask what the sky looks like), focus (the `focus`

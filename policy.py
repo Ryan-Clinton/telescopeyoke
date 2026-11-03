@@ -99,6 +99,8 @@ COMMANDS = {
     "replay.py": ("local_write", {}, {}),
     "report.py": ("local_write", {}, {}),
     "restack.py": ("local_write", {}, {}),
+    "focusdial.py": ("local_write", {}, {}),                   # draws a printable dial for the focus knob
+    "guidecam.py": ("hardware", {"install": "local_write"}, {}),  # the guide camera, on its legacy library
     "storage.py": ("read_only", {"--tidy": "local_write"}, DRY),    # moves finished Moon videos to the storage disk
     "runwatch.py": ("read_only", {}, {}),
     # run starts the queued steps, moves included, each when its time comes:
