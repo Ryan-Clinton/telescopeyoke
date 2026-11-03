@@ -159,3 +159,9 @@ Nothing was kept; `cache/horizon-ralphie-side.not-used-20261103-122252.json`.
 A sunlit wall reading as sky is not yet caught: brightness cannot tell it
 (the sky near the Sun read 440% too), and colour carries only 0.2 of the
 score.
+
+Since then a survey is judged bearing by bearing: a recheck that differs
+with the mount's axes where they were costs only that bearing; against a
+skyline checked by eye, a bearing more than 6° off either way keeps the
+checked height and the rest is kept; `--use-aside FILE --bearings FROM-TO
+--checked "..."` takes the bearings a person has looked at.
