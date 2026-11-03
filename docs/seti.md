@@ -47,9 +47,30 @@ compared with known interference and with the published searches of the
 same data (Breakthrough Listen's own papers list their candidates for
 these targets). Every candidate examined so far has turned out to be ours.
 
+## Checked against turboSETI
+
+`./seti.py search` and `cadence` take `--keep DIR` to save each slice
+they read (a small HDF5 file in Breakthrough Listen's own layout), and
+`./seti.py benchmark FILE...` runs each saved slice through this search
+and through turboSETI, Breakthrough Listen's own, at the same limits
+(10 times the noise, drifts to 4 Hz/s), and lists what both find and
+what only one does. turboSETI is not an Ubuntu package: it is installed
+in its own environment that sees the system's h5py
+(`python3 -m venv --system-site-packages ~/.local/share/telescopeyoke/seti-venv`,
+then its `pip install turbo_seti`; `TY_TURBOSETI_PYTHON` names another).
+
+On a made-up flat band with two tones (3 November 2026) both found both.
+On a sloping band turboSETI found neither: it measures the noise over the
+whole slice, band shape and all, where this search takes the band's
+shape out first. That is a difference in method to be measured on real
+data, not a fault in either.
+
 ## Tabby's star
 
-KIC 8462852 was observed by Green Bank in May 2017, among other times
-(session AGBT17A_999_67); `./seti.py find KIC8462852` lists them. It is the
+KIC 8462852 was observed by Green Bank in May 2017, among other times;
+`./seti.py find KIC8462852` lists them. The whole cadence is on 25 May
+2017 (session AGBT17A_999_68, scans 31 to 36: three looks at the star,
+each followed by one at KIC8462852_OFF); the archive files the OFF looks
+under their own name, so `find` reads them from the session's folder. It is the
 same star the telescope watches (`starwatch.py tabby`), so the optical and
 radio searches look at one target.

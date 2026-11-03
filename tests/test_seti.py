@@ -164,3 +164,34 @@ def test_the_remote_reader_takes_only_the_bytes_it_asked_for():
     r = seti.Remote("https://x/f.h5", get=short, head=head)
     with pytest.raises(interface.Refusal):
         r.read(10)
+
+
+def test_a_saved_slice_reads_back_and_the_benchmark_sets_the_two_searches_side_by_side(tmp_path):
+    pytest.importorskip("h5py")
+    pytest.importorskip("hdf5plugin")
+    made = spectra([(2000, 0.5, 8.0), (900, 0.0, 9.0)])
+    path = seti.save({"spectra": made, "fch1": FCH1, "foff": FOFF, "tsamp": TSAMP, "tstart": 57898.26,
+                      "target": "TEST"}, tmp_path / "look.h5")
+    back = seti.read_slice(path, -1e12, 1e12)
+    assert back["spectra"].shape == made.shape and back["target"] == "TEST"
+    assert back["fch1"] == pytest.approx(FCH1) and back["foff"] == pytest.approx(FOFF)
+    ours = seti.search(made, FOFF, TSAMP, FCH1)
+    # turboSETI as if it found the drifting tone, missed the steady one and found one of its own
+    theirs = [dict(drift_hz_s=0.49, snr=30.0, frequency_mhz=FCH1 + 2000 * FOFF),
+              dict(drift_hz_s=0.0, snr=12.0, frequency_mhz=FCH1 + 3000 * FOFF)]
+    answer = seti.benchmark([path], say=lambda *_: None, turbo=lambda p: theirs)
+    b = answer["benchmark"][0]
+    assert b["ours"] == len(ours) == 2 and b["turboseti"] == 2 and b["both"] == 1
+    assert [round(h["frequency_mhz"], 4) for h in b["only_ours"]] == [round(FCH1 + 900 * FOFF, 4)]
+    assert b["only_turboseti"][0]["frequency_mhz"] == pytest.approx(FCH1 + 3000 * FOFF)
+
+
+def test_turbosetis_table_is_read():
+    dat = """# -------------------------- o --------------------------
+# File ID: look.h5
+# Top_Hit_# 	Drift_Rate 	SNR 	Uncorrected_Frequency 	Corrected_Frequency 	Index 	freq_start
+001	 0.497123	 31.2	 2249.994412	 2249.994412	 2000	 2249.99
+002	 0.000000	 12.5	 2249.991618	 2249.991618	 3000	 2249.99
+"""
+    assert seti.read_dat(dat) == [{"drift_hz_s": 0.497123, "snr": 31.2, "frequency_mhz": 2249.994412},
+                                  {"drift_hz_s": 0.0, "snr": 12.5, "frequency_mhz": 2249.991618}]

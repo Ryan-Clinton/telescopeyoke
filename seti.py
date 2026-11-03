@@ -33,17 +33,24 @@ then something to check against known interference and the published
 searches of the same data, never a signal from anyone: every candidate
 Breakthrough Listen has examined so far has turned out to be ours.
 
-Nothing here moves the mount or uses the camera, and nothing is written.
+`benchmark FILE...` runs the same slices (saved with --keep) through
+turboSETI, Breakthrough Listen's own search, and sets the hits side by
+side. Nothing here moves the mount or uses the camera; only --keep
+writes, and only the slices.
 """
 import argparse
 import io
-import re
 import math
+import os
+import re
+import subprocess
+import tempfile
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from urllib.parse import unquote
 
 import numpy as np
 import requests
-from urllib.parse import unquote
 
 import interface
 
@@ -233,6 +240,26 @@ def read_slice(source, low, high):
             "fetched_mb": round(remote.fetched / 1e6, 1) if remote else None}
 
 
+def save(s, path):
+    """A slice as a filterbank HDF5 file of the layout Breakthrough Listen's
+    own files and its tools (blimpy, turboSETI) read: one `data` set of
+    (time, 1, channel) float32 with the header as its attributes."""
+    h5py = _h5()
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    n_t, n_f = s["spectra"].shape
+    with h5py.File(path, "w") as f:
+        f.attrs["CLASS"], f.attrs["VERSION"] = "FILTERBANK", "1.0"
+        data = f.create_dataset("data", data=s["spectra"].astype(np.float32).reshape(n_t, 1, n_f))
+        header = {"fch1": s["fch1"], "foff": s["foff"], "nchans": n_f, "tsamp": s["tsamp"], "tstart": s["tstart"],
+                  "nbits": 32, "nifs": 1, "data_type": 1, "telescope_id": 6, "machine_id": 10,
+                  "source_name": s["target"] or "unknown", "src_raj": 0.0, "src_dej": 0.0,
+                  "az_start": 0.0, "za_start": 0.0, "ibeam": 0, "nbeams": 1}
+        for key, value in header.items():
+            data.attrs[key] = value
+    return path
+
+
 # --- the search -----------------------------------------------------------------
 
 def flatten(spectra, block=BLOCK):
@@ -296,9 +323,13 @@ def search(spectra, foff, tsamp, fch1, snr_min=SNR_MIN, max_drift=MAX_DRIFT, blo
     return hits
 
 
-def look(source, low, high, say=print, read=read_slice):
-    """`search` on one look's slice, read from a file here or on the web."""
+def look(source, low, high, say=print, read=read_slice, keep=None):
+    """`search` on one look's slice, read from a file here or on the web;
+    with `keep` (a folder) the slice is also saved there, for a second look
+    or the benchmark, without reading it over the web again."""
     s = read(source, low, high)
+    if keep:
+        save(s, Path(keep) / (Path(str(source)).name.replace(".h5", "") + f"_{low:g}-{high:g}.h5"))
     hits = search(s["spectra"], s["foff"], s["tsamp"], s["fch1"])
     n_t, n_f = s["spectra"].shape
     answer = {"source": str(source), "target": s["target"], "from_mhz": low, "to_mhz": high, "channels": n_f,
@@ -345,13 +376,13 @@ def judge(looks):
     return events
 
 
-def cadence(sources, low, high, say=print, read=read_slice):
+def cadence(sources, low, high, say=print, read=read_slice, keep=None):
     """The six looks searched, then judged together."""
     if len(sources) != 6:
         raise interface.Refusal("INVALID_REQUEST", "A cadence is six looks: ON, OFF, ON, OFF, ON, OFF.")
     scans, looks = [], []
     for k, source in enumerate(sources):
-        answer, hits, s = look(source, low, high, say=lambda *_: None, read=read)
+        answer, hits, s = look(source, low, high, say=lambda *_: None, read=read, keep=keep)
         scans.append({"source": str(source), "target": s["target"], "on": k % 2 == 0, "hit_count": len(hits),
                       "fetched_mb": s["fetched_mb"]})
         looks.append((hits, s["tstart"], abs(s["foff"]) * 1e6, answer["seconds"]))
@@ -372,27 +403,106 @@ def cadence(sources, low, high, say=print, read=read_slice):
             "note": note, "kind": "measured"}
 
 
+# --- the benchmark: the same slices through turboSETI ----------------------------
+# turboSETI (github.com/UCBerkeleySETI/turbo_seti) is Breakthrough Listen's
+# own narrowband search. It is not an Ubuntu package, so it lives in its own
+# environment that sees the system's h5py (install.sh, the seti extra);
+# TURBOSETI_PYTHON is that environment's python.
+TURBOSETI_PYTHON = Path(os.environ.get("TY_TURBOSETI_PYTHON",
+                                       Path.home() / ".local/share/telescopeyoke/seti-venv/bin/python"))
+_TURBO = """
+import sys
+from turbo_seti.find_doppler.find_doppler import FindDoppler
+FindDoppler(sys.argv[1], max_drift=float(sys.argv[2]), snr=float(sys.argv[3]), out_dir=sys.argv[4],
+            n_coarse_chan=1, log_level_int=40).search()
+"""
+
+
+def read_dat(text):
+    """turboSETI's hits from its .dat table: frequency (MHz), drift (Hz/s), SNR."""
+    out = []
+    for line in text.splitlines():
+        cols = line.split()
+        if not cols or line.lstrip().startswith("#") or not cols[0].isdigit():
+            continue
+        out.append({"drift_hz_s": float(cols[1]), "snr": float(cols[2]), "frequency_mhz": float(cols[3])})
+    return out
+
+
+def turboseti(path, run_it=subprocess.run):
+    """turboSETI's hits on a slice file, at the same limits as ours."""
+    if not TURBOSETI_PYTHON.exists():
+        raise interface.Refusal("INVALID_REQUEST", f"turboSETI is not installed: python3 -m venv "
+                                f"--system-site-packages {TURBOSETI_PYTHON.parent.parent} && "
+                                f"{TURBOSETI_PYTHON.parent}/pip install turbo_seti")
+    with tempfile.TemporaryDirectory() as out:
+        done = run_it([str(TURBOSETI_PYTHON), "-c", _TURBO, str(path), str(MAX_DRIFT), str(SNR_MIN), out],
+                      capture_output=True, text=True, timeout=3600)
+        if done.returncode:
+            raise interface.Refusal("INTERNAL_ERROR", f"turboSETI failed on {path}: {done.stderr.strip()[-400:]}")
+        dat = next(Path(out).glob("*.dat"), None)
+        return read_dat(dat.read_text()) if dat else []
+
+
+def compare(ours, theirs, width_hz, seconds):
+    """Hits matched between the two searches: the same place within a few
+    channels and the drift's smear, and the drift within one step."""
+    step = width_hz / max(seconds, 1e-9)
+    matched, theirs_left = [], list(theirs)
+    for h in ours:
+        window = (WINDOW_CHANNELS * width_hz + abs(h["drift_hz_s"]) * seconds) / 1e6
+        twin = next((t for t in theirs_left if abs(t["frequency_mhz"] - h["frequency_mhz"]) <= window
+                     and abs(t["drift_hz_s"] - h["drift_hz_s"]) <= 2 * step), None)
+        if twin:
+            theirs_left.remove(twin)
+            matched.append({"ours": h, "turboseti": twin})
+    only_ours = [h for h in ours if not any(m["ours"] is h for m in matched)]
+    return {"both": len(matched), "only_ours": only_ours, "only_turboseti": theirs_left, "matched": matched}
+
+
+def benchmark(paths, say=print, turbo=turboseti):
+    """Each saved slice searched by this program and by turboSETI, and the
+    hits set side by side: what both find, and what only one does."""
+    out = []
+    for path in paths:
+        s = read_slice(path, -1e12, 1e12)
+        n_t, n_f = s["spectra"].shape
+        seconds = n_t * s["tsamp"]
+        ours = search(s["spectra"], s["foff"], s["tsamp"], s["fch1"])
+        theirs = turbo(path)
+        c = compare(ours, theirs, abs(s["foff"]) * 1e6, seconds)
+        out.append({"file": str(path), "target": s["target"], "ours": len(ours), "turboseti": len(theirs),
+                    "both": c["both"], "only_ours": c["only_ours"][:MAX_LISTED],
+                    "only_turboseti": c["only_turboseti"][:MAX_LISTED]})
+        say(f"{Path(path).name}: ours {len(ours)}, turboSETI {len(theirs)}, both {c['both']}, "
+            f"only ours {len(c['only_ours'])}, only turboSETI {len(c['only_turboseti'])}")
+    return {"benchmark": out, "max_drift_hz_s": MAX_DRIFT, "snr_min": SNR_MIN, "kind": "measured"}
+
+
 def run(args, say=print):
     if args.action == "find":
         if len(args.what) != 1:
             raise interface.Refusal("INVALID_REQUEST", "find takes one target, as Breakthrough Listen names it (KIC8462852).")
         return find(args.what[0], say=say)
+    if args.action == "benchmark":
+        return benchmark(args.what, say=say)
     if args.low is None or args.high is None:
         raise interface.Refusal("INVALID_REQUEST", "Give the slice: --from MHZ --to MHZ (a few MHz at most: "
                                 "each MHz is about 360,000 channels).")
     if args.action == "search":
         if len(args.what) != 1:
             raise interface.Refusal("INVALID_REQUEST", "search takes one look: a file here or its URL.")
-        return look(args.what[0], args.low, args.high, say=say)[0]
-    return cadence(args.what, args.low, args.high, say=say)
+        return look(args.what[0], args.low, args.high, say=say, keep=args.keep)[0]
+    return cadence(args.what, args.low, args.high, say=say, keep=args.keep)
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("action", choices=("find", "search", "cadence"))
+    ap.add_argument("action", choices=("find", "search", "cadence", "benchmark"))
     ap.add_argument("what", nargs="+", help="find: a target; search: one look (file or URL); cadence: six looks")
     ap.add_argument("--from", dest="low", type=float, help="MHz: the bottom of the slice")
     ap.add_argument("--to", dest="high", type=float, help="MHz: the top of the slice")
+    ap.add_argument("--keep", help="search, cadence: save each slice read in this folder (for benchmark)")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
     interface.main("seti", lambda: run(args), args.json)
