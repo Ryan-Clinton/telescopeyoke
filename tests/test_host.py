@@ -388,3 +388,15 @@ def test_a_process_is_alive_until_it_ends_and_nothing_is_signalled():
         child.kill()
         child.wait()
     assert not host.alive(child.pid) and not host.alive(None) and not host.alive("x")
+
+
+def test_only_host_asks_whether_a_process_lives_and_never_by_signal_0():
+    """On Windows signal 0 is CTRL_C_EVENT: the camera lock's own os.kill(pid,
+    0) stopped every Windows test run on GitHub (3 November 2026), as the
+    serial lead's had on 31 October. host.alive() is the one way to ask."""
+    import re
+    from pathlib import Path
+    root = Path(__file__).parent.parent
+    for path in root.glob("*.py"):
+        if path.name != "host.py":
+            assert not re.search(r"os\.kill\([^)]*,\s*0\)", path.read_text(encoding="utf-8")), path.name

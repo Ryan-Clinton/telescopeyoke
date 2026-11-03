@@ -13,6 +13,7 @@ import os
 import sys
 
 import config
+import host
 from interface import Refusal
 
 PATH = config.DATA / "cache" / "camera.lock"
@@ -45,13 +46,7 @@ def _try_lock(handle):
 
 
 def _alive(pid):
-    try:
-        os.kill(pid, 0)
-        return True
-    except ProcessLookupError:
-        return False
-    except (PermissionError, OSError):
-        return True
+    return host.alive(pid)      # never signal 0: on Windows that is Ctrl-C to the console
 
 
 GIVE_WAY_S = 15      # seconds a live view is given to close the camera when a run wants it
