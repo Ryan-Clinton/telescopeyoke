@@ -79,7 +79,7 @@ pytest -q -k meridian                       # tests matching a word
 ```
 
 CI (`.github/workflows/tests.yml`) also runs these after the tests, on Python
-3.11 to 3.14, so run them before pushing a change that touches the planner,
+3.11 and 3.14 (Windows on 3.13), so run them before pushing a change that touches the planner,
 the mount or the JSON output:
 
 ```bash
