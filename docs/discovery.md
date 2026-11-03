@@ -266,9 +266,9 @@ What a person does; everything else is automatic.
    Accounts held since 3 November 2026: the AAVSO Target Tool and Lasair
    (their keys in `~/.config/telescopeyoke/`, readable by their owner
    only), OccultWatcher Cloud (its predictions are read on its site) and
-   the Transient Name Server (waiting on its administrators; its key for
-   programs will let `brokers.py` ask it whether a transient is
-   reported). Not asked: Fink, which sorts the same ZTF alerts ALeRCE
+   the Transient Name Server (approved 3 November; its bot TelescopeYoke_bot,
+   number 198068, key in `~/.config/telescopeyoke/tns-key`, lets
+   `brokers.py` ask it whether a transient is already reported). Not asked: Fink, which sorts the same ZTF alerts ALeRCE
    does. The Minor Planet Center gives an observatory code only once
    measured asteroid positions from here have been sent, so there is no
    account to make for it yet.

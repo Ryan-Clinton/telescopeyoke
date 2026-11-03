@@ -32,12 +32,14 @@ otherwise), keeps those up here or not, and lists only the ones on
 neither Rochester list: the search for something the surveys saw and
 nobody wrote up. Such a one is rare, and still has to be looked for on
 the Transient Name Server by hand: the Rochester lists leave out most
-transients nobody has classified yet, which the Server has.
+transients nobody has classified yet, which the Server has: with a TNS bot
+key (TNS_KEY_FILE) the Server is asked too, and one it has is reported.
 
 Each comes with its brightest altitude tonight and when, whether it is
 brightening, how sure the classifier is, and the links to look it up. The
-Transient Name Server needs a key to be asked, so it is not asked: a
-person checks there before calling anything new. ZTF's own teams report
+Transient Name Server is asked by its interface for programs when a bot
+key is kept (TNS_KEY_FILE); without one, a person checks there before
+calling anything new. ZTF's own teams report
 most of what it finds, so an alert nobody has reported is rare; the use
 of this is mostly to find something real to point at.
 
@@ -80,6 +82,13 @@ LASAIR_OBJECT = "https://lasair-ztf.lsst.ac.uk/objects/{oid}/"
 LASAIR_TOKEN_FILE = Path(os.path.expanduser("~/.config/telescopeyoke/lasair-token"))
 EXPLORER = "https://alerce.online/object/{oid}"
 TNS_SEARCH = "https://www.wis-tns.org/search?ra={ra:.5f}&decl={dec:.5f}&radius=5&coords_unit=arcsec"
+# The Transient Name Server, asked by its interface for programs with a bot
+# key (~/.config/telescopeyoke/tns-key, and the bot's number and name in
+# tns-bot.json beside it; TY_TNS_KEY overrides): what it has within
+# REPORTED_WITHIN of a place. Without a key it is not asked.
+TNS_API = "https://www.wis-tns.org/api/get/search"
+TNS_KEY_FILE = Path(os.path.expanduser("~/.config/telescopeyoke/tns-key"))
+TNS_BOT_FILE = Path(os.path.expanduser("~/.config/telescopeyoke/tns-bot.json"))
 MOST = 200               # objects asked for: the classifier's surest first
 SURE = 0.5               # the classifier's probability at least this
 MIN_MINUTES = 30         # up in the dark for at least this long tonight
@@ -149,6 +158,37 @@ def up_tonight(night, ra, dec, least=MIN_MINUTES):
         i = int(np.argmax(np.where(usable, a, -99)))
         out.append((round(float(a[i]), 1), night.local(i), minutes))
     return out
+
+
+def tns_settings():
+    """(key, bot number, bot name), or None without a key."""
+    key = os.environ.get("TY_TNS_KEY")
+    try:
+        key = key or TNS_KEY_FILE.read_text(encoding="utf-8").strip()
+        bot = json.loads(TNS_BOT_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return (key, bot["bot_id"], bot["bot_name"]) if key else None
+
+
+def tns_near(ra, dec, post=requests.post, settings=None, within=REPORTED_WITHIN):
+    """What the Transient Name Server has within `within` arcseconds: its
+    names ("SN 2026aexm", "AT 2026xyz"), [] for nothing, or None when it
+    is not asked (no key) or does not answer."""
+    settings = settings or tns_settings()
+    if not settings:
+        return None
+    key, bot_id, bot_name = settings
+    marker = "tns_marker" + json.dumps({"tns_id": bot_id, "type": "bot", "name": bot_name}, separators=(",", ":"))
+    try:
+        reply = post(TNS_API, headers={"User-Agent": marker}, timeout=60,
+                     data={"api_key": key, "data": json.dumps({"ra": f"{ra:.5f}", "dec": f"{dec:.5f}",
+                                                               "radius": f"{within:g}", "units": "arcsec"})})
+        reply.raise_for_status()
+        rows = reply.json().get("data") or []
+    except (requests.RequestException, ValueError):
+        return None
+    return [f"{r.get('prefix') or 'AT'} {r['objname']}" for r in rows if r.get("objname")]
 
 
 def reported_near(ra, dec, rows, within=REPORTED_WITHIN):
@@ -247,7 +287,7 @@ def context(oid, mag, get=requests.get, token=None):
 
 
 def search(cfg, days, brighter, say=print, get=requests.get, reported=None, now=None, unreported=False,
-           lasair=None):
+           lasair=None, tns=None):
     """The answer: the alerts worth a look from here tonight; with
     `unreported`, the bright ones on neither Rochester list, up or not."""
     import sky
@@ -277,6 +317,8 @@ def search(cfg, days, brighter, say=print, get=requests.get, reported=None, now=
             bogus += 1
             continue
         name = reported_near(o["meanra"], o["meandec"], reported)
+        on_tns = (tns or tns_near)(float(o["meanra"]), float(o["meandec"]))
+        name = name or (on_tns[0] if on_tns else None)
         if name:
             known += 1
             if unreported:
@@ -289,7 +331,9 @@ def search(cfg, days, brighter, say=print, get=requests.get, reported=None, now=
                        "probability": round(float(o.get("probability") or 0), 2),
                        "real_bogus": None if real is None else round(real, 2),
                        "highest": alt, "highest_at": at and at.strftime("%H:%M"), "minutes_up": minutes,
-                       "reported": name, "tns": "not asked: check by hand",
+                       "reported": name,
+                       "tns": ("not asked (no TNS key, or it did not answer): check by hand" if on_tns is None
+                               else ", ".join(on_tns) if on_tns else "not on the Transient Name Server"),
                        "links": {"alerce": EXPLORER.format(oid=o["oid"]),
                                  "tns": TNS_SEARCH.format(ra=o["meanra"], dec=o["meandec"])}})
     for p in picked:

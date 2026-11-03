@@ -50,6 +50,21 @@ def quick(monkeypatch, tmp_path):
     monkeypatch.setattr(brokers, "PAUSE", 0)
     monkeypatch.delenv("TY_LASAIR_TOKEN", raising=False)
     monkeypatch.setattr(brokers, "LASAIR_TOKEN_FILE", tmp_path / "no-token")
+    monkeypatch.delenv("TY_TNS_KEY", raising=False)
+    monkeypatch.setattr(brokers, "TNS_KEY_FILE", tmp_path / "no-tns-key")
+
+
+def test_the_transient_name_server_is_asked_with_the_bots_marker():
+    sent = {}
+
+    def post(url, headers=None, timeout=None, data=None):
+        sent.update(url=url, agent=headers["User-Agent"], data=data)
+        return Reply({"id_code": 200, "data": [{"objname": "2026aexm", "prefix": "SN", "objid": 222556}]})
+    names = brokers.tns_near(163.12868, 7.22155, post=post, settings=("KEY", 198068, "TelescopeYoke_bot"))
+    assert names == ["SN 2026aexm"]
+    assert sent["agent"] == 'tns_marker{"tns_id":198068,"type":"bot","name":"TelescopeYoke_bot"}'
+    assert sent["data"]["api_key"] == "KEY" and '"radius": "5"' in sent["data"]["data"]
+    assert brokers.tns_near(1.0, 2.0, post=post) is None          # no key here: not asked
 
 
 def test_lasair_says_what_it_sits_on_and_how_bright_that_makes_it():
