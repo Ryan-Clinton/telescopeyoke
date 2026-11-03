@@ -344,17 +344,17 @@ def search(cfg, days, brighter, say=print, get=requests.get, reported=None, now=
               "night": str(night.date), "kind": "measured"}
     if unreported:
         say(f"{len(objects)} new transients from ALeRCE in {days:g} days; {faint} fainter than {brighter:g}, "
-            f"{bogus} bogus by ZTF's score, {known} on the Rochester lists; {len(picked)} on neither list")
+            f"{bogus} bogus by ZTF's score, {known} already reported (Rochester or TNS); {len(picked)} reported nowhere")
     else:
         say(f"{len(objects)} new transients from ALeRCE in {days:g} days; {down} not up in the dark here tonight, "
             f"{faint} fainter than {brighter:g}, {bogus} bogus by ZTF's score; {len(picked)} left, {known} of them "
-            f"already on the Rochester lists")
+            f"already reported (Rochester or TNS)")
     for p in picked:
         up_here = (f"{p['highest']:.0f}° high at {p['highest_at']}" if p["highest"] is not None
                    else "not up here tonight")
         say(f"  {p['oid']}  {p['ra']:.5f} {p['dec']:+.5f}  {p['band']} {p['mag']:.2f}"
             f"{', brightening' if p['brightening'] else ''}  {up_here}"
-            f"  {'reported as ' + p['reported'] if p['reported'] else 'not on the Rochester lists'}")
+            f"  {'reported as ' + p['reported'] if p['reported'] else 'TNS: ' + p['tns']}")
         c = p["lasair"]
         if c and c["class"]:
             near = f" {c['matched']} ({c['matched_type']}), {c['separation_arcsec']:g}\" off" if c["matched"] else ""
@@ -362,8 +362,10 @@ def search(cfg, days, brighter, say=print, get=requests.get, reported=None, now=
                 if c["absolute_mag"] is not None else ""
             say(f"    Lasair: {c['class']}{near}{absolute}")
     if picked:
-        say("Check the Transient Name Server (the links in --json) before calling anything new. Imaging one is "
-            "your decision: ./mount.py goto RA DEC, then ./shoot.py.")
+        asked = all(not p["tns"].startswith("not asked") for p in picked)
+        say(("Not on the Transient Name Server either; it does not take variable stars, so check VSX before "
+             "calling one new. " if asked else "Check the Transient Name Server (the links in --json) before "
+             "calling anything new. ") + "Imaging one is your decision: ./mount.py goto RA DEC, then ./shoot.py.")
     return answer
 
 
