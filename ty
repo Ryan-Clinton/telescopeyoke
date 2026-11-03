@@ -6,6 +6,8 @@
     ./ty context             a short briefing in plain words
     ./ty doctor              the full system check
     ./ty night               tonight in brief, the discovery fields first
+    ./ty outlook             tonight's outlook as short text, the recommendation first
+                             (--json gives ty night's answer)
     ./ty targets --limit 5   the best targets (--now, --kind galaxy)
     ./ty target M27          one object: where it is, whether a GoTo is allowed
     ./ty session             the newest imaging run (--frames 50 for detail)
@@ -78,7 +80,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("command", choices=["capabilities", "status", "context", "doctor", "night",
                                         "targets", "target", "session", "observing", "run", "rigs",
-                                        "characterise", "candidates", "discovery", "spot", "research"])
+                                        "characterise", "candidates", "discovery", "spot", "research", "outlook"])
     ap.add_argument("name", nargs="?", help="object name, for 'target'; the order, for 'run'; a spot, for 'spot'")
     ap.add_argument("--json", action="store_true")
     ap.add_argument("--demo", action="store_true", help="made-up weather at the example site")
@@ -97,6 +99,11 @@ def main():
     if args.command == "context" and not args.json:
         print(agent.context(args.demo))
         return 0
+    if args.command == "outlook":
+        if not args.json:
+            print(agent.outlook(args.demo))
+            return 0
+        args.command = "night"
     if args.command == "target" and not args.name:
         ap.error("target needs a name, e.g. ty target M27")
     work = {

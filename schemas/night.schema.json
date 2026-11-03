@@ -14,7 +14,8 @@
     "discovery",
     "best_now",
     "best_tonight",
-    "other_fields"
+    "other_fields",
+    "recommendation"
   ],
   "properties": {
     "site": {
@@ -53,6 +54,7 @@
           "field": {"type": "string"},
           "minutes": {"type": ["number", "null"], "description": "For a mosaic, minutes on each panel."},
           "mosaic": {"type": "boolean"},
+          "panels": {"type": "integer", "description": "a mosaic's panel count (its grid); 1 for a single field"},
           "command": {"type": ["string", "null"]},
           "window": {"type": ["array", "null"]},
           "best_time": {},
@@ -160,12 +162,23 @@
                                "papers": {"type": "array", "items": {"type": "object", "required": ["id", "title", "authors", "submitted", "link"]}}}}
     },
     "research": {
-      "description": "The research that needs no sky, in the night's terms (agent.research_tonight): the leads waiting and to ask again, how many are unexplained, the papers unread, each survey's coverage, the most intriguing leads looked into (investigate.py --summary's order), and observe_tonight: those this telescope can watch, still unsettled, up in tonight's dark hours, each with a dry-run GoTo. error when a record could not be read. Empty in the demo.",
+      "description": "The research that needs no sky, in the night's terms (agent.research_tonight): the leads waiting and to ask again, how many are unexplained, the papers unread, each survey's coverage, the most intriguing leads looked into (investigate.py --summary's order), and observe_tonight: those this telescope can watch, still unsettled, up in tonight's dark hours, each with a dry-run GoTo; next_waiting: the next leads investigate.py will look into, each with why it was flagged. error when a record could not be read. Empty in the demo.",
       "type": "object",
       "required": ["waiting", "to_recheck", "unexplained", "papers_unread", "intriguing", "observe_tonight"],
       "properties": {"waiting": {"type": ["integer", "null"]}, "to_recheck": {"type": ["integer", "null"]},
                      "unexplained": {"type": ["integer", "null"]}, "papers_unread": {"type": ["integer", "null"]},
-                     "intriguing": {"type": "array"}, "observe_tonight": {"type": "array"}, "error": {"type": "string"}}
+                     "intriguing": {"type": "array"}, "observe_tonight": {"type": "array"},
+                     "next_waiting": {"type": "array"}, "error": {"type": "string"}}
+    },
+    "recommendation": {
+      "description": "What to do with tonight's clear spell, in order (agent.recommend): a programme inside a watch window tonight first, then a research lead up tonight, then the programmes as their fields come best, each only if it can finish in the clear time left (a mosaic takes the panels that fit). left_out says why each other one is not taken; note is set when no clear spell is forecast.",
+      "type": "object",
+      "required": ["clear_minutes", "steps", "left_out", "note"],
+      "properties": {"clear_minutes": {"type": ["integer", "null"]},
+                     "steps": {"type": "array", "items": {"type": "object",
+                               "required": ["what", "start", "minutes", "command", "why"]}},
+                     "left_out": {"type": "array", "items": {"type": "object", "required": ["what", "why"]}},
+                     "note": {"type": ["string", "null"]}}
     },
     "sources": {
       "description": "Each outside feed this answer used, and how old its data is: fresh (fetched now), cached (a copy kept within max_age_hours), stale (an older copy, kept because the source failed: not tonight's data) or unavailable. Empty in the demo.",

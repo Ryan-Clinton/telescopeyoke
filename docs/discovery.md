@@ -227,8 +227,17 @@ What a person does; everything else is automatic.
    before it went off would need a different telescope's stars matched to
    ours, which the subtraction does not do.
 
-8. What the outlook gathers besides the programmes (`./ty night`, with
-   `./transits.py` and `./brokers.py` beside it, the discovery-night skill):
+8. What the outlook gathers besides the programmes (`./ty night`, or
+   `./ty outlook` for the same as short text, with `./transits.py` and
+   `./brokers.py` beside it, the discovery-night skill). It leads with
+   `recommendation`: what to do with the clear spell, in order (a watch
+   window tonight, then a research lead up tonight, then the programmes as
+   their fields come best, each only if it can finish in the clear; a
+   mosaic takes the panels that fit), and why each other one is left out.
+   The clear spell runs to the end of its last clear hour (3 November
+   2026: a single clear hour had come out as no time at all). The research
+   line names the next leads waiting (`next_waiting`, why each was
+   flagged) beside the most intriguing ones already looked into:
    - The catalogue (`data/targets.csv`, built by `build_catalogue.py` from
      OpenNGC's v20260501 release) holds what a stack reaches, not what the
      eye sees: galaxies to magnitude 12 and 1.5' or larger (1,050, from

@@ -10,24 +10,39 @@ allowed-tools: Bash(./ty night) Bash(./ty night --json) Bash(./ty research) Bash
 The night is `docs/discovery.md`, "Running a discovery night"; the patrol
 is `docs/agents/setup-routine.md` step 6b.
 
-0. Asked for the outlook or tonight's plan ("how's tonight looking"): start
-   the research that needs no sky in the background, as the cloudy-day
-   skill's A and B (`./archive.py screen`, `./seti.py sweep`), and say
-   their results when they land (`./ty research` gives the surveys'
-   coverage and the leads waiting, in one line); start
-   `./brokers.py` in the background (about a minute: the surveys' new
-   transients bright enough and up here tonight), run `./ty night` once
-   (3 seconds), `./transits.py` and `./ty candidates` beside it, and read the last night's notes
-   (`~/ryanclinton.uk/notes/DATE.md`): what was patrolled, looked at a
-   second time and ruled out. Answer from all of them straight away. A
-   candidate the notes rule out is dismissed at once (`python3
-   candidates.py FIELD --dismiss ID --reason ... --note ...`), never
-   planned for. That is
-   the whole job: no patrol or starwatch plans, no reading docs or code, no
-   other commands. The patrol plans only mean anything once it is dark;
-   they belong to setup, step 1. Answer first; if something is broken, say
-   so in a line at the end and fix it afterwards, in the background. Answer in this
-   shape, nothing more:
+0. Asked for the outlook or tonight's plan ("how's tonight looking"): one
+   message of tool calls, all at once, then the answer:
+   - one Bash call in the background (`run_in_background`), logs in the
+     scratchpad: `./brokers.py & ./archive.py screen; ./seti.py sweep;
+     ./investigate.py; wait` (the cloudy-day skill's A and B, the leads
+     waiting, and the surveys' new transients, about a minute);
+   - `./ty outlook` (3 seconds: `./ty night`'s answer as short text, the
+     recommendation first, the candidates seen on more than one night,
+     the newest two unread papers on each topic and a count of the rest);
+   - `./transits.py`;
+   - the last night's notes (`~/ryanclinton.uk/notes/DATE.md`): what was
+     patrolled, looked at a second time and ruled out, and how the sky
+     really was (fog the forecast missed).
+
+   Answer from those straight away. Use `./ty night --json` only for a
+   field the outlook leaves out. A candidate the notes rule out is
+   dismissed at once (`python3 candidates.py FIELD --dismiss ID --reason
+   ... --note ...`), never planned for. That is the whole job: no patrol
+   or starwatch plans, no reading docs or code, no other commands. The
+   patrol plans only mean anything once it is dark; they belong to setup,
+   step 1. When the background job finishes, say its results in their own
+   short message: the brokers' line (below), and each lead
+   `./investigate.py` looked into with its verdict. If something is
+   broken, say so in a line at the end and fix it afterwards, in the
+   background. Answer in this shape, nothing more:
+   - First, the decision: `RECOMMENDATION`'s steps as one or two lines,
+     what to do with the clear spell, in order, and why (a watch window,
+     a lead, the programme's last run), and what is left out and why.
+     Adjust it from the notes and say so: a field the fog spoilt last night
+     is worth repeating, and a measurement that needs steady sky (Tabby's
+     level, a transit) is not forced through fog. With no clear spell
+     forecast, say so and that the research carries on; the person's own
+     sky still beats the forecast. Then the detail below.
    - Before choosing anything, weigh the research against the sky, in
      `docs/discovery.md`'s order ("What the project is for"): a watch
      window tonight first; then any `research.observe_tonight` lead (still
@@ -35,9 +50,11 @@ is `docs/agents/setup-routine.md` step 6b.
      with why it is interesting (`why_interesting`) and what one look
      would settle (whether the dips go on), and planned before the routine
      patrol; then the programmes. Say the research queue in one line
-     (`research`: waiting, to ask again, unexplained) with the most
-     intriguing lead, and start `./investigate.py` in the background
-     while any lead waits.
+     (waiting, to ask again, unexplained), then the next lead to be looked
+     into (`next to look into`, why it was flagged) and the most
+     intriguing one already looked into (its verdict, and whether this
+     telescope can watch it). Never give a likely-explained lead as the
+     queue's best open one.
    - One line: the verdict, the clear spell, when the Moon rises or sets,
      the dew. When the person is out with stars in view, their sky beats
      the forecast: give each programme's `best_time` where `best_in_clear`
@@ -66,8 +83,9 @@ is `docs/agents/setup-routine.md` step 6b.
      companion's transit: measure its level tonight and on the nights
      either side). Otherwise the next window, said once with its dates.
    - One line per `papers` paper on Tabby's star, dipping stars or SETI
-     (its `abstract` read): what it claims, how sure (its own words), and
-     what it changes for a programme; one line for how many others. A
+     (its `abstract` read): what it claims, how sure (its own words,
+     quoted exactly and whole), and what it changes for a programme; one
+     line for how many others, older ones counted, not listed. A
      paper is something to read, never a result of ours. Once said, mark
      them read (`./literature.py --read ID...`).
    - One line for the `news` events (in-the-sky.org) that fall on tonight or
@@ -78,18 +96,25 @@ is `docs/agents/setup-routine.md` step 6b.
      (ExoClock's priority and its timings lately, and how many minutes the
      prediction may be out).
      Say any clash with a programme's go time. None, one line saying so.
-   - One line per `campaigns` item (AAVSO Target Tool stars this camera
-     can measure tonight, AAVSO's priority ones first, then the most
-     overdue): its name and type, the section (an alert or campaign
-     first), how overdue (`days_since_measured` against `cadence_days`)
-     and best time. None, no line.
-   - One line for the survey transients from `./brokers.py`, as soon as it
-     finishes (never hold the answer for it): each one left, with its
-     magnitude, whether it is brightening and its best time; none, say
-     how many were looked at and that none was bright enough.
-   - Any `sources` row whose `state` is `stale` or `unavailable`: one line
-     naming the feed and when its data is from. Never give stale data as
-     tonight's.
+   - The `campaigns` (AAVSO Target Tool stars this camera can measure
+     tonight): say how many and that AAVSO itself marks them priority (its
+     Alerts / Campaigns section is what makes one wanted). Then one line
+     each for the best two or three at most, chosen by AAVSO's priority,
+     the time free after the programmes, and whether the star's range
+     reaches this camera's depth (about G 17 clear, 16 in fog: a star that
+     only gets that bright now and then is a look, not a sure measure).
+     Its `days_since_measured` says how neglected it is, not how urgent.
+     The rest as a count. None, no line.
+   - The survey transients from `./brokers.py` come in the follow-up
+     message when the background job finishes (never hold the answer for
+     it): each one left, with its magnitude, whether it is brightening and
+     its best time; none, say how many were looked at and that none was
+     bright enough.
+   - Any `sources` row whose `state` is `stale` or `unavailable` (the
+     outlook's `STALE` lines): one line naming the feed and when its data
+     is from. Never give stale data as tonight's. Never say "all sources
+     fresh": the rows cover the feeds the outlook used, not the brokers
+     still running.
    - Only if `skyline_measured` is false: one line saying so.
 
 1. `./patrol.py m31-panels --plan` (or `m31-novae`, `m33-novae`): read it

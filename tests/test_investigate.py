@@ -414,3 +414,18 @@ def test_a_try_within_a_day_of_the_last_is_the_same_outage_and_not_counted():
     assert investigate._tries(None, now) == 1
     assert investigate._tries(hour_ago, now) == 1
     assert investigate._tries(day_ago, now) == 2
+
+
+def test_the_next_leads_waiting_are_named_with_why_they_were_flagged(monkeypatch):
+    # 3 November 2026: the outlook said 125 leads were waiting but not
+    # which comes next, only leads already looked into.
+    import agent
+    import investigate
+    monkeypatch.setattr(investigate, "leads", lambda: [
+        {"kind": "kepler", "kic": 1, "tier": "unusual", "real_dips": 1, "deepest_percent": 1.5, "contrast": 9.0},
+        {"kind": "kepler", "kic": 2, "tier": "unusual", "real_dips": 2, "deepest_percent": 3.0, "contrast": 6.0},
+        {"kind": "seti", "target": "KIC8462852", "session": "s1", "frequency_mhz": 1420.123456}])
+    rows = agent.next_waiting({"KIC-1": {}})
+    assert [r["star"] for r in rows] == ["KIC 2", "KIC8462852"]
+    assert rows[0]["why_flagged"] == "2 dip(s), deepest 3%, 6 times the star's own scatter"
+    assert "1420.123456 MHz" in rows[1]["why_flagged"]

@@ -12,7 +12,8 @@ M31 and M33 (`programmes/`), Tabby's star, comets near the Sun and
 exoplanet transits come first; pretty pictures fill what is left. Plan any
 night, or answer "what's the outlook", from `./ty night`'s `discovery` list
 (each programme's field and when it is up in darkness), not from the
-imaging planner's top targets.
+imaging planner's top targets. `./ty outlook` gives the same answer as
+short text, its `recommendation` first: what to do with the clear spell.
 
 ## Start here
 

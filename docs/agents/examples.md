@@ -1,11 +1,14 @@
 # Worked examples
 
 **"What's the outlook for tonight?"**
-1. `ty night --json`, once, and nothing else: an outlook takes seconds.
-2. The verdict, the clear spell, the Moon and the dew in one line.
-3. `discovery` is already cut to the clear spell and in order: one line
+1. `ty outlook` (or `ty night --json`), once, and nothing else: an outlook
+   takes seconds.
+2. The decision first: `recommendation`'s steps for the clear spell, in
+   order, and what is left out and why.
+3. The verdict, the clear spell, the Moon and the dew in one line.
+4. `discovery` is already cut to the clear spell and in order: one line
    each, with its `best_in_clear` time.
-4. Then the time left for a big target, in one line.
+5. Then the time left for a big target, in one line.
 
 **"What should I image tonight?"**
 1. `ty night --json` for the verdict and clear window.
