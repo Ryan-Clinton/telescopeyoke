@@ -200,7 +200,7 @@ one front door, the same checks. The rest (`patrol.py`, `polaralign.py`,
 - **Loads:** "polar align", "the tripod moved", or from `nightly-setup`.
 - **Does:** on the go, GoTo with `--solve` to a bright star in clear sky,
   then `./polaralign.py --step 12`; after each round the bolt, the way and
-  the amount, once, then `--turned`; until under 0.5°.
+  the amount, once, then `--turned`; until it says to leave both axes.
 
 ### `imaging-run`
 
@@ -224,8 +224,7 @@ one front door, the same checks. The rest (`patrol.py`, `polaralign.py`,
   the run stops itself at dawn by its own rule, and this skill only tidies
   up after it.
 - **Does:** stops the run if it is still going, parks only if asked, starts
-  the restack on the desktop and the sweep, and says to bring the laptop in
-  first if it is on battery (it sleeps after 15 minutes).
+  the restack on the desktop and the sweep.
 
 ### `morning-summary`
 
@@ -265,7 +264,7 @@ one front door, the same checks. The rest (`patrol.py`, `polaralign.py`,
 - **Loads:** "it's not moving", "the camera's gone", "plate solve failed".
 - **Does:** `read_only` checks first, then the known causes in order: the
   handset not past its start-up screens, motors stalled while the handset
-  reports moves, the dead USB-C port, cloud then focus then exposure for a
+  reports moves, nothing on USB (which socket), cloud then focus then exposure for a
   failed solve, dimming stars as cloud, dew or haze (asking what the sky
   looks like first). Never touches the motion lock.
 

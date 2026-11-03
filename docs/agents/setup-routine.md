@@ -40,8 +40,9 @@ motor turned and the knob did not, so focus was by hand with the spoken aid. Whe
 question before acting. Reread what the person has said: do not ask what
 it already answers.
 
-**Follow the steps in order, and skip none.** A step may be left out only
-when the rig's state shows it is already done tonight: say which, and why.
+**Follow the steps in order.** Leave one out when the rig's state shows it
+is already done tonight (say which, and why), or when the person says to
+skip it.
 
 ## 0. Before they go out (indoors)
 

@@ -24,6 +24,8 @@ are in `docs/calibration.md` ("Polar alignment") and
    program's own words, once. Never remind them to tighten: they tighten
    as they go.
 6. Once they say they have turned it, run it again with `--turned` and
-   what they turned, until the error is under 0.5°.
+   what they turned, until it says to leave both axes (it asks for a turn
+   only above about 1.2° for 16 s frames). An altitude error near half a
+   degree is reported as a figure, with no request to turn the bolts.
 
 Report the final error and what it was at the start.

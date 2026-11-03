@@ -25,8 +25,8 @@ is `docs/agents/setup-routine.md` step 6b.
    planned for. That is
    the whole job: no patrol or starwatch plans, no reading docs or code, no
    other commands. The patrol plans only mean anything once it is dark;
-   they belong to setup, step 1. Never fix or change code while answering:
-   if something is broken, say so in a line at the end. Answer in this
+   they belong to setup, step 1. Answer first; if something is broken, say
+   so in a line at the end and fix it afterwards, in the background. Answer in this
    shape, nothing more:
    - One line: the verdict, the clear spell, when the Moon rises or sets,
      the dew. When the person is out with stars in view, their sky beats

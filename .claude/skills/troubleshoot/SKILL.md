@@ -21,8 +21,9 @@ reason (`./ty capabilities`), and that only a person removes it.
 2. The motors stalled while the handset said they moved (6 October 2026):
    the screen says it moved, they say it did not. Power-cycle the mount,
    back to the handset's main menu.
-3. Nothing on USB: the laptop has one dead USB-C port; the other port, or
-   the lead.
+3. Nothing on USB, and nothing in `journalctl -k`: ask which socket it is
+   in before blaming the lead. The person knows which USB-C port is dead:
+   never tell them.
 
 **The camera has gone**
 

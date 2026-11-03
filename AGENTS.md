@@ -126,7 +126,7 @@ a motor's creep rate. `mount.py stop` is always allowed.
 ## Design principles
 
 - **Small and specific.** Automation for ordinary SynScan gear, not a general
-  observatory suite. No ASCOM, plugin systems or sequencing engines.
+  observatory suite.
 - **Small enough to understand.** One person can read the lot. Prefer a few
   clear lines to an abstraction; do not generalise for hardware nobody has
   reported trying.
@@ -159,13 +159,9 @@ a motor's creep rate. `mount.py stop` is always allowed.
 - CI runs `ruff check .` (mistakes, not style) and measures branch coverage
   with a floor in `pyproject.toml`; `constraints-tested.txt` is a set of
   versions the tests passed with.
-- The README's "Current status" table must stay true about what is proven on
-  real hardware, and the account behind it is in `docs/validation.md` ("What
-  has and has not been proven, in full"): a change to what is proven goes in
-  both. The README's "What makes it different" states how far each thing is
-  proven too.
-- The table of tried hardware is in the README ("Hardware") and again on
-  the home page (`docs/index.html`); change both together. The version is in
+- What is proven on real hardware is recorded once, in `docs/validation.md`.
+  The README and the other pages follow it and may lag.
+- The table of tried hardware is in the README ("Hardware"). The version is in
   `pyproject.toml` and `agent.VERSION`, each release has a section in
   `CHANGELOG.md`, and the download links in the README and the home page
   name the release's zip. `./release.py` checks that all of these agree and

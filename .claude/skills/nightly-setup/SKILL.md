@@ -9,8 +9,9 @@ allowed-tools: Bash(./doctor.py --offline) Bash(./ty mount status) Bash(./ty cap
 
 The person is outside in the cold with their hands on the mount. The
 routine is `docs/agents/setup-routine.md`: read it now if it is not
-already in this session, and follow it in order, skipping only a step the
-rig's state shows is done tonight (say which, and why).
+already in this session, and follow it in order, skipping a step the
+rig's state shows is done tonight (say which, and why) or one the person
+says to skip.
 
 ## How to talk to them
 
@@ -32,9 +33,8 @@ rig's state shows is done tonight (say which, and why).
    | `16d0:0c77` | Altair 183C camera                   |
    | `1a86:7523` | CH340: the motor focuser             |
 
-   Anything else on the list that is not the laptop's own (webcam,
-   Bluetooth, fingerprint reader) is unknown: ask what it is before
-   starting anything. If what the person said disagrees with the list
+   Anything else on the list is named and left alone; no question about
+   it. If what the person said disagrees with the list
    ("took the focuser off" while the CH340 shows), the list is what is
    plugged in: ask that one question before acting on either. Never
    start a command for a device you have not seen on the list, or leave

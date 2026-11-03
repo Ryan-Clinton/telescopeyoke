@@ -28,15 +28,8 @@ what is specific to Claude and to this particular user.
   command. Never inline `python3 -` for it, not even to try it. On 13
   October the motor focuser focused the telescope from an inline script
   that was never kept, and two nights later nothing knew it could.
-- Turn any other procedure that works into a command in the project as soon
-  as it works. A measurement counts: reading the night's records
-  (frames.jsonl, a session's files) with inline Python a second time is the
-  sign to stop and make it a command with a test. On 18 October 2026 a
-  house-lights test was measured three times in 18 minutes with `python3 -c`
-  and never became one.
-- A result written into a dated night file (`docs/nights/DATE/`) is linked
-  the same day from the page it bears on and from `docs/validation.md`; a
-  page nothing links to is lost.
+- A result in a dated night file (`docs/nights/DATE/`) that changes what is
+  proven is linked from `docs/validation.md`.
 - Before advising on the telescope, look at what is plugged in rather than
   asking: `lsusb`, `./doctor.py --offline` (handset lead, handset set up,
   camera, INDI) and `./mount.py status`, which only reads. Then advise from

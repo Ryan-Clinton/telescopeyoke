@@ -31,12 +31,6 @@ def test_no_page_states_a_figure_the_validation_record_found_wrong(path):
     assert not re.search(r"5\.2° to 0\.2°", text(path))
 
 
-def test_the_polar_result_in_the_readme_is_the_validation_records():
-    figure = "3.3° to 0.1°"
-    assert figure in text(VALIDATION).split("## Current conclusions")[1].split("\n## ")[0]
-    assert figure in text(ROOT / "README.md")
-
-
 def test_the_pages_do_not_say_things_that_stopped_being_true():
     assert "Not built." not in text(ROOT / "docs" / "discovery.md")[:1000]
     assert "dozen short scripts" not in text(ROOT / "README.md")

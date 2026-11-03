@@ -53,12 +53,9 @@ way (17 October 2026: HFR 1.86 at the start, 3.52 after a stopped run).
    hung" says where the focuser was left: run `./camera_setup.py`, then
    `--check`. Never answer with guesses about buffering or what might be
    happening.
-   A run sweeps nine positions through focus, three frames each, fits the
-   curve and goes once to its lowest point (`docs/focuser.md`): no
-   hunting, and it ends at tonight's best, not the usual. On a new night or
-   after the focuser has been off, measure it first:
-   `./focus.py --measure-step`, then `./focus.py --measure-backlash`, both
-   from focus.
+   The walk-in comes in from a touch out in small steps, downhill only,
+   stops once the stars are clearly past their best, and makes one move
+   back out to the best (`docs/focuser.md`). Nothing to measure first.
 5. Report the HFR it ends on. Well above the usual: suggest the cause in
    this order: cloud or haze (ask what the sky looks like), dew on the
    mirror, the field too sparse.
