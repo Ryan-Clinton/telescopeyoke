@@ -205,6 +205,7 @@ def campaign_results(night, lat, lon, source=feeds, now=None):
     out = []
     n = len(night.unix)
     ask = getattr(source, "aavso_targets", None)     # the demo has none
+    wanted = []
     for t in (ask(lat, lon, night.min_alt) if ask else None) or []:
         mode, filters = str(t.get("obs_mode") or ""), str(t.get("filter") or "")
         if mode not in ("Photometry", "All") or not any(f in filters for f in ("V", "All")):
@@ -212,9 +213,14 @@ def campaign_results(night, lat, lon, source=feeds, now=None):
         bright, faint = t.get("max_mag"), t.get("min_mag")
         if bright is None or faint is None or bright > variables.FAINTEST or faint < variables.BRIGHTEST:
             continue
-        alt, az = night.altaz_fixed([t["ra"]], [t["dec"]])
+        wanted.append(t)
+    if not wanted:
+        return []
+    alts, azs = night.altaz_fixed([t["ra"] for t in wanted], [t["dec"] for t in wanted])   # all at once
+    for t, alt, az in zip(wanted, alts, azs):
+        filters, bright, faint = str(t.get("filter") or ""), t["max_mag"], t["min_mag"]
         target = {"id": t["star_name"], "kind": "variable star", "mag": bright}
-        r = night.assess(target, np.full(n, t["ra"]), np.full(n, t["dec"]), alt[0], az[0])
+        r = night.assess(target, np.full(n, t["ra"]), np.full(n, t["dec"]), alt, az)
         if not r:
             continue
         last = _when(t.get("last_data_point"))
