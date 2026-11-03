@@ -27,6 +27,7 @@ HEADERS = {"User-Agent": "telescopeyoke/0.1 (personal observing planner)"}
 SOURCES = {
     "weather8w": ("Open-Meteo", "https://open-meteo.com"),
     "weatherpast": ("Open-Meteo", "https://open-meteo.com"),
+    "weathercentres": ("Open-Meteo, four centres", "https://open-meteo.com/en/docs#models"),
     "seeing": ("7Timer ASTRO", "https://www.7timer.info"),
     "lightpollution": ("Lorenz light-pollution atlas", "https://djlorenz.github.io/astronomy/lp/"),
     "news": ("in-the-sky.org and headlines", "https://in-the-sky.org"),
@@ -101,6 +102,33 @@ def weather(lat, lon):
             forecast_days=8, past_days=1, timeformat="unixtime", timezone="UTC",
         ).json()["hourly"]
     return _cached(f"weather8w_{lat:.3f}_{lon:.3f}", 0.5, fetch)
+
+
+# The four forecasting centres the clear spell is checked against (the same
+# four as ryanclinton.uk's Meanwhile page). Open-Meteo's default forecast is
+# one model: in the UK it is the Met Office's, and on 3 November 2026 it gave
+# one clear hour while ECMWF, ICON and GFS all cleared 00:00-03:00.
+CENTRES = {"ukmo_seamless": "Met Office", "ecmwf_ifs025": "ECMWF",
+           "icon_seamless": "DWD ICON", "gfs_seamless": "NOAA GFS"}
+CENTRE_VARS = ("cloud_cover,precipitation,precipitation_probability,temperature_2m,"
+               "dew_point_2m,wind_speed_10m,visibility")
+
+
+def weather_centres(lat, lon):
+    """Hourly forecasts from the four CENTRES in one request: 'time' (unix,
+    UTC) and, per centre, a dict of the CENTRE_VARS lists (None where that
+    centre does not reach)."""
+    def fetch():
+        h = _get(
+            "https://api.open-meteo.com/v1/forecast",
+            latitude=lat, longitude=lon, hourly=CENTRE_VARS, models=",".join(CENTRES),
+            forecast_days=8, timeformat="unixtime", timezone="UTC",
+        ).json()["hourly"]
+        n = len(h["time"])
+        return {"time": h["time"],
+                **{m: {v: h.get(f"{v}_{m}") or [None] * n for v in CENTRE_VARS.split(",")}
+                   for m in CENTRES}}
+    return _cached(f"weathercentres_{lat:.3f}_{lon:.3f}", 1, fetch)
 
 
 def weather_past(lat, lon, days=60):

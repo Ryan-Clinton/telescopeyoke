@@ -81,13 +81,17 @@ def weather_report(night, lat, lon, source=feeds):
 
     for h in hours:
         h["fog"] = foggy(h)
-    # Longest run of consecutive mostly-clear, dry, fog-free hours.
-    best, run = [], []
-    for h in hours:
-        clear = h["cloud"] <= 30 and h["rain_chance"] < 30 and h["rain_mm"] == 0 and not h["fog"]
-        run = run + [h] if clear else []
-        if len(run) > len(best):
-            best = run
+        h["clear"] = clear_hour(h)
+    centres = _centres(source, lat, lon, t[keep])
+    for h, c in zip(hours, centres or [None] * len(hours)):
+        h["centres"] = c
+    single = _longest(hours, lambda h: h["clear"])
+    # With the four centres, the spell is the hours at least half of them call
+    # clear (as ryanclinton.uk's Meanwhile page): not one model's pessimism or
+    # the most hopeful one's. Without them, the one forecast's.
+    agreed = (lambda h: h["centres"] is not None and h["centres"]["of"] > 0
+              and h["centres"]["clear"] * 2 >= h["centres"]["of"])
+    best = _longest(hours, agreed) if centres else single
     mean_cloud = statistics.mean(h["cloud"] for h in hours)
     wet = [h for h in hours if h["rain_chance"] >= 30 or h["rain_mm"] > 0]
     notes = []
@@ -109,7 +113,11 @@ def weather_report(night, lat, lon, source=feeds):
     if damp:
         notes.append(f"dew likely from {damp[0]['time']:%H:%M}; cover the laptop")
 
-    if len(best) >= 3:
+    if centres and [h["time"] for h in best] != [h["time"] for h in single]:
+        notes.insert(0, "forecasts disagree: " + spell_words(best, "the four centres", centres=True)
+                     + "; the default forecast alone: " + spell_words(single, ""))
+    split = any(h["centres"] and h["centres"]["clear"] * 4 < h["centres"]["of"] * 3 for h in best)
+    if len(best) >= 3 and not split:
         verdict = "GO"
     elif len(best) >= 1 or mean_cloud < 60:
         verdict = "MARGINAL"
@@ -123,7 +131,74 @@ def weather_report(night, lat, lon, source=feeds):
         "clear_to": best[-1]["time"] if best else None,
         "clear_hours": len(best), "notes": notes, "hours": hours,
         "fog_hours": [h["time"] for h in fog],
+        "single_clear_hours": len(single), "centres": bool(centres),
     }
+
+
+def clear_hour(h):
+    """One forecast hour clear enough to observe: cloud 30% or less, dry, no fog.
+    ryanclinton.uk's Meanwhile page judges each centre's hours by this too."""
+    return (h["cloud"] <= 30 and (h.get("rain_chance") or 0) < 30
+            and (h.get("rain_mm") or 0) == 0 and not h["fog"])
+
+
+def _longest(hours, ok):
+    """The longest run of consecutive hours for which ok(hour) holds."""
+    best, run = [], []
+    for h in hours:
+        run = run + [h] if ok(h) else []
+        if len(run) > len(best):
+            best = run
+    return best
+
+
+def centre_agreement(c, times):
+    """For each unix hour in times: {"clear": centres calling it clear, "of":
+    centres covering it} from feeds.weather_centres()' reply c."""
+    index = {int(x): i for i, x in enumerate(c["time"])}
+    out = []
+    for x in times:
+        i = index.get(int(x))
+        clear = of = 0
+        for m in feeds.CENTRES:
+            g = c.get(m) or {}
+            v = lambda k: (g.get(k) or [None] * len(c["time"]))[i]
+            if i is None or v("cloud_cover") is None:
+                continue
+            h = {"cloud": v("cloud_cover"), "rain_chance": v("precipitation_probability"),
+                 "rain_mm": v("precipitation"), "temp": v("temperature_2m"),
+                 "dew_point": v("dew_point_2m"), "wind": v("wind_speed_10m"), "visibility": v("visibility")}
+            h["fog"] = (h["visibility"] is not None or (h["temp"] is not None and h["dew_point"] is not None)) \
+                and foggy(h)
+            of += 1
+            clear += clear_hour(h)
+        out.append({"clear": clear, "of": of})
+    return out
+
+
+def _centres(source, lat, lon, times):
+    """Each hour's agreement among the four centres, or None when the source
+    has none (the demo) or they could not be had: the one forecast stands."""
+    get = getattr(source, "weather_centres", None)
+    if not get:
+        return None
+    try:
+        c = get(lat, lon)
+        out = centre_agreement(c, times) if c else None
+    except Exception:      # noqa: BLE001 - a failed second opinion leaves the first standing
+        return None
+    return out if out and any(a["of"] for a in out) else None
+
+
+def spell_words(run, who, centres=False):
+    """"<who> clear 01:00-04:00 (3 of 4 at worst)", "<who> no clear spell"."""
+    if not run:
+        return f"{who} no clear spell".strip()
+    words = f"{who} clear {hm(run[0]['time'])}-{hm(run[-1]['time'] + timedelta(hours=1))}".strip()
+    if centres:
+        worst = min(run, key=lambda h: h["centres"]["clear"] / h["centres"]["of"])["centres"]
+        words += f" ({worst['clear']} of {worst['of']} at worst)"
+    return words
 
 
 def week(cfg, demo=False, nights=7):

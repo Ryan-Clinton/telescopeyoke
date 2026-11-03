@@ -254,7 +254,15 @@ What a person does; everything else is automatic.
    plan, the other choice, the sky, the candidates, and only what is up
    tonight; the research queue and the papers are `./ty research`.
    The clear spell runs to the end of its last clear hour (3 November
-   2026: a single clear hour had come out as no time at all). The
+   2026: a single clear hour had come out as no time at all). The clear
+   spell is the hours at least half of four forecasting centres (Met
+   Office, ECMWF, DWD ICON, NOAA GFS: `feeds.CENTRES`) call clear, as
+   ryanclinton.uk's Meanwhile page counts them; when that differs from
+   Open-Meteo's default forecast (the Met Office's in the UK) the sky line
+   says "forecasts disagree", and a night is GO only when three of four
+   agree through the spell. Without the centres the default forecast
+   stands ([3 November 2026](nights/2026-11-03/forecast-centres.md): the
+   default gave one hour, three centres cleared 00:00-03:00). The
    research (`./ty research`, and `research` in `./ty night`) names the next leads waiting (`next_waiting`, why each was
    flagged) beside the most intriguing ones already looked into:
    - The catalogue (`data/targets.csv`, built by `build_catalogue.py` from

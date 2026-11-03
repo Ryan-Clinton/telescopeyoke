@@ -593,3 +593,70 @@ def test_a_comets_motion_is_read_off_its_track_at_the_time_asked():
     assert tonight.comet_motion(track, 900.0) == 12.0
     assert tonight.comet_motion(track, 3000.0) == 24.0
     assert tonight.comet_motion(track, 99999.0) == 24.0      # past the end: the last step
+
+
+def _centres_like(w, clear_for):
+    """Four centres' forecasts on w's hours; clear_for(model, local hour) says
+    whether that centre clears the hour (10% cloud) or not (90%)."""
+    import time as clock
+    hours = [clock.localtime(t).tm_hour for t in w["time"]]
+    n = len(w["time"])
+    return {"time": w["time"], **{m: {
+        "cloud_cover": [10 if clear_for(m, h) else 90 for h in hours],
+        "precipitation": [0.0] * n, "precipitation_probability": [0] * n,
+        "temperature_2m": [9.0] * n, "dew_point_2m": [5.0] * n,
+        "wind_speed_10m": [8.0] * n, "visibility": [20000.0] * n} for m in feeds.CENTRES}}
+
+
+def test_one_pessimistic_forecast_does_not_close_a_night_the_centres_agree_is_clear(monkeypatch):
+    """3 November 2026: the default forecast (the Met Office's) gave one clear
+    hour at 23:00 and the plan said no time; ECMWF, ICON and GFS all cleared
+    after midnight. The spell is the hours most centres call clear."""
+    import demo
+    w = demo.weather(0, 0)
+    w["cloud_cover"] = [90] * len(w["time"])            # the default forecast: cloud all night
+    monkeypatch.setattr(demo, "weather", lambda lat, lon: w)
+    later = lambda m, h: m != "ukmo_seamless" and 1 <= h < 5    # three of four clear 01:00-05:00
+    monkeypatch.setattr(demo, "weather_centres", lambda lat, lon: _centres_like(w, later), raising=False)
+    report = tonight.build(config.example(), demo=True)["weather"]
+    assert report["clear_hours"] == 4 and report["clear_from"].hour == 1
+    assert report["single_clear_hours"] == 0 and report["centres"]
+    assert report["verdict"] == "GO"                    # 3 of 4 every hour
+    assert any(n.startswith("forecasts disagree") and "01:00-05:00 (3 of 4 at worst)" in n
+               and "no clear spell" in n for n in report["notes"])
+
+
+def test_one_hopeful_centre_alone_opens_no_spell_and_a_split_is_never_go(monkeypatch):
+    import demo
+    w = demo.weather(0, 0)
+    w["cloud_cover"] = [90] * len(w["time"])
+    monkeypatch.setattr(demo, "weather", lambda lat, lon: w)
+    one = lambda m, h: m == "gfs_seamless"                       # only GFS is hopeful
+    monkeypatch.setattr(demo, "weather_centres", lambda lat, lon: _centres_like(w, one), raising=False)
+    report = tonight.build(config.example(), demo=True)["weather"]
+    assert report["clear_hours"] == 0
+    two = lambda m, h: m in ("gfs_seamless", "ecmwf_ifs025")     # two of four: a split night
+    monkeypatch.setattr(demo, "weather_centres", lambda lat, lon: _centres_like(w, two), raising=False)
+    report = tonight.build(config.example(), demo=True)["weather"]
+    assert report["clear_hours"] >= 3 and report["verdict"] == "MARGINAL"
+
+
+def test_without_the_centres_the_one_forecast_stands(monkeypatch):
+    import demo
+
+    def down(lat, lon):
+        raise OSError("Open-Meteo down")
+    monkeypatch.setattr(demo, "weather_centres", down, raising=False)
+    report = tonight.build(config.example(), demo=True)["weather"]
+    assert not report["centres"] and report["clear_hours"] == report["single_clear_hours"] > 0
+    assert not any(n.startswith("forecasts disagree") for n in report["notes"])
+
+
+def test_a_centre_in_fog_does_not_count_clear():
+    hour = {"cloud": 5, "rain_chance": 0, "rain_mm": 0, "temp": 2.0, "dew_point": 1.9, "wind": 1.0, "visibility": 300}
+    hour["fog"] = tonight.foggy(hour)
+    assert not tonight.clear_hour(hour)
+    c = {"time": [0], **{m: {"cloud_cover": [5], "precipitation": [0], "precipitation_probability": [0],
+                              "temperature_2m": [2.0], "dew_point_2m": [1.9], "wind_speed_10m": [1.0],
+                              "visibility": [300 if m == "ukmo_seamless" else 20000]} for m in feeds.CENTRES}}
+    assert tonight.centre_agreement(c, [0]) == [{"clear": 3, "of": 4}]
