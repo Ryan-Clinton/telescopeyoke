@@ -300,7 +300,10 @@ def spots():
     whether its skyline has been measured."""
     import horizon
     cache = config.DATA / "cache"
-    names = set(config.spots()) | {p.stem[len("horizon-"):] for p in cache.glob("horizon-*.json")}
+    # A survey set aside or a skyline replaced (horizon-SPOT.not-used-TIME.json,
+    # .replaced-TIME.json) is not a spot of its own.
+    names = set(config.spots()) | {p.stem[len("horizon-"):] for p in cache.glob("horizon-*.json")
+                                   if "." not in p.stem}
     rows = []
     for name in sorted(names):
         kept = cache / f"horizon-{name}.json"

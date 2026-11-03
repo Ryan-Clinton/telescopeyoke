@@ -344,7 +344,10 @@ The pointing error is now kept for each side of the meridian. With the
 polar axis 0.2° from the pole the real mount was 5.8° out in Dec on the east
 side and 0.2° on the west, where one figure reversed across the pole had
 been assumed; the next two GoTos on the east side landed 5' and 14' out in
-Dec. The cause of the difference is not known.
+Dec. The cause of the difference is not known. Which side a correction
+belongs to is the side the tube really came over, read from the Dec axis
+after the slew (`Mount.aim`), not the target's side of the meridian: near
+the meridian the handset may take either ([3 November 2026](nights/2026-11-02/skyline-survey.md)).
 
 The first imaging run after that alignment (207 frames of M31, cloud ending
 it after 41 minutes) showed four faults. The camera exposes for less than it
@@ -547,8 +550,14 @@ focuser not touched since the stars.
   -14.3° in Dec, home not set since 20 October) is chosen by the target's
   side of the meridian, not by the side the tube came over. The checked
   skyline is back; a survey can no longer raise one checked by eye, a
-  jammed camera is reopened, and the stream stays off air for a survey. The
-  aim itself is not yet fixed.
+  jammed camera is reopened, and the stream stays off air for a survey.
+  Every corrected slew (GoTo and the survey) now reads the axes after it
+  and, if the tube came over the other side, goes again with that side's
+  correction; by day a look whose correction was never plate-solved on its
+  side (over 2°), or whose side changed twice, is not made; a bearing
+  blocked to the top of the survey is warned about; a replaced skyline is
+  kept as `horizon-SPOT.replaced-TIME.json`. Tested in the simulator; not
+  yet run on the real mount.
 
 ### Night of 13 October 2026
 

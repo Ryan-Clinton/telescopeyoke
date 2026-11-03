@@ -329,6 +329,34 @@ class Mount:
         the meridian (the Dec axis reads past 90°)."""
         return self.axes()[1] > 90
 
+    def aim(self, hour_angle, dec, site, offset, error=None, west=None):
+        """Slew to a true hour angle and Dec (degrees), corrected by the
+        plate-solved pointing error of the side of the pole the tube really
+        comes over. The side is first guessed from the hour angle (or given
+        as `west`, with its `error`); the handset picks its own side near the
+        meridian, so after the slew the axes are read, and if the tube came
+        over the other side it is sent again with that side's correction.
+        Returns (west, error, steady): the side it is on, the correction it
+        was aimed with, and False if the side changed again on the second
+        slew, when the aim cannot be trusted. 3 November 2026: with the two
+        sides' corrections +15.6° and -14.3° in Dec (home not set), looks due
+        south took the east correction with the tube over the west side, and
+        were aimed about 30° low."""
+        west = hour_angle > 0 if west is None else west
+        error = load_pointing_error(west) if error is None else error
+        for attempt in range(2):
+            self.goto((true_sidereal(site) + offset - (hour_angle - error[0])) % 360, dec - error[1])
+            came = self.west()
+            if came == west:
+                return west, error, True
+            if attempt == 1:
+                # On `came`'s side, aimed with the other side's correction:
+                # said as it is, never to be added to or kept.
+                return came, error, False
+            west, error = came, load_pointing_error(came)
+            self.say(f"  the tube came over the {side_name(came)} side: aiming again with that "
+                     f"side's correction ({error[1]:+.1f}° in Dec); it may swing over the pole again")
+
     def drift_model(self, site):
         """What has been learned about the drift since the handset was set up;
         anything older belongs to a different setting-up and is forgotten."""
@@ -777,14 +805,19 @@ class Mount:
                  f"hour angle {hour_angle / 15:+.2f} h ({plan['side_note']})")
         # Ask for the RA that puts the tube at the true hour angle, less the
         # pointing error measured by earlier plate solves.
-        west = hour_angle > 0
-        error = load_pointing_error(west)
+        west, error = None, None
         last = None      # the miss before the last correction
         for attempt in range(4 if solve else 1):
             hour_angle, dec, _ = where(target, site)
-            self.goto((true_sidereal(site) + offset - (hour_angle - error[0])) % 360,
-                      dec - error[1])
+            # Corrected by the side the tube really came over, which is the
+            # side any correction found below is kept for.
+            west, error, steady = self.aim(hour_angle, dec, site, offset, error, west)
             self.tracking(True)
+            if not steady:
+                # Its correction was for the other side: a miss measured now
+                # would be added to the wrong side's and kept.
+                self.say("  the tube changed sides again; aim left as it is, nothing kept")
+                return "reached"
             self.apply_drift_correction(site)
             if solve and not self.can_solve:
                 print("  (demo: no camera, so no plate solve)")
@@ -1229,6 +1262,17 @@ def load_pointing_error(west):
             ha, dec = saved["error_deg"]
             return [ha, dec if saved["west"] == west else -dec]
     return [0.0, 0.0]
+
+
+def pointing_measured(west):
+    """Whether this side's pointing error was plate-solved on this side since
+    the handset's clock was set, not borrowed from the other side's."""
+    if not (POINTING_FILE.exists() and CLOCK_FILE.exists()):
+        return False
+    saved = json.loads(POINTING_FILE.read_text(encoding="utf-8"))
+    since = json.loads(CLOCK_FILE.read_text(encoding="utf-8"))["saved"]
+    here = saved.get("sides", {}).get(side_name(west))
+    return bool(here) and here["saved"] > since
 
 
 def side_name(west):

@@ -129,6 +129,12 @@ def keep(skyline, source, **more):
     saved = dict({"saved": time.time(), "source": source,
                   "skyline": sorted(skyline, key=lambda p: p["az"])}, **more)
     RESULTS.parent.mkdir(parents=True, exist_ok=True)
+    if RESULTS.exists():
+        # The skyline it replaces is kept beside it (3 November 2026: a
+        # checked one was overwritten, and only a copy set aside the day
+        # before brought it back).
+        import shutil
+        shutil.copy2(RESULTS, RESULTS.with_name(f"{RESULTS.stem}.replaced-{time.strftime('%Y%m%d-%H%M%S')}.json"))
     records.write(RESULTS, saved)
     return saved
 
@@ -449,11 +455,16 @@ def eye(site, exposure, gain, daylight=False, torch=False):
                 raise
             log.append({"az": az, "alt": alt, "open": None})
             return None
-        # Aim as goto does: allow for the pointing error found by plate solving.
+        # Aim as goto does, with the correction of the side the tube really
+        # comes over (mount.Mount.aim).
         hour_angle, dec = plan["hour_angle_hours"] * 15, plan["dec_deg"]
-        error = mount.load_pointing_error(hour_angle > 0)
-        scope.goto((mount.true_sidereal(site) + offset - (hour_angle - error[0])) % 360,
-                   dec - error[1])
+        west, error, steady = scope.aim(hour_angle, dec, site, offset)
+        doubt = aim_doubt(steady, error, mount.pointing_measured(west), daylight)
+        if doubt:
+            # Nothing by day checks where it points: a look aimed by a guess is no look.
+            log.append({"az": az, "alt": alt, "open": None, "unread": True, "aim": doubt})
+            print(f"bearing {az:>5g}°, {alt:>4g}° up: not looked at ({doubt})", flush=True)
+            return None
         # Stars need following; a rooftop needs the mount to hold still.
         scope.tracking(not daylight)
         if daylight:
@@ -767,6 +778,22 @@ def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, mo
     return [found[az] for az in sorted(found)], warnings
 
 
+TRUSTED_GUESS = 2.0     # degrees: a correction borrowed from the other side is trusted by day up to this
+
+
+def aim_doubt(steady, error, measured, daylight):
+    """Why a look's aim cannot be trusted, or None. By day nothing checks the
+    pointing, so a correction never plate-solved on the side the tube is on
+    (borrowed from the other side, reversed) is a guess, trusted only when
+    small; and a tube that changed sides again is not where it was sent."""
+    if not steady:
+        return "the tube changed sides twice; aim not trusted"
+    if daylight and not measured and abs(error[1]) > TRUSTED_GUESS:
+        return (f"this side's pointing correction ({error[1]:+.1f}° in Dec) was never plate-solved "
+                "on this side; aim not trusted")
+    return None
+
+
 def skyline_from(found, low, known=None):
     """A trace as a skyline (see limit()). With a skyline known before, its
     points are kept, each moved by what this survey found near it, so the
@@ -1017,6 +1044,11 @@ def run(args):
             sweep(look, step)
         results = look.log
     if args.trace:
+        to_top = [f["az"] for f in found if f["state"] == "blocked" and (f.get("shut") or 0) >= TOP]
+        if to_top:
+            warnings.append("Blocked as far up as it looked at " + ", ".join(f"{az:g}°" for az in to_top)
+                            + f": a wall to {TOP}° is possible, but so is a telescope aimed somewhere else. "
+                            "Look that way yourself.")
         skyline = skyline_from(found, low, known)
         higher = above_checked(skyline, kept)
         if higher:

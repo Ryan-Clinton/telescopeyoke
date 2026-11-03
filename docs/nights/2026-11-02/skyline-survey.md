@@ -97,9 +97,35 @@ looked blocked at 147-165°, 48-51° up, where the skyline says 36-45°.
 4. The live stream never goes on air for a skyline survey; this one went out
    on YouTube and Twitch.
 
-## Not changed yet: the aim
+5. Every corrected slew aims by the side the tube really came over
+   (`mount.Mount.aim`, used by GoTo and the survey): after the slew the
+   axes are read, and if the tube is on the other side it is sent again
+   with that side's correction. A GoTo's plate-solved correction is kept
+   for that side too (it was kept for the target's side, which near the
+   meridian can be the other).
+6. By day a look is not made when its side's correction was never
+   plate-solved on that side and is over 2° (`horizon.aim_doubt`), or when
+   the tube changed sides again on the second slew.
+7. A bearing blocked as far up as the survey looks is warned about: a wall
+   to 75° is possible, but so is an aim somewhere else.
+8. A skyline replaced by a survey is kept beside it as
+   `cache/horizon-SPOT.replaced-TIME.json`.
 
-Open questions:
+Corrections from before the handset was last set up are already ignored
+(`mount.load_pointing_error`). The home position is still to be set at the
+next setup, which needs a person at the handset; the large corrections
+come from it. Before another whole survey: a short daylight test at a few
+bearings whose tops are known (due north, 187.5°, west), on the person's
+go. The 2 November survey's disagreement due north cannot be checked
+against the axes: its looks did not record them.
+
+A tube that changes sides again on the second slew is left as it is: GoTo
+keeps no correction from it, and the survey makes no look. Still open:
+nothing limits how big a saved correction may be, and the second slew's
+place is the checked target less a correction, never checked itself; near
+the meridian the second slew may swing the tube over the pole again.
+
+## The questions as first asked
 
 1. Choose the correction by the side the tube really came over (read the
    axes after the slew, then slew again with that side's correction), make

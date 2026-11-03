@@ -456,3 +456,19 @@ def test_a_survey_never_raises_a_skyline_a_person_checked_by_eye():
     assert horizon.above_checked(new, checked) == [180]
     assert horizon.above_checked(new, dict(checked, checked_by_eye=None)) == []    # nobody looked: kept as before
     assert horizon.above_checked(new, {}) == []
+
+
+def test_by_day_a_look_aimed_by_a_guess_is_not_made():
+    """3 November 2026: nothing by day checks the pointing."""
+    assert horizon.aim_doubt(True, [0.0, 15.0], True, True) is None            # plate-solved on this side
+    assert "never plate-solved" in horizon.aim_doubt(True, [0.0, 15.0], False, True)
+    assert horizon.aim_doubt(True, [0.0, 1.5], False, True) is None            # a small guess is fine
+    assert horizon.aim_doubt(True, [0.0, 15.0], False, False) is None          # by night the stars check it
+    assert "changed sides" in horizon.aim_doubt(False, [0.0, 0.0], True, True)
+
+
+def test_a_replaced_skyline_is_kept_beside_the_new_one(kept):
+    horizon.keep([{"az": 0, "alt": 30}], "telescope")
+    horizon.keep([{"az": 0, "alt": 40}], "telescope")
+    old = list(horizon.RESULTS.parent.glob(f"{horizon.RESULTS.stem}.replaced-*.json"))
+    assert len(old) == 1 and json.loads(old[0].read_text())["skyline"][0]["alt"] == 30

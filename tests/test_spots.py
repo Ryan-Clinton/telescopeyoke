@@ -41,6 +41,13 @@ def reload_paths():
     return horizon
 
 
+def test_a_skyline_set_aside_or_replaced_is_not_a_spot(garden):
+    for name in ("horizon-louie-side.json", "horizon-louie-side.not-used-20261103-094230.json",
+                 "horizon-louie-side.replaced-20261103-094230.json"):
+        (garden / "cache" / name).write_text(json.dumps({"saved": 2.0, "skyline": []}), encoding="utf-8")
+    assert [row["name"] for row in agent.spots()["spots"]] == ["louie-side"]
+
+
 def test_naming_the_first_spot_keeps_what_was_measured_there(garden):
     answer = agent.set_spot("louie-side")
     assert answer["spot"] == "louie-side" and answer["skyline_measured"]

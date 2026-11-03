@@ -280,7 +280,58 @@ def test_each_side_of_the_meridian_keeps_its_own_pointing_error(scope):
     assert mount.load_pointing_error(west=False) == [1.6, 0.3]
 
 
-def test_an_old_pointing_error_is_ignored_after_the_handset_is_restarted(scope):
+def test_a_slew_is_corrected_for_the_side_the_tube_really_came_over(scope):
+    """3 November 2026: looks due south took the east side's correction
+    (+15.6° in Dec) with the tube over the west side (-14.3°), and were aimed
+    about 30° low. The simulated handset, like the real one, keeps the tube
+    east until half a degree past the meridian."""
+    mount.CLOCK_FILE.write_text(json.dumps({"offset_deg": 0, "saved": 1}), encoding="utf-8")
+    mount.save_pointing_error([0.0, 15.0], west=False)
+    mount.save_pointing_error([0.0, -14.0], west=True)
+    assert mount.pointing_measured(False) and mount.pointing_measured(True)
+    said = []
+    scope.say = said.append
+    # A target just west of the meridian: guessed west, the tube stays east.
+    west, error, steady = scope.aim(0.3, 40.0, SITE, 0.0)
+    assert (west, error, steady) == (False, [0.0, 15.0], True) and not scope.west()
+    assert mount.wrap(scope.radec()[1]) == pytest.approx(40.0 - 15.0, abs=0.1)
+    assert any("came over the east side" in s for s in said)
+    # Well west, the guess was right: one slew, the west correction.
+    said.clear()
+    assert scope.aim(30.0, 40.0, SITE, 0.0) == (True, [0.0, -14.0], True) and not said
+    # A side never measured since the clock was set is borrowed, and says so.
+    saved = json.loads(mount.POINTING_FILE.read_text(encoding="utf-8"))
+    saved["sides"]["west"]["saved"] = 0
+    mount.POINTING_FILE.write_text(json.dumps(saved), encoding="utf-8")
+    assert not mount.pointing_measured(True) and mount.pointing_measured(False)
+
+
+def test_a_tube_that_changes_sides_twice_says_so_with_the_correction_it_used():
+    """Review, 3 November 2026: reloading the new side's correction after the
+    second slew would have had GoTo add a miss to a correction 30° wrong."""
+    class Flipping:
+        sides, sent, said = iter([True, False]), [], []
+
+        def goto(self, ra, dec):
+            self.sent.append(dec)
+
+        def west(self):
+            return next(self.sides)
+
+        def say(self, text):
+            self.said.append(text)
+    tube = Flipping()
+    import unittest.mock
+    errors = {False: [0.0, 15.0], True: [0.0, -14.0]}
+    with unittest.mock.patch.object(mount, "load_pointing_error", lambda west: errors[west]), \
+            unittest.mock.patch.object(mount, "true_sidereal", lambda site: 0.0):
+        west, error, steady = mount.Mount.aim(tube, -0.3, 40.0, SITE, 0.0)
+    assert tube.sent == [40.0 - 15.0, 40.0 + 14.0]
+    assert (west, error, steady) == (False, [0.0, -14.0], False)   # east now, aimed with the west's
+    assert "swing over the pole again" in tube.said[0]
+
+
+
     mount.save_pointing_error([-10.0, -12.0], west=True)
     saved = json.loads(mount.POINTING_FILE.read_text(encoding="utf-8"))["saved"]
     mount.CLOCK_FILE.write_text(json.dumps({"offset_deg": 0, "saved": saved + 60}), encoding="utf-8")
