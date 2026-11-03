@@ -948,8 +948,17 @@ def trace(look, bearings, low, top=TOP, fine=FINE, known=None, finest=FINEST, mo
         again = look(first["az"], first["clear"])
         same = isinstance(again, float) and abs(again - first["clear"]) <= 1
     elif first:
-        same = is_sky(look(first["az"], first["clear"])) and \
-            (first["state"] != "edge" or look(first["az"], first["shut"]) in (False, np.False_))
+        again = look(first["az"], first["clear"])
+        if isinstance(again, float):
+            # The top in view this time: the same answer if it lies where the
+            # first time put it, between the highest blocked look and the
+            # lowest clear one (3 November 2026: "sky at 33°, blocked at 30°"
+            # and then "the top at 32.7°" were called different, at 165°
+            # and twice at 30°).
+            same = (first.get("shut") or first["clear"] - 1) - 1 <= again <= first["clear"] + 1
+        else:
+            same = is_sky(again) and \
+                (first["state"] != "edge" or look(first["az"], first["shut"]) in (False, np.False_))
     if first and not same and not slipped(log, first["az"]):
         # The mount's axes came back alike: no slip seen, though that proves
         # the mechanics, not the optics. That bearing, unrepeatable, keeps what

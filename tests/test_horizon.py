@@ -785,3 +785,18 @@ def test_readings_count_once_per_survey_and_a_targeted_trace_adds_no_bearings():
     old = {"skyline": [{"az": 44.9, "alt": 54.0, "trust": "telescope", "readings": [{"alt": 54.0, "survey": "a"}]}]}
     new, _ = horizon.reconcile([{"az": 45.0, "alt": 33.0, "by": "telescope", "trust": "telescope"}], old, survey="b")
     assert [r["survey"] for r in new[0]["readings"]] == ["a", "b"]
+
+
+def test_a_recheck_that_sees_the_top_where_the_first_look_bracketed_it_agrees():
+    """3 November 2026: at 165° "sky at 33°, blocked at 30°", then "the top
+    at 32.7°" on the recheck, was called unrepeatable."""
+    first = {"az": 165, "state": "edge", "clear": 33, "shut": 30}
+    calls = []
+
+    def look(az, alt):
+        calls.append((az, alt))
+        return True if alt >= horizon.TOP else 32.7
+    look.log = []
+    # Only the checks run: the one bearing is already measured.
+    found, warnings = horizon.trace(look, [165], low=20, done=[first], fill=False)
+    assert not any("read differently" in w or w.startswith(horizon.NOT_SAME) for w in warnings)

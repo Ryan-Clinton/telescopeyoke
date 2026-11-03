@@ -240,3 +240,11 @@ did not record colour, so no benchmark has been made of them.
 
 The west at 315° was not rechecked; 165° needs a fourth reading, best with
 the Sun elsewhere.
+
+**165°, 15:15-15:21**, the Sun low in the south-west, 61° away: blocked at
+30°, the top at 32.7-32.9° on every look. The first recheck was still
+called unrepeatable: the recheck saw the top in view (32.7°) where the
+first look had bracketed it (blocked at 30°, sky at 33°), and only a plain
+"sky" counted as the same answer. A top in view inside the first look's
+bracket is now the same answer (the same fault had flagged 30° twice).
+Run again: settled at 32.8°, the readings of 14:14 and 15:19 agreeing.
