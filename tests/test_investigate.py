@@ -196,3 +196,14 @@ def test_the_research_dashboard_counts_each_survey_and_each_lead_by_where_it_sta
     assert answer["papers_unread"] == 1
     page = (tmp_path / "web" / "research.html").read_text(encoding="utf-8")
     assert "Leads waiting: <b>1</b>" in page and "docs/research/KIC-1.md" in page
+
+
+def test_this_months_hours_are_tonights_not_a_night_already_gone():
+    import datetime
+    import config
+    import investigate
+    star = {"star": "KIC 6448574", "ra": 293.663, "dec": 41.874, "mag": 12.0, "mag_band": "Kepler"}
+    # 3 November: the 1st has gone; a star at +42° is up in the west after dark
+    w = investigate.follow_up(star, 10.0, cfg=config.example(), months=2, today=datetime.date(2026, 11, 3))
+    up = {u["month"]: u["dark_hours_up"] for u in w["up"]}
+    assert up["2026-11"] > 0 and up["2026-12"] > 0

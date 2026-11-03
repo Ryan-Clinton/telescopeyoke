@@ -384,7 +384,9 @@ def follow_up(star, deepest, cfg=None, months=MONTHS, today=None):
         for k in range(months):
             month = (today.month - 1 + k) % 12 + 1
             year = today.year + (today.month - 1 + k) // 12
-            night = sky.Night(cfg, date(year, month, 1))
+            # Tonight for this month, the 15th for the rest: a night already
+            # gone (the 1st, once past) has no hours left to be up in.
+            night = sky.Night(cfg, today if k == 0 else date(year, month, 15))
             n = len(night.unix)
             alt, az = night.altaz_fixed([star["ra"]], [star["dec"]])
             r = night.assess({"id": star["star"], "kind": "star"}, np.full(n, star["ra"]), np.full(n, star["dec"]),
