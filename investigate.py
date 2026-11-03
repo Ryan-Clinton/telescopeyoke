@@ -246,6 +246,9 @@ def other_mission(lead, say=print):
     try:
         tic = archive.tic_number(f"KIC {lead['kic']}")
         a = archive.analyse_tess(tic, say=lambda *_: None)
+    except interface.Refusal as refusal:     # MAST answered: it has no light curve of the star
+        return _asked("TESS (MAST)", "https://mast.stsci.edu/", {"tic": None, "dips": None,
+                                                                 "none": refusal.as_error()["message"]})
     except Exception as problem:    # astroquery raises its own errors; any is "not had"
         return _asked("TESS (MAST)", "https://mast.stsci.edu/", None,
                       error=f"not had ({type(problem).__name__}: {str(problem)[:120]})")

@@ -651,8 +651,16 @@ def benchmark(paths, say=print, turbo=turboseti):
         seconds = n_t * s["tsamp"]
         ours = search(s["spectra"], s["foff"], s["tsamp"], s["fch1"])
         theirs = turbo(path)
+        # turboSETI reads the file as saved, spike and all; a hit of its on a
+        # coarse channel's middle, which this search blanks, is set aside.
+        n_t, n_f = s["spectra"].shape
+        middles = [s["fch1"] + c * s["foff"] for c in range(n_f)
+                   if (s.get("first_channel", 0) + c) % s.get("coarse_channel", n_f + 1) == s.get("coarse_channel", 0) // 2]
+        spike = [t for t in theirs if any(abs(t["frequency_mhz"] - m) <= 2 * abs(s["foff"]) for m in middles)]
+        theirs = [t for t in theirs if t not in spike]
         c = compare(ours, theirs, abs(s["foff"]) * 1e6, seconds)
         out.append({"file": str(path), "target": s["target"], "ours": len(ours), "turboseti": len(theirs),
+                    "turboseti_on_dc_spike": len(spike),
                     "both": c["both"], "only_ours": c["only_ours"][:MAX_LISTED],
                     "only_turboseti": c["only_turboseti"][:MAX_LISTED]})
         say(f"{Path(path).name}: ours {len(ours)}, turboSETI {len(theirs)}, both {c['both']}, "
