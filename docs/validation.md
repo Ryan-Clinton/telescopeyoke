@@ -536,6 +536,20 @@ focuser not touched since the stars.
   more can be sent, a stop included, and to switch the mount off at the
   mount if a motor is still turning.
 
+### 3 November 2026
+
+- **`horizon.py --trace --daylight` from ralphie-side, 3 November 2026,
+  08:45-09:42** ([the record](nights/2026-11-02/skyline-survey.md)): 184
+  looks; due south read blocked to 75° in frames 1-5% as bright as the high
+  sky, and it replaced the skyline checked by eye the day before. The
+  mount's axes show the 180° looks aimed about 30° from the 187.5° ones on
+  the same side of the pole: each look's pointing correction (+15.6° and
+  -14.3° in Dec, home not set since 20 October) is chosen by the target's
+  side of the meridian, not by the side the tube came over. The checked
+  skyline is back; a survey can no longer raise one checked by eye, a
+  jammed camera is reopened, and the stream stays off air for a survey. The
+  aim itself is not yet fixed.
+
 ### Night of 13 October 2026
 
 **The polar measurement was wrong, and why.** `polaralign.py` turns the RA

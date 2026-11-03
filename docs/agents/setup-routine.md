@@ -41,6 +41,9 @@ when they say they have set up somewhere else in the garden. A spot whose
 skyline has not been measured is surveyed first, by daylight, before
 anything is planned there: `./horizon.py --trace --daylight` (about 35
 minutes; it needs the handset set up, step 1, and the sky still light).
+By day it aims by the last plate-solved pointing correction, so a big one
+(home not set) can aim it tens of degrees wrong near the meridian
+([3 November 2026](../nights/2026-11-02/skyline-survey.md)).
 If it cannot be surveyed before dark, work its skyline out from a measured
 spot until it can: `./horizon.py --move-from louie-side --offset METRES
 BEARING --distances FROM-TO:METRES ...`, with where the new spot is from
