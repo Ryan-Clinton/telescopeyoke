@@ -207,3 +207,16 @@ def test_this_months_hours_are_tonights_not_a_night_already_gone():
     w = investigate.follow_up(star, 10.0, cfg=config.example(), months=2, today=datetime.date(2026, 11, 3))
     up = {u["month"]: u["dark_hours_up"] for u in w["up"]}
     assert up["2026-11"] > 0 and up["2026-12"] > 0
+
+
+def test_a_red_giants_shallow_dips_are_its_own_and_a_deep_one_is_not():
+    # KIC 6448574: Gaia G 8.11, BP-RP 1.6 (V-J 3.9, B-V 1.5), parallax 1.33 mas: absolute G about -1.3
+    red = {"g": 8.11, "ruwe": 1.19, "bp_rp": 1.6, "parallax_mas": 1.326, "parallax_over_error": 55.0,
+           "abs_g": -1.28, "source_id": "2077618484452244480", "separation_arcsec": 0.19}
+    v = investigate.judge(star([dip(3.2), dip(5.0)]), checks(gaia={"star": red, "class": None, "neighbours": []}))
+    assert v["verdict"] == "explained" and any("red giant" in r for r in v["explained_by"])
+    deep = investigate.judge(star([dip(15.0), dip(20.0)]), checks(gaia={"star": red, "class": None, "neighbours": []}))
+    assert deep["verdict"] != "explained"                    # far deeper than a giant's pulsation
+    dwarf = dict(red, abs_g=6.5)                              # as red, but on the main sequence
+    assert investigate.judge(star([dip(5.0)]), checks(gaia={"star": dwarf, "class": None,
+                                                            "neighbours": []}))["verdict"] != "explained"

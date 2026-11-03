@@ -43,6 +43,7 @@ uses the camera.
 import argparse
 import csv
 import io
+import math
 import json
 import re
 from datetime import date, datetime, timezone
@@ -71,6 +72,14 @@ NEIGHBOUR_ARCSEC = 8.0   # a Gaia star this close shares Kepler's 4" pixels and 
 RUWE_COMPANION = 1.4     # Gaia's RUWE above this: an unresolved companion pulls the star about
 CROWDED = 0.95           # Kepler's CROWDSAP below this: over 5% of the aperture's light is other stars'
 KNOWN_PAPERS = 20        # cited this often in SIMBAD: known to science already
+# A red giant: Gaia colour and absolute magnitude (from a parallax at least
+# GIANT_PARALLAX times its error). Kepler's red giants vary irregularly by a
+# few percent over days to weeks as they pulsate (Bányai et al. 2013,
+# arXiv 1309.1012), so dips under GIANT_DIP on one are explained by that.
+GIANT_COLOUR = 1.0       # BP-RP at least this red
+GIANT_ABS = 2.5          # absolute G at most this (brighter): above the main sequence at that colour
+GIANT_PARALLAX = 5.0     # parallax over its error at least this, for the absolute magnitude to be trusted
+GIANT_DIP = 10.0         # percent: dips shallower than this are a giant's own
 STRONG_DEPTH = 5.0       # percent: a dip this deep...
 STRONG_DIPS = 2          # ...this many times, in both fluxes, on a quiet star, unexplained: "strong"
 PRECISION_PERCENT = 2.0  # a night's level here, now (docs/discovery.md: two nights of Tabby 0.22 mag apart)
@@ -179,7 +188,8 @@ def villanova(kic, get=requests.get):
 def gaia(ra, dec, get=requests.get):
     """Gaia DR3 round the place: the star (nearest), its RUWE and
     variability class, and every star within NEIGHBOUR_ARCSEC."""
-    query = (f"SELECT source_id, ra, dec, phot_g_mean_mag, ruwe, DISTANCE(POINT(ra, dec), POINT({ra}, {dec})) * 3600 AS sep "
+    query = (f"SELECT source_id, ra, dec, phot_g_mean_mag, ruwe, bp_rp, parallax, parallax_over_error, "
+             f"DISTANCE(POINT(ra, dec), POINT({ra}, {dec})) * 3600 AS sep "
              f"FROM gaiadr3.gaia_source WHERE 1 = CONTAINS(POINT(ra, dec), CIRCLE({ra}, {dec}, {NEIGHBOUR_ARCSEC / 3600})) "
              "ORDER BY sep")
     try:
@@ -189,7 +199,14 @@ def gaia(ra, dec, get=requests.get):
         return _asked("Gaia DR3", GAIA, None, error=f"not answered ({type(problem).__name__})")
     num = lambda v: float(v) if v not in ("", None) else None       # noqa: E731
     stars = [{"source_id": r["source_id"], "g": num(r["phot_g_mean_mag"]), "ruwe": num(r["ruwe"]),
+              "bp_rp": num(r.get("bp_rp")), "parallax_mas": num(r.get("parallax")),
+              "parallax_over_error": num(r.get("parallax_over_error")),
               "separation_arcsec": round(num(r["sep"]), 2)} for r in rows]
+    for st in stars:
+        # Its absolute G from the parallax, where the parallax is good enough
+        plx, good = st["parallax_mas"], st["parallax_over_error"]
+        st["abs_g"] = (round(st["g"] + 5 + 5 * math.log10(plx / 1000), 2)
+                       if st["g"] is not None and plx and plx > 0 and good and good >= GIANT_PARALLAX else None)
     star = next((s for s in stars if s["separation_arcsec"] <= MATCH_ARCSEC and s["g"] is not None), None)
     klass = None
     if star:
@@ -308,6 +325,12 @@ def neighbour_could(neighbours, star_g, depth_percent):
     return out
 
 
+def giant(star):
+    """Whether Gaia's colour and absolute magnitude put the star among the red giants."""
+    return bool(star and star.get("bp_rp") is not None and star.get("abs_g") is not None
+                and star["bp_rp"] >= GIANT_COLOUR and star["abs_g"] <= GIANT_ABS)
+
+
 def judge(star, checks):
     """The verdict on a star from its dips and the checks' answers."""
     explained, artefact, notes = [], [], []
@@ -344,6 +367,11 @@ def judge(star, checks):
     if known:
         notes.append(f"known to science: SIMBAD lists {s['papers']} papers on {s['name']}")
     unasked = [checks[k]["source"] for k in ("simbad", "vsx", "villanova", "gaia") if checks[k]["error"]]
+    gstar = (g or {}).get("star") or {}
+    if real and giant(gstar) and deepest < GIANT_DIP:
+        explained.append(f"a red giant (Gaia DR3 BP-RP {gstar['bp_rp']:.2f}, absolute G {gstar['abs_g']:+.1f}): "
+                         f"giants this red vary by a few percent over days to weeks as they pulsate, which dips "
+                         f"under {GIANT_DIP:g}% fit (Bányai et al. 2013, https://arxiv.org/abs/1309.1012)")
     if explained:
         verdict = "explained"
     elif artefact:
