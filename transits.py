@@ -43,7 +43,8 @@ import interface
 import records
 
 ARCHIVE = "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
-QUERY = ("select pl_name,hostname,ra,dec,sy_vmag,pl_orbper,pl_tranmid,pl_trandur,pl_trandep "
+QUERY = ("select pl_name,hostname,ra,dec,sy_vmag,pl_orbper,pl_tranmid,pl_trandur,pl_trandep,"
+         "pl_orbpererr1,pl_tranmiderr1 "
          "from pscomppars where pl_trandep>0.3 and sy_vmag<{faintest} and dec>-20 and pl_tranmid is not null "
          "and pl_orbper is not null and pl_trandur is not null")
 FRESH_DAYS = 7       # the planet list is fetched again after this long
@@ -58,8 +59,16 @@ BIN = 10
 
 # --- the planets ---------------------------------------------------------------
 
+EXOCLOCK = "https://www.exoclock.space/database/planets_json"
+WANTED = ("alert", "high")   # ExoClock's priorities that ask for more timings
+
+
 def store():
     return config.DATA / "cache" / "transiting.csv"
+
+
+def _err(text):
+    return abs(float(text)) if text else None
 
 
 def planets(get=requests.get, now=None):
@@ -67,7 +76,8 @@ def planets(get=requests.get, now=None):
     the copy kept this week."""
     path = store()
     now = now or time.time()
-    if not path.exists() or now - path.stat().st_mtime > FRESH_DAYS * 86400:
+    old = path.exists() and "pl_tranmiderr1" not in path.read_text(encoding="utf-8").split("\n", 1)[0]
+    if old or not path.exists() or now - path.stat().st_mtime > FRESH_DAYS * 86400:
         reply = get(ARCHIVE, timeout=120, params={"query": QUERY.format(faintest=FAINTEST), "format": "csv"})
         reply.raise_for_status()
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -78,10 +88,70 @@ def planets(get=requests.get, now=None):
             rows.append({"planet": r["pl_name"], "star": r["hostname"], "ra": float(r["ra"]), "dec": float(r["dec"]),
                          "v": float(r["sy_vmag"]) if r["sy_vmag"] else None, "period": float(r["pl_orbper"]),
                          "epoch": float(r["pl_tranmid"]), "hours": float(r["pl_trandur"]),
-                         "depth": float(r["pl_trandep"])})
+                         "depth": float(r["pl_trandep"]),
+                         "period_error": _err(r.get("pl_orbpererr1")), "epoch_error": _err(r.get("pl_tranmiderr1"))})
         except (KeyError, ValueError):
             continue
     return rows
+
+
+def _key(name):
+    """A planet's name as both lists can match it: "HAT-P-32 b" and "HAT-P-32b"."""
+    return "".join(c for c in name.lower() if c.isalnum())
+
+
+def exoclock(get=requests.get, now=None):
+    """ExoClock's planets (exoclock.space, the timings kept for ESA's Ariel
+    mission), by name: its priority for more timings, how many timings it
+    has had lately, the smallest telescope it lists for the planet, and its
+    own ephemeris with errors. Kept for a week; {} when it cannot be had."""
+    path = config.DATA / "cache" / "exoclock.json"
+    now = now or time.time()
+    if not path.exists() or now - path.stat().st_mtime > FRESH_DAYS * 86400:
+        try:
+            reply = get(EXOCLOCK, timeout=120)
+            reply.raise_for_status()
+            listed = reply.json()
+        except (requests.RequestException, ValueError):
+            listed = None
+        if listed:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            records.write(path, listed, indent=None)
+    if not path.exists():
+        return {}
+    out = {}
+    for name, r in json.loads(path.read_text(encoding="utf-8")).items():
+        try:
+            out[_key(name)] = {"priority": r.get("priority"), "recent": r.get("total_observations_recent"),
+                               "inches": r.get("min_telescope_inches"),
+                               "epoch": float(r["ephem_mid_time"]), "epoch_error": _err(r.get("ephem_mid_time_e1")),
+                               "period": float(r["ephem_period"]), "period_error": _err(r.get("ephem_period_e1"))}
+        except (KeyError, TypeError, ValueError):
+            continue
+    return out
+
+
+def timing_error(epoch, epoch_error, period, period_error, middle):
+    """Minutes either way the predicted middle may be wrong by tonight: the
+    epoch's error and the period's, carried over the orbits since."""
+    if epoch_error is None or period_error is None:
+        return None
+    orbits = round((middle - epoch) / period)
+    return round(math.hypot(epoch_error, orbits * period_error) * 1440, 1)
+
+
+def worth(t, listed, aperture_mm):
+    """What ExoClock says of a transit, and how sure tonight's prediction is:
+    its ephemeris when it lists the planet, else the archive's."""
+    e = listed.get(_key(t["planet"]))
+    source = e or {"epoch": t["epoch"], "epoch_error": t.get("epoch_error"),
+                   "period": t["period"], "period_error": t.get("period_error")}
+    return {"timing_error_min": timing_error(source["epoch"], source["epoch_error"], source["period"],
+                                             source["period_error"], t["middle"]),
+            "exoclock_priority": e and e["priority"],
+            "exoclock_recent": e and e["recent"],
+            "aperture_enough": None if not e or e["inches"] is None else e["inches"] * 25.4 <= aperture_mm,
+            "wanted": bool(e and e["priority"] in WANTED)}
 
 
 def transits_between(p, start_jd, end_jd):
@@ -93,8 +163,9 @@ def transits_between(p, start_jd, end_jd):
 
 # --- tonight -----------------------------------------------------------------
 
-def tonight(cfg, rows, deeper=DEEPER, now=None, say=print):
-    """The transits that can be taken whole tonight, deepest first."""
+def tonight(cfg, rows, deeper=DEEPER, now=None, say=print, listed=None):
+    """The transits that can be taken whole tonight: the ones ExoClock wants
+    timed first, then deepest first. `listed` is exoclock()'s answer."""
     import sky
     night = sky.Night(cfg, now=now)
     jd = night.times.jd
@@ -115,9 +186,12 @@ def tonight(cfg, rows, deeper=DEEPER, now=None, say=print):
                                     end=night.local(len(jd) - 1 - int(np.argmax(inside[::-1]))).strftime("%H:%M"),
                                     altitude=round(float(alt[k][i]), 1),
                                     exposure=4 if p["v"] < FULL_WELL else 16))
-    out.sort(key=lambda t: -t["depth"])
+    aperture = cfg.get("scope", {}).get("aperture_mm", 150)
+    for t in out:
+        t.update(worth(t, listed or {}, aperture))
+    out.sort(key=lambda t: (not t["wanted"], -t["depth"]))
     return {"night": str(night.date), "deeper": deeper, "planets": len(rows), "bright_and_deep": len(usable),
-            "transits": out, "kind": "inferred"}
+            "exoclock_listed": bool(listed), "transits": out, "kind": "inferred"}
 
 
 def keep(transits):
@@ -448,7 +522,7 @@ def run(args, say=print):
             raise interface.Refusal("INVALID_REQUEST", "measure needs a session and --planet.")
         return measure(args.session, args.planet, args.bin, say)
     cfg = config.example() if args.demo else config.load()
-    answer = tonight(cfg, planets(), args.deeper)
+    answer = tonight(cfg, planets(), args.deeper, listed={} if args.demo else exoclock())
     if not args.demo:
         keep(answer["transits"])
     say(f"{answer['bright_and_deep']} of {answer['planets']} transiting planets round stars of V {BRIGHTEST:g} to "
@@ -457,6 +531,12 @@ def run(args, say=print):
         say(f"  {t['planet']:<14} {t['depth']:.2f}% deep, V {t['v']:.1f}, {t['start']} to {t['end']} "
             f"(middle {t['mid']}, {t['altitude']:.0f}° high), {t['exposure']} s frames: ./mount.py goto "
             f"{t['star'].replace(' ', '')}")
+        wanted = (f"ExoClock priority {t['exoclock_priority']}, {t['exoclock_recent']} timings lately"
+                  if t["exoclock_priority"] else "not on ExoClock's list")
+        error = "" if t["timing_error_min"] is None else f"; predicted middle good to ±{t['timing_error_min']:g} min"
+        say(f"    {wanted}{error}{'; ExoClock lists a bigger telescope' if t['aperture_enough'] is False else ''}")
+    if not answer["exoclock_listed"] and not args.demo:
+        say("  ExoClock's list could not be had: which timings are wanted is not known")
     answer["before"] = before_the_night(answer["transits"])
     for line in answer["before"]:
         say(f"  before: {line}")

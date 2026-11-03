@@ -13,10 +13,12 @@ import argparse
 import json
 import statistics
 import sys
+import time
 from datetime import date as Date, datetime, timedelta, timezone
 from pathlib import Path
 
 import numpy as np
+import requests
 
 import config
 import feeds
@@ -158,8 +160,75 @@ def comet_results(night, lat, lon, elevation, source=feeds):
         target = {"id": c["id"], "name": c["name"], "kind": "comet", "mag": c["mag"]}
         result = night.assess(target, ra, dec, alt, az)
         if result:
+            result["motion_arcsec_min"] = comet_motion(track, result["best"].timestamp())
             out.append(result)
     return out
+
+
+def comet_motion(track, when):
+    """How fast the comet moves across the sky at `when` (unix), in
+    arcseconds a minute, from the two rows of its track either side: a frame
+    longer than about the seeing divided by this smears it."""
+    i = int(np.clip(np.searchsorted(track[:, 0], when), 1, len(track) - 1))
+    (t0, ra0, dec0), (t1, ra1, dec1) = track[i - 1], track[i]
+    apart = sky.separation(ra0, dec0, ra1, dec1) * 3600
+    return round(float(apart / max((t1 - t0) / 60, 1e-9)), 2)
+
+
+MOST_CAMPAIGNS = 8   # Target Tool stars listed: the most wanted first
+
+
+def _when(value):
+    """A Target Tool time (unix seconds, or ISO text) as unix seconds, or None."""
+    if value in (None, ""):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        pass
+    try:
+        when = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return (when if when.tzinfo else when.replace(tzinfo=timezone.utc)).timestamp()
+
+
+def campaign_results(night, lat, lon, source=feeds, now=None):
+    """The AAVSO Target Tool's stars this camera can measure tonight: asked
+    for by photometry in V or any filter (the camera's green is close to V,
+    untransformed), with a range that reaches between variables.BRIGHTEST
+    and variables.FAINTEST, and up in the dark here. AAVSO's high-priority
+    ones first, then the most overdue for their cadence (days since the last
+    measurement over the days asked between them). Empty without a key."""
+    import variables
+    now = now or time.time()
+    out = []
+    n = len(night.unix)
+    ask = getattr(source, "aavso_targets", None)     # the demo has none
+    for t in (ask(lat, lon, night.min_alt) if ask else None) or []:
+        mode, filters = str(t.get("obs_mode") or ""), str(t.get("filter") or "")
+        if mode not in ("Photometry", "All") or not any(f in filters for f in ("V", "All")):
+            continue
+        bright, faint = t.get("max_mag"), t.get("min_mag")
+        if bright is None or faint is None or bright > variables.FAINTEST or faint < variables.BRIGHTEST:
+            continue
+        alt, az = night.altaz_fixed([t["ra"]], [t["dec"]])
+        target = {"id": t["star_name"], "kind": "variable star", "mag": bright}
+        r = night.assess(target, np.full(n, t["ra"]), np.full(n, t["dec"]), alt[0], az[0])
+        if not r:
+            continue
+        last = _when(t.get("last_data_point"))
+        days = None if last is None else round((now - last) / 86400, 1)
+        cadence = t.get("obs_cadence")
+        overdue = None if days is None or not cadence else round(days / cadence, 1)
+        r.update({"section": t.get("obs_section"), "priority": bool(t.get("priority")), "var_type": t.get("var_type"),
+                  "range": [bright, faint], "filter": filters, "cadence_days": cadence,
+                  "days_since_measured": days, "overdue": overdue, "note": t.get("other_info") or "",
+                  "link": "https://www.aavso.org/vsx/index.php?view=results.get&ident=" +
+                          requests.utils.quote(t["star_name"])})
+        out.append(r)
+    out.sort(key=lambda r: (not r["priority"], -(r["overdue"] if r["overdue"] is not None else 99)))
+    return out[:MOST_CAMPAIGNS]
 
 
 def supernova_results(night, source=feeds):
@@ -179,6 +248,7 @@ def supernova_results(night, source=feeds):
 def build(cfg, date=None, offline=False, demo=False):
     # In demo mode the weather and sky brightness come from demo.py.
     source = feeds
+    feeds.used.clear()
     if demo:
         import demo as source
     site = cfg["site"]
@@ -213,9 +283,10 @@ def build(cfg, date=None, offline=False, demo=False):
         results += comet_results(night, lat, lon, site.get("elevation_m", 0), source)
     results.sort(key=lambda r: -r["score"])
     supernovae = [] if offline else supernova_results(night, source)
+    campaigns = [] if offline else campaign_results(night, lat, lon, source)
 
     now = datetime.now(night.tz)
-    for t in results + supernovae:
+    for t in results + supernovae + campaigns:
         # A window "starting" within the next few minutes is open now: the
         # sky is only sampled every ten minutes.
         t["now"] = t["start"] <= now + timedelta(minutes=sky.STEP_MIN) and now <= t["end"]
@@ -225,7 +296,7 @@ def build(cfg, date=None, offline=False, demo=False):
     moon_rise, moon_set = night.crossings(night.moon_alt, 0, night.sun_alt < 0)
     sunset, sunrise = night.crossings(-night.sun_alt, 0.833)
     dark = night.span(night.dark)
-    return {
+    report = {
         "site": site["name"], "date": night.date,
         "generated": datetime.now(night.tz),
         "sunset": sunset, "sunrise": sunrise,
@@ -244,8 +315,13 @@ def build(cfg, date=None, offline=False, demo=False):
         "weather": None if offline else weather_report(night, lat, lon, source),
         "targets": results,
         "supernovae": supernovae,
+        "campaigns": campaigns,
         "news": [] if offline else source.news(datetime.now(timezone.utc)) or [],
     }
+    # How old each feed's data is: a copy kept because the source failed is
+    # said to be stale, never passed off as tonight's.
+    report["sources"] = [] if demo or offline else feeds.freshness()
+    return report
 
 
 def target_tags(t, pollution, now):

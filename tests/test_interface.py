@@ -654,6 +654,15 @@ def test_the_frame_is_a_rectangle_turned_as_solved():
     assert not footprint.contains(solved, 100.0, 0.4)
 
 
+def test_each_recommendation_says_what_it_is_from_the_catalogue_alone():
+    import sky
+    targets = {t["id"]: t for t in sky.load_targets()}
+    assert agent.describe(targets["NGC 891"]) == "spiral galaxy (Sb), seen nearly edge-on, 13.03' x 3.03', magnitude 10"
+    assert agent.describe(targets["M33"]).startswith("Triangulum Galaxy, spiral galaxy (Sc), ")
+    assert "edge-on" not in agent.describe(targets["M33"]) and "face-on" not in agent.describe(targets["M33"])
+    assert agent.describe({"kind": "open cluster", "size": 30.0, "mag": 3.7}) == "open cluster, 30' across, magnitude 3.7"
+
+
 def test_a_field_unwatched_and_searchable_ranks_above_one_watched_last_night(tmp_path, monkeypatch):
     """Value, not the planner's order: a galaxy with a reference kept and
     not watched for a month comes before a better-placed one watched last

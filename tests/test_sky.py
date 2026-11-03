@@ -110,6 +110,15 @@ def test_the_catalogue_loads_with_all_the_messier_objects():
     assert all(0 <= t["ra"] < 360 and -90 <= t["dec"] <= 90 for t in targets)
 
 
+def test_the_catalogue_holds_the_galaxies_a_stack_reaches_with_their_types():
+    targets = {t["id"]: t for t in sky.load_targets()}
+    galaxies = [t for t in targets.values() if t["kind"] == "galaxy"]
+    assert len(galaxies) > 900                         # to magnitude 12: the supernova watch's fields
+    assert targets["NGC 4414"]["size"] == 1.95         # small but bright: kept
+    assert targets["NGC 891"]["hubble"] == "Sb"
+    assert "NGC 6572" in targets                       # a bright planetary nebula 11" across, kept from before
+
+
 def test_the_moon_and_planets_are_told_from_deep_sky_targets():
     kinds = [sky.object_kind(n) for n in ("Moon", "moon-copernicus", "Lunar terminator", "Jupiter",
                                          "M31", "Moonlight Nebula", "", None)]

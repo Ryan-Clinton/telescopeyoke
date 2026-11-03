@@ -40,6 +40,39 @@ def test_tonight_keeps_a_whole_transit_in_the_dark_and_leaves_out_the_rest():
     assert answer["bright_and_deep"] == 2
 
 
+def test_a_transit_exoclock_wants_timed_comes_first_with_how_sure_its_prediction_is(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    deep = planet("DEEP-1 b", depth=2.5)
+    wanted = dict(planet("WANT-1 b", depth=1.2), epoch_error=0.001, period_error=0.0001)
+
+    class Reply:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"WANT-1b": {"priority": "high", "total_observations_recent": 0, "min_telescope_inches": 6.0,
+                                "ephem_mid_time": MIDNIGHT - 100 * 3.0, "ephem_mid_time_e1": 0.002,
+                                "ephem_period": 3.0, "ephem_period_e1": 0.00005},
+                    "DEEP-1b": {"priority": "low", "total_observations_recent": 30, "min_telescope_inches": 4.0,
+                                "ephem_mid_time": MIDNIGHT - 100 * 3.0, "ephem_mid_time_e1": 0.0001,
+                                "ephem_period": 3.0, "ephem_period_e1": 0.000001}}
+    listed = transits.exoclock(get=lambda *a, **k: Reply())
+    assert listed["want1b"]["priority"] == "high"
+    answer = transits.tonight(config.example(), [deep, wanted, planet()], now=NOW, say=lambda *_: None,
+                              listed=listed)
+    assert [t["planet"] for t in answer["transits"]] == ["WANT-1 b", "DEEP-1 b", "TEST-1 b"]
+    first = answer["transits"][0]
+    # ExoClock's own errors over 100 orbits: hypot(0.002, 100 x 0.00005) days.
+    assert first["timing_error_min"] == pytest.approx(7.8, abs=0.1)
+    assert first["wanted"] and first["exoclock_recent"] == 0
+    assert first["aperture_enough"] is False            # 6 inches listed, 150 mm here
+    assert answer["transits"][1]["aperture_enough"] is True
+    unlisted = answer["transits"][2]
+    assert unlisted["exoclock_priority"] is None and unlisted["timing_error_min"] is None and not unlisted["wanted"]
+    # Kept for the week: no second question.
+    assert transits.exoclock(get=None)["deep1b"]["priority"] == "low"
+
+
 def light_curve(depth=1.5, late_min=10.0, hours=2.5, scatter=0.003, seed=1):
     rng = np.random.default_rng(seed)
     jd = MIDNIGHT + np.arange(-3, 3, 0.1) / 24

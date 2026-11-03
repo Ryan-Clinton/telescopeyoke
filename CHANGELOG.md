@@ -6,6 +6,15 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+- **What a stack reaches, and who wants what measured** (`ty night`,
+  `transits.py`, `build_catalogue.py`): the catalogue holds galaxies to
+  magnitude 12 (1,660 objects, from 641), built from a pinned OpenNGC
+  release, and each recommendation says what it is from the catalogue
+  alone; AAVSO Target Tool stars this camera can measure (`campaigns`,
+  with a Target Tool key); ExoClock's priority and each transit's timing
+  error, the wanted ones first; comets to magnitude 12 with their motion;
+  and how old each outside feed's data is (`sources`). The outlook runs
+  `brokers.py` in the background ([discovery](docs/discovery.md), step 8).
 - **Fresh fields placed by the real frame and ranked by what they add**
   (`ty night`, `footprint.py`): a galaxy is in a programme's field when
   its centre lies in the camera's rectangle (solved, from a mosaic's

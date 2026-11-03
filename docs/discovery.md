@@ -199,6 +199,52 @@ What a person does; everything else is automatic.
    before it went off would need a different telescope's stars matched to
    ours, which the subtraction does not do.
 
+8. What the outlook gathers besides the programmes (`./ty night`, with
+   `./transits.py` and `./brokers.py` beside it, the discovery-night skill):
+   - The catalogue (`data/targets.csv`, built by `build_catalogue.py` from
+     OpenNGC's v20260501 release) holds what a stack reaches, not what the
+     eye sees: galaxies to magnitude 12 and 1.5' or larger (1,050, from
+     193 under the old eyepiece cut of 10.5), clusters and nebulae 20' or
+     wider however faint, and everything the old cut kept. Each galaxy
+     carries its type, and every recommendation says what the object is
+     from the catalogue alone (`what`: "spiral galaxy (Sb), seen nearly
+     edge-on", the edge-on or face-on from its two axes). Nothing is
+     written about an object that the catalogue does not give.
+   - The AAVSO Target Tool (`campaigns`): variable stars AAVSO's alerts,
+     campaigns and sections ask for, kept to those measured in V or any
+     filter whose range reaches between `variables.py`'s BRIGHTEST and
+     FAINTEST, up in the dark here; AAVSO's high-priority ones first, then
+     the most overdue for their cadence. It needs a free Target Tool
+     account's key, kept in `~/.config/telescopeyoke/aavso-key` (or
+     `TY_AAVSO_KEY`); without one the list is empty.
+   - ExoClock (`./transits.py`): its priority for each planet (the timings
+     kept for ESA's Ariel mission), the timings it has had lately, the
+     smallest telescope it lists, and how many minutes tonight's predicted
+     middle may be out (the ephemeris's epoch and period errors carried to
+     tonight). The transits ExoClock wants timed come first.
+   - The surveys' new transients (`./brokers.py`, ALeRCE): about a minute,
+     so it runs in the background and its line comes when it lands.
+   - Comets to magnitude 12 (was 11), ten at most, each with how fast it
+     moves (`motion_arcsec_min`), which sets the longest frame that keeps
+     it sharp.
+   - How old each outside feed's data is (`sources`): fresh, cached within
+     its time, stale (an older copy kept because the source failed) or
+     unavailable. A stale feed is said, never given as tonight's.
+
+   On 3 November 2026 at 11:50, for that night with the real site and
+   data, the fresh fields went from NGC 2683, NGC 147, NGC 2403, NGC 891
+   to NGC 2683, NGC 3079, NGC 147, NGC 2403: NGC 3079, an edge-on barred
+   spiral of magnitude 10.7, was outside the old catalogue. The big
+   targets were the same (M81 with M82, M45, M39, M34, the Double
+   Cluster). ExoClock listed WASP-11 b and HAT-P-16 b at low priority with
+   their middles good to 0.3 minutes, and TOI-4153 b not at all.
+
+   Not asked, and why: Fink sorts the same ZTF alerts ALeRCE does; Lasair,
+   the Transient Name Server's interface for programs, the Minor Planet
+   Center's observatory code and OccultWatcher each need an account or a
+   registration of the person's own, and asteroid timings need the
+   timing this rig has not yet shown.
+
 What is kept, and what has to be kept to reproduce a find, is in
 [data.md](data.md).
 

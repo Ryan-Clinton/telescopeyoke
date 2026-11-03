@@ -7,6 +7,7 @@ when the laptop is out of Wi-Fi range.
 import gzip
 import json
 import math
+import os
 import re
 import time
 from datetime import datetime, timedelta, timezone
@@ -22,19 +23,56 @@ TIMEOUT = 25
 HEADERS = {"User-Agent": "telescopeyoke/0.1 (personal observing planner)"}
 
 
+# Where each cached key's data comes from, by the key's first word.
+SOURCES = {
+    "weather8w": ("Open-Meteo", "https://open-meteo.com"),
+    "weatherpast": ("Open-Meteo", "https://open-meteo.com"),
+    "seeing": ("7Timer ASTRO", "https://www.7timer.info"),
+    "lightpollution": ("Lorenz light-pollution atlas", "https://djlorenz.github.io/astronomy/lp/"),
+    "news": ("in-the-sky.org and headlines", "https://in-the-sky.org"),
+    "supernovae": ("Rochester active supernovae", "https://www.rochesterastronomy.org/snimages/snactive.html"),
+    "comets": ("COBS and JPL Horizons", "https://cobs.si"),
+    "aavso": ("AAVSO Target Tool", "https://targettool.aavso.org"),
+}
+# What each feed gave this run: fresh from the source, a copy kept within
+# its time, an old copy kept because the source failed, or nothing.
+used = {}
+
+
+def _note(key, state, path, max_age_h):
+    name, link = SOURCES.get(key.split("_")[0], (key, None))
+    fetched = None
+    if path.exists():
+        fetched = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat(timespec="seconds")
+    used[name] = {"source": name, "link": link, "state": state, "fetched": fetched,
+                  "max_age_hours": max_age_h}
+
+
+def freshness():
+    """What each feed used this run gave: one row per source, with its state
+    (fresh, cached, stale or unavailable) and when its data was fetched."""
+    return sorted(used.values(), key=lambda r: r["source"])
+
+
 def _cached(key, max_age_h, fetch):
-    """Return fetch()'s JSON-able result, reusing a recent copy from disk."""
+    """Return fetch()'s JSON-able result, reusing a recent copy from disk.
+    Each use is noted in `used`, so a report can say how old its data is."""
     path = CACHE / f"{key}.json"
     if path.exists() and time.time() - path.stat().st_mtime < max_age_h * 3600:
+        _note(key, "cached", path, max_age_h)
         return json.loads(path.read_text(encoding="utf-8"))
     try:
         value = fetch()
     except (requests.RequestException, ValueError, KeyError, OSError):
-        # A stale copy beats nothing.
+        # A stale copy beats nothing, but is said to be stale.
+        _note(key, "stale" if path.exists() else "unavailable", path, max_age_h)
         return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
     if value is not None:
         CACHE.mkdir(exist_ok=True)
         records.write(path, value, indent=None)
+        _note(key, "fresh", path, max_age_h)
+    else:
+        _note(key, "unavailable", path, max_age_h)
     return value
 
 
@@ -261,8 +299,11 @@ def bright_now(rows, now, limit=SUPERNOVA_MAG_LIMIT, days=SUPERNOVA_DAYS):
 
 # --- Comets: COBS for what is bright, JPL Horizons for where it is ----------
 
-COMET_MAG_LIMIT = 11
-MAX_COMETS = 6
+# A night's stack here reaches stars of about 17.8; a comet's light is
+# spread over its coma, so 12 is taken as the faintest worth a frame, and
+# the planner's score puts the faint ones below the bright.
+COMET_MAG_LIMIT = 12
+MAX_COMETS = 10
 
 
 def _horizons_track(designation, lat, lon, elevation_m, start, stop):
@@ -313,3 +354,49 @@ def comets(lat, lon, elevation_m, start, stop):
         return out
     key = f"comets_{lat:.3f}_{lon:.3f}_{start:%Y%m%d}"
     return _cached(key, 12, fetch)
+
+
+# --- Variable stars astronomers ask for: the AAVSO Target Tool ------------------
+# https://targettool.aavso.org/TargetTool/api : the alerts and campaigns,
+# and the stars of each section, with the cadence asked for and when the
+# last measurement came in. It needs a free account's key (the Target Tool's
+# settings page), kept in AAVSO_KEY_FILE or TY_AAVSO_KEY; without one it is
+# not asked.
+
+AAVSO_TARGETS = "https://targettool.aavso.org/TargetTool/api/v1/targets"
+AAVSO_KEY_FILE = Path(os.path.expanduser("~/.config/telescopeyoke/aavso-key"))
+
+
+def aavso_key():
+    """The Target Tool key, or None."""
+    if os.environ.get("TY_AAVSO_KEY"):
+        return os.environ["TY_AAVSO_KEY"].strip()
+    try:
+        return AAVSO_KEY_FILE.read_text(encoding="utf-8").strip() or None
+    except OSError:
+        return None
+
+
+def keep_aavso_key(text):
+    """Keep the Target Tool key, readable only by its owner."""
+    AAVSO_KEY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    descriptor = os.open(AAVSO_KEY_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as out:
+        out.write(text.strip() + "\n")
+    os.chmod(AAVSO_KEY_FILE, 0o600)
+
+
+def aavso_targets(lat, lon, min_alt=20):
+    """Every Target Tool star up here in the coming night, all sections
+    (alerts and campaigns among them), kept for 6 hours; None without a key."""
+    key = aavso_key()
+    if not key:
+        return None
+
+    def fetch():
+        r = requests.get(AAVSO_TARGETS, auth=(key, "api_token"), timeout=TIMEOUT, headers=HEADERS,
+                         params={"obs_section": ["all"], "observable": "true", "latitude": round(lat, 2),
+                                 "longitude": round(lon, 2), "targetaltitude": min_alt, "sunaltitude": -12})
+        r.raise_for_status()
+        return r.json()["targets"]
+    return _cached(f"aavso_{lat:.2f}_{lon:.2f}", 6, fetch)

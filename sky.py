@@ -101,7 +101,8 @@ def load_targets():
              "kind": r["kind"], "const": r["const"],
              "ra": float(r["ra_deg"]), "dec": float(r["dec_deg"]),
              "mag": number(r["mag"]), "size": number(r["size_arcmin"]),
-             "minor": number(r["minor_arcmin"]), "messier": bool(r["messier"])}
+             "minor": number(r["minor_arcmin"]), "messier": bool(r["messier"]),
+             "hubble": r.get("hubble") or None}
             for r in csv.DictReader(f)
         ]
 
@@ -314,6 +315,7 @@ class Night:
         return {
             "id": target["id"], "name": target.get("name", ""), "kind": kind,
             "const": target.get("const", ""), "mag": mag, "size": target.get("size"),
+            "minor": target.get("minor"), "hubble": target.get("hubble"),
             "ra": round(float(ra[i]), 4), "dec": round(float(dec[i]), 4),
             "best": self.local(i), "best_alt": round(float(alt[i]), 1),
             "best_az": round(float(az[i]), 1), "direction": compass(az[i]),

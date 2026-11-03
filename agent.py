@@ -485,6 +485,37 @@ def kept_references():
     return out
 
 
+EDGE_ON = 0.3     # a disc this thin for its length (minor/major axis) is seen nearly edge-on
+FACE_ON = 0.8     # this round, nearly face-on
+
+
+def describe(t):
+    """What the object is, in a few words, from the catalogue alone (OpenNGC's
+    class, its galaxy type and its two axes): "barred spiral galaxy (SBb),
+    seen nearly edge-on, 9.3' x 2.2', magnitude 9.8". Nothing is written
+    that the catalogue does not give."""
+    kind, hubble = t.get("kind", ""), (t.get("hubble") or "").strip()
+    words = kind
+    if "galaxy" in kind and hubble:
+        shape = ("elliptical" if hubble.startswith("E") else "lenticular" if hubble.startswith("S0")
+                 else "barred spiral" if hubble.startswith("SB") else "spiral" if hubble.startswith("S")
+                 else "irregular" if hubble.startswith("I") else "")
+        words = f"{shape} galaxy ({hubble})" if shape else f"galaxy ({hubble})"
+        size, minor = t.get("size"), t.get("minor")
+        if size and minor and shape in ("spiral", "barred spiral", "lenticular"):
+            if minor / size <= EDGE_ON:
+                words += ", seen nearly edge-on"
+            elif minor / size >= FACE_ON:
+                words += ", seen nearly face-on"
+    if t.get("name"):
+        words = f"{t['name']}, {words}"
+    if t.get("size"):
+        words += f", {t['size']:g}' x {t['minor']:g}'" if t.get("minor") else f", {t['size']:g}' across"
+    if t.get("mag") is not None:
+        words += f", magnitude {t['mag']:g}"
+    return words
+
+
 def other_fields(rep, limit=4, data=None, now=None):
     """Galaxies up in darkness tonight that no discovery programme's frames
     hold, big enough to patrol: fresh fields for a supernova watch, ranked
@@ -539,7 +570,7 @@ def other_fields(rep, limit=4, data=None, now=None):
         sn = next((active[n] for n in names if n in active), None)
         if sn:
             why.append(f"{sn['id']} in it now: the reference will hold it")
-        out.append(dict(_target(t), field=field, size_arcmin=round(size, 1), reference=reference,
+        out.append(dict(_target(t), field=field, what=describe(t), size_arcmin=round(size, 1), reference=reference,
                         supernova=sn["id"] if sn else None, days_since_watched=days and round(days, 1),
                         value=round(value, 3), why=why,
                         command=f"./patrol.py {field!r}" if " " in field else f"./patrol.py {field}"))
@@ -603,7 +634,7 @@ def big_targets(rep, limit=5, data=None, now=None):
         across = t.get("minor") if len(group) == 1 else max(o["size"] for o in group)   # a pair is long and thin
         columns, rows = mosaic.suggest(dict(t, size=span, minor=across), width, height)
         nights, days = history(t["id"], data, now)
-        out.append(dict(_target(t), size_arcmin=round(span, 1), frame_share=round(min(share, 1.0), 2),
+        out.append(dict(_target(t), what=describe(t), size_arcmin=round(span, 1), frame_share=round(min(share, 1.0), 2),
                         panels=None if columns * rows == 1 else f"{columns}x{rows}",
                         nights_imaged=nights, days_since_imaged=days and round(days, 1),
                         **{"with": [o["id"] for o in group[1:]]}))
@@ -638,7 +669,13 @@ def night(demo=False):
         "other_fields": other_fields(rep, data=None if not demo else config.DATA),
         "supernovae": [dict(_target(s), mag=s["mag"], type=s["type"], last_seen=s["last_seen"], peak_mag=s["peak_mag"])
                        for s in rep.get("supernovae", [])],
+        "campaigns": [dict(_target(c), section=c["section"], priority=c["priority"], var_type=c["var_type"],
+                           range=c["range"], cadence_days=c["cadence_days"],
+                           days_since_measured=c["days_since_measured"], overdue=c["overdue"], note=c["note"],
+                           link=c["link"])
+                      for c in rep.get("campaigns", [])],
         "news": rep.get("news", []),
+        "sources": rep.get("sources", []),
     }
 
 

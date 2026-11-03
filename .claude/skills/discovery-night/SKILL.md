@@ -10,9 +10,10 @@ allowed-tools: Bash(./ty night) Bash(./ty night --json) Bash(./patrol.py * --pla
 The night is `docs/discovery.md`, "Running a discovery night"; the patrol
 is `docs/agents/setup-routine.md` step 6b.
 
-0. Asked for the outlook or tonight's plan ("how's tonight looking"): run
-   `./ty night` once (3 seconds), `./transits.py` and `./ty candidates`
-   beside it, and read the last night's notes
+0. Asked for the outlook or tonight's plan ("how's tonight looking"): start
+   `./brokers.py` in the background (about a minute: the surveys' new
+   transients bright enough and up here tonight), run `./ty night` once
+   (3 seconds), `./transits.py` and `./ty candidates` beside it, and read the last night's notes
    (`~/ryanclinton.uk/notes/DATE.md`): what was patrolled, looked at a
    second time and ruled out. Answer from all of them straight away. A
    candidate the notes rule out is dismissed at once (`python3
@@ -50,8 +51,22 @@ is `docs/agents/setup-routine.md` step 6b.
      the night planned: a Moon or planet approach or an occultation. The
      headlines only when asked for the news.
    - One line per whole transit from `./transits.py`: planet, depth, V,
-     its window and middle altitude, and whether the timing is wanted.
+     its window and middle altitude, and whether the timing is wanted
+     (ExoClock's priority and its timings lately, and how many minutes the
+     prediction may be out).
      Say any clash with a programme's go time. None, one line saying so.
+   - One line per `campaigns` item (AAVSO Target Tool stars this camera
+     can measure tonight, AAVSO's priority ones first, then the most
+     overdue): its name and type, the section (an alert or campaign
+     first), how overdue (`days_since_measured` against `cadence_days`)
+     and best time. None, no line.
+   - One line for the survey transients from `./brokers.py`, as soon as it
+     finishes (never hold the answer for it): each one left, with its
+     magnitude, whether it is brightening and its best time; none, say
+     how many were looked at and that none was bright enough.
+   - Any `sources` row whose `state` is `stale` or `unavailable`: one line
+     naming the feed and when its data is from. Never give stale data as
+     tonight's.
    - Only if `skyline_measured` is false: one line saying so.
 
 1. `./patrol.py m31-panels --plan` (or `m31-novae`, `m33-novae`): read it

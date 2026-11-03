@@ -539,3 +539,54 @@ def test_a_foggy_night_says_so_and_fog_is_not_clear(monkeypatch):
     report = tonight.build(config.example(), demo=True)["weather"]
     assert any(n.startswith("fog likely") and "0.3 km" in n for n in report["notes"])
     assert report["clear_hours"] == 0
+
+
+def test_the_aavso_stars_this_camera_can_measure_come_wanted_first_and_reach_ty_night(monkeypatch):
+    import time as clock
+    import agent
+    import interface
+    import sky
+    from test_interface import valid
+    now = clock.time()
+    day = 86400
+
+    def star(name, **kw):
+        return dict({"star_name": name, "ra": 30.0, "dec": 85.0, "var_type": "UGSS", "min_mag": 15.5,
+                     "max_mag": 11.5, "obs_mode": "Photometry", "filter": "V", "obs_cadence": 2.0,
+                     "obs_section": ["cv"], "priority": False, "last_data_point": now - 3 * day,
+                     "other_info": ""}, **kw)
+
+    class Source:
+        @staticmethod
+        def aavso_targets(lat, lon, min_alt):
+            return [star("LATE"), star("ON TIME", last_data_point=now - day),
+                    star("WANTED", priority=True, obs_section=["Alerts / Campaigns"], last_data_point=now - day),
+                    star("TOO BRIGHT", max_mag=3.0, min_mag=4.0),
+                    star("EYE ONLY", obs_mode="Visual", filter="Vis"),
+                    star("SOUTHERN", dec=-85.0)]
+    night = sky.Night(config.example())
+    found = tonight.campaign_results(night, 0, 0, Source, now=now)
+    assert [c["id"] for c in found] == ["WANTED", "LATE", "ON TIME"]
+    assert found[1]["overdue"] == 1.5 and found[1]["days_since_measured"] == 3.0
+    assert found[0]["priority"] and found[0]["kind"] == "variable star"
+
+    import demo
+    monkeypatch.setattr(demo, "aavso_targets", Source.aavso_targets, raising=False)
+    monkeypatch.setattr(agent, "_night_cache", {})
+    data = valid(interface.run("night", lambda: agent.night(demo=True)), "night")["data"]
+    assert [c["id"] for c in data["campaigns"]] == ["WANTED", "LATE", "ON TIME"]
+
+
+def test_without_a_target_tool_key_aavso_is_not_asked(monkeypatch):
+    monkeypatch.delenv("TY_AAVSO_KEY", raising=False)
+    monkeypatch.setattr(feeds, "AAVSO_KEY_FILE", config.DATA / "no-such-key")
+    assert feeds.aavso_targets(54.0, -6.0) is None
+
+
+def test_a_comets_motion_is_read_off_its_track_at_the_time_asked():
+    import numpy as np
+    # 0.1° of declination in 30 minutes: 12" a minute.
+    track = np.array([[0.0, 10.0, 20.0], [1800.0, 10.0, 20.1], [3600.0, 10.0, 20.3]])
+    assert tonight.comet_motion(track, 900.0) == 12.0
+    assert tonight.comet_motion(track, 3000.0) == 24.0
+    assert tonight.comet_motion(track, 99999.0) == 24.0      # past the end: the last step
