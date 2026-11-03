@@ -63,6 +63,32 @@ After both fixes Tabby's star is the only Tabby-like one of the 53; next
 come KIC 7987514 (nine dips, the deepest 2.6%) and KIC 7988797. KIC 1255 b
 and KIC 3542116 give nothing: their dips are shallower than the 1% floor.
 
+## The benchmark on real light curves
+
+Tabby's dips must be found, known eclipsing binaries must come out
+periodic, and quiet stars must give nothing. The binaries are taken from
+the Villanova Kepler eclipsing binary catalogue (keplerebs.villanova.edu),
+with its periods and eclipse depths; the quiet stars are three that the
+first search near Tabby's star found nothing in. `tests/test_archive.py`
+runs it on a kept copy of the light curves (`TY_KEPLER_CACHE=.../cache/kepler
+pytest -q tests/test_archive.py -k benchmark`) and skips without one.
+3 November 2026:
+
+| Star | Catalogue | Found |
+|---|---|---|
+| KIC 8462852 (Tabby's) | dips D792 about 15%, D1519 about 20% | 14.3%, 20.7%, and 3.0% and 7.7% in the 2013 complex; the only Tabby-like star |
+| KIC 8129189 | binary, 53.647 d, eclipses 21.6% and 2.1%, eccentric | periodic, 53.637 d; no dip left |
+| KIC 10274244 | binary, 13.684 d, eclipse 19.2% | periodic, 13.649 d |
+| KIC 5795648 | binary, 4.553 d, eclipse 2.3% | periodic, 4.536 d |
+| KIC 9221398 | binary, 13.788 d, eclipse 1.19% | two 1.32% dips 827.25 days apart (60 periods): one eclipse seen twice |
+| KIC 4035675 | binary, 2.874 d, eclipse 3.8% | no dip left: its 2.1% scatter |
+| KIC 7684873, 5990753 | binaries, eclipses 0.04% and 0.00% | nothing: under the 1% floor, as they should be |
+| KIC 7849605, 7850078, 7917803 | quiet | nothing |
+
+The periods found are 0.1 to 0.4% short of the catalogue's: the period
+here is the shortest gap between eclipses, not a fit, which is enough to
+tell a binary from a dipper and not a measurement.
+
 ## Screening every star Kepler watched
 
     ./archive.py screen --batch 500

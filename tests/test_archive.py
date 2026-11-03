@@ -145,6 +145,49 @@ def test_the_screen_goes_on_where_it_stopped_and_ranks_everything_screened(tmp_p
     assert [r["kic"] for r in second["top"]] == [22, 11, 44] and len(lists) == 1   # the list fetched once
 
 
+# The benchmark on real Kepler light curves, where a copy of them is kept
+# (TY_KEPLER_CACHE: a cache/kepler folder that `archive.py dips` filled).
+# Binaries from the Villanova Kepler EB catalogue (keplerebs.villanova.edu),
+# their periods and eclipse depths as it gives them; quiet stars from the
+# first search near Tabby's star. docs/archive.md has the figures.
+BINARIES = {8129189: 53.6470815, 10274244: 13.6836897, 5795648: 4.5533695}
+TOO_SHALLOW = (7684873, 5990753)      # eclipses 0.04% and 0.00% deep: under the 1% floor
+QUIET = (7849605, 7850078, 7917803)
+
+
+def kept(kic):
+    import os
+    from pathlib import Path
+    root = os.environ.get("TY_KEPLER_CACHE")
+    paths = sorted((Path(root) / f"{kic:09d}").glob("*_llc.fits")) if root else []
+    if not paths:
+        pytest.skip(f"no kept Kepler light curves of KIC {kic} (set TY_KEPLER_CACHE)")
+    lc = archive.read(paths)
+    dips, scatter = archive.find_dips(lc["t"], lc["f"], lc["q"], lc["quarter"])
+    return dips, scatter
+
+
+def test_the_real_benchmark_tabbys_dips_are_found():
+    dips, scatter = kept(8462852)
+    left = {round(d["middle"]): d["depth_percent"] for d in dips if d["verdict"] == "dip"}
+    assert left[793] == pytest.approx(14.3, abs=1.0) and left[1520] == pytest.approx(20.7, abs=1.0)   # D792, D1519
+    assert set(left) == {793, 1520, 1540, 1568} and scatter <= archive.QUIET
+
+
+@pytest.mark.parametrize("kic", sorted(BINARIES))
+def test_the_real_benchmark_binaries_are_periodic(kic):
+    dips, _ = kept(kic)
+    periodic = [d for d in dips if d["verdict"] == "periodic"]
+    assert periodic and not [d for d in dips if d["verdict"] == "dip"]
+    assert any(abs(d["period_days"] / BINARIES[kic] - round(d["period_days"] / BINARIES[kic])) < 0.01 for d in periodic)
+
+
+@pytest.mark.parametrize("kic", TOO_SHALLOW + QUIET)
+def test_the_real_benchmark_quiet_stars_give_nothing(kic):
+    dips, _ = kept(kic)
+    assert not [d for d in dips if d["verdict"] == "dip"]
+
+
 def test_stars_are_named_as_people_write_them():
     assert archive.kic_number(["KIC", "8462852"]) == archive.kic_number("KIC8462852") == 8462852
     assert archive.kic_number("Tabby") == 8462852
