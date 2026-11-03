@@ -135,6 +135,36 @@ burst's own SNR comes out low (17.8 here, where turboSETI gives 157).
 That matters for wide interference, not for the narrow signals this
 looks for.
 
+**All seven looks, two sessions** (b23ab79: the receiver's spike at
+each coarse channel's middle, the "DC bin", blanked; turboSETI reads the
+saved slices spike and all, so its hit there is counted apart). The
+2017 cadence's six looks at 2266.75 to 2269.60 MHz, and the 2018 look
+(session AGBT18A_999_30, scan 9) at 1472.20 to 1475.05 MHz:
+
+| Look | this search | turboSETI (spike apart) | both | only this | only turboSETI |
+|---|---|---|---|---|---|
+| 2017 ON, scan 31 | 2 | 9 | 1 | 1 | 8 (all in the burst) |
+| 2017 OFF, scan 32 | 2 | 1 | 1 | 1 | 0 |
+| 2017 ON, scan 33 | 2 | 1 | 1 | 1 | 0 |
+| 2017 OFF, scan 34 | 1 | 1 | 1 | 0 | 0 |
+| 2017 ON, scan 35 | 1 | 1 | 1 | 0 | 0 |
+| 2017 OFF, scan 36 | 2 | 1 | 1 | 1 | 0 |
+| 2018 ON, scan 9 | 2 | 0 | 0 | 2 | 0 |
+
+Outside the one burst, turboSETI found nothing this search missed. The
+hit both find in every 2017 look is a steady tone at 2267.509 MHz (SNR
+about 80) in ON and OFF alike: interference. The extra hits are weak:
+a steady tone at 2269.5573 MHz (SNR 10 to 13) in scans 32, 33 and 36,
+ON and OFF, so interference too, which turboSETI's whole-band noise
+leaves under its cut; and two in 2018 at SNR 14.4 and 10.4. Planted in
+the 2018 look's noise, signals are found as in 2017: 28% at SNR 10,
+78% at 12, 98% at 15, all at 20 and above, no false hits in 240 runs.
+
+On that evidence the sweep is let loose (3 November 2026): it agrees
+with turboSETI on seven real looks from two sessions and finds 98% of
+signals at SNR 15. What it finds is still judged by the cadence, and a
+candidate is still ours until checked.
+
 ## Tabby's star
 
 KIC 8462852 was observed by Green Bank in May 2017, among other times;
