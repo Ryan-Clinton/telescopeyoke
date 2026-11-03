@@ -85,6 +85,9 @@ def night(tmp_path, monkeypatch):
         monkeypatch.setattr(mount, name, tmp_path / f"{name}.json")
     monkeypatch.setattr(mount, "LOCK_FILE", tmp_path / "MOTION_LOCKED")
     monkeypatch.setattr(mount, "SETTLE", 0)
+    # The quality pass, which a real run leaves to the background, done in
+    # place so these tests can look at what it made.
+    monkeypatch.setattr(shoot, "restack_later", lambda folder: restack.run(folder))
     for module in (shoot, restack, agent):
         monkeypatch.setattr(module, "ROOT", tmp_path)
     monkeypatch.setattr(config, "DATA", tmp_path)

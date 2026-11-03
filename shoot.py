@@ -1018,9 +1018,10 @@ def image(args, session, exposure, moving, holding, tracker):
     if told["cloud"] and not args.no_live and not config.DEMO:
         watch_on()
     if session.save and not args.no_restack:
-        if os.environ.get("TY_PATROL") or args.profile:
+        if os.environ.get("TY_PATROL") or args.profile or config.DEMO:
             # A patrol holding the telescope for its search (--wait) needs the
-            # picture before it searches; a profile wants the timings here.
+            # picture before it searches; a profile wants the timings here;
+            # the demo has no telescope to free, and ends on its picture.
             print("\nQuality pass over the raw frames:")
             restack.run(session.folder, profile=args.profile)
             import patrol

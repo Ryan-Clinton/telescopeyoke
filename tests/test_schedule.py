@@ -99,7 +99,9 @@ def test_a_step_with_an_end_time_already_past_is_skipped(monkeypatch):
     import time
     schedule.save({"steps": []})
     monkeypatch.setattr(schedule, "last_field", lambda: "M31-P4")
-    until = time.strftime("%H:%M", time.localtime(time.time() + 30))
+    # 30 to 90 s ahead whatever the second: now + 30 s cut to the minute
+    # could fall just before now, which by day is tomorrow (CI, 3 November 2026).
+    until = time.strftime("%H:%M", time.localtime(time.time() + 90))
     schedule.main(["add", "Keep going", "0", "--until", until, "--", "./shoot.py", "{last}"])
     ran = []
     assert schedule.run(say=lambda s: None, start=lambda cmd: ran.append(cmd))
