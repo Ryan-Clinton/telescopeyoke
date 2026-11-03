@@ -80,6 +80,31 @@ def test_dips_over_much_of_the_curve_are_the_stars_variability():
     assert "variability" in {d["verdict"] for d in found}
 
 
+def test_a_slow_fade_survives_joining_the_quarters_at_their_edges():
+    t = np.arange(0, 4 * 365.25, STEP)
+    quarter = (t // 91).astype(int)
+    star = 1 - 0.0075 * t / 365.25                          # 3% fainter over four years
+    scale = np.array([1.0, 0.93, 1.08, 0.97] * 5)[quarter]  # a different CCD after each roll
+    gaps = (t % 91) > 1.0                                   # a day lost at each roll
+    found = archive.trend(t[gaps], (1000 * star * scale)[gaps], quarter[gaps])
+    assert found["percent_per_year"] == pytest.approx(-0.75, abs=0.05)
+    assert found["change_percent"] == pytest.approx(-3.0, abs=0.2)
+    assert archive.trend(t[:50], np.ones(50), quarter[:50]) is None
+
+
+def test_a_dip_only_the_cleaning_shows_is_said_to_be_pdcsap_only():
+    t, f, q, quarter = curve()
+    f = dip(t, f, 40.0, 0.10, fall=0.5, rise=2.0)
+    f = dip(t, f, 70.0, 0.04, fall=0.3, rise=0.3)
+    sap = dip(t, curve(seed=3)[1], 40.0, 0.10, fall=0.5, rise=2.0)      # SAP has the first only...
+    sap = dip(t, sap, 20.0, 0.05, fall=0.3, rise=0.3)                  # ...and one the cleaning took out
+    dips, _ = archive.find_dips(t, f, q, quarter)
+    sap_dips, _ = archive.find_dips(t, sap, q, quarter)
+    alone = archive.seen_in_sap(dips, {"t": t, "sap": sap, "quarter": quarter}, sap_dips)
+    assert [(round(d["middle"]), d["seen_in"]) for d in dips] == [(40, "both"), (70, "PDCSAP only")]
+    assert [(round(d["middle"]), d["seen_in"]) for d in alone] == [(20, "SAP only")]
+
+
 def test_stars_are_named_as_people_write_them():
     assert archive.kic_number(["KIC", "8462852"]) == archive.kic_number("KIC8462852") == 8462852
     assert archive.kic_number("Tabby") == 8462852

@@ -416,7 +416,8 @@ def test_an_archive_answer_matches_its_schema(tmp_path, monkeypatch):
     t, f, q, quarter = curve()
     f = dip(t, f, 40.0, 0.10, fall=0.5, rise=2.0)
     monkeypatch.setattr(archive, "fetch", lambda kic, get=None, say=None: [])
-    monkeypatch.setattr(archive, "read", lambda paths: {"t": t, "f": f, "q": q, "quarter": quarter})
+    monkeypatch.setattr(archive, "read", lambda paths: {"t": t, "f": f, "sap": f, "pdc_raw": f * 1000,
+                                                        "sap_raw": f * 1000, "q": q, "quarter": quarter})
     one = valid(interface.run("archive", lambda: dict(archive.analyse(8462852), kind="measured")), "archive")["data"]
     assert one["tabby_like"] and one["dips"][0]["verdict"] == "dip" and np.isfinite(one["score"])
     valid(interface.run("archive", lambda: archive.search([8462852], say=lambda *_: None)), "archive")

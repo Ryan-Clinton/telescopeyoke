@@ -37,7 +37,19 @@ Before anything is called a dip it is checked against what is not the star:
   - variability: dips cover more than VARIABLE of the good points: the
     star's own spots or pulsation, not occasional dips.
 What is left is a "dip". A star is Tabby-like when it has a dip at least
-DEEP deep; stars are ranked by the dips left, deep and lopsided first.
+DEEP deep and its light is otherwise steady (scatter at most QUIET);
+stars are ranked Tabby-like first, then by the dips left, deep and
+lopsided first.
+
+Each dip is also measured in the SAP flux (the light in the aperture
+before the mission's cleaning) and said to be in both, or in PDCSAP
+only; dips in SAP that PDCSAP does not have are listed apart. The
+cleaning takes out what it judges the spacecraft's: pointing drift, focus
+and thermal changes, and sudden drops in a pixel's sensitivity (Kepler
+Archive Manual, section 2.3.1.2). Each quarter being put on its own level
+also takes out any slow change, so the long-term trend is measured
+separately, with the quarters joined at their edges (Tabby's star faded
+about 3% over Kepler's four years: Montet & Simon 2016).
 An odd light curve here is a reason to look, not a discovery: each still
 needs its catalogue checks (VSX, SIMBAD) and the papers on it.
 Nothing here moves the mount or uses the camera.
@@ -62,7 +74,8 @@ DIP_SIGMA = 3.0      # times the usual scatter below the level (variables.DIP_SI
 DIP_DEPTH = 0.01     # and at least this far below it: 1%, about variables.DIP_DEPTH's 0.02 mag halved for Kepler's precision
 EDGE_DAYS = 0.5      # this close to a quarter's end or a gap is an edge
 GAP_DAYS = 0.5       # a break this long in the good points is a gap
-FLAG_HOURS = 6.0     # a quality flag this close to a short dip's faintest point puts it on the spacecraft
+FLAG_HOURS = 2.0     # a quality flag this close to a short dip's faintest point puts it on the spacecraft
+                     # (6 at first: with a dump every three days that took a third of KIC 8129189's eclipses)
 SHORT_HOURS = 24.0   # only a dip shorter than this can be a spacecraft event: a momentum dump or a
                      # tweak upsets a few hours; Kepler had a dump every three days, so a dip of days
                      # always has one near it
@@ -71,7 +84,9 @@ SUSPECT = 1 | 2 | 4 | 8 | 32 | 128    # attitude tweak, safe mode, coarse point,
 PERIOD_TOLERANCE = 0.02   # an interval within this share of a whole multiple
 LIKE_DEPTH = 0.3          # depths within this share of their mean are alike
 VARIABLE = 0.05           # dips over this share of the good points: the star's own variability
-DEEP = 0.05               # a dip this deep makes a star Tabby-like
+DEEP = 0.05               # a dip this deep makes a star Tabby-like...
+QUIET = 0.01              # ...when its light is otherwise this steady (scatter): Tabby's is 0.03%. KIC
+                          # 7988797's 12.6% dip on 4.2% scatter (3 November 2026) is a restless star's
 
 
 def kic_number(words):
@@ -122,30 +137,91 @@ def fetch(kic, get=requests.get, say=print):
 
 
 def read(paths):
-    """One light curve from the quarters' files: time (BKJD), flux divided by
-    each quarter's median (NaN where not usable), quality flags, quarter."""
+    """One light curve from the quarters' files: time (BKJD), the PDCSAP
+    flux and the SAP flux each divided by its quarter's median (NaN where
+    not usable), both as they came (sap_raw, pdc_raw, for the long-term
+    trend), the quality flags and the quarter."""
     from astropy.io import fits
-    t, f, q, quarter = [], [], [], []
+    names = ("t", "f", "sap", "pdc_raw", "sap_raw", "q", "quarter")
+    parts = {n: [] for n in names}
     for path in paths:
         with fits.open(path, memmap=False) as hdul:
             data = hdul[1].data
             number = hdul[0].header.get("QUARTER", -1)
             time = np.array(data["TIME"], float)
-            flux = np.array(data["PDCSAP_FLUX"], float)
+            pdc = np.array(data["PDCSAP_FLUX"], float)
+            sap = np.array(data["SAP_FLUX"], float) if "SAP_FLUX" in data.columns.names else np.full(len(time), np.nan)
             flags = np.array(data["SAP_QUALITY"], int)
-        good = np.isfinite(time) & np.isfinite(flux) & (flags == 0)
+        keep = np.isfinite(time)
+        good = keep & np.isfinite(pdc) & (flags == 0)
         if not good.any():
             continue
-        flux = np.where(good, flux / np.median(flux[good]), np.nan)
-        keep = np.isfinite(time)
-        t.append(time[keep])
-        f.append(flux[keep])
-        q.append(flags[keep])
-        quarter.append(np.full(keep.sum(), number))
-    if not t:
-        return {"t": np.array([]), "f": np.array([]), "q": np.array([], int), "quarter": np.array([], int)}
-    return {"t": np.concatenate(t), "f": np.concatenate(f), "q": np.concatenate(q),
-            "quarter": np.concatenate(quarter)}
+        pdc = np.where(good, pdc, np.nan)
+        sap = np.where(keep & np.isfinite(sap) & (flags == 0), sap, np.nan)
+        sap_level = np.nanmedian(sap) if np.isfinite(sap).any() else np.nan
+        for name, value in (("t", time), ("f", pdc / np.nanmedian(pdc)), ("sap", sap / sap_level),
+                            ("pdc_raw", pdc), ("sap_raw", sap), ("q", flags), ("quarter", np.full(len(time), number))):
+            parts[name].append(value[keep])
+    if not parts["t"]:
+        return {n: np.array([], int if n in ("q", "quarter") else float) for n in names}
+    return {n: np.concatenate(v) for n, v in parts.items()}
+
+
+STITCH_DAYS = 1.0    # each quarter is put on the last's level by the medians of the day either side of the break
+
+
+def trend(t, raw, quarter):
+    """The star's slow change across the quarters, without putting each on
+    its own level: each quarter is scaled so the median of its first
+    STITCH_DAYS meets the median of the last STITCH_DAYS of the one before
+    (the star sits on another CCD after each quarterly roll, so a scale
+    per quarter is needed; fitted on the edges, it keeps whatever the star
+    did within and across quarters). Answers the straight-line change in
+    percent a year and the change from the first 30 days to the last 30,
+    or None with too little."""
+    good = np.isfinite(raw)
+    if good.sum() < 100:
+        return None
+    t, raw, quarter = t[good], raw[good], quarter[good]
+    order = sorted(set(quarter.tolist()), key=lambda n: t[quarter == n].min())
+    stitched = np.empty_like(raw)
+    tail = None
+    for n in order:
+        inside = quarter == n
+        tq, fq = t[inside], raw[inside]
+        head = np.median(fq[tq <= tq.min() + STITCH_DAYS])
+        scale = 1.0 if tail is None else tail / head
+        stitched[inside] = fq * scale
+        tail = np.median(stitched[inside][tq >= tq.max() - STITCH_DAYS])
+    stitched = stitched / np.median(stitched[t <= t.min() + 30])
+    years = (t - t.min()) / 365.25
+    slope, start = np.polyfit(years, stitched, 1)
+    late = np.median(stitched[t >= t.max() - 30])
+    return {"percent_per_year": round(float(100 * slope / start), 2),
+            "change_percent": round(float(100 * (late - 1)), 2), "years": round(float(years.max()), 2)}
+
+
+def seen_in_sap(dips, curve, sap_dips):
+    """Each PDCSAP dip's depth in SAP over the same span, and whether SAP
+    shows it (at least half as deep); and the SAP dips no PDCSAP dip
+    covers. PDC takes out what it judges the spacecraft's: pointing drift,
+    focus changes, thermal changes, and sudden drops in a pixel's
+    sensitivity (Kepler Archive Manual, section 2.3.1.2), so a dip in one
+    and not the other is the pipeline's doing until shown otherwise."""
+    t, sap, quarter = curve["t"], curve["sap"], curve["quarter"]
+    for d in dips:
+        span = (t >= d["start"]) & (t <= d["end"]) & np.isfinite(sap)
+        if not span.any():
+            d["sap_depth_percent"], d["seen_in"] = None, "PDCSAP only"
+            continue
+        level = np.nanmedian(sap[quarter == quarter[span][0]])
+        depth = 100 * (level - np.nanmin(sap[span]))
+        d["sap_depth_percent"] = round(float(depth), 2)
+        d["seen_in"] = "both" if depth >= 0.5 * d["depth_percent"] else "PDCSAP only"
+    covered = [(d["start"], d["end"]) for d in dips]
+    alone = [dict(s, seen_in="SAP only") for s in sap_dips
+             if not any(a <= s["middle"] <= b for a, b in covered)]
+    return alone
 
 
 def calendar(bkjd):
@@ -217,24 +293,43 @@ def find_dips(t, f, q, quarter):
     return out, float(scatter)
 
 
+def _period(middles):
+    """The interval three or more dips repeat at, or None: the smallest gap,
+    or a half or third of it (eclipses lost in gaps), of which every gap
+    is a whole multiple."""
+    gaps = np.diff(np.sort(middles))
+    gaps = gaps[gaps > 0.1]
+    if len(gaps) < 2:
+        return None
+    for parts in (1, 2, 3):
+        period = gaps.min() / parts
+        multiples = gaps / period
+        if (np.abs(multiples - np.round(multiples)) < PERIOD_TOLERANCE * np.maximum(np.round(multiples), 1)).all():
+            return float(period)
+    return None
+
+
 def _periodic(dips):
-    """Mark three or more like dips at whole multiples of one interval."""
-    clean = [d for d in dips if d["verdict"] in ("dip", "edge")]
-    if len(clean) < 3:
-        return
-    middles = np.array(sorted(d["middle"] for d in clean))
-    depths = np.array([d["depth_percent"] for d in clean])
-    gaps = np.diff(middles)
-    period = gaps[gaps > 0.1].min() if (gaps > 0.1).any() else None
-    if not period:
-        return
-    multiples = gaps / period
-    whole = np.abs(multiples - np.round(multiples)) < PERIOD_TOLERANCE * np.maximum(np.round(multiples), 1)
-    alike = depths.std() <= LIKE_DEPTH * depths.mean()
-    if whole.all() and alike:
-        for d in clean:
-            d["verdict"] = "periodic"
-            d["period_days"] = round(float(period), 4)
+    """Mark the dips that repeat: each group of three or more of like depth
+    (an eclipsing binary's primary eclipses, and apart from them its
+    shallower secondaries, which an eccentric orbit puts off the half
+    period) at whole multiples of one interval. 3 November 2026: KIC
+    8129189, the Villanova catalogue's 53.6-day binary (eclipses 21.6% and
+    2.1% deep), was first ranked above Tabby's star when all its dips had
+    to be alike at once."""
+    clean = [d for d in dips if d["verdict"] in ("dip", "edge", "spacecraft")]   # what repeats is the star's
+    for seed in sorted(clean, key=lambda d: -d["depth_percent"]):
+        if seed["verdict"] == "periodic":
+            continue
+        group = [d for d in clean if d["verdict"] != "periodic"
+                 and abs(d["depth_percent"] - seed["depth_percent"]) <= LIKE_DEPTH * seed["depth_percent"]]
+        if len(group) < 3:
+            continue
+        period = _period(np.array([d["middle"] for d in group]))
+        if period:
+            for d in group:
+                d["verdict"] = "periodic"
+                d["period_days"] = round(period, 4)
 
 
 def score(dips):
@@ -247,14 +342,20 @@ def analyse(kic, get=requests.get, say=print):
     """One star's answer."""
     curve = read(fetch(kic, get, say))
     dips, scatter = find_dips(curve["t"], curve["f"], curve["q"], curve["quarter"])
+    sap_dips, _ = find_dips(curve["t"], curve["sap"], curve["q"], curve["quarter"])
+    sap_only = seen_in_sap(dips, curve, sap_dips)
     real = [d for d in dips if d["verdict"] == "dip"]
     padded = f"{kic:09d}"
     return {"star": f"KIC {kic}", "kic": kic, "quarters": int(len(set(curve["quarter"].tolist()))),
             "points": int(np.isfinite(curve["f"]).sum()),
             "scatter_percent": None if scatter is None else round(100 * scatter, 3),
-            "dips": dips, "real_dips": len(real),
+            "dips": dips, "real_dips": len(real), "sap_only": sap_only,
+            "trend": {"sap": trend(curve["t"], curve["sap_raw"], curve["quarter"]),
+                      "pdcsap": trend(curve["t"], curve["pdc_raw"], curve["quarter"])},
             "deepest_percent": max((d["depth_percent"] for d in real), default=0.0),
-            "tabby_like": any(d["depth_percent"] >= 100 * DEEP for d in real), "score": score(dips),
+            "tabby_like": scatter is not None and scatter <= QUIET
+                          and any(d["depth_percent"] >= 100 * DEEP for d in real),
+            "score": score(dips),
             "source": MAST.format(group=padded[:4], kic=padded)}
 
 
@@ -263,9 +364,18 @@ def say_star(answer, say=print):
         f"{answer['scatter_percent']}%; {answer['real_dips']} dip(s) left of {len(answer['dips'])} found"
         f"{', Tabby-like' if answer['tabby_like'] else ''}")
     for d in answer["dips"]:
-        say(f"  {d['date']} (BKJD {d['middle']:.2f})  {d['depth_percent']:5.2f}% deep, {d['hours']:.1f} h, "
-            f"asymmetry {d['asymmetry']:+.2f}  {d['verdict']}"
+        sap = "" if d.get("sap_depth_percent") is None else f", SAP {d['sap_depth_percent']:.2f}%"
+        say(f"  {d['date']} (BKJD {d['middle']:.2f})  {d['depth_percent']:5.2f}% deep{sap}, {d['hours']:.1f} h, "
+            f"asymmetry {d['asymmetry']:+.2f}  {d['verdict']}, {d.get('seen_in', 'PDCSAP')}"
             f"{' (period ' + str(d['period_days']) + ' d)' if 'period_days' in d else ''}")
+    real_sap = [d for d in answer.get("sap_only", []) if d["verdict"] == "dip"]
+    if real_sap:
+        say(f"  {len(real_sap)} dip(s) in SAP only (PDC took them out: the spacecraft's, until shown otherwise): "
+            + ", ".join(f"BKJD {d['middle']:.1f} {d['depth_percent']:.1f}%" for d in real_sap[:6]))
+    for name, tr in (answer.get("trend") or {}).items():
+        if tr:
+            say(f"  long-term ({name.upper()}, quarters joined at their edges): {tr['percent_per_year']:+.2f}% a "
+                f"year, {tr['change_percent']:+.2f}% over {tr['years']:.1f} years")
 
 
 def stars(text):
@@ -293,7 +403,7 @@ def search(numbers, get=requests.get, say=print):
         answer = {k: v for k, v in answer.items() if k != "dips"} | {
             "dips": [d for d in answer["dips"] if d["verdict"] == "dip"]}
         found.append(answer)
-    found.sort(key=lambda a: -a["score"])
+    found.sort(key=lambda a: (not a["tabby_like"], -a["score"]))
     say(f"{len(found)} stars read, {len(missed)} not had; {sum(a['tabby_like'] for a in found)} Tabby-like")
     for a in found[:20]:
         say(f"  {a['star']:<14} score {a['score']:6.2f}  {a['real_dips']} dip(s), deepest {a['deepest_percent']:.2f}%"

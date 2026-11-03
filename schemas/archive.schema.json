@@ -23,8 +23,16 @@
         "points": {"type": "integer"},
         "flags": {"type": "integer", "description": "Kepler quality flags (attitude tweak, safe mode, coarse or Earth point, momentum dump, manual exclude) near the faintest point."},
         "verdict": {"enum": ["dip", "edge", "spacecraft", "periodic", "variability"], "description": "dip: left after the checks; edge: faintest at a quarter's end or a gap; spacecraft: a short dip on a quality flag; periodic: like dips at whole multiples of one interval (an eclipsing binary or planet); variability: dips over much of the curve."},
-        "period_days": {"type": "number"}
+        "period_days": {"type": "number"},
+        "sap_depth_percent": {"type": ["number", "null"], "description": "Its depth in the SAP flux (before the mission's cleaning) over the same span."},
+        "seen_in": {"enum": ["both", "PDCSAP only", "SAP only"], "description": "Whether SAP shows it at least half as deep; SAP only: a dip in SAP that the cleaned flux does not have."}
       }
+    },
+    "trend": {
+      "type": ["object", "null"],
+      "description": "The star's slow change with the quarters joined at their edges (not each put on its own level). Null with too little.",
+      "properties": {"percent_per_year": {"type": "number"}, "change_percent": {"type": "number", "description": "The last 30 days against the first 30."},
+                     "years": {"type": "number"}}
     },
     "star": {
       "type": "object",
@@ -56,6 +64,9 @@
     "tabby_like": {"type": "boolean"},
     "score": {"type": "number"},
     "source": {"type": "string"},
+    "sap_only": {"type": "array", "items": {"$ref": "#/$defs/dip"}, "description": "Dips in SAP that no PDCSAP dip covers: what the cleaning took out, the spacecraft's until shown otherwise."},
+    "trend": {"type": "object", "properties": {"sap": {"$ref": "#/$defs/trend"}, "pdcsap": {"$ref": "#/$defs/trend"}},
+              "description": "The long-term change in each flux; PDCSAP's cleaning takes out most of a slow change, SAP keeps it."},
     "stars": {"type": "array", "items": {"$ref": "#/$defs/star"}},
     "missed": {"type": "array", "items": {"type": "object", "required": ["kic", "why"],
                                           "properties": {"kic": {"type": "integer"}, "why": {"type": "string"}}}},
