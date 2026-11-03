@@ -519,7 +519,7 @@ Done when, on real hardware:
 ### 8. CI and documents
 
 - Add `windows-latest` to the matrix in `.github/workflows/tests.yml`, on
-  Python 3.13 (Linux runs 3.11 and 3.14). The Windows job
+  Python 3.13, once a day (Linux runs 3.14). The Windows job
   runs `python -m pip install ".[test]"`, `python -m pytest -q`, then the
   demo commands in their Windows form: `python tonight.py --demo --top 5`,
   `python mount.py --demo zenith`, `.\ty.cmd capabilities --json` and

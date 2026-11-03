@@ -659,7 +659,7 @@ as made. A GoTo with centring, a polar measurement and the skyline survey now
 check that the view changed, and stop if it did not; a plain GoTo with no
 plate solve still takes the handset's word.
 
-Covered by automated tests (`pytest`, run on every push that changes code: Python 3.11 and 3.14 on Ubuntu, 3.13 on Windows; the badge at the top shows how the latest run went): the astronomy, the
+Covered by automated tests (`pytest`, run once a day on GitHub: Python 3.14 on Ubuntu, 3.13 on Windows; the badge at the top shows how the latest run went): the astronomy, the
 mount logic against the simulated handset, frame alignment and hot-pixel
 removal, star measurement and frame rejection, sub-pixel and rotation
 registration, clipped stacking, calibration arithmetic, a whole simulated

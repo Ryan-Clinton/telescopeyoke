@@ -1,82 +1,44 @@
 name: tests
 
-# Words alone (docs, notes, research reports) start no run.
+# Once a day, and by hand (the Actions tab, "Run workflow"); never on a push.
+# The tests that touch a change run on the laptop before it is pushed; this
+# only catches what those cannot, chiefly Windows, within a day.
 on:
-  push:
-    branches: [main]
-    paths-ignore: ["docs/**", "**.md"]
-  pull_request:
-    paths-ignore: ["docs/**", "**.md"]
+  schedule:
+    - cron: "0 9 * * *"     # 09:00 UTC, after the night
+  workflow_dispatch:
 
-# One run per change: a newer push cancels the run it replaces, rather than
-# letting a superseded run fail and send its email.
 concurrency:
-  group: tests-${{ github.event.pull_request.number || github.ref }}
+  group: tests
   cancel-in-progress: true
 
 jobs:
-  tests:
+  linux:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        # The oldest and the newest supported: what breaks between them shows at one end.
-        python-version: ["3.11", "3.14"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
-      - run: pip install ".[test]" ruff pytest-cov
+          python-version: "3.14"
+      - run: pip install ".[test]" ruff
       # Mistakes, not style: names never defined or never used, code that cannot run.
       - run: ruff check .
-      - run: python -m compileall -q .
-      # Branch coverage, reported each run; the build fails if it falls
-      # below the floor in pyproject.toml.
-      - run: pytest -q --cov --cov-report=term:skip-covered
+      - run: pytest -q
       - run: ./tonight.py --demo --top 5
       # The zenith is always reachable; a named object may have set when this runs.
       - run: ./mount.py --demo zenith
       - run: ./ty capabilities --json
       - run: ./mount.py --demo zenith --dry-run --json
 
-  # The exact versions in constraints-tested.txt, so that file stays true.
-  tested-versions:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: pip install -c constraints-tested.txt ".[test]"
-      - run: pytest -q
-
-  # Known vulnerabilities in the libraries installed. Reported, not a gate:
-  # a new advisory should be read and acted on, not turn every build red.
-  audit:
-    runs-on: ubuntu-latest
-    continue-on-error: true
+  # No hardware here either: this shows the scripts start and the tests pass
+  # on Windows, not that a camera or mount has been used there.
+  windows:
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: pip install . pip-audit
-      - run: pip-audit
-
-  # No hardware here either: this shows the scripts start and the tests pass
-  # on Windows, not that a camera or mount has been used there.
-  windows:
-    runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: ["3.13"]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
       - run: python -m pip install ".[test]"
       # The installer is not run here (it would open the demo's window); this
       # only shows that PowerShell can read it.

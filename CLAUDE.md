@@ -78,8 +78,8 @@ pytest -q tests/test_mount.py::test_name    # one test
 pytest -q -k meridian                       # tests matching a word
 ```
 
-CI (`.github/workflows/tests.yml`) also runs these after the tests, on Python
-3.11 and 3.14 (Windows on 3.13), so run them before pushing a change that touches the planner,
+CI (`.github/workflows/tests.yml`, once a day, never on a push) also runs
+these after the tests, so run them before pushing a change that touches the planner,
 the mount or the JSON output:
 
 ```bash
