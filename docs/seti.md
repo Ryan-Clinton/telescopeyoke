@@ -96,6 +96,45 @@ comparison allows). The whole cadence of that slice (all six looks,
 880 MB read in 23 minutes) gave no candidate: 13 hits of the first ON
 look were in an OFF look too, and 98 were not in every ON look.
 
+## Is the search right?
+
+Measured on real data before the sweep is let loose (the cloudy-day
+skill holds it until this section says so).
+
+**Signals planted in real noise** (`./seti.py inject`; 3 November 2026,
+the OFF look of Tabby's 2017 cadence, scan 32, 2266.75 to 2269.60 MHz,
+40 drifting signals at each strength, drifts up to 3.6 Hz/s):
+
+| SNR planted | found | drift off by (median) | false hits |
+|---|---|---|---|
+| 10 | 30% | 0.001 Hz/s | 0 |
+| 12 | 82% | 0.002 Hz/s | 0 |
+| 15 | 98% | 0.003 Hz/s | 0 |
+| 20, 30, 50 | 100% | 0.003 Hz/s | 0 |
+
+The search's cut is SNR 10, so a signal at the cut is found about a
+third of the time, as noise pushes it either side; from SNR 15 almost
+all are found, and none of the 240 runs made a false hit.
+
+**Against turboSETI** after the changes of dd1a763 (noise measured
+block by block, one hit per run of bright channels, the ends masked):
+
+| Look | this search | turboSETI | both | only this | only turboSETI |
+|---|---|---|---|---|---|
+| ON, scan 31 | 3 | 10 | 2 | 1 | 8 |
+| OFF, scan 32 | 3 | 2 | 2 | 1 | 0 |
+
+All eight hits only turboSETI found, and the one only this search found
+in scan 31, lie in one burst of interference 110 kHz wide (2266.79 to
+2266.90 MHz), which this search now counts once and turboSETI eight
+times. Outside it the two agree on every hit turboSETI finds. The one
+extra hit in scan 32 is at SNR 10.4, at the cut, 0.07 MHz from the end
+of the coarse channel. Measuring the noise block by block has one cost
+to know: a burst filling a block raises that block's noise, so the
+burst's own SNR comes out low (17.8 here, where turboSETI gives 157).
+That matters for wide interference, not for the narrow signals this
+looks for.
+
 ## Tabby's star
 
 KIC 8462852 was observed by Green Bank in May 2017, among other times;
