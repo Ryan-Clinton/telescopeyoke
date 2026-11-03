@@ -176,7 +176,17 @@ class Remote(io.RawIOBase):
         end = min(self.pos + len(buffer), self.size) - 1
         reply = self.get(self.url, headers=dict(HEADERS, Range=f"bytes={self.pos}-{end}"), timeout=TIMEOUT)
         reply.raise_for_status()
+        # Only the bytes asked for will do: a server that ignores the range
+        # answers 200 with the file from its start, which read as the slice
+        # would be wrong data with no error.
+        expected = f"bytes {self.pos}-{end}/"
+        if reply.status_code != 206 or not str(reply.headers.get("Content-Range", "")).startswith(expected):
+            raise interface.Refusal("INTERNAL_ERROR", f"{self.url} did not answer the range asked for "
+                                    f"({reply.status_code}, Content-Range {reply.headers.get('Content-Range')!r}).")
         data = reply.content
+        if len(data) != end - self.pos + 1:
+            raise interface.Refusal("INTERNAL_ERROR", f"{self.url} sent {len(data)} bytes for a range of "
+                                    f"{end - self.pos + 1}.")
         buffer[:len(data)] = data
         self.pos += len(data)
         self.fetched += len(data)

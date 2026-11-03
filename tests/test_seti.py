@@ -128,3 +128,39 @@ def test_find_groups_the_looks_by_session_and_puts_the_off_looks_between():
     assert [sc["target"] for sc in s["scans"]][:2] == ["KIC8462852", "KIC8462852_OFF"]
     assert s["complete"] and s["command"].startswith("./seti.py cadence ") and "HIP9" not in s["command"]
     assert s["scans"][0]["size_gb"] == 15.56
+
+
+class Ranged:
+    """A server's answer to a range request."""
+    def __init__(self, status, body, content_range):
+        self.status_code, self.content, self.headers = status, body, {"Content-Range": content_range}
+
+    def raise_for_status(self):
+        pass
+
+
+def test_the_remote_reader_takes_only_the_bytes_it_asked_for():
+    import pytest
+    blob = bytes(range(256)) * 4
+    head = lambda *a, **k: type("H", (), {"headers": {"Content-Length": str(len(blob))}})()   # noqa: E731
+
+    def honest(url, headers=None, timeout=None):
+        lo, hi = (int(x) for x in headers["Range"][6:].split("-"))
+        return Ranged(206, blob[lo:hi + 1], f"bytes {lo}-{hi}/{len(blob)}")
+    r = seti.Remote("https://x/f.h5", get=honest, head=head)
+    r.seek(100)
+    assert r.read(10) == blob[100:110]
+
+    def ignores_range(url, headers=None, timeout=None):     # 200 and the file from its start
+        return Ranged(200, blob, "")
+    r = seti.Remote("https://x/f.h5", get=ignores_range, head=head)
+    r.seek(100)
+    with pytest.raises(interface.Refusal):
+        r.read(10)
+
+    def short(url, headers=None, timeout=None):
+        lo, hi = (int(x) for x in headers["Range"][6:].split("-"))
+        return Ranged(206, blob[lo:hi - 3], f"bytes {lo}-{hi}/{len(blob)}")
+    r = seti.Remote("https://x/f.h5", get=short, head=head)
+    with pytest.raises(interface.Refusal):
+        r.read(10)
