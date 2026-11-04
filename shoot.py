@@ -56,7 +56,8 @@ import restack
 import snap
 import stacking
 import tracking
-from camera import Camera, stretch
+import sxwheel
+from camera import Camera, is_mono, stretch
 from indi import IndiError as CameraError
 
 ROOT = Path(__file__).parent
@@ -119,7 +120,7 @@ class Session:
 
     def job(self, index, mosaic, header):
         """Arguments for stacking.live_frame for this frame, as things stand."""
-        cards = {k: header[k] for k in ("EXPTIME", "GAIN", "DATE-OBS", "BAYERPAT") if k in header}
+        cards = {k: header[k] for k in stacking.KEPT if k in header}
         return (mosaic, cards, self.exposure, self.gain, str(self.folder), index, self.save,
                 self.accepted[-30:], self.reference)
 
@@ -577,8 +578,8 @@ def pick_exposure(gain, calibration_for):
     print("Tracking test:")
     with Camera(gain=gain) as cam:
         for seconds in TRIAL_EXPOSURES:
-            mosaic, _ = cam.frame(seconds)
-            lum = stacking.prepare(mosaic, calibration_for(seconds)).sum(axis=2)
+            mosaic, header = cam.frame(seconds)
+            lum = stacking.prepare(mosaic, calibration_for(seconds), mono=is_mono(header)).sum(axis=2)
             q = stacking.quality(lum, stacking.find_stars(lum))
             trials.append((seconds, q))
             shape = "no stars" if q["fwhm"] is None else \
@@ -1105,6 +1106,10 @@ def image(args, session, exposure, moving, holding, tracker):
                     holding.state = "off"
             tracker.waiting()
             jammed = None
+            # The filter in the light path, when a wheel answers: each frame
+            # says it (FILTER). Asked once here, as the wheel moves only when
+            # told to (sxwheel.py move), never during a run.
+            in_path = sxwheel.current_name()
             with Camera(gain=args.gain) as cam:
                 while more():
                     try:
@@ -1112,21 +1117,22 @@ def image(args, session, exposure, moving, holding, tracker):
                     except CameraError as problem:
                         jammed = problem          # the camera is closed on the way out of this block
                         break
+                    if in_path:
+                        header["FILTER"] = in_path
                     jams = 0
                     index += 1
                     tracker.took(index)
                     since_centre += 1
                     since_dither += 1
                     if time.monotonic() - shown >= PREVIEW_EVERY:
-                        snap.publish(mosaic, kind="newest frame", quick=True,
+                        snap.publish(mosaic, kind="newest frame", quick=True, mono=is_mono(header),
                                      detail=f"frame {index} · {exposure:g} s")
                         shown = time.monotonic()
                     collect()
                     if len(waiting) >= BACKLOG:
                         # Capture never waits for processing: this frame's raw
                         # file is kept and the quality pass will use it.
-                        cards = {k: header[k] for k in ("EXPTIME", "GAIN", "DATE-OBS", "BAYERPAT")
-                                 if k in header}
+                        cards = {k: header[k] for k in stacking.KEPT if k in header}
                         if session.save:
                             pool.submit(stacking.save_only, mosaic, cards, str(session.folder), index)
                         print(session.defer(index), flush=True)

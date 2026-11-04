@@ -54,6 +54,8 @@ setup = "default"
 # power_cycle_on_jam = true   when a frame is lost twice, cut the camera's power at its
 #                         powered hub's port and give it back before trying again
 #                         (uhubctl; a hub that switches each port's power; Linux only)
+# tec_target = -10       a cooled camera's (the 183M PRO TEC) sensor target in °C; unset leaves
+#                         the cooler as it is, and a camera without one ignores it
 
 [mount]
 # The distance from one tripod foot to the next, in centimetres. With it, the
@@ -97,6 +99,12 @@ serial_match = "FTDI"
 # either way, a focus run may turn it from where it started.
 [focuser]
 travel = 512
+
+[filterwheel]
+# The Starlight Xpress USB wheel's filters, position 1 first, a gap left empty
+# (sxwheel.py). Check the order against the real wheel: ./sxwheel.py move 1,
+# then look which filter is in the light path.
+filters = "L,R,G,B,Ha,OIII,SII,"
 
 [indi]
 port = 7624
