@@ -27,8 +27,8 @@ it first, then what follows it:
 5. One line in `CHANGELOG.md` under "Not yet released".
 
 Keep the project's plain style: short sentences, what was done and what
-it showed, nothing claimed beyond the evidence. `tests/test_docs.py` fails
-if a page states a figure the validation record found wrong, or a link
-leads nowhere; say which pages you changed so the main session can run it.
+it showed, nothing claimed beyond the evidence.
+Never state a figure the validation record found wrong, and check every
+link you add leads somewhere; say which pages you changed.
 
 Answer with the list of pages changed and one line on each change.

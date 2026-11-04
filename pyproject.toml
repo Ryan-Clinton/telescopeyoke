@@ -23,7 +23,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = ["pytest>=8"]
 # seti.py only: Breakthrough Listen's files are HDF5 packed with bitshuffle.
 seti = ["h5py>=3.8", "hdf5plugin>=4.0"]
 # archive.py tess only: TESS's light curves from MAST.
@@ -39,11 +38,7 @@ Repository = "https://github.com/Ryan-Clinton/telescopeyoke"
 [tool.setuptools]
 py-modules = []
 
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["."]
-
-# Checked in CI: mistakes, not style. E9 is code that cannot run, F is
+# Mistakes, not style. E9 is code that cannot run, F is
 # pyflakes (names never defined or never used, a name hiding another).
 [tool.ruff]
 line-length = 120
@@ -52,13 +47,3 @@ extend-exclude = ["demo", "rigs", "frames"]
 [tool.ruff.lint]
 select = ["E9", "F"]
 
-[tool.coverage.run]
-branch = true
-source = ["."]
-omit = ["tests/*", "demo/*", "rigs/*"]
-
-[tool.coverage.report]
-skip_empty = true
-# Measured at 72% (branch) on 17 October 2026: a change that drops it below
-# this has left something untested.
-fail_under = 70

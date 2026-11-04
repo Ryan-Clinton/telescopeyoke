@@ -17,19 +17,18 @@ what is specific to Claude and to this particular user.
   set the handset first, then ask the user where the sky is clear.
 - Run anything expected to take more than a minute in the background and
   carry on with the next task.
-- Never wait on GitHub: push, give the summary in the same turn and go on.
-  The whole suite runs only once a day, on CI's schedule: never start
-  `./ty test-run` or a full `pytest` unless the user asks for it. Before a
-  push, the tests that touch the change. A red daily run is said with its
-  fix; never "CI is running" or "CI is green".
+- There are no tests and no CI: the user had them removed on 4 November
+  2026 after asking thirteen times for the testing to stop. Never write,
+  run or restore tests, never add CI, never make a commit wait. Before a
+  commit: `ruff check` on the changed files, then commit and push.
 - Never defer work that can be done here and now: no "tomorrow", "on my
   list", "next time" or "I can do that if you want" for something plainly
-  wanted. Do it, with its test, then say it is done. Waiting on a background
+  wanted. Do it, then say it is done. Waiting on a background
   job is time to do the next thing, not to report waiting. Defer only what
   needs daylight, the user's hands or their permission, and say which.
 - No one-off scripts for anything new that will be used every night
   (focusing, alignment, a new piece of hardware): write it as a project
-  command with a test before its first use, and use it only through that
+  command before its first use, and use it only through that
   command. Never inline `python3 -` for it, not even to try it. On 13
   October the motor focuser focused the telescope from an inline script
   that was never kept, and two nights later nothing knew it could.
@@ -72,27 +71,9 @@ what is specific to Claude and to this particular user.
 There is no build step and no linter; the scripts run from the checkout.
 
 ```bash
-pip install ".[test]"                       # what CI installs; ./install.sh uses distro packages
-./ty test-run                               # the whole suite on the desktop: only when the user asks (it runs daily in CI)
-pytest -q                                   # the same here, about fifteen minutes: likewise only when asked
-pytest -q tests/test_interface.py           # one file; this one takes seconds
-pytest -q tests/test_mount.py::test_name    # one test
-pytest -q -k meridian                       # tests matching a word
+./install.sh                                # distro packages
+ruff check FILE.py                          # before a commit: mistakes, not style
 ```
-
-CI (`.github/workflows/tests.yml`, once a day, never on a push) also runs
-these after the tests, so run them before pushing a change that touches the planner,
-the mount or the JSON output:
-
-```bash
-./tonight.py --demo --top 5
-./mount.py --demo zenith
-./ty capabilities --json
-./mount.py --demo zenith --dry-run --json
-```
-
-A demo step in CI has to hold at any hour: use the zenith, not a named object
-that may have set.
 
 ## Things that span several files
 
@@ -101,20 +82,14 @@ that may have set.
   checks it, `agent.py` reports it. Never create a way round it or remove it.
 - `config.toml` holds the user's real site and is ignored. `config.load()`
   needs it; `config.hardware()` works without it and `config.example()`
-  never reads it. Tests and `--demo` take their site from `config.example()`.
+  never reads it. `--demo` takes its site from `config.example()`.
 - Every file a script keeps (frames, pictures, remembered measurements) is
   under `config.DATA`: the repository root for real, `rigs/NAME/` for a
   named rig (`config.RIG`, from `TY_RIG`, whose settings are
-  `rigs/NAME.toml`), `demo/` in the demo (`config.DEMO`, from `TY_DEMO=1`),
-  and a scratch folder in the tests.
-  `conftest.py` sets `TY_DATA` and `TY_CALIBRATION` before anything is
-  imported, so a test cannot write into a real night's files even if its
-  fixture forgets to redirect something. Never build a path to `frames/`,
-  `web/`, `cache/` or `horizon/` from `ROOT`.
-- A change to any `--json` output touches three places together: the
-  function, its file in `schemas/`, and `tests/test_interface.py`, which
-  checks the envelope, the MCP tools' `outputSchema` and the scenarios in
-  `evals/scenarios.json`.
+  `rigs/NAME.toml`), `demo/` in the demo (`config.DEMO`, from `TY_DEMO=1`).
+  Never build a path to `frames/`, `web/`, `cache/` or `horizon/` from
+  `ROOT`.
+- A change to any `--json` output changes its file in `schemas/` with it.
 - The application is `app.py`: it runs `console.py`'s server in "app" mode and
   shows `console/index.html` in a GTK window (Ubuntu) or WebView2 (Windows).
   `console.py` alone serves the same page in "companion" mode, where the

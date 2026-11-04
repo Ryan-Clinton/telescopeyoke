@@ -2,11 +2,10 @@
 
 [README](../README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
-Built 17 October 2026, all of it, with its tests: the command classes
+Built 17 October 2026: the command classes
 (`policy.py`), the safety hooks and the decision record (`.claude/hooks/`,
-`agentlog.py`, `./ty agent-report`), the run watch (`./ty watch-run`), the
-test run (`./ty test-run`), fourteen skills in `.claude/skills/` and eight
-agents in `.claude/agents/`. Proven so far only in the tests and in this
+`agentlog.py`, `./ty agent-report`), the run watch (`./ty watch-run`), fourteen skills in `.claude/skills/` and seven
+agents in `.claude/agents/`. Proven so far only in this
 session: none has yet been used at the telescope. Written 17 October 2026,
 revised the same day. This specifies Claude Code skills,
 subagents, hooks and two plain background jobs for the procedures this
@@ -28,7 +27,7 @@ task is predictable, a model only where judgement adds something.**
 | Kind | What it is | Use it here for |
 |---|---|---|
 | **Project command** | A tested script (`mount.py`, `patrol.py`) | Everything the telescope does, and every check on it. Never a model's job |
-| **Background job** | A plain script started in the background, which wakes Claude only when something changes | Watching a run, running the tests |
+| **Background job** | A plain script started in the background, which wakes Claude only when something changes | Watching a run |
 | **Skill** (`.claude/skills/NAME/SKILL.md`) | A procedure loaded into the session talking to the person, when its description matches or they type `/NAME` | Anything done *with* the person: setup, focusing, a run, a claim |
 | **Subagent** (`.claude/agents/NAME.md`) | A separate Claude with its own context, tools, model and turn limit, returning a summary | Interpretation that is long or noisy: vetting a candidate, reading the web, reviewing a change |
 | **Hook** (`.claude/settings.json`) | A command Claude Code runs on an event; a `PreToolUse` hook that exits 2 blocks the tool call | Rules that must hold every time, whatever the model thinks |
@@ -305,7 +304,6 @@ any `hardware` or `external` command from a subagent, whatever its tools.
 | `code-reviewer` | opus | Read, Grep, Glob, Bash (read-only, below) | 10 | Findings against this project's own rules |
 | `motion-reviewer` | opus | Read, Grep, Glob | 10 | Any change to `mount.py`, `direct.py`, `simulator.py`, `polaralign.py`, `focuser.py` or `policy.py` checked against AGENTS.md's safety invariants |
 | `docs-keeper` | sonnet | Read, Grep, Edit | 15 | After a night changes what is proven: `validation.md` first, then what follows it |
-| `debugger` | opus | Read, Grep, Glob, Bash (read-only, below) | 12 | Given a failing test from `test-run`, the cause and the fix proposed (not made) |
 
 - **Web content is untrusted, and kept apart.** Only `catalogue-researcher`
   and `comet-checker` read the web; neither has a shell, and neither reads
@@ -337,14 +335,12 @@ any `hardware` or `external` command from a subagent, whatever its tools.
   as a Monitor, so Claude is woken only by those lines. Nothing is spent
   while all is well (memory: a run once went 65 minutes with no frames kept
   and nobody said).
-- **`test-run`**: the full suite on the desktop in the background; on a
-  failure, and only then, the failure goes to `debugger`.
 
 ## The hooks
 
 All in `.claude/settings.json` (committed), one Python script
 (`.claude/hooks/guard.py`, a rule name as its argument) run in exec form as
-`python3`, each rule with tests (`tests/test_hooks.py`). On Windows
+`python3`. On Windows
 `python3` must be on the PATH (the Microsoft Store's Python provides it;
 python.org's gives `python` and `py`): where it is not, every hook fails to
 start and so, failing closed, every shell command is refused until it is.
@@ -420,9 +416,9 @@ what it need not, as the polar alignment and the discovery search were
 judged by what they measured, not what they were meant to do.
 `./ty agent-report` sums it up.
 
-## Testing
+## Checks on the skills and agents
 
-- `tests/test_skills.py`: valid frontmatter; `name` matching the folder;
+- Each skill: valid frontmatter; `name` matching the folder;
   descriptions under 1024 characters; every `./COMMAND` a skill names
   exists and every flag it uses is in that command's `--help`; every
   command in an `allowed-tools` is `read_only` or `local_write` by
@@ -430,8 +426,6 @@ judged by what they measured, not what they were meant to do.
   manual skills have `disable-model-invocation: true`; every agent has
   `maxTurns`; none has both a web tool and Bash, and none that reads the
   web has Read; no agent but `docs-keeper` has Edit or Write.
-- `tests/test_hooks.py`: the cases above, the failure cases, on both
-  systems.
 - **The standard's own validator**, `skills-ref validate`, on every skill,
   and `/doctor prompt-audit` before each release, for instructions that
   have gone stale or contradict each other.
@@ -489,8 +483,8 @@ and what changed the same night:
 4. **`discovery-night`, `end-of-night`, `morning-summary`**,
    `night-analyst`, the decision record (`agentlog.py`, the `log` hook,
    `./ty agent-report`). ✅
-5. **`code-reviewer`, `motion-reviewer`, `docs-keeper`, `debugger`,
-   `test-run` (`./ty test-run`), `new-command`, `release`.** ✅
+5. **`code-reviewer`, `motion-reviewer`, `docs-keeper`, `new-command`,
+   `release`.** ✅
 6. **`first-night`, `troubleshoot`, `cloudy-day`.** ✅
 
 The plan was a real use of each step before the next; the person chose to

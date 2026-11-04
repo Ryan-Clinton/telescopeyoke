@@ -2,7 +2,6 @@
 
 **A self-measuring robotic observatory for affordable GoTo mounts, run by a person and an AI agent together.**
 
-[![tests](https://github.com/Ryan-Clinton/telescopeyoke/actions/workflows/tests.yml/badge.svg)](https://github.com/Ryan-Clinton/telescopeyoke/actions/workflows/tests.yml)
 
 ![A minute and a half of the demo: tonight's report, a target picked, a GoTo shown as a plan and then centred by plate solving, focusing, and an imaging run with cloud coming over](docs/tour.gif)
 
@@ -37,7 +36,7 @@ stays with the telescope; the observatory comes back to you through the
 status page, your phone, the house and, if you want, a live broadcast.
 
 It is an Ubuntu application. It also runs natively on Windows, where the
-tests and the demo pass and the camera has taken frames, but no mount has
+demo runs and the camera has taken frames, but no mount has
 been driven yet.
 
 > **New to motorised telescopes?** Start with
@@ -444,8 +443,8 @@ lock (`MOTION_LOCKED`) stops every rig at once.
 | Hardware | Status |
 |---|---|
 | Sky-Watcher Explorer 150P (150 mm f/5 Newtonian) | ✅ Tested by the author |
-| Python 3.11, 3.12, 3.13, 3.14 | ✅ Tests pass in CI on Ubuntu and Windows (no hardware) |
-| Windows 10 and 11 | ⚠️ Tests and the demo pass with no hardware. The camera has taken frames on Windows 11, indoors. No mount has been driven from Windows, and camera and mount have not been used together there. |
+| Python 3.11 to 3.14 | ✅ Runs on Ubuntu (no automated tests) |
+| Windows 10 and 11 | ⚠️ The demo runs with no hardware. The camera has taken frames on Windows 11, indoors. No mount has been driven from Windows, and camera and mount have not been used together there. |
 | SynScan Wi-Fi adapter, or an EQDIR lead (no handset) | ⚠️ The adapter has been found and read on a real EQ3 (firmware, gearing, position). No mount has been moved through it yet; the EQDIR lead is untried. |
 | EQ5, HEQ5, EQ6 with a SynScan handset | ⚠️ Untested. Likely: same serial protocol. |
 | Other INDI cameras | ⚠️ Untested. Likely for mono or RGGB colour sensors: set the driver and sensor size in `config.toml`. |
@@ -536,8 +535,7 @@ plan the night → GoTo → photograph → plate-solve (ASTAP) → correct → p
   pictures or two plate solves, for anything that makes many moves unattended.
 - **`page.py`** lays the report out as the status page. It is plain HTML
   with a little JavaScript reading `status.json`: no framework, no controls.
-- **`simulator.py`** is a pretend handset and mount behind `--demo` and the
-  tests.
+- **`simulator.py`** is a pretend handset and mount behind `--demo`.
 
 ## Going deeper
 
@@ -613,9 +611,9 @@ The laptop cannot see what the telescope is about to hit.
 What has been proven, and where. "Real stars" means on the author's EQ3 Pro,
 150P and Hypercam 183C on Ubuntu, at night; "real equipment" means the
 hardware answered or moved but no star was involved. Everything is also run
-against the simulated rig and the tests.
+against the simulated rig.
 
-| Feature | Under real stars | On real equipment | Simulated rig and tests |
+| Feature | Under real stars | On real equipment | Simulated rig |
 |---|---|---|---|
 | Night report and status page | ✅ | ✅ | ✅ |
 | Mount moves through the handset, `sync` | ✅ | ✅ | ✅ |
@@ -660,15 +658,8 @@ as made. A GoTo with centring, a polar measurement and the skyline survey now
 check that the view changed, and stop if it did not; a plain GoTo with no
 plate solve still takes the handset's word.
 
-Covered by automated tests (`pytest`, run once a day on GitHub on Ubuntu, Python 3.14; the badge at the top shows how the latest run went): the astronomy, the
-mount logic against the simulated handset, frame alignment and hot-pixel
-removal, star measurement and frame rejection, sub-pixel and rotation
-registration, clipped stacking, calibration arithmetic, a whole simulated
-imaging run, the focus measurement, the polar alignment geometry, the INDI
-message handling, the drift formula against a mount modelled from first
-principles, drift cancelling on both sides of the simulated mount, and the
-demo report end to end. The tests cannot cover the
-real mount, camera or sky.
+There are no automated tests: what works is what has been seen to work, on
+the real rig or in the demo against the simulated one.
 
 Known limits:
 
@@ -744,8 +735,8 @@ have taken go in
 What each release added is in [CHANGELOG.md](CHANGELOG.md); `./release.py`
 makes one. For code, see
 [CONTRIBUTING.md](CONTRIBUTING.md):
-run `pytest`, and anything that changes how the mount moves comes with a test
-against `simulator.py`.
+run `ruff check .`, and try anything that changes how the mount moves in the
+demo against `simulator.py`.
 
 ## Data sources
 

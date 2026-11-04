@@ -120,7 +120,6 @@ COMMANDS = {
     "skywatch.py": ("hardware", {}, {}),
     "snap.py": ("hardware", {}, {}),
     "solve.py": ("local_write", {}, {}),
-    "testrun.py": ("local_write", {}, {}),
     "starwatch.py": ("hardware", {"--measure": "local_write", "--history": "read_only"},
                      {"--plan": "read_only", "--dry-run": "read_only"}),
     "streak.py": ("local_write", {}, {}),           # keeps CelesTrak's orbits in cache/
@@ -141,7 +140,7 @@ COMMANDS = {
 TY = {"run": "hardware"}
 TY_PASSES = {"mount": "mount.py", "tonight": "tonight.py", "shoot": "shoot.py", "focus": "focus.py",
              "solve": "solve.py", "restack": "restack.py", "console": "console.py", "watch-run": "runwatch.py",
-             "agent-report": "agentlog.py", "test-run": "testrun.py", "streak": "streak.py",
+             "agent-report": "agentlog.py", "streak": "streak.py",
              "lucky": "lucky.py", "moon": "moon.py", "collimation": "collimation.py"}
 
 

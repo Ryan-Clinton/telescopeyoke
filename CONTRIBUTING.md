@@ -28,16 +28,14 @@ an issue: ask in
 ./install.sh --demo           # the libraries, then TelescopeYoke (demo) in its window
 ./tonight.py --demo
 ./mount.py --demo goto M27
-pytest
 ```
 
 `./doctor.py` shows what is installed and connected.
 
 ## Code
 
-- **Run `pytest` before sending a pull request.** The tests need no hardware
-  and take about fifteen minutes on a laptop. CI runs them on Python 3.11 to 3.14.
-- **Anything that changes how the mount moves needs a test against
+- **Run `ruff check .` before sending a pull request.**
+- **Anything that changes how the mount moves is tried in the demo against
   `simulator.py`.** If the simulator cannot express what you need, extend it
   in the same pull request.
 - **Keep `--demo` working.** New features should run, or decline politely,

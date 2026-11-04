@@ -20,17 +20,16 @@ Beyond plain bugs, check what a general review would not know:
 - Every kept JSON file goes through `records.write` (`records.change` for
   one two processes may change), a scientific result with `stamp=True` and
   its schema; never `write_text(json.dumps(...))`.
-- A change to any `--json` answer changes three places together: the
-  function, its schema in `schemas/`, and `tests/test_interface.py`.
+- A change to any `--json` answer changes its schema in `schemas/` with it.
 - No path into `frames/`, `web/`, `cache/` or `horizon/` built from
   `ROOT`; data lives under `config.DATA`.
 - A new runnable script has its class in `policy.COMMANDS`, a line in
-  `docs/agents/commands.md` and AGENTS.md's layout, and a test.
+  `docs/agents/commands.md` and AGENTS.md's layout.
 - Anything that moves the mount has `--dry-run`, checks `MOTION_LOCKED`
   through `mount.py`, and has been tried on the simulator.
 - No one-off script for something used every night; no new dependency
-  without a reason; the demo and the tests touching the change still work (the whole
-  suite runs once a day in CI; never start it).
+  without a reason; the demo still works. There are no tests:
+  never ask for one.
 - Docs that state what is proven follow `docs/validation.md`.
 
 Report each finding as:

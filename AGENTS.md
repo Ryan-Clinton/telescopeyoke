@@ -24,7 +24,6 @@ choice; the research and papers are `./ty research`.
 ./ty capabilities --json
 ./doctor.py --json      # what is installed and connected
 ./doctor.py --report    # the same as text to post as a hardware report; the site's name is left out
-pytest -q               # about fifteen minutes on a laptop; needs no hardware
 ```
 
 Everything runs without a telescope: `./tonight.py --demo`, `./serve.py --demo`,
@@ -49,8 +48,8 @@ them and every file kept under `demo/`.
 | `direct.py` | The mount without its handset (Wi-Fi adapter or EQDIR lead): stands in for the handset so `mount.py` is unchanged |
 | `camera.py`, `indi.py`, `altair.py`, `snap.py`, `liveview.py`, `focus.py` | Camera (through INDI, or Altair's own library) and focusing |
 | `host.py` | Everything that differs between Linux and Windows, in one place |
-| `policy.py` | What each command may do: `read_only`, `local_write`, `hardware` or `external`, every runnable script classed once (a new one fails the tests until it is); `classify_text` gives the worst class in a shell line, and anything unknown or hidden counts as `hardware`. The base of the safety hooks in `docs/skills-and-agents.md` |
-| `agentlog.py`, `testrun.py` | `ty agent-report`: the decision record the hooks keep in `cache/agent-log.jsonl` (what ran, who asked, what was refused; redacted), summed up. `ty test-run`: the tests on the desktop, only the failures brought back |
+| `policy.py` | What each command may do: `read_only`, `local_write`, `hardware` or `external`, every runnable script classed once; `classify_text` gives the worst class in a shell line, and anything unknown or hidden counts as `hardware`. The base of the safety hooks in `docs/skills-and-agents.md` |
+| `agentlog.py` | `ty agent-report`: the decision record the hooks keep in `cache/agent-log.jsonl` (what ran, who asked, what was refused; redacted), summed up |
 | `runwatch.py` | `ty watch-run`: watches an imaging run and prints a line only when frames stop, stop being kept, the share kept halves, the stars dim or come back, or the run ends |
 | `.claude/` | Claude Code's side: `settings.json` and `hooks/guard.py`, the safety hooks (fail closed: the motion lock, no inline hardware scripts, no subagent moving anything, no `pkill -f`, no secrets printed), `hooks/log.py`, the decision record, `skills/`, fourteen procedures, and `agents/`, eight agents that read and advise and never move anything (`docs/skills-and-agents.md`) |
 | `records.py` | Every kept JSON file: written whole or not at all, changed under a lock (`records.change`), checked against its schema before it replaces anything, and each scientific result stamped with the code that made it (`schemas/provenance.schema.json`) |
@@ -84,7 +83,7 @@ them and every file kept under `demo/`.
 | `mosaic.py` | Panels for an object bigger than the frame, kept in `mosaics/`; `mount.find_target` turns a panel name (`M31-P2`) into its centre |
 | `tour.py` | Records the demo being used, for the README: `docs/tour.gif` and `docs/screens/` (Ubuntu) |
 | `docs/index.html` | The project's home page, served by GitHub Pages from `docs/` |
-| `schemas/`, `tests/`, `evals/` | Output schemas, tests, agent scenarios |
+| `schemas/`, `evals/` | Output schemas, agent scenarios |
 
 A **rig** is one telescope: `TY_RIG=name`, `ty --rig name` or `app.py --rig
 name` makes `config.FILE` `rigs/name.toml` and `config.DATA` `rigs/name/`.
@@ -94,7 +93,7 @@ With none named it is `config.toml` and the repository root, as before.
 ## Safe without hardware
 
 All of `ty` except `ty mount` with a motion command; anything with `--demo`;
-anything with `--dry-run`; `pytest`; `doctor.py`.
+anything with `--dry-run`; `doctor.py`.
 
 ## Commands that move the telescope
 
@@ -122,8 +121,8 @@ a motor's creep rate. `mount.py stop` is always allowed.
    watched which way the Dec motor turns. Never record either for the user.
    `doctor.py --probe` sends a port only questions that read, and only a
    port a person named: never try ports in turn to see what is there.
-4. **Anything that changes how the mount moves needs a test against
-   `simulator.py`.**
+4. **Anything that changes how the mount moves is tried first in the demo
+   (`--demo`, against `simulator.py`).**
 5. **The user's location never goes in the repository:** `config.toml`, `rigs/`,
    `web/`, `frames/`, `cache/`, `calibration/`, `horizon/` are ignored. Do not publish
    photos of the garden: a panorama for `panorama.py` is one, and so is
@@ -137,7 +136,7 @@ a motor's creep rate. `mount.py stop` is always allowed.
   clear lines to an abstraction; do not generalise for hardware nobody has
   reported trying.
 - **Honest status.** Say what is proven on real hardware and what is not.
-- **Runs without hardware.** `--demo` and the tests cover everything they can.
+- **Runs without hardware.** `--demo` covers everything it can.
 - **One implementation, several interfaces.** The CLI, `--json`, the web API
   and MCP all call the same functions.
 
@@ -149,11 +148,10 @@ a motor's creep rate. `mount.py stop` is always allowed.
   on stdout; progress goes to stderr; exit code 0 only if `ok`. Error codes
   live in `interface.py` and are stable. Bump `SCHEMA_VERSION` for any
   breaking change.
-- Keep `--demo` and the tests working with every change.
+- Keep `--demo` working with every change.
 - On another computer (the desktop), everything goes under one folder,
-  `~/telescopeyoke-laptop/`: `tests/` for `ty test-run`, `remote/` for
-  `restack.py --on`, `pycache/` for the test run's compiled files. Nothing
-  else is made in its home folder: no one-off copies for a test run.
+  `~/telescopeyoke-laptop/`: `remote/` for `restack.py --on`. Nothing else
+  is made in its home folder.
 - What goes to the person's phone (`notify.send`) is copied to
   `cache/sent.jsonl`; `.claude/hooks/news.py` puts anything new from it in
   front of the agent at the start of a session and with each message, so
@@ -162,11 +160,8 @@ a motor's creep rate. `mount.py stop` is always allowed.
   scientific result with `stamp=True` and its schema, a file two processes
   may change (a field's candidate book) through `records.change`. Change a
   kept record's shape and its schema together, or the write is refused.
-- CI runs once a day (and by hand from the Actions tab), never on a push:
-  `ruff check .` (mistakes, not style) and the tests on Linux (Python 3.14).
-  No Windows job: Windows work waits until someone uses it there. Nothing waits on it; the tests touching a change run
-  here before the push. `constraints-tested.txt` is a set of versions the
-  tests once passed with, no longer checked.
+- There are no tests and no CI (removed 4 November 2026 at the user's
+  request). Before a commit: `ruff check` on the changed files.
 - What is proven on real hardware is recorded once, in `docs/validation.md`.
   The README and the other pages follow it and may lag.
 - The table of tried hardware is in the README ("Hardware"). The version is in
@@ -187,4 +182,4 @@ a motor's creep rate. `mount.py stop` is always allowed.
 - `docs/agents/mcp.md`: the MCP server and the web API
 - `docs/agents/examples.md`: worked examples of answering common requests
 - `docs/agents/setup-routine.md`: the order to run things in while a person is at the telescope
-- `docs/agents/architecture.md`, `testing.md`, `hardware.md`
+- `docs/agents/architecture.md`, `hardware.md`
