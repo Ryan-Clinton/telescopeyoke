@@ -16,10 +16,8 @@ frames' times) is kept apart from what was recorded (the camera layer's
 TY_RETRY in each raw frame, from 4 November 2026).
 """
 import argparse
-import json
 import statistics
 from datetime import date, datetime, timedelta
-from pathlib import Path
 
 import config
 import interface
