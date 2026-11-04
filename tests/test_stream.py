@@ -547,3 +547,19 @@ def test_the_setup_card_crosses_off_each_step_from_what_the_steps_keep(tmp_path,
     (tmp_path / "cache" / "polar.json").write_text(json.dumps({"measured": now - 10, "total_deg": 0.2}))
     assert not stream.setup_card_due(idle, None, now)                  # set up: the telescope's picture
     assert stream.setup_card_due(dict(idle, programme=director.CLOUD, run_current=True), None, now)  # cloud again
+
+
+def test_the_polar_adjust_look_gives_way_once_the_telescope_goes_to_a_target(monkeypatch):
+    """4 November 2026: the M31 patrol went out under the polar look, its
+    "waiting for the mount to be adjusted" held 15 minutes after the check."""
+    import stream
+    import streamlook
+    monkeypatch.setattr(streamlook, "focus_stream_state", lambda now: None)
+    monkeypatch.setattr(streamlook, "polar_stream_state", lambda now: {"stage": "adjust", "showing": True})
+    monkeypatch.setattr(stream, "phase", lambda: None)
+    assert stream.observatory(1.0)[0] == "polar"               # the person may be turning the bolts
+    for doing in ("goto", "solve", "imaging"):
+        monkeypatch.setattr(stream, "phase", lambda d=doing: d)
+        assert stream.observatory(1.0) == (None, None)
+    monkeypatch.setattr(streamlook, "polar_stream_state", lambda now: {"stage": "measuring", "showing": True})
+    assert stream.observatory(1.0)[0] == "polar"               # its own measuring moves are its own

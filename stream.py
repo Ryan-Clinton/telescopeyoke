@@ -285,11 +285,24 @@ def observatory(now=None):
         if found and found["showing"]:
             return "focus", found
         found = streamlook.polar_stream_state(now)
-        if found and found["showing"]:
+        # The bolts-being-turned look holds for a while after a measurement,
+        # but not once the telescope has gone on to a target (4 November
+        # 2026: the M31 patrol went out under the polar alignment's look).
+        moved_on = (found or {}).get("stage") == "adjust" and phase() in ("goto", "solve", "imaging")
+        if found and found["showing"] and not moved_on:
             return "polar", found
     except Exception:            # a file half-read is never worth the stream
         pass
     return None, None
+
+
+def phase():
+    """What the activity lines say is being done (activity.phase), or None."""
+    import activity
+    try:
+        return activity.phase()
+    except Exception:
+        return None
 
 
 def broadcasting(now=None):
