@@ -79,6 +79,13 @@
               "null"
             ]
           },
+          "local_score": {
+            "type": [
+              "number",
+              "null"
+            ],
+            "description": "The score against the score's own spread round it (difference.py); null for a difference made before 4 November 2026."
+          },
           "mag": {
             "type": [
               "number",

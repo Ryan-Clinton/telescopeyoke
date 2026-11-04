@@ -33,3 +33,6 @@ both_halves = true
 searchable_frames = 8
 worth_depth = 16.5
 desired_frames = 24
+# A depth-based stretch (decision 1, 4 Nov 2026), provisional as worth_depth:
+# the nova peak the patrol's completeness is centred on (patrol.NOVA_PEAK).
+stretch_depth = 17.5

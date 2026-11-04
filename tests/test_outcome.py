@@ -168,7 +168,33 @@ def test_a_night_runs_from_noon_to_noon(data):
 def test_the_programmes_goals_are_read_from_their_files():
     name, goals = outcome.programme_for("M31-P6")
     assert name == "m31-panels" and goals["searchable_frames"] == 8 and goals["desired_frames"] == 24
-    assert outcome.programme_for("M33")[0] == "m33-novae" and outcome.programme_for("NGC3310") == (None, {})
+    assert outcome.programme_for("M33")[0] == "m33-novae" and outcome.programme_for("M101") == (None, {})
+    # A planned target has goals of its own (Phase 2): SN 2026sqf is measured, not searched.
+    name, goals = outcome.programme_for("NGC3310")
+    assert name == "targets/sn2026sqf" and goals["purpose"] == "known-transient" and goals["worth_frames"] == 8
+
+
+def test_a_supernova_is_measured_not_searched(data, monkeypatch):
+    # 30 stacked frames of NGC 3310: no search is owed, worth it on frames.
+    sn = {"purpose": "known-transient", "searchable_frames": 8, "worth_frames": 8, "desired_frames": 30}
+    monkeypatch.setattr(outcome, "programme_for", lambda field: ("targets/sn2026sqf", sn))
+    folder = session(data, "NGC3310", "20261104-050000", frames=steady(36), stacked=30)
+    r = outcome.of_session(folder)
+    assert r["search"] == "none" and r["searchable"] == "met" and r["worth_it"] == "met" and r["desired"] == "met"
+    short = outcome.of_session(session(data, "NGC3310", "20261105-050000", frames=steady(8), stacked=6))
+    assert short["worth_it"] == "short" and any("a measurement needs" in x for x in short["limited_by"])
+
+
+def test_a_deep_stack_whose_subtraction_is_the_limit_is_not_worth_it():
+    goals = {"searchable_frames": 8, "worth_depth": 16.5, "quality_max": 0.2, "desired_frames": 24}
+    r = {"captured": 30, "stacked": 25, "depth_g": 17.4, "search": "searched", "search_stopped": None,
+         "camera_retries": None, "gap_minutes": 0, "gaps": 0, "rejected": {"cloud": 0, "trailed": 0, "other": 0},
+         "out_of_line_share": 0.35}
+    v = outcome.judge(r, goals)
+    assert v["searchable"] == "met" and v["worth_it"] == "short" and v["desired"] == "short"
+    assert any("the subtraction" in x for x in v["limited_by"])
+    r["out_of_line_share"] = 0.05
+    assert outcome.judge(r, goals)["worth_it"] == "met"
 
 
 def test_an_outcome_is_kept_beside_its_session(data):

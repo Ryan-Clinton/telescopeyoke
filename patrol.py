@@ -189,8 +189,23 @@ def steps(p, dry_run=False):
     # stalls and came out with too few frames to search).
     frames = frames_for(p["minutes"], p["exposure"])
     extra = ["--dry-run"] if dry_run else []
+    count = ["--frames", str(frames)]
+    import goals
+    rule = None
+    if goals.enabled("goals"):
+        import stacking
+        import windows
+        field = stacking.folder_name(p["target"])
+        model = (windows.costs() or {}).get("depth_model")
+        rule = goals.capture_rule(goals.from_programme(p.get("name", ""), p, field), p["minutes"],
+                                  exposure=p["exposure"], model=model, prior=goals.prior_for(field))
+    if rule:
+        # Phase 2 (docs/observing-plan-spec.md): the capture keeps going until
+        # its desired accepted frames, stalls to the time cap and rejections
+        # to the frame cap, counted apart: retakes and SHOOT_CAP as one rule.
+        count = ["--accepted", str(rule["accepted"]), "--most", str(rule["most_frames"])]
     return [[sys.executable, str(ROOT / "mount.py"), "goto", p["target"], *extra],
-            [sys.executable, str(ROOT / "shoot.py"), p["target"], "--frames", str(frames),
+            [sys.executable, str(ROOT / "shoot.py"), p["target"], *count,
              "--minutes", f"{p['minutes'] * SHOOT_CAP:g}",
              "--exposure", str(p["exposure"]), "--gain", str(p["gain"]),
              *(["--dither", str(p["dither"])] if p.get("dither") else []), *extra]]
@@ -356,6 +371,51 @@ def second_look_said(name, first, second, say=print, send=None):
 def unexplained(result):
     """The vetted candidates nothing explained."""
     return [c for c in (result.get("vet") or {}).get("candidates", []) if c["verdict"].startswith("unexplained")]
+
+
+NIGHT_S = 10 * 3600   # the night the follow-up allowance is a share of, when its darkness can't be worked out
+
+
+def night_seconds():
+    """Tonight's dark seconds, for the follow-up allowance."""
+    try:
+        import sky
+        cfg = config.load() if config.FILE.exists() else config.example()
+        night = sky.Night(cfg)
+        return float(night.dark.sum() * (night.unix[1] - night.unix[0]))
+    except Exception:
+        return NIGHT_S
+
+
+def follow_up(name, result, cfg=None):
+    """(go?, why) for a second look at a field's unexplained candidates,
+    with [plan] dispatch on (Phase 4): each candidate weighed
+    (obligations.weigh), strong ones at once, uncertain ones from the
+    night's follow-up allowance, ones at the limit of the stack waiting for
+    a deeper night. With dispatch off: always, as before."""
+    import goals
+    if not goals.enabled("dispatch", cfg):
+        return True, None
+    import obligations
+    depth_g = ((result.get("depth") or {}).get("completeness") or {}).get("all", {}).get("mag_50")
+    weights = []
+    for c in unexplained(result):
+        night = {"seen": True, "real_bogus": c.get("real_bogus"), "local_score": c.get("local_score"),
+                 "mag": c.get("mag"), "verdict": c["verdict"]}
+        stamp = Path(result.get("session", "")).name or time.strftime("%Y%m%d-%H%M%S")
+        # Weighed as of the session's own night: the look is that night's.
+        weights.append(obligations.weigh({"id": f"{name} x{c['x']} y{c['y']}", "first": stamp, "open": True,
+                                          "nights": [night]}, depth_g, today=obligations._day(stamp),
+                                         purpose=goals.of(name)["purpose"]))
+    return obligations.may_follow_up(weights, night_seconds(), cfg=cfg)
+
+
+def spent(weighed, seconds):
+    """A second look from the allowance is counted against it."""
+    go, why = weighed
+    if go and why and why.startswith("uncertain"):
+        import obligations
+        obligations.spend(seconds)
 
 
 def alert(name, session, result, say=print, packet=None, send=None):
@@ -649,16 +709,19 @@ def shoot_minutes(minutes, deadline, now):
     return minutes if deadline is None else max(1.0, min(minutes, (deadline - now) / 60))
 
 
-def second_look_put_off(waiting, room_left, enabled=True, budget=None):
+def second_look_put_off(waiting, room_left, enabled=True, budget=None, weighed=(True, None)):
     """Why a second look at a field with something unexplained is not taken
     now, or None to take it: the plan's next step is due, too little of the
-    budget is left, or second looks are off tonight."""
+    budget is left, second looks are off tonight, or (with [plan] dispatch
+    on) the candidates' weighing says no: follow_up()'s (go?, why)."""
     if waiting:
         return f"the plan's next step ({waiting}) is due; it goes first on the next clear night"
     if not room_left:
         return f"too little of the step's {budget:g} minutes left for it; it goes first on the next clear night"
     if not enabled:
         return "second looks are off tonight; it goes first on the next clear night"
+    if not weighed[0]:
+        return weighed[1]
     return None
 
 
@@ -971,8 +1034,13 @@ def run(args, say=print):
         entry = finish_panel(name, session)
         if unexplained(entry["analysis"]):
             # The telescope is still on the field: no GoTo back to allow for.
-            why = second_look_put_off(None, room_for(CONFIRM_MINUTES * (1 + STALL_SHARE)), budget=budget)
+            weighed = follow_up(name, entry["analysis"])
+            why = second_look_put_off(None, room_for(CONFIRM_MINUTES * (1 + STALL_SHARE)), budget=budget,
+                                      weighed=weighed)
+            began_look = time.time()
             entry["second_look"] = {"stopped": why} if why else second_look(p, name, say)
+            if not why:
+                spent(weighed, time.time() - began_look)
             second_look_said(name, entry["analysis"], entry["second_look"], say)
         answer["fields"].append(entry)
     if behind:
@@ -987,14 +1055,18 @@ def run(args, say=print):
             if not unexplained(entry["analysis"]):
                 answer["fields"].append(entry)
                 continue
-            why = second_look_put_off(due_step(), room_for(look), live.get("patrol.second_looks"), budget)
+            weighed = follow_up(entry["field"], entry["analysis"])
+            why = second_look_put_off(due_step(), room_for(look), live.get("patrol.second_looks"), budget,
+                                      weighed=weighed)
             if why:
                 second_look_said(entry["field"], entry["analysis"], {"stopped": why}, say)
             else:
                 goto = plans[entry["field"]][0]
                 say(f"== back to {entry['field']} for a second look")
                 if subprocess.run(goto, stdout=sys.stdout, env=dict(os.environ, TY_PATROL="1")).returncode == 0:
+                    began_look = time.time()
                     entry["second_look"] = second_look(p, entry["field"], say)
+                    spent(weighed, time.time() - began_look)
                 else:
                     entry["second_look"] = {"stopped": "the GoTo back to it failed"}
                 second_look_said(entry["field"], entry["analysis"], entry["second_look"], say)

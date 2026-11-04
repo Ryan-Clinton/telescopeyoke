@@ -3,17 +3,23 @@
 Status: decisions approved 4 November 2026. Phase 1 built (`outcome.py`)
 and audited. Phase 5 built (`history.py`, `nightreplay.py`), checked against
 the night of 3 to 4 November (docs/nights/2026-11-04/replay-check.md), deep
-audited (changes required), corrected (the same file, "Correction round"),
-and waiting for its re-audit before Phase 2.
+audited (changes required), corrected (the same file, "Correction round").
+At the person's word the re-audit was not waited for: Phases 2, 3 and 4
+were built on 4 November on the corrected engine (`goals.py`,
+`windows.py`, `obligations.py`, `dispatch.py`), each off until switched on
+in `[plan]`, and replayed on the same night
+(docs/nights/2026-11-04/phases-2-4-replay.md). None has run on the sky.
+Waiting for the audit of Phase 5's corrections and Phases 2 to 4 together.
 The order of work and its checkpoints: Phase 1,
 audit; Phase 5, a deep audit of the replay engine (a flawed one would
 make every later change look better than it is); Phases 2, 3 and 4,
 with major design changes or unexpected failures reported; then a full
 audit across simulated nights.
-Phases 2, 3 and 4 are not built yet; the phases below say what each one changes and
-how it is proven before it is used. Until a phase is proven, today's
-planning and acquisition stay as they are. Each phase is switched on by a
-setting and can be switched off again.
+The phases below say what each one changes and how it is proven before it
+is used. Until a phase is proven, today's planning and acquisition stay as
+they are. Each phase is switched on by a setting (`[plan] goals`,
+`windows`, `dispatch` in config.toml, all off by default) and can be
+switched off again.
 
 ## Why
 

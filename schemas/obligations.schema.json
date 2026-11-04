@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/obligations.schema.json",
+  "title": "Obligations",
+  "description": "data of: obligations.py --json. What the night owes, each with why and until when, refreshed from the candidate books and the last nights' outcomes and kept in cache/obligations.json (docs/observing-plan-spec.md, Phase 4).",
+  "type": "object",
+  "required": ["obligations", "allowance"],
+  "properties": {
+    "obligations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "field", "what", "why", "until", "worth", "state"],
+        "properties": {
+          "kind": {"enum": ["second look", "field short", "search not run", "interrupted"]},
+          "field": {"type": "string"},
+          "ref": {"type": "string"},
+          "what": {"type": "string"},
+          "why": {"type": "string"},
+          "until": {"type": "string", "description": "YYYY-MM-DD: when it stops counting."},
+          "worth": {"type": "boolean", "description": "Whether repeating it is still worth anything."},
+          "state": {"enum": ["open", "done", "expired"]},
+          "telescope": {"type": "boolean", "description": "false for processing that never takes the telescope."},
+          "made": {"type": "string"},
+          "weighed": {
+            "type": "object",
+            "description": "A candidate's claim on the night (obligations.weigh).",
+            "required": ["level", "verdict", "why"],
+            "properties": {
+              "level": {"enum": [1, 2, 3]},
+              "real_bogus": {"type": ["number", "null"]},
+              "rb_uncertainty": {"type": ["number", "null"], "description": "Not recorded yet: null."},
+              "local_score": {"type": ["number", "null"]},
+              "mag": {"type": ["number", "null"]},
+              "until": {"type": "string"},
+              "verdict": {"enum": ["now", "allowance", "wait", "close"]},
+              "why": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+    "allowance": {
+      "type": "object",
+      "description": "Seconds of follow-up allowance used, by the evening's date.",
+      "additionalProperties": {"type": "number"}
+    }
+  }
+}

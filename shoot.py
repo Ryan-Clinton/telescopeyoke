@@ -747,6 +747,51 @@ def what_dimmed(log, last=CLOUD_STOP):
             "look down the tube for dew")
 
 
+def capture_rule(args):
+    """--accepted's rule (goals.capture_rule's shape): accepted frames
+    wanted, the time cap (--minutes) and the frame cap (--most)."""
+    import goals
+    most = getattr(args, "most", None) or \
+        args.accepted + max(2, math.ceil(goals.REJECT_ALLOWANCE * args.accepted))
+    return {"accepted": args.accepted, "cap_minutes": args.minutes, "most_frames": most}
+
+
+def goal_stop(log, taken, elapsed_s, rule):
+    """Why a run given a goal (goals.capture_rule's rule) stops now, or None
+    to go on: the frame log as the run keeps it. shoot.py and nightreplay.py
+    both stop by this."""
+    import goals
+    accepted = sum(1 for f in log if f.get("accepted") or f.get("flux") is None)
+    in_row = 0
+    for f in reversed(judged(log)):
+        if f["accepted"]:
+            break
+        in_row += 1
+    go, why = goals.keep_capturing(accepted, taken, in_row, elapsed_s, rule)
+    return None if go else why
+
+
+def goal_reached(session, taken, elapsed_s, args, keep=True):
+    """(go on?, why it stops) for a run given --accepted (Phase 2 of
+    docs/observing-plan-spec.md): it keeps going until that many frames are
+    accepted. A camera stall costs time, which runs to --minutes; a rejected
+    frame costs a frame, which runs to --most. A frame set aside while the
+    live stack was behind counts with the accepted: the quality pass judges
+    it, and the stacked share is measured over both. When it stops, why is
+    kept in capture.json beside the frames."""
+    rule = capture_rule(args)
+    log = session.log
+    why = goal_stop(log, taken, elapsed_s, rule)
+    go = why is None
+    if not go and keep:
+        accepted = sum(1 for f in log if f.get("accepted") or f.get("flux") is None)
+        rejected = sum(1 for f in judged(log) if not f["accepted"])
+        records.write(session.folder / "capture.json",
+                      {"rule": rule, "stopped_by": why, "taken": taken, "accepted": accepted,
+                       "rejected": rejected, "seconds": round(elapsed_s, 1)}, indent=None)
+    return go, why
+
+
 def frames_asked(frames, minutes):
     """The frames a run is asked for: as given; with only --minutes, as many
     as the minutes allow (0: until the time is up or cloud stops it); else
@@ -766,6 +811,11 @@ def main():
                          "and no --frames, as many as the minutes allow)")
     ap.add_argument("--minutes", type=float,
                     help="stop after this many minutes of imaging, however many frames were lost on the way")
+    ap.add_argument("--accepted", type=int, metavar="N",
+                    help="keep going until N frames are accepted: camera stalls run to --minutes (needed), "
+                         "rejected frames to --most; the two counted apart (goals.py)")
+    ap.add_argument("--most", type=int, metavar="N",
+                    help="with --accepted: the most frames to take (default: half as many again, at least 2 more)")
     ap.add_argument("--exposure", default="2",
                     help="seconds per frame, or 'auto' to test what the tracking allows")
     ap.add_argument("--gain", type=int, default=1500)
@@ -795,6 +845,13 @@ def main():
                     help="say what would be done; no camera, no mount")
     ap.add_argument("--json", action="store_true", help="answer in JSON once the run is over")
     args = ap.parse_args()
+    if args.accepted is not None:
+        if args.accepted < 1 or not args.minutes:
+            ap.error("--accepted needs a count of 1 or more and --minutes, the time it may run to")
+        if args.frames is not None:
+            ap.error("--accepted takes the place of --frames")
+        # What the page shows as asked; the run ends by goal_reached().
+        args.frames = capture_rule(args)["most_frames"]
     args.frames = frames_asked(args.frames, args.minutes)
     if args.dither and args.no_recentre:
         ap.error("--dither moves the mount between frames; it cannot go with --no-recentre")
@@ -950,6 +1007,11 @@ def image(args, session, exposure, moving, holding, tracker):
                 told["timed"] = True
                 print(f"  {args.minutes:g} minutes taken: finishing", flush=True)
             return False
+        if getattr(args, "accepted", None):
+            go, why = goal_reached(session, index, time.monotonic() - started, args)
+            if not go:
+                print(f"  {why}: finishing", flush=True)
+            return go
         if args.frames:
             return stop is None
         if args.through_cloud and time.monotonic() - checked[0] >= NIGHT_CHECK:

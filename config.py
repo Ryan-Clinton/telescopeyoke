@@ -297,6 +297,18 @@ SETTINGS = (
      "On Windows, the camera's name as ffmpeg lists it. Linux finds one by itself.", {"optional": True}),
     ("webcam", "built_in", "Use the laptop's own webcam", "yesno",
      "Off: only a webcam plugged in watches the telescope, and the laptop's camera light stays off.", {}),
+    ("plan", "goals", "Captures keep going to their goal", "yesno",
+     "A capture keeps going until it has the frames its programme wants accepted, up to a time cap for camera "
+     "stalls and a frame cap for rejections, counted apart (goals.py). Off: frames and minutes as given.", {}),
+    ("plan", "windows", "Keep protected steps' start times", "yesno",
+     "A step given a start time, an occultation or a transit starts on time with its setup before it, and the "
+     "steps before it are timed back from that (windows.py). Off: steps run in order, each to its own time.", {}),
+    ("plan", "dispatch", "Choose the next step as the night goes", "yesno",
+     "At each step's end the next of tonight's agreed steps is chosen by what is owed and what it would add "
+     "(dispatch.py); it never adds a step. Off: the steps run in the order listed.", {}),
+    ("plan", "follow_up_share", "Share of the night for uncertain candidates", "number",
+     "Second looks at candidates that are not yet strong may take at most this share of the night; strong "
+     "ones go first outside it.", {"min": 0, "max": 1}),
     ("indi", "port", "INDI server port", "whole", "", {"min": 1, "max": 65535}),
     ("indi", "manage_server", "Start the INDI server automatically", "yesno",
      "That stops any INDI server already running, so leave it off if other equipment shares one.", {}),

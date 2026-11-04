@@ -15,9 +15,7 @@ being worked out in the background.
 """
 import argparse
 import json
-import re
 import statistics
-import tomllib
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
@@ -32,15 +30,21 @@ NIGHT_TURNS = 12     # the hour (local) a night's sessions are counted from: noo
 
 
 def programme_for(field):
-    """The programme a field belongs to and its goals: (name, goals), or
-    (None, {}) for a field no programme watches."""
-    for path in sorted(PROGRAMMES.glob("*.toml")):
-        with path.open("rb") as f:
-            p = tomllib.load(f)
-        mosaic = p.get("mosaic")
-        if p.get("target") == field or (mosaic and re.fullmatch(rf"{re.escape(mosaic)}-P\d+", field)):
-            return path.stem, p.get("goals", {})
-    return None, {}
+    """The programme or planned target a field belongs to and its goals
+    (goals.py, in the [goals] names): (name, goals), or (None, {}) for a
+    field none names."""
+    import goals
+    found = goals.of(field)
+    if found["programme"] is None:
+        return None, {}
+    return found["programme"], goals.flat(found)
+
+
+def out_of_line(session):
+    """The share of the field where the subtraction, not the sky, limited
+    the search (difference.py's out_of_line_share), or None."""
+    record = _json(Path(session) / "patrol.json") or {}
+    return (record.get("difference") or {}).get("out_of_line_share")
 
 
 def _json(path):
@@ -216,7 +220,12 @@ def of_session(session):
     mag_50 = depth.get("completeness", {}).get("all", {}).get("mag_50")
     gaps, gap_minutes = stalls(log, plan.get("exposure"))
     causes = [cause(f) for f in log if f.get("accepted") is False]
-    state, why = search_state(session, programme)
+    if goals.get("purpose") in (None, "nova-patrol", "moving"):
+        state, why = search_state(session, programme)
+    else:
+        # A supernova's or a star's frames are measured, not searched: no
+        # search is owed on them.
+        state, why = "none", None
     record = {
         "session": str(session), "field": field, "programme": programme,
         "requested": plan.get("frames"),
@@ -225,6 +234,7 @@ def of_session(session):
         "stacked": stack.get("stacked"),
         "integration_s": stack.get("total_exposure_s"),
         "depth_g": mag_50,
+        "out_of_line_share": out_of_line(session),
         # Inferred: long gaps between frames' times. They may be the camera,
         # or something else the run did between frames.
         "gaps": gaps, "gap_minutes": gap_minutes,
@@ -282,7 +292,12 @@ def judge(r, goals):
         searchable = "pending"
     worth_at, desired_depth = goals.get("worth_depth"), goals.get("desired_depth")
     desired_frames = goals.get("desired_frames")
-    if worth_at is None:
+    quality_max, worth_frames = goals.get("quality_max"), goals.get("worth_frames")
+    messy = quality_max is not None and (r.get("out_of_line_share") or 0) > quality_max
+    if worth_at is None and worth_frames is not None:
+        # A measurement, not a search: worth it with enough stacked frames.
+        worth = searchable if searchable != "met" else ("met" if stacked >= worth_frames else "short")
+    elif worth_at is None:
         worth = "not judged"
     elif searchable != "met":
         worth = "short" if searchable == "short" else searchable
@@ -291,7 +306,10 @@ def judge(r, goals):
         # finished without measuring depth is short, not waiting for ever.
         worth = "pending" if r["search"] == "running" else "short"
     else:
-        worth = "met" if r["depth_g"] >= worth_at else "short"
+        # A deeper stack whose subtraction is the limit is not counted as
+        # better (the spec's Phase 2): not worth it where the subtraction is
+        # out of line over more than quality_max of the field.
+        worth = "met" if r["depth_g"] >= worth_at and not messy else "short"
     # The goal aimed for. It can't be met by a session that wasn't worth
     # having: 24 frames whose search failed have not met a search's goal.
     if desired_depth is None and desired_frames is None:
@@ -331,6 +349,11 @@ def judge(r, goals):
         limits.append("depth was never measured: ./depth.py SESSION --plant measures it")
     if worth_at is not None and r["depth_g"] is not None and r["depth_g"] < worth_at:
         limits.append(f"shallow: G {r['depth_g']:.2f}, under the G {worth_at:g} it needs to be worth it")
+    if messy:
+        limits.append(f"the subtraction: out of line on {100 * r['out_of_line_share']:.0f}% of the field, over the "
+                      f"{100 * quality_max:.0f}% a search is trusted with")
+    if worth_frames is not None and stacked is not None and stacked < worth_frames:
+        limits.append(f"{stacked} stacked, under the {worth_frames} a measurement needs")
     return {"ran": ran, "searchable": searchable, "worth_it": worth, "desired": desired, "limited_by": limits}
 
 

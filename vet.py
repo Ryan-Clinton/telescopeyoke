@@ -316,7 +316,8 @@ def vet(record, checks, half_scores=None, ref=None, zeropoint=None, radius=4.0):
     out = []
     for n, c in enumerate(record["candidates"]):
         e = {"x": c["x"], "y": c["y"], "ra": c.get("ra"), "dec": c.get("dec"), "score": c["score"],
-             "as_strong_fading": c.get("as_strong_fading"), "mag": c.get("mag")}
+             "as_strong_fading": c.get("as_strong_fading"), "mag": c.get("mag"),
+             "local_score": c.get("local_score")}
         kinds = {"score": "measured", "mag": "measured"}
         if c.get("ra") is not None:
             for key, rows, within in (("asteroid", checks.get("asteroids"), ASTEROID_WITHIN),

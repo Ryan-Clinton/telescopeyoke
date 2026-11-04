@@ -128,6 +128,19 @@ manage_server = false
 # token = "123456:ABC..."
 # chat = "123456789"
 
+# How a night's plan chooses and runs its steps (docs/observing-plan-spec.md).
+# Each phase is switched on here and can be switched off again; off, the
+# plan runs as before. goals: a capture keeps going until its desired
+# accepted frames or its cap (Phase 2). windows: protected steps keep their
+# start, and flexible steps are timed back from it (Phase 3). dispatch: the
+# next of tonight's agreed steps is chosen at each step's end (Phase 4).
+# follow_up_share: the share of a night uncertain candidates' follow-ups may take.
+[plan]
+goals = false
+windows = false
+dispatch = false
+follow_up_share = 0.25
+
 [storage]
 # A folder on a bigger disk where finished Moon videos are moved, leaving a
 # link behind, when the data disk runs low (./storage.py). Empty: never moved.

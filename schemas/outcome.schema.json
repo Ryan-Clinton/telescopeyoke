@@ -107,6 +107,13 @@
           ],
           "description": "G where half of planted stars are found; null until depth.py has run."
         },
+        "out_of_line_share": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "description": "Share of the field where the subtraction's spread was out of line with the noise model (difference.py): over the goals' quality_max, the subtraction, not the sky, limited the search, and the session is not worth it however deep."
+        },
         "rejected": {
           "type": "object",
           "required": [
@@ -152,7 +159,7 @@
         },
         "goals": {
           "type": "object",
-          "description": "The programme's [goals]: searchable_frames, worth_depth, desired_frames, desired_depth."
+          "description": "The programme's or planned target's goals (goals.py): purpose, searchable_frames, worth_depth or worth_frames, quality_max, desired_frames, desired_depth, stretch_frames, stretch_depth."
         },
         "ran": {
           "$ref": "#/$defs/verdict"

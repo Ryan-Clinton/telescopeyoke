@@ -10,6 +10,9 @@ import pytest
 
 os.environ["TY_DATA"] = tempfile.mkdtemp(prefix="ty-test-data-")
 os.environ["TY_CALIBRATION"] = tempfile.mkdtemp(prefix="ty-no-calibration-")
+# The plan's phases ([plan] in config.toml) as the example has them, all off,
+# whatever the person has switched on: a test that wants one on says so.
+os.environ["TY_PLAN"] = "off"
 
 
 @pytest.fixture(autouse=True)

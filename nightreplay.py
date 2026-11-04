@@ -75,7 +75,9 @@ TUNED_ON = {"2026-11-03"}
 NOT_MODELLED = ["a supernova's photometry: its visits are judged by frames and depth only",
                 "what a search would discover: only whether it could run",
                 "a step stopped by hand (schedule.py next)",
-                "dawn and the mount's limits ending a patrol early (patrol.night_left)"]
+                "dawn and the mount's limits ending a patrol early (patrol.night_left)",
+                "dispatch: what was owed at the night's start, other than the plan's own second-look steps; "
+                "how strong a candidate was (every second look counts as uncertain)"]
 PANEL_FIELD = re.compile(r"(.+)-P(\d+)$")
 # The code the night of 3 to 4 November 2026 ran (main at 17:23 that
 # evening): the as-run policy reads its programmes from it.
@@ -335,12 +337,21 @@ class Current:
     """The running code's rules: each call is the function the telescope runs by."""
     name = "current"
     reconstructed = False
+    chooses = False          # Phases 3 and 4: the next step chosen, not the list in order
 
     def programme(self, name):
         return patrol.programme(name)
 
-    def prepare(self, step, now, last, sunset):
-        return schedule.prepared(step, now, last, sunset)
+    def prepare(self, step, now, last, sunset, cut=None):
+        return schedule.prepared(step, now, last, sunset, cut=cut)
+
+    def capture_rule(self, run, field, minutes, exposure):
+        """Phase 2's rule for a patrol's capture: none in today's code."""
+        return None
+
+    def weighed(self, run):
+        """Phase 4's weighing of a second look: always yes in today's code."""
+        return True, None
 
     def frames_for(self, minutes, exposure):
         return patrol.frames_for(minutes, exposure)
@@ -372,8 +383,9 @@ class Current:
     def shoot_minutes(self, minutes, deadline, now):
         return patrol.shoot_minutes(minutes, deadline, now)
 
-    def look_put_off(self, waiting, room_left, budget):
-        return patrol.second_look_put_off(waiting, room_left, live.KNOWN["patrol.second_looks"][1], budget)
+    def look_put_off(self, waiting, room_left, budget, weighed=(True, None)):
+        return patrol.second_look_put_off(waiting, room_left, live.KNOWN["patrol.second_looks"][1], budget,
+                                          weighed=weighed)
 
     def look_room(self, deadline, now):
         return patrol.room(deadline, now, patrol.visit_minutes(patrol.CONFIRM_MINUTES))
@@ -388,11 +400,11 @@ class AsRun(Current):
     name = "as-run 3 Nov"
     reconstructed = True
 
-    def prepare(self, step, now, last, sunset):
+    def prepare(self, step, now, last, sunset, cut=None):
         command = [c.replace("{last}", last or "") for c in step["command"]]
         if any(Path(c).name == "patrol.py" for c in command[:2]) and not step.get("until"):
             return command, None          # no --budget and no backstop then
-        return schedule.prepared(step, now, last, sunset)
+        return schedule.prepared(step, now, last, sunset, cut=cut)
 
     def programme(self, name):
         """The programme as it stood then (git show AS_RUN_CODE), or today's
@@ -428,11 +440,81 @@ class AsRun(Current):
     def deadline(self, began, budget):
         return None
 
-    def look_put_off(self, waiting, room_left, budget):
+    def look_put_off(self, waiting, room_left, budget, weighed=(True, None)):
         return None
 
 
-POLICIES = {"as-run": AsRun, "current": Current}
+class Goals(Current):
+    """Phase 2 on today's code ([plan] goals on): a patrol's capture keeps
+    going to its desired accepted frames, stalls to the time cap and
+    rejections to the frame cap, by the functions shoot.py --accepted stops
+    by. A desired depth becomes frames through goals.capture_rule with the
+    depth model of earlier nights and the field's star width and sky from
+    stacks measured before that moment."""
+    name = "goals (Phase 2)"
+
+    def capture_rule(self, run, field, minutes, exposure):
+        import goals
+        g = goals.of(field)
+        known = [d for d in run.night.depth_inputs if d["last"] + MEASURED_AFTER_S <= run.t]
+        prior = None
+        if known:
+            near = min(known, key=lambda d: abs(d["mid"] - run.t))
+            prior = {"fwhm": near["fwhm"], "sky": near["sky"]}
+        rule = goals.capture_rule(g, 1.0, exposure=exposure, model=run.cond.costs.get("depth_model"), prior=prior)
+        if rule:
+            rule["cap_minutes"] = minutes      # shoot.py's --minutes: the patrol's cap, kept to its budget
+        return rule
+
+
+class Windows(Goals):
+    """Phase 3 on Phase 2 ([plan] windows on): windows.choose picks the step,
+    protected starts keep their setup before them, and a flexible step is
+    told the cutoff through schedule.prepared, as the runner does."""
+    name = "windows (Phase 3)"
+    chooses = True
+
+    def choose(self, run, pending):
+        import windows
+        return windows.choose(pending, run.t, run.cond.costs, run.when)
+
+
+class Dispatch(Windows):
+    """Phase 4 on Phase 3 ([plan] dispatch on): dispatch.choose ranks the
+    agreed steps at each step's end with the measured skyline (dispatch.Sky
+    for the night), and a second look is weighed against the night's
+    follow-up allowance (obligations.allowance_left). The replay knows only
+    that a search left something unexplained, not how strong it was, so
+    every second look counts as uncertain; what is owed is the plan's own
+    second-look steps."""
+    name = "dispatch (Phase 4)"
+
+    def __init__(self):
+        self.sky = None
+
+    def choose(self, run, pending):
+        import dispatch
+        if self.sky is None:
+            try:
+                self.sky = dispatch.Sky(now=run.night.start)
+            except Exception:        # no site: every target counts as up, said in the result
+                self.sky = False
+        owed = [{"field": f, "until": (run.night.evening.fromordinal(run.night.evening.toordinal() + 1)).isoformat()}
+                for s in pending if "second look" in s["label"] for f in dispatch.what(s)[1]]
+        step, cut, hold, _ = dispatch.choose(pending, run.t, self.sky or None, owed, run.cond.costs,
+                                             run.last_target, keep=False, when=run.when)
+        if step is not None and self.sky and dispatch.what(step)[0] and \
+                not self.sky.window(dispatch.what(step)[0], run.t)[0]:
+            run.below_limit.append(step["label"])
+        return step, cut, hold
+
+    def weighed(self, run):
+        import obligations
+        return obligations.allowance_left(run.follow_up_used, run.night.end - run.night.start, FOLLOW_UP_SHARE)
+
+
+FOLLOW_UP_SHARE = 0.25   # [plan] follow_up_share, as the person approved on 4 November 2026
+POLICIES = {"as-run": AsRun, "current": Current, "goals": Goals, "windows": Windows, "dispatch": Dispatch}
 
 
 @dataclass
@@ -455,6 +537,8 @@ class Visit:
     recorded_share: float = 0.0
     move_recorded: bool = True
     verdicts: dict = dc_field(default_factory=dict)
+    stopped_by: str = ""
+    stall_s: float = 0.0
 
 
 def panel_order(night, mosaic, start, end):
@@ -504,6 +588,9 @@ class Run:
         self.steps = []
         self.deferred_looks = 0
         self.sunset = sunset_of(night)
+        self.follow_up_used = 0.0        # seconds of second looks (Phase 4's allowance)
+        self.below_limit = []            # steps chosen when the planner's skyline said their target was down
+        self.last_target = None
         self.spent = {"accepted": 0.0, "rejected": 0.0, "between frames": 0.0, "stalls": 0.0,
                       "moves": 0.0, "waiting for a timed step": 0.0, "steps not modelled": 0.0}
 
@@ -523,9 +610,14 @@ class Run:
         nearest = min(same, key=lambda s: abs(s["first"] - v.start)) if same else None
         return nearest is not None and nearest["folder"].name in self.night.unexplained
 
-    def capture(self, step, field, kind, frames, minutes, exposure, hard, goals):
+    def when(self, text, now):
+        """A step's clock time as the runner reads it, on this night."""
+        return schedule.not_before(text, now, self.sunset)
+
+    def capture(self, step, field, kind, frames, minutes, exposure, hard, goals, rule=None):
         """shoot.py on a field: the move there, then frames until the
-        policy's stop says so or the backstop (`hard`) ends it."""
+        policy's stop says so or the backstop (`hard`) ends it. With a
+        Phase 2 rule, shoot.goal_stop decides, as shoot.py --accepted does."""
         n = self.seen.get(field, 0)
         self.seen[field] = n + 1
         recorded = [s for s in self.night.sessions if s["field"] == field]
@@ -538,19 +630,29 @@ class Run:
         self.spent["moves"] += move
         self.at = field
         frames = self.policy.frames_asked(frames, minutes)
-        v = Visit(step, field, kind, exposure=exposure, start=self.t, asked=frames, move_recorded=recorded_move)
+        v = Visit(step, field, kind, exposure=exposure, start=self.t, asked=rule["accepted"] if rule else frames,
+                  move_recorded=recorded_move)
         began = self.t
         log, same, light = [], 0, []
-        while self.policy.stop(v.captured, frames, log, self.t - began, minutes) is None:
+
+        def stop():
+            if rule:
+                return shoot.goal_stop(log, v.captured, self.t - began, rule)
+            return self.policy.stop(v.captured, frames, log, self.t - began, minutes)
+        while (why_stop := stop()) is None:
             lost = self.cond.stall(self.t)
             if lost == float("inf"):
                 self.spent["stalls"] += max(0.0, hard - self.t) if hard else 0.0
+                v.stall_s += max(0.0, hard - self.t) if hard else 0.0
                 self.t = hard if hard else self.night.end
+                v.stopped_by = "the camera never came back"
                 break
             if hard is not None and self.t + lost + exposure > hard:
+                v.stopped_by = "the step's end"
                 break
             self.t += lost
             self.spent["stalls"] += lost
+            v.stall_s += lost
             p_cloud, recorded_sky = self.cond.cloud(self.t, field)
             same += recorded_sky
             if v.first_frame is None:
@@ -569,6 +671,7 @@ class Run:
                 light.append(self.cond.transparency(self.t, field))
             if self.t >= self.night.end + 3600:      # a run with no end to it stops with the night
                 break
+        v.stopped_by = v.stopped_by or why_stop or "the night's end"
         v.end = self.t
         v.recorded_share = round(same / v.captured, 2) if v.captured else 0.0
         # The quality pass as restack does it: frames whose star light falls
@@ -639,8 +742,9 @@ class Run:
             minutes = pol.shoot_minutes(p["minutes"] * pol.shoot_cap(), deadline, self.t)
             frames = pol.frames_for(p["minutes"], p["exposure"])
             field_goals = goals or outcome.programme_for(field)[1]
+            rule = pol.capture_rule(self, field, minutes, p["exposure"])
             done.append(self.capture(step["label"], field, "panel" if p.get("mosaic") else "field",
-                                     frames, minutes, p["exposure"], hard, field_goals))
+                                     frames, minutes, p["exposure"], hard, field_goals, rule=rule))
         # Second looks: a mosaic's once the panels are done, each with the
         # GoTo back (its searches finish in the background), as patrol.run
         # does. One field's patrol lets the telescope go once its frames are
@@ -649,17 +753,20 @@ class Run:
         for v in done:
             if not self.unexplained(v) or (len(chosen) == 1 and "--wait" not in command):
                 continue
+            weighed = pol.weighed(self)
             if len(chosen) > 1:
-                why = pol.look_put_off(self.due(step, began, queued), pol.look_room(deadline, self.t), budget or 0)
+                why = pol.look_put_off(self.due(step, began, queued), pol.look_room(deadline, self.t), budget or 0,
+                                       weighed)
             else:
                 why = pol.look_put_off(None, pol.room(deadline, self.t, patrol.CONFIRM_MINUTES
-                                                      * (1 + patrol.STALL_SHARE)), budget or 0)
+                                                      * (1 + patrol.STALL_SHARE)), budget or 0, weighed)
             if why:
                 self.deferred_looks += 1
                 continue
             frames = patrol.second_look_frames(patrol.CONFIRM_MINUTES, p["exposure"])
-            self.capture(step["label"], v.field, "second look", frames, None, p["exposure"], hard,
-                         goals or outcome.programme_for(v.field)[1])
+            look = self.capture(step["label"], v.field, "second look", frames, None, p["exposure"], hard,
+                                goals or outcome.programme_for(v.field)[1])
+            self.follow_up_used += look.end - look.start
 
     def shoot(self, step, command, hard):
         import stacking
@@ -670,41 +777,60 @@ class Run:
                      exposure, hard, outcome.programme_for(field)[1])
 
     def run(self):
-        steps = self.plan.get("steps", [])
-        for i, step in enumerate(steps):
-            queued = steps[i + 1]["label"] if i + 1 < len(steps) else None
-            entry = {"label": step["label"], "planned": step["minutes"], "protected": bool(step.get("not_before"))}
-            if self.t >= self.night.end:
-                self.steps.append(dict(entry, start=self.t, end=self.t, minutes=0.0, skipped="the night was over"))
-                continue
-            if step.get("not_before"):
-                entry["window"] = schedule.not_before(step["not_before"], self.t, self.sunset)
-                if self.t < entry["window"]:
-                    self.spent["waiting for a timed step"] += entry["window"] - self.t
-                    self.t = entry["window"]
-            if step.get("until"):
-                entry["until"] = schedule.not_before(step["until"], self.t, self.sunset)
-            begin = self.t
-            command, left = self.policy.prepare(step, self.t, self.at, self.sunset)
-            if command is None:
-                self.steps.append(dict(entry, start=begin, end=begin, minutes=0.0, skipped=f"{max(left, 0)} s left"))
-                continue
-            hard = begin + float(command[2]) if command[0] == "timeout" else None
-            visits_before = len(self.visits)
-            if any(Path(c).name == "patrol.py" for c in command[:5]):
-                self.patrol(step, command, begin, hard, queued)
-            elif any(Path(c).name == "shoot.py" for c in command[:5]):
-                self.shoot(step, command, hard)
-            else:
-                # Focus, a GoTo or anything else: its planned minutes, said so.
-                self.t += 60 * step["minutes"]
-                self.spent["steps not modelled"] += 60 * step["minutes"]
-                entry["not_modelled"] = True
-            mine = self.visits[visits_before:]
-            first = next((v.first_frame for v in mine if v.first_frame is not None), None)
-            self.steps.append(dict(entry, start=begin, end=self.t, first_frame=first,
-                                   minutes=round((self.t - begin) / 60, 1)))
+        """The plan's steps: in order, or with Phases 3 and 4 as the
+        policy chooses them (windows.choose, dispatch.choose) at each
+        step's end, a flexible one told the cutoff before a protected start."""
+        pending = [dict(s, status="queued") for s in self.plan.get("steps", [])]
+        while pending:
+            step, cut = pending[0], None
+            if self.policy.chooses and self.t < self.night.end:
+                chosen, cut, hold = self.policy.choose(self, pending)
+                if chosen is None and hold:
+                    self.spent["waiting for a timed step"] += hold
+                    self.t += hold
+                    continue
+                step = chosen or pending[0]
+            pending.remove(step)
+            self.run_step(step, cut, pending[0]["label"] if pending else None)
         return self
+
+    def run_step(self, step, cut, queued):
+        import dispatch
+        entry = {"label": step["label"], "planned": step["minutes"], "protected": bool(step.get("not_before"))}
+        if self.t >= self.night.end:
+            self.steps.append(dict(entry, start=self.t, end=self.t, minutes=0.0, skipped="the night was over"))
+            return
+        if step.get("not_before") and self.policy.chooses:
+            # Chosen at its launch: its setup is under way before its time.
+            entry["window"] = schedule.not_before(step["not_before"], self.t, self.sunset)
+        elif step.get("not_before"):
+            entry["window"] = schedule.not_before(step["not_before"], self.t, self.sunset)
+            if self.t < entry["window"]:
+                self.spent["waiting for a timed step"] += entry["window"] - self.t
+                self.t = entry["window"]
+        if step.get("until"):
+            entry["until"] = schedule.not_before(step["until"], self.t, self.sunset)
+        begin = self.t
+        command, left = self.policy.prepare(step, self.t, self.at, self.sunset, cut=cut)
+        if command is None:
+            self.steps.append(dict(entry, start=begin, end=begin, minutes=0.0, skipped=f"{max(left, 0)} s left"))
+            return
+        hard = begin + float(command[2]) if command[0] == "timeout" else None
+        visits_before = len(self.visits)
+        if any(Path(c).name == "patrol.py" for c in command[:5]):
+            self.patrol(step, command, begin, hard, queued)
+        elif any(Path(c).name == "shoot.py" for c in command[:5]):
+            self.shoot(step, command, hard)
+        else:
+            # Focus, a GoTo or anything else: its planned minutes, said so.
+            self.t += 60 * step["minutes"]
+            self.spent["steps not modelled"] += 60 * step["minutes"]
+            entry["not_modelled"] = True
+        mine = self.visits[visits_before:]
+        first = next((v.first_frame for v in mine if v.first_frame is not None), None)
+        self.steps.append(dict(entry, start=begin, end=self.t, first_frame=first,
+                               minutes=round((self.t - begin) / 60, 1)))
+        self.last_target = dispatch.what(step)[0]
 
 
 def measures(run):
@@ -741,6 +867,9 @@ def measures(run):
         "accepted_minutes": round(sum(v.accepted * v.exposure for v in run.visits) / 60, 1),
         "second_looks": sum(v.kind == "second look" for v in run.visits),
         "second_looks_put_off": run.deferred_looks,
+        # Phase 4: steps dispatch chose when the planner's skyline (and its
+        # margin) said their target was down, nothing else being up.
+        "steps_below_skyline_limit": len(run.below_limit),
         "last_step_minutes": run.steps[-1]["minutes"] if run.steps else 0.0,
         "recorded_share": round(statistics.mean([v.recorded_share for v in run.visits]), 2) if run.visits else 0.0,
     }
@@ -784,7 +913,28 @@ def visit_dict(v):
             "accepted": v.accepted, "stacked": v.stacked, "exposure": v.exposure,
             "depth_g": None if v.depth is None else round(v.depth, 2),
             "search": v.search, "search_source": v.search_source,
+            "stopped_by": v.stopped_by, "stall_minutes": round(v.stall_s / 60, 1), "cloud": v.cloud,
+            "shortfall": shortfall(v),
             "recorded_share": v.recorded_share, "move_recorded": v.move_recorded, **v.verdicts}
+
+
+def shortfall(v):
+    """Why a visit fell short of its minimum (searchable), from what the
+    replay recorded of it: its stalls, its cloud, the quality pass, what
+    stopped it. None if it met it or has no minimum."""
+    if v.verdicts.get("searchable") != "short":
+        return None
+    causes = []
+    if v.stall_s >= 60:
+        causes.append(f"camera stalls {v.stall_s / 60:.1f} min")
+    if v.cloud:
+        causes.append(f"cloud {v.cloud} frames")
+    if v.captured and v.stacked < SEARCHABLE <= v.accepted:
+        causes.append(f"the quality pass kept {v.stacked} of {v.accepted}")
+    if v.search not in ("searched", "none", "too few frames"):
+        causes.append(f"search: {v.search}")
+    causes.append(f"stopped: {v.stopped_by}")
+    return "; ".join(causes)
 
 
 # --- checking the engine against the record ------------------------------------
@@ -987,7 +1137,9 @@ def run(args, say=print):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("night", help="the evening's date (YYYY-MM-DD)")
-    ap.add_argument("--policy", default="as-run,current", help="policies to replay, comma-separated")
+    ap.add_argument("--policy", default="as-run,current",
+                    help="policies to replay, comma-separated: as-run, current, goals (Phase 2), windows "
+                         "(Phase 3), dispatch (Phase 4)")
     ap.add_argument("--runs", type=int, default=50, help="replays of each, each with its own draw of the modelled parts")
     ap.add_argument("--stress", choices=["camera-dead", "flicker", "no-frames", "depth-wrong"],
                     help="the night made worse in one way")

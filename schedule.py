@@ -190,15 +190,24 @@ def due(plan=None, now=None):
     return queued["label"] if queued else None
 
 
-def add(label, minutes, command, not_before_=None, pid=None, until=None):
+def add(label, minutes, command, not_before_=None, pid=None, until=None, protect=None, deadline=None,
+        uncertainty=None):
+    """A step at the end of tonight's plan. `protect` ("hard" for an
+    occultation, a transit or an urgent transient), `deadline` and
+    `uncertainty` (minutes before the start the event may come) are Phase
+    3's (windows.py), used with [plan] windows on."""
     plan = load()
     taken = {s.get("id", s["label"]) for s in plan["steps"]}
     step_id = label if label not in taken else f"{label} ({len(taken) + 1})"
-    plan["steps"].append({"id": step_id, "label": label, "minutes": minutes, "command": command,
-                          "not_before": not_before_,
-                          "until": until,
-                          "pid": pid, "status": "running" if pid else "queued",
-                          "started": time.time() if pid else None, "finished": None})
+    step = {"id": step_id, "label": label, "minutes": minutes, "command": command,
+            "not_before": not_before_,
+            "until": until,
+            "pid": pid, "status": "running" if pid else "queued",
+            "started": time.time() if pid else None, "finished": None}
+    for key, value in (("protect", protect), ("deadline", deadline), ("uncertainty", uncertainty)):
+        if value is not None:
+            step[key] = value
+    plan["steps"].append(step)
     save(plan)
     return step_id
 
@@ -284,41 +293,111 @@ RETRY_S = 30      # seconds between
 SOURCE = Path(__file__).resolve()
 
 
+def choosing(cfg=None):
+    """Whether the runner chooses its next step ([plan] windows or dispatch
+    on) rather than taking the list in order."""
+    import goals
+    return goals.enabled("windows", cfg) or goals.enabled("dispatch", cfg)
+
+
+def choose_step(steps, say=print, now=None, cfg=None, sky=None, owed=None, costs=None):
+    """(step, cutoff, hold): the step to start now and the time it must end
+    by (unix seconds, before a protected start), or no step and how long to
+    hold before asking again. A help that must never stop the night: if
+    choosing fails, the first queued step goes as before."""
+    import goals
+    import windows
+    now = now or time.time()
+    try:
+        costs = windows.costs() if costs is None else costs
+        if goals.enabled("dispatch", cfg):
+            import dispatch
+            import obligations
+            if owed is None:
+                owed = obligations.open_ones(obligations.refresh())
+            if sky is None:
+                try:
+                    sky = dispatch.Sky(cfg, now)
+                except Exception as problem:   # no sky: every target counts as up
+                    say(f"{datetime.now():%H:%M} the sky not worked out ({problem.__class__.__name__}); "
+                        "every target counts as up")
+                    sky = None
+            step, cut, hold, ranked = dispatch.choose(steps, now, sky, owed, costs, dispatch.last_target_of(steps))
+            if step is not None:
+                why = next((it["why"] for it in ranked if it["id"] == step.get("id", step["label"])), "")
+                say(f"{datetime.now():%H:%M} chosen next: {step['label']} ({why})")
+        else:
+            step, cut, hold = windows.choose(steps, now, costs)
+        if step is not None and cut is not None:
+            say(f"{datetime.now():%H:%M} {step['label']}: ends by {datetime.fromtimestamp(cut):%H:%M}, before the "
+                "next protected start and its setup")
+        return step, cut, hold
+    except Exception as problem:     # never a reason to stop the night
+        say(f"{datetime.now():%H:%M} next step not chosen ({problem.__class__.__name__}: {problem}); "
+            "taking the list in order")
+        return next((s for s in steps if s.get("status") == "queued"), None), None, None
+
+
+def owe_interrupted(step, code, say=print):
+    """A hard window that failed is owed (Phase 4): an interrupted transit
+    can't be repeated tonight, and is said so for the next chance."""
+    import windows
+    if windows.protection(step) != "hard":
+        return
+    try:
+        import obligations
+        from datetime import date, timedelta as days
+        obligations.owe("interrupted", step["label"], f"{step['label']} again, at its next window",
+                        f"its protected window ended with an error (exit {code})",
+                        (date.today() + days(days=30)).isoformat(), ref=step.get("id", ""))
+    except Exception as problem:     # a record, never a reason to stop
+        say(f"    not recorded as owed: {problem.__class__.__name__}: {problem}")
+
+
 def restart():
     """The runner started again in its own process, with the code on disk now."""
     os.execv(sys.executable, [sys.executable, str(SOURCE), "run"])
 
 
-def prepared(step, now, last=None, sunset=last_sunset):
+def prepared(step, now, last=None, sunset=last_sunset, cut=None):
     """(command, seconds left) for a queued step started at `now`, with
     `last` the field imaged last: the command as the runner starts it, told
     its time, or (None, seconds left) for a step to skip. The runner and
     nightreplay.py both start steps through this, so a replay keeps to the
-    night's own rules (the Phase 5 audit, 4 November 2026)."""
+    night's own rules (the Phase 5 audit, 4 November 2026). `cut` (unix
+    seconds): a flexible step must end by then, before the next protected
+    start and its setup (Phase 3, windows.py); it is told so as a step is
+    told its end time."""
     command = [c.replace("{last}", last or "") for c in step["command"]]
     patrolling = any(Path(c).name == "patrol.py" for c in command[:2])
     left = None
-    if patrolling and not step.get("until") and "--budget" not in command:
+    own = not_before(step["until"], now, sunset) if step.get("until") else None
+    ends = [x for x in (own, cut) if x is not None]
+    if patrolling and not ends and "--budget" not in command:
         # A patrol is told the step's minutes and takes the panels that fit
         # (4 November 2026: 8 panels in a 45-minute step ran 99 minutes).
         command = command + ["--budget", f"{step['minutes']:g}"]
         # The patrol keeps to it itself; this hard stop is a backstop only,
         # BACKSTOP_S after, as for a step with an end time.
         command = ["timeout", "--signal=INT", str(round(60 * step["minutes"]) + BACKSTOP_S)] + command
-    if step.get("until"):
+    if ends:
         # More of whatever was imaged last, to fill the time before a
         # step that keeps to the clock (20 October 2026: the panels
         # ran early, and the frames all go into the panel's stack).
-        left = round(not_before(step["until"], now, sunset) - now)
-        if left < 120 or not last:
+        left = round(min(ends) - now)
+        # Before a protected start the backstop must not run into its setup:
+        # the step is told to end BACKSTOP_S early, so the hard stop falls on
+        # the cutoff (the replay of 3 November found windows 209 s late by it).
+        early = BACKSTOP_S if cut is not None and (own is None or cut < own) else 0
+        if left - early < 120 or (own is not None and not last):
             return None, left
         if any(Path(c).name in ("shoot.py", "patrol.py") for c in command[:2]):
             # The run is told its time and finishes gracefully, picture and all;
             # the hard stop is a backstop only (1 November 2026: steps cut off
             # mid-picture, and private timers that stopped the wrong run).
             # A patrol's --minutes is each field's; its whole time is --budget.
-            command = command + ["--budget" if patrolling else "--minutes", f"{left / 60:.1f}"]
-            left += BACKSTOP_S
+            command = command + ["--budget" if patrolling else "--minutes", f"{(left - early) / 60:.1f}"]
+            left += BACKSTOP_S - early
         command = ["timeout", "--signal=INT", str(left)] + command
     return command, left
 
@@ -361,6 +440,16 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
             step.setdefault("id", step["label"])
         waiting = next((s for s in steps if s["status"] == "running" and s.get("pid")), None)
         step = waiting or next((s for s in steps if s["status"] == "queued"), None)
+        cut = None
+        chooser = not waiting and step is not None and choosing()
+        if chooser:
+            # Phases 3 and 4 (docs/observing-plan-spec.md): protected steps keep
+            # their start, flexible ones are timed back from it, and with
+            # dispatch the next agreed step is chosen by what it would get.
+            step, cut, hold = choose_step(steps, say)
+            if step is None and hold is not None:
+                sleep(min(60, max(1, hold)))
+                continue
         if step is None:
             if ran:
                 if MORNING[0] <= datetime.now().hour < MORNING[1] and not busy():
@@ -378,13 +467,13 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
                     sleep(20)
             mark_id(step["id"], status="done", finished=time.time())
             continue
-        if step.get("not_before"):
+        if step.get("not_before") and not chooser:
             until = not_before(step["not_before"], time.time())
             if time.time() < until:
                 # A minute at a time, then the plan again: it may have changed.
                 sleep(min(60, until - time.time()))
                 continue
-        command, left = prepared(step, time.time(), last_field())
+        command, left = prepared(step, time.time(), last_field(), cut=cut)
         if command is None:
             mark_id(step["id"], status="skipped", started=time.time(), finished=time.time())
             say(f"{datetime.now():%H:%M} {step['label']}: skipped, {max(left, 0)} s left")
@@ -429,6 +518,9 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
             sleep(RETRY_S)
             continue
         if not ok:
+            if chooser:
+                # Its retries used up: a hard window that failed is owed (Phase 4).
+                owe_interrupted(step, done.returncode, say)
             try:
                 offer = fill_words(fill())
             except Exception as problem:    # the offer is a help: the person is fetched all the same
@@ -847,6 +939,12 @@ def main(argv=None):
     a.add_argument("minutes", type=float)
     a.add_argument("--not-before", metavar="HH:MM", help="tonight's clock time (in darkness, one gone since sunset goes at once), or YYYY-MM-DD HH:MM")
     a.add_argument("--until", metavar="HH:MM", help="end the step then, whatever it is doing; as --not-before")
+    a.add_argument("--protect", choices=["hard", "person"],
+                   help="with [plan] windows on: hard (an occultation, a transit, an urgent transient) starts its "
+                        "frames at --not-before whatever ran before, its setup reserved before it")
+    a.add_argument("--deadline", metavar="HH:MM", help="with [plan] windows on: finish by then; it may go earlier")
+    a.add_argument("--uncertainty", type=float, metavar="MIN",
+                   help="minutes before --not-before the event may come (a transit's timing error)")
     a.add_argument("command", nargs=argparse.REMAINDER)
     w = sub.add_parser("wait")
     w.add_argument("label")
@@ -877,9 +975,18 @@ def main(argv=None):
             args.until = before[before.index("--until") + 1]
         if "--at" in before:
             args.at = int(before[before.index("--at") + 1])
+        for flag in ("--protect", "--deadline", "--uncertainty"):
+            if flag in before:
+                setattr(args, flag[2:], before[before.index(flag) + 1])
+        if args.protect not in (None, "hard", "person"):
+            ap.error("--protect is hard or person")
         if not command:
             ap.error("add needs the command after --")
-        added = add(args.label, args.minutes, command, args.not_before, until=args.until)
+        if args.protect == "hard" and not args.not_before:
+            ap.error("--protect hard needs --not-before, the time its frames must start")
+        added = add(args.label, args.minutes, command, args.not_before, until=args.until, protect=args.protect,
+                    deadline=args.deadline,
+                    uncertainty=float(args.uncertainty) if args.uncertainty is not None else None)
         if args.at:
             move(len(load()["steps"]), args.at)
         step = next((s for s in view()["steps"] if s.get("id") == added), None)

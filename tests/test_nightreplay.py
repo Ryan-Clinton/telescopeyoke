@@ -237,3 +237,65 @@ def test_a_stressed_night_still_ends(night):
         assert m["ends_overrun"]["median"] == (1 if stress == "camera-dead" else 0), stress
     dead = nightreplay.replay(night, nightreplay.Current, runs=2, stress="no-frames", costs=COSTS)["measures"]
     assert dead["accepted_minutes"]["median"] == 0
+
+
+def test_with_goals_a_panel_keeps_going_to_its_desired_frames_and_says_why_it_stopped(night):
+    visits = nightreplay.replay(night, nightreplay.Goals, runs=1, costs=COSTS)["visits"]
+    panel = next(v for v in visits if v["kind"] == "panel")
+    # 24 desired stacked frames are 29 accepted (goals.capture_rule), stopped by shoot.goal_stop.
+    assert panel["asked"] == 29
+    assert panel["stopped_by"] in ("desired accepted frames reached", "time cap reached (stalls and slow frames)",
+                                   "frame cap reached (rejections)", "the step's end")
+    assert "stall_minutes" in panel and "shortfall" in panel
+    # Today's code asks for the frames its minutes allow.
+    current = nightreplay.replay(night, nightreplay.Current, runs=1, costs=COSTS)["visits"]
+    assert next(v for v in current if v["kind"] == "panel")["asked"] != 29
+
+
+def test_a_shortfall_says_its_cause():
+    v = nightreplay.Visit("panels", "M31-P3", "panel", captured=12, accepted=7, stacked=6, cloud=5, stall_s=150,
+                          stopped_by="time cap reached (stalls and slow frames)", verdicts={"searchable": "short"})
+    said = nightreplay.shortfall(v)
+    assert "camera stalls 2.5 min" in said and "cloud 5 frames" in said and "time cap" in said
+    v.verdicts = {"searchable": "met"}
+    assert nightreplay.shortfall(v) is None
+
+
+def test_a_protected_step_starts_on_time_only_with_windows_on(night):
+    """Today's runner waits for 04:30 and then makes the GoTo, so its first
+    frame is a move late; with windows the setup is reserved before it."""
+    late = nightreplay.replay(night, nightreplay.Goals, runs=3, costs=COSTS, protect="04:30")["measures"]
+    kept = nightreplay.replay(night, nightreplay.Windows, runs=3, costs=COSTS, protect="04:30")["measures"]
+    assert late["protected_starts_missed"]["median"] == 1
+    assert kept["protected_starts_missed"]["median"] == 0 and kept["protected_start_late_s"]["median"] == 0
+
+
+def test_the_backstop_does_not_run_into_a_protected_start():
+    """A flexible step ended by a cutoff is told to end BACKSTOP_S early, so
+    its hard stop falls on the cutoff (the replay of 3 November found
+    protected starts 209 s late by it)."""
+    import schedule
+    step = {"label": "panels", "minutes": 45, "command": ["./patrol.py", "m31-panels"]}
+    command, left = schedule.prepared(step, 1000.0, "M31-P1", cut=1000.0 + 1800)
+    assert left == 1800 and command[:3] == ["timeout", "--signal=INT", "1800"]
+    assert command[command.index("--budget") + 1] == f"{(1800 - schedule.BACKSTOP_S) / 60:.1f}"
+    # A step's own end time keeps the backstop after it, as before.
+    own, left = schedule.prepared(dict(step, until="2026-11-04 03:00"), datetime(2026, 11, 4, 2, 30).timestamp(),
+                                  "M31-P1")
+    assert left == 1800 + schedule.BACKSTOP_S
+
+
+def test_dispatch_and_windows_keep_every_stress_night_safe(night):
+    for policy in (nightreplay.Windows, nightreplay.Dispatch):
+        for stress in ("camera-dead", "flicker", "no-frames", "depth-wrong"):
+            m = nightreplay.replay(night, policy, runs=2, stress=stress, costs=COSTS)["measures"]
+            assert m["ends_past_backstop"]["median"] == 0 and m["protected_starts_missed"]["median"] == 0, stress
+        protected = nightreplay.replay(night, policy, runs=2, costs=COSTS, protect="04:30")["measures"]
+        assert protected["protected_starts_missed"]["median"] == 0
+
+
+def test_the_policies_are_named_for_their_phases():
+    assert set(nightreplay.POLICIES) == {"as-run", "current", "goals", "windows", "dispatch"}
+    assert issubclass(nightreplay.Dispatch, nightreplay.Windows) and issubclass(nightreplay.Windows,
+                                                                                  nightreplay.Goals)
+    assert nightreplay.Windows.chooses and not nightreplay.Goals.chooses

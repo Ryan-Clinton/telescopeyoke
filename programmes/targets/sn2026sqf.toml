@@ -1,0 +1,25 @@
+# SN 2026sqf in NGC 3310: a planned target, not a patrol (docs/observing-plan-spec.md, Phase 2).
+# On 4 November 2026 it got 480 s stacked, and its light could not be told
+# from the galaxy's bright centre. A reference made from our own first visit
+# holds the supernova too, so subtracting it takes the supernova's light away.
+
+target = "NGC 3310"
+exposure = 16
+gain = 1500
+
+[goals]
+purpose = "known-transient"
+timing = "revisit"
+# The Transient Name Server's discovery date (YYYY-MM-DD) goes here; until it
+# does, none of our references can be shown to be from before it, and the
+# measurement is case 3: a detection or an upper limit only.
+# discovered = "2026-10-.."
+# Set when a host picture from before it is found in an archive (its URL),
+# or when the supernova has faded below what our own pictures reach (G).
+# archive_reference = ""
+# faded_below = 18.0
+# A detection or an upper limit needs a searchable stack; 30 stacked frames
+# (8 minutes of 16 s) is what one is said from. More frames don't change case 3.
+searchable_frames = 8
+worth_frames = 8
+desired_frames = 30

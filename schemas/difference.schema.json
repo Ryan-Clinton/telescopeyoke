@@ -19,6 +19,7 @@
           "ra": {"type": "number"},
           "dec": {"type": "number"},
           "score": {"type": "number", "description": "How many times the local noise."},
+          "local_score": {"type": "number", "description": "The score over the score's own spread round it: whether it stands out against its surroundings where the subtraction may be the limit."},
           "as_strong_fading": {"type": "integer", "description": "How many peaks on the fading side score at least this much: what noise and imperfect subtraction alone produce. Near 0 for a real new star."},
           "mag": {"type": "number", "description": "Brightness of what is new, unfiltered, calibrated approximately to Gaia G; only when the new stack has a depth.json."}
         }
@@ -32,6 +33,7 @@
     "noise_ref": {"type": "number"},
     "usable_share": {"type": "number", "description": "Share of the reference's pixels where candidates are trusted: covered by both, away from edges and bright stars."},
     "threshold": {"type": "number"},
+    "out_of_line_share": {"type": ["number", "null"], "description": "Share of the usable field where the score's spread round each point is over 1.3 times what the noise model expects: where the subtraction, not the sky, limits the search."},
     "fading_peaks": {"type": "integer"},
     "fading_on_stars": {"type": "integer", "description": "Fading peaks within a star's width of a star of the reference: the dark half of what a misaligned star leaves. Many of them, against few candidates, means the two stacks did not line up."},
     "sky_scale_new": {"type": ["number", "null"], "description": "Counts of glow above the sky that double the new stack's variance, measured from the stack; null where no rise could be measured and the sky's noise alone is used."},

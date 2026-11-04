@@ -234,7 +234,14 @@
                   "modelled",
                   "none"
                 ]
-              }
+              },
+              "stopped_by": {
+                "type": "string",
+                "description": "What ended the capture: shoot.py's own stop, or with the goals policy its desired accepted frames, the time cap (stalls) or the frame cap (rejections); the step's end, the camera never coming back."
+              },
+              "stall_minutes": {"type": "number", "description": "Minutes this visit lost to camera stalls (recorded inside the night's span, modelled outside it)."},
+              "cloud": {"type": "integer"},
+              "shortfall": {"type": ["string", "null"], "description": "Why the visit fell short of its minimum (searchable): stalls, cloud, the quality pass, the search, what stopped it. Null when it met it or has none."}
             }
           }
         }

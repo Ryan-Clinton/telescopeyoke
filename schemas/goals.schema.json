@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/goals.schema.json",
+  "title": "Goals",
+  "description": "data of: goals.py [FIELD] --json. What each programme and planned target is for and when it has enough: purpose, timing, and minimum, worth-it, desired and stretch levels in the purpose's own measure (docs/observing-plan-spec.md, Phase 2).",
+  "type": "object",
+  "required": ["goals", "enabled"],
+  "properties": {
+    "enabled": {"type": "boolean", "description": "Whether [plan] goals is on: captures keep going to their desired accepted frames, or the cap."},
+    "goals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["field", "programme", "purpose", "timing", "graded_on", "minimum", "worth", "desired", "stretch",
+                     "cap", "case", "notes"],
+        "properties": {
+          "field": {"type": ["string", "null"]},
+          "programme": {"type": ["string", "null"], "description": "The programme's file name, or targets/NAME for a planned target; null when nothing names the field."},
+          "purpose": {"enum": ["nova-patrol", "known-transient", "transit", "moving", "lead", null]},
+          "timing": {"enum": ["once", "revisit", "sequence", "series", "deadline", null]},
+          "graded_on": {"enum": ["search", "photometry"]},
+          "minimum": {"$ref": "#/$defs/level"},
+          "worth": {"$ref": "#/$defs/level"},
+          "desired": {"$ref": "#/$defs/level"},
+          "stretch": {"$ref": "#/$defs/level"},
+          "cap": {"type": "number", "description": "The time a capture may run, as a multiple of its planned minutes."},
+          "case": {"enum": [1, 2, 3, null], "description": "A known transient's reference case: 1 a reference from before it, 2 a model of the host, 3 a detection or an upper limit only."},
+          "notes": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  },
+  "$defs": {
+    "level": {
+      "type": "object",
+      "properties": {
+        "stacked": {"type": "integer", "description": "Stacked frames."},
+        "depth": {"type": "number", "description": "G where half of planted stars are found."},
+        "error": {"type": "number", "description": "Mag: the brightness's error."},
+        "quality_max": {"type": "number", "description": "The largest share of the field whose subtraction may be out of line."}
+      },
+      "additionalProperties": false
+    }
+  }
+}

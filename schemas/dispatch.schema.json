@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/dispatch.schema.json",
+  "title": "Dispatch",
+  "description": "data of: dispatch.py --json. Which of tonight's queued steps would go next now, until when, and the order every queued step was offered in with its reasons (docs/observing-plan-spec.md, Phase 4). Reads only; the runner chooses with [plan] dispatch on.",
+  "type": "object",
+  "required": ["next", "until", "wait_s", "offered"],
+  "properties": {
+    "next": {"type": ["string", "null"], "description": "The step's id, or null when none can start now."},
+    "until": {"type": ["number", "null"], "description": "Unix seconds it must end by: the next protected start less its setup."},
+    "wait_s": {"type": ["number", "null"], "description": "With no step now: seconds until the next protected step's setup begins."},
+    "offered": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["step", "label", "why"],
+        "properties": {
+          "step": {"type": "string"},
+          "label": {"type": "string"},
+          "why": {"type": "string"}
+        }
+      }
+    }
+  }
+}

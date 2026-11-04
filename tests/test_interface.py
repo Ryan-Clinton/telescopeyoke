@@ -816,3 +816,41 @@ def test_a_night_replay_matches_its_schema(tmp_path, monkeypatch):
         "night": "2026-11-03", "replays": [nightreplay.replay(night, nightreplay.Current, runs=2, costs=t.COSTS)]}),
           "nightreplay")
     valid(interface.run("nightreplay", lambda: nightreplay.check(night, runs=2, costs=t.COSTS)), "nightreplay")
+    # Phases 2 to 4, with a protected window, carry the visits' causes and the window's lateness.
+    valid(interface.run("nightreplay", lambda: {
+        "night": "2026-11-03", "replays": [nightreplay.replay(night, nightreplay.Dispatch, runs=2, protect="01:30",
+                                                              costs=t.COSTS)]}), "nightreplay")
+
+
+def test_goals_match_their_schema():
+    import goals
+    valid(interface.run("goals", lambda: goals.run(argparse.Namespace(field=None), say=lambda *a: None)), "goals")
+    valid(interface.run("goals", lambda: goals.run(argparse.Namespace(field="M101"), say=lambda *a: None)), "goals")
+
+
+def test_obligations_match_their_schema(tmp_path, monkeypatch):
+    import obligations
+    import outcome
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    monkeypatch.setattr(obligations, "FILE", tmp_path / "obligations.json")
+    monkeypatch.setattr(outcome, "night_sessions", lambda evening, d=None: [])
+    (tmp_path / "candidates").mkdir()
+    (tmp_path / "candidates" / "M31-P1.json").write_text(json.dumps({"name": "M31-P1", "candidates": [
+        {"id": "M31-P1-x", "first": "20261104-033754", "open": True, "ra": 1.0, "dec": 2.0, "nights": [
+            {"night": "20261104-033754", "seen": True, "verdict": "unexplained", "real_bogus": 0.2, "mag": 16.0}]}]}))
+    obligations.owe("interrupted", "WASP-12 b", "again", "its window ended with an error", "2026-12-01")
+    valid(interface.run("obligations", lambda: obligations.run(argparse.Namespace(), say=lambda *a: None)),
+          "obligations")
+
+
+def test_dispatch_matches_its_schema(tmp_path, monkeypatch):
+    import dispatch
+    import obligations
+    import schedule
+    import windows
+    monkeypatch.setattr(obligations, "refresh", lambda: {"obligations": [], "allowance": {}})
+    monkeypatch.setattr(windows, "costs", lambda: {})
+    monkeypatch.setattr(dispatch, "Sky", lambda cfg=None, now=None: None)
+    schedule.save({"steps": []})
+    schedule.add("M33", 30, ["./shoot.py", "M33"])
+    valid(interface.run("dispatch", lambda: dispatch.run(argparse.Namespace(), say=lambda *a: None)), "dispatch")

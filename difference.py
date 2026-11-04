@@ -49,6 +49,11 @@ import stacking
 
 THRESHOLD = 5.0       # a candidate scores at least this many times the local spread
 LOCAL = 64            # pixels: the square the local spread of the score is taken over
+# The score's spread round a point this many times what the noise model
+# expects: there the subtraction, not the sky, limits the search. M31-P8's
+# false candidates of 4 November 2026 sat where it was 1.3 to 1.9
+# (docs/nights/2026-11-04/p8-false-candidates.md).
+OUT_OF_LINE = 1.3
 EDGE = 24             # pixels: candidates this near the edge of the shared area are not trusted
 BRIGHT = 0.03         # of the brightest star: pixels this bright, and round them, are left out
 
@@ -528,6 +533,12 @@ def subtract(new, ref, new_wcs=None, ref_wcs=None, zeropoint=None, plant_count=0
     # stack that fewer frames reached: those candidates are marked instead
     # by how many fading peaks are as strong (as_strong_fading).
     x, y = peaks(significance, usable)
+    # Where the subtraction is the limit: kept as a share of the field, and
+    # each candidate's score against its own surroundings, for the plan to
+    # weigh (docs/observing-plan-spec.md, Phases 2 and 4). It marks; it
+    # silences nothing.
+    around = local_spread(significance)
+    out_of_line = round(float((around[usable] > OUT_OF_LINE).mean()), 3) if usable.any() else None
     # A star a fraction of a pixel out of place leaves a bright and a dark
     # lobe side by side; a new star has no dark partner.
     keep = [not dipole(significance, cx, cy) for cx, cy in zip(x, y)]
@@ -543,7 +554,8 @@ def subtract(new, ref, new_wcs=None, ref_wcs=None, zeropoint=None, plant_count=0
     on_stars = fading_on_stars(fx, fy, stars_ref, fwhm)
     candidates = []
     for cx, cy in zip(x, y):
-        c = {"x": int(cx), "y": int(cy), "score": round(float(significance[cy, cx]), 1)}
+        c = {"x": int(cx), "y": int(cy), "score": round(float(significance[cy, cx]), 1),
+             "local_score": round(float(significance[cy, cx] / around[cy, cx]), 1)}
         c["as_strong_fading"] = int(len(fading) - np.searchsorted(fading, significance[cy, cx]))
         if ref_wcs is not None:
             ra, dec = ref_wcs.pixel_to_world_values(float(cx), float(cy))
@@ -558,6 +570,7 @@ def subtract(new, ref, new_wcs=None, ref_wcs=None, zeropoint=None, plant_count=0
               "alignment_residual_px": round(residual, 3), "flux_ratio": round(scale, 4),
               "fwhm_px": round(fwhm, 2), "noise_new": round(noise_new, 3), "noise_ref": round(noise_ref, 3),
               "usable_share": round(float(usable.mean()), 3), "threshold": THRESHOLD,
+              "out_of_line_share": out_of_line,
               "fading_peaks": int(len(fading)), "fading_on_stars": on_stars, "dipoles_left_out": dipoles,
               "sky_scale_new": None if scale_new is None else round(scale_new, 1),
               "sky_scale_ref": None if scale_ref is None else round(scale_ref, 1)}
