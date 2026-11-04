@@ -1065,15 +1065,28 @@ def in_blocks(args):
     and any block that ends otherwise (cloud, a stop, an error, a refusal),
     warms it as every run does. Each filter keeps every check of its own: the
     focus offset (REFOCUS_NEEDED), the wheel's confirmed position."""
-    results = []
+    import mount
+    results, skipping = [], None
     for number, (name, minutes) in enumerate(args.blocks, 1):
         last = number == len(args.blocks)
         # FILTER@TARGET: this block and the ones after it are of another
         # target, reached by the project's own GoTo and re-centre with all its
-        # checks (the person's go for that move is the go for the command).
+        # checks. A target whose GoTo is refused when its turn comes (too low,
+        # past the meridian limit) is skipped with all its blocks: a run that
+        # cannot re-centre carries on where it points, which here would be the
+        # last target's sky filed under this one's name.
         name, _, target = name.partition("@")
         if target:
-            args.name = target
+            args.name, skipping = target, None
+            try:
+                mount.plan_goto(target, config.load()["site"])
+            except interface.Refusal as refusal:
+                skipping = target
+                print(f"\nSkipping {target} and its blocks: {refusal}", flush=True)
+        if skipping:
+            if last and args.ended_on_time and args.keep_cold:
+                warm_after_block(args)   # the last block taken left the sensor cold
+            continue
         args.filter, args.minutes, args.frames = name, float(minutes), frames_asked(None, minutes)
         args.keep_cold, args.ended_on_time = not last, False
         print(f"\nBlock {number} of {len(args.blocks)}: {args.name} in {name} for {minutes:g} min", flush=True)
