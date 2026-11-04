@@ -5,6 +5,8 @@ checked against the truth. Nothing here touches the network."""
 import json
 import math
 
+import types
+
 import numpy as np
 import pytest
 from astropy.io import fits
@@ -415,3 +417,31 @@ def test_a_depth_record_with_no_sky_figure_is_kept():
     from pathlib import Path
     schema = json.loads((Path(__file__).parent.parent / "schemas" / "depth.schema.json").read_text())
     assert "null" in schema["properties"]["sky_mag_per_arcsec2"]["type"]
+
+
+def test_when_every_vizier_mirror_is_down_esa_gives_the_same_stars(monkeypatch, tmp_path):
+    """4 November 2026: every VizieR mirror timed out from here while ESA's
+    own Gaia archive answered; the M31-P4 search waited on VizieR."""
+    import requests
+
+    import depth
+    import interface
+    monkeypatch.setattr(depth.config, "DATA", tmp_path)
+    asked = []
+
+    def get(url, **k):
+        asked.append(url)
+        if url != depth.ESA_TAP:
+            raise requests.ConnectTimeout("VizieR is down")
+        assert "CIRCLE('ICRS',11.49000,+42.07000,0.600)" in k["params"]["QUERY"]
+        return types.SimpleNamespace(raise_for_status=lambda: None,
+                                     text="ra,dec,phot_g_mean_mag,bp_rp\n11.5,42.0,15.7,1.1\n11.6,42.1,17.3,\n")
+    stars = depth.gaia(11.49, 42.07, 0.6, get=get)
+    assert stars[:, :3].tolist() == [[11.5, 42.0, 15.7], [11.6, 42.1, 17.3]] and stars[1, 3] != stars[1, 3]
+    assert asked[-1] == depth.ESA_TAP and len(asked) == len(depth.GAIA_MIRRORS) + 1
+    assert depth.gaia(11.49, 42.07, 0.6, get=lambda *a, **k: 1 / 0)[:, 0].tolist() == [11.5, 11.6]   # kept
+
+    def nothing(*a, **k):
+        raise requests.ConnectTimeout("all down")
+    with pytest.raises(interface.Refusal, match="gea.esac.esa.int"):
+        depth.gaia(30.0, 10.0, 0.3, get=nothing)

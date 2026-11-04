@@ -146,6 +146,30 @@ GAIA_MIRRORS = (GAIA_URL, "https://vizier.idia.ac.za/viz-bin/asu-tsv", "http://v
                 "http://vizier.nao.ac.jp/viz-bin/asu-tsv", "https://vizier.cfa.harvard.edu/viz-bin/asu-tsv")
 
 
+# ESA's own Gaia archive, asked when no VizieR mirror answers (4 November
+# 2026: every VizieR mirror timed out from here, ESA answered in 2 s).
+ESA_TAP = "https://gea.esac.esa.int/tap-server/tap/sync"
+
+
+def esa_gaia(ra, dec, radius, faintest, get):
+    """The same stars from ESA's Gaia archive (ADQL), as VizieR's
+    tab-separated text so they are kept and read the same way: Gaia DR3's
+    ra/dec are the same epoch-2016 ICRS places as VizieR's RA_ICRS/DE_ICRS."""
+    reply = get(ESA_TAP, timeout=(10, 120), params={
+        "REQUEST": "doQuery", "LANG": "ADQL", "FORMAT": "csv",
+        "QUERY": ("SELECT TOP 200000 ra, dec, phot_g_mean_mag, bp_rp FROM gaiadr3.gaia_source WHERE "
+                  f"1=CONTAINS(POINT('ICRS',ra,dec),CIRCLE('ICRS',{ra:.5f},{dec:+.5f},{radius:.3f})) "
+                  f"AND phot_g_mean_mag < {faintest:g}")})
+    reply.raise_for_status()
+    rows = [line.split(",") for line in reply.text.strip().splitlines()[1:]]
+    text = ("#Gaia DR3 from ESA's archive (" + ESA_TAP + ")\nRA_ICRS\tDE_ICRS\tGmag\tBP-RP\n"
+            "deg\tdeg\tmag\tmag\n---\t---\t---\t---\n"
+            + "\n".join("\t".join((r + ["", "", "", ""])[:4]) for r in rows if len(r) >= 3) + "\n")
+    if not len(read_tsv(text)):
+        raise requests.RequestException("answered with no stars")
+    return text
+
+
 def covering(store, ra, dec, radius, faintest):
     """A circle already fetched that holds this one whole: (path, its centre
     and radius), or None. A field imaged night after night is pointed a
@@ -182,7 +206,7 @@ def gaia(ra, dec, radius, faintest=FAINTEST, get=None):
                 cosd = math.cos(math.radians(dec))
                 inside = np.hypot((rows[:, 0] - ra) * cosd, rows[:, 1] - dec) <= radius
                 return rows[inside]
-        failures = []
+        failures, text = [], None
         for url in GAIA_MIRRORS:
             try:
                 reply = get(url, timeout=(10, 120), params={
@@ -193,15 +217,20 @@ def gaia(ra, dec, radius, faintest=FAINTEST, get=None):
                     # A mirror that answers with no stars (China-VO, 2 November 2026) is
                     # not believed: Gaia has stars in every field; never kept.
                     raise requests.RequestException("answered with no stars")
+                text = reply.text
                 break
             except requests.RequestException as problem:
                 failures.append(f"{url.split('/')[2]}: {type(problem).__name__}")
-        else:
-            raise interface.Refusal("REMOTE_FAILED", "Gaia's stars could not be fetched for this field ("
-                                    + "; ".join(failures) + "), and none kept cover it. Search again when "
-                                    "VizieR answers: ./patrol.py --analyse SESSION")
+        if text is None:
+            try:
+                text = esa_gaia(ra, dec, radius, faintest, get)
+            except requests.RequestException as problem:
+                failures.append(f"gea.esac.esa.int: {type(problem).__name__}")
+                raise interface.Refusal("REMOTE_FAILED", "Gaia's stars could not be fetched for this field ("
+                                        + "; ".join(failures) + "), and none kept cover it. Search again when "
+                                        "VizieR or ESA answers: ./patrol.py --analyse SESSION")
         store.mkdir(parents=True, exist_ok=True)
-        path.write_text(reply.text, encoding="utf-8")
+        path.write_text(text, encoding="utf-8")
     return read_tsv(path.read_text(encoding="utf-8"))
 
 
