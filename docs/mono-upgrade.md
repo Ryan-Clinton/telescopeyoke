@@ -340,6 +340,8 @@ possible (the 183C behind the same corrector), it is done too.
 
 ## First night, in order
 
+Done on 4 November 2026: [what it showed](nights/2026-11-04/183m-first-night.md).
+
 Daylight, indoors or out, before the sky is dark:
 
 1. Everything plugged in through the camera: `lsusb` shows the camera, the

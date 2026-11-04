@@ -650,6 +650,10 @@ focuser not touched since the stars.
 - **YouTube** went on air at 23:05 on 1 November with its title set
   automatically.
 
+### 4 November 2026: the 183M mono rig
+
+First night of the Hypercam 183M PRO TEC, the SX filter wheel and the 0.9x corrector on the 150P ([the record](nights/2026-11-04/183m-first-night.md)). Proven: every frame arrives at every readout speed; the cooler holds 0 °C within 0.4 °C on 13% of its power; the wheel confirms all seven slots; focus reached by hand (HFR 2.0) after the 20 mm tube mod; plate solving at 1.46"/px (675 mm) in 0.2-0.3 s; a three-point polar check in 60 s. Not proven: the motor focuser with this train (it could not move it), the cooler's warm-up after a reopen, imaging runs, calibration and the corners.
+
 ### 3 November 2026
 
 - **`horizon.py --trace --daylight` from ralphie-side, 3 November 2026,
