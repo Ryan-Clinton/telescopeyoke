@@ -86,7 +86,12 @@ PROGRAMMES = {"moon": "lunar lucky imaging", "transit": "exoplanet transit", "pa
 ACTIVITIES = {"goto": "slewing", "solve": "plate solving", "focus": "focusing", "polar": "polar aligning",
               "imaging": "imaging", "live": "live view", "centring": "centring", "capturing": "capturing",
               "ranking": "ranking frames", "stacking": "stacking", "done": "result ready",
-              "mineral": "mineral processing", "lucky": "lucky imaging", "colour": "capturing colour"}
+              "mineral": "mineral processing", "lucky": "lucky imaging", "colour": "capturing colour",
+              "cloud": "waiting for the cloud to clear"}
+# skywatch.py's frames while it waits for a gap: the stream names that, never
+# the target's programme (4 November 2026: "should say something like waiting
+# for the cloud to clear").
+CLOUD = "waiting for the cloud to clear"
 # How far the aim at the target has got, as what the stream may say of it:
 # moving to it, centring it, observing it, or nothing (it is not named).
 STATES = {"slewing": "moving", "centring": "centring", "reached": "observing", "centred": "observing",
@@ -223,7 +228,9 @@ def _family(name, kind, given):
     """moon, transit, patrol, planet or deep_sky: what sort of show the target is."""
     if kind == "moon":
         return "moon"
-    if given.get("transit"):
+    # Only while the transit's own run is the one going: on 4 November 2026 the
+    # night before's Qatar-5 status made a GoTo to NGC 869 "exoplanet transit".
+    if given.get("transit") and name == (given.get("status") or {}).get("name"):
         return "transit"
     if "-P" in (name or ""):
         return "patrol"
@@ -303,6 +310,8 @@ def direct(given, before=None):
     if family == "moon":
         programme = "mineral Moon" if phase == "mineral" else (
             "live view" if phase == "live" else PROGRAMMES["moon"] if phase == "lucky" else "lunar imaging")
+    elif phase == "cloud":
+        programme = CLOUD
     elif phase == "live" and not run_current:
         programme = "live view"
     else:

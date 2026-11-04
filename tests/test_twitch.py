@@ -97,3 +97,12 @@ def test_titles_lead_with_the_subject_and_tags_with_the_mission():
     assert transit["stream_title"] == "Exoplanet transit LIVE: timing TOI-2046 b crossing its star"
     _, tags = twitch.describe({"kind": "transit", "target": "TOI-2046", "transit": {"planet": "TOI-2046 b"}}, TARGETS)
     assert tags[0] == "Exoplanet" and "CitizenScience" in tags and len(tags) <= 10
+
+
+def test_the_title_says_it_is_waiting_for_the_cloud():
+    import twitch
+    title, tags = twitch.describe({"target": "NGC 869", "kind": "picture", "cloud": True,
+                                   "mission": {"stream_title": "Live telescope: imaging NGC 869"}},
+                                  targets={"targets": {}})
+    assert title.startswith("Live telescope: waiting for the cloud to clear over the NGC 869")
+    assert "Clouds" in tags

@@ -338,7 +338,9 @@ PHASES = {"Moving": "goto", "Plate solving": "solve",
           "Patrol": "imaging", "Imaging": "imaging", "Searching": "imaging",
           "Taking a lucky-imaging video": "lucky", "Stacking the lucky frames": "lucky",
           "Imaging the Moon": "lucky", "Live view": "live", "Making the mineral Moon": "mineral",
-          "Surveying the skyline": "skyline"}
+          "Surveying the skyline": "skyline",
+          # skywatch.py, waiting for a gap: the stream says so (4 November 2026).
+          "Watching for stars": "cloud"}
 # The focus motor's other modes, from the words its line carries
 # (focus.MODE_WORDS; a test keeps the two in step). "Focusing" is the hand
 # aid by ear, which the stream does not show.

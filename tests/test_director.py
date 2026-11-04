@@ -250,3 +250,14 @@ def test_an_answer_that_cannot_be_worked_out_never_stops_the_stream(tmp_path, mo
     assert d["on_air"] and d["run_current"] and d["target"] == "M31" and "division" in d["ignored"][0]
     monkeypatch.setattr(director.records, "write", lambda *a, **k: 1 / 0)
     director.aim("Moon")                                                 # inside a GoTo: never an error
+
+
+def test_the_star_watch_waits_for_cloud_and_an_old_transit_does_not_name_a_new_target():
+    """4 November 2026: skywatch.py at NGC 869 went on air as "exoplanet
+    transit" (the night before's Qatar-5 status); it is waiting for a gap."""
+    import activity
+    assert activity.PHASES["Watching for stars"] == "cloud"
+    qatar = dict(M31_OLD, name="Qatar-5")
+    d = director.direct(dict(given(qatar, aimed("NGC 869", 60), "cloud", 5), transit=True))
+    assert d["programme"] == director.CLOUD and d["activity"] == director.CLOUD
+    assert not d["scene"].startswith("transit") and d["on_air"]

@@ -1858,6 +1858,7 @@ def picture_state(st, now=None, session=None):
         s["processing"] = d["priority"] == director.PRIORITY["processing"]
         s["headline"] = headline_of(d, now)
         s["programme_words"], s["activity_words"] = d["programme"], d["activity"]
+        s["cloud"] = d["programme"] == director.CLOUD
     import sky
     kind = (d["target_kind"] if d else None) or st.get("object_kind") or sky.object_kind(name)
     if kind == "moon":
