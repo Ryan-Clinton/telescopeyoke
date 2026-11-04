@@ -45,3 +45,6 @@ mosaics/
 *.part
 *.lock
 *.rejected.json
+
+# Run and camera logs: kept privately (the memory repo), not published
+logs/
