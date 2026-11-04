@@ -77,6 +77,9 @@ DEFAULTS = {
     # travel: the furthest, in half-steps either way, a focus run may turn the
     # motor from where it started.
     "focuser": {"travel": 512},
+    # filters: the Starlight Xpress wheel's filters, position 1 first (sxwheel.py).
+    # Not yet checked against the real wheel: the order must be looked at.
+    "filterwheel": {"filters": "L,R,G,B,Ha,OIII,SII,"},
 }
 
 # Where ASTAP's installer puts the program and the star database on Windows.
@@ -245,6 +248,11 @@ SETTINGS = (
      "0 is the slowest. On 23 October 2026 the Altair 183C lost long frames at 1 and 2 and kept them at 0; "
      "camera_test.py --speed-ladder finds the fastest that keeps them. Blank leaves the driver's own.",
      {"min": 0, "max": 3, "optional": True}),
+    ("camera", "tec_target", "Cooler target temperature", "number",
+     "°C, for a camera with a cooler (the Altair 183M PRO TEC), read through Altair's own library: set each time "
+     "the camera opens, and each frame says its sensor temperature (CCD-TEMP) and this target (SET-TEMP). Blank "
+     "leaves the cooler as it is; a camera without one ignores it. Darks only match frames at the same temperature.",
+     {"min": -40, "max": 30, "optional": True}),
     ("camera", "setup", "Camera arrangement", "text",
      "A name for how the camera sits on the telescope. Change it, and take new flats, whenever the camera is "
      "rotated or taken off.", {}),
@@ -252,6 +260,10 @@ SETTINGS = (
      "Half-steps either way from where a focus run starts, overshoot included; a move beyond it is refused. "
      "The Sharpie line on the drawtube marks focus, so it is always close: on 23 October 2026 a sweep with "
      "no limit left the drawtube about an inch out.", {"min": 64, "max": 8192}),
+    ("filterwheel", "filters", "Filter wheel: filters in order", "text",
+     "The Starlight Xpress wheel's filters by position, 1 first, separated by commas; leave a gap empty. "
+     "sxwheel.py move takes these names, and each frame says the filter in the path (FILTER). Check the order "
+     "against the real wheel: ./sxwheel.py move 1, then look which filter is in the light path.", {}),
     ("mount", "link", "Mount reached by", "choice",
      "handset: a serial lead to the SynScan handset. wifi: the SynScan Wi-Fi adapter. eqdir: an EQDIR lead. "
      "The last two have no handset.", {"choices": ["handset", "wifi", "eqdir"]}),
