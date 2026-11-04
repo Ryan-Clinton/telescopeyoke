@@ -30,17 +30,21 @@ observation needs and gets.
 ## What the best observatories and tools do
 
 **Pick the next observation as the night goes, from what is true now.**
-Most robotic telescopes use a dispatch scheduler. It doesn't fix the
-night's order in advance; at each decision it takes the best observation
-for now. Examples: the Liverpool Telescope ("a simple despatch scheduler
+Professional systems use several approaches: dispatch, rolling-horizon
+optimisation, fixed windows, and mixtures of these. Which suits depends on
+the science. A dispatch scheduler doesn't fix the night's order in
+advance; at each decision it takes the best observation for now. Examples: the Liverpool Telescope ("a simple despatch scheduler
 which is run on demand"), RoboNet-II, NINA's Target Scheduler (asks its
 planner again after every exposure), and Ekos's greedy scheduler. The
 reason given is that a plan made in advance breaks when weather or kit
 changes. ZTF instead solves the whole night as an integer program in
-30-minute blocks. That gained 9% on its measure, and completed 81% of
-requested sequences against greedy's 64-79%, but over hundreds of fields
-a night. With one telescope and a handful of targets, dispatch with a
-look ahead at what sets soonest gets most of that.
+30-minute blocks. In Bellm et al.'s simulation of ZTF's May 2018
+programmes, that gave 9% more of its volume measure than its own greedy
+scheduler, and completed 81% of requested sequences against greedy's
+64-79%. That is a comparison for hundreds of fields a night, and it does
+not carry over as a number. For one telescope and a handful of targets,
+this spec takes dispatch with a look ahead at what sets soonest, mixed
+with fixed windows (Phase 3).
 
 **Value an observation in science terms, not minutes.**
 ZTF weights each exposure by the volume of space it probes,
@@ -70,6 +74,47 @@ telescope's control layer, which tells the layers above it is busy
 recovering. The Liverpool Telescope's goal is to keep operating, degraded
 if need be, when a subsystem fails.
 
+**Find discoveries by measuring the whole search, not the pictures.**
+A transient survey judges itself by what it finds and how reliably, not
+by integration:
+
+- ZTF's pipeline keeps, with every detection, its subtraction, its
+  significance, measurements of its shape, its history at that place and
+  a real-or-bogus score, with cut-outs of the images.
+- GOTO's classifier (Killestein et al. 2021) gives each candidate a
+  calibrated probability with its uncertainty. It is trained without hand
+  labels, from injected sources, and the uncertainty is used to order
+  human vetting.
+- Proper image subtraction (Zackay, Ofek and Gal-Yam 2016, which
+  `difference.zogy` implements) warns that registration errors, PSF
+  mismatch and correlated noise make a score untrustworthy where they
+  dominate. M31-P8 shows this: its candidates sit where the score's local
+  spread is 1.3 to 1.9 times what the model assumes
+  (docs/nights/2026-11-04/p8-false-candidates.md).
+
+So a deeper picture is not more sensitive if its subtraction is the
+limit.
+
+**Measure a transient against its host without its own light.**
+Supernova surveys (the Supernova Legacy Survey among them) take the
+galaxy's light away with a picture of the host made before the explosion
+or long after it fades. A reference made while the supernova shines takes
+the supernova's own light away with it.
+
+**Give each kind of science its timing.**
+- Moving objects are found by linking detections across visits and nights;
+  Rubin's Solar System strategy is built on revisits.
+- An exoplanet transit needs unbroken cadence through ingress and egress
+  and an out-of-transit baseline before and after: the BAA asks for at
+  least 30 minutes, ideally 60. Frames taken after a missed ingress
+  cannot replace it.
+
+**Treat automatic grading as provisional, and never delete.**
+NINA's Image Grader documentation says "automatic image grading is
+inherently problematic". Good early frames can make later acceptable ones
+look bad, which is why its grading can be delayed. Rejected frames are
+kept. telescopeyoke already keeps every raw frame, rejected or not.
+
 **Prove a policy by simulating nights.**
 ZTF's scheduler is the same code in simulation (with historical weather)
 and on the sky. Policies are compared on simulated nights before use, and
@@ -86,6 +131,39 @@ Rubin's survey strategy is tuned the same way.
 | `restack` / `depth` / `vet` | Measure stacked frames, integration, the depth where half of planted stars are found, and candidates. | Measured after the night, and never fed back to the plan. |
 | `altair.py` | Retries a frame that doesn't come; reopens the camera; cuts its power at the hub when allowed. | Recovery time and success are not counted, and the plan doesn't know the camera is recovering. |
 | Simulation | `--demo`, the mount simulator, and unit tests with a fake clock. | No whole-night replay to compare plans. |
+
+## What the plan is for: discovery yield
+
+The night is judged by what it could find and how reliably, not by
+integration. For each programme the plan keeps, and Phase 5 reports:
+
+| Measure | The question it answers | From |
+|---|---|---|
+| Depth | How faint the picture reaches | `depth.py` (planted stars, G) |
+| Recovery completeness | What share of planted transients of each brightness the whole search finds, by place in the field | `difference.py --plant`, `depth.py` |
+| Local significance | Whether a candidate stands out against the noise where it is, not only against the picture's average | the local spread of the score (docs/nights/2026-11-04/p8-false-candidates.md) |
+| Difference-image quality | Where the subtraction itself limits the search: the share of the field whose local spread or residual level is out of line | the same, as a map and a share |
+| False-candidate cost | How many candidates, second looks and minutes went to things that were not real | `candidates/*.json` dismissals, second looks |
+| Coverage | Which fields, or what share of a programme's area, were searched to their goal, and when last | `patrol.json`, `last_watched` |
+| Follow-up in time | Whether each candidate got its second look while it still counted | the obligations (Phase 4) |
+
+Another 20 minutes on a field is worth what it adds to these. That might
+be depth where the subtraction is clean, or nothing where it is not. An
+hour on a well-covered field can be worth less than 20 minutes on a
+neglected one with a candidate waiting.
+
+## Scientific decision contract
+
+Who may decide what. This stays within AGENTS.md's rule that a person asks
+for each move.
+
+| Part | May | May not |
+|---|---|---|
+| The scientific agent (Claude) | Say what is most interesting tonight and why; judge what a night actually showed; propose follow-ups, with their reasons and windows; name gaps, recurring faults and opportunities missed. Every proposal is explained, recorded and can be replayed. | Move the mount or camera itself; change what tonight's plan is allowed to do without the person; improvise anything to do with safety. |
+| The planner (`agent.recommend`, `schedule.py`) | Choose among the steps the person has agreed to tonight, by value, windows and conditions. | Add a step the person has not agreed to. |
+| Execution and safety (`mount.py`, `shoot.py`, `altair.py`, the motion lock, the night-end guard) | Run the chosen step; keep every physical limit (skyline, hour angle, meridian, the lock); recover faults; stop for unsafe conditions. | Be overridden by any priority. A protected window is a reservation of time, never permission to pass a safety limit. |
+| Analysis (`restack`, `depth`, `difference`, `vet`) | Measure outcomes, keep the evidence (frames, cut-outs, records), and feed the next choice. | Delete raw frames or evidence. |
+| The person | Agree the night's steps; protect any step; decide anything that changes what can be found, what is observed first or the kit's safety; send any claim. | |
 
 ## The design
 
@@ -119,6 +197,13 @@ Each outcome is *short*, *met* or *more than asked*. The goals come in
 full in Phase 2. Phase 1 starts with provisional ones from the decisions
 below, and changes nothing in how frames are taken.
 
+- Each result also keeps:
+  - **what limited it:** cloud, stalls, seeing, a shallow stack, or a
+    subtraction whose local spread was out of line;
+  - **where it came from:** frames, settings, reference version, code
+    version (already in each record's provenance);
+  - **what it leaves owed:** a candidate's second look, a field still
+    short, a measurement pending (Phase 4).
 - These go into the run's record, the schedule's line for the step, the
   night notes and the morning summary.
 - Built on what `restack.json`, `depth.json` and `patrol.json` already
@@ -147,12 +232,40 @@ There is no one measure for every programme:
 | Comet or moving object | coverage of its path, the depth it needs, and the repeat it needs |
 | Research lead (a star to check) | the brightness measured to the error its question needs |
 
+Each programme also says its timing. It is one of these:
+
+- one observation to a quality;
+- a revisit after an interval, such as a second look within the night or
+  a panel every few nights;
+- a sequence over several nights, such as a moving object's path;
+- an unbroken time series, such as a transit;
+- a follow-up by a deadline, such as an unconfirmed candidate.
+
+The planner reads it from the programme. This is not a second planner.
+
 - **A supernova's goal is its own.** 30 minutes can be plenty for a bright
   one in the open, and too little for a faint one on a galaxy's bright
   core. SN 2026sqf on 4 Nov is the example: 480 s stacked, but its light
-  could not be told from NGC 3310's centre without a reference of the
-  galaxy to subtract. So the goal is a measured brightness and its error,
-  and the first visit to a new host makes that reference.
+  could not be told from NGC 3310's centre. A reference made from our own
+  first visit would hold the supernova too, so subtracting it would take
+  the supernova's light away. Before time is given, the plan says which
+  case it is:
+  1. **A reference from before the explosion exists:** an archive picture
+     of the host, or our own from before. Its brightness can be measured
+     against that.
+  2. **No such reference:** a brightness measured against a model of the
+     galaxy, or relative to the last visit, said as such with its error.
+  3. **Neither is good enough:** a detection or an upper limit only, said
+     as that. More frames don't change this case.
+
+  The goal follows the case. Our own pictures become a host reference
+  only after the supernova has faded below what they reach.
+- **Grading suits the science.** A frame fit for a nova search (many
+  stars, sharp) may not be fit for photometry (steady sky, unsaturated
+  comparison stars). Each programme says what its frames are judged on.
+  The judgement is provisional and is checked against the session as a
+  whole, as `restack` already does with its better half. Raw frames are
+  never deleted.
 - **The capture keeps going until `desired` accepted frames, or its cap.**
   A stall extends the time, up to the cap; a rejection extends the frame
   count. The two are counted apart. `retakes()` and the patrol's
@@ -171,8 +284,14 @@ There is no one measure for every programme:
 
   The measured depth replaces that when it comes and can change later
   choices (a field found too shallow keeps its turn).
+- **Goals include search quality.** A patrol field is worth it only where
+  its recovery completeness and difference-image quality are, not just
+  its depth. A deeper stack whose subtraction is the limit is not counted
+  as better.
 - **Proof:** a replay of 4 Nov's frame logs (stalls and rejections as they
-  happened) shows each panel reaching its minimum. Then one real night.
+  happened). Each panel reaches its minimum where the night allowed it.
+  Where it did not, the shortfall and its cause are said correctly. Then
+  one real night.
 
 ### Phase 3: protected windows
 
@@ -199,8 +318,24 @@ How the windows are kept:
   runner works out each flexible step's time backwards from it, setup
   included, so a flexible step can never take it. This generalises today's
   `--until` and `--budget`.
-- **Only cloud cuts a protected step.** A protected step may be cut by
-  cloud, never by another step.
+- **No other step cuts a protected one; safety and conditions can.** A
+  protected window is a reservation of time, not permission. These stop
+  it, whatever its priority:
+  - unsafe weather, or cloud;
+  - a mount limit (skyline, hour angle, meridian), lost position, or the
+    motion lock;
+  - a camera or mount fault that cannot be recovered;
+  - power, or losing control of the kit.
+
+  Those stay in the execution layer, independent of the planner.
+- **Event times have their uncertainty.** A transit's predicted mid-time
+  has an error, and an occultation's track has its width. The window
+  covers the event's uncertainty as well as its length.
+- **Setup is estimated by operation, conservatively for deadlines.** The
+  setup a window reserves is not one fixed number. It is estimated from
+  measured history by operation (GoTo by distance, a pole swing, plate
+  solves, a focus check) and by recent faults. Before a hard window it
+  uses the 90th percentile; elsewhere, the median.
 - **Proof:** a simulated night where the step before it overruns, stalls
   and takes second looks. The protected step is taking frames at its
   window's start every time.
@@ -208,12 +343,37 @@ How the windows are kept:
 ### Phase 4: choose the next step at each step's end
 
 After each step the runner asks the planner again what is best now. It
-uses what is still owed:
+chooses among tonight's agreed steps, within the limits the planner
+already knows:
 
-- a target short of its minimum, or searchable but not worth it, keeps its
-  need;
-- a field owed a second look goes first;
-- spare time goes to the best `stretch`.
+- the measured skyline and the house;
+- altitude and airmass;
+- the Moon's distance and the sky's brightness;
+- twilight;
+- the meridian and hour-angle limit;
+- the expected image quality.
+
+`sky.Night`, `horizon` and `schedule.path` already provide these.
+
+**What is owed is kept, with why and until when.** It is kept between
+nights in the candidate books and the schedule, never only in memory.
+Each obligation says:
+
+- what it is: an unconfirmed candidate's second look, an interrupted
+  transit, a field short of its goal, a search not yet run, a failed
+  plate solve;
+- why it is owed;
+- when it stops counting, such as a candidate that is no use to confirm
+  after a week, or a transit that cannot be repeated tonight;
+- whether repeating it is still worth anything.
+
+It chooses by scientific opportunity:
+
+- obligations near their expiry first, by their worth;
+- then the best expected gain in discovery yield (above): coverage of a
+  neglected field, depth where the subtraction is clean, a candidate's
+  follow-up;
+- then the best `stretch`.
 
 The fixed list becomes the plan's first guess, still shown on the console
 and still changeable by the person.
@@ -244,8 +404,23 @@ and still changeable by the person.
   - accepted integration;
   - time idle.
 
+  It also reports discovery yield: coverage, recovery completeness of
+  planted transients, false-candidate cost and follow-up in time.
+
   It runs the current policy and the proposed one on the same nights. A
   change is kept only if it does better without missing a protected start.
+  The test of a policy is not that every goal is reached: weather can
+  make that impossible. It is that the policy made the best choice
+  available and reported each shortfall and its cause accurately.
+- **Stress nights,** beyond what has happened:
+  - a camera that never recovers;
+  - cloud coming and going every few minutes;
+  - a night with no usable frame;
+  - depth predictions that turn out wrong;
+  - a protected event that becomes impossible (cloud, a fault) part-way.
+
+  Each must end safely, with the shortfall said and nothing protected
+  taken by another step.
 - **What was seen and what is modelled are said apart.** A night's records
   say what happened where the telescope was. They don't say what a
   different target at a different time would have given. So a replay:
@@ -292,7 +467,8 @@ Proposed after review, waiting for the person's go before any building:
    - M31 and M33 novae: G 17.5 desired as a start, checked against the
      search's measured completeness before it is fixed.
    - Supernovae and other known transients: by their own purpose
-     (detection, or a brightness to a given error), never one time for all.
+     (detection, or a brightness to a given error), and by which of the
+     three reference cases applies (Phase 2), never one time for all.
    - Transits: unbroken ingress, egress and baseline at the precision the
      depth needs.
 2. **Protection.** The four classes in Phase 3: hard windows for
@@ -315,3 +491,7 @@ Ordinary building choices are made without asking.
 - LCO network scheduler as an integer program (Lampoudi et al. 2015): https://arxiv.org/abs/1503.07170
 - Rubin feature-based scheduler: https://rubin-scheduler.lsst.io/fbs.html
 - ANU 2.3 m automation: https://arxiv.org/pdf/2409.19842
+- GOTO real-bogus classification (Killestein et al. 2021): https://arxiv.org/abs/2102.09892
+- Proper image subtraction (Zackay, Ofek and Gal-Yam 2016): https://arxiv.org/abs/1601.02655
+- NINA Target Scheduler image grader: https://tcpalmer.github.io/nina-scheduler/post-acquisition/image-grader.html
+- BAA exoplanet observing guidance: https://britastro.org/section_front/exoplanets
