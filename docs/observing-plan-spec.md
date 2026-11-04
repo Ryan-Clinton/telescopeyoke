@@ -1,6 +1,13 @@
 # Spec: planning a night by what it gets, not by its clock
 
-Status: proposed, 4 November 2026, revised the same day after review.
+Status: decisions approved 4 November 2026. Phase 1 built (`outcome.py`),
+waiting for its audit (the morning-summary and discovery-night skills are
+still to be pointed at it: editing `.claude/` needs the person's leave).
+The order of work and its checkpoints: Phase 1,
+audit; Phase 5, a deep audit of the replay engine (a flawed one would
+make every later change look better than it is); Phases 2, 3 and 4,
+with major design changes or unexpected failures reported; then a full
+audit across simulated nights.
 Nothing here is built yet; the phases below say what each one changes and
 how it is proven before it is used. Until a phase is proven, today's
 planning and acquisition stay as they are. Each phase is switched on by a
@@ -508,7 +515,7 @@ wait), that is cheaper than budgeting more time for it. Measured first.
 
 ## Decisions for the person
 
-Proposed after review, waiting for the person's go before any building:
+Approved by the person on 4 November 2026:
 
 1. **Goals.**
    - M31 panels: 8 stacked frames to be searchable, 24 desired. Worth it

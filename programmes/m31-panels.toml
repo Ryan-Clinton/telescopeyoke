@@ -24,3 +24,12 @@ gain = 1500
 # A nova lasts the night: a candidate in one half of the night only is set
 # aside (vet.py says so either way; this is where it is decided).
 both_halves = true
+
+# What each visit must get (docs/observing-plan-spec.md, decisions approved 4 Nov 2026).
+# searchable_frames: stacked frames the search needs (vet.HALVES_FROM).
+# worth_depth: G a stack must reach to count as watched, provisional: about 16% of
+# M31 novae peak brighter (patrol.completeness); to be set from measured completeness.
+[goals]
+searchable_frames = 8
+worth_depth = 16.5
+desired_frames = 24

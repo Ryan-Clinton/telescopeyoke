@@ -753,6 +753,7 @@ def run(args, say=print):
         # imaged: through the patrol or by shoot.py alone (18 October 2026,
         # panel 8 imaged directly was left with nothing to search against).
         first_reference(session.parent.name, session, say)
+        keep_outcome(session, say)
         return result
     p = programme(args.programme)
     if args.minutes:
@@ -829,6 +830,7 @@ def run(args, say=print):
             restack.run(session, say=lambda *_: None)
         result = analyse(session, say, both_halves=p.get("both_halves", True))
         made = first_reference(name, session, say)
+        keep_outcome(session, say)
         return {"field": name, "analysis": result, "reference_made": made}
 
     # The budget is kept as it runs, not only when the panels are chosen: a
@@ -965,6 +967,17 @@ def first_goto(name):
         return plan
     except interface.Refusal as refused:
         return {"would_move": False, "error": refused.as_error()}
+
+
+def keep_outcome(session, say=print):
+    """What the session got (outcome.py), kept beside it once its search is
+    done, and said in one line. A help: a failure here never fails the search."""
+    try:
+        import outcome
+        record = outcome.keep(session)
+        say("  " + outcome.words(record)[1].strip())
+    except Exception as problem:      # the outcome is a report; the search stands without it
+        say(f"  outcome not kept: {problem.__class__.__name__}: {problem}")
 
 
 def due_step():

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/outcome.schema.json",
+  "title": "Outcome",
+  "description": "data of: outcome.py SESSION --json or outcome.py --night [DATE] --json. What each observation got, from what the run, the stack and the search wrote, against its programme's goals (docs/observing-plan-spec.md, Phase 1).",
+  "type": "object",
+  "required": ["sessions"],
+  "properties": {
+    "sessions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/session"}
+    }
+  },
+  "$defs": {
+    "verdict": {"enum": ["met", "short", "more than asked", "pending", "not judged", "not set"]},
+    "session": {
+      "type": "object",
+      "required": ["session", "field", "programme", "requested", "captured", "accepted", "stacked", "integration_s",
+                   "depth_g", "stalls", "stall_minutes", "rejected", "search", "search_stopped", "owed", "goals",
+                   "ran", "searchable", "worth_it", "desired", "limited_by"],
+      "properties": {
+        "session": {"type": "string"},
+        "field": {"type": "string"},
+        "programme": {"type": ["string", "null"], "description": "The programme the field belongs to; null for a field none watches."},
+        "requested": {"type": ["integer", "null"], "description": "Frames the run was asked for."},
+        "captured": {"type": ["integer", "null"]},
+        "accepted": {"type": ["integer", "null"], "description": "Frames the run's own check kept."},
+        "stacked": {"type": ["integer", "null"], "description": "Frames in the final stack; null while the stack is pending."},
+        "integration_s": {"type": ["number", "null"]},
+        "depth_g": {"type": ["number", "null"], "description": "G where half of planted stars are found; null until depth.py has run."},
+        "stalls": {"type": "integer", "description": "Gaps between frames more than 30 s beyond the exposure and the camera's usual pace."},
+        "stall_minutes": {"type": "number"},
+        "rejected": {
+          "type": "object",
+          "required": ["cloud", "trailed", "other"],
+          "properties": {"cloud": {"type": "integer"}, "trailed": {"type": "integer"}, "other": {"type": "integer"}}
+        },
+        "search": {"enum": ["searched", "stopped", "pending", "none"]},
+        "search_stopped": {"type": ["string", "null"]},
+        "owed": {"type": "array", "items": {"type": "string"}, "description": "Candidates first seen here and on no other night: each owed a second look."},
+        "goals": {"type": "object", "description": "The programme's [goals]: searchable_frames, worth_depth, desired_frames, desired_depth."},
+        "ran": {"$ref": "#/$defs/verdict"},
+        "searchable": {"$ref": "#/$defs/verdict"},
+        "worth_it": {"$ref": "#/$defs/verdict"},
+        "desired": {"$ref": "#/$defs/verdict"},
+        "limited_by": {"type": "array", "items": {"type": "string"}}
+      }
+    }
+  }
+}

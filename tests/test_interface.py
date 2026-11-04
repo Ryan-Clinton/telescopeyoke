@@ -781,3 +781,13 @@ def test_two_small_objects_sharing_a_frame_are_not_a_big_target(tmp_path, monkey
     monkeypatch.setattr(config, "DATA", tmp_path)
     rep = {"targets": [_galaxy("A", 100.0, 0.0, 3.0, 80), _galaxy("B", 100.8, 0.0, 3.0, 79)]}
     assert agent.big_targets(rep, data=tmp_path) == []
+
+
+def test_an_observations_outcome_matches_its_schema(tmp_path, monkeypatch):
+    import outcome
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    folder = tmp_path / "frames" / "M31-P3" / "20261104-033025"
+    folder.mkdir(parents=True)
+    (folder / "session.json").write_text(json.dumps({"frames": 19, "exposure": 16.0}))
+    (folder / "frames.jsonl").write_text(json.dumps({"taken": 1.0, "accepted": True, "reason": ""}) + "\n")
+    valid(interface.run("outcome", lambda: {"sessions": [outcome.of_session(folder)]}), "outcome")

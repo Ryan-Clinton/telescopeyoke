@@ -533,3 +533,22 @@ def test_a_patrol_step_is_told_its_whole_time_never_a_fields(monkeypatch):
     assert ran[0][:2] == ["timeout", "--signal=INT"] and int(ran[0][2]) == 45 * 60 + schedule.BACKSTOP_S
     assert ran[1][0] == "timeout" and "--minutes" not in ran[1]
     assert 59 <= float(ran[1][ran[1].index("--budget") + 1]) <= 60
+
+
+def test_a_finished_step_says_what_its_sessions_got(monkeypatch, tmp_path):
+    """Phase 1 of docs/observing-plan-spec.md: not only that a step's time is
+    up, but what it got, and pending for a search still running."""
+    import outcome
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    folder = tmp_path / "frames" / "M31-P3" / datetime.now().strftime("%Y%m%d-%H%M%S")
+    folder.mkdir(parents=True)
+    (folder / "session.json").write_text(json.dumps({"frames": 19, "exposure": 16.0}))
+    (folder / "frames.jsonl").write_text(json.dumps({"taken": 1.0, "accepted": True, "reason": ""}) + "\n")
+    monkeypatch.setattr(outcome, "programme_for", lambda field: ("m31-panels", {"searchable_frames": 8}))
+    schedule.save({"steps": []})
+    schedule.add("M31 panels", 45, ["./patrol.py", "m31-panels"])
+    said = []
+    schedule.run(say=said.append, sleep=lambda s: None,
+                 start=lambda cmd: types.SimpleNamespace(returncode=0))
+    told = "\n".join(said)
+    assert "M31-P3: 19 asked, 1 taken" in told and "searchable pending" in told

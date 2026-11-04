@@ -231,6 +231,22 @@ def move(ref, position):
     return step["label"]
 
 
+def say_outcomes(step, say=print):
+    """What the step's sessions got (outcome.py), a line or three each: not
+    only that its time is up. A search still running in the background is
+    said as pending. A help: a failure here never stops the night."""
+    try:
+        import outcome
+        latest = load()
+        found = next((s for s in latest.get("steps", []) if s.get("id") == step.get("id")), step)
+        sessions = outcome.during(found.get("started") or time.time(), found.get("finished") or time.time())
+        for session in sessions:
+            for line in outcome.words(outcome.of_session(session)):
+                say("    " + line)
+    except Exception as problem:      # a report, never a reason to stop
+        say(f"    outcome not said: {problem.__class__.__name__}: {problem}")
+
+
 def next_step(tell=None):
     """End the step that is running now, gracefully: its run finishes after
     the frame it is taking, keeps its picture and search, and the schedule
@@ -379,6 +395,7 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
                 "stopped by the backstop")
         mark_id(step["id"], status="done" if ok else "failed", finished=time.time(), exit=done.returncode)
         say(f"{datetime.now():%H:%M} {step['label']} {'done' if ok else f'failed (exit {done.returncode})'}")
+        say_outcomes(step, say)
         if not ok and step.get("tries", 0) < RETRIES:
             # Tried again by itself before anyone is fetched: on 1 November 2026
             # the camera jammed on a transit, the person was called, and the
