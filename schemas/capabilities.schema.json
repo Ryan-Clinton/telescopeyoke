@@ -48,6 +48,10 @@
       "properties": {
         "available": {
           "type": "boolean"
+        },
+        "instrument": {
+          "type": "object",
+          "description": "The camera in use (instrument.py): its train, focal length, filters, the programmes whose science is ready with it, the commissioning still owed, and warnings about its profile; or {error} when it could not be read."
         }
       }
     },

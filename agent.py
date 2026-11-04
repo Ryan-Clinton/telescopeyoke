@@ -62,7 +62,9 @@ def capabilities():
             "dry_run": True,
         },
         "camera": {"available": good("camera_transport", "camera"),
-                   "connected": parts["camera"]["status"] == doctor.OK},
+                   "connected": parts["camera"]["status"] == doctor.OK,
+                   # Which camera and light path, and what its science is ready for (./instrument.py).
+                   "instrument": _instrument_summary()},
         "plate_solver": {"available": good("plate_solver", "star_database"), "name": "ASTAP"},
         "imaging": {"available": good("camera_transport", "camera", "plate_solver", "star_database")},
         "motion": {
@@ -1131,7 +1133,31 @@ def night(demo=False):
         "news": rep.get("news", []),
         "sources": rep.get("sources", []),
         "research": research,
+        # The camera in use, its light path, filters and calibration, which
+        # programmes its science is ready for, and what to commission first.
+        "instrument": _safe_instrument(demo),
     }
+
+
+def _instrument_summary():
+    """The camera in use in a few fields, for capabilities()."""
+    r = _safe_instrument()
+    if "error" in r:
+        return r
+    return {"name": r["camera"]["name"], "train": r["train"]["name"],
+            "focal_length_mm": r["train"]["focal_length_mm"], "filters": [b["filter"] for b in r["filters"]],
+            "science_ready": [p["programme"] for p in r["programmes"] if p["state"] == "ready"],
+            "commissioning_owed": [s["step"] for s in r["commissioning"]], "warnings": r["warnings"]}
+
+
+def _safe_instrument(demo=False):
+    """instrument.readiness(), or why it could not be had: the night's plan
+    never fails for it. The demo's is the example's 183C."""
+    try:
+        import instrument
+        return instrument.readiness(config.example() if demo else None)
+    except Exception as problem:     # noqa: BLE001 - a help, never the plan's end
+        return {"error": f"{problem.__class__.__name__}: {problem}"}
 
 
 def _safe_research(demo):
@@ -1176,6 +1202,24 @@ def outlook(demo=False, tonight=None, open_candidates=None):
     out = []
     rec = t.get("recommendation") or {}
     clear = (f"clear {hm(t['clear_window'][0])}-{hm(t['clear_window'][1])}" if t["clear_window"] else "no clear spell")
+    inst = t.get("instrument") or {}
+    if inst.get("camera"):
+        # What the equipment in use is ready for comes first: a new camera's
+        # first nights are commissioning, and a patrol without a reference
+        # from this camera only makes one.
+        c, tr = inst["camera"], inst["train"]
+        out.append(f"KIT: {c['name']} through {tr['name']}, {tr['focal_length_mm']:g} mm, "
+                   f"{tr['field_deg'][0]:g} x {tr['field_deg'][1]:g} deg"
+                   + (f", filters {', '.join(b['filter'] for b in inst['filters'])}" if inst["filters"] else ""))
+        for w in inst.get("warnings") or []:
+            out.append(f"  ! {w}")
+        not_ready = [p for p in inst["programmes"] if p["state"] != "ready"]
+        if not_ready:
+            out.append("  science: " + "; ".join(f"{p['programme']} {p['state']}" for p in not_ready))
+        for s in (inst.get("commissioning") or [])[:3]:
+            out.append(f"  FIRST {s['step']}{'' if s['needs_sky'] else ' (no sky needed)'}: {s['command']}")
+    elif inst.get("error"):
+        out.append(f"KIT: not read ({inst['error']})")
     if rec.get("steps"):
         planned = sum(s["minutes"] for s in rec["steps"])
         setup = "" if rec.get("ready", True) else f", after {SETUP_MINUTES} min to set up (nothing set up now)"
@@ -1211,7 +1255,12 @@ def outlook(demo=False, tonight=None, open_candidates=None):
         if n.get("kind") == "event" and tonight_event(n, t["darkness"]):
             out.append(f"EVENT: {n['title']}")
     if t["campaigns"]:
-        out.append(f"AAVSO: {len(t['campaigns'])} priority stars this camera can measure (./ty night lists them)")
+        band = (inst.get("photometry_band") or {})
+        if band and not band.get("v_campaigns", True):
+            out.append(f"AAVSO: {len(t['campaigns'])} priority stars ask for V; this camera measures in "
+                       f"{band['band']}: not for V campaigns until a transformation is measured")
+        else:
+            out.append(f"AAVSO: {len(t['campaigns'])} priority stars this camera can measure (./ty night lists them)")
     for s in t.get("sources") or []:
         if s.get("state") in ("stale", "unavailable"):
             out.append(f"STALE: {s['source']}, data from {s.get('fetched') or 'never'}")

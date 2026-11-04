@@ -338,8 +338,10 @@ def _when(value):
 
 def campaign_results(night, lat, lon, source=feeds, now=None):
     """The AAVSO Target Tool's stars this camera can measure tonight: asked
-    for by photometry in V or any filter (the camera's green is close to V,
-    untransformed), with a range that reaches between variables.BRIGHTEST
+    for by photometry in V or any filter (the 183C's green is close to V,
+    untransformed; a filtered camera's bands are not V without a measured
+    transformation, and instrument.photometry_band says which, so the
+    outlook says when these are not for it), with a range that reaches between variables.BRIGHTEST
     and variables.FAINTEST, and up in the dark here. AAVSO's high-priority
     ones first, then the most overdue for their cadence (days since the last
     measurement over the days asked between them). Empty without a key."""

@@ -10,9 +10,29 @@ tried, including figures later found to be wrong.
 
 ## Current conclusions
 
-As of 2 November 2026, on the author's EQ3 Pro, 150P and Hypercam 183C on
-Ubuntu. ✅ proven on real equipment, ⚠️ partly, 🧪 simulator and tests
-only, ❌ tried and not yet working.
+The table below is the 183C's, as of 2 November 2026, on the author's EQ3
+Pro, 150P and Hypercam 183C on Ubuntu. ✅ proven on real equipment, ⚠️
+partly, 🧪 simulator only, ❌ tried and not yet working.
+
+### The 183M, from 4 November 2026
+
+The second camera (docs/mono-upgrade.md): the Altair 183M Pro TEC behind the
+0.9x coma corrector (675 mm) with the Starlight Xpress wheel. What its first
+night established, from the files it kept:
+
+| What | Where it stands |
+|---|---|
+| Recognised and opened | ✅ found on USB by its profile (`AA183MPROTEC`), frames of the full 5440-pixel sensor marked `INSTRUME 183m` |
+| Frame timing | ✅ each second asked adds 1.00 s, 0.43 s overhead (`183m/cache/camera_timing.json`); the shutter's real length is not measured (`--trail`) |
+| Focus | ⚠️ the focus aid reached HFR 3.0" from 2 s frames, on only 5 stars (`183m/cache/focus.json`) |
+| Polar alignment with it | ✅ 21:52: 1.68° from the pole, 0.88° in azimuth and 1.61° in altitude, three repeats spreading 0.109° (`cache/polar.json`) |
+| Cooling | ⚠️ the night's frames were taken uncooled (sensor 8-10 °C, no set temperature) |
+| Calibration | ❌ no darks or flats kept for it yet; its profile in config.toml does not yet say `cooled` or `mono`, so its darks would be handled as the 183C's (`./instrument.py` says so) |
+| Filter focus offsets | ❌ none measured: L, R, G and B are one parfocal set and SII, Ha and OIII another by the setting (Gary's), not yet proved on the sky (`./focus.py --walk-in --prove-sets`) |
+| References, depth, difference images, photometry | ❌ none yet from this camera: no 183C result carries over |
+
+`./instrument.py` reports this from the files at any time, and `./ty
+outlook` puts it first.
 
 | What | Where it stands |
 |---|---|

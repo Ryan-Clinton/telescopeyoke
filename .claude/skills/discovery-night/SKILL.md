@@ -2,7 +2,7 @@
 name: discovery-night
 description: Plan and run a night hunting for novae, new transients and strange stars (Tabby's star and its proposed companion's transit windows, AAVSO campaigns, exoplanet transits). Use when the person asks what is interesting tonight, for tonight's outlook or plan, what to do tonight, for the research or papers, asks to patrol M31 or M33, look for novae, or run a discovery night.
 compatibility: telescopeyoke at the telescope, set up and focused (nightly-setup), with a reference for each field or a first night to make one
-allowed-tools: Bash(./ty outlook) Bash(./ty night) Bash(./ty night --json) Bash(./ty research) Bash(./ty research *) Bash(./ty context) Bash(./patrol.py * --plan) Bash(./starwatch.py * --plan) Bash(./ty candidates) Bash(./ty candidates *) Bash(./ty watch-run --once) Bash(./transits.py) Bash(./transits.py *) Bash(./brokers.py) Bash(./literature.py *) Bash(./archive.py screen *) Bash(./seti.py sweep *) Bash(./investigate.py) Bash(./investigate.py *)
+allowed-tools: Bash(./instrument.py) Bash(./instrument.py --json) Bash(./ty outlook) Bash(./ty night) Bash(./ty night --json) Bash(./ty research) Bash(./ty research *) Bash(./ty context) Bash(./patrol.py * --plan) Bash(./starwatch.py * --plan) Bash(./ty candidates) Bash(./ty candidates *) Bash(./ty watch-run --once) Bash(./transits.py) Bash(./transits.py *) Bash(./brokers.py) Bash(./literature.py *) Bash(./archive.py screen *) Bash(./seti.py sweep *) Bash(./investigate.py) Bash(./investigate.py *)
 ---
 
 # Discovery night
@@ -30,6 +30,22 @@ is `docs/agents/setup-routine.md` step 6b.
 
    Answer from those at once, short and in plain words, at most about
    eight lines:
+   - The kit first, from the outlook's `KIT` lines (`./instrument.py`
+     says the same at length): which camera and light path, and what its
+     science is ready for. A programme that is `blocked` (calibration
+     missing) can't be searched or measured however clear it is, and one
+     on a `reference night` only makes this camera's reference: say so,
+     and when commissioning is owed (`FIRST`: masters, filter focus
+     offsets, references, each band's depth), a step of it that fits
+     tonight comes before repeating a patrol. A `!` warning about the
+     camera's profile is said as it stands; config.toml is the person's.
+   - Each step's filter and why: L for a nova or transient patrol (the
+     most light, and the band its references are in); R, G, B or a
+     narrowband filter only where a goal asks for it and its band is
+     calibrated. No filter's science is weighed against another's until
+     both bands' depth is measured on this camera; say so rather than
+     guess. Variable-star campaigns asking for V are not for a camera
+     whose band is not V (`photometry_band`).
    - The plan (`PLAN`): when it can start (with the setup time when
      nothing is set up), the steps in order and why each, in a line or two.
      Adjust it from the notes and say so: a field the fog spoilt last night

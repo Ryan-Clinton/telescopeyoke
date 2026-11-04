@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/instrument.schema.json",
+  "title": "Instrument",
+  "description": "data of: instrument.py --json. The camera in use and its light path, the filters and what each is calibrated for, the band its variable-star measurements are in, which programmes its science is ready for, and the commissioning still owed. Reads files only; never opens the camera, wheel or mount.",
+  "type": "object",
+  "required": ["camera", "train", "filters", "photometry_band", "programmes", "commissioning", "warnings"],
+  "properties": {
+    "camera": {"type": "object", "required": ["name", "mono", "cooled", "tec_target", "chosen_by"]},
+    "train": {"type": "object", "required": ["name", "corrector", "focal_length_mm", "arcsec_per_px", "processing_block",
+                                              "field_deg", "filterwheel"]},
+    "filters": {
+      "type": "array",
+      "items": {"type": "object", "required": ["filter", "calibration_missing", "focus_offset"],
+                "properties": {"filter": {"type": "string"},
+                               "calibration_missing": {"type": "array", "items": {"type": "string"},
+                                                       "description": "What a 16 s patrol frame in this filter would lack; empty when calibrated."},
+                               "focus_offset": {"type": "string"}}}
+    },
+    "photometry_band": {"type": "object", "required": ["band", "v_campaigns"],
+                        "properties": {"v_campaigns": {"type": "boolean", "description": "Whether its measurements may go to campaigns asking for V."}}},
+    "programmes": {
+      "type": "array",
+      "items": {"type": "object", "required": ["programme", "band", "state", "why"],
+                "properties": {"state": {"enum": ["ready", "reference night", "blocked"]}}}
+    },
+    "commissioning": {
+      "type": "array",
+      "description": "Most needed first.",
+      "items": {"type": "object", "required": ["step", "why", "needs_sky", "command"]}
+    },
+    "warnings": {"type": "array", "items": {"type": "string"}},
+    "cooling_minutes_per_degree": {"type": ["number", "null"]}
+  }
+}

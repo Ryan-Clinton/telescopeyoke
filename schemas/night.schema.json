@@ -161,6 +161,10 @@
                 "properties": {"topic": {"type": "string"},
                                "papers": {"type": "array", "items": {"type": "object", "required": ["id", "title", "authors", "submitted", "link"]}}}}
     },
+    "instrument": {
+      "description": "The camera in use, its light path and filters, what is calibrated, which programmes its science is ready for (ready, reference night or blocked) and the commissioning still owed: instrument.py's answer (schemas/instrument.schema.json), or {error}.",
+      "type": "object"
+    },
     "research": {
       "description": "The research that needs no sky, in the night's terms (agent.research_tonight): the leads waiting and to ask again, how many are unexplained, the papers unread, each survey's coverage, the most intriguing leads looked into (investigate.py --summary's order), and observe_tonight: those this telescope can watch, still unsettled, up in tonight's dark hours, each with a dry-run GoTo; next_waiting: the next leads investigate.py will look into, each with why it was flagged. error when a record could not be read. Empty in the demo.",
       "type": "object",
