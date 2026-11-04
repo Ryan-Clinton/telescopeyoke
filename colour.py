@@ -44,7 +44,7 @@ def sessions(name, night=None):
         light = next(iter(sorted(session.glob("light-*.fits"))), None)
         if stack is None or light is None:
             continue
-        band = fits.getheader(light).get("FILTER")
+        band = stacking.load_light(light)[1].get("FILTER")   # in the compressed image's header, not the primary
         if band:
             found[str(band)] = stack      # sorted by time: the newest of each filter wins
     return found
