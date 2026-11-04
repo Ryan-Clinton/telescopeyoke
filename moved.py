@@ -87,7 +87,7 @@ def _texture(before, after):
 def scale():
     """Degrees of sky across one pixel of the brightness pictures compared here."""
     equipment = config.hardware()
-    return math.degrees(2 * equipment["camera"]["pixel_size_um"] / 1000 / equipment["scope"]["focal_length_mm"])
+    return math.degrees(2 * equipment["camera"]["pixel_size_um"] / 1000 / config.focal_length(equipment))
 
 
 def judge(before, after, by_stars=True):

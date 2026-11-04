@@ -100,7 +100,7 @@ def arcsec_per_pixel():
     """Arcseconds of sky across one pixel of the full-size brightness
     picture, the pixel every HFR here is given in: two of the sensor's."""
     equipment = config.hardware()
-    return 2 * 206.265 * equipment["camera"]["pixel_size_um"] / equipment["scope"]["focal_length_mm"]
+    return config.scale(equipment, 2)      # the camera in use through its train
 
 
 def last_focused():

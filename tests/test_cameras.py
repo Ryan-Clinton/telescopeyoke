@@ -212,6 +212,38 @@ def test_the_183c_s_files_move_under_183c_once_and_only_when_told(data):
         cameras.move_183c(data, go=True, say=said.append)
 
 
+# --- every user of the focal length reads the train (item 4) ------------------------------------
+
+@pytest.mark.parametrize("camera_in_use, focal", [(None, 750.0), ("183m", 675.0)])
+def test_every_scale_and_field_comes_from_the_camera_in_use_and_its_train(camera_in_use, focal, monkeypatch):
+    import math
+
+    import agent
+    import console
+    import focus
+    import landmark
+    import mount
+    import moved
+    import polaris
+    if camera_in_use:
+        monkeypatch.setenv("TY_CAMERA", camera_in_use)
+    cfg = merged(dict(LEGACY, **TWO))
+    monkeypatch.setattr(config, "hardware", lambda: cfg)
+    monkeypatch.setattr(config, "load", lambda: cfg)
+    monkeypatch.setattr(config, "FILE", config.EXAMPLE)              # agent._scale reads load()
+    monkeypatch.setattr(mount, "LAST_SOLVE", config.DATA / "no-solve.json")
+    half = 206.265 * 2 * 2.4 / focal                               # arcseconds a 2x2 pixel
+    assert config.focal_length() == pytest.approx(focal)
+    assert focus.arcsec_per_pixel() == pytest.approx(half)
+    assert agent._scale() == pytest.approx(half)
+    for module in (landmark, polaris, moved):
+        assert module.scale() == pytest.approx(math.degrees(2 * 2.4e-3 / focal)), module.__name__
+    framing = console.Reader.framing(None, "M31")
+    assert framing["scale_arcsec_px"] == round(half / 2, 2)
+    assert framing["field_deg"][1] == pytest.approx(math.degrees(3648 * 2.4e-3 / focal), abs=0.001)
+    assert config.field_height() == pytest.approx(math.degrees(3648 * 2.4e-3 / focal))
+
+
 # --- settings and safety ---------------------------------------------------------------------
 
 def test_a_profile_s_own_setting_is_written_into_its_table(tmp_path):

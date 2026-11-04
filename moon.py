@@ -72,7 +72,7 @@ def plan(args, site):
     goto = mount.plan_goto("Moon", site)
     full = config.hardware()["camera"]
     width, height = full.get("width", 5440), full.get("height", 3648)
-    scale = 206.265 * full["pixel_size_um"] / config.hardware()["scope"]["focal_length_mm"]
+    scale = 206.265 * full["pixel_size_um"] / config.focal_length()      # the train in use
     across = sky["size_deg"] * 3600 / scale * (1 + 2 * 0.08)
     side = int(min(max(across, 64), min(width, height)))
     frame_bytes = side * side * (1 if args.depth == 8 else 2)

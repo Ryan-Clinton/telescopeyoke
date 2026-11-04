@@ -820,7 +820,7 @@ class Reader:
         import config
         import mount
         cfg = config.hardware()
-        camera, focal = cfg["camera"], cfg["scope"]["focal_length_mm"]
+        camera, focal = cfg["camera"], config.focal_length(cfg)     # the camera in use through its train
         degrees = lambda pixels: math.degrees(pixels * camera["pixel_size_um"] / 1000 / focal)
         target = mount.find_target(name)
         return {"field_deg": [round(degrees(camera["width"]), 3), round(degrees(camera["height"]), 3)],

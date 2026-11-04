@@ -375,7 +375,9 @@ SETTINGS = (
      {}),
     ("scope", "aperture_mm", "Aperture", "number", "Millimetres.", {"min": 10, "max": 2000}),
     ("scope", "focal_length_mm", "Focal length", "number",
-     "Millimetres. The plate solver works out the field of view from this and the sensor.", {"min": 50, "max": 20000}),
+     "Millimetres, the telescope's own (750 for the 150P). A light path with a corrector ([trains.NAME] corrector, "
+     "0.9 for the coma corrector) multiplies it; the plate solver, the framing and every scale use the result "
+     "with the sensor of the camera in use.", {"min": 50, "max": 20000}),
     ("camera", "backend", "Camera read through", "choice",
      "indi: the INDI driver (Linux). altair: Altair's own library, the only way on Windows. Blank: the usual one for this system.",
      {"choices": ["indi", "altair"], "optional": True}),

@@ -349,7 +349,7 @@ def trail(asked, gain, corrected=False):
     if config.DEMO:
         raise interface.Refusal("DEMO_UNSUPPORTED", "This needs real stars; the demo's sky does not turn.")
     equipment = config.hardware()
-    per_pixel = 2 * 206.265 * equipment["camera"]["pixel_size_um"] / equipment["scope"]["focal_length_mm"]
+    per_pixel = config.scale(equipment, 2)      # the camera in use through its train
     scope = mount.Mount()
     dec = mount.wrap(scope.radec()[1]) + mount.load_pointing_error(scope.axes()[1] > 90)[1]
     if abs(dec) > 70:

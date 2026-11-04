@@ -279,7 +279,7 @@ def rigs():
             entry.update(mount_link=settings["mount"].get("link", "handset"),
                          serial_match=settings["mount"].get("serial_match"),
                          camera_backend=settings["camera"]["backend"],
-                         focal_length_mm=settings["scope"]["focal_length_mm"])
+                         focal_length_mm=config.focal_length(settings))
         except Exception as problem:      # one rig's bad file must not hide the others
             entry["problem"] = f"its settings cannot be read: {problem}"
         try:
@@ -1252,8 +1252,7 @@ def _scale():
     if mount.LAST_SOLVE.exists():
         return json.loads(mount.LAST_SOLVE.read_text(encoding="utf-8"))["scale"]
     cfg = config.load() if config.FILE.exists() else config.example()
-    pixel = config.hardware()["camera"]["pixel_size_um"]
-    return 206.265 * 2 * pixel / cfg["scope"]["focal_length_mm"]
+    return config.scale(cfg, 2)      # the camera in use through its train
 
 
 def _trend(kept, recent=5):

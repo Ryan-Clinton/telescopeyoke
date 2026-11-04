@@ -48,7 +48,7 @@ SURE = 12.0         # how far the best match must stand above the rest (in their
 def scale():
     """Degrees of sky per pixel of the half-size pictures used here."""
     cfg = config.hardware()
-    return math.degrees(2 * cfg["camera"]["pixel_size_um"] / 1000 / cfg["scope"]["focal_length_mm"])
+    return math.degrees(2 * cfg["camera"]["pixel_size_um"] / 1000 / config.focal_length(cfg))
 
 
 def name_ok(name):
