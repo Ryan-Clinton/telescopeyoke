@@ -392,10 +392,12 @@ SETTINGS = (
      "0 is the slowest. On 23 October 2026 the Altair 183C lost long frames at 1 and 2 and kept them at 0; "
      "camera_test.py --speed-ladder finds the fastest that keeps them. Blank leaves the driver's own.",
      {"min": 0, "max": 3, "optional": True}),
-    ("camera", "tec_target", "Cooler target temperature", "number",
-     "°C, for a camera with a cooler (the Altair 183M PRO TEC), read through Altair's own library: set each time "
-     "the camera opens, and each frame says its sensor temperature (CCD-TEMP) and this target (SET-TEMP). Blank "
-     "leaves the cooler as it is; a camera without one ignores it. Darks only match frames at the same temperature.",
+    ("cameras.183m", "tec_target", "183M cooler target", "number",
+     "°C, one fixed value for the season so one set of darks serves (0 is the first guess for winter). Set each "
+     "time the 183M opens, through Altair's own library; a run keeps no frames until the sensor is within 1 °C of "
+     "it, each frame says the sensor temperature (CCD-TEMP), this target (SET-TEMP), the cooler's power and whether "
+     "it was within 0.5 °C (TY_ONTGT), and the end of a run warms the sensor 3 °C a minute before the cooler goes "
+     "off. A cooler at full power that cannot reach it stops the run and says so. Blank leaves the cooler as it is.",
      {"min": -40, "max": 30, "optional": True}),
     ("imaging", "camera", "Camera in use", "text",
      "The camera profile ([cameras.NAME] in config.toml: 183c, 183m) to use when both cameras are plugged in. "

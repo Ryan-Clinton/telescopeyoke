@@ -349,7 +349,7 @@ def prepare(mosaic, calibration, mono=False):
 # the 183C and the 183M may each be used on any night), and what the
 # pipeline needs to treat it (no BAYERPAT and TY_MONO: a mono frame).
 KEPT = ("EXPTIME", "GAIN", "DATE-OBS", "BAYERPAT", "TY_MONO", "INSTRUME", "TELESCOP", "FOCALLEN", "TY_MODEL",
-        "FILTER", "FILTPOS", "CCD-TEMP", "SET-TEMP")
+        "FILTER", "FILTPOS", "CCD-TEMP", "SET-TEMP", "TY_ONTGT", "TY_TECV", "TY_TECP")
 
 
 def camera_of(header):

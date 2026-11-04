@@ -53,6 +53,7 @@ class World:
         self.mono = False         # a mono sensor (the 183M): raw format YYYY, model flag MONO
         self.tec = False          # a cooler (model flag TEC)
         self.sensor = -52         # the sensor temperature it reports, tenths of a degree
+        self.tec_options = {}     # what the cooler reports, by option number (its voltage, its most)
 
 
 def frame_of(level, binning=1):
@@ -104,12 +105,14 @@ def fake_sdk(world):
         def get_Speed(self): return self.speed
         def get_ExpoTime(self): return self.exposure
         def get_RealExpoTime(self): return self.exposure
-        def get_Option(self, option): return self.options.get(option, 0)
+        def get_Option(self, option): return world.tec_options.get(option, self.options.get(option, 0))
         def MaxSpeed(self): return 2
         def get_Size(self): return WIDTH, HEIGHT
         def get_FinalSize(self): return WIDTH // world.binning, HEIGHT // world.binning
         def get_RawFormat(self): return int.from_bytes(b"YYYY" if world.mono else b"RGGB", "little"), 12
-        def put_Temperature(self, tenths): self.target = tenths
+        def put_Temperature(self, tenths):
+            self.target, self.targets = tenths, getattr(self, "targets", []) + [tenths]
+
         def get_Temperature(self): return world.sensor
         def SerialNumber(self): return self.serial
         def FwVersion(self): return "1.0"
@@ -1445,9 +1448,95 @@ def test_without_a_target_the_cooler_is_left_as_it_is_but_the_temperature_is_sti
     assert header["CCD-TEMP"] == pytest.approx(-5.2)
 
 
-def test_the_cooler_target_is_a_setting_the_application_can_change():
+def cooled(world, monkeypatch, target=-5, volts=60, most=120):
+    """A 183M PRO TEC: mono, with a cooler set to `target`, reporting its voltage."""
+    monkeypatch.setattr(altair, "wait_for", lambda seconds: 0.3)
+    lib = use_sdk(world, monkeypatch, tec_target=target)
+    lib.ALTAIRCAM_OPTION_TEC, lib.ALTAIRCAM_OPTION_TEC_VOLTAGE, lib.ALTAIRCAM_OPTION_TEC_VOLTAGE_MAX = 0x08, 0x20, 0x21
+    world.mono = world.tec = True
+    world.tec_options = {0x20: volts, 0x21: most}
+    return lib
+
+
+def test_each_frame_says_the_cooler_s_power_and_whether_it_was_on_target(world, monkeypatch):
+    cooled(world, monkeypatch, target=-5)
+    with altair.AltairCamera() as cam:
+        _, near = cam.frame(0.01)                 # the sensor reports -5.2
+        world.sensor = -40
+        _, warm = cam.frame(0.01)
+    assert near["SET-TEMP"] == -5.0 and near["TY_TECV"] == 6.0 and near["TY_TECP"] == 50
+    assert near["TY_ONTGT"] is True and warm["TY_ONTGT"] is False and warm["CCD-TEMP"] == -4.0
+    import stacking
+    assert {"TY_ONTGT", "TY_TECV", "TY_TECP", "CCD-TEMP", "SET-TEMP"} <= set(stacking.KEPT)
+
+
+def test_a_run_waits_for_the_sensor_to_come_within_a_degree_of_its_target(world, monkeypatch):
+    cooled(world, monkeypatch, target=-5)
+    world.sensor, said, now = 100, [], [0.0]
+
+    def sleep(seconds):                           # the sensor cools 1 °C each look
+        now[0] += seconds
+        world.sensor -= 10
+    with altair.AltairCamera() as cam:
+        assert cam.settle(say=said.append, sleep=sleep, clock=lambda: now[0]) is True
+    assert world.sensor <= -40 and "sensor at -4.0 °C, its target -5 °C" in said[-1]
+    assert said[0].startswith("camera: cooling, sensor at 10.0 °C") and "50% of its power" in said[0]
+
+
+def test_a_cooler_at_full_power_that_cannot_reach_its_target_says_so(world, monkeypatch):
+    cooled(world, monkeypatch, target=-20, volts=119, most=120)
+    world.sensor, now = 30, [0.0]
+
+    def sleep(seconds):
+        now[0] += seconds
+    with altair.AltairCamera() as cam:
+        with pytest.raises(IndiError, match="full power and the sensor has stayed at 3.0 °C, 23.0 °C above"):
+            cam.settle(say=lambda line: None, sleep=sleep, clock=lambda: now[0])
+    assert altair.STUCK_S <= now[0] < altair.COOL_WAIT_S
+
+
+def test_the_183c_neither_waits_for_a_cooler_nor_warms_one(sdk, world, monkeypatch):
+    monkeypatch.setitem(altair.SETTINGS["camera"], "tec_target", -10)    # set, and still nothing happens
+
+    def never(*_):
+        raise AssertionError("no waiting on a camera without a cooler")
+    with altair.AltairCamera() as cam:
+        assert cam.settle(say=never, sleep=never) is True
+        assert cam.warm_up(say=never, sleep=never) is False
+        handle = sdk.Altaircam.opened[-1]
+    assert not hasattr(handle, "target")
+
+
+def test_at_the_end_of_a_run_the_sensor_is_warmed_a_step_a_minute_before_the_cooler_goes_off(world, monkeypatch):
+    lib = cooled(world, monkeypatch, target=0)
+    world.sensor = 95                             # 9.5 °C before the cooler starts
+    naps, said = [], []
+    with altair.AltairCamera() as cam:
+        world.sensor = 2                          # cooled to 0.2 °C by the end of the run
+        assert cam.warm_up(say=said.append, sleep=naps.append) is True
+        handle = lib.Altaircam.opened[-1]
+    assert handle.targets == [0, 32, 62, 92, 95]          # tenths: up 3 °C a step, to where it began
+    assert naps == [altair.WARM_EVERY_S] * 4 and handle.options[lib.ALTAIRCAM_OPTION_TEC] == 0
+    assert "warming the sensor from 0.2 °C to 9.5 °C" in said[0]
+
+
+def test_a_sensor_that_never_got_cold_is_not_kept_waiting_to_warm(world, monkeypatch):
+    lib = cooled(world, monkeypatch, target=0)
+    world.sensor = 95
+    with altair.AltairCamera() as cam:
+        world.sensor = 80                         # a quick frame: barely cooled
+        cam.warm_up(say=lambda line: None, sleep=lambda s: pytest.fail("no wait"))
+        handle = lib.Altaircam.opened[-1]
+    assert handle.targets == [0] and handle.options[lib.ALTAIRCAM_OPTION_TEC] == 0
+
+
+def test_the_183m_s_cooler_target_is_a_setting_of_its_own_profile():
     import config
-    assert config.checked("camera", "tec_target", "-10") == -10
-    assert config.checked("camera", "tec_target", "") is None
+    assert config.checked("cameras.183m", "tec_target", "0") == 0
+    assert config.checked("cameras.183m", "tec_target", "") is None
     with pytest.raises(ValueError):
-        config.checked("camera", "tec_target", "-80")
+        config.checked("cameras.183m", "tec_target", "-80")
+    with pytest.raises(ValueError):
+        config.checked("camera", "tec_target", "-10")           # never the 183C's: it has no cooler
+
+

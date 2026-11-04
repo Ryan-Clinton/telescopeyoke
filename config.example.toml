@@ -70,6 +70,11 @@ setup = "default"
 # mono = true
 # cooled = true
 # readout_speed = 0
+# The cooler's target in °C, one value for the season so one set of darks
+# serves: runs wait until the sensor is within 1 °C of it, and warm it 3 °C a
+# minute at their end before the cooler goes off. Only a camera with a
+# cooler acts on it.
+# tec_target = 0
 #
 # A train is one light path: its camera, the corrector's factor (0.9 for the
 # Sky-Watcher coma corrector: 750 mm becomes 675 mm), whether the filter

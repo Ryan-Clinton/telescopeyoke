@@ -1114,6 +1114,12 @@ def image(args, session, exposure, moving, holding, tracker):
             in_path = (sxwheel.confirmed(say=lambda line: print(f"  {line}", flush=True))
                        if config.hardware()["train"].get("filterwheel") else None)
             with Camera(gain=args.gain) as cam:
+                # A cooled camera keeps no frame until its sensor is within
+                # 1 °C of its target (altair.py); every other camera, at once.
+                settle = getattr(cam, "settle", None)
+                if settle:
+                    settle(say=lambda line: print(f"  {line}", flush=True))
+                ended = False
                 while more():
                     try:
                         mosaic, header = cam.frame(exposure)
@@ -1164,6 +1170,13 @@ def image(args, session, exposure, moving, holding, tracker):
                         break
                     if args.assist and moving and len(session.track) >= live.get("shoot.assist_every", ASSIST_EVERY):
                         break
+                else:
+                    ended = True          # the run is over, not paused to re-centre or dither
+                warm_up = getattr(cam, "warm_up", None)
+                if warm_up and (ended or told["stop"]):
+                    # The end of the run: a cooled camera's sensor is brought up
+                    # gently before the cooler goes off; nothing for any other.
+                    warm_up(say=lambda line: print(f"  {line}", flush=True))
             if jammed is not None:
                 # A jammed camera is opened again and the run goes on in the same
                 # session: on 1 November 2026 a jam ended a transit run, and its

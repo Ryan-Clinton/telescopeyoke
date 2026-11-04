@@ -545,6 +545,25 @@ def test_a_run_through_a_train_with_the_wheel_labels_frames_with_the_position_it
     assert kept["FILTER"] == "Ha" and kept["FILTPOS"] == 6
 
 
+def test_a_cooled_camera_is_waited_for_before_frames_and_warmed_once_at_the_run_s_end(night, monkeypatch, capsys):
+    calls = []
+
+    class Cooled(FakeCamera):
+        def settle(self, say):
+            calls.append(("settle", Sky.taken))
+            say("camera: sensor at 0.3 °C, its target 0 °C")
+
+        def warm_up(self, say):
+            calls.append(("warm_up", Sky.taken))
+
+    monkeypatch.setattr(shoot, "Camera", Cooled)
+    monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "3", "--exposure", "2",
+                                      "--no-recentre", "--no-restack"])
+    shoot.main()
+    assert calls == [("settle", 0), ("warm_up", 3)]
+    assert "sensor at 0.3 °C" in capsys.readouterr().out
+
+
 def test_a_run_given_minutes_finishes_on_time_whatever_the_frame_count(night, monkeypatch, capsys):
     """1 November 2026: lost frames stretched a 75-minute patrol towards three
     hours and the plan's next targets."""

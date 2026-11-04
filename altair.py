@@ -39,6 +39,14 @@ USB3 = 0x40            # ALTAIRCAM_FLAG_USB30
 FAN = 0x10000          # ALTAIRCAM_FLAG_FAN
 MONO = 0x10            # ALTAIRCAM_FLAG_MONO: no colour filters on the sensor (the 183M)
 TEC = 0x80             # ALTAIRCAM_FLAG_TEC: a cooler with a target temperature
+# The cooler (docs/mono-upgrade.md, item 2), on a camera with a TEC only.
+ON_TARGET = 0.5        # °C: a frame further than this from the target is kept but flagged (TY_ONTGT)
+TEC_READY = 1.0        # °C: a run keeps no frames until the sensor is this close to its target
+COOL_WAIT_S = 900      # the longest a run waits for the sensor to get there
+COOL_POLL_S = 5.0
+FULL_POWER = 0.95      # a share of the cooler's most voltage taken as all it has
+STUCK_S = 180          # at full power this long with the sensor no colder: it cannot reach the target
+WARM_STEP_C, WARM_EVERY_S, WARM_STEPS_MOST = 3.0, 60.0, 15   # the warm-up at the end of a run
 BUFFER = 0x1000000     # ALTAIRCAM_FLAG_BUFFER: a frame buffer of some size in the camera
 DDR = 0x2000000        # ALTAIRCAM_FLAG_DDR: one big enough for a whole frame
 # Settings that could stop long frames while short ones arrive: a low-power
@@ -281,6 +289,10 @@ class AltairCamera:
             self.flags = int(getattr(getattr(device, "model", None), "flag", 0) or 0)
             self.mono = self.pattern.upper() == "YYYY" or bool(self.flags & MONO)
             self.target = None
+            if not hasattr(self, "ambient"):
+                # Before the cooler starts, the first time only (not when opened
+                # again after a jam): what warm_up() brings the sensor back to.
+                self.ambient = self.temperature()
             if camera.get("tec_target") is not None:
                 try:
                     self.cool(camera["tec_target"])
@@ -388,6 +400,88 @@ class AltairCamera:
             return self.handle.get_Temperature() / 10
         except Exception:
             return None
+
+    def tec_power(self):
+        """How hard the cooler is working: (volts, share of its most) from the
+        library's ALTAIRCAM_OPTION_TEC_VOLTAGE and _TEC_VOLTAGE_MAX, both in
+        tenths of a volt. None without a cooler, or when it will not say."""
+        lib = self.lib
+        now, most = (getattr(lib, f"ALTAIRCAM_OPTION_TEC_VOLTAGE{s}", None) for s in ("", "_MAX"))
+        if not self.flags & TEC or now is None or most is None:
+            return None
+        try:
+            volts, top = self.handle.get_Option(now) / 10, self.handle.get_Option(most) / 10
+        except Exception:
+            return None
+        return volts, (volts / top if top > 0 else None)
+
+    def settle(self, say=print, sleep=time.sleep, clock=time.monotonic, wait=COOL_WAIT_S):
+        """Wait until the sensor is within TEC_READY of the cooler's target, so
+        a run keeps no frame at the wrong temperature (its darks would not
+        match). At once on a camera with no cooler or no target: the 183C.
+        A cooler at full power whose sensor has stopped getting colder, or one
+        not there within `wait` seconds, says so with the figures and stops
+        the run (CameraError): never frames at a temperature no dark suits."""
+        if self.target is None or not self.flags & TEC:
+            return True
+        end, said, best, since = clock() + wait, None, None, clock()
+        while True:
+            degrees, power = self.temperature(), self.tec_power()
+            if degrees is None:
+                say("camera: the sensor's temperature cannot be read; frames are kept without waiting for the cooler")
+                return False
+            share = power[1] if power and power[1] is not None else None
+            if abs(degrees - self.target) <= TEC_READY:
+                say(f"camera: sensor at {degrees:.1f} °C, its target {self.target:g} °C")
+                return True
+            if best is None or degrees < best - 0.2:
+                best, since = degrees, clock()
+            usage = f", cooler at {100 * share:.0f}% of its power" if share is not None else ""
+            if share is not None and share >= FULL_POWER and clock() - since >= STUCK_S:
+                raise CameraError(f"the cooler is at full power and the sensor has stayed at {degrees:.1f} °C, "
+                                  f"{degrees - self.target:.1f} °C above its target of {self.target:g} °C: it cannot "
+                                  "reach it tonight. Set a warmer tec_target for this camera, and take darks at it.")
+            if clock() >= end:
+                raise CameraError(f"the sensor did not reach {self.target:g} °C within {wait / 60:.0f} min: "
+                                  f"it is at {degrees:.1f} °C{usage}")
+            if said is None or clock() - said >= 60:
+                say(f"camera: cooling, sensor at {degrees:.1f} °C, target {self.target:g} °C{usage}; "
+                    "no frames kept until it is within 1 °C")
+                said = clock()
+            sleep(COOL_POLL_S)
+
+    def warm_up(self, say=print, sleep=time.sleep):
+        """At the end of a run: step the cooler's target up WARM_STEP_C every
+        WARM_EVERY_S towards the temperature the sensor had before it was
+        cooled, then turn the cooler off, rather than cutting it cold (the
+        camera stops its cooler when it is closed), to spare the sensor the
+        shock and the window condensation. Nothing on a camera with no cooler
+        or no target, or a sensor already within a step of where it began."""
+        if self.target is None or not self.flags & TEC or self.handle is None:
+            return False
+        lib, handle = self.lib, self.handle
+        degrees = self.temperature()
+        if degrees is not None and self.ambient is not None and degrees < self.ambient - WARM_STEP_C:
+            level = max(self.target, degrees)
+            say(f"camera: warming the sensor from {degrees:.1f} °C to {self.ambient:.1f} °C, "
+                f"{WARM_STEP_C:g} °C a minute, before the cooler is turned off")
+            for _ in range(WARM_STEPS_MOST):
+                if level >= self.ambient:
+                    break
+                level = min(self.ambient, level + WARM_STEP_C)
+                try:
+                    handle.put_Temperature(int(round(level * 10)))
+                except lib.HRESULTException:
+                    break
+                sleep(WARM_EVERY_S)
+        option = getattr(lib, "ALTAIRCAM_OPTION_TEC", None)
+        if option is not None:
+            try:
+                handle.put_Option(option, 0)
+            except lib.HRESULTException:
+                pass
+        self.target = None
+        return True
 
     # --- the library's thread ----------------------------------------------------
 
@@ -615,6 +709,15 @@ class AltairCamera:
             header["CCD-TEMP"] = (round(degrees, 1), "sensor temperature, C")
         if self.target is not None:
             header["SET-TEMP"] = (self.target, "cooler target, C")
+            power = self.tec_power()
+            if power is not None:
+                header["TY_TECV"] = (round(power[0], 1), "cooler voltage, V")
+                if power[1] is not None:
+                    header["TY_TECP"] = (round(100 * power[1]), "cooler power, % of its most")
+            if degrees is not None:
+                # Kept either way; one off target is left out of science stacks.
+                header["TY_ONTGT"] = (abs(degrees - self.target) <= ON_TARGET,
+                                      f"sensor within {ON_TARGET:g} C of SET-TEMP")
         from camera import identify
         identify(header, SETTINGS, model=self.name)
         try:
