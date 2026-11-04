@@ -890,7 +890,7 @@ def announce(st, now, say=print, twitch_on=True, youtube_on=False):
     import twitch
 
     def run():
-        state = streamlook.from_status(st, now, session_of(st))
+        state = dict(streamlook.from_status(st, now, session_of(st)), setup=bool(st.get("setup_card")))
         title, tags = twitch.describe(state)
         if twitch_on:
             try:
@@ -1238,11 +1238,12 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
             # The plan's next step is part of it: a changed plan changes the title too.
             upcoming = next((x.get("label") for x in ((st.get("schedule") or {}).get("steps") or [])
                              if x.get("status") == "queued"), None)
-            programme = (directed["target"], directed["programme"], upcoming) \
-                if directed["target"] and not segment else None
+            programme = (directed["target"], directed["programme"], upcoming, carded) \
+                if (directed["target"] or carded) and not segment else None
             if process is not None and (twitch_on or youtube_on) and programme and programme != announced:
                 announced = programme
-                announce(dict(st, director=directed), now, say, twitch_on=twitch_on, youtube_on=youtube_on)
+                announce(dict(st, director=directed, setup_card=carded), now, say,
+                         twitch_on=twitch_on, youtube_on=youtube_on)
             if process is not None:
                 if imaging(st) and now - measured_at > MEASURE_S:
                     measuring, measured_at = measure_transit(st, measuring, say), now

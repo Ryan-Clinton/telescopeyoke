@@ -69,6 +69,10 @@ def describe(state, targets=None):
         # The night's question sells it (stream-targets.toml [missions]); focusing
         # and polar alignment are chapters of it and never change it.
         title = m["stream_title"]
+    if state.get("setup") and not state.get("cloud"):
+        # The setup card on air (4 November 2026): the steps, not a target yet.
+        title = "Live telescope: getting ready for the night, step by step"
+        extra = ["Setup", "Telescope"]
     if state.get("cloud"):
         # skywatch.py waiting for a gap (4 November 2026): never a run's title.
         title = "Live telescope: waiting for the cloud to clear" + (

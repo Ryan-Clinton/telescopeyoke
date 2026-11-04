@@ -109,3 +109,12 @@ def test_the_title_says_it_is_waiting_for_the_cloud():
                                targets={"targets": {"M31": {"common": "Andromeda Galaxy"}}})
     assert named.startswith("Live telescope: waiting for the cloud to clear over the Andromeda Galaxy (M31)")
     assert "Clouds" in tags
+
+
+def test_the_title_says_the_telescope_is_getting_ready_while_the_setup_card_shows():
+    import twitch
+    title, _ = twitch.describe({"target": "NGC 869", "kind": "picture", "setup": True}, targets={"targets": {}})
+    assert title.startswith("Live telescope: getting ready for the night")
+    title, _ = twitch.describe({"target": "NGC 869", "kind": "picture", "setup": True, "cloud": True},
+                               targets={"targets": {}})
+    assert "waiting for the cloud" in title
