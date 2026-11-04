@@ -46,7 +46,7 @@ class Motor:
 
 def measured(where, name, values):
     """Measurements on nights after any already kept for `name`."""
-    already = sum(m["filter"] == name for m in filters.load(where)["measurements"])
+    already = len(filters.load(where)["measurements"])
     for i, v in enumerate(values):
         filters.keep_measurement(name, v, temperature=5.0, night=f"2026-11-{already + i + 1:02d}", where=where)
 
@@ -58,51 +58,98 @@ def test_blocks_are_one_filter_and_count_each():
             filters.blocks(bad)
 
 
-def test_an_offset_is_used_only_from_three_nights_inward_within_the_tolerance(tmp_path):
+SHO = "set SII,Ha,OIII"
+
+
+def test_the_sets_are_a_setting_and_filters_in_l_s_set_need_no_offset(tmp_path):
+    store = filters.load(tmp_path / "ff.json")
+    assert filters.sets() == [["L", "R", "G", "B"], ["SII", "Ha", "OIII"]]
+    assert filters.offset_of("R", store) == (0.0, None) and filters.offset_of("B", store) == (0.0, None)
+    assert filters.key_of("Ha", store) == filters.key_of("OIII", store) == SHO
+    assert filters.offset_of("Ha", store)[0] is None
+
+
+def test_the_set_offset_is_used_only_from_three_nights_inward_within_the_tolerance(tmp_path):
     where = tmp_path / "ff.json"
-    measured(where, "R", [40, 44])
-    assert filters.offsets(filters.load(where), tolerance=16)["R"]["usable"] is False
-    measured(where, "R", [42])
-    found = filters.offsets(filters.load(where), tolerance=16)["R"]
-    assert found["usable"] and found["mean"] == 42.0 and found["count"] == 3 and found["spread"] == 2.0
+    measured(where, "Ha", [40, 44])
+    assert filters.offsets(filters.load(where), tolerance=16)[SHO]["usable"] is False
+    measured(where, "OIII", [42])                          # any filter of the set measures the set
+    found = filters.offsets(filters.load(where), tolerance=16)[SHO]
+    assert found["usable"] and found["mean"] == 42.0 and found["nights"] == 3 and found["spread"] == 2.0
     assert found["temperatures_c"] == [5.0, 5.0, 5.0]
-    measured(where, "Ha", [10, 60, 110])                      # spread 50 > 16
-    assert "spread 50" in filters.offsets(filters.load(where), tolerance=16)["Ha"]["why"]
+    measured(where, "SII", [200, 300, 400])                 # three more nights, spread far over 16
+    assert "spread" in filters.offsets(filters.load(where), tolerance=16)[SHO]["why"]
 
 
-def test_three_measurements_on_one_night_are_not_enough(tmp_path):
+def test_three_measurements_on_one_night_are_one_night(tmp_path):
     where = tmp_path / "ff.json"
     for v in (40, 41, 42):
-        filters.keep_measurement("R", v, night="2026-11-05", where=where)
-    assert "on 1 night" in filters.offsets(filters.load(where), tolerance=16)["R"]["why"]
+        filters.keep_measurement("Ha", v, night="2026-11-05", where=where)
+    assert "on 1 night" in filters.offsets(filters.load(where), tolerance=16)[SHO]["why"]
 
 
-def test_steps_between_filters_are_the_difference_of_their_offsets(tmp_path):
+def test_steps_between_filters_are_the_difference_of_their_sets_offsets(tmp_path):
     where = tmp_path / "ff.json"
-    measured(where, "R", [40, 42, 44])
-    measured(where, "Ha", [-20, -22, -18])
+    measured(where, "Ha", [40, 42, 44])
     store = filters.load(where)
-    assert filters.steps_between("L", "R", store, 16) == 42
-    assert filters.steps_between("R", "Ha", store, 16) == -62
-    assert filters.steps_between("Ha", "Ha", store, 16) == 0
+    assert filters.steps_between("L", "R", store, 16) == 0
+    assert filters.steps_between("R", "OIII", store, 16) == 42
+    assert filters.steps_between("SII", "G", store, 16) == -42
+    assert filters.steps_between("Ha", "SII", store, 16) == 0
+
+
+def test_the_proving_night_confirms_the_sets_or_gives_a_filter_its_own_offset(tmp_path):
+    where = tmp_path / "ff.json"
+    proved = filters.prove_sets({"L": 0, "R": 4, "G": -3, "B": 60, "SII": 100, "Ha": 104, "OIII": 98},
+                                tolerance=16, where=where, night="2026-11-05")
+    assert proved["confirmed"] == ["SII,Ha,OIII"] and proved["own"] == ["B"]
+    store = filters.load(where)
+    assert filters.key_of("B", store) == "B" and filters.key_of("R", store) == "set L,R,G,B"
+    assert store["proof"]["positions"]["B"] == 60
     with pytest.raises(interface.Refusal) as refused:
-        filters.steps_between("L", "OIII", store, 16)
-    assert refused.value.code_name == "REFOCUS_NEEDED" and "its own walk-in" in str(refused.value)
+        filters.steps_between("L", "B", store, 16)           # B now needs offsets of its own
+    assert refused.value.code_name == "REFOCUS_NEEDED"
+    assert filters.offsets(store, 16)[SHO]["nights"] == 1   # the proving night counts once for the set
+
+
+def test_the_proving_run_walks_in_every_filter_from_the_same_side(tmp_path):
+    where, turned, moves = tmp_path / "ff.json", [], []
+
+    class Drive:
+        moved = 0
+
+        def move(self, n):
+            moves.append(n)
+            self.moved += n
+    bests = iter([-100, -256, -256, -256, -256 + 90, -256, -256])   # LRGB at -100, SHO 90 further out
+
+    def walk(d):
+        at = next(bests)
+        d.moved += at
+        return {"best_at": at, "best_hfr": 2.0}
+    proved = filters.prove_all(Drive(), walk, turned.append, say=lambda *_: None, back=256, where=where)
+    assert turned == ["L", "R", "G", "B", "SII", "Ha", "OIII"] and moves == [256] * 6
+    assert proved["own"] == [] and len(proved["confirmed"]) == 2
+    assert proved["positions"]["Ha"] - proved["positions"]["L"] == 90
 
 
 def test_a_change_moves_reads_back_then_focuses_with_the_last_move_inward(tmp_path):
     where, log, naps = tmp_path / "ff.json", [], []
-    measured(where, "R", [40, 42, 44])
+    measured(where, "Ha", [40, 42, 44])
     filters.set_focused("L", where)
-    done = filters.change("R", say=lambda *_: None, open_wheel=lambda: Wheel(1, log=log),
+    done = filters.change("Ha", say=lambda *_: None, open_wheel=lambda: Wheel(1, log=log),
                           open_focuser=lambda: Motor(log), sleep=naps.append, where=where, backlash=30)
-    assert log == [("wheel", 2), ("focuser", 72), ("focuser", -30)]       # out past it, then in by the slack
-    assert done == {"position": 2, "name": "R", "from": "L", "steps": 42, "changed": True}
-    assert naps == [filters.SETTLE_S] and filters.load(where)["focused_for"]["filter"] == "R"
+    assert log == [("wheel", 5), ("focuser", 72), ("focuser", -30)]       # out past it, then in by the slack
+    assert done == {"position": 5, "name": "Ha", "from": "L", "steps": 42, "changed": True}
+    assert naps == [filters.SETTLE_S] and filters.load(where)["focused_for"]["filter"] == "Ha"
     log.clear()
-    filters.change("L", say=lambda *_: None, open_wheel=lambda: Wheel(2, log=log),
+    filters.change("R", say=lambda *_: None, open_wheel=lambda: Wheel(5, log=log),
                    open_focuser=lambda: Motor(log), sleep=naps.append, where=where, backlash=30)
-    assert log == [("wheel", 1), ("focuser", -42)]                          # inward: no overshoot
+    assert log == [("wheel", 2), ("focuser", -42)]                          # inward: no overshoot
+    log.clear()
+    filters.change("G", say=lambda *_: None, open_wheel=lambda: Wheel(2, log=log),
+                   open_focuser=lambda: pytest.fail("no focus move within a set"), sleep=naps.append, where=where)
+    assert log == [("wheel", 3)]
 
 
 def test_a_filter_with_no_usable_offset_stops_the_step_before_the_wheel_turns(tmp_path):
@@ -144,6 +191,7 @@ def test_the_first_frame_after_a_change_is_checked_against_the_last_run_in_l(tmp
     assert "refocus" in filters.size_check(5.2, store, tolerance=1.25)
 
 
+
 def test_one_offset_measurement_is_two_walk_ins_from_the_same_side(tmp_path):
     where, turned = tmp_path / "ff.json", []
 
@@ -159,13 +207,15 @@ def test_one_offset_measurement_is_two_walk_ins_from_the_same_side(tmp_path):
         found = next(bests)
         d.moved += found["best_at"]
         return found
-    out = filters.measure_offset("R", drive, walk, turned.append, say=lambda *_: None, temperature=4.5,
+    out = filters.measure_offset("Ha", drive, walk, turned.append, say=lambda *_: None, temperature=4.5,
                                  back=256, where=where)
-    # L best at -100; out 256 to +156; R best 180 further in, at -24: 76 out from L.
-    assert turned == ["L", "R"] and out["offset"] == 76 and out["usable"] is False
+    # L best at -100; out 256 to +156; Ha best 180 further in, at -24: 76 out from L.
+    assert turned == ["L", "Ha"] and out["offset"] == 76 and out["usable"] is False
     kept = filters.load(where)
     assert kept["measurements"][0]["approach"] == "in" and kept["measurements"][0]["temperature_c"] == 4.5
-    assert kept["focused_for"]["filter"] == "R"
+    assert kept["focused_for"]["filter"] == "Ha"
+    with pytest.raises(interface.Refusal):
+        filters.measure_offset("R", drive, walk, turned.append, where=where)      # in L's set: no offset to measure
 
 
 def test_a_band_is_named_for_what_took_it_and_never_gaia_or_v(monkeypatch):

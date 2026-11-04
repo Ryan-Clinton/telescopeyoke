@@ -1473,11 +1473,16 @@ def run_motor(args, mode="focus"):
     refused = motor_refusal(mode, settings, travel)
     if refused:
         raise interface.Refusal("INVALID_REQUEST", refused)
-    if getattr(args, "offset", None):
+    if getattr(args, "offset", None) or getattr(args, "prove_sets", False):
         import filters
         if mode != "walk" or not filters.wheel_in_train():
-            raise interface.Refusal("INVALID_REQUEST", "--offset FILTER measures a filter's focus offset from L "
+            raise interface.Refusal("INVALID_REQUEST", "--offset and --prove-sets measure focus offsets from L "
                                     "with --walk-in, on a light path with the filter wheel.")
+        if args.dry_run and getattr(args, "prove_sets", False):
+            print(f"Would walk in with each filter in turn, L first, going out {filters.OFFSET_BACK} half-steps "
+                  "before each after the first, and keep which filters focus with their parfocal set and which "
+                  "need their own offset. The mount does not move.")
+            return {"would_move": True, "prove_sets": filters.sets()}
         if args.dry_run:
             print(f"Would turn the wheel to L and walk in, go out {filters.OFFSET_BACK} half-steps, turn the wheel to "
                   f"{args.offset} and walk in again, and keep the difference as one measurement of {args.offset}'s "
@@ -1547,6 +1552,15 @@ def run_motor(args, mode="focus"):
                 progress(f"walking in at {WALK_MS} ms a half-step, {SWEEP_FRAMES} frames of "
                          f"{MOTOR_EXPOSURE:g} s after each move")
                 import filters
+                if getattr(args, "prove_sets", False):
+                    # Once, the first clear night: a walk-in in every filter (filters.py).
+                    try:
+                        thermistor = motor.temperature()
+                    except Exception:
+                        thermistor = None
+                    return filters.prove_all(
+                        drive, lambda d: walk_in(d, read, usual, say=say, ring=ring, live=live),
+                        lambda name: filters.turn_wheel(name, say=progress), say=progress, temperature=thermistor)
                 if getattr(args, "offset", None):
                     # A filter's focus offset from L: a walk-in in each (filters.py).
                     try:
@@ -1711,7 +1725,10 @@ def main():
                          "measuring each, to the sharpest; for when the motor cannot lift the drawtube out")
     ap.add_argument("--offset", metavar="FILTER",
                     help="with --walk-in, on a light path with the filter wheel: a walk-in in L, out a little, a "
-                         "walk-in in FILTER, and the difference kept as one measurement of its focus offset")
+                         "walk-in in FILTER, and the difference kept as one measurement of its set's focus offset")
+    ap.add_argument("--prove-sets", action="store_true",
+                    help="with --walk-in, once on the first clear night: a walk-in in every filter, to confirm the "
+                         "parfocal sets ([filterwheel] sets); one outside its set gets its own offset")
     ap.add_argument("--measure-backlash", action="store_true",
                     help="measure the focuser gears' slack on the steep side of the curve; keeps half as much "
                          "again as the overshoot")

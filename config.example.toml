@@ -157,6 +157,11 @@ makers = ""
 # provisional until the focuser's steps per mm are measured). After a change,
 # a first frame this many times wider than the last run in L means refocus.
 offset_tolerance = 16
+# The parfocal sets, filters that focus together (Gary, 4 November 2026):
+# no offset within a set, one from L's set to each other. A filter the
+# proving night (./focus.py --walk-in --prove-sets) finds outside its set
+# gets its own offset.
+sets = "L,R,G,B;SII,Ha,OIII"
 size_tolerance = 1.25
 
 [indi]

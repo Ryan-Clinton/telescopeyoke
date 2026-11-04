@@ -84,7 +84,9 @@ DEFAULTS = {
     # result is in ("L (Optolong), 183M"). offset_tolerance: half-steps of spread
     # an offset from L may have and be used (filters.py); size_tolerance: how many
     # times wider than in L the first frame after a change may be.
-    "filterwheel": {"filters": "", "makers": "", "offset_tolerance": 16, "size_tolerance": 1.25},
+    # sets: the parfocal sets, filters that focus together, groups split by ";".
+    "filterwheel": {"filters": "", "makers": "", "offset_tolerance": 16, "size_tolerance": 1.25,
+                    "sets": "L,R,G,B;SII,Ha,OIII"},
     # camera: the camera profile to use when both are plugged in; blank, the
     # one plugged in ([cameras.NAME], docs/mono-upgrade.md).
     # processing_scale: 2, a mono camera's frames are stacked and searched in
@@ -428,6 +430,11 @@ SETTINGS = (
      "sxwheel.py move takes these names, and each frame through a train with the wheel says the position the "
      "wheel confirmed (FILTPOS) and its name (FILTER). Blank: positions by number. Set it only after looking: "
      "./sxwheel.py move 1, then see which filter is in the light path, and so on round.", {"optional": True}),
+    ("filterwheel", "sets", "Filter wheel: parfocal sets", "text",
+     "Filters that focus together, each set's names separated by commas and the sets by a semicolon "
+     "(L,R,G,B;SII,Ha,OIII). No focus offset within a set; one from L's set to each other set, measured on "
+     "three nights before it is used. A filter the proving night (./focus.py --walk-in --prove-sets) finds "
+     "outside its set gets its own offset.", {"optional": True}),
     ("mount", "link", "Mount reached by", "choice",
      "handset: a serial lead to the SynScan handset. wifi: the SynScan Wi-Fi adapter. eqdir: an EQDIR lead. "
      "The last two have no handset.", {"choices": ["handset", "wifi", "eqdir"]}),

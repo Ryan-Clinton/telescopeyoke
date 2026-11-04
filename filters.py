@@ -21,13 +21,20 @@ settle. Frames are labelled only with the position the wheel confirms each
 time the camera opens, and only when that is the filter asked for
 (shoot.in_the_path); a failed move stops the step.
 
-Focus offsets are measured by focus.py --walk-in --offset FILTER: a walk-in
-in L, out OFFSET_BACK half-steps, the wheel to FILTER and a walk-in there, the
-difference kept with the night, the focuser's thermistor temperature and the
-side approached from. An offset is used only with at least NEEDED
-measurements on different nights, all approached inward, whose spread
-(sample standard deviation) is no more than the tolerance ([filterwheel]
-offset_tolerance, half-steps); otherwise that filter needs its own walk-in.
+The filters come in parfocal sets ([filterwheel] sets, by default
+"L,R,G,B;SII,Ha,OIII", from Gary, 4 November 2026): within a set no offset,
+and one offset from L's set to each other set. focus.py --walk-in
+--prove-sets, once on the first clear night, walks in in every filter: a
+filter further than the tolerance from its set's median gets its own offset
+from then on, and the result is kept. focus.py --walk-in --offset FILTER
+measures a set's offset once more: a walk-in in L, out OFFSET_BACK
+half-steps, the wheel to FILTER and a walk-in there, the difference kept
+with the night, the focuser's thermistor temperature and the side
+approached from. An offset is used only when measured on at least NEEDED
+different nights (each night's mean counted once), all approached inward,
+with a spread (sample standard deviation) within the tolerance
+([filterwheel] offset_tolerance, half-steps); otherwise a change between
+sets needs a walk-in.
 After a change, the first kept frame's star width is checked against the
 last run in L: wider by more than [filterwheel] size_tolerance times means
 refocus (REFOCUS_NEEDED), not carry on. Kept per camera and train, in
@@ -115,41 +122,109 @@ def keep_measurement(name, offset, temperature=None, l_hfr=None, f_hfr=None, app
     return store
 
 
+SETS = "L,R,G,B;SII,Ha,OIII"   # the parfocal sets (Gary, 4 November 2026): each focuses together
+
+
+def sets(cfg=None):
+    """The parfocal sets, from [filterwheel] sets: groups split by ";",
+    filters by ","."""
+    text = str(settings(cfg).get("sets") or SETS)
+    return [[n.strip() for n in group.split(",") if n.strip()] for group in text.split(";") if group.strip()]
+
+
+def key_of(name, store=None, cfg=None):
+    """What a filter's offset is kept under: its parfocal set ("set L,R,G,B"),
+    or the filter itself when it is in no set or the proving night found it
+    outside its set's tolerance (store["own"])."""
+    store = store if store is not None else load()
+    if name in (store.get("own") or []):
+        return name
+    for group in sets(cfg):
+        if name in group:
+            return "set " + ",".join(group)
+    return name
+
+
 def offsets(store=None, tolerance=None):
-    """Each measured filter's offset from L: {filter: {mean, spread, count,
-    nights, usable, why}}. L is 0 by definition."""
+    """The offsets from L, by parfocal set (or by filter, for one on its
+    own): {key: {mean, spread, count, nights, usable, why, temperatures_c}}.
+    L's set is 0 by definition. Each night counts once (its measurements'
+    mean), and at least NEEDED nights, all approached inward, with a spread
+    within the tolerance, are needed before an offset is used."""
     store = store if store is not None else load()
     tolerance = float(settings().get("offset_tolerance", OFFSET_TOLERANCE) if tolerance is None else tolerance)
+    home = key_of(DEFAULT, store)
     by = {}
     for m in store["measurements"]:
-        by.setdefault(m["filter"], []).append(m)
+        key = key_of(m["filter"], store)
+        if key != home:
+            by.setdefault(key, []).append(m)
     out = {}
-    for name, ms in by.items():
-        values = [m["offset"] for m in ms]
-        nights = len({m["night"] for m in ms})
-        spread = statistics.stdev(values) if len(values) > 1 else None
+    for key, ms in by.items():
+        nightly = {}
+        for m in ms:
+            nightly.setdefault(m["night"], []).append(m["offset"])
+        values = [statistics.mean(v) for v in nightly.values()]
+        nights = len(values)
+        spread = statistics.stdev(values) if nights > 1 else None
         sides = {m.get("approach", "in") for m in ms}
         why = None
-        if len(values) < NEEDED or nights < NEEDED:
-            why = f"{len(values)} measurement(s) on {nights} night(s): {NEEDED} on different nights are needed"
+        if nights < NEEDED:
+            why = f"measured on {nights} night(s): {NEEDED} different nights are needed"
         elif sides != {"in"}:
             why = "not every measurement approached focus from the same side (inward)"
         elif spread > tolerance:
             why = f"spread {spread:.0f} half-steps, more than the tolerance of {tolerance:g}"
-        out[name] = {"mean": round(statistics.mean(values), 1), "spread": None if spread is None else round(spread, 1),
-                     "count": len(values), "nights": nights, "usable": why is None, "why": why,
-                     "temperatures_c": [m.get("temperature_c") for m in ms]}
+        out[key] = {"mean": round(statistics.mean(values), 1), "spread": None if spread is None else round(spread, 1),
+                    "count": len(ms), "nights": nights, "usable": why is None, "why": why,
+                    "temperatures_c": [m.get("temperature_c") for m in ms]}
     return out
 
 
 def offset_of(name, store=None, tolerance=None):
-    """(half-steps from L, None) for a usable offset, or (None, why)."""
-    if name == DEFAULT:
+    """(half-steps from L, None) for a usable offset, or (None, why). Any
+    filter in L's parfocal set is 0."""
+    store = store if store is not None else load()
+    key = key_of(name, store)
+    if key == key_of(DEFAULT, store):
         return 0.0, None
-    found = offsets(store, tolerance).get(name)
+    found = offsets(store, tolerance).get(key)
     if found is None:
-        return None, "no focus offset measured"
-    return (found["mean"], None) if found["usable"] else (None, found["why"])
+        return None, f"no focus offset measured for {key}"
+    return (found["mean"], None) if found["usable"] else (None, f"{key}: {found['why']}")
+
+
+def prove_sets(positions, tolerance=None, where=None, night=None, temperature=None):
+    """The proving night: `positions` is each filter's best focus (half-steps,
+    the same run, all approached inward). Within each parfocal set, a filter
+    further than the tolerance from its set's median gets its own offset
+    (store["own"]); every filter's offset from L is kept as a measurement.
+    Returns {"confirmed": [sets], "own": [filters], "positions"}."""
+    tolerance = float(settings().get("offset_tolerance", OFFSET_TOLERANCE) if tolerance is None else tolerance)
+    if DEFAULT not in positions:
+        raise interface.Refusal("INVALID_REQUEST", "The proving night needs a walk-in in L: offsets are from L.")
+    store = load(where)
+    own, confirmed = [], []
+    for group in sets():
+        here = {n: positions[n] for n in group if n in positions}
+        if not here:
+            continue
+        middle = statistics.median(here.values())
+        out = [n for n, p in here.items() if abs(p - middle) > tolerance]
+        own += out
+        if not out and len(here) == len(group):
+            confirmed.append(",".join(group))
+    store["own"] = sorted(set(store.get("own") or []) | set(own))
+    night = night or datetime.now().strftime("%Y-%m-%d")
+    store["proof"] = {"night": night, "positions": positions, "own": own, "confirmed": confirmed,
+                      "tolerance": tolerance, "temperature_c": temperature}
+    for name, at in positions.items():
+        if name != DEFAULT:
+            store["measurements"].append({"filter": name, "offset": int(at - positions[DEFAULT]), "approach": "in",
+                                          "night": night, "temperature_c": temperature, "when": time.time(),
+                                          "proving": True})
+    save(store, where)
+    return {"confirmed": confirmed, "own": own, "positions": positions}
 
 
 def steps_between(current, wanted, store=None, tolerance=None):
@@ -299,8 +374,10 @@ def measure_offset(name, drive, walk, wheel_to, say=print, temperature=None, bac
     out `back` half-steps; `name` in the path, a walk-in from there; the
     difference of the two best places, both approached inward, is kept with
     the night and the temperature. The drawtube is left at `name`'s focus."""
-    if name == DEFAULT:
-        raise interface.Refusal("INVALID_REQUEST", "L is what the offsets are measured from.")
+    if key_of(name, load(where)) == key_of(DEFAULT, load(where)):
+        raise interface.Refusal("INVALID_REQUEST", f"{name} is in L's parfocal set ({key_of(DEFAULT, load(where))}): "
+                                "its offset is 0. Measure a filter from the other set (Ha), or prove the sets "
+                                "(--prove-sets).")
     wheel_to(DEFAULT)
     began = drive.moved                       # the drive counts half-steps from where the run began
     first = walk(drive)
@@ -315,12 +392,35 @@ def measure_offset(name, drive, walk, wheel_to, say=print, temperature=None, bac
     keep_measurement(name, offset, temperature=temperature, l_hfr=first["best_hfr"], f_hfr=second["best_hfr"],
                      where=where)
     set_focused(name, where)
-    found = offsets(load(where)).get(name, {})
+    found = offsets(load(where)).get(key_of(name, load(where)), {})
     say(f"offset: {name} is {offset:+d} half-steps from L (HFR {second['best_hfr']}); "
         f"{found.get('count')} kept, mean {found.get('mean')}, "
         + ("usable" if found.get("usable") else f"not used yet: {found.get('why')}"))
     return {"filter": name, "offset": offset, "l_best_at": at_l, "f_best_at": at_f,
             "l_hfr": first["best_hfr"], "f_hfr": second["best_hfr"], "temperature_c": temperature, **found}
+
+
+def prove_all(drive, walk, wheel_to, names=None, say=print, temperature=None, back=OFFSET_BACK, where=None):
+    """The proving night's run: a walk-in in each filter (L first), backing
+    out `back` half-steps before each after the first, so every focus is
+    approached inward; then prove_sets() on the best places. The drawtube is
+    left at the last filter's focus."""
+    names = names or [n for group in sets() for n in group]
+    names = [DEFAULT] + [n for n in names if n != DEFAULT]
+    positions = {}
+    for i, name in enumerate(names):
+        if i:
+            drive.move(back)
+        wheel_to(name)
+        began = drive.moved
+        found = walk(drive)
+        positions[name] = began + found["best_at"]
+        say(f"sets: {name} best at {positions[name]:+d} (HFR {found['best_hfr']})")
+    proved = prove_sets(positions, where=where, temperature=temperature)
+    set_focused(names[-1], where)
+    say("sets: " + (f"confirmed {'; '.join(proved['confirmed'])}" if proved["confirmed"] else "none confirmed")
+        + (f"; on their own offset: {', '.join(proved['own'])}" if proved["own"] else ""))
+    return proved
 
 
 # --- what a filter's magnitudes are called (item 8) ---------------------------------
