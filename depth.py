@@ -640,7 +640,8 @@ def sweep_stacks(paths, seconds_list, say=print):
     if exposure <= 0:
         raise interface.Refusal("INVALID_REQUEST", f"{paths[0]} does not say its exposure.")
     calibration = stacking.Calibration(exposure, gain)
-    rgb = stacking.prepare(mosaic, calibration)
+    mono = stacking.is_mono(header)
+    rgb = stacking.prepare(mosaic, calibration, mono=mono)
     lum = rgb.sum(axis=2)
     reference = {"square": stacking.centre_square(lum), "stars": stacking.find_stars(lum)}
     wanted = sorted({min(len(paths), max(1, round(s / exposure))): s for s in seconds_list}.items())
@@ -649,7 +650,7 @@ def sweep_stacks(paths, seconds_list, say=print):
     for path in paths[:wanted[-1][0]]:
         if n:
             mosaic, _ = stacking.load_light(path)
-            rgb = stacking.prepare(mosaic, calibration)
+            rgb = stacking.prepare(mosaic, calibration, mono=mono)
             rgb, _ = stacking.register(rgb, rgb.sum(axis=2), stacking.find_stars(rgb.sum(axis=2)),
                                        reference)
         stack.add(rgb)

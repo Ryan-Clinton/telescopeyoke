@@ -1,7 +1,7 @@
 """The telescope camera through Altair's own library, with no INDI server.
 
     with AltairCamera(gain=300) as cam:
-        data, header = cam.frame(2.0)      # raw 12-bit Bayer mosaic
+        data, header = cam.frame(2.0)      # raw 12-bit Bayer mosaic, or plain grey from a mono camera
 
 camera.Camera hands out one of these when config.toml says
 [camera] backend = "altair", which is the default on Windows, where INDI does
@@ -37,6 +37,8 @@ FLUSH_BOTH = 3      # ALTAIRCAM_OPTION_FLUSH: 1 the camera's memory, 2 the libra
 USB3_ON_USB2 = 0x100   # ALTAIRCAM_FLAG_USB30_OVER_USB20
 USB3 = 0x40            # ALTAIRCAM_FLAG_USB30
 FAN = 0x10000          # ALTAIRCAM_FLAG_FAN
+MONO = 0x10            # ALTAIRCAM_FLAG_MONO: no colour filters on the sensor (the 183M)
+TEC = 0x80             # ALTAIRCAM_FLAG_TEC: a cooler with a target temperature
 BUFFER = 0x1000000     # ALTAIRCAM_FLAG_BUFFER: a frame buffer of some size in the camera
 DDR = 0x2000000        # ALTAIRCAM_FLAG_DDR: one big enough for a whole frame
 # Settings that could stop long frames while short ones arrive: a low-power
@@ -212,6 +214,16 @@ class AltairCamera:
             self.width, self.height = self._size()
             fourcc, self.bits = handle.get_RawFormat()
             self.pattern = struct.pack("<I", fourcc).decode("ascii", "replace")
+            # A mono sensor's raw format is "YYYY" and its model says MONO:
+            # its frames have no colour pattern and carry no BAYERPAT.
+            self.flags = int(getattr(getattr(device, "model", None), "flag", 0) or 0)
+            self.mono = self.pattern.upper() == "YYYY" or bool(self.flags & MONO)
+            self.target = None
+            if camera.get("tec_target") is not None:
+                try:
+                    self.cool(camera["tec_target"])
+                except lib.HRESULTException as problem:     # frames still come, only warmer
+                    print(f"camera: the cooler would not be set: {_reason(problem)}", file=sys.stderr, flush=True)
             handle.put_ExpoAGain(self.gain)
             # The library keeps only a pointer to the callback. Holding it on
             # this object keeps it alive for as long as the camera can call it.
@@ -291,6 +303,29 @@ class AltairCamera:
             handle.put_Option(lib.ALTAIRCAM_OPTION_FAN, -1 if fan == "on" else 0)   # -1: its usual speed
         if offset is not None:
             handle.put_Option(lib.ALTAIRCAM_OPTION_BLACKLEVEL, int(offset))
+
+    def cool(self, degrees):
+        """Turn the cooler on and set the sensor's target, in °C. Nothing on
+        a camera without a cooler (the 183C), so one config.toml suits both."""
+        if not self.flags & TEC:
+            return False
+        lib, handle = self.lib, self.handle
+        option = getattr(lib, "ALTAIRCAM_OPTION_TEC", None)
+        if option is not None:
+            handle.put_Option(option, 1)
+        handle.put_Temperature(int(round(float(degrees) * 10)))   # the library counts tenths of a degree
+        self.target = float(degrees)
+        return True
+
+    def temperature(self):
+        """The sensor's temperature in °C as the camera reports it; None on a
+        camera without a cooler, or when it will not say."""
+        if not self.flags & TEC or not hasattr(self.handle, "get_Temperature"):
+            return None
+        try:
+            return self.handle.get_Temperature() / 10
+        except Exception:
+            return None
 
     # --- the library's thread ----------------------------------------------------
 
@@ -509,7 +544,15 @@ class AltairCamera:
         header["GAIN"] = (self.gain, "camera gain, percent")
         # When the exposure started, not when the frame arrived.
         header["DATE-OBS"] = (started.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3], "UTC, start of exposure")
-        header["BAYERPAT"] = self.pattern
+        if not self.mono:
+            header["BAYERPAT"] = self.pattern
+        else:
+            header["TY_MONO"] = (True, "mono sensor: no colour pattern")
+        degrees = self.temperature()
+        if degrees is not None:
+            header["CCD-TEMP"] = (round(degrees, 1), "sensor temperature, C")
+        if self.target is not None:
+            header["SET-TEMP"] = (self.target, "cooler target, C")
         header["INSTRUME"] = self.name
         try:
             header["READSPD"] = (int(self.handle.get_Speed()), "readout speed")
@@ -595,6 +638,8 @@ class AltairCamera:
             "usb3_camera": bool(flags & USB3),
             "flags": hex(flags), "usb3_camera_on_usb2_port": bool(flags & USB3_ON_USB2),
             "size": [self.width, self.height], "bit_depth": self.bits, "bayer": self.pattern,
+            "mono": self.mono, "cooler": bool(flags & TEC), "sensor_c": self.temperature(),
+            "cooler_target_c": self.target,
             "readout_speed": handle.get_Speed(), "max_readout_speed": handle.MaxSpeed(),
             # None until two frames have been taken; False if the camera's
             # frame stamps turned out not to keep time.

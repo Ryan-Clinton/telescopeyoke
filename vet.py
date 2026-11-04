@@ -202,14 +202,15 @@ def stacked(groups, done=lambda part: None):
     frame of the first group so they share pixels."""
     mosaic, header = stacking.load_light(groups[0][0])
     calibration = stacking.Calibration(float(header.get("EXPTIME", 0)), int(float(header.get("GAIN", 0))))
-    rgb = stacking.prepare(mosaic, calibration)
+    mono = stacking.is_mono(header)
+    rgb = stacking.prepare(mosaic, calibration, mono=mono)
     lum = rgb.sum(axis=2)
     reference = {"square": stacking.centre_square(lum), "stars": stacking.find_stars(lum)}
     out = []
     for part in groups:
         stack = stacking.Stack(rgb.shape)
         for path in part:
-            frame = stacking.prepare(stacking.load_light(path)[0], calibration)
+            frame = stacking.prepare(stacking.load_light(path)[0], calibration, mono=mono)
             frame, _ = stacking.register(frame, frame.sum(axis=2), stacking.find_stars(frame.sum(axis=2)),
                                          reference)
             stack.add(frame)
