@@ -1,10 +1,26 @@
-# The mono upgrade: 183M PRO TEC, filter wheel, coma corrector
+# More than one camera: adding the 183M PRO TEC, filter wheel and corrector
 
-Spec for moving the 150P from the colour Altair 183C to Gary's mono imaging
-train, bought 4 November 2026 and fitted that day. It says what the hardware
-is, what changes on the telescope, what every part of the software has to do
-differently, and how the first night proves it. Figures from vendors are
-marked with their source; figures not yet measured on this rig say so.
+Spec for adding Gary's mono imaging train to the 150P, bought 4 November
+2026 and fitted that day. It says what the hardware is, what changes on the
+telescope, what every part of the software has to do differently, and how
+the first night proves it. Figures from vendors are marked with their
+source; figures not yet measured on this rig say so.
+
+## The rule: an addition, not a replacement
+
+The project gains a second imaging camera; it does not swap one for the
+other. The colour 183C stays fully supported: its code path, settings,
+calibration, focus positions and records keep working unchanged, and on any
+night either camera can be the one on the telescope. The software finds out
+which camera is plugged in and uses that camera's profile; nothing assumes
+there is only one. Each camera keeps its own darks, flats, focus positions,
+reference images and fault history, so a night with one never spoils the
+other's records. The guide camera (`guidecam.py`) is a third camera already
+and stays separate.
+
+Done means: with the 183C plugged in, every command behaves as it did
+before this work, and its tests pass untouched; with the 183M plugged in,
+the same commands work in mono with the filter wheel.
 
 ## What is arriving
 
@@ -62,16 +78,46 @@ whether the focuser gets enough power:
 The first focus run is the test. A focuser stall then is a power problem,
 not the camera.
 
-**The camera fault may be over.** The 183C lost frames because it has no
-buffer and an ageing board (docs/camera-fault.md). The 183M PRO has a 4 GB
-buffer. Speed 0 and the lost-frame refusals stay in place until the new
-camera has run a full night; then try faster readout and record the
-result.
+**The camera fault and the new camera.** The 183C loses frames because it
+has no buffer and an ageing board (docs/camera-fault.md). The 183M PRO has
+a 4 GB buffer, so it may not have the fault at all. The readout speed and
+the lost-frame refusals become per camera: the 183C keeps Speed 0 and its
+refusals; the 183M starts at Speed 0 too and is tried faster only after a
+full clean night, with the result recorded against the 183M alone.
+
+**The 183C after the tube mod.** With the mirror moved up, the 183C reaches
+focus with spacers behind the corrector at the same 55 mm (it is the same
+sensor and needs the same spacing), or with an extension tube without the
+corrector at 750 mm. Which one is used is part of its train (below).
 
 ## Software work
 
 Each item is a change to an existing command or a new one, with its test,
-before its first use on the sky.
+before its first use on the sky. Item 0 comes first, because every other
+item files its settings and records by camera.
+
+0. **Camera profiles** (`config.py`, `config.example.toml`,
+   `config.SETTINGS`). Today `[camera]` describes one camera and `[scope]`
+   one focal length. They become:
+   - `[cameras.NAME]`, one table per camera (`183c`, `183m`): how to
+     recognise it (the SDK's model name, or a serial), colour or mono,
+     cooled or not, sensor size and pixels, bit depth, readout speed, gain
+     and offset, and the 183C's existing options (power cycle on jam).
+   - `[trains.NAME]`, one per light path: which camera, corrector factor
+     (0.9 or none), filter wheel or none, and the `setup` name flats are
+     filed under today. The effective focal length is 750 x the factor.
+   - The camera in use is the one the SDK finds plugged in, matched to a
+     profile; a setting or `--camera NAME` overrides when both are
+     plugged in. An unknown camera is refused with what was found, not
+     guessed. The old single `[camera]` table still loads as the `183c`
+     profile, so the existing `config.toml` keeps working unchanged.
+   - Everything kept per camera lives under the camera's name in the data
+     folder: darks, flats, focus positions and filter offsets, readout and
+     lost-frame records, patrol references and zero points. The 183C's
+     existing files move under `183c` once, by a tested step.
+   - Every frame carries `INSTRUME` (the camera) and `TELESCOP`/`FOCALLEN`
+     (the train), so a stack or a difference image never mixes cameras by
+     accident; stacking refuses a mixed set.
 
 1. **Mono frames** (`altair.py`, `camera.py`, `stacking.py`). Detect a mono
    camera from the SDK. Leave out `BAYERPAT`. Treat each 2x2 block as one
@@ -92,11 +138,12 @@ before its first use on the sky.
    moves the shorter way; poll every 250 ms until it arrives. Needs
    `python3-hid` (install.sh). `FILTER` card in every frame. *In progress
    4 Nov.*
-4. **Optics settings** (`config.toml`, `config.example.toml`). Focal length
-   675, the camera's name, and anything that holds the 750 mm (plate-solve
-   scale hints, field of view, the planner's framing, `polaris.py`,
-   `moon.py`, `landmark.py`, `focus.py`). Check every use of
-   `focal_length_mm` once the setting changes.
+4. **Focal length from the train** (every user of `focal_length_mm`:
+   plate-solve scale hints, field of view, the planner's framing,
+   `polaris.py`, `moon.py`, `landmark.py`, `focus.py`, `agent.py`,
+   `camera_test.py`). Each reads the active train's effective focal length
+   and the active camera's sensor, not a single setting, so 750 mm with the
+   183C and 675 mm with the 183M are both right.
 5. **Filter in the plan** (`shoot.py`, `schedule.py`). A run step names its
    filter. An LRGB step cycles filters in blocks (for example 10 L, then 5
    each of R, G, B), moving the wheel and the focus offset between blocks.
@@ -106,26 +153,39 @@ before its first use on the sky.
    keep it, and apply it when the wheel moves. Reset the stored travel and
    start position after the tube mod.
 7. **Calibration** (`calibrate.py`, `stacking.py`, docs/calibration.md).
-   Darks are matched by temperature as well as exposure and gain, so a
-   library made once at the set temperature is reused; the old
-   "scaled to the night" dark for a camera with no thermometer stays for
-   the 183C only. Flats per filter. Retire the 183C darks.
+   Darks are filed by camera, and for a cooled camera matched by
+   temperature as well as exposure and gain, so a 183M library made once
+   at the set temperature is reused. The 183C keeps its own darks and its
+   "scaled to the night" method for a camera with no thermometer. Flats
+   per camera, train and filter.
 8. **Discovery and photometry** (`difference.py`, `depth.py`, `patrol.py`,
-   `transits.py`, `precision.py`). The band changes from "unfiltered colour"
-   to Optolong L, so every patrol reference image is rebuilt with the new
-   camera before difference images mean anything, and the Gaia G zero point
-   is measured again. Transits in L (most light) or R (less scintillation
+   `transits.py`, `precision.py`). References and zero points are kept per
+   camera and band: the 183C's unfiltered colour references stay for nights
+   with the 183C, and each patrol field gets a 183M reference in Optolong L
+   before its difference images mean anything, with its own Gaia G zero
+   point. A difference image always pairs a frame with a reference from
+   the same camera and band. Transits in L (most light) or R (less scintillation
    and red-star bias), chosen per target. A candidate nova can be checked
    in Ha, where novae are bright. There is no photometric V filter in the
    set; G stands in, and results say "G (Optolong)", never "V".
-9. **Stream and page** (`stream.py`, `streamlook.py`, `page.py`). The live
-   picture is grey; show the filter and the sensor temperature beside it.
+9. **Stream and page** (`stream.py`, `streamlook.py`, `page.py`). Name the
+   camera in use. With the 183M the live picture is grey; show the filter
+   and the sensor temperature beside it. With the 183C, as now.
    Colour stacks come later from LRGB runs.
-10. **Checks** (`doctor.py`, `agent.py`). See the wheel (`1278:0920`) and
-    the camera's temperature; say which camera is plugged in.
-11. **Docs.** README hardware table, docs/focuser.md, docs/calibration.md,
-    docs/camera-fault.md (the 183C retired, and why), docs/validation.md as
-    each item is proven on the sky.
+10. **Checks** (`doctor.py`, `agent.py`). Say which camera and train are in
+    use and which profile matched; see the wheel (`1278:0920`) when the
+    train has one, and the camera's temperature when it is cooled.
+11. **Focus per camera** (`focus.py`). Focus positions, travel and filter
+    offsets are kept per camera and train, so swapping back to the 183C
+    starts from its own last focus, not the 183M's.
+12. **Docs.** README hardware table (both cameras), docs/focuser.md,
+    docs/calibration.md, docs/camera-fault.md (the fault belongs to the
+    183C), docs/validation.md as each item is proven on the sky.
+
+The first three items are being built on 4 November so the 183M can be
+used that night; they detect mono and the cooler from the camera itself and
+leave the 183C's behaviour as it is. Item 0 follows before anything else is
+filed by camera.
 
 ## First night, in order
 
