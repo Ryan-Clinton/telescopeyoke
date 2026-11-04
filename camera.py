@@ -287,13 +287,16 @@ def luminance(mosaic):
     return m[0::2, 0::2] + m[0::2, 1::2] + m[1::2, 0::2] + m[1::2, 1::2]
 
 
-def colour(mosaic, mono=False):
+def colour(mosaic, mono=False, block=2):
     """Half-resolution RGB image, shape (rows, cols, 3), from an RGGB mosaic.
     From a mono frame, grey: each 2x2 cell's mean in all three channels, so
-    the channels' sum is on the same footing as a colour frame's."""
+    the channels' sum is on the same footing as a colour frame's; with
+    `block` 1, every pixel of the mono frame on that same footing (full
+    resolution). A colour frame's 2x2 cell is its colour pixel, so it is
+    always 2x2."""
     m = mosaic.astype(np.float32)
     if mono:
-        grey = luminance(mosaic) / 4
+        grey = m if block == 1 else luminance(mosaic) / 4
         return np.dstack([grey, grey, grey])
     green = (m[0::2, 1::2] + m[1::2, 0::2]) / 2
     return np.dstack([m[0::2, 0::2], green, m[1::2, 1::2]])

@@ -83,7 +83,9 @@ DEFAULTS = {
     "filterwheel": {"filters": ""},
     # camera: the camera profile to use when both are plugged in; blank, the
     # one plugged in ([cameras.NAME], docs/mono-upgrade.md).
-    "imaging": {"camera": ""},
+    # processing_scale: 2, a mono camera's frames are stacked and searched in
+    # 2x2 blocks, as the colour camera's always are; 1, at full resolution.
+    "imaging": {"camera": "", "processing_scale": 2},
 }
 
 # Where ASTAP's installer puts the program and the star database on Windows.
@@ -399,6 +401,11 @@ SETTINGS = (
      "The camera profile ([cameras.NAME] in config.toml: 183c, 183m) to use when both cameras are plugged in. "
      "Blank: the one plugged in, matched to its profile when it opens; a camera with no profile is refused.",
      {"optional": True}),
+    ("imaging", "processing_scale", "Processing scale, mono camera", "whole",
+     "2: a mono camera's frames are stacked and searched in 2x2 blocks (about 1.5\" a pixel at 675 mm), as the "
+     "colour camera's always are; stars here are about eight sensor pixels across, so nothing is lost and the "
+     "work is a quarter. 1: full resolution, for corner checks or timing centroids, four times the work and "
+     "not yet tried on the sky. The raw frames kept are the full sensor either way.", {"min": 1, "max": 2}),
     ("camera", "setup", "Camera arrangement", "text",
      "A name for how the camera sits on the telescope. Change it, and take new flats, whenever the camera is "
      "rotated or taken off.", {}),

@@ -85,6 +85,10 @@ setup = "default"
 # The camera profile to use when both cameras are plugged in (or ./ty --camera
 # NAME for one command). Blank: the one plugged in.
 camera = ""
+# A mono camera's frames are stacked and searched in 2x2 blocks (2), as the
+# colour camera's always are, or at full resolution (1). The raw frames kept
+# are the full sensor either way.
+processing_scale = 2
 
 [mount]
 # The distance from one tripod foot to the next, in centimetres. With it, the

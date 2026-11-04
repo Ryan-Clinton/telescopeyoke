@@ -31,6 +31,11 @@ CALIBRATION = Path(os.environ.get("TY_CALIBRATION") or config.camera_folder() / 
 REGISTER = 1024     # side of the central square used for the first rough line-up
 MIN_MATCHES = 6     # stars needed to trust a star-by-star alignment
 SPOTS = 40          # brightest stars kept from the quick look at a frame, to place it by
+# The processing scale for a mono camera's frames ([imaging] processing_scale):
+# 2, each 2x2 block one pixel, as the colour camera's always are (stars here
+# are about eight native pixels across); 1, the mono frame's full resolution.
+# The raw frames on disk are always the full sensor, whichever it is.
+PROCESSING_SCALE = 1 if int(config.hardware().get("imaging", {}).get("processing_scale", 2)) == 1 else 2
 
 
 # --- names that become folders ---------------------------------------------------
@@ -333,8 +338,9 @@ def level_rows(frame, sections=STRIPE_SECTIONS, light=None):
 
 def prepare(mosaic, calibration, mono=False):
     """A raw frame, calibrated and destriped, as half-size RGB with hot
-    pixels removed; grey RGB from a mono camera (camera.is_mono)."""
-    return clean(colour(destripe(calibration.apply(mosaic)), mono=mono))
+    pixels removed; grey RGB from a mono camera (camera.is_mono), at
+    PROCESSING_SCALE."""
+    return clean(colour(destripe(calibration.apply(mosaic)), mono=mono, block=PROCESSING_SCALE if mono else 2))
 
 
 # --- raw frames on disk --------------------------------------------------------

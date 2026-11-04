@@ -59,6 +59,31 @@ def test_a_kept_mono_frame_keeps_what_the_pipeline_needs(tmp_path):
     assert rgb.shape == (4, 4, 3) and np.allclose(rgb[..., 0], rgb[..., 1])
 
 
+def test_raw_frames_are_kept_at_the_full_sensor_from_either_camera(tmp_path):
+    import stacking
+    for name, cards in (("colour", {"BAYERPAT": "RGGB"}), ("mono", {"TY_MONO": True})):
+        raw = np.arange(48 * 64, dtype=np.uint16).reshape(48, 64)
+        data, _ = stacking.load_light(stacking.save_light(tmp_path / name, 1, raw, dict(EXPTIME=1.0, **cards)))
+        assert data.shape == (48, 64) and np.array_equal(data, raw)
+
+
+def test_the_processing_scale_is_a_setting_for_mono_frames_only(monkeypatch):
+    import config
+    import stacking
+    assert stacking.PROCESSING_SCALE == 2 and config.example()["imaging"]["processing_scale"] == 2
+    mosaic = np.full((8, 8), 100, np.uint16)
+    mosaic[2, 3] = 900                                   # a star on one pixel
+    full = camera.colour(mosaic, mono=True, block=1)
+    assert full.shape == (8, 8, 3) and full[2, 3, 0] == 900 and full[0, 0, 0] == 100   # same footing, every pixel
+    monkeypatch.setattr(stacking, "PROCESSING_SCALE", 1)
+    assert stacking.prepare(mosaic, stacking.Calibration(2.0, 300), mono=True).shape == (8, 8, 3)
+    # A colour frame's 2x2 cell is its colour pixel: always half size.
+    assert stacking.prepare(mosaic, stacking.Calibration(2.0, 300)).shape == (4, 4, 3)
+    assert config.checked("imaging", "processing_scale", "1") == 1
+    with pytest.raises(ValueError):
+        config.checked("imaging", "processing_scale", "4")
+
+
 def ring(diameter, shape=(1200, 1600), at=(600, 800), flux=4e6):
     """An out-of-focus star: a ring with a dark middle."""
     yy, xx = np.indices(shape)
