@@ -21,6 +21,13 @@ what is specific to Claude and to this particular user.
   2026 after asking thirteen times for the testing to stop. Never write,
   run or restore tests, never add CI, never make a commit wait. Before a
   commit: `ruff check` on the changed files, then commit and push.
+- The telescope's operational protections are not testing and stay:
+  camera cooling (the slow ramp, never below -5 °C, the warm-up, stopping
+  when the cooler fails), mount safety (`MOTION_LOCKED`, the limits, dry
+  runs before moves, the demo and simulator), calibration integrity
+  (matched masters, science refusing uncalibrated frames) and every
+  fail-closed check (a filter the wheel has not confirmed, a sensor off
+  target). Never weaken or remove one as part of cutting testing.
 - Never defer work that can be done here and now: no "tomorrow", "on my
   list", "next time" or "I can do that if you want" for something plainly
   wanted. Do it, then say it is done. Waiting on a background
