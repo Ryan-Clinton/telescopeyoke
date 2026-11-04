@@ -805,6 +805,15 @@ class AltairCamera:
             header["READSPD"] = (int(self.handle.get_Speed()), "readout speed")
         except self.lib.HRESULTException:
             pass
+        # What a matched dark is chosen by besides exposure, gain, speed and
+        # set temperature (stacking.MatchedCalibration).
+        header["XBINNING"] = (int(self.binning), "binning the camera applied")
+        level = getattr(self.lib, "ALTAIRCAM_OPTION_BLACKLEVEL", None)
+        if level is not None:
+            try:
+                header["OFFSET"] = (int(self.handle.get_Option(level)), "black level (offset)")
+            except self.lib.HRESULTException:
+                pass
         # How long after the trigger the frame came back. 31 October 2026:
         # at speed 2 a 16 s frame comes back after 20.5 s when healthy and
         # 10.3 s in the fault, so a run shows when the camera changes state.

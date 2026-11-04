@@ -265,6 +265,47 @@ mirror cell. Darks need full dark, or a cap on the camera itself. Only 1 s
 and 4 s darks at gain 1500 exist; the M31 and M33 patrols shoot 16 s, so
 they have no matching darks yet (record: [validation](validation.md#2-november-2026)).
 
+## Darks, flats and bad pixels by camera
+
+Each camera keeps its own masters in its own folder (`calibration/` under
+`config.camera_folder()`), and the two cameras are calibrated two ways.
+
+**The 183C** is as it always was: one dark per exposure and gain, a bias,
+one flat per `setup`, any of them may be missing, and with a dark and a
+bias the dark is scaled to each frame's own hot pixels, since the camera has
+no thermometer. A new master replaces the old one.
+
+**The 183M** (any profile with `cooled = true`, or `dark_method =
+"matched"`) is matched, never scaled: the IMX183 has amp glow, which does
+not follow the hot pixels. `./calibrate.py` waits for the cooler and keeps:
+
+- darks by exposure, gain, offset, binning, readout speed and the cooler's
+  set temperature (`dark-16s-g800-o50-b1-s0-t-5-v1.fits`); each frame's
+  header carries all six (`OFFSET` and `XBINNING` from the camera since
+  4 November 2026), and the dark used is the newest whose cards are the
+  same. The cooler holds the temperature, so darks are made with the cap
+  on, indoors or on a cloudy night, never in a clear window;
+- flats by train and filter (`flat-183m-cc-L-v1.fits`), kept raw; the
+  flat-dark is a dark at the flat's exposure from the same library, taken
+  off and the flat normalised when it is used;
+- a bad-pixel map (`./calibrate.py badpixels`, from the longest dark kept),
+  whose pixels are replaced by the median of their neighbours; no bias.
+
+Every 183M master is a new version (`-vN`), never overwriting one, and every
+stack records which masters it used: `TY_DARK`, `TY_FLAT`, `TY_FDARK`,
+`TY_BPM` in `final.fits` and `live.fits`, and `calibration` in
+`restack.json` (the 183C's stacks record theirs too). A new library never
+changes what an old result meant.
+
+**It fails closed.** A 183M frame whose dark, flat, flat-dark or bad-pixel
+map is missing or does not match is still stacked for the stream or a quick
+look, but the stack says `TY_CALIB = F` and what was missing (`TY_MISS`,
+and `restack.json`), and restack says UNCALIBRATED. Science refuses it with
+`CALIBRATION_MISSING`, saying which: a difference image (either stack), so
+it never enters a search; depth and its sweep; and photometry (variables,
+precision, and so transits and the star watches). The 183C's frames are
+taken as they always were.
+
 ## The handset's clock
 
 `./mount.py settime` gives the handset the computer's date and time and the

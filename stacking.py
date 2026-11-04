@@ -161,14 +161,28 @@ def without_rows(master):
 
 class Calibration:
     """Master dark, bias and flat frames for one exposure and gain, loaded
-    once. Any of them may be missing; whatever exists is applied."""
+    once. Any of them may be missing; whatever exists is applied. This is
+    the 183C's way (a camera with no thermometer: the dark scaled to the
+    night). A camera whose darks are matched, never scaled (the cooled 183M,
+    `dark_method`), gets a MatchedCalibration instead, chosen from the
+    frame's header (INSTRUME) or, with none given, the camera in use."""
+    matched = False
+    missing = ()           # nothing is required of the 183C's calibration: science may use it as it is
 
-    def __init__(self, exposure, gain):
+    def __new__(cls, exposure=None, gain=None, header=None):
+        if cls is Calibration and dark_method(camera_from(header)) == "matched":
+            return super().__new__(MatchedCalibration)
+        return super().__new__(cls)
+
+    def __init__(self, exposure, gain, header=None):
         def load(path):
             return fits.getdata(path).astype(np.float32) if path.exists() else None
-        self.dark = without_rows(load(master_path("dark", exposure, gain)))
-        self.bias = without_rows(load(master_path("bias", gain=gain)))
-        self.flat = load(master_path("flat"))
+        paths = {"dark": master_path("dark", exposure, gain), "bias": master_path("bias", gain=gain),
+                 "flat": master_path("flat")}
+        self.masters = {kind: p.name for kind, p in paths.items() if p.exists()}
+        self.dark = without_rows(load(paths["dark"]))
+        self.bias = without_rows(load(paths["bias"]))
+        self.flat = load(paths["flat"])
         self.scale = 1.0   # how strongly the dark was applied to the last frame
         self.hot = None
         if self.dark is not None and self.bias is not None:
@@ -202,6 +216,234 @@ class Calibration:
         if self.flat is not None:
             frame /= self.flat
         return frame
+
+
+# --- matched calibration: the cooled 183M (docs/calibration.md) -------------------
+#
+# Darks matched on everything that changes them (exposure, gain, offset,
+# binning, readout speed, the cooler's set temperature), never scaled: the
+# IMX183 has amp glow, which does not scale with the hot pixels. Flats per
+# camera, train and filter, each with its flat-dark (a dark at the flat's own
+# exposure, from the same library). A bad-pixel map per camera. Every master
+# is versioned (NAME-vN.fits) and never overwritten; the newest that matches
+# is used, and its file name goes into every stack made with it.
+
+DARK_CARDS = ("EXPTIME", "GAIN", "OFFSET", "XBINNING", "READSPD", "SET-TEMP")
+
+
+def camera_from(header=None):
+    """The camera profile a frame was taken with (INSTRUME), or the camera in use."""
+    if header is not None:
+        return str(header.get("INSTRUME") or config.LEGACY_CAMERA)   # a frame from before INSTRUME: the 183C's
+    return config.camera_name()
+
+
+def dark_method(camera):
+    """"matched" (darks matched, never scaled; masters required for science)
+    or "scaled" (the 183C's way). A profile's `dark_method`, else matched for
+    a cooled camera."""
+    profile = config.hardware().get("cameras", {}).get(camera) or {}
+    return profile.get("dark_method") or ("matched" if profile.get("cooled") else "scaled")
+
+
+def library(camera):
+    """Where a camera's masters are kept: its own calibration/ folder."""
+    if camera == config.camera_name():
+        return CALIBRATION
+    return config.camera_folder(camera) / "calibration"
+
+
+def _slug(value):
+    return re.sub(r"[^A-Za-z0-9_.+-]+", "-", f"{value:g}" if isinstance(value, float) else str(value))
+
+
+def dark_stem(cards):
+    """The file-name stem of a matched dark for these cards."""
+    def card(key, default="x"):
+        value = cards.get(key)
+        return default if value is None else _slug(float(value) if key in ("EXPTIME", "SET-TEMP") else value)
+    return (f"dark-{card('EXPTIME')}s-g{card('GAIN')}-o{card('OFFSET')}-b{card('XBINNING', '1')}"
+            f"-s{card('READSPD')}-t{card('SET-TEMP')}")
+
+
+def flat_stem(cards):
+    return f"flat-{_slug(cards.get('TELESCOP') or 'none')}-{_slug(cards.get('FILTER') or 'none')}"
+
+
+def versions(folder, stem):
+    """Every kept version of a master, oldest first."""
+    found = []
+    for p in Path(folder).glob(f"{stem}-v*.fits"):
+        tail = p.stem[len(stem) + 2:]
+        if tail.isdigit():
+            found.append((int(tail), p))
+    return [p for _, p in sorted(found)]
+
+
+def keep_master(folder, stem, data, header):
+    """Keep a master as the next version; an existing file is never replaced."""
+    folder = Path(folder)
+    folder.mkdir(parents=True, exist_ok=True)
+    have = versions(folder, stem)
+    number = int(have[-1].stem.rsplit("-v", 1)[1]) + 1 if have else 1
+    path = folder / f"{stem}-v{number}.fits"
+    fits.PrimaryHDU(data, fits.Header(dict(header, TY_VER=number))).writeto(path, overwrite=False)
+    return path
+
+
+def calibration_cards(header):
+    """The cards a matched calibration is chosen by, from a frame's header."""
+    keys = DARK_CARDS + ("INSTRUME", "TELESCOP", "FILTER")
+    return tuple((k, header.get(k)) for k in keys) if header is not None else None
+
+
+def matches(master_header, cards, keys):
+    for key in keys:
+        want, have = cards.get(key), master_header.get(key)
+        if key in ("EXPTIME", "SET-TEMP") and want is not None and have is not None:
+            if abs(float(want) - float(have)) > 1e-6:
+                return False
+        elif (None if want is None else str(want)) != (None if have is None else str(have)):
+            return False
+    return True
+
+
+class MatchedCalibration(Calibration):
+    """A matched calibration for one camera, exposure and set of settings:
+    the newest matching dark, flat (less its flat-dark) and bad-pixel map.
+    `missing` says what is not there or does not match; science refuses a
+    frame with anything missing (require()). The frame is still calibrated
+    with what there is, for a quick look or the stream, labelled uncalibrated."""
+    matched = True
+
+    def __init__(self, exposure, gain, header=None):
+        cards = dict(header or {})
+        cards.setdefault("INSTRUME", camera_from(header))
+        cards.setdefault("EXPTIME", exposure)
+        cards.setdefault("GAIN", gain)
+        if header is None:
+            cfg = config.hardware()
+            cards.setdefault("SET-TEMP", cfg["camera"].get("tec_target"))
+            cards.setdefault("READSPD", cfg["camera"].get("readout_speed"))
+            cards.setdefault("TELESCOP", cfg["train"]["name"])
+        self.camera, self.cards = cards["INSTRUME"], cards
+        folder = library(self.camera)
+        self.missing, self.masters = [], {}
+        self.dark = self._newest(folder, dark_stem(cards), cards, DARK_CARDS, "dark")
+        self.flat = None
+        raw = self._newest(folder, flat_stem(cards), cards, ("TELESCOP", "FILTER"), "flat")
+        if raw is not None:
+            flat_cards = dict(cards, EXPTIME=self._flat_exposure)
+            flat_dark = self._newest(folder, dark_stem(flat_cards), flat_cards, DARK_CARDS, "flat-dark")
+            if flat_dark is not None:
+                light = raw - flat_dark
+                self.flat = np.clip(light / np.median(light), 0.2, None)
+        mask = self._newest(folder, "badpixels", cards, (), "bad-pixel map")
+        self.bad = None if mask is None else mask > 0
+        self.bias = None
+        self.scale = 1.0
+        self.hot = None
+
+    def _newest(self, folder, stem, cards, keys, kind):
+        found = versions(folder, stem)
+        for path in reversed(found):
+            with fits.open(path) as hdul:
+                head = hdul[0].header
+                if matches(head, cards, keys):
+                    self.masters[kind] = path.name
+                    if kind == "flat":
+                        self._flat_exposure = float(head.get("EXPTIME", 0))
+                    return hdul[0].data.astype(np.float32)
+        what = {"dark": "a dark at " + ", ".join(f"{k} {cards.get(k)}" for k in DARK_CARDS),
+                "flat": f"a flat for {cards.get('TELESCOP')} in {cards.get('FILTER') or 'no filter'}",
+                "flat-dark": f"a flat-dark at the flat's {cards.get('EXPTIME')} s",
+                "bad-pixel map": "a bad-pixel map"}[kind]
+        self.missing.append(what + (f" ({len(found)} kept, none matching)" if found else ""))
+        return None
+
+    @property
+    def calibrated(self):
+        return not self.missing
+
+    def describe(self):
+        have = ", ".join(f"{k} {v}" for k, v in self.masters.items()) or "none"
+        return (f"matched ({have})" if self.calibrated else
+                f"UNCALIBRATED, quick look only: missing {'; '.join(self.missing)} (have: {have})")
+
+    def apply(self, mosaic):
+        """(raw - dark) / flat, the dark matched and never scaled, and bad
+        pixels replaced by the median of their neighbours."""
+        frame = mosaic.astype(np.float32)
+        if self.dark is not None and self.dark.shape == frame.shape:
+            frame -= self.dark
+        if self.flat is not None and self.flat.shape == frame.shape:
+            frame /= self.flat
+        if self.bad is not None and self.bad.shape == frame.shape and self.bad.any():
+            ys, xs = np.nonzero(self.bad)
+            h, w = frame.shape
+            around = [frame[np.clip(ys + dy, 0, h - 1), np.clip(xs + dx, 0, w - 1)]
+                      for dy in (-1, 0, 1) for dx in (-1, 0, 1) if dy or dx]
+            frame[ys, xs] = np.median(np.array(around), axis=0)
+        return frame
+
+
+SCIENCE = ("difference images", "photometry", "transits", "depth")
+
+
+def require(calibration, purpose):
+    """Science fails closed: a frame from a camera whose darks are matched
+    (the 183M) with any master missing or not matching is refused
+    (CALIBRATION_MISSING), saying which. The 183C's calibration is used as
+    it always was."""
+    import interface
+    if getattr(calibration, "matched", False) and calibration.missing:
+        raise interface.Refusal("CALIBRATION_MISSING", f"{purpose} refused: these {calibration.camera} frames "
+                                f"have no matching {'; '.join(calibration.missing)}. Make it with ./calibrate.py "
+                                "(darks with the cap on, indoors or on a cloudy night).")
+    return calibration
+
+
+def require_frames(paths, purpose):
+    """require() for a set of raw frames, judged by the first of each folder."""
+    seen = set()
+    for path in paths:
+        folder = Path(path).parent
+        if folder in seen:
+            continue
+        seen.add(folder)
+        head = fits.getheader(path, 1)
+        require(Calibration(float(head.get("EXPTIME", 0)), int(float(head.get("GAIN", 0))), head), purpose)
+
+
+def require_stack(path, purpose):
+    """require() for a stack, from what restack wrote into it: a matched
+    camera's stack labelled uncalibrated (TY_CALIB false) never enters
+    science or a search."""
+    import interface
+    if not Path(path).is_file():
+        return fits.Header()           # nothing to judge here: reading the stack itself will say it is missing
+    head = fits.getheader(path)
+    camera = str(head.get("INSTRUME") or config.LEGACY_CAMERA)
+    if dark_method(camera) == "matched" and head.get("TY_CALIB") is not True:
+        why = head.get("TY_MISS") or "its calibration was not recorded"
+        raise interface.Refusal("CALIBRATION_MISSING", f"{purpose} refused: {Path(path).name} is an uncalibrated "
+                                f"stack from the {camera} ({why}); it is for a quick look only.")
+    return head
+
+
+def stack_cards(calibration, header):
+    """What a stack's FITS header says about where it came from and how it
+    was calibrated: the camera and band, whether calibrated, and the masters."""
+    cards = {k: header[k] for k in ("INSTRUME", "TELESCOP", "FOCALLEN", "FILTER", "FILTPOS") if k in header}
+    missing, masters = getattr(calibration, "missing", ()), getattr(calibration, "masters", {})
+    cards["TY_CALIB"] = bool(not missing)
+    for kind, key in (("dark", "TY_DARK"), ("flat", "TY_FLAT"), ("flat-dark", "TY_FDARK"),
+                      ("bad-pixel map", "TY_BPM"), ("bias", "TY_BIAS")):
+        if kind in masters:
+            cards[key] = masters[kind][:68]
+    if missing:
+        cards["TY_MISS"] = "; ".join(missing)[:68]
+    return cards
 
 
 def clean(rgb):
@@ -349,7 +591,8 @@ def prepare(mosaic, calibration, mono=False):
 # the 183C and the 183M may each be used on any night), and what the
 # pipeline needs to treat it (no BAYERPAT and TY_MONO: a mono frame).
 KEPT = ("EXPTIME", "GAIN", "DATE-OBS", "BAYERPAT", "TY_MONO", "INSTRUME", "TELESCOP", "FOCALLEN", "TY_MODEL",
-        "FILTER", "FILTPOS", "CCD-TEMP", "SET-TEMP", "TY_ONTGT", "TY_TECV", "TY_TECP")
+        "FILTER", "FILTPOS", "CCD-TEMP", "SET-TEMP", "TY_ONTGT", "TY_TECV", "TY_TECP", "READSPD", "OFFSET",
+        "XBINNING")
 
 
 def camera_of(header):
@@ -775,18 +1018,26 @@ class Stack:
 
 # --- work done in the worker processes -----------------------------------------
 
-@functools.lru_cache(maxsize=2)
-def _calibration(exposure, gain):
-    return Calibration(exposure, gain)
+@functools.lru_cache(maxsize=4)
+def _calibration(exposure, gain, cards=None):
+    """One calibration per exposure and gain, and per camera and its
+    settings (calibration_cards of the frame), loaded once a worker. The
+    183C's is chosen by exposure and gain alone, as before."""
+    return Calibration(exposure, gain, dict(cards) if cards else None)
+
+
+def worker_cards(header):
+    """The hashable cards a worker's calibration is chosen by."""
+    return calibration_cards(header) if header is not None else None
 
 
 def measure_file(path, exposure, gain):
     """Worker: the quick quality of one saved raw frame, with timings."""
     timings = Timings()
     with timings.phase("load raw frames"):
-        mosaic, _ = load_light(Path(path))
+        mosaic, header = load_light(Path(path))
     with timings.phase("measure quality"):
-        q = quick_quality(mosaic, _calibration(exposure, gain))
+        q = quick_quality(mosaic, _calibration(exposure, gain, worker_cards(header)))
     q["file"] = Path(path).name
     return q, timings.seconds
 
@@ -800,7 +1051,7 @@ def register_file(path, exposure, gain, reference, store, slot, shape, scale=1.0
     with timings.phase("load raw frames"):
         mosaic, header = load_light(Path(path))
     with timings.phase("calibrate and clean"):
-        rgb = prepare(mosaic, _calibration(exposure, gain), mono=is_mono(header))
+        rgb = prepare(mosaic, _calibration(exposure, gain, worker_cards(header)), mono=is_mono(header))
         lum = rgb.sum(axis=2)
     with timings.phase("find stars"):
         stars = find_stars(lum)
@@ -853,7 +1104,7 @@ def live_frame(mosaic, header, exposure, gain, folder, index, save, recent, refe
     if save:
         with timings.phase("save raw frames"):
             save_light(Path(folder), index, mosaic, header)
-    calibration = _calibration(exposure, gain)
+    calibration = _calibration(exposure, gain, worker_cards(header))
     with timings.phase("measure quality"):
         q = quick_quality(mosaic, calibration)
     keep, reason = judge(q, recent)

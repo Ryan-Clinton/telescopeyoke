@@ -16,6 +16,7 @@
         "ALTITUDE_OUT_OF_RANGE",
         "CAMERA_BUSY",
         "CAMERA_NOT_CONNECTED",
+        "CALIBRATION_MISSING",
         "DEMO_UNSUPPORTED",
         "GOTO_REFUSED",
         "MOUNT_NOT_MOVING",

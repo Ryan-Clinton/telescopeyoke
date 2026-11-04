@@ -48,6 +48,7 @@ Defined in `interface.py`; `schemas/errors.schema.json` lists them.
 | `MOUNT_NOT_MOVING` | no | The mount reported its moves as made, but the camera's view did not change (or a plate solve came back the same). The mount has been stopped. A person must watch one small move; if the tube does not turn, switch the mount off and on. |
 | `FILTER_NOT_CONFIRMED` | yes | A light path with the filter wheel and no position the wheel confirmed (not answering, turning, still on its power-up turn), or not the filter the step asked for: no frame was kept. |
 | `REFOCUS_NEEDED` | no | A filter change needed a focus offset that is not usable (fewer than three nights measured, or too spread), the focuser could not make the move, or the first frame after the change was wider than the last run in L by more than the tolerance. Walk in with that filter in the light path. |
+| `CALIBRATION_MISSING` | no | Science (a difference image, photometry, a transit, a depth measurement) on frames or a stack from a camera with matched darks (the 183M) whose dark, flat, flat-dark or bad-pixel map is missing or does not match; the message says which. |
 | `PLATE_SOLVE_FAILED` | yes | Cloud, focus, or too few stars. Take a frame and look. |
 | `NO_SESSION` | no | No imaging run recorded yet. |
 | `NO_SKY` | yes | The horizon survey saw no open sky high up: cap, cloud or exposure. |

@@ -25,12 +25,27 @@ match each frame's own hot pixels.
 
 Masters are saved in calibration/ and picked up automatically by shoot.py
 and restack.py.
+
+A camera whose darks are matched, never scaled (the cooled 183M, with amp
+glow): it waits for its cooler first, and each master is kept as a new
+version, never overwriting one, filed by everything it is matched on:
+darks by exposure, gain, offset, binning, readout speed and set
+temperature (made with the cap on, indoors or on a cloudy night: the
+cooler holds the temperature, so no clear window is spent on them); flats
+by train and filter, kept raw, with a flat-dark (a dark at the flat's
+exposure) taken off when used; and a bad-pixel map from the longest dark:
+
+    ./calibrate.py badpixels                        from the darks kept; no camera
+
+It takes no bias. Science (difference images, photometry, transits, depth)
+refuses its frames until every master matches (docs/calibration.md).
 """
 import argparse
 
 import numpy as np
 from astropy.io import fits
 
+import config
 import interface
 import stacking
 from camera import WHITE, Camera
@@ -99,7 +114,7 @@ LOWEST_BIAS = 10        # a bias reading under this, of 4095, is the black level
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("kind", choices=["dark", "bias", "flat"])
+    ap.add_argument("kind", choices=["dark", "bias", "flat", "badpixels"])
     ap.add_argument("--exposure", type=float, default=2.0, help="seconds, for darks")
     ap.add_argument("--gain", type=int, default=1500)
     ap.add_argument("--frames", type=int, default=20)
@@ -108,7 +123,89 @@ def main():
     return interface.main("calibrate", lambda: run(args), args.json)
 
 
+MATCHED_HOT = 8.0      # a pixel this many robust spreads above a dark's median is a bad (hot) pixel
+
+
+def matched_cards(header, camera):
+    """What a matched master is filed and chosen by, from a frame it was made of."""
+    cards = {k: header[k] for k in stacking.DARK_CARDS if k in header}
+    cards.update(INSTRUME=camera, **{k: header[k] for k in ("TELESCOP", "FILTER", "FILTPOS", "CCD-TEMP")
+                                      if k in header})
+    return {k: (v[0] if isinstance(v, tuple) else v) for k, v in cards.items()}
+
+
+def bad_pixels(dark, hot=MATCHED_HOT):
+    """A bad-pixel map from a dark: the pixels far above the rest."""
+    middle = float(np.median(dark))
+    spread = 1.4826 * float(np.median(np.abs(dark - middle))) + 1e-6
+    return (dark > middle + hot * spread).astype(np.uint8)
+
+
+def run_matched(args, camera):
+    """Masters for a camera whose darks are matched, never scaled (the cooled
+    183M): each kept as a new version (never overwriting one), filed by
+    everything it is matched on. A cooled camera's darks need no sky: make
+    them with the cap on, indoors or on a cloudy night, never in a clear
+    window. A flat is kept raw; its flat-dark is a dark at the flat's
+    exposure (./calibrate.py dark --exposure S), taken off when it is used."""
+    folder = stacking.library(camera)
+    if args.kind == "bias":
+        raise SystemExit(f"The {camera}'s darks are matched to each exposure and carry the offset with them: "
+                         "it takes no bias. Make darks (and flat-darks) instead.")
+    if args.kind == "badpixels":
+        darks = [p for p in folder.glob("dark-*-v*.fits")]
+        if not darks:
+            raise SystemExit(f"No darks for the {camera} yet: ./calibrate.py dark --exposure S --gain G first.")
+        longest = max(darks, key=lambda p: (float(fits.getheader(p).get("EXPTIME", 0)), p.stat().st_mtime))
+        mask = bad_pixels(fits.getdata(longest).astype(np.float32))
+        path = stacking.keep_master(folder, "badpixels", mask, {"INSTRUME": camera, "SOURCE": longest.name,
+                                                                "NBAD": int(mask.sum())})
+        print(f"saved {path}: {int(mask.sum())} bad pixels, from {longest.name}")
+        return {"kind": "badpixels", "file": str(path), "bad": int(mask.sum())}
+    with Camera(gain=args.gain) as cam:
+        settle = getattr(cam, "settle", None)
+        if settle:
+            settle(say=print)            # at the cooler's target, as the lights will be
+        if args.kind == "dark":
+            frames, header = [], None
+            for i in range(args.frames):
+                mosaic, header = cam.frame(args.exposure)
+                frames.append(mosaic)
+                print(f"  dark {i + 1} of {args.frames}  (median {np.median(mosaic[::8, ::8]):.0f})", flush=True)
+            if np.median(frames[0][::8, ::8]) > 0.2 * WHITE:
+                raise SystemExit("Those frames are bright. Darks need the cap on.")
+            cards = matched_cards(header, camera)
+            path = stacking.keep_master(folder, stacking.dark_stem(cards), master(frames),
+                                        dict(cards, NFRAMES=args.frames))
+        else:
+            import sxwheel
+            seconds = flat_exposure(cam)
+            frames, header = [], None
+            for i in range(args.frames):
+                mosaic, header = cam.frame(seconds)
+                frames.append(mosaic)
+            if config.hardware()["train"].get("filterwheel"):
+                found = sxwheel.confirmed()
+                if found is None:
+                    raise SystemExit("The filter wheel confirmed no position: no flat is kept without its filter.")
+                sxwheel.cards(header, found)
+            cards = matched_cards(header, camera)
+            cards.setdefault("TELESCOP", config.hardware()["train"]["name"])
+            cards["EXPTIME"] = seconds
+            path = stacking.keep_master(folder, stacking.flat_stem(cards), master(frames),
+                                        dict(cards, NFRAMES=args.frames))
+            print(f"Its flat-dark: with the cap on, ./calibrate.py dark --exposure {seconds:g} --gain {args.gain}")
+    print(f"saved {path}")
+    return {"kind": args.kind, "frames": args.frames, "gain": args.gain, "file": str(path)}
+
+
 def run(args):
+    camera = config.camera_name()
+    if stacking.dark_method(camera) == "matched":
+        return run_matched(args, camera)
+    if args.kind == "badpixels":
+        raise SystemExit("The 183C's hot pixels are taken out by its scaled dark and the stack's own cleaning: "
+                         "a bad-pixel map is for a camera with matched darks.")
     with Camera(gain=args.gain) as cam:
         if args.kind == "dark":
             frames = capture(cam, args.exposure, args.frames, "dark")

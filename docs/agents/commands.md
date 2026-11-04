@@ -147,6 +147,8 @@ already taken. Reporting a dip is a person's.
 `snap.py`, `liveview.py`, `focus.py` (without `--field`), `solve.py`, `skywatch.py`,
 `calibrate.py`, `camera_test.py`, `shoot.py --no-recentre`.
 
+`calibrate.py dark|bias|flat` for the 183C is as it always was. For a camera with matched darks (the cooled 183M) it waits for the cooler, keeps each master as a new version never overwriting one, files darks by exposure, gain, offset, binning, readout speed and set temperature and flats by train and filter (its flat-dark is a dark at the flat's exposure), takes no bias, and `calibrate.py badpixels` makes the camera's bad-pixel map from its longest dark without the camera. Science (difference, depth, photometry, transits) refuses a 183M frame or stack whose masters are missing or do not match with `CALIBRATION_MISSING`; such a stack is labelled uncalibrated (`TY_CALIB`, `TY_MISS`, `restack.json` `calibration`) and is a quick look only (`docs/calibration.md`).
+
 `focus.py --check` takes three frames and says the stars' size against the
 usual best; it turns nothing. `focus.py --motor` measures first the same way
 and, if focus is already within 10% of the usual best, leaves it alone

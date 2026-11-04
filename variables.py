@@ -233,6 +233,7 @@ def measured(session, name, size, say=print, stack=None, solve=None, gaia=None):
     solve = solve or (lambda lum: depth.plate(lum, name))
     gaia = gaia or depth.gaia
     frames = vet.restack_frames(session)
+    stacking.require_frames(frames, "Photometry")
     groups = batches(frames, size)
     if len(groups) < 2:
         raise interface.Refusal("NO_SESSION", f"{session.name}: too few frames for {size}-frame batches.")

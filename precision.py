@@ -156,6 +156,7 @@ def measure_night(session, planet, say=print, again=False, workers=None, first=N
     kept = session / "precision-flux.npz"
     p, stars, xy, fwhm = chosen_stars(session, planet)
     frames = vet.restack_frames(session)[:first]
+    stacking.require_frames(frames, "Photometry")
     if first:
         kept = session / f"precision-flux-first{first}.npz"
     if kept.exists() and not again:

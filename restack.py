@@ -94,14 +94,15 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
     began = time.perf_counter()
     timings = stacking.Timings()
     workers = workers or stacking.cores()
-    lights, exposures, gains = [], [], set()
+    lights, exposures, gains, calibrations = [], [], set(), []
     for one in sessions:
         found = sorted(one.glob("light-*.fits"))
         if not found:
             raise interface.Refusal("NO_SESSION", f"No raw frames in {one}.")
         _, header = stacking.load_light(found[0])
         seconds, gain = float(header.get("EXPTIME", 0)), int(float(header.get("GAIN", 0)))
-        calibration = stacking.Calibration(seconds, gain)
+        calibration = stacking.Calibration(seconds, gain, header)
+        calibrations.append((calibration, header))
         say(f"{one}: {len(found)} raw frames, {seconds:g} s at gain {gain}; "
             f"calibration: {calibration.describe()}")
         lights += found
@@ -146,7 +147,7 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
         # workers, so memory holds a frame per worker and not the whole run.
         with timings.phase("calibrate and clean"):
             mosaic, header = stacking.load_light(Path(best["path"]))
-            rgb = stacking.prepare(mosaic, stacking.Calibration(best["exposure"], gain),
+            rgb = stacking.prepare(mosaic, stacking.Calibration(best["exposure"], gain, header),
                                    mono=stacking.is_mono(header))
             lum = rgb.sum(axis=2)
         reference = {"square": stacking.centre_square(lum), "stars": stacking.find_stars(lum)}
@@ -216,9 +217,20 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
     trimmed = stacked.shape[0] - (rows.stop - rows.start), stacked.shape[1] - (cols.stop - cols.start)
     stacked = stacked[rows, cols]
     stack_file = session / "final.fits"
+    # Which masters went in, and whether the stack is calibrated: a matched
+    # camera's (the 183M's) stack with any master missing is labelled
+    # uncalibrated, a quick look that never enters science or a search.
+    missing = [m for c, _ in calibrations for m in getattr(c, "missing", ())]
+    calibrated = not missing
+    cards = stacking.stack_cards(calibrations[0][0], calibrations[0][1])
+    cards["TY_CALIB"] = calibrated
+    if missing:
+        cards["TY_MISS"] = "; ".join(dict.fromkeys(missing))[:68]
+        say(f"UNCALIBRATED stack, for a quick look only (missing {'; '.join(dict.fromkeys(missing))}): "
+            "it never enters a search, photometry or a depth measurement")
     with timings.phase("finish the picture"):
         stacking.write_stack(stack_file, stacked,
-                             {"EXPTIME": total, "NFRAMES": len(chosen), "GAIN": gain})
+                             {"EXPTIME": total, "NFRAMES": len(chosen), "GAIN": gain, **cards})
         name = session.parent.name
         image = Image.fromarray(process.process(stacked, background=process.sky_for(name)))
         image = process.mark(image, stacked, name, say)
@@ -233,7 +245,9 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
                      "median_residual_px": round(float(np.median(residuals)), 3) if residuals else None,
                      "seconds": round(time.perf_counter() - began, 1),
                      "picture": str(session / "final.jpg"),
-                     "stack": str(stack_file)}},
+                     "stack": str(stack_file)},
+         "calibration": {"calibrated": calibrated, "missing": list(dict.fromkeys(missing)),
+                         "masters": [dict(getattr(c, "masters", {})) for c, _ in calibrations]}},
         stamp=True)
     say(f"{len(frames)} captured, {len(chosen)} stacked, {len(frames) - len(chosen)} left out; "
         f"total exposure {total:.0f} s")

@@ -226,7 +226,8 @@ class Session:
         self.publish(force=True)
         stacking.write_stack(self.folder / "live.fits", self.stack.result(),
                              {"OBJECT": self.name, "NFRAMES": len(self.accepted),
-                              "EXPTIME": self.exposure * len(self.accepted), "GAIN": self.gain})
+                              "EXPTIME": self.exposure * len(self.accepted), "GAIN": self.gain,
+                              **stacking.stack_cards(self.calibration, {})})
 
 
 def lowly():
