@@ -260,7 +260,8 @@ work as before whenever Twitch is among the destinations. The broadcasts the
 stream opens start by themselves and have auto-stop off, so a pause
 between steps does not end them; when the stream stops (the night over, or
 nothing new for five minutes) it ends any broadcast still on air itself
-(`youtube.end_broadcasts`).
+(`youtube.end_broadcasts`). One left showing live is ended by hand with
+`./stream.py youtube-end`, refused while a run is imaging.
 
 **Only the telescope's own capture puts it on air.** A run counts as
 imaging from the files the capture writes (its plan, the frame log), never

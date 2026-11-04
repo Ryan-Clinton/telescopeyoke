@@ -1527,11 +1527,26 @@ def install(say=print, run=subprocess.run, home=None):
         f"and a key is in {KEY_FILE.parent}. Stop it: systemctl --user disable --now ty-stream.service")
 
 
+def youtube_end(say=print, st=None, end=None):
+    """End YouTube broadcasts left showing live after the stream stopped
+    (./stream.py youtube-end); refused while a run is imaging, as that
+    broadcast is the one on air."""
+    import youtube
+    st = status() if st is None else st
+    if imaging(st):
+        say(f"{st.get('name')} is imaging: its broadcast is on air, so nothing is ended.")
+        return 1
+    ended = (end or youtube.end_broadcasts)(say=say)
+    if not ended:
+        say("No YouTube broadcast was on air (or this laptop is not signed in to YouTube).")
+    return 0
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("action", nargs="?",
                     choices=["watch", "frame", "preview", "scenes", "director", "key", "twitch-login",
-                             "youtube-login"])
+                             "youtube-login", "youtube-end"])
     ap.add_argument("service", nargs="?", choices=sorted(NAMES), help="with key: whose key it is")
     ap.add_argument("--to", help="with watch: stream into this file instead, to try it")
     ap.add_argument("--install", action="store_true", help="with watch: run it as a systemd user service")
@@ -1555,6 +1570,8 @@ def main(argv=None):
             raise SystemExit("youtube-login needs --client FILE: the OAuth client's JSON from Google Cloud "
                              "(docs/streaming.md, \"YouTube's title and description\")")
         return 0 if youtube.login(args.client) else 1
+    if args.action == "youtube-end":
+        return youtube_end()
     if args.service and args.action != "key":
         ap.error("a service is named only with key")
     if args.action == "key":

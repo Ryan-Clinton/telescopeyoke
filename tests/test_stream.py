@@ -686,3 +686,10 @@ def test_what_goes_on_air_decodes_to_the_picture_sent_at_1080p_and_720p(tmp_path
             got = np.asarray(im.convert("RGB").resize((w, h)), dtype=np.float32)
         error = np.abs(got - picture.astype(np.float32)).mean()
         assert error < 8, f"{size}: mean error {error:.1f} levels"
+
+
+def test_youtube_end_ends_broadcasts_left_live_but_never_during_a_run():
+    calls, said = [], []
+    assert stream.youtube_end(say=said.append, st={"name": "M31", "age": 10}, end=lambda say: calls.append(1)) == 1
+    assert not calls and "imaging" in said[0]
+    assert stream.youtube_end(say=said.append, st={"name": "M31", "age": 9000}, end=lambda say: 1) == 0
