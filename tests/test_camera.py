@@ -50,6 +50,9 @@ class World:
         self.binning = 1          # what the camera has been set to bin by
         self.bins = True          # False: asking it to bin fails
         self.asked_to_bin = 0     # how many times 2x2 or more was asked for
+        self.mono = False         # a mono sensor (the 183M): raw format YYYY, model flag MONO
+        self.tec = False          # a cooler (model flag TEC)
+        self.sensor = -52         # the sensor temperature it reports, tenths of a degree
 
 
 def frame_of(level, binning=1):
@@ -105,7 +108,9 @@ def fake_sdk(world):
         def MaxSpeed(self): return 2
         def get_Size(self): return WIDTH, HEIGHT
         def get_FinalSize(self): return WIDTH // world.binning, HEIGHT // world.binning
-        def get_RawFormat(self): return int.from_bytes(b"RGGB", "little"), 12
+        def get_RawFormat(self): return int.from_bytes(b"YYYY" if world.mono else b"RGGB", "little"), 12
+        def put_Temperature(self, tenths): self.target = tenths
+        def get_Temperature(self): return world.sensor
         def SerialNumber(self): return self.serial
         def FwVersion(self): return "1.0"
 
@@ -185,7 +190,7 @@ def fake_sdk(world):
 
         @staticmethod
         def EnumV2():
-            return [types.SimpleNamespace(displayname=name, id=serial, model=types.SimpleNamespace(flag=0))
+            return [types.SimpleNamespace(displayname=name, id=serial, model=types.SimpleNamespace(flag=(0x10 if world.mono else 0) | (0x80 if world.tec else 0)))
                     for name, serial in world.cameras]
 
         @staticmethod
@@ -1376,3 +1381,73 @@ def test_a_power_cut_that_cannot_be_made_falls_back_to_opening_it_again(sdk, wor
         with pytest.raises(IndiError):
             cam.frame(0.05)
     assert "could not cut its power: uhubctl is not installed" in capsys.readouterr().err
+
+
+# --- the 183M PRO TEC: mono, with a cooler -------------------------------------------
+
+def test_a_mono_camera_s_frames_carry_no_bayer_pattern(sdk, world):
+    world.mono = True
+    with altair.AltairCamera() as cam:
+        data, header = cam.frame(0.01)
+        assert cam.details()["mono"] is True
+    assert "BAYERPAT" not in header and header["TY_MONO"] is True
+    assert camera.is_mono(header) and data.shape == (HEIGHT, WIDTH)
+
+
+def test_a_colour_camera_still_says_its_pattern_and_has_no_cooler(sdk, world, monkeypatch):
+    monkeypatch.setitem(altair.SETTINGS["camera"], "tec_target", -10)
+    with altair.AltairCamera() as cam:
+        _, header = cam.frame(0.01)
+        handle = sdk.Altaircam.opened[-1]
+    assert header["BAYERPAT"] == "RGGB" and not camera.is_mono(header)
+    assert header["INSTRUME"] == "Altair ALTAIRH183C" and "TY_MONO" not in header
+    assert "CCD-TEMP" not in header and "SET-TEMP" not in header
+    assert not hasattr(handle, "target")          # the 183C was never asked to cool
+
+
+def test_either_camera_on_any_night_is_told_from_what_the_library_says(sdk, world):
+    """No setting says which camera: the one that opened decides. The 183C's
+    frames come out exactly as before; the 183M's say their model too."""
+    with altair.AltairCamera() as cam:
+        colour_frame, colour_header = cam.frame(0.01)
+    world.cameras, world.mono, world.tec = [("Altair ALTAIRH183M PRO TEC", "SN-M")], True, True
+    with altair.AltairCamera() as cam:
+        mono_frame, mono_header = cam.frame(0.01)
+    assert mono_header["INSTRUME"] == "Altair ALTAIRH183M PRO TEC" and camera.is_mono(mono_header)
+    # The colour path is the RGGB arithmetic it always was.
+    m = colour_frame.astype(np.float32)
+    expected = np.dstack([m[0::2, 0::2], (m[0::2, 1::2] + m[1::2, 0::2]) / 2, m[1::2, 1::2]])
+    got = camera.colour(colour_frame, mono=camera.is_mono(colour_header))
+    assert np.array_equal(got, expected) and not np.allclose(got[..., 0], got[..., 2])
+    assert np.array_equal(camera.luminance(colour_frame),
+                          m[0::2, 0::2] + m[0::2, 1::2] + m[1::2, 0::2] + m[1::2, 1::2])
+
+
+def test_the_cooler_is_turned_on_to_its_target_and_each_frame_says_the_temperature(world, monkeypatch):
+    monkeypatch.setattr(altair, "wait_for", lambda seconds: 0.3)
+    lib = use_sdk(world, monkeypatch, tec_target=-10)
+    lib.ALTAIRCAM_OPTION_TEC = 0x08
+    world.mono = world.tec = True
+    with altair.AltairCamera() as cam:
+        _, header = cam.frame(0.01)
+        handle = lib.Altaircam.opened[-1]
+        assert cam.temperature() == pytest.approx(-5.2)
+    assert handle.options[lib.ALTAIRCAM_OPTION_TEC] == 1 and handle.target == -100   # tenths of a degree
+    assert header["CCD-TEMP"] == pytest.approx(-5.2) and header["SET-TEMP"] == -10.0
+
+
+def test_without_a_target_the_cooler_is_left_as_it_is_but_the_temperature_is_still_said(sdk, world):
+    world.tec = True
+    with altair.AltairCamera() as cam:
+        _, header = cam.frame(0.01)
+        handle = sdk.Altaircam.opened[-1]
+    assert not hasattr(handle, "target") and "SET-TEMP" not in header
+    assert header["CCD-TEMP"] == pytest.approx(-5.2)
+
+
+def test_the_cooler_target_is_a_setting_the_application_can_change():
+    import config
+    assert config.checked("camera", "tec_target", "-10") == -10
+    assert config.checked("camera", "tec_target", "") is None
+    with pytest.raises(ValueError):
+        config.checked("camera", "tec_target", "-80")
