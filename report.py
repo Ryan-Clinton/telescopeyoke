@@ -88,6 +88,19 @@ def last_miss(k, first_night):
     return max(misses, key=lambda n: n["night"]) if misses else None
 
 
+def calibration_of(stack):
+    """What the science stack's header says about its calibration: whether
+    calibrated, and the masters used (restack writes them, stacking.stack_cards).
+    None when there is no stack to read or it records nothing (the 183C's older stacks)."""
+    if not stack or not Path(stack).is_file():
+        return None
+    from astropy.io import fits
+    head = fits.getheader(stack)
+    found = {key: head[key] for key in ("TY_CALIB", "TY_DARK", "TY_FLAT", "TY_FDARK", "TY_BPM", "TY_BIAS",
+                                        "TY_MISS") if key in head}
+    return found or None
+
+
 def assemble(name, k, folder, rec, when, earlier=None):
     """The packet as a dict, from what is on file. `earlier` is the history
     of the place in stacks before the first detection (forced.py), for the
@@ -106,7 +119,12 @@ def assemble(name, k, folder, rec, when, earlier=None):
                                                 found.get("alignment_residual_px", 0.2), scale),
         "discovered_utc": when, "night": first["night"],
         "mag": first.get("mag"), "mag_error": first.get("error") or (round(1.0857 / (first.get("score") or 5.0), 2)),
-        "band": BAND,
+        # The band as the night's depth record names it: a filtered stack's own
+        # instrumental band ("L (Optolong), 183M") with its zero point; the
+        # 183C's unfiltered wording when the record names none.
+        "band": depth.get("band") if depth.get("band_key") else BAND,
+        "zero_point": depth.get("zeropoint"),
+        "calibration": calibration_of(found.get("new")),
         "limit_5sigma": (depth.get("limit_5sigma") or {}).get("sky"),
         "nights_seen": sum(1 for n in k["nights"] if n["seen"]), "nights_measured": len(k["nights"]),
         "reference": found.get("reference"), "science": found.get("new"),

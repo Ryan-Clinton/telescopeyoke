@@ -20,6 +20,8 @@
     "mag": {"type": ["number", "null"]},
     "mag_error": {"type": ["number", "null"]},
     "band": {"type": "string"},
+    "zero_point": {"type": ["number", "null"], "description": "the night's zero point against Gaia G, from its depth record"},
+    "calibration": {"type": ["object", "null"], "description": "the science stack's calibration: TY_CALIB and the masters used"},
     "limit_5sigma": {"type": ["number", "null"]},
     "nights_seen": {"type": "integer"},
     "nights_measured": {"type": "integer"},
