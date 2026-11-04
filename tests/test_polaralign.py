@@ -197,3 +197,30 @@ def test_where_starts_the_night_from_a_rich_field_good_for_focus_and_the_polar_t
         ha = (10.0 - t["ra"] + 180) % 360 - 180
         polaralign.positions(ha, t["dec"], ha > 0, site, f["step"], house)
     assert polaralign.RICH_FIELDS[0] == "NGC 869"
+
+
+def test_where_leaves_out_fields_near_the_meridian_and_names_not_in_the_catalogue():
+    """The handset may take either side within NEAR_MERIDIAN, and a name the
+    catalogue lacks is skipped, not a crash (the review of 4 November 2026)."""
+    import interface
+    import mount
+    import polaralign
+    site = {"latitude": 55.0, "longitude": -6.5}
+    stars = {"Overhead": {"ra": 10.0, "dec": 50.0}, "East": {"ra": 50.0, "dec": 45.0}}
+
+    def find(name):
+        if name not in stars:
+            raise interface.Refusal("TARGET_UNKNOWN", name)
+        return stars[name]
+    found = polaralign.where(site, {}, sidereal=10.0, fields=["Gone", "Overhead", "East"], find=find)
+    assert [f["field"] for f in found] == ["East"]
+    assert mount.NEAR_MERIDIAN * 15 > 0
+
+
+def test_the_polar_check_reads_the_side_as_the_mount_does():
+    """A target south of the equator on the east side reads about 357° on the
+    Dec axis: not over the pole (mount.over_pole, 3 November 2026)."""
+    import inspect
+    import polaralign
+    source = inspect.getsource(polaralign)
+    assert "axes()[1] > 90" not in source and "dec_axis > 90" not in source

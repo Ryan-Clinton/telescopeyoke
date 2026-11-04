@@ -181,11 +181,16 @@ def where(site, skyline=None, sidereal=None, fields=None, find=None):
     sidereal = mount.true_sidereal(site) if sidereal is None else sidereal
     out = []
     for rank, name in enumerate(fields or RICH_FIELDS):
-        t = find(name)
+        try:
+            t = find(name)
+        except interface.Refusal:          # not in the catalogue: skipped, never a crash
+            t = None
         if not t:
             continue
         ha = mount.wrap(sidereal - t["ra"])
-        if t["dec"] > 75 or abs(ha) > mount.MAX_HOUR_ANGLE * 15:
+        # Near the meridian the handset may put the tube on either side, and
+        # the check would turn the other way from the one judged here.
+        if t["dec"] > 75 or abs(ha) > mount.MAX_HOUR_ANGLE * 15 or abs(ha) < mount.NEAR_MERIDIAN * 15:
             continue
         altitude, azimuth = to_altaz(vector(ha, t["dec"]), site["latitude"])
         if altitude < FOCUS_ALTITUDE:
@@ -274,7 +279,7 @@ def _measure(scope, site, step=STEP, skyline=None):
     dec_handset = mount.wrap(scope.radec()[1])
     # Step away from the meridian, on the side the tube is already on. All
     # three positions are checked before the first move.
-    planned = positions(start_ha, dec_handset, scope.axes()[1] > 90, site, step, skyline)
+    planned = positions(start_ha, dec_handset, mount.over_pole(scope.axes()[1]), site, step, skyline)
     points = []
     try:
         for i, (target_ha, _) in enumerate(planned):
@@ -287,7 +292,7 @@ def _measure(scope, site, step=STEP, skyline=None):
             # where the handset believes it is, put right by the pointing
             # error last measured on this side. Without that the search
             # began 6° out on the real mount and one solve took a minute.
-            error = mount.load_pointing_error(scope.axes()[1] > 90)
+            error = mount.load_pointing_error(mount.over_pole(scope.axes()[1]))
             hint_ra = mount.true_sidereal(site) - (target_ha + error[0])
             hint_dec = dec_handset + error[1]
             found = (scope.where_really(hint_ra, hint_dec, radius=40)
@@ -321,7 +326,7 @@ def _measure(scope, site, step=STEP, skyline=None):
             dec_axis = scope.axes()[1]
             if not points:
                 first_axis = dec_axis
-            moved_by = (dec_axis - first_axis) * (-1 if dec_axis > 90 else 1)
+            moved_by = (dec_axis - first_axis) * (-1 if mount.over_pole(dec_axis) else 1)
             points.append((ha, dec - moved_by))
             tell(taken=i + 1)
             scope.say(f"position {i + 1}: hour angle {ha / 15:+.3f} h, Dec {dec:+.2f}°, "
@@ -655,7 +660,7 @@ def run(args):
         azimuth, altitude, scatter = spread(runs, site["latitude"])
     turned = getattr(args, "turned", None)
     # Kept for each side, for a --cross-check from the other.
-    side = "flipped" if scope.axes()[1] > 90 else "normal"
+    side = "flipped" if mount.over_pole(scope.axes()[1]) else "normal"
     try:
         sides = json.loads(SIDES_FILE.read_text(encoding="utf-8"))
     except (OSError, ValueError):
