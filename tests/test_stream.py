@@ -489,3 +489,27 @@ def test_an_ffmpeg_that_broke_off_is_reaped_not_left_behind():
     said = []
     assert stream.ended(Gone(), said.append) == -9
     assert calls == ["close", "kill", "wait"] and "exit -9" in said[0]
+
+
+def test_the_cloud_card_says_what_tonight_hopes_for_without_the_telescope_picture():
+    """4 November 2026: waiting for a gap, the stream showed the cloud; asked
+    for "a card saying what we hope to achieve if the cloud clears"."""
+    import time as clock
+    import stream
+    import streamlook
+    names = {"M31": "Andromeda Galaxy", "M33": "Triangulum Galaxy"}
+    assert stream.hope_words({"what": "M31-P4", "why": "a second look at M31-P4-x (seen on 2 nights)"},
+                             names).startswith("Look again at a faint spot in the Andromeda Galaxy seen on 2")
+    assert "novae" in stream.hope_words({"what": "m33-novae", "why": "last run 02 Nov"}, names)
+    assert "Triangulum" in stream.hope_words({"what": "m33-novae", "why": "last run 02 Nov"}, names)
+    assert "edge to edge" in stream.hope_words({"what": "m31-panels", "why": ""}, names)
+    brief = {"clear_window": ["2026-11-04T00:00:00+00:00", "2026-11-04T07:00:00+00:00"],
+             "recommendation": {"steps": [{"what": "m31-novae", "why": "last run 02 Nov",
+                                           "start": "2026-11-04T02:20:00+00:00"}]}}
+    lines = stream.cloud_lines(brief)
+    assert lines["hopes"][0][0] == "02:20" and "00:00 to 07:00 UTC" in lines["sky"]
+    canvas = streamlook.compose({"kind": "cloud", "target": "", "now": clock.time(), "cloud": lines})
+    words = " ".join(w["words"] for w in canvas.written)
+    assert "WAITING FOR THE CLOUD TO CLEAR" in words and "IF IT CLEARS" in words
+    assert stream.cloud_lines(None) == {"hopes": [], "sky": None}
+    streamlook.vertical({"kind": "cloud", "now": clock.time(), "cloud": lines})

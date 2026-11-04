@@ -437,6 +437,60 @@ def open_lines(brief, st):
     return lines
 
 
+def hope_words(step, names=None):
+    """One step of tonight's plan (agent.night()'s recommendation) as what it
+    hopes to find, in words for someone who has never used a telescope."""
+    import re
+    if names is None:
+        import streamlook
+        names = {k: v.get("common") for k, v in streamlook.targets().get("targets", {}).items()}
+    what, why = step.get("what") or "", step.get("why") or ""
+    field = what.split("-")[0].upper() if what.lower().startswith(("m31", "m33")) else what
+    name = f"the {names[field]}" if names.get(field) else field
+    nights = re.search(r"seen on (\d+) nights", why)
+    if what.lower() == "tabby":
+        return "Measure Tabby's star, the star with the strangest dips known, for a new dip"
+    if nights:
+        return (f"Look again at a faint spot in {name} seen on {nights.group(1)} earlier nights: "
+                "a new star, or nothing?")
+    if "novae" in what:
+        return f"Search {name} for novae: stars that suddenly flare up thousands of times brighter"
+    if "panels" in what:
+        return f"Photograph {name} edge to edge and compare it with earlier nights, star by star"
+    return f"Photograph {name}"
+
+
+def cloud_lines(brief):
+    """The waiting-for-cloud card (4 November 2026: "a card saying what we
+    hope to achieve if the cloud clears"): [(time, hope)] for tonight's plan
+    and the forecast's clear spell in words, from agent.night(). Never the site."""
+    steps = ((brief or {}).get("recommendation") or {}).get("steps") or []
+    hopes = [((utc_clock(s.get("start")) or "")[:5], hope_words(s)) for s in steps[:5]]
+    window = (brief or {}).get("clear_window") or []
+    sky = (f"The forecast gives a clear spell {utc_clock(window[0])[:5]} to {utc_clock(window[1])}"
+           if len(window) == 2 and all(utc_clock(t) for t in window) else None)
+    return {"hopes": hopes, "sky": sky}
+
+
+class Hopes:
+    """Tonight's plan for the cloud card, read on a thread of its own every
+    HOPES_S (it reads the forecast), so the picture never waits for it."""
+
+    def __init__(self, get=None):
+        self.brief, self.read_at, self.get = None, None, get
+
+    def __call__(self, now):
+        import threading
+        if self.read_at is None or now - self.read_at >= HOPES_S:
+            self.read_at = now
+            threading.Thread(target=lambda: setattr(self, "brief", night_brief(self.get) or self.brief),
+                             daemon=True).start()
+        return self.brief
+
+
+HOPES_S = 600
+
+
 def night_brief(get=None):
     """Tonight's plan (agent.night), or None when it cannot be had."""
     try:
@@ -508,6 +562,10 @@ def frame(st, now=None, mode="imaging"):
             state["story"] = streamstory.plan(state, st, now)
             return streamlook.compose(state).image
         mode = "imaging"                # gone between looking and drawing: what was there before
+    if mode == "cloud":
+        # Waiting for a gap: no telescope picture, what tonight hopes for instead.
+        state = {"kind": "cloud", "target": "", "now": now, "cloud": cloud_lines(st.get("night_brief"))}
+        return streamlook.compose(state).image
     if mode == "open" and st.get("night_brief"):
         state = {"kind": "open", "target": "", "now": now, "open": {"lines": open_lines(st["night_brief"], st)}}
     elif mode == "between":
@@ -864,6 +922,8 @@ def frame_vertical(st, now=None, mode="imaging"):
     state = streamlook.from_status(st, now, session_of(st))
     if mode in ("focus", "polar"):
         state = dict(state, kind=mode)
+    if mode == "cloud":
+        state, picture = dict(state, kind="cloud", cloud=cloud_lines(st.get("night_brief"))), None
     return streamlook.vertical(state, picture).image
 
 
@@ -987,6 +1047,7 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
     composer = Composer(draw=lambda st, now, mode: frame(st, now, mode).resize(size)
                         if size != (WIDTH, HEIGHT) else frame(st, now, mode))
     tick = clock()
+    hopes = Hopes()
     import director
     segment, segment_state, directed, looked_at, tones, voice = None, None, None, -1e9, None, None
     phones = None             # the 9:16 feed, while on air with a vertical key
@@ -1025,8 +1086,11 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
             # What the telescope sees, in the usual layout: no card ever takes
             # its place (no night-opens plan, no between-targets steps; 30
             # October 2026).
-            mode = segment or "imaging"
-            composer.view = (dict(st, director=directed), mode)
+            # The one card: waiting for the cloud to clear, what tonight hopes
+            # for in place of a starless picture (asked for, 4 November 2026).
+            cloudy = not segment and directed.get("programme") == director.CLOUD
+            mode = segment or ("cloud" if cloudy else "imaging")
+            composer.view = (dict(st, director=directed, night_brief=hopes(now) if cloudy else None), mode)
             if phones is not None and phones.dead and now - phones.dead >= 60 and process is not None:
                 phones.stop()
                 upright = vertical_address()

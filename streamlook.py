@@ -896,6 +896,32 @@ def open_card(c, s, stack):
     c.text((x, HEIGHT - MARGIN_Y - 60), "TELESCOPEYOKE", "bold", 26, "accent", on=shade)
 
 
+def cloud_card(c, s):
+    """Waiting for the cloud to clear: no telescope picture (it shows only
+    cloud), and what tonight hopes to do once it clears (4 November 2026)."""
+    k = s.get("cloud") or {}
+    x, y = MARGIN_X + 60, 170
+    c.text((x, y), "CLOUD OVER THE TELESCOPE", "bold", 24, "secondary")
+    c.text((x, y + 40), "WAITING FOR THE CLOUD TO CLEAR", "bold", 60, "text")
+    y += 140
+    if k.get("sky"):
+        c.text((x, y), k["sky"], "sans", 28, "secondary")
+        y += 60
+    if k.get("hopes"):
+        c.text((x, y), "IF IT CLEARS, TONIGHT WE HOPE TO", "bold", 24, "accent")
+        y += 50
+        for at, words in k["hopes"]:
+            if y > HEIGHT - MARGIN_Y - 140:
+                break
+            if at:
+                c.text((x, y), at, "mono", 28, "secondary")
+            y = c.wrap((x + 140, y - 2), words, "sans", 32, WIDTH - 2 * MARGIN_X - 260, "text", gap=1.25) + 22
+    else:
+        c.wrap((x, y), "The telescope is looking for stars every 30 seconds and starts the night's work "
+               "as soon as it finds them.", "sans", 32, WIDTH - 2 * MARGIN_X - 120, "text")
+    c.text((x, HEIGHT - MARGIN_Y - 60), "TELESCOPEYOKE", "bold", 26, "accent")
+
+
 CRAWL_BOX = (MARGIN_X, HEIGHT - MARGIN_Y - 34, WIDTH - MARGIN_X, HEIGHT - MARGIN_Y + 4)   # over the footer
 CRAWL_SPEED = 70           # pixels a second: slow enough to read
 
@@ -1230,6 +1256,10 @@ def compose(state, stack=None, single=None):
         open_card(c, state, stack)
         footer(c, state)
         return c
+    if state["kind"] == "cloud":
+        cloud_card(c, state)
+        footer(c, state)
+        return c
     header(c, state)
     sky_area(c, state, stack, single)
     side_panel(c, state)
@@ -1254,6 +1284,20 @@ def vertical(state, picture=None):
     target = "THE MOON" if state.get("kind") == "moon" else (state.get("target") or "").upper()
     if state.get("kind") in ("focus", "polar"):
         target = {"focus": "FOCUSING", "polar": "POLAR ALIGNMENT"}[state["kind"]]
+    if state.get("kind") == "cloud":
+        c.text((w // 2, 130), "WAITING FOR", "bold", 76, "text", anchor="ma")
+        c.text((w // 2, 220), "CLEAR SKY", "bold", 76, "text", anchor="ma")
+        k, y = state.get("cloud") or {}, 380
+        if k.get("hopes"):
+            c.text((60, y), "IF IT CLEARS, TONIGHT WE HOPE TO", "bold", 34, "accent")
+            y += 70
+            for at, words in k["hopes"]:
+                if y > h - 300:
+                    break
+                y = c.wrap((60, y), (f"{at}  " if at else "") + words, "sans", 40, w - 120, "text", gap=1.25) + 30
+        if k.get("sky") and y < h - 220:
+            c.wrap((60, y + 20), k["sky"], "sans", 34, w - 120, "secondary")
+        return c
     if target:
         c.text((w // 2, 130), target, "bold", 76, "text", anchor="ma")
     else:
