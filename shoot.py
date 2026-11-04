@@ -866,6 +866,10 @@ def main():
                     help="on a light path with the filter wheel: the filter for the whole run, moved to, read "
                          "back and focused (its offset from L) before the first frame; default the target's goals' "
                          "filter, L when they name none. Refused on a light path without the wheel (the 183C's)")
+    ap.add_argument("--blocks", metavar="FILTER:MINUTES,...",
+                    help="on a light path with the filter wheel: several filters in turn, such as R:10,G:10,B:10, "
+                         "each its own session with its own filter transaction, and the cooled sensor kept cold "
+                         "between them (one cool-down, one warm-up); in place of --filter, --minutes and --frames")
     ap.add_argument("--no-save", action="store_true", help="do not keep the raw frames")
     ap.add_argument("--no-restack", action="store_true", help="skip the final quality pass")
     ap.add_argument("--no-live", action="store_true",
@@ -882,6 +886,13 @@ def main():
             ap.error("--accepted takes the place of --frames")
         # What the page shows as asked; the run ends by goal_reached().
         args.frames = capture_rule(args)["most_frames"]
+    if args.blocks:
+        if args.filter or args.minutes or args.frames is not None or args.accepted is not None:
+            ap.error("--blocks gives each filter its minutes: not with --filter, --minutes, --frames or --accepted")
+        try:
+            args.blocks = filters.blocks(args.blocks)
+        except ValueError as problem:
+            ap.error(f"--blocks: {problem} (here the number is minutes)")
     args.frames = frames_asked(args.frames, args.minutes)
     if args.dither and args.no_recentre:
         ap.error("--dither moves the mount between frames; it cannot go with --no-recentre")
@@ -911,6 +922,13 @@ def plan(args):
         except interface.Refusal as refusal:
             # shoot.py carries on without the mount when it cannot be moved.
             out["goto"] = {"would_move": False, "error": refusal.as_error()}
+    if getattr(args, "blocks", None):
+        out["blocks"] = [{"filter": name, "minutes": minutes} for name, minutes in args.blocks]
+        for name, _ in args.blocks:
+            try:
+                filters.steps_between(filters.DEFAULT, name)
+            except interface.Refusal as refusal:
+                out.setdefault("refused", []).append({"filter": name, "why": str(refusal)})
     for key, value in out.items():
         print(f"{key}: {value}")
     return out
@@ -1009,12 +1027,55 @@ def hold_the_rig(name, path=None):
 def run(args):
     rig = hold_the_rig(args.name)     # kept open, so locked, for the whole run
     try:
+        if getattr(args, "blocks", None):
+            return in_blocks(args)
         return held(args)
     finally:
         # Let go as the run ends, however it ends: on 1 November 2026 a run
         # stopped by a jammed camera kept the lock while anything still held
         # its error, and the next run in the same process was refused.
         rig.close()
+
+
+def in_blocks(args):
+    """--blocks: one session per filter, in turn, under the one rig lock.
+    4 November 2026: each filter as its own run warmed the cooled sensor at
+    its end and cooled it again from the air's temperature at the next start,
+    15-20 minutes lost at every change. Here a block that ends on its minutes
+    leaves the sensor cold for the next one (the camera is closed only for the
+    filter transaction and the re-centre, as at every dither); the last block,
+    and any block that ends otherwise (cloud, a stop, an error, a refusal),
+    warms it as every run does. Each filter keeps every check of its own: the
+    focus offset (REFOCUS_NEEDED), the wheel's confirmed position."""
+    results = []
+    for number, (name, minutes) in enumerate(args.blocks, 1):
+        last = number == len(args.blocks)
+        args.filter, args.minutes, args.frames = name, float(minutes), frames_asked(None, minutes)
+        args.keep_cold, args.ended_on_time = not last, False
+        print(f"\nBlock {number} of {len(args.blocks)}: {name} for {minutes:g} min", flush=True)
+        try:
+            results.append(held(args))
+        except BaseException:
+            if args.ended_on_time and args.keep_cold:
+                warm_after_block(args)   # left cold for a block that will not now follow
+            raise
+        if not last and not args.ended_on_time:
+            print(f"  block {number} ended before its minutes: the rest are not taken (the sensor has been warmed)",
+                  flush=True)
+            break
+    return {"blocks": results}
+
+
+def warm_after_block(args):
+    """The warm-up for a sensor a block left cold when no block follows: the
+    camera opened again (its cooling taken up where it is, the temperature it
+    began at remembered by altair.py) and warmed as at any run's end."""
+    try:
+        with Camera(gain=args.gain) as cam:
+            warm(cam)
+    except Exception as problem:
+        print(f"  camera: could not be opened to warm the sensor ({problem}); closing it turned the cooler off",
+              flush=True)
 
 
 def filter_for_run(args, say=None):
@@ -1279,7 +1340,11 @@ def image(args, session, exposure, moving, holding, tracker):
                             reopening = go_on()      # the last frame on a pause is the run's end
                             break
                 finally:
-                    if not reopening:
+                    if told.get("timed"):
+                        args.ended_on_time = True
+                    # --blocks: a block ended on its minutes leaves the sensor
+                    # cold for the next filter (in_blocks warms it if none follows).
+                    if not reopening and not (getattr(args, "keep_cold", False) and told.get("timed")):
                         warm(cam)
             if jammed is not None:
                 # A jammed camera is opened again and the run goes on in the same
