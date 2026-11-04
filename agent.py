@@ -829,7 +829,7 @@ def big_targets(rep, limit=5, data=None, now=None):
 FOLLOW_VERDICTS = ("unexplained, strong", "unexplained, weak", "likely explained")   # worth a look of our own
 
 
-def research_tonight(demo=False, cfg=None, today=None):
+def research_tonight(demo=False, cfg=None, today=None, now=None):
     """The research in the night's terms: the queue (ty research's numbers),
     the most intriguing leads looked into, and those this telescope can
     watch that are up in tonight's dark hours, still not settled
@@ -849,7 +849,7 @@ def research_tonight(demo=False, cfg=None, today=None):
         if not row["can_watch"] or row["verdict"] not in FOLLOW_VERDICTS or rec.get("ra") is None:
             continue
         up = investigate.follow_up({"star": rec["star"], "ra": rec["ra"], "dec": rec["dec"], "mag": rec.get("mag")},
-                                   rec.get("deepest_percent", 0.0), cfg, months=1, today=today)["up"]
+                                   rec.get("deepest_percent", 0.0), cfg, months=1, today=today, now=now)["up"]
         if up and up[0]["dark_hours_up"] > 0:
             tonight.append(dict(row, dark_hours_up=up[0]["dark_hours_up"], best=up[0]["best"],
                                 command=f"./mount.py goto {rec['ra']:.4f} {rec['dec']:+.4f} --dry-run"))

@@ -263,7 +263,8 @@ def test_this_months_hours_are_tonights_not_a_night_already_gone():
     import investigate
     star = {"star": "KIC 6448574", "ra": 293.663, "dec": 41.874, "mag": 12.0, "mag_band": "Kepler"}
     # 3 November: the 1st has gone; a star at +42° is up in the west after dark
-    w = investigate.follow_up(star, 10.0, cfg=config.example(), months=2, today=datetime.date(2026, 11, 3))
+    w = investigate.follow_up(star, 10.0, cfg=config.example(), months=2, today=datetime.date(2026, 11, 3),
+                              now=datetime.datetime(2026, 11, 3, 17, 0, tzinfo=datetime.timezone.utc))
     up = {u["month"]: u["dark_hours_up"] for u in w["up"]}
     assert up["2026-11"] > 0 and up["2026-12"] > 0
 
@@ -357,7 +358,8 @@ def test_the_night_and_the_briefing_carry_the_research_and_a_lead_up_tonight(tmp
         "lead": "KIC-2", "kind": "kepler", "star": "KIC 2", "verdict": "unexplained, weak", "tier": "unusual",
         "contrast": 12.0, "dips": 2, "deepest_percent": 6.0, "ra": 293.66, "dec": 41.87, "mag": 12.0,
         "follow_up": {"can_watch": True, "reasons": ["in range"]}, "investigated": "2026-11-01T10:00:00+00:00"}))
-    r = agent.research_tonight(cfg=config.example(), today=datetime.date(2026, 11, 3))
+    r = agent.research_tonight(cfg=config.example(), today=datetime.date(2026, 11, 3),
+                              now=datetime.datetime(2026, 11, 3, 17, 0, tzinfo=datetime.timezone.utc))
     assert r["unexplained"] == 1 and r["intriguing"][0]["star"] == "KIC 2"
     up = r["observe_tonight"][0]                                   # +42°: up after dark in November
     assert up["dark_hours_up"] > 0 and "--dry-run" in up["command"]

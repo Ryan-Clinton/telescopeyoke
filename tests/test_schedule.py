@@ -1,4 +1,5 @@
 """Tonight's schedule: its times, its progress, and running it."""
+from datetime import datetime
 import json
 import os
 import time
@@ -296,7 +297,10 @@ def test_a_step_with_an_end_time_tells_its_run_how_long_it_has(monkeypatch):
     """The run finishes gracefully, picture and all; the hard stop is only a backstop."""
     monkeypatch.setattr(schedule, "last_field", lambda: "M33")
     schedule.save({"steps": []})
-    schedule.add("M81", 60, ["./shoot.py", "M81", "--frames", "0"], until="23:59")
+    # Two hours from now, as a full date and time: "23:59" was already gone
+    # after midnight and the step was skipped (4 November 2026, 00:30).
+    later = datetime.fromtimestamp(time.time() + 7200).strftime("%Y-%m-%d %H:%M")
+    schedule.add("M81", 60, ["./shoot.py", "M81", "--frames", "0"], until=later)
     ran = []
     schedule.run(say=lambda s: None, sleep=lambda s: None,
                  start=lambda cmd: ran.append(cmd) or types.SimpleNamespace(returncode=0))

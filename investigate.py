@@ -441,7 +441,7 @@ def judge(star, checks):
 
 # --- e. this telescope ----------------------------------------------------------------
 
-def follow_up(star, deepest, cfg=None, months=MONTHS, today=None):
+def follow_up(star, deepest, cfg=None, months=MONTHS, today=None, now=None):
     """Whether this telescope could watch the star, and when it is up."""
     import sky
     import variables
@@ -457,7 +457,7 @@ def follow_up(star, deepest, cfg=None, months=MONTHS, today=None):
             year = today.year + (today.month - 1 + k) // 12
             # Tonight for this month, the 15th for the rest: a night already
             # gone (the 1st, once past) has no hours left to be up in.
-            night = sky.Night(cfg, today if k == 0 else date(year, month, 15))
+            night = sky.Night(cfg, today if k == 0 else date(year, month, 15), now=now)
             n = len(night.unix)
             alt, az = night.altaz_fixed([star["ra"]], [star["dec"]])
             r = night.assess({"id": star["star"], "kind": "star"}, np.full(n, star["ra"]), np.full(n, star["dec"]),
