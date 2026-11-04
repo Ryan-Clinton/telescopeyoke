@@ -86,7 +86,7 @@ DEFAULTS = {
     # times wider than in L the first frame after a change may be.
     # sets: the parfocal sets, filters that focus together, groups split by ";".
     "filterwheel": {"filters": "", "makers": "", "offset_tolerance": 16, "size_tolerance": 1.25,
-                    "sets": "L,R,G,B;SII,Ha,OIII"},
+                    "sets": "L,R,G,B;SII,Ha,OIII", "check_every_s": 300},
     # camera: the camera profile to use when both are plugged in; blank, the
     # one plugged in ([cameras.NAME], docs/mono-upgrade.md).
     # processing_scale: 2, a mono camera's frames are stacked and searched in
@@ -435,6 +435,10 @@ SETTINGS = (
      "(L,R,G,B;SII,Ha,OIII). No focus offset within a set; one from L's set to each other set, measured on "
      "three nights before it is used. A filter the proving night (./focus.py --walk-in --prove-sets) finds "
      "outside its set gets its own offset.", {"optional": True}),
+    ("filterwheel", "check_every_s", "Filter wheel: check during a run (s)", "whole",
+     "How often a run asks the wheel again which filter is in the light path, besides each time the camera "
+     "opens: a wheel that has moved or dropped off USB stops the run before the next frame is kept.",
+     {"min": 30, "max": 3600}),
     ("mount", "link", "Mount reached by", "choice",
      "handset: a serial lead to the SynScan handset. wifi: the SynScan Wi-Fi adapter. eqdir: an EQDIR lead. "
      "The last two have no handset.", {"choices": ["handset", "wifi", "eqdir"]}),

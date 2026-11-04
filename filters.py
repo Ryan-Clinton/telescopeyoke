@@ -40,6 +40,7 @@ last run in L: wider by more than [filterwheel] size_tolerance times means
 refocus (REFOCUS_NEEDED), not carry on. Kept per camera and train, in
 config.camera_folder()/cache/filter-focus-TRAIN.json.
 """
+import os
 import statistics
 import time
 from datetime import datetime
@@ -112,9 +113,10 @@ def blocks(text):
 # --- focus offsets ------------------------------------------------------------------
 
 def keep_measurement(name, offset, temperature=None, l_hfr=None, f_hfr=None, approach="in", night=None,
-                     where=None):
+                     where=None, verified=False):
     store = load(where)
     store["measurements"].append({"filter": name, "offset": int(offset), "approach": approach,
+                                  "verified": bool(verified),
                                   "night": night or datetime.now().strftime("%Y-%m-%d"),
                                   "temperature_c": temperature, "l_hfr": l_hfr, "f_hfr": f_hfr,
                                   "when": time.time()})
@@ -175,8 +177,13 @@ def offsets(store=None, tolerance=None):
             why = "not every measurement approached focus from the same side (inward)"
         elif spread > tolerance:
             why = f"spread {spread:.0f} half-steps, more than the tolerance of {tolerance:g}"
+        # A first night: one measurement the person watched and marked
+        # verified may be used on a run they start themselves, never on a
+        # scheduled (unattended) one, and frames say it was provisional.
+        checked = [m for m in ms if m.get("verified")]
         out[key] = {"mean": round(statistics.mean(values), 1), "spread": None if spread is None else round(spread, 1),
                     "count": len(ms), "nights": nights, "usable": why is None, "why": why,
+                    "provisional": None if why is None or not checked else round(checked[-1]["offset"], 1),
                     "temperatures_c": [m.get("temperature_c") for m in ms]}
     return out
 
@@ -191,7 +198,11 @@ def offset_of(name, store=None, tolerance=None):
     found = offsets(store, tolerance).get(key)
     if found is None:
         return None, f"no focus offset measured for {key}"
-    return (found["mean"], None) if found["usable"] else (None, f"{key}: {found['why']}")
+    if found["usable"]:
+        return found["mean"], None
+    if found.get("provisional") is not None and not os.environ.get("TY_SCHEDULED"):
+        return found["provisional"], None          # attended only: the run notes it (TY_FOCPRV)
+    return None, f"{key}: {found['why']}"
 
 
 def prove_sets(positions, tolerance=None, where=None, night=None, temperature=None):
@@ -225,6 +236,15 @@ def prove_sets(positions, tolerance=None, where=None, night=None, temperature=No
                                           "proving": True})
     save(store, where)
     return {"confirmed": confirmed, "own": own, "positions": positions}
+
+
+def provisional(name, store=None, tolerance=None):
+    """True when `name`'s focus offset in use is a single verified
+    measurement (a first night), not one proved on three nights."""
+    store = store if store is not None else load()
+    key = key_of(name, store)
+    found = offsets(store, tolerance).get(key)
+    return bool(found and not found["usable"] and found.get("provisional") is not None)
 
 
 def steps_between(current, wanted, store=None, tolerance=None):
@@ -367,7 +387,8 @@ def turn_wheel(wanted, say=print, open_wheel=None):
     return number
 
 
-def measure_offset(name, drive, walk, wheel_to, say=print, temperature=None, back=OFFSET_BACK, where=None):
+def measure_offset(name, drive, walk, wheel_to, say=print, temperature=None, back=OFFSET_BACK, where=None,
+                   verified=False):
     """One measurement of filter `name`'s focus offset from L, with the
     motor (`drive`, a focus.Settled), a walk-in (`walk(drive)`, returning
     focus.walk_in's result) and `wheel_to(filter)`: L in the path, a walk-in;
@@ -390,7 +411,7 @@ def measure_offset(name, drive, walk, wheel_to, say=print, temperature=None, bac
     at_f = began + second["best_at"]
     offset = at_f - at_l
     keep_measurement(name, offset, temperature=temperature, l_hfr=first["best_hfr"], f_hfr=second["best_hfr"],
-                     where=where)
+                     where=where, verified=verified)
     set_focused(name, where)
     found = offsets(load(where)).get(key_of(name, load(where)), {})
     say(f"offset: {name} is {offset:+d} half-steps from L (HFR {second['best_hfr']}); "

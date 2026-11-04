@@ -1034,6 +1034,9 @@ def filter_for_run(args, say=None):
         return None
     wanted = asked or filters.for_target(args.name)
     done = filters.change(wanted, say=say)
+    # A focus offset in use that rests on one verified measurement: every
+    # frame says so (TY_FOCPRV), so it can be told apart later.
+    args.focus_provisional = done["steps"] != 0 and (filters.provisional(wanted) or filters.provisional(done["from"]))
     say(f"filter {wanted} in the light path (position {done['position']})"
         + (f", focus moved {done['steps']:+d} half-steps from {done['from']}'s" if done["steps"] else ""))
     return done
@@ -1215,7 +1218,15 @@ def image(args, session, exposure, moving, holding, tracker):
                     # wheel (the 183C's) is never asked, and its frames carry no
                     # FILTER, as before.
                     in_path = in_the_path(getattr(args, "light_path", None)) if wheel_in_train() else None
+                    # And again every few minutes of a long stretch with no reopen:
+                    # a wheel that moved or dropped off USB stops the run before
+                    # the next frame is kept.
+                    wheel_every = float(config.hardware().get("filterwheel", {}).get("check_every_s", 300))
+                    wheel_asked = time.monotonic()
                     while go_on():
+                        if in_path is not None and time.monotonic() - wheel_asked >= wheel_every:
+                            in_path = in_the_path(getattr(args, "light_path", None))
+                            wheel_asked = time.monotonic()
                         try:
                             mosaic, header = cam.frame(exposure)
                         except CameraError as problem:
@@ -1223,6 +1234,8 @@ def image(args, session, exposure, moving, holding, tracker):
                             reopening = jams < JAM_REOPENS
                             break
                         sxwheel.cards(header, in_path)
+                        if getattr(args, "focus_provisional", False):
+                            header["TY_FOCPRV"] = (True, "focus offset from one verified measurement")
                         jams = 0
                         index += 1
                         tracker.took(index)

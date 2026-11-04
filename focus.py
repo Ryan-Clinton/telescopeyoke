@@ -1569,7 +1569,8 @@ def run_motor(args, mode="focus"):
                         thermistor = None
                     return filters.measure_offset(
                         args.offset, drive, lambda d: walk_in(d, read, usual, say=say, ring=ring, live=live),
-                        lambda name: filters.turn_wheel(name, say=progress), say=progress, temperature=thermistor)
+                        lambda name: filters.turn_wheel(name, say=progress), say=progress, temperature=thermistor,
+                        verified=args.verified)
                 result = walk_in(drive, read, usual, say=say, ring=ring, live=live)
                 if filters.wheel_in_train():
                     # What the drawtube is now focused for: the filter the wheel says
@@ -1726,6 +1727,10 @@ def main():
     ap.add_argument("--offset", metavar="FILTER",
                     help="with --walk-in, on a light path with the filter wheel: a walk-in in L, out a little, a "
                          "walk-in in FILTER, and the difference kept as one measurement of its set's focus offset")
+    ap.add_argument("--verified", action="store_true",
+                    help="with --offset, when you watched it and the stars were sharp in both filters: this one "
+                         "measurement may be used on runs you start yourself (never scheduled ones) until three "
+                         "nights prove it")
     ap.add_argument("--prove-sets", action="store_true",
                     help="with --walk-in, once on the first clear night: a walk-in in every filter, to confirm the "
                          "parfocal sets ([filterwheel] sets); one outside its set gets its own offset")

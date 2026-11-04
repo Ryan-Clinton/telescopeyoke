@@ -529,7 +529,9 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
         mark_id(step["id"], status="running", started=time.time())
         with activity.doing("Schedule", step["label"], number, len(steps)):
             try:
-                done = start(command)
+                # TY_SCHEDULED: the step runs unattended, so what needs a person
+                # watching (a focus offset measured only once) is refused in it.
+                done = start(command, env={**os.environ, "TY_SCHEDULED": "1"})
             except Exception as error:
                 # A step that cannot even start is a failed step, not the end
                 # of the runner: on 20 October 2026 a command cut wrongly
