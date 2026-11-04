@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/skylinecheck.schema.json",
+  "title": "Skyline check",
+  "description": "data of: skylinecheck.py NIGHT --json. Every frame of a recorded night put under the planner's limit it fell below (clear, inside the skyline's margin, at or below the measured skyline, a blocked direction, the lowest altitude), with how many the run kept. Frames kept below the measured skyline say it is too high there. Reads only.",
+  "type": "object",
+  "required": ["night", "margin", "min_altitude", "skyline_points", "sessions", "totals", "verdict"],
+  "properties": {
+    "night": {"type": "string"},
+    "margin": {"type": "number", "description": "Degrees the planner raises the measured skyline by ([horizon] margin)."},
+    "min_altitude": {"type": "number"},
+    "skyline_points": {"type": "integer"},
+    "sessions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["field", "session", "found"],
+        "properties": {
+          "field": {"type": "string"},
+          "session": {"type": "string"},
+          "found": {"type": "boolean", "description": "false when the field is in no catalogue or mosaic."},
+          "alt": {"type": "array", "items": {"type": "number"}, "description": "Lowest and highest altitude over its frames."},
+          "az": {"type": "array", "items": {"type": "number"}},
+          "skyline_there": {"type": "array", "items": {"type": "number"}, "description": "The measured skyline's lowest and highest over those bearings, before its margin."},
+          "limits": {"$ref": "#/$defs/limits"},
+          "verdict": {"type": "string"}
+        }
+      }
+    },
+    "totals": {"$ref": "#/$defs/limits"},
+    "verdict": {"type": "string"}
+  },
+  "$defs": {
+    "count": {"type": "object", "required": ["frames", "kept"],
+              "properties": {"frames": {"type": "integer"}, "kept": {"type": "integer"}}},
+    "limits": {
+      "type": "object",
+      "required": ["clear", "margin", "skyline", "blocked", "floor"],
+      "additionalProperties": {"$ref": "#/$defs/count"}
+    }
+  }
+}

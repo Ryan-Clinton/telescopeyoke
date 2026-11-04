@@ -42,6 +42,16 @@ def test_closed_dismissed_old_or_confirmed_ones_are_not_chased():
     assert obligations.weigh(candidate(nights=2), 17.2, TODAY)["level"] == 3
 
 
+def test_a_candidate_seen_again_is_followed_up_not_closed():
+    seen_twice = candidate(first="20261024-030000")
+    seen_twice["nights"] = [dict(seen_twice["nights"][0], night="20261024-030000"),
+                            dict(seen_twice["nights"][0], night="20261104-030000")]
+    w = obligations.weigh(seen_twice, 17.2, TODAY)
+    # First seen twelve days ago, past a one-night candidate's usefulness, but seen again on the 4th.
+    assert w["level"] == 3 and w["verdict"] == "now" and w["until"] == "2026-11-11"
+    assert "brightness with an error" in w["why"]
+
+
 @pytest.fixture
 def store(tmp_path, monkeypatch):
     monkeypatch.setattr(obligations, "FILE", tmp_path / "obligations.json")
@@ -97,6 +107,19 @@ def test_owed_things_are_kept_between_nights_with_why_and_until(store, tmp_path,
         {"name": "M31-P1", "candidates": [candidate(open=False) | {"open": False}]}))
     later = obligations.refresh(today=TODAY, data=data)
     assert obligations.open_ones(later) == [] and later["obligations"][0]["state"] == "done"
+
+
+def test_a_repeat_candidate_stays_owed_as_a_follow_up(store, tmp_path, monkeypatch):
+    import outcome
+    data = tmp_path / "data"
+    (data / "candidates").mkdir(parents=True)
+    twice = candidate()
+    twice["nights"] = [dict(twice["nights"][0], night="20261103-030000"), dict(twice["nights"][0])]
+    (data / "candidates" / "M31-P1.json").write_text(json.dumps({"name": "M31-P1", "candidates": [twice]}))
+    monkeypatch.setattr(config, "DATA", data)
+    monkeypatch.setattr(outcome, "night_sessions", lambda evening, d=None: [])
+    owed = obligations.open_ones(obligations.refresh(today=TODAY, data=data))
+    assert [o["kind"] for o in owed] == ["follow-up"] and owed[0]["weighed"]["verdict"] == "now"
 
 
 def test_a_short_field_and_an_unrun_search_are_owed(store, tmp_path, monkeypatch):

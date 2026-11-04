@@ -65,10 +65,52 @@ def test_the_rule_counts_stalls_and_rejections_apart():
     assert goals.keep_capturing(20, 21, 0, 12 * 60, RULE)[1].startswith("time cap")
     # A rejection costs a frame, not time.
     assert goals.keep_capturing(20, 44, 0, 300, RULE)[1].startswith("frame cap")
-    # Retakes stop once the desired count is taken and three in a row are lost: cloud.
-    assert goals.keep_capturing(25, 29, 3, 300, RULE)[1].startswith("cloud")
+    # Retakes stop once the desired count is taken and three in a row are lost to something not cloud.
+    assert goals.keep_capturing(25, 29, 3, 300, RULE)[1].startswith("no retakes")
     assert goals.keep_capturing(5, 20, 3, 300, RULE) == (True, None)
-    assert goals.keep_capturing(0, 20, 20, 300, RULE)[1] == "cloud: every frame rejected"
+
+
+def test_cloud_is_a_pause_that_costs_time_not_frames():
+    # 40 frames taken, 30 of them lost to cloud: the frame cap counts the 10 others only.
+    assert goals.keep_capturing(10, 40, 0, 300, RULE, cloud=30) == (True, None)
+    # Twenty-five cloudy frames do not end it while time is left: a passing cloud is waited out.
+    assert goals.keep_capturing(5, 30, 0, 500, RULE, cloud=25) == (True, None)
+    # The time cap then lets the telescope go.
+    assert goals.keep_capturing(5, 60, 0, 12 * 60, RULE, cloud=55)[1].startswith("time cap")
+    # Twenty rejections in a row that are not cloud mean something else is wrong.
+    assert goals.keep_capturing(0, 20, 20, 300, RULE)[1].startswith("every frame rejected, not for cloud")
+
+
+def test_a_run_through_a_passing_cloud_goes_on_and_a_trailed_run_stops():
+    cloudy = {"accepted": False, "flux": 0.1, "reason": "too few stars (cloud?)"}
+    trailed = {"accepted": False, "flux": 0.9, "reason": "trailed"}
+    rule = {"accepted": 29, "cap_minutes": 12.0, "most_frames": 44}
+    log = [frame(True)] * 10 + [cloudy] * 25
+    assert shoot.goal_stop(log, len(log), 400, rule) is None
+    log = [frame(True)] * 10 + [trailed] * 20
+    assert shoot.goal_stop(log, len(log), 400, rule).startswith("every frame rejected, not for cloud")
+
+
+def test_unmeasured_frames_count_only_at_the_runs_acceptance_rate():
+    rule = {"accepted": 29, "cap_minutes": 12.0, "most_frames": 60}
+    # 20 measured, half accepted; 18 the live stack never measured count as 9, not 18: 19 < 29.
+    log = [frame(True), frame(False)] * 10 + [frame(False, measured=False)] * 18
+    assert shoot.goal_stop(log, len(log), 300, rule) is None
+    # Every measured frame accepted: the unmeasured count in full.
+    log = [frame(True)] * 20 + [frame(False, measured=False)] * 9
+    assert shoot.goal_stop(log, len(log), 300, rule) == "desired accepted frames reached"
+
+
+def test_reaching_the_accepted_count_is_not_meeting_the_goal_if_the_quality_pass_keeps_too_few():
+    """The capture stops on accepted frames; the goal is judged on stacked
+    ones (outcome.judge): 29 accepted that the quality pass cuts to 18 is
+    short of the 24 desired, and said so."""
+    import outcome
+    r = {"captured": 31, "stacked": 18, "depth_g": 17.0, "search": "searched", "search_stopped": None,
+         "camera_retries": None, "gap_minutes": 0, "gaps": 0, "rejected": {"cloud": 0, "trailed": 0, "other": 2},
+         "out_of_line_share": 0.05}
+    v = outcome.judge(r, goals.flat(goals.of("M31-P3")))
+    assert v["searchable"] == "met" and v["worth_it"] == "met" and v["desired"] == "short"
 
 
 def test_the_quick_depth_uses_the_fields_last_measured_stack():

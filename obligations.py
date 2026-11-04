@@ -7,6 +7,8 @@ Phase 4).
 
 An obligation is one of:
 - second look: an unconfirmed candidate's, seen on one night only;
+- follow-up: a candidate seen again on another night: its brightness with
+  an error and its last non-detection, then the person vets it;
 - field short: a field whose last visit fell short of its minimum or of
   being worth it, which keeps its turn;
 - search not run: frames that were never searched, or whose search failed
@@ -101,10 +103,18 @@ def weigh(c, depth_g=None, today=None, purpose="nova-patrol"):
            "local_score": local, "mag": mag, "until": useful.isoformat()}
     if not c.get("open", True) or c.get("dismissed"):
         return {**out, "verdict": "close", "why": c.get("closed_because") or "closed"}
+    if out["level"] >= 3:
+        # Seen again on another night: not done with, but a different
+        # follow-up. Its brightness with an error and its last non-detection
+        # (the evidence standard's level 3), then the person vets and claims.
+        last_night = max((_day(n["night"]) for n in c.get("nights", []) if n.get("night")), default=first)
+        out["until"] = (last_night + timedelta(days=USEFUL_DAYS.get(purpose, 7))).isoformat()
+        if today > date.fromisoformat(out["until"]):
+            return {**out, "verdict": "close", "why": f"past its usefulness ({out['until']})"}
+        return {**out, "verdict": "now", "why": "seen again on another night (level 3): measure its brightness with "
+                                                "an error and its last non-detection, then the person vets it"}
     if today > useful:
         return {**out, "verdict": "close", "why": f"past its usefulness ({useful})"}
-    if out["level"] >= 3:
-        return {**out, "verdict": "close", "why": "seen again on another night: for the person to vet and claim"}
     if depth_g is not None and mag is not None and mag > depth_g - SETTLE_MARGIN:
         return {**out, "verdict": "wait", "why": f"G {mag:.2f} at the stack's limit (G {depth_g:.2f}): another look at "
                                                  "the same depth can't settle it; it waits for a deeper night"}
@@ -143,6 +153,13 @@ def refresh(today=None, data=None, path=None, nights=3):
                     "kind": "second look", "field": field, "ref": c["id"],
                     "what": f"a second look at {c['id']}", "why": "seen on one night only; unconfirmed",
                     "until": w["until"], "worth": w["verdict"] in ("now", "allowance"), "weighed": w}
+            elif c.get("open") and w["level"] >= 3:
+                # Seen again: kept owed, as a follow-up of its own kind.
+                found[f"follow-up:{field}:{c['id']}"] = {
+                    "kind": "follow-up", "field": field, "ref": c["id"],
+                    "what": f"{c['id']}: brightness with its error and last non-detection, then the person vets it",
+                    "why": "seen again on another night (level 3)",
+                    "until": w["until"], "worth": w["verdict"] == "now", "weighed": w}
     for back in range(nights):
         evening = today - timedelta(days=back + 1)
         for session in outcome.night_sessions(evening, data):

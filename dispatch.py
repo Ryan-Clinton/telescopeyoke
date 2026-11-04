@@ -115,6 +115,21 @@ class Sky:
             return True, None            # up until dawn
         return True, float(unix[j] - now)
 
+    def rises_in(self, target, now):
+        """Seconds until a target that is down now comes up above the
+        skyline in darkness tonight, or None if it doesn't before dawn (or
+        can't be told)."""
+        found = self.up(target)
+        if found is None:
+            return None
+        _, above = found
+        unix, dark = self.night.unix, self.night.dark
+        i = int(min(max(0, (now - unix[0]) // (unix[1] - unix[0])), len(unix) - 1))
+        for j in range(i, len(unix)):
+            if above[j] and dark[j]:
+                return max(0.0, float(unix[j] - now))
+        return None
+
 
 def neglect(fields, data=None, now=None):
     """Days since the most neglected of these fields was last searched to a
@@ -210,13 +225,24 @@ def items_for(steps, now, sky=None, owed=None, data=None, today=None):
 
 def choose(steps, now=None, sky=None, owed=None, costs=None, last_target=None, keep=True, data=None, when=None):
     """(step, until, wait, ranked): the queued step to run now, as
-    windows.choose returns it, with the order it was offered in."""
+    windows.choose returns it, with the order it was offered in. Only a
+    step whose target is up is offered: with none up, no step, and `wait`
+    the seconds until the first queued target rises or a protected step's
+    setup is due, whichever is sooner (None if neither comes before dawn:
+    the steps stay queued and the runner says so). A protected step is
+    windows.choose's to start when its time comes, up or not: the mount's
+    own limits still refuse a target below them."""
     import windows
     now = now or time.time()
     ranked = rank(items_for(steps, now, sky, owed, data), now, last_target)
     by_index = {i: s for i, s in enumerate(steps)}
-    order = [by_index[it["index"]] for it in ranked if it["up"]] or [by_index[it["index"]] for it in ranked]
+    order = [by_index[it["index"]] for it in ranked if it["up"]]
     step, until, wait = windows.choose(steps, now, costs, when, among=order)
+    if step is None and sky is not None:
+        rises = [sky.rises_in(it["target"], now) for it in ranked if not it["up"] and it["target"]]
+        rises = [r for r in rises if r is not None]
+        waits = [w for w in (wait, min(rises) if rises else None) if w is not None]
+        wait = min(waits) if waits else None
     if keep and step is not None:
         try:
             LOG.parent.mkdir(parents=True, exist_ok=True)

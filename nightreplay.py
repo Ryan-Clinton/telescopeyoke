@@ -590,6 +590,7 @@ class Run:
         self.sunset = sunset_of(night)
         self.follow_up_used = 0.0        # seconds of second looks (Phase 4's allowance)
         self.below_limit = []            # steps chosen when the planner's skyline said their target was down
+        self.not_up = []                 # steps left queued: their target not up again before dawn
         self.last_target = None
         self.spent = {"accepted": 0.0, "rejected": 0.0, "between frames": 0.0, "stalls": 0.0,
                       "moves": 0.0, "waiting for a timed step": 0.0, "steps not modelled": 0.0}
@@ -664,7 +665,8 @@ class Run:
             r = self.cond.rng.random()
             accepted = r >= p_cloud + self.cond.trailed
             v.cloud += r < p_cloud
-            log.append({"flux": 1.0, "accepted": accepted})
+            log.append({"flux": 1.0, "accepted": accepted,
+                        "reason": "" if accepted else ("too few stars (cloud?)" if r < p_cloud else "trailed")})
             self.spent["accepted" if accepted else "rejected"] += exposure
             if accepted:
                 v.accepted += 1
@@ -789,7 +791,15 @@ class Run:
                     self.spent["waiting for a timed step"] += hold
                     self.t += hold
                     continue
-                step = chosen or pending[0]
+                if chosen is None:
+                    # Nothing left up before dawn: the runner leaves them queued.
+                    for s in pending:
+                        self.steps.append({"label": s["label"], "planned": s["minutes"], "start": self.t,
+                                           "end": self.t, "minutes": 0.0, "skipped": "not up again before dawn",
+                                           "protected": bool(s.get("not_before"))})
+                        self.not_up.append(s["label"])
+                    break
+                step = chosen
             pending.remove(step)
             self.run_step(step, cut, pending[0]["label"] if pending else None)
         return self
@@ -867,9 +877,11 @@ def measures(run):
         "accepted_minutes": round(sum(v.accepted * v.exposure for v in run.visits) / 60, 1),
         "second_looks": sum(v.kind == "second look" for v in run.visits),
         "second_looks_put_off": run.deferred_looks,
-        # Phase 4: steps dispatch chose when the planner's skyline (and its
-        # margin) said their target was down, nothing else being up.
+        # Phase 4: protected steps started when the planner's skyline (and its
+        # margin) said their target was down: their time, not dispatch's choice.
         "steps_below_skyline_limit": len(run.below_limit),
+        # Phase 4: steps left queued because their target was not up again before dawn.
+        "steps_not_up": len(run.not_up),
         "last_step_minutes": run.steps[-1]["minutes"] if run.steps else 0.0,
         "recorded_share": round(statistics.mean([v.recorded_share for v in run.visits]), 2) if run.visits else 0.0,
     }

@@ -8,8 +8,12 @@ At the person's word the re-audit was not waited for: Phases 2, 3 and 4
 were built on 4 November on the corrected engine (`goals.py`,
 `windows.py`, `obligations.py`, `dispatch.py`), each off until switched on
 in `[plan]`, and replayed on the same night
-(docs/nights/2026-11-04/phases-2-4-replay.md). None has run on the sky.
-Waiting for the audit of Phase 5's corrections and Phases 2 to 4 together.
+(docs/nights/2026-11-04/phases-2-4-replay.md), then reviewed and
+corrected. None has run on the sky. Phases 2 and 3 are for one controlled
+live night, with their outcome logs and the runner's choices kept; Phase 4
+is held until the measured skyline at ralphie-side is corrected between
+bearings 287 and 302, where the night's kept frames show it too high
+(`./skylinecheck.py 2026-11-03`).
 The order of work and its checkpoints: Phase 1,
 audit; Phase 5, a deep audit of the replay engine (a flawed one would
 make every later change look better than it is); Phases 2, 3 and 4,

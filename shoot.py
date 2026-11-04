@@ -758,15 +758,28 @@ def capture_rule(args):
 def goal_stop(log, taken, elapsed_s, rule):
     """Why a run given a goal (goals.capture_rule's rule) stops now, or None
     to go on: the frame log as the run keeps it. shoot.py and nightreplay.py
-    both stop by this."""
+    both stop by this.
+
+    A frame the live stack had no time to measure is counted with the
+    accepted only at the share of measured frames that were accepted, so
+    reaching the goal is not taken on trust. Frames lost to cloud are told
+    apart from other rejections (outcome.cause): cloud costs time, the
+    others cost frames."""
     import goals
-    accepted = sum(1 for f in log if f.get("accepted") or f.get("flux") is None)
+    import outcome
+    measured = judged(log)
+    kept = sum(1 for f in measured if f["accepted"])
+    unmeasured = len(log) - len(measured)
+    rate = kept / len(measured) if measured else 1.0
+    accepted = kept + int(unmeasured * rate)
+    cloud = sum(1 for f in measured if not f["accepted"] and outcome.cause(f) == "cloud")
     in_row = 0
-    for f in reversed(judged(log)):
+    for f in reversed(measured):
         if f["accepted"]:
             break
-        in_row += 1
-    go, why = goals.keep_capturing(accepted, taken, in_row, elapsed_s, rule)
+        if outcome.cause(f) != "cloud":
+            in_row += 1
+    go, why = goals.keep_capturing(accepted, taken, in_row, elapsed_s, rule, cloud)
     return None if go else why
 
 
@@ -783,11 +796,18 @@ def goal_reached(session, taken, elapsed_s, args, keep=True):
     why = goal_stop(log, taken, elapsed_s, rule)
     go = why is None
     if not go and keep:
-        accepted = sum(1 for f in log if f.get("accepted") or f.get("flux") is None)
-        rejected = sum(1 for f in judged(log) if not f["accepted"])
+        import outcome
+        measured = judged(log)
+        rejected = [f for f in measured if not f["accepted"]]
+        # Kept apart as the run knew them: the quality pass (restack.json)
+        # says how many were stacked, which is what the goal is judged on.
         records.write(session.folder / "capture.json",
-                      {"rule": rule, "stopped_by": why, "taken": taken, "accepted": accepted,
-                       "rejected": rejected, "seconds": round(elapsed_s, 1)}, indent=None)
+                      {"rule": rule, "stopped_by": why, "taken": taken,
+                       "accepted": sum(1 for f in measured if f["accepted"]),
+                       "unmeasured": len(log) - len(measured),
+                       "rejected": len(rejected),
+                       "cloud": sum(1 for f in rejected if outcome.cause(f) == "cloud"),
+                       "seconds": round(elapsed_s, 1)}, indent=None)
     return go, why
 
 

@@ -71,12 +71,25 @@ def step(label, command, **extra):
 class Up:
     """A sky where the named targets are up for the given seconds."""
 
-    def __init__(self, **stays):
-        self.stays = stays
+    def __init__(self, rises=None, **stays):
+        self.stays, self.rises = stays, rises or {}
 
     def window(self, target, now):
         s = self.stays.get(target.replace(" ", ""), "down")
         return (False, None) if s == "down" else (True, s)
+
+    def rises_in(self, target, now):
+        return self.rises.get(target.replace(" ", ""))
+
+
+def test_with_nothing_up_no_step_is_offered_and_it_waits_for_the_first_to_rise(tmp_path, monkeypatch):
+    monkeypatch.setattr(dispatch, "LOG", tmp_path / "dispatch.jsonl")
+    steps = [step("M33", ["./shoot.py", "M33"]), step("SN", ["./shoot.py", "NGC 3310"])]
+    chosen, until, wait, ranked = dispatch.choose(steps, NOW, Up(rises={"NGC3310": 1800}), [], {}, data=tmp_path)
+    assert chosen is None and wait == 1800 and all(not it["up"] for it in ranked)
+    # Nothing rising again before dawn: no step and no wait; the runner leaves them queued.
+    chosen, until, wait, _ = dispatch.choose(steps, NOW, Up(), [], {}, data=tmp_path)
+    assert chosen is None and wait is None
 
 
 def test_it_chooses_only_among_the_agreed_queued_steps(tmp_path, monkeypatch):

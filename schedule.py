@@ -326,6 +326,13 @@ def choose_step(steps, say=print, now=None, cfg=None, sky=None, owed=None, costs
             if step is not None:
                 why = next((it["why"] for it in ranked if it["id"] == step.get("id", step["label"])), "")
                 say(f"{datetime.now():%H:%M} chosen next: {step['label']} ({why})")
+            elif hold is None and ranked:
+                # Nothing it agreed to is up, and nothing rises before dawn:
+                # said, and left queued, never started below the skyline.
+                say(f"{datetime.now():%H:%M} none of tonight's queued steps is up above the measured skyline "
+                    f"again before dawn ({', '.join(it['label'] for it in ranked)}); they stay queued")
+            elif hold is not None:
+                say(f"{datetime.now():%H:%M} nothing queued is up yet: waiting {hold / 60:.0f} minutes")
         else:
             step, cut, hold = windows.choose(steps, now, costs)
         if step is not None and cut is not None:

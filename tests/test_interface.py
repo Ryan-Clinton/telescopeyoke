@@ -822,6 +822,16 @@ def test_a_night_replay_matches_its_schema(tmp_path, monkeypatch):
                                                               costs=t.COSTS)]}), "nightreplay")
 
 
+def test_a_skyline_check_matches_its_schema(tmp_path, monkeypatch):
+    import skylinecheck
+    import test_nightreplay as t
+    import test_skylinecheck as s
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    t.session(tmp_path, "M33", t.at(1, 16), 6)
+    valid(interface.run("skylinecheck", lambda: skylinecheck.check(t.EVENING, tmp_path, s.cfg(89.0))),
+          "skylinecheck")
+
+
 def test_goals_match_their_schema():
     import goals
     valid(interface.run("goals", lambda: goals.run(argparse.Namespace(field=None), say=lambda *a: None)), "goals")

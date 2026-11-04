@@ -12,7 +12,7 @@
         "type": "object",
         "required": ["kind", "field", "what", "why", "until", "worth", "state"],
         "properties": {
-          "kind": {"enum": ["second look", "field short", "search not run", "interrupted"]},
+          "kind": {"enum": ["second look", "follow-up", "field short", "search not run", "interrupted"]},
           "field": {"type": "string"},
           "ref": {"type": "string"},
           "what": {"type": "string"},

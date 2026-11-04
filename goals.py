@@ -260,21 +260,27 @@ def capture_rule(goals, minutes, share=STACKED_SHARE, exposure=None, model=None,
             "most_frames": accepted + max(2, math.ceil(REJECT_ALLOWANCE * accepted))}
 
 
-def keep_capturing(accepted, captured, rejected_in_row, elapsed_s, rule):
+def keep_capturing(accepted, captured, rejected_in_row, elapsed_s, rule, cloud=0):
     """(go on?, why it stops). The one rule that replaces retakes() and the
-    patrol's SHOOT_CAP: a stall costs time, which runs to the cap; a
-    rejection costs a frame, which runs to the most frames. The two are
-    counted apart, and the first that runs out ends the capture."""
+    patrol's SHOOT_CAP. A stall costs time, which runs to the cap. A frame
+    lost to cloud is a pause: it costs time, not one of the frames the
+    rejections may take, and cloud alone never ends a capture with time
+    left (a passing cloud is waited out; the time cap then lets the
+    telescope go). Any other rejection (trailed, soft) costs a frame, which
+    runs to the most frames; `rejected_in_row` counts only those, and
+    CLOUD_STOP of them in a row, or RETAKE_GIVE_UP once the desired count
+    has been taken, mean something other than the sky is wrong. `cloud` is
+    the frames lost to cloud so far."""
     if accepted >= rule["accepted"]:
         return False, "desired accepted frames reached"
     if elapsed_s >= 60 * rule["cap_minutes"]:
-        return False, "time cap reached (stalls and slow frames)"
-    if captured >= rule["most_frames"]:
+        return False, "time cap reached (stalls, cloud and slow frames)"
+    if captured - cloud >= rule["most_frames"]:
         return False, "frame cap reached (rejections)"
     if rejected_in_row >= CLOUD_STOP:
-        return False, "cloud: every frame rejected"
-    if captured >= rule["accepted"] and rejected_in_row >= RETAKE_GIVE_UP:
-        return False, "cloud: no retakes after rejections in a row"
+        return False, "every frame rejected, not for cloud: focus, trailing or the camera"
+    if captured - cloud >= rule["accepted"] and rejected_in_row >= RETAKE_GIVE_UP:
+        return False, "no retakes after rejections in a row (not cloud)"
     return True, None
 
 
