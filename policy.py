@@ -55,6 +55,7 @@ COMMANDS = {
     "build_catalogue.py": ("local_write", {}, {}),
     "calibrate.py": ("hardware", {}, {}),
     "camera_setup.py": ("local_write", {"--check": "read_only"}, {}),
+    "cameras.py": ("read_only", {"--go": "local_write"}, {}),   # the profiles; move-183c --go moves the 183C's files
     "camera_probe.py": ("read_only", {}, {}),     # run alone: only the black or white window camera_test.py --timed-light shines
     "camera_test.py": ("hardware", {}, DRY),
     "candidates.py": ("read_only", {"--dismiss": "local_write", "--reopen": "local_write"}, {}),
@@ -195,6 +196,8 @@ def classify(argv):
         return "hardware"
     script, rest = script_of(words[0]), words[1:]
     if script == "ty":
+        while len(rest) > 1 and rest[0] in ("--rig", "--camera"):
+            rest = rest[2:]           # which telescope or camera: the command after it decides
         if rest and rest[0] in TY_PASSES:
             script, rest = TY_PASSES[rest[0]], rest[1:]
         elif rest and not rest[0].startswith("-"):

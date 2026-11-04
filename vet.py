@@ -200,6 +200,7 @@ def halves(paths, say=print):
 def stacked(groups, done=lambda part: None):
     """A brightness stack of each group of frames, all lined up on the first
     frame of the first group so they share pixels."""
+    stacking.same_camera([p for part in groups for p in part])
     mosaic, header = stacking.load_light(groups[0][0])
     calibration = stacking.Calibration(float(header.get("EXPTIME", 0)), int(float(header.get("GAIN", 0))))
     mono = stacking.is_mono(header)

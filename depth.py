@@ -635,6 +635,7 @@ def sweep_stacks(paths, seconds_list, say=print):
     them all. Nothing is trimmed: the first frame covers the whole picture,
     and trimming each stack differently would move its pixels from under
     the solve. Returns {seconds: (brightness image, seconds really used)}."""
+    stacking.same_camera(paths)
     mosaic, header = stacking.load_light(paths[0])
     exposure, gain = float(header.get("EXPTIME", 0)), int(float(header.get("GAIN", 0)))
     if exposure <= 0:

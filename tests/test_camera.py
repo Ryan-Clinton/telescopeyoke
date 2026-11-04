@@ -1400,7 +1400,7 @@ def test_a_colour_camera_still_says_its_pattern_and_has_no_cooler(sdk, world, mo
         _, header = cam.frame(0.01)
         handle = sdk.Altaircam.opened[-1]
     assert header["BAYERPAT"] == "RGGB" and not camera.is_mono(header)
-    assert header["INSTRUME"] == "Altair ALTAIRH183C" and "TY_MONO" not in header
+    assert header["INSTRUME"] == "183c" and header["TY_MODEL"] == "Altair ALTAIRH183C" and "TY_MONO" not in header
     assert "CCD-TEMP" not in header and "SET-TEMP" not in header
     assert not hasattr(handle, "target")          # the 183C was never asked to cool
 
@@ -1413,7 +1413,7 @@ def test_either_camera_on_any_night_is_told_from_what_the_library_says(sdk, worl
     world.cameras, world.mono, world.tec = [("Altair ALTAIRH183M PRO TEC", "SN-M")], True, True
     with altair.AltairCamera() as cam:
         mono_frame, mono_header = cam.frame(0.01)
-    assert mono_header["INSTRUME"] == "Altair ALTAIRH183M PRO TEC" and camera.is_mono(mono_header)
+    assert mono_header["TY_MODEL"] == "Altair ALTAIRH183M PRO TEC" and camera.is_mono(mono_header)
     # The colour path is the RGGB arithmetic it always was.
     m = colour_frame.astype(np.float32)
     expected = np.dstack([m[0::2, 0::2], (m[0::2, 1::2] + m[1::2, 0::2]) / 2, m[1::2, 1::2]])

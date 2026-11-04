@@ -32,7 +32,7 @@ import stacking
 
 
 def folder(name):
-    return config.DATA / "reference" / stacking.folder_name(name)
+    return config.camera_folder() / "reference" / stacking.folder_name(name)   # each camera its own
 
 
 def kept(name):
@@ -213,7 +213,7 @@ def sessions_used(name):
 
 def run(args, say=print):
     if args.list:
-        root = config.DATA / "reference"
+        root = config.camera_folder() / "reference"
         fields = sorted(p.name for p in root.glob("*/") if kept(p.name)) if root.exists() else []
         answer = {"fields": [{"name": f, "versions": len(kept(f)), "newest": kept(f)[-1]} for f in fields]}
         for f in answer["fields"]:

@@ -445,7 +445,7 @@ def throughput_sdk(exposure, frames, gain):
     return results
 
 
-FAULT_LOG = config.DATA / "cache" / "camera-fault.jsonl"
+FAULT_LOG = config.camera_folder() / "cache" / "camera-fault.jsonl"   # each camera its own
 VENDOR = "16d0"          # the camera's USB vendor (MCS, which Altair's cameras use)
 USB = Path("/sys/bus/usb/devices")
 

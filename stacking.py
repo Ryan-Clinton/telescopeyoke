@@ -27,7 +27,7 @@ from camera import colour, is_mono, luminance
 ROOT = Path(__file__).parent
 # Where the master dark, bias and flat frames are kept. The tests point this
 # at an empty folder, for the worker processes too, through TY_CALIBRATION.
-CALIBRATION = Path(os.environ.get("TY_CALIBRATION") or config.DATA / "calibration")
+CALIBRATION = Path(os.environ.get("TY_CALIBRATION") or config.camera_folder() / "calibration")   # each camera its own
 REGISTER = 1024     # side of the central square used for the first rough line-up
 MIN_MATCHES = 6     # stars needed to trust a star-by-star alignment
 SPOTS = 40          # brightest stars kept from the quick look at a frame, to place it by
@@ -342,7 +342,36 @@ def prepare(mosaic, calibration, mono=False):
 # The header cards a kept raw frame carries: what it was (which camera:
 # the 183C and the 183M may each be used on any night), and what the
 # pipeline needs to treat it (no BAYERPAT and TY_MONO: a mono frame).
-KEPT = ("EXPTIME", "GAIN", "DATE-OBS", "BAYERPAT", "TY_MONO", "INSTRUME", "FILTER", "CCD-TEMP", "SET-TEMP")
+KEPT = ("EXPTIME", "GAIN", "DATE-OBS", "BAYERPAT", "TY_MONO", "INSTRUME", "TELESCOP", "FOCALLEN", "TY_MODEL",
+        "FILTER", "FILTPOS", "CCD-TEMP", "SET-TEMP")
+
+
+def camera_of(header):
+    """(camera, focal length in mm) a frame was taken with, from its INSTRUME
+    and FOCALLEN (camera.identify). A frame from before they were written
+    was the 183C's, at a focal length nobody wrote down (None)."""
+    camera = str(header.get("INSTRUME") or config.LEGACY_CAMERA)
+    focal = header.get("FOCALLEN")
+    return camera, (round(float(focal)) if focal else None)
+
+
+def same_camera(paths):
+    """Refuses (INVALID_REQUEST) a set of raw frames from more than one camera
+    or focal length: a stack or a difference image must never mix them by
+    accident. One frame is read from each folder, as a run's frames all come
+    from one camera."""
+    import interface
+    seen = {}
+    for path in paths:
+        folder = Path(path).parent
+        if folder not in seen:
+            seen[folder] = camera_of(fits.getheader(path, 1))
+    cameras = {c for c, _ in seen.values()}
+    focals = {f for _, f in seen.values() if f is not None}
+    if len(cameras) > 1 or len(focals) > 1:
+        listed = "; ".join(f"{folder.name}: {c}{f' at {f} mm' if f else ''}" for folder, (c, f) in seen.items())
+        raise interface.Refusal("INVALID_REQUEST", f"These frames come from more than one camera or light "
+                                f"path ({listed}); they cannot go into one picture.")
 
 
 def save_light(folder, index, mosaic, header):

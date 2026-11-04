@@ -68,13 +68,13 @@ ROOT = Path(__file__).parent
 PREVIEW = config.DATA / "web" / "latest.jpg"
 # The newest reading taken on many stars, kept so the status tools can say
 # how good focus was.
-FOCUS_FILE = config.DATA / "cache" / "focus.json"
+FOCUS_FILE = config.camera_folder() / "cache" / "focus.json"       # each camera its own
 # The newest frame's reading whatever it was (a ring, one star, nothing),
 # for the Focus screen; every frame of the last run, with its timing; and
 # one line for each run that reached "Focus good".
 LIVE_FILE = config.DATA / "cache" / "focus_live.json"
 FRAMES_FILE = config.DATA / "cache" / "focus_frames.jsonl"
-RUNS_FILE = config.DATA / "cache" / "focus_runs.jsonl"
+RUNS_FILE = config.camera_folder() / "cache" / "focus_runs.jsonl"
 SOUNDS = config.DATA / "cache" / "sounds"
 CROP = 300          # half-width in pixels of the box shown around the star
 MIN_EXPOSURE, MAX_EXPOSURE = 0.001, 2.0

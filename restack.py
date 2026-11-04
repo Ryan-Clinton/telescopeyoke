@@ -107,6 +107,7 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
         lights += found
         exposures += [seconds] * len(found)
         gains.add(gain)
+    stacking.same_camera(lights)
     if len(gains) > 1:
         raise interface.Refusal("INVALID_REQUEST", "These sessions were taken at different gains "
                                 f"({sorted(gains)}); they cannot go into one picture.")

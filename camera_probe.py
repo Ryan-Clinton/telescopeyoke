@@ -45,7 +45,7 @@ from pathlib import Path
 
 import config
 
-PROBES = config.DATA / "cache" / "camera-probes"
+PROBES = config.camera_folder() / "cache" / "camera-probes"   # each camera its own
 EXPOSURES = (0.5, 1.0, 1.5, 2.0, 4.0, 8.0)     # step 4, shortest first
 ROIS = ((2048, 1536), (512, 512))              # step 5: width, height in the middle of the sensor
 VIDEO = (0.05, 20)                             # step 6: exposure, frames

@@ -54,8 +54,37 @@ setup = "default"
 # power_cycle_on_jam = true   when a frame is lost twice, cut the camera's power at its
 #                         powered hub's port and give it back before trying again
 #                         (uhubctl; a hub that switches each port's power; Linux only)
-# tec_target = -10       a cooled camera's (the 183M PRO TEC) sensor target in °C; unset leaves
-#                         the cooler as it is, and a camera without one ignores it
+# train = "..."          which [trains.NAME] it is on now, when it is in more than one
+
+# More than one camera (docs/mono-upgrade.md). The [camera] table above is
+# the "183c" profile; another camera gets a [cameras.NAME] table of its own
+# with the same settings, and anything it leaves out is the 183C's sensor
+# (backend and driver it takes from [camera]). The camera plugged in is
+# matched to a profile when it opens, by `model` (part of the name Altair's
+# library gives it; the profile's own name when left out) or `serial`; a
+# camera that matches none is refused. Each camera keeps its own darks,
+# flats, focus readings and references under its name in the data folder
+# (./cameras.py).
+# [cameras.183m]
+# model = "183M"
+# mono = true
+# cooled = true
+# readout_speed = 0
+#
+# A train is one light path: its camera, the corrector's factor (0.9 for the
+# Sky-Watcher coma corrector: 750 mm becomes 675 mm), whether the filter
+# wheel is in it, and the setup name its flats are filed under. A camera in
+# no train is straight on the telescope, as always.
+# [trains.183m-cc]
+# camera = "183m"
+# corrector = 0.9
+# filterwheel = true
+# setup = "183m-cc"
+
+[imaging]
+# The camera profile to use when both cameras are plugged in (or ./ty --camera
+# NAME for one command). Blank: the one plugged in.
+camera = ""
 
 [mount]
 # The distance from one tripod foot to the next, in centimetres. With it, the

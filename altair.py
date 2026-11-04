@@ -108,10 +108,12 @@ def replug(lib, device, wait=REPLUG_WAIT, sleep=time.sleep):
     return False
 
 
-def choose(lib, wanted=None):
+def choose(lib, wanted=None, profile=None):
     """The one camera to use. None plugged in is a refusal; so are several,
-    unless config.toml names one by its serial number. Never the first of
-    several: the wrong camera would give frames that look plausible."""
+    unless config.toml names one by its serial number, or `profile` (a
+    camera profile asked for by --camera or [imaging] camera) matches just
+    one of them. Never the first of several: the wrong camera would give
+    frames that look plausible."""
     found = cameras(lib)
     if not found:
         raise Refusal("CAMERA_NOT_CONNECTED", "No camera found. Is it plugged in?" + (
@@ -128,9 +130,58 @@ def choose(lib, wanted=None):
     if wanted:
         raise Refusal("CAMERA_NOT_CONNECTED",
                       f"No camera has the serial number {wanted} named in config.toml. Found: {listed}.")
+    if profile and "cameras" in SETTINGS:
+        fits_it = [d for d in found if config.match_camera(d.displayname, serials[d.id], SETTINGS) == profile]
+        if len(fits_it) == 1:
+            return fits_it[0]
+        raise Refusal("CAMERA_NOT_CONNECTED",
+                      f"The {profile} profile was asked for, and {'none' if not fits_it else 'more than one'} "
+                      f"of the cameras plugged in matches it: {listed}.")
     raise Refusal("CAMERA_NOT_CONNECTED",
                   f"{len(found)} cameras are plugged in: {listed}. Name the one to use with "
-                  "serial = \"...\" under [camera] in config.toml.")
+                  + ("--camera NAME (ty --camera 183m ...) or camera = \"NAME\" under [imaging], or "
+                     if "cameras" in SETTINGS else "")
+                  + "serial = \"...\" under [camera] in config.toml.")
+
+
+def matched_profile(device, serial):
+    """The camera profile the opened camera is (config.match_camera), with
+    what to do about it: (name, profile settings). Refused, never guessed,
+    when it matches no profile, or is not the camera asked for. A camera
+    other than the one this command started with is remembered for the
+    next command and refused for this one, whose figures (focal length,
+    darks, focus) were worked out for the other."""
+    using = SETTINGS["camera"]
+    if "cameras" not in SETTINGS:          # settings made by hand (the tests): one camera, as it was
+        return using.get("name", config.LEGACY_CAMERA), using
+    found = config.match_camera(device.displayname, serial, SETTINGS)
+    if found is None:
+        raise Refusal("CAMERA_NOT_CONNECTED",
+                      f"{device.displayname} (serial {serial or 'unreadable'}) is not a camera with a profile "
+                      f"in config.toml, which has: {', '.join(sorted(SETTINGS['cameras']))}. Add a "
+                      "[cameras.NAME] table for it (model = part of the name above).")
+    if found != using["name"]:
+        chosen = using.get("chosen_by", "default")
+        if chosen in ("--camera", "setting"):
+            raise Refusal("CAMERA_NOT_CONNECTED",
+                          f"The {using['name']} was asked for (by {'--camera' if chosen == '--camera' else '[imaging] camera'}), "
+                          f"but the camera plugged in is {device.displayname}, the {found}.")
+        remember(found)
+        raise Refusal("CAMERA_NOT_CONNECTED",
+                      f"The {found} is plugged in, not the {using['name']} this command started with. The {found} "
+                      "is remembered now: run the command again.")
+    if len(SETTINGS["cameras"]) > 1:
+        remember(found)
+    return found, using
+
+
+def remember(name):
+    """Keep which profile the camera Altair's library opened matched, for the
+    commands that run before it opens (config.remembered_camera)."""
+    if config.remembered_camera() == name:
+        return
+    import records
+    records.write(config.DATA / config.REMEMBERED_CAMERA, {"camera": name, "when": time.time()})
 
 
 def _terminated(signum, frame):
@@ -191,7 +242,8 @@ class AltairCamera:
 
     def _open(self, replugged=False):
         lib, camera = self.lib, SETTINGS["camera"]
-        device = choose(lib, camera.get("serial"))
+        asked = camera.get("name") if camera.get("chosen_by") in ("--camera", "setting") else None
+        device = choose(lib, camera.get("serial"), asked)
         self.name = device.displayname
         handle = lib.Altaircam.Open(device.id)
         if handle is None:
@@ -199,6 +251,16 @@ class AltairCamera:
                           f"{self.name} would not open. Only one program can use the camera: "
                           "close AltairCapture, SharpCap or anything else that has it.")
         self.handle = handle
+        try:
+            serial = handle.SerialNumber()
+        except Exception:
+            serial = ""
+        try:
+            self.profile_name, self.profile = matched_profile(device, serial)
+        except Refusal:
+            self.close()
+            raise
+        camera = self.profile
         try:
             handle.put_AutoExpoEnable(0)
             handle.put_Option(lib.ALTAIRCAM_OPTION_RAW, 1)        # only settable before starting
@@ -553,7 +615,8 @@ class AltairCamera:
             header["CCD-TEMP"] = (round(degrees, 1), "sensor temperature, C")
         if self.target is not None:
             header["SET-TEMP"] = (self.target, "cooler target, C")
-        header["INSTRUME"] = self.name
+        from camera import identify
+        identify(header, SETTINGS, model=self.name)
         try:
             header["READSPD"] = (int(self.handle.get_Speed()), "readout speed")
         except self.lib.HRESULTException:

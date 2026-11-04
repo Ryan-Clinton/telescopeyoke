@@ -51,7 +51,7 @@ PROFILES = {"imaging": 1, "focus_fine": 1, "focus_fast": 2}
 
 
 # What camera_test.py --trail measured: how long the shutter was really open.
-TIMING_FILE = config.DATA / "cache" / "camera_timing.json"
+TIMING_FILE = config.camera_folder() / "cache" / "camera_timing.json"   # each camera its own
 
 
 def shutter_share(speed):
@@ -213,6 +213,7 @@ class Camera:
                     header["TY_ASKED"] = (round(ask, 4), "exposure asked of the driver, s")
                 # The frame itself says how it was binned, whatever was asked for.
                 self.binning = int(header.get("XBINNING", self.binning))
+                identify(header, model=self.name)
                 return data, header
             except (IndiError, OSError):
                 if attempt or not MANAGE_SERVER:
@@ -251,6 +252,24 @@ def start_driver(port=PORT):
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                      start_new_session=True)
     time.sleep(4)
+
+
+def identify(header, cfg=None, model=None):
+    """Write into a frame's header which camera took it and through which
+    light path: INSTRUME the camera's profile (183c, 183m), TELESCOP the
+    train, FOCALLEN its effective focal length in mm, and TY_MODEL the name
+    the camera itself gives. A stack never mixes cameras or trains by
+    accident (stacking.same_camera)."""
+    cfg = cfg or SETTINGS
+    if "scope" not in cfg:              # settings made by hand (the tests): the rest as configured
+        cfg = dict(config.hardware(), camera=cfg.get("camera", {}))
+    header["INSTRUME"] = (cfg["camera"].get("name", config.LEGACY_CAMERA), "camera profile")
+    train = cfg.get("train") or {"name": header["INSTRUME"]}
+    header["TELESCOP"] = (str(train["name"]), "light path (train)")
+    header["FOCALLEN"] = (round(config.focal_length(cfg), 1), "effective focal length, mm")
+    if model:
+        header["TY_MODEL"] = (str(model), "the camera's own name for itself")
+    return header
 
 
 def is_mono(header):

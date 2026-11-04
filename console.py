@@ -839,12 +839,15 @@ class Reader:
         # (["youtube", "twitch"] for the stream) shows as its choice, joined by +.
         def shown(value):
             return "+".join(map(str, value)) if isinstance(value, list) else value
+        # [camera] is the 183c's table whichever camera is in use now; a
+        # profile's own table is its [cameras.NAME].
+        in_use = dict(in_use, camera=in_use["cameras"][config.LEGACY_CAMERA])
         return {"file": str(config.FILE), "exists": config.FILE.exists(), "demo": self.demo,
-                "fields": [dict({"section": section, "key": key, "label": label, "kind": kind, "help": text,
-                                 "value": shown((written if limits.get("optional") else in_use)
-                                                .get(section, {}).get(key))},
+                "fields": [dict({"section": name, "key": key, "label": label, "kind": kind, "help": text,
+                                 "value": shown(config.section_of(written if limits.get("optional") else in_use,
+                                                                  name).get(key))},
                                 **limits)
-                           for section, key, label, kind, text, limits in config.SETTINGS]}
+                           for name, key, label, kind, text, limits in config.SETTINGS]}
 
     def discovery(self):
         """The patrol programmes, the newest patrol's answer, and the

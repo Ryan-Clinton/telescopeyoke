@@ -80,6 +80,9 @@ DEFAULTS = {
     # filters: the Starlight Xpress wheel's filters, position 1 first (sxwheel.py).
     # Not yet checked against the real wheel: the order must be looked at.
     "filterwheel": {"filters": "L,R,G,B,Ha,OIII,SII,"},
+    # camera: the camera profile to use when both are plugged in; blank, the
+    # one plugged in ([cameras.NAME], docs/mono-upgrade.md).
+    "imaging": {"camera": ""},
 }
 
 # Where ASTAP's installer puts the program and the star database on Windows.
@@ -89,11 +92,148 @@ SOLVER_FOLDERS = ("C:/Program Files/astap",)
 def _merged(given):
     out = copy.deepcopy(DEFAULTS)
     for section, values in given.items():
+        if section in ("cameras", "trains"):
+            continue                       # tables of tables: _profiles() reads them whole
         if isinstance(values, dict):
             out.setdefault(section, {}).update(values)
         else:
             out[section] = values
+    return _profiles(out, given)
+
+
+# --- cameras and light paths (docs/mono-upgrade.md, item 0) ----------------------
+#
+# A camera profile is one [cameras.NAME] table: how the camera is recognised
+# (`model`, part of the name Altair's library reports, the profile's own name
+# when left out; or `serial`), whether it is mono or cooled, its sensor and
+# its settings. A train is one [trains.NAME] table: one light path, naming its
+# camera, the corrector's factor (0.9, or none), whether a filter wheel is in
+# it, and the `setup` its flats are filed under. The camera in use is the one
+# plugged in, matched to a profile when it opens (altair.py), or the one
+# named by --camera (TY_CAMERA) or [imaging] camera. The old single [camera]
+# table is the 183c profile, so a config.toml written before stays as it was.
+# After resolving, cfg["camera"] is the camera in use's profile and
+# cfg["train"] its train, so everything that read [camera] reads the right one.
+
+LEGACY_CAMERA = "183c"
+# Settings that are about this computer rather than a camera: a profile that
+# does not give its own takes the 183c's ([camera]'s).
+SHARED_CAMERA = ("backend", "driver")
+REMEMBERED_CAMERA = Path("cache") / "camera-in-use.json"      # under DATA
+
+
+def remembered_camera():
+    """The profile the last camera Altair's library opened matched (altair.py
+    keeps it in cache/camera-in-use.json); None when none is remembered."""
+    import json
+    try:
+        return json.loads((DATA / REMEMBERED_CAMERA).read_text(encoding="utf-8")).get("camera")
+    except (OSError, ValueError, AttributeError):
+        return None
+
+
+def _profiles(out, given):
+    """Adds cfg["cameras"], cfg["trains"], cfg["train"] and makes cfg["camera"]
+    the profile of the camera in use."""
+    legacy = dict(out["camera"])
+    cameras = {LEGACY_CAMERA: legacy}
+    for name, table in (given.get("cameras") or {}).items():
+        if not isinstance(table, dict):
+            continue
+        if name == LEGACY_CAMERA:
+            base = legacy
+        else:
+            base = dict(DEFAULTS["camera"], **{k: legacy[k] for k in SHARED_CAMERA if k in legacy})
+        cameras[name] = dict(base, **table)
+    for name, profile in cameras.items():
+        profile["name"] = name
+    trains = {}
+    for name, table in (given.get("trains") or {}).items():
+        if isinstance(table, dict):
+            owner = cameras.get(table.get("camera", LEGACY_CAMERA), legacy)
+            trains[name] = dict({"camera": LEGACY_CAMERA, "corrector": None, "filterwheel": False,
+                                 "setup": owner.get("setup", "default")}, **table, name=name)
+    asked = os.environ.get("TY_CAMERA") or str(out.get("imaging", {}).get("camera") or "").strip()
+    if asked and asked not in cameras:
+        raise SystemExit(f"There is no camera profile called {asked!r}. Profiles: {', '.join(sorted(cameras))}.")
+    remembered = remembered_camera() if len(cameras) > 1 else None
+    remembered = remembered if remembered in cameras else None
+    using = asked or remembered or LEGACY_CAMERA
+    out["cameras"], out["trains"] = cameras, trains
+    out = using_camera(using, out)
+    out["camera"]["chosen_by"] = ("--camera" if os.environ.get("TY_CAMERA") else "setting" if asked
+                                  else "remembered" if remembered and using == remembered else "default")
     return out
+
+
+def using_camera(name, cfg):
+    """`cfg` with camera `name`'s profile as cfg["camera"] and its train as
+    cfg["train"]: the profile's own `train`, else the one train naming it,
+    else the camera straight on the telescope with no corrector or wheel."""
+    cameras, trains = cfg["cameras"], cfg["trains"]
+    profile = dict(cameras[name])
+    its = sorted(t for t in trains if trains[t]["camera"] == name)
+    if not profile.get("train") and len(its) > 1:
+        raise SystemExit(f"The {name} is in {len(its)} trains ({', '.join(its)}): say which it is on now "
+                         f"with train = \"...\" in its camera table.")
+    train_name = profile.get("train") or (its[0] if its else None)
+    if train_name and train_name not in trains:
+        raise SystemExit(f"The {name} profile names the train {train_name!r}, which has no [trains.{train_name}].")
+    train = dict(trains[train_name]) if train_name else {
+        "name": name, "camera": name, "corrector": None, "filterwheel": False,
+        "setup": profile.get("setup", "default")}
+    profile["setup"] = train["setup"]        # flats are filed under the train's setup
+    return dict(cfg, camera=profile, train=train)
+
+
+def focal_length(cfg=None):
+    """The light path's effective focal length in mm: [scope] focal_length_mm
+    (the 150P's 750) times the train's corrector factor (0.9 for the coma
+    corrector: 675)."""
+    cfg = cfg or hardware()
+    factor = (cfg.get("train") or {}).get("corrector") or 1.0
+    return cfg["scope"]["focal_length_mm"] * float(factor)
+
+
+def scale(cfg=None, block=1):
+    """Arcseconds per pixel of the camera in use through its train; `block`
+    2 for the pipeline's 2x2 frames."""
+    cfg = cfg or hardware()
+    return 206.265 * block * cfg["camera"]["pixel_size_um"] / focal_length(cfg)
+
+
+def camera_name(cfg=None):
+    """The profile name of the camera in use."""
+    return (cfg or hardware())["camera"].get("name", LEGACY_CAMERA)
+
+
+def match_camera(model, serial=None, cfg=None):
+    """The profile a camera the library reports belongs to: its `serial`
+    when the profile gives one, else its `model` (the profile's own name when
+    left out) as part of the reported name, ignoring case. None when no
+    profile, or more than one, matches."""
+    cameras = (cfg or hardware())["cameras"]
+    found = []
+    for name, profile in cameras.items():
+        if profile.get("serial"):
+            if serial and str(profile["serial"]) == str(serial):
+                found.append(name)
+        elif str(profile.get("model") or name).lower() in str(model).lower():
+            found.append(name)
+    return found[0] if len(found) == 1 else None
+
+
+def camera_folder(name=None, cfg=None):
+    """Where what is kept for one camera lives: darks and flats, focus
+    positions, readout and lost-frame records, patrol references and their
+    zero points. DATA/NAME; the 183c's stay where they always were (the data
+    folder's own cache/, calibration/ and reference/) until
+    ./cameras.py move-183c has moved them under 183c/."""
+    name = name or camera_name(cfg)
+    folder = DATA / name
+    if name == LEGACY_CAMERA and not folder.is_dir():
+        return DATA
+    return folder
 
 
 def _read(path):
@@ -184,11 +324,12 @@ def solver(cfg=None):
 
 
 def field_height(cfg=None):
-    """Height of the camera's view of the sky, in degrees."""
+    """Height of the camera's view of the sky, in degrees: the camera in
+    use's sensor through its train's focal length."""
     import math
     cfg = cfg or hardware()
     sensor_mm = cfg["camera"]["height"] * cfg["camera"]["pixel_size_um"] / 1000
-    return math.degrees(sensor_mm / cfg["scope"]["focal_length_mm"])
+    return math.degrees(sensor_mm / focal_length(cfg))
 
 
 # --- changing the settings from the application ----------------------------------
@@ -253,6 +394,10 @@ SETTINGS = (
      "the camera opens, and each frame says its sensor temperature (CCD-TEMP) and this target (SET-TEMP). Blank "
      "leaves the cooler as it is; a camera without one ignores it. Darks only match frames at the same temperature.",
      {"min": -40, "max": 30, "optional": True}),
+    ("imaging", "camera", "Camera in use", "text",
+     "The camera profile ([cameras.NAME] in config.toml: 183c, 183m) to use when both cameras are plugged in. "
+     "Blank: the one plugged in, matched to its profile when it opens; a camera with no profile is refused.",
+     {"optional": True}),
     ("camera", "setup", "Camera arrangement", "text",
      "A name for how the camera sits on the telescope. Change it, and take new flats, whenever the camera is "
      "rotated or taken off.", {}),
@@ -357,6 +502,14 @@ def checked(section, key, value):
     return text
 
 
+def section_of(settings, section):
+    """One section of a settings file read as it is, a dotted name
+    ("cameras.183m") taken a table at a time; {} when it is not there."""
+    for part in section.split("."):
+        settings = settings.get(part, {}) if isinstance(settings, dict) else {}
+    return settings if isinstance(settings, dict) else {}
+
+
 def _written(value):
     """A value as it is written in the file."""
     if isinstance(value, bool):
@@ -372,7 +525,7 @@ def changed_text(text, changes):
     key) to a value, or to None to leave the setting to its default."""
     import re
     lines = text.splitlines()
-    header = re.compile(r"^\s*(#\s*)?\[(\w+)\]\s*$")
+    header = re.compile(r"^\s*(#\s*)?\[([\w.-]+)\]\s*$")     # [camera], [cameras.183m]
     for (section, key), value in changes.items():
         heads = [(i, m) for i, m in ((i, header.match(line)) for i, line in enumerate(lines)) if m]
         at = next((i for i, m in heads if m.group(2) == section and not m.group(1)), None)
@@ -413,7 +566,7 @@ def save(changes, path=None):
     new = changed_text(old, changes)
     read_back = tomllib.loads(new)
     for (section, key), value in changes.items():
-        if read_back.get(section, {}).get(key) != value:
+        if section_of(read_back, section).get(key) != value:
             raise ValueError(f"{section}.{key} could not be written safely; the file was left alone.")
     if path.exists():
         path.with_suffix(".toml.bak").write_text(old, encoding="utf-8")

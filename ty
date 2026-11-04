@@ -24,6 +24,7 @@
     ./ty spot                where in the garden the telescope stands, and every spot's skyline
     ./ty spot far-side       it stands at far-side from now on (spots/far-side.toml, its own skyline)
     ./ty --rig heq5 ...      any of these for one rig (its settings are rigs/heq5.toml)
+    ./ty --camera 183m ...   any of these with that camera profile, when both cameras are plugged in
     ./ty mount ...           everything mount.py does, e.g. ./ty mount goto M27 --dry-run
     ./ty tonight ...         the full report, as tonight.py
     ./ty streak [FRAME]      which satellite made the streak in the newest frame with one (streak.py)
@@ -64,10 +65,11 @@ def show(value, indent=0):
 
 
 def main():
-    if len(sys.argv) > 2 and sys.argv[1] == "--rig":
-        # Before anything is imported: which telescope's settings and files this is about.
+    while len(sys.argv) > 2 and sys.argv[1] in ("--rig", "--camera"):
+        # Before anything is imported: which telescope's settings and files
+        # this is about, or which camera profile when both are plugged in.
         import os
-        os.environ["TY_RIG"] = sys.argv[2]
+        os.environ["TY_RIG" if sys.argv[1] == "--rig" else "TY_CAMERA"] = sys.argv[2]
         del sys.argv[1:3]
     if len(sys.argv) > 1 and sys.argv[1] in PASS_THROUGH:
         # The individual scripts keep their own options; this just finds them.
