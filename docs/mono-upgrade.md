@@ -162,6 +162,11 @@ item files its settings and records by camera.
    dark library serves, chosen so the cooler can hold it on the warmest
    night expected with power to spare (0 °C as the first guess for winter,
    to confirm on the first nights).
+   - **From the camera's owner (Gary, 4 Nov 2026, from the forums and his
+     own use):** never below -5 °C, where it gains nothing; and cool it
+     slowly, the target stepped down over about 20 minutes, never in one
+     jump, or the sensor can frost. The setting's lower limit is -5 °C and
+     opening the camera starts that ramp from the sensor's own temperature.
    - **Holding it:** record the cooler's power (the SDK's TEC reading, if it
      gives one) and the sensor temperature with every frame. A frame more
      than 0.5 °C off target is kept but flagged and left out of science
