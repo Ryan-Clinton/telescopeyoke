@@ -164,10 +164,11 @@ item files its settings and records by camera.
    Altair's own advice is that cooling below about 10-15 °C gains little on
    this sensor [2]. The target is one fixed value for the season so one
    dark library serves, chosen so the cooler can hold it on the warmest
-   night expected with power to spare (0 °C as the first guess for winter,
-   to confirm on the first nights).
+   night expected with power to spare: -5 °C (the camera's owner's figure,
+   below), which on 4 Nov 2026 the cooler held 0 °C with 13% of its power.
    - **From the camera's owner (Gary, 4 Nov 2026, from the forums and his
-     own use):** never below -5 °C, where it gains nothing; and cool it
+     own use):** run it at -5 °C: colder gains nothing, so -5 is both the
+     target and the floor; and cool it
      slowly, the target stepped down over about 20 minutes, never in one
      jump, or the sensor can frost. The setting's lower limit is -5 °C and
      opening the camera starts that ramp from the sensor's own temperature.

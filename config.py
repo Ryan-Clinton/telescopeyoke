@@ -401,8 +401,8 @@ SETTINGS = (
      "camera_test.py --speed-ladder finds the fastest that keeps them. Blank leaves the driver's own.",
      {"min": 0, "max": 3, "optional": True}),
     ("cameras.183m", "tec_target", "183M cooler target", "number",
-     "°C, one fixed value for the season so one set of darks serves (0 is the first guess for winter; never below -5, "
-     "where this sensor gains nothing). The cooler is taken down to it slowly, 1 °C a minute from the sensor's own "
+     "°C, one fixed value for the season so one set of darks serves (-5, the camera's owner's figure: run it there, "
+     "since colder gains nothing on this sensor, and never below it). The cooler is taken down to it slowly, 1 °C a minute from the sensor's own "
      "temperature (about 20 minutes from a warm sensor), never in one jump that could frost the window, each "
      "time the 183M opens, through Altair's own library; a run keeps no frames until the ramp is done and the sensor is within 1 °C of "
      "it, each frame says the sensor temperature (CCD-TEMP), this target (SET-TEMP), the cooler's power and whether "
