@@ -54,6 +54,8 @@ FULL_POWER = 0.95      # a share of the cooler's most voltage taken as all it ha
 STUCK_S = 180          # at full power this long with the sensor no colder: it cannot reach the target
 WARM_STEP_C, WARM_EVERY_S, WARM_STEPS_MOST = 3.0, 60.0, 15   # the warm-up at the end of a run
 WARM_MOST_S = 600      # the longest the warm-up takes, however it ends: then the cooler goes off regardless
+AMBIENT_FILE = "cache/sensor_ambient.json"   # under config.DATA: the sensor's temperature before cooling
+COLD_MEMORY_S = 1800   # a camera closed cold this recently reads cold as it opens: the kept figure is used
 BUFFER = 0x1000000     # ALTAIRCAM_FLAG_BUFFER: a frame buffer of some size in the camera
 DDR = 0x2000000        # ALTAIRCAM_FLAG_DDR: one big enough for a whole frame
 # Settings that could stop long frames while short ones arrive: a low-power
@@ -215,6 +217,34 @@ def stop_on_terminate():
         signal.signal(signal.SIGTERM, _terminated)
 
 
+def ambient_before(now, clock=time.time):
+    """What the warm-up brings the sensor back to, as a camera opens reading
+    `now`. 4 November 2026: every re-centre and dither opens the camera
+    afresh, so each opening read the already-cold sensor as where it began,
+    and a run's warm-up would have had nothing to do and cut the cooler off
+    at -5 °C. A camera closed cold within COLD_MEMORY_S keeps the figure kept
+    when its cooling began (the warmer of the two); otherwise its own reading
+    is the truth (an old figure from a warmer evening is not)."""
+    import records
+    kept = records.read(config.DATA / AMBIENT_FILE, empty={}) or {}
+    ambient, cold_at = kept.get("ambient"), kept.get("cold_at")
+    if (ambient is not None and cold_at is not None and clock() - float(cold_at) < COLD_MEMORY_S
+            and (now is None or now < float(ambient))):
+        return float(ambient)
+    return now
+
+
+def keep_ambient(ambient, clock=time.time):
+    """The sensor's temperature before cooling, and that it is cold now."""
+    if ambient is None:
+        return
+    import records
+    try:
+        records.write(config.DATA / AMBIENT_FILE, {"ambient": float(ambient), "cold_at": clock()})
+    except OSError:
+        pass   # the warm-up still has this run's own figure
+
+
 class AltairCamera:
     def __init__(self, gain=300):
         self.gain = gain
@@ -311,7 +341,7 @@ class AltairCamera:
             if not hasattr(self, "ambient"):
                 # Before the cooler starts, the first time only (not when opened
                 # again after a jam): what warm_up() brings the sensor back to.
-                self.ambient = self.temperature()
+                self.ambient = ambient_before(self.temperature())
             if cooling is not None and self.flags & TEC:
                 # A cooler that will not take its target, or a sensor whose
                 # temperature cannot be read back, stops here: frames at a
@@ -387,6 +417,8 @@ class AltairCamera:
         handle, self.handle = self.handle, None
         if handle is None:
             return
+        if getattr(self, "target", None) is not None:
+            keep_ambient(getattr(self, "ambient", None))   # closed cold: the next opening is told
         for step in (lambda: handle.Trigger(0), handle.Stop, handle.Close):
             try:
                 step()
@@ -439,6 +471,7 @@ class AltairCamera:
             # reading is the sensor's own; a reopen while cold reads colder
             # and keeps the first.
             self.ambient = now
+        keep_ambient(self.ambient)
         level = degrees if now - degrees <= RAMP_STEP_C else now - RAMP_STEP_C
         self._set_point(level)
         self.target, self.level, self._stepped = degrees, level, clock()
