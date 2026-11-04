@@ -18,15 +18,17 @@ partly, 🧪 simulator only, ❌ tried and not yet working.
 
 The second camera (docs/mono-upgrade.md): the Altair 183M Pro TEC behind the
 0.9x coma corrector (675 mm) with the Starlight Xpress wheel. What its first
-night established, from the files it kept:
+night established ([the record](nights/2026-11-04/183m-first-night.md)):
 
 | What | Where it stands |
 |---|---|
-| Recognised and opened | ✅ found on USB by its profile (`AA183MPROTEC`), frames of the full 5440-pixel sensor marked `INSTRUME 183m` |
+| Recognised and opened | ✅ found on USB by its profile (`AA183MPROTEC`), frames of the full 5440-pixel sensor marked `INSTRUME 183m`; every frame arrived at every readout speed |
 | Frame timing | ✅ each second asked adds 1.00 s, 0.43 s overhead (`183m/cache/camera_timing.json`); the shutter's real length is not measured (`--trail`) |
-| Focus | ⚠️ the focus aid reached HFR 3.0" from 2 s frames, on only 5 stars (`183m/cache/focus.json`) |
-| Polar alignment with it | ✅ 21:52: 1.68° from the pole, 0.88° in azimuth and 1.61° in altitude, three repeats spreading 0.109° (`cache/polar.json`) |
-| Cooling | ⚠️ the night's frames were taken uncooled (sensor 8-10 °C, no set temperature) |
+| Cooler | ✅ cap on: ramped at 1 °C a minute and held 0 °C within 0.4 °C on 11-13% of its power, twice. ⚠️ The night's sky frames were taken uncooled, and the warm-up after a reopen is still to see working |
+| Filter wheel | ✅ all seven slots, every position confirmed, 1.2 s a move |
+| Focus | ✅ by hand with the spoken-numbers aid, HFR 2.0 (3.0") on Enif in L. ❌ The motor focuser could not move this train |
+| Plate solving | ✅ 1.46"/px on the 2x2 frame, as predicted for 675 mm; 0.2-0.3 s a solve once the median filter was dropped (e9c741e) |
+| Polar alignment with it | ✅ from M31 in 12° steps: 4.6° at first, then 1.7° (`cache/polar.json`: 1.68°, three repeats spreading 0.109°), then 1.6°, the third run 60 s end to end |
 | Calibration | ❌ no darks or flats kept for it yet; its profile in config.toml does not yet say `cooled` or `mono`, so its darks would be handled as the 183C's (`./instrument.py` says so) |
 | Filter focus offsets | ❌ none measured: L, R, G and B are one parfocal set and SII, Ha and OIII another by the setting (Gary's), not yet proved on the sky (`./focus.py --walk-in --prove-sets`) |
 | References, depth, difference images, photometry | ❌ none yet from this camera: no 183C result carries over |
