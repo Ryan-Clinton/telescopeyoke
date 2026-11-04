@@ -90,8 +90,16 @@ whether the focuser gets enough power:
   the laptop's USB;
 - how much the wheel and the Nano draw together through one unpowered hub.
 
-The first focus run is the test. A focuser stall then is a power problem,
-not the camera.
+The first focus run is the test. A focuser stall then points first at
+power, because on 30 October the same motor stalled from a bare laptop
+port and lifted from a powered hub, but it does not prove it: the heavier
+train's load, the 28BYJ-48's torque and the Nano's driver can each stall it
+too. Tell them apart with what is here, one change at a time: the focuser
+on its own lead straight into the laptop instead of through the camera's
+hub; the wheel unplugged; the move outward (lifting the train) against
+inward; and, if a USB power meter is to hand, the voltage at the Nano while
+the motor runs. Record which change cured it. A stall that follows the
+load, not the power, is the case for the NEMA17.
 
 **The camera fault and the new camera.** The 183C loses frames because it
 has no buffer and an ageing board (docs/camera-fault.md). The 183M PRO has
@@ -150,8 +158,21 @@ item files its settings and records by camera.
    setting; `CCD-TEMP` and `SET-TEMP` in every FITS header; the run waits
    until the sensor is within 1 °C of target before keeping frames.
    Altair's own advice is that cooling below about 10-15 °C gains little on
-   this sensor [2], so start with a fixed 0 °C in winter and the same value
-   all season, so one dark library serves.
+   this sensor [2]. The target is one fixed value for the season so one
+   dark library serves, chosen so the cooler can hold it on the warmest
+   night expected with power to spare (0 °C as the first guess for winter,
+   to confirm on the first nights).
+   - **Holding it:** record the cooler's power (the SDK's TEC reading, if it
+     gives one) and the sensor temperature with every frame. A frame more
+     than 0.5 °C off target is kept but flagged and left out of science
+     stacks; a cooler at full power that cannot reach target says so and
+     the run uses the nearest dark set or stops, never silent mismatches.
+   - **Dew and frost:** a cold sensor window can mist. Watch star brightness
+     and flat corners for a sudden fall; if it happens, warm a few degrees
+     and say so.
+   - **Shutting down:** at the end of a run, step the target up a few
+     degrees a minute before turning the cooler off, rather than cutting it
+     cold, to spare the sensor thermal shock and the window condensation.
 3. **Filter wheel command** (`sxwheel.py`). `status`, `move NAME|NUMBER`,
    the filter names as a setting. Protocol from INDI's driver
    (`indi-3rdparty/indi-sx/sxwheel.cpp`): 2-byte HID write, 2-byte reply
@@ -177,9 +198,16 @@ item files its settings and records by camera.
    expose. A frame is only labelled with a filter the wheel has confirmed;
    a failed move stops the step rather than keeping mislabelled frames.
 6. **Focus per filter** (`focus.py`, `focuser.py`). Walk-in in L as now.
-   Measure the offset of every other filter from L once (walk-in in each),
-   keep it, and apply it when the wheel moves. Reset the stored travel and
-   start position after the tube mod.
+   Measure the offset of every other filter from L with a walk-in in each,
+   at least three times on different nights, approaching from the same
+   side so the motor's slack is taken up the same way, and keep the mean
+   and spread. An offset whose spread is bigger than the focus tolerance at
+   f/4.5 is not used; that filter gets its own walk-in instead. Note the
+   temperature with each, so drift with temperature can be fitted later.
+   After a wheel move and offset, the first frame's star size is checked
+   against the last frame in L; worse than tolerance means refocus, not
+   carry on. Reset the stored travel and start position after the tube
+   mod.
 7. **Calibration** (`calibrate.py`, `stacking.py`, docs/calibration.md).
    Darks are filed by camera and matched on everything that changes them:
    temperature, exposure, gain, offset, binning and readout speed. The
@@ -188,7 +216,12 @@ item files its settings and records by camera.
    with no thermometer. Flats per camera, train and filter, with flat-darks;
    a bad-pixel map per camera. Master frames are versioned and never
    overwritten, and every stack records which masters it used, so a new
-   library never changes what an old result meant. Because the 183M is
+   library never changes what an old result meant.
+   **It fails closed.** Science work (difference images, photometry,
+   transits, depth) refuses a frame whose dark, flat or bad-pixel map is
+   missing or does not match, and says which. Uncalibrated frames can still
+   be stacked for the stream or a quick look, but that product is labelled
+   uncalibrated in its file and on the page and never enters a search. Because the 183M is
    cooled, its darks can be made indoors or on a cloudy night with the cap
    on, never in a clear window.
 7a. **Gain and offset** (`camera_test.py`, which already has
@@ -224,10 +257,21 @@ item files its settings and records by camera.
 12. **What every frame records** (`altair.py`, `stacking.py`). Camera and
     serial, train, focal length, filter as confirmed by the wheel, gain,
     offset, readout speed, binning, sensor and set temperature, exposure,
-    and `DATE-OBS` as the start of the exposure in UTC from the capture
-    call, not the file's time. The IMX183 has a rolling shutter: rows are
-    read over a fraction of a second, so the frame records that timing is
-    the start of readout, and transit work states its timing error.
+    and the time the exposure really started and ended, in UTC.
+    - **Where the time comes from:** the camera's own timestamp if the SDK
+      gives one per frame; otherwise the laptop clock read either side of
+      the trigger, with the gap between those as the uncertainty. Each
+      frame says which (`DATE-OBS`, `DATE-END`, the source and the
+      uncertainty in seconds).
+    - **The clock:** the laptop's offset from network time is recorded at
+      the start of a run; a run for timing work refuses to start if it is
+      worse than a set limit.
+    - **The shutter:** the IMX183 has a rolling shutter, so rows start at
+      slightly different times. The frame says what its time refers to, and
+      transit work quotes its timing error from all of the above.
+    - **Measured, not assumed:** the delay between trigger and exposure
+      start is measured once (`camera_test.py` already has a timing test)
+      and written into the camera's profile.
     Calibration masters and software version go into every stack.
 13. **Docs.** README hardware table (both cameras), docs/focuser.md,
     docs/calibration.md, docs/camera-fault.md (the fault belongs to the
@@ -267,6 +311,11 @@ docs/discovery/results.md (`depth.py`, planted fake stars, M31):
 | False candidates per searched field | in the patrol records | to measure |
 | Scatter on a transit's flat part | in the transit records | to measure |
 
+Depth alone doesn't make a better discovery system: a deeper image that
+throws up more false candidates can be worse. So the two cameras are
+compared at the same false-alarm rate: planted stars found, at a fixed
+number of false candidates per field, both measured on the same fields.
+
 The optics change too (675 mm, corrector), so this compares the whole
 system, not the camera alone; where a fair camera-only comparison is
 possible (the 183C behind the same corrector), it is done too.
@@ -295,8 +344,15 @@ Dark:
    2x2) and set the focal length from the solve.
 9. The usual polar alignment and GoTo.
 10. Corners: star size and shape in the four corners of a full-resolution
-    frame against the middle. Elongated corner stars mean the 55 mm chain
-    or tilt is wrong.
+    frame against the middle. The pattern says which fault it is:
+    - all four corners stretched the same way round the centre (pointing
+      out from it, or across it): the 55 mm spacing is wrong; which way
+      says too long or too short;
+    - corners different from each other, one side soft or stretched and
+      the opposite side sharp: tilt in the camera, wheel or focuser;
+    - stars soft or flared off-centre even in the middle, with a skewed
+      pattern across the field: collimation, which Gary checks.
+    Fix them in that order of evidence, one change at a time.
 11. Focus offsets for R, G, B, Ha, OIII, SII.
 12. A short run in L: frames kept against frames lost, trailed share, star
     roundness, and the longest exposure that stays round, against the 183C
