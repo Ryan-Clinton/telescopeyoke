@@ -8,14 +8,17 @@
 mosaic = "M31"
 grid = "4x2"
 
-# Minutes on each panel: depth.py measured about G 17.0 in 5 minutes, so a
-# pass of eight panels is about 50 minutes and can be repeated.
-minutes = 5
+# Minutes on each panel: enough frames that the search still has its
+# eight after a camera stall, a passing cloud and the quality pass. Five
+# (from 17 October) was too few: on 4 November 2026 panels P3, P5 and P6
+# came out with 6 or 7 stacked frames and were never searched. Eight is
+# about 24 frames; a pass of eight panels is about 75 minutes.
+minutes = 8
 
 exposure = 16
 gain = 1500
 
-# No dither within a five-minute visit: each panel's GoTo lands a little
+# No dither within a short visit: each panel's GoTo lands a little
 # differently every night, which moves the camera's pattern between nights.
 
 # A nova lasts the night: a candidate in one half of the night only is set

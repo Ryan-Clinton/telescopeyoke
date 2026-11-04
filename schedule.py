@@ -161,6 +161,26 @@ def view(plan=None, now=None):
     return {"steps": out, "now": now, "runner": runner}
 
 
+def due(plan=None, now=None):
+    """The label of the next queued step when the step running now has used
+    its planned minutes, else None. Extra work a run adds by itself (a
+    patrol's second looks) gives way to it: on 4 November 2026 the M31
+    panels' second looks ran 54 minutes past their 45 and left the supernova
+    after them 27 of its 90."""
+    plan = load() if plan is None else plan
+    now = time.time() if now is None else now
+    steps = plan.get("steps", [])
+    running = next((s for s in steps if s.get("status") == "running"), None)
+    if running is None or not running.get("started"):
+        return None
+    end = not_before(running["until"], running["started"]) if running.get("until") \
+        else running["started"] + 60 * running["minutes"]
+    if now < end:
+        return None
+    queued = next((s for s in steps if s.get("status") in (None, "queued")), None)
+    return queued["label"] if queued else None
+
+
 def add(label, minutes, command, not_before_=None, pid=None, until=None):
     plan = load()
     taken = {s.get("id", s["label"]) for s in plan["steps"]}

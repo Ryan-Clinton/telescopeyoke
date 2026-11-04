@@ -497,3 +497,19 @@ def test_the_last_sunset_is_found_from_the_sun():
     dusk = schedule.last_sunset(night, site)
     assert dusk is not None and abs(dusk - datetime(2026, 11, 2, 16, 35, tzinfo=timezone.utc).timestamp()) < 3600
     assert schedule.last_sunset(noon, site) is None
+
+
+def test_a_step_past_its_minutes_says_the_next_one_is_due():
+    """4 November 2026: the panels' second looks ran on 54 minutes past their
+    step's 45; due() is what tells them to give way."""
+    now = 1_000_000.0
+    plan = {"steps": [
+        {"label": "M31 panels", "minutes": 45, "status": "running", "started": now - 46 * 60, "until": None},
+        {"label": "SN 2026sqf in NGC 3310", "minutes": 90, "status": "queued", "until": None}]}
+    assert schedule.due(plan, now) == "SN 2026sqf in NGC 3310"
+    plan["steps"][0]["started"] = now - 30 * 60
+    assert schedule.due(plan, now) is None                       # still within its time
+    plan["steps"][0]["started"] = now - 46 * 60
+    plan["steps"][1]["status"] = "done"
+    assert schedule.due(plan, now) is None                       # nothing waits
+    assert schedule.due({"steps": []}, now) is None

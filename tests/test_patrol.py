@@ -434,6 +434,54 @@ def test_a_mosaic_moves_to_the_next_panel_while_the_last_is_still_searched(tmp_p
     assert [f["field"] for f in answer["fields"]] == ["M31-P1", "M31-P2"]
 
 
+def test_second_looks_give_way_when_the_plans_next_step_is_due(tmp_path, monkeypatch):
+    """4 November 2026: the panels' second looks ran 54 minutes past the
+    step's 45 and left the supernova after them 27 minutes of its 90."""
+    import restack
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    monkeypatch.setattr(mount, "LOCK_FILE", tmp_path / "unlocked")
+    monkeypatch.setattr(patrol, "fields", lambda p: ["M31-P1", "M31-P2"])
+    monkeypatch.setattr(patrol, "priorities", lambda p, names, *a: [{"field": n, "minutes": 8} for n in names])
+    monkeypatch.setattr(patrol, "night_left", lambda p, site: 600)
+    monkeypatch.setattr(patrol, "fit", lambda rows, left: [
+        {"field": n, "priority": 1.0, "novae_reported": 1, "share_of_novae": 0.3, "expected_mag_50": 17.0,
+         "days_unwatched": 1, "minutes": 8} for n in ("M31-P1", "M31-P2")])
+    monkeypatch.setattr(patrol, "readiness", lambda p: [])
+    monkeypatch.setattr(patrol, "first_goto", lambda name: None)
+    monkeypatch.setattr(config, "load", config.example)
+    events, said = [], []
+
+    def run_command(cmd, **kw):
+        events.append(" ".join(Path(c).name for c in cmd[1:4]))
+        return type("Done", (), {"returncode": 0})()
+    monkeypatch.setattr(patrol.subprocess, "run", run_command)
+    monkeypatch.setattr(patrol, "newest_session", lambda name, after: tmp_path / name)
+    monkeypatch.setattr(restack, "run", lambda session, **k: None)
+    monkeypatch.setattr(patrol, "analyse", lambda session, say, both_halves=True: {"unexplained": 1})
+    monkeypatch.setattr(patrol, "unexplained", lambda result: result["unexplained"])
+    monkeypatch.setattr(patrol, "first_reference", lambda *a, **k: None)
+    monkeypatch.setattr(patrol, "second_look", lambda p, name, say: events.append(f"second look {name}") or {})
+    monkeypatch.setattr(patrol, "second_look_said", lambda name, first, second, say: said.append(second))
+    monkeypatch.setattr(patrol, "due_step", lambda: "SN 2026sqf in NGC 3310")
+    import stitch
+    monkeypatch.setattr(stitch, "later", lambda name: "log")
+    args = argparse.Namespace(programme="m31-panels", analyse=None, minutes=None, plan=False, dry_run=False)
+    patrol.run(args, say=lambda *_: None)
+    assert not any(e.startswith("second look") for e in events)
+    assert events.count("mount.py goto M31-P1") == 1          # never sent back to it
+    assert all("SN 2026sqf in NGC 3310" in s["stopped"] for s in said) and len(said) == 2
+
+
+def test_a_panel_visit_is_long_enough_to_be_searched_after_losses():
+    """4 November 2026: five minutes a panel gave P3, P5 and P6 six or seven
+    stacked frames after a stall, a cloud and the quality pass, under the
+    search's eight. A visit must allow for losing half its frames."""
+    import vet
+    p = patrol.programme("m31-panels")
+    frames = 60 * p["minutes"] / (p["exposure"] + 4)      # about 4 s between frames
+    assert frames / 2 >= vet.HALVES_FROM
+
+
 def test_a_panel_imaged_without_the_patrol_still_becomes_its_first_reference(tmp_path, monkeypatch):
     """18 October 2026: panel 8, imaged by shoot.py alone, was searched but
     left with no reference of its own, so the next night had nothing to

@@ -843,7 +843,12 @@ def run(args, say=print):
             except Exception as problem:     # one panel's search failing is not the night's
                 say(f"  a panel's search failed: {problem}")
                 continue
-            if unexplained(entry["analysis"]) and live.get("patrol.second_looks"):
+            waiting = due_step() if unexplained(entry["analysis"]) else None
+            if waiting:
+                second_look_said(entry["field"], entry["analysis"],
+                                 {"stopped": f"the plan's next step ({waiting}) is due; it goes first on the "
+                                             "next clear night"}, say)
+            elif unexplained(entry["analysis"]) and live.get("patrol.second_looks"):
                 goto = plans[entry["field"]][0]
                 say(f"== back to {entry['field']} for a second look")
                 if subprocess.run(goto, stdout=sys.stdout, env=dict(os.environ, TY_PATROL="1")).returncode == 0:
@@ -886,6 +891,16 @@ def first_goto(name):
         return plan
     except interface.Refusal as refused:
         return {"would_move": False, "error": refused.as_error()}
+
+
+def due_step():
+    """The schedule's next step, when the step this patrol runs as has used
+    its time (schedule.due); None outside a schedule or if it cannot say."""
+    try:
+        import schedule
+        return schedule.due()
+    except Exception:       # a patrol run by hand, or no schedule: nothing waits
+        return None
 
 
 def first_reference(name, session, say=print):
