@@ -207,38 +207,26 @@ keeps the old silent track. It takes effect when the stream next starts.
 
 ## The broadcast's running order
 
-A night on air runs in five parts, and each has its look:
+What goes on air, in order through a night. Since 30 October 2026 no card
+takes the place of what the telescope sees, with one exception (waiting for
+cloud, below), and the stream stops at once when the night is over.
 
-Since 30 October 2026 no card takes the place of what the telescope sees
-on air: the night-opens, between-targets and end-of-night cards below are
-still drawn by `./stream.py preview` but not sent, and the stream stops at
-once when the night is over.
-
-1. **The night opens.** The first time the stream goes on air in a night
-   (none in the last twelve hours, `cache/stream-night.json`) it holds a
-   card for a minute (`OPEN_S`) before anything else: the forecast's
-   verdict and mean cloud, the clear spell, the darkness, the Moon (how lit,
-   waxing or waning, when it rises or sets) and what tonight will try (the
-   schedule's steps, or else the discovery programmes in the clear), all
-   from `agent.night()` (`./ty night`), times in UTC, never the site. The
-   plan is read on its own thread, so going on air never waits for the
-   forecast; with no plan there is no card.
-2. **Setup and calibration.** Focusing and polar alignment, each with its
-   own look and its result card; the GoTo and plate solve show on the
-   between-targets card's checklist.
-3. **Science.** The imaging runs: a nova patrol's mosaic, a transit's light
+1. **Setup and calibration.** Focusing and polar alignment, each with its
+   own look and its result card for ten seconds; polar alignment gives way
+   as soon as the telescope goes on to a target.
+2. **Science.** The imaging runs: a nova patrol's mosaic, a transit's light
    curve, a picture building up, and a candidate's follow-up without its
-   place.
-4. **Background work.** Between targets, while the schedule has more due,
-   the card with what comes next; the presenter's explainers (stacking, the
-   search, a comet the hunt recovered) run through the science.
-5. **The night's result.** The end card, for two minutes, then the stream
-   stops: the fields observed and their names, frames kept, mosaic panels
-   searched and possible changes, counted from tonight's sessions; the
-   sharpest focus tonight (`cache/focus_runs.jsonl`); the polar alignment
-   from its first round to its last (`cache/polar_stream.json`); and what
-   is next, the candidates still open for a person to check. A figure not
-   found is left out.
+   place. The presenter's explainers (stacking, the search, a comet the
+   hunt recovered) run through it.
+3. **Waiting for cloud.** The one card that is sent: what tonight hopes
+   for and the setup steps, in place of a starless picture.
+
+Three more cards are drawn by `./stream.py preview` and kept in the code,
+but never sent: the night opens (a minute of the forecast, darkness, Moon
+and plan from `agent.night()`, `OPEN_S`), between targets (the checklist of
+what comes next), and the night's result (fields, frames kept, panels
+searched, sharpest focus, polar alignment from first round to last, open
+candidates; a figure not found is left out).
 
 ## YouTube and Twitch at once
 
@@ -263,10 +251,11 @@ start. A service with no key is left out with one line saying so, and the
 stream goes to the rest. ffmpeg's own messages reach the log with every key
 taken out (its errors print a failing address whole).
 
-Two streams need twice the upload: about 10 Mbit/s at 1080p. Twitch's
-bandwidth test measures one stream, so it can pass when two do not keep
-up; the stream then falls behind, and the sustained-trouble rule below
-takes both down to 720p together. The Twitch title, category, tags and chat
+Two streams need twice the upload: about 10 Mbit/s at 1080p, and 4 more
+with the 9:16 feed. Twitch's bandwidth test is therefore sent at every
+stream's bitrate added up (`combined_rate`), so it passes only when the
+upload carries them all; a shortfall later still falls behind, and the
+sustained-trouble rule below takes both down to 720p together. The Twitch title, category, tags and chat
 work as before whenever Twitch is among the destinations. YouTube starts
 and ends its broadcast itself when the stream key has Auto-start and
 Auto-stop on.
@@ -314,6 +303,17 @@ stopped, and started again 30 s later), and the broadcast went live within
 a minute. The address to watch is `youtube.com/@TelescopeYoke/live`, which
 leads to the broadcast whenever the channel is live. A connection to
 YouTube's ingest is not the stream being on air: check that address.
+
+**The stream asks YouTube whether it is live** (`YouTubeCheck`). Once it
+has been sending ten minutes (`YT_LIVE_S`), it asks YouTube every five
+(`YT_LOOK_S`, on its own thread) whether any broadcast is live. If none is,
+it says so in the log once for that start, with what YouTube says of the
+stream it receives and the broadcasts' state ("YouTube receives the stream
+(active/good) but no broadcast is live (ready)"), and sends the same line
+to the person's Telegram. The stream and the telescope carry on whatever
+the answer. Sending healthily, YouTube calling the stream healthy and
+viewers watching are three different things: the encoder's speed tells the
+first, this check the second, and the channel's page the third.
 
 The video is encoded by the laptop's own video hardware (Intel Quick Sync,
 through VAAPI). At the start it runs Twitch's bandwidth test; it drops to
@@ -375,6 +375,8 @@ live stream), `stream.py watch` sends it alongside the main feed whenever
 that is on air. It has its own ffmpeg and its own drawing thread, so it
 never holds up the main feed, and it stops with it. If it breaks off, the
 main feed carries on and the 9:16 one is started again a minute later.
+Its ffmpeg's errors reach the log marked "9:16 feed:", with the key taken
+out.
 
 ## The chat
 

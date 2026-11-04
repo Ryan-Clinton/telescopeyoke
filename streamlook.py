@@ -109,19 +109,21 @@ def sky_of(a):
 _STEADY = {}
 
 
-def steady(role, background, noise, weight=0.2):
+def steady(role, background, noise, weight=0.2, scene=None):
     """The display calibration for `role` ("single", "stack"), moved only a
     fifth of the way towards each new picture's: one exposure after another
-    then does not pump in brightness or colour on the screen."""
+    then does not pump in brightness or colour on the screen. A new `scene`
+    (another target) starts afresh, so it never inherits the last target's
+    sky for its first minutes."""
     old = _STEADY.get(role)
-    if old is not None and old[0].shape == background.shape:
+    if old is not None and old[0].shape == background.shape and old[2] == scene:
         background = old[0] + weight * (background - old[0])
         noise = old[1] + weight * (noise - old[1])
-    _STEADY[role] = (background, noise)
+    _STEADY[role] = (background, noise, scene)
     return background, noise
 
 
-def display(picture, sky=0.09, role=None):
+def display(picture, sky=0.09, role=None, scene=None):
     """The picture as shown on the stream: the sky dark and neutral without
     clipping faint structure, faint light lifted gently, bright stars
     rounded off before they clip, a little more colour. Its own sky sets it
@@ -131,7 +133,7 @@ def display(picture, sky=0.09, role=None):
     a = np.asarray(picture.convert("RGB"), dtype=np.float32) / 255.0
     background, noise = sky_of(a)
     if role:
-        background, noise = steady(role, background, noise)
+        background, noise = steady(role, background, noise, scene=scene)
     # The black point sits well under the sky, so the faintest light stays.
     black = np.clip(background - np.minimum(3.0 * noise, 0.06), 0, None)
     a = np.clip((a - black) / np.maximum(1 - black, 1e-3), 0, 1)
@@ -349,7 +351,8 @@ def sky_area(c, s, stack, single):
         stack, single = single, None
     # The Moon is its own light: the sky stretch, which sets the black point
     # from the picture's background, turned it black (30 October 2026).
-    look = (lambda p, role: p) if s.get("kind") == "moon" else (lambda p, role: display(p, role=role))
+    look = (lambda p, role: p) if s.get("kind") == "moon" else \
+        (lambda p, role: display(p, role=role, scene=s.get("target")))
     if stack is None:
         c.box((x, y, x + w, y + h), "panel")
         c.text((x + w // 2, y + h // 2), "The picture builds up after the first few exposures",
@@ -434,7 +437,8 @@ def explain(c, kind, s, area, stack, single):
                                                     (stack, f"{n} EXPOSURES" if n else "THE STACK", "stack"))):
             box = (int(inner / 2 - 20), int(row_h - 40))
             px = int(left + i * (inner / 2 + 20))
-            c.image.paste(fit(display(shrunk(picture, box), role=role), box), (px, int(top)))
+            c.image.paste(fit(display(shrunk(picture, box), role=role, scene=s.get("target")), box),
+                          (px, int(top)))
             c.text((px, top + box[1] + 8), label, "mono", 22, "text", on=on)
         words = "Each exposure is noisy. Added together, the noise averages away and fainter stars appear."
     elif kind == "transit":

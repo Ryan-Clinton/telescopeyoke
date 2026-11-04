@@ -574,3 +574,115 @@ def test_a_smaller_stream_size_sends_full_pictures_and_lets_ffmpeg_scale():
     assert cmd[cmd.index("-s") + 1] == f"{stream.WIDTH}x{stream.HEIGHT}"
     assert "scale=1280:720" in " ".join(cmd)
     assert ".resize(size)" not in inspect.getsource(stream.main if hasattr(stream, "main") else stream)
+
+
+def test_the_bandwidth_test_sends_what_every_stream_needs_together(tmp_path, monkeypatch):
+    """A test of one 5 Mbit/s stream passing said nothing about two sharing
+    the upload: it is sent at their bitrates added up."""
+    monkeypatch.setattr(stream, "PROGRESS", tmp_path / "progress.txt")
+    rates = []
+
+    def run(cmd, **kw):
+        rates.append(cmd[cmd.index("-b:v") + 1])
+        (tmp_path / "stream-bandwidth.txt").write_text("drop_frames=0\nspeed=1.0x\n")
+    one = int(stream.BITRATE[(stream.WIDTH, stream.HEIGHT)][:-1])
+    both = ["rtmp://a.rtmp.youtube.com/live2/y", "rtmp://live.twitch.tv/app/t"]
+    stream.bandwidth_test(both[1:], run=run)
+    stream.bandwidth_test(both, run=run)
+    stream.bandwidth_test(both, run=run, vertical=True)
+    upright = int(stream.BITRATE[stream.VERTICAL][:-1])
+    assert rates == [f"{one}k", f"{2 * one}k", f"{2 * one + upright}k"]
+
+
+def test_a_new_target_does_not_inherit_the_last_one_s_display_sky():
+    import numpy as np
+    streamlook._STEADY.clear()
+    dark, bright = np.full(3, 0.05), np.full(3, 0.5)
+    noise = np.full(3, 0.01)
+    streamlook.steady("stack", dark, noise, scene="M31")
+    same, _ = streamlook.steady("stack", bright, noise, scene="M31")
+    assert same[0] < 0.2                                      # smoothed: no pumping on one target
+    fresh, _ = streamlook.steady("stack", bright, noise, scene="M45")
+    assert fresh[0] == 0.5                                    # another target starts from its own sky
+
+
+def test_youtube_not_live_is_told_once_after_ten_minutes_on_air():
+    """1 November 2026: YouTube called the stream healthy while its
+    broadcast sat at Preparing, and viewers saw nothing."""
+    import time
+    stuck = {"streams": [{"status": "active", "health": "good"}], "broadcasts": [{"life": "ready"}]}
+    live = dict(stuck, broadcasts=[{"life": "live"}])
+    assert stream.youtube_trouble(live) is None and stream.youtube_trouble(None) is None
+    assert "active/good" in stream.youtube_trouble(stuck) and "ready" in stream.youtube_trouble(stuck)
+    told, said = [], []
+    check = stream.YouTubeCheck(state=lambda: stuck, tell=told.append, say=said.append)
+    check.started(1000)
+    check.look(1000 + stream.YT_LIVE_S - 1)
+    assert not check.busy and not told                        # too soon to judge
+    for later in (stream.YT_LIVE_S, stream.YT_LIVE_S + stream.YT_LOOK_S, stream.YT_LIVE_S + 3 * stream.YT_LOOK_S):
+        check.look(1000 + later)
+        deadline = time.time() + 5
+        while check.busy and time.time() < deadline:
+            time.sleep(0.01)
+    assert len(told) == 1 and said == told and "see nothing" in told[0]
+    fine = stream.YouTubeCheck(state=lambda: live, tell=told.append, say=said.append)
+    fine.started(0)
+    fine.look(stream.YT_LIVE_S)
+    while fine.busy:
+        time.sleep(0.01)
+    assert len(told) == 1
+
+
+def test_the_vertical_feed_passes_its_errors_on_without_its_key():
+    import io
+    import time
+
+    class Process:
+        stdin = io.BytesIO()
+        stderr = io.BytesIO(b"rtmp://a.rtmp.youtube.com/live2/vert-key-123: Broken pipe\n")
+
+        def wait(self, timeout=None):
+            return 0
+    said = []
+    feed = stream.VerticalFeed("rtmp://a.rtmp.youtube.com/live2/vert-key-123", run=lambda *a, **k: Process(),
+                               say=said.append)
+    deadline = time.time() + 5
+    while not said and time.time() < deadline:
+        time.sleep(0.01)
+    feed.stop()
+    assert said and said[0].startswith("9:16 feed:") and "vert-key-123" not in said[0]
+
+
+def test_what_goes_on_air_decodes_to_the_picture_sent_at_1080p_and_720p(tmp_path):
+    """4 November 2026: 720p went on air as garbage while the test of
+    ffmpeg's arguments passed. A known picture is encoded through the very
+    command the stream runs, decoded again, and compared."""
+    import shutil
+    import subprocess
+
+    import numpy as np
+    import pytest
+    from PIL import Image
+    if not shutil.which("ffmpeg"):
+        pytest.skip("no ffmpeg here")
+    stream.PROGRESS.parent.mkdir(parents=True, exist_ok=True)
+    w, h = stream.WIDTH, stream.HEIGHT
+    picture = np.zeros((h, w, 3), dtype=np.uint8)            # four coloured quarters and a white bar
+    picture[: h // 2, : w // 2] = (200, 30, 30)
+    picture[: h // 2, w // 2:] = (30, 200, 30)
+    picture[h // 2:, : w // 2] = (30, 30, 200)
+    picture[h // 2:, w // 2:] = (220, 220, 40)
+    picture[h // 2 - 40: h // 2 + 40, w // 4: 3 * w // 4] = 255
+    for size in ((w, h), stream.FALLBACK):
+        out = tmp_path / f"{size[0]}.mp4"
+        p = subprocess.run(stream.command(str(out), None, size), input=picture.tobytes() * 20,
+                           capture_output=True, timeout=120)
+        assert p.returncode == 0, p.stderr.decode()
+        frame = tmp_path / f"{size[0]}.png"
+        subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-i", str(out), "-vf", "select=eq(n\\,15)",
+                        "-frames:v", "1", str(frame)], check=True, timeout=60)
+        with Image.open(frame) as im:
+            assert im.size == size
+            got = np.asarray(im.convert("RGB").resize((w, h)), dtype=np.float32)
+        error = np.abs(got - picture.astype(np.float32)).mean()
+        assert error < 8, f"{size}: mean error {error:.1f} levels"

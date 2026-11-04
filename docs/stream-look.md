@@ -94,7 +94,9 @@ drawing again.
 **Bandwidth.** The home upload has not been measured, so the size is chosen
 once, at the start, by a test against the real ingest. On Twitch,
 `bandwidth_test()` sends 20 s of 1080p to the stream key with
-`?bandwidthtest=true`, which Twitch takes without showing it to anyone. If
+`?bandwidthtest=true`, which Twitch takes without showing it to anyone, at
+the bitrate of every stream going out added up (two services, and the 9:16
+feed when it has a key), since they all share the one upload. If
 that kept up (speed 0.95 or more, no more than a second's frames dropped),
 the stream starts at 1080p; otherwise it starts at 1280 × 720, 30 fps and
 3 Mbit/s. YouTube has no such test, so it starts at 1080p.
@@ -243,7 +245,8 @@ the galaxy.
 **No pumping.** Each new exposure would otherwise jump in brightness and
 colour as its own sky moved. So the calibration used for each role (the
 stack, the single exposure) moves only a fifth of the way towards each new
-picture's (`steady`).
+picture's (`steady`). The smoothing belongs to one target: a new target
+starts from its own sky, never from the last one's.
 
 **Cropping.** Scientific content is never cropped just to fill the box. A
 picture is fitted whole and letterboxed by default. A crop for presentation

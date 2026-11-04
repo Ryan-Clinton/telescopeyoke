@@ -832,22 +832,41 @@ def falling_behind(reports, now, within=SLOW_S, drops=None, frames=None, breaks=
     return len(recent) >= 3 and reports[0][0] <= now - within and all(s < 0.95 for s in recent)
 
 
-def bandwidth_test(target, device=None, run=subprocess.run, seconds=TEST_S):
-    """The size to start at: 1080p if a short test of it to Twitch kept up,
-    else 720p. Twitch takes a stream key with ?bandwidthtest=true without
+def combined_rate(targets, vertical=False):
+    """The upload all the streams need together at 1080p, in kbit/s: one
+    1080p stream for each rtmp destination, and the 9:16 one when it is
+    sent too."""
+    rtmp = [t for t in ([targets] if isinstance(targets, str) else targets) if str(t).startswith("rtmp")]
+    rate = int(BITRATE[(WIDTH, HEIGHT)][:-1]) * max(1, len(rtmp))
+    return rate + (int(BITRATE[VERTICAL][:-1]) if vertical else 0)
+
+
+def bandwidth_test(target, device=None, run=subprocess.run, seconds=TEST_S, vertical=False):
+    """The size to start at: 1080p if a short test to Twitch kept up, else
+    720p. Twitch takes a stream key with ?bandwidthtest=true without
     showing it to anyone. Other services have no such test: 1080p, and the
     stream watches itself. `target` may be a list: the test goes to the
-    Twitch one among them. It measures one stream, so with two the upload
-    needs twice what it showed; falling_behind catches it if that is short."""
-    target = next((t for t in ([target] if isinstance(target, str) else target) if "live.twitch.tv" in t), None)
-    if target is None:
+    Twitch one among them, at the bitrate of every stream together
+    (combined_rate), as all of them share the one upload: a test of one
+    5 Mbit/s stream passing said nothing about two."""
+    targets = [target] if isinstance(target, str) else list(target)
+    twitch_target = next((t for t in targets if "live.twitch.tv" in t), None)
+    if twitch_target is None:
         return (WIDTH, HEIGHT)
+    rate = combined_rate(targets, vertical)
+    video = encoder(device)
+    i = video.index("-b:v")
+    video[i + 1:i + 2] = [f"{rate}k"]
+    i = video.index("-maxrate")
+    video[i + 1:i + 2] = [f"{rate}k"]
+    i = video.index("-bufsize")
+    video[i + 1:i + 2] = [f"{2 * rate}k"]
     progress = PROGRESS.with_name("stream-bandwidth.txt")
     try:
         run(["ffmpeg", "-loglevel", "error", "-y", "-progress", str(progress), "-re", "-f", "lavfi",
              "-i", f"testsrc2=size={WIDTH}x{HEIGHT}:rate={FPS}", "-f", "lavfi",
              "-i", "anullsrc=channel_layout=stereo:sample_rate=44100", "-t", str(seconds),
-             *encoder(device), "-c:a", "aac", "-b:a", "64k", "-f", "flv", target + "?bandwidthtest=true"],
+             *video, "-c:a", "aac", "-b:a", "64k", "-f", "flv", twitch_target + "?bandwidthtest=true"],
             capture_output=True, timeout=seconds + 60)
         text = progress.read_text()
     except (OSError, subprocess.SubprocessError):
@@ -926,6 +945,64 @@ def announce(st, now, say=print, twitch_on=True, youtube_on=False):
             youtube.set_broadcast(yt_title, description, yt_tags, thumbnail=config.DATA / "web" / "stack.jpg",
                                   say=say)
     threading.Thread(target=run, daemon=True).start()
+
+
+YT_LOOK_S = 300           # how often YouTube is asked whether its broadcast is live, while on air
+YT_LIVE_S = 600           # on air this long and YouTube's broadcast still not live: tell the person
+
+
+def youtube_trouble(found):
+    """Why viewers cannot watch on YouTube although the stream is sent,
+    from youtube.state(), or None when a broadcast is live. YouTube can
+    call the stream it receives healthy while its broadcast sits at
+    "ready" or "testing" (Preparing stream): 1 November 2026, viewers saw
+    nothing and nothing said so."""
+    if found is None:
+        return None                     # not signed in: nothing to ask
+    casts = found.get("broadcasts") or []
+    if any(b.get("life") == "live" for b in casts):
+        return None
+    streams = found.get("streams") or []
+    receiving = ", ".join(f"{x.get('status')}/{x.get('health')}" for x in streams) or "no stream"
+    life = ", ".join(sorted({str(b.get("life")) for b in casts})) or "no broadcast"
+    return f"YouTube receives the stream ({receiving}) but no broadcast is live ({life})"
+
+
+class YouTubeCheck:
+    """While on air to YouTube, asks every YT_LOOK_S on its own thread
+    whether a broadcast is live; once the stream has been sent YT_LIVE_S
+    and none is, says so and sends it to the person's Telegram, once for
+    each start of the stream. Sending is healthy is not watching is live."""
+
+    def __init__(self, state=None, tell=None, say=print):
+        import youtube
+        self.state = state or youtube.state
+        self.tell = tell or (lambda text: __import__("notify").send(text, say=say))
+        self.say, self.asked, self.told, self.since, self.busy = say, -1e9, False, None, False
+
+    def started(self, now):
+        self.since, self.told, self.asked = now, False, -1e9
+
+    def look(self, now):
+        if self.since is None or self.told or self.busy or now - self.asked < YT_LOOK_S \
+                or now - self.since < YT_LIVE_S:
+            return
+        self.asked, self.busy = now, True
+        import threading
+        threading.Thread(target=self.ask, daemon=True).start()
+
+    def ask(self):
+        try:
+            why = youtube_trouble(self.state())
+        except Exception:                # YouTube unreachable: ask again next time
+            why = None
+        finally:
+            self.busy = False
+        if why and not self.told:
+            self.told = True
+            text = f"{time.strftime('%H:%M')} {why}: viewers on YouTube see nothing."
+            self.say(text)
+            self.tell(text)
 
 
 def chat(say=print):
@@ -1030,10 +1107,13 @@ class VerticalFeed:
     own ffmpeg and its own Composer, so it never holds up the main feed,
     and it stops with it. Silent."""
 
-    def __init__(self, address, device=None, run=subprocess.Popen):
+    def __init__(self, address, device=None, run=subprocess.Popen, say=print):
         self.composer = Composer(draw=frame_vertical)
         self.process = run(command(address, device, VERTICAL, picture=VERTICAL), stdin=subprocess.PIPE,
-                           stderr=subprocess.DEVNULL)
+                           stderr=subprocess.PIPE)
+        # Its own errors, keys taken out, marked as the 9:16 feed's: thrown
+        # away, a failure of the vertical feed could not be told apart.
+        passed_on(self.process, [address.rsplit("/", 1)[-1]], lambda line: say(f"9:16 feed: {line}"))
         self.stopped, self.dead = False, None     # when its ffmpeg went, if it has
         import threading
         self.thread = threading.Thread(target=self.run, daemon=True)
@@ -1151,6 +1231,7 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
     import director
     segment, segment_state, directed, looked_at, tones, voice = None, None, None, -1e9, None, None
     phones = None             # the 9:16 feed, while on air with a vertical key
+    on_youtube = YouTubeCheck(say=say) if youtube_on else None
     reload, keys_looked_at = False, clock()
     try:
         while True:
@@ -1199,7 +1280,7 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
             if phones is not None and phones.dead and now - phones.dead >= 60 and process is not None:
                 phones.stop()
                 upright = vertical_address()
-                phones = VerticalFeed(upright, device) if upright else None
+                phones = VerticalFeed(upright, device, say=say) if upright else None
                 say(f"{time.strftime('%H:%M')} the 9:16 picture broke off: " + ("sending it again" if phones
                                                                                   else "no key now, so not"))
             if phones is not None:
@@ -1209,7 +1290,7 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                     sleep(1)
                     continue
                 if not tested and to is None:
-                    size, tested = bandwidth_test(target, device), True
+                    size, tested = bandwidth_test(target, device, vertical=bool(vertical_address())), True
                     with composer.lock:
                         composer.ready = []
                 doing = {"focus": "focusing", "polar": "polar aligning"}.get(segment) \
@@ -1233,10 +1314,12 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                         import narrator
                         voice = narrator.Narrator(tones.add)
                 passed_on(process, stream_keys, say)
+                if on_youtube is not None:
+                    on_youtube.started(now)
                 opening(st, directed, now)
                 upright = vertical_address() if to is None else None
                 if upright and phones is None:
-                    phones = VerticalFeed(upright, device)
+                    phones = VerticalFeed(upright, device, say=say)
                     say(f"{time.strftime('%H:%M')} and the 9:16 picture to YouTube's vertical live")
             elif action == "stop":
                 say(f"{time.strftime('%H:%M')} " + ("the night is over" if ending else
@@ -1261,6 +1344,8 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                 announce(dict(st, director=directed, setup_card=carded), now, say,
                          twitch_on=twitch_on, youtube_on=youtube_on)
             if process is not None:
+                if on_youtube is not None:
+                    on_youtube.look(now)
                 if imaging(st) and now - measured_at > MEASURE_S:
                     measuring, measured_at = measure_transit(st, measuring, say), now
                 shown = composer.next(shown)
