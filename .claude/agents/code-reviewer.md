@@ -29,8 +29,8 @@ Beyond plain bugs, check what a general review would not know:
 - Anything that moves the mount has `--dry-run`, checks `MOTION_LOCKED`
   through `mount.py`, and has been tried on the simulator.
 - No one-off script for something used every night; no new dependency
-  without a reason; the demo and the tests still work (`./ty test-run`
-  is the main session's to start, not yours).
+  without a reason; the demo and the tests touching the change still work (the whole
+  suite runs once a day in CI; never start it).
 - Docs that state what is proven follow `docs/validation.md`.
 
 Report each finding as:
