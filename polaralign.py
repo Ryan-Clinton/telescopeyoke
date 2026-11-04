@@ -281,6 +281,7 @@ def _measure(scope, site, step=STEP, skyline=None):
     # three positions are checked before the first move.
     planned = positions(start_ha, dec_handset, mount.over_pole(scope.axes()[1]), site, step, skyline)
     points = []
+    learned = (0.0, 0.0)      # the first picture's solved offset from its hint, used for the next two
     try:
         for i, (target_ha, _) in enumerate(planned):
             tell(picture=i + 1, taken=i)
@@ -295,8 +296,17 @@ def _measure(scope, site, step=STEP, skyline=None):
             error = mount.load_pointing_error(mount.over_pole(scope.axes()[1]))
             hint_ra = mount.true_sidereal(site) - (target_ha + error[0])
             hint_dec = dec_handset + error[1]
+            # After the first picture, the offset it solved at is the best
+            # hint for the next two: 4 November 2026, with a hint 6-7° out
+            # each solve spiralled out for about 90 s; with a close one the
+            # same frame solved in 0.3 s.
+            if points:
+                hint_ra += learned[0]
+                hint_dec += learned[1]
             found = (scope.where_really(hint_ra, hint_dec, radius=40)
                      or scope.where_really(hint_ra, hint_dec, radius=90))
+            if found and not points:
+                learned = ((found["ra"] - hint_ra + 180) % 360 - 180, found["dec"] - hint_dec)
             if not found:
                 if i:
                     # Not left pointing at whatever hid the stars.
