@@ -124,20 +124,18 @@ item files its settings and records by camera.
    pixel the way the colour mosaic is treated now, so the 1.47"/px scale
    and everything downstream keep working; `colour()` gives a grey image.
    Native 0.73"/px is oversampled for this sky's seeing, so keep the 2x2.
-   *In progress 4 Nov.*
 2. **Cooler** (`altair.py`, `config.SETTINGS`). Target temperature as a
    setting; `CCD-TEMP` and `SET-TEMP` in every FITS header; the run waits
    until the sensor is within 1 °C of target before keeping frames.
    Altair's own advice is that cooling below about 10-15 °C gains little on
    this sensor [2], so start with a fixed 0 °C in winter and the same value
-   all season, so one dark library serves. *In progress 4 Nov.*
+   all season, so one dark library serves.
 3. **Filter wheel command** (`sxwheel.py`). `status`, `move NAME|NUMBER`,
    the filter names as a setting. Protocol from INDI's driver
    (`indi-3rdparty/indi-sx/sxwheel.cpp`): 2-byte HID write, 2-byte reply
    `[current, total]`; `{0,0}` queries, `{f,0}` moves one way, `{f+0x80,0}`
    moves the shorter way; poll every 250 ms until it arrives. Needs
-   `python3-hid` (install.sh). `FILTER` card in every frame. *In progress
-   4 Nov.*
+   `python3-hid` (install.sh). `FILTER` card in every frame.
 4. **Focal length from the train** (every user of `focal_length_mm`:
    plate-solve scale hints, field of view, the planner's framing,
    `polaris.py`, `moon.py`, `landmark.py`, `focus.py`, `agent.py`,
@@ -182,10 +180,6 @@ item files its settings and records by camera.
     docs/calibration.md, docs/camera-fault.md (the fault belongs to the
     183C), docs/validation.md as each item is proven on the sky.
 
-The first three items are being built on 4 November so the 183M can be
-used that night; they detect mono and the cooler from the camera itself and
-leave the 183C's behaviour as it is. Item 0 follows before anything else is
-filed by camera.
 
 ## First night, in order
 
