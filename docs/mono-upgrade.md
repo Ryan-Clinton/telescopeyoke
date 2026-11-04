@@ -28,7 +28,7 @@ the same commands work in mono with the filter wheel.
 |---|---|---|
 | Camera | Altair Hypercam 183M PRO TEC | Sony IMX183 mono, 5440 x 3648 at 2.4 um, 12-bit; TEC up to 45 °C below ambient; **4 GB DDR3 frame buffer** (the 183C has none); 12 V supply for the cooler; 580 g; two USB 2 sockets on the back fed by an internal hub [1][2][3]. Same Altair SDK as the 183C. Fan and TEC run only while a computer has the camera open [1]. |
 | Filter wheel | Starlight Xpress USB wheel, 7 x 1.25" (to be confirmed: the Mini is 5-position, so 7 x 1.25" is the standard SXUFW-1) | USB HID, `1278:0920`, powered from USB; about 33 mm thick T2-T2 [4][5]. Selects filter 1 after power-up; reports 0 filters until that turn ends [6]. |
-| Filters | Optolong L, R, G, B; SII, Ha, OIII (1.25") | Narrowband brand and bandwidth to be confirmed. One slot spare. |
+| Filters | Optolong L, R, G, B; SII, Ha, OIII (1.25") | Narrowband brand and bandwidth to be confirmed. Seven filters, seven slots: the wheel is full, with no clear or dark position. |
 | Corrector | Sky-Watcher 0.9x coma corrector (part 20233) | For f/4-f/6 Newtonians; makes the 150P **f/4.5, 675 mm**; needs **55 mm** (±2) from the bottom of its 2" thread to the sensor [7]. |
 
 ## What changes on the telescope
@@ -39,6 +39,21 @@ The usual fix is to move the primary mirror 20-25 mm up the tube and
 recollimate [8]; cutting the drawtube is the other way. Gary does it on
 4 November with the user's Dremel. Record how far the mirror moved (mm) and
 which way was chosen here when it is done.
+
+**The 55 mm budget.** The corrector wants 55 mm (±2) from the bottom of its
+2" thread to the sensor. The chain has to be written down and measured, not
+assumed:
+
+| Piece | Optical length | Source |
+|---|---|---|
+| 183M PRO TEC, flange to sensor | 17.5 mm (to measure: one forum report says 12.5 mm for a 183M Pro) | Altair's spacer listing for Hypercam TEC cameras [9]; [10] |
+| SX wheel, T2 to T2 | about 33 mm (to measure) | [5] |
+| Filter glass | adds about a third of its thickness (about 0.7 mm for 2 mm glass) | the usual rule for glass in a converging beam |
+| Spacers and adaptors | the rest: about 4.5 mm if the figures above hold | measured on the day |
+
+Write the measured chain into the train's settings. Reaching focus in the
+middle is not enough: stars in the corners of a full-resolution frame
+decide whether the spacing is right (first night, below).
 
 **Image scale and field.** At 675 mm instead of 750 mm:
 
@@ -85,10 +100,12 @@ the lost-frame refusals become per camera: the 183C keeps Speed 0 and its
 refusals; the 183M starts at Speed 0 too and is tried faster only after a
 full clean night, with the result recorded against the 183M alone.
 
-**The 183C after the tube mod.** With the mirror moved up, the 183C reaches
-focus with spacers behind the corrector at the same 55 mm (it is the same
-sensor and needs the same spacing), or with an extension tube without the
-corrector at 750 mm. Which one is used is part of its train (below).
+**The 183C after the tube mod.** With the mirror moved up, the 183C needs
+more outward travel or an extension to reach focus. Behind the corrector it
+needs its own spacer chain to 55 mm: same sensor, but its body's flange
+distance is its own and has to be measured, not taken from the 183M. Without
+the corrector it works at 750 mm with an extension tube. Each is a separate
+train (below) with its own measured chain.
 
 ## Software work
 
@@ -120,10 +137,15 @@ item files its settings and records by camera.
      accident; stacking refuses a mixed set.
 
 1. **Mono frames** (`altair.py`, `camera.py`, `stacking.py`). Detect a mono
-   camera from the SDK. Leave out `BAYERPAT`. Treat each 2x2 block as one
-   pixel the way the colour mosaic is treated now, so the 1.47"/px scale
-   and everything downstream keep working; `colour()` gives a grey image.
-   Native 0.73"/px is oversampled for this sky's seeing, so keep the 2x2.
+   camera from the SDK. Leave out `BAYERPAT`. The raw frame is kept at its
+   full 5440 x 3648, as the 183C's raw mosaics are kept now, so it can
+   always be reprocessed. Processing (stacking, searching, the stream)
+   works on 2x2 blocks by default, as now, because stars here measure about
+   6.4" across (docs/discovery/results.md), eight native pixels; software
+   binning on CMOS adds no read-noise gain, it only matches the sampling.
+   The processing scale is a setting, so full resolution can be used where
+   it pays (corner checks, centroids for timing work), and the choice is
+   tested against the measured seeing and the laptop's speed.
 2. **Cooler** (`altair.py`, `config.SETTINGS`). Target temperature as a
    setting; `CCD-TEMP` and `SET-TEMP` in every FITS header; the run waits
    until the sensor is within 1 °C of target before keeping frames.
@@ -142,30 +164,53 @@ item files its settings and records by camera.
    `camera_test.py`). Each reads the active train's effective focal length
    and the active camera's sensor, not a single setting, so 750 mm with the
    183C and 675 mm with the 183M are both right.
-5. **Filter in the plan** (`shoot.py`, `schedule.py`). A run step names its
-   filter. An LRGB step cycles filters in blocks (for example 10 L, then 5
-   each of R, G, B), moving the wheel and the focus offset between blocks.
-   Default L, so a step that says nothing behaves like today.
+5. **Filter in the plan** (`shoot.py`, `schedule.py`, the observing plan's
+   goals and windows, docs/observing-plan-spec.md). The filter belongs to
+   the step's purpose, through the plan that already chooses steps by goal,
+   not a separate filter scheduler: discovery patrols in L against same-band
+   references; a transit in one filter for its whole window, never changed
+   mid-transit; emission nebulae in narrowband; colour pictures in LRGB
+   blocks (for example 10 L, then 5 each of R, G, B). Default L, so a step
+   that says nothing behaves like today.
+   A filter change is one transaction: finish the exposure, move the wheel,
+   read back the position, apply the focus offset, let it settle, then
+   expose. A frame is only labelled with a filter the wheel has confirmed;
+   a failed move stops the step rather than keeping mislabelled frames.
 6. **Focus per filter** (`focus.py`, `focuser.py`). Walk-in in L as now.
    Measure the offset of every other filter from L once (walk-in in each),
    keep it, and apply it when the wheel moves. Reset the stored travel and
    start position after the tube mod.
 7. **Calibration** (`calibrate.py`, `stacking.py`, docs/calibration.md).
-   Darks are filed by camera, and for a cooled camera matched by
-   temperature as well as exposure and gain, so a 183M library made once
-   at the set temperature is reused. The 183C keeps its own darks and its
-   "scaled to the night" method for a camera with no thermometer. Flats
-   per camera, train and filter.
+   Darks are filed by camera and matched on everything that changes them:
+   temperature, exposure, gain, offset, binning and readout speed. The
+   IMX183 has amp glow, so 183M darks are matched, never scaled. The 183C
+   keeps its own darks and its "scaled to the night" method for a camera
+   with no thermometer. Flats per camera, train and filter, with flat-darks;
+   a bad-pixel map per camera. Master frames are versioned and never
+   overwritten, and every stack records which masters it used, so a new
+   library never changes what an old result meant. Because the 183M is
+   cooled, its darks can be made indoors or on a cloudy night with the cap
+   on, never in a clear window.
+7a. **Gain and offset** (`camera_test.py`, which already has
+   `--gain-sweep`). Before fixing the 183M's defaults, measure read noise
+   from bias pairs, full well and dynamic range, and how long a frame can
+   be before bright stars saturate, over a few gains and offsets. Altair's
+   starting point for the IMX183 (gain 800, offset 50) is where the sweep
+   starts, not the answer.
 8. **Discovery and photometry** (`difference.py`, `depth.py`, `patrol.py`,
    `transits.py`, `precision.py`). References and zero points are kept per
    camera and band: the 183C's unfiltered colour references stay for nights
    with the 183C, and each patrol field gets a 183M reference in Optolong L
-   before its difference images mean anything, with its own Gaia G zero
-   point. A difference image always pairs a frame with a reference from
-   the same camera and band. Transits in L (most light) or R (less scintillation
-   and red-star bias), chosen per target. A candidate nova can be checked
-   in Ha, where novae are bright. There is no photometric V filter in the
-   set; G stands in, and results say "G (Optolong)", never "V".
+   before its difference images mean anything. A difference image always
+   pairs a frame with a reference from the same camera and band.
+   Magnitudes are instrumental and say so: the band is named for what took
+   it ("L (Optolong), 183M"), the zero point against Gaia G is fitted with a
+   colour term measured from comparison stars of different colours, and
+   every magnitude carries its uncertainty. Neither L nor the Optolong G is
+   Gaia G or Johnson V; a result never calls itself either. Transits in L
+   (most light) or R (less scintillation and red-star bias), chosen per
+   target, with an ensemble of comparison stars. A candidate nova can be
+   checked in Ha, where novae are bright.
 9. **Stream and page** (`stream.py`, `streamlook.py`, `page.py`). Name the
    camera in use. With the 183M the live picture is grey; show the filter
    and the sensor temperature beside it. With the 183C, as now.
@@ -176,9 +221,55 @@ item files its settings and records by camera.
 11. **Focus per camera** (`focus.py`). Focus positions, travel and filter
     offsets are kept per camera and train, so swapping back to the 183C
     starts from its own last focus, not the 183M's.
-12. **Docs.** README hardware table (both cameras), docs/focuser.md,
+12. **What every frame records** (`altair.py`, `stacking.py`). Camera and
+    serial, train, focal length, filter as confirmed by the wheel, gain,
+    offset, readout speed, binning, sensor and set temperature, exposure,
+    and `DATE-OBS` as the start of the exposure in UTC from the capture
+    call, not the file's time. The IMX183 has a rolling shutter: rows are
+    read over a fraction of a second, so the frame records that timing is
+    the start of readout, and transit work states its timing error.
+    Calibration masters and software version go into every stack.
+13. **Docs.** README hardware table (both cameras), docs/focuser.md,
     docs/calibration.md, docs/camera-fault.md (the fault belongs to the
     183C), docs/validation.md as each item is proven on the sky.
+
+## Later, after the 183M works
+
+In this order, each its own piece of work with its own test:
+
+- **LRGB and narrowband stacking.** Each filter stacked and scored on its
+  own, then combined. An incomplete set (cloud during B) keeps what it got,
+  and later nights add to the same project. Narrowband composites (SHO)
+  are labelled as false colour.
+- **Focus that looks after itself.** Refocus on temperature drift and
+  after filter changes, notice a focuser stall, and stop rather than keep
+  soft frames.
+- **The longest useful exposure.** Learned per filter and sky position from
+  rejected frames and signal-to-noise, so narrowband exposures are as long
+  as the EQ3 can track and no longer.
+- **Stream.** Grey live view in L, a colour picture that builds as R, G
+  and B arrive, the filter and why it was chosen.
+- **Guiding** is its own spec: the guide camera (docs: guide camera,
+  29 Oct) is a step towards it, not closed-loop guiding.
+
+## Is it better? Measured, not assumed
+
+The same tests the 183C has already been through, repeated with the 183M,
+so the upgrade is judged on numbers. The 183C's baselines, from
+docs/discovery/results.md (`depth.py`, planted fake stars, M31):
+
+| Measure | 183C | 183M |
+|---|---|---|
+| 50% of planted stars found, 8 min (40 x 12 s) | G 17.14 | to measure |
+| 50% found, 54 min (202 x 16 s) | G 17.59 | to measure |
+| 5-sigma on sky, 54 min | 17.91 | to measure |
+| Frames kept, of frames taken | in the night records | to measure |
+| False candidates per searched field | in the patrol records | to measure |
+| Scatter on a transit's flat part | in the transit records | to measure |
+
+The optics change too (675 mm, corrector), so this compares the whole
+system, not the camera alone; where a fair camera-only comparison is
+possible (the 183C behind the same corrector), it is done too.
 
 
 ## First night, in order
@@ -193,7 +284,8 @@ Daylight, indoors or out, before the sky is dark:
    `CCD-TEMP`, `SET-TEMP` and `FILTER`.
 4. Focuser moves the whole train out and back without stalling.
 5. Focus reaches a far-off object (a mast or hill more than a kilometre
-   away): proves the tube mod gives enough inward travel.
+   away) with travel to spare both ways: record how far inside and outside
+   focus the drawtube can still go, not just that focus is reached.
 
 Dark:
 
@@ -202,10 +294,18 @@ Dark:
 8. Plate solve at 675 mm; check the solved scale is 0.73"/px (1.47 after
    2x2) and set the focal length from the solve.
 9. The usual polar alignment and GoTo.
-10. Focus offsets for R, G, B, Ha, OIII, SII.
-11. A short run in L: frames kept against frames lost, trailed share.
-12. Darks at the set temperature for the night's exposures and gains.
-13. Flats per filter at dusk or dawn.
+10. Corners: star size and shape in the four corners of a full-resolution
+    frame against the middle. Elongated corner stars mean the 55 mm chain
+    or tilt is wrong.
+11. Focus offsets for R, G, B, Ha, OIII, SII.
+12. A short run in L: frames kept against frames lost, trailed share, star
+    roundness, and the longest exposure that stays round, against the 183C
+    nights.
+13. Flats per filter at dusk or dawn; their corners show whether the
+    1.25" filters vignette the sensor at f/4.5.
+
+Darks at the set temperature are made on a cloudy night or indoors with
+the cap on, not in this clear window.
 
 Each result goes in `docs/nights/2026-11-04/` and, when it proves a line
 above, in docs/validation.md.
@@ -228,3 +328,5 @@ above, in docs/validation.md.
 6. [SX Mini filter wheel handbook](https://www.sxccd.com/wp-content/files/Mini-Filter-Wheel.pdf); INDI driver `indilib/indi-3rdparty/indi-sx/sxwheel.cpp`
 7. [First Light Optics: Sky-Watcher 0.9x coma corrector](https://www.firstlightoptics.com/coma-correctors/skywatcher-coma-corrector.html)
 8. [Stargazers Lounge: coma corrector on the 150PDS](https://stargazerslounge.com/topic/276993-coma-corrector-skywatcher-150pds/); [the 150P and prime focus](https://stargazerslounge.com/topic/283434-achieving-focus-with-skywatcher-star-discovery-150p-and-dslr/)
+9. [Altair spacer for Hypercam TEC cameras, 17.5 mm sensor-to-flange](https://astroworldtelescopes.com/products/altair-nikon-lens-adapter-spacer-17-5-mm-for-hypercam-tec)
+10. [Stargazers Lounge: backfocus for a 55 mm corrector (12.5 mm report for the 183M Pro)](https://stargazerslounge.com/topic/356556-what-else-do-i-need-for-my-55mm-backfocus)
