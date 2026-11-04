@@ -395,12 +395,14 @@ SETTINGS = (
      "camera_test.py --speed-ladder finds the fastest that keeps them. Blank leaves the driver's own.",
      {"min": 0, "max": 3, "optional": True}),
     ("cameras.183m", "tec_target", "183M cooler target", "number",
-     "°C, one fixed value for the season so one set of darks serves (0 is the first guess for winter). Set each "
-     "time the 183M opens, through Altair's own library; a run keeps no frames until the sensor is within 1 °C of "
+     "°C, one fixed value for the season so one set of darks serves (0 is the first guess for winter; never below -5, "
+     "where this sensor gains nothing). The cooler is taken down to it slowly, 1 °C a minute from the sensor's own "
+     "temperature (about 20 minutes from a warm sensor), never in one jump that could frost the window, each "
+     "time the 183M opens, through Altair's own library; a run keeps no frames until the ramp is done and the sensor is within 1 °C of "
      "it, each frame says the sensor temperature (CCD-TEMP), this target (SET-TEMP), the cooler's power and whether "
      "it was within 0.5 °C (TY_ONTGT), and the end of a run warms the sensor 3 °C a minute before the cooler goes "
      "off. A cooler at full power that cannot reach it stops the run and says so. Blank leaves the cooler as it is.",
-     {"min": -40, "max": 30, "optional": True}),
+     {"min": -5, "max": 30, "optional": True}),
     ("imaging", "camera", "Camera in use", "text",
      "The camera profile ([cameras.NAME] in config.toml: 183c, 183m) to use when both cameras are plugged in. "
      "Blank: the one plugged in, matched to its profile when it opens; a camera with no profile is refused.",

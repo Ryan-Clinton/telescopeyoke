@@ -71,7 +71,10 @@ setup = "default"
 # cooled = true
 # readout_speed = 0
 # The cooler's target in °C, one value for the season so one set of darks
-# serves: runs wait until the sensor is within 1 °C of it, and warm it 3 °C a
+# serves, never below -5 (no gain below it on this sensor). The cooler goes
+# down to it slowly, 1 °C a minute from the sensor's own temperature (never
+# one jump: the window can frost); runs wait until the sensor is within 1 °C
+# of it, and warm it 3 °C a
 # minute at their end before the cooler goes off. Only a camera with a
 # cooler acts on it.
 # tec_target = 0

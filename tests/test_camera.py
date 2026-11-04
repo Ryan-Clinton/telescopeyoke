@@ -1428,15 +1428,15 @@ def test_either_camera_on_any_night_is_told_from_what_the_library_says(sdk, worl
 
 def test_the_cooler_is_turned_on_to_its_target_and_each_frame_says_the_temperature(world, monkeypatch):
     monkeypatch.setattr(altair, "wait_for", lambda seconds: 0.3)
-    lib = use_sdk(world, monkeypatch, tec_target=-10)
+    lib = use_sdk(world, monkeypatch, tec_target=-5)
     lib.ALTAIRCAM_OPTION_TEC = 0x08
     world.mono = world.tec = True
     with altair.AltairCamera() as cam:
         _, header = cam.frame(0.01)
         handle = lib.Altaircam.opened[-1]
         assert cam.temperature() == pytest.approx(-5.2)
-    assert handle.options[lib.ALTAIRCAM_OPTION_TEC] == 1 and handle.target == -100   # tenths of a degree
-    assert header["CCD-TEMP"] == pytest.approx(-5.2) and header["SET-TEMP"] == -10.0
+    assert handle.options[lib.ALTAIRCAM_OPTION_TEC] == 1 and handle.target == -50   # tenths; the sensor (-5.2) is already there: no ramp
+    assert header["CCD-TEMP"] == pytest.approx(-5.2) and header["SET-TEMP"] == -5.0
 
 
 def test_without_a_target_the_cooler_is_left_as_it_is_but_the_temperature_is_still_said(sdk, world):
@@ -1470,29 +1470,80 @@ def test_each_frame_says_the_cooler_s_power_and_whether_it_was_on_target(world, 
     assert {"TY_ONTGT", "TY_TECV", "TY_TECP", "CCD-TEMP", "SET-TEMP"} <= set(stacking.KEPT)
 
 
-def test_a_run_waits_for_the_sensor_to_come_within_a_degree_of_its_target(world, monkeypatch):
-    cooled(world, monkeypatch, target=-5)
-    world.sensor, said, now = 100, [], [0.0]
-
-    def sleep(seconds):                           # the sensor cools 1 °C each look
+def following(lib, world, now):
+    """A sleep for settle(): time passes and the sensor follows the cooler's
+    set point, 1 °C a look at most."""
+    def sleep(seconds):
         now[0] += seconds
-        world.sensor -= 10
+        point = lib.Altaircam.opened[-1].target
+        world.sensor = max(point, world.sensor - 10)
+    return sleep
+
+
+def test_a_run_waits_for_the_ramp_and_the_sensor_to_come_within_a_degree_of_its_target(world, monkeypatch):
+    lib = cooled(world, monkeypatch, target=-5)
+    world.sensor, said, now = 100, [], [0.0]
     with altair.AltairCamera() as cam:
-        assert cam.settle(say=said.append, sleep=sleep, clock=lambda: now[0]) is True
-    assert world.sensor <= -40 and "sensor at -4.0 °C, its target -5 °C" in said[-1]
-    assert said[0].startswith("camera: cooling, sensor at 10.0 °C") and "50% of its power" in said[0]
+        assert cam.settle(say=said.append, sleep=following(lib, world, now), clock=lambda: now[0]) is True
+    assert "its target -5 °C" in said[-1] and abs(world.sensor + 50) <= 10
+    assert said[0].startswith("camera: cooling, sensor at 10.0 °C") and "stepping down 0.5 °C every 30 s" in said[0]
+    assert now[0] >= 15 / altair.RAMP_STEP_C * altair.RAMP_EVERY_S - altair.RAMP_EVERY_S   # about 15 minutes
+
+
+def test_the_cooler_is_ramped_down_over_about_twenty_minutes_never_in_one_jump(world, monkeypatch):
+    lib = cooled(world, monkeypatch, target=-5)
+    world.sensor, now = 150, [0.0]                # 15 °C: 20 °C to come down
+    with altair.AltairCamera() as cam:
+        handle = lib.Altaircam.opened[-1]
+        assert handle.targets == [145]             # opened: one step below the sensor, not the target
+        times = []
+        real = handle.put_Temperature
+
+        def stamped(tenths):
+            times.append(now[0])
+            real(tenths)
+        handle.put_Temperature = stamped
+        cam.settle(say=lambda line: None, sleep=following(lib, world, now), clock=lambda: now[0])
+    steps = handle.targets
+    assert steps[-1] == -50 and all(0 < a - b <= 5 for a, b in zip(steps, steps[1:]))   # 0.5 °C at most
+    assert all(b - a >= altair.RAMP_EVERY_S for a, b in zip(times, times[1:]))
+    assert 18 * 60 <= times[-1] <= 22 * 60                                   # about 20 minutes
+
+
+def test_a_camera_opened_again_near_its_target_does_not_start_a_new_ramp(world, monkeypatch):
+    lib = cooled(world, monkeypatch, target=-5)
+    world.sensor, now = -48, [0.0]                 # a re-centre: the sensor is still at -4.8 °C
+    with altair.AltairCamera() as cam:
+        assert lib.Altaircam.opened[-1].targets == [-50]
+        assert cam.settle(say=lambda line: None, sleep=following(lib, world, now), clock=lambda: now[0]) is True
+    assert now[0] == 0
+
+
+def test_a_target_below_minus_five_is_refused_by_the_camera_and_the_setting():
+    import config
+    with pytest.raises(ValueError):
+        config.checked("cameras.183m", "tec_target", "-6")
+    assert config.checked("cameras.183m", "tec_target", "-5") == -5
+    assert altair.TEC_LOWEST == -5
+
+
+def test_the_camera_refuses_a_target_below_minus_five_from_a_hand_written_config(world, monkeypatch):
+    cooled(world, monkeypatch, target=-10)
+    with pytest.raises(IndiError, match="below -5 °C"):
+        altair.AltairCamera()
 
 
 def test_a_cooler_at_full_power_that_cannot_reach_its_target_says_so(world, monkeypatch):
-    cooled(world, monkeypatch, target=-20, volts=119, most=120)
+    cooled(world, monkeypatch, target=-5, volts=119, most=120)
     world.sensor, now = 30, [0.0]
 
     def sleep(seconds):
         now[0] += seconds
     with altair.AltairCamera() as cam:
-        with pytest.raises(IndiError, match="full power and the sensor has stayed at 3.0 °C, 23.0 °C above"):
+        with pytest.raises(IndiError, match="full power and the sensor has stayed at 3.0 °C, 8.0 °C above"):
             cam.settle(say=lambda line: None, sleep=sleep, clock=lambda: now[0])
-    assert altair.STUCK_S <= now[0] < altair.COOL_WAIT_S
+    ramp = 7.5 / altair.RAMP_STEP_C * altair.RAMP_EVERY_S
+    assert ramp - altair.RAMP_EVERY_S + altair.STUCK_S <= now[0] < ramp + altair.COOL_WAIT_S
 
 
 def test_the_183c_neither_waits_for_a_cooler_nor_warms_one(sdk, world, monkeypatch):
@@ -1512,10 +1563,11 @@ def test_at_the_end_of_a_run_the_sensor_is_warmed_a_step_a_minute_before_the_coo
     world.sensor = 95                             # 9.5 °C before the cooler starts
     naps, said = [], []
     with altair.AltairCamera() as cam:
+        cam.level = cam.target                    # the ramp down was done by the run (settle)
         world.sensor = 2                          # cooled to 0.2 °C by the end of the run
         assert cam.warm_up(say=said.append, sleep=naps.append) is True
         handle = lib.Altaircam.opened[-1]
-    assert handle.targets == [0, 32, 62, 92, 95]          # tenths: up 3 °C a step, to where it began
+    assert handle.targets == [90, 32, 62, 92, 95]    # tenths: the first step down at opening, then up 3 °C a step
     assert naps == [altair.WARM_EVERY_S] * 4 and handle.options[lib.ALTAIRCAM_OPTION_TEC] == 0
     assert "warming the sensor from 0.2 °C to 9.5 °C" in said[0]
 
@@ -1527,7 +1579,7 @@ def test_a_sensor_that_never_got_cold_is_not_kept_waiting_to_warm(world, monkeyp
         world.sensor = 80                         # a quick frame: barely cooled
         cam.warm_up(say=lambda line: None, sleep=lambda s: pytest.fail("no wait"))
         handle = lib.Altaircam.opened[-1]
-    assert handle.targets == [0] and handle.options[lib.ALTAIRCAM_OPTION_TEC] == 0
+    assert handle.targets == [90] and handle.options[lib.ALTAIRCAM_OPTION_TEC] == 0
 
 
 def test_the_183m_s_cooler_target_is_a_setting_of_its_own_profile():
@@ -1616,10 +1668,11 @@ def test_the_warm_up_is_bounded_in_time_and_the_cooler_goes_off_at_its_end(world
     def sleep(seconds):
         now[0] += seconds
     with altair.AltairCamera() as cam:
+        cam.level = cam.target
         world.sensor = 0
         assert cam.warm_up(say=said.append, sleep=sleep, clock=lambda: now[0], most=150) is True
         handle = lib.Altaircam.opened[-1]
-    assert now[0] <= 150 and handle.targets == [0, 30, 60]         # two steps fit, not seven
+    assert now[0] <= 150 and handle.targets == [195, 30, 60]       # the first step down at opening; then two up fit, not seven
     assert handle.options[lib.ALTAIRCAM_OPTION_TEC] == 0 and "has had its 2.5 minutes" in said[-1]
     assert altair.WARM_MOST_S <= 15 * 60
 
@@ -1628,6 +1681,7 @@ def test_a_warm_up_that_fails_part_way_still_turns_the_cooler_off_and_never_rais
     lib = cooled(world, monkeypatch, target=0)
     world.sensor = 200
     with altair.AltairCamera() as cam:
+        cam.level = cam.target
         world.sensor = 0
         handle = lib.Altaircam.opened[-1]
 

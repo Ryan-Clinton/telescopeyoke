@@ -42,7 +42,13 @@ TEC = 0x80             # ALTAIRCAM_FLAG_TEC: a cooler with a target temperature
 # The cooler (docs/mono-upgrade.md, item 2), on a camera with a TEC only.
 ON_TARGET = 0.5        # °C: a frame further than this from the target is kept but flagged (TY_ONTGT)
 TEC_READY = 1.0        # °C: a run keeps no frames until the sensor is this close to its target
-COOL_WAIT_S = 900      # the longest a run waits for the sensor to get there
+COOL_WAIT_S = 900      # the longest a run waits for the sensor to get there, after the ramp's own time
+# Cooling slowly, from the camera's owner (years with it): never below -5 °C,
+# where this sensor gains nothing, and down a step at a time, never one jump,
+# or the sensor's window can frost: 0.5 °C every 30 s, 1 °C a minute, so
+# about 20 minutes from a sensor at 15 °C to -5 °C.
+TEC_LOWEST = -5.0
+RAMP_STEP_C, RAMP_EVERY_S = 0.5, 30.0
 COOL_POLL_S = 5.0
 FULL_POWER = 0.95      # a share of the cooler's most voltage taken as all it has
 STUCK_S = 180          # at full power this long with the sensor no colder: it cannot reach the target
@@ -387,31 +393,62 @@ class AltairCamera:
         if offset is not None:
             handle.put_Option(lib.ALTAIRCAM_OPTION_BLACKLEVEL, int(offset))
 
-    def cool(self, degrees):
-        """Turn the cooler on and set the sensor's target, in °C. Nothing on
-        a camera without a cooler (the 183C), so one config.toml suits both."""
+    def cool(self, degrees, clock=time.monotonic):
+        """Turn the cooler on and start the slow way down to the sensor's
+        target, in °C: never one jump, which can frost the sensor's window
+        (the camera's owner, who has used it for years). The set point starts
+        RAMP_STEP_C below the sensor's own temperature now and ramp() takes
+        it down a step every RAMP_EVERY_S (1 °C a minute, so about 20 minutes
+        from a warm sensor); a camera opened again with its sensor already
+        near the target (a re-centre, a jam) gets there in a step or two, not
+        a fresh 20 minutes. Never below TEC_LOWEST. Nothing on a camera
+        without a cooler (the 183C), so one config.toml suits both."""
         if not self.flags & TEC:
             return False
+        degrees = float(degrees)
+        if degrees < TEC_LOWEST:
+            raise CameraError(f"a cooler target of {degrees:g} °C is below {TEC_LOWEST:g} °C, the lowest this "
+                              "sensor is ever set to (no gain below it): set tec_target to -5 or warmer")
         lib, handle = self.lib, self.handle
         option = getattr(lib, "ALTAIRCAM_OPTION_TEC", None)
         if option is not None:
             handle.put_Option(option, 1)
+        now = self.temperature()
+        if now is None:
+            raise CameraError("the cooler is on but the sensor's temperature cannot be read, so no dark could be "
+                              "matched to the frames")
+        level = degrees if now - degrees <= RAMP_STEP_C else now - RAMP_STEP_C
+        self._set_point(level)
+        self.target, self.level, self._stepped = degrees, level, clock()
+        return True
+
+    def _set_point(self, degrees):
+        """The cooler's set point now, read back where the library can say it
+        (ALTAIRCAM_OPTION_TECTARGET): a set point the camera does not hold
+        stops the run."""
+        lib, handle = self.lib, self.handle
         tenths = int(round(float(degrees) * 10))      # the library counts tenths of a degree
         handle.put_Temperature(tenths)
-        # Read back: the target the camera now holds, where the library can
-        # say it, and the sensor's own temperature, which every frame and
-        # every dark is matched on. Either missing stops the run.
         readback = getattr(lib, "ALTAIRCAM_OPTION_TECTARGET", None)
         if readback is not None:
             held = handle.get_Option(readback)
             if held != tenths:
-                raise CameraError(f"the cooler was set to {float(degrees):g} °C and says its target is "
+                raise CameraError(f"the cooler was set to {tenths / 10:g} °C and says its target is "
                                   f"{held / 10:g} °C")
-        if self.temperature() is None:
-            raise CameraError("the cooler is on but the sensor's temperature cannot be read, so no dark could be "
-                              "matched to the frames")
-        self.target = float(degrees)
-        return True
+
+    def ramp(self, clock=time.monotonic):
+        """One step further down towards the target when RAMP_EVERY_S has
+        passed since the last; True once the set point is the target."""
+        if self.target is None or not self.flags & TEC:
+            return True
+        if self.level > self.target and clock() - self._stepped >= RAMP_EVERY_S:
+            level = max(self.target, self.level - RAMP_STEP_C)
+            try:
+                self._set_point(level)
+            except self.lib.HRESULTException as problem:
+                raise CameraError(f"the cooler would not take its next step to {level:g} °C: {_reason(problem)}")
+            self.level, self._stepped = level, clock()
+        return self.level <= self.target
 
     def temperature(self):
         """The sensor's temperature in °C as the camera reports it; None on a
@@ -437,30 +474,36 @@ class AltairCamera:
             return None
         return volts, (volts / top if top > 0 else None)
 
-    def settle(self, say=print, sleep=time.sleep, clock=time.monotonic, wait=COOL_WAIT_S):
-        """Wait until the sensor is within TEC_READY of the cooler's target, so
-        a run keeps no frame at the wrong temperature (its darks would not
-        match). At once on a camera with no cooler or no target: the 183C.
-        A cooler at full power whose sensor has stopped getting colder, one
-        not there within `wait` seconds, or a sensor whose temperature cannot
-        be read, says so with the figures and stops the run (CameraError):
-        never frames at a temperature no dark suits."""
+    def settle(self, say=print, sleep=time.sleep, clock=time.monotonic, wait=None):
+        """Take the cooler's set point down its ramp (cool(), ramp()) and wait
+        until the ramp has reached the target and the sensor is within
+        TEC_READY of it, so a run keeps no frame at the wrong temperature (its
+        darks would not match). At once on a camera with no cooler or no
+        target: the 183C. A cooler at full power whose sensor has stopped
+        getting colder once the ramp is done, one not there within `wait`
+        seconds (the ramp's own time plus COOL_WAIT_S), or a sensor whose
+        temperature cannot be read, says so with the figures and stops the
+        run (CameraError): never frames at a temperature no dark suits."""
         if self.target is None or not self.flags & TEC:
             return True
+        if wait is None:
+            wait = (self.level - self.target) / RAMP_STEP_C * RAMP_EVERY_S + COOL_WAIT_S
         end, said, best, since = clock() + wait, None, None, clock()
+        self._stepped = clock()          # the step cool() set counts from here, on this clock
         while True:
+            ramped = self.ramp(clock)
             degrees, power = self.temperature(), self.tec_power()
             if degrees is None:
                 raise CameraError(f"the sensor's temperature cannot be read while cooling to {self.target:g} °C: "
                                   "no frames are kept at a temperature no dark matches")
             share = power[1] if power and power[1] is not None else None
-            if abs(degrees - self.target) <= TEC_READY:
+            if ramped and abs(degrees - self.target) <= TEC_READY:
                 say(f"camera: sensor at {degrees:.1f} °C, its target {self.target:g} °C")
                 return True
-            if best is None or degrees < best - 0.2:
+            if not ramped or best is None or degrees < best - 0.2:
                 best, since = degrees, clock()
             usage = f", cooler at {100 * share:.0f}% of its power" if share is not None else ""
-            if share is not None and share >= FULL_POWER and clock() - since >= STUCK_S:
+            if ramped and share is not None and share >= FULL_POWER and clock() - since >= STUCK_S:
                 raise CameraError(f"the cooler is at full power and the sensor has stayed at {degrees:.1f} °C, "
                                   f"{degrees - self.target:.1f} °C above its target of {self.target:g} °C: it cannot "
                                   "reach it tonight. Set a warmer tec_target for this camera, and take darks at it.")
@@ -468,7 +511,8 @@ class AltairCamera:
                 raise CameraError(f"the sensor did not reach {self.target:g} °C within {wait / 60:.0f} min: "
                                   f"it is at {degrees:.1f} °C{usage}")
             if said is None or clock() - said >= 60:
-                say(f"camera: cooling, sensor at {degrees:.1f} °C, target {self.target:g} °C{usage}; "
+                step = "" if ramped else f", set point {self.level:g} °C stepping down {RAMP_STEP_C:g} °C every {RAMP_EVERY_S:g} s"
+                say(f"camera: cooling, sensor at {degrees:.1f} °C, target {self.target:g} °C{step}{usage}; "
                     "no frames kept until it is within 1 °C")
                 said = clock()
             sleep(COOL_POLL_S)
@@ -492,7 +536,7 @@ class AltairCamera:
         try:
             degrees = self.temperature()
             if degrees is not None and self.ambient is not None and degrees < self.ambient - WARM_STEP_C:
-                level = max(self.target, degrees)
+                level = max(self.level, degrees)
                 say(f"camera: warming the sensor from {degrees:.1f} °C to {self.ambient:.1f} °C, "
                     f"{WARM_STEP_C:g} °C a minute, before the cooler is turned off")
                 for _ in range(WARM_STEPS_MOST):
