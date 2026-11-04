@@ -203,12 +203,19 @@ item files its settings and records by camera.
    expose. A frame is only labelled with a filter the wheel has confirmed;
    a failed move stops the step rather than keeping mislabelled frames.
 6. **Focus per filter** (`focus.py`, `focuser.py`). Walk-in in L as now.
-   Measure the offset of every other filter from L with a walk-in in each,
-   at least three times on different nights, approaching from the same
-   side so the motor's slack is taken up the same way, and keep the mean
-   and spread. An offset whose spread is bigger than the focus tolerance at
-   f/4.5 is not used; that filter gets its own walk-in instead. Note the
-   temperature with each, so drift with temperature can be fitted later.
+   The filters come in two parfocal sets (Gary, 4 Nov 2026): L, R, G and B
+   focus together, and SII, Ha and OIII focus together. So the offsets are
+   kept by set, not by filter: none within a set, and one offset from the
+   LRGB set to the SHO set.
+   - **Proving it once:** on the first clear night, a walk-in in each of
+     the seven filters. Filters in a set that land within the focus
+     tolerance at f/4.5 of each other confirm it; one that doesn't gets
+     its own offset, and the result is recorded.
+   - **The set-to-set offset:** measured at least three times on different
+     nights, approaching from the same side so the motor's slack is taken
+     up the same way, kept as mean and spread; a spread bigger than the
+     tolerance means a walk-in after every change between sets instead.
+     Temperature noted with each, so drift can be fitted later.
    After a wheel move and offset, the first frame's star size is checked
    against the last frame in L; worse than tolerance means refocus, not
    carry on. Reset the stored travel and start position after the tube
