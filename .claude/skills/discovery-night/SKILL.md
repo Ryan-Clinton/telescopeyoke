@@ -87,7 +87,11 @@ is `docs/agents/setup-routine.md` step 6b.
    --plan`, then `./starwatch.py tabby` (a 10-minute look); `./transits.py`
    lists whole transits tonight, and one is taken only if they ask.
 4. Each panel's answer: how deep it reached and how many candidates are
-   unexplained. Show each `patrol-N.png` before calling anything a find.
+   unexplained. The night-note bullet for each step comes from
+   `./outcome.py SESSION` (the schedule also says it when the step ends):
+   frames asked, taken, accepted and stacked, depth, and whether it was
+   searchable and worth it, with what limited it. Show each `patrol-N.png`
+   before calling anything a find.
    An unexplained candidate also goes to the person's phone by itself,
    and the patrol takes a second look at once.
 5. For a candidate: `catalogue-researcher` with its place, then

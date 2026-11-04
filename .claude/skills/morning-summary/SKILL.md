@@ -2,10 +2,16 @@
 name: morning-summary
 description: Say what last night's observing got. Use when the person asks how last night went, what we got, or for a summary of a night.
 compatibility: telescopeyoke with a night's sessions under frames/
-allowed-tools: Bash(./ty session *) Bash(./ty candidates *) Bash(./ty agent-report *)
+allowed-tools: Bash(./ty session *) Bash(./ty candidates *) Bash(./ty agent-report *) Bash(./outcome.py *)
 ---
 
 # Morning summary
+
+First `./outcome.py --night` (last night's sessions, before noon): for
+each observation, whether it ran, could be searched, was worth it and
+reached its goal, and what limited it. Give its lines to the agent with
+the night, and say any session short of searchable or worth it in line 4,
+with its cause.
 
 Hand the reading to the `night-analyst` agent: the night's folders are
 many and long, and only its five lines are needed here. Give it the night

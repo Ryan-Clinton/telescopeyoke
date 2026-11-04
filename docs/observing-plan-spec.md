@@ -1,8 +1,7 @@
 # Spec: planning a night by what it gets, not by its clock
 
 Status: decisions approved 4 November 2026. Phase 1 built (`outcome.py`),
-waiting for its audit (the morning-summary and discovery-night skills are
-still to be pointed at it: editing `.claude/` needs the person's leave).
+waiting for its audit. The morning summary and the night notes use it.
 The order of work and its checkpoints: Phase 1,
 audit; Phase 5, a deep audit of the replay engine (a flawed one would
 make every later change look better than it is); Phases 2, 3 and 4,
