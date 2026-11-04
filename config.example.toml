@@ -131,9 +131,11 @@ travel = 512
 
 [filterwheel]
 # The Starlight Xpress USB wheel's filters, position 1 first, a gap left empty
-# (sxwheel.py). Check the order against the real wheel: ./sxwheel.py move 1,
-# then look which filter is in the light path.
-filters = "L,R,G,B,Ha,OIII,SII,"
+# (sxwheel.py). Blank: the positions go by number. Fill it in only after
+# looking: ./sxwheel.py move 1, see which filter is in the light path, and so
+# on round. Seven filters in seven slots would be, in the order found:
+#   filters = "L,R,G,B,SII,Ha,OIII"
+filters = ""
 
 [indi]
 port = 7624

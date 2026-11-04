@@ -516,6 +516,35 @@ def test_a_camera_that_stays_jammed_stops_the_run_after_a_few_tries(night, monke
     assert stopped
 
 
+def kept_header(folder, summary):
+    return stacking.load_light(sorted((folder / summary["folder"]).glob("light-*.fits"))[0])[1]
+
+
+def test_a_run_through_the_183c_s_train_never_asks_a_filter_wheel(night, monkeypatch):
+    import sxwheel
+    _, folder = night
+
+    def asked(**_):
+        raise AssertionError("the 183C's train has no wheel")
+    monkeypatch.setattr(sxwheel, "confirmed", asked)
+    monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "3", "--exposure", "2",
+                                      "--no-recentre", "--no-restack"])
+    kept = kept_header(folder, shoot.main())
+    assert "FILTER" not in kept and "FILTPOS" not in kept
+
+
+def test_a_run_through_a_train_with_the_wheel_labels_frames_with_the_position_it_confirmed(night, monkeypatch):
+    import sxwheel
+    _, folder = night
+    plain = config.hardware
+    monkeypatch.setattr(config, "hardware", lambda: dict(plain(), train={"name": "183m-cc", "filterwheel": True}))
+    monkeypatch.setattr(sxwheel, "confirmed", lambda **_: (6, "Ha"))
+    monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "3", "--exposure", "2",
+                                      "--no-recentre", "--no-restack"])
+    kept = kept_header(folder, shoot.main())
+    assert kept["FILTER"] == "Ha" and kept["FILTPOS"] == 6
+
+
 def test_a_run_given_minutes_finishes_on_time_whatever_the_frame_count(night, monkeypatch, capsys):
     """1 November 2026: lost frames stretched a 75-minute patrol towards three
     hours and the plan's next targets."""

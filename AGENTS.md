@@ -57,7 +57,7 @@ them and every file kept under `demo/`.
 | `alert.py` | Tells the house when cloud or rain arrives: a Hue light changes colour and a Google Home speaker says so. Reads the run's frames and the forecast; moves nothing |
 | `focuser.py`, `firmware/focuser/` | The focuser's motor: an Arduino Nano driving a small stepper, and the firmware it runs. `focuser.py` turns the motor; `focus.py --motor` uses it to focus on the stars in view |
 | `cameras.py` | The camera profiles (`[cameras.NAME]`; the old `[camera]` is the 183c) and light paths (`[trains.NAME]`), which is in use and why; `move-183c --go` moves the 183C's own files under `183c/` once |
-| `sxwheel.py` | The Starlight Xpress USB filter wheel (HID): `status`, `move` a name or number; names from `[filterwheel] filters`, order not yet checked on the real wheel |
+| `sxwheel.py` | The Starlight Xpress USB filter wheel (HID): `status`, `move` a name or number; names from `[filterwheel] filters` (none until someone has looked); frames through a train with the wheel carry the position it confirmed (`FILTPOS`, `FILTER`) |
 | `shoot.py`, `stacking.py`, `restack.py`, `process.py`, `calibrate.py` | Imaging pipeline |
 | `depth.py` | How faint a stack reaches, measured: zero point against Gaia, 5-sigma limit, planted stars found again (`docs/discovery.md`, phase 0) |
 | `remote.py` | `restack.py --on HOST`: sends the frames, calibration and code to another computer by SSH and rsync, stacks there under `~/telescopeyoke-laptop/remote`, and brings the picture back |

@@ -5,10 +5,12 @@
     ./sxwheel.py move Ha        turn to a filter by its name, or by its number:
     ./sxwheel.py move 3         waits until it has arrived (--timeout, seconds)
 
-The names are [filterwheel] filters in config.toml, position 1 first. The
-order there is a guess until someone has looked: move 1, then see which
-filter is in the light path. shoot.py writes the filter into each frame's
-header (FILTER) when the wheel answers.
+The names are [filterwheel] filters in config.toml, position 1 first; with
+none set the positions go by number. Set them only once someone has looked:
+move 1, then see which filter is in the light path, and so on round. When
+the light path (train) has the wheel in it, shoot.py asks the wheel where it
+is and writes that into each frame (FILTPOS, and FILTER the name): only a
+position the wheel has confirmed, never one assumed.
 
 The wheel is a USB HID device, 1278:0920. Its protocol, as INDI's driver
 speaks it (indilib/indi-3rdparty, indi-sx/sxwheel.cpp): every command is
@@ -105,7 +107,9 @@ class Wheel:
             found = [i + 1 for i, name in enumerate(known[:total]) if name and name.lower() == text.lower()]
             if not found:
                 listed = ", ".join(f"{i + 1} {n}" for i, n in enumerate(known[:total]) if n)
-                raise WheelError(f"No filter named {text!r}. The wheel holds: {listed or 'nothing named'}.")
+                raise WheelError(f"No filter named {text!r}. The wheel holds: {listed}." if listed else
+                                 f"No filter named {text!r}: the positions have no names yet ([filterwheel] "
+                                 "filters); move by number, 1 to the wheel's size.")
             number = found[0]
         if not 1 <= number <= total:
             raise WheelError(f"Filter {number} is not on a {total}-position wheel.")
@@ -140,19 +144,36 @@ def label(number, known=None):
     return f"{number} ({name})" if name else str(number)
 
 
-def current_name(hid=None):
-    """The name of the filter in the light path, for a frame's header; None
-    when there is no wheel, no module, it is turning, or the position has
-    no name. Never raises: a run carries on without it."""
+def confirmed(hid=None, say=None):
+    """(position, name) of the filter in the light path as the wheel itself
+    has just said it, for a frame's header: FILTPOS the position, FILTER its
+    name, or "position N" while the positions have no names. None when there
+    is no wheel, no module, or it is turning: then a frame says no filter
+    rather than one the wheel did not confirm. Never raises; `say` hears why
+    there is none."""
     if config.DEMO:
         return None
     try:
         with Wheel.open(hid) as wheel:
-            current, _ = wheel.status()
-    except Exception:
+            current, total = wheel.status()
+    except Exception as problem:
+        if say:
+            say(f"the filter wheel did not answer ({problem}): frames carry no FILTER")
+        return None
+    if not current or not total:
+        if say:
+            say("the filter wheel is turning: frames carry no FILTER")
         return None
     known = names()
-    return (known[current - 1] or None) if 0 < current <= len(known) else None
+    name = known[current - 1] if current <= len(known) else ""
+    return current, name or f"position {current}"
+
+
+def cards(header, found):
+    """Write a confirmed (position, name) into a frame's header."""
+    if found:
+        header["FILTPOS"], header["FILTER"] = found     # plain values: some cameras give a dict
+    return header
 
 
 def main(argv=None):

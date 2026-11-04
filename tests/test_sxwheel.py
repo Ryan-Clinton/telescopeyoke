@@ -110,26 +110,44 @@ def test_no_wheel_and_a_wheel_that_may_not_be_opened_are_told_apart():
         sxwheel.Wheel.open(hid_with(Closed(), plugged=True))
 
 
-def test_the_frame_s_filter_name_comes_from_the_wheel_and_never_raises(monkeypatch):
+def test_a_frame_s_filter_is_only_a_position_the_wheel_confirmed_and_never_raises(monkeypatch):
     monkeypatch.setattr(sxwheel.config, "DEMO", False)
-    assert sxwheel.current_name(hid_with(FakeWheel(at=6))) == "OIII"
-    assert sxwheel.current_name(hid_with(FakeWheel(at=8, total=8))) is None   # the empty position
+    said = []
+    assert sxwheel.confirmed(hid_with(FakeWheel(at=6))) == (6, "OIII")
+    assert sxwheel.confirmed(hid_with(FakeWheel(at=8, total=8))) == (8, "position 8")   # no name for it
     turning = FakeWheel(at=1)
     turning.going, turning.left = 3, 5
-    assert sxwheel.current_name(hid_with(turning)) is None
+    assert sxwheel.confirmed(hid_with(turning), say=said.append) is None
+    assert sxwheel.confirmed(hid_with(FakeWheel(warming=2)), say=said.append) is None   # power-up turn
 
     class Gone(FakeWheel):
         def open(self, vendor, product):
             raise OSError("open failed")
-    assert sxwheel.current_name(hid_with(Gone(), plugged=False)) is None
+    assert sxwheel.confirmed(hid_with(Gone(), plugged=False), say=said.append) is None
+    assert said[0] == said[1] == "the filter wheel is turning: frames carry no FILTER"
+    assert said[2].startswith("the filter wheel did not answer")
+    header = sxwheel.cards({}, (6, "OIII"))
+    assert header == {"FILTPOS": 6, "FILTER": "OIII"} and sxwheel.cards({}, None) == {}
+
+
+def test_with_no_names_set_the_positions_go_by_number(monkeypatch, capsys):
+    monkeypatch.setattr(sxwheel, "names", lambda cfg=None: [""])
+    device = FakeWheel(at=2)
+    with sxwheel.Wheel.open(hid_with(device)) as wheel:
+        assert wheel.move("5", sleep=lambda s: None) == 5
+        with pytest.raises(sxwheel.WheelError, match="positions have no names yet"):
+            wheel.move("Ha", sleep=lambda s: None)
+    monkeypatch.setattr(sxwheel.config, "DEMO", False)
+    assert sxwheel.confirmed(hid_with(FakeWheel(at=3))) == (3, "position 3")
 
 
 def test_the_names_come_from_the_setting_with_gaps_kept(monkeypatch):
     monkeypatch.undo()
-    assert sxwheel.names({"filterwheel": {"filters": "L, R,G,B,Ha,OIII,SII,"}}) == \
-        ["L", "R", "G", "B", "Ha", "OIII", "SII", ""]
+    assert sxwheel.names({"filterwheel": {"filters": "L, R,G,B,SII,Ha,OIII"}}) == \
+        ["L", "R", "G", "B", "SII", "Ha", "OIII"]
+    assert sxwheel.names({"filterwheel": {"filters": "L,,G"}}) == ["L", "", "G"]
     import config
-    assert sxwheel.names(config.example())[:7] == ["L", "R", "G", "B", "Ha", "OIII", "SII"]
+    assert sxwheel.names(config.example()) == [""]          # no order guessed before anyone has looked
 
 
 def test_the_command_says_where_the_wheel_is_and_moves_it(monkeypatch, capsys):

@@ -78,8 +78,9 @@ DEFAULTS = {
     # motor from where it started.
     "focuser": {"travel": 512},
     # filters: the Starlight Xpress wheel's filters, position 1 first (sxwheel.py).
-    # Not yet checked against the real wheel: the order must be looked at.
-    "filterwheel": {"filters": "L,R,G,B,Ha,OIII,SII,"},
+    # None until someone has looked which filter sits in which slot: until
+    # then the positions go by number, so no frame is named by a guess.
+    "filterwheel": {"filters": ""},
     # camera: the camera profile to use when both are plugged in; blank, the
     # one plugged in ([cameras.NAME], docs/mono-upgrade.md).
     "imaging": {"camera": ""},
@@ -407,8 +408,9 @@ SETTINGS = (
      "no limit left the drawtube about an inch out.", {"min": 64, "max": 8192}),
     ("filterwheel", "filters", "Filter wheel: filters in order", "text",
      "The Starlight Xpress wheel's filters by position, 1 first, separated by commas; leave a gap empty. "
-     "sxwheel.py move takes these names, and each frame says the filter in the path (FILTER). Check the order "
-     "against the real wheel: ./sxwheel.py move 1, then look which filter is in the light path.", {}),
+     "sxwheel.py move takes these names, and each frame through a train with the wheel says the position the "
+     "wheel confirmed (FILTPOS) and its name (FILTER). Blank: positions by number. Set it only after looking: "
+     "./sxwheel.py move 1, then see which filter is in the light path, and so on round.", {"optional": True}),
     ("mount", "link", "Mount reached by", "choice",
      "handset: a serial lead to the SynScan handset. wifi: the SynScan Wi-Fi adapter. eqdir: an EQDIR lead. "
      "The last two have no handset.", {"choices": ["handset", "wifi", "eqdir"]}),

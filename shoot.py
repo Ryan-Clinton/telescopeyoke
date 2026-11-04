@@ -1106,10 +1106,13 @@ def image(args, session, exposure, moving, holding, tracker):
                     holding.state = "off"
             tracker.waiting()
             jammed = None
-            # The filter in the light path, when a wheel answers: each frame
-            # says it (FILTER). Asked once here, as the wheel moves only when
-            # told to (sxwheel.py move), never during a run.
-            in_path = sxwheel.current_name()
+            # The filter in the light path, when the train has the wheel in it:
+            # each frame says the position the wheel confirmed (FILTPOS, FILTER).
+            # Asked here, as the wheel moves only when told to (sxwheel.py
+            # move), never during a run. A train with no wheel (the 183C's) is
+            # never asked, and its frames carry no FILTER, as before.
+            in_path = (sxwheel.confirmed(say=lambda line: print(f"  {line}", flush=True))
+                       if config.hardware()["train"].get("filterwheel") else None)
             with Camera(gain=args.gain) as cam:
                 while more():
                     try:
@@ -1117,8 +1120,7 @@ def image(args, session, exposure, moving, holding, tracker):
                     except CameraError as problem:
                         jammed = problem          # the camera is closed on the way out of this block
                         break
-                    if in_path:
-                        header["FILTER"] = in_path
+                    sxwheel.cards(header, in_path)
                     jams = 0
                     index += 1
                     tracker.took(index)
