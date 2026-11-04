@@ -8,7 +8,9 @@ come from that.
 
 ## Rules
 
-1. **A person asks for each move.** Agents plan and check; people decide.
+1. **Moves come from the person's night:** what they ask for, and every slew
+   of a plan they asked for or agreed, with no asking again. No move of the
+   agent's own outside that.
 2. **Check first.** `ty mount goto NAME --dry-run --json` says what would
    happen and applies every limit, with no hardware involved.
 3. **Never weaken a limit to make a request succeed.** Report the refusal.

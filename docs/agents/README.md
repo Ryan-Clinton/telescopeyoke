@@ -30,7 +30,7 @@ Start with [AGENTS.md](../../AGENTS.md); the details are in the pages beside thi
 The web API and the MCP server are read-only: they can report, plan and
 simulate, and cannot move the mount or start the camera. Moving the telescope
 from an agent means running `mount.py`, with the same limits as a person and
-only when a person has asked for that move.
+for what a person has asked for or a night plan they agreed.
 [`evals/`](../../evals/) holds the situations an agent should handle well; the test
 suite checks the interface gives the right answer in each. They have not yet
 been run with a model in the loop.
