@@ -379,7 +379,7 @@ def session(include_frames=False, limit=50, include_series=False, data=None):
     folders = {p.parent for p in (base / "frames").glob("*/*/frames.json*")}
     if not folders:
         raise interface.Refusal("NO_SESSION", "No imaging run has been recorded yet.")
-    newest = max(folders, key=lambda d: max(q.stat().st_mtime for q in d.glob("*.json*")))
+    newest = max(folders, key=stacking.last_capture)
     status = stacking.run_status(newest)
     series = status.pop("series", None)
     status["state"] = imaging_state(status)

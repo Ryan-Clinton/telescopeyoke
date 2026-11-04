@@ -202,3 +202,25 @@ def test_the_page_shows_a_plain_runs_frames(place, tmp_path):
         shown = on_the_page(tmp_path, serve.run_now())
     assert shown["doing"].startswith("Imaging M31-P6: 4 of 19 frames of 16 s")
     assert shown["runState"] == "waiting for the first frame"     # no frame kept in its log yet
+
+
+def test_processing_a_finished_session_does_not_make_it_the_run_imaging(place):
+    """4 November 2026: after the night was over a restack of NGC3310 and a
+    search of an old Tabby session wrote restack.json, depth.json and
+    patrol.json into their folders; the newest-file rule read each as the
+    run imaging, and the stream went on air three times with nothing taken."""
+    import stacking
+    hour_ago = time.time() - 3600
+    for name, when in (("NGC3310", hour_ago), ("Tabby", hour_ago - 86400)):
+        old = config.DATA / "frames" / name / "20261103-200000"
+        old.mkdir(parents=True)
+        (old / "session.json").write_text(json.dumps({"name": name, "frames": 10, "exposure": 16}))
+        (old / "frames.jsonl").write_text("")
+        for f in ("session.json", "frames.jsonl"):
+            os.utime(old / f, (when, when))
+        for f in ("restack.json", "depth.json", "patrol.json"):
+            (old / f).write_text("{}")                      # written just now, by processing
+    os.utime(place / "session.json", (hour_ago + 600, hour_ago + 600))   # M31-P6's run: the newest capture
+    st = serve.run_now()
+    assert st["name"] == "M31-P6" and st["age"] >= 2900 and not stream.imaging(st)
+    assert stacking.last_capture(config.DATA / "frames" / "NGC3310" / "20261103-200000") == pytest.approx(hour_ago)

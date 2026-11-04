@@ -207,13 +207,15 @@ def run_now(names=None):
     imaging run, whether a process is still running it ("running", and if
     not "stopped_at"), its pictures (a stack of an earlier run marked not
     "current"), and what is being done now ("activity", "activity_last")."""
-    # A session is any folder with a frame log or a plan, newest activity
+    # A session is any folder with a frame log or a plan, newest capture
     # last: a run that has not kept its first frame yet is still the newest
     # (22 October 2026, the page showed a WASP-12 run from two nights
-    # before while M31-P6 waited for a frame).
+    # before while M31-P6 waited for a frame). Only the run's own files
+    # count (stacking.last_capture): a search or restack of an old session
+    # does not make it the run going on (4 November 2026).
     folders = {p.parent for pattern in ("*/*/frames.json*", "*/*/session.json")
                for p in (config.DATA / "frames").glob(pattern)}
-    sessions = sorted(folders, key=lambda d: max(q.stat().st_mtime for q in d.glob("*.json*")))
+    sessions = sorted(folders, key=stacking.last_capture)
     status = stacking.run_status(sessions[-1]) if sessions else {}
     if status.get("name"):
         full = (names or {}).get(status["name"], "")

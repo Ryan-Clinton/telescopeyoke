@@ -176,3 +176,15 @@ def test_before_the_stream_starts_a_broadcast_is_opened_on_the_channels_stream(s
     get, post, sent = youtube_sky([stream("S1", "inactive")], [cast("B", "ready", "S1")])
     assert youtube.ensure_broadcast("t", "d", say=lambda s: None, get=get, post=post, before_start=True) == "B"
     assert not sent
+
+
+def test_a_stopped_stream_ends_the_broadcast_still_on_air(signed):
+    """4 November 2026: broadcasts are opened with auto-stop off, so nothing
+    ended them when the night was over and the channel stayed "live"."""
+    youtube._keep({"refresh_token": "r", "access_token": "a", "expires_at": time.time() + 3600})
+    get, post, sent = youtube_sky([stream("S1", "inactive")], [cast("B", "live", "S1"), cast("old", "complete", "S1")])
+    said = []
+    assert youtube.end_broadcasts(say=said.append, get=get, post=post) == 1
+    assert [(name, params["broadcastStatus"], params["id"]) for name, params, _ in sent] == [("transition", "complete", "B")]
+    youtube.TOKEN_FILE.unlink()
+    assert youtube.end_broadcasts(say=said.append, get=get, post=post) == 0      # not signed in: nothing sent

@@ -244,6 +244,36 @@ def state(get=requests.get, post=requests.post):
 OPEN = ("created", "ready", "testStarting", "testing", "liveStarting", "live")
 
 
+ON_AIR = ("testStarting", "testing", "liveStarting", "live")
+
+
+def end_broadcasts(say=print, get=requests.get, post=requests.post):
+    """End every broadcast still on air, when the stream has stopped. Ours
+    are opened with auto-stop off, so a pause between steps does not end
+    them; but then nothing ended them at the night's end either, and the
+    channel showed a live broadcast with nothing coming (4 November
+    2026). Returns how many were ended; never raises."""
+    try:
+        token = _access(post)
+        if not token:
+            return 0
+        auth = {"Authorization": f"Bearer {token}"}
+        ended = 0
+        for b in state(get, post)["broadcasts"]:
+            if b["life"] in ON_AIR:
+                went = post(f"{API}/liveBroadcasts/transition", params={"broadcastStatus": "complete",
+                            "id": b["id"], "part": "status"}, headers=auth, timeout=30)
+                if went.status_code == 200:
+                    ended += 1
+                    say(f"YouTube broadcast {b['id']} ended with the stream.")
+                else:
+                    say(f"YouTube would not end broadcast {b['id']} ({went.status_code}).")
+        return ended
+    except Exception as error:      # never holds up the stream's stop
+        say(f"YouTube's broadcast was not ended: {type(error).__name__}")
+        return 0
+
+
 def ensure_broadcast(title, description, say=print, get=requests.get, post=requests.post, clock=time.time,
                      before_start=False):
     """A broadcast open on the stream YouTube is receiving: the one already

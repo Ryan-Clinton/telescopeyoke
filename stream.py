@@ -1330,6 +1330,11 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                 process, quiet_since, shown = None, None, None
                 if phones is not None:
                     phones, _ = None, phones.stop()
+                if youtube_on:
+                    # Opened with auto-stop off (a pause must not end it), so
+                    # ended here, or the channel shows "live" with nothing coming.
+                    import threading
+                    threading.Thread(target=youtube.end_broadcasts, kwargs={"say": say}, daemon=True).start()
             if process is not None and twitch_on and chatting is None:
                 chatting = chat(say)
             # The channel's title follows the mission (the target and its

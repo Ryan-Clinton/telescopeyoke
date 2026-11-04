@@ -256,9 +256,17 @@ with the 9:16 feed. Twitch's bandwidth test is therefore sent at every
 stream's bitrate added up (`combined_rate`), so it passes only when the
 upload carries them all; a shortfall later still falls behind, and the
 sustained-trouble rule below takes both down to 720p together. The Twitch title, category, tags and chat
-work as before whenever Twitch is among the destinations. YouTube starts
-and ends its broadcast itself when the stream key has Auto-start and
-Auto-stop on.
+work as before whenever Twitch is among the destinations. The broadcasts the
+stream opens start by themselves and have auto-stop off, so a pause
+between steps does not end them; when the stream stops (the night over, or
+nothing new for five minutes) it ends any broadcast still on air itself
+(`youtube.end_broadcasts`).
+
+**Only the telescope's own capture puts it on air.** A run counts as
+imaging from the files the capture writes (its plan, the frame log), never
+from what processing writes beside them later (`stacking.last_capture`): on
+4 November 2026 a restack of NGC3310 and a search of an old Tabby session
+put the stream back on air three times after the night was over.
 
 **A destination that drops off comes back.** ffmpeg says when a tee
 destination fails ("Slave muxer #1 failed ..., continuing with 1/2

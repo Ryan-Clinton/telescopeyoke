@@ -860,6 +860,25 @@ def append_log(session, entry):
         f.write(json.dumps(entry) + "\n")
 
 
+CAPTURE_FILES = ("frames.jsonl", "frames.json", "session.json")
+
+
+def last_capture(session):
+    """When the run itself last wrote to `session`: its plan (the start),
+    a frame's line in the log, the log written whole at the end; 0 if none.
+    Never what processing writes beside them afterwards (restack.json,
+    depth.json, patrol.json, forced photometry...): on 4 November 2026 a
+    restack and a search of finished sessions read as imaging, and the
+    stream went back on air three times after the night was over."""
+    times = []
+    for name in CAPTURE_FILES:
+        try:
+            times.append((Path(session) / name).stat().st_mtime)
+        except OSError:
+            pass
+    return max(times, default=0)
+
+
 def read_log(session):
     """Every frame's entry so far."""
     lines = Path(session) / "frames.jsonl"
@@ -940,8 +959,7 @@ def run_status(session, now=None):
                       for f in recent],
             "accepted": [bool(f["accepted"]) for f in recent],
         }
-    newest = max((p.stat().st_mtime for p in session.glob("*.json*")), default=0)
-    status["age"] = round((now or time.time()) - newest)
+    status["age"] = round((now or time.time()) - last_capture(session))
     return status
 
 
