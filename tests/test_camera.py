@@ -1344,9 +1344,12 @@ def test_a_jammed_camera_has_its_power_cut_at_the_hub_and_carries_on(sdk, world,
     monkeypatch.setattr(usbpower, "cycle", cycle)
     a_failing_camera(world)
     with altair.AltairCamera() as cam:
-        data, _ = cam.frame(0.05)
+        data, header = cam.frame(0.05)
     assert cut == [True] and data is not None
     assert capsys.readouterr().err.count("trying again") == 2
+    # The frame says what getting it cost: a recorded stall, not one inferred
+    # from the gaps between frames (outcome.py).
+    assert header["TY_RETRY"] == 2 and header["TY_GOT_S"] >= 0
 
 
 def test_without_the_setting_the_power_is_never_cut(sdk, world, monkeypatch):

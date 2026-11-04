@@ -477,6 +477,7 @@ class AltairCamera:
         drops off USB. The jam clears only that way (1 November 2026: twice
         in an hour at speeds 0 and 2), and until then it took a walk outside."""
         lib = self.lib
+        asked_at = time.monotonic()
         for attempt in range(4):        # the 4th: the first frame after opening again is often lost
             try:
                 data, started = self._expose(seconds)
@@ -519,6 +520,12 @@ class AltairCamera:
         # 10.3 s in the fault, so a run shows when the camera changes state.
         if getattr(self, "back_s", None) is not None:
             header["TY_BACK"] = (self.back_s, "s from trigger to the frame arriving")
+        # What getting this frame cost the camera layer: how many tries failed
+        # first and the seconds from the first try to this frame. A recorded
+        # stall, as against a gap between frames inferred afterwards
+        # (outcome.py; 4 November 2026).
+        header["TY_RETRY"] = (attempt, "failed tries before this frame")
+        header["TY_GOT_S"] = (round(time.monotonic() - asked_at, 1), "s from the first try to this frame")
         return data, header
 
     def video(self, seconds, count, roi=None, timeout=5.0):

@@ -73,17 +73,77 @@ def stalls(log, exposure=None):
     return len(lost), round(sum(lost) / 60, 1)
 
 
-def search_state(session, field_watched):
-    """Whether the session's search ran: ("searched", None), ("stopped", why),
-    ("pending", None) while the background search has not finished, or
-    ("none", None) for a session no search is meant for."""
-    record = _json(Path(session) / "patrol.json")
-    if record is None:
-        return ("pending", None) if field_watched else ("none", None)
-    for line in record.get("summary", []):
-        if line.startswith("Stopped at "):
-            return "stopped", line.split(": ", 1)[1] if ": " in line else line
-    return "searched", None
+def working_on(session, programme=None, proc=Path("/proc")):
+    """Whether a live process is stacking or searching this session: a
+    patrol or restack naming the session's folder, or the patrol running its
+    programme (whose search is done in that process, panel after panel)."""
+    folder, wanted = str(Path(session)), ("patrol.py", "restack.py")
+    for entry in proc.glob("[0-9]*/cmdline"):
+        try:
+            args = entry.read_bytes().split(b"\0")
+        except OSError:
+            continue
+        words = [a.decode(errors="replace") for a in args if a]
+        if not any(w.endswith(wanted) for w in words):
+            continue
+        if any(folder in w for w in words) or (programme and programme in words):
+            return True
+    return False
+
+
+def search_state(session, programme=None, working=None):
+    """Where the session's search is, said apart:
+    - ("searched", None): it ran to the end;
+    - ("stopped", why): it ran and stopped itself (too few frames, too shallow,
+      a subtraction that did not match);
+    - ("running", None): a live process is stacking or searching it;
+    - ("failed", why): it started (its patrol.log is there) and ended without
+      an answer;
+    - ("not started", None): nothing ever searched it (`./patrol.py --sweep`
+      does);
+    - ("none", None): a session no programme searches.
+    Only "running" is pending: a failed or never-started search is not left
+    waiting for ever (the Phase 1 audit, 4 November 2026)."""
+    session = Path(session)
+    record = _json(session / "patrol.json")
+    if record is not None:
+        for line in record.get("summary", []):
+            if line.startswith("Stopped at "):
+                return "stopped", line.split(": ", 1)[1] if ": " in line else line
+        return "searched", None
+    if programme is None:
+        return "none", None
+    if (working or working_on)(session, programme):
+        return "running", None
+    log = session / "patrol.log"
+    if log.exists():
+        lines = [line for line in log.read_text(encoding="utf-8", errors="replace").splitlines() if line.strip()]
+        return "failed", (lines[-1][:200] if lines else "its log is empty")
+    return "not started", None
+
+
+def camera_retries(session):
+    """What the camera layer recorded getting each frame (altair.py's
+    TY_RETRY and TY_GOT_S in the raw frames' headers, from 4 November 2026):
+    frames that needed a retry, the failed tries and the seconds they took.
+    None for a session taken before it was recorded."""
+    from astropy.io import fits
+    frames = tries = 0
+    seconds = 0.0
+    seen = False
+    for path in sorted(Path(session).glob("light-*.fits")):
+        try:
+            header = fits.getheader(path)
+        except OSError:
+            continue
+        if "TY_RETRY" not in header:
+            continue
+        seen = True
+        if header["TY_RETRY"]:
+            frames += 1
+            tries += int(header["TY_RETRY"])
+            seconds += max(0.0, float(header.get("TY_GOT_S", 0)) - float(header.get("EXPTIME", 0)))
+    return {"frames": frames, "tries": tries, "minutes": round(seconds / 60, 1)} if seen else None
 
 
 def owed(field, session):
@@ -107,9 +167,9 @@ def of_session(session):
     stack = (_json(session / "restack.json") or {}).get("summary", {})
     depth = _json(session / "depth.json") or {}
     mag_50 = depth.get("completeness", {}).get("all", {}).get("mag_50")
-    stalled, stall_minutes = stalls(log, plan.get("exposure"))
+    gaps, gap_minutes = stalls(log, plan.get("exposure"))
     rejected = [f.get("reason") or "" for f in log if f.get("accepted") is False]
-    state, why = search_state(session, programme is not None)
+    state, why = search_state(session, programme)
     record = {
         "session": str(session), "field": field, "programme": programme,
         "requested": plan.get("frames"),
@@ -118,7 +178,11 @@ def of_session(session):
         "stacked": stack.get("stacked"),
         "integration_s": stack.get("total_exposure_s"),
         "depth_g": mag_50,
-        "stalls": stalled, "stall_minutes": stall_minutes,
+        # Inferred: long gaps between frames' times. They may be the camera,
+        # or something else the run did between frames.
+        "gaps": gaps, "gap_minutes": gap_minutes,
+        # Recorded: what the camera layer itself said each frame cost.
+        "camera_retries": camera_retries(session),
         "rejected": {"cloud": sum("cloud" in r for r in rejected),
                      "trailed": sum("trailed" in r for r in rejected),
                      "other": sum(not ("cloud" in r or "trailed" in r) for r in rejected)},
@@ -161,11 +225,13 @@ def judge(r, goals):
     if searchable_at is None:
         searchable = "not judged"
     elif stacked is None:
-        searchable = "pending"
+        searchable = "pending" if r["search"] == "running" else "short"
     else:
         searchable = "met" if stacked >= searchable_at else "short"
-    if searchable == "met" and r["search"] == "stopped":
-        searchable = "short"          # enough frames, but the search could not run on them
+    if searchable == "met" and r["search"] in ("stopped", "failed", "not started"):
+        searchable = "short"          # enough frames, but the search did not run on them
+    if searchable == "met" and r["search"] == "running":
+        searchable = "pending"
     worth_at, desired_depth = goals.get("worth_depth"), goals.get("desired_depth")
     desired_frames = goals.get("desired_frames")
     if worth_at is None:
@@ -176,9 +242,12 @@ def judge(r, goals):
         worth = "pending"
     else:
         worth = "met" if r["depth_g"] >= worth_at else "short"
-    # The goal aimed for, apart from whether it was worth having at all.
+    # The goal aimed for. It can't be met by a session that wasn't worth
+    # having: 24 frames whose search failed have not met a search's goal.
     if desired_depth is None and desired_frames is None:
         desired = "not set"
+    elif worth in ("short", "pending"):
+        desired = worth
     elif (desired_depth is not None and r["depth_g"] is None) or (desired_frames is not None and stacked is None):
         desired = "pending"
     else:
@@ -188,8 +257,13 @@ def judge(r, goals):
             (desired_frames is not None and stacked >= 1.5 * desired_frames)
         desired = ("more than asked" if beyond else "met") if all(reached) else "short"
     limits = []
-    if r["stall_minutes"]:
-        limits.append(f"camera stalls: {r['stalls']}, {r['stall_minutes']:g} min lost")
+    retries = r["camera_retries"]
+    if retries and retries["frames"]:
+        limits.append(f"camera retries (recorded): {_frames(retries['frames'])}, {retries['tries']} failed tries, "
+                      f"{retries['minutes']:g} min")
+    if r["gap_minutes"]:
+        limits.append(f"gaps between frames (inferred, the camera or the run): {r['gaps']}, "
+                      f"{r['gap_minutes']:g} min")
     if r["rejected"]["cloud"]:
         limits.append(f"cloud: {_frames(r['rejected']['cloud'])} rejected")
     if r["rejected"]["trailed"]:
@@ -198,6 +272,10 @@ def judge(r, goals):
         limits.append(f"{stacked} stacked, under the {searchable_at} the search needs")
     if r["search"] == "stopped":
         limits.append(f"search stopped: {r['search_stopped']}")
+    elif r["search"] == "failed":
+        limits.append(f"search failed: {r['search_stopped']}")
+    elif r["search"] == "not started":
+        limits.append("never searched: ./patrol.py --sweep searches it")
     if worth_at is not None and r["depth_g"] is not None and r["depth_g"] < worth_at:
         limits.append(f"shallow: G {r['depth_g']:.2f}, under the G {worth_at:g} it needs to be worth it")
     return {"ran": ran, "searchable": searchable, "worth_it": worth, "desired": desired, "limited_by": limits}

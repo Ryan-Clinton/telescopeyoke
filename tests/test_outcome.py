@@ -41,6 +41,8 @@ def data(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "DATA", tmp_path)
     monkeypatch.setattr(outcome, "programme_for",
                         lambda field: ("m31-panels", PANELS) if field.startswith("M31-P") else (None, {}))
+    # No live process works on these made-up sessions, whatever runs on this machine.
+    monkeypatch.setattr(outcome, "working_on", lambda session, programme=None: False)
     return tmp_path
 
 
@@ -55,7 +57,8 @@ def test_a_panel_that_stalls_is_not_searchable_and_says_why(data):
     # Measured against the exposure and the camera's pace, not the session's own median gap,
     # which here is itself a stall.
     # Gaps of 60, 55, 55 and 58 s against 16 + 5.6 s usual: 38.4 + 33.4 + 33.4 + 36.4 s lost.
-    assert r["stalls"] == 4 and r["stall_minutes"] == pytest.approx(2.4, abs=0.05)
+    assert r["gaps"] == 4 and r["gap_minutes"] == pytest.approx(2.4, abs=0.05)
+    assert r["camera_retries"] is None          # taken before the camera layer recorded its retries
     assert any("7 stacked, under the 8 the search needs" in s for s in r["limited_by"])
 
 
@@ -82,7 +85,7 @@ def test_a_good_panel_is_met_and_what_it_leaves_owed_is_said(data):
         {"id": "M31-P8-20261020-004156-004", "open": True, "first": "20261020-004156", "nights": [{}, {}]}]}))
     r = outcome.of_session(folder)
     assert (r["searchable"], r["worth_it"], r["desired"]) == ("met", "met", "short")    # 14 of the 24 hoped for
-    assert r["stalls"] == 0 and r["limited_by"] == []
+    assert r["gaps"] == 0 and r["limited_by"] == []
     assert r["owed"] == ["M31-P8-20261104-035115-010"]
 
 
@@ -94,10 +97,56 @@ def test_enough_frames_but_a_failed_search_is_not_searchable(data):
     assert r["search"] == "stopped" and r["searchable"] == "short"
 
 
-def test_what_is_still_being_worked_out_is_pending_not_short(data):
+def test_only_a_search_still_running_is_pending(data, monkeypatch):
     folder = session(data, "M31-P2", "20261104-031549", frames=steady(16))
+    monkeypatch.setattr(outcome, "working_on", lambda session, programme=None: True)
     r = outcome.of_session(folder)
-    assert (r["stacked"], r["searchable"], r["worth_it"], r["search"]) == (None, "pending", "pending", "pending")
+    assert (r["search"], r["searchable"], r["worth_it"], r["desired"]) == ("running", "pending", "pending", "pending")
+
+
+def test_a_search_never_started_or_failed_is_said_not_left_pending(data, monkeypatch):
+    """The Phase 1 audit: a missing search must not read as pending for ever."""
+    monkeypatch.setattr(outcome, "working_on", lambda session, programme=None: False)
+    never = session(data, "M31-P2", "20261104-031549", frames=steady(16), stacked=14)
+    r = outcome.of_session(never)
+    assert (r["search"], r["searchable"], r["worth_it"]) == ("not started", "short", "short")
+    assert "never searched: ./patrol.py --sweep searches it" in r["limited_by"]
+    failed = session(data, "M31-P7", "20261104-032325", frames=steady(16), stacked=14)
+    (failed / "patrol.log").write_text("depth...\nrequests.exceptions.ConnectionError: VizieR unreachable\n")
+    r = outcome.of_session(failed)
+    assert r["search"] == "failed" and "VizieR unreachable" in r["search_stopped"]
+    assert r["searchable"] == "short"
+
+
+def test_a_process_working_on_the_session_is_found(tmp_path):
+    proc = tmp_path / "proc"
+    (proc / "41").mkdir(parents=True)
+    (proc / "41" / "cmdline").write_bytes(b"python3\0./patrol.py\0m31-panels\0")
+    (proc / "42").mkdir()
+    (proc / "42" / "cmdline").write_bytes(b"python3\0./restack.py\0/data/frames/M33/20261104-011701\0")
+    assert outcome.working_on("/data/frames/M31-P2/x", "m31-panels", proc=proc)
+    assert outcome.working_on("/data/frames/M33/20261104-011701", "m33-novae", proc=proc)
+    assert not outcome.working_on("/data/frames/M33/20261103-011701", "m33-novae", proc=proc)
+
+
+def test_a_failed_search_cannot_meet_the_desired_goal(data):
+    """The Phase 1 audit: 24 frames whose subtraction failed have not met a search's goal."""
+    folder = session(data, "M31-P4", "20261104-040535", frames=steady(26), stacked=24, depth=16.9,
+                     patrol=["Stopped at vet: the subtraction left as many dark leftovers on stars as bright ones"])
+    r = outcome.of_session(folder)
+    assert r["stacked"] == 24 and (r["searchable"], r["worth_it"], r["desired"]) == ("short", "short", "short")
+
+
+def test_the_camera_layers_own_record_of_retries_is_read(data):
+    from astropy.io import fits
+    import numpy as np
+    folder = session(data, "M33", "20261105-011701", frames=steady(3), stacked=3)
+    for i, (tries, got) in enumerate([(0, 21.0), (2, 70.0), (1, 40.0)], 1):
+        header = fits.Header({"EXPTIME": 16.0, "TY_RETRY": tries, "TY_GOT_S": got})
+        fits.PrimaryHDU(np.zeros((2, 2), np.uint16), header).writeto(folder / f"light-{i:04d}.fits")
+    r = outcome.of_session(folder)
+    # 54 + 24 s beyond the exposure on the two frames that needed it.
+    assert r["camera_retries"] == {"frames": 2, "tries": 3, "minutes": 1.3}
 
 
 def test_a_field_no_programme_watches_is_not_judged(data):

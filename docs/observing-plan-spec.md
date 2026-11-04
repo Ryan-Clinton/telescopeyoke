@@ -237,6 +237,28 @@ below, and changes nothing in how frames are taken.
   panel 1's second stack was searchable in frames but too shallow
   (G 15.7).
 
+Built as `outcome.py` (docs/nights/2026-11-04/outcomes.txt is the night
+read back), with these corrections from its audit:
+
+- **Desired depends on worth it.** A session not worth having can't meet
+  its desired goal: 24 frames whose search failed have not met a search's
+  goal.
+- **Only a search actually running is pending.** It is found by a live
+  patrol or restack process naming the session or its programme. A search
+  that started and ended without an answer is *failed* (with its log's
+  last line), and one that never started is *not started*, to be swept.
+  Neither waits for ever.
+- **Stalls are said by where they come from.** Long gaps between frames'
+  times are *inferred*: the camera, or the run doing something else.
+  From 4 November 2026 the camera layer records each frame's failed tries
+  and the seconds they took (`TY_RETRY`, `TY_GOT_S` in the raw frame's
+  header), and those are reported as *recorded*. Phase 5 learns equipment
+  reliability from the recorded ones only.
+- **Limits stay visible.** `worth_depth = 16.5` in the programmes is
+  provisional, until it is set from measured completeness, and is never a
+  permanent criterion. A target no programme watches (SN 2026sqf in
+  NGC 3310) is *not judged* until Phase 2 gives it a goal of its own.
+
 ### Phase 2: goals by purpose, in accepted frames or a measure
 
 Each programme (`programmes/*.toml`) and planned target gets three goals,

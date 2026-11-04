@@ -3,36 +3,36 @@
     owed a second look: M31-P4-20261104-010345-004
 0117 M33: 281 asked, 180 taken, 165 accepted, 138 stacked, 2208 s, G 17.75
     ran met; searchable met; worth it met; desired met
-    limited by camera stalls: 16, 15.3 min lost; cloud: 13 frames rejected; trailed: 2 frames rejected
+    limited by gaps between frames (inferred, the camera or the run): 16, 15.3 min; cloud: 13 frames rejected; trailed: 2 frames rejected
 0241 M31: 112 asked, 63 taken, 54 accepted, 46 stacked, 736 s, G 16.86
     ran met; searchable met; worth it met; desired short
-    limited by camera stalls: 8, 10.2 min lost; cloud: 8 frames rejected; trailed: 1 frame rejected
+    limited by gaps between frames (inferred, the camera or the run): 8, 10.2 min; cloud: 8 frames rejected; trailed: 1 frame rejected
 0315 M31-P2: 19 asked, 16 taken, 16 accepted, 14 stacked, 224 s, G 16.76
     ran met; searchable met; worth it met; desired short
 0323 M31-P7: 19 asked, 16 taken, 16 accepted, 14 stacked, 224 s, G 16.74
     ran met; searchable met; worth it met; desired short
 0330 M31-P3: 19 asked, 11 taken, 7 accepted, 6 stacked, 96 s
     ran met; searchable short; worth it short; desired short
-    limited by camera stalls: 4, 2.3 min lost; cloud: 4 frames rejected; 6 stacked, under the 8 the search needs; search stopped: too few frames to search: 6, and checking each half of the night needs 8
+    limited by gaps between frames (inferred, the camera or the run): 4, 2.3 min; cloud: 4 frames rejected; 6 stacked, under the 8 the search needs; search stopped: too few frames to search: 6, and checking each half of the night needs 8
 0337 M31-P1: 19 asked, 16 taken, 16 accepted, 8 stacked, 128 s, G 16.44
     ran met; searchable met; worth it short; desired short
     limited by shallow: G 16.44, under the G 16.5 it needs to be worth it
 0344 M31-P5: 19 asked, 9 taken, 9 accepted, 7 stacked, 112 s
     ran met; searchable short; worth it short; desired short
-    limited by camera stalls: 3, 2.3 min lost; 7 stacked, under the 8 the search needs; search stopped: too few frames to search: 7, and checking each half of the night needs 8
+    limited by gaps between frames (inferred, the camera or the run): 3, 2.3 min; 7 stacked, under the 8 the search needs; search stopped: too few frames to search: 7, and checking each half of the night needs 8
 0351 M31-P8: 19 asked, 16 taken, 9 accepted, 8 stacked, 128 s, G 16.45
     ran met; searchable met; worth it short; desired short
     limited by cloud: 7 frames rejected; shallow: G 16.45, under the G 16.5 it needs to be worth it
     owed a second look: M31-P8-20261104-035115-010
 0358 M31-P6: 19 asked, 8 taken, 8 accepted, 7 stacked, 112 s
     ran met; searchable short; worth it short; desired short
-    limited by camera stalls: 4, 2.9 min lost; 7 stacked, under the 8 the search needs; search stopped: too few frames to search: 7, and checking each half of the night needs 8
+    limited by gaps between frames (inferred, the camera or the run): 4, 2.9 min; 7 stacked, under the 8 the search needs; search stopped: too few frames to search: 7, and checking each half of the night needs 8
 0405 M31-P4: 19 asked, 16 taken, 16 accepted, 14 stacked, 224 s, G 16.75
     ran met; searchable short; worth it short; desired short
     limited by search stopped: the subtraction left as many dark leftovers on stars as bright ones (9 fading on stars, 0 brightening): it did not match tonight's stack to the reference; nothing reported
 0416 M31-P1: 38 asked, 47 taken, 23 accepted, 14 stacked, 224 s, G 15.66
     ran met; searchable short; worth it short; desired short
-    limited by camera stalls: 4, 4.1 min lost; cloud: 24 frames rejected; search stopped: too shallow to search: half of planted stars found at G 15.66, brighter than G 16; a nova in M31 peaks near G 17.5; shallow: G 15.66, under the G 16.5 it needs to be worth it
+    limited by gaps between frames (inferred, the camera or the run): 4, 4.1 min; cloud: 24 frames rejected; search stopped: too shallow to search: half of planted stars found at G 15.66, brighter than G 16; a nova in M31 peaks near G 17.5; shallow: G 15.66, under the G 16.5 it needs to be worth it
 0443 M31-P8: 38 asked, 26 taken, 3 accepted, 2 stacked, 32 s
     ran met; searchable short; worth it short; desired short
     limited by cloud: 23 frames rejected; 2 stacked, under the 8 the search needs; search stopped: too few frames to search: 2, and checking each half of the night needs 8

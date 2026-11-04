@@ -545,6 +545,7 @@ def test_a_finished_step_says_what_its_sessions_got(monkeypatch, tmp_path):
     (folder / "session.json").write_text(json.dumps({"frames": 19, "exposure": 16.0}))
     (folder / "frames.jsonl").write_text(json.dumps({"taken": 1.0, "accepted": True, "reason": ""}) + "\n")
     monkeypatch.setattr(outcome, "programme_for", lambda field: ("m31-panels", {"searchable_frames": 8}))
+    monkeypatch.setattr(outcome, "working_on", lambda session, programme=None: True)    # its search runs on
     schedule.save({"steps": []})
     schedule.add("M31 panels", 45, ["./patrol.py", "m31-panels"])
     said = []
