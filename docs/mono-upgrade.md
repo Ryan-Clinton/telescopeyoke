@@ -36,9 +36,11 @@ the same commands work in mono with the filter wheel.
 **Tube mod.** The 150P was not designed to reach focus with a camera, and
 the corrector plus 55 mm of camera and wheel need even more inward focus.
 The usual fix is to move the primary mirror 20-25 mm up the tube and
-recollimate [8]; cutting the drawtube is the other way. Gary does it on
-4 November with the user's Dremel. Record how far the mirror moved (mm) and
-which way was chosen here when it is done.
+recollimate [8]; cutting the drawtube is the other way. Done on 4 November 2026: Gary took the primary mirror out, cut about 1 cm
+off the bottom of the tube and put the mirror back, so the mirror sits
+about 10 mm nearer the focuser. That is less than the usual 20-25 mm, so
+the first night's daylight focus check (travel to spare both ways) shows
+whether it is enough; the mirror came out, so collimation is checked too.
 
 **The 55 mm budget.** The corrector wants 55 mm (±2) from the bottom of its
 2" thread to the sensor. The chain has to be written down and measured, not
