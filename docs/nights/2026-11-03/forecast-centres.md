@@ -47,6 +47,13 @@ and takes the clear spell from the hours at least half of them call clear,
 as the Meanwhile page does. It says when that differs from the default
 forecast ("forecasts disagree: ..."), and a night is GO only when at least
 three of four agree in every hour of the spell; a two-two split stays
-MARGINAL. With the centres unavailable, the one forecast stands as before.
+MARGINAL, with the part where three of four or more agree named (tonight
+"2 of 4 at worst; 3 of 4 or more 01:00-04:00"). Rain, fog, dew and the
+night's mean cloud follow the same at-least-half rule, so the default
+forecast's rain or fog alone can no longer turn the centres' clear night
+NO-GO. With the centres unavailable, the one forecast stands as before.
+
+The Meanwhile page's 01:00-06:00 was not reproduced for the garden: it
+was another place (Portstewart) and a forecast two hours older.
 
 What the sky really did is still to be recorded in the night's notes.

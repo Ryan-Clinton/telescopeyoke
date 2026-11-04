@@ -92,31 +92,46 @@ def weather_report(night, lat, lon, source=feeds):
     agreed = (lambda h: h["centres"] is not None and h["centres"]["of"] > 0
               and h["centres"]["clear"] * 2 >= h["centres"]["of"])
     best = _longest(hours, agreed) if centres else single
-    mean_cloud = statistics.mean(h["cloud"] for h in hours)
-    wet = [h for h in hours if h["rain_chance"] >= 30 or h["rain_mm"] > 0]
+    # Rain, fog, dew and the cloud by the same evidence as the spell: at least
+    # half the centres when they are here, the one forecast when not. 4 November
+    # 2026: the one forecast's rain could still have made a night the centres
+    # agreed was clear NO-GO.
+    def most(h, key, own):
+        c = h["centres"]
+        return c[key] * 2 >= c["of"] if c and c["of"] else own
+
+    def by(key, fs):
+        n = max((h["centres"][key] for h in fs if h["centres"]), default=None)
+        return None if n is None else f"{n} of {max(h['centres']['of'] for h in fs if h['centres'])} centres"
+    mean_cloud = statistics.mean(h["centres"]["cloud"] if h["centres"] and h["centres"]["of"] else h["cloud"]
+                                 for h in hours)
+    wet = [h for h in hours if most(h, "wet", h["rain_chance"] >= 30 or h["rain_mm"] > 0)]
     notes = []
     if wet:
         notes.append(f"rain possible from {wet[0]['time']:%H:%M} "
-                     f"({max(h['rain_chance'] for h in wet)}% chance)")
+                     f"({by('wet', wet) or str(max(h['rain_chance'] for h in wet)) + '% chance'})")
     gust = max(h["gust"] for h in hours)
     if gust >= 35:
         notes.append(f"gusts to {gust:.0f} km/h will shake the scope")
     elif gust >= 25:
         notes.append(f"breezy, gusts to {gust:.0f} km/h")
-    fog = [h for h in hours if h["fog"]]
+    fog = [h for h in hours if most(h, "fog", h["fog"])]
     if fog:
         seen = [h["visibility"] for h in fog if h["visibility"] is not None]
         notes.append(f"fog likely from {fog[0]['time']:%H:%M}"
-                     + (f" (visibility down to {min(seen) / 1000:.1f} km)" if seen else
+                     + (f" ({by('fog', fog)})" if by("fog", fog) else
+                        f" (visibility down to {min(seen) / 1000:.1f} km)" if seen else
                         " (air at its dew point with hardly any wind)"))
-    damp = [h for h in hours if h["temp"] - h["dew_point"] <= 2]
+    damp = [h for h in hours if most(h, "damp", h["temp"] - h["dew_point"] <= 2)]
     if damp:
         notes.append(f"dew likely from {damp[0]['time']:%H:%M}; cover the laptop")
 
+    split = any(h["centres"] and h["centres"]["clear"] * 4 < h["centres"]["of"] * 3 for h in best)
     if centres and [h["time"] for h in best] != [h["time"] for h in single]:
         notes.insert(0, "forecasts disagree: " + spell_words(best, "the four centres", centres=True)
                      + "; the default forecast alone: " + spell_words(single, ""))
-    split = any(h["centres"] and h["centres"]["clear"] * 4 < h["centres"]["of"] * 3 for h in best)
+    elif split:
+        notes.insert(0, "the centres are split: " + spell_words(best, "half or more", centres=True))
     if len(best) >= 3 and not split:
         verdict = "GO"
     elif len(best) >= 1 or mean_cloud < 60:
@@ -159,7 +174,8 @@ def centre_agreement(c, times):
     out = []
     for x in times:
         i = index.get(int(x))
-        clear = of = 0
+        clear = of = wet = fog = damp = 0
+        cloud = []
         for m in feeds.CENTRES:
             g = c.get(m) or {}
             v = lambda k: (g.get(k) or [None] * len(c["time"]))[i]
@@ -172,7 +188,12 @@ def centre_agreement(c, times):
                 and foggy(h)
             of += 1
             clear += clear_hour(h)
-        out.append({"clear": clear, "of": of})
+            wet += (h["rain_chance"] or 0) >= 30 or (h["rain_mm"] or 0) > 0
+            fog += bool(h["fog"])
+            damp += h["temp"] is not None and h["dew_point"] is not None and h["temp"] - h["dew_point"] <= 2
+            cloud.append(h["cloud"])
+        out.append({"clear": clear, "of": of, "wet": wet, "fog": fog, "damp": damp,
+                    "cloud": statistics.mean(cloud) if cloud else None})
     return out
 
 
@@ -197,7 +218,12 @@ def spell_words(run, who, centres=False):
     words = f"{who} clear {hm(run[0]['time'])}-{hm(run[-1]['time'] + timedelta(hours=1))}".strip()
     if centres:
         worst = min(run, key=lambda h: h["centres"]["clear"] / h["centres"]["of"])["centres"]
-        words += f" ({worst['clear']} of {worst['of']} at worst)"
+        words += f" ({worst['clear']} of {worst['of']} at worst"
+        if worst["clear"] * 4 < worst["of"] * 3:     # a split: say where the agreement is firm
+            firm = _longest(run, lambda h: h["centres"]["clear"] * 4 >= h["centres"]["of"] * 3)
+            words += (f"; 3 of 4 or more {hm(firm[0]['time'])}-{hm(firm[-1]['time'] + timedelta(hours=1))}"
+                      if firm else "; never 3 of 4")
+        words += ")"
     return words
 
 
