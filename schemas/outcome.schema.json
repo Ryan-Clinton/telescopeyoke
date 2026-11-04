@@ -42,6 +42,7 @@
         "gap_minutes",
         "camera_retries",
         "rejected",
+        "deferred",
         "search",
         "search_stopped",
         "owed",
@@ -200,6 +201,10 @@
               "type": "number"
             }
           }
+        },
+        "deferred": {
+          "type": "integer",
+          "description": "Frames the live stack had no time for, left to the quality pass: not rejections."
         }
       }
     }

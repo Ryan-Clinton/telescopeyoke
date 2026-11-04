@@ -58,6 +58,20 @@ def frames_log(session):
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
+def cause(entry):
+    """Why a frame was not accepted by the run: cloud, trailed, deferred (the
+    live stack was behind and left it to the quality pass: not a rejection),
+    or other. One rule, shared with history.py."""
+    if entry.get("deferred") or "kept for the quality pass" in (entry.get("reason") or ""):
+        return "deferred"
+    reason = entry.get("reason") or ""
+    if "cloud" in reason:
+        return "cloud"
+    if "trailed" in reason:
+        return "trailed"
+    return "other"
+
+
 def stalls(log, exposure=None):
     """Camera stalls from the frame times: (how many, minutes lost). A gap
     more than STALL_S beyond the usual one is a stall. The usual gap is the
@@ -188,7 +202,7 @@ def of_session(session):
     depth = _json(session / "depth.json") or {}
     mag_50 = depth.get("completeness", {}).get("all", {}).get("mag_50")
     gaps, gap_minutes = stalls(log, plan.get("exposure"))
-    rejected = [f.get("reason") or "" for f in log if f.get("accepted") is False]
+    causes = [cause(f) for f in log if f.get("accepted") is False]
     state, why = search_state(session, programme)
     record = {
         "session": str(session), "field": field, "programme": programme,
@@ -203,9 +217,10 @@ def of_session(session):
         "gaps": gaps, "gap_minutes": gap_minutes,
         # Recorded: what the camera layer itself said each frame cost.
         "camera_retries": camera_retries(session),
-        "rejected": {"cloud": sum("cloud" in r for r in rejected),
-                     "trailed": sum("trailed" in r for r in rejected),
-                     "other": sum(not ("cloud" in r or "trailed" in r) for r in rejected)},
+        "rejected": {kind: causes.count(kind) for kind in ("cloud", "trailed", "other")},
+        # Not rejected: set aside while the live stack was behind, for the
+        # quality pass to judge (restack's stacked count includes them).
+        "deferred": causes.count("deferred"),
         "search": state, "search_stopped": why,
         "owed": owed(field, session),
         "goals": goals,

@@ -208,3 +208,14 @@ def test_a_finished_search_without_a_depth_is_short_not_pending(data):
     r = outcome.of_session(folder)
     assert r["search"] == "searched" and r["worth_it"] == "short"
     assert "depth was never measured: ./depth.py SESSION --plant measures it" in r["limited_by"]
+
+
+def test_frames_left_to_the_quality_pass_are_not_rejections():
+    """523 frames across the nights say 'live stack behind; kept for the quality
+    pass': set aside, not rejected. Each reason has one cause."""
+    assert outcome.cause({"reason": "live stack behind; kept for the quality pass", "deferred": True}) == "deferred"
+    assert outcome.cause({"reason": "too few stars (cloud?)"}) == "cloud"
+    assert outcome.cause({"reason": "sky brightened (cloud or a light)"}) == "cloud"
+    assert outcome.cause({"reason": "star brightness down 81% (cloud)"}) == "cloud"
+    assert outcome.cause({"reason": "stars trailed (wind or a knock?)"}) == "trailed"
+    assert outcome.cause({"reason": "stars bloated (seeing or shake)"}) == "other"

@@ -791,3 +791,14 @@ def test_an_observations_outcome_matches_its_schema(tmp_path, monkeypatch):
     (folder / "session.json").write_text(json.dumps({"frames": 19, "exposure": 16.0}))
     (folder / "frames.jsonl").write_text(json.dumps({"taken": 1.0, "accepted": True, "reason": ""}) + "\n")
     valid(interface.run("outcome", lambda: {"sessions": [outcome.of_session(folder)]}), "outcome")
+
+
+def test_what_observing_costs_matches_its_schema(tmp_path, monkeypatch):
+    import history
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    folder = tmp_path / "frames" / "M33" / "20261104-011700"
+    folder.mkdir(parents=True)
+    (folder / "session.json").write_text(json.dumps({"exposure": 16.0}))
+    (folder / "frames.jsonl").write_text("".join(json.dumps({"taken": 1000.0 + 21 * i, "accepted": True}) + "\n"
+                                                 for i in range(5)))
+    valid(interface.run("history", lambda: history.costs(data=tmp_path)), "history")

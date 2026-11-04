@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/history.schema.json",
+  "title": "History",
+  "description": "data of: history.py --json. What observing really costs, from every night kept (docs/observing-plan-spec.md, Phase 5). Each measure is a spread (median, 10th and 90th percentile, how many) or null when nothing measures it yet. Inferred measures say so.",
+  "type": "object",
+  "required": ["since", "nights", "sessions", "frame_gap_s", "frame_gap_s_by_exposure", "move_s", "long_gaps",
+               "camera_retries", "rejections", "stacked_share", "depth_model_error", "depth_model"],
+  "properties": {
+    "since": {"type": ["string", "null"]},
+    "nights": {"type": "integer"},
+    "sessions": {"type": "integer"},
+    "frame_gap_s": {"$ref": "#/$defs/spread"},
+    "frame_gap_s_by_exposure": {"type": "object", "additionalProperties": {"$ref": "#/$defs/spread"}},
+    "move_s": {"$ref": "#/$defs/spread", "description": "Inferred: last frame of one session to the first of the next, the same night, up to 20 minutes."},
+    "long_gaps": {
+      "type": "object", "required": ["per_hour", "seconds_each", "hours", "kind"],
+      "properties": {"per_hour": {"$ref": "#/$defs/spread"}, "seconds_each": {"$ref": "#/$defs/spread"},
+                     "hours": {"type": "number"}, "kind": {"type": "string"}}
+    },
+    "camera_retries": {"type": ["object", "null"], "description": "Recorded by the camera layer (TY_RETRY); null before any frame carried it."},
+    "rejections": {
+      "type": "object", "required": ["frames", "share", "share_by_night"],
+      "properties": {"frames": {"type": "integer"}, "share": {"type": "object"}, "share_by_night": {"type": "object"}}
+    },
+    "stacked_share": {"$ref": "#/$defs/spread"},
+    "depth_model_error": {"$ref": "#/$defs/spread", "description": "Measured depth less depth.py's model for the same stack, mag."},
+    "depth_model": {"type": ["object", "null"]}
+  },
+  "$defs": {
+    "spread": {
+      "type": ["object", "null"],
+      "required": ["median", "p10", "p90", "n"],
+      "properties": {"median": {"type": "number"}, "p10": {"type": "number"}, "p90": {"type": "number"},
+                     "n": {"type": "integer"}}
+    }
+  }
+}
