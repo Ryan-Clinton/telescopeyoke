@@ -434,8 +434,9 @@ def restack_frames(session):
     log = session / "restack.json"
     if log.exists():
         kept = json.loads(log.read_text(encoding="utf-8")).get("kept", [])
-        return [session / n for n in sorted(Path(k).name for k in kept) if (session / n).exists()]
-    return sorted(session.glob("light-*.fits"))
+        return stacking.on_target([session / n for n in sorted(Path(k).name for k in kept) if (session / n).exists()],
+                                  lambda line: None)
+    return stacking.on_target(sorted(session.glob("light-*.fits")), lambda line: None)
 
 
 def main():

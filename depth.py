@@ -656,6 +656,7 @@ def sweep_stacks(paths, seconds_list, say=print):
     them all. Nothing is trimmed: the first frame covers the whole picture,
     and trimming each stack differently would move its pixels from under
     the solve. Returns {seconds: (brightness image, seconds really used)}."""
+    paths = stacking.on_target(paths, say)
     stacking.same_camera(paths)
     stacking.require_frames(paths, "A depth sweep")
     mosaic, header = stacking.load_light(paths[0])
@@ -879,7 +880,7 @@ def destripe_check(session, frames=5, per_frame=300, fwhm=4.0, seed=11, say=prin
     in each frame too, of a random size, shape and turn, and what the
     destriping kept of it is measured in elliptical rings: its centre, its
     profile and its total (1 is all kept)."""
-    files = sorted(Path(session).glob("light-*.fits"))[:frames]
+    files = stacking.on_target(sorted(Path(session).glob("light-*.fits"))[:frames], lambda line: None)
     if not files:
         raise interface.Refusal("NO_SESSION", f"No saved frames in {session}.")
     rng = np.random.default_rng(seed)

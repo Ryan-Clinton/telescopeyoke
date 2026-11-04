@@ -327,6 +327,10 @@ class MatchedCalibration(Calibration):
             cards.setdefault("READSPD", cfg["camera"].get("readout_speed"))
             cards.setdefault("TELESCOP", cfg["train"]["name"])
         self.camera, self.cards = cards["INSTRUME"], cards
+        # The light frame's size, from its header (a compressed frame keeps it
+        # in ZNAXIS): a master of any other size does not match it.
+        size = [cards.get(f"ZNAXIS{i}") or cards.get(f"NAXIS{i}") for i in (2, 1)]
+        self.shape = tuple(int(n) for n in size) if all(size) else None
         folder = library(self.camera)
         self.missing, self.masters = [], {}
         self.dark = self._newest(folder, dark_stem(cards), cards, DARK_CARDS, "dark")
@@ -350,6 +354,8 @@ class MatchedCalibration(Calibration):
             with fits.open(path) as hdul:
                 head = hdul[0].header
                 if matches(head, cards, keys):
+                    if self.shape and hdul[0].data is not None and hdul[0].data.shape != self.shape:
+                        continue          # another size of frame (binning, a cropped read): not this one's
                     self.masters[kind] = path.name
                     if kind == "flat":
                         self._flat_exposure = float(head.get("EXPTIME", 0))
@@ -374,6 +380,11 @@ class MatchedCalibration(Calibration):
         """(raw - dark) / flat, the dark matched and never scaled, and bad
         pixels replaced by the median of their neighbours."""
         frame = mosaic.astype(np.float32)
+        for kind, master in (("dark", self.dark), ("flat", self.flat), ("bad-pixel map", self.bad)):
+            if master is not None and master.shape != frame.shape:
+                note = f"a {kind} of this frame's size ({frame.shape[1]}x{frame.shape[0]})"
+                if note not in self.missing:
+                    self.missing.append(note)      # so the frame counts as uncalibrated: science refuses it
         if self.dark is not None and self.dark.shape == frame.shape:
             frame -= self.dark
         if self.flat is not None and self.flat.shape == frame.shape:
@@ -604,9 +615,25 @@ def camera_of(header):
     return camera, (round(float(focal)) if focal else None)
 
 
+def on_target(paths, say=print):
+    """Science leaves out frames taken while a cooled camera's sensor was
+    more than 0.5 °C off its target (TY_ONTGT false, altair.py), saying how
+    many. Frames without the card (the 183C, or a camera with no cooler) are
+    all kept, as before. The stream and quick looks never call this."""
+    kept, off = [], 0
+    for path in paths:
+        if fits.getheader(path, 1).get("TY_ONTGT") is False:
+            off += 1
+        else:
+            kept.append(path)
+    if off:
+        say(f"Left out {off} of {len(paths)} frames: the sensor was more than 0.5 °C off its target.")
+    return kept
+
+
 def same_camera(paths):
-    """Refuses (INVALID_REQUEST) a set of raw frames from more than one camera
-    or focal length: a stack or a difference image must never mix them by
+    """Refuses (INVALID_REQUEST) a set of raw frames from more than one camera,
+    focal length or filter (a frame with no FILTER, the 183C's, counts as no filter): a stack or a difference image must never mix them by
     accident. One frame is read from each folder, as a run's frames all come
     from one camera."""
     import interface
@@ -614,13 +641,16 @@ def same_camera(paths):
     for path in paths:
         folder = Path(path).parent
         if folder not in seen:
-            seen[folder] = camera_of(fits.getheader(path, 1))
-    cameras = {c for c, _ in seen.values()}
-    focals = {f for _, f in seen.values() if f is not None}
-    if len(cameras) > 1 or len(focals) > 1:
-        listed = "; ".join(f"{folder.name}: {c}{f' at {f} mm' if f else ''}" for folder, (c, f) in seen.items())
-        raise interface.Refusal("INVALID_REQUEST", f"These frames come from more than one camera or light "
-                                f"path ({listed}); they cannot go into one picture.")
+            head = fits.getheader(path, 1)
+            seen[folder] = camera_of(head) + (head.get("FILTER") or None,)
+    cameras = {c for c, _, _ in seen.values()}
+    focals = {f for _, f, _ in seen.values() if f is not None}
+    filters = {b for _, _, b in seen.values()}
+    if len(cameras) > 1 or len(focals) > 1 or len(filters) > 1:
+        listed = "; ".join(f"{folder.name}: {c}{f' at {f} mm' if f else ''}{f' in {b}' if b else ''}"
+                           for folder, (c, f, b) in seen.items())
+        raise interface.Refusal("INVALID_REQUEST", f"These frames come from more than one camera, light "
+                                f"path or filter ({listed}); they cannot go into one picture or measurement.")
 
 
 def save_light(folder, index, mosaic, header):

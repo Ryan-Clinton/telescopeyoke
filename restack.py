@@ -96,7 +96,7 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
     workers = workers or stacking.cores()
     lights, exposures, gains, calibrations = [], [], set(), []
     for one in sessions:
-        found = sorted(one.glob("light-*.fits"))
+        found = stacking.on_target(sorted(one.glob("light-*.fits")), say)
         if not found:
             raise interface.Refusal("NO_SESSION", f"No raw frames in {one}.")
         _, header = stacking.load_light(found[0])

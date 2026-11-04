@@ -184,6 +184,17 @@ def run(args, say=print):
     rows = history(args.name, args.ra, args.dec, say, subtract=args.difference)
     if not rows:
         raise interface.Refusal("NO_SESSION", f"No measured stack of {args.name}: run ./depth.py on them first.")
+    # One light curve, one band: a mix of filters (or filtered and the 183C's
+    # unfiltered) is refused unless --band picks one.
+    found = sorted({r.get("band") or "unfiltered" for r in rows})
+    if getattr(args, "band", None):
+        rows = [r for r in rows if (r.get("band") or "unfiltered") == args.band]
+        if not rows:
+            raise interface.Refusal("INVALID_REQUEST", f"No measurement of {args.name} in {args.band}; "
+                                    f"there are: {', '.join(found)}.")
+    elif len(found) > 1:
+        raise interface.Refusal("INVALID_REQUEST", f"The stacks of {args.name} were taken in more than one band "
+                                f"({', '.join(found)}); a light curve must not mix them. Pick one with --band.")
     answer = {"name": args.name, "ra": args.ra, "dec": args.dec, "measurements": rows,
               "above_reference": bool(args.difference),
               "band": bands_of(rows)}
@@ -200,6 +211,8 @@ def main():
     ap.add_argument("dec", type=float, help="degrees")
     ap.add_argument("--difference", action="store_true",
                     help="measure each stack less the field's reference: the light above it, not under it")
+    ap.add_argument("--band", help="only the measurements in this band (as the stacks name it, or \"unfiltered\"); "
+                                   "needed when the stacks were taken in more than one")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
     args = ap.parse_args()
     interface.main("forced", lambda: run(args), args.json)
