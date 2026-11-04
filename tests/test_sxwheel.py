@@ -163,3 +163,16 @@ def test_the_command_says_where_the_wheel_is_and_moves_it(monkeypatch, capsys):
     monkeypatch.setattr(sxwheel, "_hid", missing)
     assert sxwheel.main(["status"]) == 1
     assert "hidapi module is missing" in capsys.readouterr().err
+
+
+def test_the_hidraw_module_is_preferred(monkeypatch):
+    # Debian's python3-hid: `hidraw` opens /dev/hidraw (which the udev rule
+    # opens up); `hid` goes through libusb and could not open the wheel.
+    import sys
+    import types
+    hidraw, hid = types.ModuleType("hidraw"), types.ModuleType("hid")
+    monkeypatch.setitem(sys.modules, "hidraw", hidraw)
+    monkeypatch.setitem(sys.modules, "hid", hid)
+    assert sxwheel._hid() is hidraw
+    monkeypatch.setitem(sys.modules, "hidraw", None)      # only pip's `hid`
+    assert sxwheel._hid() is hid

@@ -44,12 +44,18 @@ def names(cfg=None):
 
 
 def _hid():
-    try:
-        import hid
-    except ImportError:
-        raise WheelError("The Python hidapi module is missing: sudo apt-get install python3-hid "
-                         "(./install.sh does it).")
-    return hid
+    """The hidapi module that opens /dev/hidraw, which the udev rule makes
+    readable. Debian's python3-hid ships two: `hidraw` (the hidraw backend)
+    and `hid` (libusb, which needs the USB device node itself and failed to
+    open the wheel on 4 November 2026 with the rule in place). `hidraw`
+    first; `hid` where only it exists (pip's hidapi on other systems)."""
+    for name in ("hidraw", "hid"):
+        try:
+            return __import__(name)
+        except ImportError:
+            continue
+    raise WheelError("The Python hidapi module is missing: sudo apt-get install python3-hid "
+                     "(./install.sh does it).")
 
 
 class Wheel:
