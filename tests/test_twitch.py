@@ -104,5 +104,8 @@ def test_the_title_says_it_is_waiting_for_the_cloud():
     title, tags = twitch.describe({"target": "NGC 869", "kind": "picture", "cloud": True,
                                    "mission": {"stream_title": "Live telescope: imaging NGC 869"}},
                                   targets={"targets": {}})
-    assert title.startswith("Live telescope: waiting for the cloud to clear over the NGC 869")
+    assert title.startswith("Live telescope: waiting for the cloud to clear at NGC 869 |")
+    named, _ = twitch.describe({"target": "M31", "kind": "picture", "cloud": True},
+                               targets={"targets": {"M31": {"common": "Andromeda Galaxy"}}})
+    assert named.startswith("Live telescope: waiting for the cloud to clear over the Andromeda Galaxy (M31)")
     assert "Clouds" in tags
