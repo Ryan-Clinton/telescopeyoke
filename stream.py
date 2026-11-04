@@ -1141,8 +1141,11 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
     rejoins = []          # when the stream was started again to bring a lost destination back
     tested = False
     chatting = None
-    composer = Composer(draw=lambda st, now, mode: frame(st, now, mode).resize(size)
-                        if size != (WIDTH, HEIGHT) else frame(st, now, mode))
+    # Always the full picture: ffmpeg is told its input is WIDTH x HEIGHT and
+    # scales to the size sent itself (encoder()). 4 November 2026: after the
+    # bandwidth test chose 1280x720, pictures shrunk here were read as
+    # 1920x1080 and the stream showed garbage.
+    composer = Composer(draw=frame)
     tick = clock()
     hopes = Hopes()
     import director

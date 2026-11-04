@@ -563,3 +563,14 @@ def test_the_polar_adjust_look_gives_way_once_the_telescope_goes_to_a_target(mon
         assert stream.observatory(1.0) == (None, None)
     monkeypatch.setattr(streamlook, "polar_stream_state", lambda now: {"stage": "measuring", "showing": True})
     assert stream.observatory(1.0)[0] == "polar"               # its own measuring moves are its own
+
+
+def test_a_smaller_stream_size_sends_full_pictures_and_lets_ffmpeg_scale():
+    """4 November 2026: the bandwidth test chose 1280x720, the pictures were
+    shrunk before ffmpeg, which read them as 1920x1080: garbage on air."""
+    import inspect
+    import stream
+    cmd = stream.command("rtmp://x", None, (1280, 720))
+    assert cmd[cmd.index("-s") + 1] == f"{stream.WIDTH}x{stream.HEIGHT}"
+    assert "scale=1280:720" in " ".join(cmd)
+    assert ".resize(size)" not in inspect.getsource(stream.main if hasattr(stream, "main") else stream)
