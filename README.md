@@ -369,7 +369,6 @@ There is one, and it is the author's:
 |---|---|---|---|---|---|
 | Sky-Watcher EQ3 Pro | SynScan, firmware 3.35, FTDI serial lead | Altair Hypercam 183C (on USB 2 on 3 and 4 October, on a 3 m USB 3 lead from 6 October) | Ubuntu 26.04, Python 3.14 | ✅ Planner, mount moves, camera, focusing, plate solving, GoTo with centring, under real stars | the author |
 | the same EQ3 Pro | the same | the same Hypercam 183C | Windows 11 | ⚠️ The demo, and camera frames indoors. No mount driven, no star seen | the author |
-| the same EQ3 Pro | the same | Altair Hypercam 183M PRO TEC (mono, cooled; Altair's library), Starlight Xpress 7-position USB filter wheel (`./sxwheel.py`), 0.9x coma corrector | Ubuntu 26.04 | ❔ written for, not yet tried: mono frames, the cooler's target (`tec_target`), the wheel's order of filters | the author |
 | EQ5 | SynScan | any | Linux or Windows | ❔ wanted | could be you |
 | HEQ5 | SynScan | any | Linux or Windows | ❔ wanted | could be you |
 | EQ6, EQ6-R | SynScan | any | Linux or Windows | ❔ wanted | could be you |

@@ -22,7 +22,7 @@ from scipy import ndimage
 from scipy.spatial import cKDTree
 
 import config
-from camera import colour, is_mono, luminance
+from camera import colour, luminance
 
 ROOT = Path(__file__).parent
 # Where the master dark, bias and flat frames are kept. The tests point this
@@ -331,25 +331,20 @@ def level_rows(frame, sections=STRIPE_SECTIONS, light=None):
     return out
 
 
-def prepare(mosaic, calibration, mono=False):
+def prepare(mosaic, calibration):
     """A raw frame, calibrated and destriped, as half-size RGB with hot
-    pixels removed; grey RGB from a mono camera (camera.is_mono)."""
-    return clean(colour(destripe(calibration.apply(mosaic)), mono=mono))
+    pixels removed."""
+    return clean(colour(destripe(calibration.apply(mosaic))))
 
 
 # --- raw frames on disk --------------------------------------------------------
-
-# The header cards a kept raw frame carries: what it was (which camera:
-# the 183C and the 183M may each be used on any night), and what the
-# pipeline needs to treat it (no BAYERPAT and TY_MONO: a mono frame).
-KEPT = ("EXPTIME", "GAIN", "DATE-OBS", "BAYERPAT", "TY_MONO", "INSTRUME", "FILTER", "CCD-TEMP", "SET-TEMP")
-
 
 def save_light(folder, index, mosaic, header):
     """Keep a raw frame, losslessly compressed (about half the size)."""
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"light-{index:04d}.fits"
-    kept = fits.Header({k: header[k] for k in KEPT if k in header})
+    kept = fits.Header({k: header[k] for k in ("EXPTIME", "GAIN", "DATE-OBS", "BAYERPAT")
+                        if k in header})
     fits.HDUList([fits.PrimaryHDU(), fits.CompImageHDU(mosaic, kept, compression_type="RICE_1")]
                  ).writeto(path, overwrite=True)
     return path
@@ -763,9 +758,9 @@ def register_file(path, exposure, gain, reference, store, slot, shape, scale=1.0
     write it into its slot of the shared file of registered frames."""
     timings = Timings()
     with timings.phase("load raw frames"):
-        mosaic, header = load_light(Path(path))
+        mosaic, _ = load_light(Path(path))
     with timings.phase("calibrate and clean"):
-        rgb = prepare(mosaic, _calibration(exposure, gain), mono=is_mono(header))
+        rgb = prepare(mosaic, _calibration(exposure, gain))
         lum = rgb.sum(axis=2)
     with timings.phase("find stars"):
         stars = find_stars(lum)
@@ -827,7 +822,7 @@ def live_frame(mosaic, header, exposure, gain, folder, index, save, recent, refe
     if not keep:
         return out
     with timings.phase("calibrate and clean"):
-        rgb = prepare(mosaic, calibration, mono=is_mono(header))
+        rgb = prepare(mosaic, calibration)
         lum = rgb.sum(axis=2)
     with timings.phase("find stars"):
         stars = find_stars(lum)

@@ -1053,7 +1053,7 @@ function drawDoctor() {
 }
 
 const SECTIONS = { site: "Where the telescope is", horizon: "Horizon", scope: "Telescope", camera: "Camera", mount: "Mount",
-                   solver: "Plate solver", webcam: "Webcam", indi: "INDI", filterwheel: "Filter wheel" };
+                   solver: "Plate solver", webcam: "Webcam", indi: "INDI" };
 
 async function loadSettings() {
   const reply = await ask("/api/settings");

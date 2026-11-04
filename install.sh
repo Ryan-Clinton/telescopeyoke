@@ -37,8 +37,6 @@ packages+=(python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1)
 if ! $planner_only; then
     # uhubctl: ./camera_test.py --power-cycle cuts the camera's power at the hub's port
     packages+=(indi-bin astap-cli ffmpeg speech-dispatcher uhubctl)
-    # sxwheel.py: the Starlight Xpress filter wheel, a USB HID device
-    packages+=(python3-hid)
 fi
 
 echo "Installing: ${packages[*]}"
@@ -65,11 +63,6 @@ if $planner_only; then
     fi
     exit 0
 fi
-
-# The filter wheel's /dev/hidraw is root's alone unless a rule opens it.
-echo 'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1278", ATTRS{idProduct}=="0920", MODE="0666"' |
-    sudo tee /etc/udev/rules.d/99-sxwheel.rules >/dev/null
-sudo udevadm control --reload-rules
 
 # Serial access to the mount's handset.
 if ! id -nG "$USER" | grep -qw dialout; then

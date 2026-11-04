@@ -144,9 +144,8 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
         # the sharpest frame. The results go into one file shared between the
         # workers, so memory holds a frame per worker and not the whole run.
         with timings.phase("calibrate and clean"):
-            mosaic, header = stacking.load_light(Path(best["path"]))
-            rgb = stacking.prepare(mosaic, stacking.Calibration(best["exposure"], gain),
-                                   mono=stacking.is_mono(header))
+            mosaic, _ = stacking.load_light(Path(best["path"]))
+            rgb = stacking.prepare(mosaic, stacking.Calibration(best["exposure"], gain))
             lum = rgb.sum(axis=2)
         reference = {"square": stacking.centre_square(lum), "stars": stacking.find_stars(lum)}
         # Line up on the sharpest frame, but frame the picture where most of

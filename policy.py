@@ -126,7 +126,6 @@ COMMANDS = {
     "stitch.py": ("local_write", {}, {}),           # the mosaic of every night; --on stacks on the person's own desktop
     "seti.py": ("local_write", {}, {}),             # reads Breakthrough Listen's open data; sweep keeps its progress in cache/, --keep the slices
     "sungrazer.py": ("local_write", {}, {}),
-    "sxwheel.py": ("hardware", {"status": "read_only"}, {}),   # the filter wheel: status only asks
     "tonight.py": ("read_only", {}, {}),
     "tour.py": ("local_write", {}, {}),
     "transits.py": ("local_write", {}, {}),
