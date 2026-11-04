@@ -251,7 +251,17 @@ def check_camera_link():
     if _demo():
         return OK, "camera USB link (not needed in the demo)"
     import config
-    return host.camera_usb_link(config.hardware()["camera"].get("usb_match", "ALTAIR"))
+    camera = config.hardware()["camera"]
+    # The name the camera gives USB: [camera] usb_match if set; otherwise the
+    # profile's model or own name (the 183M is "AA183MPROTEC", which holds
+    # "183m"), then "ALTAIR", which the 183C's name holds.
+    tried = [camera.get("usb_match"), camera.get("model"), camera.get("name"), "ALTAIR"]
+    answer = None
+    for match in dict.fromkeys(m for m in tried if m):
+        answer = host.camera_usb_link(match)
+        if "not found" not in answer[1]:
+            return answer
+    return answer
 
 
 def check_camera():
