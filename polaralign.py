@@ -295,17 +295,20 @@ def _measure(scope, site, step=STEP, skyline=None):
             error = mount.load_pointing_error(mount.over_pole(scope.axes()[1]))
             hint_ra = mount.true_sidereal(site) - (target_ha + error[0])
             hint_dec = dec_handset + error[1]
-            found = (scope.where_really(hint_ra, hint_dec, radius=40)
-                     or scope.where_really(hint_ra, hint_dec, radius=90))
+            found = scope.where_really(hint_ra, hint_dec, radius=40, wider=90)
             if found:
                 # Where it really pointed is the pointing error on this side:
                 # kept, so the next picture's hint (read back above), tonight's
                 # GoTos and the next run's first picture start close. 4 November
                 # 2026: with a hint 6-7° out each solve spiralled out for about
                 # 90 s; with a close one the same frame solved in 0.3 s.
+                # In the same terms as a GoTo's correction (mount.py): the
+                # solve, a J2000 position, turned into tonight's hour angle and
+                # declination at the moment of the picture, against the handset's.
                 west = mount.over_pole(scope.axes()[1])
-                ha_error = ((mount.true_sidereal(site) - found["ra"]) - target_ha + 180) % 360 - 180
-                mount.save_pointing_error([ha_error, found["dec"] - dec_handset], west)
+                actual = mount.where(found, site, found["when"])
+                mount.save_pointing_error([mount.wrap(actual[0] - target_ha), actual[1] - mount.wrap(dec_handset)],
+                                          west)
             if not found:
                 if i:
                     # Not left pointing at whatever hid the stars.

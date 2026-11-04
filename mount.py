@@ -478,7 +478,7 @@ class Mount:
             ra_handset, dec_handset = self.radec()
             believed = wrap(sidereal + offset - ra_handset)
             hint = (sidereal - (believed + guess[0]), wrap(dec_handset) + guess[1])
-            found = self.where_really(*hint, radius=40) or self.where_really(*hint, radius=90)
+            found = self.where_really(*hint, radius=40, wider=90)
             if not found:
                 self.say(f"hour angle {hours_out:+g} h: no plate solve; left out")
                 continue
@@ -893,9 +893,12 @@ class Mount:
         here_ha, here_dec = self.true_hour_angle(site), wrap(self.radec()[1]) + pointing[1]
         return math.hypot(wrap(here_ha - hour_angle) * math.cos(math.radians(dec)), here_dec - dec)
 
-    def where_really(self, ra_hint, dec_hint, radius=30, exposure=1.0):
+    def where_really(self, ra_hint, dec_hint, radius=30, exposure=1.0, wider=None):
         """Photograph the sky and plate-solve it. Returns the J2000 position
-        of the frame centre as {"ra", "dec"} in degrees, or None."""
+        of the frame centre as {"ra", "dec"} in degrees, or None. With
+        `wider`, a frame that does not solve within `radius` is searched again
+        out to `wider` degrees: the same picture, not a new one."""
+        began = time.monotonic()
         import solve as solver
         import numpy as np
         from scipy import ndimage
@@ -918,6 +921,7 @@ class Mount:
                     raise
                 print(f"{time.strftime('%H:%M:%S')} the camera sent no picture; trying again", flush=True)
         when = Time.now()
+        framed = time.monotonic()
         snap.publish(mosaic, kind="plate-solve frame", detail=f"{exposure:g} s")
         if self.recording:
             count = len(list(self.recording.glob("frame-*.jpg")))
@@ -935,7 +939,15 @@ class Mount:
         hot = image > brightest + 5 * noise
         if hot.any():
             image[hot] = ndimage.median_filter(image, footprint=ring, mode="nearest")[hot]
+        prepared = time.monotonic()
         found = solver.solve(image, ra_hint, dec_hint, radius)
+        if not found and wider:
+            found = solver.solve(image, ra_hint, dec_hint, wider)
+        # Where the time went, for every plate solve (4 November 2026: a polar
+        # check took minutes and nothing said which part).
+        print(f"{time.strftime('%H:%M:%S')} plate solve: camera and frame {framed - began:.1f} s, "
+              f"preparing {prepared - framed:.1f} s, solving {time.monotonic() - prepared:.1f} s"
+              f"{'' if found else ', no solution'}", flush=True)
         if found:
             found["when"] = when  # solving can take a while; the sky moves on
             # Kept for shoot.py's drift assist, which needs to know which way
