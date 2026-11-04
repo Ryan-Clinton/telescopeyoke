@@ -46,7 +46,9 @@ COOL_WAIT_S = 900      # the longest a run waits for the sensor to get there
 COOL_POLL_S = 5.0
 FULL_POWER = 0.95      # a share of the cooler's most voltage taken as all it has
 STUCK_S = 180          # at full power this long with the sensor no colder: it cannot reach the target
-WARM_STEP_C, WARM_EVERY_S, WARM_STEPS_MOST = 3.0, 60.0, 15   # the warm-up at the end of a runBUFFER = 0x1000000     # ALTAIRCAM_FLAG_BUFFER: a frame buffer of some size in the camera
+WARM_STEP_C, WARM_EVERY_S, WARM_STEPS_MOST = 3.0, 60.0, 15   # the warm-up at the end of a run
+WARM_MOST_S = 600      # the longest the warm-up takes, however it ends: then the cooler goes off regardless
+BUFFER = 0x1000000     # ALTAIRCAM_FLAG_BUFFER: a frame buffer of some size in the camera
 DDR = 0x2000000        # ALTAIRCAM_FLAG_DDR: one big enough for a whole frame
 # Settings that could stop long frames while short ones arrive: a low-power
 # mode the camera enters above a set exposure, and the library's own
@@ -471,37 +473,51 @@ class AltairCamera:
                 said = clock()
             sleep(COOL_POLL_S)
 
-    def warm_up(self, say=print, sleep=time.sleep):
+    def warm_up(self, say=print, sleep=time.sleep, clock=time.monotonic, most=None):
         """At the end of a run: step the cooler's target up WARM_STEP_C every
         WARM_EVERY_S towards the temperature the sensor had before it was
         cooled, then turn the cooler off, rather than cutting it cold (the
         camera stops its cooler when it is closed), to spare the sensor the
         shock and the window condensation. Nothing on a camera with no cooler
-        or no target, or a sensor already within a step of where it began."""
+        or no target, or a sensor already within a step of where it began.
+        Bounded: after `most` seconds (WARM_MOST_S), a step the camera
+        refuses, or any failure part way, the cooler is turned off regardless.
+        Never raises, so a run that failed can warm on its way out without its
+        own error being hidden."""
         if self.target is None or not self.flags & TEC or self.handle is None:
             return False
         lib, handle = self.lib, self.handle
-        degrees = self.temperature()
-        if degrees is not None and self.ambient is not None and degrees < self.ambient - WARM_STEP_C:
-            level = max(self.target, degrees)
-            say(f"camera: warming the sensor from {degrees:.1f} °C to {self.ambient:.1f} °C, "
-                f"{WARM_STEP_C:g} °C a minute, before the cooler is turned off")
-            for _ in range(WARM_STEPS_MOST):
-                if level >= self.ambient:
-                    break
-                level = min(self.ambient, level + WARM_STEP_C)
+        most = WARM_MOST_S if most is None else most
+        began = clock()
+        try:
+            degrees = self.temperature()
+            if degrees is not None and self.ambient is not None and degrees < self.ambient - WARM_STEP_C:
+                level = max(self.target, degrees)
+                say(f"camera: warming the sensor from {degrees:.1f} °C to {self.ambient:.1f} °C, "
+                    f"{WARM_STEP_C:g} °C a minute, before the cooler is turned off")
+                for _ in range(WARM_STEPS_MOST):
+                    if level >= self.ambient:
+                        break
+                    if clock() - began + WARM_EVERY_S > most:
+                        say(f"camera: the warm-up has had its {most / 60:g} minutes; the cooler goes off with the "
+                            f"sensor near {level:.1f} °C")
+                        break
+                    level = min(self.ambient, level + WARM_STEP_C)
+                    try:
+                        handle.put_Temperature(int(round(level * 10)))
+                    except lib.HRESULTException:
+                        break
+                    sleep(WARM_EVERY_S)
+        except Exception as problem:             # a failing camera still has its cooler turned off
+            say(f"camera: the warm-up stopped ({problem}); the cooler goes off now")
+        finally:
+            option = getattr(lib, "ALTAIRCAM_OPTION_TEC", None)
+            if option is not None:
                 try:
-                    handle.put_Temperature(int(round(level * 10)))
-                except lib.HRESULTException:
-                    break
-                sleep(WARM_EVERY_S)
-        option = getattr(lib, "ALTAIRCAM_OPTION_TEC", None)
-        if option is not None:
-            try:
-                handle.put_Option(option, 0)
-            except lib.HRESULTException:
-                pass
-        self.target = None
+                    handle.put_Option(option, 0)
+                except Exception:
+                    pass
+            self.target = None
         return True
 
     # --- the library's thread ----------------------------------------------------

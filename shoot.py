@@ -922,6 +922,21 @@ def disk_full(folder, least=None):
     return shutil.disk_usage(path).free < (MIN_FREE if least is None else least)
 
 
+def warm(cam, say=None):
+    """The end of a run, however it ended: a cooled camera's sensor brought up
+    gently before its cooler goes off (altair.py's warm_up, which is bounded
+    in time and turns the cooler off whatever happens); nothing for any other
+    camera. Never raises: a run that stopped on an error keeps that error."""
+    say = say or (lambda line: print(f"  {line}", flush=True))
+    warm_up = getattr(cam, "warm_up", None)
+    if not warm_up:
+        return
+    try:
+        warm_up(say=say)
+    except Exception as problem:
+        say(f"camera: the warm-up failed ({problem}); closing the camera turns the cooler off")
+
+
 def hold_the_rig(name, path=None):
     """The mount and camera for this run alone: an open file locked for as
     long as the run lives (the lock goes with the process, however it ends).
@@ -1061,6 +1076,18 @@ def image(args, session, exposure, moving, holding, tracker):
             told["cloudy"], told["recentre"] = False, True
         return True
 
+    asked_more = {}
+
+    def go_on():
+        """more(), asked once a frame: the camera block asks it before it
+        pauses (so a run whose last frame falls on a re-centre or a dither
+        ends warmed, not paused), and the loops ask it again for the same
+        frame without saying anything twice."""
+        key = (index, told["stop"])
+        if asked_more.get("key") != key:
+            asked_more.update(key=key, answer=more())
+        return asked_more["answer"]
+
     def collect(everything=False):
         """Take finished frames into the stack, in the order they were taken.
         With `everything`, wait for all of them."""
@@ -1071,7 +1098,7 @@ def image(args, session, exposure, moving, holding, tracker):
 
     with stacking.worker_pool(workers) as pool:
         session.drawer = pool       # the page's picture is drawn by these workers, never a new process
-        while more():
+        while go_on():
             tracker.pause()      # re-centring or catching up is not the camera keeping it waiting
             due = (args.recentre and since_centre >= args.recentre) or told["recentre"]
             if moving and args.dither and since_dither >= args.dither:
@@ -1114,69 +1141,72 @@ def image(args, session, exposure, moving, holding, tracker):
             in_path = (sxwheel.confirmed(say=lambda line: print(f"  {line}", flush=True))
                        if config.hardware()["train"].get("filterwheel") else None)
             with Camera(gain=args.gain) as cam:
-                # A cooled camera keeps no frame until its sensor is within
-                # 1 °C of its target (altair.py); every other camera, at once.
-                settle = getattr(cam, "settle", None)
-                if settle:
-                    settle(say=lambda line: print(f"  {line}", flush=True))
-                ended = False
-                while more():
-                    try:
-                        mosaic, header = cam.frame(exposure)
-                    except CameraError as problem:
-                        jammed = problem          # the camera is closed on the way out of this block
-                        break
-                    sxwheel.cards(header, in_path)
-                    jams = 0
-                    index += 1
-                    tracker.took(index)
-                    since_centre += 1
-                    since_dither += 1
-                    if time.monotonic() - shown >= PREVIEW_EVERY:
-                        snap.publish(mosaic, kind="newest frame", quick=True, mono=is_mono(header),
-                                     detail=f"frame {index} · {exposure:g} s")
-                        shown = time.monotonic()
-                    collect()
-                    if len(waiting) >= BACKLOG:
-                        # Capture never waits for processing: this frame's raw
-                        # file is kept and the quality pass will use it.
-                        cards = {k: header[k] for k in stacking.KEPT if k in header}
-                        if session.save:
-                            pool.submit(stacking.save_only, mosaic, cards, str(session.folder), index)
-                        print(session.defer(index), flush=True)
-                    else:
-                        # Until the first good frame has become the reference
-                        # the others cannot be lined up, so collect() waits for it.
-                        waiting.append((pool.submit(stacking.live_frame,
-                                                    *session.job(index, mosaic, header)), time.time()))
-                    asked = order(args.name)
-                    if asked:
-                        print(f"  told to {asked}", flush=True)
-                    if disk_full(session.folder):
-                        print(f"  stopping: under {MIN_FREE / 1e9:.0f} GB left on the disk", flush=True)
-                        asked = "stop"
-                    if asked == "stop":
-                        told["stop"] = True
-                        break
-                    if asked in ("assist-on", "assist-off"):
-                        args.assist = asked == "assist-on"
-                    told["recentre"] = told["recentre"] or asked == "recentre"
-                    due = (args.recentre and since_centre >= args.recentre) or told["recentre"]
-                    if moving and (session.drift > DRIFT_LIMIT or due):
-                        break
-                    if holding and moving and holding.due(session.shifts):
-                        break
-                    if moving and args.dither and since_dither >= args.dither:
-                        break
-                    if args.assist and moving and len(session.track) >= live.get("shoot.assist_every", ASSIST_EVERY):
-                        break
-                else:
-                    ended = True          # the run is over, not paused to re-centre or dither
-                warm_up = getattr(cam, "warm_up", None)
-                if warm_up and (ended or told["stop"]):
-                    # The end of the run: a cooled camera's sensor is brought up
-                    # gently before the cooler goes off; nothing for any other.
-                    warm_up(say=lambda line: print(f"  {line}", flush=True))
+                # True only when this block ends to be opened again at once: a
+                # re-centre, a dither, a trim of the creep, a hold, or a jam that
+                # still has reopens left. Every other way out (the run's end, a
+                # stop, the disk, an error, Ctrl-C) warms a cooled sensor first.
+                reopening = False
+                try:
+                    # A cooled camera keeps no frame until its sensor is within
+                    # 1 °C of its target (altair.py); every other camera, at once.
+                    settle = getattr(cam, "settle", None)
+                    if settle:
+                        settle(say=lambda line: print(f"  {line}", flush=True))
+                    while go_on():
+                        try:
+                            mosaic, header = cam.frame(exposure)
+                        except CameraError as problem:
+                            jammed = problem          # the camera is closed on the way out of this block
+                            reopening = jams < JAM_REOPENS
+                            break
+                        sxwheel.cards(header, in_path)
+                        jams = 0
+                        index += 1
+                        tracker.took(index)
+                        since_centre += 1
+                        since_dither += 1
+                        if time.monotonic() - shown >= PREVIEW_EVERY:
+                            snap.publish(mosaic, kind="newest frame", quick=True, mono=is_mono(header),
+                                         detail=f"frame {index} · {exposure:g} s")
+                            shown = time.monotonic()
+                        collect()
+                        if len(waiting) >= BACKLOG:
+                            # Capture never waits for processing: this frame's raw
+                            # file is kept and the quality pass will use it.
+                            cards = {k: header[k] for k in stacking.KEPT if k in header}
+                            if session.save:
+                                pool.submit(stacking.save_only, mosaic, cards, str(session.folder), index)
+                            print(session.defer(index), flush=True)
+                        else:
+                            # Until the first good frame has become the reference
+                            # the others cannot be lined up, so collect() waits for it.
+                            waiting.append((pool.submit(stacking.live_frame,
+                                                        *session.job(index, mosaic, header)), time.time()))
+                        asked = order(args.name)
+                        if asked:
+                            print(f"  told to {asked}", flush=True)
+                        if disk_full(session.folder):
+                            print(f"  stopping: under {MIN_FREE / 1e9:.0f} GB left on the disk", flush=True)
+                            asked = "stop"
+                        if asked == "stop":
+                            told["stop"] = True
+                            break
+                        if asked in ("assist-on", "assist-off"):
+                            args.assist = asked == "assist-on"
+                        told["recentre"] = told["recentre"] or asked == "recentre"
+                        due = (args.recentre and since_centre >= args.recentre) or told["recentre"]
+                        reopening = bool(
+                            (moving and (session.drift > DRIFT_LIMIT or due))
+                            or (holding and moving and holding.due(session.shifts))
+                            or (moving and args.dither and since_dither >= args.dither)
+                            or (args.assist and moving
+                                and len(session.track) >= live.get("shoot.assist_every", ASSIST_EVERY)))
+                        if reopening:
+                            reopening = go_on()      # the last frame on a pause is the run's end
+                            break
+                finally:
+                    if not reopening:
+                        warm(cam)
             if jammed is not None:
                 # A jammed camera is opened again and the run goes on in the same
                 # session: on 1 November 2026 a jam ended a transit run, and its

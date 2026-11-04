@@ -1606,3 +1606,34 @@ def test_the_183c_with_a_target_set_and_no_thermometer_opens_as_before(sdk, worl
         _, header = cam.frame(0.01)
         assert cam.settle(say=pytest.fail, sleep=pytest.fail) is True
     assert "CCD-TEMP" not in header and header["BAYERPAT"] == "RGGB"
+
+
+def test_the_warm_up_is_bounded_in_time_and_the_cooler_goes_off_at_its_end(world, monkeypatch):
+    lib = cooled(world, monkeypatch, target=0)
+    world.sensor = 200                            # 20 °C before the cooler starts
+    now, said = [0.0], []
+
+    def sleep(seconds):
+        now[0] += seconds
+    with altair.AltairCamera() as cam:
+        world.sensor = 0
+        assert cam.warm_up(say=said.append, sleep=sleep, clock=lambda: now[0], most=150) is True
+        handle = lib.Altaircam.opened[-1]
+    assert now[0] <= 150 and handle.targets == [0, 30, 60]         # two steps fit, not seven
+    assert handle.options[lib.ALTAIRCAM_OPTION_TEC] == 0 and "has had its 2.5 minutes" in said[-1]
+    assert altair.WARM_MOST_S <= 15 * 60
+
+
+def test_a_warm_up_that_fails_part_way_still_turns_the_cooler_off_and_never_raises(world, monkeypatch):
+    lib = cooled(world, monkeypatch, target=0)
+    world.sensor = 200
+    with altair.AltairCamera() as cam:
+        world.sensor = 0
+        handle = lib.Altaircam.opened[-1]
+
+        def gone(tenths):
+            raise OSError("the camera has gone")
+        handle.put_Temperature = gone
+        said = []
+        assert cam.warm_up(say=said.append, sleep=lambda s: None) is True
+    assert handle.options[lib.ALTAIRCAM_OPTION_TEC] == 0 and "the cooler goes off now" in said[-1]

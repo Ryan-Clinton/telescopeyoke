@@ -564,6 +564,82 @@ def test_a_cooled_camera_is_waited_for_before_frames_and_warmed_once_at_the_run_
     assert "sensor at 0.3 °C" in capsys.readouterr().out
 
 
+def cooled_camera(calls, warm_fails=False):
+    class Cooled(FakeCamera):
+        def settle(self, say):
+            calls.append(("settle", Sky.taken))
+
+        def warm_up(self, say):
+            calls.append(("warm_up", Sky.taken))
+            if warm_fails:
+                raise RuntimeError("the camera has gone")
+    return Cooled
+
+
+def test_a_cooled_run_that_fails_part_way_still_warms_and_keeps_its_own_error(night, monkeypatch):
+    calls = []
+    Cooled = cooled_camera(calls, warm_fails=True)       # and the warm-up itself fails too
+    real = Cooled.frame
+
+    def frame(self, seconds):
+        if Sky.taken == 2:
+            raise RuntimeError("something else broke")
+        return real(self, seconds)
+    monkeypatch.setattr(Cooled, "frame", frame)
+    monkeypatch.setattr(shoot, "Camera", Cooled)
+    monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "5", "--exposure", "2",
+                                      "--no-recentre", "--no-restack"])
+    with pytest.raises(RuntimeError, match="something else broke"):
+        shoot.main()
+    assert calls == [("settle", 0), ("warm_up", 2)]
+
+
+def test_a_cooled_run_stopped_by_ctrl_c_warms_on_the_way_out(night, monkeypatch):
+    calls = []
+    Cooled = cooled_camera(calls)
+    real = Cooled.frame
+
+    def frame(self, seconds):
+        if Sky.taken == 1:
+            raise KeyboardInterrupt
+        return real(self, seconds)
+    monkeypatch.setattr(Cooled, "frame", frame)
+    monkeypatch.setattr(shoot, "Camera", Cooled)
+    monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "5", "--exposure", "2",
+                                      "--no-recentre", "--no-restack"])
+    with pytest.raises(KeyboardInterrupt):
+        shoot.main()
+    assert calls[-1] == ("warm_up", 1)
+
+
+def test_a_cooled_run_is_not_warmed_when_it_pauses_to_dither_only_at_its_end(night, monkeypatch):
+    calls = []
+    monkeypatch.setattr(shoot, "Camera", cooled_camera(calls))
+    monkeypatch.setattr(sys, "argv", ["shoot", reachable_target(), "--frames", "12", "--exposure", "2",
+                                      "--dither", "4", "--no-restack"])
+    shoot.main()
+    assert [c[0] for c in calls].count("warm_up") == 1 and calls[-1][0] == "warm_up"   # once, at the end
+    assert [c[0] for c in calls].count("settle") == 3        # opened three times, warmed once
+
+
+def test_a_jam_that_is_opened_again_does_not_warm_but_the_last_one_does(night, monkeypatch):
+    import indi
+    calls = []
+    Cooled = cooled_camera(calls)
+    monkeypatch.setattr(shoot, "JAM_WAIT_S", 0)
+
+    def frame(self, seconds):
+        raise indi.IndiError("no frame")
+    monkeypatch.setattr(Cooled, "frame", frame)
+    monkeypatch.setattr(shoot, "Camera", Cooled)
+    monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "5", "--exposure", "2",
+                                      "--no-recentre", "--no-restack"])
+    with pytest.raises(indi.IndiError):
+        shoot.main()
+    assert [c[0] for c in calls].count("settle") == shoot.JAM_REOPENS + 1
+    assert [c[0] for c in calls].count("warm_up") == 1 and calls[-1][0] == "warm_up"
+
+
 def test_a_run_given_minutes_finishes_on_time_whatever_the_frame_count(night, monkeypatch, capsys):
     """1 November 2026: lost frames stretched a 75-minute patrol towards three
     hours and the plan's next targets."""
