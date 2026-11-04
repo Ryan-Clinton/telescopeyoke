@@ -134,8 +134,9 @@ Rubin's survey strategy is tuned the same way.
 
 ## What the plan is for: discovery yield
 
-The night is judged by what it could find and how reliably, not by
-integration. For each programme the plan keeps, and Phase 5 reports:
+The aim is discoveries that survive scrutiny, not the number of
+candidates found or frames taken. The night is judged by what it could
+find and how reliably, not by integration. For each programme the plan keeps, and Phase 5 reports:
 
 | Measure | The question it answers | From |
 |---|---|---|
@@ -144,13 +145,30 @@ integration. For each programme the plan keeps, and Phase 5 reports:
 | Local significance | Whether a candidate stands out against the noise where it is, not only against the picture's average | the local spread of the score (docs/nights/2026-11-04/p8-false-candidates.md) |
 | Difference-image quality | Where the subtraction itself limits the search: the share of the field whose local spread or residual level is out of line | the same, as a map and a share |
 | False-candidate cost | How many candidates, second looks and minutes went to things that were not real | `candidates/*.json` dismissals, second looks |
-| Coverage | Which fields, or what share of a programme's area, were searched to their goal, and when last | `patrol.json`, `last_watched` |
+| Coverage and cadence | Which fields, or what share of a programme's area, were last *searched to a useful depth* (worth it, Phase 1), and how often: G 17.5 every two nights is a different survey from G 17.5 every ten | `patrol.json` and `depth.json` per field; today's `last_watched` counts any imaging, and is replaced by this |
 | Follow-up in time | Whether each candidate got its second look while it still counted | the obligations (Phase 4) |
 
 Another 20 minutes on a field is worth what it adds to these. That might
 be depth where the subtraction is clean, or nothing where it is not. An
 hour on a well-covered field can be worth less than 20 minutes on a
 neglected one with a candidate waiting.
+
+## Evidence standard
+
+What a thing is called follows its evidence, in reports, the night notes,
+Telegram, the stream and the website. Each level needs all of the one
+before:
+
+| Level | Called | Needs |
+|---|---|---|
+| 1 | a detection | A difference peak above the threshold, with its record: time, frames, reference version, place, significance against the picture and against its own surroundings, real-or-bogus score with its uncertainty, and cut-outs. |
+| 2 | a candidate worth a look | Nothing known explains it: no asteroid, variable, catalogued star change or earlier report (each check said as done, failed or not reachable). Present in both halves of the night. Not in a patch where the subtraction is known to be the limit, unless it stands out against its own surroundings. |
+| 3 | a confirmed transient | Seen again at the same place on another night (a forced measurement of 3 sigma does not count as seen), by the same measure. Its brightness is measured with an error, and its last non-detection is known. |
+| 4 | a reportable discovery | Level 3, and no report on the Transient Name Server at that place. The packet (`report.py`) has nothing left on its "Before sending" list. The person decides and sends it (docs/agents/claiming.md). |
+
+The scientific agent never calls anything by a higher level than its
+record supports, and says which checks could not be made, such as a
+catalogue that didn't answer.
 
 ## Scientific decision contract
 
@@ -367,6 +385,22 @@ Each obligation says:
   after a week, or a transit that cannot be repeated tonight;
 - whether repeating it is still worth anything.
 
+**A candidate's claim on the night is weighed, not assumed:**
+
+- **Confidence:** its evidence level, its real-or-bogus probability and
+  that probability's uncertainty, and its significance against its own
+  surroundings.
+- **Novelty:** nothing catalogued, and not in a known problem patch.
+- **What another look would settle:** a 5-sigma spot at the limit can't be
+  settled by another visit at the same depth. That needs a deeper or
+  steadier night, and waits for one.
+- **Time sensitivity:** a nova fades over days, a moving object goes in
+  hours, and a candidate past its usefulness is closed, not chased.
+
+Uncertain candidates share a bounded part of the night: a follow-up
+allowance, set with the person, which they cannot exceed. A candidate
+with strong evidence (level 2 with high confidence) can go first at once.
+
 It chooses by scientific opportunity:
 
 - obligations near their expiry first, by their worth;
@@ -407,11 +441,27 @@ and still changeable by the person.
   It also reports discovery yield: coverage, recovery completeness of
   planted transients, false-candidate cost and follow-up in time.
 
-  It runs the current policy and the proposed one on the same nights. A
-  change is kept only if it does better without missing a protected start.
+  It runs the current policy and the proposed one on the same nights.
+  There is no single score, and no weights summing unlike things:
+
+  - **Constraints, pass or fail:** no protected start missed to another
+    step, no safety limit passed, nothing deleted. A policy that fails one
+    is rejected.
+  - **Measures, side by side, each with its uncertainty:**
+    - coverage to a useful depth and cadence;
+    - recovery completeness;
+    - follow-ups done in time;
+    - accepted integration where it counts;
+    - opportunities missed (a field up and clear, left unsearched);
+    - false-candidate cost.
+
+  A new policy is preferred only if it is no worse on any measure beyond
+  its uncertainty and better on at least one. Where it trades one measure
+  against another, the trade is shown to the person, who decides.
+
   The test of a policy is not that every goal is reached: weather can
-  make that impossible. It is that the policy made the best choice
-  available and reported each shortfall and its cause accurately.
+  make that impossible. It is that it made the best choice available by
+  those measures and reported each shortfall and its cause accurately.
 - **Stress nights,** beyond what has happened:
   - a camera that never recovers;
   - cloud coming and going every few minutes;
@@ -471,11 +521,14 @@ Proposed after review, waiting for the person's go before any building:
      three reference cases applies (Phase 2), never one time for all.
    - Transits: unbroken ingress, egress and baseline at the precision the
      depth needs.
-2. **Protection.** The four classes in Phase 3: hard windows for
+2. **The follow-up allowance:** the share of a night uncertain candidates
+   may take. Proposed: a quarter, with strong ones (level 2, high
+   confidence) outside it.
+3. **Protection.** The four classes in Phase 3: hard windows for
    occultations, transits and the most urgent transients; deadlines for
    setting objects; everything else flexible; the person can protect any
    step.
-3. **Order.** 1, 5, 2, 3, 4.
+4. **Order.** 1, 5, 2, 3, 4.
 
 The person is asked about any choice that changes what can be found
 (sensitivity), what is observed first, or the safety of the kit.
