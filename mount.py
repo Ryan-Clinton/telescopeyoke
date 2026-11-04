@@ -897,6 +897,7 @@ class Mount:
         """Photograph the sky and plate-solve it. Returns the J2000 position
         of the frame centre as {"ra", "dec"} in degrees, or None."""
         import solve as solver
+        import numpy as np
         from scipy import ndimage
         from camera import Camera, luminance
         import snap
@@ -921,8 +922,19 @@ class Mount:
         if self.recording:
             count = len(list(self.recording.glob("frame-*.jpg")))
             snap.publish(mosaic, self.recording / f"frame-{count + 1:02d}.jpg")
-        # Hot pixels look like stars to the solver; a median filter removes them.
-        image = ndimage.median_filter(luminance(mosaic), 3)
+        # Hot pixels look like stars to the solver: only a pixel far brighter
+        # than every one of its eight neighbours (which a star never is) is
+        # put back to their median. A median filter over the whole frame did
+        # this on 4 November 2026 and blurred the 183M's small, sharp stars so
+        # far that each solve took 107 s; the same frame unfiltered took 0.3 s.
+        image = luminance(mosaic).astype(np.float32)
+        ring = np.ones((3, 3), bool)
+        ring[1, 1] = False
+        brightest = ndimage.maximum_filter(image, footprint=ring, mode="nearest")
+        noise = 1.4826 * float(np.median(np.abs(image[::4, ::4] - np.median(image[::4, ::4])))) or 1.0
+        hot = image > brightest + 5 * noise
+        if hot.any():
+            image[hot] = ndimage.median_filter(image, footprint=ring, mode="nearest")[hot]
         found = solver.solve(image, ra_hint, dec_hint, radius)
         if found:
             found["when"] = when  # solving can take a while; the sky moves on
