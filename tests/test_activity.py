@@ -320,3 +320,24 @@ def test_focusing_and_polar_alignment_are_told_apart_stage_by_stage():
     # The between-targets card still has its four steps: every focus stage is "focus".
     assert [activity.step_of(p) for p in ("goto", "solve", "focus_fit", "focus_walk", "imaging", "polar_measure",
                                           None)] == ["goto", "solve", "focus", "focus", "imaging", None, None]
+
+
+def test_a_clearing_reminds_whoever_watches_to_go_on_without_waiting(monkeypatch, capsys):
+    """4 November 2026: the sky cleared and the polar check waited for "go";
+    gaps can be small, and anything past setting the handset is live."""
+    import datetime as real
+    import skywatch
+    monkeypatch.setattr(skywatch, "Camera", LookingCamera)
+    monkeypatch.setattr(skywatch, "publish", lambda *a, **k: None)
+    monkeypatch.setattr(skywatch, "save", lambda *a, **k: "frame.fits")
+    monkeypatch.setattr(skywatch, "count_stars", lambda lum: 50)
+
+    class Clock:
+        @staticmethod
+        def now():
+            return real.datetime(2026, 11, 4, 0, 53)
+    monkeypatch.setattr(skywatch, "datetime", Clock)
+    skywatch.watch("05:30", 0, 2.0)
+    out = capsys.readouterr().out
+    assert "STARS VISIBLE" in out and skywatch.GO_NOW in out
+    assert "do not wait for the person to say go" in skywatch.GO_NOW and "setting the handset" in skywatch.GO_NOW

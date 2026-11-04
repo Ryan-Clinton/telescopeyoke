@@ -19,6 +19,10 @@ from camera import Camera, luminance
 from snap import publish, save
 
 ENOUGH_STARS = 8  # in two frames running; a plate solve needs about this many
+# Said with every clearing, for whoever (or whatever agent) started the watch
+# (4 November 2026: a gap came and the polar check waited for "go").
+GO_NOW = ("Gaps in the cloud can be small. In live observation (anything past setting "
+          "the handset) start the next step now: do not wait for the person to say go.")
 
 
 def star_places(lum):
@@ -68,6 +72,7 @@ def watch(until, every, exposure):
             streak = streak + 1 if stars >= ENOUGH_STARS else 0
             if streak >= 2:
                 print(f"STARS VISIBLE: frame saved as {save(mosaic, header)}", flush=True)
+                print(GO_NOW, flush=True)
                 return
             time.sleep(max(0, every - (time.monotonic() - started)))
     print("No clear sky before the deadline.", flush=True)
