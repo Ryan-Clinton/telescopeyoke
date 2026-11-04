@@ -531,7 +531,18 @@ def setup_card_due(directed, segment, now):
         return True
     if directed.get("run_current"):
         return False
+    # Only once tonight's setting up has begun (the handset set) and while it
+    # goes on (a step within SETUP_S): never all afternoon, nor after packing up.
+    began = night_began(now)
+    times = [t for t in (_record(n, k)[0] for n, k in (("handset_clock.json", "saved"),
+             ("focus_runs.jsonl", "saved"), ("polar.json", "measured"))) if t and t >= began]
+    clock, _ = _record("handset_clock.json", "saved")
+    if not (clock and clock >= began) or now - max(times) > SETUP_S:
+        return False
     return any(state != "done" for _, state, _ in setup_steps(now)[:3])
+
+
+SETUP_S = 90 * 60
 
 
 def _cloud_words():
@@ -1151,10 +1162,12 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                     tones.hear(segment_state)
                 if process is not None:
                     side_jobs(st, directed, now, voice if tones is not None else None, s["clips"] and to is None, say)
-            active = directed["on_air"]
             surveying = directed["scene"] == "skyline"       # never streamed (director.py)
+            # The setup card is something to watch: on air while it is due.
+            carded = not surveying and setup_card_due(directed, segment, now)
+            active = directed["on_air"] or carded
             between = not surveying and not imaging(st) and runner_alive() and due_soon(st, now)
-            ending = surveying or (directed["scene"] == "end" and night_ending(st, between, active))
+            ending = surveying or (directed["scene"] == "end" and not carded and night_ending(st, between, active))
             action, quiet_since = decide(process is not None, st, quiet_since, now, between, ending, active)
             # What the telescope sees, in the usual layout: no card ever takes
             # its place (no night-opens plan, no between-targets steps; 30
@@ -1164,7 +1177,7 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
             # Then the setup card's steps too (asked for the same night): the
             # card until tonight's setting up is done and a run is imaging,
             # and again whenever the star watch waits for cloud.
-            cloudy = setup_card_due(directed, segment, now)
+            cloudy = carded
             mode = segment or ("cloud" if cloudy else "imaging")
             composer.view = (dict(st, director=directed, night_brief=hopes(now) if cloudy else None), mode)
             if phones is not None and phones.dead and now - phones.dead >= 60 and process is not None:

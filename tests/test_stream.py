@@ -531,6 +531,7 @@ def test_the_setup_card_crosses_off_each_step_from_what_the_steps_keep(tmp_path,
     assert now - 86400 < began <= now
     steps = stream.setup_steps(now)
     assert [s[1] for s in steps] == ["now", "open", "open", "open"]
+    assert not stream.setup_card_due({"programme": None, "run_current": False}, None, now)  # not begun
     (tmp_path / "cache" / "handset_clock.json").write_text(json.dumps({"saved": now - 60}))
     (tmp_path / "cache" / "focus_runs.jsonl").write_text(json.dumps({"saved": began - 3600}) + "\n"
                                                         + json.dumps({"saved": now - 30, "checked_hfr": 2.25}) + "\n")
@@ -540,6 +541,7 @@ def test_the_setup_card_crosses_off_each_step_from_what_the_steps_keep(tmp_path,
     assert steps[1][2] == "in focus: star size 2.25" and steps[2][2] is None   # yesterday's polar is not tonight's
     idle = {"programme": None, "run_current": False}
     assert stream.setup_card_due(idle, None, now)                      # polar still to do: the card
+    assert not stream.setup_card_due(idle, None, now + stream.SETUP_S + 60)   # left: not on air for ever
     assert not stream.setup_card_due(idle, "focus", now)               # focusing has its own look
     assert not stream.setup_card_due(dict(idle, run_current=True), None, now)
     (tmp_path / "cache" / "polar.json").write_text(json.dumps({"measured": now - 10, "total_deg": 0.2}))
