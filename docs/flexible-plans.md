@@ -33,10 +33,17 @@ every hitch came from changing the plan.
    (`shoot.ORDER_STALE_S`) is thrown away. `./ty run stop` with no run named
    still stops whatever is running.
 2. **Every step ends on its own clock, gracefully.** A step with `--until`
-   tells its `shoot.py` or `patrol.py` how many minutes it has (`--minutes`),
-   so it finishes after its frame and keeps its picture; the hard stop comes
+   tells its `shoot.py` how many minutes it has (`--minutes`), so it
+   finishes after its frame and keeps its picture; the hard stop comes
    15 minutes later as a backstop only. `shoot.py --minutes` ends a run on
-   time whatever the camera loses, and patrols pass their programme's time.
+   time whatever the camera loses. A `patrol.py` step is always told its
+   whole time as `--budget` (the step's minutes, or the time left before
+   its `--until`): a mosaic takes the panels that fit, GoTo included, and
+   one field is shortened to it. Its `--minutes` is each field's, never the
+   step's. A patrol's second looks give way once its step has used its
+   time and another step is waiting (`schedule.due()`). On 4 November 2026
+   eight panels in a 45-minute step ran 99 minutes and the supernova after
+   them got 27 of its 90.
 3. **The plan changes while it runs.** The runner reads the plan again before
    every step, so these act at once, with no restart:
 

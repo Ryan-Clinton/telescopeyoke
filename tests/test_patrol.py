@@ -573,3 +573,33 @@ def test_readiness_says_when_there_is_no_dark_for_the_frames(tmp_path, monkeypat
     items = patrol.readiness({"target": "M33", "exposure": 16, "gain": 1500, "minutes": 30})
     dark = next(i for i in items if i["what"] == "dark")
     assert not dark["ok"] and not dark["stops"] and "--exposure 16 --gain 1500" in dark["detail"]
+
+
+def test_a_patrol_with_a_budget_takes_only_the_panels_that_fit(monkeypatch):
+    """4 November 2026, as a scenario: eight panels in a 45-minute step. The
+    patrol takes the highest-priority panels that fit in 45 minutes,
+    GoTo and plate solve included, and never more."""
+    monkeypatch.setattr(patrol, "night_left", lambda p, site: 130)
+    monkeypatch.setattr(patrol, "readiness", lambda p: [])
+    monkeypatch.setattr(patrol, "first_goto", lambda name: None)
+    monkeypatch.setattr(patrol, "known_novae", lambda ra, dec: [])
+    monkeypatch.setattr(patrol, "expected_depth", lambda p: (lambda name: 17.0))
+    monkeypatch.setattr(config, "load", config.example)
+    args = argparse.Namespace(programme="m31-panels", analyse=None, minutes=None, plan=True, dry_run=False,
+                              budget=45.0)
+    answer = patrol.run(args, say=lambda *_: None)
+    cost = sum(r["minutes"] for r in answer["order"])
+    assert cost <= 45 and len(answer["order"]) == int(45 // (patrol.programme("m31-panels")["minutes"]
+                                                               + patrol.OVERHEAD))
+    unbounded = patrol.run(argparse.Namespace(**dict(vars(args), budget=None)), say=lambda *_: None)
+    assert len(unbounded["order"]) == 8                 # the night alone would have allowed all eight
+
+
+def test_one_field_is_shortened_to_its_budget(monkeypatch):
+    monkeypatch.setattr(patrol, "readiness", lambda p: [])
+    monkeypatch.setattr(patrol, "first_goto", lambda name: None)
+    monkeypatch.setattr(config, "load", config.example)
+    args = argparse.Namespace(programme="m33-novae", analyse=None, minutes=None, plan=True, dry_run=False,
+                              budget=30.0)
+    answer = patrol.run(args, say=lambda *_: None)
+    assert answer["programme"]["minutes"] == 30.0 - patrol.OVERHEAD

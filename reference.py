@@ -93,14 +93,42 @@ def made_from(stack):
 
 
 FIELD_REACH = 0.6    # degrees from a field's centre that its stack covers, about half the frame's diagonal
+EDGE_MARGIN = 0.02   # degrees: a candidate this close outside the stack's frame still counts as inside
 
 
-def contaminated(name, sessions):
+def stack_footprint(stack, record=None, name=None, solver=None):
+    """Where a stack's frame lies on the sky (footprint.py's form): the
+    plate solve kept in its depth record, or a solve made now and kept in
+    the record for next time; None if it cannot be placed."""
+    import footprint
+    record = Path(record) if record else None
+    kept = json.loads(record.read_text(encoding="utf-8")) if record and record.is_file() else {}
+    solve = kept.get("footprint")
+    if not solve:
+        try:
+            from astropy.io import fits
+            lum = depth.brightness(fits.getdata(stack))
+            wcs = (solver or depth.plate)(lum, name or Path(stack).parent.parent.name)
+            solve = depth.footprint_of(wcs, lum.shape)
+        except Exception:        # no solver, no stars, no file: the caller stays cautious
+            return None
+        if record and record.is_file():
+            kept["footprint"] = solve
+            record.write_text(json.dumps(kept, indent=1), encoding="utf-8")
+    return footprint.from_solve(solve, f"plate solve of {stack}")
+
+
+def contaminated(name, sessions, frame=None):
     """Open candidates in the field that a reference made from these
     sessions could contain: first seen on or before the last of its nights
-    and within the field. A reference with a real, lasting nova in it would
-    subtract the nova away from every night after."""
+    and inside the stack's own frame (`frame`, footprint.py's form), or
+    within FIELD_REACH of the field's centre when the frame is not known.
+    A reference with a real, lasting nova in it would subtract the nova away
+    from every night after. The frame, not a circle: on 4 November 2026 the
+    circle held back M31-P8's clean 20 October stack for a candidate that
+    lies outside that stack's frame."""
     import candidates
+    import footprint
     import mount
     import vet
     try:
@@ -111,13 +139,16 @@ def contaminated(name, sessions):
     out = []
     for book_name in dict.fromkeys((name, name.rsplit("-P", 1)[0] if "-P" in name else name)):
         for k in candidates.load(book_name)["candidates"]:
-            near = vet.separation(centre["ra"], centre["dec"], k["ra"], k["dec"]) <= FIELD_REACH * 3600
+            if frame is not None:
+                near = footprint.contains(frame, k["ra"], k["dec"], margin=EDGE_MARGIN)
+            else:
+                near = vet.separation(centre["ra"], centre["dec"], k["ra"], k["dec"]) <= FIELD_REACH * 3600
             if k["open"] and near and k["first"] <= last:
                 out.append(k["id"])
     return out
 
 
-def make(name, source=None, force=False):
+def make(name, source=None, force=False, solver=None):
     """Keep a stack as the field's next reference version."""
     candidates = measured_stacks(name)
     if source:
@@ -133,6 +164,11 @@ def make(name, source=None, force=False):
         chosen = candidates[0]
     sessions = made_from(Path(chosen["stack"]))
     held = contaminated(name, sessions)
+    if held:
+        # Only a candidate inside the stack's own frame can be in it.
+        frame = stack_footprint(chosen["stack"], chosen["record"], name, solver=solver)
+        if frame is not None:
+            held = contaminated(name, sessions, frame)
     if held and not force:
         raise interface.Refusal("INVALID_REQUEST", f"{chosen['stack']} could contain open candidates "
                                 f"({', '.join(held)}); a reference must not hold what it is looking for. "

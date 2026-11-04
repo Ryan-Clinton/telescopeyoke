@@ -723,6 +723,13 @@ def run(args, say=print):
     if args.minutes:
         p["minutes"] = args.minutes
     names = fields(p)
+    # The time the whole patrol has (the schedule's step): a mosaic takes the
+    # panels that fit in it, one field is shortened to it. On 4 November 2026
+    # the panels' step had 45 minutes, the patrol did not know, and the
+    # supernova after it lost an hour.
+    budget = getattr(args, "budget", None)
+    if budget and len(names) == 1:
+        p["minutes"] = min(p["minutes"], max(budget - OVERHEAD, 1.0))
     order = None
     if len(names) > 1:
         import mount
@@ -732,6 +739,8 @@ def run(args, say=print):
             left = night_left(p, config.load()["site"])
         except (SystemExit, KeyError, OSError):
             left = None
+        if budget:
+            left = budget if left is None else min(left, budget)
         order = fit(rows, left)
         p = dict(p, target=order[0]["field"] if order else names[0])
     items = readiness(p)
@@ -1024,7 +1033,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("programme", nargs="?", help="a programme in programmes/ (m31-novae), or a target name")
     ap.add_argument("--plan", action="store_true", help="readiness and what it would do; moves nothing")
-    ap.add_argument("--minutes", type=float, help="how long to image (default: the programme's)")
+    ap.add_argument("--minutes", type=float, help="how long to image each field (default: the programme's)")
+    ap.add_argument("--budget", type=float,
+                    help="minutes the whole patrol has (the schedule gives its step's): the panels that fit")
     ap.add_argument("--analyse", metavar="SESSION", help="only look for anything new in a session already taken")
     ap.add_argument("--release", action="store_true",
                     help="let the telescope go once the frames are in (the default): the picture and the search are "

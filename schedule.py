@@ -326,6 +326,11 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
                 sleep(min(60, until - time.time()))
                 continue
         command = [c.replace("{last}", last_field() or "") for c in step["command"]]
+        patrolling = any(Path(c).name == "patrol.py" for c in command[:2])
+        if patrolling and not step.get("until") and "--budget" not in command:
+            # A patrol is told the step's minutes and takes the panels that fit
+            # (4 November 2026: 8 panels in a 45-minute step ran 99 minutes).
+            command = command + ["--budget", f"{step['minutes']:g}"]
         if step.get("until"):
             # More of whatever was imaged last, to fill the time before a
             # step that keeps to the clock (20 October 2026: the panels
@@ -339,7 +344,8 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
                 # The run is told its time and finishes gracefully, picture and all;
                 # the hard stop is a backstop only (1 November 2026: steps cut off
                 # mid-picture, and private timers that stopped the wrong run).
-                command = command + ["--minutes", f"{left / 60:.1f}"]
+                # A patrol's --minutes is each field's; its whole time is --budget.
+                command = command + ["--budget" if patrolling else "--minutes", f"{left / 60:.1f}"]
                 left += BACKSTOP_S
             command = ["timeout", "--signal=INT", str(left)] + command
         try:

@@ -77,6 +77,51 @@ def test_a_stack_that_could_hold_an_open_candidate_is_not_made_a_reference(data,
     assert made["held_back"] == ["M31-20261018-220000-001"]
 
 
+FRAME = {"ra": 10.68, "dec": 41.27, "cd": [[-0.000378, 0.0], [0.0, 0.000378]], "width_px": 2700, "height_px": 1800}
+
+
+def test_only_a_candidate_inside_the_stacks_own_frame_holds_it_back(data, monkeypatch):
+    """4 November 2026: a circle round the field's centre held back M31-P8's
+    clean stack for a candidate outside that stack's frame. The stack's own
+    plate solve decides; a candidate inside it still holds it back."""
+    import candidates
+    import mount
+    monkeypatch.setattr(mount, "find_target", lambda name: {"id": name, "ra": 10.68, "dec": 41.27})
+    folder = measured(data, "20261020-221500", 17.9)
+    record = json.loads((folder / "depth.json").read_text())
+    (folder / "depth.json").write_text(json.dumps(dict(record, footprint=FRAME)))
+    book = candidates.load("M31")
+    # 0.45 degrees north: inside the old 0.6 degree circle, outside a 0.68 degree tall frame.
+    candidates.add_night(book, "20261018-220000", [{"ra": 10.68, "dec": 41.72, "score": 6.0, "mag": 17.5,
+                                                    "verdict": "unexplained: worth a person's eyes"}])
+    candidates.save(book)
+    assert reference.make("M31")["held_back"] == []
+    # One inside the frame still stops it, as before.
+    candidates.add_night(book, "20261019-220000", [{"ra": 10.80, "dec": 41.40, "score": 6.0, "mag": 17.5,
+                                                    "verdict": "unexplained: worth a person's eyes"}])
+    candidates.save(book)
+    with pytest.raises(interface.Refusal) as refused:
+        reference.make("M31")
+    assert "M31-20261019-220000-002" in refused.value.message
+    assert "M31-20261018-220000-001" not in refused.value.message
+
+
+def test_a_stack_that_cannot_be_placed_keeps_the_cautious_circle(data, monkeypatch):
+    import candidates
+    import mount
+    monkeypatch.setattr(mount, "find_target", lambda name: {"id": name, "ra": 10.68, "dec": 41.27})
+    measured(data, "20261020-221500", 17.9)       # no kept solve, and the solve below fails
+    book = candidates.load("M31")
+    candidates.add_night(book, "20261018-220000", [{"ra": 10.68, "dec": 41.72, "score": 6.0, "mag": 17.5,
+                                                    "verdict": "unexplained: worth a person's eyes"}])
+    candidates.save(book)
+
+    def no_solve(lum, name):
+        raise interface.Refusal("PLATE_SOLVE_FAILED", "no")
+    with pytest.raises(interface.Refusal):
+        reference.make("M31", solver=no_solve)
+
+
 def test_a_stack_from_before_the_candidate_is_clean(data, monkeypatch):
     import candidates
     import mount

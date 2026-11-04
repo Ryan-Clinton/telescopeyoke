@@ -513,3 +513,21 @@ def test_a_step_past_its_minutes_says_the_next_one_is_due():
     plan["steps"][1]["status"] = "done"
     assert schedule.due(plan, now) is None                       # nothing waits
     assert schedule.due({"steps": []}, now) is None
+
+
+def test_a_patrol_step_is_told_its_whole_time_never_a_fields(monkeypatch):
+    """4 November 2026: the M31 panels' step had 45 minutes, the patrol was
+    never told and ran 99, and the supernova after it lost an hour. A patrol
+    is given its step's minutes as --budget; with an end time, the time left,
+    as --budget too (its --minutes would be each panel's)."""
+    monkeypatch.setattr(schedule, "last_field", lambda: "M31-P4")
+    schedule.save({"steps": []})
+    schedule.add("M31 panels", 45, ["./patrol.py", "m31-panels"])
+    later = datetime.fromtimestamp(time.time() + 3600).strftime("%Y-%m-%d %H:%M")
+    schedule.add("M33 till then", 60, ["./patrol.py", "m33-novae"], until=later)
+    ran = []
+    schedule.run(say=lambda s: None, sleep=lambda s: None,
+                 start=lambda cmd: ran.append(cmd) or types.SimpleNamespace(returncode=0))
+    assert ran[0][-2:] == ["--budget", "45"] and "--minutes" not in ran[0]
+    assert ran[1][0] == "timeout" and "--minutes" not in ran[1]
+    assert 59 <= float(ran[1][ran[1].index("--budget") + 1]) <= 60
