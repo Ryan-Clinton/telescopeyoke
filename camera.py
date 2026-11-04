@@ -253,15 +253,29 @@ def start_driver(port=PORT):
     time.sleep(4)
 
 
+def is_mono(header):
+    """Whether a frame came from a mono sensor (the 183M): no BAYERPAT, and
+    altair.py's TY_MONO. A colour frame that lost its BAYERPAT somewhere is
+    still treated as colour, so old frames restack as they always did."""
+    return "BAYERPAT" not in header and bool(header.get("TY_MONO"))
+
+
 def luminance(mosaic):
-    """Brightness image at half resolution: each 2x2 colour cell summed."""
+    """Brightness image at half resolution: each 2x2 colour cell summed. A
+    mono frame is the same 2x2 sum, so the scale (about 1.3"/px) and every
+    figure measured from it stay as they are."""
     m = mosaic.astype(np.float32)
     return m[0::2, 0::2] + m[0::2, 1::2] + m[1::2, 0::2] + m[1::2, 1::2]
 
 
-def colour(mosaic):
-    """Half-resolution RGB image, shape (rows, cols, 3), from an RGGB mosaic."""
+def colour(mosaic, mono=False):
+    """Half-resolution RGB image, shape (rows, cols, 3), from an RGGB mosaic.
+    From a mono frame, grey: each 2x2 cell's mean in all three channels, so
+    the channels' sum is on the same footing as a colour frame's."""
     m = mosaic.astype(np.float32)
+    if mono:
+        grey = luminance(mosaic) / 4
+        return np.dstack([grey, grey, grey])
     green = (m[0::2, 1::2] + m[1::2, 0::2]) / 2
     return np.dstack([m[0::2, 0::2], green, m[1::2, 1::2]])
 

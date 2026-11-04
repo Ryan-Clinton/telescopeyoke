@@ -31,6 +31,34 @@ def test_colour_and_luminance_from_a_bayer_mosaic():
     assert camera.colour(mosaic)[0, 0].tolist() == [10, 25, 40]
 
 
+def test_a_mono_frame_is_grey_at_the_same_scale_and_level():
+    mosaic = np.zeros((4, 4), dtype=np.uint16)
+    mosaic[0::2, 0::2], mosaic[0::2, 1::2] = 10, 20
+    mosaic[1::2, 0::2], mosaic[1::2, 1::2] = 30, 40
+    grey = camera.colour(mosaic, mono=True)
+    assert grey.shape == (2, 2, 3) and grey[0, 0].tolist() == [25, 25, 25]
+    # The channels' sum matches a colour frame's footing: 3/4 of the 2x2 sum.
+    assert grey.sum(axis=2)[0, 0] == pytest.approx(0.75 * camera.luminance(mosaic)[0, 0])
+
+
+def test_only_a_frame_that_says_it_is_mono_is_treated_as_mono():
+    assert camera.is_mono({"TY_MONO": True})
+    assert not camera.is_mono({"BAYERPAT": "RGGB"})
+    assert not camera.is_mono({})              # an old colour frame that lost its BAYERPAT
+    assert not camera.is_mono({"BAYERPAT": "RGGB", "TY_MONO": True})
+
+
+def test_a_kept_mono_frame_keeps_what_the_pipeline_needs(tmp_path):
+    import stacking
+    header = {"EXPTIME": 2.0, "GAIN": 300, "DATE-OBS": "2026-11-04T20:00:00.000", "TY_MONO": True,
+              "FILTER": "Ha", "CCD-TEMP": -9.8, "SET-TEMP": -10.0}
+    path = stacking.save_light(tmp_path, 1, np.zeros((8, 8), np.uint16), header)
+    _, kept = stacking.load_light(path)
+    assert camera.is_mono(kept) and kept["FILTER"] == "Ha" and kept["SET-TEMP"] == -10.0
+    rgb = stacking.prepare(np.full((8, 8), 100, np.uint16), stacking.Calibration(2.0, 300), mono=True)
+    assert rgb.shape == (4, 4, 3) and np.allclose(rgb[..., 0], rgb[..., 1])
+
+
 def ring(diameter, shape=(1200, 1600), at=(600, 800), flux=4e6):
     """An out-of-focus star: a ring with a dark middle."""
     yy, xx = np.indices(shape)

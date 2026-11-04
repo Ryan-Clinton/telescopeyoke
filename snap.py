@@ -17,7 +17,7 @@ from astropy.io import fits
 from PIL import Image
 
 import host
-from camera import PORT, Camera, colour, stretch
+from camera import PORT, Camera, colour, is_mono, stretch
 
 ROOT = Path(__file__).parent
 FRAMES = config.DATA / "frames"
@@ -34,11 +34,11 @@ def label(kind, detail="", folder=None, name="latest", **extra):
     records.write((folder / f"{name}.json"), {**extra, "kind": kind, "detail": detail}, indent=None)
 
 
-def publish(mosaic, path=PREVIEW, kind="single frame", detail="", quick=False):
+def publish(mosaic, path=PREVIEW, kind="single frame", detail="", quick=False, mono=False):
     """Write a colour preview of a raw frame. web/latest.jpg, the default, is
     always the newest single exposure: what the telescope sees now. `quick`
     halves the size first, for callers that publish every frame."""
-    rgb = colour(mosaic)
+    rgb = colour(mosaic, mono=mono)
     image = Image.fromarray(stretch(rgb[::2, ::2] if quick else rgb))
     if image.width > PREVIEW_WIDTH:
         height = round(image.height * PREVIEW_WIDTH / image.width)
@@ -76,7 +76,7 @@ def main():
     mosaic, header = look(args.exposure, args.gain, args.port)
     took = time.monotonic() - started
     path = save(mosaic, header)
-    publish(mosaic, detail=f"{args.exposure:g} s")
+    publish(mosaic, detail=f"{args.exposure:g} s", mono=is_mono(header))
     print(f"{args.exposure:g}s exposure, {took:.1f}s in total")
     print(f"frame {mosaic.shape}, min {mosaic.min()}, median {np.median(mosaic):.0f}, "
           f"max {mosaic.max()} (of 4095)")
