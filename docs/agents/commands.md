@@ -144,7 +144,9 @@ already taken. Reporting a dip is a person's.
 ## Uses the camera, not the mount
 
 `snap.py`, `liveview.py`, `focus.py` (without `--field`), `solve.py`, `skywatch.py`,
-`calibrate.py`, `camera_test.py`, `shoot.py --no-recentre`.
+`calibrate.py`, `camera_test.py`, `corners.py`, `shoot.py --no-recentre`.
+
+`corners.py` (or `--file FRAME`, which uses no camera): star width, roundness and stretch direction in the four corners against the middle, at full resolution on the 183M, and which fault the pattern points to: the corrector's 55 mm spacing (all corners alike), tilt (corners unlike) or collimation (the middle too).
 
 `calibrate.py dark|bias|flat` for the 183C is as it always was. For a camera with matched darks (the cooled 183M) it waits for the cooler, keeps each master as a new version never overwriting one, files darks by exposure, gain, offset, binning, readout speed and set temperature and flats by train and filter (its flat-dark is a dark at the flat's exposure), takes no bias, and `calibrate.py badpixels` makes the camera's bad-pixel map from its longest dark without the camera. Science (difference, depth, photometry, transits) refuses a 183M frame or stack whose masters are missing or do not match with `CALIBRATION_MISSING`; such a stack is labelled uncalibrated (`TY_CALIB`, `TY_MISS`, `restack.json` `calibration`) and is a quick look only (`docs/calibration.md`).
 

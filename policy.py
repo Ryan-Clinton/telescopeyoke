@@ -61,6 +61,7 @@ COMMANDS = {
     "candidates.py": ("read_only", {"--dismiss": "local_write", "--reopen": "local_write"}, {}),
     "clouds.py": ("read_only", {}, {}),
     "collimation.py": ("hardware", {"--file": "local_write", "--history": "read_only"}, {}),   # the camera only
+    "corners.py": ("hardware", {"--file": "read_only"}, {}),   # the camera only; with --file nothing
     "compare.py": ("local_write", {}, {}),
     "console.py": ("hardware", {}, {}),             # its server runs the other scripts on request
     "depth.py": ("local_write", {}, {}),
