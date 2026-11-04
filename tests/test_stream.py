@@ -508,8 +508,40 @@ def test_the_cloud_card_says_what_tonight_hopes_for_without_the_telescope_pictur
                                            "start": "2026-11-04T02:20:00+00:00"}]}}
     lines = stream.cloud_lines(brief)
     assert lines["hopes"][0][0] == "02:20" and "00:00 to 07:00 UTC" in lines["sky"]
-    canvas = streamlook.compose({"kind": "cloud", "target": "", "now": clock.time(), "cloud": lines})
+    canvas = streamlook.compose({"kind": "cloud", "target": "", "now": clock.time(), "cloud": dict(lines, waiting=True)})
     words = " ".join(w["words"] for w in canvas.written)
     assert "WAITING FOR THE CLOUD TO CLEAR" in words and "IF IT CLEARS" in words
     assert stream.cloud_lines(None) == {"hopes": [], "sky": None}
     streamlook.vertical({"kind": "cloud", "now": clock.time(), "cloud": lines})
+
+
+def test_the_setup_card_crosses_off_each_step_from_what_the_steps_keep(tmp_path, monkeypatch):
+    """4 November 2026: "show the steps and cross them out when complete ...
+    switch to the scope when that is done ... come back if the cloud
+    monitor is activated again later"."""
+    import json
+    import time as clock
+    import config
+    import director
+    import stream
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    (tmp_path / "cache").mkdir()
+    now = clock.time()
+    began = stream.night_began(now)
+    assert now - 86400 < began <= now
+    steps = stream.setup_steps(now)
+    assert [s[1] for s in steps] == ["now", "open", "open", "open"]
+    (tmp_path / "cache" / "handset_clock.json").write_text(json.dumps({"saved": now - 60}))
+    (tmp_path / "cache" / "focus_runs.jsonl").write_text(json.dumps({"saved": began - 3600}) + "\n"
+                                                        + json.dumps({"saved": now - 30, "checked_hfr": 2.25}) + "\n")
+    (tmp_path / "cache" / "polar.json").write_text(json.dumps({"measured": began - 60, "total_deg": 1.5}))
+    steps = stream.setup_steps(now)
+    assert [s[1] for s in steps] == ["done", "done", "now", "open"]
+    assert steps[1][2] == "in focus: star size 2.25" and steps[2][2] is None   # yesterday's polar is not tonight's
+    idle = {"programme": None, "run_current": False}
+    assert stream.setup_card_due(idle, None, now)                      # polar still to do: the card
+    assert not stream.setup_card_due(idle, "focus", now)               # focusing has its own look
+    assert not stream.setup_card_due(dict(idle, run_current=True), None, now)
+    (tmp_path / "cache" / "polar.json").write_text(json.dumps({"measured": now - 10, "total_deg": 0.2}))
+    assert not stream.setup_card_due(idle, None, now)                  # set up: the telescope's picture
+    assert stream.setup_card_due(dict(idle, programme=director.CLOUD, run_current=True), None, now)  # cloud again

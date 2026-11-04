@@ -896,29 +896,71 @@ def open_card(c, s, stack):
     c.text((x, HEIGHT - MARGIN_Y - 60), "TELESCOPEYOKE", "bold", 26, "accent", on=shade)
 
 
+def struck(c, x, y, words, kind, size, colour):
+    """Words crossed out: a step done."""
+    c.text((x, y), words, kind, size, colour)
+    width = c.measure(words, kind, size)
+    mid = y + int(size * 0.72)
+    c.draw.line((x, mid, x + width, mid), fill=COLOURS[colour], width=max(2, size // 12))
+
+
+def setup_steps_block(c, steps, x, y, width, size=30, gap=26):
+    """The setup's steps, numbered: done ones ticked and crossed out with
+    what they found, the one under way marked, the rest to come; the y below."""
+    for i, (label, state, detail) in enumerate(steps, 1):
+        if state == "done":
+            c.text((x, y), "✓", "bold", size, "live")
+            struck(c, x + 50, y, f"{i}. {label}", "sans", size, "secondary")
+            y += int(size * 1.35)
+            if detail:
+                c.text((x + 50, y), detail, "sans", size - 8, "live")
+                y += int(size * 1.15)
+        else:
+            mark, colour = ("●", "accent") if state == "now" else ("○", "secondary")
+            c.text((x, y), mark, "bold", size, colour)
+            y = c.wrap((x + 50, y), f"{i}. {label}", "sans", size, width - 50,
+                       "text" if state == "now" else "secondary", gap=1.2) + 4
+        y += gap
+    return y
+
+
 def cloud_card(c, s):
-    """Waiting for the cloud to clear: no telescope picture (it shows only
-    cloud), and what tonight hopes to do once it clears (4 November 2026)."""
+    """Setting up, or waiting for the cloud to clear: no telescope picture,
+    the setup's steps crossed out as they are done, and what tonight hopes
+    to do (4 November 2026: the cloud card, then "that could be the setup
+    card")."""
     k = s.get("cloud") or {}
-    x, y = MARGIN_X + 60, 170
-    c.text((x, y), "CLOUD OVER THE TELESCOPE", "bold", 24, "secondary")
-    c.text((x, y + 40), "WAITING FOR THE CLOUD TO CLEAR", "bold", 60, "text")
-    y += 140
+    x, y = MARGIN_X + 60, 150
+    waiting = k.get("waiting")
+    c.text((x, y), "CLOUD OVER THE TELESCOPE" if waiting else "THE NIGHT BEGINS", "bold", 24, "secondary")
+    c.text((x, y + 40), "WAITING FOR THE CLOUD TO CLEAR" if waiting else "GETTING THE TELESCOPE READY",
+           "bold", 60, "text")
+    y += 130
     if k.get("sky"):
         c.text((x, y), k["sky"], "sans", 28, "secondary")
-        y += 60
+        y += 50
+    top = y + 20
+    steps = k.get("steps") or []
+    right = x
+    if steps:
+        c.text((x, top), "SETTING UP", "bold", 24, "accent")
+        setup_steps_block(c, steps, x, top + 50, 760)
+        right = x + 860
+    width = WIDTH - MARGIN_X - 60 - right
+    y = top
     if k.get("hopes"):
-        c.text((x, y), "IF IT CLEARS, TONIGHT WE HOPE TO", "bold", 24, "accent")
+        c.text((right, y), "IF IT CLEARS, TONIGHT WE HOPE TO" if waiting else "TONIGHT WE HOPE TO",
+               "bold", 24, "accent")
         y += 50
         for at, words in k["hopes"]:
             if y > HEIGHT - MARGIN_Y - 140:
                 break
             if at:
-                c.text((x, y), at, "mono", 28, "secondary")
-            y = c.wrap((x + 140, y - 2), words, "sans", 32, WIDTH - 2 * MARGIN_X - 260, "text", gap=1.25) + 22
-    else:
-        c.wrap((x, y), "The telescope is looking for stars every 30 seconds and starts the night's work "
-               "as soon as it finds them.", "sans", 32, WIDTH - 2 * MARGIN_X - 120, "text")
+                c.text((right, y), at, "mono", 26, "secondary")
+            y = c.wrap((right + 110, y - 2), words, "sans", 28, width - 110, "text", gap=1.25) + 20
+    elif waiting:
+        c.wrap((right, y), "The telescope is looking for stars every 30 seconds and starts the night's work "
+               "as soon as it finds them.", "sans", 30, width, "text")
     c.text((x, HEIGHT - MARGIN_Y - 60), "TELESCOPEYOKE", "bold", 26, "accent")
 
 
@@ -1285,9 +1327,12 @@ def vertical(state, picture=None):
     if state.get("kind") in ("focus", "polar"):
         target = {"focus": "FOCUSING", "polar": "POLAR ALIGNMENT"}[state["kind"]]
     if state.get("kind") == "cloud":
-        c.text((w // 2, 130), "WAITING FOR", "bold", 76, "text", anchor="ma")
-        c.text((w // 2, 220), "CLEAR SKY", "bold", 76, "text", anchor="ma")
-        k, y = state.get("cloud") or {}, 380
+        k = state.get("cloud") or {}
+        c.text((w // 2, 130), "WAITING FOR" if k.get("waiting") else "GETTING", "bold", 76, "text", anchor="ma")
+        c.text((w // 2, 220), "CLEAR SKY" if k.get("waiting") else "READY", "bold", 76, "text", anchor="ma")
+        y = 360
+        if k.get("steps"):
+            y = setup_steps_block(c, k["steps"], 60, y, w - 120, size=36, gap=18) + 30
         if k.get("hopes"):
             c.text((60, y), "IF IT CLEARS, TONIGHT WE HOPE TO", "bold", 34, "accent")
             y += 70

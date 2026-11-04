@@ -472,6 +472,73 @@ def cloud_lines(brief):
     return {"hopes": hopes, "sky": sky}
 
 
+def night_began(now):
+    """When tonight's setting up could have begun: the last noon, local time."""
+    import datetime
+    local = datetime.datetime.fromtimestamp(now)
+    noon = local.replace(hour=12, minute=0, second=0, microsecond=0)
+    return (noon if local >= noon else noon - datetime.timedelta(days=1)).timestamp()
+
+
+def _record(name, key):
+    """A cache record's time (its `key`) and the record, or (None, {})."""
+    import config
+    path = config.DATA / "cache" / name
+    try:
+        if name.endswith(".jsonl"):
+            lines = path.read_text(encoding="utf-8").strip().splitlines()
+            d = json.loads(lines[-1]) if lines else {}
+        else:
+            d = json.loads(path.read_text(encoding="utf-8"))
+        return float(d.get(key) or 0) or None, d
+    except (OSError, ValueError, AttributeError):
+        return None, {}
+
+
+def setup_steps(now, imaging_now=False):
+    """The setup card's steps (4 November 2026: "show the steps and cross
+    them out when complete"), each (label, "done" | "now" | "open", detail),
+    from what the steps' own commands keep: the handset's clock
+    (mount.py settime), the last focus run or check (focus.py), the polar
+    measurement (polaralign.py), and a run imaging the first target."""
+    began = night_began(now)
+    clock, _ = _record("handset_clock.json", "saved")
+    focused, f = _record("focus_runs.jsonl", "saved")
+    polar, p = _record("polar.json", "measured")
+    hfr = f.get("checked_hfr") or f.get("hfr") or f.get("best_hfr")
+    found = [("Set the handset", bool(clock and clock >= began), None),
+             ("Check focus, and fine-tune it if needed", bool(focused and focused >= began),
+              f"in focus: star size {hfr:.2f}" if hfr else None),
+             ("Check the polar alignment", bool(polar and polar >= began),
+              f"{p['total_deg']:.2f}° from the pole" if p.get("total_deg") is not None else None),
+             ("Find and centre the first target", bool(imaging_now), None)]
+    out, current = [], False
+    for label, done, detail in found:
+        state = "done" if done else ("open" if current else "now")
+        current = current or not done
+        out.append((label, state, detail if done else None))
+    return out
+
+
+def setup_card_due(directed, segment, now):
+    """Whether the stream shows the setup card rather than the telescope:
+    while the star watch waits for cloud to clear, whatever else is done;
+    and while tonight's setting up is not finished, until a run is imaging.
+    Focusing and polar alignment keep their own looks (`segment`)."""
+    if segment:
+        return False
+    if directed.get("programme") == _cloud_words():
+        return True
+    if directed.get("run_current"):
+        return False
+    return any(state != "done" for _, state, _ in setup_steps(now)[:3])
+
+
+def _cloud_words():
+    import director
+    return director.CLOUD
+
+
 class Hopes:
     """Tonight's plan for the cloud card, read on a thread of its own every
     HOPES_S (it reads the forecast), so the picture never waits for it."""
@@ -563,8 +630,12 @@ def frame(st, now=None, mode="imaging"):
             return streamlook.compose(state).image
         mode = "imaging"                # gone between looking and drawing: what was there before
     if mode == "cloud":
-        # Waiting for a gap: no telescope picture, what tonight hopes for instead.
-        state = {"kind": "cloud", "target": "", "now": now, "cloud": cloud_lines(st.get("night_brief"))}
+        # Setting up or waiting for a gap: no telescope picture, the setup's
+        # steps and what tonight hopes for instead.
+        state = {"kind": "cloud", "target": "", "now": now,
+                 "cloud": dict(cloud_lines(st.get("night_brief")),
+                               waiting=st["director"].get("programme") == director.CLOUD,
+                               steps=setup_steps(now, st["director"].get("run_current")))}
         return streamlook.compose(state).image
     if mode == "open" and st.get("night_brief"):
         state = {"kind": "open", "target": "", "now": now, "open": {"lines": open_lines(st["night_brief"], st)}}
@@ -923,7 +994,9 @@ def frame_vertical(st, now=None, mode="imaging"):
     if mode in ("focus", "polar"):
         state = dict(state, kind=mode)
     if mode == "cloud":
-        state, picture = dict(state, kind="cloud", cloud=cloud_lines(st.get("night_brief"))), None
+        state, picture = dict(state, kind="cloud", cloud=dict(
+            cloud_lines(st.get("night_brief")), waiting=d.get("programme") == director.CLOUD,
+            steps=setup_steps(now, d.get("run_current")))), None
     return streamlook.vertical(state, picture).image
 
 
@@ -1088,7 +1161,10 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
             # October 2026).
             # The one card: waiting for the cloud to clear, what tonight hopes
             # for in place of a starless picture (asked for, 4 November 2026).
-            cloudy = not segment and directed.get("programme") == director.CLOUD
+            # Then the setup card's steps too (asked for the same night): the
+            # card until tonight's setting up is done and a run is imaging,
+            # and again whenever the star watch waits for cloud.
+            cloudy = setup_card_due(directed, segment, now)
             mode = segment or ("cloud" if cloudy else "imaging")
             composer.view = (dict(st, director=directed, night_brief=hopes(now) if cloudy else None), mode)
             if phones is not None and phones.dead and now - phones.dead >= 60 and process is not None:
