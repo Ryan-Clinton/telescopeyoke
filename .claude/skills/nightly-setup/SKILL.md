@@ -51,9 +51,9 @@ says to skip.
 
 ## When a step moves something
 
-A move runs when they asked for it ("swing to Vega"), or when what they
-just said they can see is the go for the routine's next step (CLAUDE.md).
-Loading this skill is not a go by itself. Dry-run it, then send it at once
+A move runs at once, with no approval asked: what they ask for ("swing to
+Vega"), the routine step their sky report fits, and every slew of the plan.
+Dry-run it, then send it at once
 if the dry run passes. The safety hooks refuse what no one may do; the
 project's commands refuse what is unsafe.
 

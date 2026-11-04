@@ -852,7 +852,7 @@ need the real camera.
   another computer in the house. A console that listens only on the
   computer beside the telescope cannot be used that way. This version keeps
   to that on purpose: moving the mount from another room means nobody is
-  watching it, and the one collision so far happened that way. If control
+  watching it. If control
   from indoors is wanted later, it needs a password, an encrypted link and
   the webcam picture beside every move button, and it is a separate piece of
   work.

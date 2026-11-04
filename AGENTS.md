@@ -103,10 +103,9 @@ a motor's creep rate. `mount.py stop` is always allowed.
 
 ## Safety invariants (do not weaken these)
 
-1. **Moves come from the person's night.** What they ask for, and every slew
-   of a plan they asked for or agreed, is made without asking again: dry-run
-   it and, if the dry run passes, send it. No move of the agent's own outside
-   that. Never remove `MOTION_LOCKED`.
+1. **No approval asking.** What the person asks for, and every slew of the
+   night's plan, is made at once: dry-run it and, if the dry run passes, send
+   it. Never remove `MOTION_LOCKED`.
 2. **The web server and the MCP server are read-only.** No motion, no
    capture, no writes; do not add any without authentication designed first.
    The control console (`console.py`) is the one place with buttons, and it

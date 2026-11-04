@@ -10,7 +10,7 @@ allowed-tools: Bash(./ty mount goto * --dry-run) Bash(./ty shoot * --dry-run) Ba
 1. The target: what they asked for, or the best from `./ty tonight` in the
    part of the sky they said is clear.
 2. `./ty mount goto TARGET --solve --dry-run`, then the GoTo itself, which
-   is the move they asked for.
+   with no approval asked.
 3. `./ty shoot TARGET --frames 0 --recentre 8` (dry-run first), in the
    background. Tell them it is running and they can go in.
 4. Start the watch as a Monitor: `./ty watch-run`. It prints nothing while

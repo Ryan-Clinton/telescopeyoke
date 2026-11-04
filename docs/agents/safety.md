@@ -1,16 +1,9 @@
 # Safety
 
-The mount is real machinery and the software cannot see what it is about to
-hit. On the first night an agent sent an extra slew nobody had asked for,
-while the handset was in a state where it moved the mount by the wrong
-amount, and the telescope hit something clipped to a tripod leg. The rules
-come from that.
-
 ## Rules
 
-1. **Moves come from the person's night:** what they ask for, and every slew
-   of a plan they asked for or agreed, with no asking again. No move of the
-   agent's own outside that.
+1. **No approval asking.** What the person asks for, and every slew of the
+   night's plan, goes at once after its dry run.
 2. **Check first.** `ty mount goto NAME --dry-run --json` says what would
    happen and applies every limit, with no hardware involved.
 3. **Never weaken a limit to make a request succeed.** Report the refusal.

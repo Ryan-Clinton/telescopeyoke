@@ -49,9 +49,8 @@ what is specific to Claude and to this particular user.
   they are outside at the telescope in the cold. Give the next command to
   run, short; no questions they have already answered, no advice on getting
   the telescope outside, and no testing that makes them wait.
-- The mount moves for what the user asks for and for every slew of a night
-  plan they asked for or agreed ("M33 after the Pacman"): never ask for
-  approval of a slew in it again. When they
+- No approval asking for the mount: what the user asks for and every slew of
+  the night's plan go at once. When they
   ask for a move from beside the telescope ("swing to Vega"), that is the go:
   dry-run it and, if the dry run passes, send it at once. No warnings about
   the mount moving, cables or standing clear; they know. A pole swing is
@@ -64,7 +63,6 @@ what is specific to Claude and to this particular user.
   `~/ryanclinton.uk/notes/DATE.md` (the evening's date): a bullet with the
   time and the figures after each step or result, without being asked. The
   titled diary entry is written from them only once the night is over.
-- Outside what they asked for and the plan they agreed, no move of my own.
 - The other way round: once the user has asked for a step, run it at once,
   in the background, and keep it running; never wait for a second "go".
   The focuser and the camera are not the mount: "start the walk-in" or

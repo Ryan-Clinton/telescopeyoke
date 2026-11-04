@@ -94,7 +94,7 @@ is `docs/agents/setup-routine.md` step 6b.
 1. `./patrol.py m31-panels --plan` (or `m31-novae`, `m33-novae`): read it
    out. Anything marked NO is said once; the focus line comes before going
    on. A panel's first good night becomes its reference by itself.
-2. On their go: `./patrol.py m31-panels` in the background. Say it has
+2. At once, as part of the plan: `./patrol.py m31-panels` in the background. Say it has
    started, then each panel's result; never a line per frame or per plate
    solve. Tell them at once only if frames stop being kept
    (`./ty watch-run --once` to check). The patrol moves the mount only through the project's

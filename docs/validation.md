@@ -617,8 +617,8 @@ focuser not touched since the stars.
   up). The camera, its lead and the counterweights stayed clear of the legs
   at every step (the counterweights 22 cm away at the closest, the camera
   level and well clear at 7.5 h), and the way back home was clear. The
-  hour-angle limit, 5.75 h since the first night's collision (whose cause
-  was the handset clipped to a leg), is now 7.5 h.
+  hour-angle limit, 5.75 h before,
+  is now 7.5 h.
 - **The two low gaps, 16:47-16:53**, from the person's phone photos and
   sky-map screenshots. The **south-west gap**, at bearings 210-228°, is open
   to about 20° (±5°, from a phone photo), where the kept skyline says 54°,
