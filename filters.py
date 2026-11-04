@@ -296,7 +296,8 @@ def _refused(why):
     return interface.Refusal("FILTER_NOT_CONFIRMED", f"Stopped before keeping a frame: {why}.")
 
 
-def change(wanted, say=print, open_wheel=None, open_focuser=None, sleep=time.sleep, where=None, backlash=None):
+def change(wanted, say=print, open_wheel=None, open_focuser=None, sleep=time.sleep, where=None, backlash=None,
+           as_is=False):
     """Put filter `wanted` in the light path and the focus where it belongs,
     with the camera closed. Returns {"position", "name", "from", "steps",
     "changed"}. Refuses (FILTER_NOT_CONFIRMED, REFOCUS_NEEDED) rather than
@@ -323,7 +324,16 @@ def change(wanted, say=print, open_wheel=None, open_focuser=None, sleep=time.sle
         names = sxwheel.names()
         here = names[current - 1] if 0 < current <= len(names) and names[current - 1] else None
         focused = (store.get("focused_for") or {}).get("filter") or here or wanted
-        steps = steps_between(focused, wanted, store)       # before anything turns
+        # as_is: the person has approved this run at the focus as it stands
+        # (shoot.py --focus-as-is), so no offset is needed and nothing moves;
+        # the drawtube stays focused for `focused`, and every frame says so.
+        # Only where the offset is missing: a filter with one still moves by it.
+        try:
+            steps, as_is = steps_between(focused, wanted, store), False       # before anything turns
+        except interface.Refusal:
+            if not as_is:
+                raise
+            steps = 0
         if current != number:
             say(f"filter: turning the wheel to {sxwheel.label(number)}")
             try:
@@ -365,9 +375,10 @@ def change(wanted, say=print, open_wheel=None, open_focuser=None, sleep=time.sle
             if close:
                 close()
         sleep(SETTLE_S)
-    if focused != wanted:
+    if focused != wanted and not as_is:
         set_focused(wanted, where)
-    return {"position": number, "name": wanted, "from": focused, "steps": steps, "changed": focused != wanted}
+    return {"position": number, "name": wanted, "from": focused, "steps": steps, "changed": focused != wanted,
+            "as_is": bool(as_is and focused != wanted)}
 
 
 def turn_wheel(wanted, say=print, open_wheel=None):

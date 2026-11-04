@@ -870,6 +870,10 @@ def main():
                     help="on a light path with the filter wheel: several filters in turn, such as R:10,G:10,B:10, "
                          "each its own session with its own filter transaction, and the cooled sensor kept cold "
                          "between them (one cool-down, one warm-up); in place of --filter, --minutes and --frames")
+    ap.add_argument("--focus-as-is", action="store_true",
+                    help="approved by the person for this run only: a filter with no measured focus offset is "
+                         "imaged at the focus as it stands, nothing moved, every frame labelled focus not proven "
+                         "(TY_FOCFIX); the star-size check after the change still stops a run gone soft")
     ap.add_argument("--no-save", action="store_true", help="do not keep the raw frames")
     ap.add_argument("--no-restack", action="store_true", help="skip the final quality pass")
     ap.add_argument("--no-live", action="store_true",
@@ -926,7 +930,8 @@ def plan(args):
         out["blocks"] = [{"filter": name, "minutes": minutes} for name, minutes in args.blocks]
         for name, _ in args.blocks:
             try:
-                filters.steps_between(filters.DEFAULT, name)
+                if not args.focus_as_is:
+                    filters.steps_between(filters.DEFAULT, name)
             except interface.Refusal as refusal:
                 out.setdefault("refused", []).append({"filter": name, "why": str(refusal)})
     for key, value in out.items():
@@ -1092,7 +1097,14 @@ def filter_for_run(args, say=None):
                                     f"({config.hardware()['train'].get('name')}) has no filter wheel.")
         return None
     wanted = asked or filters.for_target(args.name)
-    done = filters.change(wanted, say=say)
+    done = filters.change(wanted, say=say, as_is=getattr(args, "focus_as_is", False))
+    # --focus-as-is: approved by the person for this run; every frame names the
+    # filter the focus was really set in (TY_FOCFIX), so it is never taken for
+    # a proven focus in this one.
+    args.focus_fixed = done["from"] if done.get("as_is") else None
+    if args.focus_fixed:
+        say(f"filter {wanted} at the focus set for {done['from']}, as approved (--focus-as-is): "
+            "its frames are labelled focus not proven")
     # A focus offset in use that rests on one verified measurement: every
     # frame says so (TY_FOCPRV), so it can be told apart later.
     args.focus_provisional = done["steps"] != 0 and (filters.provisional(wanted) or filters.provisional(done["from"]))
@@ -1293,6 +1305,9 @@ def image(args, session, exposure, moving, holding, tracker):
                             reopening = jams < JAM_REOPENS
                             break
                         sxwheel.cards(header, in_path)
+                        if getattr(args, "focus_fixed", None):
+                            header["TY_FOCFIX"] = (str(args.focus_fixed),
+                                                   "focus left as set for this filter, not proven in FILTER")
                         if getattr(args, "focus_provisional", False):
                             header["TY_FOCPRV"] = (True, "focus offset from one verified measurement")
                         jams = 0

@@ -603,7 +603,7 @@ def prepare(mosaic, calibration, mono=False):
 # pipeline needs to treat it (no BAYERPAT and TY_MONO: a mono frame).
 KEPT = ("EXPTIME", "GAIN", "DATE-OBS", "BAYERPAT", "TY_MONO", "INSTRUME", "TELESCOP", "FOCALLEN", "TY_MODEL",
         "FILTER", "FILTPOS", "CCD-TEMP", "SET-TEMP", "TY_ONTGT", "TY_TECV", "TY_TECP", "READSPD", "OFFSET",
-        "XBINNING", "TY_FOCPRV")
+        "XBINNING", "TY_FOCPRV", "TY_FOCFIX")
 
 
 def camera_of(header):
