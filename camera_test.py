@@ -5,6 +5,8 @@
     ./camera_test.py --throughput       time every way of getting frames off the camera
     ./camera_test.py --gain-sweep       try a range of gains on tonight's sky
     ./camera_test.py --gain-sweep --gains 300 900 1500 2500 --exposure 2
+    ./camera_test.py --offset-sweep     cap on: where the background sits at each black level and gain
+    ./camera_test.py --cooler 0         cap on: the cooler ramped to 0 °C, held, a dark either side, warmed
     ./camera_test.py --timing           does a frame take as long as the exposure asked for?
     ./camera_test.py --trail            how long is the shutter really open? From a star's trail
     ./camera_test.py --cooldown --note "3 m lead, port 2-4"   cap on, outside: do the stripes grow as it cools?
@@ -621,6 +623,10 @@ def main():
                       help="whether a run's stripes are fixed in the sensor or new each frame, from its saved frames")
     what.add_argument("--stripes-weather", action="store_true",
                       help="every saved night's stripes beside its temperature, dew point and humidity")
+    what.add_argument("--cooler", type=float, metavar="TARGET",
+                      help="cap on, a cooled camera: a dark, the slow ramp down to TARGET °C (-5 or warmer), the "
+                           "target held --minutes (default 5) with temperature and cooler power, a dark at it, "
+                           "then the gentle warm-up; --exposure is each dark (default 60)")
     what.add_argument("--offset-sweep", action="store_true",
                       help="cap on: a bias frame at each black level for each of --gains: background, grain and "
                            "what is clipped at zero, and the smallest offset that clears it; --keep-best keeps it")
@@ -682,6 +688,7 @@ def main():
                     help="with --repeat: the camera closed and opened again, or dropped from USB and found again "
                          "by Altair's library (replug), between the runs")
     ap.add_argument("--dry-run", action="store_true", help="say what it would do; no camera, no mount")
+    ap.add_argument("--minutes", type=float, help="with --cooler: how long to hold the target")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args()
     return interface.main("camera_test.dry_run" if args.dry_run else "camera_test", lambda: run(args), args.json)
@@ -832,6 +839,50 @@ def stripes_weather(weather=None, say=print):
     say("stripes follow: " + (", ".join(f"{k} {v:+.2f}" for k, v in follows.items()) or "too few nights to say")
         + " (1 rises with it, -1 falls as it rises, 0 unrelated)")
     return {"nights": rows, "follows": follows}
+
+
+def cooler_test(target, hold_minutes=5.0, dark_s=60.0, gain=300, say=print, sleep=time.sleep):
+    """Cap on: the cooled camera's cooler end to end. A dark at the sensor's
+    starting temperature; the slow ramp down to `target` (altair.py: 1 °C a
+    minute, never below -5 °C); the target held `hold_minutes` with the
+    temperature and the cooler's power every 30 s; a dark at the target; the
+    gentle warm-up. Says how far the sensor wandered while held and what the
+    cooling did to the dark. Refuses a camera with no cooler (the 183C)."""
+    def dark(cam):
+        data = cam.frame(dark_s)[0].astype(np.float32)
+        return {"level_adu": round(float(np.median(data)), 1), "grain_adu": round(float(np.std(data[::4, ::4])), 2),
+                "hot_pixels": int(np.sum(data > np.median(data) + 200)), "sensor_c": cam.temperature()}
+    with Camera(gain=gain) as cam:
+        if not hasattr(cam, "cool") or cam.temperature() is None:
+            raise interface.Refusal("INVALID_REQUEST", "This camera has no cooler to test (or will not say its "
+                                    "temperature).")
+        start = cam.temperature()
+        say(f"sensor at {start:.1f} °C; a {dark_s:g} s dark before cooling")
+        before = dark(cam)
+        say(f"  dark at {before['sensor_c']} °C: background {before['level_adu']} ADU, grain {before['grain_adu']}, "
+            f"{before['hot_pixels']} hot pixels")
+        cam.cool(target)
+        say(f"cooling to {target:g} °C, 1 °C a minute")
+        cam.settle(say=lambda line: say("  " + line))
+        rows, began = [], time.monotonic()
+        while time.monotonic() - began < hold_minutes * 60:
+            cam.ramp()
+            power = cam.tec_power()
+            rows.append({"after_s": round(time.monotonic() - began), "sensor_c": cam.temperature(),
+                         "cooler_share": None if not power or power[1] is None else round(power[1], 2)})
+            say(f"  held {rows[-1]['after_s']:4d} s: sensor {rows[-1]['sensor_c']} °C"
+                + (f", cooler at {100 * rows[-1]['cooler_share']:.0f}%" if rows[-1]["cooler_share"] is not None else ""))
+            sleep(30)
+        say(f"a {dark_s:g} s dark at the target")
+        after = dark(cam)
+        say(f"  dark at {after['sensor_c']} °C: background {after['level_adu']} ADU, grain {after['grain_adu']}, "
+            f"{after['hot_pixels']} hot pixels")
+        cam.warm_up(say=lambda line: say("  " + line))
+    temps = [r["sensor_c"] for r in rows if r["sensor_c"] is not None]
+    wander = round(max(temps) - min(temps), 1) if temps else None
+    say(f"held within {wander} °C over {hold_minutes:g} min; hot pixels {before['hot_pixels']} -> {after['hot_pixels']}")
+    return {"target_c": target, "start_c": start, "dark_s": dark_s, "gain": gain, "before": before,
+            "after": after, "held": rows, "wander_c": wander}
 
 
 OFFSETS = (0, 10, 20, 30, 40, 60, 80)
@@ -1129,6 +1180,8 @@ def run(args):
         return trail(args.exposure or 10.0, args.gain, args.corrected)
     if args.stripes:
         return stripes_in(args.stripes)
+    if args.cooler is not None:
+        return cooler_test(args.cooler, args.minutes or 5.0, args.exposure or 60.0, 300)
     if args.offset_sweep:
         return offset_sweep(args.gains, keep=args.keep_best)
     if args.banding:
