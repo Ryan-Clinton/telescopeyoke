@@ -373,7 +373,7 @@ above, in docs/validation.md.
 
 ## To ask Gary
 
-- The filter slot order, and the narrowband filters' make and bandwidth.
+- The narrowband filters' make and bandwidth. (Slot order, from Gary on 4 Nov: 1 L, 2 R, 3 G, 4 B, 5 Ha, 6 SII, 7 OIII; in [filterwheel] filters.)
 - Which SX wheel it is (7 x 1.25" standard?) and what spacers make the
   55 mm.
 - How far the mirror moved, or how much drawtube came off.
