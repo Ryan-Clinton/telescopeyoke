@@ -694,3 +694,19 @@ def test_a_field_owed_a_second_look_goes_first(monkeypatch):
     rows = patrol.priorities({"minutes": 8}, ["M31-P1", "M31-P8"], [], lambda name: 17.0,
                              lambda name: 0 if name == "M31-P8" else None, now=86400)
     assert rows[0]["field"] == "M31-P8" and rows[0]["priority"] < rows[1]["priority"]
+
+
+def test_a_search_records_that_it_ran_and_how_it_ended(tmp_path):
+    """search.json: running while the search works, then done or failed."""
+    chain = {"depth": lambda: {}, "difference": lambda: {"candidates": []}, "vet": lambda: {"candidates": []}}
+    (tmp_path / "s").mkdir()
+    patrol.analyse(tmp_path / "s", say=lambda *_: None, chain=chain)
+    assert json.loads((tmp_path / "s" / "search.json").read_text())["state"] == "done"
+
+    def broken():
+        raise RuntimeError("VizieR unreachable")
+    (tmp_path / "t").mkdir()
+    with pytest.raises(RuntimeError):
+        patrol.analyse(tmp_path / "t", say=lambda *_: None, chain=dict(chain, depth=broken))
+    kept = json.loads((tmp_path / "t" / "search.json").read_text())
+    assert kept["state"] == "failed" and "VizieR unreachable" in kept["error"]

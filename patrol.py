@@ -202,11 +202,38 @@ def newest_session(target, after):
     return sessions[-1] if sessions else None
 
 
+SEARCH_JOB = "search.json"    # the search's own record of where it is: running, done or failed
+
+
+def search_job(session, state, **fields):
+    """Keep the search's state beside the session: who is running it (pid,
+    started) and how it ended. outcome.py reads it rather than guessing
+    from the processes running (the Phase 1 audit, 4 November 2026)."""
+    import records
+    record = {"state": state, "pid": os.getpid(), "at": time.time(), **fields}
+    try:
+        records.write(Path(session) / SEARCH_JOB, record)
+    except OSError:       # a record of the search never stops the search
+        pass
+
+
 @activity.during("Searching", lambda a: f"{Path(a['session']).parent.name}: depth, the difference against the "
                                        "reference, and vetting what is left")
 def analyse(session, say=print, chain=None, both_halves=True, alerting=True):
     """Depth, difference and vetting on a session, and the answer. `chain`
-    replaces the three steps (for the tests)."""
+    replaces the three steps (for the tests). Its state is kept in
+    search.json: running while it works, then done or failed."""
+    search_job(session, "running")
+    try:
+        answer = _analyse(session, say, chain=chain, both_halves=both_halves, alerting=alerting)
+    except BaseException as problem:
+        search_job(session, "failed", error=f"{problem.__class__.__name__}: {problem}"[:300])
+        raise
+    search_job(session, "done")
+    return answer
+
+
+def _analyse(session, say=print, chain=None, both_halves=True, alerting=True):
     import depth
     import difference
     import vet

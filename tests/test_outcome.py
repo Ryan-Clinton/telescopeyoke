@@ -186,3 +186,25 @@ def test_a_steps_sessions_are_the_ones_begun_while_it_ran(data):
     began = datetime(2026, 11, 4, 3, 14).timestamp()
     ended = datetime(2026, 11, 4, 4, 0).timestamp()
     assert outcome.during(began, ended, data) == [inside]
+
+
+def test_a_search_keeps_its_own_record_of_where_it_is(data, tmp_path):
+    """The Phase 1 re-audit: the search's own record, not a guess from the
+    processes running. A record left 'running' by a process that has gone
+    is a failure, not pending."""
+    import os
+    folder = session(data, "M31-P2", "20261104-031549", frames=steady(16), stacked=14)
+    (folder / "search.json").write_text(json.dumps({"state": "running", "pid": os.getpid()}))
+    assert outcome.search_state(folder, "m31-panels")[0] == "running"
+    (folder / "search.json").write_text(json.dumps({"state": "running", "pid": 99999999}))
+    assert outcome.search_state(folder, "m31-panels") == ("failed", "the search's process ended without an answer")
+    (folder / "search.json").write_text(json.dumps({"state": "failed", "error": "ConnectionError: VizieR"}))
+    assert outcome.search_state(folder, "m31-panels") == ("failed", "ConnectionError: VizieR")
+
+
+def test_a_finished_search_without_a_depth_is_short_not_pending(data):
+    folder = session(data, "M31-P2", "20261104-031549", frames=steady(16), stacked=14,
+                     patrol=["Subtracted from the reference: 0 candidates"])
+    r = outcome.of_session(folder)
+    assert r["search"] == "searched" and r["worth_it"] == "short"
+    assert "depth was never measured: ./depth.py SESSION --plant measures it" in r["limited_by"]

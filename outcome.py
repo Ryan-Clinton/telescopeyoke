@@ -91,6 +91,16 @@ def working_on(session, programme=None, proc=Path("/proc")):
     return False
 
 
+def _alive(pid):
+    """Whether process `pid` is still running."""
+    import os
+    try:
+        os.kill(int(pid), 0)
+    except (OSError, TypeError, ValueError):
+        return False
+    return True
+
+
 def search_state(session, programme=None, working=None):
     """Where the session's search is, said apart:
     - ("searched", None): it ran to the end;
@@ -113,7 +123,17 @@ def search_state(session, programme=None, working=None):
         return "searched", None
     if programme is None:
         return "none", None
+    job = _json(session / "search.json")
+    if job is not None:
+        # The search's own record (patrol.search_job), from 4 November 2026.
+        if job.get("state") == "failed":
+            return "failed", job.get("error") or "the search failed"
+        if job.get("state") == "running":
+            if _alive(job.get("pid")):
+                return "running", None
+            return "failed", "the search's process ended without an answer"
     if (working or working_on)(session, programme):
+        # Older sessions, and the stack made before the search starts.
         return "running", None
     log = session / "patrol.log"
     if log.exists():
@@ -239,7 +259,9 @@ def judge(r, goals):
     elif searchable != "met":
         worth = "short" if searchable == "short" else searchable
     elif r["depth_g"] is None:
-        worth = "pending"
+        # Pending only while something is still working on it; a search that
+        # finished without measuring depth is short, not waiting for ever.
+        worth = "pending" if r["search"] == "running" else "short"
     else:
         worth = "met" if r["depth_g"] >= worth_at else "short"
     # The goal aimed for. It can't be met by a session that wasn't worth
@@ -276,6 +298,9 @@ def judge(r, goals):
         limits.append(f"search failed: {r['search_stopped']}")
     elif r["search"] == "not started":
         limits.append("never searched: ./patrol.py --sweep searches it")
+    if worth_at is not None and r["depth_g"] is None and r["search"] in ("searched", "stopped") \
+            and searchable == "met":
+        limits.append("depth was never measured: ./depth.py SESSION --plant measures it")
     if worth_at is not None and r["depth_g"] is not None and r["depth_g"] < worth_at:
         limits.append(f"shallow: G {r['depth_g']:.2f}, under the G {worth_at:g} it needs to be worth it")
     return {"ran": ran, "searchable": searchable, "worth_it": worth, "desired": desired, "limited_by": limits}
