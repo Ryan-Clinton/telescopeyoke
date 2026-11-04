@@ -25,7 +25,9 @@ def test_a_programme_is_read_from_its_file_and_a_bare_name_still_works():
 def test_it_points_with_mount_py_and_images_with_shoot_py():
     goto, shoot = patrol.steps({"target": "M31", "exposure": 16, "gain": 1500, "minutes": 30})
     assert goto[1].endswith("mount.py") and goto[2:] == ["goto", "M31"]
-    assert shoot[1].endswith("shoot.py") and shoot[2:] == ["M31", "--frames", "112", "--minutes", "33", "--exposure", "16",
+    # The frames 30 minutes give at the camera's real pace (16 s + 5.6 s), and
+    # up to 45 minutes to get them when it stalls (4 November 2026).
+    assert shoot[1].endswith("shoot.py") and shoot[2:] == ["M31", "--frames", "83", "--minutes", "45", "--exposure", "16",
                                                             "--gain", "1500"]
     dry = patrol.steps({"target": "M31", "exposure": 16, "gain": 1500, "minutes": 30}, dry_run=True)
     assert all(cmd[-1] == "--dry-run" for cmd in dry)
@@ -172,10 +174,10 @@ def test_panels_are_ordered_by_novae_share_caught_and_time_unwatched(monkeypatch
     assert [r["field"] for r in rows] == ["M31-P2", "M31-P3", "M31-P1"]
     p2 = rows[0]
     assert p2["novae_reported"] == 5 and p2["days_unwatched"] == 3.0
-    assert p2["priority"] == pytest.approx(6 * patrol.completeness(17.0) * 3.0 / (5 + patrol.OVERHEAD), abs=1e-3)
+    assert p2["priority"] == pytest.approx(6 * patrol.completeness(17.0) * 3.0 / patrol.visit_minutes(5), abs=1e-3)
     assert rows[1]["days_unwatched"] == patrol.DEBT_DAYS          # never watched counts as the longest
     # Only what the night allows, highest first.
-    assert [r["field"] for r in patrol.fit(rows, 14)] == ["M31-P2", "M31-P3"]
+    assert [r["field"] for r in patrol.fit(rows, 2 * patrol.visit_minutes(5))] == ["M31-P2", "M31-P3"]
 
 
 def test_the_share_of_novae_caught_rises_with_depth():
@@ -589,8 +591,8 @@ def test_a_patrol_with_a_budget_takes_only_the_panels_that_fit(monkeypatch):
                               budget=45.0)
     answer = patrol.run(args, say=lambda *_: None)
     cost = sum(r["minutes"] for r in answer["order"])
-    assert cost <= 45 and len(answer["order"]) == int(45 // (patrol.programme("m31-panels")["minutes"]
-                                                               + patrol.OVERHEAD))
+    assert cost <= 45 and len(answer["order"]) == int(45 // patrol.visit_minutes(
+        patrol.programme("m31-panels")["minutes"]))
     unbounded = patrol.run(argparse.Namespace(**dict(vars(args), budget=None)), say=lambda *_: None)
     assert len(unbounded["order"]) == 8                 # the night alone would have allowed all eight
 
@@ -602,7 +604,10 @@ def test_one_field_is_shortened_to_its_budget(monkeypatch):
     args = argparse.Namespace(programme="m33-novae", analyse=None, minutes=None, plan=True, dry_run=False,
                               budget=30.0)
     answer = patrol.run(args, say=lambda *_: None)
-    assert answer["programme"]["minutes"] == 30.0 - patrol.OVERHEAD
+    assert patrol.visit_minutes(answer["programme"]["minutes"]) == pytest.approx(30.0)
+
+
+shoots = []      # the --minutes each capture was given, in budget_night
 
 
 def budget_night(tmp_path, monkeypatch, goto_minutes, shoot_minutes, unexplained_in=()):
@@ -624,8 +629,11 @@ def budget_night(tmp_path, monkeypatch, goto_minutes, shoot_minutes, unexplained
     now = [0.0]
     monkeypatch.setattr(patrol, "clock", lambda: now[0])
     events, said = [], []
+    shoots.clear()
 
     def run_command(cmd, **kw):
+        if "--minutes" in cmd:
+            shoots.append(cmd[cmd.index("--minutes") + 1])
         what = " ".join(Path(c).name for c in cmd[1:4])
         events.append(f"{now[0] / 60:.1f} {what}")
         now[0] += 60 * (goto_minutes if "goto" in cmd else shoot_minutes)
@@ -656,6 +664,8 @@ def test_slow_gotos_and_a_stalled_camera_never_take_the_next_steps_time(tmp_path
     events, said, answer, ended = budget_night(tmp_path, monkeypatch, goto_minutes=5, shoot_minutes=8.8)
     started = [e.split()[-1] for e in events if "goto" in e]
     assert started == ["M31-P1", "M31-P2"]
+    # Making up stalled frames is never given more than the budget has left.
+    assert all(float(m) <= 30 for m in shoots)
     assert ended <= 30
     assert {"field": "M31-P3", "stopped": "no time left in the step's budget"} in answer["fields"]
 

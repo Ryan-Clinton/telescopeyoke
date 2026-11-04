@@ -40,9 +40,16 @@ every hitch came from changing the plan.
    whole time as `--budget` (the step's minutes, or the time left before
    its `--until`): a mosaic takes the panels that fit, GoTo included, and
    one field is shortened to it. Its `--minutes` is each field's, never the
-   step's. The budget is kept as the patrol runs, on a monotonic clock: a
-   panel is not started unless a whole visit (shoot.py's cap and the GoTo)
-   fits in what is left, and a second look is not started without its
+   step's. Every plan and budget counts a field as `patrol.visit_minutes`:
+   its minutes, a quarter more for camera stalls (on 4 November 2026 they
+   cost panels 3, 5 and 6 2.4-3 of their 5.5 minutes, and M33 23% of its
+   time) and 2.5 minutes for the GoTo and plate solves (1.2-2.2 measured
+   between panels that night). The capture asks for the frames its minutes
+   give at the camera's real pace and may run to 1.5 times its minutes to
+   make up stalled ones, never past the budget: more frames than needed
+   beats too few. The budget is kept as the patrol runs, on a monotonic
+   clock: a panel is not started unless a whole planned visit fits in what
+   is left, and a second look is not started without its
    10 minutes and the GoTo back. One put off is told to the person, and the
    field goes first in the next night's order (`second_look_owed`). Second
    looks also give way once the step has used its time and another step is

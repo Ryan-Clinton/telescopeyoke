@@ -557,11 +557,14 @@ def test_the_recommendation_takes_what_can_finish_in_the_clear_and_says_why_the_
     lead = {"star": "KIC 2", "verdict": "unexplained, weak", "why_interesting": ["2 dips"],
             "command": "./mount.py goto 293.6600 +41.8700 --dry-run"}
     rec = agent.recommend(plan, clear, {"observe_tonight": [lead]})
-    o = patrol.OVERHEAD                                       # each field's GoTo and plate solve
+    v = patrol.visit_minutes                                  # each field's capped capture, GoTo and plate solve
     order = [(s["what"], s["minutes"]) for s in rec["steps"]]
     # 90 min: 10 + 10 + 30 and their GoTos, then the panels that fit with theirs.
-    assert order == [("watched", 10 + o), ("KIC 2", 10 + o), ("m31-novae", 30 + o), ("m31-panels", 5 * (5 + o))]
-    assert rec["steps"][0]["start"] == at(23) and rec["steps"][1]["start"] == at(23, 11).replace(second=30)
+    used = v(10) + v(10) + v(30)
+    panels = int((90 - used) // v(5))
+    assert order == [("watched", v(10)), ("KIC 2", v(10)), ("m31-novae", v(30)), ("m31-panels", panels * v(5))]
+    assert rec["steps"][0]["start"] == at(23) and \
+        rec["steps"][1]["start"] == at(23) + __import__("datetime").timedelta(minutes=v(10))
     left = {s["what"]: s["why"] for s in rec["left_out"]}
     assert "cannot finish" in left["m33-novae"] and left["tabby"] == "not up tonight"
     assert rec["clear_minutes"] == 90
@@ -651,7 +654,7 @@ def test_a_candidate_seen_on_two_nights_gets_its_second_look_first():
     # A mosaic's panels that fit go by their own priority: the candidate's panel alone, first.
     assert first["what"] == "M31-P4" and "M31-P4-1" in first["why"]
     assert first["command"] == f"./patrol.py M31-P4 --minutes {agent.FOLLOW_MINUTES}"
-    assert first["minutes"] == agent.FOLLOW_MINUTES + patrol.OVERHEAD
+    assert first["minutes"] == patrol.visit_minutes(agent.FOLLOW_MINUTES)
     assert rec["steps"][1]["what"] == "m33-novae" and "M33-1" in rec["steps"][1]["why"]
     without = agent.recommend(agent.in_the_clear(plan, clear), clear, now=at(23))
     assert without["steps"][0]["what"] == "m31-novae"

@@ -182,12 +182,16 @@ def sky_now(p, when=None):
 
 def steps(p, dry_run=False):
     """The commands the patrol runs to point and image, in order."""
-    frames = max(1, round(60 * p["minutes"] / p["exposure"]))
+    # The frames the programme's minutes give at the camera's real pace, and
+    # time to make them up when the camera stalls: a visit with no stall ends
+    # on its frames, one with stalls runs on to the cap to get them
+    # (4 November 2026: panels 3, 5 and 6 lost 2.4-3 of their 5.5 minutes to
+    # stalls and came out with too few frames to search).
+    frames = max(1, round(60 * p["minutes"] / (p["exposure"] + FRAME_GAP_S)))
     extra = ["--dry-run"] if dry_run else []
     return [[sys.executable, str(ROOT / "mount.py"), "goto", p["target"], *extra],
             [sys.executable, str(ROOT / "shoot.py"), p["target"], "--frames", str(frames),
-             # The programme's time, kept to whatever the camera loses (1 November 2026).
-             "--minutes", f"{p['minutes'] * 1.1:g}",
+             "--minutes", f"{p['minutes'] * SHOOT_CAP:g}",
              "--exposure", str(p["exposure"]), "--gain", str(p["gain"]),
              *(["--dither", str(p["dither"])] if p.get("dither") else []), *extra]]
 
@@ -569,7 +573,23 @@ def cutouts(session, vetted, half=32):
 
 NOVA_PEAK = (17.5, 1.0)   # G: the middle and spread of M31 novae's peaks, for the completeness (estimated)
 DEBT_DAYS = 10.0          # a field unwatched longer than this counts as this long
-OVERHEAD = 1.5            # minutes a field costs beyond its frames: the GoTo and the plate solve
+# Minutes a field costs beyond its capture: the GoTo, the plate solves that
+# centre it and the camera starting. Measured on 4 November 2026 between
+# panels: 1.2 to 2.2 minutes, 6 when a solve struggled; 2.5 so a plan has
+# room to spare (the person: more frames than needed beats too few).
+OVERHEAD = 2.5
+FRAME_GAP_S = 5.6         # seconds between frames beyond the exposure: the median on 4 November 2026
+# Camera stalls: on 4 November 2026 they cost panels 3, 5 and 6 2.4 to 3.0 of
+# their 5.5 minutes, and M33 17.7 of its 77 (23%). A visit is planned with a
+# quarter more for them and may run to half as much again to get its frames.
+STALL_SHARE = 0.25
+SHOOT_CAP = 1.5           # shoot.py may run this many times a field's minutes to make up stalled frames
+
+
+def visit_minutes(minutes):
+    """What one field is planned to cost, as every plan and budget counts it:
+    its frames, a quarter more for camera stalls, and the GoTo before it."""
+    return minutes * (1 + STALL_SHARE) + OVERHEAD
 KNOWN_FRESH = 86400       # seconds the list of known novae is kept before it is fetched again
 
 
@@ -639,7 +659,7 @@ def priorities(p, names, known, expected, last_seen, now=None):
         share = completeness(depth50)
         seen = last_seen(name)
         days = DEBT_DAYS if seen is None else min(DEBT_DAYS, max(0.0, (now - seen) / 86400))
-        minutes = p["minutes"] + OVERHEAD
+        minutes = visit_minutes(p["minutes"])
         rows.append({"field": name, "novae_reported": inside, "expected_mag_50": round(depth50, 2),
                      "share_of_novae": round(share, 3), "days_unwatched": round(days, 1),
                      "minutes": minutes, "priority": round((inside + 1) * share * days / minutes, 4),
@@ -744,7 +764,7 @@ def run(args, say=print):
     # supernova after it lost an hour.
     budget = getattr(args, "budget", None)
     if budget and len(names) == 1:
-        p["minutes"] = min(p["minutes"], max(budget - OVERHEAD, 1.0))
+        p["minutes"] = min(p["minutes"], max((budget - OVERHEAD) / (1 + STALL_SHARE), 1.0))
     order = None
     if len(names) > 1:
         import mount
@@ -820,8 +840,8 @@ def run(args, say=print):
     def room_for(minutes):
         return deadline is None or (deadline - clock()) / 60 >= minutes
 
-    visit = p["minutes"] * 1.1 + OVERHEAD           # shoot.py's cap, and the GoTo before it
-    look = CONFIRM_MINUTES * 1.1 + OVERHEAD          # a second look, with the GoTo back
+    visit = visit_minutes(p["minutes"])             # shoot.py's cap, and the GoTo before it
+    look = visit_minutes(CONFIRM_MINUTES)            # a second look, with the GoTo back
     for number, name in enumerate(chosen, 1):
         if not args.dry_run and not room_for(visit):
             left = max(0.0, (deadline - clock()) / 60)
@@ -839,6 +859,11 @@ def run(args, say=print):
         for cmd in plans[name]:
             if (behind or getattr(args, "release", False)) and Path(cmd[1]).name == "shoot.py":
                 cmd = [*cmd, "--no-restack"]       # the final picture is made in the background
+            if deadline is not None and Path(cmd[1]).name == "shoot.py" and "--minutes" in cmd:
+                # Making up stalled frames never runs past the step's budget.
+                at = cmd.index("--minutes") + 1
+                left = (deadline - clock()) / 60
+                cmd = [*cmd[:at], f"{max(1.0, min(float(cmd[at]), left)):.1f}", *cmd[at + 1:]]
             say("$ " + " ".join(Path(c).name if c.endswith(".py") else c for c in cmd[1:]))
             # Through sys.stdout as it stands: with --json that is stderr, and
             # the commands' own lines must not land in the middle of the answer.
@@ -871,7 +896,7 @@ def run(args, say=print):
             answer["fields"].append({"field": name, "searching": finish_later(session, say)})
             continue
         entry = finish_panel(name, session)
-        if unexplained(entry["analysis"]) and not room_for(CONFIRM_MINUTES * 1.1):
+        if unexplained(entry["analysis"]) and not room_for(CONFIRM_MINUTES * (1 + STALL_SHARE)):
             entry["second_look"] = {"stopped": f"too little of the step's {budget:g} minutes left for it; "
                                                "the field goes first on the next clear night"}
             second_look_said(name, entry["analysis"], entry["second_look"], say)

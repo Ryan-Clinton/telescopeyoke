@@ -946,8 +946,8 @@ def recommend(discovery, clear, research=None, fog=False, now=None, is_ready=Tru
     lead up tonight (docs/discovery.md, "What the project is for"); then
     the programmes in the order their fields come best, each only if it
     can finish in the time left (a mosaic takes the panels that fit). Each
-    field costs patrol.OVERHEAD on top of its frames (the GoTo and the
-    plate solve), each mosaic panel too. With fog forecast a brightness
+    field costs patrol.visit_minutes: its capped capture and the GoTo and
+    plate solve, each mosaic panel too. With fog forecast a brightness
     measurement (photometry()) is left out unless a watch window makes
     tonight count, and then it says so. Returns {"clear_minutes", "from",
     "ready", "steps": [{"what", "start", "minutes", "command", "why"}],
@@ -998,7 +998,7 @@ def recommend(discovery, clear, research=None, fog=False, now=None, is_ready=Tru
         if fog and photometry(p["command"]):
             left.append({"what": p["programme"], "why": hazy})
             return
-        each = (p["minutes"] or 0) + patrol.OVERHEAD
+        each = patrol.visit_minutes(p["minutes"] or 0)
         total = each * (p.get("panels") or 1)
         if not take(p["programme"], p["in_clear"], total, p["command"], why,
                     panel=each if p.get("mosaic") else None):
@@ -1008,7 +1008,7 @@ def recommend(discovery, clear, research=None, fog=False, now=None, is_ready=Tru
     for p in discovery:
         if watched(p) and p.get("in_clear"):
             why = "inside a watch window tonight" + (f"; {hazy}" if fog and photometry(p["command"]) else "")
-            if not take(p["programme"], p["in_clear"], (p["minutes"] or 10) + patrol.OVERHEAD, p["command"], why):
+            if not take(p["programme"], p["in_clear"], patrol.visit_minutes(p["minutes"] or 10), p["command"], why):
                 left.append({"what": p["programme"], "why": "no clear time left"})
     for p in discovery:
         held = [f for f in followups if f["programme"] == p["programme"]]
@@ -1020,7 +1020,7 @@ def recommend(discovery, clear, research=None, fog=False, now=None, is_ready=Tru
             for field in dict.fromkeys(f["field"] for f in held):
                 why = "a second look at " + ", ".join(f"{f['candidate']} (seen on {f['nights']} nights)"
                                                      for f in held if f["field"] == field)
-                if not take(field, p["in_clear"], FOLLOW_MINUTES + patrol.OVERHEAD,
+                if not take(field, p["in_clear"], patrol.visit_minutes(FOLLOW_MINUTES),
                             f"./patrol.py {field} --minutes {FOLLOW_MINUTES}", why):
                     left.append({"what": field, "why": "no clear time left"})
         else:
@@ -1031,7 +1031,7 @@ def recommend(discovery, clear, research=None, fog=False, now=None, is_ready=Tru
             left.append({"what": lead["star"], "why": hazy})
             continue
         why = f"research lead, {lead['verdict']}: " + "; ".join(lead.get("why_interesting") or [])
-        if not take(lead["star"], clear, 10 + patrol.OVERHEAD, lead["command"], why):
+        if not take(lead["star"], clear, patrol.visit_minutes(10), lead["command"], why):
             left.append({"what": lead["star"], "why": "no clear time left"})
     for p in discovery:
         if p["programme"] in taken or any(s["what"] == p["programme"] for s in left):
