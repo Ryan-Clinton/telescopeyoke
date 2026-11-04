@@ -603,3 +603,84 @@ def test_one_field_is_shortened_to_its_budget(monkeypatch):
                               budget=30.0)
     answer = patrol.run(args, say=lambda *_: None)
     assert answer["programme"]["minutes"] == 30.0 - patrol.OVERHEAD
+
+
+def budget_night(tmp_path, monkeypatch, goto_minutes, shoot_minutes, unexplained_in=()):
+    """Three 8-minute panels chosen for a 30-minute budget, run against a
+    clock the commands move on: a GoTo and a capture take what they are
+    given. Returns the events and what the person was told."""
+    import restack
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    monkeypatch.setattr(mount, "LOCK_FILE", tmp_path / "unlocked")
+    names = ["M31-P1", "M31-P2", "M31-P3"]
+    rows = [{"field": n, "priority": 1.0, "novae_reported": 1, "share_of_novae": 0.3, "expected_mag_50": 17.0,
+             "days_unwatched": 1, "minutes": 9.5} for n in names]
+    monkeypatch.setattr(patrol, "fields", lambda p: names)
+    monkeypatch.setattr(patrol, "priorities", lambda p, n, *a: rows)
+    monkeypatch.setattr(patrol, "night_left", lambda p, site: 600)
+    monkeypatch.setattr(patrol, "readiness", lambda p: [])
+    monkeypatch.setattr(patrol, "first_goto", lambda name: None)
+    monkeypatch.setattr(config, "load", config.example)
+    now = [0.0]
+    monkeypatch.setattr(patrol, "clock", lambda: now[0])
+    events, said = [], []
+
+    def run_command(cmd, **kw):
+        what = " ".join(Path(c).name for c in cmd[1:4])
+        events.append(f"{now[0] / 60:.1f} {what}")
+        now[0] += 60 * (goto_minutes if "goto" in cmd else shoot_minutes)
+        return type("Done", (), {"returncode": 0})()
+    monkeypatch.setattr(patrol.subprocess, "run", run_command)
+    monkeypatch.setattr(patrol, "newest_session", lambda name, after: tmp_path / name)
+    monkeypatch.setattr(restack, "run", lambda session, **k: None)
+    monkeypatch.setattr(patrol, "analyse", lambda session, say, both_halves=True:
+                        {"unexplained": 1 if session.name in unexplained_in else 0})
+    monkeypatch.setattr(patrol, "unexplained", lambda result: result["unexplained"])
+    monkeypatch.setattr(patrol, "first_reference", lambda *a, **k: None)
+    monkeypatch.setattr(patrol, "second_look", lambda p, name, say: events.append(f"second look {name}") or {})
+    monkeypatch.setattr(patrol, "second_look_said", lambda name, first, second, say: said.append(second))
+    monkeypatch.setattr(patrol, "due_step", lambda: None)
+    import stitch
+    monkeypatch.setattr(stitch, "later", lambda name: "log")
+    args = argparse.Namespace(programme="m31-panels", analyse=None, minutes=None, plan=False, dry_run=False,
+                              budget=30.0)
+    answer = patrol.run(args, say=lambda *_: None)
+    return events, said, answer, now[0] / 60
+
+
+def test_slow_gotos_and_a_stalled_camera_never_take_the_next_steps_time(tmp_path, monkeypatch):
+    """4 November 2026 as a scenario: GoTos of 5 minutes (plate solves that
+    kept failing) and captures that ran to shoot.py's cap. Three panels were
+    chosen by estimate; the third is not started when it cannot finish, and
+    the patrol is done inside its 30 minutes."""
+    events, said, answer, ended = budget_night(tmp_path, monkeypatch, goto_minutes=5, shoot_minutes=8.8)
+    started = [e.split()[-1] for e in events if "goto" in e]
+    assert started == ["M31-P1", "M31-P2"]
+    assert ended <= 30
+    assert {"field": "M31-P3", "stopped": "no time left in the step's budget"} in answer["fields"]
+
+
+def test_a_second_look_never_starts_without_the_time_for_it(tmp_path, monkeypatch):
+    """A second look and its GoTo back take about 12.5 minutes; with less
+    left of the budget it is put off, the person told, and the field owes it."""
+    events, said, answer, ended = budget_night(tmp_path, monkeypatch, goto_minutes=1, shoot_minutes=8.8,
+                                               unexplained_in=("M31-P1",))
+    assert not [e for e in events if e.startswith("second look")]
+    assert ended <= 30
+    assert said and "too little of the step's 30 minutes left" in said[0]["stopped"]
+
+
+def test_with_time_to_spare_the_second_look_is_taken(tmp_path, monkeypatch):
+    events, said, answer, ended = budget_night(tmp_path, monkeypatch, goto_minutes=0.5, shoot_minutes=2,
+                                               unexplained_in=("M31-P1",))
+    assert "second look M31-P1" in events
+
+
+def test_a_field_owed_a_second_look_goes_first(monkeypatch):
+    """A second look put off keeps its turn: that field leads the next night's order."""
+    monkeypatch.setattr(patrol, "second_look_owed", lambda name: 1 if name == "M31-P8" else 0)
+    import mount as mount_
+    monkeypatch.setattr(mount_, "find_target", lambda name: {"ra": 10.68, "dec": 41.27})
+    rows = patrol.priorities({"minutes": 8}, ["M31-P1", "M31-P8"], [], lambda name: 17.0,
+                             lambda name: 0 if name == "M31-P8" else None, now=86400)
+    assert rows[0]["field"] == "M31-P8" and rows[0]["priority"] < rows[1]["priority"]

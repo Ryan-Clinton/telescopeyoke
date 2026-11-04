@@ -529,5 +529,7 @@ def test_a_patrol_step_is_told_its_whole_time_never_a_fields(monkeypatch):
     schedule.run(say=lambda s: None, sleep=lambda s: None,
                  start=lambda cmd: ran.append(cmd) or types.SimpleNamespace(returncode=0))
     assert ran[0][-2:] == ["--budget", "45"] and "--minutes" not in ran[0]
+    # And a hard stop behind it, as a backstop only.
+    assert ran[0][:2] == ["timeout", "--signal=INT"] and int(ran[0][2]) == 45 * 60 + schedule.BACKSTOP_S
     assert ran[1][0] == "timeout" and "--minutes" not in ran[1]
     assert 59 <= float(ran[1][ran[1].index("--budget") + 1]) <= 60

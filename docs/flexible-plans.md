@@ -40,10 +40,16 @@ every hitch came from changing the plan.
    whole time as `--budget` (the step's minutes, or the time left before
    its `--until`): a mosaic takes the panels that fit, GoTo included, and
    one field is shortened to it. Its `--minutes` is each field's, never the
-   step's. A patrol's second looks give way once its step has used its
-   time and another step is waiting (`schedule.due()`). On 4 November 2026
-   eight panels in a 45-minute step ran 99 minutes and the supernova after
-   them got 27 of its 90.
+   step's. The budget is kept as the patrol runs, on a monotonic clock: a
+   panel is not started unless a whole visit (shoot.py's cap and the GoTo)
+   fits in what is left, and a second look is not started without its
+   10 minutes and the GoTo back. One put off is told to the person, and the
+   field goes first in the next night's order (`second_look_owed`). Second
+   looks also give way once the step has used its time and another step is
+   waiting (`schedule.due()`). The runner adds a hard stop 15 minutes after
+   the budget, as a backstop only. On 4 November 2026 eight panels in a
+   45-minute step ran 99 minutes and the supernova after them got 27 of
+   its 90.
 3. **The plan changes while it runs.** The runner reads the plan again before
    every step, so these act at once, with no restart:
 

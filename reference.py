@@ -163,12 +163,11 @@ def make(name, source=None, force=False, solver=None):
     else:
         chosen = candidates[0]
     sessions = made_from(Path(chosen["stack"]))
-    held = contaminated(name, sessions)
-    if held:
-        # Only a candidate inside the stack's own frame can be in it.
-        frame = stack_footprint(chosen["stack"], chosen["record"], name, solver=solver)
-        if frame is not None:
-            held = contaminated(name, sessions, frame)
+    # The stack's own frame decides which candidates it could hold: a frame
+    # sits off the catalogue's centre, and its corners reach past any circle.
+    # The circle is only for a stack that cannot be placed.
+    frame = stack_footprint(chosen["stack"], chosen["record"], name, solver=solver)
+    held = contaminated(name, sessions, frame)
     if held and not force:
         raise interface.Refusal("INVALID_REQUEST", f"{chosen['stack']} could contain open candidates "
                                 f"({', '.join(held)}); a reference must not hold what it is looking for. "

@@ -331,6 +331,9 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
             # A patrol is told the step's minutes and takes the panels that fit
             # (4 November 2026: 8 panels in a 45-minute step ran 99 minutes).
             command = command + ["--budget", f"{step['minutes']:g}"]
+            # The patrol keeps to it itself; this hard stop is a backstop only,
+            # BACKSTOP_S after, as for a step with an end time.
+            command = ["timeout", "--signal=INT", str(round(60 * step["minutes"]) + BACKSTOP_S)] + command
         if step.get("until"):
             # More of whatever was imaged last, to fill the time before a
             # step that keeps to the clock (20 October 2026: the panels
@@ -369,7 +372,11 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
                 say(f"{datetime.now():%H:%M} {step['label']} could not start: {error}")
                 done = subprocess.CompletedProcess(command, 127)
         # Stopped at its time by timeout is how a step with an end time ends.
-        ok = done.returncode == 0 or (step.get("until") and done.returncode == 124)
+        backstopped = done.returncode == 124 and command[:1] == ["timeout"]
+        ok = done.returncode == 0 or backstopped
+        if backstopped and not step.get("until"):
+            say(f"{datetime.now():%H:%M} {step['label']}: ran past its {step['minutes']:g} minutes and was "
+                "stopped by the backstop")
         mark_id(step["id"], status="done" if ok else "failed", finished=time.time(), exit=done.returncode)
         say(f"{datetime.now():%H:%M} {step['label']} {'done' if ok else f'failed (exit {done.returncode})'}")
         if not ok and step.get("tries", 0) < RETRIES:

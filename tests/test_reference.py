@@ -122,6 +122,26 @@ def test_a_stack_that_cannot_be_placed_keeps_the_cautious_circle(data, monkeypat
         reference.make("M31", solver=no_solve)
 
 
+def test_a_candidate_inside_the_frame_but_outside_the_circle_still_holds_it_back(data, monkeypatch):
+    """A frame sits off the catalogue's centre and its corners reach past
+    0.6 degrees: the frame is the authority whenever it is known, so a
+    candidate in it is never missed for being outside the circle."""
+    import candidates
+    import mount
+    monkeypatch.setattr(mount, "find_target", lambda name: {"id": name, "ra": 10.68, "dec": 41.27})
+    folder = measured(data, "20261020-221500", 17.9)
+    record = json.loads((folder / "depth.json").read_text())
+    (folder / "depth.json").write_text(json.dumps(dict(record, footprint=dict(FRAME, dec=41.57))))
+    book = candidates.load("M31")
+    # 0.62 degrees from the catalogue's centre, 0.32 from the frame's (half its height is 0.34).
+    candidates.add_night(book, "20261018-220000", [{"ra": 10.68, "dec": 41.89, "score": 6.0, "mag": 17.5,
+                                                    "verdict": "unexplained: worth a person's eyes"}])
+    candidates.save(book)
+    with pytest.raises(interface.Refusal) as refused:
+        reference.make("M31")
+    assert "M31-20261018-220000-001" in refused.value.message
+
+
 def test_a_stack_from_before_the_candidate_is_clean(data, monkeypatch):
     import candidates
     import mount
