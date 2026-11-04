@@ -533,24 +533,82 @@ def test_a_run_through_the_183c_s_train_never_asks_a_filter_wheel(night, monkeyp
     assert "FILTER" not in kept and "FILTPOS" not in kept
 
 
-def test_a_run_through_a_train_with_the_wheel_labels_frames_with_the_position_it_confirmed(night, monkeypatch):
+def with_wheel(monkeypatch, at=(6, "Ha"), changed=False, asked=None):
+    """A light path with the wheel; the filter transaction made up (filters.change
+    is tested on its own), the wheel confirming `at`."""
+    import filters
     import sxwheel
-    _, folder = night
     plain = config.hardware
     monkeypatch.setattr(config, "hardware", lambda: dict(plain(), train={"name": "183m-cc", "filterwheel": True}))
-    monkeypatch.setattr(sxwheel, "confirmed", lambda **_: (6, "Ha"))
+    asked = asked if asked is not None else []
+
+    def change(wanted, say=print, **_):
+        asked.append(wanted)
+        return {"position": at[0], "name": wanted, "from": "L", "steps": 40 if changed else 0, "changed": changed}
+    monkeypatch.setattr(filters, "change", change)
+    monkeypatch.setattr(sxwheel, "confirmed", lambda **_: at)
+    return asked
+
+
+def test_a_run_through_a_train_with_the_wheel_labels_frames_with_the_position_it_confirmed(night, monkeypatch):
+    _, folder = night
+    asked = with_wheel(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "3", "--exposure", "2",
+                                      "--no-recentre", "--no-restack", "--filter", "Ha"])
+    kept = kept_header(folder, shoot.main())
+    assert kept["FILTER"] == "Ha" and kept["FILTPOS"] == 6 and asked == ["Ha"]
+
+
+def test_a_step_that_names_no_filter_is_taken_in_its_goals_filter_l(night, monkeypatch):
+    asked = with_wheel(monkeypatch, at=(1, "L"))
     monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "3", "--exposure", "2",
                                       "--no-recentre", "--no-restack"])
-    kept = kept_header(folder, shoot.main())
-    assert kept["FILTER"] == "Ha" and kept["FILTPOS"] == 6
+    shoot.main()
+    assert asked == ["L"]
+    import filters
+    assert filters.load()["last_l"]["fwhm"] > 0          # a run in L is what changes are checked against
+
+
+def test_the_183c_s_train_refuses_a_filter_and_never_moves_a_wheel(night, monkeypatch):
+    import filters
+    monkeypatch.setattr(filters, "change", lambda *a, **k: pytest.fail("no wheel on the 183C"))
+    monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "3", "--exposure", "2",
+                                      "--no-recentre", "--no-restack", "--filter", "R"])
+    with pytest.raises(interface.Refusal) as refused:
+        shoot.main()
+    assert refused.value.code_name == "INVALID_REQUEST" and "no filter wheel" in str(refused.value)
+
+
+def test_a_wheel_that_says_another_filter_than_asked_keeps_no_frame(night, monkeypatch):
+    import sxwheel
+    _, folder = night
+    with_wheel(monkeypatch, at=(2, "R"))
+    monkeypatch.setattr(sxwheel, "confirmed", lambda **_: (5, "Ha"))      # someone turned it since
+    monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "3", "--exposure", "2",
+                                      "--no-recentre", "--no-restack", "--filter", "R"])
+    with pytest.raises(interface.Refusal) as refused:
+        shoot.main()
+    assert refused.value.code_name == "FILTER_NOT_CONFIRMED" and "not R" in str(refused.value)
+    assert not list(folder.glob("frames/Test/*/light-*.fits"))
+
+
+def test_stars_wider_than_in_l_after_a_change_stop_the_run_to_refocus(night, monkeypatch, capsys):
+    import filters
+    with_wheel(monkeypatch, at=(2, "R"), changed=True)
+    filters.keep_last_l(2.0)                               # the frames here measure about 6 px
+    monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "12", "--exposure", "2",
+                                      "--no-recentre", "--no-restack", "--filter", "R"])
+    with pytest.raises(interface.Refusal) as refused:
+        shoot.main()
+    assert refused.value.code_name == "REFOCUS_NEEDED" and "refocus" in str(refused.value)
+    assert Sky.taken < 12
 
 
 def test_a_train_with_the_wheel_keeps_no_frame_when_the_wheel_confirms_nothing(night, monkeypatch):
     import sxwheel
     _, folder = night
-    plain = config.hardware
     calls = []
-    monkeypatch.setattr(config, "hardware", lambda: dict(plain(), train={"name": "183m-cc", "filterwheel": True}))
+    with_wheel(monkeypatch)
     monkeypatch.setattr(shoot, "Camera", cooled_camera(calls))
 
     def silent(say=None, **_):

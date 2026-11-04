@@ -7,6 +7,8 @@ each is expected to start and finish, for the console to show.
     ./schedule.py add "WASP-12 b" 250 --not-before 01:45 -- ./shoot.py WASP-12 --frames 0
     ./schedule.py add "Keep going" 0 --until 01:44 -- ./shoot.py {last} --frames 0
                                           more of whatever was imaged last, until then
+    ./schedule.py add "M42 LRGB" 60 --filters L:10,R:5,G:5,B:5 -- ./shoot.py M42
+                                          one step per filter (a light path with the wheel)
     ./schedule.py wait "M31 novae" 30 PID  a step already running elsewhere, by its process id
     ./schedule.py run                     run the queued steps, one after the other
     ./schedule.py fill                    what from tonight's discovery list fills the first gap
@@ -210,6 +212,35 @@ def add(label, minutes, command, not_before_=None, pid=None, until=None, protect
     plan["steps"].append(step)
     save(plan)
     return step_id
+
+
+def add_blocks(label, minutes, command, blocks_text, protect=None, **step):
+    """A colour set as blocks, one step per filter ("L:10,R:5,G:5,B:5"):
+    each the imaging command with --filter and --frames added, its minutes
+    in proportion to its frames, so each block is a run, and a stack, of one
+    filter (filters.py). A hard window (a transit, an occultation) keeps one
+    filter for its whole time, so blocks are refused for it. Returns the
+    steps' ids."""
+    import filters
+    if protect == "hard":
+        raise interface.Refusal("INVALID_REQUEST", "A hard window (a transit, an occultation) is taken in one "
+                                "filter for its whole time: give it one --filter in its command, not blocks.")
+    if not any(Path(c).name == "shoot.py" for c in command[:2]):
+        raise interface.Refusal("INVALID_REQUEST", "--filters splits an imaging run (./shoot.py TARGET ...) "
+                                "into blocks; this command is not one.")
+    if any(c in ("--filter", "--frames", "--accepted") for c in command):
+        raise interface.Refusal("INVALID_REQUEST", "With --filters each block sets its own --filter and "
+                                "--frames: leave them out of the command.")
+    try:
+        parts = filters.blocks(blocks_text)
+    except ValueError as problem:
+        raise interface.Refusal("INVALID_REQUEST", f"--filters {blocks_text}: {problem}") from None
+    total = sum(n for _, n in parts)
+    first = step.pop("not_before_", None)        # the set starts then; the blocks follow one another
+    return [add(f"{label} {name}", round(minutes * n / total, 1),
+                list(command) + ["--filter", name, "--frames", str(n)],
+                not_before_=first if i == 0 else None, protect=protect, **step)
+            for i, (name, n) in enumerate(parts)]
 
 
 def find(ref, plan):
@@ -952,6 +983,9 @@ def main(argv=None):
     a.add_argument("--deadline", metavar="HH:MM", help="with [plan] windows on: finish by then; it may go earlier")
     a.add_argument("--uncertainty", type=float, metavar="MIN",
                    help="minutes before --not-before the event may come (a transit's timing error)")
+    a.add_argument("--filters", metavar="F:N,...",
+                   help="a colour set as blocks, one step per filter (L:10,R:5,G:5,B:5): the imaging command with "
+                        "--filter and --frames added to each; not for a hard window, which keeps one filter")
     a.add_argument("command", nargs=argparse.REMAINDER)
     w = sub.add_parser("wait")
     w.add_argument("label")
@@ -991,6 +1025,14 @@ def main(argv=None):
             ap.error("add needs the command after --")
         if args.protect == "hard" and not args.not_before:
             ap.error("--protect hard needs --not-before, the time its frames must start")
+        if "--filters" in before:
+            args.filters = before[before.index("--filters") + 1]
+        if args.filters:
+            added_ids = add_blocks(args.label, args.minutes, command, args.filters, protect=args.protect,
+                                   not_before_=args.not_before, until=args.until, deadline=args.deadline)
+            print(f"added {len(added_ids)} blocks: {', '.join(added_ids)}")
+            show()
+            return
         added = add(args.label, args.minutes, command, args.not_before, until=args.until, protect=args.protect,
                     deadline=args.deadline,
                     uncertainty=float(args.uncertainty) if args.uncertainty is not None else None)

@@ -175,3 +175,11 @@ def test_a_run_with_rejections_runs_to_its_frame_cap(tmp_path):
     go, why = shoot.goal_reached(session, 20, 300, args)
     assert not go and why.startswith("frame cap")
     assert json.loads((tmp_path / "capture.json").read_text())["rejected"] == 10
+
+
+def test_a_step_s_filter_is_its_goals_or_l():
+    import goals
+    assert goals.of("M101")["filter"] == "L"
+    p = {"target": "M42", "goals": {"purpose": "lead", "filter": "Ha"}}
+    assert goals.from_programme("targets/m42", p, "M42")["filter"] == "Ha"
+    assert goals.from_programme("m31-panels", {"mosaic": "M31"}, "M31-P1")["filter"] == "L"

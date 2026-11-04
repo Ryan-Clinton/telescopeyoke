@@ -80,7 +80,11 @@ DEFAULTS = {
     # filters: the Starlight Xpress wheel's filters, position 1 first (sxwheel.py).
     # None until someone has looked which filter sits in which slot: until
     # then the positions go by number, so no frame is named by a guess.
-    "filterwheel": {"filters": ""},
+    # makers: each filter's maker, the same order, for naming the band a
+    # result is in ("L (Optolong), 183M"). offset_tolerance: half-steps of spread
+    # an offset from L may have and be used (filters.py); size_tolerance: how many
+    # times wider than in L the first frame after a change may be.
+    "filterwheel": {"filters": "", "makers": "", "offset_tolerance": 16, "size_tolerance": 1.25},
     # camera: the camera profile to use when both are plugged in; blank, the
     # one plugged in ([cameras.NAME], docs/mono-upgrade.md).
     # processing_scale: 2, a mono camera's frames are stacked and searched in

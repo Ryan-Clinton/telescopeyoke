@@ -57,6 +57,7 @@ import snap
 import stacking
 import tracking
 import sxwheel
+import filters
 from camera import Camera, is_mono, stretch
 from indi import IndiError as CameraError
 
@@ -117,6 +118,7 @@ class Session:
         self.shifts = []   # the same for every accepted frame of the run
         self.timings = stacking.Timings()
         self.preview_every, self.published = preview_every, 0.0
+        self.size_check, self.refocus = False, None   # set after a filter change (filters.size_check)
 
     def job(self, index, mosaic, header):
         """Arguments for stacking.live_frame for this frame, as things stand."""
@@ -148,6 +150,11 @@ class Session:
                 self.stack.add(frame)
                 self.accepted.append({k: entry[k] for k in
                                       ("fwhm", "roundness", "stars", "flux", "background", "noise")})
+            if self.size_check and self.refocus is None:
+                # After a filter change and its focus offset: the first kept
+                # frame's stars against the last run in L (filters.py).
+                self.size_check = False
+                self.refocus = filters.size_check(entry.get("fwhm"))
             self.publish()
         self.log.append(entry)
         stacking.append_log(self.folder, entry)
@@ -856,6 +863,10 @@ def main():
     ap.add_argument("--hold", type=float, metavar="PX",
                     help="for transits: keep the target within PX pixels of where the first frame had it, "
                          "learning first how small moves shift the frames; no dithering")
+    ap.add_argument("--filter", metavar="NAME",
+                    help="on a light path with the filter wheel: the filter for the whole run, moved to, read "
+                         "back and focused (its offset from L) before the first frame; default the target's goals' "
+                         "filter, L when they name none. Refused on a light path without the wheel (the 183C's)")
     ap.add_argument("--no-save", action="store_true", help="do not keep the raw frames")
     ap.add_argument("--no-restack", action="store_true", help="skip the final quality pass")
     ap.add_argument("--no-live", action="store_true",
@@ -922,15 +933,15 @@ def disk_full(folder, least=None):
     return shutil.disk_usage(path).free < (MIN_FREE if least is None else least)
 
 
-def wheel_in_train(cfg=None):
-    """Whether the light path in use has the filter wheel in it."""
-    return bool((cfg or config.hardware())["train"].get("filterwheel"))
+wheel_in_train = filters.wheel_in_train
 
 
-def in_the_path(say=None):
+def in_the_path(expected=None):
     """(position, name) the wheel confirms is in the light path, or a refusal
-    (FILTER_NOT_CONFIRMED) saying why there is none: a train with the wheel
-    keeps no frame without a confirmed filter, never one unlabelled or guessed."""
+    (FILTER_NOT_CONFIRMED) saying why there is none, or that it is not the
+    `expected` position (the filter the step asked for): a train with the
+    wheel keeps no frame without a confirmed filter, never one unlabelled,
+    guessed or other than asked for."""
     said = []
     found = sxwheel.confirmed(say=said.append)
     if found is None:
@@ -938,6 +949,10 @@ def in_the_path(say=None):
         raise interface.Refusal("FILTER_NOT_CONFIRMED", f"Stopped before keeping a frame: {why}. A light path "
                                 "with the filter wheel keeps frames only in a filter the wheel has confirmed "
                                 "(./sxwheel.py status).")
+    if expected is not None and found[0] != expected["position"]:
+        raise interface.Refusal("FILTER_NOT_CONFIRMED", f"Stopped before keeping a frame: the wheel says "
+                                f"{found[1]} (position {found[0]}), not {expected['name']} (position "
+                                f"{expected['position']}), which this step asked for.")
     return found
 
 
@@ -1003,7 +1018,28 @@ def run(args):
         rig.close()
 
 
+def filter_for_run(args, say=None):
+    """The filter transaction before the run's first frame (filters.change),
+    on a light path with the wheel: the filter asked for (--filter), else the
+    one the target's goals give (L when none says). None on a light path
+    without the wheel, where --filter is refused: the 183C's frames have no
+    filter, and a step that says nothing behaves as it always has."""
+    say = say or (lambda line: print(f"  {line}", flush=True))
+    asked = getattr(args, "filter", None)
+    if not filters.wheel_in_train():
+        if asked:
+            raise interface.Refusal("INVALID_REQUEST", f"--filter {asked}: the light path in use "
+                                    f"({config.hardware()['train'].get('name')}) has no filter wheel.")
+        return None
+    wanted = asked or filters.for_target(args.name)
+    done = filters.change(wanted, say=say)
+    say(f"filter {wanted} in the light path (position {done['position']})"
+        + (f", focus moved {done['steps']:+d} half-steps from {done['from']}'s" if done["steps"] else ""))
+    return done
+
+
 def held(args):
+    args.light_path = filter_for_run(args)      # before anything is exposed, the camera closed
     moving = not args.no_recentre
     if moving:
         moving = recentre(args.name)
@@ -1020,6 +1056,8 @@ def held(args):
         exposure = float(args.exposure)
 
     session = Session(args.name, exposure, args.gain, save=not args.no_save, frames=args.frames or None)
+    session.size_check = bool(args.light_path and args.light_path["changed"] and args.light_path["name"]
+                              != filters.DEFAULT)
     # "Imaging M31-P6: 4 of 19 frames of 16 s" on the status page for as long
     # as the run lives, and a camera that has stopped sending said plainly.
     with activity.imaging(session.name, args.frames or None, exposure, session.folder) as tracker:
@@ -1052,6 +1090,11 @@ def image(args, session, exposure, moving, holding, tracker):
         until a run of frames in a row has been lost, which means cloud (or
         dawn, or dew) has ended the session."""
         if told["stop"]:
+            return False
+        if session.refocus:
+            if not told.get("refocus"):
+                told["refocus"] = True
+                print(f"  stopping: {session.refocus}", flush=True)
             return False
         cloud_stop = live.get("shoot.cloud_stop", CLOUD_STOP)
         stop = stop_for(index, args.frames, session.log, time.monotonic() - started,
@@ -1170,7 +1213,7 @@ def image(args, session, exposure, moving, holding, tracker):
                     # confirmed position no frame is kept at all. A train with no
                     # wheel (the 183C's) is never asked, and its frames carry no
                     # FILTER, as before.
-                    in_path = in_the_path() if wheel_in_train() else None
+                    in_path = in_the_path(getattr(args, "light_path", None)) if wheel_in_train() else None
                     while go_on():
                         try:
                             mosaic, header = cam.frame(exposure)
@@ -1241,6 +1284,13 @@ def image(args, session, exposure, moving, holding, tracker):
         collect(everything=True)
 
     session.finish()
+    if session.refocus:
+        raise interface.Refusal("REFOCUS_NEEDED", f"Stopped after a filter change: {session.refocus}.")
+    if getattr(args, "light_path", None) and args.light_path["name"] == filters.DEFAULT and session.accepted:
+        # The stars' width in L, what a change to another filter is checked against.
+        widths = [f["fwhm"] for f in session.accepted[-10:] if f.get("fwhm")]
+        if widths:
+            filters.keep_last_l(float(np.median(widths)))
     used = len(session.accepted)
     if not used:
         raise interface.Refusal("NO_USABLE_FRAMES", "No usable frames.")

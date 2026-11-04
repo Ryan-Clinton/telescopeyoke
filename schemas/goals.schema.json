@@ -12,7 +12,7 @@
       "items": {
         "type": "object",
         "required": ["field", "programme", "purpose", "timing", "graded_on", "minimum", "worth", "desired", "stretch",
-                     "cap", "case", "notes"],
+                     "cap", "case", "filter", "notes"],
         "properties": {
           "field": {"type": ["string", "null"]},
           "programme": {"type": ["string", "null"], "description": "The programme's file name, or targets/NAME for a planned target; null when nothing names the field."},
@@ -25,6 +25,7 @@
           "stretch": {"$ref": "#/$defs/level"},
           "cap": {"type": "number", "description": "The time a capture may run, as a multiple of its planned minutes."},
           "case": {"enum": [1, 2, 3, null], "description": "A known transient's reference case: 1 a reference from before it, 2 a model of the host, 3 a detection or an upper limit only."},
+          "filter": {"type": "string", "description": "The filter its steps are taken in on a light path with the filter wheel ([goals] filter, L when it names none); a light path without the wheel ignores it."},
           "notes": {"type": "array", "items": {"type": "string"}}
         }
       }

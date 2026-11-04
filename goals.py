@@ -57,6 +57,10 @@ SHOOT_CAP = 1.5         # the time a capture may run, as a multiple of its plann
 # Provisional, as worth_depth: a stack whose subtraction is out of line over
 # more than this share of its field is limited by the subtraction, not the sky.
 QUALITY_MAX = 0.2
+# The filter a step is taken in, on a light path with the filter wheel (filters.py):
+# a programme's or target's [goals] filter, else L, the most light and the
+# patrols' band. A light path without the wheel (the 183C's) ignores it.
+FILTER = "L"
 
 CASES = {
     1: "a reference from before the explosion exists: its brightness is measured against that",
@@ -180,7 +184,7 @@ def of(field, cfg_files=None):
         if matches(p, field):
             return from_programme(name, p, field)
     return {"field": field, "programme": None, "purpose": None, "timing": None, "graded_on": "search",
-            "minimum": {}, "worth": {}, "desired": {}, "stretch": {}, "cap": SHOOT_CAP, "case": None, "notes":
+            "minimum": {}, "worth": {}, "desired": {}, "stretch": {}, "cap": SHOOT_CAP, "case": None, "filter": FILTER, "notes":
             ["no programme or planned target names it: not judged"]}
 
 
@@ -203,7 +207,8 @@ def from_programme(name, p, field=None):
     return {"field": field, "programme": name, "purpose": purpose, "timing": timing_of(p, purpose),
             "graded_on": g.get("graded_on", GRADED_ON.get(purpose, "search")),
             "minimum": minimum, "worth": worth, "desired": desired, "stretch": stretch,
-            "cap": float(g.get("cap", SHOOT_CAP)), "case": case, "notes": notes}
+            "cap": float(g.get("cap", SHOOT_CAP)), "case": case, "filter": str(g.get("filter") or FILTER),
+            "notes": notes}
 
 
 def flat(goals):

@@ -146,8 +146,18 @@ travel = 512
 # (sxwheel.py). Blank: the positions go by number. Fill it in only after
 # looking: ./sxwheel.py move 1, see which filter is in the light path, and so
 # on round. Seven filters in seven slots would be, in the order found:
-#   filters = "L,R,G,B,SII,Ha,OIII"
+#   filters = "L,R,G,B,Ha,SII,OIII"
 filters = ""
+# Each filter's maker, in the same order, for naming the band a magnitude is
+# in ("L (Optolong), 183M"); blank where unknown:
+#   makers = "Optolong,Optolong,Optolong,Optolong,,,"
+makers = ""
+# A filter's focus offset from L is used only when at least three
+# measurements on different nights spread by no more than this (half-steps;
+# provisional until the focuser's steps per mm are measured). After a change,
+# a first frame this many times wider than the last run in L means refocus.
+offset_tolerance = 16
+size_tolerance = 1.25
 
 [indi]
 port = 7624

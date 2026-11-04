@@ -562,3 +562,19 @@ def test_each_nights_plan_is_kept_for_replaying_it():
     schedule.save({"steps": [{"label": "M31 panels"}], "made": made})
     kept = json.loads((schedule.NIGHTS / "2026-11-03.json").read_text())
     assert kept["steps"][0]["label"] == "M31 panels"
+
+
+def test_a_colour_set_becomes_one_step_per_filter_and_a_hard_window_keeps_one(monkeypatch, tmp_path):
+    import interface
+    monkeypatch.setattr(schedule, "FILE", tmp_path / "schedule.json")
+    ids = schedule.add_blocks("M42", 60, ["./shoot.py", "M42", "--exposure", "16"], "L:10,R:5,G:5,B:5",
+                              not_before_="22:00")
+    steps = schedule.load()["steps"]
+    assert ids == ["M42 L", "M42 R", "M42 G", "M42 B"] and [s["minutes"] for s in steps] == [24.0, 12.0, 12.0, 12.0]
+    assert steps[0]["command"][-4:] == ["--filter", "L", "--frames", "10"] and steps[3]["command"][-3] == "B"
+    assert steps[0]["not_before"] == "22:00" and steps[1]["not_before"] is None
+    for command, protect in ((["./shoot.py", "WASP-12"], "hard"), (["./patrol.py", "m31"], None),
+                             (["./shoot.py", "M42", "--filter", "L"], None)):
+        with pytest.raises(interface.Refusal):
+            schedule.add_blocks("x", 10, command, "L:1,R:1", protect=protect)
+    assert len(schedule.load()["steps"]) == 4

@@ -1473,6 +1473,16 @@ def run_motor(args, mode="focus"):
     refused = motor_refusal(mode, settings, travel)
     if refused:
         raise interface.Refusal("INVALID_REQUEST", refused)
+    if getattr(args, "offset", None):
+        import filters
+        if mode != "walk" or not filters.wheel_in_train():
+            raise interface.Refusal("INVALID_REQUEST", "--offset FILTER measures a filter's focus offset from L "
+                                    "with --walk-in, on a light path with the filter wheel.")
+        if args.dry_run:
+            print(f"Would turn the wheel to L and walk in, go out {filters.OFFSET_BACK} half-steps, turn the wheel to "
+                  f"{args.offset} and walk in again, and keep the difference as one measurement of {args.offset}'s "
+                  "offset. The mount does not move.")
+            return {"would_move": True, "offset": args.offset}
     if args.dry_run and mode == "walk":
         port = focuser.find_port()
         print(f"Would turn the focuser on {port} inward only, 64, 32 then 16 half-steps at a time at {WALK_MS} ms a "
@@ -1536,7 +1546,24 @@ def run_motor(args, mode="focus"):
                     motor.speed(WALK_MS)
                 progress(f"walking in at {WALK_MS} ms a half-step, {SWEEP_FRAMES} frames of "
                          f"{MOTOR_EXPOSURE:g} s after each move")
+                import filters
+                if getattr(args, "offset", None):
+                    # A filter's focus offset from L: a walk-in in each (filters.py).
+                    try:
+                        thermistor = motor.temperature()
+                    except Exception:
+                        thermistor = None
+                    return filters.measure_offset(
+                        args.offset, drive, lambda d: walk_in(d, read, usual, say=say, ring=ring, live=live),
+                        lambda name: filters.turn_wheel(name, say=progress), say=progress, temperature=thermistor)
                 result = walk_in(drive, read, usual, say=say, ring=ring, live=live)
+                if filters.wheel_in_train():
+                    # What the drawtube is now focused for: the filter the wheel says
+                    # is in the path, so a change to another moves by the offsets' difference.
+                    import sxwheel
+                    here = sxwheel.confirmed()
+                    if here:
+                        filters.set_focused(here[1])
                 if "doughnut" in seen:
                     # The doughnuts it started from show the collimation for free
                     # (collimation.py; 24 October 2026).
@@ -1682,6 +1709,9 @@ def main():
     ap.add_argument("--walk-in", action="store_true",
                     help="from a little outside focus, set by hand: in a few half-steps at a time, slowly, "
                          "measuring each, to the sharpest; for when the motor cannot lift the drawtube out")
+    ap.add_argument("--offset", metavar="FILTER",
+                    help="with --walk-in, on a light path with the filter wheel: a walk-in in L, out a little, a "
+                         "walk-in in FILTER, and the difference kept as one measurement of its focus offset")
     ap.add_argument("--measure-backlash", action="store_true",
                     help="measure the focuser gears' slack on the steep side of the curve; keeps half as much "
                          "again as the overshoot")
