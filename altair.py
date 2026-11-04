@@ -46,8 +46,7 @@ COOL_WAIT_S = 900      # the longest a run waits for the sensor to get there
 COOL_POLL_S = 5.0
 FULL_POWER = 0.95      # a share of the cooler's most voltage taken as all it has
 STUCK_S = 180          # at full power this long with the sensor no colder: it cannot reach the target
-WARM_STEP_C, WARM_EVERY_S, WARM_STEPS_MOST = 3.0, 60.0, 15   # the warm-up at the end of a run
-BUFFER = 0x1000000     # ALTAIRCAM_FLAG_BUFFER: a frame buffer of some size in the camera
+WARM_STEP_C, WARM_EVERY_S, WARM_STEPS_MOST = 3.0, 60.0, 15   # the warm-up at the end of a runBUFFER = 0x1000000     # ALTAIRCAM_FLAG_BUFFER: a frame buffer of some size in the camera
 DDR = 0x2000000        # ALTAIRCAM_FLAG_DDR: one big enough for a whole frame
 # Settings that could stop long frames while short ones arrive: a low-power
 # mode the camera enters above a set exposure, and the library's own
@@ -293,11 +292,19 @@ class AltairCamera:
                 # Before the cooler starts, the first time only (not when opened
                 # again after a jam): what warm_up() brings the sensor back to.
                 self.ambient = self.temperature()
-            if camera.get("tec_target") is not None:
+            if camera.get("tec_target") is not None and self.flags & TEC:
+                # A cooler that will not take its target, or a sensor whose
+                # temperature cannot be read back, stops here: frames at a
+                # temperature nobody knows match no dark (docs/calibration.md).
                 try:
                     self.cool(camera["tec_target"])
-                except lib.HRESULTException as problem:     # frames still come, only warmer
-                    print(f"camera: the cooler would not be set: {_reason(problem)}", file=sys.stderr, flush=True)
+                except lib.HRESULTException as problem:
+                    self.close()
+                    raise CameraError(f"the cooler would not be set to {float(camera['tec_target']):g} °C: "
+                                      f"{_reason(problem)}. No frames are kept at a temperature no dark matches.")
+                except CameraError:
+                    self.close()
+                    raise
             handle.put_ExpoAGain(self.gain)
             # The library keeps only a pointer to the callback. Holding it on
             # this object keeps it alive for as long as the camera can call it.
@@ -387,7 +394,20 @@ class AltairCamera:
         option = getattr(lib, "ALTAIRCAM_OPTION_TEC", None)
         if option is not None:
             handle.put_Option(option, 1)
-        handle.put_Temperature(int(round(float(degrees) * 10)))   # the library counts tenths of a degree
+        tenths = int(round(float(degrees) * 10))      # the library counts tenths of a degree
+        handle.put_Temperature(tenths)
+        # Read back: the target the camera now holds, where the library can
+        # say it, and the sensor's own temperature, which every frame and
+        # every dark is matched on. Either missing stops the run.
+        readback = getattr(lib, "ALTAIRCAM_OPTION_TECTARGET", None)
+        if readback is not None:
+            held = handle.get_Option(readback)
+            if held != tenths:
+                raise CameraError(f"the cooler was set to {float(degrees):g} °C and says its target is "
+                                  f"{held / 10:g} °C")
+        if self.temperature() is None:
+            raise CameraError("the cooler is on but the sensor's temperature cannot be read, so no dark could be "
+                              "matched to the frames")
         self.target = float(degrees)
         return True
 
@@ -419,17 +439,18 @@ class AltairCamera:
         """Wait until the sensor is within TEC_READY of the cooler's target, so
         a run keeps no frame at the wrong temperature (its darks would not
         match). At once on a camera with no cooler or no target: the 183C.
-        A cooler at full power whose sensor has stopped getting colder, or one
-        not there within `wait` seconds, says so with the figures and stops
-        the run (CameraError): never frames at a temperature no dark suits."""
+        A cooler at full power whose sensor has stopped getting colder, one
+        not there within `wait` seconds, or a sensor whose temperature cannot
+        be read, says so with the figures and stops the run (CameraError):
+        never frames at a temperature no dark suits."""
         if self.target is None or not self.flags & TEC:
             return True
         end, said, best, since = clock() + wait, None, None, clock()
         while True:
             degrees, power = self.temperature(), self.tec_power()
             if degrees is None:
-                say("camera: the sensor's temperature cannot be read; frames are kept without waiting for the cooler")
-                return False
+                raise CameraError(f"the sensor's temperature cannot be read while cooling to {self.target:g} °C: "
+                                  "no frames are kept at a temperature no dark matches")
             share = power[1] if power and power[1] is not None else None
             if abs(degrees - self.target) <= TEC_READY:
                 say(f"camera: sensor at {degrees:.1f} °C, its target {self.target:g} °C")

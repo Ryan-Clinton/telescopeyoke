@@ -1540,3 +1540,69 @@ def test_the_183m_s_cooler_target_is_a_setting_of_its_own_profile():
         config.checked("camera", "tec_target", "-10")           # never the 183C's: it has no cooler
 
 
+
+
+# --- a cooler that cannot be set or read stops the run (it never carries on warm) ----
+
+def refusing(lib, monkeypatch, name, value=None):
+    """Every handle opened from now on answers `name` with an error (value None) or `value`."""
+    real = lib.Altaircam.Open
+
+    def Open(camera_id):
+        handle = real(camera_id)
+
+        def answer(*_):
+            if value is None:
+                raise lib.HRESULTException(0x80004005)
+            return value
+        setattr(handle, name, answer)
+        return handle
+    monkeypatch.setattr(lib.Altaircam, "Open", Open)
+
+
+def test_a_cooler_that_will_not_take_its_target_stops_the_camera_opening(world, monkeypatch):
+    lib = cooled(world, monkeypatch, target=0)
+    refusing(lib, monkeypatch, "put_Temperature")
+    with pytest.raises(IndiError, match="cooler would not be set to 0 °C"):
+        altair.AltairCamera()
+    assert lib.Altaircam.opened[-1].closed            # closed again, not left open half set up
+
+
+def test_a_target_the_camera_does_not_read_back_stops_it(world, monkeypatch):
+    lib = cooled(world, monkeypatch, target=-5)
+    lib.ALTAIRCAM_OPTION_TECTARGET = 0x0f
+    world.tec_options[0x0f] = 0                        # the camera says its target is 0 °C, not -5
+    with pytest.raises(IndiError, match="set to -5 °C and says its target is 0 °C"):
+        altair.AltairCamera()
+
+
+def test_a_target_read_back_as_set_lets_it_open(world, monkeypatch):
+    lib = cooled(world, monkeypatch, target=-5)
+    lib.ALTAIRCAM_OPTION_TECTARGET = 0x0f
+    world.tec_options[0x0f] = -50
+    with altair.AltairCamera() as cam:
+        assert cam.target == -5.0
+
+
+def test_a_cooled_sensor_whose_temperature_cannot_be_read_stops_it_opening(world, monkeypatch):
+    cooled(world, monkeypatch, target=0)
+    world.sensor = None
+    with pytest.raises(IndiError, match="temperature cannot be read"):
+        altair.AltairCamera()
+
+
+def test_a_thermometer_lost_while_cooling_stops_the_wait_instead_of_keeping_frames(world, monkeypatch):
+    cooled(world, monkeypatch, target=-5)
+    with altair.AltairCamera() as cam:
+        world.sensor = None
+        with pytest.raises(IndiError, match="cannot be read while cooling to -5 °C"):
+            cam.settle(say=lambda line: None, sleep=lambda s: None)
+
+
+def test_the_183c_with_a_target_set_and_no_thermometer_opens_as_before(sdk, world, monkeypatch):
+    monkeypatch.setitem(altair.SETTINGS["camera"], "tec_target", -10)
+    world.sensor = None
+    with altair.AltairCamera() as cam:
+        _, header = cam.frame(0.01)
+        assert cam.settle(say=pytest.fail, sleep=pytest.fail) is True
+    assert "CCD-TEMP" not in header and header["BAYERPAT"] == "RGGB"
