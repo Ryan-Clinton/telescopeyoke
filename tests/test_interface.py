@@ -813,6 +813,6 @@ def test_a_night_replay_matches_its_schema(tmp_path, monkeypatch):
     t.session(tmp_path, "M33", t.at(1, 16), 30, depth=17.5)
     night = nightreplay.load(t.EVENING, tmp_path)
     valid(interface.run("nightreplay", lambda: {
-        "night": "2026-11-03", "replays": [nightreplay.replay(night, nightreplay.CURRENT, runs=2, costs=t.COSTS)]}),
+        "night": "2026-11-03", "replays": [nightreplay.replay(night, nightreplay.Current, runs=2, costs=t.COSTS)]}),
           "nightreplay")
     valid(interface.run("nightreplay", lambda: nightreplay.check(night, runs=2, costs=t.COSTS)), "nightreplay")

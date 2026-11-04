@@ -698,6 +698,24 @@ def retakes(log, asked):
     return min(lost, max(2, asked // 4))
 
 
+def stop_for(index, frames, log, elapsed_s, minutes=None, cloud_stop=CLOUD_STOP):
+    """Why a run takes no more frames after `index` of them, or None to take
+    another: "time", its minutes are up, however many frames were lost on
+    the way (1 November 2026: lost frames stretched a 75-minute patrol
+    towards three hours and the plan's next targets); "frames", its frames
+    and their retakes are in; "cloud", with no fixed number, the last
+    `cloud_stop` measured frames were all rejected. The run's loop and
+    nightreplay.py both ask this."""
+    if minutes and elapsed_s >= 60 * minutes:
+        return "time"
+    if frames:
+        return None if index < frames + retakes(log, frames) else "frames"
+    latest = judged(log)[-cloud_stop:]
+    if len(latest) == cloud_stop and not any(f["accepted"] for f in latest):
+        return "cloud"
+    return None
+
+
 def judged(log):
     """The frames that were measured. A frame the live stack had no time for
     is logged with no figures and no verdict: it says nothing about cloud,
@@ -923,25 +941,23 @@ def image(args, session, exposure, moving, holding, tracker):
         dawn, or dew) has ended the session."""
         if told["stop"]:
             return False
-        if getattr(args, "minutes", None) and time.monotonic() - started >= 60 * args.minutes:
-            # The time a run was given, however many frames were lost on the way:
-            # on 1 November 2026 lost frames stretched a 75-minute patrol towards
-            # three hours and the plan's next targets.
+        cloud_stop = live.get("shoot.cloud_stop", CLOUD_STOP)
+        stop = stop_for(index, args.frames, session.log, time.monotonic() - started,
+                        getattr(args, "minutes", None), cloud_stop)
+        if stop == "time":
             if not told.get("timed"):
                 told["timed"] = True
                 print(f"  {args.minutes:g} minutes taken: finishing", flush=True)
             return False
         if args.frames:
-            return index < args.frames + retakes(session.log, args.frames)
+            return stop is None
         if args.through_cloud and time.monotonic() - checked[0] >= NIGHT_CHECK:
             checked[0] = time.monotonic()
             why = night_over(args.name, site)
             if why:
                 print(f"  {why}; stopping", flush=True)
                 return False
-        cloud_stop = live.get("shoot.cloud_stop", CLOUD_STOP)
-        latest = judged(session.log)[-cloud_stop:]
-        if len(latest) == cloud_stop and not any(f["accepted"] for f in latest):
+        if stop == "cloud":
             if not args.through_cloud:
                 print(f"  the last {cloud_stop} frames were all rejected ({what_dimmed(session.log)}); stopping",
                       flush=True)

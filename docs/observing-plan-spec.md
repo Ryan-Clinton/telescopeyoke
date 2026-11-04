@@ -2,8 +2,9 @@
 
 Status: decisions approved 4 November 2026. Phase 1 built (`outcome.py`)
 and audited. Phase 5 built (`history.py`, `nightreplay.py`), checked against
-the night of 3 to 4 November (docs/nights/2026-11-04/replay-check.md), and
-waiting for its deep audit before Phase 2.
+the night of 3 to 4 November (docs/nights/2026-11-04/replay-check.md), deep
+audited (changes required), corrected (the same file, "Correction round"),
+and waiting for its re-audit before Phase 2.
 The order of work and its checkpoints: Phase 1,
 audit; Phase 5, a deep audit of the replay engine (a flawed one would
 make every later change look better than it is); Phases 2, 3 and 4,

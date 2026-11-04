@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/nightreplay.schema.json",
   "title": "Night replay",
-  "description": "data of: nightreplay.py NIGHT --json (replays: each policy's measures, each a spread over the runs, and the first run's visits) or nightreplay.py NIGHT --check --json (the as-run policy against the record, session by session). docs/observing-plan-spec.md, Phase 5.",
+  "description": "data of: nightreplay.py NIGHT --json (replays: each policy's measures, each a spread over the runs, and the first run's visits) or nightreplay.py NIGHT --check --json (the as-run rules against the record in two parts reported apart: acquisition, each visit started where the record started it, and the whole night from its start). docs/observing-plan-spec.md, Phase 5.",
   "type": "object",
   "oneOf": [
     {
@@ -26,8 +26,10 @@
       "required": [
         "night",
         "runs",
-        "sessions",
-        "agreement"
+        "calibration",
+        "independent",
+        "acquisition",
+        "whole_night"
       ],
       "properties": {
         "night": {
@@ -36,29 +38,86 @@
         "runs": {
           "type": "integer"
         },
-        "sessions": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": [
-              "field",
-              "session",
-              "recorded",
-              "replayed",
-              "searchable_agrees"
-            ]
-          }
+        "calibration": {
+          "enum": [
+            "chronological",
+            "leave-one-out"
+          ]
         },
-        "agreement": {
+        "costs_before": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "independent": {
+          "type": "boolean",
+          "description": "False for a night the engine's own constants were tuned against: its agreement is not an independent test."
+        },
+        "acquisition": {
           "type": "object",
           "required": [
-            "captured_error_share",
-            "accepted_error_share",
-            "stacked_error_share",
-            "depth_error_mag",
-            "depth_error_mag_worst",
-            "searchable_agrees"
-          ]
+            "sessions",
+            "agreement"
+          ],
+          "properties": {
+            "sessions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "field",
+                  "session",
+                  "recorded",
+                  "replayed",
+                  "searchable_agrees"
+                ]
+              }
+            },
+            "agreement": {
+              "type": "object",
+              "required": [
+                "captured_error_share",
+                "accepted_error_share",
+                "stacked_error_share",
+                "depth_error_mag",
+                "depth_error_mag_worst",
+                "searchable_agrees"
+              ]
+            }
+          }
+        },
+        "whole_night": {
+          "type": "object",
+          "required": [
+            "steps",
+            "recorded_visits",
+            "replayed_visits",
+            "agreement"
+          ],
+          "properties": {
+            "steps": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "label",
+                  "recorded_minutes",
+                  "replayed_start_error_minutes",
+                  "replayed_minutes"
+                ]
+              }
+            },
+            "agreement": {
+              "type": "object",
+              "required": [
+                "same_visit_order_share",
+                "visits_in_recorded_order_median",
+                "step_start_error_minutes",
+                "step_length_error_minutes"
+              ]
+            }
+          }
         }
       }
     }
@@ -80,14 +139,22 @@
       "type": "object",
       "required": [
         "policy",
+        "reconstructed",
         "runs",
         "stress",
+        "protect",
+        "calibration",
         "measures",
+        "not_modelled",
         "visits"
       ],
       "properties": {
         "policy": {
           "type": "string"
+        },
+        "reconstructed": {
+          "type": "boolean",
+          "description": "True for a policy rebuilt from code no longer running (as-run); false for the running code's own rules."
         },
         "runs": {
           "type": "integer"
@@ -98,10 +165,35 @@
             "null"
           ]
         },
+        "protect": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "HH:MM of a step the person timed, put in the plan to see whether its first frame comes on time."
+        },
+        "calibration": {
+          "enum": [
+            "chronological",
+            "leave-one-out"
+          ]
+        },
+        "costs_before": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "measures": {
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/spread"
+          }
+        },
+        "not_modelled": {
+          "type": "array",
+          "items": {
+            "type": "string"
           }
         },
         "visits": {
@@ -118,7 +210,10 @@
               "captured",
               "accepted",
               "stacked",
+              "exposure",
               "depth_g",
+              "search",
+              "search_source",
               "recorded_share",
               "move_recorded"
             ],
@@ -128,6 +223,17 @@
                 "minimum": 0,
                 "maximum": 1,
                 "description": "Share of the visit's frames whose sky was recorded on that field within five minutes; the rest is modelled."
+              },
+              "search": {
+                "type": "string",
+                "description": "How its search ended: searched, subtraction, no reference, unsolved, too few frames, too shallow, or none."
+              },
+              "search_source": {
+                "enum": [
+                  "recorded",
+                  "modelled",
+                  "none"
+                ]
               }
             }
           }

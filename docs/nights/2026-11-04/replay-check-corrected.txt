@@ -1,0 +1,28 @@
+The as-run rules against the record, night of 2026-11-03 (50 runs; costs from 13 nights before it, depth calibrated chronological)
+  This night was used to build the engine: agreement here is not an independent test. Nights with a kept plan from 4 November 2026 on are.
+1. Acquisition, each visit started where the record started it:
+  session                      captured       accepted        stacked          depth G  search
+  M31-P4 0103                   31 / 31        31 / 31        26 / 26     17.26 / 16.2  searched
+  M33 0117                    180 / 193    165 / 177.5      138 / 150    17.75 / 16.82  searched
+  M31 0241                      63 / 67      54 / 58.5      46 / 49.5    16.86 / 17.57  searched
+  M31-P2 0315                   16 / 16        16 / 16        14 / 14    16.76 / 17.07  searched
+  M31-P7 0323                   16 / 16        16 / 15        14 / 13    16.74 / 16.94  searched
+  M31-P3 0330                   11 / 11          7 / 9          6 / 8        - / 16.72  too few frames
+  M31-P1 0337                   16 / 16      16 / 14.5          8 / 8    16.44 / 16.77  searched
+  M31-P5 0344                    9 / 11         9 / 10          7 / 8        - / 16.67  too few frames
+  M31-P8 0351                   16 / 16         9 / 10          8 / 8    16.45 / 16.47  searched
+  M31-P6 0358                     8 / 9          8 / 7          7 / 6        - / 16.72  too few frames
+  M31-P4 0405                   16 / 16        16 / 16        14 / 14    16.75 / 16.72  subtraction
+  M31-P1 0416                   47 / 46        23 / 19        14 / 11    15.66 / 15.75  too shallow
+  M31-P8 0443                   26 / 47         3 / 15          2 / 5            - / -  too few frames
+  NGC3310 0455                  75 / 69        55 / 50        30 / 27         - / 17.2  -
+  (recorded / replayed median; '-' where the replay never reached that visit)
+  searchable disagrees: M31-P5 0344 recorded short, the replay agrees in 26% of runs
+  Agreement: captured within 1%, accepted 9%, stacked 8% (median); depth 0.31 mag (worst 1.06); searchable verdict as recorded in 84% of runs
+2. Whole night, the as-run rules from the night's start:
+  M31-P4 second look           recorded 13.1 min, replayed 12.95 min; start +0.0 min from the record
+  M33 novae, second look       recorded 84.8 min, replayed 85.45 min; start -0.1 min from the record
+  M31 novae                    recorded 34.7 min, replayed 34.8 min; start +0.6 min from the record
+  M31 panels                   recorded 98.8 min, replayed 91.9 min; start +0.7 min from the record
+  SN 2026sqf in NGC 3310       recorded 29.2 min, replayed 26.5 min; start -4.9 min from the record
+  Agreement: steps start within 0.6 min and last within 0.7 min of the record (median); 14 visits recorded, 13.5 replayed; the same visits in the same order in 50% of runs, the first 13.0 in order (median)

@@ -289,6 +289,40 @@ def restart():
     os.execv(sys.executable, [sys.executable, str(SOURCE), "run"])
 
 
+def prepared(step, now, last=None, sunset=last_sunset):
+    """(command, seconds left) for a queued step started at `now`, with
+    `last` the field imaged last: the command as the runner starts it, told
+    its time, or (None, seconds left) for a step to skip. The runner and
+    nightreplay.py both start steps through this, so a replay keeps to the
+    night's own rules (the Phase 5 audit, 4 November 2026)."""
+    command = [c.replace("{last}", last or "") for c in step["command"]]
+    patrolling = any(Path(c).name == "patrol.py" for c in command[:2])
+    left = None
+    if patrolling and not step.get("until") and "--budget" not in command:
+        # A patrol is told the step's minutes and takes the panels that fit
+        # (4 November 2026: 8 panels in a 45-minute step ran 99 minutes).
+        command = command + ["--budget", f"{step['minutes']:g}"]
+        # The patrol keeps to it itself; this hard stop is a backstop only,
+        # BACKSTOP_S after, as for a step with an end time.
+        command = ["timeout", "--signal=INT", str(round(60 * step["minutes"]) + BACKSTOP_S)] + command
+    if step.get("until"):
+        # More of whatever was imaged last, to fill the time before a
+        # step that keeps to the clock (20 October 2026: the panels
+        # ran early, and the frames all go into the panel's stack).
+        left = round(not_before(step["until"], now, sunset) - now)
+        if left < 120 or not last:
+            return None, left
+        if any(Path(c).name in ("shoot.py", "patrol.py") for c in command[:2]):
+            # The run is told its time and finishes gracefully, picture and all;
+            # the hard stop is a backstop only (1 November 2026: steps cut off
+            # mid-picture, and private timers that stopped the wrong run).
+            # A patrol's --minutes is each field's; its whole time is --budget.
+            command = command + ["--budget" if patrolling else "--minutes", f"{left / 60:.1f}"]
+            left += BACKSTOP_S
+        command = ["timeout", "--signal=INT", str(left)] + command
+    return command, left
+
+
 def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=None):
     """The queued steps in order. A step given by process id is waited for;
     the rest are started here, each when the one before has ended and not
@@ -350,32 +384,11 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
                 # A minute at a time, then the plan again: it may have changed.
                 sleep(min(60, until - time.time()))
                 continue
-        command = [c.replace("{last}", last_field() or "") for c in step["command"]]
-        patrolling = any(Path(c).name == "patrol.py" for c in command[:2])
-        if patrolling and not step.get("until") and "--budget" not in command:
-            # A patrol is told the step's minutes and takes the panels that fit
-            # (4 November 2026: 8 panels in a 45-minute step ran 99 minutes).
-            command = command + ["--budget", f"{step['minutes']:g}"]
-            # The patrol keeps to it itself; this hard stop is a backstop only,
-            # BACKSTOP_S after, as for a step with an end time.
-            command = ["timeout", "--signal=INT", str(round(60 * step["minutes"]) + BACKSTOP_S)] + command
-        if step.get("until"):
-            # More of whatever was imaged last, to fill the time before a
-            # step that keeps to the clock (20 October 2026: the panels
-            # ran early, and the frames all go into the panel's stack).
-            left = round(not_before(step["until"], time.time()) - time.time())
-            if left < 120 or not last_field():
-                mark_id(step["id"], status="skipped", started=time.time(), finished=time.time())
-                say(f"{datetime.now():%H:%M} {step['label']}: skipped, {max(left, 0)} s left")
-                continue
-            if any(Path(c).name in ("shoot.py", "patrol.py") for c in command[:2]):
-                # The run is told its time and finishes gracefully, picture and all;
-                # the hard stop is a backstop only (1 November 2026: steps cut off
-                # mid-picture, and private timers that stopped the wrong run).
-                # A patrol's --minutes is each field's; its whole time is --budget.
-                command = command + ["--budget" if patrolling else "--minutes", f"{left / 60:.1f}"]
-                left += BACKSTOP_S
-            command = ["timeout", "--signal=INT", str(left)] + command
+        command, left = prepared(step, time.time(), last_field())
+        if command is None:
+            mark_id(step["id"], status="skipped", started=time.time(), finished=time.time())
+            say(f"{datetime.now():%H:%M} {step['label']}: skipped, {max(left, 0)} s left")
+            continue
         try:
             if storage.words():
                 # Room first: finished Moon videos go to the storage disk.

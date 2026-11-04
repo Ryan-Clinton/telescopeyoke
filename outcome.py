@@ -72,6 +72,19 @@ def cause(entry):
     return "other"
 
 
+def stop_kind(why):
+    """What stopped a search, from its words: "subtraction" (it did not
+    match the reference), "no reference", "unsolved" (the stack would not
+    plate-solve), "too few frames", "too shallow", or "other"."""
+    why = (why or "").lower()
+    for kind, words in (("subtraction", ("the subtraction",)), ("no reference", ("no reference",)),
+                        ("unsolved", ("plate-solve", "plate solve")), ("too few frames", ("too few frames",)),
+                        ("too shallow", ("too shallow",))):
+        if any(w in why for w in words):
+            return kind
+    return "other"
+
+
 def stalls(log, exposure=None):
     """Camera stalls from the frame times: (how many, minutes lost). A gap
     more than STALL_S beyond the usual one is a stall. The usual gap is the

@@ -187,7 +187,7 @@ def steps(p, dry_run=False):
     # on its frames, one with stalls runs on to the cap to get them
     # (4 November 2026: panels 3, 5 and 6 lost 2.4-3 of their 5.5 minutes to
     # stalls and came out with too few frames to search).
-    frames = max(1, round(60 * p["minutes"] / (p["exposure"] + FRAME_GAP_S)))
+    frames = frames_for(p["minutes"], p["exposure"])
     extra = ["--dry-run"] if dry_run else []
     return [[sys.executable, str(ROOT / "mount.py"), "goto", p["target"], *extra],
             [sys.executable, str(ROOT / "shoot.py"), p["target"], "--frames", str(frames),
@@ -400,7 +400,7 @@ def second_look(p, name, say=print, dry_run=False, run_command=None, search=None
     candidate falls on other pixels than the first time: a defect of the
     camera does not move with the sky, a real object does."""
     minutes = live.get("patrol.second_look_minutes", CONFIRM_MINUTES)
-    frames = max(1, round(60 * minutes / p["exposure"]))
+    frames = second_look_frames(minutes, p["exposure"])
     cmd = [sys.executable, str(ROOT / "shoot.py"), name, "--frames", str(frames), "--exposure", str(p["exposure"]),
            "--gain", str(p["gain"]), "--dither-first", *(["--dry-run"] if dry_run else [])]
     say(f"== a second look at {name}: {minutes:g} minutes more")
@@ -617,6 +617,51 @@ def visit_minutes(minutes):
     """What one field is planned to cost, as every plan and budget counts it:
     its frames, a quarter more for camera stalls, and the GoTo before it."""
     return minutes * (1 + STALL_SHARE) + OVERHEAD
+
+
+# The patrol's choices as it runs, as functions of the clock: patrol.run
+# keeps to them, and nightreplay.py replays a night with the same ones
+# rather than a copy (the Phase 5 audit, 4 November 2026).
+
+def frames_for(minutes, exposure):
+    """The frames a field's minutes give at the camera's real pace."""
+    return max(1, round(60 * minutes / (exposure + FRAME_GAP_S)))
+
+
+def second_look_frames(minutes, exposure):
+    """A second look's frames: its minutes over the exposure alone, with no
+    --minutes, so it runs on for as long as they take."""
+    return max(1, round(60 * minutes / exposure))
+
+
+def field_minutes(minutes, budget):
+    """One field's minutes, shortened so its visit fits the step's budget."""
+    return min(minutes, max((budget - OVERHEAD) / (1 + STALL_SHARE), 1.0)) if budget else minutes
+
+
+def room(deadline, now, minutes):
+    """Whether `minutes` still fit before the budget's end (None: no budget)."""
+    return deadline is None or (deadline - now) / 60 >= minutes
+
+
+def shoot_minutes(minutes, deadline, now):
+    """shoot.py's --minutes: making up stalled frames never runs past the budget."""
+    return minutes if deadline is None else max(1.0, min(minutes, (deadline - now) / 60))
+
+
+def second_look_put_off(waiting, room_left, enabled=True, budget=None):
+    """Why a second look at a field with something unexplained is not taken
+    now, or None to take it: the plan's next step is due, too little of the
+    budget is left, or second looks are off tonight."""
+    if waiting:
+        return f"the plan's next step ({waiting}) is due; it goes first on the next clear night"
+    if not room_left:
+        return f"too little of the step's {budget:g} minutes left for it; it goes first on the next clear night"
+    if not enabled:
+        return "second looks are off tonight; it goes first on the next clear night"
+    return None
+
+
 KNOWN_FRESH = 86400       # seconds the list of known novae is kept before it is fetched again
 
 
@@ -791,8 +836,8 @@ def run(args, say=print):
     # the panels' step had 45 minutes, the patrol did not know, and the
     # supernova after it lost an hour.
     budget = getattr(args, "budget", None)
-    if budget and len(names) == 1:
-        p["minutes"] = min(p["minutes"], max((budget - OVERHEAD) / (1 + STALL_SHARE), 1.0))
+    if len(names) == 1:
+        p["minutes"] = field_minutes(p["minutes"], budget)
     order = None
     if len(names) > 1:
         import mount
@@ -867,7 +912,7 @@ def run(args, say=print):
     deadline = clock() + 60 * budget if budget else None
 
     def room_for(minutes):
-        return deadline is None or (deadline - clock()) / 60 >= minutes
+        return room(deadline, clock(), minutes)
 
     visit = visit_minutes(p["minutes"])             # shoot.py's cap, and the GoTo before it
     look = visit_minutes(CONFIRM_MINUTES)            # a second look, with the GoTo back
@@ -891,8 +936,7 @@ def run(args, say=print):
             if deadline is not None and Path(cmd[1]).name == "shoot.py" and "--minutes" in cmd:
                 # Making up stalled frames never runs past the step's budget.
                 at = cmd.index("--minutes") + 1
-                left = (deadline - clock()) / 60
-                cmd = [*cmd[:at], f"{max(1.0, min(float(cmd[at]), left)):.1f}", *cmd[at + 1:]]
+                cmd = [*cmd[:at], f"{shoot_minutes(float(cmd[at]), deadline, clock()):.1f}", *cmd[at + 1:]]
             say("$ " + " ".join(Path(c).name if c.endswith(".py") else c for c in cmd[1:]))
             # Through sys.stdout as it stands: with --json that is stderr, and
             # the commands' own lines must not land in the middle of the answer.
@@ -925,12 +969,10 @@ def run(args, say=print):
             answer["fields"].append({"field": name, "searching": finish_later(session, say)})
             continue
         entry = finish_panel(name, session)
-        if unexplained(entry["analysis"]) and not room_for(CONFIRM_MINUTES * (1 + STALL_SHARE)):
-            entry["second_look"] = {"stopped": f"too little of the step's {budget:g} minutes left for it; "
-                                               "the field goes first on the next clear night"}
-            second_look_said(name, entry["analysis"], entry["second_look"], say)
-        elif unexplained(entry["analysis"]):
-            entry["second_look"] = second_look(p, name, say)
+        if unexplained(entry["analysis"]):
+            # The telescope is still on the field: no GoTo back to allow for.
+            why = second_look_put_off(None, room_for(CONFIRM_MINUTES * (1 + STALL_SHARE)), budget=budget)
+            entry["second_look"] = {"stopped": why} if why else second_look(p, name, say)
             second_look_said(name, entry["analysis"], entry["second_look"], say)
         answer["fields"].append(entry)
     if behind:
@@ -942,16 +984,13 @@ def run(args, say=print):
             except Exception as problem:     # one panel's search failing is not the night's
                 say(f"  a panel's search failed: {problem}")
                 continue
-            waiting = due_step() if unexplained(entry["analysis"]) else None
-            if waiting:
-                second_look_said(entry["field"], entry["analysis"],
-                                 {"stopped": f"the plan's next step ({waiting}) is due; it goes first on the "
-                                             "next clear night"}, say)
-            elif unexplained(entry["analysis"]) and not room_for(look):
-                second_look_said(entry["field"], entry["analysis"],
-                                 {"stopped": f"too little of the step's {budget:g} minutes left for it; it goes "
-                                             "first on the next clear night"}, say)
-            elif unexplained(entry["analysis"]) and live.get("patrol.second_looks"):
+            if not unexplained(entry["analysis"]):
+                answer["fields"].append(entry)
+                continue
+            why = second_look_put_off(due_step(), room_for(look), live.get("patrol.second_looks"), budget)
+            if why:
+                second_look_said(entry["field"], entry["analysis"], {"stopped": why}, say)
+            else:
                 goto = plans[entry["field"]][0]
                 say(f"== back to {entry['field']} for a second look")
                 if subprocess.run(goto, stdout=sys.stdout, env=dict(os.environ, TY_PATROL="1")).returncode == 0:
@@ -959,10 +998,6 @@ def run(args, say=print):
                 else:
                     entry["second_look"] = {"stopped": "the GoTo back to it failed"}
                 second_look_said(entry["field"], entry["analysis"], entry["second_look"], say)
-            elif unexplained(entry["analysis"]):
-                second_look_said(entry["field"], entry["analysis"],
-                                 {"stopped": "second looks are off tonight; it goes first on the next clear night"},
-                                 say)
             answer["fields"].append(entry)
     if order is not None and answer["fields"] and not args.dry_run:
         # Every night's frames of the mosaic as one picture, growing with this night's.

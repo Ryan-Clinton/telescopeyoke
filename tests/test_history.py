@@ -74,3 +74,23 @@ def test_nights_before_since_are_left_out(data):
     session(data, "M33", "20261019-002600", 16.0, [21] * 3, 900_000.0)
     session(data, "M33", "20261104-011700", 16.0, [21] * 3, 1_000_000.0)
     assert history.costs(date(2026, 11, 3), data)["sessions"] == 1
+
+
+def test_a_replay_s_costs_come_only_from_the_nights_before_it(data):
+    from datetime import date
+    session(data, "M33", "20261019-002600", 16.0, [21] * 3, 900_000.0)
+    session(data, "M33", "20261104-011700", 16.0, [60] * 3, 1_000_000.0)
+    c = history.costs(data=data, before=date(2026, 11, 3))
+    assert c["sessions"] == 1 and c["before"] == "2026-11-03"
+    assert c["frame_gap_s"]["median"] == 5.0      # 3 November's 44 s gaps are not in it
+
+
+def test_how_searches_ended_is_counted_by_kind(data):
+    from datetime import date
+    stopped = "Stopped at vet: the subtraction left as many dark leftovers as bright ones (7 fading, 4 brightening)"
+    for name, summary in (("20261019-002600", ["Unexplained: 0"]), ("20261020-002600", [stopped]),
+                          ("20261021-002600", ["Stopped at depth: too few frames to search: 4"])):
+        folder = session(data, "M31-P2", name, 16.0, [21] * 3, 900_000.0)
+        (folder / "patrol.json").write_text(json.dumps({"summary": summary}))
+    counts = history.costs(data=data, before=date(2026, 11, 3))["search_outcomes"]
+    assert counts == {"searched": 1, "subtraction": 1}       # too few frames is the replay's own to work out

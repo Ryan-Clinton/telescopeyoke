@@ -18,6 +18,7 @@ TY_RETRY in each raw frame, from 4 November 2026).
 import argparse
 import statistics
 from datetime import date, datetime, timedelta
+from pathlib import Path
 
 import config
 import interface
@@ -44,24 +45,35 @@ def night_of(when):
     return (when - timedelta(hours=NIGHT_TURNS)).date()
 
 
-def sessions(since=None, data=None):
+def session_night(folder):
+    """The evening's date of a session folder (or a folder inside one), from
+    its name; None if it has no date."""
+    for part in (Path(folder), *Path(folder).parents):
+        try:
+            return night_of(datetime.strptime(part.name, "%Y%m%d-%H%M%S"))
+        except ValueError:
+            continue
+    return None
+
+
+def sessions(since=None, data=None, before=None):
     """Every session with a frame log, oldest first, as dicts of what the
-    measures need."""
+    measures need; with `before`, only nights before that evening."""
     data = data or config.DATA
     out = []
     for folder in sorted((data / "frames").glob("*/*/")):
         try:
-            began = datetime.strptime(folder.name, "%Y%m%d-%H%M%S")
+            night = night_of(datetime.strptime(folder.name, "%Y%m%d-%H%M%S"))
         except ValueError:
             continue
-        if since and night_of(began) < since:
+        if (since and night < since) or (before and night >= before):
             continue
         log = outcome.frames_log(folder)
         times = sorted(f["taken"] for f in log if isinstance(f.get("taken"), (int, float)))
         if not times:
             continue
         plan = outcome._json(folder / "session.json") or {}
-        out.append({"folder": folder, "field": folder.parent.name, "night": night_of(began).isoformat(),
+        out.append({"folder": folder, "field": folder.parent.name, "night": night.isoformat(),
                     "exposure": plan.get("exposure"), "log": log, "first": times[0], "last": times[-1],
                     "times": times})
     return sorted(out, key=lambda s: s["first"])
@@ -169,12 +181,16 @@ def stacked_share(rows):
     return out
 
 
-def depth_error(rows):
+def depth_error(rows, data=None, before=None):
     """Measured depth less the depth model's prediction for the same stack:
-    how far a modelled depth can be trusted."""
+    how far a modelled depth can be trusted. With `before`, the model is
+    fitted only to stacks from nights before that evening."""
     import depth
+    measured = depth.measurements((data or config.DATA) / "frames")
+    if before:
+        measured = [m for m in measured if (session_night(m["session"]) or before) < before]
     try:
-        model, _ = depth.fit(depth.measurements())
+        model, _ = depth.fit(measured)
     except interface.Refusal:
         return None, []
     out = []
@@ -187,12 +203,33 @@ def depth_error(rows):
     return model, out
 
 
-def costs(since=None, data=None):
-    """Every measure, as one record."""
-    rows = sessions(since, data)
-    model, errors = depth_error(rows)
+def search_outcomes(rows):
+    """How the searches of sessions with enough frames ended: searched to
+    the end, or stopped by a subtraction that did not match, no reference,
+    or a stack that would not solve (outcome.stop_kind), with the counts a
+    replay draws its odds from. Stops for too few frames or too shallow a
+    stack are left out: a replay works those out from its own frames."""
+    counts = {}
+    for s in rows:
+        programme, goals = outcome.programme_for(s["field"])
+        if not goals:
+            continue
+        state, why = outcome.search_state(s["folder"], programme, working=lambda *_: False)
+        kind = "searched" if state == "searched" else outcome.stop_kind(why) if state == "stopped" else None
+        if kind in ("searched", "subtraction", "no reference", "unsolved"):
+            counts[kind] = counts.get(kind, 0) + 1
+    return counts
+
+
+def costs(since=None, data=None, before=None):
+    """Every measure, as one record; with `before`, from nights before that
+    evening only, as a replay of it must be (it cannot learn from itself)."""
+    rows = sessions(since, data, before)
+    model, errors = depth_error(rows, data, before)
     return {
         "since": since.isoformat() if since else None,
+        "before": before.isoformat() if before else None,
+        "search_outcomes": search_outcomes(rows),
         "nights": len({s["night"] for s in rows}), "sessions": len(rows),
         "frame_gap_s": spread(frame_gaps(rows)),
         "frame_gap_s_by_exposure": frame_gaps_by_exposure(rows),

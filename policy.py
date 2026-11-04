@@ -68,6 +68,9 @@ COMMANDS = {
     "focus.py": ("hardware", {}, DRY),
     "focuser.py": ("hardware", {}, {}),
     "forced.py": ("local_write", {}, {}),
+    "history.py": ("read_only", {}, {}),          # what observing costs, from the sessions' records
+    "nightreplay.py": ("read_only", {}, {}),      # a kept night replayed under a policy; moves nothing
+    "outcome.py": ("read_only", {}, {}),          # what each session got, from its records
     "horizon.py": ("hardware", {"--show": "read_only", "--forget": "local_write", "--use-aside": "local_write"}, DRY),
     "landmark.py": ("hardware", {"list": "read_only"}, DRY),
     "literature.py": ("local_write", {}, {}),   # keeps arXiv's answers in cache/
