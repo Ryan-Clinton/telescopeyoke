@@ -429,11 +429,15 @@ class AltairCamera:
         if now is None:
             raise CameraError("the cooler is on but the sensor's temperature cannot be read, so no dark could be "
                               "matched to the frames")
-        if getattr(self, "ambient", None) is None:
+        if getattr(self, "ambient", None) is None or now > self.ambient:
             # The camera may not say its temperature the moment it opens: then
             # the sensor's temperature as cooling starts is what warm_up()
             # brings it back to (4 November 2026: with none, the warm-up was
-            # skipped and the cooler went off at -0.7 °C).
+            # skipped and the cooler went off at -0.7 °C). It may also say a
+            # false 0.0 °C as it opens: the same night the sensor read 9.9 °C
+            # as cooling began, and the warm-up stopped at 0.0 °C. The warmer
+            # reading is the sensor's own; a reopen while cold reads colder
+            # and keeps the first.
             self.ambient = now
         level = degrees if now - degrees <= RAMP_STEP_C else now - RAMP_STEP_C
         self._set_point(level)
