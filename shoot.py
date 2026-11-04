@@ -869,7 +869,9 @@ def main():
     ap.add_argument("--blocks", metavar="FILTER:MINUTES,...",
                     help="on a light path with the filter wheel: several filters in turn, such as R:10,G:10,B:10, "
                          "each its own session with its own filter transaction, and the cooled sensor kept cold "
-                         "between them (one cool-down, one warm-up); in place of --filter, --minutes and --frames")
+                         "between them (one cool-down, one warm-up); in place of --filter, --minutes and --frames. "
+                         "FILTER@TARGET:MINUTES moves on to another target from that block on (its GoTo checked "
+                         "in the dry run), still cold")
     ap.add_argument("--focus-as-is", action="store_true",
                     help="approved by the person for this run only: a filter with no measured focus offset is "
                          "imaged at the focus as it stands, nothing moved, every frame labelled focus not proven "
@@ -927,8 +929,19 @@ def plan(args):
             # shoot.py carries on without the mount when it cannot be moved.
             out["goto"] = {"would_move": False, "error": refusal.as_error()}
     if getattr(args, "blocks", None):
-        out["blocks"] = [{"filter": name, "minutes": minutes} for name, minutes in args.blocks]
-        for name, _ in args.blocks:
+        out["blocks"], target = [], args.name
+        for name, minutes in args.blocks:
+            name, _, other = name.partition("@")
+            if other and other != target:
+                target = other
+                try:
+                    goto = mount.plan_goto(target, site)
+                    goto.pop("side_note", None)
+                    out.setdefault("later_gotos", []).append(goto)
+                except interface.Refusal as refusal:
+                    out.setdefault("refused", []).append({"target": target, "why": str(refusal)})
+            out["blocks"].append({"target": target, "filter": name, "minutes": minutes})
+        for name, _ in ((n.partition("@")[0], m) for n, m in args.blocks):
             try:
                 if not args.focus_as_is:
                     filters.steps_between(filters.DEFAULT, name)
@@ -1055,9 +1068,15 @@ def in_blocks(args):
     results = []
     for number, (name, minutes) in enumerate(args.blocks, 1):
         last = number == len(args.blocks)
+        # FILTER@TARGET: this block and the ones after it are of another
+        # target, reached by the project's own GoTo and re-centre with all its
+        # checks (the person's go for that move is the go for the command).
+        name, _, target = name.partition("@")
+        if target:
+            args.name = target
         args.filter, args.minutes, args.frames = name, float(minutes), frames_asked(None, minutes)
         args.keep_cold, args.ended_on_time = not last, False
-        print(f"\nBlock {number} of {len(args.blocks)}: {name} for {minutes:g} min", flush=True)
+        print(f"\nBlock {number} of {len(args.blocks)}: {args.name} in {name} for {minutes:g} min", flush=True)
         try:
             results.append(held(args))
         except BaseException:
