@@ -18,8 +18,10 @@ what is specific to Claude and to this particular user.
 - Run anything expected to take more than a minute in the background and
   carry on with the next task.
 - Never wait on GitHub: push, give the summary in the same turn and go on.
-  CI and `./ty test-run` are watched in the background and said only when
-  something fails, with the fix; never "CI is running" or "CI is green".
+  The whole suite runs only once a day, on CI's schedule: never start
+  `./ty test-run` or a full `pytest` unless the user asks for it. Before a
+  push, the tests that touch the change. A red daily run is said with its
+  fix; never "CI is running" or "CI is green".
 - Never defer work that can be done here and now: no "tomorrow", "on my
   list", "next time" or "I can do that if you want" for something plainly
   wanted. Do it, with its test, then say it is done. Waiting on a background
@@ -71,8 +73,8 @@ There is no build step and no linter; the scripts run from the checkout.
 
 ```bash
 pip install ".[test]"                       # what CI installs; ./install.sh uses distro packages
-./ty test-run                               # the whole suite on the desktop, in the background; only failures come back
-pytest -q                                   # the same here: about fifteen minutes on this laptop
+./ty test-run                               # the whole suite on the desktop: only when the user asks (it runs daily in CI)
+pytest -q                                   # the same here, about fifteen minutes: likewise only when asked
 pytest -q tests/test_interface.py           # one file; this one takes seconds
 pytest -q tests/test_mount.py::test_name    # one test
 pytest -q -k meridian                       # tests matching a word

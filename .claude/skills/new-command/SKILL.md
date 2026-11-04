@@ -28,7 +28,7 @@ before its first real use. Write it in the style of the file next to it
    it in (a test checks), and a row in AGENTS.md's "Layout".
 7. If `ty` should pass it on, its entry in `ty`'s `PASS_THROUGH` and
    `policy.TY_PASSES`.
-8. `./ty test-run` in the background; on a failure, the `debugger` agent.
+8. The new command's own tests and those it touches (the whole suite runs once a day in CI); on a failure, the `debugger` agent.
    Before committing, the `code-reviewer` agent, and `motion-reviewer` if
    it moves anything.
 9. Commit and push (memory: finished work is always pushed).

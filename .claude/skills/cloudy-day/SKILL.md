@@ -60,6 +60,6 @@ Then, in a few lines, whichever of these apply now:
    `catalogue-researcher` and `candidate-vetter`.
 6. **Measurements still missing:** `./ty characterise` lists them and
    which need a clear night.
-7. **The tests:** `./ty test-run` in the background.
+7. **The tests:** the ones touching what changed; the whole suite runs once a day in CI, never started here unless the user asks.
 
 Then say which needs clear sky next, so tonight's plan is ready.
