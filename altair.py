@@ -302,20 +302,25 @@ class AltairCamera:
             # its frames have no colour pattern and carry no BAYERPAT.
             self.flags = int(getattr(getattr(device, "model", None), "flag", 0) or 0)
             self.mono = self.pattern.upper() == "YYYY" or bool(self.flags & MONO)
+            # A camera opened again to recover a lost frame keeps any cooling
+            # already under way (set from config, or by cool() as a test does):
+            # 4 November 2026, a reopen mid-test left no target, so the warm-up
+            # had nothing to do and the cooler went off cold.
+            cooling = self.target if getattr(self, "target", None) is not None else camera.get("tec_target")
             self.target = None
             if not hasattr(self, "ambient"):
                 # Before the cooler starts, the first time only (not when opened
                 # again after a jam): what warm_up() brings the sensor back to.
                 self.ambient = self.temperature()
-            if camera.get("tec_target") is not None and self.flags & TEC:
+            if cooling is not None and self.flags & TEC:
                 # A cooler that will not take its target, or a sensor whose
                 # temperature cannot be read back, stops here: frames at a
                 # temperature nobody knows match no dark (docs/calibration.md).
                 try:
-                    self.cool(camera["tec_target"])
+                    self.cool(cooling)
                 except lib.HRESULTException as problem:
                     self.close()
-                    raise CameraError(f"the cooler would not be set to {float(camera['tec_target']):g} °C: "
+                    raise CameraError(f"the cooler would not be set to {float(cooling):g} °C: "
                                       f"{_reason(problem)}. No frames are kept at a temperature no dark matches.")
                 except CameraError:
                     self.close()
