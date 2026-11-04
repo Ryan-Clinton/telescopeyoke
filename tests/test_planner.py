@@ -659,7 +659,11 @@ def test_a_centre_in_fog_does_not_count_clear():
     c = {"time": [0], **{m: {"cloud_cover": [5], "precipitation": [0], "precipitation_probability": [0],
                               "temperature_2m": [2.0], "dew_point_2m": [1.9], "wind_speed_10m": [1.0],
                               "visibility": [300 if m == "ukmo_seamless" else 20000]} for m in feeds.CENTRES}}
-    assert tonight.centre_agreement(c, [0]) == [{"clear": 3, "of": 4, "wet": 0, "fog": 1, "damp": 4, "cloud": 5}]
+    (hour,) = tonight.centre_agreement(c, [0])
+    assert {k: v for k, v in hour.items() if k != "by"} == {"clear": 3, "of": 4, "wet": 0, "fog": 1, "damp": 4, "cloud": 5}
+    assert hour["by"]["Met Office"]["fog"] and not hour["by"]["Met Office"]["clear"]
+    assert hour["by"]["ECMWF"] == {"cloud": 5, "clear": True, "fog": False, "wet": False,
+                                   "dew_gap": 0.1, "wind": 1.0, "visibility": 20000}
 
 
 def test_the_one_forecasts_rain_fog_and_dew_cannot_overrule_the_centres(monkeypatch):
@@ -703,3 +707,29 @@ def test_a_split_spell_says_where_the_centres_firmly_agree(monkeypatch):
     report = tonight.build(config.example(), demo=True)["weather"]
     assert report["verdict"] == "MARGINAL"
     assert any("2 of 4 at worst; 3 of 4 or more 01:00-03:00" in n for n in report["notes"])
+
+
+def test_the_forecast_view_sets_the_four_centres_side_by_side(monkeypatch):
+    """4 November 2026: "compare the forecasting models" was answered from
+    scratch scripts; ./tonight.py --forecast is that table."""
+    import demo
+    w = demo.weather(0, 0)
+    monkeypatch.setattr(demo, "weather", lambda lat, lon: w)
+    later = lambda m, h: m != "ukmo_seamless" and 1 <= h < 5
+    monkeypatch.setattr(demo, "weather_centres", lambda lat, lon: _centres_like(w, later), raising=False)
+    text = tonight.render_forecast(tonight.build(config.example(), demo=True))
+    head = next(line for line in text.splitlines() if line.startswith("time"))
+    assert all(name in head for name in feeds.CENTRES.values())
+    row = next(line for line in text.splitlines() if line.startswith("02:00"))
+    assert row.split()[1:] == ["90%", "10%*", "10%*", "10%*", "3/4"]
+    assert "dew gap 4.0-4.0°C" in text and "together: GO" in text
+
+
+def test_the_forecast_view_without_the_centres_says_so(monkeypatch):
+    import demo
+
+    def down(lat, lon):
+        raise OSError("Open-Meteo down")
+    monkeypatch.setattr(demo, "weather_centres", down, raising=False)
+    text = tonight.render_forecast(tonight.build(config.example(), demo=True))
+    assert text.startswith("The four centres could not be had")

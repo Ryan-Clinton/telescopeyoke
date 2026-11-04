@@ -176,7 +176,8 @@ def centre_agreement(c, times):
         i = index.get(int(x))
         clear = of = wet = fog = damp = 0
         cloud = []
-        for m in feeds.CENTRES:
+        by = {}
+        for m, name in feeds.CENTRES.items():
             g = c.get(m) or {}
             v = lambda k: (g.get(k) or [None] * len(c["time"]))[i]
             if i is None or v("cloud_cover") is None:
@@ -192,8 +193,13 @@ def centre_agreement(c, times):
             fog += bool(h["fog"])
             damp += h["temp"] is not None and h["dew_point"] is not None and h["temp"] - h["dew_point"] <= 2
             cloud.append(h["cloud"])
+            by[name] = {"cloud": h["cloud"], "clear": clear_hour(h), "fog": bool(h["fog"]),
+                        "wet": (h["rain_chance"] or 0) >= 30 or (h["rain_mm"] or 0) > 0,
+                        "dew_gap": None if h["temp"] is None or h["dew_point"] is None
+                        else round(h["temp"] - h["dew_point"], 1),
+                        "wind": h["wind"], "visibility": h["visibility"]}
         out.append({"clear": clear, "of": of, "wet": wet, "fog": fog, "damp": damp,
-                    "cloud": statistics.mean(cloud) if cloud else None})
+                    "cloud": statistics.mean(cloud) if cloud else None, "by": by})
     return out
 
 
@@ -241,6 +247,41 @@ def week(cfg, demo=False, nights=7):
         night = sky.Night(cfg, first + timedelta(days=n))
         out.append((night.date, weather_report(night, site["latitude"], site["longitude"], source)))
     return out
+
+
+def render_forecast(rep):
+    """The four forecasting centres side by side, hour by hour through the
+    dark: each one's cloud (* = that centre calls the hour clear: 30% or
+    less, dry, no fog; R rain, F fog), then the dew gap, wind and visibility
+    from all four, and the verdict they make together. 4 November 2026: the
+    night's comparison was made from scratch scripts; this is it as a command."""
+    w = rep and rep.get("weather")
+    if not w:
+        return "No forecast (offline, or the weather service could not be reached)."
+    hours = [h for h in w["hours"] if h.get("centres") and h["centres"].get("by")]
+    if not hours:
+        return ("The four centres could not be had; the default forecast alone: "
+                + weather_line(w))
+    names = list(feeds.CENTRES.values())
+
+    def cell(c):
+        if not c:
+            return "-"
+        return f"{c['cloud']:.0f}%" + ("*" if c["clear"] else "R" if c["wet"] else "F" if c["fog"] else "")
+    rows = [[f"{h['time']:%H:%M}"] + [cell(h["centres"]["by"].get(n)) for n in names]
+            + [f"{h['centres']['clear']}/{h['centres']['of']}"] for h in hours]
+
+    def spread(key, fmt):
+        vals = [c[key] for h in hours for c in h["centres"]["by"].values() if c.get(key) is not None]
+        return fmt(min(vals), max(vals)) if vals else "-"
+    out = [f"{rep['site']} - the four forecasting centres, {rep['date']}", "",
+           table(["time"] + names + ["clear"], rows), "",
+           "* clear (30% cloud or less, dry, no fog)   R rain   F fog", "",
+           "dew gap " + spread("dew_gap", lambda a, b: f"{a:.1f}-{b:.1f}°C")
+           + ", wind " + spread("wind", lambda a, b: f"{a:.0f}-{b:.0f} km/h")
+           + ", visibility " + spread("visibility", lambda a, b: f"{a / 1000:.0f}-{b / 1000:.0f} km"),
+           "together: " + weather_line(w)]
+    return "\n".join(out)
 
 
 def render_week(site, days):
@@ -583,6 +624,8 @@ def main():
     ap.add_argument("--kind", help="only this type, e.g. galaxy, planet, globular")
     ap.add_argument("--week", action="store_true",
                     help="the weather verdict for each of the next seven nights, and nothing else")
+    ap.add_argument("--forecast", action="store_true",
+                    help="the four forecasting centres side by side, hour by hour, and nothing else")
     ap.add_argument("--offline", action="store_true")
     ap.add_argument("--demo", action="store_true",
                     help="made-up weather at the example site; needs no setup")
@@ -597,6 +640,11 @@ def main():
         print(render_week(cfg["site"]["name"], week(cfg, args.demo)))
         return
     rep = build(cfg, args.date, args.offline, args.demo)
+    if args.forecast:
+        if args.json or args.html or args.week:
+            ap.error("--forecast prints its own short text: it does not go with --json, --html or --week")
+        print(render_forecast(rep))
+        return
     if args.kind:
         rep["targets"] = [t for t in rep["targets"] if args.kind == t["kind"]
                           or args.kind in t["kind"].replace("+", " ").split()]

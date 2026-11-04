@@ -263,7 +263,10 @@ What a person does; everything else is automatic.
    agree through the spell; a split spell names where three of four or
    more agree. Rain, fog, dew and the mean cloud are judged the same way
    (at least half the centres), so the one forecast's rain or fog cannot
-   make a night NO-GO that the centres call clear. Without the centres the
+   make a night NO-GO that the centres call clear. `./tonight.py --forecast`
+   sets the four side by side, hour by hour, with the dew gap, wind and
+   visibility ([4 November 2026](nights/2026-11-04/whats-interesting-tonight.png)).
+   Without the centres the
    default forecast stands ([3 November 2026](nights/2026-11-03/forecast-centres.md): the
    default gave one hour, three centres cleared 00:00-03:00). The
    research (`./ty research`, and `research` in `./ty night`) names the next leads waiting (`next_waiting`, why each was

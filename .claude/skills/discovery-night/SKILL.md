@@ -23,6 +23,8 @@ is `docs/agents/setup-routine.md` step 6b.
    - `./ty outlook` (3 seconds: the plan from now, the other choice, the
      sky, the candidates worth a second look, and only what is up tonight);
    - `./transits.py`;
+   - asked to compare the forecasts or models: `./tonight.py --forecast`
+     (the four centres side by side, hour by hour), its table in the answer;
    - the last night's notes (`~/ryanclinton.uk/notes/DATE.md`): what was
      patrolled and how the sky really was (fog the forecast missed).
 
