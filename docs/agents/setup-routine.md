@@ -101,7 +101,8 @@ says it moved and they say it did not, the motors have stalled (6 October
 
 ## 4. Focus
 
-    ./mount.py goto Deneb      (or any rich star field in clear sky)
+    ./polaralign.py --where    a rich field to focus on that the polar check can also start from
+    ./mount.py goto FIELD      the field it names, if that part of the sky is clear
     ./focus.py --check         the level now: three frames, about 15 seconds, nothing turns
 
 **Measure first, and tell the person the number** against the usual best

@@ -163,6 +163,48 @@ def positions(start_ha, dec, west, site, step=STEP, skyline=None):
     return spots
 
 
+# Rich star fields for focusing (many stars, none glaring), richest first,
+# to start the night from (4 November 2026: the Double Cluster was good for
+# focus, but its polar turns ran into the house; one field should do both).
+RICH_FIELDS = ["NGC 869", "M37", "NGC 7789", "M11", "M35", "M36", "M38", "M52", "NGC 663",
+               "NGC 457", "M103", "M34", "M39", "M44"]
+FOCUS_ALTITUDE = 45.0   # degrees: lower, the air's blur spoils the focus reading
+
+
+def where(site, skyline=None, sidereal=None, fields=None, find=None):
+    """The rich fields where the night's setting up can both focus and run
+    this polar check without moving on, best first: [{"field", "altitude",
+    "hour_angle_h", "step"}]. Each is high enough to focus on, and its three
+    polar positions pass positions() at the full step, or else the least
+    that clears what is in the way. Reads only: nothing moves."""
+    find = find or mount.find_target
+    sidereal = mount.true_sidereal(site) if sidereal is None else sidereal
+    out = []
+    for rank, name in enumerate(fields or RICH_FIELDS):
+        t = find(name)
+        if not t:
+            continue
+        ha = mount.wrap(sidereal - t["ra"])
+        if t["dec"] > 75 or abs(ha) > mount.MAX_HOUR_ANGLE * 15:
+            continue
+        altitude, azimuth = to_altaz(vector(ha, t["dec"]), site["latitude"])
+        if altitude < FOCUS_ALTITUDE:
+            continue
+        if skyline:
+            import horizon
+            if altitude < horizon.in_the_way(skyline, azimuth % 360) + CLEAR:
+                continue
+        for step in (STEP, 20.0, 15.0, LEAST):
+            try:
+                positions(ha, t["dec"], ha > 0, site, step, skyline)
+            except interface.Refusal:
+                continue
+            out.append({"field": name, "altitude": round(float(altitude)), "hour_angle_h": round(ha / 15, 2),
+                        "step": step, "rank": rank})
+            break
+    return sorted(out, key=lambda f: (f["step"] < STEP, f["rank"]))
+
+
 def told():
     """The stream file as it stands, or {}."""
     try:
@@ -532,6 +574,9 @@ def broadcast(result, exposure=FRAME_S):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--dry-run", action="store_true", help="say what it would do; no camera, no mount")
+    ap.add_argument("--where", action="store_true",
+                    help="the rich star field to start the night from: good to focus on and for this "
+                         "check's turns, clear of what is in the way; nothing moves")
     ap.add_argument("--json", action="store_true", help="answer in JSON at the end")
     ap.add_argument("--step", type=float, default=STEP, metavar="DEG",
                     help=f"degrees to turn between photographs, {LEAST:.0f} to {STEP:.0f} (default {STEP:.0f}): "
@@ -550,6 +595,25 @@ def main():
                     help=f"measure N times (2 to {MOST_REPEATS}) without touching the bolts, and say how well "
                          "the answers agree")
     args = ap.parse_args()
+    if args.where:
+        if args.json:
+            ap.error("--where prints its own short text")
+        settings = config.load()
+        found = where(settings["site"], settings.get("horizon"))
+        if not found:
+            print("No rich field is high enough and clear for the polar turns now: focus on any rich field "
+                  "and start the polar check from a star east of the meridian.")
+            return 0
+        best = found[0]
+        print(f"Start from {best['field']}: {best['altitude']}° up, {abs(best['hour_angle_h']):.1f} h "
+              f"{'west' if best['hour_angle_h'] > 0 else 'east'} of the meridian; focus there, then "
+              "./polaralign.py" + (f" --step {best['step']:g}" if best["step"] < STEP else "") + " from the same place.")
+        print(f"  ./mount.py goto \"{best['field']}\"")
+        others = ", ".join(f"{f['field']} ({f['altitude']}°" + (f", step {f['step']:g}" if f["step"] < STEP else "")
+                           + ")" for f in found[1:5])
+        if others:
+            print(f"Others: {others}")
+        return 0
     return interface.main("polaralign.dry_run" if args.dry_run else "polaralign", lambda: run(args), args.json)
 
 

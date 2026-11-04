@@ -177,3 +177,23 @@ def test_turns_are_sized_by_the_most_a_turn_has_done(bolts):
                          {"azimuth_deg": -per_turn, "altitude_deg": 0.0}, (1.0, 0))
     turns = polaralign.guidance(1.8, 0.0)["azimuth"]["turns"]
     assert turns == pytest.approx(1.8 / 2.22, abs=0.01)
+
+
+def test_where_starts_the_night_from_a_rich_field_good_for_focus_and_the_polar_turns():
+    """4 November 2026: the Double Cluster suited focus, then the polar
+    check's turns from it ran into the house in the west."""
+    import polaralign
+    site = {"latitude": 55.0, "longitude": -6.5}
+    stars = {"West": {"ra": 350.0, "dec": 57.0}, "East": {"ra": 50.0, "dec": 45.0},
+             "Low": {"ra": 120.0, "dec": 10.0}}
+    house = {"blocked": [{"from": 240, "to": 340, "altitude": 75}]}
+    found = polaralign.where(site, house, sidereal=10.0, fields=["West", "East", "Low"], find=stars.get)
+    names = [f["field"] for f in found]
+    assert names[0] == "East" and found[0]["step"] == polaralign.STEP     # its turns go east, into open sky
+    assert "Low" not in names                                             # too low to focus on
+    assert all(f["altitude"] >= polaralign.FOCUS_ALTITUDE for f in found)
+    for f in found:                                                       # every answer passes the real check
+        t = stars[f["field"]]
+        ha = (10.0 - t["ra"] + 180) % 360 - 180
+        polaralign.positions(ha, t["dec"], ha > 0, site, f["step"], house)
+    assert polaralign.RICH_FIELDS[0] == "NGC 869"

@@ -17,8 +17,9 @@ way (17 October 2026: HFR 1.86 at the start, 3.52 after a stopped run).
    Never the hand-turned aid while it is plugged in, whatever was said
    earlier about taking it off: ask one question if the two disagree.
 1. The telescope must point at a rich star field in a part of the sky the
-   person said is clear. If it does not, the GoTo to one (Vega, Deneb, or a
-   field the planner suggests) is a move, under nightly-setup's rule.
+   person said is clear. If it does not, the GoTo to one is a move, under
+   nightly-setup's rule: in setting up, the field `./polaralign.py --where`
+   names, so the polar check can start from the same place.
 2. `./focus.py --check`: three frames, about 15 seconds, nothing turns.
    Tell the person the number and what it is against, in one line:
    "Focus now HFR 1.86, usual 2.38: good."
