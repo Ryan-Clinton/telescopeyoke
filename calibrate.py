@@ -115,7 +115,9 @@ LOWEST_BIAS = 10        # a bias reading under this, of 4095, is the black level
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("kind", choices=["dark", "bias", "flat", "badpixels"])
-    ap.add_argument("--exposure", type=float, default=2.0, help="seconds, for darks")
+    ap.add_argument("--exposure", type=float, nargs="+", default=[2.0],
+                    help="seconds, for darks; a cooled camera takes several in one cold session "
+                         "(--exposure 4 16), then warms up gently")
     ap.add_argument("--gain", type=int, default=1500)
     ap.add_argument("--frames", type=int, default=20)
     ap.add_argument("--json", action="store_true", help="answer in JSON at the end")
@@ -167,16 +169,35 @@ def run_matched(args, camera):
         if settle:
             settle(say=print)            # at the cooler's target, as the lights will be
         if args.kind == "dark":
-            frames, header = [], None
-            for i in range(args.frames):
-                mosaic, header = cam.frame(args.exposure)
-                frames.append(mosaic)
-                print(f"  dark {i + 1} of {args.frames}  (median {np.median(mosaic[::8, ::8]):.0f})", flush=True)
-            if np.median(frames[0][::8, ::8]) > 0.2 * WHITE:
-                raise SystemExit("Those frames are bright. Darks need the cap on.")
-            cards = matched_cards(header, camera)
-            path = stacking.keep_master(folder, stacking.dark_stem(cards), master(frames),
-                                        dict(cards, NFRAMES=args.frames))
+            # 4 November 2026: one exposure a run meant closing the camera
+            # between the 4 s and 16 s darks, which turns the cooler off with
+            # no warm-up. Every exposure is taken in the one cold session and
+            # the cooler is stepped up gently at the end (finally, below).
+            try:
+                paths = []
+                for seconds in args.exposure:
+                    frames, header = [], None
+                    for i in range(args.frames):
+                        mosaic, header = cam.frame(seconds)
+                        frames.append(mosaic)
+                        print(f"  {seconds:g} s dark {i + 1} of {args.frames}  "
+                              f"(median {np.median(mosaic[::8, ::8]):.0f})", flush=True)
+                    if np.median(frames[0][::8, ::8]) > 0.2 * WHITE:
+                        raise SystemExit("Those frames are bright. Darks need the cap on.")
+                    cards = matched_cards(header, camera)
+                    path = stacking.keep_master(folder, stacking.dark_stem(cards), master(frames),
+                                                dict(cards, NFRAMES=args.frames))
+                    print(f"saved {path}", flush=True)
+                    paths.append(str(path))
+            finally:
+                warm_up = getattr(cam, "warm_up", None)
+                if warm_up:
+                    try:
+                        warm_up(say=lambda line: print(f"  {line}", flush=True))
+                    except Exception as problem:
+                        print(f"  camera: the warm-up failed ({problem}); closing the camera turns the cooler off")
+            return {"kind": "dark", "frames": args.frames, "gain": args.gain, "exposures": args.exposure,
+                    "files": paths}
         else:
             import sxwheel
             seconds = flat_exposure(cam)
@@ -206,6 +227,10 @@ def run(args):
     if args.kind == "badpixels":
         raise SystemExit("The 183C's hot pixels are taken out by its scaled dark and the stack's own cleaning: "
                          "a bad-pixel map is for a camera with matched darks.")
+    if len(args.exposure) > 1:
+        raise SystemExit("Several exposures in one run are for a cooled camera's matched darks: "
+                         "take this camera's darks one exposure at a time.")
+    args.exposure = args.exposure[0]
     with Camera(gain=args.gain) as cam:
         if args.kind == "dark":
             frames = capture(cam, args.exposure, args.frames, "dark")
