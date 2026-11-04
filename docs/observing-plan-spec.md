@@ -8,7 +8,7 @@ audit; Phase 5, a deep audit of the replay engine (a flawed one would
 make every later change look better than it is); Phases 2, 3 and 4,
 with major design changes or unexpected failures reported; then a full
 audit across simulated nights.
-Nothing here is built yet; the phases below say what each one changes and
+Phases 2 to 5 are not built yet; the phases below say what each one changes and
 how it is proven before it is used. Until a phase is proven, today's
 planning and acquisition stay as they are. Each phase is switched on by a
 setting and can be switched off again.
