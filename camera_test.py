@@ -621,6 +621,9 @@ def main():
                       help="whether a run's stripes are fixed in the sensor or new each frame, from its saved frames")
     what.add_argument("--stripes-weather", action="store_true",
                       help="every saved night's stripes beside its temperature, dew point and humidity")
+    what.add_argument("--offset-sweep", action="store_true",
+                      help="cap on: a bias frame at each black level for each of --gains: background, grain and "
+                           "what is clipped at zero, and the smallest offset that clears it; --keep-best keeps it")
     what.add_argument("--banding", action="store_true",
                       help="how strong the horizontal stripes are with the fan on and off and at two black levels")
     what.add_argument("--probe", action="store_true",
@@ -829,6 +832,44 @@ def stripes_weather(weather=None, say=print):
     say("stripes follow: " + (", ".join(f"{k} {v:+.2f}" for k, v in follows.items()) or "too few nights to say")
         + " (1 rises with it, -1 falls as it rises, 0 unrelated)")
     return {"nights": rows, "follows": follows}
+
+
+OFFSETS = (0, 10, 20, 30, 40, 60, 80)
+
+
+def offset_sweep(gains, offsets=OFFSETS, exposure=0.1, keep=False, say=print):
+    """Cap on: a bias frame at each black level (offset) for each gain, and
+    where the background sits, its grain and how much of it is cut off at
+    zero. The smallest offset whose background clears zero by five times its
+    grain, with almost nothing clipped, is the pick for each gain; with
+    `keep`, the pick for the first gain goes into the camera's own profile.
+    4 November 2026: the 183M's dark background sat at 17 ADU."""
+    rows, picks = [], {}
+    with Camera(gain=gains[0]) as cam:
+        for gain in gains:
+            cam.gain = gain                              # applied with each exposure
+            for offset in offsets:
+                cam.settings(offset=offset)
+                cam.frame(exposure)                      # one frame to let the change take
+                data = cam.frame(exposure)[0].astype(np.float32)
+                level, grain = float(np.median(data)), float(np.std(data[::4, ::4]))
+                clipped = float(np.mean(data <= 1))
+                rows.append({"gain": gain, "offset": offset, "level_adu": round(level, 1),
+                             "grain_adu": round(grain, 2), "clipped_share": round(clipped, 6)})
+                say(f"  gain {gain:5d}  offset {offset:3d}: background {level:6.1f} ADU, grain {grain:5.2f}, "
+                    f"clipped {100 * clipped:.4f}%")
+                if gain not in picks and level >= 5 * grain and clipped < 1e-5:
+                    picks[gain] = offset
+    for gain in gains:
+        say(f"gain {gain}: " + (f"offset {picks[gain]} clears zero" if gain in picks
+                                else "no offset tried clears zero by five times the grain"))
+    name = config.hardware()["camera"].get("name", "183c")
+    kept = bool(keep and gains[0] in picks)
+    if kept:
+        section = "camera" if name == config.LEGACY_CAMERA else f"cameras.{name}"
+        config.save({(section, "offset"): picks[gains[0]]})
+        say(f"Kept in config.toml: offset {picks[gains[0]]} for the {name}. Take new darks and bias after it.")
+    return {"exposure_s": exposure, "gains": list(gains), "rows": rows, "picks": picks, "kept": kept}
 
 
 def banding_trial(exposure, gain, frames=2, keep=False, settings=BANDING_SETTINGS, say=print):
@@ -1088,6 +1129,8 @@ def run(args):
         return trail(args.exposure or 10.0, args.gain, args.corrected)
     if args.stripes:
         return stripes_in(args.stripes)
+    if args.offset_sweep:
+        return offset_sweep(args.gains, keep=args.keep_best)
     if args.banding:
         return banding_trial(args.exposure or 16.0, args.gain, min(args.frames or 2, 2), args.keep_best)
     if args.speed_ladder:
