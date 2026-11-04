@@ -287,6 +287,13 @@ class AltairCamera:
             self.binning = 1
             if camera.get("readout_speed") is not None:
                 handle.put_Speed(int(camera["readout_speed"]))
+            # The black level and fan from this camera's settings, every time it
+            # opens: the camera does not keep them (4 November 2026: the 183M's
+            # offset of 80 was not in its darks, which sat at the default 17).
+            if camera.get("offset") is not None:
+                handle.put_Option(lib.ALTAIRCAM_OPTION_BLACKLEVEL, int(camera["offset"]))
+            if camera.get("fan") in ("on", "off") and hasattr(lib, "ALTAIRCAM_OPTION_FAN"):
+                handle.put_Option(lib.ALTAIRCAM_OPTION_FAN, -1 if camera["fan"] == "on" else 0)
             handle.put_Option(lib.ALTAIRCAM_OPTION_TRIGGER, 1)    # one exposure per request
             self.width, self.height = self._size()
             fourcc, self.bits = handle.get_RawFormat()
@@ -417,6 +424,12 @@ class AltairCamera:
         if now is None:
             raise CameraError("the cooler is on but the sensor's temperature cannot be read, so no dark could be "
                               "matched to the frames")
+        if getattr(self, "ambient", None) is None:
+            # The camera may not say its temperature the moment it opens: then
+            # the sensor's temperature as cooling starts is what warm_up()
+            # brings it back to (4 November 2026: with none, the warm-up was
+            # skipped and the cooler went off at -0.7 °C).
+            self.ambient = now
         level = degrees if now - degrees <= RAMP_STEP_C else now - RAMP_STEP_C
         self._set_point(level)
         self.target, self.level, self._stepped = degrees, level, clock()
@@ -535,6 +548,9 @@ class AltairCamera:
         began = clock()
         try:
             degrees = self.temperature()
+            if degrees is None or self.ambient is None:
+                say(f"camera: the warm-up cannot tell the sensor's temperature "
+                    f"({'now' if degrees is None else 'from before cooling'}); the cooler goes off now")
             if degrees is not None and self.ambient is not None and degrees < self.ambient - WARM_STEP_C:
                 level = max(self.level, degrees)
                 say(f"camera: warming the sensor from {degrees:.1f} °C to {self.ambient:.1f} °C, "
