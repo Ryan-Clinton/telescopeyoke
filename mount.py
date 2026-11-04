@@ -94,6 +94,22 @@ LOCK_FILE = ROOT / "MOTION_LOCKED"
 POINTING_FILE = config.DATA / "cache" / "pointing.json"
 CENTRED = 2 / 60  # degrees; close enough to stop correcting
 LAST_SOLVE = config.DATA / "cache" / "last_solve.json"
+
+
+def last_solve(cfg=None):
+    """The last plate solve's record (ra, dec, rotation, scale, cd, saved)
+    if it was made by the camera in use through its present light path, else
+    None: a solve by the 183C at 750 mm must never give the 183M at 675 mm
+    its scale or its orientation. A record from before the camera was written
+    into it counts as not matching; the next solve replaces it."""
+    try:
+        record = json.loads(LAST_SOLVE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    camera, focal = config.light_path(cfg)
+    if record.get("camera") != camera or record.get("focal_mm") != focal:
+        return None
+    return record
 FRAME_TRIES = 3   # pictures tried for one plate solve before the camera counts as gone
 # What has been learned about the drift, and the Dec creep now running.
 DRIFT_FILE = config.DATA / "cache" / "drift_model.json"
@@ -953,8 +969,13 @@ class Mount:
             # Kept for shoot.py's drift assist, which needs to know which way
             # up the camera is.
             (config.DATA / "cache").mkdir(exist_ok=True)
+            # With the camera and light path it was made through, so a solve
+            # by one camera is never read as another's scale or orientation
+            # (last_solve). Read after the frame: opening the camera is what
+            # tells the settings which camera is in use.
+            camera, focal = config.light_path()
             records.write(LAST_SOLVE, {k: found[k] for k in ("ra", "dec", "rotation", "scale", "cd") if k in found}
-                          | {"saved": time.time()}, indent=None)
+                          | {"camera": camera, "focal_mm": focal, "saved": time.time()}, indent=None)
         return found
 
     def sync(self, site):

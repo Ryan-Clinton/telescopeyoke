@@ -1297,10 +1297,12 @@ def target(name, demo=False):
 
 def _scale():
     """Arcseconds per pixel of the half-size frames: from the last plate solve
-    if there is one, else from the camera and telescope in the settings."""
-    if mount.LAST_SOLVE.exists():
-        return json.loads(mount.LAST_SOLVE.read_text(encoding="utf-8"))["scale"]
+    if the camera in use made it through its present light path, else from
+    the camera and telescope in the settings."""
     cfg = config.load() if config.FILE.exists() else config.example()
+    solved = mount.last_solve(cfg)
+    if solved and solved.get("scale"):
+        return solved["scale"]
     return config.scale(cfg, 2)      # the camera in use through its train
 
 

@@ -56,13 +56,10 @@ def camera_axes(angle=None):
     from the last plate solve's CD matrix, else the camera square to RA."""
     if angle is None:
         import mount
-        if mount.LAST_SOLVE.exists():
-            cd = json.loads(mount.LAST_SOLVE.read_text(encoding="utf-8")).get("cd")
-            if cd:
-                across = (cd[0][0], cd[1][0])
-                up = (cd[0][1], cd[1][1])
-                return _unit(across), _unit(up), "the last plate solve"
-        angle, source = 0.0, "no plate solve yet, so square to RA and Dec"
+        cd = (mount.last_solve() or {}).get("cd")
+        if cd:
+            return _unit((cd[0][0], cd[1][0])), _unit((cd[0][1], cd[1][1])), "the last plate solve"
+        angle, source = 0.0, "no plate solve by this camera yet, so square to RA and Dec"
     else:
         source = "--angle"
     a = math.radians(angle)
@@ -114,8 +111,9 @@ def plan(target, columns, rows, overlap=OVERLAP, angle=None, cfg=None):
                              a * across[0] + b * up[0], a * across[1] + b * up[1])
             panels.append({"id": f"{target['id'].replace(' ', '')}-P{len(panels) + 1}",
                            "ra": round(ra, 5), "dec": round(dec, 5), "column": column + 1, "row": row + 1})
+    camera, focal = config.light_path(cfg)
     return {"target": target["id"], "name": target.get("name", ""), "columns": columns, "rows": rows,
-            "overlap": overlap, "field_deg": [round(width, 3), round(height, 3)],
+            "camera": camera, "focal_mm": focal, "overlap": overlap, "field_deg": [round(width, 3), round(height, 3)],
             "covers_deg": [round(width + (columns - 1) * step_w, 2), round(height + (rows - 1) * step_h, 2)],
             "angle_deg": round(math.degrees(math.atan2(across[1], across[0])), 1),
             "angle_from": source, "panels": panels}
@@ -144,13 +142,23 @@ def find_panel(name):
             "mag": None, "size": None, "minor": None, "messier": False}
 
 
-def describe(kept):
+def describe(kept, cfg=None):
+    """The plan in words; with a line saying so when it was made for another
+    camera's field than the camera in use's (a plan kept from the 183C at
+    750 mm, read with the 183M at 675 mm): its panels still point where they
+    did, but their overlap is not what was planned."""
     width, height = kept["field_deg"]
+    now_w, now_h = field(cfg)
+    other = ""
+    if abs(now_w / width - 1) > 0.02 or abs(now_h / height - 1) > 0.02:
+        made = f" by the {kept['camera']} at {kept['focal_mm']} mm" if kept.get("camera") else ""
+        other = (f"This plan was made{made} for a {width:.2f}° x {height:.2f}° field; the camera in use "
+                 f"sees {now_w:.2f}° x {now_h:.2f}°. --replace plans it again for this camera.")
     lines = [f"{kept['target']} {kept['name']}: {kept['columns']} x {kept['rows']} panels of "
              f"{width:.2f}° x {height:.2f}°, {kept['overlap']:.0%} overlap, covering "
              f"{kept['covers_deg'][0]:.2f}° x {kept['covers_deg'][1]:.2f}°",
              f"Camera turned {kept['angle_deg']:+.0f}° from east towards north ({kept['angle_from']}).",
-             ""]
+             *([other] if other else []), ""]
     for p in kept["panels"]:
         lines.append(f"  {p['id']:<12} RA {p['ra'] / 15:6.3f} h  Dec {p['dec']:+7.3f}°   "
                      f"column {p['column']}, row {p['row']}")
@@ -184,7 +192,7 @@ def main():
         columns, rows = suggest(target, *field(cfg), args.overlap)
     fresh = plan(target, columns, rows, args.overlap, args.angle, cfg)
     if args.demo:
-        print(describe(fresh))
+        print(describe(fresh, cfg))
         return 0
     if kept and not args.replace and (kept["columns"], kept["rows"]) != (columns, rows):
         print(describe(kept))

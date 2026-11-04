@@ -211,6 +211,15 @@ def scale(cfg=None, block=1):
     return 206.265 * block * cfg["camera"]["pixel_size_um"] / focal_length(cfg)
 
 
+def light_path(cfg=None):
+    """(camera profile, effective focal length to the mm) of the camera in
+    use: what a kept measurement that depends on the pixel scale or the
+    camera's orientation must have been made with before it is used again
+    (mount.last_solve, goals.prior_for, stacking.same_camera's frames)."""
+    cfg = cfg or hardware()
+    return camera_name(cfg), round(focal_length(cfg))
+
+
 def camera_name(cfg=None):
     """The profile name of the camera in use."""
     return (cfg or hardware())["camera"].get("name", LEGACY_CAMERA)

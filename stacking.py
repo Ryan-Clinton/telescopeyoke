@@ -634,21 +634,20 @@ def on_target(paths, say=print):
 def same_camera(paths):
     """Refuses (INVALID_REQUEST) a set of raw frames from more than one camera,
     focal length or filter (a frame with no FILTER, the 183C's, counts as no filter): a stack or a difference image must never mix them by
-    accident. One frame is read from each folder, as a run's frames all come
-    from one camera."""
+    accident. Every frame's header is read, not one per folder: a folder
+    added to by a later run through another light path is caught too."""
     import interface
     seen = {}
     for path in paths:
-        folder = Path(path).parent
-        if folder not in seen:
-            head = fits.getheader(path, 1)
-            seen[folder] = camera_of(head) + (head.get("FILTER") or None,)
-    cameras = {c for c, _, _ in seen.values()}
-    focals = {f for _, f, _ in seen.values() if f is not None}
-    filters = {b for _, _, b in seen.values()}
+        head = fits.getheader(path, 1)
+        kind = camera_of(head) + (head.get("FILTER") or None,)
+        seen.setdefault(kind, Path(path))
+    cameras = {c for c, _, _ in seen}
+    focals = {f for _, f, _ in seen if f is not None}
+    filters = {b for _, _, b in seen}
     if len(cameras) > 1 or len(focals) > 1 or len(filters) > 1:
-        listed = "; ".join(f"{folder.name}: {c}{f' at {f} mm' if f else ''}{f' in {b}' if b else ''}"
-                           for folder, (c, f, b) in seen.items())
+        listed = "; ".join(f"{path.parent.name}/{path.name}: {c}{f' at {f} mm' if f else ''}{f' in {b}' if b else ''}"
+                           for (c, f, b), path in seen.items())
         raise interface.Refusal("INVALID_REQUEST", f"These frames come from more than one camera, light "
                                 f"path or filter ({listed}); they cannot go into one picture or measurement.")
 

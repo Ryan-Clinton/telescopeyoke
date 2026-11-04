@@ -550,11 +550,9 @@ def assist(session):
     which way up the camera is)."""
     import config
     import mount
-    if not mount.LAST_SOLVE.exists():
-        print("  drift assist needs a plate solve first; skipped", flush=True)
-        return False
-    cd = json.loads(mount.LAST_SOLVE.read_text(encoding="utf-8")).get("cd")
+    cd = (mount.last_solve() or {}).get("cd")
     if not cd:
+        print("  drift assist needs a plate solve by this camera first; skipped", flush=True)
         return False
     times = [t for t, _, _ in session.track]
     residual, sigma = tracking.drift_from_shifts(times, [(x, y) for _, x, y in session.track], cd)

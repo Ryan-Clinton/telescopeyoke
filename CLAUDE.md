@@ -97,6 +97,13 @@ ruff check FILE.py                          # before a commit: mistakes, not sty
   Never build a path to `frames/`, `web/`, `cache/` or `horizon/` from
   `ROOT`.
 - A change to any `--json` output changes its file in `schemas/` with it.
+- Anything kept that depends on the pixel scale or the camera's angle names
+  the camera and light path it was made with, and is used again only when
+  `config.light_path()` (profile, effective focal length) matches: the last
+  plate solve (`mount.last_solve()`, which `agent`, `mosaic`, `shoot`'s drift
+  assist and `mineral` read), a field's depth prior (`goals.prior_for`) and
+  a kept mosaic plan (flagged when its field differs). `stacking.same_camera`
+  reads every frame's header, not one per folder.
 - The application is `app.py`: it runs `console.py`'s server in "app" mode and
   shows `console/index.html` in a GTK window (Ubuntu) or WebView2 (Windows).
   `console.py` alone serves the same page in "companion" mode, where the

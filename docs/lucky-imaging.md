@@ -205,7 +205,8 @@ score.
 the same seas are then checked, so the orientation is checked by something
 else where it can be. The json keeps the seas' score both ways round and
 the margin between them. If a plate solve of the same night is within six
-hours (`cache/last_solve.json`), its CD matrix gives the camera's angle on
+hours (`cache/last_solve.json`) and was made by the camera in use through
+its present light path (the record names both), its CD matrix gives the camera's angle on
 the sky (`lunar.turn_from_solve`), turned 180° if the mount was on the
 other side of the meridian. Without a solve, a margin under 1.1 marks the
 orientation, and so the seas' check, not sure.

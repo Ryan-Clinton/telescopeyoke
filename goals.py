@@ -294,16 +294,28 @@ def keep_capturing(accepted, captured, rejected_in_row, elapsed_s, rule, cloud=0
 def prior_for(field, data=None):
     """What the field's newest measured stack says to turn a frame log into
     the depth model's units: its pixel scale, its sky (mag/arcsec²) and the
-    median sky counts of its accepted frames. None if no stack of the field
-    was measured."""
+    median sky counts of its accepted frames. Only a stack taken by the
+    camera in use through its present light path counts: another camera's
+    pixel scale and sky counts would give this one a wrong depth. None if no
+    such stack of the field was measured; a folder whose frames have gone to
+    the archive cannot say which camera took them and is passed over."""
     import json
+    import stacking
+    from astropy.io import fits
     data = data or config.DATA
+    camera, focal = config.light_path()
     for folder in sorted((data / "frames" / field).glob("*/"), reverse=True):
         try:
             d = json.loads((folder / "depth.json").read_text(encoding="utf-8"))
         except (OSError, ValueError):
             continue
         if not (d.get("scale_arcsec_per_px") and d.get("sky_mag_per_arcsec2")):
+            continue
+        frame = next(iter(sorted(folder.glob("light-*.fits"))), None)
+        if frame is None:
+            continue
+        took, at = stacking.camera_of(fits.getheader(frame, 1))
+        if took != camera or (at is not None and at != focal):
             continue
         log = _log(folder)
         counts = [f["background"] for f in log if f.get("accepted") and f.get("background")]

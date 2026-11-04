@@ -101,6 +101,21 @@ def calibration_of(stack):
     return found or None
 
 
+def frames_scale(folder):
+    """Arcseconds per pixel of a night's half-size frames, from the camera
+    and focal length their own headers name (stacking.camera_of), for a
+    stack with no depth record: never the camera in use's, which may not be
+    the one that took them. A frame with no FOCALLEN is the 183C's at the
+    150P's own focal length."""
+    import stacking
+    from astropy.io import fits
+    cfg = config.hardware()
+    frame = next(iter(sorted(Path(folder).glob("light-*.fits"))), None)
+    camera, focal = stacking.camera_of(fits.getheader(frame, 1)) if frame else (config.LEGACY_CAMERA, None)
+    profile = cfg["cameras"].get(camera, cfg["cameras"][config.LEGACY_CAMERA])
+    return 206.265 * 2 * profile["pixel_size_um"] / (focal or cfg["scope"]["focal_length_mm"])
+
+
 def assemble(name, k, folder, rec, when, earlier=None):
     """The packet as a dict, from what is on file. `earlier` is the history
     of the place in stacks before the first detection (forced.py), for the
@@ -111,7 +126,7 @@ def assemble(name, k, folder, rec, when, earlier=None):
     vetted = next((c for c in (rec.get("vetted") or {}).get("candidates", [])
                    if c.get("ra") is not None and abs(c["ra"] - k["ra"]) < 3e-4 and abs(c["dec"] - k["dec"]) < 3e-4),
                   None)
-    scale = depth.get("scale_arcsec_per_px", 1.32)
+    scale = depth.get("scale_arcsec_per_px") or frames_scale(folder)
     packet = {
         "id": k["id"], "object": name, "ra": round(k["ra"], 6), "dec": round(k["dec"], 6),
         "ra_hms": hms(k["ra"] / 15), "dec_dms": dms(k["dec"]),

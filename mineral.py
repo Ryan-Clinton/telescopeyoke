@@ -547,12 +547,16 @@ def solved_turn(site, when, look, path=None):
     """The picture's (turn, mirrored) from the night's plate solve, or None:
     the last solve (cache/last_solve.json) if it was within SOLVE_WITHIN of
     `when`, turned 180 degrees if the mount was on the other side of the
-    meridian for the Moon. Assumes the camera was not turned in between."""
+    meridian for the Moon. Only a solve by the camera in use through its
+    present light path counts (mount.last_solve's rule): another camera sits
+    at its own angle. Assumes the camera was not turned in between."""
     path = Path(path or config.DATA / "cache" / "last_solve.json")
     try:
         solve = json.loads(path.read_text(encoding="utf-8"))
         cd, saved, ra = solve["cd"], float(solve["saved"]), float(solve["ra"])
     except (OSError, ValueError, KeyError, TypeError):
+        return None
+    if (solve.get("camera"), solve.get("focal_mm")) != config.light_path():
         return None
     if abs(saved - when.timestamp()) > SOLVE_WITHIN:
         return None
