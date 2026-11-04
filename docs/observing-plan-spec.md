@@ -1,7 +1,10 @@
 # Spec: planning a night by what it gets, not by its clock
 
-Status: proposed, 4 November 2026. Nothing here is built yet; the phases
-below say what each one changes and how it is proven before it is used.
+Status: proposed, 4 November 2026, revised the same day after review.
+Nothing here is built yet; the phases below say what each one changes and
+how it is proven before it is used. Until a phase is proven, today's
+planning and acquisition stay as they are. Each phase is switched on by a
+setting and can be switched off again.
 
 ## Why
 
@@ -86,7 +89,8 @@ Rubin's survey strategy is tuned the same way.
 
 ## The design
 
-Each phase is useful alone and is proven before the next.
+Each phase is useful alone and is proven before the next. Order: 1, 5, 2,
+3, 4, so every change after Phase 1 is judged on replayed nights.
 
 ### Phase 1: say what each observation got
 
@@ -97,28 +101,58 @@ Every step's result is the six numbers the person asked for:
 3. accepted
 4. stacked
 5. integration in seconds
-6. depth reached (G, half of planted stars found)
+6. depth reached (G, half of planted stars found), or the step's own
+   measure (below)
 
-Its outcome is then *short*, *met* or *more than asked*, against the
-programme's need (Phase 2).
+Three outcomes are said apart, never folded into one "done":
+
+- **Ran:** the step ran its course and kept frames.
+- **Searchable:** there was enough to run the search or measurement at all.
+  For a patrol panel, that is 8 stacked frames.
+- **Worth it:** the result meets the step's purpose, such as a depth
+  reached, a brightness measured to a given error, or a transit covered.
+
+A panel can be searchable but too shallow to be worth it; it is then not
+counted as watched, and keeps its turn.
+
+Each outcome is *short*, *met* or *more than asked*. The goals come in
+full in Phase 2. Phase 1 starts with provisional ones from the decisions
+below, and changes nothing in how frames are taken.
 
 - These go into the run's record, the schedule's line for the step, the
   night notes and the morning summary.
-- Built on what `restack.json` and `depth.json` already hold.
-- Proof: the 3-4 Nov night is replayed from its records, and the result
-  says panels 3, 5 and 6 were short and why.
+- Built on what `restack.json`, `depth.json` and `patrol.json` already
+  hold.
+- **Proof:** the 3-4 Nov night is replayed from its records. The result
+  says panels 3, 5 and 6 ran but were not searchable and why, and that
+  panel 1's second stack was searchable in frames but too shallow
+  (G 15.7).
 
-### Phase 2: goals in accepted frames, not minutes
+### Phase 2: goals by purpose, in accepted frames or a measure
 
-Each programme (`programmes/*.toml`) and planned target gets three goals:
+Each programme (`programmes/*.toml`) and planned target gets three goals,
+by what it is for:
 
-- `minimum`: the least worth having. For a patrol panel, the 8 stacked
-  frames the search needs.
-- `desired`: the result aimed for, such as a depth or a frame count.
+- `minimum`: the least worth having.
+- `desired`: the result aimed for.
 - `stretch`: more, if time is spare.
 
-Each is in accepted frames or a depth, with minutes as a cap only.
+There is no one measure for every programme:
 
+| Purpose | Measured by |
+|---|---|
+| Nova patrol (M31, M33, panels) | stacked frames to be searchable; depth for worth it |
+| Supernova or other known transient | its own brightness measured to a given error, against a reference of its host (see below) |
+| Exoplanet transit | unbroken coverage of ingress, egress and the baseline before and after, at the precision the depth needs |
+| Comet or moving object | coverage of its path, the depth it needs, and the repeat it needs |
+| Research lead (a star to check) | the brightness measured to the error its question needs |
+
+- **A supernova's goal is its own.** 30 minutes can be plenty for a bright
+  one in the open, and too little for a faint one on a galaxy's bright
+  core. SN 2026sqf on 4 Nov is the example: 480 s stacked, but its light
+  could not be told from NGC 3310's centre without a reference of the
+  galaxy to subtract. So the goal is a measured brightness and its error,
+  and the first visit to a new host makes that reference.
 - **The capture keeps going until `desired` accepted frames, or its cap.**
   A stall extends the time, up to the cap; a rejection extends the frame
   count. The two are counted apart. `retakes()` and the patrol's
@@ -126,28 +160,58 @@ Each is in accepted frames or a depth, with minutes as a cap only.
 - **Planned and worst case are kept apart.** The plan books the expected
   cost (measured, Phase 5). The runner allows up to the worst case only
   out of time that nothing protected needs.
+- **Decisions use quick measures, and the slow one when it comes.**
+  Depth from planted stars takes minutes of processing, and processing
+  never holds the telescope. While it runs, the next choice uses what is
+  known at once:
+  - accepted frames;
+  - star size, star count and sky level from the frame log;
+  - the depth `depth.predict` gives for them (the model the patrol
+    already uses for its expected depth).
+
+  The measured depth replaces that when it comes and can change later
+  choices (a field found too shallow keeps its turn).
 - **Proof:** a replay of 4 Nov's frame logs (stalls and rejections as they
   happened) shows each panel reaching its minimum. Then one real night.
 
 ### Phase 3: protected windows
 
-A step that only works at certain times, such as a transit with its
-baseline, an occultation or a supernova before it sets, is marked
-`protected`, with its window.
+What is protected is a window, not a kind of object:
 
-- The runner works out every flexible step's time backwards from the next
-  protected start, so a flexible step can never take it. This generalises
-  today's `--until` and `--budget`.
-- A protected step may still be cut by cloud, never by another step.
+- **Hard windows:** occultations, exoplanet transits with their baseline,
+  and transients whose science is in the next hour. These start on time
+  whatever ran before.
+- **Deadlines:** an object about to set or go behind the skyline, a comet
+  heading into twilight, a follow-up needed before a known time. It must
+  be finished by then; it may move earlier.
+- **Flexible, high priority:** routine supernova photometry, nova patrols,
+  mosaic panels. Chosen by value, never protected.
+- **Protected by the person:** any step the person gives a start time or a
+  window, whatever it is.
+
+How the windows are kept:
+
+- **The window starts with its setup.** A protected start reserves its
+  GoTo, centring and a focus check before it, from Phase 5's measured
+  costs. A transit's baseline begins with frames being taken, not with
+  the GoTo.
+- **Flexible steps are timed back from the next protected start.** The
+  runner works out each flexible step's time backwards from it, setup
+  included, so a flexible step can never take it. This generalises today's
+  `--until` and `--budget`.
+- **Only cloud cuts a protected step.** A protected step may be cut by
+  cloud, never by another step.
 - **Proof:** a simulated night where the step before it overruns, stalls
-  and takes second looks. The protected step starts on time every time.
+  and takes second looks. The protected step is taking frames at its
+  window's start every time.
 
 ### Phase 4: choose the next step at each step's end
 
 After each step the runner asks the planner again what is best now. It
 uses what is still owed:
 
-- a target short of its minimum keeps its need;
+- a target short of its minimum, or searchable but not worth it, keeps its
+  need;
 - a field owed a second look goes first;
 - spare time goes to the best `stretch`.
 
@@ -175,12 +239,22 @@ and still changeable by the person.
   the stalls, rejections, GoTo times and cloud from recorded nights. It
   reports:
   - protected starts missed;
-  - targets that reached their minimum, desired or stretch goal;
+  - targets that ran, were searchable and were worth it, against their
+    goals;
   - accepted integration;
   - time idle.
 
   It runs the current policy and the proposed one on the same nights. A
   change is kept only if it does better without missing a protected start.
+- **What was seen and what is modelled are said apart.** A night's records
+  say what happened where the telescope was. They don't say what a
+  different target at a different time would have given. So a replay:
+  - takes what is recorded wherever the policy does what was done;
+  - models the rest (cloud by time, stalls by rate, depth from the model)
+    with its uncertainty;
+  - reports every figure as recorded or modelled.
+
+  No policy is credited with frames the records cannot establish.
 - Ordinary nights, degraded ones (stalls like 1 Nov, patchy cloud like
   3 Nov) and exceptional ones (fog, 2 Nov) are reported apart.
 
@@ -209,15 +283,27 @@ wait), that is cheaper than budgeting more time for it. Measured first.
 
 ## Decisions for the person
 
-1. Each programme's `minimum` and `desired` goals. Proposed:
-   - M31 panel: 8 stacked frames minimum, 24 desired.
-   - M33 and M31 novae: depth G 17.5 desired.
-   - A supernova: 30 minutes accepted desired.
-2. Which kinds of step are protected. Proposed: exoplanet transits with
-   their baseline, occultations, supernovae and comets near setting, and
-   any step the person says is.
-3. The order of the phases. Proposed: 1, 5 (costs and replays), 2, 3, 4,
-   so every later change is judged on replays.
+Proposed after review, waiting for the person's go before any building:
+
+1. **Goals.**
+   - M31 panels: 8 stacked frames to be searchable, 24 desired. Worth it
+     at a depth to be set from the panels' measured completeness. A
+     depth-based stretch.
+   - M31 and M33 novae: G 17.5 desired as a start, checked against the
+     search's measured completeness before it is fixed.
+   - Supernovae and other known transients: by their own purpose
+     (detection, or a brightness to a given error), never one time for all.
+   - Transits: unbroken ingress, egress and baseline at the precision the
+     depth needs.
+2. **Protection.** The four classes in Phase 3: hard windows for
+   occultations, transits and the most urgent transients; deadlines for
+   setting objects; everything else flexible; the person can protect any
+   step.
+3. **Order.** 1, 5, 2, 3, 4.
+
+The person is asked about any choice that changes what can be found
+(sensitivity), what is observed first, or the safety of the kit.
+Ordinary building choices are made without asking.
 
 ## Sources
 
