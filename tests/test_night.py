@@ -545,6 +545,27 @@ def test_a_run_through_a_train_with_the_wheel_labels_frames_with_the_position_it
     assert kept["FILTER"] == "Ha" and kept["FILTPOS"] == 6
 
 
+def test_a_train_with_the_wheel_keeps_no_frame_when_the_wheel_confirms_nothing(night, monkeypatch):
+    import sxwheel
+    _, folder = night
+    plain = config.hardware
+    calls = []
+    monkeypatch.setattr(config, "hardware", lambda: dict(plain(), train={"name": "183m-cc", "filterwheel": True}))
+    monkeypatch.setattr(shoot, "Camera", cooled_camera(calls))
+
+    def silent(say=None, **_):
+        say("the filter wheel is turning, or still on its power-up turn")
+        return None
+    monkeypatch.setattr(sxwheel, "confirmed", silent)
+    monkeypatch.setattr(sys, "argv", ["shoot", "Test", "--frames", "3", "--exposure", "2",
+                                      "--no-recentre", "--no-restack"])
+    with pytest.raises(interface.Refusal) as refused:
+        shoot.main()
+    assert refused.value.code_name == "FILTER_NOT_CONFIRMED" and "power-up turn" in str(refused.value)
+    assert not list(folder.glob("frames/Test/*/light-*.fits")) and Sky.taken == 0
+    assert calls[-1][0] == "warm_up"          # a cooled camera is still warmed on the way out
+
+
 def test_a_cooled_camera_is_waited_for_before_frames_and_warmed_once_at_the_run_s_end(night, monkeypatch, capsys):
     calls = []
 

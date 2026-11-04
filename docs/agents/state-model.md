@@ -46,6 +46,7 @@ Defined in `interface.py`; `schemas/errors.schema.json` lists them.
 | `SLEW_TIMED_OUT` | yes | The mount was stopped. |
 | `GOTO_REFUSED` | yes | The handset would not accept the GoTo. |
 | `MOUNT_NOT_MOVING` | no | The mount reported its moves as made, but the camera's view did not change (or a plate solve came back the same). The mount has been stopped. A person must watch one small move; if the tube does not turn, switch the mount off and on. |
+| `FILTER_NOT_CONFIRMED` | yes | A light path with the filter wheel and no position the wheel confirmed (not answering, turning, still on its power-up turn), or not the filter the step asked for: no frame was kept. |
 | `PLATE_SOLVE_FAILED` | yes | Cloud, focus, or too few stars. Take a frame and look. |
 | `NO_SESSION` | no | No imaging run recorded yet. |
 | `NO_SKY` | yes | The horizon survey saw no open sky high up: cap, cloud or exposure. |

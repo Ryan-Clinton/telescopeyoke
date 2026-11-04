@@ -154,9 +154,9 @@ def confirmed(hid=None, say=None):
     """(position, name) of the filter in the light path as the wheel itself
     has just said it, for a frame's header: FILTPOS the position, FILTER its
     name, or "position N" while the positions have no names. None when there
-    is no wheel, no module, or it is turning: then a frame says no filter
-    rather than one the wheel did not confirm. Never raises; `say` hears why
-    there is none."""
+    is no wheel, no module, or it is turning: then an imaging run keeps no
+    frame at all (shoot.in_the_path) rather than one the wheel did not
+    confirm. Never raises; `say` hears why there is none."""
     if config.DEMO:
         return None
     try:
@@ -164,11 +164,11 @@ def confirmed(hid=None, say=None):
             current, total = wheel.status()
     except Exception as problem:
         if say:
-            say(f"the filter wheel did not answer ({problem}): frames carry no FILTER")
+            say(f"the filter wheel did not answer ({problem})")
         return None
     if not current or not total:
         if say:
-            say("the filter wheel is turning: frames carry no FILTER")
+            say("the filter wheel is turning, or still on its power-up turn")
         return None
     known = names()
     name = known[current - 1] if current <= len(known) else ""

@@ -922,6 +922,25 @@ def disk_full(folder, least=None):
     return shutil.disk_usage(path).free < (MIN_FREE if least is None else least)
 
 
+def wheel_in_train(cfg=None):
+    """Whether the light path in use has the filter wheel in it."""
+    return bool((cfg or config.hardware())["train"].get("filterwheel"))
+
+
+def in_the_path(say=None):
+    """(position, name) the wheel confirms is in the light path, or a refusal
+    (FILTER_NOT_CONFIRMED) saying why there is none: a train with the wheel
+    keeps no frame without a confirmed filter, never one unlabelled or guessed."""
+    said = []
+    found = sxwheel.confirmed(say=said.append)
+    if found is None:
+        why = said[-1] if said else "the filter wheel confirmed no position"
+        raise interface.Refusal("FILTER_NOT_CONFIRMED", f"Stopped before keeping a frame: {why}. A light path "
+                                "with the filter wheel keeps frames only in a filter the wheel has confirmed "
+                                "(./sxwheel.py status).")
+    return found
+
+
 def warm(cam, say=None):
     """The end of a run, however it ended: a cooled camera's sensor brought up
     gently before its cooler goes off (altair.py's warm_up, which is bounded
@@ -1133,13 +1152,6 @@ def image(args, session, exposure, moving, holding, tracker):
                     holding.state = "off"
             tracker.waiting()
             jammed = None
-            # The filter in the light path, when the train has the wheel in it:
-            # each frame says the position the wheel confirmed (FILTPOS, FILTER).
-            # Asked here, as the wheel moves only when told to (sxwheel.py
-            # move), never during a run. A train with no wheel (the 183C's) is
-            # never asked, and its frames carry no FILTER, as before.
-            in_path = (sxwheel.confirmed(say=lambda line: print(f"  {line}", flush=True))
-                       if config.hardware()["train"].get("filterwheel") else None)
             with Camera(gain=args.gain) as cam:
                 # True only when this block ends to be opened again at once: a
                 # re-centre, a dither, a trim of the creep, a hold, or a jam that
@@ -1152,6 +1164,13 @@ def image(args, session, exposure, moving, holding, tracker):
                     settle = getattr(cam, "settle", None)
                     if settle:
                         settle(say=lambda line: print(f"  {line}", flush=True))
+                    # The filter in the light path, each time the camera opens,
+                    # when the train has the wheel in it: every frame says the
+                    # position the wheel confirmed (FILTPOS, FILTER), and with no
+                    # confirmed position no frame is kept at all. A train with no
+                    # wheel (the 183C's) is never asked, and its frames carry no
+                    # FILTER, as before.
+                    in_path = in_the_path() if wheel_in_train() else None
                     while go_on():
                         try:
                             mosaic, header = cam.frame(exposure)

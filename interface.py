@@ -35,6 +35,8 @@ ERRORS = {
                                 "move; if the tube does not turn, switch the mount off and on."),
     "FOCUSER_NOT_MOVING": (False, "The focuser's motor turns and the stars do not change. Watch "
                                   "./focuser.py test: if the knob stays still, the coupler is slipping."),
+    "FILTER_NOT_CONFIRMED": (True, "The filter wheel did not confirm the filter asked for: ./sxwheel.py status, "
+                                   "check its lead through the camera's hub, then run the step again."),
     "PLATE_SOLVE_FAILED": (True, "Usual causes: cloud, focus, too few stars. Take a frame and look."),
     "CAMERA_BUSY": (True, "Another command has the camera: let it finish, or stop it, then try again."),
     "CAMERA_NOT_CONNECTED": (False, "Plug in the camera. Through INDI, start its driver; on Windows, "

@@ -124,7 +124,7 @@ def test_a_frame_s_filter_is_only_a_position_the_wheel_confirmed_and_never_raise
         def open(self, vendor, product):
             raise OSError("open failed")
     assert sxwheel.confirmed(hid_with(Gone(), plugged=False), say=said.append) is None
-    assert said[0] == said[1] == "the filter wheel is turning: frames carry no FILTER"
+    assert said[0] == said[1] == "the filter wheel is turning, or still on its power-up turn"
     assert said[2].startswith("the filter wheel did not answer")
     header = sxwheel.cards({}, (6, "OIII"))
     assert header == {"FILTPOS": 6, "FILTER": "OIII"} and sxwheel.cards({}, None) == {}
