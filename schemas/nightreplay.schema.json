@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/nightreplay.schema.json",
+  "title": "Night replay",
+  "description": "data of: nightreplay.py NIGHT --json (replays: each policy's measures, each a spread over the runs, and the first run's visits) or nightreplay.py NIGHT --check --json (the as-run policy against the record, session by session). docs/observing-plan-spec.md, Phase 5.",
+  "type": "object",
+  "oneOf": [
+    {
+      "required": [
+        "night",
+        "replays"
+      ],
+      "properties": {
+        "night": {
+          "type": "string"
+        },
+        "replays": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/replay"
+          }
+        }
+      }
+    },
+    {
+      "required": [
+        "night",
+        "runs",
+        "sessions",
+        "agreement"
+      ],
+      "properties": {
+        "night": {
+          "type": "string"
+        },
+        "runs": {
+          "type": "integer"
+        },
+        "sessions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "field",
+              "session",
+              "recorded",
+              "replayed",
+              "searchable_agrees"
+            ]
+          }
+        },
+        "agreement": {
+          "type": "object",
+          "required": [
+            "captured_error_share",
+            "accepted_error_share",
+            "stacked_error_share",
+            "depth_error_mag",
+            "depth_error_mag_worst",
+            "searchable_agrees"
+          ]
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "spread": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "median",
+        "p10",
+        "p90",
+        "n"
+      ]
+    },
+    "replay": {
+      "type": "object",
+      "required": [
+        "policy",
+        "runs",
+        "stress",
+        "measures",
+        "visits"
+      ],
+      "properties": {
+        "policy": {
+          "type": "string"
+        },
+        "runs": {
+          "type": "integer"
+        },
+        "stress": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "measures": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/spread"
+          }
+        },
+        "visits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "step",
+              "field",
+              "kind",
+              "start",
+              "minutes",
+              "asked",
+              "captured",
+              "accepted",
+              "stacked",
+              "depth_g",
+              "recorded_share",
+              "move_recorded"
+            ],
+            "properties": {
+              "recorded_share": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "Share of the visit's frames whose sky was recorded on that field within five minutes; the rest is modelled."
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

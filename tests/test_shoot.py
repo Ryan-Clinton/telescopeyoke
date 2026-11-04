@@ -177,3 +177,12 @@ def test_an_order_named_for_one_run_never_reaches_another(tmp_path, monkeypatch)
     assert shoot.order("M31", now=time.time() + shoot.ORDER_STALE_S + 1) is None   # stale: never acted on
     shoot.ORDERS.write_text("stop")                                    # the old plain form still works
     assert shoot.order("M31") == "stop"
+
+
+def test_minutes_alone_mean_image_for_that_long():
+    """4 November 2026: '--minutes 90' with no --frames took the default 60
+    frames and would have stopped after half an hour (nightreplay.py found it)."""
+    assert shoot.frames_asked(None, 90) == 0          # as many as the minutes allow
+    assert shoot.frames_asked(None, None) == 60       # as before, with neither
+    assert shoot.frames_asked(19, 5.5) == 19          # a count given is kept
+    assert shoot.frames_asked(0, None) == 0

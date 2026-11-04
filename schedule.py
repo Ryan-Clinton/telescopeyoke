@@ -73,9 +73,18 @@ def load():
         return {"steps": []}
 
 
+NIGHTS = config.DATA / "cache" / "schedules"   # each night's plan, kept for replaying it (nightreplay.py)
+
+
 def save(plan):
     FILE.parent.mkdir(parents=True, exist_ok=True)
     records.write(FILE, plan)
+    # The night's copy, by the evening the plan was made: schedule.json is
+    # cleared for the next night, and a replay needs the plan as it ran.
+    if plan.get("steps"):
+        made = plan.get("made") or time.time()
+        evening = (datetime.fromtimestamp(made) - timedelta(hours=12)).date()
+        records.write(NIGHTS / f"{evening.isoformat()}.json", plan)
 
 
 SUN_SET = -0.833           # degrees: the Sun's centre at sunset, refraction and its radius allowed for

@@ -728,11 +728,23 @@ def what_dimmed(log, last=CLOUD_STOP):
             "look down the tube for dew")
 
 
+def frames_asked(frames, minutes):
+    """The frames a run is asked for: as given; with only --minutes, as many
+    as the minutes allow (0: until the time is up or cloud stops it); else
+    60. On 4 November 2026 "./shoot.py NGC 3310 --minutes 90" took the
+    default 60 frames and their retakes, and would have stopped after half
+    an hour had the plan started it on time (found by nightreplay.py)."""
+    if frames is not None:
+        return frames
+    return 0 if minutes else 60
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("name", help="what it is a picture of; a catalogue name allows re-centring")
-    ap.add_argument("--frames", type=int, default=60,
-                    help="how many to take; 0 carries on until cloud stops it")
+    ap.add_argument("--frames", type=int, default=None,
+                    help="how many to take; 0 carries on until cloud stops it (default: 60, or with --minutes "
+                         "and no --frames, as many as the minutes allow)")
     ap.add_argument("--minutes", type=float,
                     help="stop after this many minutes of imaging, however many frames were lost on the way")
     ap.add_argument("--exposure", default="2",
@@ -764,6 +776,7 @@ def main():
                     help="say what would be done; no camera, no mount")
     ap.add_argument("--json", action="store_true", help="answer in JSON once the run is over")
     args = ap.parse_args()
+    args.frames = frames_asked(args.frames, args.minutes)
     if args.dither and args.no_recentre:
         ap.error("--dither moves the mount between frames; it cannot go with --no-recentre")
     if args.hold and (args.dither or args.dither_first or args.no_recentre):

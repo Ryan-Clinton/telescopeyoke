@@ -802,3 +802,17 @@ def test_what_observing_costs_matches_its_schema(tmp_path, monkeypatch):
     (folder / "frames.jsonl").write_text("".join(json.dumps({"taken": 1000.0 + 21 * i, "accepted": True}) + "\n"
                                                  for i in range(5)))
     valid(interface.run("history", lambda: history.costs(data=tmp_path)), "history")
+
+
+def test_a_night_replay_matches_its_schema(tmp_path, monkeypatch):
+    import nightreplay
+    import test_nightreplay as t
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    t.plan(tmp_path, [{"label": "M33", "minutes": 20, "until": None, "started": t.at(1, 15), "finished": t.at(1, 35),
+                       "command": ["./patrol.py", "m33-novae"]}])
+    t.session(tmp_path, "M33", t.at(1, 16), 30, depth=17.5)
+    night = nightreplay.load(t.EVENING, tmp_path)
+    valid(interface.run("nightreplay", lambda: {
+        "night": "2026-11-03", "replays": [nightreplay.replay(night, nightreplay.CURRENT, runs=2, costs=t.COSTS)]}),
+          "nightreplay")
+    valid(interface.run("nightreplay", lambda: nightreplay.check(night, runs=2, costs=t.COSTS)), "nightreplay")

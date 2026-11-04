@@ -553,3 +553,12 @@ def test_a_finished_step_says_what_its_sessions_got(monkeypatch, tmp_path):
                  start=lambda cmd: types.SimpleNamespace(returncode=0))
     told = "\n".join(said)
     assert "M31-P3: 19 asked, 1 taken" in told and "searchable pending" in told
+
+
+def test_each_nights_plan_is_kept_for_replaying_it():
+    """schedule.json is cleared for the next night; nightreplay.py needs the
+    plan as it ran, so each is kept by the evening it was made."""
+    made = datetime(2026, 11, 4, 0, 1).timestamp()
+    schedule.save({"steps": [{"label": "M31 panels"}], "made": made})
+    kept = json.loads((schedule.NIGHTS / "2026-11-03.json").read_text())
+    assert kept["steps"][0]["label"] == "M31 panels"
