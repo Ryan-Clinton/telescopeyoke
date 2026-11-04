@@ -21,7 +21,8 @@
           "score": {"type": "number", "description": "How many times the local noise."},
           "local_score": {"type": "number", "description": "The score over the score's own spread round it: whether it stands out against its surroundings where the subtraction may be the limit."},
           "as_strong_fading": {"type": "integer", "description": "How many peaks on the fading side score at least this much: what noise and imperfect subtraction alone produce. Near 0 for a real new star."},
-          "mag": {"type": "number", "description": "Brightness of what is new, unfiltered, calibrated approximately to Gaia G; only when the new stack has a depth.json."}
+          "mag": {"type": "number", "description": "Brightness of what is new, in the band the record names: the 183C's unfiltered calibrated approximately to Gaia G, a filtered stack's instrumental in its own band; only when the new stack has a depth.json."},
+          "mag_error": {"type": "number", "description": "The magnitude's uncertainty: the aperture's noise in both stacks and the zero point's error."}
         }
       }
     },

@@ -26,6 +26,7 @@
           "mag": {"type": ["number", "null"]},
           "error": {"type": ["number", "null"]},
           "limit": {"type": ["number", "null"], "description": "Fainter than this, if not seen."},
+          "band": {"type": "string", "description": "A filtered stack's own instrumental band (\"L (Optolong), 183M\"); absent for the 183C's unfiltered stacks."},
           "kind": {"const": "measured"}
         }
       }

@@ -502,8 +502,8 @@ def test_a_panel_with_no_reference_at_all_is_still_searched(tmp_path, monkeypatc
     session = tmp_path / "M31-P9" / "20261018-232611"
     session.mkdir(parents=True)
     (session / "final.fits").write_bytes(b"")
-    monkeypatch.setattr(reference, "for_field", lambda field: (None, None))
-    monkeypatch.setattr(reference, "newest", lambda field: None)
+    monkeypatch.setattr(reference, "for_field", lambda field, band=None: (None, None))
+    monkeypatch.setattr(reference, "newest", lambda field, band=None: None)
     assert patrol.searchable(session)
     other = tmp_path / "NGC7000" / "20261018-232611"
     other.mkdir(parents=True)

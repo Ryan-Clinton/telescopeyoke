@@ -30,6 +30,7 @@ from astropy.io import fits
 import config
 import depth
 import difference
+import filters
 import interface
 import records
 import stacking
@@ -101,13 +102,13 @@ def measure_at(lum, x, y, fwhm, zeropoint, rng):
     return None, None, None if limit is None else round(limit, 2)
 
 
-def above_reference(lum, wcs, name, solve_with):
+def above_reference(lum, wcs, name, solve_with, band=None):
     """The stack with the field's reference taken off, on the stack's own
     pixels and in its own units: what is new at each place, without the
     galaxy or the faint stars under it. None if there is no reference."""
     import difference
     import reference
-    ref_path, _ = reference.for_field(name)
+    ref_path, _ = reference.for_field(name, band)    # the same camera and band only
     if ref_path is None:
         return None
     ref = depth.brightness(fits.getdata(ref_path))
@@ -136,9 +137,11 @@ def history(name, ra, dec, say=print, solve_with=None, subtract=False):
     rows = []
     for s in stacks_of(name):
         lum = depth.brightness(fits.getdata(s["stack"]))
+        head = fits.getheader(s["stack"])
+        named = filters.band(head)
         wcs = solve_with(lum)
         if subtract:
-            less = above_reference(lum, wcs, name, solve_with)
+            less = above_reference(lum, wcs, name, solve_with, band=head.get("FILTER") or None)
             if less is None:
                 say(f"  {s['session']}: no reference to take off")
                 continue
@@ -147,6 +150,8 @@ def history(name, ra, dec, say=print, solve_with=None, subtract=False):
         inside = 40 <= x < lum.shape[1] - 40 and 40 <= y < lum.shape[0] - 40
         row = {"session": s["session"], "stack": str(s["stack"]), "exposure_s": s["exposure_s"],
                "x": round(x, 1), "y": round(y, 1), "in_picture": inside}
+        if named:
+            row["band"] = named          # a filtered stack: its own instrumental band
         if inside:
             mag, err, limit = measure_at(lum, x, y, s["fwhm"], s["zeropoint"], rng)
             row.update(mag=mag, error=err, limit=limit, kind="measured")
@@ -160,6 +165,18 @@ def history(name, ra, dec, say=print, solve_with=None, subtract=False):
     return rows
 
 
+def bands_of(rows):
+    """What the measurements' magnitudes are: the 183C's wording when every
+    stack was unfiltered, else each filtered measurement's own instrumental
+    band (never Gaia G or V), which a light curve must not mix."""
+    named = sorted({r["band"] for r in rows if r.get("band")})
+    if not named:
+        return "unfiltered, calibrated approximately to Gaia G"
+    plain = any(not r.get("band") for r in rows)
+    return ("instrumental, each measurement in its own band: " + "; ".join(named)
+            + ("; and unfiltered (183C) ones, calibrated approximately to Gaia G" if plain else ""))
+
+
 def run(args, say=print):
     if config.DEMO:
         raise interface.Refusal("DEMO_UNSUPPORTED", "Forced photometry needs real stacks.")
@@ -169,7 +186,7 @@ def run(args, say=print):
         raise interface.Refusal("NO_SESSION", f"No measured stack of {args.name}: run ./depth.py on them first.")
     answer = {"name": args.name, "ra": args.ra, "dec": args.dec, "measurements": rows,
               "above_reference": bool(args.difference),
-              "band": "unfiltered, calibrated approximately to Gaia G"}
+              "band": bands_of(rows)}
     kept = config.DATA / "frames" / stacking.folder_name(args.name) / f"forced-{args.ra:.5f}{args.dec:+.5f}.json"
     records.write(kept, answer, schema="forced", stamp=True)
     say(f"kept as {kept}")

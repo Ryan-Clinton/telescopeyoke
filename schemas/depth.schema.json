@@ -65,7 +65,8 @@
     "stars_detected": {"type": "integer"},
     "limit_5sigma": {"$ref": "#/$defs/byRegion"},
     "share_of_image": {"$ref": "#/$defs/byRegion"},
-    "band": {"type": "string"},
+    "band": {"type": "string", "description": "What the magnitudes are: the 183C's unfiltered stacks calibrated approximately to Gaia G; a filtered stack's instrumental band named for what took it (\"L (Optolong), 183M\"), with its colour term against Gaia G."},
+    "band_key": {"type": "array", "items": {"type": ["string", "null"]}, "description": "(camera, filter) of a filtered stack: references and zero points are kept, and compared, only within one."},
     "kinds": {
       "type": "object",
       "description": "What kind of figure each is: measured, inferred, estimated, simulated, reported or not known.",

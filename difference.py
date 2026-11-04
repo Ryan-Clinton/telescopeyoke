@@ -465,7 +465,7 @@ def spikes(new_flat, ref_flat, fwhm, bright=BRIGHT):
 # --- putting it together ---------------------------------------------------------
 
 def subtract(new, ref, new_wcs=None, ref_wcs=None, zeropoint=None, plant_count=0, seed=3, finder=None,
-             workings=None):
+             workings=None, zeropoint_error=0.0):
     """Lay the new image on the reference, subtract properly, and list what
     is brighter now. With plant_count, fake new stars of known brightness
     are added to the new image first and counted when found. A dict as
@@ -565,6 +565,9 @@ def subtract(new, ref, new_wcs=None, ref_wcs=None, zeropoint=None, plant_count=0
         extra = depth.photometry(new_flat - scale * ref_flat, np.array([[cx, cy]], float), radius)[0]
         if zeropoint is not None and extra > 0:
             c["mag"] = round(zeropoint - 2.5 * math.log10(extra), 2)
+            # Its uncertainty: the aperture's noise in both stacks, and the zero point's.
+            noise = math.sqrt(math.pi * radius ** 2 * (noise_new ** 2 + (scale * noise_ref) ** 2))
+            c["mag_error"] = round(math.hypot(1.0857 * noise / extra, zeropoint_error), 3)
         candidates.append(c)
     record = {"candidates": candidates, "matched_stars": matched,
               "alignment_residual_px": round(residual, 3), "flux_ratio": round(scale, 4),
@@ -626,30 +629,42 @@ def curve(mags, found):
 def run(args, say=print):
     if config.DEMO:
         raise interface.Refusal("DEMO_UNSUPPORTED", "A difference needs two real stacks.")
+    import filters
     import reference
     new_path = depth.find_stack(args.new)
+    new_head = stacking.require_stack(new_path, "A difference image")
+    band = new_head.get("FILTER") or None          # a filtered stack (the 183M's) is compared within its band
     name = args.near or depth.object_name(new_path)
     owner = None
     if args.reference:
         ref_path = depth.find_stack(args.reference)
     else:
-        ref_path, owner = reference.for_field(name)
+        ref_path, owner = reference.for_field(name, band)
         if ref_path is None:
-            raise interface.Refusal("NO_SESSION", f"No reference kept for {name}: ./reference.py {name} --make, "
+            raise interface.Refusal("NO_SESSION", f"No reference kept for {name}"
+                                    + (f" in {band}" if band else "") + f": ./reference.py {name} --make, "
                                     "or name one with --reference.")
         if owner != name:
             say(f"no reference of {name}'s own yet: {owner}'s, where they overlap")
-        if new_path.parent.resolve() in reference.sessions_used(owner):
+        if new_path.parent.resolve() in reference.sessions_used(owner, band):
             raise interface.Refusal("INVALID_REQUEST", f"{new_path.parent} made {name}'s reference: a night "
                                     "is never compared with itself.")
+    ref_head = stacking.require_stack(ref_path, "A difference image")
+    if filters.band_key(new_head) != filters.band_key(ref_head):
+        (nc, nf), (rc, rf) = filters.band_key(new_head), filters.band_key(ref_head)
+        raise interface.Refusal("INVALID_REQUEST", f"A difference pairs only one camera and band: the new stack "
+                                f"is the {nc}'s{f' in {nf}' if nf else ' unfiltered'}, the reference the {rc}'s"
+                                f"{f' in {rf}' if rf else ' unfiltered'}.")
     new = depth.brightness(fits.getdata(new_path))
     ref = depth.brightness(fits.getdata(ref_path))
     say(f"new {new_path}, reference {ref_path}")
     new_wcs, ref_wcs = depth.plate(new, name), depth.plate(ref, name)
     kept = depth.record_path(new_path)
-    zeropoint = json.loads(kept.read_text(encoding="utf-8"))["zeropoint"] if kept.exists() else None
+    measured = json.loads(kept.read_text(encoding="utf-8")) if kept.exists() else {}
+    zeropoint = measured.get("zeropoint")
     try:
-        record, significance = subtract(new, ref, new_wcs, ref_wcs, zeropoint, args.plant)
+        record, significance = subtract(new, ref, new_wcs, ref_wcs, zeropoint, args.plant,
+                                        zeropoint_error=measured.get("zeropoint_error") or 0.0)
     except interface.Refusal as refused:
         # A borrowed reference that does not reach this field: the cure is the
         # field's own reference, not a count of stars in common.
@@ -657,8 +672,10 @@ def run(args, say=print):
             raise
         raise interface.Refusal("NO_SESSION", f"{name} has no reference of its own, and {owner}'s does not "
                                 f"overlap it enough: ./reference.py {name} --make.") from None
+    named = filters.band(new_head)
     record.update(new=str(new_path), reference=str(ref_path), object=name,
-                  band="unfiltered, calibrated approximately to Gaia G" if zeropoint else None)
+                  band=(f"{named}, instrumental" if named else "unfiltered, calibrated approximately to Gaia G")
+                  if zeropoint else None)
     folder = new_path.parent
     records.write(folder / "candidates.json", record, schema="difference", stamp=True)
     fits.PrimaryHDU(significance, ref_wcs.to_header()).writeto(folder / "difference.fits", overwrite=True)

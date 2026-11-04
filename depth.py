@@ -617,6 +617,27 @@ def measure(lum, wcs, catalogue, plant_stars=False, trials=6, seed=7, finder=Non
     return record
 
 
+def named(record, header):
+    """A filtered stack's (the 183M's) magnitudes named for what took them:
+    instrumental, in its own band ("L (Optolong), 183M"), with the zero point
+    against Gaia G and its colour term from comparison stars of different
+    colours, or said when there were too few to fit one. Never called Gaia
+    G or V. The 183C's unfiltered stacks keep their wording."""
+    import filters
+    band = filters.band(header)
+    if not band:
+        return record
+    term = record.get("colour_term")
+    record["band"] = (f"{band}, instrumental: zero point against Gaia G with a colour term of {term:+.3f} mag "
+                      f"per mag of BP-RP about BP-RP {record.get('colour_ref')}" if term is not None else
+                      f"{band}, instrumental: zero point against Gaia G, no colour term (too few comparison stars "
+                      "of different colours), so a star's magnitude carries its colour's error")
+    record["band_key"] = list(filters.band_key(header))
+    if term is None:
+        record.setdefault("kinds", {})["colour_term"] = "not known"
+    return record
+
+
 def frames_for_sweep(session):
     """The session's frames worth stacking, in the order they were taken."""
     import restack
@@ -636,6 +657,7 @@ def sweep_stacks(paths, seconds_list, say=print):
     and trimming each stack differently would move its pixels from under
     the solve. Returns {seconds: (brightness image, seconds really used)}."""
     stacking.same_camera(paths)
+    stacking.require_frames(paths, "A depth sweep")
     mosaic, header = stacking.load_light(paths[0])
     exposure, gain = float(header.get("EXPTIME", 0)), int(float(header.get("GAIN", 0)))
     if exposure <= 0:
@@ -667,6 +689,7 @@ def run(args, say=print):
     if config.DEMO:
         raise interface.Refusal("DEMO_UNSUPPORTED", "Measuring depth needs a real stack and Gaia.")
     stack = find_stack(args.target)
+    stacking.require_stack(stack, "A depth measurement")
     name = args.near or object_name(stack)
     lum = brightness(fits.getdata(stack))
     header = fits.getheader(stack)
@@ -676,6 +699,7 @@ def run(args, say=print):
     catalogue = gaia(*field(wcs, lum.shape))
     say(f"{len(catalogue)} Gaia stars in the field")
     record = measure(lum, wcs, catalogue, plant_stars=args.plant or args.sweep, trials=args.trials)
+    named(record, header)
     record.update(stack=str(stack), object=name, exposure_s=header.get("EXPTIME"),
                   frames=header.get("NFRAMES"), footprint=footprint_of(wcs, lum.shape))
     report(record, say)

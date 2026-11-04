@@ -434,6 +434,55 @@ def verdict(result, expected):
             f"{expected:.2f}%), middle {result['early_late_min']:+.1f} min against the prediction.")
 
 
+ENSEMBLE = 8          # comparison stars at most
+ENSEMBLE_MAG = 1.5    # within this many G magnitudes of the target
+ENSEMBLE_COLOUR = 0.5  # and this much BP-RP, where both are known
+
+
+def ensemble(stars, mags, target, most=ENSEMBLE):
+    """The target's comparison ensemble: up to `most` stars nearest it in
+    brightness, within ENSEMBLE_MAG and (where Gaia gives both colours)
+    ENSEMBLE_COLOUR of BP-RP, measured in every batch; and the target's
+    light curve relative to their mean, put back on the target's own median.
+    {"count", "stars" (ra, dec, g, bp_rp), "scatter_mmag" (the ensemble's
+    own spread about its mean), "curve"}."""
+    stars, mags = np.asarray(stars, float), np.asarray(mags, float)
+    g = stars[target, 2]
+    colour = stars[target, 3] if stars.shape[1] > 3 else np.nan
+    ok = np.isfinite(mags).all(axis=0) & (np.abs(stars[:, 2] - g) <= ENSEMBLE_MAG)
+    ok[target] = False
+    if np.isfinite(colour) and stars.shape[1] > 3:
+        ok &= ~np.isfinite(stars[:, 3]) | (np.abs(stars[:, 3] - colour) <= ENSEMBLE_COLOUR)
+    chosen = [int(i) for i in np.argsort(np.abs(stars[:, 2] - g)) if ok[i]][:most]
+    if not chosen:
+        return {"count": 0, "stars": [], "scatter_mmag": None, "curve": mags[:, target]}
+    comparison = mags[:, chosen]
+    mean = comparison.mean(axis=1)
+    curve = mags[:, target] - mean + np.nanmedian(mean)
+    spread = comparison - mean[:, None]
+    scatter = float(np.nanstd(spread - np.nanmedian(spread, axis=0))) if len(chosen) > 1 else None
+    return {"count": len(chosen),
+            "stars": [{"ra": round(float(stars[i, 0]), 6), "dec": round(float(stars[i, 1]), 6),
+                       "g": round(float(stars[i, 2]), 3),
+                       "bp_rp": None if stars.shape[1] < 4 or not np.isfinite(stars[i, 3])
+                       else round(float(stars[i, 3]), 3)} for i in chosen],
+            "scatter_mmag": None if scatter is None else round(1000 * scatter, 2), "curve": curve}
+
+
+def filtered_band(session):
+    """The instrumental band a session's frames were taken in (the 183M's,
+    through the wheel), or None for unfiltered frames (the 183C's)."""
+    import filters
+    import stacking
+    first = next(iter(sorted(Path(session).glob("light-*.fits"))), None)
+    if first is None:
+        return None
+    try:
+        return filters.band(stacking.load_light(first)[1])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
 def measure(session, planet, size=BIN, say=print, rows=None, night=None):
     """The planet's star in a night's frames: its light curve and the fitted
     transit beside the predicted one."""
@@ -461,6 +510,14 @@ def measure(session, planet, size=BIN, say=print, rows=None, night=None):
                                               f"bright or too crowded to measure.")
     jd = np.array(n["jd"], float)
     mag = np.asarray(n["mags"])[:, j]
+    group = ensemble(stars, np.asarray(n["mags"]), j)
+    band = filtered_band(session)
+    if band and group["count"]:
+        # A filtered night (the 183M's) is measured against its comparison
+        # ensemble, in its own instrumental band: never Gaia G or V.
+        mag = group.pop("curve")
+    else:
+        group.pop("curve", None)
     middles = transits_between(p, jd.min() - 0.5, jd.max() + 0.5)
     predicted = min(middles, key=lambda m: abs(m - jd.mean())) if middles else None
     result = fit(jd, mag, predicted, p["hours"]) if predicted is not None else None
@@ -473,7 +530,8 @@ def measure(session, planet, size=BIN, say=print, rows=None, night=None):
     where = looked.pop("_where", None)
     answer = {"planet": p["planet"], "star": p["star"], "session": session.name,
               "predicted_middle": predicted, "expected_depth": p["depth"], "hours": p["hours"],
-              "fit": result, "verdict": verdict(result, p["depth"]), "checks": looked,
+              "fit": result, "verdict": verdict(result, p["depth"]), "checks": looked, "ensemble": group,
+              **({"band": f"{band}, instrumental, relative to the comparison ensemble"} if band else {}),
               "jd": [round(t, 5) for t in jd], "mag": [None if not np.isfinite(m) else round(float(m), 4)
                                                        for m in mag], "kind": "measured"}
     if where is not None:

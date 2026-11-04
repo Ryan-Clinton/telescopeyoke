@@ -55,7 +55,7 @@ def test_the_light_above_the_reference_leaves_out_the_star_underneath(tmp_path, 
     image, wcs, catalogue = star_field(shape=(500, 700), count=220, seed=4)
     ref_path = tmp_path / "ref.fits"
     fits.PrimaryHDU(image).writeto(ref_path)
-    monkeypatch.setattr(reference, "for_field", lambda name: (ref_path, name))
+    monkeypatch.setattr(reference, "for_field", lambda name, band=None: (ref_path, name))
     rng = np.random.default_rng(9)
     place = (352.4, 247.8)
     steady = render(image.shape, np.array([place]), np.array([10 ** (-0.4 * (16.5 - ZP))]), fwhm=4.0)

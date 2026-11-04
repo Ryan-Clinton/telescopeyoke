@@ -31,35 +31,51 @@ import records
 import stacking
 
 
-def folder(name):
-    return config.camera_folder() / "reference" / stacking.folder_name(name)   # each camera its own
+CURRENT = object()     # the band of the light path in use (default_band)
 
 
-def kept(name):
+def default_band():
+    """The band references are kept in when none is named: none for a light
+    path without the wheel (the 183C's unfiltered references, where they
+    always were); L, the patrols' band, through one with the wheel."""
+    import filters
+    return filters.DEFAULT if filters.wheel_in_train() else None
+
+
+def folder(name, band=CURRENT):
+    """Each camera its own references, and within a filtered camera each
+    band its own (reference/M31/L/): a difference pairs only the same
+    camera and band (docs/mono-upgrade.md, item 8)."""
+    band = default_band() if band is CURRENT else band
+    base = config.camera_folder() / "reference" / stacking.folder_name(name)
+    return base / stacking.folder_name(band) if band else base
+
+
+def kept(name, band=CURRENT):
     """Every version kept for a field, oldest first, as their records."""
     out = []
-    versions = [p for p in folder(name).glob("v*.json") if p.stem[1:].isdigit()]   # not v1-depth.json
+    versions = [p for p in folder(name, band).glob("v*.json") if p.stem[1:].isdigit()]   # not v1-depth.json
     for path in sorted(versions, key=lambda p: int(p.stem[1:])):
         out.append(json.loads(path.read_text(encoding="utf-8")))
     return out
 
 
-def newest(name):
+def newest(name, band=CURRENT):
     """The newest reference's FITS path, or None."""
-    versions = kept(name)
+    versions = kept(name, band)
     return Path(versions[-1]["file"]) if versions else None
 
 
-def for_field(name):
+def for_field(name, band=CURRENT):
     """(the reference to compare a field with, whose it is): the field's own
     newest, or for a mosaic panel with none yet (M31-P3) the whole object's,
     which difference.py uses where the two overlap. (None, None) if neither."""
-    own = newest(name)
+    own = newest(name, band)
     if own is not None:
         return own, name
     whole = name.rsplit("-P", 1)[0] if "-P" in name else None
-    if whole and newest(whole) is not None:
-        return newest(whole), whole
+    if whole and newest(whole, band) is not None:
+        return newest(whole, band), whole
     return None, None
 
 
@@ -148,6 +164,16 @@ def contaminated(name, sessions, frame=None):
     return out
 
 
+def stack_band(stack):
+    """The filter a stack was taken through (its FILTER card), None for an
+    unfiltered one (the 183C's); the light path's band when it cannot be read."""
+    from astropy.io import fits
+    try:
+        return fits.getheader(stack).get("FILTER") or None
+    except (OSError, ValueError):
+        return CURRENT
+
+
 def make(name, source=None, force=False, solver=None):
     """Keep a stack as the field's next reference version."""
     candidates = measured_stacks(name)
@@ -172,14 +198,17 @@ def make(name, source=None, force=False, solver=None):
         raise interface.Refusal("INVALID_REQUEST", f"{chosen['stack']} could contain open candidates "
                                 f"({', '.join(held)}); a reference must not hold what it is looking for. "
                                 "Settle them first (candidates.py), choose another stack (--from), or --force.")
-    versions = kept(name)
+    band = stack_band(chosen["stack"])
+    versions = kept(name, band)
     number = len(versions) + 1
-    where = folder(name)
+    where = folder(name, band)
     where.mkdir(parents=True, exist_ok=True)
     target = where / f"v{number}.fits"
     shutil.copyfile(chosen["stack"], target)
     record = dict(chosen, version=number, file=str(target), source=chosen["stack"],
                   sessions=sessions, made=time.time(), held_back=held)
+    if band not in (None, CURRENT):
+        record["band"] = band
     records.write(where / f"v{number}.json", record, schema="reference#/$defs/version", stamp=True)
     # Its depth goes with it, so difference.py finds the zero point.
     shutil.copyfile(chosen["record"], depth.record_path(target))
@@ -203,10 +232,10 @@ def locate(name, solver=None):
     return record["footprint"]
 
 
-def sessions_used(name):
+def sessions_used(name, band=CURRENT):
     """Every session folder a kept reference of this field was made from."""
     used = set()
-    for v in kept(name):
+    for v in kept(name, band):
         used.update(Path(s).resolve() for s in v.get("sessions", []))
     return used
 

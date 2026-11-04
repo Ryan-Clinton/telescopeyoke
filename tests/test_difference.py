@@ -119,8 +119,8 @@ def test_a_field_without_its_own_reference_is_told_to_make_one(field, monkeypatc
     stacks = {"new": tmp_path / "new" / "final.fits", "ref": tmp_path / "ref" / "final.fits"}
     monkeypatch.setattr(config, "DEMO", False)
     monkeypatch.setattr(depth, "find_stack", lambda name: stacks["new"])
-    monkeypatch.setattr(reference, "for_field", lambda name: (stacks["ref"], "M31"))
-    monkeypatch.setattr(reference, "sessions_used", lambda owner: [])
+    monkeypatch.setattr(reference, "for_field", lambda name, band=None: (stacks["ref"], "M31"))
+    monkeypatch.setattr(reference, "sessions_used", lambda owner, band=None: [])
     monkeypatch.setattr(difference.fits, "getdata", lambda path: blank if path == stacks["new"] else ref)
     monkeypatch.setattr(depth, "brightness", lambda image: image)
     monkeypatch.setattr(depth, "plate", lambda image, name: None)
