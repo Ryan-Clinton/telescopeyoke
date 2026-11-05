@@ -67,7 +67,7 @@ WEB = config.DATA / "web"
 # as a fraction of the frame's height. The drift up to then is welcome: it
 # spreads the sensor's fixed pattern around, which averaging then removes.
 DRIFT_LIMIT = 0.2
-DITHER_SETTLE_S = 6   # seconds after an open-camera dither or plain GoTo back before the next frame
+DITHER_SETTLE_S = 10  # seconds after an open-camera dither or plain GoTo back before the next frame
 PLAIN_MISS = 0.08   # a plain GoTo back that leaves the frame this far (frame heights) off its reference: solve
 UNALIGNED = 3       # good frames in a row that will not line up on the reference: re-centre with a plate solve
 TRIAL_EXPOSURES = (2, 4, 8, 16, 30)   # the tracking test's lengths, in seconds
