@@ -18,7 +18,7 @@ it first, then what follows it:
    the night's account in its place below, dated. A figure found wrong is
    kept in the account, marked as wrong and why; it leaves the
    conclusions.
-2. The README's "Current status" table and the prose near it.
+2. The README's "What has been proven" table and the prose near it, and docs/results.md.
 3. The guides that mention it (`docs/first-night.md`, `docs/setup.md`,
    `docs/calibration.md`, `docs/focus.md`...): they say "proven" or
    "experimental" and link to validation, rather than repeat figures.
