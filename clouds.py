@@ -3,6 +3,8 @@
 
     ./clouds.py        fetch the newest infrared image, mark the site on it,
                        save it for the web page and print how cloudy it looks
+    ./clouds.py --at 2026-11-05T04:30   the picture at that time (UT), saved
+                       beside it as clouds-YYYYMMDD-HHMM.jpg: was it cloud?
 
 Source: EUMETSAT's public image service (view.eumetsat.int), 10.5 µm
 infrared, a new image every 10 minutes. Infrared works at night: clouds are
@@ -25,8 +27,9 @@ WIDTH, HEIGHT = 1110, 510
 SPAN_LAT, SPAN_LON = 1.7, 3.7
 
 
-def _layer(name, box, transparent=False):
-    r = requests.get(WMS, timeout=60, params={
+def _layer(name, box, transparent=False, when=None):
+    extra = {"time": when.strftime("%Y-%m-%dT%H:%M:00Z")} if when else {}
+    r = requests.get(WMS, timeout=60, params={**extra,
         "service": "WMS", "version": "1.3.0", "request": "GetMap", "layers": name,
         "styles": "", "crs": "EPSG:4326", "bbox": ",".join(f"{v:.3f}" for v in box),
         "width": WIDTH, "height": HEIGHT, "format": "image/png",
@@ -56,13 +59,15 @@ def coastline(box):
     return Image.open(kept)
 
 
-def update(site):
+def update(site, when=None):
     """Fetch, annotate and save the image. Returns (brightness over the site,
     brightness of the darkest tenth of the map), both 0-255; the second is a
-    stand-in for clear sky."""
+    stand-in for clear sky. `when` (UTC) is a past picture, saved under its
+    own name so the page's live one is left alone: 5 November 2026, dimmed
+    stars were put down to dew without a look at the satellite."""
     lat, lon = site["latitude"], site["longitude"]
     box = (lat - SPAN_LAT, lon - SPAN_LON, lat + SPAN_LAT, lon + SPAN_LON)
-    infrared = _layer("mtg_fd:ir105_hrfi", box).convert("RGB")
+    infrared = _layer("mtg_fd:ir105_hrfi", box, when=when).convert("RGB")
     levels = np.asarray(infrared.convert("L"), dtype=float)
     x, y = WIDTH // 2, HEIGHT // 2
     here = float(levels[y - 4:y + 5, x - 4:x + 5].mean())
@@ -77,16 +82,23 @@ def update(site):
     draw.ellipse([x - 7, y - 7, x + 7, y + 7], outline=(255, 40, 40), width=3)
     # Stretch vertically so distances look right at this latitude.
     true_height = round(WIDTH * SPAN_LAT / (SPAN_LON * np.cos(np.radians(lat))))
-    PICTURE.parent.mkdir(exist_ok=True)
-    infrared.resize((WIDTH, true_height)).save(PICTURE, quality=88)
-    return here, clear
+    out = PICTURE.with_name(f"clouds-{when:%Y%m%d-%H%M}.jpg") if when else PICTURE
+    out.parent.mkdir(exist_ok=True)
+    infrared.resize((WIDTH, true_height)).save(out, quality=88)
+    return here, clear, out
 
 
 if __name__ == "__main__":
+    import argparse
+    import datetime as dt
+    ap = argparse.ArgumentParser(description="Live (or past) cloud picture from Meteosat.")
+    ap.add_argument("--at", metavar="YYYY-MM-DDTHH:MM", help="a past time, UT")
+    args = ap.parse_args()
+    when = dt.datetime.fromisoformat(args.at).replace(tzinfo=dt.timezone.utc) if args.at else None
     try:
-        here, clear = update(config.load()["site"])
+        here, clear, saved = update(config.load()["site"], when)
     except (RuntimeError, requests.RequestException) as problem:
         raise SystemExit(f"No satellite picture: {problem}. Try again in a few minutes.")
     verdict = "cloud" if here - clear > 20 else "probably clear" if here - clear < 10 else "thin or broken cloud"
     print(f"over the site: {here:.0f}, clear areas: {clear:.0f} -> {verdict}")
-    print(f"saved {PICTURE}")
+    print(f"saved {saved}")
