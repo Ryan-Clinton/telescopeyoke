@@ -516,6 +516,7 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
                 end_session(step["session"])     # its own marks stand; only what it left open is closed
             else:
                 mark_id(step["id"], status="done", finished=time.time())
+            ran = True     # a night that imaged, though another process ran it: it is ended in the morning too
             continue
         if step.get("not_before") and not chooser:
             until = not_before(step["not_before"], time.time())
