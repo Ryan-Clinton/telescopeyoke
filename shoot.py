@@ -755,7 +755,11 @@ def stop_for(index, frames, log, elapsed_s, minutes=None, cloud_stop=CLOUD_STOP)
     if frames:
         return None if index < frames + retakes(log, frames) else "frames"
     latest = judged(log)[-cloud_stop:]
-    if len(latest) == cloud_stop and not any(f["accepted"] for f in latest):
+    # A frame good enough to keep that would not line up on the reference
+    # says the aim or the reference is wrong, not that cloud has come: 5
+    # November 2026, M81 and M82's clear frames, after a centring, were
+    # counted as twenty rejected and called "haze or thin cloud".
+    if len(latest) == cloud_stop and not any(f["accepted"] or f.get("unaligned") for f in latest):
         return "cloud"
     return None
 
