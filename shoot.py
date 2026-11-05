@@ -123,6 +123,14 @@ class Session:
     def job(self, index, mosaic, header):
         """Arguments for stacking.live_frame for this frame, as things stand."""
         cards = {k: header[k] for k in stacking.KEPT if k in header}
+        if getattr(self, "first_cards", None) is None:
+            # The run's calibration as its frames really have it, from the first
+            # frame's own cards: the one made before any frame existed has no
+            # offset, binning or filter, matched no dark, and labelled every
+            # 183M stack uncalibrated (4 November 2026), though each frame was
+            # calibrated from its own header.
+            self.first_cards = cards
+            self.calibration = stacking.Calibration(self.exposure, self.gain, cards)
         return (mosaic, cards, self.exposure, self.gain, str(self.folder), index, self.save,
                 self.accepted[-30:], self.reference)
 
@@ -227,7 +235,7 @@ class Session:
         stacking.write_stack(self.folder / "live.fits", self.stack.result(),
                              {"OBJECT": self.name, "NFRAMES": len(self.accepted),
                               "EXPTIME": self.exposure * len(self.accepted), "GAIN": self.gain,
-                              **stacking.stack_cards(self.calibration, {})})
+                              **stacking.stack_cards(self.calibration, getattr(self, "first_cards", None) or {})})
 
 
 def lowly():
