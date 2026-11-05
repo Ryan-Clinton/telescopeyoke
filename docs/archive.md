@@ -86,10 +86,8 @@ Tabby's dips must be found, known eclipsing binaries must come out
 periodic, and quiet stars must give nothing. The binaries are taken from
 the Villanova Kepler eclipsing binary catalogue (keplerebs.villanova.edu),
 with its periods and eclipse depths; the quiet stars are three that the
-first search near Tabby's star found nothing in. `tests/test_archive.py`
-runs it on a kept copy of the light curves (`TY_KEPLER_CACHE=.../cache/kepler
-pytest -q tests/test_archive.py -k benchmark`) and skips without one.
-3 November 2026:
+first search near Tabby's star found nothing in. Run on a kept copy of the
+light curves on 3 November 2026:
 
 | Star | Catalogue | Found |
 |---|---|---|

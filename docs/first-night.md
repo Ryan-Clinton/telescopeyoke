@@ -1,6 +1,6 @@
 # From box to first galaxy
 
-[README](../README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
+[README](../README.md) · [All docs](README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Results](results.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
 *A first night with a motorised telescope, for someone who does not know
 what any of this means yet.*
@@ -242,7 +242,7 @@ wrong, it says so and moves nothing.*
 Or the **Tonight** and **Targets** screens. Each line is something worth
 pointing at, best first, with when it is highest, how high, which way, and
 the hours it is in view. It already allows for the Moon, your sky's
-brightness and, if you have [taught it your skyline](../README.md#what-makes-it-different),
+brightness and, if you have [taught it your skyline](features.md),
 your house and trees.
 
 For a first galaxy from the northern hemisphere, the Andromeda Galaxy,

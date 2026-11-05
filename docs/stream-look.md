@@ -952,6 +952,10 @@ registered for the channel), and the chat's read-only commands
 
 ## Tests
 
+> The project's tests and CI were removed on 4 November 2026 at the
+> owner's request; this list is kept as the design record of what was
+> checked, not as something that runs.
+
 - The mission (`tests/test_mission.py`): every programme has a goal; a
   question carries only tonight's known figures and is dropped once
   answered; milestones from the measured stages, colour videos, fields and

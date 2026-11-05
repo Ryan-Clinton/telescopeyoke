@@ -39,8 +39,8 @@ breaks the public page, so change them only together with the site:
 | `web/stack.jpg`, `web/latest.jpg` | the running stack and the newest frame |
 | `http://127.0.0.1:8080/api/v1/night`, every 10 minutes | sunset, sunrise, darkness, moon, the clear window, sky brightness |
 
-`tests/test_stacking.py` and `tests/test_schedule.py` check that the run's
-fields and the schedule's fields are still there.
+These are the fields the site reads: a change to the run's or the
+schedule's output keeps them.
 
 Added on 22 October 2026, for the site to use when it is ready (nothing
 above changed): `running` (a process is still running the run), `stopped_at`
@@ -49,8 +49,7 @@ camera has kept the run waiting past twice the exposure and a minute), and
 `stack.current`: false when `web/stack.jpg` is an earlier run's stack, with
 `stack.instead` ("no stack yet for M31-P6"). Until the site reads
 `stack.current`, it can show an earlier run's stack under a new run that
-has none yet; the status page and `stream.py` already leave it out
-(`tests/test_doing_now.py`).
+has none yet; the status page and `stream.py` already leave it out.
 
 Anything added to `status.json` may reach the public page (`discovery` is
 sent as it is), so keep everything in it fit to publish.

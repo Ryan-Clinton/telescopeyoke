@@ -2,8 +2,7 @@
 
 `./ty` is the single way in. Every line below accepts `--json`; those marked
 *demo* accept `--demo`. What each command may do is classed in `policy.py`
-(`./policy.py COMMAND`), and the sections here follow it: a test keeps them
-in step.
+(`./policy.py COMMAND`), and the sections here follow it.
 
 ## No hardware: reading, planning and files on this computer (never touches the mount's serial port)
 

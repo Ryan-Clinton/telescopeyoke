@@ -1,6 +1,6 @@
 # Mounts: what works, what is planned, and how to ask for yours
 
-[README](../README.md) · [Hardware](../README.md#hardware) · [Validation](validation.md) · [Research notes](research/mount-protocols-2026-10-20.md)
+[README](../README.md) · [Hardware](hardware.md) · [Validation](validation.md) · [Research notes](research/mount-protocols-2026-10-20.md)
 
 telescopeyoke has driven one mount so far: the author's Sky-Watcher EQ3
 Pro, through its SynScan handset. Nothing in it is meant to stay

@@ -1,6 +1,6 @@
 # Looking for something new: the discovery station
 
-[README](../README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
+[README](../README.md) · [All docs](README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Results](results.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
 The discovery station is operational; what remains unproven is an
 original astronomical discovery with this rig:
@@ -49,6 +49,22 @@ queue, the most intriguing leads and any up tonight) and `./ty night`.
 
 ## Recent proofs
 
+- **4-5 November 2026, the cooled mono camera:** a first M33 in L from
+  the 183M (126 frames of 16 s at -5 °C); the patrols are blocked on it
+  until it has flats, and each field's first visit with it becomes its
+  reference ([the night](nights/2026-11-04/183m-first-night.md)).
+- **4 November 2026, M31 panel 8:** its recurring false candidates traced
+  to the search's noise model underestimating one patch's noise 1.3-1.9
+  times; 2 of 34 candidates over four comparisons stood out against their
+  own surroundings, both on a cloudy 8-frame night
+  ([the record](nights/2026-11-04/p8-false-candidates.md)).
+- **3 November 2026, the Kepler archive:** `archive.py` finds Tabby's
+  star's four known dips and nothing else at 1% or deeper; 16 leads from
+  the search looked into by `investigate.py`, the most intriguing likely
+  red giants pulsating, none a discovery ([archive](archive.md),
+  [the leads](research/README.md)). The radio SETI sweep of Tabby's star's
+  2017 cadence began the same day: 9 of 308 blocks by 5 November, every
+  hit interference ([SETI](seti.md)).
 - **1-2 November 2026, M31 and M33:** the subtraction fix cut false
   candidates from 23 to 5, and the second looks found none real; `vet.py`
   now sets aside only clusters of 3 or more as residue
@@ -77,20 +93,20 @@ queue, the most intriguing leads and any up tonight) and `./ty night`.
   candidate from an earlier night seen again is now sent to the person at
   once with how it was seen.
 
-Where it stands on 20 October 2026, phase by phase:
+Where it stands on 5 November 2026, phase by phase:
 
 | Phase | Software | Proved |
 |---|---|---|
 | 0 Depth and completeness | built | yes, on our own M31 frames; darks, flats and dithering against the noise floor still to try |
 | 1 Transient pipeline | built | on archive data (AT2024koe from ZTF images); not yet a transient in our own frames |
-| 2 M31 patrol | built | no: a known nova recovered from our own data is still to come |
-| 3 M33 | programme and depth only | no: a night with its completeness measured is still to come |
+| 2 M31 patrol | built | no: a known nova recovered from our own data is still to come; false candidates cut from 23 to 5 by the subtraction fix (1-2 November), M31-P8's traced to its noise model (4 November) |
+| 3 M33 | patrolled with M31 since 1 November | no: a night with its completeness measured is still to come; the first 183M stack (L, 4-5 November) has no flats yet |
 | 4 Sungrazer | built, running every 6 hours | yes: known comets found in archived pictures, and a known Kreutz sungrazer found by the hunt itself in live CCOR-1 pictures (19 October) |
 | 5 Report packet | built | the packet, yes (95 s); a claim filled in on the Transient Name Server and stopped before sending, not yet |
 | 6 Public alerts | built | the month's search, yes; a public transient observed with the 150P, not yet |
 | 7 Search everything again | built | not yet run as a rerun that finds fakes planted in old frames |
 | 8 Real-or-bogus classifier | built (`realbogus.py`) | the fall in false candidates, yes, on planted stars: night by night 175 of 452 set aside, 98% of planted stars kept; a candidate leading to a useful repeat, not yet |
-| 9 Variables, dippers, transits | built | no: no VSX submission, no transit timed yet; first attempt on WASP-12 b, 20 October 2026: dimming seen but not a detection (no baseline after it, a 20 mmag floor in the photometry; docs/discovery/transit-wasp12b-2026-10-20) |
+| 9 Variables, dippers, transits | built; the Kepler and TESS archive search and `investigate.py` since 3 November | no: no VSX submission, no transit timed yet; first attempt on WASP-12 b, 20 October 2026: dimming seen but not a detection (no baseline after it, a 20 mmag floor in the photometry; docs/discovery/transit-wasp12b-2026-10-20). The archive search finds Tabby's star's known dips; 16 leads, none unexplained |
 | 10 Several telescopes | not built | needs other users |
 
 Every result these phases keep says which code made it: the version, the

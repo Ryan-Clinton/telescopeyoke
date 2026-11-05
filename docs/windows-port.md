@@ -1,6 +1,6 @@
 # Running on Windows: specification
 
-[README](../README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
+[README](../README.md) · [All docs](README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Results](results.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
 This is a work order for an agent (or a person) working on a Windows machine.
 The aim is that someone with the tested gear (SynScan handset, Altair
@@ -133,9 +133,8 @@ hardware at all.
   for Windows. Confirm every script that reaches it runs under
   `if __name__ == "__main__":` (all the entry points have the guard today).
 
-Done when: `python -m pip install ".[test]"` then `python -m pytest -q`
-passes on Windows with no hardware, on the oldest and newest supported
-Python (3.11 and 3.14). The suite takes about 2.5 minutes on Linux.
+Done when: every script imports and the demo runs on Windows with no
+hardware, on the oldest and newest supported Python (3.11 and 3.14).
 
 ### 2. Launching and installing
 
@@ -517,6 +516,9 @@ Done when, on real hardware:
   handedness.
 
 ### 8. CI and documents
+
+> All tests and CI were removed on 4 November 2026 at the owner's
+> request. What follows is the record of what they were.
 
 - Taken out again on 3 Nov 2026: Windows waits until someone uses it
   there, so CI has no Windows job. What it was: `windows-latest` in

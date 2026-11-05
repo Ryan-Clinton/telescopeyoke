@@ -1,6 +1,6 @@
 # Setup
 
-[README](../README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
+[README](../README.md) · [All docs](README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Results](results.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
 1. `./install.sh` installs the packaged software and creates `config.toml`
    from the example. Put in your location, and your camera's INDI driver and
@@ -23,7 +23,7 @@
 
 On Ubuntu and Debian, `install.sh` takes the Python libraries from the
 distribution's own packages. `pyproject.toml` lists the same libraries with
-the oldest versions known to work, and is what CI and `pip install .` use.
+the oldest versions known to work, and is what `pip install .` uses.
 
 ## The mount without its handset
 

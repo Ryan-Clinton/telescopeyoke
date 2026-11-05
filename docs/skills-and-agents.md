@@ -1,6 +1,6 @@
 # Claude skills, agents and hooks for telescopeyoke: a specification
 
-[README](../README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
+[README](../README.md) · [All docs](README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Results](results.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
 Built 17 October 2026: the command classes
 (`policy.py`), the safety hooks and the decision record (`.claude/hooks/`,
@@ -373,9 +373,7 @@ Remove-Item MOTION_LOCKED    del MOTION_LOCKED
 ```
 
 and each must block when its script is missing, crashes, times out or is
-given input it cannot read (that is what `onFailure: "block"` is for, and
-it is tested, not assumed). The hook tests run in CI on Ubuntu and
-Windows.
+given input it cannot read (that is what `onFailure: "block"` is for).
 
 ## The decision record
 

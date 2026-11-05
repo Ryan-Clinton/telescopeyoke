@@ -1,6 +1,6 @@
 # Naming the satellite in a frame
 
-[README](../README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
+[README](../README.md) · [All docs](README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Results](results.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
 Built on 18 October 2026 as `streak.py` (`ty streak`), from this
 specification and its worked example of 13 October. What it found the first
@@ -148,18 +148,7 @@ date to trust.
 - `shoot.py` already sets aside frames that would spoil a stack. A streak
   frame can be named in the run's summary ("frame 1: ONEWEB-0331").
 
-A `--json` answer means a schema in `schemas/`, the function, and
-`tests/test_interface.py` together.
-
-## Tests
-
-- The streak finder, on made frames: a line among stars, a line off one
-  edge, stars alone, a star trail from poor tracking (not a streak).
-- The matching, with a made-up orbit placed to cross a made-up frame, and
-  one placed to miss it; and two satellites near together, where neither
-  must be named with confidence.
-- The 13 October frame, kept small, with that night's orbit for ONEWEB-0331
-  beside it, as a test that runs without the network.
+A `--json` answer means a schema in `schemas/` and the function together.
 
 ## Not done yet
 

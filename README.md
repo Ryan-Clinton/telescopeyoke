@@ -1,7 +1,6 @@
 # telescopeyoke 🔭
 
-**A self-measuring robotic observatory for affordable GoTo mounts, run by a person and an AI agent together.**
-
+**A self-measuring robotic observatory and discovery station for affordable GoTo mounts, run by a person and an AI agent together.**
 
 ![A minute and a half of the demo: tonight's report, a target picked, a GoTo shown as a plan and then centred by plate solving, focusing, and an imaging run with cloud coming over](docs/tour.gif)
 
@@ -12,32 +11,32 @@ and the real centring, focusing and stacking code runs on it.*
 **[Home page](https://ryan-clinton.github.io/telescopeyoke/) ·
 [Download 0.2.1](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.2.1/TelescopeYoke-v0.2.1.zip) ·
 [Try the demo, no telescope needed](#quick-start) ·
-[What it has been tried on](#hardware) ·
+[Results](docs/results.md) ·
+[What it has been tried on](docs/hardware.md) ·
+[All the docs](docs/README.md) ·
 [Ask a question](https://github.com/Ryan-Clinton/telescopeyoke/discussions)**
 
 telescopeyoke takes the kind of GoTo mount many amateur astronomers already
 own, starting with Sky-Watcher's SynScan family, and adds what much bigger
-systems do. It runs on the author's EQ3 Pro today; other mounts are
-welcome, and [Mounts](docs/mounts.md) says which are planned and how to ask
-for yours. It measures its own
-pointing, polar alignment, focus, drift, camera timing and image depth, and
-corrects for them; plans and runs a whole night; searches its pictures and
-public data for new objects, and follows them up; tells you when something
-matters, on your phone or through the house's lights and speaker; and can
-explain the night live to an audience. An AI agent can operate it beside
-you, by one rule: **AI proposes; deterministic code decides what is safe; a
-person authorises movement.**
+systems do. It measures its own pointing, polar alignment, focus, drift,
+camera timing and image depth, and corrects for them; plans and runs a
+whole night; searches its pictures for novae and new transients, and public
+archives (spacecraft coronagraphs, Kepler and TESS light curves, radio SETI
+recordings) for what is strange; tells you when something matters, on your
+phone or through the house's lights and speaker; and can explain the night
+live to an audience. An AI agent can operate it beside you, by one rule:
+**AI proposes; deterministic code decides what is safe; a person decides
+what the telescope does.**
 
 It is built around one idea: **measure the imperfections of modest
 equipment instead of pretending they are not there.** A home position set
 by eye, a manual focuser, a rough polar alignment, a garden with a house in
-the way: each is measured, and then corrected or planned around. The laptop
-stays with the telescope; the observatory comes back to you through the
-status page, your phone, the house and, if you want, a live broadcast.
+the way: each is measured, and then corrected or planned around.
 
-It is an Ubuntu application. It also runs natively on Windows, where the
-demo runs and the camera has taken frames, but no mount has
-been driven yet.
+It runs on the author's EQ3 Pro today; other mounts are welcome, and
+[Mounts](docs/mounts.md) says which are planned. It is an Ubuntu
+application. It also runs natively on Windows, where the demo runs and the
+camera has taken frames, but no mount has been driven yet.
 
 > **New to motorised telescopes?** Start with
 > **[From box to first galaxy](docs/first-night.md)**: a first night, step by
@@ -48,8 +47,7 @@ been driven yet.
 > EQ3 Pro. If you have an EQ3, EQ5, HEQ5 or EQ6 with a SynScan handset, on
 > Linux or Windows, a report from you is worth more than any new feature.
 > You do not have to let it move your mount: `./doctor.py --report` only
-> looks at what is connected, and what it writes is useful by itself. See
-> [Hardware](#hardware).
+> looks at what is connected. See [Hardware](docs/hardware.md#to-add-a-row).
 
 ## The observatory at a glance
 
@@ -57,146 +55,67 @@ been driven yet.
 OBSERVE   plan → schedule → GoTo and centre → focus → image → hold → park
 MEASURE   pointing · polar error · true home · drift · focus · shutter · depth · precision
 DISCOVER  patrol → subtract → vet → second look → follow night to night → report
+RESEARCH  comets in coronagraph pictures · Kepler and TESS dips · radio SETI
 OPERATE   cloud and rain · stopped runs · alerts by phone, lights and speaker
-REASON    JSON for every command · ty · MCP · skills and specialist agents · a person approves moves
-SHARE     status page · public live page · Twitch broadcast with a presenter and chat
+REASON    JSON for every command · ty · MCP · skills and specialist agents
+SHARE     status page · public live page · YouTube and Twitch broadcast with a presenter and chat
 ```
 
-What happened in its first 17 days, each recorded in
-[the validation record](docs/validation.md):
+## What it has done
+
+Each of these is recorded in [the validation record](docs/validation.md);
+[Results](docs/results.md) gives each one's method and limits.
 
 - **3 October 2026:** first light; a GoTo from a home set 10° out by eye
   centred by plate solving in three corrections.
 - **13 October:** polar alignment measured and corrected from 3.3° to 0.1°.
-- **17 October:** the true home found from 10.66° out to 0.19°, and the
-  garden's skyline measured by the telescope itself.
+- **17 October:** the true home found from 10.66° out to 0.19°, one
+  pointing correction per side shown to be enough, and the garden's skyline
+  measured by the telescope itself.
 - **19 October:** the six-hourly comet hunt found a known Kreutz sungrazer by
   itself in live GOES-19 coronagraph pictures.
 - **20 October:** live on Twitch; a first exoplanet transit attempt on
   WASP-12 b, rejected by its own measurement as not a detection, and the
   reasons found and worked on the same day.
+- **1-2 November:** live on YouTube; the polar measurement shown to repeat
+  to 0.06-0.11°; a subtraction fix cut the nova patrol's false candidates
+  from 23 to 5.
+- **3 November:** the Kepler archive search found Tabby's star's four known
+  dips and nothing else; 16 leads from it looked into, none yet a discovery.
+- **4-5 November:** the cooled mono camera's first night: held at -5 °C all
+  session, seven filters, plate solves in 0.3 s, and M33 in 34 minutes.
 
-| Live broadcast | Discovery | Science |
+| Discovery | Science | New camera |
 |---|---|---|
-| ![The live broadcast's card about the comet hunt: three frames of the comet over a dimmed star field, with the hunt's own figures](docs/results/stream-2026-10-20.jpg) | ![Four frames of a comet's head and short tail moving towards the Sun](docs/results/comet-ccor1-2026-10-19.jpg) | ![WASP-12's light through the night, scattered points slightly lower after the first forty minutes, with the fitted box](docs/results/wasp12b-2026-10-20.jpg) |
-| The Twitch broadcast's comet-hunt card, as `./stream.py preview` draws it (the side panel's figures are its examples) | A known Kreutz sungrazer the hunt found by itself in GOES-19 coronagraph pictures, 19 October 2026 | The first exoplanet transit attempt, WASP-12 b, 20 October 2026: dimming seen, not a detection |
+| ![Four frames of a comet's head and short tail moving towards the Sun](docs/results/comet-ccor1-2026-10-19.jpg) | ![WASP-12's light through the night, scattered points slightly lower after the first forty minutes, with the fitted box](docs/results/wasp12b-2026-10-20.jpg) | ![M33 in L from the cooled mono camera, its spiral arms and NGC 604 showing](docs/results/m33-183m-l-2026-11-05.jpg) |
+| A known Kreutz sungrazer the hunt found by itself in GOES-19 coronagraph pictures, 19 October 2026 | The first exoplanet transit attempt, WASP-12 b, 20 October 2026: dimming seen, not a detection | M33 from the 183M's first night, 4-5 November 2026: 126 frames of 16 s in L, darks only, no flats yet |
 
 **Why it is unusual.** No one of these functions is new. What is unusual
 is that one inexpensive amateur rig combines measuring its own faults,
-robotic observing, searches for new objects with their vetting,
-AI-agent workflows, alerts in the house and a public science broadcast, and
-keeps physical safety outside the language model.
-
-## What makes it different
-
-Most telescope software assumes a mount that has been set up carefully.
-This assumes it has not, and measures what is actually there.
-`./ty characterise` lists what a rig has had measured about itself so far
-(the camera's real exposure, the pointing error on each side, the polar
-error and how well it repeats, how the drift answers the motor, the skyline)
-and the command for each thing it has not; in the application that is the
-Rig knowledge screen, with a "Measure this" button on each line. Each of these
-says how far it has been proven; [Current status](#current-status) has the
-table and [docs/validation.md](docs/validation.md) the full account.
-
-**Home position set by eye?** It photographs the sky, plate-solves where the
-telescope really ended up, corrects, and repeats until the target is in the
-middle. On its first real night an EQ3 that started about ten degrees out
-centred M27 in three corrections: 107′ off, then 6′, then 1′
-([the run is below](#see-it-working)). And after a polar alignment it can
-measure where home really is, from plate solves either side of the meridian,
-drive there, and have you mark the joints, so that home is two marks lined
-up from then on ([Calibrating a mount](docs/calibration.md)). *Both are
-proven under real stars: finding home took an EQ3 set 10.66° out by eye to
-0.19° on the marks (17 October 2026).*
-
-**Manual focuser?** Keep your hand on it and listen. Every frame, once it
-has been measured, gives a click: your last turn has been seen. A tone
-follows, higher the sharper the stars. It starts on quick binned frames,
-moves by itself to many stars and then to the full sensor as focus nears,
-tells you when you have passed the minimum, and says "Focus good. Hold" only
-when the readings have come back and stayed on it
-([Focusing by ear](docs/focus.md)). *The star measurement has brought the
-real telescope to focus; the click, tone and levels have run only on made-up
-stars.*
-
-**House and trees hiding half the garden?** Teach it your garden. Give it a
-phone panorama and it finds the line between sky and everything else, lets
-you redraw the line where it is wrong, and ties the picture to the compass
-from two known bearings. The planner then stops recommending targets you
-cannot see from that spot. Set up in more than one place? Each spot in the
-garden keeps its own skyline and blocked directions: `./ty spot NAME` says
-where the telescope stands tonight. The telescope can check and refine that skyline
-itself, looking only where the line bends. *Proven by day: on 17 October 2026 the
-telescope's own survey measured the author's garden in 34 minutes, one look
-checked by eye. The skyline has been found in real panoramas too; tying one
-to the compass is not yet proven.*
-
-**Setting up before dark?** An experimental mode looks for Polaris by day,
-when nothing else near the pole would show. `polaris.py` checks whether the sky, the Sun
-and the focus make it worth trying, searches round the home position, proves
-a candidate is a star by tipping the tube and seeing it move as the sky
-should, then turns the RA axis with the star in view to find where the axis
-really points and which way to move each bolt. `landmark.py` remembers a
-distant chimney or aerial from a night when the mount was aligned, and by day
-turns back to it to recover the azimuth. *Experimental: the search has run
-on the real mount three times and has not yet found Polaris, though it did
-tell sensor blemishes from stars; the rest has run only on the simulated
-mount.*
-
-**Polar alignment still rough?** By night, three plate solves measure how
-far the axis is from the pole and say which way to turn each adjuster: on
-the real mount, six rounds took it from 3.3° to 0.1° (13 October 2026).
-That is with the measurement corrected for the handset moving the Dec axis
-during it; the figures from 6 October were wrong for that reason
-([validation](docs/validation.md#night-of-13-october-2026)). It says what to do
-with your hands, with a drawing of each bolt: which to turn in, about how
-far, or to turn the whole tripod and by how many centimetres at the feet;
-and it learns what a turn of your mount's bolts does from what you tell it
-you turned. Or leave it rough:
-telescopeyoke works out the declination drift that error causes, predicts it
-for any other part of the sky, and creeps the Dec motor against it as a
-guider would, correcting part of the error at a time and never reversing the
-motor for a small overshoot ([how](docs/tracking.md)). *The measuring is
-proven on the real mount. An earlier, cruder drift correction cancelled most
-of the drift there; the model that predicts it across the sky has run only
-on the simulated mount.*
-
-**Mount says it moved?** That is not proof. On one real night the motors
-stopped with no sound while the handset went on reporting every move as
-made, and a survey stared at one tree for half an hour. Now a GoTo whose
-correction changes nothing, a polar measurement whose plate solves come back
-the same, and a survey whose pictures do not change all stop with "the mount
-is not moving" instead of carrying on. *Written because it happened; tried
-on made-up frames, and by day it only records what it sees, after its first
-real frames nearly fooled it.*
-
-**Tracking not good enough for long exposures?** It works out the longest
-exposure the mount can hold, takes many short ones, checks each as it
-arrives, re-centres when the target wanders, and stacks the good ones. The
-live picture is never the last word: every raw frame is kept, and the quality
-pass goes back over them afterwards to choose, weight and clip, so a better
-method next month can remake last night's picture
-([How a picture is made](docs/imaging.md)). *Real runs of 48 and 207 frames
-have been stacked; the newest fixes have not yet been through a real run.*
+robotic observing, searches for new objects with their vetting, research in
+public archives, AI-agent workflows, alerts in the house and a public
+science broadcast, and keeps physical safety outside the language model.
+Its failures are kept as carefully as its successes: a transit that was
+not a detection says so, and why.
 
 ## What it does
 
 **Observe**
 
 - 🌙 **Plans tonight's observing**: darkness, Moon, and a GO / MARGINAL / NO-GO verdict, with the discovery programmes timed into the clear spell
-- 🗓️ **Runs the whole night** (`schedule.py`): the agreed steps in order, not before their times, gaps filled with more of the last field; a failed step stops the rest and fetches you; at the end it parks the mount and tells you
+- 🗓️ **Runs the whole night** (`schedule.py`): the agreed steps in order, not before their times; a failed step stops the rest and fetches you; at the end it parks the mount and tells you
 - 🧭 **Plate-solves and centres GoTos automatically** (`goto M27 --solve`)
 - 🔭 **Controls SynScan mounts** through the handset, with the handset's clock errors corrected
 - 📷 **Captures and stacks images**: every raw frame kept, poor frames rejected, stars lined up to a fraction of a pixel, satellite trails clipped out, and the whole stack rebuilt from the raw frames afterwards
+- ❄️ **Runs a cooled mono camera and filter wheel**: cooled slowly once and held cold all night (`keeper.py`), several filters and targets in one cold session (`shoot.py --blocks`), a colour picture from L, R, G and B (`colour.py`)
 - 🎯 **Holds a transit's target on the same pixels all night** (`shoot.py --hold`), learning how the mount answers first
 
-**Measure**
+**Measure** ([what makes it different](docs/features.md))
 
 - 📐 **Measures the polar alignment**, by night from three plate solves or before dark from Polaris alone, and says which way to turn each adjuster
 - 🧮 **Makes the best of a rough polar alignment**: predicts the drift it causes anywhere in the sky and creeps a motor against it
-- 🔊 **Focuses**: with a motor focuser by itself, or by ear with your hand on the knob: a click and a tone for every frame, and a few words at the turning points: "Level two" … "Minimum passed. Reverse slightly" … "Focus good. Hold"
-- 📏 **Measures itself**: the true home, the pointing on each side, the camera's real shutter time and stripes, how deep each picture reaches (planted fake stars) and how precise its photometry is (`precision.py`)
+- 🔊 **Focuses**: with a motor focuser by itself, or by ear with your hand on the knob: a click and a tone for every frame, and a few words at the turning points
+- 📏 **Measures itself**: the true home, the pointing on each side, the camera's real shutter time and stripes, how deep each picture reaches (planted fake stars) and how precise its photometry is
 - 🎯 **Ranks targets for your actual sky**: altitude, moonlight, light pollution, and your own skyline, measured from a phone panorama or by the telescope
 
 **Discover** ([the discovery station](docs/discovery.md))
@@ -204,7 +123,13 @@ have been stacked; the newest fixes have not yet been through a real run.*
 - 🌌 **Patrols M31 and M33 for novae**: subtracts a reference, vets every candidate against catalogues, asteroids and a classifier trained on its own pictures, takes a second look, and follows candidates from night to night
 - ☄️ **Hunts comets in spacecraft pictures** every six hours, checks each find against the planets, bright stars and the Sungrazer Project's reports, and says what it turned out to be
 - 🪐 **Measures exoplanet transits and variable stars**, with the verdict before any fitted number
-- 🔁 **Searches public survey alerts and its own old pictures again** as its methods improve, and prepares a report packet for a find
+- 🔁 **Searches public survey alerts and its own old pictures again** as its methods improve, and prepares a report packet for a person to check and send
+
+**Research without the telescope** ([archive](docs/archive.md), [leads](docs/research/README.md), [SETI](docs/seti.md))
+
+- 📉 **Searches Kepler's and TESS's light curves for stars like Tabby's** (`archive.py`), ruling out the spacecraft's own events and eclipsing binaries
+- 🔎 **Looks into each lead by one fixed procedure** (`investigate.py`) against Gaia, SIMBAD and VSX, and says whether it is explained, an artefact or unexplained, and whether this telescope could watch it
+- 📡 **Searches Breakthrough Listen's open radio data** for narrowband signals (`seti.py`), with the ON-OFF cadence test that tells interference from the target, a few blocks of the band each cloudy day
 
 **Operate** ([alerts](docs/alerts.md))
 
@@ -214,34 +139,38 @@ have been stacked; the newest fixes have not yet been through a real run.*
 
 **Reason** ([for programs and AI agents](docs/agents/README.md))
 
-- 🤖 **Built to be operated with an AI agent**: every command answers in one JSON shape, `ty` is one front door, the web API and MCP server are read-only, and skills and specialist agents hold the routines (see below)
+- 🤖 **Built to be operated with an AI agent**: every command answers in one JSON shape, `ty` is one front door, the web API and MCP server are read-only, and skills and specialist agents hold the routines
 
 **Share** ([streaming](docs/streaming.md))
 
 - 🏠 **Shows it all on a status page** you can watch from indoors, and a public live page with the place left out
-- 📺 **Broadcasts the night live on Twitch**: the stack building up, what the object is and why it matters, a presenter that explains the method, cards between targets, and chat commands that let viewers ask but not operate
-- 🧪 **Has a complete pretend rig built in**: the demo runs the real centring, focusing and imaging code against a simulated mount, camera and sky, with a focuser to turn, cloud to bring over and a lead to pull out
+- 📺 **Broadcasts the night live on YouTube and Twitch**: the stack building up, what the object is and why it matters, a presenter that explains the method, cards between targets, and chat commands that let viewers ask but not operate
+- 🧪 **Has a complete pretend rig built in**: the demo runs the real centring, focusing and imaging code against a simulated mount, camera and sky
+
+Every script and what it does: [Commands](docs/commands.md).
 
 ## A person and an AI, together
 
-**AI proposes; deterministic code decides what is safe; a person authorises
-movement.** An AI agent (the author uses Claude) can read everything the
-observatory knows, plan a night, investigate a candidate and propose the
-next step: fourteen skills hold the routines (setup at the telescope,
-focusing, polar alignment, a discovery night, a claim, a comet report) and
-eight specialist agents do focused jobs (vetting a candidate, researching a
-place in catalogues, checking a comet track, reviewing a change that moves
-the mount, analysing a night). What may move is decided by code that does
-not depend on the agent: the Sun and altitude limits, the motion lock, the
-handset's state, dry runs, moves checked against the camera, and hooks that
-refuse any attempt to work round them. The MCP server and web API are
-read-only, every agent action is logged, and a person asks for each move.
+**AI proposes; deterministic code decides what is safe; a person decides
+what the telescope does.** An AI agent (the author uses Claude) can read
+everything the observatory knows, plan a night, investigate a candidate and
+propose the next step: fourteen skills hold the routines (setup at the
+telescope, focusing, polar alignment, a discovery night, a claim, a comet
+report) and seven specialist agents do focused jobs (vetting a candidate,
+researching a place in catalogues, checking a comet track, reviewing a
+change that moves the mount, analysing a night). What may move is decided by
+code that does not depend on the agent: the Sun and altitude limits, the
+motion lock, the handset's state, dry runs, moves checked against the
+camera, and hooks that refuse any attempt to work round them. The MCP server
+and web API are read-only, every agent action is logged, and every move is
+one the person asked for, or part of a night's plan they agreed.
 [AGENTS.md](AGENTS.md) has the detail.
 
 It learns from real nights: a comet split in two by a gap in the pictures
 became joined tracks and a checked verdict by noon the next day; a transit
 that could not be measured became a precision diagnosis, a hold on the same
-pixels and a recipe the same day ([the records](docs/discovery.md#recent-proofs)).
+pixels and a recipe the same day; a colour picture whose filters drifted
+apart became a refusal (`FRAMES_APART`) and a fix by morning.
 
 ## See it working
 
@@ -291,8 +220,13 @@ That zip is release 0.2.1, which stays as it is; a hardware report says
 which release made it. `git clone https://github.com/Ryan-Clinton/telescopeyoke`
 gets the newest code instead, which changes from day to day.
 
-Either way a window opens on a pretend mount, camera and sky. It is in the
-applications menu (or Start Menu) from then on as **TelescopeYoke (demo)**.
+Either way a window opens on a pretend mount, camera and sky: a GoTo is
+centred by plate solving, the focusing aid follows a focuser you turn with
+a button, and an imaging run stacks frames and rejects the ones taken after
+you bring the cloud over. It runs the same commands as a real night and
+keeps its files in a folder of its own (`demo/`), apart from anything real.
+It is in the applications menu (or Start Menu) from then on as
+**TelescopeYoke (demo)**.
 
 The same from a terminal, a piece at a time:
 
@@ -312,269 +246,30 @@ and so on, and `.\ty.cmd` (or `python ty`) for `./ty`. See
 Start Menu). It opens in a window of its own, with no terminal and no
 browser: Tonight, Targets, Imaging, Focus and Mount for observing; Camera,
 Telescope, Plate solver and Webcam for setting the equipment up; the tools;
-and the doctor, settings and logs. The first time, it opens on what is ready
-and what still needs doing. With a real mount, every move is checked with a
-dry run and shown as a plan, and nothing moves until you confirm it. From a
-terminal it is `./app.py`, or `./app.py --demo`. It has not yet been used
-with a real mount or camera.
-
-**The demo is the whole thing on a pretend telescope.** TelescopeYoke (demo)
-has a pretend mount, camera and sky: a GoTo is centred by plate solving,
-the focusing aid follows a focuser you turn with a button, and an imaging
-run stacks frames and rejects the ones taken after you bring the cloud
-over. It runs the same commands as a real night and keeps its files in a
-folder of its own (`demo/`), apart from anything real.
+and the doctor, settings and logs. With a real mount, every move is checked
+with a dry run and shown as a plan, and nothing moves until you confirm it.
+From a terminal it is `./app.py`, or `./app.py --demo`. It has not yet been
+used with a real mount or camera.
 
 **Use the planner for real** (still no telescope needed): put your location
 in `config.toml`, then `./tonight.py`.
 
 **Run a telescope:** `./install.sh`, then follow [Setup](docs/setup.md).
 
-## The scripts underneath
-
-The application is the front door. Underneath it is a set of scripts, each
-of which can be run by itself from a terminal, and the planner needs no
-telescope at all.
-
-| For | Scripts | Needs |
-|---|---|---|
-| **Planning the night** | `tonight.py`, `serve.py`, `clouds.py` | Any computer with Python. No telescope. |
-| **Setting up** | `doctor.py`, `camera_setup.py`, `polaralign.py`, `polaris.py`, `landmark.py` | The mount and camera. |
-| **Measuring the site** | `panorama.py`, `horizon.py` | A phone panorama; for the telescope's own survey, the mount and camera. |
-| **Moving the mount** | `mount.py`, `watch.py` | A SynScan mount and its serial lead. |
-| **Focusing** | `focus.py` | A supported camera. |
-| **Imaging** | `snap.py`, `solve.py`, `shoot.py`, `planet.py`, `mosaic.py`, `liveview.py`, `skywatch.py` | A supported camera and ASTAP. On Linux the camera is read through INDI; on Windows through Altair's own library, which is the only camera route there. |
-| **Processing** | `restack.py`, `calibrate.py`, `process.py`, `compare.py` | The raw frames a run kept. |
-
-Start with the planner; add hardware when you have it. [Commands](#commands)
-says what each script does.
-
 ## Hardware
 
-**Other mounts are wanted.** It has driven one mount, a Sky-Watcher EQ3
-Pro; nothing in it is meant to stay Sky-Watcher-only. [Mounts](docs/mounts.md)
-says which mounts can be reached and how, in the order planned: the rest of
-Sky-Watcher's family through the motor board's own protocol, Celestron's
-NexStar hand controllers, any mount INDI drives on Linux, any ASCOM or Alpaca
-driver through Alpaca, and ZWO's AM mounts natively. Ask for yours, or offer
-to test one, with a
-[Mount support request](https://github.com/Ryan-Clinton/telescopeyoke/issues/new?template=mount-support.yml):
-the first step only reads, and nothing moves until you choose it.
+It has driven one mount, the author's, with two cameras:
 
-**Tried so far.** One row for each set of equipment someone has run it on.
-There is one, and it is the author's:
+| Mount | Camera and optics | System | What has worked |
+|---|---|---|---|
+| Sky-Watcher EQ3 Pro, SynScan handset 3.35 | Explorer 150P; Altair Hypercam 183C (colour) | Ubuntu 26.04 | ✅ Planner, mount moves, camera, focusing, plate solving, GoTo with centring, polar alignment, imaging, under real stars |
+| the same | the same | Windows 11 | ⚠️ The demo, and camera frames indoors. No mount driven |
+| the same | 150P with a 0.9x coma corrector (675 mm); Altair Hypercam 183M PRO TEC (mono, cooled); Starlight Xpress 7-position filter wheel | Ubuntu 26.04 | ✅ First night 4-5 November 2026: cooled to -5 °C, darks, every filter, plate solving, polar alignment, M33 in L. ❌ No flats yet, the motor focuser cannot lift it, the first colour picture to be retaken |
+| EQ5, HEQ5, EQ6 with SynScan, or yours | any | Linux or Windows | ❔ wanted: [send a report](docs/hardware.md#to-add-a-row) |
 
-| Mount | Handset | Camera | System | What has worked | Tried by |
-|---|---|---|---|---|---|
-| Sky-Watcher EQ3 Pro | SynScan, firmware 3.35, FTDI serial lead | Altair Hypercam 183C (on USB 2 on 3 and 4 October, on a 3 m USB 3 lead from 6 October) | Ubuntu 26.04, Python 3.14 | ✅ Planner, mount moves, camera, focusing, plate solving, GoTo with centring, under real stars | the author |
-| the same EQ3 Pro | the same | the same Hypercam 183C | Windows 11 | ⚠️ The demo, and camera frames indoors. No mount driven, no star seen | the author |
-| the same EQ3 Pro | the same | Altair Hypercam 183M PRO TEC (mono, cooled; Altair's library) beside the 183C, its own camera profile (`[cameras.183m]`, `./cameras.py`); Starlight Xpress 7-position USB filter wheel (`./sxwheel.py`); 0.9x coma corrector (a train at 675 mm) | Ubuntu 26.04 | ❔ written for, not yet tried on the hardware: the profile matched from the library's name, mono frames, the cooler (target, waiting, warm-up, power reading), the wheel and its order of filters, the 675 mm scale | the author |
-| EQ5 | SynScan | any | Linux or Windows | ❔ wanted | could be you |
-| HEQ5 | SynScan | any | Linux or Windows | ❔ wanted | could be you |
-| EQ6, EQ6-R | SynScan | any | Linux or Windows | ❔ wanted | could be you |
-| any of them | SynScan | another INDI camera | Linux | ❔ wanted | could be you |
-| a mount converted with an EQStar or other EQMOD-style controller | none | any | Linux or Windows | ❔ wanted: whether it answers at all | could be you |
-
-**To add a row**, working or not:
-
-1. Run `./doctor.py --report` (on Windows `python doctor.py --report`), or
-   press "Write a hardware report" on the application's Doctor screen. It
-   writes out what the computer is, what the handset says the mount is and
-   its firmware version, and every check. It only looks: nothing is moved,
-   and your location is left out.
-2. Paste it into a
-   [Hardware compatibility report](https://github.com/Ryan-Clinton/telescopeyoke/issues/new?template=hardware-report.md)
-   and tick what you tried. Your GitHub name goes beside your row if you
-   want it there.
-
-You can stop there. If you want to go further without the mount turning,
-`./mount.py status` reads its position and `./mount.py goto M27 --dry-run`
-checks a move against the limits and says what it would do, without making
-it. For a question first ("will it work with my HEQ5?"), ask in
-[Discussions](https://github.com/Ryan-Clinton/telescopeyoke/discussions).
-
-**A controller that is not a SynScan handset** (an EQDIR lead, an
-Astro-Gadget EQStar, anything normally driven through EQMOD): nobody knows
-yet whether telescopeyoke can talk to yours, and it does not guess. Name the
-port and it will ask:
-
-```bash
-./doctor.py --report --probe COM7        # Linux: --probe /dev/ttyUSB0
-```
-
-It asks that one port what it is, first as a SynScan handset and then as a
-Sky-Watcher motor board (the language EQMOD speaks), at 9600 and at 115200
-baud, and writes what answered into the report along with the adapter's
-make and USB numbers. Every question only reads; nothing is told to move.
-Close EQMOD first, since only one program can have the port.
-
-### Already using EQMOD or ASCOM?
-
-Keep them. telescopeyoke does not use ASCOM and changes nothing about an
-ASCOM or EQMOD installation: it talks to the mount's COM port itself. The
-one rule is that two programs cannot hold the same port at once, so close
-EQMOD (or NINA, or the SynScan app) before starting telescopeyoke on that
-mount, and the other way round. On Windows the doctor says so when it sees
-ASCOM or EQMOD installed. What it adds to a setup that already works is the
-part in between: targets ranked for your own horizon, a GoTo that
-plate-solves and centres itself, focusing by ear, and short exposures
-checked and stacked as they arrive.
-
-### More than one telescope
-
-A **rig** is one telescope with its own settings and its own files. With two
-out on a good night, each runs in a window of its own:
-
-```bash
-./app.py --new-rig heq5       # its settings (rigs/heq5.toml) and "TelescopeYoke (heq5)" in the menu
-./app.py --rig heq5           # open it; set it up on its Settings screen
-./ty --rig heq5 mount status  # any command, for that rig
-./ty rigs                     # every rig in one view: what each is and what it is imaging
-```
-
-Each rig keeps its own frames, pictures, calibration frames and remembered
-measurements under `rigs/heq5/`, so two nights' work never mix. The
-application's Rigs screen shows what every rig is doing. With no rig named
-everything is as before: `config.toml` and the folders beside it. The motion
-lock (`MOTION_LOCKED`) stops every rig at once.
-
-**What to expect of other equipment:**
-
-| Hardware | Status |
-|---|---|
-| Sky-Watcher Explorer 150P (150 mm f/5 Newtonian) | ✅ Tested by the author |
-| Python 3.11 to 3.14 | ✅ Runs on Ubuntu (no automated tests) |
-| Windows 10 and 11 | ⚠️ The demo runs with no hardware. The camera has taken frames on Windows 11, indoors. No mount has been driven from Windows, and camera and mount have not been used together there. |
-| SynScan Wi-Fi adapter, or an EQDIR lead (no handset) | ⚠️ The adapter has been found and read on a real EQ3 (firmware, gearing, position). No mount has been moved through it yet; the EQDIR lead is untried. |
-| EQ5, HEQ5, EQ6 with a SynScan handset | ⚠️ Untested. Likely: same serial protocol. |
-| Other INDI cameras | ⚠️ Untested. Likely for mono or RGGB colour sensors: set the driver and sensor size in `config.toml`. |
-| Other telescopes | Set the focal length in `config.toml`. |
-| ASCOM, Alpaca | ❌ Not used yet. An ASCOM or EQMOD installation is noticed and left alone; see above. Alpaca is planned as the way to every ASCOM driver ([Mounts](docs/mounts.md)). |
-| Celestron, ZWO, iOptron and others | 🗓️ Planned, in order, in [Mounts](docs/mounts.md); testers wanted. |
-
-## Commands
-
-| Script | What it does |
-|---|---|
-| `tonight.py` | Report for the night: darkness, Moon, weather verdict, ranked targets. `--html` writes the web page. |
-| `serve.py` | Serves the status page on port 8080: the night's report rebuilt every 10 minutes, and the imaging run, pictures and system panel refreshed every two seconds. `--install` runs it as a systemd user service (`ty-serve`) that starts at boot and restarts if it stops. |
-| `clouds.py` | Fetches the latest infrared satellite image with the site marked on it. |
-| `mount.py` | Moves the mount: `status`, `settime` (gives the handset this computer's date, time and the site's position, once you have pressed ENTER through its start-up screens), `nudge` (from home, tips the tube 5° and back, for someone beside it to see that it turns), `home`, `zenith`, `goto NAME [--solve]`, `point AZ ALT`, `sync`, `drift`, `compensate`, `stop`. `response` sets the Dec motor creeping at five rates and measures the drift at each, to see whether the sky answers in proportion; `pointing` plate-solves at eight hour angles, four each side of the meridian, to see whether one correction for each side is enough. `findhome` works out from one run of plate solves where the home position really is, and `truehome` drives there for the joints to be marked. |
-| `liveview.py` | Takes a frame every few seconds so the status page shows what the telescope sees now. Steps aside while `shoot.py` runs. |
-| `app.py` | TelescopeYoke, the application: one window with everything in it, started from the applications menu. `./app.py --demo` tries it with nothing plugged in. |
-| `console.py` | The same observing screens as a page in a browser, without the equipment set-up and tools: the companion to the application. This computer only. |
-| `polaralign.py` | Measures how far the polar axis is from the pole by plate solving at three positions, and says which way to turn each adjuster. `--repeat 5` measures five times with the bolts left alone and gives the scatter. After each measurement it says which bolt to turn and about how far, or to turn the whole tripod; `--turned AZ ALT` tells it what you turned since the last one, and it learns what a turn does on this mount. `--cross-check` compares the answer with the last one from the other side of the meridian and gives no advice when they disagree. |
-| `polaris.py` | Polar alignment before dark, from Polaris alone, which shows in daylight when nothing else near the pole does. `check` says whether it is worth trying (sky, Sun, focus); `find` looks around the home position until the star is in the picture, proves it by tipping the tube, and can keep every look (`--record`); `align` turns the RA axis with it in view, says roughly which way to move each adjuster, and with `--watch` keeps saying how far is left while the bolts are turned. |
-| `landmark.py` | Sets the azimuth by day: remembers a distant fixed thing with the telescope's axis readings, and next time turns back to it and shows how far it has moved. |
-| `panorama.py` | The skyline from a phone panorama, with no motors: finds the line between sky and everything else in the picture, lets you put it right where it is wrong, ties the picture to the compass from two marks (something the telescope is pointing at, a remembered landmark, or typed bearings), and keeps the result for the planner. Panoramas from other heights add doubt where things close by sit differently. |
-| `horizon.py` | The telescope measuring its own skyline, or checking a panorama's. `--trace` starts 30° apart, adds bearings only where the skyline bends, starts each from the skyline already measured, and checks its own answer; `--daylight` works by day, judging each small square of the frame by brightness, smoothness and colour; a frame that shows the top itself gives the height at once. `--show` prints the skyline in use, `--forget` throws it away. `--move-from SPOT --offset METRES BEARING --distances FROM-TO:METRES ...` works a new spot's skyline out from another spot's, by geometry, with 3° of doubt added, until it is surveyed. Without `--trace` it looks on a fixed grid, as it first did. |
-| `snap.py` | Takes one camera frame, saves the FITS in `frames/`, publishes a preview. |
-| `shoot.py` | Takes a picture: many short exposures, each checked, lined up and stacked live, with the raw frames kept. `--exposure auto` picks the longest exposure the tracking allows. `--frames 0` carries on until cloud stops it. While it runs, `./ty run stop` ends it cleanly with its final picture; `recentre`, `assist-on` and `assist-off` are also understood. |
-| `planet.py` | Photographs a planet: hundreds of frames of a few hundredths of a second, a square round the planet kept from each, the sharpest quarter lined up and stacked, sharpened and given the planet's usual colour. `--restack FOLDER` stacks a saved capture again. Point the telescope first with `mount.py goto Saturn --solve`. |
-| `mosaic.py` | Splits an object bigger than the frame into overlapping panels along the camera's sides, and keeps their centres; each panel is then a target, `M31-P1`, for `mount.py goto` and `shoot.py`. With no grid it suggests one from the object's size. |
-| `restack.py` | The quality pass: goes back over a session's raw frames, keeps the best, weights and clips them, and writes the finished picture. `shoot.py` runs it at the end. `--all`, or several session folders, stacks sessions from one night or many into one picture. `--on HOST` does the work on a faster computer reached by SSH (a name in `~/.ssh/config`) and brings the picture back (`remote.py`). |
-| `calibrate.py` | Makes master dark, bias and flat frames, which `shoot.py` and `restack.py` then apply automatically. |
-| `camera_setup.py` | Gets the camera ready: checks it is plugged in and has a driver, takes Altair's library files out of their SDK zip if they are missing, and takes a test frame. `--check` only looks. Also the "Set up the camera" button in the console. |
-| `stream.py` | Streams the telescope live to YouTube, Twitch or both at once while a run is imaging, and stops when it is not, in 1080p (720p if the upload falls behind): the stack with one exposure, what the object is, the programme (a transit's light curve once it is steady, a patrol's panel map) and the figures, a card between targets and at the night's end; never the place, the webcam or a candidate's position. Drawn by `streamlook.py` from the words in `stream-targets.toml` ([docs/stream-look.md](docs/stream-look.md)); `./stream.py preview` draws each state. On Twitch it sets the channel's title, category and tags for each target (`twitch.py`, after a one-time `./stream.py twitch-login`). A presenter (`streamstory.py`) turns chapters, explainers and a slow crawl through the night, all curated or measured, and `streamchat.py` answers `!what`, `!next` and the like in the chat. Off unless switched on in Settings; `./stream.py key` puts the stream key in `~/.config/telescopeyoke/stream-key`, and `./stream.py key youtube` or `key twitch` each service's own key for streaming to both (`[stream] service = ["youtube", "twitch"]`: encoded once and sent to each through ffmpeg's tee, so one dropping leaves the other on air). Encoded on the laptop's video hardware where it works. `watch --to FILE` tries it with no account; `watch --install` runs it from boot. Live on Twitch since 20 October 2026; the public pages and what they read are in [docs/live-page.md](docs/live-page.md). |
-| `mission.py` | Each programme as a mission for the stream: its goal, its milestones from what was measured, the open question with tonight's figures, a confidence label for a result, the WHAT / WHY / NOW / NEXT line and the RAW → RESULT reveal ([docs/stream-look.md](docs/stream-look.md#the-mission-what-why-how-far-and-what-is-still-unknown)). |
-| `narrator.py` | TelescopeYoke's voice on the stream: a curated first-person sentence when something happens, and the mission now and then, spoken by gTTS into the stream's sound ([docs/streaming.md](docs/streaming.md#the-voice)). |
-| `clips.py` | Clips of the night's moments cut from a rolling buffer of what was sent, into `clips/` ([docs/streaming.md](docs/streaming.md#clips-of-the-big-moments)). |
-| `director.py` | Decides in one place what the observatory is doing and so what the stream shows: the target (what the telescope was last aimed at and how far the aim got: moving, centring, reached by the mount's reading, centred by the camera, or failed; `cache/target.json`, set by every GoTo), the programme, the activity, the scene and the picture, with fresh camera frames over any older run or schedule. Kept in `cache/broadcast.json`; `./stream.py director` says what it decided and what it left out, `./stream.py scenes` draws every scene ([docs/streaming.md](docs/streaming.md#what-is-on-screen-and-why-the-director)). |
-| `schedule.py` | Tonight's schedule: the agreed steps of a night (`add LABEL MINUTES [--not-before HH:MM] -- COMMAND`, or `wait LABEL MINUTES PID` for one already running), run in order by `run`, with each step's expected start and finish and its progress, shown on the console's home screen; a step that fails stops the rest and fetches the person (`alert.py call`). |
-| `camera_test.py` | `--capabilities` lists what the camera is and offers (model, firmware, FPGA, when it was made, frame buffer, USB link: the camera's part of Altair's Diagnose File); `--throughput` times every way of getting frames off it; `--gain-sweep` tries a range of gains on tonight's sky and suggests one. `--timing` shows whether frames arrive sooner than their exposures could have ended; `--trail` stops the mount following the sky for one frame and reads the real exposure from the stars' trails. `--banding` and `--stripes` measure the row stripes; `--cooldown`, cap on outside, measures them every few minutes as the camera cools, with the air temperature, dew point and USB port (`docs/banding.md`). |
-| `compare.py` | Shows the same patch of sky from several stacks side by side at full size, with star measurements for each. |
-| `process.py` | Turns a finished stack into a cleaner picture: level sky, white stars, smoothed colour noise. |
-| `focus.py` | Hands-free focusing aid: a click and a tone for every frame measured, higher as focus improves, in three levels from quick binned frames to many stars on the full sensor. `--quiet` for no sound, `--numbers` for each reading spoken as a number, `--field` to go first to a bright star with many round it (this moves the telescope), `--scene` for a daytime view. `--report` says how quickly the last run answered a turn of the knob, level by level. |
-| `solve.py` | Plate-solves a frame: where is the telescope really pointing? |
-| `skywatch.py` | Photographs the sky every minute and stops when stars appear. |
-| `doctor.py` | Checks what is installed and connected, and says what is ready: planner, mount, imaging. `--report` writes the same out to post as a hardware report, with the mount's model and the handset's firmware as the handset gives them, and your location left out; `--probe PORT` adds what answers on a serial port you name. |
-| `tour.py` | Records the demo being used, pressing the same buttons a person would: the animation at the top of this page, and a still of each screen. Ubuntu only. |
-| `replay.py` | Turns a centring run recorded with `mount.py goto --solve --record` into a GIF. |
-| `watch.py` | Photographs the telescope itself with the webcam. |
-| `release.py` | Makes a release: the zip people download, its notes from `CHANGELOG.md`, and with `--publish` the tag and the release on GitHub. |
-| `build_catalogue.py` | Regenerates `data/targets.csv` from OpenNGC. |
-| `ty` | One front door for programs and AI agents: `capabilities`, `status`, `context`, `night`, `targets`, `target NAME`, `session`, `observing`, `doctor`, `rigs`, `characterise` (what this rig has had measured about itself). `--rig NAME` first runs any of them for one of several telescopes. Add `--json` for a fixed machine-readable shape. |
-| `mcp_server.py` | Read-only MCP server offering the same information to MCP-aware assistants. |
-
-`tonight.py`, `serve.py` and `mount.py` accept `--demo`.
-
-The status page shows two pictures while imaging: **Now**, the newest single
-exposure straight from the camera, and **Live stack**, everything added up so
-far.
-
-## How it works
-
-It is built from plain, focused Python files rather than a framework, each
-named for what it does (`mount.py`, `focus.py`, `solve.py`, `shoot.py`,
-`patrol.py`). Most things have one obvious file, so a person can follow a
-command from the screen to the hardware, and it means to stay that way.
-
-```
-plan the night → GoTo → photograph → plate-solve (ASTAP) → correct → photograph … → stack
-```
-
-- **`sky.py`** does the astronomy locally with astropy: positions, darkness,
-  moonlight (Krisciunas & Schaefer's model), and a score for each target.
-- **`feeds.py`** fetches weather, seeing, light pollution and comets, and
-  caches them so the report still works when the Wi-Fi drops.
-- **`mount.py`** speaks the SynScan handset's serial protocol. It measures how
-  wrong the handset's clock is and corrects every GoTo for it, steers by the
-  raw axis angles where the handset's own GoTo is unreliable, and stores the
-  pointing error found by plate solving.
-- **`indi.py`** is a small INDI client written for this project: about 150
-  lines that read and set properties and receive image BLOBs over the XML
-  protocol, with no dependencies. The stock INDI command-line tools cannot
-  address a device whose name contains a dot, which this camera's does.
-- **`camera.py`** wraps that into "give me a frame", and recovers when the
-  driver stalls.
-- **`stacking.py`** is the imaging pipeline's working parts, used live by
-  `shoot.py` and again afterwards by `restack.py`.
-- **`tracking.py`** predicts the drift a misaligned polar axis causes and
-  decides how to trim the Dec motor against it.
-- **`moved.py`** judges whether the telescope really turned, from two
-  pictures or two plate solves, for anything that makes many moves unattended.
-- **`page.py`** lays the report out as the status page. It is plain HTML
-  with a little JavaScript reading `status.json`: no framework, no controls.
-- **`simulator.py`** is a pretend handset and mount behind `--demo`.
-
-## Going deeper
-
-| Page | What is in it |
-|---|---|
-| [From box to first galaxy](docs/first-night.md) | A first night for someone who knows none of the words: assemble, point north, switch on, align, focus, GoTo, picture. Says which steps are proven on a real mount. |
-| [Calibrating a mount, in order](docs/calibration.md) | Level roughly, polar-align, find the true home and mark it, measure the pointing each side, and check that the mount really turns. |
-| [Looking for something new](docs/discovery.md) | The discovery station: novae in M31 and M33, comets in spacecraft pictures, transits, public alerts; its recent proofs. Operational; no find of its own yet. |
-| [The live stream](docs/streaming.md) | Running the Twitch broadcast: what viewers see, the presenter, the chat's commands. [The design record](docs/stream-look.md) says why it looks as it does. |
-| [Alerts](docs/alerts.md) | The house's lights and speaker, the phone, and calling the person. |
-| [How a picture is made](docs/imaging.md) | Calibration, frame checks, lining up, stacking, the quality pass. |
-| [Focusing by ear](docs/focus.md) | Turn the knob and the laptop talks you onto focus. |
-| [The cloud sensor](docs/cloudsensor.md) | A plan for a £40 box on the wall that says whether the sky above the garden is clear, cloudy or raining, all night. Not yet built. |
-| [The mount is wonky; measure how wonky](docs/tracking.md) | Drift from a rough polar alignment, and how it is cancelled. |
-| [Setup](docs/setup.md) | Installing, the camera driver, the plate solver, what the computer needs. |
-| [For programs and AI agents](docs/agents/README.md) | `--json`, `--dry-run`, the `ty` command, the web API and the MCP server. |
-| [Checking it under real sky](docs/validation.md) | Exactly what has and has not been proven, night by night, and the five experiments that will show whether the clever parts work. |
-
-**For programs and AI agents**, every command answers in one JSON shape with
-`--json`, anything that moves the mount can be checked first with `--dry-run`,
-and a read-only web API and MCP server offer the same information. Start with
-[AGENTS.md](AGENTS.md).
-
-## A night's routine
-
-1. Set the mount in the home position, power on, and take the handset to its
-   main menu.
-2. `./mount.py nudge` while you stand beside it: the tube tips 5° and comes
-   back (optional: the setting "Motor check at setup", `[mount] nudge_check`). Then `./mount.py zenith` to measure the handset's clock.
-3. Focus: `./focus.py --scene` on something distant in daylight, then
-   `./focus.py` on stars. Turn the focuser and listen for the tone to rise: go on
-   until "Minimum passed", come back, and stop at "Focus good. Hold".
-4. `./mount.py sync` on any patch of stars, so later GoTos allow for the home
-   position having been set by eye.
-5. `./mount.py goto M27 --solve`, then `./shoot.py M27 --frames 48 --recentre 8`.
-
-Commands that move the mount need serial access; until you have logged out
-and back in after joining the `dialout` group, prefix them with
-`sudo -u $USER -g dialout`.
+[Hardware](docs/hardware.md) has the full table, what to expect of other
+equipment, a probe for EQMOD-style controllers, living beside EQMOD and
+ASCOM, and running more than one telescope.
 
 ## Safety
 
@@ -599,6 +294,11 @@ The laptop cannot see what the telescope is about to hit.
 - Creating a file called `MOTION_LOCKED` in this folder blocks all movement.
 - `mount.py` will not go below 20° altitude or more than 7.5 hours from the
   meridian.
+- **A cooled camera is cooled and warmed slowly**, 1 °C a minute, never
+  below its set floor, and cooling stops if the cooler fails.
+- **Science refuses what it cannot trust**: frames without matching
+  calibration, a filter the wheel has not confirmed, a sensor not at its
+  temperature, colour from filters that do not overlap.
 - **The status page (`serve.py`) is read-only on purpose.** It is served to
   the whole home network with no login, which is fine for pictures and
   reports. Nothing that moves the mount will be added to it.
@@ -606,51 +306,54 @@ The laptop cannot see what the telescope is about to hit.
   needs a key made each time it starts, shows every move as a plan first,
   and moves the mount only when that plan is confirmed.
 
-## Current status
+## What has been proven
 
-What has been proven, and where. "Real stars" means on the author's EQ3 Pro,
-150P and Hypercam 183C on Ubuntu, at night; "real equipment" means the
-hardware answered or moved but no star was involved. Everything is also run
-against the simulated rig.
+What has been proven, and where. "Real stars" means on the author's EQ3 Pro
+and 150P on Ubuntu, at night, with the Hypercam 183C unless the row says
+the 183M; "real equipment" means the hardware answered or moved but no star
+was involved. Everything is also run against the simulated rig.
 
 | Feature | Under real stars | On real equipment | Simulated rig |
 |---|---|---|---|
 | Night report and status page | ✅ | ✅ | ✅ |
 | Mount moves through the handset, `sync` | ✅ | ✅ | ✅ |
 | GoTo centred by plate solving | ✅ to about an arcminute, from 10° out | ✅ | ✅ |
-| Polar alignment from three plate solves | ✅ 3.3° to 0.1° over six rounds, with the corrected measurement; it repeats to 0.06-0.11° (2 November 2026) | ✅ | ✅ |
-| Imaging and stacking | ⚠️ runs of 48 and 207 frames; the newest fixes not yet rerun | ✅ | ✅ |
-| Focusing: measuring the stars | ✅ the reading fell from 11 to about 2 as focus was reached | ✅ | ✅ |
+| Polar alignment from three plate solves | ✅ 3.3° to 0.1° over six rounds; it repeats to 0.06-0.11° (1-2 November 2026) | ✅ | ✅ |
+| Finding and marking the true home (`findhome`, `truehome`) | ✅ 17 October 2026: from 10.66° out by eye to 0.19° on the marks | ✅ | ✅ |
+| Pointing survey: one correction for each side | ✅ 17 October 2026 | ✅ | ✅ |
+| Imaging and stacking | ⚠️ runs of 48 and 207 frames, M31 and M33 runs since; long stacks reach a noise floor | ✅ | ✅ |
+| The cooled mono camera (183M) and filter wheel | ✅ 4-5 November 2026: held at -5 °C all session with the camera kept open, all seven filters, plate solves in 0.2-0.3 s, M33 in L. ❌ Colour from L, R, G and B: the first try's filters drifted apart (fixed, not yet rerun); filter focus offsets not measured | ✅ | ✅ |
+| Focusing: measuring the stars | ✅ the reading fell from 11 to about 2 as focus was reached; HFR 2.0 by hand on the 183M | ✅ | ✅ |
 | Focusing: click, tone and three levels | not yet | not yet | ✅ |
-| Motor focuser (`focus.py --motor`) | ✅ focused the 150P to HFR 2.47 (15 October 2026), always finishing inward because of the gears' slack | ✅ | ✅ |
+| Motor focuser (`focus.py --motor`) | ✅ focused the 150P with the 183C to HFR 2.47 (15 October 2026). ❌ cannot move the 183M's heavier train | ✅ | ✅ |
 | Shutter time corrected (`camera.py`) | ✅ a 10 s frame's trails show 9.6 s open, from 6.4 s | ✅ | ✅ |
 | Drift model and Dec correction | ⚠️ an earlier, cruder version only | ⚠️ the same | ✅ |
 | Daytime Polaris | ⚠️ searched three times, Polaris not found | ⚠️ the search only | ✅ |
 | Skyline from a phone panorama | does not need them | ⚠️ three real panoramas; not yet tied to the compass | ✅ |
-| The telescope's own skyline survey | ⚠️ by night, a torch trial only | ✅ by day, 17 October 2026: 28 bearings in 34 minutes, a look at the hedge checked by eye; 2 November, a second spot's skyline kept on the author's eye check, its south-west gap probably too high | ✅ |
+| The telescope's own skyline survey | ⚠️ by night, a torch trial only | ✅ by day, 17 October 2026: 28 bearings in 34 minutes; 2 November, a second spot's skyline | ✅ |
 | Azimuth from a landmark | not yet | not yet | ✅ |
 | Control without the handset (Wi-Fi, EQDIR) | not yet | ⚠️ the Wi-Fi adapter read; nothing moved | ✅ |
 | The application window | not yet | ⚠️ opened on Ubuntu, in the demo only | ✅ |
 | Windows | not yet | ⚠️ camera frames indoors; no mount driven | ✅ |
-| Checking that the telescope really turned | not yet | not yet | ✅ |
-| Finding and marking the true home (`findhome`, `truehome`) | ✅ 17 October 2026: from 10.66° out by eye to 0.19° on the marks | ✅ | ✅ |
-| Pointing survey: one correction for each side | ✅ 17 October 2026 | ✅ | ✅ |
-| Polar repeatability | ✅ 0.06-0.11° scatter, 1-2 November 2026 | ✅ | ✅ |
-| Discovery: subtraction, candidates, vetting | ⚠️ on real M31 stacks, with planted fakes; no find of our own yet | ✅ | ✅ a known nova found again in ZTF's archive images |
+| Checking that the telescope really turned | not yet | ⚠️ by day: one real record, and it caught a real fault; 109 checked looks on a working mount, none stopped wrongly | ✅ |
+| Discovery: subtraction, candidates, vetting | ⚠️ on real M31 and M33 stacks, with planted fakes; no find of our own yet | ✅ | ✅ a known nova found again in ZTF's archive images |
 | Comets in spacecraft pictures (`sungrazer.py`) | does not need them | ✅ 19 October 2026: a known Kreutz sungrazer found by the hunt itself in live CCOR-1 pictures | ✅ known comets found in archived LASCO pictures |
+| Kepler and TESS archive search (`archive.py`, `investigate.py`) | does not need them | ✅ Tabby's star's four known dips found and nothing else (3 November 2026); 16 leads looked into, none unexplained | ✅ |
+| Radio SETI (`seti.py`) | does not need them | ⚠️ 9 of 308 blocks of one cadence searched; planted signals found, no false hits in 240 runs; every candidate so far interference | ✅ |
 | Lights, speaker and phone alerts (`alert.py`) | does not need them | ✅ cloud and rain alerts on a real light and speaker; the call that woke the author when a run stopped (20 October 2026) | ✅ |
 | Live stream on Twitch and YouTube (`stream.py`) | ✅ Twitch on air 20 October 2026 on the WASP-12 b run; YouTube on air 1 November 2026 | ✅ | ✅ |
 | Exoplanet transit photometry | ⚠️ one attempt (WASP-12 b): dimming seen, not a detection | ✅ | ✅ |
 | Photometric hold (`shoot.py --hold`) | not yet | not yet | ✅ |
 | The night's end: parked and told | not yet | ⚠️ `mount.py home` only | ✅ |
 | Several rigs, `--probe` | not yet | not yet | ✅ |
-| Dark and flat frames, gain sweep | not yet | not yet | ✅ |
+| Dark frames | does not need them | ✅ 183M master darks at -5 °C, 4 November 2026 | ✅ |
+| Flat frames, gain sweep | not yet | not yet | ✅ |
 
 **[docs/validation.md](docs/validation.md#current-conclusions) is the one
 record of what has been proven**: this table follows its "Current
 conclusions", and the account under them says, night by night, what was
 tried, what it showed, and what is still a guess. Two things from it that
-anyone using the software should know: the camera exposed for less time
+anyone using the software should know: the 183C exposed for less time
 than it was asked (about two thirds at 10 s) until `camera.py` learnt to ask
 for more, so stacks from before 13 October 2026 overstate their integration;
 and on one night the motors stopped while the handset went on reporting every move
@@ -663,11 +366,9 @@ the real rig or in the demo against the simulated one.
 
 Known limits:
 
-- Camera frames are slow with this driver on a USB 2 lead: about 4 s plus
-  five times the exposure, so light is collected only about a seventh of the
-  time. On a USB 3 lead, timed indoors on 6 October 2026, a 1 s frame takes
-  1.5 s instead of 9.3 s. The frames' timing shows the camera has been on
-  USB 3 since the first nights (17 October 2026).
+- The 183C's frames are slow through INDI on a USB 2 lead (about 4 s plus
+  five times the exposure); on the USB 3 lead it has used since 6 October
+  2026 a 1 s frame takes about 1.5 s. The 183M adds 0.43 s to each frame.
 - After a slew the stars streak for up to half a minute while the gears
   settle; the scripts wait before photographing.
 - With a rough polar alignment the aim drifts by an arcsecond or more per
@@ -678,15 +379,20 @@ Known limits:
 
 ## Roadmap
 
-Near term, the measurements the first nights showed are needed, each now
-one command (`./ty characterise` shows which have been made):
+Next, on the sky (each is in [Validation](docs/validation.md#current-conclusions)
+as not yet done):
 
-- The click-and-tone focusing under real stars on the USB 3 lead (`./focus.py`).
-- Whether the polar measurement repeats (`./polaralign.py --repeat 5`).
-- Whether one pointing correction for each side is enough (`./mount.py pointing`).
-- A phone panorama tied to the compass and compared with what the telescope sees.
-- Daytime Polaris again, now the axis is 0.1° from the pole: the search looks
-  within 1.6° by itself after a recent night alignment.
+- Flats for the 183M in each filter, then a colour picture with the
+  drift fix in, and a measured depth against the 183C.
+- The filter focus offsets proved on the sky (`./focus.py --walk-in --prove-sets`),
+  so the narrowband filters can be used without "focus as is".
+- A stronger focuser motor for the 183M's train.
+- A known nova recovered from this rig's own frames; a transit timed
+  against its prediction, with `shoot.py --hold` on the real mount.
+- A whole night ended by the runner alone: parked, told, flats taken.
+- The click-and-tone focusing under real stars.
+- A phone panorama tied to the compass and checked by the telescope;
+  daytime Polaris again, now the axis is close to the pole.
 - A night with mount and camera together on Windows.
 
 Then:
@@ -696,17 +402,13 @@ Then:
 - Recordings from real nights for this page: a GoTo-and-centre run
   (`--record` and `replay.py` are ready for it) and a focusing session. The
   animation at the top is the demo.
-- More of the camera's quirks moved into `config.toml` as other cameras are tried.
-- A night on the USB 3 lead. Indoors it brings the shutter from open about
-  a seventh of the time to about two thirds; under the stars it is untried.
-- Dark and flat frames taken and in use, and the gain chosen from a sweep
-  instead of by guesswork.
+- More of the cameras' quirks moved into `config.toml` as other cameras are tried.
 
 Later, for image quality, in this order: colour calibration from catalogue
 stars (the plate solve already identifies them); gentle deconvolution, once
 calibration and alignment are proven; sky-gradient removal frame by frame;
-drizzle on the raw Bayer frames. None of these before a controlled
-comparison has shown what the current pipeline gains on real data.
+drizzle on the 183C's raw Bayer frames. None of these before a controlled comparison has shown what the current
+pipeline gains on real data.
 
 Later, if people ask for them:
 
@@ -714,29 +416,41 @@ Later, if people ask for them:
 - Controls on the web page, behind a login.
 - Letting an agent request a move over MCP, carried out only after a person
   approves that exact move (designed in `docs/agents/safety.md`, not built).
-- The agent scenarios in `evals/` run with a real model in the loop.
 - The MCP server moved onto the official MCP Python SDK, once MCP is a feature people
   rely on. Today's hand-written one speaks the protocol directly to avoid a dependency;
   the telescope logic stays in `agent.py` either way.
-- Guiding; focusers other than this project's own motor (`docs/focuser.md`).
+- The agent scenarios in `evals/` run with a real model in the loop.
+- Guiding (the guide camera opens; it waits for a guide scope).
 
-Not planned: ASCOM's Windows-only COM interface (Alpaca reaches the same drivers, and is planned: [Mounts](docs/mounts.md)), mobile apps, a React front end, cloud services, AI target
-selection, Docker images, plugin systems, a sequencing language. Bigger
+Not planned: ASCOM's Windows-only COM interface (Alpaca reaches the same drivers, and is planned: [Mounts](docs/mounts.md)), mobile apps, a React front end, cloud services, Docker images, plugin systems, a sequencing language. Bigger
 projects (NINA, KStars/Ekos) do those well; this one stays small, readable,
 and aimed at ordinary SynScan gear.
+
+## The documentation
+
+| Page | What is in it |
+|---|---|
+| [All the docs](docs/README.md) | Every page, sorted by what you came for: trying it, its results, watching it, building with agents. |
+| [Results so far](docs/results.md) | Each real result as question, method, result and limits. |
+| [From box to first galaxy](docs/first-night.md) | A first night for someone who knows none of the words. |
+| [Hardware](docs/hardware.md) | What it has run on, and how to add yours. |
+| [Commands](docs/commands.md) | Every script, how they fit together, and a night by hand. |
+| [What makes it different](docs/features.md) | Each way it measures and works round modest equipment, with how far each is proven. |
+| [Looking for something new](docs/discovery.md) | The discovery station and its phases. |
+| [Checking it under real sky](docs/validation.md) | Exactly what has and has not been proven, night by night. |
+| [For programs and AI agents](docs/agents/README.md) | `--json`, `--dry-run`, the `ty` command, the web API and the MCP server; start with [AGENTS.md](AGENTS.md). |
 
 ## Contributing
 
 Reports from other hardware are the most useful contribution: run
 `./doctor.py --report` and paste it into a **Hardware compatibility report**
-issue, as [Hardware](#hardware) describes. Questions, ideas and pictures you
-have taken go in
+issue, as [Hardware](docs/hardware.md#to-add-a-row) describes. Questions,
+ideas and pictures you have taken go in
 [Discussions](https://github.com/Ryan-Clinton/telescopeyoke/discussions).
 What each release added is in [CHANGELOG.md](CHANGELOG.md); `./release.py`
-makes one. For code, see
-[CONTRIBUTING.md](CONTRIBUTING.md):
-run `ruff check .`, and try anything that changes how the mount moves in the
-demo against `simulator.py`.
+makes one. For code, see [CONTRIBUTING.md](CONTRIBUTING.md): run
+`ruff check` on what you changed, and try anything that changes how the
+mount moves in the demo against `simulator.py`.
 
 ## Data sources
 
@@ -746,6 +460,9 @@ Comets: [COBS](https://cobs.si) and [JPL Horizons](https://ssd.jpl.nasa.gov/hori
 Bright supernovae: [the Rochester list of active ones](https://www.rochesterastronomy.org/snimages/snactive.html), in `./ty night` and `./tonight.py` when one brighter than magnitude 15.5 is up.
 The sky's events and the news: [in-the-sky.org](https://in-the-sky.org), [Universe Today](https://www.universetoday.com) and the [BAA](https://britastro.org), in `./ty night` and `./tonight.py`.
 Cloud imagery: [EUMETSAT](https://view.eumetsat.int).
+Coronagraph pictures: SOHO's LASCO and GOES-19's CCOR-1.
+Light curves: Kepler and TESS, from [MAST](https://archive.stsci.edu).
+Radio: [Breakthrough Listen's open data](https://seti.berkeley.edu/opendata).
 
 ## Licence
 

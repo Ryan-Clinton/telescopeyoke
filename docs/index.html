@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TelescopeYoke: a self-measuring robotic observatory for affordable GoTo mounts</title>
-<meta name="description" content="A self-measuring robotic observatory for affordable GoTo mounts, starting with Sky-Watcher SynScan: it measures and corrects its own faults, runs whole nights, hunts for new objects and tells you what matters: self-centring GoTos, focusing by ear, a skyline from a phone panorama, polar alignment and stacking. Free and open source, for EQ3, EQ5, HEQ5 and EQ6 mounts. Linux, with a Windows port. Try the demo with no telescope.">
+<meta name="description" content="Free, open-source robotic observatory software for Sky-Watcher SynScan mounts (EQ3, EQ5, HEQ5, EQ6): self-centring GoTos by plate solving, polar alignment, focusing, stacking and whole nights run with an AI agent, plus nova patrols, a comet hunt, Kepler archive and radio SETI searches. Linux, with a Windows port. Try the demo with no telescope.">
+<link rel="canonical" href="https://ryan-clinton.github.io/telescopeyoke/">
 <meta property="og:title" content="TelescopeYoke">
 <meta property="og:description" content="A self-measuring robotic observatory for affordable GoTo mounts, starting with Sky-Watcher SynScan: it measures and corrects its own faults, runs whole nights, hunts for new objects and tells you what matters: self-centring GoTos, focusing by ear, a skyline from a phone panorama, polar alignment and stacking.">
 <meta property="og:image" content="https://ryan-clinton.github.io/telescopeyoke/social-preview.png">
@@ -74,17 +75,23 @@
   <li><b>Keeps the mount inside its limits</b>. Every move is checked first and shown as a plan; nothing turns until you confirm it.</li>
   <li><b>Runs the whole night</b>: the agreed steps in order, a failed step fetches you, and at the end it parks the mount and tells you.</li>
   <li><b>Hunts for something new</b>: novae in M31 and M33 by image subtraction, comets in spacecraft pictures every six hours, exoplanet transits; each find checked before it reaches you, with the evidence.</li>
+  <li><b>Researches without the telescope</b>: Kepler and TESS light curves searched for stars that dim like Tabby's, each lead checked against Gaia, SIMBAD and VSX, and Breakthrough Listen's open radio data searched for narrowband signals. No discovery yet, and it says so.</li>
+  <li><b>Runs a cooled mono camera and filter wheel</b>: cooled slowly once and held cold all night, several filters and targets in one cold session.</li>
   <li><b>Tells you what matters</b>: on your phone with the evidence, and when it needs your hands, through the house's lights and a speaker.</li>
-  <li><b>Explains itself live</b>: a Twitch broadcast with the stack building up, a presenter that says what and why, and chat commands viewers can ask but not operate.</li>
+  <li><b>Explains itself live</b>: a YouTube and Twitch broadcast with the stack building up, a presenter that says what and why, and chat commands viewers can ask but not operate.</li>
   <li><b>Works with an AI agent</b>: every command answers in a fixed JSON shape, skills and specialist agents hold the routines, and code that does not depend on the agent decides what may move.</li>
 </ul>
 <p>It runs on your own computer. No account, no cloud service, no ASCOM.</p>
 
-<h2>A real result</h2>
+<h2>Real results</h2>
 <div class="pair">
   <figure>
     <img src="m27-result.jpg" alt="The Dumbbell Nebula, M27">
     <figcaption>The Dumbbell Nebula (M27): 48 two-second exposures through a 150 mm Newtonian on an EQ3 Pro that was polar aligned by eye. The home position was about ten degrees out; plate solving found the target anyway.</figcaption>
+  </figure>
+  <figure>
+    <img src="results/m33-183m-l-2026-11-05.jpg" alt="The Triangulum Galaxy, M33, in luminance from the cooled mono camera">
+    <figcaption>The Triangulum Galaxy (M33) from the cooled mono camera's first night, 4-5 November 2026: 126 frames of 16 s at -5 °C, darks only. The darker corners are for want of flats, still to take.</figcaption>
   </figure>
   <figure>
     <img src="screens/plan.png" alt="A move shown as a plan, waiting to be confirmed">
@@ -118,6 +125,7 @@ cd TelescopeYoke-v0.2.1
   <tr><th>Mount</th><th>Handset</th><th>Camera</th><th>System</th><th>What has worked</th><th>Tried by</th></tr>
   <tr><td>Sky-Watcher EQ3 Pro</td><td>SynScan, firmware 3.35</td><td>Altair Hypercam 183C</td><td>Ubuntu 26.04</td><td>Planner, mount moves, camera, focusing, plate solving and GoTo with centring, under real stars</td><td>the author</td></tr>
   <tr><td>the same EQ3 Pro</td><td>the same</td><td>the same</td><td>Windows 11</td><td>The demo, and camera frames indoors. No mount driven yet</td><td>the author</td></tr>
+  <tr><td>the same EQ3 Pro</td><td>the same</td><td>Altair Hypercam 183M PRO TEC (mono, cooled), Starlight Xpress filter wheel, 0.9x coma corrector</td><td>Ubuntu 26.04</td><td>First night 4-5 November 2026: cooled to -5 °C, darks, every filter, plate solving, polar alignment, M33. No flats yet</td><td>the author</td></tr>
   <tr class="wanted"><td>EQ5</td><td>SynScan</td><td>any</td><td>Linux or Windows</td><td>wanted</td><td>could be you</td></tr>
   <tr class="wanted"><td>HEQ5</td><td>SynScan</td><td>any</td><td>Linux or Windows</td><td>wanted</td><td>could be you</td></tr>
   <tr class="wanted"><td>EQ6, EQ6-R</td><td>SynScan</td><td>any</td><td>Linux or Windows</td><td>wanted</td><td>could be you</td></tr>
@@ -136,6 +144,8 @@ cd TelescopeYoke-v0.2.1
 <ul>
   <li><a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/first-night.md">From box to first galaxy</a>: a first night, step by step, for someone new to motorised telescopes. No knowledge of polar alignment, plate solving or astrophotography assumed.</li>
   <li><a href="https://github.com/Ryan-Clinton/telescopeyoke#readme">The README</a>: everything it does.</li>
+  <li><a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/results.md">Results so far</a>: each real result with its method and its limits, from the first self-centring GoTo to a comet found by the hunt itself.</li>
+  <li><a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/README.md">All the documentation</a>, sorted by what you came for.</li>
   <li><a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/validation.md#current-conclusions">What has been proven</a>: what works on real hardware, what is partly proven, and what has run only on the simulator.</li>
   <li><a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/setup.md">Setup</a>: installing it for a real telescope, on Ubuntu and on Windows.</li>
   <li><a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/CHANGELOG.md">Changes</a> in each release.</li>

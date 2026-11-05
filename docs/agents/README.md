@@ -60,4 +60,4 @@ Field names in `schemas/` do not change casually. New fields may be added
 under schema version 1.0. Anything that would break a reader raises the version
 to 2.0.
 
-- [Skills, agents and hooks](../skills-and-agents.md): Claude Code skills, subagents and safety hooks for these procedures. All built: the hooks and the decision record (`.claude/settings.json`, `./ty agent-report`), `./ty watch-run`, `./ty test-run`, fourteen skills in `.claude/skills/` and eight agents in `.claude/agents/`.
+- [Skills, agents and hooks](../skills-and-agents.md): Claude Code skills, subagents and safety hooks for these procedures. All built: the hooks and the decision record (`.claude/settings.json`, `./ty agent-report`), `./ty watch-run`, fourteen skills in `.claude/skills/` and seven agents in `.claude/agents/`.
