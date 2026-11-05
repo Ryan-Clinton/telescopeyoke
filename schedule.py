@@ -476,8 +476,17 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
         steps = plan["steps"]
         for step in steps:
             step.setdefault("id", step["label"])
-        waiting = next((s for s in steps if s["status"] == "running" and s.get("pid")), None)
-        step = waiting or next((s for s in steps if s["status"] == "queued"), None)
+        # A session's own blocks (shoot.py --blocks) are waited on, never
+        # started: the session marks them; its process gone, the rest are ended.
+        for s in steps:
+            if s.get("session") and s["status"] in ("queued", "running") and not alive(s["session"]):
+                end_session(s["session"])
+                plan = load()
+                steps = plan["steps"]
+                break
+        waiting = next((s for s in steps if s["status"] == "running" and s.get("pid")), None) or next(
+            (s for s in steps if s.get("session") and s["status"] == "queued"), None)
+        step = waiting or next((s for s in steps if s["status"] == "queued" and not s.get("session")), None)
         cut = None
         chooser = not waiting and step is not None and choosing()
         if chooser:
@@ -503,7 +512,10 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
             with activity.doing("Schedule", f"waiting for {step['label']} to finish, imaging and its search"):
                 while alive(step["pid"]):
                     sleep(20)
-            mark_id(step["id"], status="done", finished=time.time())
+            if step.get("session"):
+                end_session(step["session"])     # its own marks stand; only what it left open is closed
+            else:
+                mark_id(step["id"], status="done", finished=time.time())
             continue
         if step.get("not_before") and not chooser:
             until = not_before(step["not_before"], time.time())
@@ -774,6 +786,47 @@ def mark_id(step_id, **fields):
     for step in plan["steps"]:
         if step.get("id", step["label"]) == step_id:
             step.update(fields)
+    save(plan)
+
+
+def add_session(blocks, pid):
+    """The blocks of one imaging session (shoot.py --blocks), one step each,
+    owned by that process: it marks them itself (mark_block) and the runner
+    never starts them, only waits while the process lives. Replaces any of
+    that process's steps left from before. Returns the steps' ids in order.
+    5 November 2026: the night's cold session showed on the console as one
+    bar, or not at all."""
+    plan = load()
+    plan["steps"] = [s for s in plan["steps"] if s.get("session") != pid]
+    taken = {s.get("id", s["label"]) for s in plan["steps"]}
+    ids = []
+    for label, minutes in blocks:
+        step_id = label if label not in taken else f"{label} ({len(taken) + 1})"
+        taken.add(step_id)
+        plan["steps"].append({"id": step_id, "label": label, "minutes": float(minutes), "command": None,
+                              "not_before": None, "until": None, "pid": pid, "session": pid,
+                              "status": "queued", "started": None, "finished": None})
+        ids.append(step_id)
+    plan.setdefault("made", time.time())
+    save(plan)
+    return ids
+
+
+def mark_block(step_id, status):
+    """A session's block as it starts ("running") or ends ("done", "skipped",
+    "failed"), with the time."""
+    now = time.time()
+    mark_id(step_id, status=status, **({"started": now} if status == "running" else {"finished": now}))
+
+
+def end_session(pid):
+    """A session's process has gone: its blocks still queued are skipped and
+    one still running is done (its frames are kept), with the time."""
+    plan, now = load(), time.time()
+    for step in plan["steps"]:
+        if step.get("session") == pid and step["status"] in ("queued", "running"):
+            step.update(status="done" if step["status"] == "running" else "skipped", finished=now,
+                        started=step.get("started") or now)
     save(plan)
 
 

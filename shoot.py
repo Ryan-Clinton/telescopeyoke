@@ -1086,6 +1086,39 @@ def in_blocks(args):
     focus offset (REFOCUS_NEEDED), the wheel's confirmed position."""
     import mount
     results, skipping = [], None
+    # Each block on tonight's schedule, so the console shows them with their
+    # times and ticks them off (schedule.py add_session); never a reason to stop.
+    labels, target = [], args.name
+    for name, minutes in args.blocks:
+        band, _, other = name.partition("@")
+        target = other or target
+        labels.append((f"{target} {band}, {minutes:g} min", minutes))
+    try:
+        import schedule
+        ids = schedule.add_session(labels, os.getpid())
+    except Exception as problem:
+        print(f"  (the blocks are not on the schedule: {problem})", flush=True)
+        schedule, ids = None, [None] * len(labels)
+
+    def mark(index, status):
+        if schedule is not None and ids[index]:
+            try:
+                schedule.mark_block(ids[index], status)
+            except Exception:
+                pass
+
+    try:
+        return run_blocks(args, mount, results, skipping, mark)
+    finally:
+        if schedule is not None:
+            try:
+                schedule.end_session(os.getpid())
+            except Exception:
+                pass
+
+
+def run_blocks(args, mount, results, skipping, mark):
+    """in_blocks' loop, each block marked on the schedule by `mark`."""
     for number, (name, minutes) in enumerate(args.blocks, 1):
         last = number == len(args.blocks)
         # FILTER@TARGET: this block and the ones after it are of another
@@ -1106,18 +1139,22 @@ def in_blocks(args):
                 skipping = args.name
                 print(f"\nSkipping {args.name} and its blocks: {refusal}", flush=True)
         if skipping:
+            mark(number - 1, "skipped")
             if last and args.ended_on_time and args.keep_cold:
                 warm_after_block(args)   # the last block taken left the sensor cold
             continue
         args.filter, args.minutes, args.frames = name, float(minutes), frames_asked(None, minutes)
         args.keep_cold, args.ended_on_time = not last, False
         print(f"\nBlock {number} of {len(args.blocks)}: {args.name} in {name} for {minutes:g} min", flush=True)
+        mark(number - 1, "running")
         try:
             results.append(held(args))
         except BaseException:
+            mark(number - 1, "failed")
             if args.ended_on_time and args.keep_cold:
                 warm_after_block(args)   # left cold for a block that will not now follow
             raise
+        mark(number - 1, "done")
         if not last and not args.ended_on_time:
             print(f"  block {number} ended before its minutes: the rest are not taken (the sensor has been warmed)",
                   flush=True)
