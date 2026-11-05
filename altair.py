@@ -41,7 +41,9 @@ MONO = 0x10            # ALTAIRCAM_FLAG_MONO: no colour filters on the sensor (t
 TEC = 0x80             # ALTAIRCAM_FLAG_TEC: a cooler with a target temperature
 # The cooler (docs/mono-upgrade.md, item 2), on a camera with a TEC only.
 ON_TARGET = 0.5        # °C: a frame further than this from the target is kept but flagged (TY_ONTGT)
-TEC_READY = 1.0        # °C: a run keeps no frames until the sensor is this close to its target
+TEC_READY = ON_TARGET  # °C: a run keeps no frames until the sensor is this close to its target; the same
+#                        as ON_TARGET, since the stack leaves out frames further off (4 November 2026: at
+#                        1.0 °C, 6 of the Pacman's 31 frames were taken at -4.0 to -4.5 °C and thrown away)
 COOL_WAIT_S = 900      # the longest a run waits for the sensor to get there, after the ramp's own time
 # Cooling slowly, from the camera's owner (years with it): never below -5 °C,
 # where this sensor gains nothing, and down a step at a time, never one jump,
@@ -568,7 +570,7 @@ class AltairCamera:
             if said is None or clock() - said >= 60:
                 step = "" if ramped else f", set point {self.level:g} °C stepping down {RAMP_STEP_C:g} °C every {RAMP_EVERY_S:g} s"
                 say(f"camera: cooling, sensor at {degrees:.1f} °C, target {self.target:g} °C{step}{usage}; "
-                    "no frames kept until it is within 1 °C")
+                    f"no frames kept until it is within {TEC_READY:g} °C")
                 said = clock()
             sleep(COOL_POLL_S)
 
