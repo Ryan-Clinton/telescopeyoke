@@ -45,7 +45,7 @@ import stacking
 
 ROOT = Path(__file__).parent
 COMBINED = "combined"   # folder under frames/NAME/ for a picture made from several sessions
-MIN_MATCHED = 8         # stars a frame must share with the reference to count as lined up
+MIN_MATCHED = stacking.LINED_UP   # stars a frame must share with the reference to count as lined up
 
 
 def find_session(name):
@@ -161,14 +161,17 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
             say(f"framed where most frames sat, {np.hypot(*moved):.0f} pixels from the sharpest")
         for f in frames:
             f.pop("spots", None)    # not worth keeping in the session's record
-        shape = (len(chosen), *rgb.shape)
-        np.memmap(work, dtype=np.float16, mode="w+", shape=shape).flush()
+        # A mono frame's three planes are the same: one is kept, at float32.
+        mono = stacking.is_mono(header)
+        plane = (*rgb.shape[:2], 1 if mono else rgb.shape[2])
+        shape = (len(chosen), *plane)
+        dtype = stacking.store_dtype(shape)
+        np.memmap(work, dtype=dtype, mode="w+", shape=shape).flush()
         try:
             n = len(chosen)
             results = pool.map(stacking.register_file, [f["path"] for f in chosen],
                                [f["exposure"] for f in chosen], [gain] * n, [reference] * n,
-                               [str(work)] * n, range(n), [shape] * n, [f["scale"] for f in chosen],
-                               [several] * n)
+                               [str(work)] * n, range(n), [shape] * n, [f["scale"] for f in chosen])
             residuals = []
             for f, (info, spent) in zip(chosen, results):
                 f.update(info)
@@ -176,31 +179,33 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
                 if info["residual"] is not None:
                     residuals.append(info["residual"])
             weights = [stacking.weight(f, best) for f in chosen]
-            if several:
-                # A frame from another session that found few of the reference's
-                # stars has not lined up (the camera was turned, or it is a
-                # different field); it would only smear the picture.
-                turned = sum(f["flipped"] for f in chosen)
-                if turned:
-                    say(f"{turned} frames were taken on the other side of the meridian and "
-                        "were turned the right way up")
-                lost = [i for i, f in enumerate(chosen) if f["matched"] < MIN_MATCHED]
-                for i in lost:
-                    weights[i] = 0.0
-                if lost:
-                    say(f"{len(lost)} frames would not line up on the reference and were left out")
-                if len(lost) == n - 1 and n > 1:
-                    say("Nothing from the other sessions lined up: was the camera turned?")
+            # A frame that found too few of the reference's stars has not lined
+            # up (it drifted out of the field, cloud took its stars, the camera
+            # was turned, or it is a different field), in one session or
+            # several: its place is a guess and it would only smear the picture.
+            turned = sum(f["flipped"] for f in chosen)
+            if turned:
+                say(f"{turned} frames were taken on the other side of the meridian and "
+                    "were turned the right way up")
+            lost = [i for i, f in enumerate(chosen) if not stacking.lined_up(f["matched"])]
+            for i in lost:
+                weights[i] = 0.0
+                chosen[i]["left_out"] = f"would not line up on the reference ({chosen[i]['matched']} stars matched)"
+            if lost:
+                say(f"{len(lost)} frames would not line up on the reference and were left out "
+                    "(their raw files are kept)")
+            if several and len(lost) == n - 1 and n > 1:
+                say("Nothing from the other sessions lined up: was the camera turned?")
 
-            registered = np.memmap(work, dtype=np.float16, mode="r", shape=shape)
+            registered = np.memmap(work, dtype=dtype, mode="r", shape=shape)
             with timings.phase("stack"):
-                first = stacking.Stack(rgb.shape, after=10 ** 9)   # no clipping yet
+                first = stacking.Stack(plane, after=10 ** 9)   # no clipping yet
                 for i in range(n):
                     if weights[i]:
                         first.add(registered[i].astype(np.float32), weights[i])
                 # Now that the average and its spread are known, leave out
                 # whatever strays too far from them.
-                final = stacking.Stack(rgb.shape)
+                final = stacking.Stack(plane)
                 final.reference = (first.mean(), first.spread())
                 for i in range(n):
                     if weights[i]:
@@ -216,6 +221,8 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
     rows, cols = final.covered()
     trimmed = stacked.shape[0] - (rows.stop - rows.start), stacked.shape[1] - (cols.stop - cols.start)
     stacked = stacked[rows, cols]
+    if stacked.shape[2] == 1:
+        stacked = np.repeat(stacked, 3, axis=2)   # written as a mono stack always is: three equal planes
     stack_file = session / "final.fits"
     # Which masters went in, and whether the stack is calibrated: a matched
     # camera's (the 183M's) stack with any master missing is labelled
@@ -240,7 +247,8 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
     records.write(session / "restack.json",
         {"kept": [f["file"] for f in chosen], "frames": frames,
          "summary": {"captured": len(frames), "stacked": len(chosen),
-                     "left_out": len(frames) - len(chosen), "total_exposure_s": total,
+                     "left_out": len(frames) - len(chosen), "unaligned": len(lost),
+                     "total_exposure_s": total,
                      "sessions": [str(s) for s in sessions],
                      "median_residual_px": round(float(np.median(residuals)), 3) if residuals else None,
                      "seconds": round(time.perf_counter() - began, 1),

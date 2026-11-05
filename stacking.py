@@ -30,6 +30,7 @@ ROOT = Path(__file__).parent
 CALIBRATION = Path(os.environ.get("TY_CALIBRATION") or config.camera_folder() / "calibration")   # each camera its own
 REGISTER = 1024     # side of the central square used for the first rough line-up
 MIN_MATCHES = 6     # stars needed to trust a star-by-star alignment
+LINED_UP = 8        # stars a frame must share with the reference to go into any stack
 SPOTS = 40          # brightest stars kept from the quick look at a frame, to place it by
 # The processing scale for a mono camera's frames ([imaging] processing_scale):
 # 2, each 2x2 block one pixel, as the colour camera's always are (stars here
@@ -1073,47 +1074,78 @@ def measure_file(path, exposure, gain):
 
 FLIP_RESIDUAL = 2.0      # pixels: a fit worse than this is tried the other way up
 
-def register_file(path, exposure, gain, reference, store, slot, shape, scale=1.0, try_flip=False):
+
+def lined_up(matched):
+    """Whether a frame's alignment can be trusted: enough of its stars sit on
+    the reference's. A frame that fails is never stacked, live or in the
+    quality pass; its raw file is kept. align() hands back the rough shift
+    when the stars do not pair, and a frame stacked on that comes out as a
+    second, smeared copy of every star."""
+    return matched is not None and matched >= LINED_UP
+
+
+def line_up(rgb, lum, stars, reference, moved=(0.0, 0.0)):
+    """A frame lined up on the reference: (frame, R, t, matched, residual,
+    flipped). The stars are asked directly when the rough line-up cannot see
+    the shift (align()'s centre), and a poor fit is tried the other way up.
+    `moved` is how far the reference's stars have been moved from where the
+    reference frame had them (framing())."""
+    rough = offset(reference["square"], centre_square(lum))
+    rough = (rough[0] + moved[1], rough[1] + moved[0])
+    centre = (lum.shape[1] / 2, lum.shape[0] / 2)
+    r, t, matched, residual = align(stars, reference["stars"], rough, centre)
+    flipped = False
+    if matched < LINED_UP or residual is None or residual > FLIP_RESIDUAL:
+        # Taken on the other side of the meridian, the picture is upside
+        # down: the tube swung over the pole in between. Turn it and retry.
+        # A dense field gives eight or more chance matches to an upside-down
+        # frame, so a poor fit is enough to try: on 14 October 2026 all but
+        # 8 of 226 frames from the far side of M31 were stacked unturned,
+        # 7.7 pixels out, and the galaxy came out twice.
+        turned = np.ascontiguousarray(rgb[::-1, ::-1])
+        turned_lum = turned.sum(axis=2)
+        turned_stars = find_stars(turned_lum)
+        rough = offset(reference["square"], centre_square(turned_lum))
+        again = align(turned_stars, reference["stars"], (rough[0] + moved[1], rough[1] + moved[0]), centre)
+        if again[2] >= LINED_UP and (again[2] > matched or (again[3] is not None and (residual is None or again[3] < residual))):
+            rgb, flipped = turned, True
+            r, t, matched, residual = again
+    return rgb, r, t, matched, residual, flipped
+
+
+def store_dtype(shape):
+    """The kind of number a registered frame is kept as: a mono frame (one
+    plane) as float32, a colour frame's three planes as float16, which is
+    already finer than a 12-bit frame's noise and keeps the file half the
+    size. One float32 plane is still smaller than three float16 ones."""
+    return np.float32 if shape[-1] == 1 else np.float16
+
+
+def register_file(path, exposure, gain, reference, store, slot, shape, scale=1.0):
     """Worker: prepare one raw frame in full, line it up on the reference and
-    write it into its slot of the shared file of registered frames."""
+    write it into its slot of the shared file of registered frames. A store
+    of one plane (shape ending in 1) keeps a mono frame's single plane."""
     timings = Timings()
     with timings.phase("load raw frames"):
         mosaic, header = load_light(Path(path))
     with timings.phase("calibrate and clean"):
         rgb = prepare(mosaic, _calibration(exposure, gain, worker_cards(header)), mono=is_mono(header))
         lum = rgb.sum(axis=2)
+        if shape[-1] == 1:
+            rgb = np.ascontiguousarray(rgb[..., :1])   # a mono frame's three planes are the same
     with timings.phase("find stars"):
         stars = find_stars(lum)
     with timings.phase("line up"):
-        rough = offset(reference["square"], centre_square(lum))
         # The picture is framed where most frames sat (see framing()): the
         # reference's stars have been moved there already, and the rough
         # line-up, which knows only the reference as it was taken, follows.
-        moved = reference.get("moved", (0.0, 0.0))
-        rough = (rough[0] + moved[1], rough[1] + moved[0])
-        centre = (lum.shape[1] / 2, lum.shape[0] / 2)
-        r, t, matched, residual = align(stars, reference["stars"], rough, centre)
-        flipped = False
-        if try_flip and (matched < 8 or residual is None or residual > FLIP_RESIDUAL):
-            # Taken on the other side of the meridian, the picture is upside
-            # down: the tube swung over the pole in between. Turn it and retry.
-            # A dense field gives eight or more chance matches to an upside-down
-            # frame, so a poor fit is enough to try: on 14 October 2026 all but
-            # 8 of 226 frames from the far side of M31 were stacked unturned,
-            # 7.7 pixels out, and the galaxy came out twice.
-            turned = np.ascontiguousarray(rgb[::-1, ::-1])
-            turned_lum = turned.sum(axis=2)
-            turned_stars = find_stars(turned_lum)
-            again = align(turned_stars, reference["stars"],
-                          offset(reference["square"], centre_square(turned_lum)), centre)
-            if again[2] >= 8 and (again[2] > matched or (again[3] is not None and (residual is None or again[3] < residual))):
-                rgb, flipped = turned, True
-                r, t, matched, residual = again
+        rgb, r, t, matched, residual, flipped = line_up(rgb, lum, stars, reference,
+                                                        reference.get("moved", (0.0, 0.0)))
     with timings.phase("resample"):
         # `scale` puts frames of a different exposure length on the same footing.
         registered = warp(rgb, r, t) * scale
     with timings.phase("write registered"):
-        frames = np.memmap(store, dtype=np.float16, mode="r+", shape=shape)
+        frames = np.memmap(store, dtype=store_dtype(shape), mode="r+", shape=shape)
         frames[slot] = registered
         frames.flush()
     info = {"shift": [float(t[0]), float(t[1])],
@@ -1152,13 +1184,18 @@ def live_frame(mosaic, header, exposure, gain, folder, index, save, recent, refe
         out["entry"].update(shift=[0.0, 0.0], rotation=0.0, matched=len(stars), residual=0.0)
         return out
     with timings.phase("line up"):
-        rough = offset(reference["square"], centre_square(lum))
-        r, t, matched, residual = align(stars, reference["stars"], rough)
-    with timings.phase("resample"):
-        out["frame"] = warp(rgb, r, t)
+        rgb, r, t, matched, residual, flipped = line_up(rgb, lum, stars, reference)
     out["entry"].update(shift=[float(t[0]), float(t[1])],
                         rotation=float(np.degrees(np.arctan2(r[1, 0], r[0, 0]))),
-                        matched=matched, residual=residual)
+                        matched=matched, residual=residual, flipped=flipped)
+    if not lined_up(matched):
+        # Good enough to keep, but its place is not known: stacked on the
+        # rough shift it would put a second copy of every star in the stack.
+        out["entry"].update(accepted=False, unaligned=True,
+                            reason=f"would not line up on the reference ({matched} stars matched)")
+        return out
+    with timings.phase("resample"):
+        out["frame"] = warp(rgb, r, t)
     return out
 
 

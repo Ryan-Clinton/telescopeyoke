@@ -87,8 +87,9 @@ def combine(stacks, saturation=1.25, say=print):
                       "shift_px": [round(v, 1) for v in info["shift"]]}
         say(f"  {band} lined up on {base}: {info['matched']} stars matched, shift "
             f"{info['shift'][0]:+.1f}, {info['shift'][1]:+.1f} px")
-        if not info["matched"]:
-            raise interface.Refusal("NO_STARS", f"The {band} stack matched no stars of the {base} stack: "
+        if not stacking.lined_up(info["matched"]):
+            raise interface.Refusal("NO_STARS", f"The {band} stack matched only {info['matched']} stars of the "
+                                    f"{base} stack (at least {stacking.LINED_UP} are needed): "
                                     "the colours would not line up.")
     valid = np.all([np.isfinite(i) for i in images.values()], axis=0)
     rgb = np.stack([np.where(valid, images[b], 0) for b in COLOURS], axis=2)

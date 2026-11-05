@@ -10,6 +10,9 @@ raw frame → saved to disk → dark and flat applied → 2x2 Bayer cells to RGB
 → stars measured (sharpness, roundness, brightness, count)
 → rejected if cloud, wind or a knock spoiled it
 → lined up on the first frame: shift and rotation, to a fraction of a pixel
+  (or turned round, if taken on the other side of the meridian)
+→ rejected if fewer than 8 of its stars sit on the reference's: its place is
+  not known, and stacked on a guess it would double every star
 → added to a running stack that leaves out satellite trails
 → web page updated
 ```
@@ -20,7 +23,8 @@ It prints a line per frame, such as `032 ACCEPT  FWHM 3.4  round 0.93  stars
 When the run ends, `restack.py` does the same job again with hindsight: it
 measures every saved frame, judges each against the better half of the
 session (so a half-cloudy night does not set a cloudy standard), keeps the
-best 85% of those that pass, lines them up on the sharpest, weights each by
+best 85% of those that pass, lines them up on the sharpest (leaving out any
+that will not line up, counted as `unaligned` in `restack.json`), weights each by
 sharpness, roundness, transparency and noise, clips
 outliers against the whole session's average, removes the sky gradient, and
 writes `final.fits` and `final.jpg` in the session folder
@@ -39,6 +43,13 @@ Things worth knowing:
 - **The 2x2 Bayer reduction is deliberate.** It halves the resolution to
   about 1.3 arcseconds per pixel on this telescope, which suits ordinary
   seeing; the sensor's native 0.66 would only record blur more finely.
+- **A frame that will not line up is never stacked.** Live, three good frames
+  in a row that will not line up mean the target has left the field: the run
+  re-centres with a plate solve, once. In the quality pass such frames are
+  left out with their reason, one session or several. Their raw files are
+  always kept. A mono camera's frames are lined up and stacked as one plane
+  at full float32 precision; a colour camera's three planes at float16, which
+  is already finer than a 12-bit frame's noise.
 - **Drift is used, not fought.** The mount is only sent back to the target
   once it has drifted a fifth of the frame. Until then the stars wander over
   different pixels, so the sensor's fixed pattern averages away.

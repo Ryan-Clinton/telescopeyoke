@@ -68,6 +68,7 @@ WEB = config.DATA / "web"
 # spreads the sensor's fixed pattern around, which averaging then removes.
 DRIFT_LIMIT = 0.2
 PLAIN_MISS = 0.08   # a plain GoTo back that leaves the frame this far (frame heights) off its reference: solve
+UNALIGNED = 3       # good frames in a row that will not line up on the reference: re-centre with a plate solve
 TRIAL_EXPOSURES = (2, 4, 8, 16, 30)   # the tracking test's lengths, in seconds
 ASSIST_EVERY = 15   # accepted frames between trims of the Dec creep
 # A running run looks here after every frame for an order from "ty run ...".
@@ -115,6 +116,8 @@ class Session:
         self.accepted, self.log = [], []
         self.drift = 0.0   # how far the newest frame was from the first since the last centring, in frame heights
         self.origin = None  # the shift of that first frame: drift is measured from it
+        self.unaligned = 0  # good frames in a row that would not line up on the reference (never stacked)
+        self.unaligned_solved = False   # and a plate-solved re-centre has been made for them
         self.track = []    # (time, x shift, y shift) of accepted frames since the last trim
         self.shifts = []   # the same for every accepted frame of the run
         self.timings = stacking.Timings()
@@ -140,6 +143,10 @@ class Session:
         entry, frame = result["entry"], result["frame"]
         entry["taken"] = round(taken or time.time(), 2)
         self.timings.add(result["timings"])
+        if entry.get("unaligned"):
+            self.unaligned += 1
+        elif entry["accepted"]:
+            self.unaligned, self.unaligned_solved = 0, False
         if entry["accepted"]:
             with self.timings.phase("stack"):
                 if self.reference is None:
@@ -1397,6 +1404,15 @@ def image(args, session, exposure, moving, holding, tracker):
                         if asked in ("assist-on", "assist-off"):
                             args.assist = asked == "assist-on"
                         told["recentre"] = told["recentre"] or asked == "recentre"
+                        if moving and session.unaligned >= UNALIGNED and not session.unaligned_solved:
+                            # Frames good enough to keep whose stars no longer sit on the
+                            # reference's are never stacked (stacking.lined_up): the
+                            # target has gone from the field, so it is found again. Once:
+                            # if they still will not line up, they are kept raw and the
+                            # quality pass judges them.
+                            print(f"  {session.unaligned} frames in a row would not line up on the reference; "
+                                  "re-centring with a plate solve", flush=True)
+                            told["recentre"], session.unaligned_solved = True, True
                         due = (args.recentre and since_centre >= args.recentre) or told["recentre"]
                         dither_due = bool(moving and args.dither and since_dither >= args.dither)
                         drifted = bool(moving and session.drift > DRIFT_LIMIT)
