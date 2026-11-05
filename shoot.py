@@ -67,6 +67,7 @@ WEB = config.DATA / "web"
 # as a fraction of the frame's height. The drift up to then is welcome: it
 # spreads the sensor's fixed pattern around, which averaging then removes.
 DRIFT_LIMIT = 0.2
+PLAIN_MISS = 0.08   # a plain GoTo back that leaves the frame this far (frame heights) off its reference: solve
 TRIAL_EXPOSURES = (2, 4, 8, 16, 30)   # the tracking test's lengths, in seconds
 ASSIST_EVERY = 15   # accepted frames between trims of the Dec creep
 # A running run looks here after every frame for an order from "ty run ...".
@@ -153,6 +154,8 @@ class Session:
                     self.origin = tuple(entry["shift"])
                 self.drift = float(np.hypot(entry["shift"][0] - self.origin[0],
                                             entry["shift"][1] - self.origin[1])) / frame.shape[0]
+                # How far off the reference (taken just after the solved centring), in frame heights.
+                self.off_reference = float(np.hypot(*entry["shift"])) / frame.shape[0]
                 self.track.append((taken or time.time(), *entry["shift"]))
                 self.shifts.append((taken or time.time(), *entry["shift"]))   # never cleared: the hold's
                 self.stack.add(frame)
@@ -320,7 +323,7 @@ def order(name=None, now=None):
     return left.get("order") if left.get("order") in KNOWN_ORDERS else None
 
 
-def recentre(target, aim_off=(0.0, 0.0)):
+def recentre(target, aim_off=(0.0, 0.0), solve=None):
     """Put the target back in the middle of the frame by plate solving, or
     with `aim_off` (arcminutes east and north) a little off it, for
     dithering. Returns False if the mount cannot be reached."""
@@ -335,7 +338,8 @@ def recentre(target, aim_off=(0.0, 0.0)):
         # A dither only has to land somewhere a little different: one GoTo,
         # no plate solving (17 October 2026: a solved dither took 1 to 3
         # minutes for a move of an arcminute). Centring the target solves.
-        scope.goto_target(target, config.load()["site"], solve=not any(aim_off), aim_off=aim_off)
+        scope.goto_target(target, config.load()["site"], solve=not any(aim_off) if solve is None else solve,
+                          aim_off=aim_off)
     except SystemExit as problem:
         print(f"  could not re-centre: {problem}", flush=True)
     except BaseException:
@@ -1195,6 +1199,8 @@ def image(args, session, exposure, moving, holding, tracker):
     rng = random.Random()
     ORDERS.unlink(missing_ok=True)   # an order left for an earlier run is not for this one
     told = {"stop": False, "recentre": False, "cloud": False, "cloudy": False}
+    plain_check = [None]    # after a plain GoTo back: how many frames were kept before it
+    plain_failed = [False]  # it missed: the next drift is centred with a plate solve
     checked = [0.0]   # when the Sun and the target were last checked
     paused = [0.0]    # when the run last said it was paused for cloud
     site = None
@@ -1298,6 +1304,7 @@ def image(args, session, exposure, moving, holding, tracker):
                 collect(everything=True)
                 print(f"  drifted {session.drift * 100:.0f}% of the frame; re-centring", flush=True)
                 recentre(args.name)
+                plain_failed[0], plain_check[0] = False, None   # solved: the next drift tries a plain GoTo again
                 session.drift, session.origin, since_centre = 0.0, None, 0
                 session.track.clear()   # the slew, not drift, moved the next frames
                 if holding and holding.state != "off":
@@ -1392,11 +1399,36 @@ def image(args, session, exposure, moving, holding, tracker):
                         told["recentre"] = told["recentre"] or asked == "recentre"
                         due = (args.recentre and since_centre >= args.recentre) or told["recentre"]
                         dither_due = bool(moving and args.dither and since_dither >= args.dither)
+                        drifted = bool(moving and session.drift > DRIFT_LIMIT)
                         other = bool(
-                            (moving and (session.drift > DRIFT_LIMIT or due))
+                            (moving and due)
                             or (holding and moving and holding.due(session.shifts))
                             or (args.assist and moving
                                 and len(session.track) >= live.get("shoot.assist_every", ASSIST_EVERY)))
+                        if plain_check[0] is not None and len(session.accepted) > plain_check[0]:
+                            # The first frame kept after a plain GoTo back: near the
+                            # reference (taken just after the solved centring), or
+                            # the full re-centre with its plate solve is made.
+                            plain_check[0] = None
+                            if getattr(session, "off_reference", 0.0) > PLAIN_MISS:
+                                print("  the plain GoTo back missed; re-centring with a plate solve", flush=True)
+                                plain_failed[0] = True
+                                told["recentre"] = True
+                                other = True
+                        if drifted and not other and not dither_due and not plain_failed[0] and go_on():
+                            # Drift back with one plain GoTo, which applies the pointing
+                            # error the last plate solve measured, the camera left open
+                            # so a cooled sensor stays cold (4 November 2026: each
+                            # re-centre cost about 4 minutes of re-cooling).
+                            collect(everything=True)
+                            print(f"  drifted {session.drift * 100:.0f}% of the frame; back with a plain GoTo, "
+                                  "the camera kept open", flush=True)
+                            recentre(args.name, solve=False)
+                            session.drift, session.origin, since_centre = 0.0, None, 0
+                            session.track.clear()
+                            plain_check[0] = len(session.accepted)
+                            continue
+                        other = other or drifted
                         if dither_due and not other and go_on():
                             # A dither is one GoTo with no plate solve, so it is made
                             # between frames with the camera left open: 4 November
