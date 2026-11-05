@@ -104,6 +104,83 @@ class Lent:
         return getattr(self._cam, name)
 
 
+class Kept:
+    """The camera keeper.py holds open and cold all night, borrowed by a
+    command in another process: each frame and setting goes through the
+    keeper, at this borrower's gain. Closing it, or its warm-up, leaves the
+    camera open and cold: the keeper warms it once, at the night's end.
+    settle() waits for the keeper's own slow cooling to be done."""
+
+    # What a borrower reads from the camera itself, not calls.
+    VALUES = {"name", "width", "height", "mono", "pattern", "bits", "flags", "target", "level", "ambient",
+              "profile", "profile_name", "binning", "refuses_binning", "clock", "exposures", "probed"}
+
+    def __init__(self, gain):
+        self.gain = gain
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+    def close(self):
+        pass
+
+    def warm_up(self, say=print, **_):
+        say("camera: kept cold by the camera keeper; it warms the sensor once, at the night's end")
+        return False
+
+    def cool(self, degrees, **_):
+        target = self.target
+        if target is not None and abs(float(degrees) - target) > 0.05:
+            raise Refusal("CAMERA_BUSY", f"The camera keeper holds the sensor at {target:g} °C, not "
+                                         f"{float(degrees):g} °C: ./keeper.py stop first.")
+        return True
+
+    def settle(self, say=print, sleep=time.sleep, wait=3600, **_):
+        import keeper
+        end, said = time.monotonic() + wait, 0.0
+        while True:
+            status = keeper.ask(("status",))
+            if status.get("ready"):
+                say(f"camera: sensor at {status['sensor_c']:.1f} °C, its target {status['target_c']:g} °C "
+                    "(kept cold by the camera keeper)")
+                return True
+            if time.monotonic() >= end:
+                raise Refusal("CAMERA_BUSY", f"The camera keeper's sensor is not at its target after "
+                                             f"{wait / 60:.0f} min: {keeper.words(status)}.")
+            if time.monotonic() - said >= 60:
+                say(f"camera: waiting for the keeper's cooling: {keeper.words(status)}")
+                said = time.monotonic()
+            sleep(5)
+
+    def __getattr__(self, name):
+        import keeper
+        if name.startswith("__"):
+            raise AttributeError(name)
+        if name in ("handle", "lib", "client"):
+            raise Refusal("CAMERA_BUSY", "The camera keeper holds the camera, and this needs the camera's "
+                                         "library itself: ./keeper.py stop first.")
+        if name in self.VALUES:
+            return keeper.ask(("get", name))
+
+        def call(*args, **kwargs):
+            # A function cannot cross to the keeper (say=print and the like):
+            # the keeper's own defaults stand in.
+            kwargs = {k: v for k, v in kwargs.items() if not callable(v)}
+            return keeper.ask(("call", name, self.gain, args, kwargs))
+        return call
+
+
+def kept():
+    """Whether the camera keeper (keeper.py) holds the camera for this command."""
+    if os.environ.get("TY_KEEPER") or BACKEND != "altair" or config.DEMO:
+        return False
+    import keeper
+    return keeper.running()
+
+
 @contextlib.contextmanager
 def lend(cam):
     """While inside, Camera() in this process gives `cam` (Lent), not a new
@@ -122,6 +199,8 @@ class Camera:
     def __new__(cls, port=PORT, gain=300):
         if cls is Camera and _LENT:
             return Lent(_LENT[-1], gain)
+        if cls is Camera and kept():
+            return Kept(gain)
         # With the SDK backend the caller gets altair.py's camera instead. It
         # is not a Camera, so the INDI set-up below never runs for it.
         if cls is Camera and config.DEMO:

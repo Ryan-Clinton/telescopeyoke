@@ -46,7 +46,7 @@ them and every file kept under `demo/`.
 | `moved.py` | Whether the telescope really turned, judged from two pictures or two plate solves; raises `MOUNT_NOT_MOVING` |
 | `horizon.py`, `panorama.py` | The skyline from where the telescope stands: measured by the telescope, or taken from a phone panorama. Kept in `cache/horizon.json`; the planner keeps targets above it |
 | `direct.py` | The mount without its handset (Wi-Fi adapter or EQDIR lead): stands in for the handset so `mount.py` is unchanged |
-| `camera.py`, `indi.py`, `altair.py`, `snap.py`, `liveview.py`, `focus.py` | Camera (through INDI, or Altair's own library) and focusing |
+| `camera.py`, `indi.py`, `altair.py`, `keeper.py`, `snap.py`, `liveview.py`, `focus.py` | Camera (through INDI, or Altair's own library; `keeper.py` holds the cooled camera open and cold all night for every command) and focusing |
 | `host.py` | Everything that differs between Linux and Windows, in one place |
 | `policy.py` | What each command may do: `read_only`, `local_write`, `hardware` or `external`, every runnable script classed once; `classify_text` gives the worst class in a shell line, and anything unknown or hidden counts as `hardware`. The base of the safety hooks in `docs/skills-and-agents.md` |
 | `agentlog.py` | `ty agent-report`: the decision record the hooks keep in `cache/agent-log.jsonl` (what ran, who asked, what was refused; redacted), summed up |

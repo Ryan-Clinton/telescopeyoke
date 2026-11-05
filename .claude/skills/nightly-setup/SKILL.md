@@ -59,7 +59,10 @@ project's commands refuse what is unsafe.
 
 ## The steps, in short
 
-1. `./ty mount settime` once the handset is at its main menu.
+1. `./ty mount settime` once the handset is at its main menu, and with the
+   183M plugged in, `./keeper.py start` in the background at the same time:
+   the camera cools slowly while the rest of the setup goes on, and stays
+   open and cold for every step until the night's end.
 2. Ask where the sky is clear, and choose every star from the answer.
 3. Only if the settime dry run says the motor check is on (`[mount]
    nudge_check`, off since 3 Nov 2026): `./ty mount nudge`, and ask whether

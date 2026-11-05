@@ -716,14 +716,30 @@ def dawn_flats(popen=subprocess.Popen):
     camera = config.camera_name()
     if stacking.dark_method(camera) != "matched" or not config.hardware()["train"].get("filterwheel"):
         return None
+    import shlex
+    here = Path(__file__).parent
+    python = shlex.quote(sys.executable)
+    # Then the camera keeper (keeper.py), if it holds the camera, warms the
+    # sensor slowly and lets it go: the night's one warm-up, after the flats.
+    line = (f"{python} calibrate.py flat --twilight --tell --filters {' '.join(DAWN_FILTERS)}; "
+            f"{python} keeper.py stop")
     FLATS_LOG.parent.mkdir(parents=True, exist_ok=True)
     with open(FLATS_LOG, "w", encoding="utf-8") as log:
-        popen([sys.executable, str(Path(__file__).with_name("calibrate.py")), "flat", "--twilight", "--tell",
-               "--filters", *DAWN_FILTERS], stdout=log, stderr=subprocess.STDOUT,
-              cwd=str(Path(__file__).parent), start_new_session=True)
+        popen(["sh", "-c", line], stdout=log, stderr=subprocess.STDOUT, cwd=str(here), start_new_session=True)
     return ("Dawn flats in B, G, R and L will be taken from where it is parked as the sky brightens, "
             "with nothing over the tube, and you will be told when they are kept or if they fail: "
             "leave the camera, wheel and focus as they are until then.")
+
+
+def release_camera(popen=subprocess.Popen):
+    """The camera keeper, if it holds the camera, told to warm the sensor
+    slowly and let it go (in the background: the warm-up takes minutes)."""
+    import keeper
+    if not keeper.running():
+        return False
+    popen([sys.executable, str(Path(__file__).with_name("keeper.py")), "stop"], stdout=subprocess.DEVNULL,
+          stderr=subprocess.DEVNULL, cwd=str(Path(__file__).parent), start_new_session=True)
+    return True
 
 
 def end(say=print, send=None, run=subprocess.run, now=None, home=None, start_flats=None):
@@ -757,10 +773,11 @@ def end(say=print, send=None, run=subprocess.run, now=None, home=None, start_fla
                  if parked else
                  f"Observation is over. Tonight: {got}. The telescope could NOT be parked: it is still "
                  f"{state.get('state', 'where it was')}. Please check it.")
-        if parked and sessions:
-            flats = (start_flats or dawn_flats)()
-            if flats:
-                words += f" {flats}"
+        flats = (start_flats or dawn_flats)() if parked and sessions else None
+        if flats:
+            words += f" {flats}"
+        elif release_camera():
+            words += " The camera is being warmed slowly, then let go."
     say(words)
     send(words, say=say)
     return parked

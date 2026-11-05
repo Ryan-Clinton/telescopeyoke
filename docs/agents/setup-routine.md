@@ -76,6 +76,21 @@ with `./doctor.py --offline` ("handset answering and set up"), then
 It moves nothing. It gives the handset this laptop's date, time and site,
 and measures its clock. Every later step depends on it.
 
+At the same time, with the cooled camera (the 183M) plugged in, start the
+camera keeper in the background:
+
+    ./keeper.py start
+
+It opens the camera, cools it slowly to its `tec_target` (1 °C a minute,
+about 15 minutes from a warm sensor) while the rest of the setup goes on,
+and holds it open and cold all night: focus, polar alignment, plate solves,
+the runs and the darks all borrow it, so the cooler never stops between
+them. `./keeper.py status` says how cold it is. It warms the sensor slowly
+once, at the night's end (`schedule.py end`, after the dawn flats), or on
+`./keeper.py stop`. 5 November 2026: without it, every command opened and
+closed the camera, the cooler stopped each time, and the night went on
+warming and re-cooling.
+
 ## 2. Ask where the sky is clear
 
 **Ask the person.** They can see the sky and the forecast cannot: a forecast
