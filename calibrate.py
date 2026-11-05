@@ -174,9 +174,32 @@ def main():
                     help="flats: one after another in these filters (at dawn the sky brightens, so B G R L)")
     ap.add_argument("--twilight", action="store_true",
                     help="flats: dawn sky flats with nothing over the tube; waits for the twilight")
+    ap.add_argument("--tell", action="store_true",
+                    help="send the outcome to the person's phone when done, kept or failed (the dawn flats)")
     ap.add_argument("--json", action="store_true", help="answer in JSON at the end")
     args = ap.parse_args()
-    return interface.main("calibrate", lambda: run(args), args.json)
+    return interface.main("calibrate", lambda: told(args) if args.tell else run(args), args.json)
+
+
+def told(args, send=None):
+    """run(), with its outcome sent to the person's phone: the dawn flats run
+    with nobody watching, and a start is not a result."""
+    import notify
+    send = send or notify.send
+    try:
+        result = run(args)
+    except BaseException as problem:
+        send(f"Dawn flats: none kept. {problem or problem.__class__.__name__}")
+        raise
+    if args.kind == "flat":
+        bands = result.get("filters", [])
+        missing = [b for b in (args.filters or []) if b not in bands]
+        exposures = " ".join(f"{s:g}" for s in sorted(set(result.get("exposures", []))))
+        send(f"Dawn flats kept in {', '.join(bands)}"
+             + (f"; none in {', '.join(missing)} (the sky grew too bright)" if missing else "")
+             + ". They are used once their flat-darks exist: "
+             f"cap on, ./calibrate.py dark --exposure {exposures} --gain {args.gain}")
+    return result
 
 
 MATCHED_HOT = 8.0      # a pixel this many robust spreads above a dark's median is a bad (hot) pixel
@@ -259,7 +282,7 @@ def run_matched(args, camera):
             # first night, and the camera was packed away before any could
             # be. Every filter in one cold session, then the warm-up (a flat
             # used to close the camera cold, which stops the cooler at once).
-            kept, exposures = [], []
+            kept, exposures, bands = [], [], []
             try:
                 for band in getattr(args, "filters", None) or [None]:
                     try:
@@ -269,6 +292,7 @@ def run_matched(args, camera):
                         break
                     kept.append(found["file"])
                     exposures.append(found["exposure"])
+                    bands.append(band or "the filter in place")
             finally:
                 warm_up = getattr(cam, "warm_up", None)
                 if warm_up:
@@ -281,7 +305,7 @@ def run_matched(args, camera):
             print("Their flat-darks: with the cap on, ./calibrate.py dark --exposure "
                   + " ".join(f"{s:g}" for s in sorted(set(exposures))) + f" --gain {args.gain}")
             return {"kind": "flat", "frames": args.frames, "gain": args.gain, "files": kept,
-                    "exposures": exposures}
+                    "exposures": exposures, "filters": bands}
     print(f"saved {path}")
     return {"kind": args.kind, "frames": args.frames, "gain": args.gain, "file": str(path)}
 

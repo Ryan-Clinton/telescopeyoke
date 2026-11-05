@@ -718,11 +718,12 @@ def dawn_flats(popen=subprocess.Popen):
         return None
     FLATS_LOG.parent.mkdir(parents=True, exist_ok=True)
     with open(FLATS_LOG, "w", encoding="utf-8") as log:
-        popen([sys.executable, str(Path(__file__).with_name("calibrate.py")), "flat", "--twilight",
+        popen([sys.executable, str(Path(__file__).with_name("calibrate.py")), "flat", "--twilight", "--tell",
                "--filters", *DAWN_FILTERS], stdout=log, stderr=subprocess.STDOUT,
               cwd=str(Path(__file__).parent), start_new_session=True)
     return ("Dawn flats in B, G, R and L will be taken from where it is parked as the sky brightens, "
-            "with nothing over the tube: leave the camera, wheel and focus as they are until then.")
+            "with nothing over the tube, and you will be told when they are kept or if they fail: "
+            "leave the camera, wheel and focus as they are until then.")
 
 
 def end(say=print, send=None, run=subprocess.run, now=None, home=None, start_flats=None):
@@ -900,11 +901,20 @@ def add_session(blocks, pid):
     return ids
 
 
-def mark_block(step_id, status):
+def mark_block(step_id, status, kept_minutes=None):
     """A session's block as it starts ("running") or ends ("done", "skipped",
-    "failed"), with the time."""
+    "failed"), with the time. A block that ends says on the page how many
+    minutes of frames it kept against its planned minutes: 5 November 2026,
+    M81 and M82's L block was marked done with 3 of its 30 minutes kept."""
     now = time.time()
-    mark_id(step_id, status=status, **({"started": now} if status == "running" else {"finished": now}))
+    fields = {"started": now} if status == "running" else {"finished": now}
+    if kept_minutes is not None:
+        plan = load()
+        step = next((s for s in plan["steps"] if s.get("id", s["label"]) == step_id), None)
+        if step is not None:
+            fields["kept_minutes"] = round(float(kept_minutes), 1)
+            fields["label"] = f"{step_id}: kept {kept_minutes:.0f}"
+    mark_id(step_id, status=status, **fields)
 
 
 def end_session(pid):
