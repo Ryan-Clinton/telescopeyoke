@@ -103,16 +103,16 @@ not a detection says so, and why.
 **Observe**
 
 - 🌙 **Plans tonight's observing**: darkness, Moon, and a GO / MARGINAL / NO-GO verdict, with the discovery programmes timed into the clear spell
-- 🗓️ **Runs the whole night** (`schedule.py`): the agreed steps in order, not before their times; a failed step stops the rest and fetches you; at the end it parks the mount and tells you
+- 🗓️ **Runs the whole night** (`schedule.py`): the agreed steps in order, not before their times; a failed step stops the rest and fetches you; at the end it parks the mount and tells you (each piece proven; a whole night ended by it alone, not yet)
 - 🧭 **Plate-solves and centres GoTos automatically** (`goto M27 --solve`)
 - 🔭 **Controls SynScan mounts** through the handset, with the handset's clock errors corrected
 - 📷 **Captures and stacks images**: every raw frame kept, poor frames rejected, stars lined up to a fraction of a pixel, satellite trails clipped out, and the whole stack rebuilt from the raw frames afterwards
-- ❄️ **Runs a cooled mono camera and filter wheel**: cooled slowly once and held cold all night (`keeper.py`), several filters and targets in one cold session (`shoot.py --blocks`), a colour picture from L, R, G and B (`colour.py`)
-- 🎯 **Holds a transit's target on the same pixels all night** (`shoot.py --hold`), learning how the mount answers first
+- ❄️ **Runs a cooled mono camera and filter wheel**: cooled slowly once and held cold all night (`keeper.py`), several filters and targets in one cold session (`shoot.py --blocks`), a colour picture from L, R, G and B (`colour.py`; the first real try failed, its fix not yet rerun)
+- 🎯 **Holds a transit's target on the same pixels all night** (`shoot.py --hold`), learning how the mount answers first (simulator only so far)
 
 **Measure** ([what makes it different](docs/features.md))
 
-- 📐 **Measures the polar alignment**, by night from three plate solves or before dark from Polaris alone, and says which way to turn each adjuster
+- 📐 **Measures the polar alignment**, by night from three plate solves, and says which way to turn each adjuster; before dark from Polaris alone is experimental (not yet found by day)
 - 🧮 **Makes the best of a rough polar alignment**: predicts the drift it causes anywhere in the sky and creeps a motor against it
 - 🔊 **Focuses**: with a motor focuser by itself, or by ear with your hand on the knob: a click and a tone for every frame, and a few words at the turning points
 - 📏 **Measures itself**: the true home, the pointing on each side, the camera's real shutter time and stripes, how deep each picture reaches (planted fake stars) and how precise its photometry is
@@ -246,8 +246,10 @@ and so on, and `.\ty.cmd` (or `python ty`) for `./ty`. See
 Start Menu). It opens in a window of its own, with no terminal and no
 browser: Tonight, Targets, Imaging, Focus and Mount for observing; Camera,
 Telescope, Plate solver and Webcam for setting the equipment up; the tools;
-and the doctor, settings and logs. With a real mount, every move is checked
-with a dry run and shown as a plan, and nothing moves until you confirm it.
+and the doctor, settings and logs. With a real mount, a move you make in
+the application is checked with a dry run and shown as a plan, and goes
+only when you confirm it. A night's schedule you have agreed runs its own
+moves, each through the same limits and dry runs.
 From a terminal it is `./app.py`, or `./app.py --demo`. It has not yet been
 used with a real mount or camera.
 

@@ -12,7 +12,7 @@ below says, in italics, how far it has been proven; the evidence is in
 error and how well it repeats, how the drift answers the motor, the skyline)
 and the command for each thing it has not; in the application that is the
 Rig knowledge screen, with a "Measure this" button on each line. Each of these
-says how far it has been proven; [Current status](../README.md#what-has-been-proven) has the
+says how far it has been proven; [What has been proven](../README.md#what-has-been-proven) has the
 table and [docs/validation.md](validation.md) the full account.
 
 **Home position set by eye?** It photographs the sky, plate-solves where the

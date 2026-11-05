@@ -7,8 +7,8 @@ works.
 ## The most useful thing: a hardware report
 
 If you try telescopeyoke on your own mount or camera, say what happened,
-working or not. That is how the table of what has been tried, in the README,
-grows; your GitHub name goes beside your row if you want it there.
+working or not. That is how the table of what has been tried, in
+[docs/hardware.md](docs/hardware.md), grows; your GitHub name goes beside your row if you want it there.
 
 1. Run `./doctor.py --report` (or press "Write a hardware report" on the
    application's Doctor screen). It writes out what the computer is, what the
@@ -34,7 +34,10 @@ an issue: ask in
 
 ## Code
 
-- **Run `ruff check .` before sending a pull request.**
+- **Run `ruff check` on the files you changed before sending a pull request.**
+  There are no automated tests and no CI (removed on 4 November 2026);
+  what works is what has been seen to work, on real equipment or in the
+  demo.
 - **Anything that changes how the mount moves is tried in the demo against
   `simulator.py`.** If the simulator cannot express what you need, extend it
   in the same pull request.
@@ -45,8 +48,9 @@ an issue: ask in
 - **Hardware details go in `config.toml`,** with a default in `config.py`
   that keeps the original setup working.
 - **Say what you tested on.** A change proven on real equipment and one only
-  run against the simulator are both welcome; the README's status section
-  should stay true about which is which.
+  run against the simulator are both welcome; [docs/validation.md](docs/validation.md#current-conclusions)
+  and the README's "What has been proven" should stay true about which is
+  which. A fix is not proven until it has been seen working again.
 
 ## Safety
 
@@ -55,7 +59,7 @@ anything that moves it without a person having asked for that move, and do
 not add controls to the status page (`serve.py`): it is served to the local
 network without a login. Controls belong in the console (`console.py`),
 which answers this computer only; a new control there is one more row in its
-table of fixed commands, with a test, and anything that moves the mount goes
+table of fixed commands, tried in the demo, and anything that moves the mount goes
 through the plan a person confirms.
 
 ## What is out of scope

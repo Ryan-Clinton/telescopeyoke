@@ -2,6 +2,12 @@
 
 [README](../README.md) · [All docs](README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Results](results.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
+> **Tests, then and now.** The project's tests and CI were removed on 4
+> November 2026 at the owner's request. Where this page says something is
+> "tested" or "a test checks", that records how it was checked when it was
+> built; nothing is checked by tests now. Before a commit: `ruff check` on
+> the changed files. The hooks themselves still run in every session.
+
 Built 17 October 2026: the command classes
 (`policy.py`), the safety hooks and the decision record (`.claude/hooks/`,
 `agentlog.py`, `./ty agent-report`), the run watch (`./ty watch-run`), fourteen skills in `.claude/skills/` and seven
@@ -115,7 +121,7 @@ cannot be forgotten by a blacklist.
 
 1. **Commands only.** Every step is a project command, never inline Python
    and never a one-off script (CLAUDE.md). A skill needing something no
-   command does waits for the command, written with its test.
+   command does waits for the command.
 2. **Loading a skill is not permission to move.** A skill may load from
    what the person says, and then run `read_only` commands and dry runs at
    once. A `hardware` command runs only when the person has asked for that
@@ -276,9 +282,8 @@ one front door, the same checks. The rest (`patrol.py`, `polaralign.py`,
 - **Loads:** "make that a command", or when a procedure has just worked by
   hand.
 - **Does:** the script with `--json`, and `--dry-run` if it touches
-  hardware; its class in `policy.COMMANDS`; its schema, `test_interface.py`,
-  a test of its own; the lines in `docs/agents/commands.md` and AGENTS.md;
-  the full test run in the background.
+  hardware; its class in `policy.COMMANDS`; its schema in `schemas/`; the lines in
+  `docs/agents/commands.md` and AGENTS.md; `ruff check` on it.
 
 ### `release`
 
@@ -323,7 +328,7 @@ any `hardware` or `external` command from a subagent, whatever its tools.
 - **`code-reviewer`** knows what a general review does not: every kept
   JSON through `records.write`; a `--json` change in three places; no path
   from `ROOT` into `frames/`, `web/`, `cache/` or `horizon/`; a new script
-  given its class in `policy.py`; the demo and tests still working.
+  given its class in `policy.py`; the demo still working.
 
 ## The background jobs (no model)
 

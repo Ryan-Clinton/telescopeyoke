@@ -8,12 +8,20 @@ what came out, and what it does not show. The full account of what is and
 is not proven is [Validation](validation.md); the discovery programme's own
 record is [docs/discovery/results.md](discovery/results.md).
 
+Each result names its kind of evidence, since they answer different
+questions: a **real-sky observation** (this telescope's own frames),
+**instrument characterisation** (measuring the rig itself), **archive
+analysis** (public data, no telescope of ours), **controlled software
+validation** (finding what was planted, so the answer is known) and
+**public operation** (it ran in front of people).
+
 None of this is a discovery. The project has found known objects again,
 rejected its own weak results, and measured its own equipment; it has not
 yet found anything new.
 
 ## A GoTo that finds its own way: M27, 3 October 2026
 
+- **Evidence:** real-sky observation.
 - **Question:** can a mount whose home was set by eye, about ten degrees
   out, still put a target in the middle of the frame?
 - **With:** EQ3 Pro, 150P, Hypercam 183C, on the first night.
@@ -28,6 +36,7 @@ yet found anything new.
 
 ## Measuring the mount: polar axis, home and pointing, October to November 2026
 
+- **Evidence:** instrument characterisation, on real stars.
 - **Question:** how far is a cheaply set-up mount from right, and can it be
   measured and put right without a polar scope?
 - **With:** the EQ3 Pro and plate solves of real stars.
@@ -45,6 +54,7 @@ yet found anything new.
 
 ## A comet found by the hunt itself: GOES-19 CCOR-1, 19 October 2026
 
+- **Evidence:** archive analysis (live public spacecraft pictures), a known object found again.
 - **Question:** can a search that runs every six hours, with no one
   watching, find a sungrazing comet in live spacecraft pictures?
 - **With:** 74 public CCOR-1 coronagraph pictures from GOES-19; SOHO's C3
@@ -63,6 +73,7 @@ yet found anything new.
 
 ## An exoplanet transit, and why it was not a detection: WASP-12 b, 20 October 2026
 
+- **Evidence:** real-sky observation.
 - **Question:** can a 150 mm Newtonian on an EQ3 measure a hot Jupiter's
   transit?
 - **With:** the 150P and Hypercam 183C, 973 frames through ingress and the
@@ -82,6 +93,7 @@ yet found anything new.
 
 ## Novae in M31 and M33: the patrol, October and November 2026
 
+- **Evidence:** real-sky observation, with controlled software validation (planted fakes) and an archive re-detection (ZTF).
 - **Question:** can image subtraction on this rig's frames find a nova in a
   nearby galaxy, without drowning in false candidates?
 - **With:** the 150P and 183C's M31 and M33 stacks; ZTF's archive images.
@@ -99,6 +111,7 @@ yet found anything new.
 
 ## Stars like Tabby's in Kepler's archive, November 2026
 
+- **Evidence:** archive analysis, a known result found again.
 - **Question:** are there other stars that dim like KIC 8462852?
 - **With:** Kepler's public light curves (about 150,000 stars, 2009-2013),
   and TESS's; no telescope of ours.
@@ -114,6 +127,7 @@ yet found anything new.
 
 ## Radio SETI in Breakthrough Listen's open data, November 2026
 
+- **Evidence:** archive analysis, with controlled software validation (planted signals).
 - **Question:** can a laptop search Green Bank's published recordings for
   narrowband signals, telling our own interference from a signal from the
   target?
@@ -131,6 +145,7 @@ yet found anything new.
 
 ## The cooled mono camera's first night: M33, 4-5 November 2026
 
+- **Evidence:** real-sky observation and instrument characterisation.
 - **Question:** does the new train (Altair 183M PRO TEC, Starlight Xpress
   wheel, 0.9x coma corrector at 675 mm) work on the sky, and does it beat
   the 183C?
@@ -152,6 +167,7 @@ yet found anything new.
 
 ## On air: the live broadcast, from 20 October 2026
 
+- **Evidence:** public operation.
 - **Question:** can a night's work be explained live, as it happens, with
   nothing made up?
 - **With:** `./stream.py`, Twitch and YouTube.

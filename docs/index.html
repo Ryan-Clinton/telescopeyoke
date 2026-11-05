@@ -3,12 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TelescopeYoke: a self-measuring robotic observatory for affordable GoTo mounts</title>
+<title>TelescopeYoke: a robotic observatory and discovery station for affordable GoTo telescopes</title>
 <meta name="description" content="Free, open-source robotic observatory software for Sky-Watcher SynScan mounts (EQ3, EQ5, HEQ5, EQ6): self-centring GoTos by plate solving, polar alignment, focusing, stacking and whole nights run with an AI agent, plus nova patrols, a comet hunt, Kepler archive and radio SETI searches. Linux, with a Windows port. Try the demo with no telescope.">
 <link rel="canonical" href="https://ryan-clinton.github.io/telescopeyoke/">
-<meta property="og:title" content="TelescopeYoke">
-<meta property="og:description" content="A self-measuring robotic observatory for affordable GoTo mounts, starting with Sky-Watcher SynScan: it measures and corrects its own faults, runs whole nights, hunts for new objects and tells you what matters: self-centring GoTos, focusing by ear, a skyline from a phone panorama, polar alignment and stacking.">
+<meta property="og:title" content="TelescopeYoke: a robotic observatory and discovery station for affordable GoTo telescopes">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://ryan-clinton.github.io/telescopeyoke/">
+<meta property="og:description" content="Free, open-source robotic observatory software for Sky-Watcher SynScan mounts: self-centring GoTos, polar alignment, focusing, stacking and whole nights run with an AI agent, plus nova patrols, a comet hunt, Kepler archive and radio SETI searches.">
 <meta property="og:image" content="https://ryan-clinton.github.io/telescopeyoke/social-preview.png">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="logo.svg">
 <style>
   :root { --ground: #0c0e14; --panel: #151924; --rule: #2a3040; --ink: #e6e8ee; --quiet: #9aa3b5; --go: #6fcf97; --warn: #f2c14e; --link: #8ab4ff; }
@@ -72,11 +75,11 @@
   <li><b>Takes and stacks the pictures</b>: short exposures, each one checked, poor ones rejected, the rest lined up and added, with every raw frame kept so the picture can be rebuilt later.</li>
   <li><b>Plans the night</b>: darkness, Moon, cloud, and a GO / MARGINAL / NO-GO verdict, with targets ranked for your own sky.</li>
   <li><b>Controls Sky-Watcher SynScan mounts</b> through the handset's serial lead, correcting for a handset clock that is wrong.</li>
-  <li><b>Keeps the mount inside its limits</b>. Every move is checked first and shown as a plan; nothing turns until you confirm it.</li>
-  <li><b>Runs the whole night</b>: the agreed steps in order, a failed step fetches you, and at the end it parks the mount and tells you.</li>
+  <li><b>Keeps the mount inside its limits</b>. Every move is checked against the limits first. A move you make in the application is shown as a plan and goes only when you confirm it; a night's schedule you have agreed runs its own moves through the same checks.</li>
+  <li><b>Runs the whole night</b>: the agreed steps in order, a failed step fetches you, and at the end it parks the mount and tells you. Each piece has run on the real mount; a whole night ended by it alone has not yet.</li>
   <li><b>Hunts for something new</b>: novae in M31 and M33 by image subtraction, comets in spacecraft pictures every six hours, exoplanet transits; each find checked before it reaches you, with the evidence.</li>
   <li><b>Researches without the telescope</b>: Kepler and TESS light curves searched for stars that dim like Tabby's, each lead checked against Gaia, SIMBAD and VSX, and Breakthrough Listen's open radio data searched for narrowband signals. No discovery yet, and it says so.</li>
-  <li><b>Runs a cooled mono camera and filter wheel</b>: cooled slowly once and held cold all night, several filters and targets in one cold session.</li>
+  <li><b>Runs a cooled mono camera and filter wheel</b>: cooled slowly once and held cold all night, several filters and targets in one cold session. Its first colour picture failed; the fix is not yet rerun.</li>
   <li><b>Tells you what matters</b>: on your phone with the evidence, and when it needs your hands, through the house's lights and a speaker.</li>
   <li><b>Explains itself live</b>: a YouTube and Twitch broadcast with the stack building up, a presenter that says what and why, and chat commands viewers can ask but not operate.</li>
   <li><b>Works with an AI agent</b>: every command answers in a fixed JSON shape, skills and specialist agents hold the routines, and code that does not depend on the agent decides what may move.</li>

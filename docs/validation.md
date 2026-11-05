@@ -3,9 +3,11 @@
 [README](../README.md) · [All docs](README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Results](results.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
 This page is the one record of what has been proven on real hardware.
-The README's "Current status", the guides and the home page follow these
-conclusions; where they differ, this page is right and they are out of
-date. The account underneath, night by night, keeps everything that was
+The README's "What has been proven", [Results](results.md), the guides and
+the home page follow these conclusions; where they differ, this page is
+right and they are out of date. A fix committed after a night is not a
+proof: a feature that failed on the sky stays failed here until a later
+night shows the fix working. The account underneath, night by night, keeps everything that was
 tried, including figures later found to be wrong.
 
 ## Current conclusions
@@ -301,7 +303,7 @@ views share nothing to measure a shift by.
 
 ## What has and has not been proven, in full
 
-The README's "Current status" has the table. This is the account behind it.
+The README's "What has been proven" has the table. This is the account behind it.
 
 Working on real hardware and real stars: the night report and web page,
 mount moves through the handset, camera frames, focusing, plate solving,

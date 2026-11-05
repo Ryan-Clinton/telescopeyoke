@@ -42,7 +42,7 @@ laptop; the SDK zip may be newer.
 3. **No ASCOM, no WSL, no new framework.** Keep to the design principles in
    `AGENTS.md`. New dependencies allowed: `tzdata` (Windows only). Nothing
    else without a reason written in the pull request.
-4. **Say what was proven.** The README's hardware table and "Current status"
+4. **Say what was proven.** The README's hardware table and "What has been proven"
    get a Windows row that says exactly what ran: tests only, or real gear.
 5. **Vendor files are not committed.** `altaircam.py` and `altaircam.dll`
    belong to Altair. They go in `vendor/altair/`, and `vendor/` is ignored.
