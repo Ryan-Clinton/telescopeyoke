@@ -1379,6 +1379,11 @@ def image(args, session, exposure, moving, holding, tracker):
                     settle = getattr(cam, "settle", None)
                     if settle:
                         settle(say=lambda line: print(f"  {line}", flush=True))
+                        if index == 0:
+                            # The run's minutes count from its first frame, not from
+                            # the cool-down: 5 November 2026, M33's 20-minute L block
+                            # spent 14 of them cooling from the air's temperature.
+                            started = time.monotonic()
                     # The filter in the light path, each time the camera opens,
                     # when the train has the wheel in it: every frame says the
                     # position the wheel confirmed (FILTPOS, FILTER), and with no
