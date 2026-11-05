@@ -67,6 +67,7 @@ WEB = config.DATA / "web"
 # as a fraction of the frame's height. The drift up to then is welcome: it
 # spreads the sensor's fixed pattern around, which averaging then removes.
 DRIFT_LIMIT = 0.2
+DITHER_SETTLE_S = 6   # seconds after an open-camera dither or plain GoTo back before the next frame
 PLAIN_MISS = 0.08   # a plain GoTo back that leaves the frame this far (frame heights) off its reference: solve
 UNALIGNED = 3       # good frames in a row that will not line up on the reference: re-centre with a plate solve
 TRIAL_EXPOSURES = (2, 4, 8, 16, 30)   # the tracking test's lengths, in seconds
@@ -1482,6 +1483,7 @@ def image(args, session, exposure, moving, holding, tracker):
                             print(f"  drifted {session.drift * 100:.0f}% of the frame; back with a plain GoTo, "
                                   "the camera kept open", flush=True)
                             recentre(args.name, solve=False)
+                            time.sleep(DITHER_SETTLE_S)
                             session.drift, session.origin, since_centre = 0.0, None, 0
                             session.track.clear()
                             plain_check[0] = len(session.accepted)
@@ -1497,6 +1499,10 @@ def image(args, session, exposure, moving, holding, tracker):
                             print(f"  dithering: {aim[0]:+.1f}' east, {aim[1]:+.1f}' north of {args.name}, "
                                   "the camera kept open", flush=True)
                             recentre(args.name, aim)
+                            # The gears take a moment to bite again after the move:
+                            # 5 November 2026, the frame straight after each open-camera
+                            # dither trailed and was thrown away.
+                            time.sleep(DITHER_SETTLE_S)
                             session.drift, session.origin, since_centre, since_dither = 0.0, None, 0, 0
                             session.track.clear()
                             continue
