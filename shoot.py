@@ -1109,7 +1109,17 @@ def in_blocks(args):
                 pass
 
     try:
-        return run_blocks(args, mount, results, skipping, mark)
+        # The camera opened once for the whole session and lent to every
+        # opening in it (camera.lend): the blocks, the re-centres and their
+        # plate solves, so the cooled sensor's cooler never stops between them.
+        # The wheel turns between frames, with no exposure in flight. A sensor
+        # left cold by any way out is warmed before the camera is closed.
+        from camera import lend
+        with Camera(gain=args.gain) as kept, lend(kept):
+            try:
+                return run_blocks(args, mount, results, skipping, mark)
+            finally:
+                warm(kept)
     finally:
         if schedule is not None:
             try:

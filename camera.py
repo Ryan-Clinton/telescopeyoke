@@ -12,6 +12,7 @@ exposure length, so a 2 s exposure takes roughly 14 s to arrive. On USB 3 a
     cam.use("focus_fast")                  # quick frames for focusing: binned 2x2 if the camera will
     cam.use("imaging")                     # the full sensor again
 """
+import contextlib
 import io
 import json
 import os
@@ -75,8 +76,52 @@ def shutter_share(speed):
     return share
 
 
+_LENT = []   # a cooled camera a session keeps open, lent to every Camera() in this process
+
+
+class Lent:
+    """The camera a session keeps open (lend()), handed to a Camera() opened
+    in the same process: at the gain asked for while borrowed, and never
+    closed by the borrower, so a cooled sensor's cooler is never stopped.
+    5 November 2026: every close between a session's blocks, re-centres and
+    plate solves stopped the 183M's cooler, and each reopen began with
+    minutes of re-cooling at 1 °C a minute."""
+
+    def __init__(self, cam, gain):
+        self._cam, self._before = cam, cam.gain
+        cam.gain = gain
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+    def close(self):
+        self._cam.gain = self._before
+
+    def __getattr__(self, name):
+        return getattr(self._cam, name)
+
+
+@contextlib.contextmanager
+def lend(cam):
+    """While inside, Camera() in this process gives `cam` (Lent), not a new
+    opening. Only a cooled camera is lent; any other is opened as before."""
+    if getattr(cam, "warm_up", None) is None:
+        yield cam
+        return
+    _LENT.append(cam)
+    try:
+        yield cam
+    finally:
+        _LENT.remove(cam)
+
+
 class Camera:
     def __new__(cls, port=PORT, gain=300):
+        if cls is Camera and _LENT:
+            return Lent(_LENT[-1], gain)
         # With the SDK backend the caller gets altair.py's camera instead. It
         # is not a Camera, so the INDI set-up below never runs for it.
         if cls is Camera and config.DEMO:
