@@ -1184,6 +1184,21 @@ def run_blocks(args, mount, results, skipping, mark):
         mark(number - 1, "running")
         try:
             results.append(held(args))
+        except interface.Refusal as refusal:
+            if refusal.code_name != "NO_USABLE_FRAMES" or not args.ended_on_time:
+                mark(number - 1, "failed")
+                if args.ended_on_time and args.keep_cold:
+                    warm_after_block(args)
+                raise
+            # Its minutes ran out with nothing kept (cloud or haze all through):
+            # the next block goes on. 5 November 2026, M81 and M82's R block
+            # kept nothing in haze and ended the session before G, B and the
+            # supernova.
+            print(f"  block {number}: no usable frames in its {minutes:g} minutes; going on", flush=True)
+            mark(number - 1, "skipped")
+            if last and args.keep_cold:
+                warm_after_block(args)
+            continue
         except BaseException:
             mark(number - 1, "failed")
             if args.ended_on_time and args.keep_cold:
