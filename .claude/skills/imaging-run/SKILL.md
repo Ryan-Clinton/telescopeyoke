@@ -16,10 +16,21 @@ allowed-tools: Bash(./ty mount goto * --dry-run) Bash(./ty shoot * --dry-run) Ba
 4. Start the watch as a Monitor: `./ty watch-run`. It prints nothing while
    all is well and a line when frames stop, stop being kept, the share kept
    halves, the stars dim or come back, or the run ends. Tell the person at
-   once about each line; for dimming stars, ask what the sky looks like
-   before saying cloud, dew or haze.
+   once about each line; for dimming stars, the satellite first
+   (`./clouds.py`; the watch's line already says what it shows), then ask
+   what the sky looks like before saying haze or dew.
 5. While they are inside nobody is watching the mount: make no move they
    did not ask for.
+
+## Planning a picture with the mono camera
+
+A picture needs L, R, G and B of one target, about three hours between
+them: an hour or more of L and 30 to 40 minutes of each colour. Asked for
+several targets in one night, give each its minutes and say what that
+gets: under about an hour in all, a grey snapshot, not a picture.
+5 November 2026: five targets in one night gave 34 minutes of M33 in L and
+3 to 8 minutes of the rest, and no colour. `schedule.py end` reports each
+block's minutes kept against those planned.
 
 ## Switching target
 

@@ -88,6 +88,21 @@ def update(site, when=None):
     return here, clear, out
 
 
+def verdict(here, clear):
+    """The satellite's word on the site: "cloud", "thin or broken cloud" or "probably clear"."""
+    return "cloud" if here - clear > 20 else "probably clear" if here - clear < 10 else "thin or broken cloud"
+
+
+def over_site():
+    """The satellite's verdict on the site now (the page's picture updated
+    too), or None if no picture came."""
+    try:
+        here, clear, _ = update(config.load()["site"])
+    except (RuntimeError, requests.RequestException, OSError):
+        return None
+    return verdict(here, clear)
+
+
 if __name__ == "__main__":
     import argparse
     import datetime as dt
@@ -99,6 +114,5 @@ if __name__ == "__main__":
         here, clear, saved = update(config.load()["site"], when)
     except (RuntimeError, requests.RequestException) as problem:
         raise SystemExit(f"No satellite picture: {problem}. Try again in a few minutes.")
-    verdict = "cloud" if here - clear > 20 else "probably clear" if here - clear < 10 else "thin or broken cloud"
-    print(f"over the site: {here:.0f}, clear areas: {clear:.0f} -> {verdict}")
+    print(f"over the site: {here:.0f}, clear areas: {clear:.0f} -> {verdict(here, clear)}")
     print(f"saved {saved}")

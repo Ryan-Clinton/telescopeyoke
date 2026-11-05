@@ -786,12 +786,29 @@ def what_dimmed(log, last=CLOUD_STOP):
     stars = float(np.median([f["flux"] for f in recent])) / max(float(np.median([f["flux"] for f in kept])), 1e-6)
     sky = float(np.median([f["background"] for f in recent])) / max(float(np.median([f["background"] for f in kept])), 1e-6)
     levels = f"stars at {100 * stars:.0f}% of their kept brightness, sky at {100 * sky:.0f}%"
+    # The satellite first: 5 November 2026, dimmed stars were put down to dew
+    # and the dawn flats skipped, while Meteosat showed cloud over the site
+    # all night. Dew is only mentioned when the satellite sees no cloud.
+    seen = satellite()
+    if seen in ("cloud", "thin or broken cloud"):
+        return f"{levels}: {seen} over the site on the satellite"
     if sky > SKY_LIT:
         return f"{levels}: cloud lit by the town, or a light shining in"
     if stars < ALL_GONE:
         return f"{levels}: thick cloud, or something in front of the telescope"
-    return (f"{levels}: haze or thin cloud, or dew on the mirrors. Look up: if the sky is clear, "
-            "look down the tube for dew")
+    if seen is None:
+        return f"{levels}: haze or thin cloud (no satellite picture to tell)"
+    return (f"{levels}: the satellite sees clear sky over the site, so haze too thin for it, or dew "
+            "on the mirrors. Look up: if the sky is clear, look down the tube for dew")
+
+
+def satellite():
+    """The Meteosat verdict over the site now (clouds.py), or None."""
+    try:
+        import clouds
+        return clouds.over_site()
+    except Exception:
+        return None
 
 
 def capture_rule(args):
@@ -1257,13 +1274,20 @@ def filter_for_run(args, say=None):
 def held(args):
     args.light_path = filter_for_run(args)      # before anything is exposed, the camera closed
     moving = not args.no_recentre
-    if moving and not getattr(args, "same_target", False):
+    import camera
+    if moving and (not getattr(args, "same_target", False) or camera._LENT):
+        # A block of the same target, with the camera kept open for the
+        # session (camera.lend), is plate-solved back onto the target too, so
+        # every filter frames the same field: the solve no longer closes the
+        # camera, so it costs seconds, not a re-cooling (proven 5 November
+        # 2026: -4.4 °C after a solved re-centre through the kept camera).
+        # 5 November 2026: M33's colour failed because nothing checked the
+        # framing between blocks and B ended 1070 px from L.
         moving = recentre(args.name)
     elif moving:
-        # Back to the target with one plain GoTo (the pointing error the last
-        # solve measured applied), no plate solve: 5 November 2026, with no
-        # move at all between M33's blocks the drift carried on through them,
-        # just under the re-centre limit in each, and B ended 1070 px from L.
+        # Camera not kept open (TY_NO_LEND): back to the target with one
+        # plain GoTo (the pointing error the last solve measured applied), no
+        # plate solve, which would close the camera and stop its cooler.
         moving = recentre(args.name, solve=False)
         time.sleep(DITHER_SETTLE_S)
     # --blocks, a block of the same target as the one before: already on it,
