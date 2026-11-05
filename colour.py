@@ -115,6 +115,21 @@ def combine(stacks, saturation=1.25, say=print):
         light = colour.mean(axis=2, keepdims=True)
         colour = colour * (detail[..., None] / np.maximum(light, 1.0))
     colour[~valid] = 0
+    # Cropped to the rectangle every filter covers, not padded with black:
+    # 5 November 2026, M33's filters drifted apart and three quarters of the
+    # picture was black. What was cropped is said, as a share of the L frame.
+    # The rows and columns nearly as full as the fullest (the overlap is a
+    # slightly turned rectangle, so none is quite whole).
+    by_row, by_col = valid.sum(axis=1), valid.sum(axis=0)
+    rows = np.where(by_row >= 0.97 * by_row.max())[0] if by_row.max() else np.array([], int)
+    cols = np.where(by_col >= 0.97 * by_col.max())[0] if by_col.max() else np.array([], int)
+    if rows.size and cols.size:
+        r0, r1, c0, c1 = rows[0], rows[-1], cols[0], cols[-1]
+        if r1 > r0 and c1 > c0:
+            colour = colour[r0:r1 + 1, c0:c1 + 1]
+            share = colour.shape[0] * colour.shape[1] / valid.size
+            used["covered"] = round(float(share), 2)
+            say(f"  every filter covers {share:.0%} of the frame; the picture is cropped to it")
     return np.clip(colour, 0, 255).astype(np.uint8), used
 
 
