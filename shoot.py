@@ -1144,6 +1144,7 @@ def run_blocks(args, mount, results, skipping, mark):
             if last and args.ended_on_time and args.keep_cold:
                 warm_after_block(args)   # the last block taken left the sensor cold
             continue
+        args.same_target = bool(results) and not target and args.ended_on_time
         args.filter, args.minutes, args.frames = name, float(minutes), frames_asked(None, minutes)
         args.keep_cold, args.ended_on_time = not last, False
         print(f"\nBlock {number} of {len(args.blocks)}: {args.name} in {name} for {minutes:g} min", flush=True)
@@ -1208,8 +1209,13 @@ def filter_for_run(args, say=None):
 def held(args):
     args.light_path = filter_for_run(args)      # before anything is exposed, the camera closed
     moving = not args.no_recentre
-    if moving:
+    if moving and not getattr(args, "same_target", False):
         moving = recentre(args.name)
+    # --blocks, a block of the same target as the one before: already on it,
+    # so no plate-solved re-centre. 5 November 2026: the solve kept the camera
+    # closed about a minute, the 183M's cooler stopped, and each block began
+    # with about 8 minutes of re-cooling from +2 °C. Drift is still taken back
+    # between frames, and frames that will not line up still re-centre.
     holding = None
     if moving and getattr(args, "hold", None):
         try:
