@@ -50,6 +50,8 @@ ERRORS = {
     "NO_SKY": (True, "The camera saw no open sky high up: the cap, thick cloud, or the exposure. "
                      "Look at the newest frame, then try again."),
     "NO_USABLE_FRAMES": (True, "Every frame was rejected; see the reasons in the session log."),
+    "FRAMES_APART": (False, "The filters' stacks frame different parts of the sky, so the target may be cut off: "
+                            "take the colour again with a re-centre at each filter, or ask for it anyway."),
     "NO_SESSION": (False, "No imaging run has been recorded yet."),
     "NO_CONFIG": (False, "Copy config.example.toml to config.toml and set the location."),
     "DEMO_UNSUPPORTED": (False, "This needs the real camera; there is no demo of it."),

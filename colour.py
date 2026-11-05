@@ -15,7 +15,9 @@ focus for the parfocal set, the sharpest, so a softer B (4 November 2026: HFR
 2.32 against L's 1.92) blurs only the colour, which the eye forgives.
 
 Without L, the R, G and B stacks make the picture alone; without all three of
-R, G and B, there is no colour and it says so. Nothing is moved or exposed.
+R, G and B, there is no colour and it says so. Filters that frame different
+sky (sharing under 75% of the frame) are refused, as the target would be cut
+off (--any-coverage makes it anyway). Nothing is moved or exposed.
 """
 import argparse
 import json
@@ -76,7 +78,10 @@ def lined_up(image, reference):
     return moved[..., 0], info
 
 
-def combine(stacks, saturation=1.25, say=print):
+MIN_COVERED = 0.75   # share of the frame every filter must cover for the target to be in the picture
+
+
+def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED):
     """The colour picture (8-bit RGB array) and what went into it."""
     have = [b for b in ("L",) + COLOURS if b in stacks]
     if not all(b in stacks for b in COLOURS):
@@ -130,6 +135,14 @@ def combine(stacks, saturation=1.25, say=print):
             share = colour.shape[0] * colour.shape[1] / valid.size
             used["covered"] = round(float(share), 2)
             say(f"  every filter covers {share:.0%} of the frame; the picture is cropped to it")
+            if share < min_covered:
+                # 5 November 2026: M33's filters shared 41% of the frame, the
+                # field beside the galaxy, which was cut off at its edge. A
+                # crop that size is a picture of the wrong sky, not a success.
+                raise interface.Refusal("FRAMES_APART", f"The filters share only {share:.0%} of the frame "
+                                        f"(at least {min_covered:.0%} keeps the target, framed in the middle "
+                                        "of each): the colour picture would cut it off. --any-coverage makes "
+                                        "it anyway.")
     return np.clip(colour, 0, 255).astype(np.uint8), used
 
 
@@ -138,6 +151,8 @@ def main():
     ap.add_argument("name", help="the object, as given to shoot.py")
     ap.add_argument("--night", metavar="YYYYMMDD", help="only sessions begun that date")
     ap.add_argument("--saturation", type=float, default=1.25, help="colour strength; 1 is as shot")
+    ap.add_argument("--any-coverage", action="store_true",
+                    help="make the picture even when the filters share under 75%% of the frame")
     ap.add_argument("--json", action="store_true", help="answer in JSON at the end")
     args = ap.parse_args()
     return interface.main("colour", lambda: run(args), args.json)
@@ -146,7 +161,7 @@ def main():
 def run(args):
     stacks = sessions(args.name, args.night)
     print("stacks: " + (", ".join(f"{b} {p.parent.name}" for b, p in sorted(stacks.items())) or "none"))
-    picture, used = combine(stacks, args.saturation)
+    picture, used = combine(stacks, args.saturation, min_covered=0.0 if args.any_coverage else MIN_COVERED)
     out = config.DATA / "web" / f"{stacking.folder_name(args.name)}-colour.jpg"
     out.parent.mkdir(exist_ok=True)
     Image.fromarray(picture).save(out, quality=93)

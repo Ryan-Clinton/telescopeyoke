@@ -63,6 +63,7 @@
               "NO_SESSION",
               "NO_STARS",
               "NO_USABLE_FRAMES",
+              "FRAMES_APART",
               "PLATE_SOLVE_FAILED",
               "SLEW_TIMED_OUT",
               "TARGET_BELOW_ALTITUDE_LIMIT",
