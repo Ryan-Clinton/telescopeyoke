@@ -1221,6 +1221,13 @@ def held(args):
     moving = not args.no_recentre
     if moving and not getattr(args, "same_target", False):
         moving = recentre(args.name)
+    elif moving:
+        # Back to the target with one plain GoTo (the pointing error the last
+        # solve measured applied), no plate solve: 5 November 2026, with no
+        # move at all between M33's blocks the drift carried on through them,
+        # just under the re-centre limit in each, and B ended 1070 px from L.
+        moving = recentre(args.name, solve=False)
+        time.sleep(DITHER_SETTLE_S)
     # --blocks, a block of the same target as the one before: already on it,
     # so no plate-solved re-centre. 5 November 2026: the solve kept the camera
     # closed about a minute, the 183M's cooler stopped, and each block began
