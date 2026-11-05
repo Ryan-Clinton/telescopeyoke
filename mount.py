@@ -820,6 +820,7 @@ class Mount:
         finally:
             if not again or outcome == "failed":
                 self.arrived(name, site, aim_off, outcome)
+        return outcome          # "centred" only when a plate solve found the object in the middle
 
     def _goto_target(self, name, site, solve, aim_off, plan, offset):
         """goto_target's move: "reached" once the mount has arrived, or

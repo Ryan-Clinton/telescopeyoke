@@ -69,6 +69,8 @@ WEB = config.DATA / "web"
 DRIFT_LIMIT = 0.2
 DITHER_SETTLE_S = 10  # seconds after an open-camera dither or plain GoTo back before the next frame
 REFERENCE_FEW = 30   # a live reference with fewer stars is replaced when clearer frames will not line up on it
+UNSOLVED = [False]   # the last plate-solved centring found no solution (cloud): tried again when stars come
+SOLVE_RETRY_FRAMES = 3   # good frames between tries
 PLAIN_MISS = 0.08   # a plain GoTo back that leaves the frame this far (frame heights) off its reference: solve
 UNALIGNED = 3       # good frames in a row that will not line up on the reference: re-centre with a plate solve
 TRIAL_EXPOSURES = (2, 4, 8, 16, 30)   # the tracking test's lengths, in seconds
@@ -359,8 +361,10 @@ def recentre(target, aim_off=(0.0, 0.0), solve=None):
         # A dither only has to land somewhere a little different: one GoTo,
         # no plate solving (17 October 2026: a solved dither took 1 to 3
         # minutes for a move of an arcminute). Centring the target solves.
-        scope.goto_target(target, config.load()["site"], solve=not any(aim_off) if solve is None else solve,
-                          aim_off=aim_off)
+        solving = not any(aim_off) if solve is None else solve
+        outcome = scope.goto_target(target, config.load()["site"], solve=solving, aim_off=aim_off)
+        if solving:
+            UNSOLVED[0] = outcome != "centred"
     except SystemExit as problem:
         print(f"  could not re-centre: {problem}", flush=True)
     except BaseException:
@@ -1284,6 +1288,7 @@ def image(args, session, exposure, moving, holding, tracker):
     told = {"stop": False, "recentre": False, "cloud": False, "cloudy": False}
     plain_check = [None]    # after a plain GoTo back: how many frames were kept before it
     plain_failed = [False]  # it missed: the next drift is centred with a plate solve
+    solve_retry = [-SOLVE_RETRY_FRAMES]   # frames kept when a failed centring was last tried again
     checked = [0.0]   # when the Sun and the target were last checked
     paused = [0.0]    # when the run last said it was paused for cloud
     site = None
@@ -1512,6 +1517,15 @@ def image(args, session, exposure, moving, holding, tracker):
                                 plain_failed[0] = True
                                 told["recentre"] = True
                                 other = True
+                        if (moving and UNSOLVED[0] and not other and session.accepted
+                                and len(session.accepted) - solve_retry[0] >= SOLVE_RETRY_FRAMES):
+                            # The last centring could not plate-solve (cloud): the aim
+                            # may be far off, so try again once stars come through.
+                            # 5 November 2026: M81 and M82's GoTo was 1.2° off and
+                            # the frames were of the wrong field until a later solve.
+                            solve_retry[0] = len(session.accepted)
+                            print("  the last centring could not plate-solve; stars now: trying again", flush=True)
+                            told["recentre"], other = True, True
                         if drifted and not other and not dither_due and not plain_failed[0] and go_on():
                             # Drift back with one plain GoTo, which applies the pointing
                             # error the last plate solve measured, the camera left open
