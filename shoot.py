@@ -1078,11 +1078,14 @@ def in_blocks(args):
         name, _, target = name.partition("@")
         if target:
             args.name, skipping = target, None
+        if not skipping:
+            # Every block, not only a new target's: one that reached the
+            # mount's limit in its last block is refused here too.
             try:
-                mount.plan_goto(target, config.load()["site"])
+                mount.plan_goto(args.name, config.load()["site"])
             except interface.Refusal as refusal:
-                skipping = target
-                print(f"\nSkipping {target} and its blocks: {refusal}", flush=True)
+                skipping = args.name
+                print(f"\nSkipping {args.name} and its blocks: {refusal}", flush=True)
         if skipping:
             if last and args.ended_on_time and args.keep_cold:
                 warm_after_block(args)   # the last block taken left the sensor cold
@@ -1223,6 +1226,9 @@ def image(args, session, exposure, moving, holding, tracker):
             why = night_over(args.name, site)
             if why:
                 print(f"  {why}; stopping", flush=True)
+                # --blocks: a target at the mount's limit ends its own blocks,
+                # not the night; the Sun ends everything.
+                told["limit"] = "past the meridian" in why
                 return False
         if stop == "cloud":
             if not args.through_cloud:
@@ -1387,11 +1393,13 @@ def image(args, session, exposure, moving, holding, tracker):
                             reopening = go_on()      # the last frame on a pause is the run's end
                             break
                 finally:
-                    if told.get("timed"):
+                    block_over = bool(told.get("timed") or told.get("limit"))
+                    if block_over:
                         args.ended_on_time = True
-                    # --blocks: a block ended on its minutes leaves the sensor
-                    # cold for the next filter (in_blocks warms it if none follows).
-                    if not reopening and not (getattr(args, "keep_cold", False) and told.get("timed")):
+                    # --blocks: a block ended on its minutes (or its target at
+                    # the mount's limit) leaves the sensor cold for the next
+                    # block (in_blocks warms it if none follows).
+                    if not reopening and not (getattr(args, "keep_cold", False) and block_over):
                         warm(cam)
             if jammed is not None:
                 # A jammed camera is opened again and the run goes on in the same
