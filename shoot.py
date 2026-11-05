@@ -68,6 +68,7 @@ WEB = config.DATA / "web"
 # spreads the sensor's fixed pattern around, which averaging then removes.
 DRIFT_LIMIT = 0.2
 DITHER_SETTLE_S = 10  # seconds after an open-camera dither or plain GoTo back before the next frame
+REFERENCE_FEW = 30   # a live reference with fewer stars is replaced when clearer frames will not line up on it
 PLAIN_MISS = 0.08   # a plain GoTo back that leaves the frame this far (frame heights) off its reference: solve
 UNALIGNED = 3       # good frames in a row that will not line up on the reference: re-centre with a plate solve
 TRIAL_EXPOSURES = (2, 4, 8, 16, 30)   # the tracking test's lengths, in seconds
@@ -146,6 +147,18 @@ class Session:
         self.timings.add(result["timings"])
         if entry.get("unaligned"):
             self.unaligned += 1
+            few = len(self.reference["stars"]) if self.reference else 0
+            if self.unaligned >= 2 and few < REFERENCE_FEW and (entry.get("stars") or 0) >= 2 * max(few, 1):
+                # A reference from a frame taken through thin cloud has too few
+                # stars for clearer frames to match: 5 November 2026, M81 and
+                # M82's was 8 stars, frames of 20-43 would not line up, and a
+                # plate-solved re-centre followed that could not help. The live
+                # stack starts again from the next good frame; the quality pass
+                # uses every raw frame whatever happens here.
+                print(f"  the reference has only {few} stars; frames with {entry.get('stars')} will not line up "
+                      "on it: the live stack starts again from the next good frame", flush=True)
+                self.reference, self.stack, self.origin = None, None, None
+                self.unaligned, self.unaligned_solved = 0, True
         elif entry["accepted"]:
             self.unaligned, self.unaligned_solved = 0, False
         if entry["accepted"]:
