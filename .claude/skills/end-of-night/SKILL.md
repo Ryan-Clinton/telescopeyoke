@@ -19,3 +19,10 @@ Only on the person's word. The imaging run stops at its own limits
 4. `./patrol.py --sweep` for any field with a reference.
 5. One line on what the night got: frames kept, total time, and anything
    the patrol found. The full summary is `morning-summary`, tomorrow.
+6. Flats with the 183M: `schedule.py end` starts the dawn sky flats itself
+   after parking (cache/dawn-flats.log). Ending by hand before dawn, start
+   them the same way: `./calibrate.py flat --filters B G R L --twilight` in
+   the background. Never skip them for dew no one has seen or cloud: an
+   overcast dawn makes good flats. Tell the person in one line to leave the
+   camera, wheel and focus alone until they are done, and if they pack up
+   first, the flats are lost: say so before, not after.

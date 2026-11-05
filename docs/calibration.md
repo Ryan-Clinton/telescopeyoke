@@ -287,7 +287,15 @@ not follow the hot pixels. `./calibrate.py` waits for the cooler and keeps:
   on, indoors or on a cloudy night, never in a clear window;
 - flats by train and filter (`flat-183m-cc-L-v1.fits`), kept raw; the
   flat-dark is a dark at the flat's exposure from the same library, taken
-  off and the flat normalised when it is used;
+  off and the flat normalised when it is used. Dawn sky flats need nothing
+  over the tube: `./calibrate.py flat --filters B G R L --twilight` waits
+  with the camera closed for the Sun at -12°, then takes each filter as
+  the sky brightens (B first, the faintest through its filter), and
+  warms the camera up after. `schedule.py end` starts it by itself once
+  the mount is parked after a night with this camera, so the flats match
+  the night's light path; the flat-darks wait for the cap (5 November
+  2026: the 183M's first night got none, and the camera was packed away
+  before any could be taken);
 - a bad-pixel map (`./calibrate.py badpixels`, from the longest dark kept),
   whose pixels are replaced by the median of their neighbours; no bias.
 

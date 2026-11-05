@@ -4,6 +4,8 @@
     ./calibrate.py dark --exposure 2 --gain 1500    cap ON the telescope
     ./calibrate.py bias --gain 1500                 cap ON
     ./calibrate.py flat --gain 300                  cap OFF, evenly lit view
+    ./calibrate.py flat --filters B G R L --twilight    dawn sky flats, nothing over
+                       the tube: waits for the twilight, one filter after another
 
 A dark is what the camera records with no light: its hot pixels, glow and
 fixed pattern. Subtracting it removes them from every frame. Darks must match
@@ -41,6 +43,7 @@ It takes no bias. Science (difference images, photometry, transits, depth)
 refuses its frames until every master matches (docs/calibration.md).
 """
 import argparse
+import time
 
 import numpy as np
 from astropy.io import fits
@@ -88,19 +91,66 @@ def normalise_flat(flat):
     return np.clip(out, 0.2, None)
 
 
-def flat_exposure(cam, target=0.4):
-    """An exposure that fills the sensor to about `target` of full scale."""
-    seconds = 0.01
-    for _ in range(8):
+SHORTEST, LONGEST = 0.0005, 5.0   # seconds a flat may take
+TWILIGHT_SUN = -12.0     # degrees: dawn flats wait for the Sun to be this high before the camera opens
+TWILIGHT_WAIT = 3600     # seconds the twilight is waited for, at most, once the camera is open
+
+
+class TooBright(Exception):
+    """The shortest exposure still fills the sensor: the sky is too bright for flats."""
+
+
+def flat_exposure(cam, target=0.4, twilight=False, sleep=time.sleep, most=TWILIGHT_WAIT):
+    """An exposure that fills the sensor to about `target` of full scale.
+    With `twilight`, a sky still too dark is waited for (a minute at a time,
+    up to `most` seconds) instead of refused, and one already too bright for
+    the shortest exposure raises TooBright."""
+    seconds, waited = 0.01, 0.0
+    for _ in range(200 if twilight else 8):
         mosaic, _ = cam.frame(seconds)
         level = float(np.median(mosaic[::8, ::8])) / WHITE
         print(f"  {seconds:.4f} s gives {level:.0%} of full scale", flush=True)
         if 0.3 <= level <= 0.5:
             return seconds
+        if twilight and level > 0.5 and seconds <= SHORTEST:
+            raise TooBright(f"{SHORTEST} s already fills {level:.0%} of the sensor")
+        wanted = seconds * target / max(level, 1e-6)
+        if twilight and (level < 0.005 or wanted > LONGEST):
+            if waited >= most:
+                raise SystemExit(f"The sky never grew bright enough for flats in {most / 60:.0f} minutes.")
+            print("  the sky is still too dark for flats; waiting a minute", flush=True)
+            sleep(60)
+            waited += 60
+            seconds = LONGEST if level >= 0.005 else 0.01
+            continue
         if level < 0.005:
             raise SystemExit("Hardly any light is reaching the camera. Is the cap off?")
-        seconds = float(np.clip(seconds * target / level, 0.0005, 5.0))
+        seconds = float(np.clip(wanted, SHORTEST, LONGEST))
     return seconds
+
+
+def sun_altitude(when=None):
+    """The Sun's altitude at the site now, in degrees."""
+    import mount
+    from astropy.coordinates import AltAz, get_sun
+    from astropy.time import Time
+    when = when or Time.now()
+    place = mount.location(config.load()["site"])
+    return float(get_sun(when).transform_to(AltAz(obstime=when, location=place)).alt.deg)
+
+
+def wait_for_twilight(sleep=time.sleep, altitude=sun_altitude):
+    """Before dawn sky flats: wait, with the camera closed, for the Sun to
+    reach TWILIGHT_SUN, so the cooler has settled by the time the sky is
+    bright enough. Refuses once the Sun is up."""
+    while True:
+        sun = altitude()
+        if sun > 0:
+            raise SystemExit(f"The Sun is {sun:.0f}° up: too late for sky flats.")
+        if sun >= TWILIGHT_SUN:
+            return
+        print(f"  the Sun is {-sun:.0f}° below the horizon; waiting for {-TWILIGHT_SUN:.0f}°", flush=True)
+        sleep(300)
 
 
 def save(path, data, **cards):
@@ -120,6 +170,10 @@ def main():
                          "(--exposure 4 16), then warms up gently")
     ap.add_argument("--gain", type=int, default=1500)
     ap.add_argument("--frames", type=int, default=20)
+    ap.add_argument("--filters", nargs="+", metavar="F",
+                    help="flats: one after another in these filters (at dawn the sky brightens, so B G R L)")
+    ap.add_argument("--twilight", action="store_true",
+                    help="flats: dawn sky flats with nothing over the tube; waits for the twilight")
     ap.add_argument("--json", action="store_true", help="answer in JSON at the end")
     args = ap.parse_args()
     return interface.main("calibrate", lambda: run(args), args.json)
@@ -164,6 +218,8 @@ def run_matched(args, camera):
                                                                 "NBAD": int(mask.sum())})
         print(f"saved {path}: {int(mask.sum())} bad pixels, from {longest.name}")
         return {"kind": "badpixels", "file": str(path), "bad": int(mask.sum())}
+    if args.kind == "flat" and getattr(args, "twilight", False):
+        wait_for_twilight()
     with Camera(gain=args.gain) as cam:
         settle = getattr(cam, "settle", None)
         if settle:
@@ -199,25 +255,61 @@ def run_matched(args, camera):
             return {"kind": "dark", "frames": args.frames, "gain": args.gain, "exposures": args.exposure,
                     "files": paths}
         else:
-            import sxwheel
-            seconds = flat_exposure(cam)
-            frames, header = [], None
-            for i in range(args.frames):
-                mosaic, header = cam.frame(seconds)
-                frames.append(mosaic)
-            if config.hardware()["train"].get("filterwheel"):
-                found = sxwheel.confirmed()
-                if found is None:
-                    raise SystemExit("The filter wheel confirmed no position: no flat is kept without its filter.")
-                sxwheel.cards(header, found)
-            cards = matched_cards(header, camera)
-            cards.setdefault("TELESCOP", config.hardware()["train"]["name"])
-            cards["EXPTIME"] = seconds
-            path = stacking.keep_master(folder, stacking.flat_stem(cards), master(frames),
-                                        dict(cards, NFRAMES=args.frames))
-            print(f"Its flat-dark: with the cap on, ./calibrate.py dark --exposure {seconds:g} --gain {args.gain}")
+            # 5 November 2026: no dawn flats were taken after the 183M's
+            # first night, and the camera was packed away before any could
+            # be. Every filter in one cold session, then the warm-up (a flat
+            # used to close the camera cold, which stops the cooler at once).
+            kept, exposures = [], []
+            try:
+                for band in getattr(args, "filters", None) or [None]:
+                    try:
+                        found = flat_in(cam, camera, folder, args, band)
+                    except TooBright as problem:
+                        print(f"  no flat in {band}: {problem}; the sky is too bright now", flush=True)
+                        break
+                    kept.append(found["file"])
+                    exposures.append(found["exposure"])
+            finally:
+                warm_up = getattr(cam, "warm_up", None)
+                if warm_up:
+                    try:
+                        warm_up(say=lambda line: print(f"  {line}", flush=True))
+                    except Exception as problem:
+                        print(f"  camera: the warm-up failed ({problem}); closing the camera turns the cooler off")
+            if not kept:
+                raise SystemExit("No flat was kept.")
+            print("Their flat-darks: with the cap on, ./calibrate.py dark --exposure "
+                  + " ".join(f"{s:g}" for s in sorted(set(exposures))) + f" --gain {args.gain}")
+            return {"kind": "flat", "frames": args.frames, "gain": args.gain, "files": kept,
+                    "exposures": exposures}
     print(f"saved {path}")
     return {"kind": args.kind, "frames": args.frames, "gain": args.gain, "file": str(path)}
+
+
+def flat_in(cam, camera, folder, args, band=None):
+    """One matched flat in filter `band` (None: whatever is in the light path)."""
+    import sxwheel
+    if band:
+        import filters
+        # As the lights were taken: LRGB are parfocal and the focus is left as it is.
+        filters.change(band, say=lambda line: print(f"  {line}", flush=True), as_is=True)
+    seconds = flat_exposure(cam, twilight=getattr(args, "twilight", False))
+    frames, header = [], None
+    for i in range(args.frames):
+        mosaic, header = cam.frame(seconds)
+        frames.append(mosaic)
+    if config.hardware()["train"].get("filterwheel"):
+        found = sxwheel.confirmed()
+        if found is None:
+            raise SystemExit("The filter wheel confirmed no position: no flat is kept without its filter.")
+        sxwheel.cards(header, found)
+    cards = matched_cards(header, camera)
+    cards.setdefault("TELESCOP", config.hardware()["train"]["name"])
+    cards["EXPTIME"] = seconds
+    path = stacking.keep_master(folder, stacking.flat_stem(cards), master(frames),
+                                dict(cards, NFRAMES=args.frames))
+    print(f"saved {path} ({band or 'the filter in place'}, {seconds:g} s)", flush=True)
+    return {"file": str(path), "exposure": seconds}
 
 
 def run(args):

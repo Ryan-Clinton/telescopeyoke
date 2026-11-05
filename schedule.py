@@ -600,12 +600,71 @@ def tonight(now=None, hours=NIGHT_HOURS):
     return out
 
 
-def summary(sessions):
-    """What the night got, in one line: frames kept by field."""
-    fields = {}
-    for field, frames, _ in sessions:
-        fields[field] = fields.get(field, 0) + frames
-    return ", ".join(f"{field} {n} frames" for field, n in fields.items()) or "no frames kept"
+def summary(sessions, now=None):
+    """What the night got, in one line: by field and filter, the minutes of
+    frames kept against the minutes planned for them, so a block that got
+    nothing is said, not hidden in a count of frames taken. 5 November 2026:
+    "M33 487 frames" was reported for a night whose colour could not be
+    made and whose M81 frames were mostly the wrong field."""
+    got, planned = delivered(now), promised(now)
+    if not got and not planned:
+        fields = {}
+        for field, frames, _ in sessions:
+            fields[field] = fields.get(field, 0) + frames
+        return ", ".join(f"{field} {n} frames" for field, n in fields.items()) or "no frames kept"
+    parts = []
+    for field in dict.fromkeys([f for f, _ in planned] + [f for f, _ in got]):
+        bands = dict.fromkeys([b for f, b in planned if f == field] + [b for f, b in got if f == field])
+        parts.append(field + " " + ", ".join(
+            f"{band} {got.get((field, band), 0) / 60:.0f}"
+            + (f" of {planned[(field, band)]:g}" if (field, band) in planned else "") + " min"
+            for band in bands))
+    return "; ".join(parts) + " (minutes of frames kept, of minutes planned)"
+
+
+def delivered(now=None, hours=NIGHT_HOURS):
+    """{(field folder, filter): seconds of frames kept} for the night's sessions."""
+    import stacking
+    now = now or time.time()
+    out = {}
+    for d in sorted((config.DATA / "frames").glob("*/2*")):
+        try:
+            begun = datetime.strptime(d.name[:15], "%Y%m%d-%H%M%S").timestamp()
+        except ValueError:
+            continue
+        log = d / "frames.jsonl"
+        if now - begun > hours * 3600 or not log.exists():
+            continue
+        first = next(iter(sorted(d.glob("light-*.fits"))), None)
+        if first is None:
+            continue
+        try:
+            header = stacking.load_light(first)[1]
+            kept = sum(1 for line in log.read_text(encoding="utf-8").splitlines()
+                       if line.strip() and json.loads(line).get("accepted"))
+        except (OSError, ValueError, IndexError):
+            continue
+        key = (d.parent.name, str(header.get("FILTER") or "-"))
+        out[key] = out.get(key, 0.0) + kept * float(header.get("EXPTIME") or 0)
+    return out
+
+
+def promised(now=None, hours=NIGHT_HOURS):
+    """{(field folder, filter): minutes planned} from tonight's session blocks
+    ("M33 L, 90 min")."""
+    import re
+
+    import stacking
+    now = now or time.time()
+    out = {}
+    for step in load().get("steps", []):
+        found = re.match(r"^(.*) (\S+), ([\d.]+) min", step.get("label") or "")
+        when = step.get("started") or step.get("finished")
+        if not step.get("session") or not found or (when and now - when > hours * 3600):
+            continue
+        key = (stacking.folder_name(found[1]), found[2])
+        out[key] = out.get(key, 0.0) + float(found[3])
+    return out
 
 
 def mount_state(run=subprocess.run):
@@ -642,10 +701,34 @@ def go_home(home=None, wait=600):
             proc.kill()
 
 
-def end(say=print, send=None, run=subprocess.run, now=None, home=None):
+DAWN_FILTERS = ("B", "G", "R", "L")    # the sky brightens through dawn: the faintest-through filter first
+FLATS_LOG = config.DATA / "cache" / "dawn-flats.log"
+
+
+def dawn_flats(popen=subprocess.Popen):
+    """After a night with a cooled camera behind a filter wheel, take dawn
+    sky flats in LRGB from where the telescope is parked, with nothing over
+    the tube: calibrate.py waits for the twilight, camera closed until then.
+    5 November 2026: after the 183M's first night no flats were taken (put
+    down to dew that was really cloud), and by the time they were wanted
+    the camera was packed away. Returns what to tell the person, or None."""
+    import stacking
+    camera = config.camera_name()
+    if stacking.dark_method(camera) != "matched" or not config.hardware()["train"].get("filterwheel"):
+        return None
+    FLATS_LOG.parent.mkdir(parents=True, exist_ok=True)
+    with open(FLATS_LOG, "w", encoding="utf-8") as log:
+        popen([sys.executable, str(Path(__file__).with_name("calibrate.py")), "flat", "--twilight",
+               "--filters", *DAWN_FILTERS], stdout=log, stderr=subprocess.STDOUT,
+              cwd=str(Path(__file__).parent), start_new_session=True)
+    return ("Dawn flats in B, G, R and L will be taken from where it is parked as the sky brightens, "
+            "with nothing over the tube: leave the camera, wheel and focus as they are until then.")
+
+
+def end(say=print, send=None, run=subprocess.run, now=None, home=None, start_flats=None):
     """The night is over: send the mount home (mount.py, so its motion lock
-    and checks hold), check it got there, and tell the person on their
-    phone. Returns whether it is parked."""
+    and checks hold), check it got there, start the dawn flats, and tell the
+    person on their phone. Returns whether it is parked."""
     import notify
     send = send or notify.send
     now = now or time.time()
@@ -673,6 +756,10 @@ def end(say=print, send=None, run=subprocess.run, now=None, home=None):
                  if parked else
                  f"Observation is over. Tonight: {got}. The telescope could NOT be parked: it is still "
                  f"{state.get('state', 'where it was')}. Please check it.")
+        if parked and sessions:
+            flats = (start_flats or dawn_flats)()
+            if flats:
+                words += f" {flats}"
     say(words)
     send(words, say=say)
     return parked
