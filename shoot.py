@@ -1383,12 +1383,26 @@ def image(args, session, exposure, moving, holding, tracker):
                             args.assist = asked == "assist-on"
                         told["recentre"] = told["recentre"] or asked == "recentre"
                         due = (args.recentre and since_centre >= args.recentre) or told["recentre"]
-                        reopening = bool(
+                        dither_due = bool(moving and args.dither and since_dither >= args.dither)
+                        other = bool(
                             (moving and (session.drift > DRIFT_LIMIT or due))
                             or (holding and moving and holding.due(session.shifts))
-                            or (moving and args.dither and since_dither >= args.dither)
                             or (args.assist and moving
                                 and len(session.track) >= live.get("shoot.assist_every", ASSIST_EVERY)))
+                        if dither_due and not other and go_on():
+                            # A dither is one GoTo with no plate solve, so it is made
+                            # between frames with the camera left open: 4 November
+                            # 2026, closing it for each dither stopped the 183M's
+                            # cooler and cost about 4 minutes of slow re-cooling.
+                            collect(everything=True)
+                            aim = dither_offset(rng)
+                            print(f"  dithering: {aim[0]:+.1f}' east, {aim[1]:+.1f}' north of {args.name}, "
+                                  "the camera kept open", flush=True)
+                            recentre(args.name, aim)
+                            session.drift, session.origin, since_centre, since_dither = 0.0, None, 0, 0
+                            session.track.clear()
+                            continue
+                        reopening = other or dither_due
                         if reopening:
                             reopening = go_on()      # the last frame on a pause is the run's end
                             break
