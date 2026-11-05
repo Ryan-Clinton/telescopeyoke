@@ -1115,6 +1115,8 @@ def in_blocks(args):
         # The wheel turns between frames, with no exposure in flight. A sensor
         # left cold by any way out is warmed before the camera is closed.
         from camera import lend
+        if os.environ.get("TY_NO_LEND"):     # each block opens its own camera, as before lend()
+            return run_blocks(args, mount, results, skipping, mark)
         with Camera(gain=args.gain) as kept, lend(kept):
             try:
                 return run_blocks(args, mount, results, skipping, mark)
