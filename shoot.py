@@ -1139,10 +1139,10 @@ def in_blocks(args):
         print(f"  (the blocks are not on the schedule: {problem})", flush=True)
         schedule, ids = None, [None] * len(labels)
 
-    def mark(index, status):
+    def mark(index, status, kept_minutes=None):
         if schedule is not None and ids[index]:
             try:
-                schedule.mark_block(ids[index], status)
+                schedule.mark_block(ids[index], status, kept_minutes)
             except Exception:
                 pass
 
@@ -1221,7 +1221,7 @@ def run_blocks(args, mount, results, skipping, mark):
             if args.ended_on_time and args.keep_cold:
                 warm_after_block(args)   # left cold for a block that will not now follow
             raise
-        mark(number - 1, "done")
+        mark(number - 1, "done", (results[-1] or {}).get("integration_s", 0) / 60)
         if not last and not args.ended_on_time:
             print(f"  block {number} ended before its minutes: the rest are not taken (the sensor has been warmed)",
                   flush=True)

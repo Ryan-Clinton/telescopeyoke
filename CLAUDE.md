@@ -33,6 +33,12 @@ what is specific to Claude and to this particular user.
   wanted. Do it, then say it is done. Waiting on a background
   job is time to do the next thing, not to report waiting. Defer only what
   needs daylight, the user's hands or their permission, and say which.
+- A change to how a night's imaging runs (shoot.py's blocks, re-centring,
+  the camera kept open, cloud handling) says in its commit what it does to
+  all four: the framing of the target, the sensor's temperature, the
+  minutes lost, and the mount's safety. On 5 November 2026 a fix to keep
+  the sensor cold (no re-centre between filters) let M33's filters drift
+  apart, and three more fixes that night undid it piece by piece.
 - No one-off scripts for anything new that will be used every night
   (focusing, alignment, a new piece of hardware): write it as a project
   command before its first use, and use it only through that
