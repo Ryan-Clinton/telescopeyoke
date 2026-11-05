@@ -33,21 +33,34 @@ COLOURS = ("R", "G", "B")
 
 
 def sessions(name, night=None):
-    """{filter: newest stack path} for this object, from each session's own
-    raw frames' FILTER (the stack's header may not carry it)."""
+    """{filter: the deepest stack} for this object: each session's own, and
+    restack.py's combinations of several (combined-FILTER), the one with the
+    most exposure winning. 5 November 2026: the newest won, so a 28-frame
+    restart of M33 in L would have stood in for the 126-frame stack."""
     folder = config.DATA / "frames" / stacking.folder_name(name)
     found = {}
-    for session in sorted(p for p in folder.glob("*") if p.is_dir() and p.name[:8].isdigit()):
-        if night and not session.name.startswith(night):
+    for session in sorted(p for p in folder.glob("*") if p.is_dir()):
+        combined = session.name.startswith("combined-")
+        if not (combined or session.name[:8].isdigit()):
+            continue
+        if night and not combined and not session.name.startswith(night):
             continue
         stack = next((session / f for f in ("final.fits", "live.fits") if (session / f).exists()), None)
-        light = next(iter(sorted(session.glob("light-*.fits"))), None)
-        if stack is None or light is None:
+        if stack is None:
             continue
-        band = stacking.load_light(light)[1].get("FILTER")   # in the compressed image's header, not the primary
-        if band:
-            found[str(band)] = stack      # sorted by time: the newest of each filter wins
-    return found
+        if combined:
+            band = session.name.split("-", 1)[1]
+        else:
+            light = next(iter(sorted(session.glob("light-*.fits"))), None)
+            if light is None:
+                continue
+            band = stacking.load_light(light)[1].get("FILTER")   # in the compressed image's header, not the primary
+        if not band:
+            continue
+        depth = float(fits.getheader(stack).get("EXPTIME") or 0)
+        if depth >= found.get(str(band), (0.0, None))[0]:
+            found[str(band)] = (depth, stack)
+    return {band: stack for band, (_, stack) in found.items()}
 
 
 def brightness(path):

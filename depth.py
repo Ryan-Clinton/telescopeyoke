@@ -89,7 +89,7 @@ def find_stack(name):
 def object_name(stack):
     """The object a stack is of, from its folder: frames/NAME/<date-time>/final.fits."""
     parent = stack.parent
-    return (parent.parent if parent.name[:1].isdigit() or parent.name == "combined" else parent).name
+    return (parent.parent if parent.name[:1].isdigit() or parent.name.startswith("combined") else parent).name
 
 
 def brightness(rgb):

@@ -62,7 +62,7 @@ def find_session(name):
 def all_sessions(name):
     """Every saved session of an object, oldest first."""
     folder = config.DATA / "frames" / stacking.folder_name(name)
-    return sorted(p for p in folder.glob("*/") if p.name != COMBINED and any(p.glob("light-*.fits")))
+    return sorted(p for p in folder.glob("*/") if not p.name.startswith(COMBINED) and any(p.glob("light-*.fits")))
 
 
 def select(frames, keep=0.85):
@@ -116,7 +116,11 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
     # frame and a 2 s frame of the same star agree before they are averaged.
     exposure = exposures[0]
     scales = [exposure / e if e else 1.0 for e in exposures]
-    session = sessions[0].parent / COMBINED if several else sessions[0]
+    # One filter's sessions combined go to combined-FILTER (5 November 2026: a
+    # mono camera's L and R combinations in the one folder overwrote each other).
+    bands = {str(h.get("FILTER")) for _, h in calibrations if h.get("FILTER")}
+    folder = COMBINED + (f"-{bands.pop()}" if len(bands) == 1 else "")
+    session = sessions[0].parent / folder if several else sessions[0]
     session.mkdir(exist_ok=True)
     say(f"{len(lights)} frames in all; {workers} workers")
 
