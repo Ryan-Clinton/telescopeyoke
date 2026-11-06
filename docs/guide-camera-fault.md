@@ -154,7 +154,11 @@ The colour Hypercam 183C (Gary's; [the camera fault](camera-fault.md))
 has an ST4 autoguide port (6 November 2026, the user). On the 162 mm
 guide scope it would give about 4.7° x 3.1° at 3.1"/px. Whether its
 fault (frames lost, jams cleared only by reopening it) shows at 2 s
-guide frames is not known: it has never been run that way. It is about
+guide frames is not known: it has never been run that way here. Gary,
+whose camera it is, used to run it as his guide camera once he grew
+fed up with its faults as an imaging camera (told by the user, 6
+November 2026); how well it guided for him, and on what software, is
+not recorded. It is about
 four times the GPCAM's weight on the finder shoe. Tried only if the
 GPCAM fails, indoors first, with the same pass as here.
 
