@@ -124,6 +124,27 @@ In order of how likely each is to help:
 If none of these gives a steady 2 s stream, the camera cannot guide on
 this laptop, and there is no maintained software to fix it.
 
+### How each is judged
+
+- `./guidecam.py probe` before and after each change, with the same
+  exposures and the same window, and on the same port: the frames that
+  came, the frames that should have, and the longest gap.
+- The pass is not one 2 s frame arriving. It is a steady supply over
+  several minutes: `./guidecam.py probe --exposures 2 --window 300` giving
+  at least 90 % of the frames expected (about 150 in 5 minutes, less the
+  readout), with no gap longer than twice the exposure.
+- One change at a time, so a cure can be put down to what did it.
+
+### The filter wheel is a separate question
+
+On 6 November the filter wheel and the guide camera also failed together
+on the unpowered Trust hub: the wheel never finished its power-up turn.
+That is a power question about the wheel on that hub. The dropped frames
+happen with no hub and no wheel, so curing one says nothing about the
+other; both have to pass before a guided night (the wheel and guide
+camera together for 10 minutes, [Autoguiding](autoguiding.md), hardware
+step 1).
+
 ## For a return
 
 If it goes back, the plain description: "On Linux, with the only library
