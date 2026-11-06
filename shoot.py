@@ -1538,7 +1538,9 @@ def image(args, session, exposure, moving, holding, tracker):
                             if went["rms"] is not None:
                                 header["GUIDERMS"] = (went["rms"], "guide error RMS during the frame, arcsec")
                                 header["GUIDEMAX"] = (went["max"], "largest guide error during it, arcsec")
-                            header["GUIDELST"] = (went["lost_s"], "seconds without the guide star during it")
+                            header["GUIDELST"] = (went["lost_s"], "seconds of it no good guide frame covered")
+                            header["GUIDEREJ"] = (went["rejected"], "guide frames without the star during it")
+                            header["GUIDECOV"] = (went["coverage"], "share of it covered by good guide frames")
                         if getattr(args, "focus_fixed", None):
                             header["TY_FOCFIX"] = (str(args.focus_fixed),
                                                    "focus left as set for this filter, not proven in FILTER")

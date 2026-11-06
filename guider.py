@@ -1242,6 +1242,7 @@ SETTLE_SPAN = 3.0          # seconds
 SETTLE_S = 30.0            # still guiding but not settled after this: the frame is taken and marked
 LOST_WAIT_S = 300.0        # lost (cloud), relocking or calibrating this long: guided imaging stops
 RUN_LOG = config.DATA / "cache" / "guide-run.log"
+MARGIN_S = 10.0            # guide frames this long before an imaging frame began are read for its coverage
 
 
 class Supervisor:
@@ -1438,29 +1439,52 @@ class Supervisor:
             for line in path.read_text(encoding="utf-8").splitlines()[-2000:]:
                 row = json.loads(line)
                 mid = (row.get("time") or {}).get("mid", 0)
-                if row.get("run") == self.run and start <= mid <= end:
+                # From a little before the frame began: a guide frame then
+                # also covers the frame's first seconds.
+                if row.get("run") == self.run and start - MARGIN_S <= mid <= end:
                     rows.append(row)
         except (OSError, ValueError):
             pass
         good = sorted((r["time"]["mid"], math.hypot(r["ra_err"], r["dec_err"]))
                       for r in rows if r.get("ra_err") is not None)
-        errors = [e for _, e in good]
-        # Seconds without the star: every stretch of the frame longer than two
-        # guide exposures with no good guide frame in it, rejected frames and
-        # frames that never came alike.
-        marks = [start] + [t for t, _ in good] + [end]
-        allowed = 2 * self.exposure
-        lost = sum(max(0.0, b - a - allowed) for a, b in zip(marks, marks[1:]))
-        # Guided only if the guider is still healthy and guiding as the frame ends.
+        inside = [r for r in rows if r["time"]["mid"] >= start]
+        rejected = sum(1 for r in inside if r.get("ra_err") is None)
+        errors = [e for t, e in good if t >= start]
+        # The guider's own cycle (exposure, readout, pulses), from the spacing
+        # of every frame it logged, good or not; the exposure plus a second
+        # when there are too few to tell.
+        mids = sorted((r.get("time") or {}).get("mid", 0) for r in rows)
+        spacing = [b - a for a, b in zip(mids, mids[1:]) if b > a]
+        cycle = float(np.median(spacing)) if len(spacing) >= 2 else self.exposure + 1.0
+        # Each good guide frame covers its own cycle, centred on its midpoint.
+        # Lost: every part of the frame no good guide frame covered, a
+        # rejected frame and one that never came alike, counted in full.
+        # The last cycle is left out: the guide frame being taken as the frame
+        # ends is not logged yet, and the guider's state at the end judges it.
+        judged_to = max(start, end - cycle)
+        covered = 0.0
+        edge = start
+        for t, _ in good:
+            lo, hi = max(t - cycle / 2, edge, start), min(t + cycle / 2, judged_to)
+            if hi > lo:
+                covered += hi - lo
+                edge = hi
+        span = max(judged_to - start, 1e-9)
+        lost = max(0.0, span - covered) if judged_to > start else 0.0
         state = read_state()
         ok, why = health(state, self.run)
         if ok and state.get("state") != "guiding":
             ok, why = False, f"the guider was {state.get('state')} at the frame's end"
-        if ok and not good:
+        if ok and not errors:
             ok, why = False, "no guide frame during it"
+        if ok and rejected:
+            ok, why = False, f"{rejected} guide frame(s) without the star during it"
+        if ok and lost > 0.5 * cycle:
+            ok, why = False, f"{lost:.0f} s of it with no good guide frame"
         return {"rms": round(float(np.sqrt(np.mean(np.square(errors)))), 2) if errors else None,
                 "max": round(max(errors), 2) if errors else None,
-                "lost_s": round(lost, 1), "frames": len(rows), "guided": ok, "why": why}
+                "lost_s": round(lost, 1), "rejected": rejected, "coverage": round(covered / span, 3),
+                "frames": len(rows), "guided": ok, "why": why}
 
     def stop(self):
         """The guider stopped if this run started it, and the creep put back.
