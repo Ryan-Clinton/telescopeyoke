@@ -11,6 +11,11 @@ proven is `docs/validation.md` ("Current conclusions").
   gives the targets his 0-to-5 rating and note, adds about 1,800 of his
   other objects, and weighs his rating into the planner's ranking; it
   never goes in the repository ([commands](docs/agents/commands.md)).
+- **6 November 2026**: the Compendium's rows match the catalogue the same
+  way every time (own name first, clashes reported), impossible rows are
+  left out, his Caldwell, Sharpless, Barnard and other names find their
+  targets, his palettes (SHO, HOO, Ha+RGB, LRGB) are given as advice with
+  each nebula, and `--kind` takes his subtypes.
 
 - **3 November 2026**: VSX is asked of every VizieR mirror in turn, a
   dead one left after 10 seconds, and an empty page is no longer read as

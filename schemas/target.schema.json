@@ -70,6 +70,57 @@
     "note": {
       "type": "string",
       "description": "Gary Imm's note on the object from his Compendium; empty when there is none."
+    },
+    "palette": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "The palette Gary Imm's Compendium gives for this kind of object, as the wheel's filters; null when he gives none (galaxies, clusters) or the Compendium has not been fetched. His, not the planner's.",
+      "required": [
+        "name",
+        "filters",
+        "light",
+        "source"
+      ],
+      "properties": {
+        "name": {
+          "enum": [
+            "SHO",
+            "HOO",
+            "Ha+RGB",
+            "LRGB"
+          ]
+        },
+        "filters": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "L",
+              "R",
+              "G",
+              "B",
+              "Ha",
+              "SII",
+              "OIII"
+            ]
+          }
+        },
+        "light": {
+          "type": "string",
+          "description": "What his class says of its light, e.g. SII .2, Ha 1, OIII .1 (strongest 1), or OIII strongest."
+        },
+        "source": {
+          "type": "string"
+        }
+      }
+    },
+    "aliases": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Its other names that find it, from Gary Imm's cross-references (Caldwell, Sharpless, Barnard...)."
     }
   }
 }

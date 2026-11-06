@@ -333,6 +333,7 @@ class Night:
             "contrast": None if contrast is None else round(float(contrast), 1),
             "score": round(float(score), 1),
             "rating": target.get("rating"), "note": target.get("note") or "",
+            "sub": target.get("sub") or "", "palette": target.get("palette"),
         }
 
 

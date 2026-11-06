@@ -535,6 +535,8 @@ async function choose(id) {
   fact("Window", ranked.window ? `${clockTime(ranked.window[0])} to ${clockTime(ranked.window[1])}` : null);
   fact("Notes", (ranked.tags || []).join(", ").toLowerCase());
   fact("Gary Imm", t.rating != null ? `${t.rating}/5${t.note ? ": " + t.note : ""}` : t.note);
+  if (t.palette) fact("His palette", `${t.palette.name} (${t.palette.filters.join(", ")})${t.palette.light ? ": " + t.palette.light : ""}`);
+  if (t.aliases && t.aliases.length) fact("Also", t.aliases.join(", "));
   const allowed = t.goto && t.goto.allowed;
   const go = el("button", { type: "button", text: `Go to ${t.id}`, "data-needs": "mount", "data-gate": "goto", on: { click: () => makePlan("goto", { target: t.id }) } });
   const centre = el("button", { type: "button", text: "Centre with plate solve", "data-needs": "imaging", "data-gate": "goto", on: { click: () => makePlan("goto", { target: t.id, solve: true }) } });
@@ -1084,7 +1086,7 @@ async function loadSettings() {
     : all.exists ? `Saved in ${all.file}.` : `No settings file yet. Saving makes ${all.file}; put your own location in first.`;
   $("save-settings").disabled = $("open-settings").disabled = !!all.demo;
   const imm = all.compendium || {};
-  $("compendium-state").textContent = imm.present ? `Here: ${imm.edition}, ${imm.objects} objects. Downloading again fetches the edition his page links to now.`
+  $("compendium-state").textContent = imm.present ? `Here: ${imm.edition}, ${imm.objects} objects. Downloading again fetches the link kept in compendium.py (taken from his page on ${imm.link_checked}); a newer edition needs its new link there.`
     : "Not downloaded yet.";
   $("compendium").textContent = imm.present ? "Download it again" : "Download the Compendium";
   $("settings-wrong").hidden = true;

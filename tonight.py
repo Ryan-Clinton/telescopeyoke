@@ -625,7 +625,8 @@ def main():
     ap.add_argument("--date", type=Date.fromisoformat,
                     help="evening date of the night to plan (default: tonight)")
     ap.add_argument("--top", type=int, default=25, help="targets to list")
-    ap.add_argument("--kind", help="only this type, e.g. galaxy, planet, globular")
+    ap.add_argument("--kind", help="only this type, e.g. galaxy, planet, globular; with Gary Imm's "
+                    "Compendium fetched, his subtypes too, e.g. merger, dark, polar, snr")
     ap.add_argument("--week", action="store_true",
                     help="the weather verdict for each of the next seven nights, and nothing else")
     ap.add_argument("--forecast", action="store_true",
@@ -651,7 +652,8 @@ def main():
         return
     if args.kind:
         rep["targets"] = [t for t in rep["targets"] if args.kind == t["kind"]
-                          or args.kind in t["kind"].replace("+", " ").split()]
+                          or args.kind in t["kind"].replace("+", " ").split()
+                          or args.kind.lower() == t.get("sub", "").lower()]
     if args.html:
         write_html(rep, args.top, args.html)
     if args.json:

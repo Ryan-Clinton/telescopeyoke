@@ -34,9 +34,12 @@ PAGE = "https://www.garyimm.com/compendium"
 # The English workbook's Google Drive file, as linked from PAGE ("Compendium
 # (xls) - English"; the 2026 6th edition, 36 MB, on 6 November 2026). When he
 # publishes a new edition the link on his page changes: put its id= here.
+# It cannot be read from the page by a script: the page is built in the
+# browser by a site builder, and its HTML holds no links.
 DRIVE_ID = "1fCiBsMPofrbb39R0QoapKPyMxBsXvuWo"
 # drive.google.com/uc answers a file this big with a "can't scan for
 # viruses" page; this address with confirm=t gives the file itself.
+LINK_CHECKED = "6 November 2026"
 URL = f"https://drive.usercontent.google.com/download?id={DRIVE_ID}&export=download&confirm=t"
 
 WORKBOOK = config.DATA / "cache" / "compendium.xlsx"
@@ -58,8 +61,9 @@ STARS = {"OC": "open cluster", "GC": "globular", "Star Cld": "open cluster", "YS
 MIN_SIZE = {"galaxy": 1.5, "planetary nebula": 0.5}
 SMALLEST = 1.0
 
-FIELDS = ["id", "nickname", "alt_id", "kind", "type", "sub", "const", "ra_deg", "dec_deg",
-          "mag", "size_arcmin", "surf_br", "rating", "note", "ngc", "ic", "messier", "edition"]
+FIELDS = ["id", "nickname", "alt_id", "kind", "type", "sub", "class", "const", "ra_deg", "dec_deg",
+          "mag", "size_arcmin", "surf_br", "rating", "note", "palette", "light", "aliases",
+          "ngc", "ic", "messier", "edition"]
 
 
 # --- reading the workbook --------------------------------------------------------
@@ -100,6 +104,19 @@ def _cells(book):
     return rows
 
 
+# His cross-reference columns (labelled in the second header row), and the
+# name each gives an object. "Abell" is there twice, galaxy clusters and
+# planetary nebulae, with numbers that overlap: neither is used, his own
+# names ("Abell 1", "AbellG 2151") stand for them. Griffiths, Kohoutek,
+# Minkowski, the SNR catalogue and O'Meara's lists are left out as well:
+# their numbers are not how anyone types them.
+CROSS = (("ngc", "NGC", "NGC "), ("ic", "IC", "IC "), ("messier", "Messier", "M"),
+         ("caldwell", "Caldwell", "C"), ("arp", "Arp", "Arp "), ("hickson", "Hickson", "HCG "),
+         ("ugc", "UGC", "UGC "), ("pgc", "PGC", "PGC "), ("barnard", "Barn.", "B "),
+         ("gum", "Gum", "Gum "), ("lbn", "LBN", "LBN "), ("ldn", "LDN", "LDN "),
+         ("rcw", "RCW", "RCW "), ("sh2", "Sh2", "Sh2-"), ("vdb", "vdB", "vdB "))
+
+
 def _columns(rows):
     """Where each wanted column is, found from his two header rows rather
     than fixed letters, so a new edition that moves a column still reads."""
@@ -109,9 +126,9 @@ def _columns(rows):
                                 "this edition of the Compendium is laid out differently.")
     below = rows[rows.index(top) + 1]
     by_top = {v: k for k, v in top.items()}
-    want = {"type": "Type", "sub": "Sub", "size": "Size", "rating": "Rating", "note": "Notes",
-            "const": "Const.", "nickname": "Nick.", "alt_id": "Alt. ID", "mag": "Visual",
-            "surf_br": "Surf."}
+    want = {"type": "Type", "sub": "Sub", "class": "Class", "size": "Size", "rating": "Rating",
+            "note": "Notes", "const": "Const.", "nickname": "Nick.", "alt_id": "Alt. ID",
+            "mag": "Visual", "surf_br": "Surf."}
     found = {key: by_top.get(head) for key, head in want.items()}
     # Each position is two columns, the sexagesimal one and then degrees
     # ("(Deg)" in the row below).
@@ -119,11 +136,10 @@ def _columns(rows):
         start = by_top.get(head)
         deg = next((c for c, v in below.items() if v == "(Deg)" and _after(c, start)), None)
         found[key] = deg
-    # The cross-references are labelled in the second row ("Abell" is there
-    # twice, galaxy clusters and planetary nebulae: not used here).
-    for key, head in (("ngc", "NGC"), ("ic", "IC"), ("messier", "Messier")):
+    for key, head, _ in CROSS:
         found[key] = next((c for c, v in below.items() if v == head), None)
-    missing = [k for k, v in found.items() if v is None and k not in ("surf_br", "nickname", "alt_id")]
+    optional = {"surf_br", "nickname", "alt_id", "class"} | {k for k, _, _ in CROSS[3:]}
+    missing = [k for k, v in found.items() if v is None and k not in optional]
     if missing:
         raise interface.Refusal("INVALID_REQUEST", f"The Compendium's columns have changed: no {', '.join(missing)}.")
     return found, rows.index(top) + 2
@@ -165,38 +181,118 @@ def _kind(kind, sub):
     return STARS.get(sub, "open cluster")
 
 
+# The palettes he gives for each kind of nebula ("Typical these nebulae are
+# imaged with the following channel palettes", in the workbook's own help),
+# as the wheel's filters (slots 1 L 2 R 3 G 4 B 5 Ha 6 SII 7 OIII). He gives
+# none for galaxies, clusters, Stromgren spheres or the rest: nor does this.
+PALETTES = {"SHO": ("SII", "Ha", "OIII"), "HOO": ("Ha", "OIII"),
+            "Ha+RGB": ("Ha", "R", "G", "B"), "LRGB": ("L", "R", "G", "B")}
+# A planetary nebula's class is shape, signal, progenitor ("BRN/c"); the signal letter.
+PN_SIGNAL = {"O": "OIII strongest", "H": "Ha strongest", "C": "Ha and OIII comparable",
+             "R": "Ha rim, OIII inside"}
+
+
+def palette(sub, cls):
+    """His palette for an object, (name, what his class says of its light),
+    or ("", "") when he gives none."""
+    sub, cls = (sub or "").strip(), (cls or "").strip()
+    if sub == "Em":
+        if cls.startswith("SHO"):
+            m = re.fullmatch(r"SHO-([\d.]+)/([\d.]+)/([\d.]+)", cls)
+            light = f"SII {m[1]}, Ha {m[2]}, OIII {m[3]} (strongest 1)" if m else "SII, Ha and OIII all 10% or more"
+            return "SHO", light
+        if cls.startswith("HII"):
+            return "Ha+RGB", "Ha dominant: SII and OIII under 10% of it"
+        if cls.startswith("WR"):
+            return "HOO", "Wolf-Rayet nebula"
+        return "", ""
+    if sub == "SNR":
+        return "HOO", "supernova remnant"
+    if sub in ("PN", "PPN"):
+        return "HOO", PN_SIGNAL.get(cls[1:2], "") if len(cls) >= 2 else ""
+    if sub in ("Refl", "Dark", "Mol Cld", "Mol CLd"):
+        return "LRGB", ""
+    return "", ""
+
+
+def _cross(text):
+    """A cross-reference cell as its number: 189.0 -> "189"; a blank or a
+    space (his empty cells) as ""."""
+    n = _number(text)
+    if n is not None:
+        return str(int(n)) if n == int(n) else f"{n:g}"
+    return (text or "").strip()
+
+
 def read(book):
     """The Compendium's objects, one dict per row of the main sheet."""
     rows = _cells(book)
     title = rows[0].get("A", "") if rows else ""
     edition = title.split("-", 1)[-1].strip() if "Compendium" in title else ""
     col, first = _columns(rows)
-    out = []
+    out, skipped, seen = [], [], set()
     for row in rows[first:]:
         name = row.get("A")
         kind, ra, dec = row.get(col["type"]), _number(row.get(col["ra"])), _number(row.get(col["dec"]))
         if not name or not kind or ra is None or dec is None:
             continue    # the key, units and totals rows
         rating = _number(row.get(col["rating"]))
-        cross = {k: "" if _number(row.get(col[k])) is None else str(int(_number(row.get(col[k]))))
-                 for k in ("ngc", "ic", "messier")}
         mag, size = _number(row.get(col["mag"])), _number(row.get(col["size"]))
         surf = _number(row.get(col["surf_br"])) if col["surf_br"] else None
+        ident = _ident(name)
+        # Checked before anything uses it: a position the mount may be sent
+        # to, a rating that weighs in the ranking.
+        wrong = []
+        if not 0 <= ra < 360:
+            wrong.append(f"RA {ra}")
+        if not -90 <= dec <= 90:
+            wrong.append(f"Dec {dec}")
+        if rating is not None and (rating != int(rating) or not 0 <= rating <= 5):
+            wrong.append(f"rating {rating}")
+        if size is not None and not 0 < size <= 3000:
+            wrong.append(f"size {size}'")
+        if ident in seen:
+            wrong.append("a second row of that name")
+        if wrong:
+            skipped.append(f"{ident}: {', '.join(wrong)}")
+            continue
+        seen.add(ident)
+        cross = {key: _cross(row.get(col[key])) if col[key] else "" for key, _, _ in CROSS}
+        aliases = [f"{prefix}{cross[key]}" for key, _, prefix in CROSS if cross[key]]
+        if cross["barnard"]:
+            aliases.append(f"Barnard {cross['barnard']}")
+        aliases = [a for a in dict.fromkeys(aliases) if a.replace(" ", "") != ident.replace(" ", "")]
+        cls = (row.get(col["class"]) or "").strip() if col["class"] else ""
+        sub = (row.get(col["sub"]) or "").strip()
+        scheme, light = palette(sub, cls)
         out.append({
-            "id": _ident(name), "nickname": (row.get(col["nickname"]) or "").split(",")[0].strip(),
+            "id": ident, "nickname": (row.get(col["nickname"]) or "").split(",")[0].strip(),
             "alt_id": _ident(row.get(col["alt_id"]) or ""),
-            "kind": _kind(kind, row.get(col["sub"])), "type": kind.strip(),
-            "sub": (row.get(col["sub"]) or "").strip(), "const": row.get(col["const"], ""),
+            "kind": _kind(kind, sub), "type": kind.strip(), "sub": sub, "class": cls,
+            "const": row.get(col["const"], ""),
             "ra_deg": f"{ra:.5f}", "dec_deg": f"{dec:.5f}",
             "mag": "" if mag is None else f"{mag:g}", "size_arcmin": "" if size is None else f"{size:g}",
             "surf_br": "" if surf is None else f"{surf:.2f}",
             "rating": "" if rating is None else str(int(rating)),
             "note": " ".join((row.get(col["note"]) or "").split()),
-            **cross, "edition": edition,
+            "palette": scheme, "light": light, "aliases": ";".join(aliases),
+            "ngc": cross["ngc"], "ic": cross["ic"], "messier": cross["messier"], "edition": edition,
         })
     if len(out) < 1000:
         raise interface.Refusal("INVALID_REQUEST", f"Only {len(out)} objects read from {book}: "
                                 "not the Compendium as it was known.")
+    if len(skipped) > 0.02 * len(out):
+        raise interface.Refusal("INVALID_REQUEST", f"{len(skipped)} of {len(out) + len(skipped)} rows fail the "
+                                f"checks (first: {skipped[0]}): the workbook's columns may mean something else now.")
+    # The whole sky, both hemispheres: RA in hours instead of degrees, or a
+    # column moved, shows here first.
+    ras, decs = [float(o["ra_deg"]) for o in out], [float(o["dec_deg"]) for o in out]
+    if max(ras) - min(ras) < 300 or min(decs) > -45 or max(decs) < 60:
+        raise interface.Refusal("INVALID_REQUEST", f"The positions span RA {min(ras):.0f}-{max(ras):.0f}°, "
+                                f"Dec {min(decs):.0f} to {max(decs):.0f}°: not the whole sky, so the columns "
+                                "are not read as they were meant.")
+    for line in skipped:
+        print(f"left out {line}", file=sys.stderr)
     return out
 
 
@@ -230,7 +326,15 @@ def fetch():
                                 "English workbook by hand, and run ./compendium.py import FILE "
                                 "(and put the new id= in compendium.DRIVE_ID).")
     part.replace(WORKBOOK)
-    return keep(WORKBOOK)
+    before = (load() or [{}])[0].get("edition")
+    s = keep(WORKBOOK)
+    s["edition_before"] = before
+    if before and before != s["edition"]:
+        print(f"A new edition: {before} before, {s['edition']} now.", file=sys.stderr)
+    elif before:
+        print(f"The same edition as before ({before}): the link still gives it. A newer one on "
+              f"{PAGE} needs its new link in compendium.DRIVE_ID.", file=sys.stderr)
+    return s
 
 
 def load():
@@ -241,46 +345,104 @@ def load():
         return list(csv.DictReader(f))
 
 
+def _key(name):
+    return name.replace(" ", "").upper()
+
+
 def _keys(t):
     """The names one target is known by, spaces removed."""
-    names = {t.get("id", ""), t.get("alt_id", "")}
+    names = [t.get("id", ""), t.get("alt_id", ""), *t.get("aliases", ())]
     if t.get("messier") and str(t["messier"]).isdigit():
-        names.add(f"M{t['messier']}")
-    return {n.replace(" ", "").upper() for n in names if n}
+        names.append(f"M{t['messier']}")
+    return [_key(n) for n in names if n]
+
+
+def _names(r):
+    """His row's names, in the order they decide a match: its own name, its
+    alternative, then Messier, NGC and IC."""
+    names = [r["id"], r["alt_id"]] + [f"{p}{r[k]}" for p, k in (("M", "messier"), ("NGC ", "ngc"), ("IC ", "ic")) if r[k]]
+    return [_key(n) for n in dict.fromkeys(names) if n]
+
+
+def _his(r):
+    """What he says of an object, attributed: added to a target."""
+    scheme = r.get("palette", "")
+    return {"rating": int(r["rating"]) if r["rating"] else None, "note": r["note"], "imm": r["id"],
+            "sub": r["sub"],
+            "palette": {"name": scheme, "filters": list(PALETTES[scheme]), "light": r.get("light", ""),
+                        "source": "Gary Imm's Deep Sky Compendium"} if scheme else None}
+
+
+# What the last merge did, for status(): how many matched, were added, and
+# which of his rows named more than one target.
+last = {}
 
 
 def merge(targets):
-    """Add his rating and note to the targets the catalogue has, and his
-    other objects as targets of their own. A target is the same object when
-    any of its NGC, IC or Messier names match."""
+    """Add what he says to the targets the catalogue has, and his other
+    objects as targets of their own. A row is the catalogue's target when one
+    of its names is: its own name first, then its alternative, Messier, NGC
+    and IC, the first that matches deciding. A target two of his rows match
+    takes the one whose own name it is, else the first."""
     rows = load()
+    last.clear()
     if not rows:
         return targets
     index = {}
     for t in targets:
         for k in _keys(t):
             index.setdefault(k, t)
+    ambiguous, clashes, matched, added = [], 0, set(), 0
+    rows_for = {}
     for r in rows:
-        names = {n.replace(" ", "").upper() for n in (r["id"], r["alt_id"]) if n}
-        names |= {f"{p}{r[k]}" for p, k in (("NGC", "ngc"), ("IC", "ic"), ("M", "messier")) if r[k]}
-        mine = next((index[n] for n in names if n in index), None)
-        rating = int(r["rating"]) if r["rating"] else None
-        if mine is not None:
-            if mine.get("rating") is None:    # the first of his rows for it wins
-                mine.update(rating=rating, note=r["note"], imm=r["id"])
+        names = _names(r)
+        hits = list(dict.fromkeys(index[n]["id"] for n in names if n in index))
+        if len(hits) > 1:
+            ambiguous.append(f"{r['id']}: {', '.join(hits)} (taken as {hits[0]})")
+        if hits:
+            rows_for.setdefault(hits[0], []).append(r)
+        else:
+            rows_for.setdefault(None, []).append(r)
+    by_id = {t["id"]: t for t in targets}
+    for tid, rs in rows_for.items():
+        if tid is None:
             continue
+        t = by_id.get(tid) or next(x for x in targets if x["id"] == tid)
+        own = [r for r in rs if _key(r["id"]) in _keys(t)]
+        best = (own or rs)[0]
+        t.update(_his(best))
+        matched.add(tid)
+        # Every row that matched it lends its names: "C49" finds the Rosette.
+        t["aliases"] = list(t.get("aliases", []))
+        for r in rs:
+            for a in [r["id"]] + [a for a in r["aliases"].split(";") if a]:
+                k = _key(a)
+                if index.get(k, t) is not t:
+                    clashes += 1
+                    continue
+                if k not in _keys(t):
+                    t["aliases"].append(a)
+                index[k] = t
+    for r in rows_for.get(None, []):
         size = _number(r["size_arcmin"])
         if size is None or size < MIN_SIZE.get(r["kind"], SMALLEST):
             continue
+        aliases = []
+        for a in [a for a in r["aliases"].split(";") if a]:
+            if _key(a) in index:
+                clashes += 1
+            else:
+                aliases.append(a)
         target = {"id": r["id"], "alt_id": r["alt_id"],
                   "name": "" if r["nickname"] == r["id"] else r["nickname"], "kind": r["kind"],
                   "const": r["const"], "ra": float(r["ra_deg"]), "dec": float(r["dec_deg"]),
                   "mag": _number(r["mag"]), "size": size, "minor": None, "messier": False,
-                  "hubble": None, "surf_br": _number(r["surf_br"]),
-                  "rating": rating, "note": r["note"], "imm": r["id"]}
+                  "hubble": None, "surf_br": _number(r["surf_br"]), "aliases": aliases, **_his(r)}
         targets.append(target)
+        added += 1
         for k in _keys(target):
             index.setdefault(k, target)
+    last.update(matched=len(matched), added=added, ambiguous=ambiguous, alias_clashes=clashes)
     return targets
 
 
@@ -291,8 +453,15 @@ def status():
     ratings = {}
     for r in rows:
         ratings[r["rating"] or "none"] = ratings.get(r["rating"] or "none", 0) + 1
+    import compendium       # the module sky imports, also when this runs as a script
+    import sky
+    sky.load_targets()      # fills compendium.last
+    last = compendium.last
     return {"present": True, "edition": rows[0]["edition"], "objects": len(rows),
             "ratings": dict(sorted(ratings.items())), "table": str(TABLE),
+            "matched": last.get("matched", 0), "added": last.get("added", 0),
+            "ambiguous": last.get("ambiguous", []), "alias_clashes": last.get("alias_clashes", 0),
+            "link": URL, "link_checked": LINK_CHECKED,
             "workbook": str(WORKBOOK) if WORKBOOK.exists() else None, "page": PAGE}
 
 
@@ -302,6 +471,13 @@ def say(s):
         return
     print(f"Imm Deep Sky Compendium, {s['edition']}: {s['objects']} objects, kept in {s['table']}.")
     print("Ratings (0 low to 5 high): " + ", ".join(f"{k}: {v}" for k, v in s["ratings"].items()))
+    print(f"{s['matched']} matched to the catalogue's targets, {s['added']} added as targets of their own.")
+    for line in s["ambiguous"]:
+        print(f"  named more than one target: {line}")
+    if s["alias_clashes"]:
+        print(f"  {s['alias_clashes']} of his other names already name another target: left to that one.")
+    print(f"The download link was taken from {s['page']} on {s['link_checked']}; a newer edition "
+          "there has a new link, which this does not see until compendium.DRIVE_ID is changed.")
 
 
 def main():

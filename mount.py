@@ -1425,8 +1425,11 @@ def find_target(name):
         if star.lower() == wanted:
             return {"id": star, "name": "star", "ra": ra_hours * 15, "dec": dec}
     for t in sky.load_targets():
+        # Its other names too (Caldwell, Sharpless, Barnard... from Gary
+        # Imm's Compendium when it is here): only finding it, never where.
         if wanted in (t["id"].replace(" ", "").lower(), t["alt_id"].replace(" ", "").lower(),
-                      t["name"].replace(" ", "").lower()):
+                      t["name"].replace(" ", "").lower(),
+                      *(a.replace(" ", "").lower() for a in t.get("aliases", ()))):
             return t
     if wanted in PLANETS:
         # A planet is where it is tonight, not where a catalogue put it. Never

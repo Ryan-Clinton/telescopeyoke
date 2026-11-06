@@ -32,6 +32,13 @@ gets: under about an hour in all, a grey snapshot, not a picture.
 3 to 8 minutes of the rest, and no colour. `schedule.py end` reports each
 block's minutes kept against those planned.
 
+The filters: `./ty target TARGET --json` gives `palette` when Gary Imm's
+Compendium is here (`./compendium.py status`): the palette he gives for that
+kind of nebula (SHO, HOO, Ha+RGB or LRGB) and what his class says of its
+light. Offer it as his, with its filters as `--blocks`
+(`Ha:N,OIII:N` for HOO), and the person chooses; with no palette, LRGB as
+above. It is advice: nothing picks a filter from it on its own.
+
 ## Switching target
 
 Stop the run (`./ty run stop`), GoTo the new one at once and start its

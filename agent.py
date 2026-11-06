@@ -459,7 +459,7 @@ def _target(t):
     return {"id": t["id"], "name": t["name"], "kind": t["kind"], "score": t["score"],
             "observable_now": t["now"], "best_time": t["best"], "best_altitude_deg": t["best_alt"],
             "direction": t["direction"], "window": [t["start"], t["end"]], "tags": t["tags"],
-            "rating": t.get("rating"), "note": t.get("note", "")}
+            "rating": t.get("rating"), "note": t.get("note", ""), "palette": t.get("palette")}
 
 
 def spots():
@@ -1274,7 +1274,8 @@ def targets(limit=10, kind=None, now=False, demo=False):
     """The best targets tonight, best first."""
     found = _report(demo)["targets"]
     if kind:
-        found = [t for t in found if kind == t["kind"] or kind in t["kind"].replace("+", " ").split()]
+        found = [t for t in found if kind == t["kind"] or kind in t["kind"].replace("+", " ").split()
+                 or kind.lower() == t.get("sub", "").lower()]
     if now:
         found = [t for t in found if t["now"]]
     return {"count": len(found), "targets": [_target(t) for t in found[:limit]]}
@@ -1289,8 +1290,9 @@ def target(name, demo=False):
            "altitude_deg": round(float(altitude), 1), "hour_angle_hours": round(float(hour_angle) / 15, 3),
            "dec_deg": round(float(dec), 2)}
     # Gary Imm's rating and note, when his Compendium has been fetched.
-    if found.get("rating") is not None or found.get("note"):
-        out.update(rating=found.get("rating"), note=found.get("note", ""))
+    if found.get("imm"):
+        out.update(rating=found.get("rating"), note=found.get("note", ""), palette=found.get("palette"),
+                   aliases=found.get("aliases", []))
     try:
         plan = mount.plan_goto(name, site)
         out["goto"] = {"allowed": True, "pier_side": plan["pier_side"], "warnings": plan["warnings"]}

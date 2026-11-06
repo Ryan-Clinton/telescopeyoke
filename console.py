@@ -773,7 +773,7 @@ class Reader:
             "targets": [{"id": t["id"], "name": t["name"], "kind": t["kind"], "score": round(t["score"]),
                          "best": t["best"], "best_alt": round(t["best_alt"]), "direction": t["direction"],
                          "start": t["start"], "end": t["end"], "tags": t["tags"], "now": t["now"],
-                         "rating": t.get("rating"), "note": t.get("note", ""),
+                         "rating": t.get("rating"), "note": t.get("note", ""), "palette": t.get("palette"),
                          "row": tonight.target_row(i, t)}
                         for i, t in enumerate(rep["targets"][:40], 1)],
         }
