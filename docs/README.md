@@ -67,6 +67,7 @@ is built). What is proven is decided in one place,
 | Page | Kind | What is in it |
 |---|---|---|
 | [Adding the 183M, filter wheel and corrector](mono-upgrade.md) | specification | The cooled mono train: what changed and why. |
+| [Autoguiding](autoguiding.md) | specification | Guiding through the guide camera's ST4 lead, with dithering. Not built. |
 | [The main camera's lost-frame fault](camera-fault.md) | record | The 183C's fault from the first sign to the latest test. |
 | [The camera's row stripes](banding.md) | record | What others found, and what was measured here. |
 | [The USB hub](usb-hub.md) | record | The powered hub at the telescope. |
