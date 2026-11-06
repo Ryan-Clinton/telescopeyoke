@@ -7,6 +7,15 @@
     ./guidecam.py pulse [--seconds 5]   test the ST4 lead to the mount: a
                                         pulse each way, the handset read
                                         around each (--dry-run first)
+    ./guidecam.py star [--count 30]     find a guide star and follow it,
+                                        no pulses: how much it wanders
+    ./guidecam.py calibrate             pulse each way in steps and learn
+                                        what each does (--dry-run first)
+    ./guidecam.py guide [--minutes M]   guide: the kept calibration checked
+                                        and reused, or a new one, then the
+                                        loop (--dry-run first)
+
+Guiding is guider.py's; docs/autoguiding.md is its specification.
 
 This early GPCAM (USB 16d0:0b2a) is no longer opened by Altair's current
 library, on Linux or Windows, nor by ToupTek's: on 2 November 2026 versions
@@ -101,6 +110,33 @@ class Driver:
             return None
         return width.value, height.value, self.buffer.raw[:width.value * height.value]
 
+    def triggered(self, handle, on):
+        """Software trigger mode (option 0x0b = 1): one frame per trigger(),
+        of exactly the exposure set, instead of a video stream."""
+        self.lib.Altaircam_put_Option.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_int]
+        return self.lib.Altaircam_put_Option(handle, 0x0b, 1 if on else 0)
+
+    def trigger(self, handle):
+        self.lib.Altaircam_Trigger.argtypes = [ctypes.c_void_p, ctypes.c_ushort]
+        return self.lib.Altaircam_Trigger(handle, 1)
+
+    def speed(self, handle, value=None):
+        """The camera's USB speed setting (0 is slowest); set it if given.
+        Returns (speed, the most it can be)."""
+        if value is not None:
+            self.lib.Altaircam_put_Speed.argtypes = [ctypes.c_void_p, ctypes.c_ushort]
+            self.lib.Altaircam_put_Speed(handle, value)
+        now = ctypes.c_ushort()
+        self.lib.Altaircam_get_Speed(handle, ctypes.byref(now))
+        self.lib.Altaircam_get_MaxSpeed.argtypes = [ctypes.c_void_p]
+        return now.value, self.lib.Altaircam_get_MaxSpeed(handle)
+
+    def exposure_range(self, handle):
+        """(shortest, longest) exposure in seconds the library allows."""
+        lo, hi, default = ctypes.c_uint(), ctypes.c_uint(), ctypes.c_uint()
+        self.lib.Altaircam_get_ExpTimeRange(handle, ctypes.byref(lo), ctypes.byref(hi), ctypes.byref(default))
+        return lo.value / 1e6, hi.value / 1e6
+
     def st4(self, handle, direction, ms):
         """A guiding pulse out of the camera's ST4 port: 0 north, 1 south,
         2 east, 3 west, 4 stop. Below zero is a refusal."""
@@ -153,14 +189,56 @@ class GuideCamera:
             if not got:
                 self.sleep(0.02)
 
+    def timed_frame(self, seconds, gain=None, wall=time.time):
+        """One triggered frame and its times (UTC seconds): the trigger, the
+        exposure's midpoint and when it arrived. Software trigger mode, as
+        the video stream sent no frames at 1 s or longer (6 November 2026);
+        each frame starts when asked, so one never mixes in a pulse sent
+        before it. A frame identical to the one before is let go."""
+        if not getattr(self, "_triggering", False):
+            if self.driver.triggered(self.handle, True) < 0:
+                refuse("The guide camera would not go into software trigger mode.")
+            self._triggering = True
+            self.seconds = None
+        if gain is not None:
+            self.driver.gain(self.handle, gain)
+        if seconds != self.seconds:
+            self.driver.exposure(self.handle, seconds)
+            self.seconds = seconds
+        while self.driver.pull(self.handle):        # anything left over from before
+            pass
+        while True:
+            if self.driver.trigger(self.handle) < 0:
+                refuse("The guide camera refused a trigger.")
+            started = wall()
+            asked = self.clock()
+            while True:
+                got = self.driver.pull(self.handle)
+                if got:
+                    break
+                if self.clock() - asked > seconds + WAIT_S:
+                    refuse(f"The guide camera sent no frame within {seconds + WAIT_S:.0f} s of a trigger.")
+                self.sleep(0.02)
+            arrived = wall()
+            width, height, data = got
+            frame = np.frombuffer(data, np.uint8).reshape(height, width).copy()
+            digest = hash(data)
+            if digest != getattr(self, "_last_digest", None):
+                self._last_digest = digest
+                return frame, {"start": started, "mid": started + seconds / 2, "arrived": arrived}
+
     def pulse(self, direction, seconds):
-        """One ST4 pulse, waited out."""
-        if self.driver.st4(self.handle, DIRECTIONS[direction], int(seconds * 1000)) < 0:
+        """One ST4 pulse, waited out: the call returns only once the camera
+        says it has ended. Still going 1 s past its length is a fault."""
+        if self.driver.st4(self.handle, DIRECTIONS[direction], int(round(seconds * 1000))) < 0:
             refuse("The guide camera refused to send an ST4 pulse.")
-        end = self.clock() + seconds + 2
+        end = self.clock() + seconds + 1
         self.sleep(seconds)
-        while self.driver.st4_busy(self.handle) and self.clock() < end:
-            self.sleep(0.05)
+        while self.driver.st4_busy(self.handle):
+            if self.clock() > end:
+                self.stop_pulse()
+                refuse(f"The guide camera's ST4 pulse {direction} did not end 1 s after its {seconds:.2f} s.")
+            self.sleep(0.02)
 
     def stop_pulse(self):
         self.driver.st4(self.handle, STOP, 0)
@@ -184,6 +262,40 @@ def keep(frame, seconds, gain, folder=None, now=None):
     header = fits.Header({"EXPTIME": seconds, "INSTRUME": MODEL, "GAIN": gain if gain is not None else -1})
     fits.writeto(path, frame, header, overwrite=True)
     return path
+
+
+def probe(cam, exposures, trigger=False, speed=None, window=12.0, say=print):
+    """When frames arrive at each exposure: the camera's frames counted for
+    `window` seconds after the exposure is set, video or triggered, at the
+    given USB speed. For finding why long exposures send nothing."""
+    d, h = cam.driver, cam.handle
+    if speed is not None:
+        d.speed(h, speed)
+    now, most = d.speed(h)
+    say(f"USB speed {now} of {most}; {'software trigger' if trigger else 'video'} mode")
+    if trigger:
+        say(f"  trigger mode: {d.triggered(h, True)}")
+    for seconds in exposures:
+        d.exposure(h, seconds)
+        while d.pull(h):
+            pass
+        began = cam.clock()
+        arrivals, levels = [], []
+        if trigger:
+            say(f"  trigger: {d.trigger(h)}")
+        while cam.clock() - began < window:
+            got = d.pull(h)
+            if got:
+                arrivals.append(cam.clock() - began)
+                levels.append(np.frombuffer(got[2], np.uint8).mean())
+                if trigger:
+                    d.trigger(h)
+            else:
+                cam.sleep(0.01)
+        gaps = np.diff([0.0] + arrivals)
+        say(f"{seconds:g} s: {len(arrivals)} frames in {window:g} s"
+            + (f", at {', '.join(f'{a:.2f}' for a in arrivals[:8])} s; gaps up to {gaps.max():.2f} s; "
+               f"levels {', '.join(f'{v:.1f}' for v in levels[:8])}" if arrivals else ""))
 
 
 MOVED = 4.0        # arcseconds an axis must turn beyond the still reading to count as moved
@@ -254,6 +366,78 @@ def install(say=print, fetch=None, run=subprocess.run):
     return LIBRARY
 
 
+def pointing(args):
+    """(Dec, west of the pier) from --dec and --side, or read once from the
+    handset, which must say the mount is tracking."""
+    if args.dec is not None and args.side:
+        return args.dec, args.side == "west"
+    import mount
+    try:
+        scope = mount.Mount(watch=False)
+        state = scope.state()
+        dec, west = scope.radec()[1], scope.west()
+    except (OSError, SystemExit) as why:
+        refuse(f"The handset could not be read ({why}): give --dec and --side.")
+    if state != "tracking":
+        raise interface.Refusal("INVALID_REQUEST", f"The mount is {state}, not tracking: guide only while it tracks.")
+    return (args.dec if args.dec is not None else dec), (args.side == "west" if args.side else west)
+
+
+def guide_dry_run(args):
+    import guider
+    guider.motion_check()
+    if args.recalibrate:
+        dec = args.dec if args.dec is not None else 0.0
+        ra_step, dec_step = guider.step_seconds(dec)
+        print(f"would: find a guide star in {args.exposure:g} s frames; at Dec {dec:+.1f} pulse west in steps of "
+              f"{ra_step * 1000:.0f} ms until it has moved {guider.CAL_DISTANCE} px or "
+              f"{guider.CAL_MOST_STEPS} steps, east back the same; north until the Dec slack is taken up, "
+              f"then north in {dec_step * 1000:.0f} ms steps the same way, south back, and "
+              f"{guider.CAL_REVERSAL_STEPS} steps north and south to measure the slack again; keep it in "
+              f"{guider.CAL_FILE}")
+    if args.action == "guide":
+        if not args.recalibrate:
+            cal = guider.load_calibration()
+            if not cal:
+                cols, why = None, "no calibration kept"
+            elif args.dec is None or not args.side:
+                print("would: read the target's Dec and side of the pier from the handset")
+                cols, why = cal["columns"], ""
+            else:
+                cols, why = guider.reuse(cal, args.dec, args.side == "west")
+            print(f"would: reuse the calibration of {cal['made']} after a check of {guider.VERIFY_STEPS} steps "
+                  "each way, recalibrating if it fails" if cols is not None else f"would: calibrate first ({why})")
+        print(f"would: lock on the star and guide every {args.exposure:g} s"
+              + (f" for {args.minutes:g} minutes" if args.minutes else " until Ctrl-C")
+              + f"; pulses at most {guider.LONGEST_PULSE} s an axis, RA then Dec; the motion lock checked "
+              "before each; stop on a fault")
+
+
+def run_guider(args):
+    import guider
+    with GuideCamera() as cam:
+        if args.action == "star":
+            shortest, longest = cam.driver.exposure_range(cam.handle)
+            print(f"guide camera exposures {shortest * 1000:g} ms to {longest:g} s")
+            guider.watch(cam, args.exposure, args.count, args.gain)
+            return
+        dec, west = pointing(args)
+        cal = None if args.recalibrate else guider.load_calibration()
+        cols, why = guider.reuse(cal, dec, west) if cal else (
+            None, "a new calibration asked for" if args.recalibrate else "no calibration kept")
+        if cols is not None:
+            print(f"checking the calibration of {cal['made']}")
+            ok, why = guider.verify(cam, args.exposure, cal, cols, west, args.gain)
+            cols = guider.reuse(cal, dec, west)[0] if ok else None
+        if cols is None:
+            if args.action == "guide":
+                print(f"calibrating: {why}")
+            cal = guider.calibrate(cam, args.exposure, dec, west, args.gain)
+            cols, _ = guider.reuse(cal, dec, west)
+        if args.action == "guide":
+            guider.guide(cam, cols, cal, args.exposure, args.gain, args.minutes, args.dec_one_way)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="action")
@@ -265,10 +449,45 @@ def main(argv=None):
     p = sub.add_parser("pulse", help="test the ST4 lead to the mount: a pulse each way, the handset read around each")
     p.add_argument("--seconds", type=float, default=5.0, help="length of each pulse")
     p.add_argument("--dry-run", action="store_true", help="say what it would do, open nothing")
+    q = sub.add_parser("probe", help="when frames arrive at each exposure, video or triggered")
+    q.add_argument("--exposures", default="0.1,0.5,1,2", help="seconds, comma-separated")
+    q.add_argument("--trigger", action="store_true", help="software trigger mode instead of video")
+    q.add_argument("--speed", type=int, help="the camera's USB speed setting (0 is slowest)")
+    q.add_argument("--window", type=float, default=12.0, help="seconds to count frames at each exposure")
+    w = sub.add_parser("star", help="find a guide star and follow it, no pulses")
+    w.add_argument("--count", type=int, default=30, help="frames to follow it through")
+    for name, helptext in (("calibrate", "pulse each way in steps and learn what each does"),
+                           ("guide", "guide, reusing the kept calibration once checked")):
+        g = sub.add_parser(name, help=helptext)
+        g.add_argument("--dec", type=float, help="the target's Dec, if not read from the handset")
+        g.add_argument("--side", choices=("east", "west"), help="side of the pier, if not read from the handset")
+        g.add_argument("--dry-run", action="store_true", help="say what it would do, open nothing")
+        if name == "guide":
+            g.add_argument("--minutes", type=float, help="stop after this long (default: until Ctrl-C)")
+            g.add_argument("--recalibrate", action="store_true", help="calibrate again first")
+            g.add_argument("--dec-one-way", choices=("north", "south"),
+                           help="correct Dec only this way, the way the polar drift pushes")
+    for name in ("star", "calibrate", "guide"):
+        sub.choices[name].add_argument("--exposure", type=float, default=2.0, help="guide exposure, seconds (0.5 to 4)")
+        sub.choices[name].add_argument("--gain", type=int, help="the camera's gain, per cent (100 = none)")
     args = ap.parse_args(argv)
+    if args.action in ("star", "calibrate", "guide") and not 0.5 <= args.exposure <= 4:
+        sys.exit("The guide exposure is 0.5 to 4 s.")
+    if args.action == "calibrate":
+        args.recalibrate, args.minutes, args.dec_one_way = True, None, None
     try:
         if args.action == "install":
             install()
+            return
+        if args.action in ("calibrate", "guide") and args.dry_run:
+            guide_dry_run(args)
+            return
+        if args.action in ("star", "calibrate", "guide"):
+            run_guider(args)
+            return
+        if args.action == "probe":
+            with GuideCamera() as cam:
+                probe(cam, [float(e) for e in args.exposures.split(",")], args.trigger, args.speed, args.window)
             return
         if args.action == "pulse" and args.dry_run:
             print(f"would: read the handset, wait {args.seconds:g} s still, then pulse north, south, east, "

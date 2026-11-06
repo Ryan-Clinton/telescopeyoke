@@ -2,7 +2,7 @@
 
 [README](../README.md) · [All docs](README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Results](results.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
-**Specification, 6 November 2026. Not built.** This says what autoguiding
+**Specification, 6 November 2026. Stages 1 to 3 built, not yet run on the sky.** This says what autoguiding
 should do on this rig, what has to change around it, and how the first clear
 night proves it. Figures measured on this rig say when; figures from other
 people say whose; the rest are starting values to be tuned on the sky.
@@ -35,7 +35,8 @@ guiding and dithering are one piece of work here, never guiding alone.
 | Guide camera and filter wheel together | On the unpowered Trust hub off the 183M's internal hub, with both plugged in, the wheel never finishes its power-up turn and the guide camera stops sending frames. Each works alone (6 Nov 2026). Starlight Xpress recommends a powered hub "to ensure that the wheel motor has sufficient torque" [5] |
 | Guide scope focus | Not done |
 | Guide scope fitted firmly, and the balance with it | Not checked on the sky |
-| Guiding software | None. No loop, no calibration, no dithering by the guider |
+| Guiding software | Built, not run on the sky: `./guidecam.py star`, `calibrate` and `guide` (`guider.py`; the shared maths in `guidemath.py`). Not built: one owner of the camera, the heartbeat timer, orders, `shoot.py --guide`, dithering |
+| Guide frames of 1 s and more | 6 November 2026, `./guidecam.py probe`: on the 183M's hub through the Trust hub, with the wheel unplugged, frames came with gaps of about 3 s even at 0.1 s, one frame in 12 s at 0.5 and 1 s, none at 2 s; the same in software trigger mode and at the slowest USB speed. The 2 November test took single frames only, so it was never seen. Guiding needs 2 s frames every few seconds |
 | Long darks for the 183M at -5 °C | None at 120 to 300 s |
 
 ## The numbers

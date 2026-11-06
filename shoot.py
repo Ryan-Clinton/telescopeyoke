@@ -58,6 +58,7 @@ import stacking
 import tracking
 import sxwheel
 import filters
+import guidemath
 from camera import Camera, is_mono, stretch
 from indi import IndiError as CameraError
 
@@ -433,13 +434,7 @@ class Hold:
     def drifting(track, last=6):
         """The frames' own drift, pixels a second, from the last few: what a
         learning move's measurement must not count as the move's."""
-        if len(track) < 3:
-            return np.zeros(2)
-        t = np.array([row[0] for row in track[-last:]], float)
-        xy = np.array([row[1:] for row in track[-last:]], float)
-        if np.ptp(t) <= 0:
-            return np.zeros(2)
-        return np.array([np.polyfit(t, xy[:, k], 1)[0] for k in (0, 1)])
+        return guidemath.drift_rate(track, last)
 
     def due(self, track):
         """Whether a move is due now: never in the HOLD_SETTLE frames after one."""
@@ -458,12 +453,11 @@ class Hold:
         +Dec moved the frames 12.3 px a second and -Dec 2.0, the corrections
         never closed the miss, and the hold gave up mid-transit."""
         plus, minus = (float(np.hypot(*self.columns[("Dec", k)])) for k in (1, -1))
-        strong, weak = max(plus, minus), min(plus, minus)
-        if strong <= 0 or weak / strong > 1 / HOLD_SLACK_RATIO:
+        found = guidemath.slack(plus, minus, HOLD_LEARN, HOLD_SLACK_RATIO, HOLD_SLACK_MOST)
+        if found is None:
             return
-        sign = 1 if plus >= minus else -1
+        sign, self.dec_slack = found
         self.columns[("Dec", -sign)] = -self.columns[("Dec", sign)]
-        self.dec_slack = min(HOLD_LEARN * (1 - weak / strong), HOLD_SLACK_MOST)
         say(f"  hold: Dec gear slack about {self.dec_slack:.1f} s of move; taken up on each reversal")
 
     def move(self, name, sign, seconds):
@@ -519,17 +513,7 @@ class Hold:
     def solve(self, now):
         """Seconds of move in RA and Dec (signed) that take back HOLD_GAIN of
         `now`, each direction with its own learnt strength."""
-        want = -HOLD_GAIN * np.asarray(now, float)
-        signs = (1, 1)
-        for _ in range(3):              # the signs decide the strengths, the strengths the signs
-            m = np.column_stack([self.columns[("RA", signs[0])] * signs[0],
-                                 self.columns[("Dec", signs[1])] * signs[1]])
-            seconds = np.linalg.solve(m, want)
-            new = tuple(1 if s >= 0 else -1 for s in seconds)
-            if new == signs:
-                break
-            signs = new
-        return seconds
+        return guidemath.solve(self.columns, -HOLD_GAIN * np.asarray(now, float))
 
     def correct(self, now, kept, say=print):
         """Moves that take back HOLD_GAIN of the shift `now`."""
