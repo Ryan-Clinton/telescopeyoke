@@ -15,6 +15,7 @@ The guide scope is the 50 mm Orion Mini (162 mm) with the GPCAM's 3.75 um
 pixels: 4.77" a pixel. The guide rate is the handset's, measured on
 6 November 2026 at about 7.1"/s; a calibration replaces it with its own.
 """
+import fcntl
 import json
 import math
 import os
@@ -88,12 +89,13 @@ HEARTBEAT_S = 1.0          # the state file's heartbeat, on its own timer
 STALE_S = 5.0              # a heartbeat older than this: the guider is not to be trusted
 ORDERS = ("pause", "resume", "relock", "dither", "stop")
 ORDER_TIMEOUT = {"pause": 10, "resume": 30, "relock": 60, "dither": 60, "stop": 15}
-ORDER_STALE_S = 120        # an order not taken within this long is thrown away
+ORDER_STALE_S = 120        # an order not taken within this long is answered as failed
 RELOCK_PATIENCE = 50.0     # seconds a relock looks for a star
 
 STATE_FILE = config.DATA / "cache" / "guide.json"
-PID_FILE = config.DATA / "cache" / "guide.pid"
-ORDER_FILE = config.DATA / "cache" / "guide-order.json"
+PID_FILE = config.DATA / "cache" / "guide.pid"          # who holds the guide camera (information only)
+CAMERA_LOCK = config.DATA / "cache" / "guide.lock"      # the kernel lock that decides it
+ORDER_DIR = config.DATA / "cache" / "guide-orders"      # one file per order, and one per result
 CAL_FILE = config.DATA / "cache" / "guide-cal.json"
 LOG_FOLDER = config.DATA / "frames" / "guide"
 
@@ -316,6 +318,8 @@ class Calibrator:
         return self.where
 
     def step(self, direction, seconds):
+        if self.tick:
+            self.tick()                     # orders (a stop) are taken here, before the pulse
         motion_check()
         self.cam.pulse(direction, seconds)
         return self.look()
@@ -702,57 +706,93 @@ def alive(pid):
     return True
 
 
-def owner(path=None):
-    """The guider holding the guide camera ({pid, run, started}), or None
-    when no process that is still alive holds it."""
+def owner(lock_path=None, info_path=None):
+    """Who holds the guide camera ({pid, run, role, started}), or None. The
+    kernel's lock on CAMERA_LOCK says whether it is held (it goes when the
+    holder's process ends, however it ends); the pid file says by whom."""
+    lock_path, info_path = lock_path or CAMERA_LOCK, info_path or PID_FILE
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o644)
     try:
-        held = json.loads((path or PID_FILE).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        try:
+            held = json.loads(info_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            held = {}
+        return held if isinstance(held, dict) and held else {"pid": None, "role": "unknown"}
+    else:
+        fcntl.flock(fd, fcntl.LOCK_UN)
         return None
-    return held if isinstance(held, dict) and alive(held.get("pid")) else None
-
-
-def refuse_if_owned(what, path=None):
-    """For every other use of the guide camera or its ST4 port: refused
-    while a guider holds it."""
-    held = owner(path)
-    if held and held.get("pid") != os.getpid():
-        raise interface.Refusal("INVALID_REQUEST", f"The guider (process {held['pid']}, run {held.get('run')}) "
-                                f"holds the guide camera: no {what} until it stops (./guidecam.py tell stop).")
+    finally:
+        os.close(fd)
 
 
 class Ownership:
-    """The guide camera held by this process for as long as the `with`
-    lasts: one guider at a time. A pid file left by a process that has
-    died is taken over."""
+    """The guide camera and its ST4 port held by this process for as long as
+    the `with` lasts. Every command that opens the guide camera takes it,
+    the guider and the diagnostics alike, so two can never use it at once.
+    It is a kernel lock (flock), so it is atomic, and it is let go when the
+    process ends, even by a crash or SIGKILL: no stale file to take over."""
 
-    def __init__(self, run, path=None):
-        self.path, self.run = path or PID_FILE, run
+    def __init__(self, run=None, role="guider", lock_path=None, info_path=None):
+        self.lock_path, self.info_path = lock_path or CAMERA_LOCK, info_path or PID_FILE
+        self.run, self.role, self.fd = run, role, None
 
     def __enter__(self):
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        for _ in range(2):
+        self.lock_path.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(self.lock_path, os.O_RDWR | os.O_CREAT, 0o644)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            os.close(fd)
             try:
-                fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-            except FileExistsError:
-                held = owner(self.path)
-                if held:
-                    raise interface.Refusal("INVALID_REQUEST", f"A guider is already running (process "
-                                            f"{held['pid']}, run {held.get('run')}): one at a time.")
-                self.path.unlink(missing_ok=True)       # left by a guider that died
-                continue
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump({"pid": os.getpid(), "run": self.run, "started": time.time()}, f)
-            return self
-        raise interface.Refusal("INVALID_REQUEST", f"Could not take the guide camera's pid file {self.path}.")
+                held = json.loads(self.info_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                held = {}
+            raise interface.Refusal("INVALID_REQUEST", f"The guide camera is in use ({held.get('role', 'unknown')}, "
+                                    f"process {held.get('pid')}, run {held.get('run')}): one user at a time."
+                                    + (" Stop the guider with ./guidecam.py tell stop." if held.get("role") == "guider"
+                                       else "")) from None
+        self.fd = fd
+        scratch = self.info_path.with_suffix(".tmp")
+        scratch.write_text(json.dumps({"pid": os.getpid(), "run": self.run, "role": self.role,
+                                       "started": time.time()}), encoding="utf-8")
+        os.replace(scratch, self.info_path)
+        return self
 
     def __exit__(self, *exc):
         try:
-            held = json.loads(self.path.read_text(encoding="utf-8"))
+            held = json.loads(self.info_path.read_text(encoding="utf-8"))
             if held.get("pid") == os.getpid():
-                self.path.unlink()
+                self.info_path.unlink()
         except (OSError, ValueError):
             pass
+        if self.fd is not None:
+            fcntl.flock(self.fd, fcntl.LOCK_UN)
+            os.close(self.fd)
+            self.fd = None
+
+
+def terminate(pid, wait=10.0, sleep=time.sleep):
+    """End a guider that cannot end itself (its loop hung inside the camera
+    library: the heartbeat's watch writes `fault` but cannot interrupt the
+    call). SIGTERM first; SIGKILL if it is still there after `wait`
+    seconds. The kernel then lets go of its lock on the camera. Returns
+    True once the process is gone."""
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        if not alive(pid):
+            return True
+        try:
+            os.kill(int(pid), sig)
+        except ProcessLookupError:
+            return True
+        end = time.monotonic() + wait
+        while time.monotonic() < end:
+            if not alive(pid):
+                return True
+            sleep(0.2)
+    return not alive(pid)
 
 
 # ------------------------------------------------- the heartbeat
@@ -836,9 +876,19 @@ def health(state, run=None, now=None):
 
 # ------------------------------------------------- orders
 
-def tell(order, args=(), run=None, path=None, state_path=None):
-    """An order for the running guider, numbered and naming its run (the
-    one in the state file unless `run` is given). Returns (number, run)."""
+class StopRequested(Exception):
+    """A stop order taken between pulses (calibration, its check, or the loop)."""
+
+    def __init__(self, order):
+        super().__init__("a stop order")
+        self.order = order
+
+
+def tell(order, args=(), run=None, folder=None, state_path=None):
+    """An order for the running guider: a file of its own in ORDER_DIR,
+    named by a random ID and naming the guider's run (the one in the state
+    file unless `run` is given), so no order can overwrite another.
+    Returns (id, run)."""
     if order not in ORDERS:
         raise interface.Refusal("INVALID_REQUEST", f"Unknown guider order '{order}'. Known: {', '.join(ORDERS)}")
     if run is None:
@@ -847,65 +897,129 @@ def tell(order, args=(), run=None, path=None, state_path=None):
         if not ok:
             raise Fault(f"No guider to tell: {why}.")
         run = state["run"]
-    number = int(time.time() * 1000)
-    path = path or ORDER_FILE
-    path.parent.mkdir(parents=True, exist_ok=True)
-    scratch = path.with_suffix(".tmp")
-    scratch.write_text(json.dumps({"n": number, "run": run, "order": order, "args": list(args),
+    ident = uuid.uuid4().hex
+    folder = folder or ORDER_DIR
+    folder.mkdir(parents=True, exist_ok=True)
+    scratch = folder / f"{ident}.tmp"
+    scratch.write_text(json.dumps({"id": ident, "run": run, "order": order, "args": list(args),
                                    "at": time.time()}), encoding="utf-8")
-    os.replace(scratch, path)
-    return number, run
+    os.replace(scratch, folder / f"{ident}.order.json")
+    return ident, run
 
 
-def wait_for(number, run, timeout=None, order=None, state_path=None, sleep=time.sleep):
-    """The outcome of order `number` sent to `run`: only an outcome with
-    both is accepted, so an answer left by an earlier guider never counts.
-    A guider that stops being healthy, a `failed` outcome or the order's
-    timeout is a Fault."""
+def answer_order(order, done, why="", folder=None):
+    """An order's result, in a file of its own beside it: written only once
+    what it asked for is true."""
+    folder = folder or ORDER_DIR
+    result = {"id": order["id"], "run": order.get("run"), "order": order.get("order"),
+              "outcome": "done" if done else "failed", "reason": why, "at": time.time()}
+    scratch = folder / f"{order['id']}.result.tmp"
+    scratch.write_text(json.dumps(result), encoding="utf-8")
+    os.replace(scratch, folder / f"{order['id']}.result.json")
+    (folder / f"{order['id']}.taken.json").unlink(missing_ok=True)
+    return result
+
+
+def wait_for(ident, run, timeout=None, order=None, state_path=None, folder=None, sleep=time.sleep):
+    """The result of order `ident` sent to `run`. Only a result with both is
+    accepted. A failed result, a guider that stops being healthy (or, for a
+    stop, one that ends without answering), or the order's timeout is a
+    Fault."""
+    folder = folder or ORDER_DIR
     timeout = timeout or ORDER_TIMEOUT.get(order, 30)
     end = time.monotonic() + timeout
+    path = folder / f"{ident}.result.json"
     while time.monotonic() < end:
-        state = read_state(state_path)
-        done = (state or {}).get("order") or {}
-        if done.get("n") == number and done.get("run") == run:
+        try:
+            done = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            done = None
+        if done and done.get("id") == ident and done.get("run") == run:
             if done.get("outcome") != "done":
                 raise Fault(f"The guider's {done.get('order')} failed: {done.get('reason')}.")
             return done
-        ok, why = health(state, run)
-        if not ok and not (order == "stop" and (state or {}).get("state") == "stopped"):
-            raise Fault(f"Waiting for the guider's {order or 'order'}: {why}.")
+        state = read_state(state_path)
+        if order == "stop":
+            if state and state.get("run") == run and not alive(state.get("pid")):
+                raise Fault("The guider ended without answering the stop.")
+        else:
+            ok, why = health(state, run)
+            if not ok:
+                raise Fault(f"Waiting for the guider's {order or 'order'}: {why}.")
         sleep(0.2)
     raise Fault(f"The guider did not carry out {order or 'the order'} within {timeout:.0f} s.")
 
 
-def take_order(run, taken, path=None, now=None):
-    """The next order for this guider, or None. An order is taken once
-    (its number above `taken`). One older than ORDER_STALE_S is thrown
-    away; one for another run is answered as failed, under that run, so
-    its sender hears why rather than waiting."""
-    path = path or ORDER_FILE
-    try:
-        left = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    if not isinstance(left, dict) or (left.get("n") or 0) <= taken:
-        return None
-    now = time.time() if now is None else now
-    if now - (left.get("at") or 0) > ORDER_STALE_S:
-        path.unlink(missing_ok=True)
-        return None
-    return left
+class OrderDesk:
+    """The guider's side of the orders: each order file claimed once (by
+    renaming it), in the order sent. One for another run, one sent before
+    this guider started, or one older than ORDER_STALE_S is answered as
+    failed, so its sender hears why rather than waiting."""
+
+    def __init__(self, run, started=None, folder=None, say=print):
+        self.run, self.started = run, started or time.time()
+        self.folder, self.say = folder or ORDER_DIR, say
+        self.folder.mkdir(parents=True, exist_ok=True)
+        for old in self.folder.glob("*.result.json"):           # results nobody collected
+            try:
+                if time.time() - old.stat().st_mtime > 3600:
+                    old.unlink()
+            except OSError:
+                pass
+
+    def answer(self, order, done, why=""):
+        answer_order(order, done, why, self.folder)
+        self.say(f"  order {order.get('order')}: {'done' if done else 'failed'}" + (f" ({why})" if why else ""))
+
+    def poll(self, now=None):
+        """The orders for this run waiting to be carried out, oldest first."""
+        now = time.time() if now is None else now
+        found = []
+        for path in self.folder.glob("*.order.json"):
+            try:
+                found.append(json.loads(path.read_text(encoding="utf-8")))
+            except (OSError, ValueError):
+                continue
+        found.sort(key=lambda o: (o.get("at") or 0, o.get("id", "")))
+        ready = []
+        for order in found:
+            source = self.folder / f"{order.get('id')}.order.json"
+            claimed = self.folder / f"{order.get('id')}.taken.json"
+            try:
+                os.replace(source, claimed)          # claimed once, by one reader
+            except OSError:
+                continue
+            if order.get("run") != self.run:
+                self.answer(order, False, f"sent to run {order.get('run')}; this guider is run {self.run}")
+            elif (order.get("at") or 0) < self.started:
+                self.answer(order, False, "sent before this guider started")
+            elif now - (order.get("at") or 0) > ORDER_STALE_S:
+                self.answer(order, False, f"not taken within {ORDER_STALE_S:.0f} s")
+            else:
+                ready.append(order)
+        return ready
+
+    def between_pulses(self, doing="calibrating"):
+        """For calibration and its check, before every pulse: a stop ends it
+        (StopRequested, answered by the caller once the pulses have stopped
+        and the camera is let go); any other order is answered as failed."""
+        for order in self.poll():
+            if order.get("order") == "stop":
+                raise StopRequested(order)
+            self.answer(order, False, f"{doing}: only stop is taken until guiding starts")
 
 
 # ------------------------------------------------- the loop
 
 def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, say=print,
-          state_path=None, log_folder=None, run_id=None, order_path=None):
+          state_path=None, log_folder=None, run_id=None, desk=None):
     """The closed loop, with its heartbeat and its orders. Finds a star,
     locks on it and keeps it there until `minutes` pass, a `stop` order,
     Ctrl-C or SIGTERM, or a fault. The state file has the heartbeat every
     second and everything else every frame; each frame is logged to
-    guide-DATE.jsonl. The caller holds the camera (Ownership)."""
+    guide-DATE.jsonl. The caller holds the camera (Ownership), and answers
+    a stop order only once the camera is let go: this returns (the final
+    state, the stop order or None)."""
     motion_check()
     run_id = run_id or uuid.uuid4().hex[:8]
     folder = log_folder or LOG_FOLDER
@@ -913,19 +1027,17 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
     log = folder / f"guide-{datetime.now():%Y%m%d}.jsonl"
     ctl = Controller(cols, cal.get("backlash_s", 0.0), cal.get("backlash_spread_s", 0.0), seconds, one_way)
     stuck_after = 3 * seconds + 5 + RETRY_S + 2 * LONGEST_PULSE
-    beat = Heartbeat({"pid": os.getpid(), "run": run_id, "exposure": seconds, "state": "starting"},
+    desk = desk or OrderDesk(run_id, say=say)
+    beat = Heartbeat({"pid": os.getpid(), "run": run_id, "exposure": seconds, "state": "starting",
+                      "camera_held": True},
                      stuck_after, state_path, say)
     errors = deque(maxlen=RMS_FRAMES)
-    lock, state, reason, outcome = None, "starting", "", None
-    taken = (take_order(None, 0, order_path) or {}).get("n", 0)    # orders from before this run are not ours
+    lock, state, reason = None, "starting", ""
+    answer = desk.answer
 
-    def answer(order, done, why=""):
-        """An order's outcome, written once what it asked for is true."""
-        nonlocal outcome
-        outcome = {"n": order["n"], "run": order.get("run"), "order": order.get("order"),
-                   "outcome": "done" if done else "failed", "reason": why, "at": time.time()}
-        beat.update(order=outcome)
-        say(f"  order {order.get('order')}: {'done' if done else 'failed'}" + (f" ({why})" if why else ""))
+    def starting():
+        beat.progress()
+        desk.between_pulses("finding the guide star")
 
     def sigterm(signum, frame):
         raise KeyboardInterrupt
@@ -937,7 +1049,7 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
     beat.start()
     resuming = stopping = None
     try:
-        star = first_star(cam, seconds, gain, say, tick=beat.progress)
+        star = first_star(cam, seconds, gain, say, tick=starting)
         lock = where = (star.x, star.y)
         say(f"locked on the star at {lock[0]:.1f}, {lock[1]:.1f} (SNR {star.snr:.1f}); guiding")
         lost, state = 0, "guiding"
@@ -945,13 +1057,9 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
         ended = time.monotonic() + minutes * 60 if minutes else None
         while (ended is None or time.monotonic() < ended) and stopping is None:
             beat.progress()
-            order = take_order(run_id, taken, order_path)
-            if order:
-                taken = order["n"]
+            for order in desk.poll():
                 name = order.get("order")
-                if order.get("run") != run_id:
-                    answer(order, False, f"sent to run {order.get('run')}; this guider is run {run_id}")
-                elif name == "stop":
+                if name == "stop":
                     stopping = order
                     break
                 elif name == "pause":
@@ -1043,6 +1151,9 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
                 say(f"  RA {row['ra_err']:+5.1f}\" Dec {row['dec_err']:+5.1f}\"  pulses {sent[0]:+.2f} "
                     f"{sent[1]:+.2f} s" + (f"  RMS {rms['total']:.2f}\"" if rms else ""))
         state, reason = "stopped", ("a stop order" if stopping else "its time was up")
+    except StopRequested as stop:
+        stopping = stop.order
+        state, reason = "stopped", "a stop order"
     except interface.Refusal as fault:
         state, reason = "fault", fault.message
         say(f"guiding stopped: {reason}")
@@ -1062,11 +1173,6 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
         except Exception as failure:
             say(f"  the ST4 stop failed too: {failure}")
         final = {"state": state, "reason": reason, "lock": list(lock) if lock else None, "pulses": [0.0, 0.0]}
-        if state == "stopped" and stopping:
-            final["order"] = {"n": stopping["n"], "run": stopping.get("run"), "order": "stop",
-                              "outcome": "done", "reason": "", "at": time.time()}
-        elif outcome:
-            final["order"] = outcome
         try:
             with beat.lock:
                 beat.fields.update(final, time=time.time(), heartbeat=time.time())
@@ -1075,4 +1181,4 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
             say(f"  the final state could not be written: {failure}")
         if previous is not None:
             signal.signal(signal.SIGTERM, previous)
-    return state
+    return state, stopping

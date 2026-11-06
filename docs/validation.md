@@ -652,7 +652,8 @@ focuser not touched since the stars.
   close came from it ([camera-fault.md](camera-fault.md#the-afternoon-of-2-november-2026)).
 - **Guide camera:** the GPCAM MT9M034M opened only through
   libaltaircamlegacy 1.24, by `./guidecam.py`, giving frames of 17, 151 and
-  255 at 1, 10 and 100 ms. No guiding yet: it waits for the guide scope.
+  255 at 1, 10 and 100 ms. No guiding then: the guide scope had not
+  come (it came on 6 November; see that day below).
 - **YouTube** went on air at 23:05 on 1 November with its title set
   automatically.
 

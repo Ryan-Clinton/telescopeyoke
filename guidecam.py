@@ -164,14 +164,22 @@ class GuideCamera:
     as at 1 ms, the next 151), so frames that began before the change are
     let go."""
 
-    def __init__(self, driver=None, clock=time.monotonic, sleep=time.sleep):
-        self.driver = driver or Driver()
-        self.clock, self.sleep = clock, sleep
-        found = [c for c in self.driver.cameras() if c[0] == MODEL]
-        if not found:
-            refuse(f"No guide camera ({MODEL}, USB {USB_ID}) found. Is it plugged in?")
-        self.handle, self.size = self.driver.open(found[0][1])
-        self.seconds = None
+    def __init__(self, driver=None, clock=time.monotonic, sleep=time.sleep, role="use", run=None):
+        import guider
+        # The guide camera's lock, taken before it is opened and let go only
+        # after it is closed: no two commands ever use it, or its ST4 port, at once.
+        self.owned = guider.Ownership(run, role).__enter__()
+        try:
+            self.driver = driver or Driver()
+            self.clock, self.sleep = clock, sleep
+            found = [c for c in self.driver.cameras() if c[0] == MODEL]
+            if not found:
+                refuse(f"No guide camera ({MODEL}, USB {USB_ID}) found. Is it plugged in?")
+            self.handle, self.size = self.driver.open(found[0][1])
+            self.seconds = None
+        except BaseException:
+            self.owned.__exit__(None, None, None)
+            raise
 
     def frame(self, seconds, gain=None):
         if gain is not None:
@@ -251,7 +259,10 @@ class GuideCamera:
         self.driver.st4(self.handle, STOP, 0)
 
     def close(self):
-        self.driver.close(self.handle)
+        try:
+            self.driver.close(self.handle)
+        finally:
+            self.owned.__exit__(None, None, None)
 
     def __enter__(self):
         return self
@@ -423,52 +434,77 @@ def guide_dry_run(args):
 def run_guider(args):
     import guider
     if args.action == "star":
-        guider.refuse_if_owned("star")
-        with GuideCamera() as cam:
+        with GuideCamera(role="star") as cam:
             shortest, longest = cam.driver.exposure_range(cam.handle)
             print(f"guide camera exposures {shortest * 1000:g} ms to {longest:g} s")
             guider.watch(cam, args.exposure, args.count, args.gain)
         return
     import uuid
     run = uuid.uuid4().hex[:8]
-    # The camera is held for the whole of calibrate or guide: one guider at a time.
-    with guider.Ownership(run), GuideCamera() as cam:
-        dec, west = pointing(args)
-        # Calibration and its check have a heartbeat too, as `calibrating`.
-        beat = guider.Heartbeat({"pid": os.getpid(), "run": run, "exposure": args.exposure,
-                                 "state": "calibrating"}, 3 * args.exposure + 5 + 2 * guider.CAL_LONGEST_MS / 1000
-                                + guider.RETRY_S).start()
-        try:
-            cal = None if args.recalibrate else guider.load_calibration()
-            cols, why = guider.reuse(cal, dec, west) if cal else (
-                None, "a new calibration asked for" if args.recalibrate else "no calibration kept")
-            if cols is not None:
-                print(f"checking the calibration of {cal['made']}")
-                ok, why = guider.verify(cam, args.exposure, cal, cols, west, args.gain, tick=beat.progress)
-                cols = guider.reuse(cal, dec, west)[0] if ok else None
-            if cols is None:
+    desk = guider.OrderDesk(run)
+    stop_order, beat = None, None
+    try:
+        # The camera, and its lock, held for the whole of calibrate or guide.
+        with GuideCamera(role="guider", run=run) as cam:
+            dec, west = pointing(args)
+            # Calibration and its check have a heartbeat too, as `calibrating`,
+            # and take a stop before every pulse.
+            beat = guider.Heartbeat({"pid": os.getpid(), "run": run, "exposure": args.exposure,
+                                     "state": "calibrating", "camera_held": True},
+                                    3 * args.exposure + 5 + 2 * guider.CAL_LONGEST_MS / 1000 + guider.RETRY_S).start()
+
+            def tick():
+                beat.progress()
+                desk.between_pulses()
+            try:
+                cal = None if args.recalibrate else guider.load_calibration()
+                cols, why = guider.reuse(cal, dec, west) if cal else (
+                    None, "a new calibration asked for" if args.recalibrate else "no calibration kept")
+                if cols is not None:
+                    print(f"checking the calibration of {cal['made']}")
+                    ok, why = guider.verify(cam, args.exposure, cal, cols, west, args.gain, tick=tick)
+                    cols = guider.reuse(cal, dec, west)[0] if ok else None
+                if cols is None:
+                    if args.action == "guide":
+                        print(f"calibrating: {why}")
+                    cal = guider.calibrate(cam, args.exposure, dec, west, args.gain, tick=tick)
+                    cols, _ = guider.reuse(cal, dec, west)
+            except guider.StopRequested as stop:
+                beat.stop()
+                cam.stop_pulse()
+                stop_order = stop.order
+                beat.update(state="stopped", reason="a stop order during calibration")
+            except BaseException as failure:
+                beat.stop()
+                cam.stop_pulse()
+                beat.update(state="fault" if not isinstance(failure, KeyboardInterrupt) else "stopped",
+                            reason=getattr(failure, "message", str(failure)) or type(failure).__name__)
+                raise
+            else:
+                beat.stop()
                 if args.action == "guide":
-                    print(f"calibrating: {why}")
-                cal = guider.calibrate(cam, args.exposure, dec, west, args.gain, tick=beat.progress)
-                cols, _ = guider.reuse(cal, dec, west)
-        except BaseException as failure:
-            beat.stop()
-            cam.stop_pulse()
-            beat.update(state="fault" if not isinstance(failure, KeyboardInterrupt) else "stopped",
-                        reason=getattr(failure, "message", str(failure)) or type(failure).__name__)
-            raise
-        beat.stop()
-        if args.action == "guide":
-            guider.guide(cam, cols, cal, args.exposure, args.gain, args.minutes, args.dec_one_way, run_id=run)
-        else:
-            beat.update(state="stopped", reason="calibrated")
+                    _, stop_order = guider.guide(cam, cols, cal, args.exposure, args.gain, args.minutes,
+                                                 args.dec_one_way, run_id=run, desk=desk)
+                else:
+                    beat.update(state="stopped", reason="calibrated")
+    finally:
+        # The camera is closed and its lock let go by here: only now is a
+        # stop done, and the state says the camera is no longer held.
+        state = guider.read_state()
+        if state and state.get("run") == run:
+            state["camera_held"] = False
+            guider.write_state(state)
+        if stop_order:
+            desk.answer(stop_order, True, "pulses stopped and the guide camera let go")
 
 
 def show_status():
     import guider
     state = guider.read_state()
     if not state:
-        print("no guider has run")
+        held = guider.owner()
+        print("no guider has run; guide camera: " + (f"held by {held.get('role')} (process {held.get('pid')})"
+                                                     if held else "free"))
         return
     ok, why = guider.health(state)
     age = time.time() - (state.get("heartbeat") or 0)
@@ -477,10 +513,11 @@ def show_status():
           + f"; heartbeat {age:.0f} s ago; " + ("healthy" if ok else f"not healthy: {why}"))
     if state.get("rms"):
         print(f"RMS RA {state['rms']['ra']:.2f}\" Dec {state['rms']['dec']:.2f}\" total {state['rms']['total']:.2f}\"")
-    if state.get("order"):
-        o = state["order"]
-        print(f"last order: {o.get('order')} #{o.get('n')} {o.get('outcome')}"
-              + (f" ({o.get('reason')})" if o.get("reason") else ""))
+    held = guider.owner()
+    print("guide camera: " + (f"held by {held.get('role')} (process {held.get('pid')}, run {held.get('run')})"
+                              if held else "free"))
+    if state.get("camera_held") and not held:
+        print("  (the state says held, but no process holds the camera's lock: that guider has ended)")
 
 
 def main(argv=None):
@@ -536,19 +573,17 @@ def main(argv=None):
             return
         if args.action == "tell":
             import guider
-            number, run = guider.tell(args.order)
-            print(f"order {args.order} #{number} sent to run {run}")
+            ident, run = guider.tell(args.order)
+            print(f"order {args.order} {ident[:8]} sent to run {run}")
             if not args.no_wait:
-                done = guider.wait_for(number, run, order=args.order)
-                print(f"{args.order}: {done['outcome']}")
+                done = guider.wait_for(ident, run, order=args.order)
+                print(f"{args.order}: {done['outcome']}" + (f" ({done['reason']})" if done.get("reason") else ""))
             return
         if args.action in ("star", "calibrate", "guide"):
             run_guider(args)
             return
-        import guider
-        guider.refuse_if_owned({"probe": "probe", "pulse": "ST4 test", "snap": "snap"}.get(args.action, "use"))
         if args.action == "probe":
-            with GuideCamera() as cam:
+            with GuideCamera(role="probe") as cam:
                 probe(cam, [float(e) for e in args.exposures.split(",")], args.trigger, args.speed, args.window)
             return
         if args.action == "pulse" and args.dry_run:
@@ -559,10 +594,10 @@ def main(argv=None):
         if args.action == "pulse":
             import mount
             scope = mount.Mount(watch=False)
-            with GuideCamera() as cam:
+            with GuideCamera(role="ST4 test") as cam:
                 cable_test(cam, scope, args.seconds)
             return
-        with GuideCamera() as cam:
+        with GuideCamera(role=args.action or "find") as cam:
             width, height = cam.size
             print(f"guide camera: {MODEL}, {width} x {height}")
             for n in range(args.count if args.action == "snap" else 0):

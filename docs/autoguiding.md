@@ -211,16 +211,18 @@ session's frames, for later analysis.
 ### 5. Orders it takes
 
 `pause`, `resume`, `dither DX DY` (guide px), `relock` (find the star
-again after a GoTo), `stop`. `shoot.py` sends them, each numbered with the
-guider's run ID. An order is marked `done` only once what it asked for is
+again after a GoTo), `stop`. `shoot.py` sends them, each a file of its own
+in `cache/guide-orders/` with a random ID and the guider's run ID, so two
+orders sent together can never overwrite each other; each gets a result
+file of its own. An order is marked `done` only once what it asked for is
 true, not when it is read:
 
 - `pause`: any pulse running has finished or been stopped, and no more go;
 - `relock`: a star found and its new lock position set;
 - `dither`: the lock moved and the guider settled on it;
-- `stop`: pulses stopped and the final state written; the pid file is released as the guider exits.
+- `stop`: pulses stopped, the camera closed and its lock let go. A stop is taken between pulses during calibration and its check too, not only while guiding; the other orders are answered `failed` until guiding starts.
 
-`shoot.py` accepts only an outcome with its own order's number and the run
+`shoot.py` accepts only a result with its own order's ID and the run
 ID it sent to, so an answer left by an earlier guider never counts. Every
 order has a timeout: 10 s for `pause`, 60 s for `relock` and `dither`. A
 timed-out or `failed` order is a fault, and `shoot.py` stops guided imaging
@@ -228,10 +230,19 @@ with the reason.
 
 ### 6. Owning the guide camera
 
-- One guider at a time: it holds `config.DATA/cache/guide.pid` while it
-  runs. A second `guide` refuses, or `shoot.py --guide` attaches to the one
-  running. `./guidecam.py pulse` and `snap` refuse while it exists and its
-  process is alive.
+- One user of the guide camera at a time: every command that opens it
+  takes a kernel lock (`flock` on `cache/guide.lock`) before opening it and
+  lets it go only after closing it; `cache/guide.pid` says who holds it.
+  The kernel drops the lock however the process ends, so nothing stale is
+  left to take over. A second `guide` refuses, or `shoot.py --guide`
+  attaches to the one running.
+- **A hung guider:** the heartbeat's watch writes `fault` when the loop
+  stops moving, but it cannot interrupt a call stuck inside the camera
+  library, so the process may still hold the camera (`camera_held` stays
+  true). Detecting the fault is not shutting down. The supervisor
+  (`shoot.py`, stage 5) stops guided imaging at once and ends the process
+  with `guider.terminate()`: SIGTERM, then SIGKILL after 10 s, after which
+  the kernel lets go of the lock.
 - `MOTION_LOCKED` is checked before every pulse, not only at start.
 - **Stale state:** `shoot.py` trusts the state file only while its
   heartbeat is under 5 s old (the timer writes it every second) and the
