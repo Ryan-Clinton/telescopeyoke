@@ -429,15 +429,18 @@ proven, is linked from `docs/validation.md`.
 - **Measured results are scattered** through single forum posts, mostly for
   other mounts. CCDWare cites a survey of 50 PEMPro users but shows no
   per-mount table [10].
-- **No EQ3 Pro measurement was found at all**, and no shared database for
-  any mount.
+- **No published EQ3 Pro curve with its data was found**, and no shared
+  database for any mount. Owners do measure their own mounts, with PHD2's
+  Guiding Assistant or PECPrep, but the measurements stay on their laptops.
 - **Single spec numbers hide a lot of variation**: a forum post gives typical
   uncorrected error as ±15" "but can vary widely between mounts" [11].
 - **The general range** quoted for entry-level mounts is 30–120" peak to
   peak [12].
 
-That search was a handful of queries. Before claiming a first, search
-Cloudy Nights and Stargazers Lounge properly.
+That search was a handful of queries, so nothing here is claimed as a
+first. What is offered is an openly reproducible measurement of one EQ3
+Pro: the raw data, the method and the code, so anyone can check it or
+measure their own the same way.
 
 ### What is known about ours
 
@@ -456,29 +459,70 @@ A project command, written before its first use.
 3. Guide camera frames of 1 to 2 s, for at least 5 worm periods (about an
    hour). That follows EQMOD's PECPrep guidance of at least five periods
    [13].
-4. Each frame records:
-   - the star's centroid;
-   - the time;
-   - the RA axis reading from the handset, giving the worm's angle within
-     its turn (counts modulo 35,200).
+4. Each frame records, one row of the raw CSV:
+   - the exposure's start and midpoint (UTC), and the time it arrived;
+   - the raw centroid x and y in guide pixels, the star's peak, SNR and
+     HFD, and whether it was used or why not;
+   - the RA and Dec axis readings from the handset (the motor counts),
+     and the time each was read;
+   - the mount's state: tracking on, sidereal rate, no guiding, no creep.
+
+   The run's header holds what is the same for every row: the guide
+   camera, exposure, gain, binning, the scale, the calibration's angle and
+   rates, the star's RA and Dec, the site's latitude, the hour angle at the
+   start, and the handset's power-on time if known. The cadence and every
+   gap longer than two exposures are reported, since frames do not come
+   at an exactly even rate.
 
    The handset is read only.
-5. The analysis:
+5. The analysis, every step kept beside the raw data so it can be redone:
    - centroid to RA arcseconds, using the scale and the camera's angle
      from the guider's calibration;
-   - take out the steady drift (a straight line), which comes from polar
-     alignment and tracking rate, not the worm;
-   - fold what is left on the worm's angle, not the clock, so different
-     nights line up;
-   - report the average curve, its peak-to-peak with an uncertainty, the
-     strongest harmonics (as periods in seconds) and the steepest rate of
-     change in "/s, the number that matters for guiding.
+   - take out the steady drift, which comes from polar alignment,
+     refraction and the tracking rate, not the worm. A straight line
+     first; a quadratic as a check. If the two give a peak-to-peak more
+     than 10 % apart, both are published and the drift is named as a
+     limit, not hidden;
+   - plot the residuals against time before folding, so drift that is not
+     a straight line is seen, not taken for periodic error;
+   - fold on the worm's angle (counts modulo 35,200), not the clock;
+   - each worm turn on its own: its own curve and peak-to-peak. The
+     result is the mean of the turns' peak-to-peak, with their spread and
+     a 95 % interval from resampling the turns (a bootstrap over whole
+     turns, not frames, since frames within a turn are not independent);
+   - the average curve, the strongest harmonics (as periods in seconds)
+     and the steepest rate of change in "/s, the number that matters for
+     guiding;
+   - a held-out check: fit the curve on all turns but one, and say how
+     well it predicts the one left out, in turn for each. A curve that
+     does not predict its own held-out turns better than a flat line is
+     not periodic error, and is not published as such.
 6. Frames hit by wind, or with the star lost, are flagged and left out of
    the fit, with a count of how many.
 
-Most published curves are tied to the clock. Tagging each frame with the
-worm's angle ties the curve to the gear itself. It makes nights and owners
-comparable, and the same curve could drive periodic error correction later.
+**The worm's phase holds only within one power-on.** The handset counts
+from wherever the mount sat when it was switched on (`mount.py`), so counts
+modulo 35,200 give a phase whose zero is different each time it is
+powered up. Within a night that does not matter: the motor counts follow
+the worm, and releasing the RA clutch turns the axis, not the worm. Between
+nights, the curves are lined up by fitting the phase offset between them
+(the shift that best matches them), and the offset is published with the
+fit. A fixed zero would need a mark on the worm itself, which is not
+planned.
+
+So the fold on the worm's angle buys this: within a night, gaps and an
+uneven cadence do not smear the curve as a fold on the clock would, and
+between nights only one number, the offset, has to be fitted. The same
+curve could drive periodic error correction later, within a power-on.
+
+**A second night** repeats the measurement. The result counts as this
+mount's periodic error only when the two nights' curves, once lined up,
+agree within their intervals. Until then it is one night's figure and is
+called that.
+
+**The first run is kept for good**, raw, as the uncorrected baseline: if
+periodic error correction is ever added, its improvement is measured
+against it.
 
 ### What gets published
 
@@ -499,7 +543,8 @@ comparable, and the same curve could drive periodic error correction later.
 - **One mount is not the model.** The first result is "this EQ3 Pro", and
   only many owners would make a figure for the model.
 - **Seeing** blurs a single 2 s frame by 1 to 2". The fold over 5 or more
-  turns averages that down.
+  turns averages that down, and the per-turn spread shows how far.
+- **Phase between nights** is fitted, not measured (above).
 - **Wind** shows as spikes that do not repeat with the worm.
 
 ### When
