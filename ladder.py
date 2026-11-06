@@ -1,0 +1,178 @@
+#!/usr/bin/env python3
+"""The sub-length ladder: how long a guided sub this rig can take with round
+stars, measured on the sky, never fixed in advance (docs/autoguiding.md,
+proof step 3).
+
+    ./shoot.py TARGET --guide --ladder [30,60,120,180,300] [--ladder-frames 3]
+                          guided frames at each length in turn, the sensor
+                          kept cold between them, then judged
+    ./ladder.py           the kept result: each length's frames and the
+                          longest that passed
+    ./shoot.py TARGET --guide --exposure ladder
+                          a guided run at the longest length that passed,
+                          for this camera and light path
+
+A length passes when, against the shortest length's frames: at least
+KEPT_SHARE of its frames were accepted, their median FWHM is within
+FWHM_GROWTH, their median roundness within ROUNDNESS_LOSS, and at least
+GUIDED_SHARE were guided to their end (GUIDED in the header). The answer is
+the longest length that passed with every shorter one passing too: a
+length that only passes past a failing one is luck, not the mount.
+"""
+import argparse
+import json
+import sys
+import time
+from pathlib import Path
+
+import numpy as np
+
+import config
+import interface
+
+LENGTHS = (30, 60, 120, 180, 300)   # seconds: the spec's ladder
+FRAMES = 3                          # guided frames at each length
+KEPT_SHARE = 2 / 3                  # of a length's frames, accepted
+FWHM_GROWTH = 1.2                   # median FWHM at most this times the shortest length's
+ROUNDNESS_LOSS = 0.9                # median roundness at least this times the shortest length's
+GUIDED_SHARE = 2 / 3                # of a length's frames, GUIDED to their end
+SETTLE_ALLOW_S = 20                 # seconds a frame's minutes allow for the guider's settling
+RESULT = config.DATA / "cache" / "sub-ladder.json"
+
+
+def lengths(text):
+    """`--ladder 30,60,120`: whole seconds, rising, each 1 or more."""
+    try:
+        values = [int(v) for v in str(text).split(",") if v.strip()]
+    except ValueError:
+        raise ValueError("lengths are whole seconds, comma-separated") from None
+    if not values or any(v < 1 for v in values) or values != sorted(set(values)):
+        raise ValueError("lengths are whole seconds, 1 or more, rising, none twice")
+    return values
+
+
+def blocks(seconds, frames, band):
+    """The ladder as --blocks: one block of `band` per length, its minutes
+    allowing `frames` frames and their settling."""
+    return [(band, round(s * frames + SETTLE_ALLOW_S * frames) / 60) for s in seconds]
+
+
+def measure(folder, exposure):
+    """One length's frames, from its session folder: how many were taken,
+    accepted and guided to their end, and the accepted frames' median FWHM
+    and roundness, and the guide RMS."""
+    folder = Path(folder)
+    entries = []
+    try:
+        for line in (folder / "frames.jsonl").read_text(encoding="utf-8").splitlines():
+            entries.append(json.loads(line))
+    except (OSError, ValueError):
+        pass
+    taken = [e for e in entries if not e.get("deferred")]
+    kept = [e for e in taken if e.get("accepted") and e.get("fwhm")]
+    guided, rms = 0, []
+    try:
+        from astropy.io import fits
+        for path in sorted(folder.glob("light-*.fits")):
+            header = fits.getheader(path)
+            guided += bool(header.get("GUIDED"))
+            if header.get("GUIDERMS") is not None:
+                rms.append(float(header["GUIDERMS"]))
+    except (OSError, ImportError):
+        pass
+    return {"exposure_s": exposure, "folder": str(folder), "taken": len(taken), "accepted": len(kept),
+            "guided": guided,
+            "fwhm": round(float(np.median([e["fwhm"] for e in kept])), 2) if kept else None,
+            "roundness": round(float(np.median([e["roundness"] for e in kept])), 3) if kept else None,
+            "guide_rms": round(float(np.median(rms)), 2) if rms else None}
+
+
+def judge(rows):
+    """Each length's pass or fail against the shortest's frames, and the
+    longest that passed with all shorter ones passing. Returns (rows with
+    `passed` and `why`, the longest length or None)."""
+    base = rows[0] if rows else None
+    longest, unbroken = None, True
+    for row in rows:
+        why = []
+        if not row["taken"] or row["accepted"] / row["taken"] < KEPT_SHARE:
+            why.append(f"{row['accepted']} of {row['taken']} accepted")
+        if row["taken"] and row["guided"] / row["taken"] < GUIDED_SHARE:
+            why.append(f"{row['guided']} of {row['taken']} guided to their end")
+        if base and base["fwhm"] and row["fwhm"] and row["fwhm"] > FWHM_GROWTH * base["fwhm"]:
+            why.append(f"FWHM {row['fwhm']:.2f} against {base['fwhm']:.2f}")
+        if base and base["roundness"] and row["roundness"] and row["roundness"] < ROUNDNESS_LOSS * base["roundness"]:
+            why.append(f"roundness {row['roundness']:.2f} against {base['roundness']:.2f}")
+        if row["fwhm"] is None:
+            why.append("no star measured")
+        row["passed"] = not why
+        row["why"] = "; ".join(why)
+        if row["passed"] and unbroken:
+            longest = row["exposure_s"]
+        else:
+            unbroken = False
+    return rows, longest
+
+
+def keep(target, band, rows, longest, path=None):
+    """The result, for this camera and light path, with when and on what."""
+    camera, focal = config.light_path()
+    result = {"made": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "target": target, "filter": band,
+              "camera": camera, "focal_mm": focal, "rows": rows, "longest_s": longest}
+    path = path or RESULT
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(result, indent=1), encoding="utf-8")
+    return result
+
+
+def kept(path=None):
+    try:
+        return json.loads((path or RESULT).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def longest_for_now(path=None):
+    """The longest guided sub the kept ladder allows on this camera and light
+    path, refused when there is none or it was made on another."""
+    result = kept(path)
+    if not result:
+        raise interface.Refusal("INVALID_REQUEST", "No sub-length ladder kept: run ./shoot.py TARGET --guide "
+                                "--ladder first.")
+    if (result.get("camera"), result.get("focal_mm")) != config.light_path():
+        raise interface.Refusal("INVALID_REQUEST", f"The kept ladder was made with {result.get('camera')} at "
+                                f"{result.get('focal_mm')} mm, not the light path in use: run the ladder again.")
+    if not result.get("longest_s"):
+        raise interface.Refusal("INVALID_REQUEST", "The kept ladder passed no length: guided subs are not proven "
+                                "at any length yet.")
+    return float(result["longest_s"])
+
+
+def report(result, say=print):
+    say(f"Sub-length ladder of {result['made']}: {result['target']} in {result['filter']}, "
+        f"{result['camera']} at {result['focal_mm']} mm")
+    for row in result["rows"]:
+        say(f"  {row['exposure_s']:>4g} s: {row['accepted']}/{row['taken']} kept, {row['guided']} guided, "
+            f"FWHM {row['fwhm'] if row['fwhm'] is not None else '-'}, round "
+            f"{row['roundness'] if row['roundness'] is not None else '-'}, guide RMS "
+            f"{row['guide_rms'] if row['guide_rms'] is not None else '-'}\"  "
+            + ("pass" if row["passed"] else f"FAIL ({row['why']})"))
+    say(f"Longest guided sub with round stars: {result['longest_s']} s" if result.get("longest_s")
+        else "No length passed.")
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--json", action="store_true", help="the kept result as JSON")
+    args = ap.parse_args(argv)
+    result = kept()
+    if not result:
+        sys.exit("No sub-length ladder kept yet: ./shoot.py TARGET --guide --ladder")
+    if args.json:
+        print(json.dumps(result, indent=1))
+    else:
+        report(result)
+
+
+if __name__ == "__main__":
+    main()

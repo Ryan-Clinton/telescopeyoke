@@ -2,7 +2,7 @@
 
 [README](../README.md) · [All docs](README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Results](results.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
-**Specification, 6 November 2026.** **Status:** the ST4 lead works; stages 1 to 6 (star, calibration, loop; the guider's ownership, heartbeat, orders and watch on a hung loop; `shoot.py --guide`; dithering by the guider's lock) are built and have not guided; the guide camera streams 2 s frames read 2 x 2 binned at USB speed 0, and does so beside the filter wheel (299 of 300 frames and 37 of 37 wheel turns in 10 minutes, 6 November; [the fault](guide-camera-fault.md)), so the first guided night waits only for clear sky and the guide scope's focus; longer subs (stage 7) wait for the ladder on the sky. This says what autoguiding
+**Specification, 6 November 2026.** **Status:** the ST4 lead works; stages 1 to 7 (star, calibration, loop; the guider's ownership, heartbeat, orders and watch on a hung loop; `shoot.py --guide`; dithering by the guider's lock; the sub-length ladder and `--exposure ladder`) are built and have not guided; the guide camera streams 2 s frames read 2 x 2 binned at USB speed 0, and does so beside the filter wheel (299 of 300 frames and 37 of 37 wheel turns in 10 minutes, 6 November; [the fault](guide-camera-fault.md)), so the first guided night waits only for clear sky and the guide scope's focus; the sub lengths themselves wait for the ladder on the sky. This says what autoguiding
 should do on this rig, what has to change around it, and how the first clear
 night proves it. Figures measured on this rig say when; figures from other
 people say whose; the rest are starting values to be tuned on the sky.
@@ -332,8 +332,10 @@ with the reason.
   blocks then take the longest length that kept its stars round. The frame
   checks must not treat 300 s frames as if they were 15 s ones:
   - drift limits are in pixels per frame, not per second;
-  - one rejected frame now costs 5 minutes, so a starless frame is treated
-    as cloud at once (wait and retry, as now) rather than after several.
+  - one rejected frame now costs 5 minutes, so with subs of 60 s or more
+    cloud is counted by time, not frames: rejected frames in a row covering
+    320 s (as 20 frames of 16 s do) is cloud, at least 2 (2 at 300 s, not
+    20).
     A run stops only on a fault that persists: the camera, the mount or the
     guider, not cloud.
 
@@ -408,8 +410,9 @@ These need daylight or the user's hands. None needs the sky.
    as trailed or doubled stars while the guider reports good numbers [7].
 4. **Balance.** Rebalance Dec and RA with the full train and the guide
    scope on.
-5. **Darks:** 120 s and 300 s darks at -5 °C, gain as planned. Science
-   refuses frames without matched darks, so these come first.
+5. **Darks:** 30, 60, 120, 180 and 300 s darks at -5 °C, gain as planned,
+   for the ladder's lengths. Science refuses frames without matched darks,
+   so these come first.
 
 ## The order it is built in
 
@@ -435,9 +438,14 @@ In order, each with what counts as passing.
    longest pulse or the aggression before going on.
    Then kill the guider process: `shoot.py` must see the stale heartbeat
    and start no new frame.
-3. **Sub length ladder:** guided L frames of 30, 60, 120, 180 and 300 s,
-   a few of each. The guider's RMS is not enough: the frames' own star
-   shapes decide the longest length used.
+3. **Sub length ladder:** `./shoot.py TARGET --guide --ladder`: 3 guided
+   L frames at each of 30, 60, 120, 180 and 300 s, the sensor kept cold
+   between lengths (about 40 minutes). The guider's RMS is not enough: each
+   length passes when, against the 30 s frames, 2 of 3 or more were kept
+   and guided to their end, the median FWHM grew by no more than 20 % and
+   the median roundness fell by no more than 10 %. The longest length that
+   passed, with every shorter one passing too, is kept (`./ladder.py` shows
+   it), and `--guide --exposure ladder` uses it.
 4. **Flexure check:** at the longest length the ladder allows, several
    guided frames on one side of the meridian and several on the other.
    Stars elongated the same way across frames while the guider reported

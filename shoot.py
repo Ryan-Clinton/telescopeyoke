@@ -81,6 +81,8 @@ ORDERS = config.DATA / "cache" / "run_order.txt"
 KNOWN_ORDERS = ("stop", "recentre", "assist-on", "assist-off")
 RETAKE_GIVE_UP = 3  # with --frames N, no more retakes after this many rejected frames in a row
 CLOUD_STOP = 20     # with --frames 0, stop after this many rejected frames in a row
+LONG_SUB_S = 60     # subs this long or longer count cloud by time, not by frames
+CLOUD_STOP_S = 320  # with long subs: rejected frames in a row covering this long (20 x 16 s) is cloud
 JAM_REOPENS = 3     # a jammed camera is opened again this many times in a row before the run stops
 JAM_WAIT_S = 20     # seconds before it is opened again
 PREVIEW_EVERY = 3.0  # seconds between updates of the picture on the web page
@@ -910,7 +912,8 @@ def main():
     ap.add_argument("--most", type=int, metavar="N",
                     help="with --accepted: the most frames to take (default: half as many again, at least 2 more)")
     ap.add_argument("--exposure", default="2",
-                    help="seconds per frame, or 'auto' to test what the tracking allows")
+                    help="seconds per frame, 'auto' to test what the tracking allows, or with --guide 'ladder' "
+                         "for the longest guided sub the kept ladder found round stars at (ladder.py)")
     ap.add_argument("--gain", type=int, default=1500)
     ap.add_argument("--recentre", type=int, metavar="N", default=0,
                     help="also re-centre every N frames, whatever the drift")
@@ -931,6 +934,14 @@ def main():
                          "or uses one already guiding, pauses it around every GoTo, keeps the Dec creep off, and "
                          "waits for it to settle before each frame. Not with --hold, --assist, --dither or "
                          "--no-recentre. Not yet proven on the sky")
+    ap.add_argument("--ladder", nargs="?", const="30,60,120,180,300", metavar="SECONDS,...",
+                    help="with --guide: the sub-length ladder (ladder.py): --ladder-frames guided frames at each "
+                         "length in turn (default 30,60,120,180,300 s), the sensor kept cold between them, then "
+                         "each length judged on its stars against the shortest, and the longest that kept them "
+                         "round kept for --exposure ladder. Needs the filter wheel's light path; --filter picks the "
+                         "band (default L)")
+    ap.add_argument("--ladder-frames", type=int, default=None, metavar="N",
+                    help="with --ladder: frames at each length (default 3)")
     ap.add_argument("--dither-size", type=float, metavar="ARCSEC",
                     help=f"with --guide: how far a dither moves the guider's lock, in arcseconds (default "
                          f"{GUIDED_DITHER:g}, about 8 binned imaging pixels); each is a random way, between half "
@@ -996,6 +1007,31 @@ def main():
         ap.error("--dither-size is for --guide's dithers; an unguided dither is a GoTo about 1.5' off")
     if args.dither_size is None:
         args.dither_size = GUIDED_DITHER
+    if args.exposure == "ladder" and not args.guide:
+        ap.error("--exposure ladder is the longest guided sub the ladder found: it needs --guide")
+    args.ladder_lengths = None
+    if args.ladder_frames is not None and not args.ladder:
+        ap.error("--ladder-frames goes with --ladder")
+    if args.ladder:
+        import ladder
+        if not args.guide:
+            ap.error("--ladder measures guided subs: it needs --guide")
+        if args.blocks or args.minutes or args.accepted is not None or args.exposure != "2":
+            ap.error("--ladder sets each length's exposure and frames itself: not with --blocks, --minutes, "
+                     "--frames, --accepted or --exposure")
+        try:
+            args.ladder_lengths = ladder.lengths(args.ladder)
+        except ValueError as problem:
+            ap.error(f"--ladder: {problem}")
+        args.ladder_frames = args.ladder_frames or ladder.FRAMES
+        if args.ladder_frames < 1:
+            ap.error("--ladder-frames: 1 or more")
+        band = args.filter or filters.DEFAULT
+        args.filter = None
+        args.blocks = ladder.blocks(args.ladder_lengths, args.ladder_frames, band)
+        args.block_exposures = list(args.ladder_lengths)
+        args.block_frames = args.ladder_frames
+        args.ladder_band = band
     work = (lambda: plan(args)) if args.dry_run else (lambda: run(args))
     return interface.main("shoot.dry_run" if args.dry_run else "shoot", work, args.json)
 
@@ -1041,7 +1077,10 @@ def plan(args):
                     out.setdefault("later_gotos", []).append(goto)
                 except interface.Refusal as refusal:
                     out.setdefault("refused", []).append({"target": target, "why": str(refusal)})
-            out["blocks"].append({"target": target, "filter": name, "minutes": minutes})
+            out["blocks"].append({"target": target, "filter": name, "minutes": round(minutes, 1)})
+            if getattr(args, "block_exposures", None):
+                out["blocks"][-1].update(exposure_s=args.block_exposures[len(out["blocks"]) - 1],
+                                         frames=args.block_frames)
         for name, _ in ((n.partition("@")[0], m) for n, m in args.blocks):
             try:
                 if not args.focus_as_is:
@@ -1151,6 +1190,8 @@ def run(args):
         site = (config.load() if config.FILE.exists() else config.example())["site"]
         args.supervisor = guider.Supervisor(site=site, say=lambda line: print(line, flush=True))
     try:
+        if getattr(args, "ladder_lengths", None):
+            return run_ladder(args)
         if getattr(args, "blocks", None):
             return in_blocks(args)
         return held(args)
@@ -1162,6 +1203,19 @@ def run(args):
         # stopped by a jammed camera kept the lock while anything still held
         # its error, and the next run in the same process was refused.
         rig.close()
+
+
+def run_ladder(args):
+    """--ladder: the lengths as blocks of one filter, each block's frames
+    then judged on their stars, and the result kept (ladder.py)."""
+    import ladder
+    done = in_blocks(args).get("blocks", [])
+    rows = [ladder.measure(r["folder"], r["exposure_s"]) for r in done if r and r.get("folder")]
+    rows, longest = ladder.judge(rows)
+    result = ladder.keep(args.name, args.ladder_band, rows, longest)
+    print()
+    ladder.report(result, say=lambda line: print(line, flush=True))
+    return {"ladder": result}
 
 
 def in_blocks(args):
@@ -1247,6 +1301,10 @@ def run_blocks(args, mount, results, skipping, mark):
             continue
         args.same_target = bool(results) and not target and args.ended_on_time
         args.filter, args.minutes, args.frames = name, float(minutes), frames_asked(None, minutes)
+        if getattr(args, "block_exposures", None):
+            # --ladder: each block its own length, and its own count of frames.
+            args.exposure = str(args.block_exposures[number - 1])
+            args.frames = args.block_frames
         args.keep_cold, args.ended_on_time = not last, False
         print(f"\nBlock {number} of {len(args.blocks)}: {args.name} in {name} for {minutes:g} min", flush=True)
         mark(number - 1, "running")
@@ -1361,6 +1419,10 @@ def held(args):
             print(f"  hold: mount not available ({problem}); imaging without it", flush=True)
     if args.exposure == "auto":
         exposure = pick_exposure(args.gain, lambda s: stacking.Calibration(s, args.gain))
+    elif args.exposure == "ladder":
+        import ladder
+        exposure = ladder.longest_for_now()
+        print(f"  exposure: {exposure:g} s, the longest guided sub the kept ladder found round stars at", flush=True)
     else:
         exposure = float(args.exposure)
 
@@ -1409,6 +1471,10 @@ def image(args, session, exposure, moving, holding, tracker):
                 print(f"  stopping: {session.refocus}", flush=True)
             return False
         cloud_stop = live.get("shoot.cloud_stop", CLOUD_STOP)
+        if exposure >= LONG_SUB_S:
+            # A 300 s frame lost costs 5 minutes: cloud is the same few minutes
+            # of starless frames, not 20 of them (100 minutes at 300 s).
+            cloud_stop = max(2, math.ceil(CLOUD_STOP_S / exposure))
         stop = stop_for(index, args.frames, session.log, time.monotonic() - started,
                         getattr(args, "minutes", None), cloud_stop)
         if stop == "time":
@@ -1695,7 +1761,10 @@ def image(args, session, exposure, moving, holding, tracker):
                             reopening = go_on()      # the last frame on a pause is the run's end
                             break
                 finally:
-                    block_over = bool(told.get("timed") or told.get("limit"))
+                    block_over = bool(told.get("timed") or told.get("limit")
+                                      # --ladder: a block ends on its frames, as asked
+                                      or (getattr(args, "block_frames", None) and args.frames
+                                          and index >= args.frames))
                     if block_over:
                         args.ended_on_time = True
                     # --blocks: a block ended on its minutes (or its target at
