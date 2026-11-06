@@ -12,10 +12,12 @@ proof step 3).
                           a guided run at the longest length that passed,
                           for this camera and light path
 
-A length passes when, against the shortest length's frames: at least
-KEPT_SHARE of its frames were accepted, their median FWHM is within
-FWHM_GROWTH, their median roundness within ROUNDNESS_LOSS, and at least
-GUIDED_SHARE were guided to their end (GUIDED in the header). The answer is
+A length passes when all its frames were taken, each matched to its own raw
+frame (right exposure, filter, camera), and, against the shortest length's
+frames: at least KEPT_SHARE of them were both accepted and guided to their
+end (GUIDED in the header), their median FWHM is within FWHM_GROWTH, and
+their median roundness within ROUNDNESS_LOSS. A length not taken, or not
+taken in full, fails. The answer is
 the longest length that passed with every shorter one passing too: a
 length that only passes past a failing one is luck, not the mount.
 """
@@ -57,10 +59,13 @@ def blocks(seconds, frames, band):
     return [(band, round(s * frames + SETTLE_ALLOW_S * frames) / 60) for s in seconds]
 
 
-def measure(folder, exposure):
-    """One length's frames, from its session folder: how many were taken,
-    accepted and guided to their end, and the accepted frames' median FWHM
-    and roundness, and the guide RMS."""
+def measure(folder, exposure, band=None, frames=None):
+    """One length's frames, from its session folder. Each frame's quality
+    record (frames.jsonl) is matched by its index to its own raw frame
+    (light-NNNN.fits, the header in extension 1), which must carry this
+    exposure, the band, the camera in use, and GUIDED. A frame counts as
+    good only if it was accepted and its raw frame says all of that; a
+    missing or mismatched raw frame counts against the length, with why."""
     folder = Path(folder)
     entries = []
     try:
@@ -69,22 +74,43 @@ def measure(folder, exposure):
     except (OSError, ValueError):
         pass
     taken = [e for e in entries if not e.get("deferred")]
-    kept = [e for e in taken if e.get("accepted") and e.get("fwhm")]
-    guided, rms = 0, []
-    try:
-        from astropy.io import fits
-        for path in sorted(folder.glob("light-*.fits")):
-            header = fits.getheader(path)
-            guided += bool(header.get("GUIDED"))
+    camera, _ = config.light_path()
+    good, guided, rms, problems = [], 0, [], []
+    from astropy.io import fits
+    for entry in taken:
+        path = folder / f"light-{int(entry.get('index', -1)):04d}.fits"
+        try:
+            header = fits.getheader(path, 1)
+        except (OSError, IndexError, KeyError):
+            problems.append(f"frame {entry.get('index')}: no raw frame")
+            continue
+        wrong = []
+        if abs(float(header.get("EXPTIME", -1)) - float(exposure)) > 0.5:
+            wrong.append(f"exposure {header.get('EXPTIME')}")
+        if band and header.get("FILTER") not in (None, band):
+            wrong.append(f"filter {header.get('FILTER')}")
+        if header.get("INSTRUME") and str(header.get("INSTRUME")) != str(camera):
+            wrong.append(f"camera {header.get('INSTRUME')}")
+        if wrong:
+            problems.append(f"frame {entry.get('index')}: " + ", ".join(wrong))
+            continue
+        if header.get("GUIDED"):
+            guided += 1
             if header.get("GUIDERMS") is not None:
                 rms.append(float(header["GUIDERMS"]))
-    except (OSError, ImportError):
-        pass
-    return {"exposure_s": exposure, "folder": str(folder), "taken": len(taken), "accepted": len(kept),
-            "guided": guided,
-            "fwhm": round(float(np.median([e["fwhm"] for e in kept])), 2) if kept else None,
-            "roundness": round(float(np.median([e["roundness"] for e in kept])), 3) if kept else None,
-            "guide_rms": round(float(np.median(rms)), 2) if rms else None}
+            if entry.get("accepted") and entry.get("fwhm"):
+                good.append(entry)
+    return {"exposure_s": exposure, "folder": str(folder), "asked": frames, "taken": len(taken),
+            "accepted": sum(1 for e in taken if e.get("accepted")), "guided": guided, "good": len(good),
+            "fwhm": round(float(np.median([e["fwhm"] for e in good])), 2) if good else None,
+            "roundness": round(float(np.median([e["roundness"] for e in good])), 3) if good else None,
+            "guide_rms": round(float(np.median(rms)), 2) if rms else None, "problems": problems[:10]}
+
+
+def not_taken(exposure, frames, why):
+    """A length the ladder asked for and did not get."""
+    return {"exposure_s": exposure, "folder": None, "asked": frames, "taken": 0, "accepted": 0, "guided": 0,
+            "good": 0, "fwhm": None, "roundness": None, "guide_rms": None, "problems": [why]}
 
 
 def judge(rows):
@@ -95,10 +121,14 @@ def judge(rows):
     longest, unbroken = None, True
     for row in rows:
         why = []
-        if not row["taken"] or row["accepted"] / row["taken"] < KEPT_SHARE:
-            why.append(f"{row['accepted']} of {row['taken']} accepted")
-        if row["taken"] and row["guided"] / row["taken"] < GUIDED_SHARE:
-            why.append(f"{row['guided']} of {row['taken']} guided to their end")
+        asked = row.get("asked") or row["taken"]
+        if row["taken"] < asked:
+            why.append(f"incomplete: {row['taken']} of {asked} frames taken")
+        if not row["taken"] or row["good"] / max(asked, 1) < min(KEPT_SHARE, GUIDED_SHARE):
+            why.append(f"{row['good']} of {asked} accepted and guided to their end")
+        if row.get("problems"):
+            why.append(row["problems"][0] + (f" (and {len(row['problems']) - 1} more)" if len(row["problems"]) > 1
+                                             else ""))
         if base and base["fwhm"] and row["fwhm"] and row["fwhm"] > FWHM_GROWTH * base["fwhm"]:
             why.append(f"FWHM {row['fwhm']:.2f} against {base['fwhm']:.2f}")
         if base and base["roundness"] and row["roundness"] and row["roundness"] < ROUNDNESS_LOSS * base["roundness"]:
@@ -152,7 +182,8 @@ def report(result, say=print):
     say(f"Sub-length ladder of {result['made']}: {result['target']} in {result['filter']}, "
         f"{result['camera']} at {result['focal_mm']} mm")
     for row in result["rows"]:
-        say(f"  {row['exposure_s']:>4g} s: {row['accepted']}/{row['taken']} kept, {row['guided']} guided, "
+        say(f"  {row['exposure_s']:>4g} s: {row['taken']}/{row.get('asked') or row['taken']} taken, "
+            f"{row['accepted']} kept, {row['guided']} guided, {row['good']} both, "
             f"FWHM {row['fwhm'] if row['fwhm'] is not None else '-'}, round "
             f"{row['roundness'] if row['roundness'] is not None else '-'}, guide RMS "
             f"{row['guide_rms'] if row['guide_rms'] is not None else '-'}\"  "

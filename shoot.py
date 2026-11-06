@@ -1019,6 +1019,8 @@ def main():
         if args.blocks or args.minutes or args.accepted is not None or args.exposure != "2":
             ap.error("--ladder sets each length's exposure and frames itself: not with --blocks, --minutes, "
                      "--frames, --accepted or --exposure")
+        if args.no_save:
+            ap.error("--ladder judges each length from its raw frames: not with --no-save")
         try:
             args.ladder_lengths = ladder.lengths(args.ladder)
         except ValueError as problem:
@@ -1208,13 +1210,35 @@ def run(args):
 def run_ladder(args):
     """--ladder: the lengths as blocks of one filter, each block's frames
     then judged on their stars, and the result kept (ladder.py)."""
+    import guider
     import ladder
-    done = in_blocks(args).get("blocks", [])
-    rows = [ladder.measure(r["folder"], r["exposure_s"]) for r in done if r and r.get("folder")]
+    # The 10-minute guiding check comes before the ladder (docs/autoguiding.md,
+    # proof step 2): said here, so a ladder started without it is a choice.
+    print(guider.check_note(), flush=True)
+    done, failure = [], None
+    try:
+        done = in_blocks(args).get("blocks", [])
+    except interface.Refusal as refusal:
+        failure = refusal
+        print(f"  the ladder stopped: {refusal.message}; judging what it took", flush=True)
+    # Every length asked for has a row, taken or not: a failed or missing
+    # block is a failed rung, never left out.
+    by_length = {}
+    for r in done:
+        if r and r.get("folder"):
+            by_length[float(r["exposure_s"])] = r["folder"]
+    rows = []
+    for length in args.ladder_lengths:
+        folder = by_length.get(float(length))
+        rows.append(ladder.measure(folder, length, args.ladder_band, args.ladder_frames) if folder
+                    else ladder.not_taken(length, args.ladder_frames,
+                                          "not taken" + (f" ({failure.message})" if failure else "")))
     rows, longest = ladder.judge(rows)
     result = ladder.keep(args.name, args.ladder_band, rows, longest)
     print()
     ladder.report(result, say=lambda line: print(line, flush=True))
+    if failure:
+        raise failure
     return {"ladder": result}
 
 

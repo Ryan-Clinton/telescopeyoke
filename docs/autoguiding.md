@@ -431,7 +431,8 @@ In order, each with what counts as passing.
 1. **Calibration** near the meridian and Dec 0 to +30. Passes with at least
    8 steps west and 8 north, the axes within 10° of right angles, and a
    measured guide rate within 20 % of 7.1"/s.
-2. **Guide 10 minutes with no imaging.** Passes with a total RMS under 2.5"
+2. **Guide 10 minutes with no imaging** (`./guidecam.py guide --minutes 10`,
+   which keeps its whole-run RMS for the ladder to show). Passes with a total RMS under 2.5"
    and no runaway. Note the RA and Dec RMS separately, the backlash, the
    measured cycle time, the delay from exposure midpoint to pulse, and the
    pulse lengths. If the error grows while pulses are long, lower the
@@ -440,9 +441,12 @@ In order, each with what counts as passing.
    and start no new frame.
 3. **Sub length ladder:** `./shoot.py TARGET --guide --ladder`: 3 guided
    L frames at each of 30, 60, 120, 180 and 300 s, the sensor kept cold
-   between lengths (about 40 minutes). The guider's RMS is not enough: each
-   length passes when, against the 30 s frames, 2 of 3 or more were kept
-   and guided to their end, the median FWHM grew by no more than 20 % and
+   between lengths (about 40 minutes). It prints the last 10-minute
+   guiding check (step 2) first, or that there was none tonight. The
+   guider's RMS is not enough: each length passes when all its frames were
+   taken, each matched by index to its own raw frame (right exposure,
+   filter and camera), and, against the 30 s frames, 2 of 3 or more were
+   both kept and guided to their end, the median FWHM grew by no more than 20 % and
    the median roundness fell by no more than 10 %. The longest length that
    passed, with every shorter one passing too, is kept (`./ladder.py` shows
    it), and `--guide --exposure ladder` uses it.

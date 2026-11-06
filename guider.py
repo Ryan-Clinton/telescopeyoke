@@ -1091,6 +1091,7 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
     beat.start()
     resuming = stopping = None
     dithering = None                # a dither order not yet settled: {order, since, good}
+    whole = [0.0, 0.0, 0]           # the whole run's squared RA and Dec errors, and how many
     frames = 0                      # guide frames taken: what a reader counts samples by
     try:
         star = first_star(cam, seconds, gain, say, tick=starting)
@@ -1207,6 +1208,9 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
                 error = (found.x - lock[0], found.y - lock[1])
                 sent, info = ctl.pulses(error)
                 errors.append((info["ra_px"] * SCALE, info["dec_px"] * SCALE))
+                whole[0] += (info["ra_px"] * SCALE) ** 2
+                whole[1] += (info["dec_px"] * SCALE) ** 2
+                whole[2] += 1
                 pulsed = time.time()
                 send(cam, sent)
                 if resuming:
@@ -1243,6 +1247,11 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
                 say(f"  RA {row['ra_err']:+5.1f}\" Dec {row['dec_err']:+5.1f}\"  pulses {sent[0]:+.2f} "
                     f"{sent[1]:+.2f} s" + (f"  RMS {rms['total']:.2f}\"" if rms else ""))
         state, reason = "stopped", ("a stop order" if stopping else "its time was up")
+        guided_for = (time.monotonic() - (ended - minutes * 60)) / 60 if minutes else None
+        if guided_for is not None and guided_for >= CHECK_MINUTES * 0.99 and whole[2]:
+            ra, dec = (math.sqrt(whole[k] / whole[2]) for k in (0, 1))
+            keep_check(guided_for, {"ra": round(ra, 2), "dec": round(dec, 2), "total": round(math.hypot(ra, dec), 2),
+                                    "frames": whole[2]}, run_id)
     except StopRequested as stop:
         stopping = stop.order
         state, reason = "stopped", "a stop order"
@@ -1291,6 +1300,35 @@ SETTLE_SPAN = 3.0          # seconds
 SETTLE_S = 30.0            # still guiding but not settled after this: the frame is taken and marked
 LOST_WAIT_S = 300.0        # lost (cloud), relocking or calibrating this long: guided imaging stops
 RUN_LOG = config.DATA / "cache" / "guide-run.log"
+CHECK_FILE = config.DATA / "cache" / "guide-check.json"   # the last guiding check of 10 minutes or more
+CHECK_MINUTES = 10
+CHECK_RMS = 2.5            # arcsec total RMS: the first night's pass (docs/autoguiding.md, proof step 2)
+
+
+def keep_check(minutes, rms, run, path=None):
+    """A guiding run of CHECK_MINUTES or more, kept with its RMS, for the
+    ladder to say before it starts."""
+    path = path or CHECK_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"at": time.time(), "minutes": round(minutes, 1), "rms": rms, "run": run,
+                                **light_path()}), encoding="utf-8")
+
+
+def check_note(path=None, now=None):
+    """What the last guiding check says, in a line: passed, failed, or
+    none tonight (within 12 hours)."""
+    now = time.time() if now is None else now
+    try:
+        check = json.loads((path or CHECK_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        check = None
+    if not check or now - check.get("at", 0) > 12 * 3600:
+        return (f"  guiding check: none tonight. The first night's order is {CHECK_MINUTES} minutes of "
+                f"./guidecam.py guide --minutes {CHECK_MINUTES} under {CHECK_RMS}\" RMS before the ladder.")
+    rms = (check.get("rms") or {}).get("total")
+    verdict = "passed" if rms is not None and rms < CHECK_RMS else "NOT passed"
+    return (f"  guiding check: {check['minutes']:g} minutes, {rms}\" RMS, "
+            f"{(now - check['at']) / 3600:.1f} h ago: {verdict} (under {CHECK_RMS}\")")
 MARGIN_S = 10.0            # guide frames this long before an imaging frame began are read for its coverage
 
 
