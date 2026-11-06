@@ -86,6 +86,7 @@ class Driver:
         self.lib.Altaircam_Open.restype = ctypes.c_void_p
         self.lib.Altaircam_Open.argtypes = [ctypes.c_char_p]
         self.buffer = None
+        self.pull_error = None  # the last code from PullImage that was not "no frame yet"
         self.events = []        # (time.monotonic(), code) for every event the library sends
 
     def _event(self, kind, ctx):
@@ -138,9 +139,16 @@ class Driver:
         self.lib.Altaircam_put_ExpoAGain(handle, ctypes.c_ushort(int(percent)))
 
     def pull(self, handle):
-        """The next frame as (width, height, bytes), or None if none is ready."""
+        """The next frame as (width, height, bytes), or None if none is ready.
+        This legacy library answers E_FAIL, not E_PENDING, while no frame is
+        ready (6 November 2026: 585 E_FAIL to 2 S_OK in 6 s at 2 s, binned),
+        so E_FAIL is not an error here. Any other code is kept in
+        `pull_error` for the refusal when no frame comes."""
         width, height = ctypes.c_uint(), ctypes.c_uint()
-        if self.lib.Altaircam_PullImage(handle, self.buffer, 8, ctypes.byref(width), ctypes.byref(height)) != 0:
+        hr = self.lib.Altaircam_PullImage(handle, self.buffer, 8, ctypes.byref(width), ctypes.byref(height))
+        if hr != 0:
+            if hr & 0xFFFFFFFF not in (NOT_READY, PENDING):
+                self.pull_error = hr
             return None
         return width.value, height.value, self.buffer.raw[:width.value * height.value]
 
@@ -184,6 +192,9 @@ class Driver:
     def close(self, handle):
         self.lib.Altaircam_Close(handle)
 
+
+NOT_READY = 0x80004005     # E_FAIL: this legacy library's answer while no frame is ready
+PENDING = 0x8000000A       # E_PENDING: the newer libraries' answer for the same
 
 # The library's events (altaircam.h), as the probe names them.
 EVENTS = {0x0001: "exposure changed", 0x0004: "image", 0x0005: "still image", 0x0007: "trigger failed",
@@ -246,7 +257,9 @@ class GuideCamera:
                 width, height, data = got
                 return np.frombuffer(data, np.uint8).reshape(height, width).copy()
             if now - asked > seconds + WAIT_S:
-                refuse(f"The guide camera sent no frame within {seconds + WAIT_S:.0f} s.")
+                last = getattr(self.driver, "pull_error", None)
+                refuse(f"The guide camera sent no frame within {seconds + WAIT_S:.0f} s"
+                       + (f" (the library last said {hresult(last)})." if last is not None else "."))
             if not got:
                 self.sleep(0.02)
 

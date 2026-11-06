@@ -85,7 +85,7 @@ The same as on the hubs, so **the hubs are not the cause.**
 | A slow USB link | `lsusb -t`: the camera is at 480M, high speed |
 | Linux's USB transfer memory (`usbfs_memory_mb`) | Raised from 16 to 200 MB: the same, 30 frames in 12 s at 0.1 s and none at 2 s |
 | The library's conversion of each frame | Raw mode: no better (10 frames in 12 s at 0.1 s, none at 2 s) |
-| Errors the library saw | Its events, now listed by the probe: only "image", no error and no timeout, in every run. The frames that go missing never reach it |
+| Errors the library saw | Its events, now listed by the probe: only "image", no error and no timeout, in every run. The frames that go missing never reach it. `PullImage` answers E_FAIL while no frame is ready (585 to 2 S_OK in 6 s), so E_FAIL means "not yet" with this library; any other code is named when a frame does not come |
 
 ## What others have found
 
