@@ -50,6 +50,12 @@ USB_ID = "16d0:0b2a"
 FOLDER = config.DATA / "frames" / "guide"
 WAIT_S = 5.0          # beyond the exposure, how long a frame may take to come
 DUPLICATES = 3        # the same frame again this many times running: a camera fault
+# How guiding opens the camera: 640 x 480 (the library's size 1, 2 x 2
+# binning) at USB speed 0. At full size, at any speed, it sends one 2 s
+# frame in 13 to 18 s; this way it sent 149 of 150 in 5 minutes
+# (6 November 2026, docs/guide-camera-fault.md). guider.BIN must match.
+GUIDE_SIZE = 1
+GUIDE_SPEED = 0
 
 
 def refuse(why):
@@ -205,7 +211,8 @@ class GuideCamera:
     as at 1 ms, the next 151), so frames that began before the change are
     let go."""
 
-    def __init__(self, driver=None, clock=time.monotonic, sleep=time.sleep, role="use", run=None, size=None, raw=False):
+    def __init__(self, driver=None, clock=time.monotonic, sleep=time.sleep, role="use", run=None, size=None, raw=False,
+                 speed=None):
         import guider
         # The guide camera's lock, taken before it is opened and let go only
         # after it is closed: no two commands ever use it, or its ST4 port, at once.
@@ -218,6 +225,8 @@ class GuideCamera:
                 refuse(f"No guide camera ({MODEL}, USB {USB_ID}) found. Is it plugged in?")
             opened = {k: v for k, v in (("size", size), ("raw", raw)) if v}
             self.handle, self.size = self.driver.open(found[0][1], **opened)
+            if speed is not None:
+                self.driver.speed(self.handle, speed)
             self.seconds = None
         except BaseException:
             self.owned.__exit__(None, None, None)
@@ -242,43 +251,22 @@ class GuideCamera:
                 self.sleep(0.02)
 
     def timed_frame(self, seconds, gain=None, wall=time.time):
-        """One triggered frame and its times (UTC seconds): the trigger, the
-        exposure's midpoint and when it arrived. Software trigger mode, as
-        the video stream sent no frames at 1 s or longer (6 November 2026);
-        each frame starts when asked, so one never mixes in a pulse sent
-        before it. A frame identical to the one before is let go."""
-        if not getattr(self, "_triggering", False):
-            if self.driver.triggered(self.handle, True) < 0:
-                refuse("The guide camera would not go into software trigger mode.")
-            self._triggering = True
-            self.seconds = None
-        if gain is not None:
-            self.driver.gain(self.handle, gain)
-        if seconds != self.seconds:
-            self.driver.exposure(self.handle, seconds)
-            self.seconds = seconds
-        while self.driver.pull(self.handle):        # anything left over from before
-            pass
+        """One frame from the video stream and its times (UTC seconds): its
+        exposure's start, midpoint and arrival, taking the readout as
+        instant. frame() lets go of any frame that began before it was
+        asked for, so a frame never mixes in a pulse sent before it. The
+        stream, not software trigger mode: at 2 x 2 binning and USB speed 0
+        it sent 149 of 150 2 s frames in 5 minutes (6 November 2026);
+        trigger mode was not tried that way. A frame identical to the one
+        before is let go."""
         repeats = 0
         for _ in range(DUPLICATES + 1):
-            if self.driver.trigger(self.handle) < 0:
-                refuse("The guide camera refused a trigger.")
-            started = wall()
-            asked = self.clock()
-            while True:
-                got = self.driver.pull(self.handle)
-                if got:
-                    break
-                if self.clock() - asked > seconds + WAIT_S:
-                    refuse(f"The guide camera sent no frame within {seconds + WAIT_S:.0f} s of a trigger.")
-                self.sleep(0.02)
+            frame = self.frame(seconds, gain)
             arrived = wall()
-            width, height, data = got
-            frame = np.frombuffer(data, np.uint8).reshape(height, width).copy()
-            digest = hash(data)
+            digest = hash(frame.tobytes())
             if digest != getattr(self, "_last_digest", None):
                 self._last_digest = digest
-                return frame, {"start": started, "mid": started + seconds / 2, "arrived": arrived}
+                return frame, {"start": arrived - seconds, "mid": arrived - seconds / 2, "arrived": arrived}
             repeats += 1
         # The library has no frame number to tell a stale buffer from a new
         # frame; the same bytes this many times running is a camera fault.
@@ -501,7 +489,7 @@ def guide_dry_run(args):
 def run_guider(args):
     import guider
     if args.action == "star":
-        with GuideCamera(role="star") as cam:
+        with GuideCamera(role="star", size=GUIDE_SIZE, speed=GUIDE_SPEED) as cam:
             shortest, longest = cam.driver.exposure_range(cam.handle)
             print(f"guide camera exposures {shortest * 1000:g} ms to {longest:g} s")
             guider.watch(cam, args.exposure, args.count, args.gain)
@@ -512,7 +500,7 @@ def run_guider(args):
     stop_order, beat = None, None
     try:
         # The camera, and its lock, held for the whole of calibrate or guide.
-        with GuideCamera(role="guider", run=run) as cam:
+        with GuideCamera(role="guider", run=run, size=GUIDE_SIZE, speed=GUIDE_SPEED) as cam:
             dec, west = pointing(args)
             # Calibration and its check have a heartbeat too, as `calibrating`,
             # and take a stop before every pulse.

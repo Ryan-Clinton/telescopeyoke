@@ -12,7 +12,8 @@ orders confirmed once done, and the watch on a hung loop. Not yet:
 shoot.py --guide and dithering.
 
 The guide scope is the 50 mm Orion Mini (162 mm) with the GPCAM's 3.75 um
-pixels: 4.77" a pixel. The guide rate is the handset's, measured on
+pixels read 2 x 2 binned: 9.55" a pixel (4.77" at full size, where the
+camera drops frames). The guide rate is the handset's, measured on
 6 November 2026 at about 7.1"/s; a calibration replaces it with its own.
 """
 import fcntl
@@ -36,26 +37,30 @@ import interface
 
 FOCAL_MM = 162.0
 PIXEL_UM = 3.75
-SCALE = 206.265 * PIXEL_UM / FOCAL_MM     # arcseconds a guide pixel: 4.77
+BIN = 2                  # the camera is read 2 x 2 binned (guidecam.GUIDE_SIZE): full size drops frames
+SCALE = 206.265 * PIXEL_UM * BIN / FOCAL_MM     # arcseconds a guide pixel: 9.55 binned (4.77 at full size)
+
+# The limits below in guide pixels are for 2 x 2 binning: each is half its
+# full-size value, so it is the same on the sky.
 GUIDE_RATE = 7.1                          # "/s, measured 6 Nov 2026; a calibration's own replaces it
 
 # Finding the star
 SATURATED = 230      # a peak this high or more may be clipped: not chosen
-EDGE = 30            # px from the frame's edge
-NEIGHBOUR = 15       # px: no brighter star nearer than this
+EDGE = 15            # px from the frame's edge (640 x 480)
+NEIGHBOUR = 8        # px: no brighter star nearer than this
 SNR_FIND = 10        # to be chosen
 SNR_LOST = 6         # below this while guiding, the star counts as lost
-HFD_LEAST = 0.7      # px: narrower is a hot pixel, not a star
-BOX = 10             # half-width of the box a star is measured in
-AMBIGUOUS = 2.0      # px: two stars this close in distance from where the star should be: neither taken
-WINDOW = 20          # half-width of the search window round where the star should be
-RELOCK_RADIUS = 10   # px from the lock a lost star must come back within
-JUMP = 8             # px in one frame: a satellite, a bird or a cosmic ray
+HFD_LEAST = 0.4      # px: narrower is a hot pixel, not a star (binned, a star is only a pixel or two across)
+BOX = 6              # half-width of the box a star is measured in
+AMBIGUOUS = 1.0      # px: two stars this close in distance from where the star should be: neither taken
+WINDOW = 10          # half-width of the search window round where the star should be
+RELOCK_RADIUS = 5    # px from the lock a lost star must come back within
+JUMP = 4             # px in one frame: a satellite, a bird or a cosmic ray
 LOST_FRAMES = 3      # frames running without the star: lost
 RETRY_S = 10         # seconds between looks for a star when there is none
 
 # Calibration
-CAL_DISTANCE = 25    # px each leg aims to move the star
+CAL_DISTANCE = 13    # px each leg aims to move the star: about 2' (25 px at full size)
 CAL_STEPS = 12       # steps the leg is planned in
 CAL_MOST_STEPS = 15
 CAL_LEAST_STEPS = 8  # fewer than this to cover the distance: steps too long
@@ -65,7 +70,8 @@ CAL_REVERSAL_STEPS = 6  # steps of each extra Dec reversal that measures the sla
 VERIFY_STEPS = 3     # steps each way of the check on a reused calibration
 VERIFY_ANGLE = 30    # degrees a reused direction may be off
 VERIFY_SIZE = 0.35   # share a reused strength may be off
-RETURN_PX = 2.0      # px from where it started a check's way back must end
+RETURN_PX = 1.0      # px from where it started a check's way back must end
+SLACK_MOVED = 0.8    # px: the star has started to move (the Dec slack taken up); three times it, a leg that moved at all
 
 # The loop (PHD2's defaults as a start)
 RA_AGGRESSION = 0.7
@@ -80,7 +86,7 @@ LONGEST_PULSE = 2.5  # seconds per axis per frame
 RMS_FRAMES = 30
 
 # Limits: each is a fault
-ERROR_FAULT_PX = 30
+ERROR_FAULT_PX = 15
 ERROR_FAULT_FRAMES = 5
 CORRECTION_FAULT = 600.0   # arcseconds of signed correction on an axis since the lock was set
 RUNAWAY_FRAMES = 10        # frames running at the longest pulse the same way
@@ -115,7 +121,7 @@ class Fault(interface.Refusal):
 def light_path():
     """What a calibration was made with: it is used again only on the same."""
     import guidecam
-    return {"camera": guidecam.MODEL, "focal_mm": round(FOCAL_MM)}
+    return {"camera": guidecam.MODEL, "focal_mm": round(FOCAL_MM), "binning": BIN}
 
 
 def motion_check():
@@ -227,7 +233,7 @@ def follow(frame, where, window=WINDOW, least_snr=SNR_LOST):
     stars.sort(key=lambda pair: pair[0])
     # The nearest to where it should be, not the brightest; two about as near is no answer.
     if len(stars) > 1 and stars[1][0] - stars[0][0] < AMBIGUOUS \
-            and math.hypot(stars[1][1].x - stars[0][1].x, stars[1][1].y - stars[0][1].y) > 2:
+            and math.hypot(stars[1][1].x - stars[0][1].x, stars[1][1].y - stars[0][1].y) > 2 * AMBIGUOUS:
         return None, (f"two stars about as near ({stars[0][0]:.1f} and {stars[1][0]:.1f} px): "
                       "not guessing which")
     return stars[0][1], ""
@@ -350,7 +356,7 @@ def _enough(leg, points, steps):
     """A leg that did not move the star far enough is a failed calibration,
     never a calibration to guide with."""
     moved = _moved(points)
-    if moved < 5:
+    if moved < SLACK_MOVED * 3:
         raise Fault(f"{steps} {leg} steps moved the star only {moved:.1f} px: the ST4 {leg} line is not "
                     "moving the mount. Calibration failed; nothing kept.")
     if leg in ("west", "north") and moved < CAL_DISTANCE * 0.6:
@@ -392,7 +398,7 @@ def calibrate(cam, seconds, dec, west, gain=None, say=print, rate=GUIDE_RATE, ti
     start = c.look()
     for n in range(CAL_SLACK_STEPS):
         here = c.step("north", dec_step)
-        if math.hypot(here[0] - start[0], here[1] - start[1]) >= 1.5:
+        if math.hypot(here[0] - start[0], here[1] - start[1]) >= SLACK_MOVED:
             break
     else:
         raise Fault(f"{CAL_SLACK_STEPS} north steps of {dec_step:.2f} s did not move the star: "
@@ -523,7 +529,7 @@ def verify(cam, seconds, cal, cols, west, gain=None, say=print, tick=None):
         if direction == "north":                    # the slack first, as in calibration
             for _ in range(CAL_SLACK_STEPS):
                 here = c.step("north", dec_step)
-                if math.hypot(here[0] - start[0], here[1] - start[1]) >= 1.5:
+                if math.hypot(here[0] - start[0], here[1] - start[1]) >= SLACK_MOVED:
                     break
             start = c.look()
         end = c.back(direction, step, VERIFY_STEPS)[-1]
@@ -1227,7 +1233,7 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
 
 GUIDE_START_S = 480.0      # a new guider has this long to calibrate and reach `guiding`
 RESTART_S = 180.0          # a restarted guider, its calibration reused, has this long
-SETTLE_PX = 1.0            # guide px: every error under this...
+SETTLE_PX = 0.5            # guide px (about 5"): every error under this...
 SETTLE_FRAMES = 2          # ...for this many guide frames running, spanning at least SETTLE_SPAN
 SETTLE_SPAN = 3.0          # seconds
 SETTLE_S = 30.0            # still guiding but not settled after this: the frame is taken and marked

@@ -44,15 +44,19 @@ guiding and dithering are one piece of work here, never guiding alone.
 | | Guide camera on the 50 mm Orion Mini | 183M on the 150P with the 0.9x corrector |
 |---|---|---|
 | Focal length | 162 mm | 675 mm |
-| Pixel | 3.75 µm | 2.4 µm (binned 2x2: 4.8 µm) |
-| Scale | **4.77"/px** | 0.73"/px (binned 2x2: **1.47"/px**) |
-| Field | 1.70° x 1.27° (1280 x 960) | 1.11° x 0.74° |
+| Pixel | 3.75 µm, read 2x2 binned: 7.5 µm | 2.4 µm (binned 2x2: 4.8 µm) |
+| Scale | **9.55"/px** binned (4.77"/px full size) | 0.73"/px (binned 2x2: **1.47"/px**) |
+| Field | 1.70° x 1.27° (640 x 480 binned) | 1.11° x 0.74° |
 
-- **Guide ratio:** 6.5 against the 183M unbinned and 3.3 binned. Both are
-  comfortably within the usual rule of thumb (forum advice says under 5 to
-  10 [2]). A centroid good to about 0.1 guide pixel is 0.5", a third of a
-  binned imaging pixel.
-- **One guide pixel at the guide rate:** 4.77" / 7.1"/s, about **0.67 s** of
+The guide camera is read 2 x 2 binned at USB speed 0: at full size it drops
+frames whatever the setting, and binned it sent 149 of 150 2 s frames in 5
+minutes (6 November 2026, [the fault](guide-camera-fault.md)).
+
+- **Guide ratio:** 6.5 against the 183M binned 2x2, within the usual rule of
+  thumb (forum advice says under 5 to 10 [2]); 13 against it unbinned, past
+  it. Guided imaging should be binned 2x2. A centroid good to about 0.1
+  guide pixel is about 1", two thirds of a binned imaging pixel.
+- **One guide pixel at the guide rate:** 9.55" / 7.1"/s, about **1.3 s** of
   pulse.
 
 ## The guiding command
@@ -95,14 +99,14 @@ imaging camera, so `keeper.py` holding the 183M open is untouched.
 ### 2. Calibrate
 
 - Pulse west in steps, measuring the star after each, until it has moved
-  about 25 guide pixels or 15 steps have been sent. Then pulse east to come
+  about 13 guide pixels (about 2', 25 at full size) or 15 steps have been sent. Then pulse east to come
   back. Then do the same north and south, taking up Dec slack first with
   north pulses until the star starts to move. This follows PHD2's practice
   [1][3].
 - Step length: aim for 12 steps over the whole move, rounded up to the
   nearest 50 ms (S&T's guidance; the PHD2 developers' calculator). It is
-  worked out, not fixed: 25 px x 4.77"/px / 7.1"/s / 12, which is
-  **1400 ms** at Dec 0. RA motion shrinks by cos(Dec), so RA steps are that
+  worked out, not fixed: 13 px x 9.55"/px / 7.1"/s / 12, which is
+  **1500 ms** at Dec 0. RA motion shrinks by cos(Dec), so RA steps are that
   divided by cos(Dec), capped at 3000 ms. The rate used is the guide rate
   last measured, 7.1"/s until the first calibration replaces it.
 - From the two lines, record:
@@ -143,7 +147,7 @@ Each guide frame:
    exposure starts only after both have ended, so a frame never mixes a
    move into its measurement. The cycle is the exposure, the readout and
    the pulses: at 2 s and a typical correction of a fraction of a guide
-   pixel (one pixel is 0.67 s of pulse) that is about 3 s; at the worst,
+   pixel (one pixel is 1.3 s of pulse) that is about 3 s; at the worst,
    both axes at the 2.5 s cap, 7 s. The two together are capped at the
    exposure length; a longer total is shortened, both axes in
    proportion, and the rest taken back on the next frames. Each call's return value is checked, and a pulse
@@ -273,8 +277,8 @@ with the reason.
     guiding is proven;
   - `--guide` and `--hold` are refused together.
 - **Each frame waits for "settled":** before an exposure starts, the guider
-  must report `guiding` with every error under 1.0 guide px (about 5") for
-  3 s running. After 30 s still `guiding` but not inside that, the frame is
+  must report `guiding` with every error under 0.5 guide px (about 5") for
+  two guide frames over at least 3 s. After 30 s still `guiding` but not inside that, the frame is
   taken and marked. No other state ever times out into a frame, and the
   two kinds of trouble are handled apart:
   - `lost` (the guider working, no star: cloud) and `calibrating`:
@@ -315,7 +319,7 @@ with the reason.
     half and all of a set size. It never adds to the last one, so the field
     cannot wander.
   - Size and how often are settings (`--dither-size`, `--dither N`). Start
-    at 8 imaging pixels binned (about 12", or 2.5 guide px); forum practice
+    at 8 imaging pixels binned (about 12", or 1.25 guide px); forum practice
     is 5 to 10 imaging pixels [2]. Start dithering every frame for subs of
     2 minutes or more, every 2 to 3 frames for shorter.
   - Each dither waits for "settled". At 15 s a dither that is 5 % of a
@@ -357,7 +361,7 @@ with the reason.
     cut the 2.5 s cap is the limit;
   - it is confirmed paused before every slew;
   - three limits, each a `fault`:
-    1. **guide error:** the star more than 30 guide px (about 2.4′) from
+    1. **guide error:** the star more than 15 guide px (about 2.4′) from
        the lock for 5 frames running while `guiding`;
     2. **correction since relock:** the pulses sent since the last
        acknowledged `relock`, added up per axis with their signs and turned
