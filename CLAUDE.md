@@ -42,7 +42,7 @@ what is specific to Claude and to this particular user.
 - No one-off scripts for anything new that will be used every night
   (focusing, alignment, a new piece of hardware): write it as a project
   command before its first use, and use it only through that
-  command. Never inline `python3 -` for it, not even to try it. On 13
+  command. On 13
   October the motor focuser focused the telescope from an inline script
   that was never kept, and two nights later nothing knew it could.
 - A result in a dated night file (`docs/nights/DATE/`) that changes what is
