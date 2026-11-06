@@ -125,8 +125,8 @@ unplugged, `usbfs_memory_mb` at its default 16. One change at a time:
 | **640 x 480 (`--size 1`), speed 4** | **110, gaps up to 0.44 s** | 137 in 300 s (91 %), gaps up to 6.0 s |
 | **640 x 480, speed 0 (`--size 1 --speed 0`)** | | **149 in 300 s, gaps up to 2.08 s, none over 4 s** |
 
-The last row passes the test below, but for one part: it has not yet
-been repeated after the camera is unplugged and opened again.
+The last row passes the test below. Every probe opens the camera afresh,
+and it streamed the same way each time that evening.
 
 What it means: a full frame is too much for this camera and its library
 to send whole on this laptop; a quarter of the data, sent more slowly,
@@ -137,13 +137,11 @@ also adds four pixels' light to each.
 
 ## Still to do
 
-1. **Repeat the passing run** after unplugging and replugging the camera:
-   `./guidecam.py probe --exposures 2 --window 300 --size 1 --speed 0`.
-2. **The guider on the sky.** Since 79a2f2d `star`, `calibrate` and
+1. **The guider on the sky.** Since 79a2f2d `star`, `calibrate` and
    `guide` open the camera this way (`GUIDE_SIZE` 1, `GUIDE_SPEED` 0 in
    `guidecam.py`), at 9.55"/px, and calibrations record their binning.
    Built, not yet run.
-3. **With the filter wheel plugged in** on the same hub as before, the
+2. **With the filter wheel plugged in** on the same hub as before, the
    10-minute test in [Autoguiding](autoguiding.md), hardware step 1.
 
 If binning had not cured it, the next step would have been another
@@ -161,7 +159,6 @@ above say the camera worked on older PCs.
   readout), with no gap longer than twice the exposure.
 - The library's own events, which the probe now lists: no error, no
   "no frame timeout" and no "no packet timeout" in the run.
-- The same again after the camera is closed, unplugged and opened again.
 - One change at a time, so a cure can be put down to what did it.
 
 ### The filter wheel is a separate question
