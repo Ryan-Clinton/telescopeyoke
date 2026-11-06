@@ -98,6 +98,10 @@ ORDERS = ("pause", "resume", "relock", "dither", "stop")
 ORDER_TIMEOUT = {"pause": 10, "resume": 30, "relock": 60, "dither": 60, "stop": 15}
 ORDER_STALE_S = 120        # an order not taken within this long is answered as failed
 RELOCK_PATIENCE = 50.0     # seconds a relock looks for a star
+DITHER_MOST_PX = 5.0       # guide px (about 48"): the furthest a dither may put the lock from where relock set it
+DITHER_SETTLED_PX = 0.5    # guide px: a dither is done once the star is this close to its new lock...
+DITHER_SETTLED_FRAMES = 2  # ...for this many guide frames running
+DITHER_SETTLE_MAX = 50.0   # seconds a dither may take to settle (its order times out at 60)
 
 STATE_FILE = config.DATA / "cache" / "guide.json"
 PID_FILE = config.DATA / "cache" / "guide.pid"          # who holds the guide camera (information only)
@@ -1086,10 +1090,11 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
         previous = None
     beat.start()
     resuming = stopping = None
+    dithering = None                # a dither order not yet settled: {order, since, good}
     frames = 0                      # guide frames taken: what a reader counts samples by
     try:
         star = first_star(cam, seconds, gain, say, tick=starting)
-        lock = where = (star.x, star.y)
+        lock = where = origin = (star.x, star.y)      # origin: where relock set it; dithers are offsets from it
         say(f"locked on the star at {lock[0]:.1f}, {lock[1]:.1f} (SNR {star.snr:.1f}); guiding")
         lost, state = 0, "guiding"
         beat.update(state=state, lock=list(lock))
@@ -1128,7 +1133,10 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
                         beat.update(state=state)
                         answer(order, False, why.message)
                     else:
-                        lock = where = (star.x, star.y)
+                        lock = where = origin = (star.x, star.y)
+                        if dithering:
+                            answer(dithering["order"], False, "a relock came before it settled")
+                            dithering = None
                         ctl.reset_limits()
                         errors.clear()
                         lost, state = 0, "guiding"
@@ -1136,11 +1144,33 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
                         say(f"  relocked on the star at {lock[0]:.1f}, {lock[1]:.1f}")
                         answer(order, True)
                 elif name == "dither":
-                    answer(order, False, "dithering is not built yet")
+                    # The lock moved to an offset from the origin (never from the
+                    # last dither, so the field cannot wander); done once the
+                    # star has settled on it.
+                    try:
+                        dx, dy = (float(v) for v in order.get("args", [])[:2])
+                    except (TypeError, ValueError):
+                        answer(order, False, "a dither needs DX and DY in guide pixels")
+                        continue
+                    if state != "guiding":
+                        answer(order, False, f"not guiding ({state})")
+                    elif math.hypot(dx, dy) > DITHER_MOST_PX:
+                        answer(order, False, f"{math.hypot(dx, dy):.1f} px is past the {DITHER_MOST_PX:g} px a "
+                                             "dither may go from the origin")
+                    else:
+                        if dithering:
+                            answer(dithering["order"], False, "a newer dither came before it settled")
+                        lock = (origin[0] + dx, origin[1] + dy)
+                        dithering = {"order": order, "since": time.monotonic(), "good": 0}
+                        beat.update(lock=list(lock), dither=[dx, dy])
+                        say(f"  dither: lock moved {dx:+.2f}, {dy:+.2f} px from the origin")
                 else:
                     answer(order, False, f"unknown order {name}")
             if stopping:
                 break                       # no frame and no pulse after a stop
+            if dithering and time.monotonic() - dithering["since"] > DITHER_SETTLE_MAX:
+                answer(dithering["order"], False, f"not settled within {DITHER_SETTLE_MAX:.0f} s")
+                dithering = None
             if state == "paused":
                 time.sleep(0.5)
                 continue
@@ -1176,6 +1206,14 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
                 if resuming:
                     answer(resuming, True)
                     resuming = None
+                if dithering:
+                    near = math.hypot(*error) < DITHER_SETTLED_PX
+                    dithering["good"] = dithering["good"] + 1 if near else 0
+                    took = time.monotonic() - dithering["since"]
+                    if dithering["good"] >= DITHER_SETTLED_FRAMES:
+                        answer(dithering["order"], True, f"settled in {took:.0f} s")
+                        row["dither_settled_s"] = round(took, 1)
+                        dithering = None
                 row.update(star={"x": round(found.x, 3), "y": round(found.y, 3), "snr": round(found.snr, 1),
                                  "hfd": round(found.hfd, 2), "peak": found.peak},
                            error_px=[round(error[0], 3), round(error[1], 3)],
@@ -1220,6 +1258,11 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
             cam.stop_pulse()
         except Exception as failure:
             say(f"  the ST4 stop failed too: {failure}")
+        if dithering:
+            try:
+                answer(dithering["order"], False, "the guider stopped before it settled")
+            except OSError:
+                pass
         final = {"state": state, "reason": reason, "lock": list(lock) if lock else None, "pulses": [0.0, 0.0]}
         try:
             with beat.lock:
@@ -1356,9 +1399,21 @@ class Supervisor:
             time.sleep(1)
         raise Fault(f"The guider was not guiding within {timeout:.0f} s. Its log: {RUN_LOG}.")
 
-    def order(self, name):
-        ident, run = tell(name, run=self.run)
+    def order(self, name, args=()):
+        ident, run = tell(name, args, run=self.run)
         return wait_for(ident, run, order=name)
+
+    def dither(self, size_arcsec, rng):
+        """The guider's lock moved a random way, between half and all of
+        `size_arcsec` from where its last relock set it (never from the last
+        dither, so the field cannot wander), and settled on: no GoTo.
+        Returns (dx, dy) in guide pixels and the guider's word on settling."""
+        size = size_arcsec / SCALE
+        distance = size * (0.5 + 0.5 * rng.random())
+        angle = rng.random() * 2 * math.pi
+        dx, dy = distance * math.cos(angle), distance * math.sin(angle)
+        done = self.order("dither", (round(dx, 3), round(dy, 3)))
+        return (dx, dy), done.get("reason", "")
 
     # -- around a GoTo
 

@@ -712,6 +712,18 @@ DITHER = 1.5        # arcminutes a dither aims off the target: tens of pixels, s
                     # camera's pattern lands on other stars, small enough to keep the framing
 
 
+GUIDED_DITHER = 12.0   # arcseconds a guided dither moves the guider's lock: about 8 imaging pixels binned
+                       # 2x2 (1.47"/px), within forum practice of 5 to 10 (docs/autoguiding.md)
+
+
+def guided_dither(args, rng):
+    """A dither while guided: the guider's lock moved, no GoTo, and its
+    settling waited for. Says how far and how long it took."""
+    (dx, dy), how = args.supervisor.dither(args.dither_size, rng)
+    import guider
+    print(f"  dithering: the guider's lock moved {math.hypot(dx, dy) * guider.SCALE:.0f}\" ({how})", flush=True)
+
+
 def dither_offset(rng, size=DITHER):
     """Arcminutes east and north to aim off the target: a random direction,
     between half and all of `size` away, so no two dithers sit together."""
@@ -919,6 +931,10 @@ def main():
                          "or uses one already guiding, pauses it around every GoTo, keeps the Dec creep off, and "
                          "waits for it to settle before each frame. Not with --hold, --assist, --dither or "
                          "--no-recentre. Not yet proven on the sky")
+    ap.add_argument("--dither-size", type=float, metavar="ARCSEC",
+                    help=f"with --guide: how far a dither moves the guider's lock, in arcseconds (default "
+                         f"{GUIDED_DITHER:g}, about 8 binned imaging pixels); each is a random way, between half "
+                         "and all of it, from the lock the last re-centre set, never added to the last")
     ap.add_argument("--hold", type=float, metavar="PX",
                     help="for transits: keep the target within PX pixels of where the first frame had it, "
                          "learning first how small moves shift the frames; no dithering")
@@ -966,12 +982,13 @@ def main():
         ap.error("--hold keeps the stars on the same pixels: not with --dither or --no-recentre")
     if args.guide:
         clash = [name for name, on in (("--hold", args.hold), ("--assist", args.assist),
-                                       ("--dither", args.dither), ("--dither-first", args.dither_first),
                                        ("--no-recentre", args.no_recentre)) if on]
         if clash:
-            ap.error(f"--guide gives the guider RA and Dec: not with {', '.join(clash)}"
-                     + (" (dithering while guided moves the guider's lock, which is not built yet)"
-                        if args.dither or args.dither_first else ""))
+            ap.error(f"--guide gives the guider RA and Dec: not with {', '.join(clash)}")
+    if args.dither_size is not None and not args.guide:
+        ap.error("--dither-size is for --guide's dithers; an unguided dither is a GoTo about 1.5' off")
+    if args.dither_size is None:
+        args.dither_size = GUIDED_DITHER
     work = (lambda: plan(args)) if args.dry_run else (lambda: run(args))
     return interface.main("shoot.dry_run" if args.dry_run else "shoot", work, args.json)
 
@@ -988,6 +1005,8 @@ def plan(args):
            # The hold moves the mount in small steps all through the run.
            "hold_px": getattr(args, "hold", None),
            "guided": bool(getattr(args, "guide", False))}
+    if out["guided"] and out["dither_every"]:
+        out["dither"] = f"the guider's lock, {args.dither_size:g}\" (half to all of it, a random way), no GoTo"
     if out["guided"]:
         import guider
         state = guider.read_state()
@@ -1456,11 +1475,18 @@ def image(args, session, exposure, moving, holding, tracker):
                 # A dither centres the target again too, a little off.
                 told["recentre"] = False
                 collect(everything=True)
-                aim = dither_offset(rng)
-                print(f"  dithering: re-centring {aim[0]:+.1f}' east, {aim[1]:+.1f}' north of {args.name}", flush=True)
-                recentre(args.name, aim)
-                session.drift, session.origin, since_centre, since_dither = 0.0, None, 0, 0
-                session.track.clear()
+                if getattr(args, "supervisor", None):
+                    # Guided: the guider's lock moves; the mount stays on its re-centre.
+                    guided_dither(args, rng)
+                    since_dither = 0
+                    session.track.clear()     # the dither, not drift, moved the next frames
+                else:
+                    aim = dither_offset(rng)
+                    print(f"  dithering: re-centring {aim[0]:+.1f}' east, {aim[1]:+.1f}' north of {args.name}",
+                          flush=True)
+                    recentre(args.name, aim)
+                    session.drift, session.origin, since_centre, since_dither = 0.0, None, 0, 0
+                    session.track.clear()
             elif moving and (session.drift > DRIFT_LIMIT or due):
                 told["recentre"] = False
                 collect(everything=True)
@@ -1638,6 +1664,13 @@ def image(args, session, exposure, moving, holding, tracker):
                             # 2026, closing it for each dither stopped the 183M's
                             # cooler and cost about 4 minutes of slow re-cooling.
                             collect(everything=True)
+                            if getattr(args, "supervisor", None):
+                                # Guided: the guider's lock moves, no GoTo; the next
+                                # frame waits for settling as every guided frame does.
+                                guided_dither(args, rng)
+                                since_dither = 0
+                                session.track.clear()
+                                continue
                             aim = dither_offset(rng)
                             print(f"  dithering: {aim[0]:+.1f}' east, {aim[1]:+.1f}' north of {args.name}, "
                                   "the camera kept open", flush=True)
