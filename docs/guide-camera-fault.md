@@ -8,7 +8,7 @@ frames steadily.** The guide camera, an Altair GPCAM MT9M034M (mono,
 1280 x 960, USB 2, ID `16d0:0b2a`), will not send a steady stream of
 full-size frames on this laptop: at 2 s it sends one every 3 to 18 s.
 Binned and slowed, it sent 149 of 150 in 5 minutes ([below](#what-cured-it)).
-The guider does not use that setting yet, so nothing has guided
+The guider opens it that way since 79a2f2d; nothing has guided yet
 ([Autoguiding](autoguiding.md)).
 
 ## What works
@@ -139,11 +139,10 @@ also adds four pixels' light to each.
 
 1. **Repeat the passing run** after unplugging and replugging the camera:
    `./guidecam.py probe --exposures 2 --window 300 --size 1 --speed 0`.
-2. **The guider opens the camera this way.** `star`, `calibrate` and
-   `guide` still open it at full size and speed 4, which does not stream.
-   They need size 1 and speed 0, and the pixel scale the guider works in
-   doubles to about 9.6"/px. A kept calibration made at the full size
-   cannot be reused.
+2. **The guider on the sky.** Since 79a2f2d `star`, `calibrate` and
+   `guide` open the camera this way (`GUIDE_SIZE` 1, `GUIDE_SPEED` 0 in
+   `guidecam.py`), at 9.55"/px, and calibrations record their binning.
+   Built, not yet run.
 3. **With the filter wheel plugged in** on the same hub as before, the
    10-minute test in [Autoguiding](autoguiding.md), hardware step 1.
 
