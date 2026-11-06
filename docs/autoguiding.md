@@ -62,7 +62,12 @@ project command before its first use, and the photometric hold in
 `shoot.py` already contains a guider's hard parts. That hold learns each
 direction separately, takes up Dec gear slack on a reversal, corrects only
 part of each error, and gives up when corrections stop helping. The guider
-should share that code, not copy it.
+should share that maths, not copy it, and not call the hold itself: the
+hold is driven by the stacker's frame shifts and moves the mount through
+the handset, the guider by a guide star and ST4. The parts both need (a
+response learnt per direction, the slack from two opposite moves, the
+partial correction) come out of `shoot.Hold` into plain functions in a
+small module that both import. Each keeps its own loop.
 
 It runs as its own process, in the background, beside `shoot.py`. The two
 talk through one small state file, `config.DATA/cache/guide.json`, and an
@@ -82,8 +87,9 @@ imaging camera, so `keeper.py` holding the 183M open is untouched.
   be (the lock position plus the corrections just sent), not the whole
   frame, so a neighbour or a hot pixel is not mistaken for it. Every frame
   rejected is logged with its reason.
-- No star: retry every 10 s and say so, the way the other steps retry
-  through cloud.
+- No star: try again every 10 s and say so, the way the other steps retry
+  through cloud. The state is `lost`, not `fault`: cloud is not a broken
+  guider.
 
 ### 2. Calibrate
 
@@ -92,10 +98,12 @@ imaging camera, so `keeper.py` holding the 183M open is untouched.
   back. Then do the same north and south, taking up Dec slack first with
   north pulses until the star starts to move. This follows PHD2's practice
   [1][3].
-- Step length: aim for 10 to 15 steps over the whole move, rounded up to
-  the nearest 50 ms (S&T's guidance; the PHD2 developers' calculator).
-  At 7.1"/s and Dec 0 that is about 1000 ms. RA motion shrinks by cos(Dec),
-  so steps lengthen as 1/cos(Dec), capped at 3000 ms.
+- Step length: aim for 12 steps over the whole move, rounded up to the
+  nearest 50 ms (S&T's guidance; the PHD2 developers' calculator). It is
+  worked out, not fixed: 25 px x 4.77"/px / 7.1"/s / 12, which is
+  **1400 ms** at Dec 0. RA motion shrinks by cos(Dec), so RA steps are that
+  divided by cos(Dec), capped at 3000 ms. The rate used is the guide rate
+  last measured, 7.1"/s until the first calibration replaces it.
 - From the two lines, record:
   - the camera's angle on the sky;
   - RA and Dec rates in px/s;
@@ -104,7 +112,8 @@ imaging camera, so `keeper.py` holding the 183M open is untouched.
 - Keep the calibration in `config.DATA/cache/guide-cal.json`, labelled with
   the Dec, the side of the pier and the light path, as for the plate solves.
 - Reuse it on later nights while the guide camera has not turned:
-  - scale the RA rate by cos(Dec) for the target;
+  - scale the RA rate by cos(target Dec) / cos(calibration Dec), since the
+    rate stored was measured at the calibration's Dec;
   - reverse Dec after a swing over the pole.
 
   Verify the reuse with one short north and one short west pulse at the
@@ -127,11 +136,14 @@ Each guide frame:
    convert to a pulse length.
 4. Send the pulses through the camera's `ST4PlusGuide`, RA then Dec.
    That call takes one direction at a time, so the two run one after the
-   other, and together they must end before the next frame's exposure
-   starts; a longer total is cut, RA first. Each call's return value is
-   checked, and a pulse still running past its length plus 1 s is a fault.
-   Whether a second call overlaps the first or cuts it short is checked on
-   the bench with `./guidecam.py pulse` before the loop is written.
+   other: Dec is sent only once `ST4PlusGuideState` says the RA pulse has
+   finished, so no call can cut short the other axis's pulse. The two
+   together must end before the next frame's exposure starts, with the
+   time between frames as the budget; a longer total is shortened, both
+   axes in proportion. Each call's return value is checked, and a pulse
+   still running past its length plus 1 s is a fault. Both axes at once
+   comes later and only if a bench check with `./guidecam.py pulse` shows
+   the SDK runs them together without one stopping the other.
 
 Each frame is logged with four times: exposure start, its midpoint, when
 the frame arrived and when each pulse went. The cadence and the delay from
@@ -175,9 +187,10 @@ and the night's notes. It holds:
 
 - the state: `calibrating`, `guiding`, `settling`, `lost`, `paused`,
   `fault` or `stopped`;
-- the guider's process ID, a run ID made at start, and a heartbeat time
-  written every frame;
-- the number of the last order it has carried out;
+- the guider's process ID, a run ID made at start, and a heartbeat time,
+  written once a second by its own timer whether or not a frame came in;
+- the last order: its number, the run ID it was carried out under, and its
+  outcome (`done` or `failed`, with the reason);
 - the star's position and SNR;
 - the last error in RA and Dec, in arcseconds;
 - the running RMS in RA, Dec and total over the last 30 frames, in
@@ -192,10 +205,20 @@ session's frames, for later analysis.
 ### 5. Orders it takes
 
 `pause`, `resume`, `dither DX DY` (guide px), `relock` (find the star
-again after a GoTo), `stop`. `shoot.py` sends them, each numbered, and an
-order counts as done only when the state file shows its number. Every
-order has a timeout: 10 s for `pause`, 60 s for `relock`. A timed-out
-order is a fault, and `shoot.py` stops guided imaging with the reason.
+again after a GoTo), `stop`. `shoot.py` sends them, each numbered with the
+guider's run ID. An order is marked `done` only once what it asked for is
+true, not when it is read:
+
+- `pause`: any pulse running has finished or been stopped, and no more go;
+- `relock`: a star found and its new lock position set;
+- `dither`: the lock moved and the guider settled on it;
+- `stop`: pulses stopped and the pid file released.
+
+`shoot.py` accepts only an outcome with its own order's number and the run
+ID it sent to, so an answer left by an earlier guider never counts. Every
+order has a timeout: 10 s for `pause`, 60 s for `relock` and `dither`. A
+timed-out or `failed` order is a fault, and `shoot.py` stops guided imaging
+with the reason.
 
 ### 6. Owning the guide camera
 
@@ -205,8 +228,12 @@ order is a fault, and `shoot.py` stops guided imaging with the reason.
   process is alive.
 - `MOTION_LOCKED` is checked before every pulse, not only at start.
 - **Stale state:** `shoot.py` trusts the state file only while its
-  heartbeat is under 3 guide exposures old (6 s at 2 s) and the process
-  and run ID match. Older is `lost`, whatever the file says.
+  heartbeat is under 5 s old (the timer writes it every second) and the
+  process and run ID match. Older is `fault`, whatever the file says.
+- **Lost or fault:** `lost` means the camera is working but no star passes
+  (cloud, a passing tree). `fault` means the guider cannot do its job: the
+  camera stopped answering for 3 exposure lengths plus 5 s, an SDK call
+  failed, a pulse did not finish, or a limit below was hit.
 - **On the way out:** Ctrl-C, an exception, the camera timing out or
   unplugged: send an ST4 stop, write `stopped` or `fault` with the reason,
   release the pid file. A crash or a power cut cannot send the stop, so
@@ -264,7 +291,7 @@ order is a fault, and `shoot.py` stops guided imaging with the reason.
   - Whether it worked is measured: the stack's background noise and any
     walking pattern, against an undithered stack of the same target.
 - **Exposure:** unchanged by default. Guided runs keep today's sub lengths
-  until the ladder test (proof step 5) has measured star shape, HFD and the
+  until the ladder test (proof step 3) has measured star shape, HFD and the
   share of frames kept at 30, 60, 120, 180 and 300 s. The plan's per-filter
   blocks then take the longest length that kept its stars round. The frame
   checks must not treat 300 s frames as if they were 15 s ones:
@@ -297,10 +324,20 @@ order is a fault, and `shoot.py` stops guided imaging with the reason.
   - it sends an ST4 stop on every exit it controls; after a crash or power
     cut the 2.5 s cap is the limit;
   - it is confirmed paused before every slew;
-  - it stops with `fault` when the star's net movement from the lock,
-    corrected, passes 10′ (summing every pulse would trip on normal
-    guiding), or when 10 frames running need the longest pulse the same
-    way, since that is a runaway, not guiding;
+  - three limits, each a `fault`:
+    1. **guide error:** the star more than 30 guide px (about 2.4′) from
+       the lock for 5 frames running while `guiding`;
+    2. **correction since relock:** the pulses sent since the last
+       acknowledged `relock`, added up per axis with their signs and turned
+       into arcseconds by the calibration, past 10′ on either axis. Signs
+       count, so ordinary back and forth cancels and only a steady push
+       builds up; 10 frames running at the longest pulse the same way is a
+       runaway as well;
+    3. **dither:** the lock never more than the dither size from where the
+       last `relock` set it, which the random offset already keeps to.
+
+    All three start again only on an acknowledged `relock`, never on a
+    dither;
   - limits, the Sun exclusion and dry runs are still enforced by
     `mount.py` for every GoTo.
 
@@ -356,19 +393,20 @@ In order, each with what counts as passing.
    and no runaway. Note the RA and Dec RMS separately, and the backlash.
    Then kill the guider process: `shoot.py` must see the stale heartbeat
    and start no new frame.
-3. **Flexure check:** a guided 300 s L frame. Round stars with the guider
-   reporting under 2.5" means no flexure. A trail in one direction while
-   the guider was good means flexure or mirror shift: stop here and record
-   it.
-4. **A guided run with dithers:** 30 minutes of 120 s L frames, dithering
+3. **Sub length ladder:** guided L frames of 30, 60, 120, 180 and 300 s,
+   a few of each. The guider's RMS is not enough: the frames' own star
+   shapes decide the longest length used.
+4. **Flexure check:** at the longest length the ladder allows, several
+   guided frames on one side of the meridian and several on the other.
+   Stars elongated the same way across frames while the guider reported
+   under 2.5" means flexure or mirror shift: record it and stop there. One
+   round frame does not clear it; several on both sides do.
+5. **A guided run with dithers:** 30 minutes of L frames at the ladder's length, dithering
    each frame. Passes when 90 % or more of frames are kept, the settle time
    after a dither is under 20 s, each dither landed within 1 guide px of
    its offset, the field has not wandered, and the stack shows no walking
    noise. A GoTo during it must show no pulse in the log between `pause`
    and `relock`.
-5. **Sub length ladder:** guided L frames of 30, 60, 120, 180 and 300 s,
-   a few of each. The guider's RMS is not enough: the frames' own star
-   shapes decide the longest length used.
 6. **The swing over the pole:** GoTo a target across the meridian, then
    relock. Passes when the reuse check shows which way Dec went, guiding
    resumes the right way without running away, and the answer is stored.
