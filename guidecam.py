@@ -384,6 +384,73 @@ def say_events(got, began, say):
             + (f" (and {len(other) - 20} more)" if len(other) > 20 else ""))
 
 
+
+def wheel_test(cam, wheel, minutes=10.0, seconds=2.0, every=15.0, say=print):
+    """The guide camera and the filter wheel together (autoguiding.md,
+    hardware step 1): guide frames for `minutes` while the wheel turns to
+    the next filter every `every` seconds, round all of them. Passes with
+    at least 90 % of the frames, no gap over twice the exposure, no error
+    from the camera's library, and every turn of the wheel arriving.
+    True if it passed."""
+    import threading
+    import sxwheel
+    d, h = cam.driver, cam.handle
+    d.exposure(h, seconds)
+    while d.pull(h):
+        pass
+    window = minutes * 60
+    began = cam.clock()
+    seen = len(getattr(d, "events", []))
+    moves, stop = [], threading.Event()
+
+    def turn():
+        _, total = wheel.status()
+        filt = 0
+        while not stop.wait(every):
+            filt = filt % max(total, 1) + 1
+            t = cam.clock() - began
+            try:
+                wheel.move(filt)
+                moves.append((t, filt, cam.clock() - began - t, None))
+            except sxwheel.WheelError as e:
+                moves.append((t, filt, None, str(e)))
+
+    arrivals = []
+    mover = threading.Thread(target=turn, daemon=True)
+    mover.start()
+    last_said = 0
+    try:
+        while cam.clock() - began < window:
+            if d.pull(h):
+                arrivals.append(cam.clock() - began)
+            else:
+                cam.sleep(0.01)
+            if cam.clock() - began - last_said >= 60:
+                last_said = cam.clock() - began
+                say(f"  {last_said / 60:.0f} min: {len(arrivals)} frames, {sum(1 for m in moves if not m[3])} "
+                    f"turns arrived, {sum(1 for m in moves if m[3])} failed")
+    finally:
+        stop.set()
+        mover.join(timeout=every + sxwheel.TIMEOUT)
+    expected = int(window // seconds)
+    gaps = np.diff([0.0] + arrivals) if arrivals else np.array([window])
+    long_gaps = int((gaps[1:] > 2 * seconds).sum()) if len(gaps) > 1 else 0
+    errors = [k for _, k in getattr(d, "events", [])[seen:] if k >= 0x0080]
+    failed = [m for m in moves if m[3]]
+    visited = {m[1] for m in moves if not m[3]}
+    say(f"guide camera: {len(arrivals)} of {expected} {seconds:g} s frames in {minutes:g} min "
+        f"({100 * len(arrivals) / max(expected, 1):.0f} %), gaps up to {gaps.max():.2f} s, "
+        f"{long_gaps} over {2 * seconds:g} s; library errors: {len(errors)}")
+    say(f"filter wheel: {len(moves) - len(failed)} of {len(moves)} turns arrived, filters reached "
+        f"{sorted(visited)}" + (f"; slowest {max(m[2] for m in moves if not m[3]):.1f} s" if visited else ""))
+    for t, filt, _, why in failed[:10]:
+        say(f"  at {t:.0f} s, to filter {filt}: {why}")
+    passed = (len(arrivals) >= 0.9 * expected and long_gaps == 0 and not errors and not failed
+              and len(visited) >= 7)
+    say("PASSED" if passed else "FAILED")
+    return passed
+
+
 MOVED = 4.0        # arcseconds an axis must turn beyond the still reading to count as moved
 
 
@@ -608,6 +675,9 @@ def main(argv=None):
     q.add_argument("--window", type=float, default=12.0, help="seconds to count frames at each exposure")
     q.add_argument("--size", type=int, help="the library's resolution index (0 is 1280 x 960; higher is smaller)")
     q.add_argument("--raw", action="store_true", help="the sensor's raw data, not the library's converted frames")
+    k = sub.add_parser("wheeltest", help="the guide camera and the filter wheel together: frames while the wheel turns")
+    k.add_argument("--minutes", type=float, default=10.0, help="how long (default 10)")
+    k.add_argument("--every", type=float, default=15.0, help="seconds between turns of the wheel")
     sub.add_parser("status", help="the guider's state, and whether it can be trusted")
     t = sub.add_parser("tell", help="an order for the running guider, waited for until done")
     t.add_argument("order", choices=("pause", "resume", "relock", "stop"))
@@ -654,6 +724,18 @@ def main(argv=None):
         if args.action in ("star", "calibrate", "guide"):
             run_guider(args)
             return
+        if args.action == "wheeltest":
+            import sxwheel
+            try:
+                wheel = sxwheel.Wheel.open()
+            except sxwheel.WheelError as e:
+                refuse(str(e))
+            with wheel, \
+                    GuideCamera(role="wheel test", size=GUIDE_SIZE, speed=GUIDE_SPEED) as cam:
+                print(f"guide camera {cam.size[0]} x {cam.size[1]}, wheel {wheel.status()}; "
+                      f"{args.minutes:g} min, a turn every {args.every:g} s")
+                ok = wheel_test(cam, wheel, args.minutes, every=args.every)
+            sys.exit(0 if ok else 1)
         if args.action == "probe":
             with GuideCamera(role="probe", size=args.size, raw=args.raw) as cam:
                 probe(cam, [float(e) for e in args.exposures.split(",")], args.trigger, args.speed, args.window)

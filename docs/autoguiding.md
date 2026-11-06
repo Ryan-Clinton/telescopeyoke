@@ -396,7 +396,10 @@ These need daylight or the user's hands. None needs the sky.
 1. **Power.** The wheel and the guide camera on one powered hub, or on
    separate ports. Done when both stay up together for 10 minutes, with
    the wheel moving through all 7 filters and the guide camera taking
-   frames throughout. `docs/usb-hub.md` has the history: the last powered
+   frames throughout. `./guidecam.py wheeltest` runs it: 2 s guide frames
+   (binned, speed 0) while the wheel turns to the next filter every 15 s,
+   and says PASSED with 90 % of the frames, no gap over 4 s, no library
+   error and every turn arriving. `docs/usb-hub.md` has the history: the last powered
    hub, the RSH-ST04, dropped its devices and was returned.
 2. **Guide scope focus**, on a distant roof edge in daylight, using
    `./guidecam.py snap`. Lock the helical focuser.
