@@ -494,8 +494,9 @@ def reuse(cal, dec, west):
     it before any guiding."""
     if not cal:
         return None, "no calibration kept"
-    if {k: cal.get(k) for k in light_path()} != light_path():
-        return None, "made with another guide camera or scope"
+    if {k: cal.get(k) for k in light_path()} != light_path() or abs((cal.get("scale") or 0) - SCALE) > 0.01:
+        return None, (f"made with another guide camera, scope or binning (binning {cal.get('binning')}, "
+                      f"{cal.get('scale') or 0:.2f}\"/px; now {BIN}, {SCALE:.2f}\"/px)")
     factor = math.cos(math.radians(dec)) / max(math.cos(math.radians(cal["dec"])), 0.05)
     cols = {k: np.array(v, float) for k, v in cal["columns"].items()}
     for k in ("west", "east"):
@@ -1085,6 +1086,7 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
         previous = None
     beat.start()
     resuming = stopping = None
+    frames = 0                      # guide frames taken: what a reader counts samples by
     try:
         star = first_star(cam, seconds, gain, say, tick=starting)
         lock = where = (star.x, star.y)
@@ -1189,9 +1191,10 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
             row["state"] = state
             with log.open("a", encoding="utf-8") as f:
                 f.write(json.dumps({**row, "run": run_id}) + "\n")
+            frames += 1
             beat.update(state=state, lock=list(lock), star=row.get("star"), ra_err=row.get("ra_err"),
                         dec_err=row.get("dec_err"), rms=rms, pulses=list(sent), sent_arcsec=dict(ctl.sent),
-                        rejected=row.get("rejected"))
+                        rejected=row.get("rejected"), frame=frames, frame_mid=times["mid"])
             if found is not None:
                 say(f"  RA {row['ra_err']:+5.1f}\" Dec {row['dec_err']:+5.1f}\"  pulses {sent[0]:+.2f} "
                     f"{sent[1]:+.2f} s" + (f"  RMS {rms['total']:.2f}\"" if rms else ""))
@@ -1304,6 +1307,36 @@ class Supervisor:
                           stdout=log, stderr=log, start_new_session=True)
         self.launched, self.pid = True, proc.pid
         self.say(f"  guide: guider started (process {proc.pid}); calibrating or checking its calibration")
+        try:
+            self._wait_guiding(proc, timeout)
+        except BaseException:
+            # A guider this run started and that did not reach guiding is
+            # ended here, never left running behind a failed start.
+            self.end_launched(proc)
+            raise
+
+    def end_launched(self, proc=None):
+        """The guider this run launched, ended: a stop order if it can take
+        one, else signalled (only if the pid is still that guider)."""
+        state = read_state()
+        ok, _ = health(state, self.run) if self.run else (False, "")
+        if ok:
+            try:
+                ident, run = tell("stop", run=self.run)
+                wait_for(ident, run, order="stop")
+                return
+            except interface.Refusal:
+                pass
+        start = self.pid_start if self.pid_start is not None else process_start(self.pid)
+        if self.pid and start is not None:
+            terminate(self.pid, start)
+        if proc is not None:
+            try:
+                proc.wait(timeout=5)
+            except Exception:
+                pass
+
+    def _wait_guiding(self, proc, timeout):
         end = time.monotonic() + timeout
         while time.monotonic() < end:
             state = read_state()
@@ -1364,11 +1397,18 @@ class Supervisor:
                                 f"({state.get('rejected') or state.get('reason') or 'no star'}): guided imaging stops.")
             else:
                 troubled = None
-                if state.get("ra_err") is not None and (not seen or seen[-1][0] != state.get("time")):
-                    seen.append((state.get("time"), math.hypot(state["ra_err"], state["dec_err"]) / SCALE))
+                # One sample per guide frame, by its number: a heartbeat, an
+                # order's answer or a pause rewrites the file but is no new frame.
+                number = state.get("frame")
+                if number is not None and (not seen or seen[-1][0] != number):
+                    if state.get("ra_err") is None or state.get("rejected"):
+                        seen.append((number, None, state.get("frame_mid")))
+                    else:
+                        seen.append((number, math.hypot(state["ra_err"], state["dec_err"]) / SCALE,
+                                     state.get("frame_mid")))
                 recent = seen[-SETTLE_FRAMES:]
-                if (len(recent) == SETTLE_FRAMES and all(e < SETTLE_PX for _, e in recent)
-                        and recent[-1][0] - recent[0][0] >= SETTLE_SPAN * 0.99):
+                if (len(recent) == SETTLE_FRAMES and all(e is not None and e < SETTLE_PX for _, e, _ in recent)
+                        and recent[-1][2] - recent[0][2] >= SETTLE_SPAN * 0.99):
                     return True
                 if now - begun > SETTLE_S:
                     return False
@@ -1402,11 +1442,25 @@ class Supervisor:
                     rows.append(row)
         except (OSError, ValueError):
             pass
-        errors = [math.hypot(r["ra_err"], r["dec_err"]) for r in rows if r.get("ra_err") is not None]
-        lost = sum(1 for r in rows if r.get("ra_err") is None) * self.exposure
+        good = sorted((r["time"]["mid"], math.hypot(r["ra_err"], r["dec_err"]))
+                      for r in rows if r.get("ra_err") is not None)
+        errors = [e for _, e in good]
+        # Seconds without the star: every stretch of the frame longer than two
+        # guide exposures with no good guide frame in it, rejected frames and
+        # frames that never came alike.
+        marks = [start] + [t for t, _ in good] + [end]
+        allowed = 2 * self.exposure
+        lost = sum(max(0.0, b - a - allowed) for a, b in zip(marks, marks[1:]))
+        # Guided only if the guider is still healthy and guiding as the frame ends.
+        state = read_state()
+        ok, why = health(state, self.run)
+        if ok and state.get("state") != "guiding":
+            ok, why = False, f"the guider was {state.get('state')} at the frame's end"
+        if ok and not good:
+            ok, why = False, "no guide frame during it"
         return {"rms": round(float(np.sqrt(np.mean(np.square(errors)))), 2) if errors else None,
                 "max": round(max(errors), 2) if errors else None,
-                "lost_s": round(lost, 1), "frames": len(rows)}
+                "lost_s": round(lost, 1), "frames": len(rows), "guided": ok, "why": why}
 
     def stop(self):
         """The guider stopped if this run started it, and the creep put back.
@@ -1414,12 +1468,7 @@ class Supervisor:
         if not self.launched:
             return
         try:
-            if self.active:
-                self.order("stop")
-        except interface.Refusal as problem:
-            self.say(f"  guide: the guider did not stop cleanly ({problem.message})")
-            if self.pid and self.pid_start is not None:
-                terminate(self.pid, self.pid_start)
+            self.end_launched()          # whether or not it ever reached guiding
         finally:
             self.active = False
             self.creep_back()

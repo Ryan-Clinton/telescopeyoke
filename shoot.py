@@ -1530,7 +1530,10 @@ def image(args, session, exposure, moving, holding, tracker):
                         sxwheel.cards(header, in_path)
                         if supervisor:
                             went = supervisor.during(exposed, time.time())
-                            header["GUIDED"] = (True, "autoguided through the guide camera's ST4 lead")
+                            # Guided only if the guider was still healthy and guiding as
+                            # the frame ended, with guide frames during it.
+                            header["GUIDED"] = (bool(went["guided"]), "autoguided through the guide camera's ST4 lead"
+                                                if went["guided"] else f"not guided to its end: {went['why']}"[:68])
                             header["GUIDESET"] = (bool(settled), "guiding had settled when the frame began")
                             if went["rms"] is not None:
                                 header["GUIDERMS"] = (went["rms"], "guide error RMS during the frame, arcsec")
