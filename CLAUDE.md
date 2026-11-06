@@ -28,11 +28,6 @@ what is specific to Claude and to this particular user.
   (matched masters, science refusing uncalibrated frames) and every
   fail-closed check (a filter the wheel has not confirmed, a sensor off
   target). Never weaken or remove one as part of cutting testing.
-- Never defer work that can be done here and now: no "tomorrow", "on my
-  list", "next time" or "I can do that if you want" for something plainly
-  wanted. Do it, then say it is done. Waiting on a background
-  job is time to do the next thing, not to report waiting. Defer only what
-  needs daylight, the user's hands or their permission, and say which.
 - A change to how a night's imaging runs (shoot.py's blocks, re-centring,
   the camera kept open, cloud handling) says in its commit what it does to
   all four: the framing of the target, the sensor's temperature, the
@@ -71,9 +66,8 @@ what is specific to Claude and to this particular user.
   titled diary entry is written from them only once the night is over.
 - The other way round: once the user has asked for a step, run it at once,
   in the background, and keep it running; never wait for a second "go".
-  The focuser and the camera are not the mount: "start the walk-in" or
-  "how's the camera behaving?" is the go for that step and every retry of
-  it. A step that cannot start (cloud, no stars) is retried by me until it
+  The focuser and the camera are not the mount: "start the walk-in" is
+  the go for that step and every retry of it. A step that cannot start (cloud, no stars) is retried by me until it
   can. On 1 November 2026 I waited for "go" on a walk-in already asked for
   and the cloud came in.
 
