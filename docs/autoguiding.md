@@ -78,6 +78,10 @@ imaging camera, so `keeper.py` holding the 183M open is untouched.
   15 px, and a signal-to-noise ratio above 10. Report its SNR and HFD.
 - Centroid: the weighted centre of mass over a small box around the star,
   after taking off the median background. Expect about 0.1 px.
+- While guiding, look for the star only in a window round where it should
+  be (the lock position plus the corrections just sent), not the whole
+  frame, so a neighbour or a hot pixel is not mistaken for it. Every frame
+  rejected is logged with its reason.
 - No star: retry every 10 s and say so, the way the other steps retry
   through cloud.
 
@@ -105,7 +109,10 @@ imaging camera, so `keeper.py` holding the 183M open is untouched.
 
   Verify the reuse with one short north and one short west pulse at the
   start of each run. A full calibration happens only when that check
-  fails.
+  fails, never guiding on a guessed sign.
+- Whether Dec reverses after a swing over the pole is not assumed: through
+  ST4 it depends on the mount. The first night measures it (proof step 6)
+  and the answer is stored with the calibration.
 - Best calibrated near Dec 0 and near the meridian. Accuracy falls off
   towards the pole (forum consensus [4]). Calibrating on the target is
   acceptable below Dec +60°.
@@ -118,8 +125,18 @@ Each guide frame:
 2. Convert it to RA and Dec errors with the calibration.
 3. Compute each axis's correction, apply the per-axis rules below, and
    convert to a pulse length.
-4. Send both pulses: RA and Dec at once, through the camera's
-   `ST4PlusGuide`, one call per axis.
+4. Send the pulses through the camera's `ST4PlusGuide`, RA then Dec.
+   That call takes one direction at a time, so the two run one after the
+   other, and together they must end before the next frame's exposure
+   starts; a longer total is cut, RA first. Each call's return value is
+   checked, and a pulse still running past its length plus 1 s is a fault.
+   Whether a second call overlaps the first or cuts it short is checked on
+   the bench with `./guidecam.py pulse` before the loop is written.
+
+Each frame is logged with four times: exposure start, its midpoint, when
+the frame arrived and when each pulse went. The cadence and the delay from
+midpoint to pulse are reported, and a frame arriving twice (same data) is
+dropped.
 
 Starting settings, modelled on PHD2's defaults [1]:
 
@@ -133,8 +150,11 @@ Starting settings, modelled on PHD2's defaults [1]:
 - **Dec backlash:** this is the EQ3 Pro's known weakness. Forum owners
   report Guiding Assistant backlash measurements in the thousands of
   milliseconds [6].
-  - Measure it during calibration, as the hold already does.
-  - A Dec reversal starts with the slack taken up.
+  - Measure it during calibration, as the hold already does, repeated so
+    it has a spread as well as a figure.
+  - A Dec reversal starts with part of the slack taken up, not all of it:
+    half the measured figure to start, raised or lowered by what the next
+    frames show, never above the measured figure plus its spread.
   - If guiding in Dec flips back and forth, switch Dec to one direction
     only: correct only the way the polar drift pushes. The drift model in
     `tracking.py` already predicts which way that is.
@@ -145,15 +165,19 @@ Starting settings, modelled on PHD2's defaults [1]:
   - keep looking;
   - resume when the star returns within 10 px of the lock position.
 - **Saturation or a jump of more than 8 px in one frame:** ignore that
-  frame, treating it as a passing satellite, a bird or a cosmic ray.
+  frame, treating it as a passing satellite, a bird or a cosmic ray. Not
+  while settling after a dither or relock, when large moves are expected.
 
 ### 4. What the state file says
 
 The guider writes the state file every frame, for `shoot.py`, the 8080 page
 and the night's notes. It holds:
 
-- the state: `calibrating`, `guiding`, `settling`, `lost`, `paused` or
-  `stopped`;
+- the state: `calibrating`, `guiding`, `settling`, `lost`, `paused`,
+  `fault` or `stopped`;
+- the guider's process ID, a run ID made at start, and a heartbeat time
+  written every frame;
+- the number of the last order it has carried out;
 - the star's position and SNR;
 - the last error in RA and Dec, in arcseconds;
 - the running RMS in RA, Dec and total over the last 30 frames, in
@@ -168,40 +192,87 @@ session's frames, for later analysis.
 ### 5. Orders it takes
 
 `pause`, `resume`, `dither DX DY` (guide px), `relock` (find the star
-again after a GoTo), `stop`. `shoot.py` sends them.
+again after a GoTo), `stop`. `shoot.py` sends them, each numbered, and an
+order counts as done only when the state file shows its number. Every
+order has a timeout: 10 s for `pause`, 60 s for `relock`. A timed-out
+order is a fault, and `shoot.py` stops guided imaging with the reason.
+
+### 6. Owning the guide camera
+
+- One guider at a time: it holds `config.DATA/cache/guide.pid` while it
+  runs. A second `guide` refuses, or `shoot.py --guide` attaches to the one
+  running. `./guidecam.py pulse` and `snap` refuse while it exists and its
+  process is alive.
+- `MOTION_LOCKED` is checked before every pulse, not only at start.
+- **Stale state:** `shoot.py` trusts the state file only while its
+  heartbeat is under 3 guide exposures old (6 s at 2 s) and the process
+  and run ID match. Older is `lost`, whatever the file says.
+- **On the way out:** Ctrl-C, an exception, the camera timing out or
+  unplugged: send an ST4 stop, write `stopped` or `fault` with the reason,
+  release the pid file. A crash or a power cut cannot send the stop, so
+  the protection there is the pulse cap: no pulse is longer than 2.5 s.
 
 ## Changes to `shoot.py`
 
 - **`--guide`:** starts the guider, or uses one already running. While it
   guides:
   - the photometric hold is off, and the drift assist's Dec trims are off;
-  - the Dec creep set by GoTo stays, which leaves the guider less to do;
+  - the Dec creep set by GoTo is turned off, so the guider is the only
+    thing correcting Dec; it is put back when guiding ends. Whether a creep
+    under the guider means fewer Dec reversals is tried later, once
+    guiding is proven;
   - `--guide` and `--hold` are refused together.
 - **Each frame waits for "settled":** before an exposure starts, the guider
-  must report `guiding` with an error under 1.5 guide px (about 7") for
-  3 s, or 30 s pass, after which the frame is taken anyway and marked.
-  This mirrors PHD2's settle tolerance, minimum time and timeout [2].
-- **Headers:** `GUIDED`, and `GUIDERMS` (the guider's total RMS in
-  arcseconds over the exposure).
+  must report `guiding` with every error under 1.0 guide px (about 5") for
+  3 s running. After 30 s still `guiding` but not inside that, the frame is
+  taken and marked. `lost`, `calibrating`, `paused`, `fault` or a stale
+  heartbeat never time out into a frame: `shoot.py` waits, and after 5
+  minutes stops guided imaging with the reason. It never carries on
+  unguided unless the run was started to allow it. This follows PHD2's
+  settle tolerance, minimum time and timeout [2].
+- **Headers:** `GUIDED`, `GUIDERMS` (the guider's total RMS in arcseconds
+  over the exposure), `GUIDEMAX` (the largest error) and `GUIDELST`
+  (seconds lost). The frame's own stars still decide whether it is kept;
+  the guider's figures explain a rejection.
 - **Frames taken while guiding was `lost`:** kept, marked, and judged by
   the usual frame checks. They are not thrown away blind.
-- **GoTo, re-centre, filter change, swing over the pole:**
-  1. send `pause` first, then `relock` after;
-  2. after a swing over the pole, reverse the calibration's Dec;
-  3. if the reuse check fails, run a full calibration.
+- **GoTo, re-centre, swing over the pole:** anything that moves the
+  telescope.
+  1. send `pause`, and wait until the state file shows it carried out, so
+     no pulse is going when the slew starts;
+  2. the GoTo;
+  3. `relock`: a new lock position from where the star is now, since a
+     re-centre means the old one is wrong;
+  4. after a swing over the pole, the Dec sign as measured for this mount,
+     and the reuse check; if that fails, a full calibration;
+  5. settle, then the next frame.
+- **Filter change:** the telescope does not move, so the guider keeps
+  guiding and keeps its lock. The next frame waits for "settled" in case
+  the wheel's turn shook it.
 - **Dithering while guided:** move the guider's lock position, never a
   GoTo. Today's dither is a 1.5' GoTo every N frames, which would throw the
-  guide star off the lock. The dither is random, between half and all of a
-  set size. Start at 8 imaging pixels binned (about 12", or 2.5 guide px);
-  forum practice is 5 to 10 imaging pixels [2]. Dither every frame for
-  subs of 2 minutes or more, every 2 to 3 frames for shorter. Each dither
-  waits for "settled".
-- **Exposure:** a guided run's default sub goes to 120 s in L, R, G and B,
-  and 300 s in Ha, SII and OIII, through the plan's per-filter blocks. The
-  frame checks must not treat 300 s frames as if they were 15 s ones:
+  guide star off the lock.
+  - Each dither is a random offset from the original lock position, between
+    half and all of a set size. It never adds to the last one, so the field
+    cannot wander.
+  - Size and how often are settings (`--dither-size`, `--dither N`). Start
+    at 8 imaging pixels binned (about 12", or 2.5 guide px); forum practice
+    is 5 to 10 imaging pixels [2]. Start dithering every frame for subs of
+    2 minutes or more, every 2 to 3 frames for shorter.
+  - Each dither waits for "settled". At 15 s a dither that is 5 % of a
+    300 s sub; the settle times are logged so the cost is known.
+  - Whether it worked is measured: the stack's background noise and any
+    walking pattern, against an undithered stack of the same target.
+- **Exposure:** unchanged by default. Guided runs keep today's sub lengths
+  until the ladder test (proof step 5) has measured star shape, HFD and the
+  share of frames kept at 30, 60, 120, 180 and 300 s. The plan's per-filter
+  blocks then take the longest length that kept its stars round. The frame
+  checks must not treat 300 s frames as if they were 15 s ones:
   - drift limits are in pixels per frame, not per second;
-  - one rejected frame now costs 5 minutes, so cloud handling stops on the
-    first starless frame, not after several.
+  - one rejected frame now costs 5 minutes, so a starless frame is treated
+    as cloud at once (wait and retry, as now) rather than after several.
+    A run stops only on a fault that persists: the camera, the mount or the
+    guider, not cloud.
 
 ### The four things every change to a night's imaging must say
 
@@ -222,10 +293,14 @@ again after a GoTo), `stop`. `shoot.py` sends them.
 - **Mount safety:**
   - pulses are arcseconds a second, at most 2.5 s each;
   - the guider refuses to start or pulse while `MOTION_LOCKED` exists;
-  - it sends an ST4 stop on every exit, crash included;
-  - it pauses during every slew;
-  - it stops when the total correction since the last GoTo passes 10′,
-    since anything that large is a fault and not guiding;
+  - it checks `MOTION_LOCKED` before every pulse;
+  - it sends an ST4 stop on every exit it controls; after a crash or power
+    cut the 2.5 s cap is the limit;
+  - it is confirmed paused before every slew;
+  - it stops with `fault` when the star's net movement from the lock,
+    corrected, passes 10′ (summing every pulse would trip on normal
+    guiding), or when 10 frames running need the longest pulse the same
+    way, since that is a runaway, not guiding;
   - limits, the Sun exclusion and dry runs are still enforced by
     `mount.py` for every GoTo.
 
@@ -260,25 +335,45 @@ These need daylight or the user's hands. None needs the sky.
 5. **Darks:** 120 s and 300 s darks at -5 °C, gain as planned. Science
    refuses frames without matched darks, so these come first.
 
+## The order it is built in
+
+The camera and the star tracking, then calibration, then the closed loop,
+then the safety and recovery above, then `shoot.py`, then dithering, then
+longer subs, then an unattended run. Each is proven on the sky before the
+next is given control.
+
 ## The first clear night: proving it
+
+Before the sky: the wheel and the guide camera together for 10 minutes, as
+in hardware step 1.
 
 In order, each with what counts as passing.
 
 1. **Calibration** near the meridian and Dec 0 to +30. Passes with at least
    8 steps west and 8 north, the axes within 10° of right angles, and a
    measured guide rate within 20 % of 7.1"/s.
-2. **Guide 10 minutes with no imaging.** Passes with a total RMS under 2.5".
-   Note the RA and Dec RMS separately, and the backlash.
+2. **Guide 10 minutes with no imaging.** Passes with a total RMS under 2.5"
+   and no runaway. Note the RA and Dec RMS separately, and the backlash.
+   Then kill the guider process: `shoot.py` must see the stale heartbeat
+   and start no new frame.
 3. **Flexure check:** a guided 300 s L frame. Round stars with the guider
    reporting under 2.5" means no flexure. A trail in one direction while
    the guider was good means flexure or mirror shift: stop here and record
    it.
 4. **A guided run with dithers:** 30 minutes of 120 s L frames, dithering
    each frame. Passes when 90 % or more of frames are kept, the settle time
-   after a dither is under 20 s, and the stack shows no walking noise.
-5. **The swing over the pole:** GoTo a target across the meridian, then
-   relock. Passes when guiding resumes with Dec reversed and no new
-   calibration.
+   after a dither is under 20 s, each dither landed within 1 guide px of
+   its offset, the field has not wandered, and the stack shows no walking
+   noise. A GoTo during it must show no pulse in the log between `pause`
+   and `relock`.
+5. **Sub length ladder:** guided L frames of 30, 60, 120, 180 and 300 s,
+   a few of each. The guider's RMS is not enough: the frames' own star
+   shapes decide the longest length used.
+6. **The swing over the pole:** GoTo a target across the meridian, then
+   relock. Passes when the reuse check shows which way Dec went, guiding
+   resumes the right way without running away, and the answer is stored.
+7. **A full session:** several filters on one target, the 183M kept cold
+   throughout, and every filter's frames on the same framing.
 
 Each result goes in `docs/nights/DATE/` and, where it changes what is
 proven, is linked from `docs/validation.md`.
