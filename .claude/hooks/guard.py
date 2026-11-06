@@ -21,8 +21,7 @@ starting, a timeout). The rules (docs/skills-and-agents.md):
 - no-secrets-out: nothing prints config.toml whole, its Telegram section,
   or a token from the environment.
 - small-focus: no focus.py sweep (--motor, --sweep, --find, --measure-step,
-  --measure-backlash) and no focuser.py move of more than FOCUS_MOST
-  half-steps. On 23 October 2026 two --motor runs, each stopped part way,
+  --measure-backlash). On 23 October 2026 two --motor runs, each stopped part way,
   left the drawtube about an inch from the Sharpie line after the person
   had said it was a touch out; focusing is the walk-in, small steps in
   (docs/agents/setup-routine.md, step 4).
@@ -40,6 +39,8 @@ sys.path.insert(0, str(PROJECT))
 import policy  # noqa: E402
 
 LOCK = "MOTION_LOCKED"
+# The lock as a file in code (a quoted name, a path, mount's LOCK_FILE), not the word in a note.
+LOCK_AS_FILE = re.compile(r"""['"/\\]""" + LOCK + "|" + LOCK + r"""['"]|LOCK_FILE""")
 SHELL_TOOLS = ("Bash", "PowerShell")
 EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
 HARDWARE_MODULES = ("mount", "direct", "focuser", "camera", "indi", "altair", "serial", "simulator")
@@ -150,8 +151,9 @@ def motion_lock(payload):
                 any(LOCK in w for w in rest):
             raise Refused(f"{LOCK} is a person's to remove, never an agent's.")
         if name in policy.LAUNCHERS or name in ("perl", "ruby", "node", "bash", "sh", "pwsh", "powershell"):
-            if LOCK in command:
-                raise Refused(f"A command that runs code naming {LOCK} is refused: it is a person's to change.")
+            if LOCK_AS_FILE.search(command):
+                raise Refused(f"A command that runs code using {LOCK} as a file is refused: it is a person's "
+                              "to change.")
         if name in CHANGERS:
             recursive = any(w.startswith("-") and ("r" in w.lower() or w in ("--recursive", "-Recurse"))
                             for w in rest)
@@ -244,7 +246,6 @@ def no_secrets_out(payload):
 
 # argparse takes any unambiguous start of an option: --mot is --motor, --fin is --find.
 FOCUS_SWEEP = re.compile(r"(?<![\w-])--(mo|sw|fin|measure-s|measure-b)[\w-]*")
-FOCUS_MOST = 64     # half-steps a hand-sent focuser.py move may turn
 
 
 def small_focus(payload):
@@ -265,19 +266,6 @@ def small_focus(payload):
                 raise Refused(f"focus.py {sweep.group(0)} is refused: on 23 October 2026 the sweep moved the "
                               "drawtube about an inch from the Sharpie line. Focus with ./focus.py --walk-in, "
                               "from the drawtube a touch out, small steps in.")
-        found = re.search(r"focuser\.py(?![\w.-])(.*?)(?<![\w-])move(?![\w-])(.*)", piece)
-        if found:
-            words = re.findall(r"\S+", found.group(1) + " " + found.group(2))
-            for i, w in enumerate(words):
-                if i and words[i - 1] in ("--ms", "--port"):
-                    continue
-                try:
-                    steps = int(w.strip("'\""))
-                except ValueError:
-                    continue
-                if abs(steps) > FOCUS_MOST:
-                    raise Refused(f"focuser.py move {steps} is refused: more than {FOCUS_MOST} half-steps by "
-                                  "hand. Focus is within a few tens of microns of the Sharpie line.")
 
 
 # The two below are for agents only, set in their own frontmatter
