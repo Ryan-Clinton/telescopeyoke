@@ -87,10 +87,11 @@ def measure(folder, exposure, band=None, frames=None):
         wrong = []
         if abs(float(header.get("EXPTIME", -1)) - float(exposure)) > 0.5:
             wrong.append(f"exposure {header.get('EXPTIME')}")
-        if band and header.get("FILTER") not in (None, band):
-            wrong.append(f"filter {header.get('FILTER')}")
-        if header.get("INSTRUME") and str(header.get("INSTRUME")) != str(camera):
-            wrong.append(f"camera {header.get('INSTRUME')}")
+        # Both must be there and match: a ladder certifies one light path.
+        if band and header.get("FILTER") != band:
+            wrong.append(f"filter {header.get('FILTER') or 'not recorded'}")
+        if str(header.get("INSTRUME") or "") != str(camera):
+            wrong.append(f"camera {header.get('INSTRUME') or 'not recorded'}")
         if wrong:
             problems.append(f"frame {entry.get('index')}: " + ", ".join(wrong))
             continue
