@@ -114,7 +114,8 @@ imaging camera, so `keeper.py` holding the 183M open is untouched.
 - Reuse it on later nights while the guide camera has not turned:
   - scale the RA rate by cos(target Dec) / cos(calibration Dec), since the
     rate stored was measured at the calibration's Dec;
-  - reverse Dec after a swing over the pole.
+  - after a swing over the pole, use the Dec direction stored for this
+    mount once it has been measured (below), never an assumed reversal.
 
   Verify the reuse with one short north and one short west pulse at the
   start of each run. A full calibration happens only when that check
@@ -137,10 +138,14 @@ Each guide frame:
 4. Send the pulses through the camera's `ST4PlusGuide`, RA then Dec.
    That call takes one direction at a time, so the two run one after the
    other: Dec is sent only once `ST4PlusGuideState` says the RA pulse has
-   finished, so no call can cut short the other axis's pulse. The two
-   together must end before the next frame's exposure starts, with the
-   time between frames as the budget; a longer total is shortened, both
-   axes in proportion. Each call's return value is checked, and a pulse
+   finished, so no call can cut short the other axis's pulse. The next
+   exposure starts only after both have ended, so a frame never mixes a
+   move into its measurement. The cycle is the exposure, the readout and
+   the pulses: at 2 s and a typical correction of a fraction of a guide
+   pixel (one pixel is 0.67 s of pulse) that is about 3 s; at the worst,
+   both axes at the 2.5 s cap, 7 s. The two together are capped at the
+   exposure length; a longer total is shortened, both axes in
+   proportion, and the rest taken back on the next frames. Each call's return value is checked, and a pulse
    still running past its length plus 1 s is a fault. Both axes at once
    comes later and only if a bench check with `./guidecam.py pulse` shows
    the SDK runs them together without one stopping the other.
@@ -252,10 +257,19 @@ with the reason.
 - **Each frame waits for "settled":** before an exposure starts, the guider
   must report `guiding` with every error under 1.0 guide px (about 5") for
   3 s running. After 30 s still `guiding` but not inside that, the frame is
-  taken and marked. `lost`, `calibrating`, `paused`, `fault` or a stale
-  heartbeat never time out into a frame: `shoot.py` waits, and after 5
-  minutes stops guided imaging with the reason. It never carries on
-  unguided unless the run was started to allow it. This follows PHD2's
+  taken and marked. No other state ever times out into a frame, and the
+  two kinds of trouble are handled apart:
+  - `lost` (the guider working, no star: cloud) and `calibrating`:
+    `shoot.py` waits, as it waits through cloud now, and after 5 minutes
+    stops guided imaging with the reason;
+  - `fault`, a stale heartbeat or a guider process that has died: no
+    waiting. `shoot.py` stops the guider if it is still there, starts a
+    new one once, which runs its reuse check (a recalibration if that
+    fails) within 3 minutes. If that new one does not reach `guiding`,
+    guided imaging stops with the reason. A second fault in the same run
+    stops it without a restart.
+
+  It never carries on unguided unless the run was started to allow it. This follows PHD2's
   settle tolerance, minimum time and timeout [2].
 - **Headers:** `GUIDED`, `GUIDERMS` (the guider's total RMS in arcseconds
   over the exposure), `GUIDEMAX` (the largest error) and `GUIDELST`
@@ -390,7 +404,10 @@ In order, each with what counts as passing.
    8 steps west and 8 north, the axes within 10° of right angles, and a
    measured guide rate within 20 % of 7.1"/s.
 2. **Guide 10 minutes with no imaging.** Passes with a total RMS under 2.5"
-   and no runaway. Note the RA and Dec RMS separately, and the backlash.
+   and no runaway. Note the RA and Dec RMS separately, the backlash, the
+   measured cycle time, the delay from exposure midpoint to pulse, and the
+   pulse lengths. If the error grows while pulses are long, lower the
+   longest pulse or the aggression before going on.
    Then kill the guider process: `shoot.py` must see the stale heartbeat
    and start no new frame.
 3. **Sub length ladder:** guided L frames of 30, 60, 120, 180 and 300 s,
