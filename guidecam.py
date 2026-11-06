@@ -48,6 +48,7 @@ MODEL = "GPCAMMT9M034M"
 USB_ID = "16d0:0b2a"
 FOLDER = config.DATA / "frames" / "guide"
 WAIT_S = 5.0          # beyond the exposure, how long a frame may take to come
+DUPLICATES = 3        # the same frame again this many times running: a camera fault
 
 
 def refuse(why):
@@ -207,7 +208,8 @@ class GuideCamera:
             self.seconds = seconds
         while self.driver.pull(self.handle):        # anything left over from before
             pass
-        while True:
+        repeats = 0
+        for _ in range(DUPLICATES + 1):
             if self.driver.trigger(self.handle) < 0:
                 refuse("The guide camera refused a trigger.")
             started = wall()
@@ -226,6 +228,10 @@ class GuideCamera:
             if digest != getattr(self, "_last_digest", None):
                 self._last_digest = digest
                 return frame, {"start": started, "mid": started + seconds / 2, "arrived": arrived}
+            repeats += 1
+        # The library has no frame number to tell a stale buffer from a new
+        # frame; the same bytes this many times running is a camera fault.
+        refuse(f"The guide camera sent the same frame {repeats + 1} times running.")
 
     def pulse(self, direction, seconds):
         """One ST4 pulse, waited out: the call returns only once the camera
@@ -367,17 +373,17 @@ def install(say=print, fetch=None, run=subprocess.run):
 
 
 def pointing(args):
-    """(Dec, west of the pier) from --dec and --side, or read once from the
-    handset, which must say the mount is tracking."""
-    if args.dec is not None and args.side:
-        return args.dec, args.side == "west"
+    """(Dec, west of the pier), read once from the handset, which must say
+    the mount is tracking: always asked, whatever is given. --dec and --side
+    override only the coordinates, never that check."""
     import mount
     try:
         scope = mount.Mount(watch=False)
         state = scope.state()
         dec, west = scope.radec()[1], scope.west()
     except (OSError, SystemExit) as why:
-        refuse(f"The handset could not be read ({why}): give --dec and --side.")
+        raise interface.Refusal("INVALID_REQUEST", f"The handset could not be read ({why}): not guiding a "
+                                "mount whose state is not known.")
     if state != "tracking":
         raise interface.Refusal("INVALID_REQUEST", f"The mount is {state}, not tracking: guide only while it tracks.")
     return (args.dec if args.dec is not None else dec), (args.side == "west" if args.side else west)
@@ -459,8 +465,8 @@ def main(argv=None):
     for name, helptext in (("calibrate", "pulse each way in steps and learn what each does"),
                            ("guide", "guide, reusing the kept calibration once checked")):
         g = sub.add_parser(name, help=helptext)
-        g.add_argument("--dec", type=float, help="the target's Dec, if not read from the handset")
-        g.add_argument("--side", choices=("east", "west"), help="side of the pier, if not read from the handset")
+        g.add_argument("--dec", type=float, help="the target's Dec, in place of the handset's (the handset is still asked that the mount tracks)")
+        g.add_argument("--side", choices=("east", "west"), help="side of the pier, in place of the handset's")
         g.add_argument("--dry-run", action="store_true", help="say what it would do, open nothing")
         if name == "guide":
             g.add_argument("--minutes", type=float, help="stop after this long (default: until Ctrl-C)")

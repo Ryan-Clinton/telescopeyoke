@@ -42,6 +42,7 @@ SNR_FIND = 10        # to be chosen
 SNR_LOST = 6         # below this while guiding, the star counts as lost
 HFD_LEAST = 0.7      # px: narrower is a hot pixel, not a star
 BOX = 10             # half-width of the box a star is measured in
+AMBIGUOUS = 2.0      # px: two stars this close in distance from where the star should be: neither taken
 WINDOW = 20          # half-width of the search window round where the star should be
 RELOCK_RADIUS = 10   # px from the lock a lost star must come back within
 JUMP = 8             # px in one frame: a satellite, a bird or a cosmic ray
@@ -59,6 +60,7 @@ CAL_REVERSAL_STEPS = 6  # steps of each extra Dec reversal that measures the sla
 VERIFY_STEPS = 3     # steps each way of the check on a reused calibration
 VERIFY_ANGLE = 30    # degrees a reused direction may be off
 VERIFY_SIZE = 0.35   # share a reused strength may be off
+RETURN_PX = 2.0      # px from where it started a check's way back must end
 
 # The loop (PHD2's defaults as a start)
 RA_AGGRESSION = 0.7
@@ -199,14 +201,20 @@ def follow(frame, where, window=WINDOW, least_snr=SNR_LOST):
     peaks = _peaks(frame, med + 3 * noise, within=(where, window))
     if not peaks:
         return None, "no star in the window"
-    star = measure(frame, peaks[0][0], peaks[0][1])
-    if star is None:
-        return None, "the star's box crosses the edge"
-    if star.hfd < HFD_LEAST:
-        return None, "a hot pixel, not a star"
-    if star.snr < least_snr:
-        return None, f"SNR {star.snr:.1f} under {least_snr}"
-    return star, ""
+    stars = []
+    for x, y, _ in peaks[:20]:
+        star = measure(frame, x, y)
+        if star is not None and star.hfd >= HFD_LEAST and star.snr >= least_snr:
+            stars.append((math.hypot(star.x - where[0], star.y - where[1]), star))
+    if not stars:
+        return None, f"no star in the window passes (SNR {least_snr}, not a hot pixel, inside the frame)"
+    stars.sort(key=lambda pair: pair[0])
+    # The nearest to where it should be, not the brightest; two about as near is no answer.
+    if len(stars) > 1 and stars[1][0] - stars[0][0] < AMBIGUOUS \
+            and math.hypot(stars[1][1].x - stars[0][1].x, stars[1][1].y - stars[0][1].y) > 2:
+        return None, (f"two stars about as near ({stars[0][0]:.1f} and {stars[1][0]:.1f} px): "
+                      "not guessing which")
+    return stars[0][1], ""
 
 
 def first_star(cam, seconds, gain=None, say=print, patience=300.0, sleep=time.sleep):
@@ -310,6 +318,22 @@ class Calibrator:
         return points
 
 
+def _moved(points):
+    return math.hypot(points[-1][0] - points[0][0], points[-1][1] - points[0][1])
+
+
+def _enough(leg, points, steps):
+    """A leg that did not move the star far enough is a failed calibration,
+    never a calibration to guide with."""
+    moved = _moved(points)
+    if moved < 5:
+        raise Fault(f"{steps} {leg} steps moved the star only {moved:.1f} px: the ST4 {leg} line is not "
+                    "moving the mount. Calibration failed; nothing kept.")
+    if leg in ("west", "north") and moved < CAL_DISTANCE * 0.6:
+        raise Fault(f"{steps} {leg} steps moved the star only {moved:.1f} px of {CAL_DISTANCE}: too little "
+                    "to measure. Calibration failed; nothing kept.")
+
+
 def _slack_of(points, step, strength, unit):
     """Seconds of a leg's pulses lost to slack, from how far it got along
     `unit` against what `strength` (px/s) would have moved it."""
@@ -332,9 +356,11 @@ def calibrate(cam, seconds, dec, west, gain=None, say=print, rate=GUIDE_RATE):
 
     west_points = c.leg("west", ra_step)
     steps["west"] = len(west_points) - 1
+    _enough("west", west_points, steps["west"])
     columns["west"] = _rate(west_points, ra_step)
     say(f"  west: {steps['west']} steps, {np.hypot(*columns['west']):.2f} px/s")
     east_points = c.back("east", ra_step, steps["west"])
+    _enough("east", east_points, steps["west"])
     columns["east"] = _rate(east_points, ra_step)
     say(f"  east: {steps['west']} steps back, {np.hypot(*columns['east']):.2f} px/s")
 
@@ -350,6 +376,7 @@ def calibrate(cam, seconds, dec, west, gain=None, say=print, rate=GUIDE_RATE):
     say(f"  Dec slack taken up after {n + 1} north steps")
     north_points = c.leg("north", dec_step)
     steps["north"] = len(north_points) - 1
+    _enough("north", north_points, steps["north"])
     columns["north"] = _rate(north_points, dec_step)
     north_strength = float(np.hypot(*columns["north"]))
     say(f"  north: {steps['north']} steps, {north_strength:.2f} px/s")
@@ -378,20 +405,17 @@ def calibrate(cam, seconds, dec, west, gain=None, say=print, rate=GUIDE_RATE):
         np.dot(columns["west"], columns["north"]) / (np.hypot(*columns["west"]) * north_strength), -1, 1)))
     ra_rate = float(np.hypot(*columns["west"])) * SCALE / max(math.cos(math.radians(dec)), 0.05)
     dec_rate = north_strength * SCALE
+    if abs(between - 90) > 10:
+        raise Fault(f"RA and Dec moved the star {between:.0f} degrees apart, not 90 +/- 10: the measurement "
+                    "is not to be trusted (wind, a slipping clutch, or the star mistaken). Calibration failed; "
+                    "nothing kept.")
+    # Warnings only: the calibration measured what the mount does, and that is what is used.
     for label, measured in (("RA", ra_rate), ("Dec", dec_rate)):
         if abs(measured / rate - 1) > 0.2:
             notes.append(f"{label} guide rate {measured:.1f}\"/s, not within 20 % of {rate:.1f}")
-    if abs(between - 90) > 10:
-        notes.append(f"RA and Dec are {between:.0f} degrees apart, not 90 +/- 10")
     for leg in ("west", "north"):
-        moved = math.hypot(*np.subtract((west_points if leg == "west" else north_points)[-1],
-                                        (west_points if leg == "west" else north_points)[0]))
         if steps[leg] < CAL_LEAST_STEPS:
             notes.append(f"{leg} took {steps[leg]} steps, under {CAL_LEAST_STEPS}: steps too long")
-        if moved < CAL_DISTANCE * 0.6:
-            notes.append(f"{leg} moved the star only {moved:.1f} px in {steps[leg]} steps")
-        if moved < 5:
-            raise Fault(f"A {leg} pulse moved the star only {moved:.1f} px: the ST4 {leg} line is not moving the mount.")
 
     cal = {
         "made": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -456,7 +480,10 @@ def verify(cam, seconds, cal, cols, west, gain=None, say=print):
     north and back. Each must go the way the columns say, within
     VERIFY_ANGLE degrees and VERIFY_SIZE of the strength. Across the pier
     with Dec not yet known, a north move exactly reversed is recorded as
-    what this mount does. Returns (True, "") or (False, why)."""
+    what this mount does, once its strength has matched too. The way back
+    is checked as well: RA must return within RETURN_PX of where it
+    started, Dec within the measured slack's worth plus RETURN_PX. Returns
+    (True, "") or (False, why)."""
     ra_step, dec_step = (cal["step_ms"]["ra"] / 1000, cal["step_ms"]["dec"] / 1000)
     star = first_star(cam, seconds, gain, say)
     c = Calibrator(cam, seconds, gain, say)
@@ -471,11 +498,19 @@ def verify(cam, seconds, cal, cols, west, gain=None, say=print):
                     break
             start = c.look()
         end = c.back(direction, step, VERIFY_STEPS)[-1]
-        c.back(OPPOSITE[direction], step, VERIFY_STEPS)
+        home = c.back(OPPOSITE[direction], step, VERIFY_STEPS)[-1]
         results[direction] = np.subtract(end, start) / (VERIFY_STEPS * step)
+        missed = math.hypot(home[0] - start[0], home[1] - start[1])
+        allowed = RETURN_PX + (cal.get("backlash_s", 0.0) * float(np.hypot(*cols["north"]))
+                               if direction == "north" else 0.0)
+        if missed > allowed:
+            return False, (f"{OPPOSITE[direction]} did not bring the star back: {missed:.1f} px from where "
+                           f"it started, more than {allowed:.1f}")
     for direction, got in results.items():
         want = cols[direction]
         strength, expected = float(np.hypot(*got)), float(np.hypot(*want))
+        if abs(strength / max(expected, 1e-9) - 1) > VERIFY_SIZE:
+            return False, f"{direction} moved the star {strength:.2f} px/s against {expected:.2f}"
         off = math.degrees(math.acos(np.clip(np.dot(got, want) / max(strength * expected, 1e-9), -1, 1)))
         if direction == "north" and west != cal["west"] and cal.get("dec_after_flip") is None:
             what = "same" if off < VERIFY_ANGLE else "negated" if off > 180 - VERIFY_ANGLE else None
@@ -485,9 +520,8 @@ def verify(cam, seconds, cal, cols, west, gain=None, say=print):
             keep_calibration(cal)
             say(f"  after a flip, Dec on this mount: {what}; kept")
             continue
-        if off > VERIFY_ANGLE or abs(strength / max(expected, 1e-9) - 1) > VERIFY_SIZE:
-            return False, (f"{direction} went {off:.0f} degrees off, at {strength:.2f} px/s "
-                           f"against {expected:.2f}")
+        if off > VERIFY_ANGLE:
+            return False, f"{direction} went {off:.0f} degrees off the calibrated way"
     return True, ""
 
 
@@ -682,10 +716,20 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
         raise
     except KeyboardInterrupt:
         state, reason = "stopped", "Ctrl-C"
+    except Exception as failure:            # anything else is a fault too, never left as "guiding"
+        state, reason = "fault", f"{type(failure).__name__}: {failure}"
+        say(f"guiding stopped: {reason}")
+        raise
     finally:
+        if state not in ("stopped", "fault"):
+            state, reason = "fault", reason or "ended unexpectedly"
         try:
             cam.stop_pulse()
-        finally:
+        except Exception as failure:
+            say(f"  the ST4 stop failed too: {failure}")
+        try:
             write_state({**base, "state": state, "reason": reason, "time": time.time(), "lock": list(lock)},
                         state_path)
+        except Exception as failure:        # never hide the error that ended the loop
+            say(f"  the final state could not be written: {failure}")
     return state
