@@ -80,27 +80,53 @@ class Driver:
         self.lib.Altaircam_Open.restype = ctypes.c_void_p
         self.lib.Altaircam_Open.argtypes = [ctypes.c_char_p]
         self.buffer = None
+        self.events = []        # (time.monotonic(), code) for every event the library sends
+
+    def _event(self, kind, ctx):
+        # Runs on the library's own thread: a note and nothing more.
+        self.events.append((time.monotonic(), kind))
 
     def cameras(self):
         found = (self._Device * 16)()
         n = self.lib.Altaircam_EnumV2(found)
         return [(d.model.contents.name.decode(), d.id) for d in found[:n]]
 
-    def open(self, ident):
+    def open(self, ident, size=None, raw=False):
+        """Open and start the stream. `size` is the library's resolution
+        index (0 is the full 1280 x 960); `raw` takes the sensor's data
+        without the library's conversion. Both can only be set before the
+        stream starts, so a start or a setting the library refuses is a
+        refusal here, with its code."""
         handle = self.lib.Altaircam_Open(ident)
         if not handle:
             refuse("The guide camera is listed but would not open: unplug it and plug it in again.")
         handle = ctypes.c_void_p(handle)
+        if size is not None:
+            self.lib.Altaircam_get_ResolutionNumber.argtypes = [ctypes.c_void_p]
+            sizes = self.lib.Altaircam_get_ResolutionNumber(handle)
+            self.lib.Altaircam_put_eSize.argtypes = [ctypes.c_void_p, ctypes.c_uint]
+            self._checked(handle, f"size {size} (of {sizes})", self.lib.Altaircam_put_eSize(handle, size))
+        if raw:
+            self.lib.Altaircam_put_Option.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_int]
+            self._checked(handle, "raw mode", self.lib.Altaircam_put_Option(handle, 0x04, 1))
         width, height = ctypes.c_int(), ctypes.c_int()
         self.lib.Altaircam_get_Size(handle, ctypes.byref(width), ctypes.byref(height))
         self.buffer = ctypes.create_string_buffer(width.value * height.value * 3)
         self.lib.Altaircam_put_AutoExpoEnable(handle, 0)
-        self._callback = ctypes.CFUNCTYPE(None, ctypes.c_uint, ctypes.c_void_p)(lambda kind, ctx: None)
-        self.lib.Altaircam_StartPullModeWithCallback(handle, self._callback, None)
+        self._callback = ctypes.CFUNCTYPE(None, ctypes.c_uint, ctypes.c_void_p)(self._event)
+        self._checked(handle, "starting the stream",
+                      self.lib.Altaircam_StartPullModeWithCallback(handle, self._callback, None))
         return handle, (width.value, height.value)
 
+    def _checked(self, handle, what, hr):
+        if hr < 0:
+            self.lib.Altaircam_Close(handle)
+            refuse(f"The guide camera's library refused {what}: {hresult(hr)}.")
+        return hr
+
     def exposure(self, handle, seconds):
-        self.lib.Altaircam_put_ExpoTime(handle, ctypes.c_uint(int(round(seconds * 1e6))))
+        """Set the exposure; the library's answer (below zero is a refusal)."""
+        return self.lib.Altaircam_put_ExpoTime(handle, ctypes.c_uint(int(round(seconds * 1e6))))
 
     def gain(self, handle, percent):
         self.lib.Altaircam_put_ExpoAGain(handle, ctypes.c_ushort(int(percent)))
@@ -153,6 +179,21 @@ class Driver:
         self.lib.Altaircam_Close(handle)
 
 
+# The library's events (altaircam.h), as the probe names them.
+EVENTS = {0x0001: "exposure changed", 0x0004: "image", 0x0005: "still image", 0x0007: "trigger failed",
+          0x0080: "error", 0x0081: "disconnected", 0x0082: "no frame timeout", 0x0085: "no packet timeout"}
+
+
+def hresult(hr):
+    """A library return code as its hex and name."""
+    names = {0: "S_OK", 1: "S_FALSE", 0x8000FFFF: "E_UNEXPECTED", 0x80004001: "E_NOTIMPL",
+             0x80070057: "E_INVALIDARG", 0x80004005: "E_FAIL", 0x8000000A: "E_PENDING",
+             0x8001010E: "E_WRONG_THREAD", 0x80004003: "E_POINTER", 0x80070005: "E_ACCESSDENIED", 0x8007000E: "E_OUTOFMEMORY",
+             0x800700AA: "E_BUSY", 0x8001011F: "E_TIMEOUT"}
+    code = hr & 0xFFFFFFFF
+    return f"0x{code:08x}" + (f" {names[code]}" if code in names else "")
+
+
 DIRECTIONS = {"north": 0, "south": 1, "east": 2, "west": 3}
 STOP = 4
 
@@ -164,7 +205,7 @@ class GuideCamera:
     as at 1 ms, the next 151), so frames that began before the change are
     let go."""
 
-    def __init__(self, driver=None, clock=time.monotonic, sleep=time.sleep, role="use", run=None):
+    def __init__(self, driver=None, clock=time.monotonic, sleep=time.sleep, role="use", run=None, size=None, raw=False):
         import guider
         # The guide camera's lock, taken before it is opened and let go only
         # after it is closed: no two commands ever use it, or its ST4 port, at once.
@@ -175,7 +216,8 @@ class GuideCamera:
             found = [c for c in self.driver.cameras() if c[0] == MODEL]
             if not found:
                 refuse(f"No guide camera ({MODEL}, USB {USB_ID}) found. Is it plugged in?")
-            self.handle, self.size = self.driver.open(found[0][1])
+            opened = {k: v for k, v in (("size", size), ("raw", raw)) if v}
+            self.handle, self.size = self.driver.open(found[0][1], **opened)
             self.seconds = None
         except BaseException:
             self.owned.__exit__(None, None, None)
@@ -290,14 +332,20 @@ def probe(cam, exposures, trigger=False, speed=None, window=12.0, say=print):
     if speed is not None:
         d.speed(h, speed)
     now, most = d.speed(h)
-    say(f"USB speed {now} of {most}; {'software trigger' if trigger else 'video'} mode")
+    say(f"USB speed {now} of {most}; {'software trigger' if trigger else 'video'} mode; "
+        f"frames {cam.size[0]} x {cam.size[1]}")
     if trigger:
         say(f"  trigger mode: {d.triggered(h, True)}")
+    events = getattr(d, "events", None)
     for seconds in exposures:
-        d.exposure(h, seconds)
+        hr = d.exposure(h, seconds)
+        if hr is not None and hr < 0:
+            say(f"{seconds:g} s: the library refused the exposure, {hresult(hr)}")
+            continue
         while d.pull(h):
             pass
         began = cam.clock()
+        seen = len(events) if events is not None else 0
         arrivals, levels = [], []
         if trigger:
             say(f"  trigger: {d.trigger(h)}")
@@ -312,8 +360,27 @@ def probe(cam, exposures, trigger=False, speed=None, window=12.0, say=print):
                 cam.sleep(0.01)
         gaps = np.diff([0.0] + arrivals)
         say(f"{seconds:g} s: {len(arrivals)} frames in {window:g} s"
-            + (f", at {', '.join(f'{a:.2f}' for a in arrivals[:8])} s; gaps up to {gaps.max():.2f} s; "
+            + (f", at {', '.join(f'{a:.2f}' for a in arrivals[:8])} s; gaps up to {gaps.max():.2f} s, "
+               f"{int((gaps[1:] > 2 * seconds).sum())} over {2 * seconds:g} s; "
                f"levels {', '.join(f'{v:.1f}' for v in levels[:8])}" if arrivals else ""))
+        if events is not None:
+            say_events(events[seen:], began, say)
+
+
+def say_events(got, began, say):
+    """What the library reported in a window: a count of each event, and
+    when each one that was not an image came."""
+    if not got:
+        say("  library events: none")
+        return
+    counts = {}
+    for _, kind in got:
+        counts[kind] = counts.get(kind, 0) + 1
+    say("  library events: " + ", ".join(f"{EVENTS.get(k, hex(k))} {n}" for k, n in sorted(counts.items())))
+    other = [(t - began, k) for t, k in got if k not in (0x0001, 0x0004)]
+    if other:
+        say("  at " + ", ".join(f"{t:.2f} s {EVENTS.get(k, hex(k))}" for t, k in other[:20])
+            + (f" (and {len(other) - 20} more)" if len(other) > 20 else ""))
 
 
 MOVED = 4.0        # arcseconds an axis must turn beyond the still reading to count as moved
@@ -538,6 +605,8 @@ def main(argv=None):
     q.add_argument("--trigger", action="store_true", help="software trigger mode instead of video")
     q.add_argument("--speed", type=int, help="the camera's USB speed setting (0 is slowest)")
     q.add_argument("--window", type=float, default=12.0, help="seconds to count frames at each exposure")
+    q.add_argument("--size", type=int, help="the library's resolution index (0 is 1280 x 960; higher is smaller)")
+    q.add_argument("--raw", action="store_true", help="the sensor's raw data, not the library's converted frames")
     sub.add_parser("status", help="the guider's state, and whether it can be trusted")
     t = sub.add_parser("tell", help="an order for the running guider, waited for until done")
     t.add_argument("order", choices=("pause", "resume", "relock", "stop"))
@@ -585,7 +654,7 @@ def main(argv=None):
             run_guider(args)
             return
         if args.action == "probe":
-            with GuideCamera(role="probe") as cam:
+            with GuideCamera(role="probe", size=args.size, raw=args.raw) as cam:
                 probe(cam, [float(e) for e in args.exposures.split(",")], args.trigger, args.speed, args.window)
             return
         if args.action == "pulse" and args.dry_run:

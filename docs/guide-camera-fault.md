@@ -2,11 +2,14 @@
 
 [README](../README.md) · [All docs](README.md) · [Validation](validation.md) · [Autoguiding](autoguiding.md) · [The 6 November record](nights/2026-11-06/guide-camera.md)
 
-**Record, 6 November 2026. Open: the cause is not known.** The guide
-camera, an Altair GPCAM MT9M034M (mono, 1280 x 960, USB 2, ID `16d0:0b2a`),
-will not send a steady stream of frames on this laptop. Guiding needs a
-2 s frame every few seconds; it sends one every 3 to 18 s. Until that is
-fixed nothing can guide ([Autoguiding](autoguiding.md)).
+**Record, 6 November 2026. Found a working setting, late that evening:
+2 x 2 binned (640 x 480) at the camera's USB speed 0 it streams 2 s
+frames steadily.** The guide camera, an Altair GPCAM MT9M034M (mono,
+1280 x 960, USB 2, ID `16d0:0b2a`), will not send a steady stream of
+full-size frames on this laptop: at 2 s it sends one every 3 to 18 s.
+Binned and slowed, it sent 149 of 150 in 5 minutes ([below](#what-cured-it)).
+The guider does not use that setting yet, so nothing has guided
+([Autoguiding](autoguiding.md)).
 
 ## What works
 
@@ -51,6 +54,11 @@ Moved to the laptop's own port (`1-1`) at 20:22; frames in 30 s:
 | 1 s | about 30 | 2 | 2 |
 | 2 s | about 15 | 1 | 2 |
 
+"Expected" is the window divided by the exposure, an upper bound that
+leaves out the readout: no USB 2 camera sends 3,000 frames in 30 s. The
+fair yardstick is the rate the camera holds at short exposures once it
+streams (at 640 x 480, below: 110 frames in 12 s at 0.1 s).
+
 The same as on the hubs, so **the hubs are not the cause.**
 
 ### The pattern
@@ -74,6 +82,10 @@ The same as on the hubs, so **the hubs are not the cause.**
 | The camera's USB speed setting | The same at 0 and 4 of 4 |
 | Video against software trigger mode | Both fail the same way |
 | An exposure out of range | The library allows up to 800 s |
+| A slow USB link | `lsusb -t`: the camera is at 480M, high speed |
+| Linux's USB transfer memory (`usbfs_memory_mb`) | Raised from 16 to 200 MB: the same, 30 frames in 12 s at 0.1 s and none at 2 s |
+| The library's conversion of each frame | Raw mode: no better (10 frames in 12 s at 0.1 s, none at 2 s) |
+| Errors the library saw | Its events, now listed by the probe: only "image", no error and no timeout, in every run. The frames that go missing never reach it |
 
 ## What others have found
 
@@ -100,29 +112,44 @@ What fits: this early camera's firmware and its old library do not get on
 with newer computers' USB, more than a fault in this one camera. None of
 the reports proves which.
 
-## Not yet tried
+## What cured it
 
-In order of how likely each is to help:
+6 November, about 21:00 to 21:30, on the laptop's own port, filter wheel
+unplugged, `usbfs_memory_mb` at its default 16. One change at a time:
 
-1. **Linux's limit on USB transfer memory.** The kernel lets a program
-   claim at most `usbfs_memory_mb` of buffer memory for USB transfers; on
-   this laptop it is the default, **16 MB**. This is a known cause of
-   dropped frames for astronomy cameras on Linux: ZWO, QHY and ToupTek tell
-   Linux users to raise it (to 200, or 0 for no limit), and INDI's
-   installers do. If the library queues more buffers than that, frames
-   break off and it times out, which would give exactly the steady 3 s
-   gaps. Raised for a test with
-   `echo 200 | sudo tee /sys/module/usbcore/parameters/usbfs_memory_mb`
-   (no reboot, and back to 16 at the next reboot), then the same probe.
-2. **Smaller frames:** the library's 2 x 2 binning or a 640 x 480 size, a
-   quarter of the data per frame.
-3. **The library's other settings:** raw mode, the other bit depth, its
-   frame-rate limit.
-4. **Another computer**, older if possible, with an old SharpCap on
-   Windows: the reports above say the camera worked on older PCs.
+| Setting | 0.1 s, frames in 12 s | 2 s |
+|---|---|---|
+| 1280 x 960, speed 4 (as before) | 33, gaps up to 3.1 s | 1 in 12 s |
+| 1280 x 960, `usbfs_memory_mb` 200 | 30, gaps up to 2.3 s | 0 in 12 s |
+| 1280 x 960, raw | 10, gaps up to 2.8 s | 0 in 12 s |
+| **640 x 480 (`--size 1`), speed 4** | **110, gaps up to 0.44 s** | 137 in 300 s (91 %), gaps up to 6.0 s |
+| **640 x 480, speed 0 (`--size 1 --speed 0`)** | | **149 in 300 s, gaps up to 2.08 s, none over 4 s** |
 
-If none of these gives a steady 2 s stream, the camera cannot guide on
-this laptop, and there is no maintained software to fix it.
+The last row passes the test below, but for one part: it has not yet
+been repeated after the camera is unplugged and opened again.
+
+What it means: a full frame is too much for this camera and its library
+to send whole on this laptop; a quarter of the data, sent more slowly,
+gets through. The library's own table says size 1 is 2 x 2 binning
+(ratio 2/1), not a crop, so the guider still sees the whole field, at
+about 9.6"/px through the 162 mm guide scope instead of 4.8"/px. Binning
+also adds four pixels' light to each.
+
+## Still to do
+
+1. **Repeat the passing run** after unplugging and replugging the camera:
+   `./guidecam.py probe --exposures 2 --window 300 --size 1 --speed 0`.
+2. **The guider opens the camera this way.** `star`, `calibrate` and
+   `guide` still open it at full size and speed 4, which does not stream.
+   They need size 1 and speed 0, and the pixel scale the guider works in
+   doubles to about 9.6"/px. A kept calibration made at the full size
+   cannot be reused.
+3. **With the filter wheel plugged in** on the same hub as before, the
+   10-minute test in [Autoguiding](autoguiding.md), hardware step 1.
+
+If binning had not cured it, the next step would have been another
+computer, older if possible, with an old SharpCap on Windows: the reports
+above say the camera worked on older PCs.
 
 ### How each is judged
 
@@ -133,6 +160,9 @@ this laptop, and there is no maintained software to fix it.
   several minutes: `./guidecam.py probe --exposures 2 --window 300` giving
   at least 90 % of the frames expected (about 150 in 5 minutes, less the
   readout), with no gap longer than twice the exposure.
+- The library's own events, which the probe now lists: no error, no
+  "no frame timeout" and no "no packet timeout" in the run.
+- The same again after the camera is closed, unplugged and opened again.
 - One change at a time, so a cure can be put down to what did it.
 
 ### The filter wheel is a separate question

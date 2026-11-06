@@ -52,6 +52,15 @@ same: **the hubs are not the cause.** The full record, what is ruled out,
 what others have found and what is left to try:
 [the guide camera's dropped frames](../../guide-camera-fault.md).
 
+Later still (about 21:00 to 21:30), the cure, one change at a time on the
+laptop's port: raising `usbfs_memory_mb` from 16 to 200 MB and raw mode
+did nothing, and the library's events showed no error or timeout, only the
+frames that came. **2 x 2 binned (640 x 480) it streamed:** 110 frames in
+12 s at 0.1 s; at 2 s, 137 of 150 in 5 minutes with USB speed 4 (gaps up
+to 6 s), and **149 of 150 with USB speed 0, no gap over 2.08 s** (`./guidecam.py
+probe --exposures 2 --window 300 --size 1 --speed 0`). Not yet repeated
+after a replug; the guider does not open the camera that way yet.
+
 ## Built the same day, not run on the sky
 
 The guider's first three stages (`./guidecam.py star`, `calibrate`,
