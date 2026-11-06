@@ -141,8 +141,7 @@ also adds four pixels' light to each.
    `guide` open the camera this way (`GUIDE_SIZE` 1, `GUIDE_SPEED` 0 in
    `guidecam.py`), at 9.55"/px, and calibrations record their binning.
    Built, not yet run.
-2. **With the filter wheel plugged in** on the same hub as before, the
-   10-minute test in [Autoguiding](autoguiding.md), hardware step 1.
+2. ~~With the filter wheel plugged in~~ **Passed:** guide camera on the laptop's own port and the filter wheel on the 183M's hub: 299 of 300 2 s guide frames (640 x 480, speed 0) in 10 minutes, no gap over 2.08 s, no library error, while the wheel made 37 of 37 turns through all 7 filters, the slowest 1.0 s (`./guidecam.py wheeltest`, 6 November 2026, about 21:35 to 21:45).
 
 If binning had not cured it, the next step would have been another
 computer, older if possible, with an old SharpCap on Windows: the reports

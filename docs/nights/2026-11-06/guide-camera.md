@@ -60,6 +60,8 @@ frames that came. **2 x 2 binned (640 x 480) it streamed:** 110 frames in
 to 6 s), and **149 of 150 with USB speed 0, no gap over 2.08 s** (`./guidecam.py
 probe --exposures 2 --window 300 --size 1 --speed 0`). The guider was changed to open the camera that way the same evening (79a2f2d).
 
+**The wheel and the guide camera together passed**, the guide camera on the laptop's own port and the filter wheel on the 183M's hub: 299 of 300 2 s guide frames (640 x 480, speed 0) in 10 minutes, no gap over 2.08 s, no library error, while the wheel made 37 of 37 turns through all 7 filters, the slowest 1.0 s (`./guidecam.py wheeltest`, 6 November 2026, about 21:35 to 21:45).
+
 ## Built the same day, not run on the sky
 
 The guider's first three stages (`./guidecam.py star`, `calibrate`,

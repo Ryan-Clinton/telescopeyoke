@@ -32,7 +32,7 @@ guiding and dithering are one piece of work here, never guiding alone.
 
 | What | State |
 |---|---|
-| Guide camera and filter wheel together | On the unpowered Trust hub off the 183M's internal hub, with both plugged in, the wheel never finishes its power-up turn and the guide camera stops sending frames. Each works alone (6 Nov 2026). Starlight Xpress recommends a powered hub "to ensure that the wheel motor has sufficient torque" [5] |
+| Guide camera and filter wheel together | ✅ on separate connections: guide camera on the laptop's own port and the filter wheel on the 183M's hub: 299 of 300 2 s guide frames (640 x 480, speed 0) in 10 minutes, no gap over 2.08 s, no library error, while the wheel made 37 of 37 turns through all 7 filters, the slowest 1.0 s (`./guidecam.py wheeltest`, 6 November 2026, about 21:35 to 21:45). Earlier, on the unpowered Trust hub off the 183M's internal hub, with both plugged in, the wheel never finishes its power-up turn and the guide camera stops sending frames. Each works alone (6 Nov 2026). Starlight Xpress recommends a powered hub "to ensure that the wheel motor has sufficient torque" [5] |
 | Guide scope focus | Not done |
 | Guide scope fitted firmly, and the balance with it | Not checked on the sky |
 | Guiding software | Built, not run on the sky: `./guidecam.py star`, `calibrate` and `guide` (`guider.py`; the shared maths in `guidemath.py`). Not built: one owner of the camera, the heartbeat timer, orders, `shoot.py --guide`, dithering |
