@@ -1107,8 +1107,14 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
                 elif name == "relock":
                     state = "relocking"
                     beat.update(state=state)
+                    def relocking():
+                        beat.progress()
+                        desk.between_pulses("relocking")     # a stop is taken here too
                     try:
-                        star = first_star(cam, seconds, gain, say, patience=RELOCK_PATIENCE, tick=beat.progress)
+                        star = first_star(cam, seconds, gain, say, patience=RELOCK_PATIENCE, tick=relocking)
+                    except StopRequested:
+                        answer(order, False, "a stop came first")
+                        raise
                     except Fault as why:
                         state = "lost"
                         beat.update(state=state)
