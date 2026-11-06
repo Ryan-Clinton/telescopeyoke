@@ -4,6 +4,9 @@
     ./guidecam.py                       find it and say what it is
     ./guidecam.py snap --exposure 0.5   one frame, kept in frames/guide/
     ./guidecam.py install               fetch the library it needs
+    ./guidecam.py pulse [--seconds 5]   test the ST4 lead to the mount: a
+                                        pulse each way, the handset read
+                                        around each (--dry-run first)
 
 This early GPCAM (USB 16d0:0b2a) is no longer opened by Altair's current
 library, on Linux or Windows, nor by ToupTek's: on 2 November 2026 versions
@@ -98,8 +101,22 @@ class Driver:
             return None
         return width.value, height.value, self.buffer.raw[:width.value * height.value]
 
+    def st4(self, handle, direction, ms):
+        """A guiding pulse out of the camera's ST4 port: 0 north, 1 south,
+        2 east, 3 west, 4 stop. Below zero is a refusal."""
+        self.lib.Altaircam_ST4PlusGuide.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_uint]
+        return self.lib.Altaircam_ST4PlusGuide(handle, direction, ms)
+
+    def st4_busy(self, handle):
+        self.lib.Altaircam_ST4PlusGuideState.argtypes = [ctypes.c_void_p]
+        return self.lib.Altaircam_ST4PlusGuideState(handle) == 0     # S_OK while a pulse is going
+
     def close(self, handle):
         self.lib.Altaircam_Close(handle)
+
+
+DIRECTIONS = {"north": 0, "south": 1, "east": 2, "west": 3}
+STOP = 4
 
 
 class GuideCamera:
@@ -136,6 +153,18 @@ class GuideCamera:
             if not got:
                 self.sleep(0.02)
 
+    def pulse(self, direction, seconds):
+        """One ST4 pulse, waited out."""
+        if self.driver.st4(self.handle, DIRECTIONS[direction], int(seconds * 1000)) < 0:
+            refuse("The guide camera refused to send an ST4 pulse.")
+        end = self.clock() + seconds + 2
+        self.sleep(seconds)
+        while self.driver.st4_busy(self.handle) and self.clock() < end:
+            self.sleep(0.05)
+
+    def stop_pulse(self):
+        self.driver.st4(self.handle, STOP, 0)
+
     def close(self):
         self.driver.close(self.handle)
 
@@ -155,6 +184,54 @@ def keep(frame, seconds, gain, folder=None, now=None):
     header = fits.Header({"EXPTIME": seconds, "INSTRUME": MODEL, "GAIN": gain if gain is not None else -1})
     fits.writeto(path, frame, header, overwrite=True)
     return path
+
+
+MOVED = 4.0        # arcseconds an axis must turn beyond the still reading to count as moved
+
+
+def cable_test(cam, scope, seconds=5.0, say=print, sleep=time.sleep):
+    """Whether the ST4 lead from the guide camera to the mount works: the
+    handset's axis readings across a still wait, then across a pulse each
+    way. North and south should turn the Dec axis opposite ways, east and
+    west the RA axis (against the tracking seen in the still wait). The
+    mount tracks for the test, and is left as it was found."""
+    import mount
+    if mount.LOCK_FILE.exists():
+        raise interface.Refusal("MOTION_LOCKED", "Motion is locked: "
+                                + mount.LOCK_FILE.read_text(encoding="utf-8").strip())
+    was = scope.state()
+    if was == "slewing":
+        refuse("The mount is slewing: test the ST4 lead once it has stopped.")
+    if was == "stopped":
+        scope.tracking(True)
+
+    def turn(during):
+        ra0, dec0 = scope.axes()
+        during()
+        ra1, dec1 = scope.axes()
+        return mount.wrap(ra1 - ra0) * 3600, mount.wrap(dec1 - dec0) * 3600
+
+    results = {}
+    try:
+        still = turn(lambda: sleep(seconds))
+        say(f"still {seconds:g} s: RA axis {still[0]:+.1f}\", Dec axis {still[1]:+.1f}\"")
+        for name in DIRECTIONS:
+            ra, dec = turn(lambda: cam.pulse(name, seconds))
+            axis = 1 if name in ("north", "south") else 0
+            moved = (ra, dec)[axis] - still[axis]
+            results[name] = moved
+            say(f"{name:5} {seconds:g} s: RA axis {ra:+.1f}\", Dec axis {dec:+.1f}\"  -> "
+                f"{'Dec' if axis else 'RA'} {moved:+.1f}\" beyond still: "
+                f"{'moved' if abs(moved) >= MOVED else 'NO MOVE'}")
+    finally:
+        cam.stop_pulse()
+        if was == "stopped":
+            scope.tracking(False)
+    pairs = {"Dec (north/south)": ("north", "south"), "RA (east/west)": ("east", "west")}
+    for label, (a, b) in pairs.items():
+        ok = abs(results[a]) >= MOVED and abs(results[b]) >= MOVED and results[a] * results[b] < 0
+        say(f"{label}: {'works' if ok else 'NOT WORKING'}")
+    return results
 
 
 def install(say=print, fetch=None, run=subprocess.run):
@@ -185,10 +262,24 @@ def main(argv=None):
     s.add_argument("--exposure", type=float, default=0.5, help="seconds")
     s.add_argument("--gain", type=int, help="the camera's gain, per cent (100 = none)")
     s.add_argument("--count", type=int, default=1, help="frames one after another, each kept")
+    p = sub.add_parser("pulse", help="test the ST4 lead to the mount: a pulse each way, the handset read around each")
+    p.add_argument("--seconds", type=float, default=5.0, help="length of each pulse")
+    p.add_argument("--dry-run", action="store_true", help="say what it would do, open nothing")
     args = ap.parse_args(argv)
     try:
         if args.action == "install":
             install()
+            return
+        if args.action == "pulse" and args.dry_run:
+            print(f"would: read the handset, wait {args.seconds:g} s still, then pulse north, south, east, "
+                  f"west for {args.seconds:g} s each through the guide camera's ST4 port, reading the handset "
+                  "around each; tracking on for the test if it was off, and off again after")
+            return
+        if args.action == "pulse":
+            import mount
+            scope = mount.Mount(watch=False)
+            with GuideCamera() as cam:
+                cable_test(cam, scope, args.seconds)
             return
         with GuideCamera() as cam:
             width, height = cam.size

@@ -85,7 +85,7 @@ The cooled camera, discovery and research scripts:
 | `instrument.py` | What the camera in use is ready for and what it still needs (darks, flats, focus offsets, references) before its science counts. |
 | `cameras.py` | The camera profiles and light paths (trains). |
 | `corners.py` | Star shapes in the corners against the middle: the corrector's spacing, a tilt or the collimation. |
-| `guidecam.py` | The guide camera: finds it and takes frames. No guiding yet. |
+| `guidecam.py` | The guide camera: finds it, takes frames, tests its ST4 lead to the mount (`pulse`). No guiding yet. |
 | `patrol.py` | A discovery patrol of one field, from pointing the telescope to the morning's answer: is there anything new? |
 | `vet.py`, `candidates.py`, `realbogus.py` | Each candidate checked against catalogues, asteroids and the rig's own history; followed from night to night; scored real or bogus from this rig's own nights. |
 | `depth.py` | How faint a stack really reaches, from fake stars planted in it. |
