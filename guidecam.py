@@ -449,7 +449,8 @@ def run_guider(args):
             dec, west = pointing(args)
             # Calibration and its check have a heartbeat too, as `calibrating`,
             # and take a stop before every pulse.
-            beat = guider.Heartbeat({"pid": os.getpid(), "run": run, "exposure": args.exposure,
+            beat = guider.Heartbeat({"pid": os.getpid(), "pid_start": guider.process_start(os.getpid()),
+                                     "run": run, "exposure": args.exposure,
                                      "state": "calibrating", "camera_held": True},
                                     3 * args.exposure + 5 + 2 * guider.CAL_LONGEST_MS / 1000 + guider.RETRY_S).start()
 
@@ -496,6 +497,7 @@ def run_guider(args):
             guider.write_state(state)
         if stop_order:
             desk.answer(stop_order, True, "pulses stopped and the guide camera let go")
+        desk.close()            # anything still waiting is answered: the guider has stopped
 
 
 def show_status():

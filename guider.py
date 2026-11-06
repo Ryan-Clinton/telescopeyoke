@@ -25,6 +25,7 @@ import time
 import uuid
 from collections import deque, namedtuple
 from datetime import datetime, timezone
+from pathlib import Path
 
 import numpy as np
 from scipy import ndimage
@@ -774,25 +775,40 @@ class Ownership:
             self.fd = None
 
 
-def terminate(pid, wait=10.0, sleep=time.sleep):
+def process_start(pid):
+    """When process `pid` started (clock ticks since boot, /proc/PID/stat),
+    or None if there is no such process. With the pid it names one process:
+    a pid can be used again by another once the first has gone."""
+    try:
+        stat = Path(f"/proc/{int(pid)}/stat").read_text()
+    except (OSError, TypeError, ValueError):
+        return None
+    return int(stat.rsplit(")", 1)[1].split()[19])
+
+
+def terminate(pid, start, wait=10.0, sleep=time.sleep):
     """End a guider that cannot end itself (its loop hung inside the camera
     library: the heartbeat's watch writes `fault` but cannot interrupt the
     call). SIGTERM first; SIGKILL if it is still there after `wait`
-    seconds. The kernel then lets go of its lock on the camera. Returns
-    True once the process is gone."""
+    seconds. The kernel then lets go of its lock on the camera.
+
+    Only the process that is still the guider is signalled: `start` is the
+    pid_start from its state file, checked before each signal, so a pid
+    since used by another process is never touched. Returns True once that
+    guider is gone."""
     for sig in (signal.SIGTERM, signal.SIGKILL):
-        if not alive(pid):
-            return True
+        if process_start(pid) != start:
+            return True                     # that guider has gone; the pid is not its any more
         try:
             os.kill(int(pid), sig)
         except ProcessLookupError:
             return True
         end = time.monotonic() + wait
         while time.monotonic() < end:
-            if not alive(pid):
+            if process_start(pid) != start:
                 return True
             sleep(0.2)
-    return not alive(pid)
+    return process_start(pid) != start
 
 
 # ------------------------------------------------- the heartbeat
@@ -971,8 +987,10 @@ class OrderDesk:
         answer_order(order, done, why, self.folder)
         self.say(f"  order {order.get('order')}: {'done' if done else 'failed'}" + (f" ({why})" if why else ""))
 
-    def poll(self, now=None):
-        """The orders for this run waiting to be carried out, oldest first."""
+    def next(self, now=None):
+        """The oldest order for this run waiting to be carried out, claimed,
+        or None. One at a time: the rest stay unclaimed, and visible, until
+        they can be handled."""
         now = time.time() if now is None else now
         found = []
         for path in self.folder.glob("*.order.json"):
@@ -981,7 +999,6 @@ class OrderDesk:
             except (OSError, ValueError):
                 continue
         found.sort(key=lambda o: (o.get("at") or 0, o.get("id", "")))
-        ready = []
         for order in found:
             source = self.folder / f"{order.get('id')}.order.json"
             claimed = self.folder / f"{order.get('id')}.taken.json"
@@ -996,16 +1013,30 @@ class OrderDesk:
             elif now - (order.get("at") or 0) > ORDER_STALE_S:
                 self.answer(order, False, f"not taken within {ORDER_STALE_S:.0f} s")
             else:
-                ready.append(order)
-        return ready
+                return order
+        return None
+
+    def close(self, why="the guider stopped"):
+        """Every order still waiting when the guider ends gets an answer:
+        failed, with why, so no sender waits on it until its timeout."""
+        for path in self.folder.glob("*.order.json"):
+            try:
+                order = json.loads(path.read_text(encoding="utf-8"))
+                os.replace(path, self.folder / f"{order.get('id')}.taken.json")
+            except (OSError, ValueError):
+                continue
+            if order.get("run") == self.run:
+                self.answer(order, False, why)
+            else:                                   # not ours to answer: put it back
+                os.replace(self.folder / f"{order.get('id')}.taken.json", path)
 
     def between_pulses(self, doing="calibrating"):
         """For calibration and its check, before every pulse: a stop ends it
         (StopRequested, answered by the caller once the pulses have stopped
         and the camera is let go); any other order is answered as failed."""
-        for order in self.poll():
+        while (order := self.next()) is not None:
             if order.get("order") == "stop":
-                raise StopRequested(order)
+                raise StopRequested(order)      # later orders stay unclaimed; close() answers them
             self.answer(order, False, f"{doing}: only stop is taken until guiding starts")
 
 
@@ -1028,8 +1059,8 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
     ctl = Controller(cols, cal.get("backlash_s", 0.0), cal.get("backlash_spread_s", 0.0), seconds, one_way)
     stuck_after = 3 * seconds + 5 + RETRY_S + 2 * LONGEST_PULSE
     desk = desk or OrderDesk(run_id, say=say)
-    beat = Heartbeat({"pid": os.getpid(), "run": run_id, "exposure": seconds, "state": "starting",
-                      "camera_held": True},
+    beat = Heartbeat({"pid": os.getpid(), "pid_start": process_start(os.getpid()), "run": run_id,
+                      "exposure": seconds, "state": "starting", "camera_held": True},
                      stuck_after, state_path, say)
     errors = deque(maxlen=RMS_FRAMES)
     lock, state, reason = None, "starting", ""
@@ -1057,7 +1088,7 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
         ended = time.monotonic() + minutes * 60 if minutes else None
         while (ended is None or time.monotonic() < ended) and stopping is None:
             beat.progress()
-            for order in desk.poll():
+            while (order := desk.next()) is not None:
                 name = order.get("order")
                 if name == "stop":
                     stopping = order
@@ -1094,6 +1125,8 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
                     answer(order, False, "dithering is not built yet")
                 else:
                     answer(order, False, f"unknown order {name}")
+            if stopping:
+                break                       # no frame and no pulse after a stop
             if state == "paused":
                 time.sleep(0.5)
                 continue

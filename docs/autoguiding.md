@@ -242,7 +242,13 @@ with the reason.
   true). Detecting the fault is not shutting down. The supervisor
   (`shoot.py`, stage 5) stops guided imaging at once and ends the process
   with `guider.terminate()`: SIGTERM, then SIGKILL after 10 s, after which
-  the kernel lets go of the lock.
+  the kernel lets go of the lock. It signals only the process that is
+  still that guider: the state file carries the guider's process start
+  time (`pid_start`), checked before each signal, so a pid used again by
+  another process is never touched.
+- **Orders are claimed one at a time.** After a stop, no frame is taken
+  and no pulse sent; any order still waiting when the guider ends is
+  answered `failed` ("the guider stopped"), never left to time out.
 - `MOTION_LOCKED` is checked before every pulse, not only at start.
 - **Stale state:** `shoot.py` trusts the state file only while its
   heartbeat is under 5 s old (the timer writes it every second) and the
