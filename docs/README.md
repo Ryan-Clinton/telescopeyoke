@@ -68,6 +68,7 @@ is built). What is proven is decided in one place,
 |---|---|---|
 | [Adding the 183M, filter wheel and corrector](mono-upgrade.md) | specification | The cooled mono train: what changed and why. |
 | [Autoguiding](autoguiding.md) | specification | Guiding through the guide camera's ST4 lead, with dithering. The ST4 lead works; star, calibration and loop are built but have not guided, and the camera does not yet deliver 2 s frames on its hub. |
+| [The guide camera's dropped frames](guide-camera-fault.md) | record | Why the guide camera does not stream: what was measured, what is ruled out, what others found, what is left to try. |
 | [The main camera's lost-frame fault](camera-fault.md) | record | The 183C's fault from the first sign to the latest test. |
 | [The camera's row stripes](banding.md) | record | What others found, and what was measured here. |
 | [The USB hub](usb-hub.md) | record | The powered hub at the telescope. |

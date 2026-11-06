@@ -47,9 +47,10 @@ The 2 November test took single frames of 1 to 100 ms only, so this was
 not seen then. Guiding needs a 2 s frame every few seconds, so it cannot
 run on this connection as it stands.
 
-**Not yet known:** whether it follows the hubs (two in a row, the second
-unpowered), the lead, the camera or the library. Not tried: another port
-or a powered hub.
+Later that evening, on the laptop's own port with no hubs, it was the
+same: **the hubs are not the cause.** The full record, what is ruled out,
+what others have found and what is left to try:
+[the guide camera's dropped frames](../../guide-camera-fault.md).
 
 ## Built the same day, not run on the sky
 
