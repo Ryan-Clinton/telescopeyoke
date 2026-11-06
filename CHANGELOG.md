@@ -16,6 +16,10 @@ proven is `docs/validation.md` ("Current conclusions").
   left out, his Caldwell, Sharpless, Barnard and other names find their
   targets, his palettes (SHO, HOO, Ha+RGB, LRGB) are given as advice with
   each nebula, and `--kind` takes his subtypes.
+- **6 November 2026**: a Compendium table kept by the first version is read
+  again from the workbook instead of breaking the planner; every object row
+  is counted, those left out kept with their reasons in
+  `cache/compendium-import.json`.
 
 - **3 November 2026**: VSX is asked of every VizieR mirror in turn, a
   dead one left after 10 seconds, and an empty page is no longer read as

@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/compendium-import.schema.json",
+  "title": "Compendium import",
+  "description": "What the last read of Gary Imm's Deep Sky Compendium took and left out (cache/compendium-import.json, written by compendium.py).",
+  "type": "object",
+  "required": ["edition", "candidate_rows", "accepted", "rejected", "reasons", "rejected_rows", "workbook", "fields"],
+  "properties": {
+    "edition": {"type": "string"},
+    "candidate_rows": {"type": "integer", "minimum": 0, "description": "Rows of the main sheet with an object's name and a type or position."},
+    "accepted": {"type": "integer", "minimum": 0},
+    "rejected": {"type": "integer", "minimum": 0},
+    "reasons": {"type": "object", "additionalProperties": {"type": "integer"}, "description": "How many rows were left out for each reason."},
+    "rejected_rows": {"type": "array", "items": {"type": "object", "required": ["id", "why"], "properties": {"id": {"type": "string"}, "why": {"type": "string"}}}},
+    "workbook": {"type": "string"},
+    "fields": {"type": "array", "items": {"type": "string"}, "description": "The kept table's columns; a table with others is read again."}
+  }
+}

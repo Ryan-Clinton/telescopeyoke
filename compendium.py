@@ -44,6 +44,7 @@ URL = f"https://drive.usercontent.google.com/download?id={DRIVE_ID}&export=downl
 
 WORKBOOK = config.DATA / "cache" / "compendium.xlsx"
 TABLE = config.DATA / "cache" / "compendium.csv"
+REPORT = config.DATA / "cache" / "compendium-import.json"   # what the last import took and left out
 
 MAIN = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 RELS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -231,11 +232,19 @@ def read(book):
     edition = title.split("-", 1)[-1].strip() if "Compendium" in title else ""
     col, first = _columns(rows)
     out, skipped, seen = [], [], set()
+    candidates = 0
     for row in rows[first:]:
         name = row.get("A")
         kind, ra, dec = row.get(col["type"]), _number(row.get(col["ra"])), _number(row.get(col["dec"]))
-        if not name or not kind or ra is None or dec is None:
-            continue    # the key, units and totals rows
+        # An object's row has its name and something of its own; the units
+        # and totals rows under the headers have no name in A.
+        if not name or not (kind or row.get(col["ra"]) or row.get(col["dec"])):
+            continue
+        candidates += 1
+        if not kind or ra is None or dec is None:
+            missing = [w for w, v in (("type", kind), ("RA", ra), ("Dec", dec)) if not v and v != 0]
+            skipped.append((_ident(name), f"no {' or '.join(missing)}"))
+            continue
         rating = _number(row.get(col["rating"]))
         mag, size = _number(row.get(col["mag"])), _number(row.get(col["size"]))
         surf = _number(row.get(col["surf_br"])) if col["surf_br"] else None
@@ -254,7 +263,7 @@ def read(book):
         if ident in seen:
             wrong.append("a second row of that name")
         if wrong:
-            skipped.append(f"{ident}: {', '.join(wrong)}")
+            skipped.append((ident, ", ".join(wrong)))
             continue
         seen.add(ident)
         cross = {key: _cross(row.get(col[key])) if col[key] else "" for key, _, _ in CROSS}
@@ -281,9 +290,10 @@ def read(book):
     if len(out) < 1000:
         raise interface.Refusal("INVALID_REQUEST", f"Only {len(out)} objects read from {book}: "
                                 "not the Compendium as it was known.")
-    if len(skipped) > 0.02 * len(out):
-        raise interface.Refusal("INVALID_REQUEST", f"{len(skipped)} of {len(out) + len(skipped)} rows fail the "
-                                f"checks (first: {skipped[0]}): the workbook's columns may mean something else now.")
+    if len(skipped) > 0.02 * candidates:
+        raise interface.Refusal("INVALID_REQUEST", f"{len(skipped)} of {candidates} rows fail the checks "
+                                f"(first: {skipped[0][0]}: {skipped[0][1]}): the workbook's columns may mean "
+                                "something else now.")
     # The whole sky, both hemispheres: RA in hours instead of degrees, or a
     # column moved, shows here first.
     ras, decs = [float(o["ra_deg"]) for o in out], [float(o["dec_deg"]) for o in out]
@@ -291,17 +301,26 @@ def read(book):
         raise interface.Refusal("INVALID_REQUEST", f"The positions span RA {min(ras):.0f}-{max(ras):.0f}°, "
                                 f"Dec {min(decs):.0f} to {max(decs):.0f}°: not the whole sky, so the columns "
                                 "are not read as they were meant.")
-    for line in skipped:
-        print(f"left out {line}", file=sys.stderr)
-    return out
+    reasons = {}
+    for _, why in skipped:
+        reason = re.sub(r"[-\d.]+'?$", "", why).strip() if not why.startswith("no ") else why
+        reasons[reason] = reasons.get(reason, 0) + 1
+    report = {"edition": edition, "candidate_rows": candidates, "accepted": len(out),
+              "rejected": len(skipped), "reasons": reasons,
+              "rejected_rows": [{"id": i, "why": w} for i, w in skipped]}
+    for i, w in skipped:
+        print(f"left out {i}: {w}", file=sys.stderr)
+    return out, report
 
 
 # --- keeping it --------------------------------------------------------------------
 
 def keep(book):
     """Read the workbook and write the table the planner uses."""
-    objects = read(book)
+    objects, report = read(book)
     TABLE.parent.mkdir(parents=True, exist_ok=True)
+    import records
+    records.write(REPORT, dict(report, workbook=str(book), fields=FIELDS), schema="compendium-import")
     part = TABLE.with_suffix(".csv.part")
     with part.open("w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDS)
@@ -337,12 +356,35 @@ def fetch():
     return s
 
 
+_told = []     # said once per process that an old table is not used
+
+
 def load():
-    """The kept table, or [] when the Compendium has not been fetched."""
+    """The kept table, or [] when the Compendium has not been fetched. A
+    table kept by an older version of this (other columns) is read again
+    from the kept workbook, or, with none, left unused with a message: the
+    planner never fails for want of it."""
     if not TABLE.exists():
         return []
     with TABLE.open(encoding="utf-8") as f:
-        return list(csv.DictReader(f))
+        reader = csv.DictReader(f)
+        if reader.fieldnames == FIELDS:
+            return list(reader)
+    if WORKBOOK.exists():
+        print("The Compendium's kept table is from an older version: reading the workbook again.",
+              file=sys.stderr)
+        try:
+            keep(WORKBOOK)
+        except (interface.Refusal, OSError, zipfile.BadZipFile) as problem:
+            print(f"Could not: {problem}. The planner goes on without it.", file=sys.stderr)
+            return []
+        with TABLE.open(encoding="utf-8") as f:
+            return list(csv.DictReader(f))
+    if not _told:
+        print("The Compendium's kept table is from an older version and there is no workbook to read "
+              "again: ./compendium.py fetch. The planner goes on without it.", file=sys.stderr)
+        _told.append(True)
+    return []
 
 
 def _key(name):
@@ -398,7 +440,14 @@ def merge(targets):
         names = _names(r)
         hits = list(dict.fromkeys(index[n]["id"] for n in names if n in index))
         if len(hits) > 1:
-            ambiguous.append(f"{r['id']}: {', '.join(hits)} (taken as {hits[0]})")
+            # Only what he says is added to a target (its rating, note, names);
+            # its position stays the catalogue's, so no match moves where the
+            # telescope points. A row naming two targets, neither by its own
+            # name, could be either: it adds to neither.
+            if _key(r["id"]) not in {_key(h) for h in hits}:
+                ambiguous.append(f"{r['id']}: {', '.join(hits)} (left to neither)")
+                continue
+            ambiguous.append(f"{r['id']}: {', '.join(hits)} (its own name, {r['id']})")
         if hits:
             rows_for.setdefault(hits[0], []).append(r)
         else:
@@ -415,7 +464,7 @@ def merge(targets):
         # Every row that matched it lends its names: "C49" finds the Rosette.
         t["aliases"] = list(t.get("aliases", []))
         for r in rs:
-            for a in [r["id"]] + [a for a in r["aliases"].split(";") if a]:
+            for a in [r["id"]] + [a for a in r.get("aliases", "").split(";") if a]:
                 k = _key(a)
                 if index.get(k, t) is not t:
                     clashes += 1
@@ -428,7 +477,7 @@ def merge(targets):
         if size is None or size < MIN_SIZE.get(r["kind"], SMALLEST):
             continue
         aliases = []
-        for a in [a for a in r["aliases"].split(";") if a]:
+        for a in [a for a in r.get("aliases", "").split(";") if a]:
             if _key(a) in index:
                 clashes += 1
             else:
@@ -444,6 +493,12 @@ def merge(targets):
             index.setdefault(k, target)
     last.update(matched=len(matched), added=added, ambiguous=ambiguous, alias_clashes=clashes)
     return targets
+
+
+def _report():
+    import records
+    kept = records.read(REPORT, None) if REPORT.exists() else None
+    return kept and {k: kept[k] for k in ("edition", "candidate_rows", "accepted", "rejected", "reasons")}
 
 
 def status():
@@ -462,6 +517,7 @@ def status():
             "matched": last.get("matched", 0), "added": last.get("added", 0),
             "ambiguous": last.get("ambiguous", []), "alias_clashes": last.get("alias_clashes", 0),
             "link": URL, "link_checked": LINK_CHECKED,
+            "import": _report(),
             "workbook": str(WORKBOOK) if WORKBOOK.exists() else None, "page": PAGE}
 
 
@@ -471,6 +527,11 @@ def say(s):
         return
     print(f"Imm Deep Sky Compendium, {s['edition']}: {s['objects']} objects, kept in {s['table']}.")
     print("Ratings (0 low to 5 high): " + ", ".join(f"{k}: {v}" for k, v in s["ratings"].items()))
+    if s.get("import"):
+        i = s["import"]
+        print(f"Last import: {i['candidate_rows']} object rows, {i['accepted']} taken, {i['rejected']} left out"
+              + (" (" + ", ".join(f"{k}: {v}" for k, v in i["reasons"].items()) + ")" if i["reasons"] else "")
+              + f"; the rows left out are in {REPORT}.")
     print(f"{s['matched']} matched to the catalogue's targets, {s['added']} added as targets of their own.")
     for line in s["ambiguous"]:
         print(f"  named more than one target: {line}")
