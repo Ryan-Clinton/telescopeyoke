@@ -985,6 +985,13 @@ def main():
                                        ("--no-recentre", args.no_recentre)) if on]
         if clash:
             ap.error(f"--guide gives the guider RA and Dec: not with {', '.join(clash)}")
+    if args.dither < 0:
+        ap.error("--dither N: every N frames, N 1 or more (0, the default, is none)")
+    if args.dither_size is not None:
+        import guider
+        most = guider.DITHER_MOST_PX * guider.SCALE
+        if not (math.isfinite(args.dither_size) and 0 < args.dither_size <= most):
+            ap.error(f"--dither-size: above 0 and at most {most:.0f}\" (the guider's {guider.DITHER_MOST_PX:g} px)")
     if args.dither_size is not None and not args.guide:
         ap.error("--dither-size is for --guide's dithers; an unguided dither is a GoTo about 1.5' off")
     if args.dither_size is None:
@@ -1566,7 +1573,8 @@ def image(args, session, exposure, moving, holding, tracker):
                                 header["GUIDEMAX"] = (went["max"], "largest guide error during it, arcsec")
                             header["GUIDELST"] = (went["lost_s"], "seconds of it no good guide frame covered")
                             header["GUIDEREJ"] = (went["rejected"], "guide frames without the star during it")
-                            header["GUIDECOV"] = (went["coverage"], "share of it covered by good guide frames")
+                            if went["coverage"] is not None:
+                                header["GUIDECOV"] = (went["coverage"], "share of it covered by good guide frames")
                         if getattr(args, "focus_fixed", None):
                             header["TY_FOCFIX"] = (str(args.focus_fixed),
                                                    "focus left as set for this filter, not proven in FILTER")

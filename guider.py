@@ -1109,6 +1109,9 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
                 elif name == "pause":
                     cam.stop_pulse()                # no pulse can be running: they finish before this
                     state = "paused"
+                    if dithering:                   # it cannot settle with no guide frames
+                        answer(dithering["order"], False, "paused before it settled")
+                        dithering = None
                     beat.update(state=state, pulses=[0.0, 0.0])
                     answer(order, True)
                 elif name == "resume":
@@ -1189,6 +1192,9 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
                 row["rejected"] = why
                 if lost >= LOST_FRAMES and state != "lost":
                     state = "lost"
+                    if dithering:
+                        answer(dithering["order"], False, f"the star was lost before it settled ({why})")
+                        dithering = None
                     say(f"  star lost ({why}); no pulses; looking within {RELOCK_RADIUS} px of the lock")
                     if resuming:
                         answer(resuming, False, f"the star was not found after the pause ({why})")
@@ -1536,9 +1542,13 @@ class Supervisor:
             ok, why = False, f"{rejected} guide frame(s) without the star during it"
         if ok and lost > 0.5 * cycle:
             ok, why = False, f"{lost:.0f} s of it with no good guide frame"
+        # A frame shorter than two guide cycles has no stretch to judge
+        # coverage over: none is given, and GUIDED rests on a good guide frame
+        # inside it, none rejected, and guiding at its end.
+        coverage = round(covered / span, 3) if end - start >= 2 * cycle else None
         return {"rms": round(float(np.sqrt(np.mean(np.square(errors)))), 2) if errors else None,
                 "max": round(max(errors), 2) if errors else None,
-                "lost_s": round(lost, 1), "rejected": rejected, "coverage": round(covered / span, 3),
+                "lost_s": round(lost, 1), "rejected": rejected, "coverage": coverage,
                 "frames": len(rows), "guided": ok, "why": why}
 
     def stop(self):
