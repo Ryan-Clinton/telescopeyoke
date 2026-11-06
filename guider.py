@@ -1221,3 +1221,199 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
         if previous is not None:
             signal.signal(signal.SIGTERM, previous)
     return state, stopping
+
+
+# ------------------------------------------------- shoot.py's side: a guided run
+
+GUIDE_START_S = 480.0      # a new guider has this long to calibrate and reach `guiding`
+RESTART_S = 180.0          # a restarted guider, its calibration reused, has this long
+SETTLE_PX = 1.0            # guide px: every error under this...
+SETTLE_FRAMES = 2          # ...for this many guide frames running, spanning at least SETTLE_SPAN
+SETTLE_SPAN = 3.0          # seconds
+SETTLE_S = 30.0            # still guiding but not settled after this: the frame is taken and marked
+LOST_WAIT_S = 300.0        # lost (cloud), relocking or calibrating this long: guided imaging stops
+RUN_LOG = config.DATA / "cache" / "guide-run.log"
+
+
+class Supervisor:
+    """What shoot.py --guide does with the guider: starts one (or uses one
+    already guiding), pauses it around every GoTo and relocks after, keeps
+    the Dec creep off while it guides, waits for it to settle before each
+    frame, says how guiding went during each frame, and recovers from a
+    fault once before stopping guided imaging. It never lets a guided run
+    carry on unguided: every way it gives up is a Fault."""
+
+    def __init__(self, exposure=2.0, say=print, popen=None, site=None):
+        import subprocess
+        self.exposure, self.say = exposure, say
+        self.popen = popen or subprocess.Popen
+        self.site = site
+        self.run = self.pid = self.pid_start = None
+        self.launched = False          # this run started it, so this run stops it
+        self.active = False
+        self.restarts = 0
+
+    # -- the mount's Dec creep: off while the guider owns Dec
+
+    def creep_off(self):
+        import mount
+        try:
+            mount.Mount(watch=False).dec_creep(0)
+        except (OSError, SystemExit) as problem:
+            raise Fault(f"The Dec creep could not be turned off for guiding ({problem}).") from None
+
+    def creep_back(self):
+        import mount
+        try:
+            scope = mount.Mount(watch=False)
+            if self.site:
+                scope.apply_drift_correction(self.site)
+        except (OSError, SystemExit, KeyError, ValueError) as problem:
+            self.say(f"  guide: the Dec creep could not be put back ({problem})")
+
+    # -- starting, and the guider's state
+
+    def start(self):
+        """A guider guiding, with the creep off. One already guiding (healthy)
+        is used; otherwise one is started."""
+        state = read_state()
+        ok, _ = health(state)
+        held = owner()
+        if ok and held and held.get("role") == "guider" and state.get("state") in ("guiding", "paused"):
+            self.run, self.pid, self.pid_start = state["run"], state["pid"], state.get("pid_start")
+            self.say(f"  guide: using the guider already running (run {self.run})")
+            self.active = True
+            self.creep_off()
+            self.order("relock")
+            return
+        self.creep_off()
+        self.launch(GUIDE_START_S)
+
+    def launch(self, timeout):
+        import sys
+        RUN_LOG.parent.mkdir(parents=True, exist_ok=True)
+        log = RUN_LOG.open("a", encoding="utf-8")
+        proc = self.popen([sys.executable, str(config.ROOT / "guidecam.py"), "guide",
+                           "--exposure", f"{self.exposure:g}"],
+                          stdout=log, stderr=log, start_new_session=True)
+        self.launched, self.pid = True, proc.pid
+        self.say(f"  guide: guider started (process {proc.pid}); calibrating or checking its calibration")
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            state = read_state()
+            if state and state.get("pid") == proc.pid:
+                self.run, self.pid_start = state.get("run"), state.get("pid_start")
+                if state.get("state") == "guiding":
+                    self.active = True
+                    self.say(f"  guide: guiding (run {self.run})")
+                    return
+                ok, why = health(state, self.run)
+                if not ok or state.get("state") == "stopped":
+                    raise Fault(f"The guider did not start guiding: {why or state.get('reason')}. "
+                                f"Its log: {RUN_LOG}.")
+            elif proc.poll() is not None:
+                raise Fault(f"The guider ended before it started guiding. Its log: {RUN_LOG}.")
+            time.sleep(1)
+        raise Fault(f"The guider was not guiding within {timeout:.0f} s. Its log: {RUN_LOG}.")
+
+    def order(self, name):
+        ident, run = tell(name, run=self.run)
+        return wait_for(ident, run, order=name)
+
+    # -- around a GoTo
+
+    def before_move(self):
+        """Paused, confirmed: no pulse goes while the mount slews."""
+        if self.active:
+            self.order("pause")
+
+    def after_move(self):
+        """The creep the GoTo set turned off again, and a new lock where the star now is."""
+        if self.active:
+            self.creep_off()
+            self.order("relock")
+
+    # -- before and during each frame
+
+    def settle(self, sleep=time.sleep):
+        """Waits until guiding has settled; True if it did, False if it was
+        still guiding but not inside SETTLE_PX after SETTLE_S (the frame is
+        taken and marked). lost, relocking or calibrating for LOST_WAIT_S, or
+        a fault that a restart does not cure, is a Fault."""
+        begun = time.monotonic()
+        seen = []                         # (frame time, error in guide px) of guide frames since asked
+        troubled = None                   # when it was last found not guiding
+        while True:
+            state = read_state()
+            ok, why = health(state, self.run)
+            if not ok:
+                self.recover(why)
+                begun, seen, troubled = time.monotonic(), [], None
+                continue
+            now = time.monotonic()
+            if state.get("state") != "guiding":
+                troubled = troubled or now
+                if now - troubled > LOST_WAIT_S:
+                    raise Fault(f"The guider has been {state.get('state')} for {LOST_WAIT_S / 60:.0f} minutes "
+                                f"({state.get('rejected') or state.get('reason') or 'no star'}): guided imaging stops.")
+            else:
+                troubled = None
+                if state.get("ra_err") is not None and (not seen or seen[-1][0] != state.get("time")):
+                    seen.append((state.get("time"), math.hypot(state["ra_err"], state["dec_err"]) / SCALE))
+                recent = seen[-SETTLE_FRAMES:]
+                if (len(recent) == SETTLE_FRAMES and all(e < SETTLE_PX for _, e in recent)
+                        and recent[-1][0] - recent[0][0] >= SETTLE_SPAN * 0.99):
+                    return True
+                if now - begun > SETTLE_S:
+                    return False
+            sleep(0.3)
+
+    def recover(self, why):
+        """One restart in a run: the hung or failed guider ended (only if it is
+        still that process), a new one started with the calibration reused,
+        the creep off. A second fault, or a restart that does not reach
+        guiding, is a Fault."""
+        if self.restarts >= 1:
+            raise Fault(f"The guider failed again ({why}): guided imaging stops.")
+        self.restarts += 1
+        self.say(f"  guide: {why}; restarting the guider once")
+        if self.pid and self.pid_start is not None and not terminate(self.pid, self.pid_start):
+            raise Fault(f"The guider (process {self.pid}) could not be ended: guided imaging stops.")
+        self.active = False
+        self.creep_off()
+        self.launch(RESTART_S)
+
+    def during(self, start, end):
+        """How guiding went from `start` to `end` (UTC seconds): RMS and the
+        largest error in arcseconds, and seconds without the star."""
+        rows = []
+        path = LOG_FOLDER / f"guide-{datetime.fromtimestamp(start):%Y%m%d}.jsonl"
+        try:
+            for line in path.read_text(encoding="utf-8").splitlines()[-2000:]:
+                row = json.loads(line)
+                mid = (row.get("time") or {}).get("mid", 0)
+                if row.get("run") == self.run and start <= mid <= end:
+                    rows.append(row)
+        except (OSError, ValueError):
+            pass
+        errors = [math.hypot(r["ra_err"], r["dec_err"]) for r in rows if r.get("ra_err") is not None]
+        lost = sum(1 for r in rows if r.get("ra_err") is None) * self.exposure
+        return {"rms": round(float(np.sqrt(np.mean(np.square(errors)))), 2) if errors else None,
+                "max": round(max(errors), 2) if errors else None,
+                "lost_s": round(lost, 1), "frames": len(rows)}
+
+    def stop(self):
+        """The guider stopped if this run started it, and the creep put back.
+        One this run found running is left guiding, the creep left off."""
+        if not self.launched:
+            return
+        try:
+            if self.active:
+                self.order("stop")
+        except interface.Refusal as problem:
+            self.say(f"  guide: the guider did not stop cleanly ({problem.message})")
+            if self.pid and self.pid_start is not None:
+                terminate(self.pid, self.pid_start)
+        finally:
+            self.active = False
+            self.creep_back()

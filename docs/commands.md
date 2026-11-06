@@ -110,6 +110,7 @@ Not yet proven on the sky ([Autoguiding](autoguiding.md)). The mount must be tra
 | 3. The ST4 lead | `./guidecam.py pulse` | **yes**, 5 s each way |
 | 4. Calibration | `./guidecam.py calibrate` | **yes**, about 3 minutes of steps |
 | 5. Guiding | `./guidecam.py guide --minutes 10` | **yes**, until stopped or a fault |
+| 6. A guided imaging run | `./shoot.py TARGET --guide` | **yes**: GoTos as any run, and the guider's pulses |
 
 `guide` reuses the kept calibration after a short check move each way, or calibrates first. While it runs, `./guidecam.py status` says how it is, and `./guidecam.py tell pause|resume|relock|stop` orders it, waiting until it is done; nothing else may use the guide camera meanwhile.
 

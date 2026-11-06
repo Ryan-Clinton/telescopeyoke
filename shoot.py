@@ -347,6 +347,19 @@ def order(name=None, now=None):
     return left.get("order") if left.get("order") in KNOWN_ORDERS else None
 
 
+def go(args, target, aim_off=(0.0, 0.0), solve=None):
+    """recentre(), and while guided the guider paused (confirmed) before the
+    GoTo and relocked after it, the creep the GoTo set turned off again."""
+    supervisor = getattr(args, "supervisor", None)
+    if supervisor:
+        supervisor.before_move()
+    try:
+        return recentre(target, aim_off, solve)
+    finally:
+        if supervisor:
+            supervisor.after_move()
+
+
 def recentre(target, aim_off=(0.0, 0.0), solve=None):
     """Put the target back in the middle of the frame by plate solving, or
     with `aim_off` (arcminutes east and north) a little off it, for
@@ -901,6 +914,11 @@ def main():
                          "the stars come back, and ends at dawn or when the target nears the mount's limit")
     ap.add_argument("--assist", action="store_true",
                     help="trim the Dec motor's creep from the drift the frames show")
+    ap.add_argument("--guide", action="store_true",
+                    help="autoguide through the guide camera's ST4 lead (docs/autoguiding.md): starts the guider "
+                         "or uses one already guiding, pauses it around every GoTo, keeps the Dec creep off, and "
+                         "waits for it to settle before each frame. Not with --hold, --assist, --dither or "
+                         "--no-recentre. Not yet proven on the sky")
     ap.add_argument("--hold", type=float, metavar="PX",
                     help="for transits: keep the target within PX pixels of where the first frame had it, "
                          "learning first how small moves shift the frames; no dithering")
@@ -946,6 +964,14 @@ def main():
         ap.error("--dither moves the mount between frames; it cannot go with --no-recentre")
     if args.hold and (args.dither or args.dither_first or args.no_recentre):
         ap.error("--hold keeps the stars on the same pixels: not with --dither or --no-recentre")
+    if args.guide:
+        clash = [name for name, on in (("--hold", args.hold), ("--assist", args.assist),
+                                       ("--dither", args.dither), ("--dither-first", args.dither_first),
+                                       ("--no-recentre", args.no_recentre)) if on]
+        if clash:
+            ap.error(f"--guide gives the guider RA and Dec: not with {', '.join(clash)}"
+                     + (" (dithering while guided moves the guider's lock, which is not built yet)"
+                        if args.dither or args.dither_first else ""))
     work = (lambda: plan(args)) if args.dry_run else (lambda: run(args))
     return interface.main("shoot.dry_run" if args.dry_run else "shoot", work, args.json)
 
@@ -960,7 +986,14 @@ def plan(args):
            "quality_pass": not (args.no_save or args.no_restack), "would_move": False,
            "dither_every": getattr(args, "dither", 0) or None,
            # The hold moves the mount in small steps all through the run.
-           "hold_px": getattr(args, "hold", None)}
+           "hold_px": getattr(args, "hold", None),
+           "guided": bool(getattr(args, "guide", False))}
+    if out["guided"]:
+        import guider
+        state = guider.read_state()
+        ok, _ = guider.health(state)
+        out["guider"] = (f"uses the guider already {state.get('state')} (run {state.get('run')})" if ok
+                         else "starts a guider after the first GoTo (calibrating, or checking the kept calibration)")
     if not args.no_recentre:
         site = (config.load() if config.FILE.exists() else config.example())["site"]
         try:
@@ -1086,11 +1119,19 @@ def hold_the_rig(name, path=None):
 
 def run(args):
     rig = hold_the_rig(args.name)     # kept open, so locked, for the whole run
+    args.supervisor = None
+    if getattr(args, "guide", False):
+        import guider
+        site = (config.load() if config.FILE.exists() else config.example())["site"]
+        args.supervisor = guider.Supervisor(site=site, say=lambda line: print(line, flush=True))
     try:
         if getattr(args, "blocks", None):
             return in_blocks(args)
         return held(args)
     finally:
+        if args.supervisor:
+            # The guider stopped (if this run started it) and the Dec creep put back.
+            args.supervisor.stop()
         # Let go as the run ends, however it ends: on 1 November 2026 a run
         # stopped by a jammed camera kept the lock while anything still held
         # its error, and the next run in the same process was refused.
@@ -1267,18 +1308,24 @@ def held(args):
         # 2026: -4.4 °C after a solved re-centre through the kept camera).
         # 5 November 2026: M33's colour failed because nothing checked the
         # framing between blocks and B ended 1070 px from L.
-        moving = recentre(args.name)
+        moving = go(args, args.name)
     elif moving:
         # Camera not kept open (TY_NO_LEND): back to the target with one
         # plain GoTo (the pointing error the last solve measured applied), no
         # plate solve, which would close the camera and stop its cooler.
-        moving = recentre(args.name, solve=False)
+        moving = go(args, args.name, solve=False)
         time.sleep(DITHER_SETTLE_S)
     # --blocks, a block of the same target as the one before: already on it,
     # so no plate-solved re-centre. 5 November 2026: the solve kept the camera
     # closed about a minute, the 183M's cooler stopped, and each block began
     # with about 8 minutes of re-cooling from +2 °C. Drift is still taken back
     # between frames, and frames that will not line up still re-centre.
+    supervisor = getattr(args, "supervisor", None)
+    if supervisor and not supervisor.active:
+        if not moving:
+            raise interface.Refusal("INVALID_REQUEST", "--guide needs the mount, and it could not be reached.")
+        # After the first GoTo, so the guider calibrates on the target.
+        supervisor.start()
     holding = None
     if moving and getattr(args, "hold", None):
         try:
@@ -1418,7 +1465,7 @@ def image(args, session, exposure, moving, holding, tracker):
                 told["recentre"] = False
                 collect(everything=True)
                 print(f"  drifted {session.drift * 100:.0f}% of the frame; re-centring", flush=True)
-                recentre(args.name)
+                go(args, args.name)
                 plain_failed[0], plain_check[0] = False, None   # solved: the next drift tries a plain GoTo again
                 session.drift, session.origin, since_centre = 0.0, None, 0
                 session.track.clear()   # the slew, not drift, moved the next frames
@@ -1471,6 +1518,9 @@ def image(args, session, exposure, moving, holding, tracker):
                         if in_path is not None and time.monotonic() - wheel_asked >= wheel_every:
                             in_path = in_the_path(getattr(args, "light_path", None))
                             wheel_asked = time.monotonic()
+                        supervisor = getattr(args, "supervisor", None)
+                        settled = supervisor.settle() if supervisor else None
+                        exposed = time.time()
                         try:
                             mosaic, header = cam.frame(exposure)
                         except CameraError as problem:
@@ -1478,6 +1528,14 @@ def image(args, session, exposure, moving, holding, tracker):
                             reopening = jams < JAM_REOPENS
                             break
                         sxwheel.cards(header, in_path)
+                        if supervisor:
+                            went = supervisor.during(exposed, time.time())
+                            header["GUIDED"] = (True, "autoguided through the guide camera's ST4 lead")
+                            header["GUIDESET"] = (bool(settled), "guiding had settled when the frame began")
+                            if went["rms"] is not None:
+                                header["GUIDERMS"] = (went["rms"], "guide error RMS during the frame, arcsec")
+                                header["GUIDEMAX"] = (went["max"], "largest guide error during it, arcsec")
+                            header["GUIDELST"] = (went["lost_s"], "seconds without the guide star during it")
                         if getattr(args, "focus_fixed", None):
                             header["TY_FOCFIX"] = (str(args.focus_fixed),
                                                    "focus left as set for this filter, not proven in FILTER")
@@ -1515,7 +1573,8 @@ def image(args, session, exposure, moving, holding, tracker):
                             told["stop"] = True
                             break
                         if asked in ("assist-on", "assist-off"):
-                            args.assist = asked == "assist-on"
+                            # Guided, the guider owns Dec: the assist's trims stay off.
+                            args.assist = asked == "assist-on" and not getattr(args, "supervisor", None)
                         told["recentre"] = told["recentre"] or asked == "recentre"
                         if moving and session.unaligned >= UNALIGNED and not session.unaligned_solved:
                             # Frames good enough to keep whose stars no longer sit on the
@@ -1561,7 +1620,7 @@ def image(args, session, exposure, moving, holding, tracker):
                             collect(everything=True)
                             print(f"  drifted {session.drift * 100:.0f}% of the frame; back with a plain GoTo, "
                                   "the camera kept open", flush=True)
-                            recentre(args.name, solve=False)
+                            go(args, args.name, solve=False)
                             time.sleep(DITHER_SETTLE_S)
                             session.drift, session.origin, since_centre = 0.0, None, 0
                             session.track.clear()

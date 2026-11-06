@@ -103,6 +103,7 @@ Without a handset only: `ty mount directions` tips the tube 5° and back and
 asks a person which way it went; `ty mount sethome` records the home position
 and moves nothing.
 `shoot.py --dither N` re-centres every N frames a little off the target (a plate-solved GoTo).
+`shoot.py --guide` autoguides (`docs/autoguiding.md`, not yet proven on the sky): after the first GoTo it starts the guider (or uses one already guiding), turns the Dec creep off while the guider owns Dec, pauses the guider (confirmed) before every GoTo and relocks it after, waits before each frame for two guide frames under 1 guide px (30 s at most, then the frame is marked `GUIDESET` false), and writes `GUIDED`, `GUIDERMS`, `GUIDEMAX`, `GUIDELST` on each frame. Lost for 5 minutes stops the run; a fault gets one restart of the guider, a second stops the run; it never carries on unguided. The guider it started is stopped at the end and the creep put back. Refused with `--hold`, `--assist`, `--dither`, `--dither-first` and `--no-recentre`; exposures stay as given.
 `patrol.py PROGRAMME` points at the field with `mount.py goto` and images it with `shoot.py`, then
 analyses the night; a programme with a mosaic (`m31-panels`) does each panel in turn, in order of
 priority, as long as the night allows; a `MOTION_LOCKED` file stops it before anything moves, and `--dry-run` runs both
