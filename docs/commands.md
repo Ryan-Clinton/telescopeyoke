@@ -111,7 +111,7 @@ Not yet proven on the sky ([Autoguiding](autoguiding.md)). The mount must be tra
 | 4. Calibration | `./guidecam.py calibrate` | **yes**, about 3 minutes of steps |
 | 5. Guiding | `./guidecam.py guide --minutes 10` | **yes**, until stopped or a fault |
 
-`guide` reuses the kept calibration after a short check move each way, or calibrates first.
+`guide` reuses the kept calibration after a short check move each way, or calibrates first. While it runs, `./guidecam.py status` says how it is, and `./guidecam.py tell pause|resume|relock|stop` orders it, waiting until it is done; nothing else may use the guide camera meanwhile.
 
 ## How it works
 

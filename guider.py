@@ -6,9 +6,10 @@ direction moves it, and the loop that keeps it on its lock position.
     ./guidecam.py calibrate   pulse each way and learn what each does
     ./guidecam.py guide       guide: calibration reused or made, then the loop
 
-Built so far: the star, the calibration and the closed loop (the spec's
-first three stages). Not yet: one guider owning the camera, the heartbeat
-on its own timer, the numbered orders, and shoot.py --guide.
+Built so far: the star, the calibration, the closed loop, and (stage 4)
+one guider owning the camera, the heartbeat on its own timer, numbered
+orders confirmed once done, and the watch on a hung loop. Not yet:
+shoot.py --guide and dithering.
 
 The guide scope is the 50 mm Orion Mini (162 mm) with the GPCAM's 3.75 um
 pixels: 4.77" a pixel. The guide rate is the handset's, measured on
@@ -17,6 +18,8 @@ pixels: 4.77" a pixel. The guide rate is the handset's, measured on
 import json
 import math
 import os
+import signal
+import threading
 import time
 import uuid
 from collections import deque, namedtuple
@@ -80,7 +83,17 @@ ERROR_FAULT_FRAMES = 5
 CORRECTION_FAULT = 600.0   # arcseconds of signed correction on an axis since the lock was set
 RUNAWAY_FRAMES = 10        # frames running at the longest pulse the same way
 
+# Owning the camera, the heartbeat and orders
+HEARTBEAT_S = 1.0          # the state file's heartbeat, on its own timer
+STALE_S = 5.0              # a heartbeat older than this: the guider is not to be trusted
+ORDERS = ("pause", "resume", "relock", "dither", "stop")
+ORDER_TIMEOUT = {"pause": 10, "resume": 30, "relock": 60, "dither": 60, "stop": 15}
+ORDER_STALE_S = 120        # an order not taken within this long is thrown away
+RELOCK_PATIENCE = 50.0     # seconds a relock looks for a star
+
 STATE_FILE = config.DATA / "cache" / "guide.json"
+PID_FILE = config.DATA / "cache" / "guide.pid"
+ORDER_FILE = config.DATA / "cache" / "guide-order.json"
 CAL_FILE = config.DATA / "cache" / "guide-cal.json"
 LOG_FOLDER = config.DATA / "frames" / "guide"
 
@@ -217,11 +230,14 @@ def follow(frame, where, window=WINDOW, least_snr=SNR_LOST):
     return stars[0][1], ""
 
 
-def first_star(cam, seconds, gain=None, say=print, patience=300.0, sleep=time.sleep):
+def first_star(cam, seconds, gain=None, say=print, patience=300.0, sleep=time.sleep, tick=None):
     """A star to guide on, looking every RETRY_S seconds for up to `patience`
-    seconds (cloud passes)."""
+    seconds (cloud passes). `tick` is called at each look, so a watcher
+    knows the search is alive."""
     began = time.monotonic()
     while True:
+        if tick:
+            tick()
         frame, _ = cam.timed_frame(seconds, gain)
         star, why = find_star(frame)
         if star:
@@ -284,11 +300,14 @@ class Calibrator:
     """Moves the star through ST4 in steps and measures each, keeping the
     star in its window throughout."""
 
-    def __init__(self, cam, seconds, gain=None, say=print):
+    def __init__(self, cam, seconds, gain=None, say=print, tick=None):
         self.cam, self.seconds, self.gain, self.say = cam, seconds, gain, say
+        self.tick = tick
         self.where = None
 
     def look(self):
+        if self.tick:
+            self.tick()
         frame, _ = self.cam.timed_frame(self.seconds, self.gain)
         star, why = follow(frame, self.where)
         if star is None:
@@ -341,7 +360,7 @@ def _slack_of(points, step, strength, unit):
     return max((len(points) - 1) * step - max(went, 0.0) / strength, 0.0)
 
 
-def calibrate(cam, seconds, dec, west, gain=None, say=print, rate=GUIDE_RATE):
+def calibrate(cam, seconds, dec, west, gain=None, say=print, rate=GUIDE_RATE, tick=None):
     """Stage 2: west and back east, then north and back south (the Dec
     slack taken up first), then two short Dec reversals to measure the
     slack again. Returns the calibration (also kept in CAL_FILE)."""
@@ -349,8 +368,8 @@ def calibrate(cam, seconds, dec, west, gain=None, say=print, rate=GUIDE_RATE):
     ra_step, dec_step = step_seconds(dec, rate)
     say(f"calibrating at Dec {dec:+.1f}, {'west' if west else 'east'} of the pier: steps of "
         f"{ra_step * 1000:.0f} ms in RA, {dec_step * 1000:.0f} ms in Dec")
-    star = first_star(cam, seconds, gain, say)
-    c = Calibrator(cam, seconds, gain, say)
+    star = first_star(cam, seconds, gain, say, tick=tick)
+    c = Calibrator(cam, seconds, gain, say, tick)
     c.where = (star.x, star.y)
     columns, steps, notes = {}, {}, []
 
@@ -480,7 +499,7 @@ def reuse(cal, dec, west):
     return cols, ""
 
 
-def verify(cam, seconds, cal, cols, west, gain=None, say=print):
+def verify(cam, seconds, cal, cols, west, gain=None, say=print, tick=None):
     """The check on a reused calibration: VERIFY_STEPS steps west and back,
     north and back. Each must go the way the columns say, within
     VERIFY_ANGLE degrees and VERIFY_SIZE of the strength. Across the pier
@@ -490,8 +509,8 @@ def verify(cam, seconds, cal, cols, west, gain=None, say=print):
     started, Dec within the measured slack's worth plus RETURN_PX. Returns
     (True, "") or (False, why)."""
     ra_step, dec_step = (cal["step_ms"]["ra"] / 1000, cal["step_ms"]["dec"] / 1000)
-    star = first_star(cam, seconds, gain, say)
-    c = Calibrator(cam, seconds, gain, say)
+    star = first_star(cam, seconds, gain, say, tick=tick)
+    c = Calibrator(cam, seconds, gain, say, tick)
     c.where = (star.x, star.y)
     results = {}
     for direction, step in (("west", ra_step), ("north", dec_step)):
@@ -558,6 +577,10 @@ class Controller:
         self.slack_share = SLACK_START
         self.slack_most = (backlash + spread) / backlash if backlash > 0 else 0.0
         self.reversed_with = None       # the Dec error before a reversal with slack taken up
+        self.reset_limits()
+
+    def reset_limits(self):
+        """The three limits start again: only on an acknowledged relock."""
         self.sent = {"RA": 0.0, "Dec": 0.0}
         self.far_frames = 0
         self.saturated = {"RA": (0, 0), "Dec": (0, 0)}     # (sign, frames running at the longest)
@@ -643,9 +666,16 @@ class Controller:
 def write_state(state, path=None):
     path = path or STATE_FILE
     path.parent.mkdir(parents=True, exist_ok=True)
-    scratch = path.with_suffix(".tmp")
+    scratch = path.with_suffix(f".{threading.get_ident()}.tmp")
     scratch.write_text(json.dumps(state), encoding="utf-8")
     os.replace(scratch, path)
+
+
+def read_state(path=None):
+    try:
+        return json.loads((path or STATE_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
 
 
 def send(cam, seconds):
@@ -658,31 +688,309 @@ def send(cam, seconds):
             cam.pulse(plus if s > 0 else minus, abs(s))
 
 
+# ------------------------------------------------- owning the guide camera
+
+def alive(pid):
+    try:
+        os.kill(int(pid), 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except (TypeError, ValueError, OverflowError):
+        return False
+    return True
+
+
+def owner(path=None):
+    """The guider holding the guide camera ({pid, run, started}), or None
+    when no process that is still alive holds it."""
+    try:
+        held = json.loads((path or PID_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return held if isinstance(held, dict) and alive(held.get("pid")) else None
+
+
+def refuse_if_owned(what, path=None):
+    """For every other use of the guide camera or its ST4 port: refused
+    while a guider holds it."""
+    held = owner(path)
+    if held and held.get("pid") != os.getpid():
+        raise interface.Refusal("INVALID_REQUEST", f"The guider (process {held['pid']}, run {held.get('run')}) "
+                                f"holds the guide camera: no {what} until it stops (./guidecam.py tell stop).")
+
+
+class Ownership:
+    """The guide camera held by this process for as long as the `with`
+    lasts: one guider at a time. A pid file left by a process that has
+    died is taken over."""
+
+    def __init__(self, run, path=None):
+        self.path, self.run = path or PID_FILE, run
+
+    def __enter__(self):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        for _ in range(2):
+            try:
+                fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                held = owner(self.path)
+                if held:
+                    raise interface.Refusal("INVALID_REQUEST", f"A guider is already running (process "
+                                            f"{held['pid']}, run {held.get('run')}): one at a time.")
+                self.path.unlink(missing_ok=True)       # left by a guider that died
+                continue
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump({"pid": os.getpid(), "run": self.run, "started": time.time()}, f)
+            return self
+        raise interface.Refusal("INVALID_REQUEST", f"Could not take the guide camera's pid file {self.path}.")
+
+    def __exit__(self, *exc):
+        try:
+            held = json.loads(self.path.read_text(encoding="utf-8"))
+            if held.get("pid") == os.getpid():
+                self.path.unlink()
+        except (OSError, ValueError):
+            pass
+
+
+# ------------------------------------------------- the heartbeat
+
+class Heartbeat:
+    """The state file, written by the loop whenever something changes and
+    by a timer of its own every HEARTBEAT_S, whether or not a frame came
+    in. The timer also watches the loop: if the loop has not moved for
+    `stuck_after` seconds (the camera or a pulse hung inside the library),
+    it writes `fault` and stops beating, so no reader takes a hung guider
+    for a working one."""
+
+    def __init__(self, base, stuck_after, path=None, say=print):
+        self.path, self.stuck_after, self.say = path, stuck_after, say
+        self.fields = dict(base)
+        self.lock = threading.Lock()
+        self.halt = threading.Event()
+        self.moved = time.monotonic()
+        self.thread = threading.Thread(target=self._beat, daemon=True, name="guide-heartbeat")
+
+    def start(self):
+        self.write()
+        self.thread.start()
+        return self
+
+    def progress(self):
+        self.moved = time.monotonic()
+
+    def update(self, **fields):
+        with self.lock:
+            self.fields.update(fields, time=time.time())
+        self.progress()
+        self.write()
+
+    def write(self):
+        with self.lock:
+            self.fields["heartbeat"] = time.time()
+            write_state(self.fields, self.path)
+
+    def _beat(self):
+        while not self.halt.wait(HEARTBEAT_S):
+            idle = time.monotonic() - self.moved
+            if idle > self.stuck_after:
+                with self.lock:
+                    self.fields.update(state="fault", reason=f"the guide loop has not moved for {idle:.0f} s "
+                                       "(the camera or a pulse hung)", time=time.time())
+                try:
+                    self.write()
+                finally:
+                    self.say(f"guiding stopped: the loop has not moved for {idle:.0f} s")
+                return
+            try:
+                self.write()
+            except OSError:
+                pass
+
+    def stop(self):
+        self.halt.set()
+        if self.thread.is_alive():
+            self.thread.join(timeout=2 * HEARTBEAT_S)
+
+
+def health(state, run=None, now=None):
+    """Whether a state read from the file can be trusted: (True, "") or
+    (False, why). A heartbeat older than STALE_S, a process that has gone,
+    another run than the one expected, or `fault` all fail."""
+    now = time.time() if now is None else now
+    if not state:
+        return False, "no guider state"
+    if run is not None and state.get("run") != run:
+        return False, f"the state is run {state.get('run')}'s, not {run}'s"
+    if not alive(state.get("pid")):
+        return False, f"the guider (process {state.get('pid')}) has gone"
+    age = now - (state.get("heartbeat") or 0)
+    if age > STALE_S:
+        return False, f"the guider's heartbeat is {age:.0f} s old"
+    if state.get("state") == "fault":
+        return False, f"the guider is in fault: {state.get('reason')}"
+    return True, ""
+
+
+# ------------------------------------------------- orders
+
+def tell(order, args=(), run=None, path=None, state_path=None):
+    """An order for the running guider, numbered and naming its run (the
+    one in the state file unless `run` is given). Returns (number, run)."""
+    if order not in ORDERS:
+        raise interface.Refusal("INVALID_REQUEST", f"Unknown guider order '{order}'. Known: {', '.join(ORDERS)}")
+    if run is None:
+        state = read_state(state_path)
+        ok, why = health(state)
+        if not ok:
+            raise Fault(f"No guider to tell: {why}.")
+        run = state["run"]
+    number = int(time.time() * 1000)
+    path = path or ORDER_FILE
+    path.parent.mkdir(parents=True, exist_ok=True)
+    scratch = path.with_suffix(".tmp")
+    scratch.write_text(json.dumps({"n": number, "run": run, "order": order, "args": list(args),
+                                   "at": time.time()}), encoding="utf-8")
+    os.replace(scratch, path)
+    return number, run
+
+
+def wait_for(number, run, timeout=None, order=None, state_path=None, sleep=time.sleep):
+    """The outcome of order `number` sent to `run`: only an outcome with
+    both is accepted, so an answer left by an earlier guider never counts.
+    A guider that stops being healthy, a `failed` outcome or the order's
+    timeout is a Fault."""
+    timeout = timeout or ORDER_TIMEOUT.get(order, 30)
+    end = time.monotonic() + timeout
+    while time.monotonic() < end:
+        state = read_state(state_path)
+        done = (state or {}).get("order") or {}
+        if done.get("n") == number and done.get("run") == run:
+            if done.get("outcome") != "done":
+                raise Fault(f"The guider's {done.get('order')} failed: {done.get('reason')}.")
+            return done
+        ok, why = health(state, run)
+        if not ok and not (order == "stop" and (state or {}).get("state") == "stopped"):
+            raise Fault(f"Waiting for the guider's {order or 'order'}: {why}.")
+        sleep(0.2)
+    raise Fault(f"The guider did not carry out {order or 'the order'} within {timeout:.0f} s.")
+
+
+def take_order(run, taken, path=None, now=None):
+    """The next order for this guider, or None. An order is taken once
+    (its number above `taken`). One older than ORDER_STALE_S is thrown
+    away; one for another run is answered as failed, under that run, so
+    its sender hears why rather than waiting."""
+    path = path or ORDER_FILE
+    try:
+        left = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(left, dict) or (left.get("n") or 0) <= taken:
+        return None
+    now = time.time() if now is None else now
+    if now - (left.get("at") or 0) > ORDER_STALE_S:
+        path.unlink(missing_ok=True)
+        return None
+    return left
+
+
+# ------------------------------------------------- the loop
+
 def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, say=print,
-          state_path=None, log_folder=None):
-    """Stage 3: the closed loop. Finds a star, locks on it and keeps it
-    there until `minutes` pass, Ctrl-C, or a fault. The state file is
-    written every frame and each frame is logged to guide-DATE.jsonl."""
+          state_path=None, log_folder=None, run_id=None, order_path=None):
+    """The closed loop, with its heartbeat and its orders. Finds a star,
+    locks on it and keeps it there until `minutes` pass, a `stop` order,
+    Ctrl-C or SIGTERM, or a fault. The state file has the heartbeat every
+    second and everything else every frame; each frame is logged to
+    guide-DATE.jsonl. The caller holds the camera (Ownership)."""
     motion_check()
-    run_id = uuid.uuid4().hex[:8]
+    run_id = run_id or uuid.uuid4().hex[:8]
     folder = log_folder or LOG_FOLDER
     folder.mkdir(parents=True, exist_ok=True)
     log = folder / f"guide-{datetime.now():%Y%m%d}.jsonl"
     ctl = Controller(cols, cal.get("backlash_s", 0.0), cal.get("backlash_spread_s", 0.0), seconds, one_way)
-    base = {"pid": os.getpid(), "run": run_id, "exposure": seconds}
+    stuck_after = 3 * seconds + 5 + RETRY_S + 2 * LONGEST_PULSE
+    beat = Heartbeat({"pid": os.getpid(), "run": run_id, "exposure": seconds, "state": "starting"},
+                     stuck_after, state_path, say)
     errors = deque(maxlen=RMS_FRAMES)
-    lock, state, reason = None, "starting", ""
+    lock, state, reason, outcome = None, "starting", "", None
+    taken = (take_order(None, 0, order_path) or {}).get("n", 0)    # orders from before this run are not ours
+
+    def answer(order, done, why=""):
+        """An order's outcome, written once what it asked for is true."""
+        nonlocal outcome
+        outcome = {"n": order["n"], "run": order.get("run"), "order": order.get("order"),
+                   "outcome": "done" if done else "failed", "reason": why, "at": time.time()}
+        beat.update(order=outcome)
+        say(f"  order {order.get('order')}: {'done' if done else 'failed'}" + (f" ({why})" if why else ""))
+
+    def sigterm(signum, frame):
+        raise KeyboardInterrupt
+
     try:
-        # Finding the first star is inside the same cleanup as the loop: a
-        # failure here is a fault in the state file too, and the ST4 stop goes.
-        write_state({**base, "state": state, "time": time.time()}, state_path)
-        star = first_star(cam, seconds, gain, say)
+        previous = signal.signal(signal.SIGTERM, sigterm)
+    except ValueError:            # not the main thread
+        previous = None
+    beat.start()
+    resuming = stopping = None
+    try:
+        star = first_star(cam, seconds, gain, say, tick=beat.progress)
         lock = where = (star.x, star.y)
         say(f"locked on the star at {lock[0]:.1f}, {lock[1]:.1f} (SNR {star.snr:.1f}); guiding")
         lost, state = 0, "guiding"
+        beat.update(state=state, lock=list(lock))
         ended = time.monotonic() + minutes * 60 if minutes else None
-        while ended is None or time.monotonic() < ended:
+        while (ended is None or time.monotonic() < ended) and stopping is None:
+            beat.progress()
+            order = take_order(run_id, taken, order_path)
+            if order:
+                taken = order["n"]
+                name = order.get("order")
+                if order.get("run") != run_id:
+                    answer(order, False, f"sent to run {order.get('run')}; this guider is run {run_id}")
+                elif name == "stop":
+                    stopping = order
+                    break
+                elif name == "pause":
+                    cam.stop_pulse()                # no pulse can be running: they finish before this
+                    state = "paused"
+                    beat.update(state=state, pulses=[0.0, 0.0])
+                    answer(order, True)
+                elif name == "resume":
+                    if state != "paused":
+                        answer(order, False, f"not paused ({state})")
+                    else:
+                        state, lost, resuming = "guiding", 0, order
+                        beat.update(state=state)
+                elif name == "relock":
+                    state = "relocking"
+                    beat.update(state=state)
+                    try:
+                        star = first_star(cam, seconds, gain, say, patience=RELOCK_PATIENCE, tick=beat.progress)
+                    except Fault as why:
+                        state = "lost"
+                        beat.update(state=state)
+                        answer(order, False, why.message)
+                    else:
+                        lock = where = (star.x, star.y)
+                        ctl.reset_limits()
+                        errors.clear()
+                        lost, state = 0, "guiding"
+                        beat.update(state=state, lock=list(lock), sent_arcsec=ctl.sent)
+                        say(f"  relocked on the star at {lock[0]:.1f}, {lock[1]:.1f}")
+                        answer(order, True)
+                elif name == "dither":
+                    answer(order, False, "dithering is not built yet")
+                else:
+                    answer(order, False, f"unknown order {name}")
+            if state == "paused":
+                time.sleep(0.5)
+                continue
             frame, times = cam.timed_frame(seconds, gain)
+            beat.progress()
             row = {"time": times, "state": state}
             looking = (lock, RELOCK_RADIUS) if state == "lost" else (where, WINDOW)
             found, why = follow(frame, looking[0], looking[1])
@@ -697,6 +1005,9 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
                 if lost >= LOST_FRAMES and state != "lost":
                     state = "lost"
                     say(f"  star lost ({why}); no pulses; looking within {RELOCK_RADIUS} px of the lock")
+                    if resuming:
+                        answer(resuming, False, f"the star was not found after the pause ({why})")
+                        resuming = None
             else:
                 if state == "lost":
                     say("  star back; guiding")
@@ -707,6 +1018,9 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
                 errors.append((info["ra_px"] * SCALE, info["dec_px"] * SCALE))
                 pulsed = time.time()
                 send(cam, sent)
+                if resuming:
+                    answer(resuming, True)
+                    resuming = None
                 row.update(star={"x": round(found.x, 3), "y": round(found.y, 3), "snr": round(found.snr, 1),
                                  "hfd": round(found.hfd, 2), "peak": found.peak},
                            error_px=[round(error[0], 3), round(error[1], 3)],
@@ -722,19 +1036,19 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
             row["state"] = state
             with log.open("a", encoding="utf-8") as f:
                 f.write(json.dumps({**row, "run": run_id}) + "\n")
-            write_state({**base, "state": state, "time": time.time(), "lock": list(lock),
-                         "star": row.get("star"), "ra_err": row.get("ra_err"), "dec_err": row.get("dec_err"),
-                         "rms": rms, "pulses": list(sent), "sent_arcsec": ctl.sent}, state_path)
+            beat.update(state=state, lock=list(lock), star=row.get("star"), ra_err=row.get("ra_err"),
+                        dec_err=row.get("dec_err"), rms=rms, pulses=list(sent), sent_arcsec=dict(ctl.sent),
+                        rejected=row.get("rejected"))
             if found is not None:
                 say(f"  RA {row['ra_err']:+5.1f}\" Dec {row['dec_err']:+5.1f}\"  pulses {sent[0]:+.2f} "
                     f"{sent[1]:+.2f} s" + (f"  RMS {rms['total']:.2f}\"" if rms else ""))
-        state = "stopped"
+        state, reason = "stopped", ("a stop order" if stopping else "its time was up")
     except interface.Refusal as fault:
         state, reason = "fault", fault.message
         say(f"guiding stopped: {reason}")
         raise
     except KeyboardInterrupt:
-        state, reason = "stopped", "Ctrl-C"
+        state, reason = "stopped", "Ctrl-C or SIGTERM"
     except Exception as failure:            # anything else is a fault too, never left as "guiding"
         state, reason = "fault", f"{type(failure).__name__}: {failure}"
         say(f"guiding stopped: {reason}")
@@ -742,13 +1056,23 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
     finally:
         if state not in ("stopped", "fault"):
             state, reason = "fault", reason or "ended unexpectedly"
+        beat.stop()
         try:
             cam.stop_pulse()
         except Exception as failure:
             say(f"  the ST4 stop failed too: {failure}")
+        final = {"state": state, "reason": reason, "lock": list(lock) if lock else None, "pulses": [0.0, 0.0]}
+        if state == "stopped" and stopping:
+            final["order"] = {"n": stopping["n"], "run": stopping.get("run"), "order": "stop",
+                              "outcome": "done", "reason": "", "at": time.time()}
+        elif outcome:
+            final["order"] = outcome
         try:
-            write_state({**base, "state": state, "reason": reason, "time": time.time(),
-                         "lock": list(lock) if lock else None}, state_path)
+            with beat.lock:
+                beat.fields.update(final, time=time.time(), heartbeat=time.time())
+                write_state(beat.fields, state_path)
         except Exception as failure:        # never hide the error that ended the loop
             say(f"  the final state could not be written: {failure}")
+        if previous is not None:
+            signal.signal(signal.SIGTERM, previous)
     return state

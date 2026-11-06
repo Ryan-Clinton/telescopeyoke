@@ -28,6 +28,7 @@ status page. Linux only: the Windows library does not open it either.
 """
 import argparse
 import ctypes
+import os
 import subprocess
 import sys
 import tempfile
@@ -421,27 +422,65 @@ def guide_dry_run(args):
 
 def run_guider(args):
     import guider
-    with GuideCamera() as cam:
-        if args.action == "star":
+    if args.action == "star":
+        guider.refuse_if_owned("star")
+        with GuideCamera() as cam:
             shortest, longest = cam.driver.exposure_range(cam.handle)
             print(f"guide camera exposures {shortest * 1000:g} ms to {longest:g} s")
             guider.watch(cam, args.exposure, args.count, args.gain)
-            return
+        return
+    import uuid
+    run = uuid.uuid4().hex[:8]
+    # The camera is held for the whole of calibrate or guide: one guider at a time.
+    with guider.Ownership(run), GuideCamera() as cam:
         dec, west = pointing(args)
-        cal = None if args.recalibrate else guider.load_calibration()
-        cols, why = guider.reuse(cal, dec, west) if cal else (
-            None, "a new calibration asked for" if args.recalibrate else "no calibration kept")
-        if cols is not None:
-            print(f"checking the calibration of {cal['made']}")
-            ok, why = guider.verify(cam, args.exposure, cal, cols, west, args.gain)
-            cols = guider.reuse(cal, dec, west)[0] if ok else None
-        if cols is None:
-            if args.action == "guide":
-                print(f"calibrating: {why}")
-            cal = guider.calibrate(cam, args.exposure, dec, west, args.gain)
-            cols, _ = guider.reuse(cal, dec, west)
+        # Calibration and its check have a heartbeat too, as `calibrating`.
+        beat = guider.Heartbeat({"pid": os.getpid(), "run": run, "exposure": args.exposure,
+                                 "state": "calibrating"}, 3 * args.exposure + 5 + 2 * guider.CAL_LONGEST_MS / 1000
+                                + guider.RETRY_S).start()
+        try:
+            cal = None if args.recalibrate else guider.load_calibration()
+            cols, why = guider.reuse(cal, dec, west) if cal else (
+                None, "a new calibration asked for" if args.recalibrate else "no calibration kept")
+            if cols is not None:
+                print(f"checking the calibration of {cal['made']}")
+                ok, why = guider.verify(cam, args.exposure, cal, cols, west, args.gain, tick=beat.progress)
+                cols = guider.reuse(cal, dec, west)[0] if ok else None
+            if cols is None:
+                if args.action == "guide":
+                    print(f"calibrating: {why}")
+                cal = guider.calibrate(cam, args.exposure, dec, west, args.gain, tick=beat.progress)
+                cols, _ = guider.reuse(cal, dec, west)
+        except BaseException as failure:
+            beat.stop()
+            cam.stop_pulse()
+            beat.update(state="fault" if not isinstance(failure, KeyboardInterrupt) else "stopped",
+                        reason=getattr(failure, "message", str(failure)) or type(failure).__name__)
+            raise
+        beat.stop()
         if args.action == "guide":
-            guider.guide(cam, cols, cal, args.exposure, args.gain, args.minutes, args.dec_one_way)
+            guider.guide(cam, cols, cal, args.exposure, args.gain, args.minutes, args.dec_one_way, run_id=run)
+        else:
+            beat.update(state="stopped", reason="calibrated")
+
+
+def show_status():
+    import guider
+    state = guider.read_state()
+    if not state:
+        print("no guider has run")
+        return
+    ok, why = guider.health(state)
+    age = time.time() - (state.get("heartbeat") or 0)
+    print(f"guider run {state.get('run')} (process {state.get('pid')}): {state.get('state')}"
+          + (f" ({state.get('reason')})" if state.get("reason") else "")
+          + f"; heartbeat {age:.0f} s ago; " + ("healthy" if ok else f"not healthy: {why}"))
+    if state.get("rms"):
+        print(f"RMS RA {state['rms']['ra']:.2f}\" Dec {state['rms']['dec']:.2f}\" total {state['rms']['total']:.2f}\"")
+    if state.get("order"):
+        o = state["order"]
+        print(f"last order: {o.get('order')} #{o.get('n')} {o.get('outcome')}"
+              + (f" ({o.get('reason')})" if o.get("reason") else ""))
 
 
 def main(argv=None):
@@ -460,6 +499,10 @@ def main(argv=None):
     q.add_argument("--trigger", action="store_true", help="software trigger mode instead of video")
     q.add_argument("--speed", type=int, help="the camera's USB speed setting (0 is slowest)")
     q.add_argument("--window", type=float, default=12.0, help="seconds to count frames at each exposure")
+    sub.add_parser("status", help="the guider's state, and whether it can be trusted")
+    t = sub.add_parser("tell", help="an order for the running guider, waited for until done")
+    t.add_argument("order", choices=("pause", "resume", "relock", "stop"))
+    t.add_argument("--no-wait", action="store_true", help="send it and return")
     w = sub.add_parser("star", help="find a guide star and follow it, no pulses")
     w.add_argument("--count", type=int, default=30, help="frames to follow it through")
     for name, helptext in (("calibrate", "pulse each way in steps and learn what each does"),
@@ -488,9 +531,22 @@ def main(argv=None):
         if args.action in ("calibrate", "guide") and args.dry_run:
             guide_dry_run(args)
             return
+        if args.action == "status":
+            show_status()
+            return
+        if args.action == "tell":
+            import guider
+            number, run = guider.tell(args.order)
+            print(f"order {args.order} #{number} sent to run {run}")
+            if not args.no_wait:
+                done = guider.wait_for(number, run, order=args.order)
+                print(f"{args.order}: {done['outcome']}")
+            return
         if args.action in ("star", "calibrate", "guide"):
             run_guider(args)
             return
+        import guider
+        guider.refuse_if_owned({"probe": "probe", "pulse": "ST4 test", "snap": "snap"}.get(args.action, "use"))
         if args.action == "probe":
             with GuideCamera() as cam:
                 probe(cam, [float(e) for e in args.exposures.split(",")], args.trigger, args.speed, args.window)
