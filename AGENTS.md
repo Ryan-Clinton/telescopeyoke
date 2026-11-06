@@ -40,6 +40,7 @@ them and every file kept under `demo/`.
 | `agent.py`, `interface.py` | Read-only facts for programs; the JSON envelope, error codes, states |
 | `mcp_server.py` | Read-only MCP server over `agent.py` |
 | `tonight.py`, `sky.py`, `feeds.py`, `page.py`, `serve.py` | Planner, status page, read-only web API |
+| `compendium.py` | Gary Imm's Deep Sky Compendium: `fetch` downloads his free workbook from his own link into `cache/` (never the repository: it is his), `import FILE` reads a copy downloaded by hand. When it is here, `sky.load_targets()` gives the catalogue's targets his rating (0 to 5) and note, adds his other objects 1' or larger, and the planner counts the rating as half of a target's appeal; without it, nothing changes |
 | `app.py` | TelescopeYoke, the application: a window of its own over `console.py`'s server, with every screen |
 | `console.py`, `console/` | The server and the page behind the application; run by itself, the companion page in a browser (observing only). This computer only; runs the other scripts |
 | `mount.py`, `tracking.py`, `polaralign.py`, `polaris.py`, `landmark.py`, `simulator.py` | Mount control, drift model, polar alignment by the stars, the same by day from Polaris alone (experimental: not yet found on the real sky), azimuth by a remembered landmark, simulated handset and motor board |

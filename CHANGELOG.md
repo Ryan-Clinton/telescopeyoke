@@ -6,6 +6,12 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+- **6 November 2026**: Gary Imm's Deep Sky Compendium, fetched onto this
+  computer by `./compendium.py fetch` or the Settings screen's button,
+  gives the targets his 0-to-5 rating and note, adds about 1,800 of his
+  other objects, and weighs his rating into the planner's ranking; it
+  never goes in the repository ([commands](docs/agents/commands.md)).
+
 - **3 November 2026**: VSX is asked of every VizieR mirror in turn, a
   dead one left after 10 seconds, and an empty page is no longer read as
   "not in VSX" ([archive](docs/archive.md)).

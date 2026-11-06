@@ -251,6 +251,8 @@ ACTIONS = {
     "horizon":    {"label": "Horizon survey", "command": survey, "uses": "mount", "moves": True,
                    "says": "This moves the mount all over the sky, over the pole and back, for "
                            "about a minute per look. Keep clear of it while it runs."},
+    "compendium": {"label": "Download Gary Imm's Compendium", "uses": None, "moves": False,
+                   "command": lambda p: ["compendium.py", "fetch"]},
     "horizon-forget": {"label": "Forget the measured skyline", "uses": None, "moves": False,
                        "command": lambda p: ["horizon.py", "--forget"]},
     # The skyline from a phone panorama (panorama.py). None of it moves the
@@ -360,7 +362,7 @@ WORKSTATION = ("camera-setup", "camera-capabilities", "camera-throughput", "came
                "polaris-check", "polaris-find", "polaris-align",
                "drift", "compensate", "sync", "open-settings",
                "polar-repeat", "pointing-survey", "camera-timing", "camera-trail",
-               "find-home", "true-home")
+               "find-home", "true-home", "compendium")
 # Orders that have a run move the mount or change its motors.
 MOVING_ORDERS = ("run-recentre", "run-assist-on", "run-assist-off")
 
@@ -771,6 +773,7 @@ class Reader:
             "targets": [{"id": t["id"], "name": t["name"], "kind": t["kind"], "score": round(t["score"]),
                          "best": t["best"], "best_alt": round(t["best_alt"]), "direction": t["direction"],
                          "start": t["start"], "end": t["end"], "tags": t["tags"], "now": t["now"],
+                         "rating": t.get("rating"), "note": t.get("note", ""),
                          "row": tonight.target_row(i, t)}
                         for i, t in enumerate(rep["targets"][:40], 1)],
         }
@@ -842,7 +845,9 @@ class Reader:
         # [camera] is the 183c's table whichever camera is in use now; a
         # profile's own table is its [cameras.NAME].
         in_use = dict(in_use, camera=in_use["cameras"][config.LEGACY_CAMERA])
+        import compendium
         return {"file": str(config.FILE), "exists": config.FILE.exists(), "demo": self.demo,
+                "compendium": compendium.status(),
                 "fields": [dict({"section": name, "key": key, "label": label, "kind": kind, "help": text,
                                  "value": shown(config.section_of(written if limits.get("optional") else in_use,
                                                                   name).get(key))},

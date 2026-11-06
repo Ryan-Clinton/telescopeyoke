@@ -534,6 +534,7 @@ async function choose(id) {
   fact("Best", ranked.best_time ? clockTime(ranked.best_time) : null);
   fact("Window", ranked.window ? `${clockTime(ranked.window[0])} to ${clockTime(ranked.window[1])}` : null);
   fact("Notes", (ranked.tags || []).join(", ").toLowerCase());
+  fact("Gary Imm", t.rating != null ? `${t.rating}/5${t.note ? ": " + t.note : ""}` : t.note);
   const allowed = t.goto && t.goto.allowed;
   const go = el("button", { type: "button", text: `Go to ${t.id}`, "data-needs": "mount", "data-gate": "goto", on: { click: () => makePlan("goto", { target: t.id }) } });
   const centre = el("button", { type: "button", text: "Centre with plate solve", "data-needs": "imaging", "data-gate": "goto", on: { click: () => makePlan("goto", { target: t.id, solve: true }) } });
@@ -1082,6 +1083,10 @@ async function loadSettings() {
   $("settings-note").textContent = all.demo ? "The demo uses the example settings; they cannot be changed here."
     : all.exists ? `Saved in ${all.file}.` : `No settings file yet. Saving makes ${all.file}; put your own location in first.`;
   $("save-settings").disabled = $("open-settings").disabled = !!all.demo;
+  const imm = all.compendium || {};
+  $("compendium-state").textContent = imm.present ? `Here: ${imm.edition}, ${imm.objects} objects. Downloading again fetches the edition his page links to now.`
+    : "Not downloaded yet.";
+  $("compendium").textContent = imm.present ? "Download it again" : "Download the Compendium";
   $("settings-wrong").hidden = true;
 }
 
@@ -1280,6 +1285,7 @@ $("hardware-report").addEventListener("click", async () => {
 });
 $("horizon-run").addEventListener("click", () => makePlan("horizon", { trace: $("horizon-trace").checked, daylight: $("horizon-daylight").checked, fresh: $("horizon-fresh").checked }));
 $("horizon-forget").addEventListener("click", () => act("horizon-forget"));
+$("compendium").addEventListener("click", () => act("compendium"));
 $("pano-use").addEventListener("click", () => { panoShown = 1; panoPending = null; act("panorama-use", { file: $("pano-file").value }); });
 $("pano-also").addEventListener("click", () => act("panorama-also", { file: $("pano-file").value }));
 $("pano-save").addEventListener("click", () => act("panorama-save"));

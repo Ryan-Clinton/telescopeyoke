@@ -556,11 +556,12 @@ def target_row(i, t):
             f"{t['best_alt']:.0f}° {t['direction']}",
             f"{hm(t['start'])}-{hm(t['end'])}",
             "" if t["moon_sep"] is None else f"{t['moon_sep']}°",
-            f"{t['sky']:.1f}", f"{t['score']:.0f}"]
+            f"{t['sky']:.1f}", f"{t['score']:.0f}",
+            "" if t.get("rating") is None else f"{t['rating']}/5"]
 
 
 TARGET_HEAD = ["#", "Object", "Name", "Type", "Mag", "Size", "Best", "Alt",
-               "Window", "Moon", "Sky", "Score"]
+               "Window", "Moon", "Sky", "Score", "Imm"]
 WEATHER_HEAD = ["Time", "Cloud", "Low/Mid/High", "Rain", "Temp", "Dew gap",
                 "Wind/gust from", "Seeing", "Transp."]
 
@@ -601,7 +602,8 @@ def render_text(rep, top):
     out += ["", f"Top {len(rows)} of {len(rep['targets'])} observable targets", ""]
     out += [table(TARGET_HEAD, rows), "",
             "Sky = background brightness at the target's best time, including "
-            "moonlight (higher is darker)."]
+            "moonlight (higher is darker). Imm = Gary Imm's rating, 0 to 5, when his "
+            "Compendium has been fetched (./compendium.py fetch)."]
     if rep.get("supernovae"):
         out += ["", "Bright supernovae up tonight (Rochester's active list):"]
         out += [f"  {s['id']} in {s['name']} ({s['type']}), mag {s['mag']:g} on {s['last_seen']}: "

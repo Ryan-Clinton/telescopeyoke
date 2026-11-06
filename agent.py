@@ -458,7 +458,8 @@ def _report(demo=False):
 def _target(t):
     return {"id": t["id"], "name": t["name"], "kind": t["kind"], "score": t["score"],
             "observable_now": t["now"], "best_time": t["best"], "best_altitude_deg": t["best_alt"],
-            "direction": t["direction"], "window": [t["start"], t["end"]], "tags": t["tags"]}
+            "direction": t["direction"], "window": [t["start"], t["end"]], "tags": t["tags"],
+            "rating": t.get("rating"), "note": t.get("note", "")}
 
 
 def spots():
@@ -1287,6 +1288,9 @@ def target(name, demo=False):
     out = {"id": found["id"], "name": found.get("name", ""), "kind": found.get("kind", "star"),
            "altitude_deg": round(float(altitude), 1), "hour_angle_hours": round(float(hour_angle) / 15, 3),
            "dec_deg": round(float(dec), 2)}
+    # Gary Imm's rating and note, when his Compendium has been fetched.
+    if found.get("rating") is not None or found.get("note"):
+        out.update(rating=found.get("rating"), note=found.get("note", ""))
     try:
         plan = mount.plan_goto(name, site)
         out["goto"] = {"allowed": True, "pier_side": plan["pier_side"], "warnings": plan["warnings"]}

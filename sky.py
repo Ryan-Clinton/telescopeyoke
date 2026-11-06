@@ -96,15 +96,19 @@ def load_targets():
         return float(text) if text else None
 
     with CATALOGUE.open(encoding="utf-8") as f:
-        return [
+        targets = [
             {"id": r["id"], "alt_id": r["alt_id"], "name": r["name"],
              "kind": r["kind"], "const": r["const"],
              "ra": float(r["ra_deg"]), "dec": float(r["dec_deg"]),
              "mag": number(r["mag"]), "size": number(r["size_arcmin"]),
              "minor": number(r["minor_arcmin"]), "messier": bool(r["messier"]),
-             "hubble": r.get("hubble") or None}
+             "hubble": r.get("hubble") or None, "rating": None, "note": ""}
             for r in csv.DictReader(f)
         ]
+    # Gary Imm's ratings and notes, and his other objects, when this computer
+    # has fetched his Compendium (compendium.py); without it, as before.
+    import compendium
+    return compendium.merge(targets)
 
 
 def separation(ra1, dec1, ra2, dec2):
@@ -310,6 +314,10 @@ class Night:
             # Messier and named objects are the proven showpieces.
             appeal = min(1.0, 0.75 * brightness + 0.25 * target.get("messier", False)
                          + 0.12 * bool(target.get("name")))
+            # An experienced imager's rating (Gary Imm's, 0 to 5) of how well
+            # it rewards a camera counts for half when there is one.
+            if target.get("rating") is not None:
+                appeal = 0.5 * appeal + 0.5 * target["rating"] / 5
             score = 100 * (0.45 * height + 0.40 * appeal + 0.15 * duration) * visibility
 
         return {
@@ -324,11 +332,15 @@ class Night:
             "sky": round(sky, 2),
             "contrast": None if contrast is None else round(float(contrast), 1),
             "score": round(float(score), 1),
+            "rating": target.get("rating"), "note": target.get("note") or "",
         }
 
 
 def surface_brightness(target):
-    """Mean surface brightness in mag/arcsec² from total magnitude and size."""
+    """Mean surface brightness in mag/arcsec² from total magnitude and size,
+    or as the catalogue gives it (the Compendium's objects)."""
+    if target.get("surf_br") is not None:
+        return target["surf_br"]
     mag, major = target.get("mag"), target.get("size")
     if mag is None or not major:
         return DEFAULT_SURFACE_BRIGHTNESS

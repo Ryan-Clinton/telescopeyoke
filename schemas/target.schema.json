@@ -57,6 +57,19 @@
           "type": "object"
         }
       }
+    },
+    "rating": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 5,
+      "description": "Gary Imm's rating in his Deep Sky Compendium, 0 (low) to 5 (high); null when he has none or the Compendium has not been fetched (compendium.py)."
+    },
+    "note": {
+      "type": "string",
+      "description": "Gary Imm's note on the object from his Compendium; empty when there is none."
     }
   }
 }

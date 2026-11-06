@@ -53,6 +53,7 @@ COMMANDS = {
     "brokers.py": ("local_write", {"--follow": "hardware"},
                    {"--plan": "local_write", "--dry-run": "local_write"}),
     "build_catalogue.py": ("local_write", {}, {}),
+    "compendium.py": ("local_write", {"status": "read_only"}, {}),   # fetches Gary Imm's workbook into cache/
     "calibrate.py": ("hardware", {}, {}),
     "camera_setup.py": ("local_write", {"--check": "read_only"}, {}),
     "cameras.py": ("read_only", {"--go": "local_write"}, {}),   # the profiles; move-183c --go moves the 183C's files
