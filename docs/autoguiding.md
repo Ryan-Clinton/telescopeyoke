@@ -2,7 +2,7 @@
 
 [README](../README.md) · [All docs](README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Results](results.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
-**Specification, 6 November 2026. Stages 1 to 3 built, not yet run on the sky.** This says what autoguiding
+**Specification, 6 November 2026.** **Status:** the ST4 lead works; stages 1 to 3 (star, calibration, loop) are built and have not guided; the guide camera does not yet deliver 2 s frames on its hub ([the record](nights/2026-11-06/guide-camera.md)), which blocks any sky test; stages 4 onward are not built. This says what autoguiding
 should do on this rig, what has to change around it, and how the first clear
 night proves it. Figures measured on this rig say when; figures from other
 people say whose; the rest are starting values to be tuned on the sky.

@@ -422,7 +422,7 @@ Later, if people ask for them:
   rely on. Today's hand-written one speaks the protocol directly to avoid a dependency;
   the telescope logic stays in `agent.py` either way.
 - The agent scenarios in `evals/` run with a real model in the loop.
-- Guiding (the guide camera opens; it waits for a guide scope).
+- Guiding through the guide camera's ST4 lead: the lead moves the mount, and the guider's star, calibration and loop are built, but nothing has guided yet; the guide camera does not yet deliver frames steadily enough ([Autoguiding](docs/autoguiding.md)).
 
 Not planned: ASCOM's Windows-only COM interface (Alpaca reaches the same drivers, and is planned: [Mounts](docs/mounts.md)), mobile apps, a React front end, cloud services, Docker images, plugin systems, a sequencing language. Bigger
 projects (NINA, KStars/Ekos) do those well; this one stays small, readable,

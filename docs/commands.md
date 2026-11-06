@@ -99,6 +99,20 @@ The cooled camera, discovery and research scripts:
 | `seti.py` | Narrowband radio signals in Breakthrough Listen's open data, with the ON-OFF cadence test ([docs/seti.md](seti.md)). |
 | `alert.py`, `notify.py` | The house's lights and speaker, and the phone by Telegram ([docs/alerts.md](alerts.md)). |
 
+### Guiding, in order
+
+Not yet proven on the sky ([Autoguiding](autoguiding.md)). The mount must be tracking. **Moves the mount** marks the ones that send ST4 pulses; each has `--dry-run`, and each checks the motion lock before every pulse.
+
+| Step | Command | Moves the mount |
+|---|---|---|
+| 1. The camera's frames arrive | `./guidecam.py probe --exposures 2` | no |
+| 2. A star found and followed | `./guidecam.py star --count 30` | no |
+| 3. The ST4 lead | `./guidecam.py pulse` | **yes**, 5 s each way |
+| 4. Calibration | `./guidecam.py calibrate` | **yes**, about 3 minutes of steps |
+| 5. Guiding | `./guidecam.py guide --minutes 10` | **yes**, until stopped or a fault |
+
+`guide` reuses the kept calibration after a short check move each way, or calibrates first.
+
 ## How it works
 
 It is built from plain, focused Python files rather than a framework, each

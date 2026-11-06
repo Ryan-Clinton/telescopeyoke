@@ -409,7 +409,9 @@ def calibrate(cam, seconds, dec, west, gain=None, say=print, rate=GUIDE_RATE):
         raise Fault(f"RA and Dec moved the star {between:.0f} degrees apart, not 90 +/- 10: the measurement "
                     "is not to be trusted (wind, a slipping clutch, or the star mistaken). Calibration failed; "
                     "nothing kept.")
-    # Warnings only: the calibration measured what the mount does, and that is what is used.
+    # Usable from here. Whether it also meets the first night's pass
+    # (docs/autoguiding.md, proof step 1) is said apart: a usable calibration
+    # is not a passed commissioning.
     for label, measured in (("RA", ra_rate), ("Dec", dec_rate)):
         if abs(measured / rate - 1) > 0.2:
             notes.append(f"{label} guide rate {measured:.1f}\"/s, not within 20 % of {rate:.1f}")
@@ -426,11 +428,14 @@ def calibrate(cam, seconds, dec, west, gain=None, say=print, rate=GUIDE_RATE):
         "ra_rate": round(ra_rate, 2), "dec_rate": round(dec_rate, 2),
         "backlash_s": round(backlash, 2), "backlash_spread_s": round(spread, 2),
         "dec_after_flip": None, "notes": notes,
+        "usable": True, "first_night_pass": not notes,
     }
     say(f"  camera angle {angle:.1f} deg, axes {between:.1f} deg apart, guide rate RA {ra_rate:.1f}\"/s, "
         f"Dec {dec_rate:.1f}\"/s")
     for note in notes:
-        say(f"  warning: {note}")
+        say(f"  short of the first night's pass: {note}")
+    say("  usable for guiding; " + ("meets the first night's calibration pass" if not notes
+                                     else "does NOT meet the first night's calibration pass"))
     keep_calibration(cal)
     return cal
 
@@ -500,15 +505,25 @@ def verify(cam, seconds, cal, cols, west, gain=None, say=print):
         end = c.back(direction, step, VERIFY_STEPS)[-1]
         home = c.back(OPPOSITE[direction], step, VERIFY_STEPS)[-1]
         results[direction] = np.subtract(end, start) / (VERIFY_STEPS * step)
+        results[OPPOSITE[direction]] = np.subtract(home, end) / (VERIFY_STEPS * step)
         missed = math.hypot(home[0] - start[0], home[1] - start[1])
         allowed = RETURN_PX + (cal.get("backlash_s", 0.0) * float(np.hypot(*cols["north"]))
                                if direction == "north" else 0.0)
         if missed > allowed:
             return False, (f"{OPPOSITE[direction]} did not bring the star back: {missed:.1f} px from where "
                            f"it started, more than {allowed:.1f}")
+    say("  check: " + ", ".join(f"{k} {v[0]:+.2f},{v[1]:+.2f} px/s" for k, v in results.items()))
+    measured_now = None             # Dec after a flip, if this check is what found it out
     for direction, got in results.items():
-        want = cols[direction]
+        want = -cols[direction] if direction == "south" and measured_now == "negated" else cols[direction]
         strength, expected = float(np.hypot(*got)), float(np.hypot(*want))
+        if direction == "south":
+            # The way back after a reversal: shortened by the slack by design,
+            # so only its direction is judged.
+            off = math.degrees(math.acos(np.clip(np.dot(got, want) / max(strength * expected, 1e-9), -1, 1)))
+            if strength < 0.1 * expected or off > 90:
+                return False, f"south did not move the star back towards where it came from ({off:.0f} degrees off)"
+            continue
         if abs(strength / max(expected, 1e-9) - 1) > VERIFY_SIZE:
             return False, f"{direction} moved the star {strength:.2f} px/s against {expected:.2f}"
         off = math.degrees(math.acos(np.clip(np.dot(got, want) / max(strength * expected, 1e-9), -1, 1)))
@@ -516,7 +531,7 @@ def verify(cam, seconds, cal, cols, west, gain=None, say=print):
             what = "same" if off < VERIFY_ANGLE else "negated" if off > 180 - VERIFY_ANGLE else None
             if what is None:
                 return False, f"north went {off:.0f} degrees from either way it could"
-            cal["dec_after_flip"] = what
+            cal["dec_after_flip"] = measured_now = what
             keep_calibration(cal)
             say(f"  after a flip, Dec on this mount: {what}; kept")
             continue
@@ -656,12 +671,16 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
     ctl = Controller(cols, cal.get("backlash_s", 0.0), cal.get("backlash_spread_s", 0.0), seconds, one_way)
     base = {"pid": os.getpid(), "run": run_id, "exposure": seconds}
     errors = deque(maxlen=RMS_FRAMES)
-    star = first_star(cam, seconds, gain, say)
-    lock = where = (star.x, star.y)
-    say(f"locked on the star at {lock[0]:.1f}, {lock[1]:.1f} (SNR {star.snr:.1f}); guiding")
-    lost, state, reason = 0, "guiding", ""
-    ended = time.monotonic() + minutes * 60 if minutes else None
+    lock, state, reason = None, "starting", ""
     try:
+        # Finding the first star is inside the same cleanup as the loop: a
+        # failure here is a fault in the state file too, and the ST4 stop goes.
+        write_state({**base, "state": state, "time": time.time()}, state_path)
+        star = first_star(cam, seconds, gain, say)
+        lock = where = (star.x, star.y)
+        say(f"locked on the star at {lock[0]:.1f}, {lock[1]:.1f} (SNR {star.snr:.1f}); guiding")
+        lost, state = 0, "guiding"
+        ended = time.monotonic() + minutes * 60 if minutes else None
         while ended is None or time.monotonic() < ended:
             frame, times = cam.timed_frame(seconds, gain)
             row = {"time": times, "state": state}
@@ -728,8 +747,8 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
         except Exception as failure:
             say(f"  the ST4 stop failed too: {failure}")
         try:
-            write_state({**base, "state": state, "reason": reason, "time": time.time(), "lock": list(lock)},
-                        state_path)
+            write_state({**base, "state": state, "reason": reason, "time": time.time(),
+                         "lock": list(lock) if lock else None}, state_path)
         except Exception as failure:        # never hide the error that ended the loop
             say(f"  the final state could not be written: {failure}")
     return state

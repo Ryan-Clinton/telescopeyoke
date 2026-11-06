@@ -63,7 +63,8 @@ outlook` puts it first.
 | Comets in spacecraft pictures | ✅ known comets found in archived LASCO pictures; 19 October, the six-hourly hunt found a known Kreutz sungrazer by itself in 74 GOES-19 CCOR-1 pictures, followed it for 7 hours across a gap and matched it to the Sungrazer Project's report to about 2 pixels; SOHO's C3 showed it too (`docs/discovery/comet-hunt-2026-10-19`); false alarms beside CCOR-1's occulter arm stopped on 27 October by measuring each pixel's own noise (`docs/discovery/results.md`) |
 | Lights, speaker and phone alerts | ✅ cloud and rain alerts changed a Hue light and spoke on a Google speaker (before the watch was turned off on 16 October); the call at 04:59 on 20 October, when a transit run stopped, pulsed the house's lights, spoke and sent the phone message, and woke the person |
 | Live stream on Twitch | ✅ on air from 01:20 UTC on 20 October on the WASP-12 b run: 1080p, the title, category and tags set for each target, the presenter and the chat's commands; one 9-minute freeze when old code met new words (restarted). YouTube went on air at 23:05 on 1 November with its title set automatically |
-| Guide camera | ⚠️ the GPCAM MT9M034M opens only through libaltaircamlegacy 1.24, by `./guidecam.py`; frames of 17, 151 and 255 at 1, 10 and 100 ms on 2 November. No guiding yet: it waits for the guide scope |
+| Guide camera | ⚠️ the GPCAM MT9M034M opens only through libaltaircamlegacy 1.24, by `./guidecam.py`; single frames at 1 to 100 ms (2 November). Its ST4 lead moves the mount all four ways (6 November). Frames at guiding exposures fail on its present hub connection: gaps of about 3 s even at 0.1 s, none at 2 s (6 November, [record](nights/2026-11-06/guide-camera.md)) |
+| Autoguiding | ❌ not proven. Stages 1 to 3 (star, calibration, loop) built on 6 November, dry runs only; nothing has guided ([spec](autoguiding.md)) |
 | Exoplanet transit photometry | ⚠️ one attempt, WASP-12 b on 20 October: 973 frames, dimming of about the right size seen but not a detection: no baseline after the transit (cloud), and about 14 mmag per 40 s point (`docs/discovery/transit-wasp12b-2026-10-20`) |
 | Photometric hold (`shoot.py --hold`) | 🧪 built and reviewed 20 October; not yet run on the real mount |
 | The night's end: parked and told | 🧪 `schedule.py end` and the morning guard, built and reviewed 20 October; `mount.py home` itself proven, the whole not yet through a real night |
@@ -654,6 +655,10 @@ focuser not touched since the stars.
   255 at 1, 10 and 100 ms. No guiding yet: it waits for the guide scope.
 - **YouTube** went on air at 23:05 on 1 November with its title set
   automatically.
+
+### 6 November 2026: the guide camera
+
+Indoors, no sky ([the record](nights/2026-11-06/guide-camera.md)). Proven: the GPCAM's ST4 lead moves the mount north, south, east and west, about 7.1"/s (`./guidecam.py pulse`). Failed: the guide camera and the filter wheel together on the unpowered Trust hub; and, with the wheel unplugged, a steady supply of frames: gaps of about 3 s even at 0.1 s and no 2 s frame at all, in video and in software trigger mode (`./guidecam.py probe`). The cause is not known. Built, not proven: the guider's first three stages (`./guidecam.py star`, `calibrate`, `guide`), dry runs only.
 
 ### 4 November 2026: the 183M mono rig
 
