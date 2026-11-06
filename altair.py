@@ -54,6 +54,8 @@ RAMP_STEP_C, RAMP_EVERY_S = 0.5, 30.0
 COOL_POLL_S = 5.0
 FULL_POWER = 0.95      # a share of the cooler's most voltage taken as all it has
 STUCK_S = 180          # at full power this long with the sensor no colder: it cannot reach the target
+NO_POWER_S = 120.0     # the cooler at 0 % this long while the sensor is well above its set point: no 12 V
+NO_POWER_ABOVE_C = 2.0
 WARM_STEP_C, WARM_EVERY_S, WARM_STEPS_MOST = 3.0, 60.0, 15   # the warm-up at the end of a run
 WARM_MOST_S = 600      # the longest the warm-up takes, however it ends: then the cooler goes off regardless
 AMBIENT_FILE = "cache/sensor_ambient.json"   # under config.DATA: the sensor's temperature before cooling
@@ -545,7 +547,7 @@ class AltairCamera:
             return True
         if wait is None:
             wait = (self.level - self.target) / RAMP_STEP_C * RAMP_EVERY_S + COOL_WAIT_S
-        end, said, best, since = clock() + wait, None, None, clock()
+        end, said, best, since, idle = clock() + wait, None, None, clock(), None
         self._stepped = clock()          # the step cool() set counts from here, on this clock
         while True:
             ramped = self.ramp(clock)
@@ -560,6 +562,17 @@ class AltairCamera:
             if not ramped or best is None or degrees < best - 0.2:
                 best, since = degrees, clock()
             usage = f", cooler at {100 * share:.0f}% of its power" if share is not None else ""
+            # A cooler drawing nothing while the sensor sits well above the set
+            # point has no power (6 November 2026: 14 min at 0 %, the sensor
+            # rising from 24.8 to 31.0 °C as the set point went down to -1.7 °C).
+            if share is not None and share <= 0 and degrees > self.level + NO_POWER_ABOVE_C:
+                idle = clock() if idle is None else idle
+                if clock() - idle >= NO_POWER_S:
+                    raise CameraError(f"the cooler has drawn no power for {NO_POWER_S / 60:.0f} min while the sensor is "
+                                      f"at {degrees:.1f} °C, {degrees - self.level:.1f} °C above its set point of "
+                                      f"{self.level:g} °C: is the cooler's 12 V supply plugged in? No frames kept.")
+            else:
+                idle = None
             if ramped and share is not None and share >= FULL_POWER and clock() - since >= STUCK_S:
                 raise CameraError(f"the cooler is at full power and the sensor has stayed at {degrees:.1f} °C, "
                                   f"{degrees - self.target:.1f} °C above its target of {self.target:g} °C: it cannot "
