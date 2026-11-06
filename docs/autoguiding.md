@@ -283,6 +283,98 @@ In order, each with what counts as passing.
 Each result goes in `docs/nights/DATE/` and, where it changes what is
 proven, is linked from `docs/validation.md`.
 
+## Measuring and publishing the mount's periodic error
+
+### Why it is worth doing
+
+- **Sky-Watcher publishes no periodic error figure** for the EQ3 Pro, or
+  for any of its mounts as far as a search on 6 November 2026 found.
+- **Figures in circulation are retailer estimates that disagree:**
+  - HEQ5: "±10 arcsec" [8], and 3–5" and 5–10" on two pages of one blog
+    network;
+  - EQ6-R: 12–15" on a blog, and 1.00" on AstroBin's equipment page [9].
+- **Measured results are scattered** through single forum posts, mostly for
+  other mounts. CCDWare cites a survey of 50 PEMPro users but shows no
+  per-mount table [10].
+- **No EQ3 Pro measurement was found at all**, and no shared database for
+  any mount.
+- **Single spec numbers hide a lot of variation**: a forum post gives typical
+  uncorrected error as ±15" "but can vary widely between mounts" [11].
+- **The general range** quoted for entry-level mounts is 30–120" peak to
+  peak [12].
+
+That search was a handful of queries. Before claiming a first, search
+Cloudy Nights and Stargazers Lounge properly.
+
+### What is known about ours
+
+The RA worm wheel has 130 teeth: 35,200 handset counts per worm turn
+(`docs/agents/hardware.md`). A sidereal day of 86,164.1 s divided by 130
+gives a worm period of **662.8 s, about 11 minutes**. The periodic error
+should repeat on that cycle, with harmonics from the other gears.
+
+### The measurement: `./guidecam.py pe`
+
+A project command, written before its first use.
+
+1. A star near Dec 0 and near the meridian, where RA motion and the error
+   are at their largest.
+2. Tracking only: no guiding, no drift assist trims, no hold.
+3. Guide camera frames of 1 to 2 s, for at least 5 worm periods (about an
+   hour). That follows EQMOD's PECPrep guidance of at least five periods
+   [13].
+4. Each frame records:
+   - the star's centroid;
+   - the time;
+   - the RA axis reading from the handset, giving the worm's angle within
+     its turn (counts modulo 35,200).
+
+   The handset is read only.
+5. The analysis:
+   - centroid to RA arcseconds, using the scale and the camera's angle
+     from the guider's calibration;
+   - take out the steady drift (a straight line), which comes from polar
+     alignment and tracking rate, not the worm;
+   - fold what is left on the worm's angle, not the clock, so different
+     nights line up;
+   - report the average curve, its peak-to-peak with an uncertainty, the
+     strongest harmonics (as periods in seconds) and the steepest rate of
+     change in "/s, the number that matters for guiding.
+6. Frames hit by wind, or with the star lost, are flagged and left out of
+   the fit, with a count of how many.
+
+Most published curves are tied to the clock. Tagging each frame with the
+worm's angle ties the curve to the gear itself. It makes nights and owners
+comparable, and the same curve could drive periodic error correction later.
+
+### What gets published
+
+- `docs/results.md`, with the figure, the curve as a picture, the method,
+  and the raw CSV in the repository. Linked from `docs/validation.md`.
+- The user's blog entry on ryanclinton.uk, through the usual inbox.
+- Forum posts on Cloudy Nights and Stargazers Lounge, written by the user
+  as with their other public posts.
+- The method made usable by other owners: `pe` should work from any
+  camera's frames, and from a mount reached through `direct.py` as well as
+  the handset, so others can measure theirs the same way.
+- Later, if others take part: an open table of mount, unit, date,
+  peak-to-peak, method and link to data. It would show the spread between
+  units that single spec numbers hide.
+
+### Limits
+
+- **One mount is not the model.** The first result is "this EQ3 Pro", and
+  only many owners would make a figure for the model.
+- **Seeing** blurs a single 2 s frame by 1 to 2". The fold over 5 or more
+  turns averages that down.
+- **Wind** shows as spikes that do not repeat with the worm.
+
+### When
+
+On the first clear night, after the guider's calibration (proof step 1),
+since `pe` uses its scale and angle. Or on any later night with an hour
+spare. Results go in `docs/nights/DATE/` like the rest.
+
 ## Questions for review
 
 1. **PHD2 instead of our own guider?** PHD2 can drive the camera through
@@ -302,6 +394,10 @@ proven, is linked from `docs/validation.md`.
 6. **Off-axis guider later?** On a Newtonian an off-axis guider removes
    differential flexure, which forum users often recommend [7]. Is it worth
    planning for now?
+7. **Periodic error measurement:** is an hour of 2 s guide camera frames at
+   4.77"/px enough for a figure worth publishing? Is folding on the worm's
+   angle from the handset sound? And has anyone already published an EQ3
+   Pro curve that the search missed?
 
 ## Sources
 
@@ -312,3 +408,9 @@ proven, is linked from `docs/validation.md`.
 5. [SX Universal Filter Wheel handbook](https://manualmachine.com/starlightxpress/sx/1731761-user-manual) (powered hub recommended; under 100 mA from USB per retailers, e.g. [Adorama](https://www.adorama.com/sxufw1t.html))
 6. [PHD2 Best Practices (2019)](https://www.openphdguiding.org/PHD2_BestPractices_2019-12.pdf); [IceInSpace: EQ3 Pro guiding advice](https://www.iceinspace.com.au/forum/archive/index.php/t-204077.html); [PHD2 forum: Guiding Assistant and Dec backlash](https://groups.google.com/g/open-phd-guiding/c/MtoeNTHQv4Y); EQ3 Pro guide rates 0.25x to 1x: [Wex](https://www.wexphotovideo.com/sky-watcher-eq3-pro-synscan-goto-deluxe-equatorial-mount-and-aluminium-tripod-1531007)
 7. [AstroBin: differential flexure](https://app.astrobin.com/forum/topic/240772/guiding/differential-flexure-1); [IceInSpace: differential flexure, cure or OAG?](https://www.iceinspace.com.au/forum/archive/index.php/t-26578.html); [Jerry Lodriguss: mirror shift and flexure](https://astropix.com/books/BGDA/CHAPTER9/902.HTM)
+8. [Astronomics: HEQ5 Pro](https://astronomics.com/collections/sky-watcher/products/sky-watcher-heq5-pro-equatorial-computer-goto-mount-s30400)
+9. [AstroBin equipment: EQ6-R Pro](https://app.astrobin.com/equipment/explorer/mount/995/sky-watcher-eq6-r-pro)
+10. [CCDWare: PEMPro](https://ccdware.com/?p=1146)
+11. [Stargazers Lounge: EQ5 periodic error correction](https://stargazerslounge.com/topic/157386-eq5-periodic-error-correction)
+12. [astrojolo: mount periodic error](https://astrojolo.com/gears/mount-periodic-error/)
+13. [EQMOD PECPrep](https://eq-mod.sourceforge.net/docs/PECPrep.pdf); EQ3-2's 130-tooth wheel: [IceInSpace](https://iceinspace.com.au/forum/archive/index.php/t-143412.html)
