@@ -142,7 +142,7 @@ also adds four pixels' light to each.
    `guidecam.py`), at 9.55"/px, and calibrations record their binning.
    Built, not yet run.
 2. ~~With the filter wheel plugged in~~ **Passed:** guide camera on the laptop's own port and the filter wheel on the 183M's hub: 299 of 300 2 s guide frames (640 x 480, speed 0) in 10 minutes, no gap over 2.08 s, no library error, while the wheel made 37 of 37 turns through all 7 filters, the slowest 1.0 s (`./guidecam.py wheeltest`, 6 November 2026, about 21:35 to 21:45).
-3. **A whole night passed:** 14,399 of 14,400 2 s frames in 8 hours (6 November about 22:30 to 7 November 06:30), gaps up to 2.08 s, none over 4 s, no library error or timeout (`./guidecam.py probe --exposures 2 --window 28800 --size 1 --speed 0`, on the laptop's own port, with the 183M on the same laptop taking its 120 s and 300 s darks for the first 3 hours).
+3. **A whole night passed:** 14,399 of 14,400 2 s frames in 8 hours (6 November about 23:10 to 7 November 07:10), gaps up to 2.08 s, none over 4 s, no library error or timeout (`./guidecam.py probe --exposures 2 --window 28800 --size 1 --speed 0`, on the laptop's own port, with the 183M on the same laptop taking its 120 s and 300 s darks for the first 2 hours).
 
 If binning had not cured it, the next step would have been another
 computer, older if possible, with an old SharpCap on Windows: the reports
