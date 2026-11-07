@@ -8,6 +8,8 @@ Home speaker says so.
     ./alert.py say "words"     say something on the speaker
     ./alert.py call "words"    get the person's attention: every light pulses, the speaker
                                says it, and it goes to their phone by Telegram
+    ./alert.py flash "Living room"  pulse only the lights whose name starts so (green), no
+                               speaker: for a house with other people in it
     ./alert.py pair            press the button on the Hue bridge, then run this once
     ./alert.py lights          the lights the bridge has, and which do colour
     ./alert.py speakers        the speakers found on the network
@@ -536,10 +538,39 @@ def call(words, dry_run=False, say_it=print, bridge=None, speak=None, send=None)
         say_it(line)
 
 
+def flash(room, colour="Green", dry_run=False, say_it=print, bridge=None):
+    """Pulse only the lights whose name starts with `room`, and say nothing
+    on the speaker: the call for when other people are in the house
+    (7 November 2026: "just living room lights other people here tonight")."""
+    s = settings()
+    if dry_run or config.DEMO:
+        say_it(f"Would pulse the lights whose name starts \"{room}\" {colour.lower()}; no speaker.")
+        return
+    bridge = bridge or Bridge(s.get("hue_address"), s.get("hue_key"))
+    chosen = [light for light in bridge.lights()
+              if light.get("metadata", {}).get("name", "").lower().startswith(room.lower())]
+    if not chosen:
+        raise AlertError(f"No light's name starts \"{room}\": ./alert.py lights lists them")
+    done, threads = [], []
+    for light in chosen:
+        def lit(light=light):
+            try:
+                done.append(colour_light(bridge, light, colour, s["brightness"], s["seconds"], s["restore"]))
+            except AlertError as error:
+                done.append(f"light: {error}")
+        threads.append(threading.Thread(target=lit))
+        threads[-1].start()
+    for thread in threads:
+        thread.join()
+    for line in done:
+        say_it(line)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("command", choices=["watch", "check", "test", "say", "call", "pair", "lights", "speakers"])
-    ap.add_argument("what", nargs="?", help="for test: cloud, clouded, rain or clear; for say and call: the words")
+    ap.add_argument("command", choices=["watch", "check", "test", "say", "call", "flash", "pair", "lights", "speakers"])
+    ap.add_argument("what", nargs="?", help="for test: cloud, clouded, rain or clear; for say and call: the words; "
+                    "for flash: the start of the lights' names")
     ap.add_argument("--address", help="for pair: the bridge's address, if it is not found by itself")
     ap.add_argument("--dry-run", action="store_true", help="say what would be done; no light, no speaker")
     args = ap.parse_args(argv)
@@ -565,6 +596,10 @@ def main(argv=None):
             if not args.what:
                 ap.error("call needs the words")
             call(args.what, args.dry_run)
+        elif args.command == "flash":
+            if not args.what:
+                ap.error("flash needs the start of the lights' names, such as \"Living room\"")
+            flash(args.what, dry_run=args.dry_run)
         elif args.command == "test":
             if args.what not in EVENTS:
                 ap.error("test needs one of: " + ", ".join(EVENTS))

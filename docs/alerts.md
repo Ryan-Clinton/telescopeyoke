@@ -83,3 +83,11 @@ can), the speaker says the words, and they go to the phone by Telegram.
 Every light, not only the one chosen for the sky, so it is used only when
 the person has said so for that night (19 October 2026: alone in the
 house, they asked for it).
+
+## Only the living room, with people in the house
+
+`./alert.py flash "Living room"` pulses green only the lights whose name
+starts so (here the living room light and the two ceiling lights) and says
+nothing on the speaker. Added 7 November 2026, with other people in the
+house, to call the person when the sky watch (`./skywatch.py`) sees stars.
+Not yet seen on the real lights.
