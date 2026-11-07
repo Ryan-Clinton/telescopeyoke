@@ -37,7 +37,7 @@ guiding and dithering are one piece of work here, never guiding alone.
 | Guide scope fitted firmly, and the balance with it | Not checked on the sky |
 | Guiding software | Built, not run on the sky: `./guidecam.py star`, `calibrate`, `guide`, `status` and `tell` (`guider.py`; the shared maths in `guidemath.py`), the camera's lock, the heartbeat, orders, `shoot.py --guide` and `--guide --dither N [--dither-size ARCSEC]` |
 | Guide frames of 1 s and more | 6 November 2026, `./guidecam.py probe`: on the 183M's hub through the Trust hub, with the wheel unplugged, frames came with gaps of about 3 s even at 0.1 s, one frame in 12 s at 0.5 and 1 s, none at 2 s; the same in software trigger mode and at the slowest USB speed. The 2 November test took single frames only, so it was never seen. Guiding needs 2 s frames every few seconds. Later that evening, 2 x 2 binned (640 x 480) at USB speed 0: 149 of 150 2 s frames in 5 minutes, no gap over 2.08 s ([the fault](guide-camera-fault.md#what-cured-it)). Since 79a2f2d the guider opens the camera that way, at 9.55"/px |
-| Long darks for the 183M at -5 °C | None at 120 to 300 s |
+| Long darks for the 183M at -5 °C | ✅ 120 s and 300 s masters, 20 frames each (6 to 7 November 2026, [record](nights/2026-11-06/darks-183m.md)): dark current at most about 0.002 ADU/s, about 0.3 % of the R sky |
 
 ## The numbers
 
