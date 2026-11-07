@@ -90,4 +90,4 @@ house, they asked for it).
 starts so (here the living room light and the two ceiling lights) and says
 nothing on the speaker. Added 7 November 2026, with other people in the
 house, to call the person when the sky watch (`./skywatch.py`) sees stars.
-Not yet seen on the real lights.
+It is `call`'s light pulse (proven since October), on fewer lights.
