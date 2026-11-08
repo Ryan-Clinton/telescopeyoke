@@ -8,8 +8,8 @@ port on which the camera has taken frames but no mount has been driven. `README.
 agents. Deeper notes are in `docs/agents/`.
 
 **What the nights are for now: discovery** (`docs/discovery.md`). Novae in
-M31 and M33 (`programmes/`), Tabby's star, comets near the Sun and
-exoplanet transits come first; pretty pictures fill what is left. Plan any
+M31 and M33 (`programmes/`), Tabby's star and exoplanet transits
+come first; pretty pictures fill what is left. Plan any
 night, or answer "what's the outlook", from `./ty night`'s `discovery` list
 (each programme's field and when it is up in darkness), not from the
 imaging planner's top targets. `./ty outlook` gives the short answer,
@@ -52,7 +52,7 @@ them and every file kept under `demo/`.
 | `policy.py` | What each command may do: `read_only`, `local_write`, `hardware` or `external`, every runnable script classed once; `classify_text` gives the worst class in a shell line, and anything unknown or hidden counts as `hardware`. The base of the safety hooks in `docs/skills-and-agents.md` |
 | `agentlog.py` | `ty agent-report`: the decision record the hooks keep in `cache/agent-log.jsonl` (what ran, who asked, what was refused; redacted), summed up |
 | `runwatch.py` | `ty watch-run`: watches an imaging run and prints a line only when frames stop, stop being kept, the share kept halves, the stars dim or come back, or the run ends |
-| `.claude/` | Claude Code's side: `settings.json` and `hooks/guard.py`, the safety hooks (fail closed: the motion lock, no inline hardware scripts, no subagent moving anything, no `pkill -f`, no secrets printed), `hooks/log.py`, the decision record, `skills/`, fourteen procedures, and `agents/`, seven agents that read and advise and never move anything (`docs/skills-and-agents.md`) |
+| `.claude/` | Claude Code's side: `settings.json` and `hooks/guard.py`, the safety hooks (fail closed: the motion lock, no inline hardware scripts, no subagent moving anything, no `pkill -f`, no secrets printed), `hooks/log.py`, the decision record, `skills/`, thirteen procedures, and `agents/`, six agents that read and advise and never move anything (`docs/skills-and-agents.md`) |
 | `records.py` | Every kept JSON file: written whole or not at all, changed under a lock (`records.change`), checked against its schema before it replaces anything, and each scientific result stamped with the code that made it (`schemas/provenance.schema.json`) |
 | `alert.py` | Tells the house when cloud or rain arrives: a Hue light changes colour and a Google Home speaker says so. Reads the run's frames and the forecast; moves nothing |
 | `focuser.py`, `firmware/focuser/` | The focuser's motor: an Arduino Nano driving a small stepper, and the firmware it runs. `focuser.py` turns the motor; `focus.py --motor` uses it to focus on the stars in view |
@@ -72,9 +72,8 @@ them and every file kept under `demo/`.
 | `realbogus.py` | Real or bogus: a logistic model trained on stars planted in this rig's own subtractions and on the peaks the subtraction leaves, tested night by night; its probability goes into each vetted candidate's evidence, as advice (`docs/discovery.md`, phase 8) |
 | `reference.py`, `vet.py`, `plant.py` | Each field's kept reference; the evidence for each candidate and its verdict; fake novae through the whole pipeline for the discovery completeness (`docs/discovery.md`, phase 1) |
 | `streak.py` | Which satellite made the streak across a frame: finds the line, plate-solves the frame, and places every active satellite (CelesTrak's orbits, SGP4) through the exposure; names one only when it alone fits (`docs/satellites.md`) |
-| `sungrazer.py` | Comets near the Sun in SOHO's LASCO pictures, for cloudy nights: fetches them politely, finds what moves other than as the stars do, and makes a movie of each for a person (`docs/discovery.md`, phase 4) |
 | `brokers.py` | Public alerts: ALeRCE's new supernova-like transients, bright enough and up here tonight, not on the Rochester lists; `--unreported` searches the last month for bright ones on neither list (`docs/discovery.md`, phase 6) |
-| `notify.py` | Alerts to the person's phone by their own Telegram bot (`[telegram]` in config.toml): the patrol's unexplained candidates with their pictures and report packet, the comet hunt's finds with the movie, every finished stack's picture with the same picture attached at full size (Telegram shrinks a photo); claiming them is `docs/agents/claiming.md` |
+| `notify.py` | Alerts to the person's phone by their own Telegram bot (`[telegram]` in config.toml): the patrol's unexplained candidates with their pictures and report packet, every finished stack's picture with the same picture attached at full size (Telegram shrinks a photo); claiming them is `docs/agents/claiming.md` |
 | `starwatch.py` | A watch on a star that dims without warning, Tabby's star first: a short look through the patrol, measured against the stars round it, and a warning when it is fainter than usual (`docs/discovery.md`, phase 9) |
 | `transits.py` | Known exoplanet transits: which can be taken whole from here tonight (NASA's Exoplanet Archive), and from a night's frames its verdict, the fitted depth and timing, the light curve drawn, the calibration and timing checks, BJD_TDB and the exposure headroom (`docs/discovery.md`, phase 9) |
 | `newhardware.py` | Notices a new serial device or SynScan Wi-Fi network without sending it anything; on the person's choice asks it what it is (only reads: SynScan handset, motor board, LX200 family), writes the report with serial numbers left out, and gives the Mount support form filled in, never sent. `--watch --install` runs from boot |

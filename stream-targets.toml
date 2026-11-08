@@ -192,11 +192,6 @@ title = "POLAR ALIGNMENT"
 goal = "Get the mount's axis pointing at the sky's pole."
 question = "Can it get both axes under the drift limit?"
 
-[missions.comet]
-title = "COMET HUNT"
-goal = "Search today's spacecraft pictures of the Sun for a comet."
-question = "A known comet, an artefact, or something unexplained?"
-
 # TelescopeYoke's voice (narrator.py): a sentence now and then over the
 # stream's sound, first person, calm, plain about what is not known. Each is
 # filled with the measured state; nothing else is said.

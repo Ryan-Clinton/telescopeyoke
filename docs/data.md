@@ -16,7 +16,6 @@ asked to believe it.
 | `reference/NAME/` | Each field's references: `vN.fits` the stack and `vN.json` where it came from. A version is never replaced; a better one is the next number |
 | `candidates/NAME.json` | Every candidate a field has had, followed as one object from night to night, with each night's measurement or limit and any dismissal and its reason |
 | `reports/ID/` | A candidate's report packet: `report.json`, `report.txt`, `finding.png` |
-| `sungrazer/` | The coronagraph pictures fetched (deleted after 3 days), each look's tracks and movies, and `hunt-CAMERA.json`, the newest hunt's finds |
 | `calibration/` | Dark and flat frames, by exposure and gain |
 | `cache/` | Things fetched or worked out that can be fetched or worked out again (`realbogus.json`, the real-or-bogus model, is made again with `./realbogus.py train`; `agent-log.jsonl`, the decision record of what Claude ran, is not: keep it if it matters): catalogue stars, ZTF images, public alerts, the skyline, the mount's remembered measurements |
 | `mosaics/`, `landmarks/`, `web/` | Mosaic panels, remembered landmarks, the status page |

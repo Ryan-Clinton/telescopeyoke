@@ -553,7 +553,7 @@ atlas. Comets: COBS and JPL Horizons. Cloud imagery: EUMETSAT. Catalogue: OpenNG
 
   function showDiscovery(d) {
     const box = $$("discovery");
-    if (!d || !(d.sessions.length || d.tabby || d.comets)) { box.hidden = true; return; }
+    if (!d || !(d.sessions.length || d.tabby)) { box.hidden = true; return; }
     box.hidden = false;
     const colour = {done: "#2e7d32", now: "#f9a825", waiting: "#555", stopped: "#c62828"};
     $$("mosaics").innerHTML = d.mosaics.map(m => `<div style="margin-bottom:10px"><b>$${esc(m.name)}</b>
@@ -574,7 +574,6 @@ atlas. Comets: COBS and JPL Horizons. Cloud imagery: EUMETSAT. Catalogue: OpenNG
     }).join("");
     const more = [];
     if (d.tabby) more.push(`Tabby's star: G $${d.tabby.mag} ± $${d.tabby.error} on $${d.tabby.nights} night$${d.tabby.nights === 1 ? "" : "s"}`);
-    if (d.comets) more.push(`comet hunt ($${esc(d.comets.camera)}, $${esc(d.comets.when)}): $${d.comets.towards_sun} heading for the Sun`);
     more.push(`$${d.open_candidates} candidate$${d.open_candidates === 1 ? "" : "s"} open`);
     $$("discovery-more").textContent = more.join(" · ");
   }

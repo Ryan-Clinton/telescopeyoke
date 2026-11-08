@@ -243,9 +243,8 @@ Papers not yet read: {answer['papers_unread']}.</p>
 
 def candidates():
     """Every field's open candidates in one view, in the same shape as
-    candidates.py's, each with its field; the most nights seen first; and
-    the comet hunt's newest tracks heading in towards the Sun. It reads the
-    candidate books and the hunt's answers and nothing else."""
+    candidates.py's, each with its field; the most nights seen first. It
+    reads the candidate books and nothing else."""
     import candidates as book
     found = []
     for file in sorted((config.DATA / "candidates").glob("*.json")):
@@ -255,15 +254,7 @@ def candidates():
             continue
         found += [dict(k, field=kept.get("name", file.stem)) for k in kept.get("candidates", []) if k.get("open")]
     found.sort(key=lambda k: (-book.nights_seen(k), k["id"]))
-    # The comet hunt's newest answer from each camera: what heads in towards the Sun.
-    comets = []
-    for file in sorted((config.DATA / "sungrazer").glob("hunt-*.json")):
-        try:
-            hunt = json.loads(file.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
-        comets += [dict(c, camera=hunt.get("camera"), hunted=hunt.get("when")) for c in hunt.get("towards_sun", [])]
-    return {"name": "every field", "candidates": found, "comets": comets}
+    return {"name": "every field", "candidates": found}
 
 
 def rigs():
@@ -1361,7 +1352,7 @@ def discovery(hours=14, now=None, data=None):
     """Tonight's discovery work, for the status page: every session started
     in the last `hours`, with how far it got and the patrol's answer when
     there is one; the mosaic being patrolled, panel by panel; Tabby's star;
-    the comet hunt; and the candidates still open. Reads files only."""
+    and the candidates still open. Reads files only."""
     import datetime
     import re
     import mosaic
@@ -1421,14 +1412,10 @@ def discovery(hours=14, now=None, data=None):
             tabby = {"nights": len(nights), "last": nights[-1].get("session"),
                      "mag": round(nights[-1]["mag"], 3) if nights[-1].get("mag") is not None else None,
                      "error": nights[-1].get("scatter")}
-    comets = None
-    for hunt in sorted((base / "sungrazer").glob("hunt-*.json")):
-        h = json.loads(hunt.read_text(encoding="utf-8"))
-        comets = {"camera": h.get("camera"), "when": h.get("when"), "towards_sun": len(h.get("towards_sun") or [])}
     open_ = 0
     for book in (base / "candidates").glob("*.json"):
         open_ += sum(k.get("open", False) for k in json.loads(book.read_text(encoding="utf-8")).get("candidates", []))
-    return {"sessions": sessions, "mosaics": list(mosaics.values()), "tabby": tabby, "comets": comets,
+    return {"sessions": sessions, "mosaics": list(mosaics.values()), "tabby": tabby,
             "open_candidates": open_}
 
 

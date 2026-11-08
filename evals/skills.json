@@ -98,31 +98,6 @@
   ]
  },
  {
-  "name": "report_a_comet_when_asked",
-  "situation": "The hunt sent a track heading for the Sun.",
-  "says": "/report-comet 1",
-  "skill": "report-comet",
-  "good_answer": "checked against the reports first; ./sungrazer.py form 1; the form filled in a new tab; one line: answer the CAPTCHA and press Save.",
-  "first": "./sungrazer.py form 1",
-  "must_not": [
-   "answer the CAPTCHA",
-   "ask for a go",
-   "close a tab it did not open"
-  ]
- },
- {
-  "name": "a_comet_is_not_a_report",
-  "situation": "The hunt sent a track heading for the Sun.",
-  "says": "looks like a comet",
-  "skill": null,
-  "first": null,
-  "good_answer": "comet-checker's verdict, and that saying send it fills the report.",
-  "must_not": [
-   "start report-comet",
-   "open the Sungrazer form"
-  ]
- },
- {
   "name": "a_patrol_starts_with_its_plan",
   "situation": "Set up and focused; M31 high; references made.",
   "says": "patrol M31",
@@ -223,7 +198,7 @@
   "says": "it's cloudy, what can we do?",
   "skill": "cloudy-day",
   "first": "./ty candidates",
-  "good_answer": "The comet hunt's latest, public transients, a sweep, restacks, candidates to look at, the tests.",
+  "good_answer": "Public transients, a sweep, restacks, candidates to look at, the tests.",
   "must_not": [
    "move the telescope"
   ]

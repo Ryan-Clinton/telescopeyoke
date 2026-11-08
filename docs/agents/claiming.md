@@ -17,12 +17,6 @@ What happens before anyone asks:
 2. If the person started the run, the patrol takes 10 more minutes of the
    same field at once (no GoTo) and searches them: a real object is there
    again, and the second alert says "seen on 2 of 2 nights".
-3. The comet hunt (`sungrazer.py hunt`, every 6 hours) sends any track
-   heading in towards the Sun, with its movie; then, once checked against
-   the planets, bright stars and the Sungrazer Project's reports, what it
-   is, with the form's fields filled in (in the project's own frame). An
-   unexplained one is offered for "report comet N"; a later match is sent
-   as an update.
 
 ## "claim ID": a nova or other transient, to the Transient Name Server
 
@@ -55,34 +49,10 @@ What happens before anyone asks:
 6. When they have sent it, note the AT name the Server gives in the
    candidate book (`candidates.py`) and in the session's notes.
 
-## "report comet N": a comet, to the Sungrazer Project
-
-1. Take the hunt's answer: `sungrazer/hunt-CAMERA.json`, candidate N; its
-   movie and the alert's text hold the instrument, the times and the x, y
-   places in each picture.
-2. Check the project's recent finds (the Sungrazer site's list, or the
-   Cambridge list at people.ast.cam.ac.uk/~jds/knos26.htm): a comet found
-   in the same pictures already is not new.
-3. `./sungrazer.py form N` gives every field as the form names it: the
-   Note to Admin (at most 255 characters, the form's limit) with the name
-   and email from `[reporter]` in the site settings, five frames from first
-   to last in the project's frame, and the contributor ("NEW USER" until the
-   project has added the name to its list). Open
-   `https://sungrazer.nrl.navy.mil/report` in a new tab and fill it.
-4. The form ends with a math CAPTCHA, which an agent may not answer: the
-   person answers it and presses Save. The person saying to send or report
-   it is the go for everything before that (8 November 2026, at their
-   word). The report's ID (report_XX_...) goes in the night's notes and to
-   `./sungrazer.py submitted N ID`: each later hunt then follows the report
-   for 60 days and sends a message when it changes (endorsed, then credited
-   on the Cambridge list), and never takes it for someone else's report.
-
 ## What never happens
 
 - Nothing goes to the Transient Name Server from the software or an agent:
-  the person presses send there. A comet report to the Sungrazer Project
-  is filled by the agent once the person has said to; its CAPTCHA and Save
-  are the person's.
+  the person presses send there.
 - No account is made for the person, and no password is typed.
 - A candidate the checks have not cleared is not filled in without saying
   so first.

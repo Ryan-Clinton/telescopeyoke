@@ -51,7 +51,7 @@ checked the interface against them was removed with all the tests on
   `schemas/`.
 - Claiming a find: [claiming.md](claiming.md). The software alerts the
   person and fills the report; an agent fills the Transient Name Server's
-  or the Sungrazer Project's form in the browser and stops for the person
+  form in the browser and stops for the person
   to press send.
 
 ## The schemas are a public interface
@@ -60,4 +60,4 @@ Field names in `schemas/` do not change casually. New fields may be added
 under schema version 1.0. Anything that would break a reader raises the version
 to 2.0.
 
-- [Skills, agents and hooks](../skills-and-agents.md): Claude Code skills, subagents and safety hooks for these procedures. All built: the hooks and the decision record (`.claude/settings.json`, `./ty agent-report`), `./ty watch-run`, fourteen skills in `.claude/skills/` and seven agents in `.claude/agents/`.
+- [Skills, agents and hooks](../skills-and-agents.md): Claude Code skills, subagents and safety hooks for these procedures. All built: the hooks and the decision record (`.claude/settings.json`, `./ty agent-report`), `./ty watch-run`, thirteen skills in `.claude/skills/` and six agents in `.claude/agents/`.

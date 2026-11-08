@@ -33,7 +33,7 @@ is built). What is proven is decided in one place,
 |---|---|---|
 | [Results so far](results.md) | record | Each real result as question, method, result and limits: the self-centring GoTo, the mount measured, the comet, WASP-12 b, the nova patrol, Kepler, SETI, the 183M's first M33. |
 | [Validation](validation.md) | record | Exactly what has and has not been proven, night by night. |
-| [Looking for something new](discovery.md) | guide and specification | The discovery station: novae in M31 and M33, comets, transits, public alerts, and its phases. |
+| [Looking for something new](discovery.md) | guide and specification | The discovery station: novae in M31 and M33, transits, public alerts, and its phases. |
 | [Discovery results](discovery/results.md) | record | What each phase measured. |
 | [Searching the Kepler archive](archive.md) | guide and record | Tabby-like dips in Kepler's and TESS's light curves. |
 | [The leads](research/README.md) | record | Each lead from the archive searches, and what explains it. |

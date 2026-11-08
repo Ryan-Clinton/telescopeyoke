@@ -6,9 +6,7 @@ The discovery station is operational; what remains unproven is an
 original astronomical discovery with this rig:
 
 - the software, on planted fakes and archive data: ✅
-- known objects found again: ✅ a known nova in ZTF's archive, known comets
-  in archived LASCO pictures, and a known Kreutz sungrazer in live GOES-19
-  pictures, found by the hunt itself (19 October 2026)
+- known objects found again: ✅ a known nova in ZTF's archive
 - an original transient in this rig's own pictures: ❌ not yet
 
 Each programme has its own level of proof (the table below). This says how telescopeyoke
@@ -70,15 +68,6 @@ queue, the most intriguing leads and any up tonight) and `./ty night`.
   now sets aside only clusters of 3 or more as residue
   ([results](discovery/results.md#m31-and-m33-patrols-1-and-2-november-2026)).
 
-- **19 October 2026, GOES-19 CCOR-1:** the six-hourly comet hunt found a
-  known Kreutz sungrazer by itself in 74 pictures, followed it for seven
-  hours across a 45-minute gap, and matched it to the Sungrazer Project's
-  report of it to about 2 pixels; SOHO's C3 showed it too. A weak track on
-  the occulter's flickering rim was its one false alarm. Within hours the
-  hunt joined tracks across gaps, set rim tracks aside, gave positions in
-  the project's own frame, checked each find against the planets, bright
-  stars and the project's reports, and told the person in two messages
-  ([the record](discovery/comet-hunt-2026-10-19/README.md)).
 - **20 October 2026, WASP-12 b:** the first exoplanet transit attempt, 973
   frames through ingress and the middle. Dimming of about the right size
   was seen and rejected as a detection: no baseline after the transit, and
@@ -101,7 +90,7 @@ Where it stands on 5 November 2026, phase by phase:
 | 1 Transient pipeline | built | on archive data (AT2024koe from ZTF images); not yet a transient in our own frames |
 | 2 M31 patrol | built | no: a known nova recovered from our own data is still to come; false candidates cut from 23 to 5 by the subtraction fix (1-2 November), M31-P8's traced to its noise model (4 November) |
 | 3 M33 | patrolled with M31 since 1 November | no: a night with its completeness measured is still to come; the first 183M stack (L, 4-5 November) has no flats yet |
-| 4 Sungrazer | built, running every 6 hours | yes: known comets found in archived pictures, and a known Kreutz sungrazer found by the hunt itself in live CCOR-1 pictures (19 October) |
+| 4 Sungrazer | moved out of telescopeyoke, 8 November 2026 | — |
 | 5 Report packet | built | the packet, yes (95 s); a claim filled in on the Transient Name Server and stopped before sending, not yet |
 | 6 Public alerts | built | the month's search, yes; a public transient observed with the 150P, not yet |
 | 7 Search everything again | built | not yet run as a rerun that finds fakes planted in old frames |
@@ -141,9 +130,6 @@ with the Triangulum Galaxy (M33) added once M31 works:
 Programmes that need no clear sky run alongside, so something is always
 hunting:
 
-- **Comets in SOHO pictures (the Sungrazer Project)** for cloudy nights.
-  No telescope is needed, and volunteers have found most of the project's
-  5,204 comets.
 - **Public alerts** from the surveys, searched for transients nobody has
   reported yet, and checked with the telescope when the rig can reach them.
 - **Our own old pictures,** searched again whenever the methods improve.
@@ -198,9 +184,8 @@ What a person does; everything else is automatic.
 4. To claim one, tell the agent "claim ID": it makes a fresh `./report.py
    ID`, checks the Transient Name Server, fills in the form, and you press
    send ([reporting](discovery/reporting.md)).
-5. On cloudy nights: the comet hunt runs by itself every 6 hours
-   (`./sungrazer.py hunt --install`, once); `./brokers.py` lists public
-   transients worth a look tonight.
+5. On cloudy nights: `./brokers.py` lists public transients worth a look
+   tonight.
 6. Old nights are searched again with `./patrol.py --sweep` (the last 3
    days) or `--sweep --all-history` after an improvement.
 7. Fresh fields: `./ty night` lists under `other_fields` the big galaxies
@@ -374,8 +359,7 @@ What is kept, and what has to be kept to reproduce a find, is in
   wait, how a discovery is made as likely as possible, the seven layers it
   is built in, what could go wrong, and the sources.
 - [Results](discovery/results.md): what phase 0 and phase 1 have measured,
-  the comet hunt's planted comets and finds, and the variable-star
-  precision.
+  and the variable-star precision.
 - [Reporting](discovery/reporting.md): how a find is reported and credited.
 
 ## Phases
@@ -389,7 +373,7 @@ ends with a scientific proof, not just working code.
 | 1 | References, calibration, proper subtraction, the candidate database, vetting and forced photometry for M31. **Software complete, 16 and 17 October 2026: all of it built and tested. Scientific validation under way: realistic fakes measured, a real nova recovered from archive images (AT2024koe); a find of our own still to come** | planted fakes recovered; a planted rising fake gets the right light curve; a known asteroid and a known variable set aside |
 | 2 | The M31 patrol, scheduled by priority. **Built 16 and 17 October 2026: `patrol.py` for one field or M31's 4 x 2 panels, ordered by novae reported x share caught x days unwatched, fitted to the night; each panel's first night becomes its reference. Proof to come: a known nova recovered** | a known nova, past or current, recovered from our data |
 | 3 | M33 | a first M33 night with its completeness measured |
-| 4 | Sungrazer, running all the time. **`sungrazer.py` built 17 October 2026. A bright comet (C/2024 G3) found in archived pictures; raw LASCO and GOES-19's CCOR-1 added, fakes planted to measure the search; the 15 September 2026 Kreutz comet very likely found; CCOR-1 hunted every 6 hours (`hunt --install`)** | a known comet recovered in archived pictures |
+| 4 | Comets in coronagraph pictures. **Moved out of telescopeyoke on 8 November 2026: it needs no telescope** | — |
 | 5 | The report packet. **`report.py` built 17 October 2026: 95 s for a real candidate. Since then: made at once for every unexplained candidate and sent to the person's phone (`notify.py`, Telegram), a second look at the field taken while the telescope is there, and the form filled in the browser by an agent for the person to send (`docs/agents/claiming.md`)** | under five minutes from a confirmed planted fake to a packet |
 | 6 | Public alerts (`brokers.py`). **Built 17 October 2026: ALeRCE's new transients, bright enough and up here tonight; the month's search run (its one real find was AT 2026aexm, already on the Transient Name Server)** | a real public transient observed; an unreported-transient search run over a past month of alerts |
 | 7 | Every session searched; old frames searched again on each improvement. **Built 17 October 2026: each new stack of a field with a reference is searched in the background; `patrol.py --sweep [--all-history]` for the rest** | every science picture checked automatically; a rerun finds fakes planted in old frames |
@@ -398,4 +382,4 @@ ends with a scientific proof, not just working code.
 | 10 | Several telescopes together: other people's telescopeyoke rigs sharing fields and confirming each other's candidates. **Needs other users first** | a candidate confirmed by another telescope |
 
 Phases 0 to 2 run through the 2026 to 2027 M31 season if the weather
-allows. Sungrazer needs no sky and can be built any cloudy week.
+allows.

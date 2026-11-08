@@ -6,6 +6,13 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+- **8 November 2026**: the comet hunt (`sungrazer.py`) has moved to its
+  own project: it needs no telescope, mount or camera. Taken out with it:
+  its schema, timer, the comets in `ty candidates` and `ty discovery`, the
+  stream's comet card, the report-comet skill, the comet-checker agent and
+  the comet parts of the docs. Bright comets for the telescope (COBS and
+  JPL Horizons, in `tonight.py`) stay.
+
 - **6 November 2026**: Gary Imm's Deep Sky Compendium, fetched onto this
   computer by `./compendium.py fetch` or the Settings screen's button,
   gives the targets his 0-to-5 rating and note, adds about 1,800 of his

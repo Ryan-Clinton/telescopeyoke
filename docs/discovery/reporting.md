@@ -16,8 +16,6 @@ How an agent fills the forms for the person to send is
 - **Confirmation** comes from someone else's picture and, for a nova, a
   spectrum from a larger telescope. A candidate we report is an "AT"
   until it is classified.
-- **Sungrazer comets:** reported through the project's form; the project
-  measures them and the Minor Planet Center gives the designation.
 - **Variable stars:** the AAVSO's VSX, with a light curve and, for a
   periodic star, a phase plot. VSX asks new submitters to know their way
   round light curves, and takes one submission a day.

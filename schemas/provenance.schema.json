@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/provenance.schema.json",
   "title": "Provenance",
-  "description": "The \"provenance\" every scientific record carries (records.py): which code made it, from which settings, and when. Kept in: candidates/NAME.json, a session's candidates.json, vetted.json, patrol.json, depth.json, restack.json, transit-*.json, variables.json and variables-BIN.json, forced-*.json, plant.json, the references' vN.json, reports/ID/report.json, sungrazer's look.json, plant.json and hunt-*.json and a watched star's starwatch.json. Each night in a candidate's history carries the same thing in short as \"code\" (0.2.1+6bb014d).",
+  "description": "The \"provenance\" every scientific record carries (records.py): which code made it, from which settings, and when. Kept in: candidates/NAME.json, a session's candidates.json, vetted.json, patrol.json, depth.json, restack.json, transit-*.json, variables.json and variables-BIN.json, forced-*.json, plant.json, the references' vN.json, reports/ID/report.json and a watched star's starwatch.json. Each night in a candidate's history carries the same thing in short as \"code\" (0.2.1+6bb014d).",
   "type": "object",
   "required": ["telescopeyoke", "git_commit", "uncommitted_changes", "schema_version", "record_version", "python", "libraries", "settings", "created_utc"],
   "additionalProperties": false,

@@ -19,8 +19,8 @@
                              the stars dim or come back, or the run ends (runwatch.py)
     ./ty rigs                every rig in one view: what each is and what it is doing
     ./ty characterise        what this rig has had measured about itself, and what it has not
-    ./ty discovery           tonight's discovery work: the mosaic's panels, each session's answer, Tabby, comets
-    ./ty candidates          every field's open candidates, the most nights seen first, and the comet hunt's
+    ./ty discovery           tonight's discovery work: the mosaic's panels, each session's answer, Tabby
+    ./ty candidates          every field's open candidates, the most nights seen first
     ./ty spot                where in the garden the telescope stands, and every spot's skyline
     ./ty spot far-side       it stands at far-side from now on (spots/far-side.toml, its own skyline)
     ./ty --rig heq5 ...      any of these for one rig (its settings are rigs/heq5.toml)

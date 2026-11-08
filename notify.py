@@ -21,8 +21,7 @@ on. Nothing is sent from the tests or the demo.
 
 What is sent: the patrol's unexplained candidates once vetted (with the
 night, the reference and the difference side by side, and the report
-packet), and the comet hunt's tracks heading in towards the Sun (with
-the movie). Sending a report anywhere else stays a person's decision.
+packet). Sending a report anywhere else stays a person's decision.
 """
 import argparse
 import os

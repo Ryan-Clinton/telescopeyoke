@@ -49,7 +49,6 @@ channels at once and answering faster than a person could alone.
 | Channel | When it hunts | Telescope |
 |---|---|---|
 | M31 and M33 novae | clear nights, October to February | yes |
-| Sungrazer comets | all the time | no |
 | Public alerts, for unreported transients | all the time; confirmed on clear nights | sometimes |
 | Every science picture taken | after every session | yes, already |
 | Our old pictures, searched again | whenever a method improves | no |
@@ -204,7 +203,6 @@ M31 is the first programme, not the architecture. Each programme is a file:
     programmes/m31-novae.toml
     programmes/m33-novae.toml
     programmes/variable-stars.toml
-    programmes/sungrazer.toml
     programmes/public-alerts.toml
 
 Each names its fields (for M31, `mosaic.py`'s panels), cadence, exposure,
@@ -415,27 +413,6 @@ synthetic stacks, tracklets, and a match against SkyBoT. Recovering known
 asteroids first makes it a science programme of its own; discovery is the
 long shot.
 
-### Sungrazer: cloudy-night mode
-
-    ./sungrazer.py fetch            the latest LASCO C3 and C2 pictures
-    ./sungrazer.py look             candidates, as a movie and a list
-
-It runs all the time, day and night, whatever the weather. Background
-removed; moving points found; tracklets scored for steady, near-straight
-motion and steady brightness; checked against comets already reported; stars and cosmic rays rejected; each candidate
-shown as a short movie for a person to watch. The project's guide asks
-reporters to view frames in sequence, confirm the object is a comet, and
-report its pixel positions and times through the project's form under
-their own name. Before fetching automatically, ask the project, and keep
-the rate low. A candidate reaches the person as: "possible unreported
-comet, 91% track consistency, in 6 consecutive C3 frames, straight
-motion, not in the reported list [watch] [dismiss] [open the report
-form]". It may well be the likeliest credited discovery, but the headline
-stays "the telescope found a new source in the sky".
-
-What the comet search has found and missed so far, with fake comets
-planted to measure it, is in [results](results.md#the-comet-hunt).
-
 ### Variable stars, dippers and transits: `variables.py`, `starwatch.py`, `transits.py`
 
 `variables.py` stacks each night's kept frames in batches and puts each
@@ -529,8 +506,8 @@ In the morning:
   earlier. An independent second report is still a confirmation, but not
   a discovery.
 - **Weather.** Northern Ireland might give a handful of clear nights a
-  month in winter. Sungrazer and the analysis of earlier frames are the
-  work for the other nights.
+  month in winter. The analysis of earlier frames is the work for the
+  other nights.
 - **Depth.** The 150P reaches about 17.0 in 5 minutes and 17.6 in 54,
   with a floor that more nights did not lower: see "What phase 0
   measured" in [results](results.md#what-phase-0-measured). M31 novae near their peak are within reach, but not the
@@ -565,5 +542,4 @@ In the morning:
 - [Anomaly detection and expert review](https://arxiv.org/abs/2012.01419)
 - [ANTARES](https://antares.noirlab.edu/faq) alert broker; [RTS2](https://rts2.org/) observatory control
 - [Tycho Tracker](https://www.tycho-tracker.com/): synthetic tracking
-- [The Sungrazer Project](https://sungrazer.nrl.navy.mil/) and [its tutorial](https://sungrazer.nrl.navy.mil/tutorial)
 - [What do I do when I discover a new variable star?](https://aavso.org/node/74808) and [VSX policy changes](https://www.aavso.org/index.php/node/83028), AAVSO

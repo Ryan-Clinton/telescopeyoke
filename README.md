@@ -55,7 +55,7 @@ camera has taken frames, but no mount has been driven yet.
 OBSERVE   plan → schedule → GoTo and centre → focus → image → hold → park
 MEASURE   pointing · polar error · true home · drift · focus · shutter · depth · precision
 DISCOVER  patrol → subtract → vet → second look → follow night to night → report
-RESEARCH  comets in coronagraph pictures · Kepler and TESS dips · radio SETI
+RESEARCH  Kepler and TESS dips · radio SETI
 OPERATE   cloud and rain · stopped runs · alerts by phone, lights and speaker
 REASON    JSON for every command · ty · MCP · skills and specialist agents
 SHARE     status page · public live page · YouTube and Twitch broadcast with a presenter and chat
@@ -72,8 +72,6 @@ Each of these is recorded in [the validation record](docs/validation.md);
 - **17 October:** the true home found from 10.66° out to 0.19°, one
   pointing correction per side shown to be enough, and the garden's skyline
   measured by the telescope itself.
-- **19 October:** the six-hourly comet hunt found a known Kreutz sungrazer by
-  itself in live GOES-19 coronagraph pictures.
 - **20 October:** live on Twitch; a first exoplanet transit attempt on
   WASP-12 b, rejected by its own measurement as not a detection, and the
   reasons found and worked on the same day.
@@ -85,10 +83,10 @@ Each of these is recorded in [the validation record](docs/validation.md);
 - **4-5 November:** the cooled mono camera's first night: held at -5 °C all
   session, seven filters, plate solves in 0.3 s, and M33 in 34 minutes.
 
-| Discovery | Science | New camera |
-|---|---|---|
-| ![Four frames of a comet's head and short tail moving towards the Sun](docs/results/comet-ccor1-2026-10-19.jpg) | ![WASP-12's light through the night, scattered points slightly lower after the first forty minutes, with the fitted box](docs/results/wasp12b-2026-10-20.jpg) | ![M33 in L from the cooled mono camera, its spiral arms and NGC 604 showing](docs/results/m33-183m-l-2026-11-05.jpg) |
-| A known Kreutz sungrazer the hunt found by itself in GOES-19 coronagraph pictures, 19 October 2026 | The first exoplanet transit attempt, WASP-12 b, 20 October 2026: dimming seen, not a detection | M33 from the 183M's first night, 4-5 November 2026: 126 frames of 16 s in L, darks only, no flats yet |
+| Science | New camera |
+|---|---|
+| ![WASP-12's light through the night, scattered points slightly lower after the first forty minutes, with the fitted box](docs/results/wasp12b-2026-10-20.jpg) | ![M33 in L from the cooled mono camera, its spiral arms and NGC 604 showing](docs/results/m33-183m-l-2026-11-05.jpg) |
+| The first exoplanet transit attempt, WASP-12 b, 20 October 2026: dimming seen, not a detection | M33 from the 183M's first night, 4-5 November 2026: 126 frames of 16 s in L, darks only, no flats yet |
 
 **Why it is unusual.** No one of these functions is new. What is unusual
 is that one inexpensive amateur rig combines measuring its own faults,
@@ -121,7 +119,6 @@ not a detection says so, and why.
 **Discover** ([the discovery station](docs/discovery.md))
 
 - 🌌 **Patrols M31 and M33 for novae**: subtracts a reference, vets every candidate against catalogues, asteroids and a classifier trained on its own pictures, takes a second look, and follows candidates from night to night
-- ☄️ **Hunts comets in spacecraft pictures** every six hours, checks each find against the planets, bright stars and the Sungrazer Project's reports, and says what it turned out to be
 - 🪐 **Measures exoplanet transits and variable stars**, with the verdict before any fitted number
 - 🔁 **Searches public survey alerts and its own old pictures again** as its methods improve, and prepares a report packet for a person to check and send
 
@@ -134,7 +131,7 @@ not a detection says so, and why.
 **Operate** ([alerts](docs/alerts.md))
 
 - ☁️ **Checks cloud, rain, wind, dew and seeing**, from the forecast and from its own frames, plus a live satellite cloud picture
-- 📱 **Tells you what matters, by the right channel**: candidates, comets and the end of the night on Telegram with the evidence; for hands now, every light in the house, a spoken sentence on a speaker, and your phone
+- 📱 **Tells you what matters, by the right channel**: candidates and the end of the night on Telegram with the evidence; for hands now, every light in the house, a spoken sentence on a speaker, and your phone
 - 🛑 **Keeps the mount inside physical limits**, with a motion lock, the handset's state checked before each move, and moves checked against what the camera saw
 
 **Reason** ([for programs and AI agents](docs/agents/README.md))
@@ -154,10 +151,10 @@ Every script and what it does: [Commands](docs/commands.md).
 **AI proposes; deterministic code decides what is safe; a person decides
 what the telescope does.** An AI agent (the author uses Claude) can read
 everything the observatory knows, plan a night, investigate a candidate and
-propose the next step: fourteen skills hold the routines (setup at the
-telescope, focusing, polar alignment, a discovery night, a claim, a comet
-report) and seven specialist agents do focused jobs (vetting a candidate,
-researching a place in catalogues, checking a comet track, reviewing a
+propose the next step: thirteen skills hold the routines (setup at the
+telescope, focusing, polar alignment, a discovery night, a claim) and
+six specialist agents do focused jobs (vetting a candidate,
+researching a place in catalogues, reviewing a
 change that moves the mount, analysing a night). What may move is decided by
 code that does not depend on the agent: the Sun and altitude limits, the
 motion lock, the handset's state, dry runs, moves checked against the
@@ -166,8 +163,7 @@ and web API are read-only, every agent action is logged, and every move is
 one the person asked for, or part of a night's plan they agreed.
 [AGENTS.md](AGENTS.md) has the detail.
 
-It learns from real nights: a comet split in two by a gap in the pictures
-became joined tracks and a checked verdict by noon the next day; a transit
+It learns from real nights: a transit
 that could not be measured became a precision diagnosis, a hold on the same
 pixels and a recipe the same day; a colour picture whose filters drifted
 apart became a refusal (`FRAMES_APART`) and a fix by morning.
@@ -339,7 +335,6 @@ was involved. Everything is also run against the simulated rig.
 | Windows | not yet | ⚠️ camera frames indoors; no mount driven | ✅ |
 | Checking that the telescope really turned | not yet | ⚠️ by day: one real record, and it caught a real fault; 109 checked looks on a working mount, none stopped wrongly | ✅ |
 | Discovery: subtraction, candidates, vetting | ⚠️ on real M31 and M33 stacks, with planted fakes; no find of our own yet | ✅ | ✅ a known nova found again in ZTF's archive images |
-| Comets in spacecraft pictures (`sungrazer.py`) | does not need them | ✅ 19 October 2026: a known Kreutz sungrazer found by the hunt itself in live CCOR-1 pictures | ✅ known comets found in archived LASCO pictures |
 | Kepler and TESS archive search (`archive.py`, `investigate.py`) | does not need them | ✅ Tabby's star's four known dips found and nothing else (3 November 2026); 16 leads looked into, none unexplained | ✅ |
 | Radio SETI (`seti.py`) | does not need them | ⚠️ 9 of 308 blocks of one cadence searched; planted signals found, no false hits in 240 runs; every candidate so far interference | ✅ |
 | Lights, speaker and phone alerts (`alert.py`) | does not need them | ✅ cloud and rain alerts on a real light and speaker; the call that woke the author when a run stopped (20 October 2026) | ✅ |

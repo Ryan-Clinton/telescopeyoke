@@ -3,9 +3,9 @@
 the person's phone (notify.py's copy of every message, cache/sent.jsonl)
 since the agent last looked, put in front of the agent.
 
-20 October 2026: the comet hunt's alert reached the phone at 06:12 and the
-agent only heard of it when the person said so; a candidate seen again on a
-second night went the same way. Prints nothing when there is nothing new,
+20 October 2026: an alert reached the phone at 06:12 and the agent only
+heard of it when the person said so; a candidate seen again on a second
+night went the same way. Prints nothing when there is nothing new,
 and never blocks: whatever goes wrong here, it exits 0.
 """
 import json

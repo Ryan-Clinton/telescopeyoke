@@ -19,7 +19,7 @@ one way into all of them: [docs/agents/commands.md](agents/commands.md).
 | **Imaging** | `snap.py`, `solve.py`, `shoot.py`, `planet.py`, `mosaic.py`, `liveview.py`, `skywatch.py` | A supported camera and ASTAP. On Linux the camera is read through INDI; on Windows through Altair's own library, which is the only camera route there. |
 | **Processing** | `restack.py`, `calibrate.py`, `process.py`, `compare.py` | The raw frames a run kept. |
 | **The cooled mono camera** | `keeper.py`, `sxwheel.py`, `colour.py`, `instrument.py`, `cameras.py`, `corners.py` | The 183M (read through Altair's own library, on Linux too) and its filter wheel. |
-| **Discovery** | `patrol.py`, `vet.py`, `candidates.py`, `realbogus.py`, `depth.py`, `report.py`, `brokers.py`, `sungrazer.py`, `transits.py`, `precision.py`, `variables.py`, `starwatch.py` | Frames from the telescope; the comet hunt and public alerts need none. |
+| **Discovery** | `patrol.py`, `vet.py`, `candidates.py`, `realbogus.py`, `depth.py`, `report.py`, `brokers.py`, `transits.py`, `precision.py`, `variables.py`, `starwatch.py` | Frames from the telescope; public alerts need none. |
 | **Research without the telescope** | `archive.py`, `investigate.py`, `seti.py` | An internet connection. |
 
 Start with the planner; add hardware when you have it. [The table below](#every-script)
@@ -91,7 +91,6 @@ The cooled camera, discovery and research scripts:
 | `depth.py` | How faint a stack really reaches, from fake stars planted in it. |
 | `report.py` | Everything a report of a new transient needs, gathered for a person to check and send; never sent by the software. |
 | `brokers.py` | Public transient alerts bright enough for this rig and up in the dark tonight. |
-| `sungrazer.py` | Comets near the Sun in SOHO's and GOES-19's coronagraph pictures, hunted every six hours. |
 | `transits.py`, `precision.py` | Tonight's whole exoplanet transits; a night's verdict before any fitted number; what limits the photometry. |
 | `variables.py`, `starwatch.py` | Light curves of every star bright enough in the frames already taken; a nightly look at Tabby's star. |
 | `archive.py` | Tabby-like dips in Kepler's and TESS's public light curves ([docs/archive.md](archive.md)). |

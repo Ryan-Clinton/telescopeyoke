@@ -52,25 +52,6 @@ yet found anything new.
 - **Record:** [Validation](validation.md#current-conclusions),
   [Calibration](calibration.md).
 
-## A comet found by the hunt itself: GOES-19 CCOR-1, 19 October 2026
-
-- **Evidence:** archive analysis (live public spacecraft pictures), a known object found again.
-- **Question:** can a search that runs every six hours, with no one
-  watching, find a sungrazing comet in live spacecraft pictures?
-- **With:** 74 public CCOR-1 coronagraph pictures from GOES-19; SOHO's C3
-  as a check.
-- **How:** `./sungrazer.py hunt`: moving points tracked across pictures,
-  joined across gaps, checked against the planets, bright stars and the
-  Sungrazer Project's reports.
-- **Result:** a known Kreutz sungrazer, found by the hunt itself, followed
-  for seven hours across a 45-minute gap, and matched to the Sungrazer
-  Project's report to about 2 pixels. One false alarm, on the occulter's
-  rim, since stopped.
-- **Limits:** the comet was already known; a new one has not been found.
-- **Record:** [the comet hunt, 19 October 2026](discovery/comet-hunt-2026-10-19/README.md).
-
-![Four frames of a comet's head and short tail moving towards the Sun](results/comet-ccor1-2026-10-19.jpg)
-
 ## An exoplanet transit, and why it was not a detection: WASP-12 b, 20 October 2026
 
 - **Evidence:** real-sky observation.

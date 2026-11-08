@@ -22,7 +22,6 @@ transition takes the screen instead (streamlook.PRIORITY).
 """
 import math
 import time
-from pathlib import Path
 
 # The broadcast clock: (chapter, seconds), round and round from the stream's start.
 CLOCK = [("NOW", 45), ("SCIENCE", 25), ("NOW", 45), ("HOW IT WORKS", 25), ("NOW", 45), ("TONIGHT", 20),
@@ -33,7 +32,6 @@ EXPLAINER_EVERY, EXPLAINER_S = 300, 12
 CRAWL_EVERY, CRAWL_S = 600, 45
 NAKED_EYE = 6.0                       # the faintest stars an eye sees under a dark sky (magnitude)
 FULLISH = 90                          # % lit from which the Moon is told as near full (short shadows)
-COMET_HOURS = 36                     # a comet the hunt recovered is told for this long after the hunt
 # While the telescope focuses or is polar aligned: the card's title, its
 # pool in [stories], and how long each card stays.
 SEGMENTS = {"focus": "HOW FOCUSING WORKS", "polar": "HOW POLAR ALIGNMENT WORKS"}
@@ -111,42 +109,6 @@ def made(s, live):
         out.append(("made-depth", f"Tonight's search can find a new star down to about magnitude {depth:.1f}: "
                                   f"some {fainter(depth)} times fainter than the faintest star the eye can see."))
     return out
-
-
-def comet_hunt(now, data=None):
-    """The comet hunt's latest find worth telling (sungrazer.py's
-    hunt-ccor1.json): a known comet it found by itself, in the last
-    COMET_HOURS. A track nobody has reported is never told: it is the
-    person's to check first, as a nova candidate is."""
-    import datetime
-    import json
-    import config
-    path = Path(data or config.DATA) / "sungrazer" / "hunt-ccor1.json"
-    try:
-        hunt = json.loads(path.read_text(encoding="utf-8"))
-        when = datetime.datetime.strptime(hunt["when"], "%Y-%m-%d %H:%M").replace(tzinfo=datetime.timezone.utc)
-    except (OSError, ValueError, KeyError):
-        return None
-    if not 0 <= now - when.timestamp() <= COMET_HOURS * 3600:
-        return None
-    for c in hunt.get("towards_sun", []):
-        match = c.get("public") or {}
-        if match.get("state") == "known comet" and c.get("times"):
-            first, last = (datetime.datetime.strptime(t, "%Y-%m-%d %H:%M") for t in (c["times"][0], c["times"][-1]))
-            return {"pictures": hunt.get("pictures"), "seen": len(c["times"]), "group": match.get("group") or "",
-                    "hours": (last - first).total_seconds() / 3600, "day": f"{first.day} {first:%B}",
-                    "movie": c.get("movie")}
-    return None
-
-
-def comet_words(hunt):
-    """The comet hunt's find, told as its mission (stream-targets.toml [missions.comet])."""
-    import mission
-    goal = mission.missions().get("comet", {}).get("goal")
-    kind = f"a known {hunt['group']} sungrazing comet" if hunt["group"] == "Kreutz" else "a known comet"
-    return (f"{'Mission: ' + goal[0].lower() + goal[1:] + ' ' if goal else ''}"
-            f"On {hunt['day']} the comet hunt found {kind} by itself in {hunt['pictures']} pictures "
-            f"from the GOES-19 satellite: {hunt['seen']} of them, over {hunt['hours']:.0f} hours.")
 
 
 def tonight_lines(s, live):
@@ -287,9 +249,6 @@ def plan(s, live, now=None, story=None, targets=None):
         pool = prog.get("method", []) + [t for _, t in made(s, live)] + stories.get("stacking", []) \
             + stories.get("discovery", []) + stories.get("plate_solving", []) + stories.get("focus", []) \
             + stories.get("telescope", [])
-        hunt = comet_hunt(now)
-        if hunt:
-            pool.append(comet_words(hunt))
         import streamchat
         try:
             voted = streamchat.tally(now)
