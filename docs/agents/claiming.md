@@ -72,7 +72,10 @@ What happens before anyone asks:
 4. The form ends with a math CAPTCHA, which an agent may not answer: the
    person answers it and presses Save. The person saying to send or report
    it is the go for everything before that (8 November 2026, at their
-   word). The report's ID (report_XX_...) goes in the night's notes.
+   word). The report's ID (report_XX_...) goes in the night's notes and to
+   `./sungrazer.py submitted N ID`: each later hunt then follows the report
+   for 60 days and sends a message when it changes (endorsed, then credited
+   on the Cambridge list), and never takes it for someone else's report.
 
 ## What never happens
 

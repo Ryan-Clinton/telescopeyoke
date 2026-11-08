@@ -3,7 +3,7 @@ name: report-comet
 description: Report a comet found by the comet hunt to the Sungrazer Project. Use when the person says to report it, send it or submit it ("send it", "report comet 1", /report-comet N) after the hunt or comet-checker has found an unexplained track.
 argument-hint: TRACK-NUMBER
 compatibility: Claude Code with Claude in Chrome; without a browser tool it gives the form's fields as a list to paste
-allowed-tools: Bash(./sungrazer.py form *) Bash(./ty candidates *)
+allowed-tools: Bash(./sungrazer.py form *) Bash(./sungrazer.py submitted *) Bash(./ty candidates *)
 ---
 
 # Report comet $ARGUMENTS
@@ -30,8 +30,10 @@ The first report is the one credited.
 4. The form ends with a math CAPTCHA, which an agent may not answer. Say in
    one line that it is ready: they answer the CAPTCHA and press Save. Leave
    the tab open.
-5. They paste or say the report's ID (report_XX_...): add a bullet with it
-   to the night's notes (`~/ryanclinton.uk/notes/DATE.md`).
+5. They paste or say the report's ID (report_XX_...): `./sungrazer.py
+   submitted N ID`, so each later hunt follows it (endorsements, the
+   Cambridge list) and never takes it for someone else's; and a bullet with
+   it in the night's notes (`~/ryanclinton.uk/notes/DATE.md`).
 
 Never close a tab you did not open; a tab that appears during the job is
 the person's.

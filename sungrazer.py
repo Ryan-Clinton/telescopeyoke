@@ -155,6 +155,12 @@ MATCH_PX = 12.0      # pixels of the report's frame: a reported point this near 
 MATCH_HOURS = 6.0    # hours a track is carried on, either way, to meet a report's times
 RIM = {"ccor1": 70}  # pixels beyond the occulter where its bright edge flickers (40 elsewhere)
 RIM_STRENGTH = 20.0  # hunt: a track wholly in the rim this weak is set aside, not sent
+REPORT_PAGE = "https://sungrazer.nrl.navy.mil/index.php/report/"   # + the report's ID without its underscores
+CAMBRIDGE = "https://people.ast.cam.ac.uk/~jds/knos{yy}.htm"       # the year's list of coronagraph comets
+CAMBRIDGE_CAMERA = {"ccor1": "G1", "c2": "C2", "c3": "C3"}
+SUBMITTED_DAYS = 60  # days a report sent is followed: its endorsements and the Cambridge list
+LIKE_RATE = 0.25     # a report moving within this fraction of the track's speed, and its direction, moves like it
+LIKE_PATH = 40.0     # pixels across the track's line a report like it may lie and still be on the same path
 
 
 def folder():
@@ -462,21 +468,25 @@ def public_reports(camera, get=requests.get):
         points = [(h + m, float(x), float(y))
                   for h, m, x, y in re.findall(r"(\d{2}):?(\d{2})\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)", frames[0])]
         out.append({"id": cell.get("title", ""), "who": cell.get("contributor", ""), "date": date[1],
-                    "type": cell.get("sighting-type", ""), "group": cell.get("comet-group", ""), "points": points})
+                    "type": cell.get("sighting-type", ""), "group": cell.get("comet-group", ""), "points": points,
+                    "endorsements": cell.get("endorsements", "").count("\u2714")})
     return out
 
 
-def public_match(c, reports, near=MATCH_PX, hours=MATCH_HOURS):
+def public_match(c, reports, near=MATCH_PX, hours=MATCH_HOURS, mine=()):
     """How a candidate stands against the project's reports: "known comet"
     (it matches a report of a known one), "possible public match" (it
     matches someone's report), or "no matching public report found". A
     report matches when one of its points lies within `near` pixels of the
-    track carried to that point's time. Nothing is rejected for it."""
+    track carried to that point's time. Nothing is rejected for it. The
+    reports in `mine` are the person's own and are passed over."""
     when = [datetime.datetime.strptime(t, "%Y-%m-%d %H:%M") for t in c["times"]]
     t = np.array([(w - when[0]).total_seconds() / 60 for w in when])
     xy = np.array(c["sungrazer_xy"], float)
     fit = [np.polyfit(t, xy[:, k], 1) for k in (0, 1)] if len(t) > 1 else None
     for r in reports:
+        if r["id"] in mine:
+            continue
         day = datetime.datetime.strptime(r["date"], "%Y-%m-%d")
         for hhmm, x, y in r["points"]:
             for d in (day - datetime.timedelta(days=1), day):     # a report sent after midnight
@@ -488,6 +498,118 @@ def public_match(c, reports, near=MATCH_PX, hours=MATCH_HOURS):
                     return {"state": state, "report": r["id"], "who": r["who"], "type": r["type"],
                             "group": r.get("group", "")}
     return {"state": "no matching public report found"}
+
+
+def moves_like(c, reports, mine=()):
+    """A report that is not this track but moves as it does, at about its
+    speed and in its direction, on the same line across the sky: a comet
+    ahead of or behind it on the same path, as Kreutz fragments come.
+    {"report", "who", "type", "group", "hours"} (hours > 0: the report is
+    ahead), or None."""
+    when = [datetime.datetime.strptime(t, "%Y-%m-%d %H:%M") for t in c["times"]]
+    if len(when) < 2 or not c.get("sungrazer_xy"):
+        return None
+    t = np.array([(w - when[0]).total_seconds() / 60 for w in when])
+    xy = np.array(c["sungrazer_xy"], float)
+    vx, x0 = np.polyfit(t, xy[:, 0], 1)
+    vy, y0 = np.polyfit(t, xy[:, 1], 1)
+    speed = math.hypot(vx, vy)
+    if speed == 0:
+        return None
+    ux, uy = vx / speed, vy / speed
+    best = None
+    for r in reports:
+        if r["id"] in mine or len(r["points"]) < 2:
+            continue
+        day = datetime.datetime.strptime(r["date"], "%Y-%m-%d")
+        m = []
+        for hhmm, x, y in r["points"]:
+            stamp = day.replace(hour=int(hhmm[:2]), minute=int(hhmm[2:]))
+            m.append(((stamp - when[0]).total_seconds() / 60, x, y))
+        m = np.array(m)
+        if np.ptp(m[:, 0]) == 0:
+            continue
+        rx, ry = np.polyfit(m[:, 0], m[:, 1], 1)[0], np.polyfit(m[:, 0], m[:, 2], 1)[0]
+        if math.hypot(rx - vx, ry - vy) > LIKE_RATE * speed:
+            continue
+        tm, px, py = m[0]
+        dx, dy = px - (x0 + vx * tm), py - (y0 + vy * tm)    # the report from the track, at the report's time
+        across, along = abs(dx * uy - dy * ux), dx * ux + dy * uy
+        hours = along / speed / 60
+        if across <= LIKE_PATH and abs(hours) >= 1 and (best is None or abs(hours) < abs(best["hours"])):
+            best = {"report": r["id"], "who": r["who"], "type": r["type"], "group": r.get("group", ""),
+                    "hours": round(float(hours), 1)}
+    return best
+
+
+def report_page(rid, get=requests.get):
+    """One report's own page: {"found", "endorsed_by": [names]}."""
+    page = get(REPORT_PAGE + rid.replace("_", ""), timeout=30, headers={"User-Agent": "telescopeyoke comet hunt"})
+    if page.status_code == 404:
+        return {"found": False, "endorsed_by": []}
+    page.raise_for_status()
+    field = re.search(r'field-name-field-endorsements.*?</div>\s*</div>', page.text, re.S)
+    names = re.findall(r'field__item">([^<]+)<', field[0]) if field else []
+    return {"found": True, "endorsed_by": [n.strip() for n in names]}
+
+
+def cambridge_line(name, camera, first, get=requests.get):
+    """The Cambridge list's line crediting `name` with a comet found in
+    `camera` within a day of `first` (YYYY-MM-DD), or None."""
+    page = get(CAMBRIDGE.format(yy=first[2:4]), timeout=30, headers={"User-Agent": "telescopeyoke comet hunt"})
+    page.raise_for_status()
+    text = re.sub(r"<[^>]+>", "", page.text)
+    day = datetime.date.fromisoformat(first)
+    for line in text.splitlines():
+        m = re.match(r"\s*(\S*)\s*(\d{2})/(\d{2})/(\d{4})\s+(\S+)\s+(\S+)\s+(.*?)\s{2,}", line + "  ")
+        if not m or m[5] != CAMBRIDGE_CAMERA.get(camera) or name.lower() not in m[7].lower():
+            continue
+        seen = datetime.date(int(m[4]), int(m[3]), int(m[2]))
+        if abs((seen - day).days) <= 1:
+            return " ".join(line.split())
+    return None
+
+
+def followed(t, camera, get=requests.get):
+    """Where a report sent stands: its endorsements, and whether the
+    Cambridge list credits the reporter. The words say it."""
+    rid = t["submitted"]
+    try:
+        page = report_page(rid, get)
+    except (requests.RequestException, OSError) as error:
+        return f"your report {rid} could not be read ({error})"
+    if not page["found"]:
+        return f"your report {rid} is no longer on the Sungrazer site"
+    who = page["endorsed_by"]
+    words = f"your report {rid}: " + (f"endorsed by {', '.join(who)}" if who else "not endorsed yet")
+    name = reporter()["name"]
+    if name:
+        try:
+            line = cambridge_line(name, camera, t["times"][0][:10], get)
+        except (requests.RequestException, OSError):
+            line = None
+        if line:
+            words += f"; on the Cambridge list of coronagraph comets: {line}"
+    return words
+
+
+def submit(rid, n, camera):
+    """Keep that candidate `n` of the newest hunt was reported as `rid`, so
+    later hunts follow the report and do not take it for someone else's."""
+    if not re.fullmatch(r"report_[a-z]+_\d{14}", rid):
+        raise SystemExit(f"{rid} does not look like a Sungrazer report ID (report_xx_YYYYMMDDHHMMSS).")
+    hunt = json.loads((folder() / f"hunt-{camera}.json").read_text())
+    found = hunt.get("towards_sun") or []
+    if not 1 <= n <= len(found):
+        raise SystemExit(f"The hunt of {hunt.get('when')} has {len(found)} candidates heading for the Sun, not {n}.")
+    path = folder() / f"told-{camera}.json"
+    rows = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+    row = next((r for r in rows if same(found[n - 1], r)), None)
+    if row is None:
+        raise SystemExit(f"Candidate {n} is not among the candidates sent; nothing kept.")
+    row["submitted"] = rid
+    records.write(path, rows)
+    return {"camera": camera, "pictures": len(row.get("times", [])), "candidate": n, "submitted": rid}
 
 
 def steady(track, most=STEADY):
@@ -751,7 +873,14 @@ def form(n, camera, group="Kreutz", note=""):
     found = hunt.get("towards_sun") or []
     if not 1 <= n <= len(found):
         raise SystemExit(f"The hunt of {hunt.get('when')} has {len(found)} candidates heading for the Sun, not {n}.")
-    c = found[n - 1]
+    fields = form_fields(found[n - 1], camera, group=group, note=note)
+    return {"camera": camera, "pictures": len(found[n - 1]["times"]), "candidate": n,
+            "verdict": found[n - 1].get("verdict", {}).get("kind"), "url": "https://sungrazer.nrl.navy.mil/report",
+            "form": fields}
+
+
+def form_fields(c, camera, group="Kreutz", note=""):
+    """The report form's fields for one candidate, as the form names them."""
     times, xy = c["times"], c.get("sungrazer_xy") or c["track"]
     picks = sorted({round(i * (len(times) - 1) / (FORM_FRAMES - 1)) for i in range(FORM_FRAMES)})
     frames = [[times[i][11:13] + times[i][14:16], round(xy[i][0]), round(xy[i][1])] for i in picks]
@@ -769,11 +898,9 @@ def form(n, camera, group="Kreutz", note=""):
         raise SystemExit(f"The Note to Admin is {len(text)} characters; the form takes {NOTE_MAX}. "
                          "Shorten --note.")
     cam, size = FORM_CAMERA.get(camera, (camera.upper(), ""))
-    fields = {"Contributor": who["contributor"], "Note to Admin": text, "Sighting Type": "Potential Comet",
-              "Image or Report Date": times[0][:10], "Camera": cam, "Image Size": size,
-              "Your (0,0) position": "Upper Left", "Comet Group": group, "Frames": frames}
-    return {"camera": camera, "pictures": len(times), "candidate": n, "verdict": c.get("verdict", {}).get("kind"),
-            "url": "https://sungrazer.nrl.navy.mil/report", "form": fields}
+    return {"Contributor": who["contributor"], "Note to Admin": text, "Sighting Type": "Potential Comet",
+            "Image or Report Date": times[0][:10], "Camera": cam, "Image Size": size,
+            "Your (0,0) position": "Upper Left", "Comet Group": group, "Frames": frames}
 
 
 BODY_NEAR = 10.0     # pixels: a track this near a planet or bright star at its first and last pictures is that
@@ -870,8 +997,14 @@ def verdict(c, camera):
         return {"kind": "reported", "words": f"a comet someone has already reported, not yet confirmed: "
                                              f"{who}, \"{match.get('type')}\"{group}"}
     if state == "no matching public report found":
-        return {"kind": "unexplained", "words": "nothing explains it: no planet or bright star, and no report "
-                                                "of it in the project's list. It could be new"}
+        words = "nothing explains it: no planet or bright star, and no report of it in the project's list. It could be new"
+        like = c.get("like")
+        if like:
+            lag = f"{abs(like['hours'])} h {'behind' if like['hours'] > 0 else 'ahead of'}"
+            words += (f". It moves like {like['report']} ({like['who']}, \"{like['type']}\""
+                      + (f", {like['group']}" if like.get("group") else "")
+                      + f") but {lag} it on the same path: a separate comet, probably a companion")
+        return {"kind": "unexplained", "words": words}
     return {"kind": "not checked", "words": "the project's reports could not be read: not checked yet"}
 
 
@@ -909,7 +1042,8 @@ def told(camera, now):
         rows = json.loads((folder() / f"told-{camera}.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return []
-    return [r for r in rows if now.timestamp() - r.get("told", 0) <= TOLD_DAYS * 86400]
+    return [r for r in rows if now.timestamp() - r.get("told", 0)
+            <= (SUBMITTED_DAYS if r.get("submitted") else TOLD_DAYS) * 86400]
 
 
 def hunt(camera, hours=HUNT_HOURS, say=print, now=None, get=requests.get, looker=None, send=None):
@@ -945,10 +1079,13 @@ def hunt(camera, hours=HUNT_HOURS, say=print, now=None, get=requests.get, looker
         except (requests.RequestException, OSError) as error:
             say(f"The project's public reports could not be read ({error}): not checked")
     for c in new + pending:
+        mine = (c["submitted"],) if c.get("submitted") else ()
         if "body" not in c:
             c["body"] = body_on(c, camera)
-        c["public"] = public_match(c, reports) if reports is not None and c.get("sungrazer_xy") \
+        c["public"] = public_match(c, reports, mine=mine) if reports is not None and c.get("sungrazer_xy") \
             else c.get("public") or {"state": "public reports not checked"}
+        if reports is not None and c.get("sungrazer_xy"):
+            c["like"] = moves_like(c, reports, mine=mine)
         c["verdict"] = verdict(c, camera)
     for c in towards:
         twin = next((t for t in earlier if same(c, t)), None)
@@ -968,16 +1105,27 @@ def hunt(camera, hours=HUNT_HOURS, say=print, now=None, get=requests.get, looker
         lines = [f"Comet hunt checked: {headline(new, rim)}."]
         for n, c in enumerate(new, 1):
             lines.append(f"\n{n}. {c['verdict']['words']}.")
-            lines.append(report_text(c, camera))
             if c["verdict"]["kind"] == "unexplained":
-                lines.append(f"To report it, tell Claude \"report comet {n}\" (./sungrazer.py form {n}): it fills the "
-                             "Sungrazer form; you answer its CAPTCHA and press Save.")
+                group = (c.get("like") or {}).get("group") or "Kreutz"
+                lines.append("The report form, filled:")
+                lines += [f"  {k}: {v}" if k != "Frames" else "  Frames: " + "; ".join(" ".join(map(str, f)) for f in v)
+                          for k, v in form_fields(c, camera, group=group).items()]
+                lines.append(f"To report it, tell Claude \"report comet {n}\": it fills the Sungrazer form; "
+                             "you answer its CAPTCHA and press Save.")
+            else:
+                lines.append(report_text(c, camera))
         send("\n".join(lines), say=say)
     for t in pending:
         before = t.get("said", "")
         if t["verdict"]["words"] != before:
             send(f"Comet hunt update: the possible comet first seen {t['times'][0]} UTC is {t['verdict']['words']}.",
                  say=say)
+    for t in earlier:
+        if t.get("submitted"):
+            t["followed"] = followed(t, camera, get)
+            if t["followed"] != t.get("followed_said"):
+                send(f"Comet hunt: {t['followed']}.", say=say)
+                t["followed_said"] = t["followed"]
     stamp = now.timestamp()
     kept = [dict(t, said=t["verdict"]["words"]) for t in earlier]
     kept += [{"files": c.get("files", []), "track": c["track"], "times": c.get("times", []),
@@ -1034,11 +1182,17 @@ def moment(text):
 
 def run(args, say=print):
     until = moment(args.until) if args.until else None
-    args.camera = args.camera or ("ccor1" if args.action in ("hunt", "form") else "c3")
+    args.camera = args.camera or ("ccor1" if args.action in ("hunt", "form", "submitted") else "c3")
     if args.action == "hunt":
         if args.install:
             return install(args.camera, say)
         return hunt(args.camera, args.hours if args.hours != 12.0 else HUNT_HOURS, say, now=until)
+    if args.action == "submitted":
+        if not args.report:
+            raise SystemExit("Give the report's ID: ./sungrazer.py submitted N report_xx_YYYYMMDDHHMMSS")
+        answer = submit(args.report, args.n, args.camera)
+        say(f"Kept: candidate {args.n} was reported as {args.report}; each hunt follows it for {SUBMITTED_DAYS} days.")
+        return answer
     if args.action == "form":
         answer = form(args.n, args.camera, group=args.group, note=args.note)
         for k, v in answer["form"].items():
@@ -1060,8 +1214,10 @@ def run(args, say=print):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("action", choices=("fetch", "look", "hunt", "form"))
-    ap.add_argument("n", nargs="?", type=int, default=1, help="form: the candidate's number in the newest hunt")
+    ap.add_argument("action", choices=("fetch", "look", "hunt", "form", "submitted"))
+    ap.add_argument("n", nargs="?", type=int, default=1,
+                    help="form, submitted: the candidate's number in the newest hunt")
+    ap.add_argument("report", nargs="?", help="submitted: the report's ID, report_xx_YYYYMMDDHHMMSS")
     ap.add_argument("--group", default="Kreutz", help="form: the comet group (default Kreutz)")
     ap.add_argument("--note", default="", help="form: words added to the Note to Admin (255 characters in all)")
     ap.add_argument("--camera", choices=("c3", "c2", "ccor1"),
