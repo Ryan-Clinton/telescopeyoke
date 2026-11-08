@@ -266,7 +266,8 @@ one front door, the same checks. The rest (`patrol.py`, `polaralign.py`,
 - **Loads:** "send it", "report it", `/report-comet N`.
 - **Needs:** as `claim`, for the Sungrazer form.
 - **Does:** checks the track against the reports first; fills the form
-  (name and email from `[reporter]` in the site settings) and sends it.
+  from `./sungrazer.py form N` in a new tab; the person answers the CAPTCHA
+  and presses Save.
 
 ### `troubleshoot`
 

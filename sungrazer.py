@@ -725,6 +725,57 @@ def report_text(c, camera):
     return "\n".join(lines)
 
 
+NOTE_MAX = 255      # characters the report form's "Note to Admin" takes; a longer note is refused on Save
+FORM_FRAMES = 5     # frames put in the form's table: spread from the first picture to the last
+FORM_CAMERA = {"ccor1": ("CCOR1", "2048x1920 (CCOR1)"), "c2": ("C2", "1024x1024"), "c3": ("C3", "1024x1024")}
+
+
+def reporter():
+    """`[reporter]` in config.toml: name, email, and contributor (the name
+    on the form's list, "NEW USER" until the project has added it)."""
+    import tomllib
+    try:
+        r = tomllib.loads(config.FILE.read_text()).get("reporter", {})
+    except (OSError, ValueError):
+        r = {}
+    return {"name": r.get("name", ""), "email": r.get("email", ""), "contributor": r.get("contributor", "NEW USER")}
+
+
+def form(n, camera, group="Kreutz", note=""):
+    """The Sungrazer report form for candidate `n` of the newest hunt,
+    field by field as the form names them, ready to fill in."""
+    path = folder() / f"hunt-{camera}.json"
+    if not path.exists():
+        raise SystemExit(f"No hunt for {camera} yet: ./sungrazer.py hunt --camera {camera}")
+    hunt = json.loads(path.read_text())
+    found = hunt.get("towards_sun") or []
+    if not 1 <= n <= len(found):
+        raise SystemExit(f"The hunt of {hunt.get('when')} has {len(found)} candidates heading for the Sun, not {n}.")
+    c = found[n - 1]
+    times, xy = c["times"], c.get("sungrazer_xy") or c["track"]
+    picks = sorted({round(i * (len(times) - 1) / (FORM_FRAMES - 1)) for i in range(FORM_FRAMES)})
+    frames = [[times[i][11:13] + times[i][14:16], round(xy[i][0]), round(xy[i][1])] for i in picks]
+    who = reporter()
+    new_user = who["contributor"] == "NEW USER"
+    first, last = times[0][11:16].replace(":", ""), times[-1][11:16].replace(":", "")
+    words = [f"{who['name']}, {who['email']}" + (" (new user, please add to list)." if new_user else "."),
+             f"Automated {camera.upper()} search: {len(times)} frames {first}-{last} UT, steady inbound."]
+    if c.get("gaps"):
+        words.append(f"One track across {', '.join(c['gaps'])}.")
+    if note:
+        words.append(note)
+    text = " ".join(words)
+    if len(text) > NOTE_MAX:
+        raise SystemExit(f"The Note to Admin is {len(text)} characters; the form takes {NOTE_MAX}. "
+                         "Shorten --note.")
+    cam, size = FORM_CAMERA.get(camera, (camera.upper(), ""))
+    fields = {"Contributor": who["contributor"], "Note to Admin": text, "Sighting Type": "Potential Comet",
+              "Image or Report Date": times[0][:10], "Camera": cam, "Image Size": size,
+              "Your (0,0) position": "Upper Left", "Comet Group": group, "Frames": frames}
+    return {"camera": camera, "pictures": len(times), "candidate": n, "verdict": c.get("verdict", {}).get("kind"),
+            "url": "https://sungrazer.nrl.navy.mil/report", "form": fields}
+
+
 BODY_NEAR = 10.0     # pixels: a track this near a planet or bright star at its first and last pictures is that
 TOLD_DAYS = 4        # days a candidate already sent is remembered, so the next hunts do not send it again
 BRIGHT_STARS = {     # stars bright enough to leave a track near the Sun (RA, Dec in degrees, J2000)
@@ -919,8 +970,8 @@ def hunt(camera, hours=HUNT_HOURS, say=print, now=None, get=requests.get, looker
             lines.append(f"\n{n}. {c['verdict']['words']}.")
             lines.append(report_text(c, camera))
             if c["verdict"]["kind"] == "unexplained":
-                lines.append(f"To report it, tell Claude \"report comet {n}\": it fills the Sungrazer form and you "
-                             "press send.")
+                lines.append(f"To report it, tell Claude \"report comet {n}\" (./sungrazer.py form {n}): it fills the "
+                             "Sungrazer form; you answer its CAPTCHA and press Save.")
         send("\n".join(lines), say=say)
     for t in pending:
         before = t.get("said", "")
@@ -983,11 +1034,23 @@ def moment(text):
 
 def run(args, say=print):
     until = moment(args.until) if args.until else None
-    args.camera = args.camera or ("ccor1" if args.action == "hunt" else "c3")
+    args.camera = args.camera or ("ccor1" if args.action in ("hunt", "form") else "c3")
     if args.action == "hunt":
         if args.install:
             return install(args.camera, say)
         return hunt(args.camera, args.hours if args.hours != 12.0 else HUNT_HOURS, say, now=until)
+    if args.action == "form":
+        answer = form(args.n, args.camera, group=args.group, note=args.note)
+        for k, v in answer["form"].items():
+            if k == "Frames":
+                say("Frames (time, X Pos, Y Pos):")
+                for t, x, y in v:
+                    say(f"  {t}  {x}  {y}")
+            else:
+                say(f"{k}: {v}")
+        say(f"({len(answer['form']['Note to Admin'])} of {NOTE_MAX} characters in the note; "
+            f"form at {answer['url']})")
+        return answer
     if args.action == "fetch":
         paths = fetch(args.hours, args.camera, say, now=until, raw=args.raw)
         return {"camera": args.camera, "raw": args.raw, "pictures": len(paths),
@@ -997,9 +1060,12 @@ def run(args, say=print):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("action", choices=("fetch", "look", "hunt"))
+    ap.add_argument("action", choices=("fetch", "look", "hunt", "form"))
+    ap.add_argument("n", nargs="?", type=int, default=1, help="form: the candidate's number in the newest hunt")
+    ap.add_argument("--group", default="Kreutz", help="form: the comet group (default Kreutz)")
+    ap.add_argument("--note", default="", help="form: words added to the Note to Admin (255 characters in all)")
     ap.add_argument("--camera", choices=("c3", "c2", "ccor1"),
-                    help="LASCO C3 (wide) or C2 (close in), or GOES-19's CCOR-1 (default: c3; ccor1 for hunt)")
+                    help="LASCO C3 (wide) or C2 (close in), or GOES-19's CCOR-1 (default: c3; ccor1 for hunt and form)")
     ap.add_argument("--hours", type=float, default=12.0, help="how far back (default 12)")
     ap.add_argument("--until", help="the end of the time looked at, UTC (YYYY-MM-DDTHH:MM; default now, or "
                     "the newest picture kept)")

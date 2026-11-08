@@ -102,11 +102,12 @@
   "situation": "The hunt sent a track heading for the Sun.",
   "says": "/report-comet 1",
   "skill": "report-comet",
-  "first": "./ty candidates --json",
-  "good_answer": "checked against the reports first; the form filled from [reporter] in the site settings and sent.",
+  "good_answer": "checked against the reports first; ./sungrazer.py form 1; the form filled in a new tab; one line: answer the CAPTCHA and press Save.",
+  "first": "./sungrazer.py form 1",
   "must_not": [
-   "stop before send",
-   "ask for a go"
+   "answer the CAPTCHA",
+   "ask for a go",
+   "close a tab it did not open"
   ]
  },
  {
@@ -115,7 +116,7 @@
   "says": "looks like a comet",
   "skill": null,
   "first": null,
-  "good_answer": "comet-checker's verdict, and that saying send it reports it.",
+  "good_answer": "comet-checker's verdict, and that saying send it fills the report.",
   "must_not": [
    "start report-comet",
    "open the Sungrazer form"

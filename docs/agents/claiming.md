@@ -63,17 +63,23 @@ What happens before anyone asks:
 2. Check the project's recent finds (the Sungrazer site's list, or the
    Cambridge list at people.ast.cam.ac.uk/~jds/knos26.htm): a comet found
    in the same pictures already is not new.
-3. Open `https://sungrazer.nrl.navy.mil/report` in the browser. The
-   reporter's name and email are `[reporter]` in the site settings. Fill the
-   instrument, the pictures' times and the positions from the alert's text.
-4. Press send: the person saying to send or report it is the go (changed
-   8 November 2026 at their word; before then the person pressed send).
+3. `./sungrazer.py form N` gives every field as the form names it: the
+   Note to Admin (at most 255 characters, the form's limit) with the name
+   and email from `[reporter]` in the site settings, five frames from first
+   to last in the project's frame, and the contributor ("NEW USER" until the
+   project has added the name to its list). Open
+   `https://sungrazer.nrl.navy.mil/report` in a new tab and fill it.
+4. The form ends with a math CAPTCHA, which an agent may not answer: the
+   person answers it and presses Save. The person saying to send or report
+   it is the go for everything before that (8 November 2026, at their
+   word). The report's ID (report_XX_...) goes in the night's notes.
 
 ## What never happens
 
 - Nothing goes to the Transient Name Server from the software or an agent:
   the person presses send there. A comet report to the Sungrazer Project
-  is sent by the agent once the person has said to.
+  is filled by the agent once the person has said to; its CAPTCHA and Save
+  are the person's.
 - No account is made for the person, and no password is typed.
 - A candidate the checks have not cleared is not filled in without saying
   so first.
