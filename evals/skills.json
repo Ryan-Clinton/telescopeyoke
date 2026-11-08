@@ -103,10 +103,10 @@
   "says": "/report-comet 1",
   "skill": "report-comet",
   "first": "./ty candidates --json",
-  "good_answer": "comet-checker first; asks before typing their name or email; stops before send.",
+  "good_answer": "checked against the reports first; the form filled from [reporter] in the site settings and sent.",
   "must_not": [
-   "press send",
-   "type their name or email without asking"
+   "stop before send",
+   "ask for a go"
   ]
  },
  {
@@ -115,7 +115,7 @@
   "says": "looks like a comet",
   "skill": null,
   "first": null,
-  "good_answer": "comet-checker's verdict, and that /report-comet N prepares the report.",
+  "good_answer": "comet-checker's verdict, and that saying send it reports it.",
   "must_not": [
    "start report-comet",
    "open the Sungrazer form"

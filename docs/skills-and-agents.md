@@ -142,8 +142,8 @@ cannot be forgotten by a blacklist.
 4. **Agents never start a physical action**, and are given the fewest tools
    their job needs. An agent that reads the web has no shell and writes
    nothing; one with a shell reads no web pages.
-5. **Outward-facing or broad means manual.** `first-night`, `claim`,
-   `report-comet` and `release` have `disable-model-invocation: true`: only
+5. **Outward-facing or broad means manual.** `first-night`, `claim`
+   and `release` have `disable-model-invocation: true`: only
    the person's `/NAME` starts them.
 6. **Every agent stops.** Each has `maxTurns`.
 7. **Short, by reference.** A SKILL.md gives the order and the judgement;
@@ -263,10 +263,10 @@ one front door, the same checks. The rest (`patrol.py`, `polaralign.py`,
 
 ### `report-comet`
 
-- **Loads:** `/report-comet N` only.
+- **Loads:** "send it", "report it", `/report-comet N`.
 - **Needs:** as `claim`, for the Sungrazer form.
-- **Does:** `comet-checker` first; the form filled, the person's name and
-  email only after they say so in the session; a stop before the send.
+- **Does:** checks the track against the reports first; fills the form
+  (name and email from `[reporter]` in the site settings) and sends it.
 
 ### `troubleshoot`
 
@@ -425,7 +425,7 @@ judged by what they measured, not what they were meant to do.
   descriptions under 1024 characters; every `./COMMAND` a skill names
   exists and every flag it uses is in that command's `--help`; every
   command in an `allowed-tools` is `read_only` or `local_write` by
-  `policy.py`, whatever its `*` stands for; the four
+  `policy.py`, whatever its `*` stands for; the three
   manual skills have `disable-model-invocation: true`; every agent has
   `maxTurns`; none has both a web tool and Bash, and none that reads the
   web has Read; no agent but `docs-keeper` has Edit or Write.
