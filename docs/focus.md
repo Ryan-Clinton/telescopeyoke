@@ -135,9 +135,16 @@ at the start and speaks its changes of state without the click and tone.
 
 ## What has and has not been tried
 
-All of this has run only on made-up star fields and the demo's pretend
-camera. On a real camera, none of the following has been tried from this
-code yet:
+**On the sky:** hand focus with the spoken numbers is how the telescope is
+focused every night: HFR 2.0 (3.0") on Enif in L ([validation](validation.md)),
+and again on 7 and 8 November 2026. The motor focuser has focused on stars
+with the same measuring (HFR 2.47, then 2.28 and 2.14, 15 and 17 October)
+until it could no longer lift the camera ([focuser](focuser.md)). The guide
+scope's aid, `./guidecam.py focus`, was first used on 8 November 2026 (to
+about 3.1 to 3.5 px binned, through haze).
+
+**Not tried on the sky:** the click-and-tone mode with its spoken changes of
+state ("Focus good. Hold"), and with it the following:
 
 - **Binning through INDI.** `camera_test.py` timed binned frames on the USB 3
   lead (0.70 s against 1.02 s for a full frame at 0.1 s exposures). The one
