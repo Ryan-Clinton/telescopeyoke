@@ -9,8 +9,7 @@ allowed-tools: Bash(./ty candidates *) Bash(./ty characterise *) Bash(./ty agent
 
 A cloudy day is research time: the telescope is not the only instrument.
 Start these at once, each in the background, without offering them, and
-say each result when it lands (docs/discovery.md step 9, docs/seti.md,
-docs/archive.md):
+say each result when it lands (docs/discovery.md, docs/archive.md):
 
 A. **Kepler's archive:** `./archive.py screen --batch 200` (on the
    desktop for big batches) carries the screen of Kepler's stars on from
@@ -18,27 +17,17 @@ A. **Kepler's archive:** `./archive.py screen --batch 200` (on the
    dips are. Say the new top few, each with what the checks say (periodic,
    at an edge, only in one of SAP and PDCSAP), and look each one up
    (`catalogue-researcher`) before calling it strange.
-B. **Radio SETI:** only once `docs/seti.md` ("Is the search right?")
-   shows it agrees with turboSETI on several real looks and finds planted
-   signals at SNR 15 and above: `./seti.py sweep KIC8462852 --blocks 3`
-   carries the search of Tabby's star's Green Bank cadence on, one 2.9
-   MHz block at a time, from where it stopped. Until then, measure
-   instead: `./seti.py benchmark` and `./seti.py inject` on the slices
-   kept. Say how much of the band is done and any candidate, with the
-   note that a candidate is ours until checked against known
-   interference and the published searches.
-C. **Papers:** `./literature.py --unread`. Read each abstract on Tabby's
-   star, dipping stars and SETI, and say in a line what it claims, how
+B. **Papers:** `./literature.py --unread`. Read each abstract on Tabby's
+   star and dipping stars, and say in a line what it claims, how
    sure it is (the paper's own words: sigma, "tentative", "confirmed")
    and what it means for the programmes (a new window goes into the
    programme's `[[watch]]`, with its source). Then mark them read
    (`./literature.py --read ID...`).
-D. **Investigate:** `./investigate.py`, after A's batch has landed so its
+C. **Investigate:** `./investigate.py`, after A's batch has landed so its
    new leads are in the queue (it picks itself: a lead with a check
    unanswered first, then the top new one; run it again while `./ty
    research` shows any waiting or to ask again). Say its verdict
-   (explained, likely explained, artefact, likely interference,
-   unexplained weak or strong) and why, "likely" with what is missing, whether it is known to science
+   (explained, likely explained, artefact, unexplained weak or strong) and why, "likely" with what is missing, whether it is known to science
    already, and whether this telescope can watch it; the report is
    `docs/research/LEAD.md`. An "unexplained" lead goes to
    `catalogue-researcher` before anything is called new. `./ty research`

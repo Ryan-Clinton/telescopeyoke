@@ -21,8 +21,7 @@ own, starting with Sky-Watcher's SynScan family, and adds what much bigger
 systems do. It measures its own pointing, polar alignment, focus, drift,
 camera timing and image depth, and corrects for them; plans and runs a
 whole night; searches its pictures for novae and new transients, and public
-archives (Kepler and TESS light curves, radio SETI recordings) for what is
-strange; tells you when something matters, on your phone or through the house's lights and speaker; and can explain the night
+archives (Kepler and TESS light curves) for what is strange; tells you when something matters, on your phone or through the house's lights and speaker; and can explain the night
 live to an audience. An AI agent can operate it beside you, by one rule:
 **AI proposes; deterministic code decides what is safe; a person decides
 what the telescope does.**
@@ -54,7 +53,7 @@ camera has taken frames, but no mount has been driven yet.
 OBSERVE   plan → schedule → GoTo and centre → focus → image → hold → park
 MEASURE   pointing · polar error · true home · drift · focus · shutter · depth · precision
 DISCOVER  patrol → subtract → vet → second look → follow night to night → report
-RESEARCH  Kepler and TESS dips · radio SETI
+RESEARCH  Kepler and TESS dips
 OPERATE   cloud and rain · stopped runs · alerts by phone, lights and speaker
 REASON    JSON for every command · ty · MCP · skills and specialist agents
 SHARE     status page · public live page · YouTube and Twitch broadcast with a presenter and chat
@@ -121,11 +120,10 @@ not a detection says so, and why.
 - 🪐 **Measures exoplanet transits and variable stars**, with the verdict before any fitted number
 - 🔁 **Searches public survey alerts and its own old pictures again** as its methods improve, and prepares a report packet for a person to check and send
 
-**Research without the telescope** ([archive](docs/archive.md), [leads](docs/research/README.md), [SETI](docs/seti.md))
+**Research without the telescope** ([archive](docs/archive.md), [leads](docs/research/README.md))
 
 - 📉 **Searches Kepler's and TESS's light curves for stars like Tabby's** (`archive.py`), ruling out the spacecraft's own events and eclipsing binaries
 - 🔎 **Looks into each lead by one fixed procedure** (`investigate.py`) against Gaia, SIMBAD and VSX, and says whether it is explained, an artefact or unexplained, and whether this telescope could watch it
-- 📡 **Searches Breakthrough Listen's open radio data** for narrowband signals (`seti.py`), with the ON-OFF cadence test that tells interference from the target, a few blocks of the band each cloudy day
 
 **Operate** ([alerts](docs/alerts.md))
 
@@ -335,7 +333,6 @@ was involved. Everything is also run against the simulated rig.
 | Checking that the telescope really turned | not yet | ⚠️ by day: one real record, and it caught a real fault; 109 checked looks on a working mount, none stopped wrongly | ✅ |
 | Discovery: subtraction, candidates, vetting | ⚠️ on real M31 and M33 stacks, with planted fakes; no find of our own yet | ✅ | ✅ a known nova found again in ZTF's archive images |
 | Kepler and TESS archive search (`archive.py`, `investigate.py`) | does not need them | ✅ Tabby's star's four known dips found and nothing else (3 November 2026); 16 leads looked into, none unexplained | ✅ |
-| Radio SETI (`seti.py`) | does not need them | ⚠️ 9 of 308 blocks of one cadence searched; planted signals found, no false hits in 240 runs; every candidate so far interference | ✅ |
 | Lights, speaker and phone alerts (`alert.py`) | does not need them | ✅ cloud and rain alerts on a real light and speaker; the call that woke the author when a run stopped (20 October 2026) | ✅ |
 | Live stream on Twitch and YouTube (`stream.py`) | ✅ Twitch on air 20 October 2026 on the WASP-12 b run; YouTube on air 1 November 2026 | ✅ | ✅ |
 | Exoplanet transit photometry | ⚠️ one attempt (WASP-12 b): dimming seen, not a detection | ✅ | ✅ |
@@ -457,7 +454,6 @@ Bright supernovae: [the Rochester list of active ones](https://www.rochesterastr
 The sky's events and the news: [in-the-sky.org](https://in-the-sky.org), [Universe Today](https://www.universetoday.com) and the [BAA](https://britastro.org), in `./ty night` and `./tonight.py`.
 Cloud imagery: [EUMETSAT](https://view.eumetsat.int).
 Light curves: Kepler and TESS, from [MAST](https://archive.stsci.edu).
-Radio: [Breakthrough Listen's open data](https://seti.berkeley.edu/opendata).
 
 ## Licence
 

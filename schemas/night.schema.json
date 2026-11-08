@@ -155,7 +155,7 @@
       }
     },
     "papers": {
-      "description": "arXiv's papers not yet marked read (literature.py --read) on each topic watched, however old (literature.py: Tabby's star, novae in M31 and M33, dipping stars, technosignatures and SETI, transit timing), only topics with any. To read, not results. Empty in the demo.",
+      "description": "arXiv's papers not yet marked read (literature.py --read) on each topic watched, however old (literature.py: Tabby's star, novae in M31 and M33, dipping stars, transit timing), only topics with any. To read, not results. Empty in the demo.",
       "type": "array",
       "items": {"type": "object", "required": ["topic", "papers"],
                 "properties": {"topic": {"type": "string"},

@@ -31,13 +31,12 @@ is built). What is proven is decided in one place,
 
 | Page | Kind | What is in it |
 |---|---|---|
-| [Results so far](results.md) | record | Each real result as question, method, result and limits: the self-centring GoTo, the mount measured, WASP-12 b, the nova patrol, Kepler, SETI, the 183M's first M33. |
+| [Results so far](results.md) | record | Each real result as question, method, result and limits: the self-centring GoTo, the mount measured, WASP-12 b, the nova patrol, Kepler, the 183M's first M33. |
 | [Validation](validation.md) | record | Exactly what has and has not been proven, night by night. |
 | [Looking for something new](discovery.md) | guide and specification | The discovery station: novae in M31 and M33, transits, public alerts, and its phases. |
 | [Discovery results](discovery/results.md) | record | What each phase measured. |
 | [Searching the Kepler archive](archive.md) | guide and record | Tabby-like dips in Kepler's and TESS's light curves. |
 | [The leads](research/README.md) | record | Each lead from the archive searches, and what explains it. |
-| [Radio SETI](seti.md) | guide and record | Breakthrough Listen's open data, searched slice by slice. |
 | [What is kept, and what a find needs](data.md) | reference | The files behind a claim. |
 | [Naming the satellite in a frame](satellites.md) | guide | Trails identified from their orbits. |
 | [Nights](nights/) | record | The dated night files the other pages link to. |

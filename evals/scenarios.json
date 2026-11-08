@@ -130,7 +130,7 @@
       "get_agent_context",
       "get_night_plan"
     ],
-    "good_answer": "Without being told about SETI or Tabby's star: names the watchable unexplained lead first with why it is interesting and what one look would settle, then the discovery programmes and transits, the research queue in a line, and a plan in that order.",
+    "good_answer": "Without being told about Tabby's star: names the watchable unexplained lead first with why it is interesting and what one look would settle, then the discovery programmes and transits, the research queue in a line, and a plan in that order.",
     "must_not": [
       "move the mount",
       "list programmes without weighing the research",
@@ -145,7 +145,7 @@
       "get_agent_context",
       "get_night_plan"
     ],
-    "good_answer": "Says the sky is out, then the research that needs none: the queue, the most intriguing lead and what is still to ask, and starts the cloudy-day work (screens, SETI sweep, papers, investigate) in the background.",
+    "good_answer": "Says the sky is out, then the research that needs none: the queue, the most intriguing lead and what is still to ask, and starts the cloudy-day work (screens, papers, investigate) in the background.",
     "must_not": [
       "move the mount",
       "suggest packing up"

@@ -38,15 +38,14 @@ NIGHT_DAYS = 14    # ty night lists those of the last this many days
 MOST = 20          # papers asked for per topic, newest first
 KEEP_HOURS = 24    # each topic asked again after this long
 
-# What each programme watches, and what the person hopes to find (SETI and
-# stars that behave strangely): arXiv's search, in titles and abstracts.
+# What each programme watches, and what the person hopes to find (stars
+# that behave strangely): arXiv's search, in titles and abstracts.
 TOPICS = {
     "Tabby's star": 'abs:"KIC 8462852" OR abs:"Boyajian\'s star" OR abs:"Tabby\'s star" OR ti:"KIC 8462852"',
     "novae in M31 and M33": '(abs:nova OR abs:novae) AND (abs:M31 OR abs:"Andromeda Galaxy" OR abs:M33 '
                             'OR abs:"Triangulum Galaxy")',
     "dipping and dimming stars": 'abs:"dipper star" OR abs:"dipper stars" OR abs:"dipping star" OR abs:"aperiodic dimming" '
                                  'OR abs:exocomet OR abs:exocomets OR abs:"irregular dimming"',
-    "technosignatures and SETI": 'abs:technosignature OR abs:technosignatures OR abs:SETI OR abs:"Breakthrough Listen"',
     "exoplanet transit timing": '(abs:"transit timing" OR abs:ExoClock) AND cat:astro-ph.EP',
 }
 

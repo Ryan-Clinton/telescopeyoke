@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/literature.schema.json",
   "title": "Literature",
-  "description": "data of: literature.py --json, arXiv's newest papers on each topic the telescope watches or hopes to find (Tabby's star, novae in M31 and M33, dipping stars, technosignatures and SETI, transit timing). Something to read, not a result. Nothing moves.",
+  "description": "data of: literature.py --json, arXiv's newest papers on each topic the telescope watches or hopes to find (Tabby's star, novae in M31 and M33, dipping stars, transit timing). Something to read, not a result. Nothing moves.",
   "type": "object",
   "required": [
     "kind"

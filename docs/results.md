@@ -106,24 +106,6 @@ yet found anything new.
 - **Limits:** every lead so far is likely explained; none is a discovery.
 - **Record:** [the archive search](archive.md), [the leads](research/README.md).
 
-## Radio SETI in Breakthrough Listen's open data, November 2026
-
-- **Evidence:** archive analysis, with controlled software validation (planted signals).
-- **Question:** can a laptop search Green Bank's published recordings for
-  narrowband signals, telling our own interference from a signal from the
-  target?
-- **With:** Breakthrough Listen's open data, read slice by slice over the
-  web.
-- **How:** `./seti.py`: every drift line up to 4 Hz a second, then the
-  ON-OFF cadence test; checked against signals planted in the data and
-  against turboSETI.
-- **Result:** the planted-signal test finds signals at its cut as expected,
-  with no false hits in 240 runs. Every candidate examined so far has been
-  interference.
-- **Limits:** by 5 November, 9 of the 308 blocks of Tabby's star's
-  25 May 2017 cadence searched (1818-1845 MHz), a few more each cloudy day.
-- **Record:** [docs/seti.md](seti.md).
-
 ## The cooled mono camera's first night: M33, 4-5 November 2026
 
 - **Evidence:** real-sky observation and instrument characterisation.

@@ -104,12 +104,12 @@ def _screen_summary(name, kind):
 RESEARCH_HOST = "desktop"                          # where the big screens and investigations run
 RESEARCH_PLACE = "telescopeyoke-laptop/research"   # its folder there; data in data-research/ (TY_DATA)
 PULLED = ("cache/kepler/screened.json", "cache/kepler/targets.csv", "cache/kepler/villanova.json",
-          "cache/tess/", "cache/seti/", "cache/research/")
+          "cache/tess/", "cache/research/")
 
 
 def pull_research(run=subprocess.run, say=print):
     """Bring the desktop's research records here (`ty research --pull`):
-    the screens' records, the SETI sweeps, the investigations and their
+    the screens' records, the investigations and their
     reports, so the briefing and the night plan count what the desktop
     found. Copies only, never deletes here, and never over a newer copy here
     (one asked again on this computer). Returns what came."""
@@ -133,8 +133,8 @@ def pull_research(run=subprocess.run, say=print):
 
 def research(html=False, pull=False):
     """The research that needs no sky, in one view (`ty research`): how much
-    of each survey has been searched (the Kepler and TESS screens, each SETI
-    sweep), the leads they flagged, what investigate.py made of the ones it
+    of each survey has been searched (the Kepler and TESS screens), the
+    leads they flagged, what investigate.py made of the ones it
     looked into, and the papers not yet read. Each lead is kept apart by
     where it stands: a lead (flagged, not looked into), explained or an
     artefact (looked into), unexplained after the checks, and known to
@@ -143,15 +143,6 @@ def research(html=False, pull=False):
     pulled = pull_research() if pull else None
     cache = config.DATA / "cache"
     surveys = [_screen_summary("Kepler screen", "kepler"), _screen_summary("TESS screen", "tess")]
-    seti = []
-    for path in sorted((cache / "seti").glob("*.json")):
-        kept = _read_json(path, {}) or {}
-        done = kept.get("done", {})
-        blocks = len(kept.get("blocks") or [])
-        seti.append({"survey": f"SETI sweep {path.stem}", "searched": len(done), "of": blocks,
-                     "covered_percent": round(100 * len(done) / blocks, 2) if blocks else None,
-                     "searched_mhz": round(sum(d["to_mhz"] - d["from_mhz"] for d in done.values()), 3),
-                     "candidates": sum(d.get("candidates", 0) for d in done.values())})
     looked = []
     for path in sorted((cache / "research").glob("*.json")):
         r = _read_json(path)
@@ -180,10 +171,9 @@ def research(html=False, pull=False):
             else:
                 unread += re.sub(r"v\d+$", "", p.get("id", "")) not in set(marked)
     count = lambda *labels: sum(1 for r in looked if r["verdict"] in labels)     # noqa: E731
-    answer = {"surveys": surveys + seti,
+    answer = {"surveys": surveys,
               "leads": {"waiting": waiting, "to_recheck": rechecks, "explained": count("explained"),
                         "likely_explained": count("likely explained"), "artefact": count("artefact"),
-                        "likely_interference": count("likely interference"),
                         "unexplained_weak": count("unexplained, weak"), "unexplained_strong": count("unexplained, strong"),
                         "known_to_science": sum(1 for r in looked if r["known_to_science"])},
               "investigated": sorted(looked, key=lambda r: r["investigated"] or "", reverse=True),
@@ -193,8 +183,6 @@ def research(html=False, pull=False):
                           "explained": "a catalogue names this star's variability and every catalogue answered",
                           "likely_explained": "a known class fits (a red giant, say) or a catalogue did not "
                                               "answer: likely, not certain",
-                          "likely_interference": "a SETI candidate with signs of interference (a satellite band, "
-                                                 "no drift): signs, not proof",
                           "artefact": "a check failed: the data, the pipeline or a neighbour's light",
                           "unexplained": "every check made and nothing accounts for it: for a person to read, "
                                          "not a discovery",
@@ -228,7 +216,7 @@ table{{border-collapse:collapse;width:100%;margin:.5rem 0 1.5rem}}td,th{{border-
 @media (prefers-color-scheme: dark){{body{{background:#111;color:#eee}}a{{color:#9cf}}td,th{{border-color:#444}}}}</style></head><body>
 <h1>Research that needs no sky</h1>
 <p>Leads waiting: <b>{leads['waiting']}</b>, {leads['to_recheck']} to ask again. Looked into: {leads['explained']} explained,
-{leads['likely_explained']} likely explained, {leads['artefact']} artefacts, {leads['likely_interference']} likely interference,
+{leads['likely_explained']} likely explained, {leads['artefact']} artefacts,
 {leads['unexplained_weak']} unexplained (weak), <b>{leads['unexplained_strong']}</b> unexplained (strong); {leads['known_to_science']} known to science.
 Papers not yet read: {answer['papers_unread']}.</p>
 <h2>Surveys</h2><table><tr><th>Survey</th><th>Searched</th><th>Of</th><th>Covered</th><th>Failed</th><th>Leads</th></tr>{rows}</table>
@@ -1488,7 +1476,7 @@ def context(demo=False):
     caps, now = capabilities(), status()
     lines = [f"telescopeyoke {VERSION}", "",
              "Mission (docs/discovery.md, \"What the project is for\"): discovery first. New transients and "
-             "novae with the telescope; strange stars (Tabby's star, dippers) and radio SETI in the archives; "
+             "novae with the telescope; strange stars (Tabby's star, dippers) in the archives; "
              "the person wants the weird and wonderful, so a research lead this telescope can watch tonight "
              "comes before a routine patrol. Plan with ./ty night (its research section) and the "
              "discovery-night skill; on a cloudy day, the cloudy-day skill.", ""]

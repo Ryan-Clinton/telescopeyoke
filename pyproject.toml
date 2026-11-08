@@ -23,8 +23,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# seti.py only: Breakthrough Listen's files are HDF5 packed with bitshuffle.
-seti = ["h5py>=3.8", "hdf5plugin>=4.0"]
 # archive.py tess only: TESS's light curves from MAST.
 archive = ["astroquery>=0.4.6"]
 # sxwheel.py only: the Starlight Xpress filter wheel, a USB HID device.

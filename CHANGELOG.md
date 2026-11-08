@@ -6,6 +6,13 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+- **8 November 2026**: the radio SETI search (`seti.py`) has moved to its
+  own project: it uses no telescope. Taken out with it: its schema and
+  guide, its sweep in `ty research`, its candidates in `investigate.py`
+  (and the "likely interference" verdict), its arXiv topic, its steps in
+  the cloudy-day and discovery-night skills, h5py and hdf5plugin from the
+  install, and its README and docs entries.
+
 - **8 November 2026**: the comet hunt (`sungrazer.py`) has moved to its
   own project: it needs no telescope, mount or camera. Taken out with it:
   its schema, timer, the comets in `ty candidates` and `ty discovery`, the

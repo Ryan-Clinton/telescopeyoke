@@ -2,7 +2,7 @@
 name: discovery-night
 description: Plan and run a night hunting for novae, new transients and strange stars (Tabby's star and its proposed companion's transit windows, AAVSO campaigns, exoplanet transits). Use when the person asks what is interesting tonight, for tonight's outlook or plan, what to do tonight, for the research or papers, asks to patrol M31 or M33, look for novae, or run a discovery night.
 compatibility: telescopeyoke at the telescope, set up and focused (nightly-setup), with a reference for each field or a first night to make one
-allowed-tools: Bash(./instrument.py) Bash(./instrument.py --json) Bash(./ty outlook) Bash(./ty night) Bash(./ty night --json) Bash(./ty research) Bash(./ty research *) Bash(./ty context) Bash(./patrol.py * --plan) Bash(./starwatch.py * --plan) Bash(./ty candidates) Bash(./ty candidates *) Bash(./ty watch-run --once) Bash(./transits.py) Bash(./transits.py *) Bash(./brokers.py) Bash(./literature.py *) Bash(./archive.py screen *) Bash(./seti.py sweep *) Bash(./investigate.py) Bash(./investigate.py *)
+allowed-tools: Bash(./instrument.py) Bash(./instrument.py --json) Bash(./ty outlook) Bash(./ty night) Bash(./ty night --json) Bash(./ty research) Bash(./ty research *) Bash(./ty context) Bash(./patrol.py * --plan) Bash(./starwatch.py * --plan) Bash(./ty candidates) Bash(./ty candidates *) Bash(./ty watch-run --once) Bash(./transits.py) Bash(./transits.py *) Bash(./brokers.py) Bash(./literature.py *) Bash(./archive.py screen *) Bash(./investigate.py) Bash(./investigate.py *)
 ---
 
 # Discovery night
@@ -17,7 +17,6 @@ is `docs/agents/setup-routine.md` step 6b.
      its own log in the scratchpad (`S`) and its exit status printed:
      `(./brokers.py > $S/brokers.log 2>&1; echo "brokers exit $?") &
      ./archive.py screen --batch 200 > $S/archive.log 2>&1; echo "archive exit $?";
-     ./seti.py sweep KIC8462852 --blocks 3 > $S/seti.log 2>&1; echo "seti exit $?";
      ./investigate.py > $S/investigate.log 2>&1; echo "investigate exit $?"; wait`
      (the research goes on; it is not the answer);
    - `./ty outlook` (3 seconds: the plan from now, the other choice, the
@@ -79,8 +78,8 @@ is `docs/agents/setup-routine.md` step 6b.
    `papers`. Then the research queue in one line (waiting, to ask again,
    unexplained), the next lead to look into and why it was flagged, the
    most intriguing one already looked into (never a likely-explained one as
-   the best open one), and one line per paper on Tabby's star, dipping
-   stars or SETI (its `abstract` read): what it claims, how sure in its own
+   the best open one), and one line per paper on Tabby's star or dipping
+   stars (its `abstract` read): what it claims, how sure in its own
    words quoted exactly and whole, and what it changes for a programme;
    then mark them read (`./literature.py --read ID...`). A paper is
    something to read, never a result of ours.

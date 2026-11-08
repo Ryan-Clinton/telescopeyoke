@@ -235,11 +235,7 @@ mirror that sends an empty page has not answered, so VSX is asked again
 later rather than taken as listing nothing.
 A lead is the screens' own (`archive.is_lead`: a dip left, a possible
 repeated eclipse or a short TESS dip, not a known binary; Tabby-like
-first) or a SETI sweep's candidate (every ON look, no OFF look;
-interference and unconfirmed hits stay in the sweep's record). A SETI
-lead is one detection, named by target, session and frequency; its
-`signal` (target and frequency to the kHz) links detections in different
-sessions that may be the same signal. A star's dips are judged by kind:
+first). A star's dips are judged by kind:
 long (the 30-minute search), possible repeats, and short TESS dips (the
 2-minute pass); the red-giant rule explains only dips of a day or more,
 since a giant's pulsation takes days to weeks. It
@@ -255,7 +251,6 @@ by going out altogether. The verdict is one of:
 | explained | a catalogue names this star's variability (Villanova EB, a VSX type, SIMBAD's class, Gaia's class) and every catalogue answered |
 | likely explained | a known class fits but no catalogue names the star's variability (the red-giant rule: Gaia colour and luminosity), or a catalogue did not answer |
 | artefact | a check fails: one flux only, the aperture's crowding, a neighbour bright enough, no dip left |
-| likely interference | a SETI candidate with a sign of interference (a satellite band, no drift), each stated: signs, not proof |
 | unexplained, weak / strong | nothing accounts for it; strong needs two dips of 5% or more in both fluxes, on a star steady between them, with every catalogue answering |
 
 "Known to science" is said apart: a star cited 20 times or more is

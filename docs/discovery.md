@@ -28,9 +28,8 @@ One mission, two instruments. The telescope hunts what changes in the sky
 (novae in M31 and M33, supernovae, new transients, the timing of
 exoplanet transits, Tabby's star's level); the archives hunt what is
 strange in data already taken (Kepler's and TESS's light curves for
-Tabby-like dippers, Breakthrough Listen's Green Bank data for radio
-technosignatures). The person is drawn to the weird and wonderful
-(SETI@home, Tabby's star), so the two are weighed together each night,
+Tabby-like dippers). The person is drawn to the weird and wonderful
+(Tabby's star), so the two are weighed together each night,
 in this order:
 
 1. A watch window tonight (Tabby's proposed companion's transit).
@@ -38,7 +37,7 @@ in this order:
    telescope can watch and is up tonight (`./ty night`'s `research`,
    `observe_tonight`): one look says whether the behaviour goes on.
 3. The discovery programmes and transits, as planned.
-4. Everything without the sky (the screens, the SETI sweep, the papers,
+4. Everything without the sky (the screens, the papers,
    the investigations) runs beside it on the desktop, every night and
    every cloudy day.
 
@@ -60,9 +59,7 @@ queue, the most intriguing leads and any up tonight) and `./ty night`.
   star's four known dips and nothing else at 1% or deeper; 16 leads from
   the search looked into by `investigate.py`, the most intriguing likely
   red giants pulsating, none a discovery ([archive](archive.md),
-  [the leads](research/README.md)). The radio SETI sweep of Tabby's star's
-  2017 cadence began the same day: 9 of 308 blocks by 5 November, every
-  hit interference ([SETI](seti.md)).
+  [the leads](research/README.md)).
 - **1-2 November 2026, M31 and M33:** the subtraction fix cut false
   candidates from 23 to 5, and the second looks found none real; `vet.py`
   now sets aside only clusters of 3 or more as residue
@@ -317,7 +314,7 @@ What a person does; everything else is automatic.
 
    - Papers (`./literature.py`, and `papers` in `ty night`): arXiv's
      newest on Tabby's star, novae in M31 and M33, dipping and dimming
-     stars, technosignatures and SETI, and transit timing, asked once a
+     stars and transit timing, asked once a
      day. On 3 November 2026 its first run found two Tabby's star papers
      the project had not known: Madurga-Favieres et al. (MNRAS 550,
      stag1273, July 2026), a giant companion at 2.3 sigma with a 1.1%
@@ -343,12 +340,6 @@ What a person does; everything else is automatic.
    does. The Minor Planet Center gives an observatory code only once
    measured asteroid positions from here have been sent, so there is no
    account to make for it yet.
-9. Radio SETI on any day, cloudy or not: `./seti.py` searches Breakthrough
-   Listen's open radio data for narrowband signals that drift as a
-   transmitter on a turning planet would, and keeps only those found in
-   every look at the target and none of the looks away from it
-   ([seti.md](seti.md)). Tabby's star is among the stars Green Bank
-   observed, so the optical watch and the radio search share a target.
 
 What is kept, and what has to be kept to reproduce a find, is in
 [data.md](data.md).
