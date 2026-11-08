@@ -139,7 +139,9 @@ def motion_check():
 # ---------------------------------------------------------------- the star
 
 def measure(frame, x, y, box=BOX):
-    """The star near (x, y): its centroid, peak, signal to noise and HFD,
+    """The star near (x, y): its centroid, peak, signal to noise and HFD
+    (here twice the flux-weighted mean radius, within about 7 % of the true
+    half-flux diameter for a round star),
     from a box round it with the median of the box's border taken off as
     background. Only pixels 3 noise above the background count, so the
     noise does not pull the centroid. None if there is nothing there or the

@@ -11,6 +11,16 @@ eyes on the telescope, the laptop making the sounds.
 
 ## What you hear
 
+**By default, numbers only** (8 November 2026, the person's choice: "i just
+want numbers"): each measured frame's HFR is said to one decimal, and a
+frame with no star to measure is said as "no stars". Nothing else is
+spoken: no "better", "worse" or "best focus" (looking up tells cloud from
+focus). The guide scope's aid, `./guidecam.py focus`, speaks the same way,
+its number the guide star's size in binned pixels, and says "no stars" for a
+star too faint to measure truly (under the guider's SNR of 10).
+
+With `--tones`, instead:
+
 Every frame, once it has been measured, makes one short sound. The camera
 has already started on the next frame by then.
 
@@ -24,7 +34,7 @@ The tone runs from 250 Hz to 1600 Hz in 32 semitone steps, because the ear
 hears pitch by ratio. Every sound is the same loudness: loudness that changed
 with the reading would be heard as a change of pitch.
 
-Words are kept for changes of state, and each is said once:
+With `--tones`, words are kept for changes of state, and each is said once:
 
 | Words | When |
 |---|---|

@@ -1878,10 +1878,16 @@ def run(args):
                 if not args.scene:
                     cam.use("focus_fine" if tracker.level == 3 else "focus_fast")
                 pending = ahead(cam, exposure)
-            spoken = live.get("hfr") if getattr(args, "numbers", False) and not args.scene else None
+            numbers = getattr(args, "numbers", False) and not args.scene
+            spoken = live.get("hfr") if numbers else None
             if not args.quiet and spoken:
                 # The reading itself, for someone who would sooner hear it.
                 say(f"{spoken:.1f}")
+            elif not args.quiet and numbers:
+                # Numbers only, and "no stars": no coaching words, no tones
+                # (8 November 2026: "i just want numbers"; "no stars is fine
+                # i can look up and see if its cloud").
+                say("no stars")
             elif not args.quiet:
                 sound(noise, fraction)
                 if words:

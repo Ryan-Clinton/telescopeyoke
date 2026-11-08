@@ -567,10 +567,14 @@ def guide_dry_run(args):
 
 
 def focus_aid(cam, seconds, minutes, gain=None, say=print, speak=None):
-    """Hand focus of the guide scope: the guide star's HFD each frame, said
-    aloud (one decimal) and printed, with the best so far. The same star is
-    followed while it can be; lost, the brightest is found again. Nothing
-    moves but the person's hand on the focuser."""
+    """Hand focus of the guide scope: the guide star's size each frame, said
+    aloud as a number (one decimal) and nothing else but "no stars"; printed
+    with the best so far. A star under the guider's SNR to find one is not
+    measured (cloud or haze gives a wrong size). The same star is followed
+    while it can be; lost, the brightest is found again, and the change is
+    printed. The size is guider.measure's: twice the flux-weighted mean
+    radius, within about 7 % of the true half-flux diameter for a round
+    star. Nothing moves but the person's hand on the focuser."""
     import guider
     if speak is None:
         from host import speak
@@ -581,11 +585,16 @@ def focus_aid(cam, seconds, minutes, gain=None, say=print, speak=None):
         star, why = guider.follow(frame, where) if where else (None, "")
         if star is None:
             star, why = guider.find_star(frame)
+        if star is not None and star.snr < guider.SNR_FIND:
+            # Too faint to measure truly (cloud, haze): no number rather than a wrong one.
+            star, why = None, f"the star's SNR is {star.snr:.1f}, under {guider.SNR_FIND}"
         if star is None:
             where = None
-            say(f"{time.strftime('%H:%M:%S')}  no star: {why}")
-            speak("no star")
+            say(f"{time.strftime('%H:%M:%S')}  no stars: {why}")
+            speak("no stars")
             continue
+        if where and abs(star.x - where[0]) + abs(star.y - where[1]) > 10:
+            say(f"{time.strftime('%H:%M:%S')}  another star, at {star.x:.0f}, {star.y:.0f}")
         where = (star.x, star.y)
         trend = "" if best is None else ("best" if star.hfd < best else "worse" if star.hfd > best * 1.1 else "steady")
         best = star.hfd if best is None else min(best, star.hfd)
