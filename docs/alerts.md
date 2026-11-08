@@ -86,8 +86,8 @@ house, they asked for it).
 
 ## Only the living room, with people in the house
 
-`./alert.py flash "Living room"` pulses green only the lights whose name
-starts so (here the living room light and the two ceiling lights) and says
-nothing on the speaker. Added 7 November 2026, with other people in the
-house, to call the person when the sky watch (`./skywatch.py`) sees stars.
-It is `call`'s light pulse (proven since October), on fewer lights.
+`./alert.py flash "Living room"` pulses green only the lights the Hue app
+puts in that room, and says nothing on the speaker; `--dry-run` names
+them. Lights are never picked by their own names: on 7 November 2026 the
+first version picked every light whose name began "Living room", one of
+those is in a child's bedroom, and it flashed there twice at night.
