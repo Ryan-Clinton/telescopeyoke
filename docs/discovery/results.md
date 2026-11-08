@@ -375,6 +375,36 @@ runs the CCOR-1 hunt every 6 hours as a systemd user timer: the last
 day's pictures, only what heads in towards the Sun kept in
 sungrazer/hunt-ccor1.json, pictures over 3 days old deleted.
 
+**The first report, and how fast the others are, 8 November 2026.** The
+07:34 hunt found a track heading in from 7 November 19:15 to 23:45 UTC,
+19 pictures, unmatched by any report: reported as
+report_nu_20261108025621 (Kreutz, probably a companion running 17.3 hours
+behind the known comet of report_zy_20261107114905 on the same path).
+The project's own list, 155 reports from 20 September to 8 November, says
+how far behind that was. A report's ID is the time it was sent in US
+Eastern time (ours, 02:56, was sent at 07:56 UTC); against its last
+picture, the median report is sent 0.8 hours after it (CCOR-1 potential
+comets 0.6 h, the middle half 0.4-2.3 h). Ours was 8.2 hours: NOAA's
+archive on S3 publishes each day's CCOR-1 pictures in one batch at about
+04:36 UTC the next morning, 5 to 29 hours after they were taken, so no
+hunt on it can be quick. NOAA's Space Weather Prediction Center has the
+same pictures about 13 minutes after they are taken
+(services.swpc.noaa.gov/products/ccor1/fits/, level 1B, 8.6 MB each, in
+the 2048 x 1920 frame the project measures, with sky coordinates in a
+header that can be read alone), and JPEGs (images/animations/ccor1/,
+the last day only) that are not the same pictures: turned solar north
+up, coloured, captioned and 1204 x 1205. The day of JPEGs holding the
+comet is kept in sungrazer/pictures/ccor1-live/ for trying a quicker
+hunt on; nothing yet runs on either.
+
+The planted comets now count as found only when one track follows a fake
+through at least 5 of the same pictures; before, one picture in common
+was enough, so a track of noise crossing a fake's path once counted. On
+the 66 pictures to 7 November 23:45 the two rules give the same answer:
+0, 5, 8, 10, 10 and 9 of 10 at 3, 4, 6, 8, 12 and 16 times the noise
+(31 s of processor time, 1.8 GB at most). Every track heading for the Sun
+is now kept, however many; only the others stop at 20 listed.
+
 ## Variable stars
 
 **First measured 17 October 2026, on the six M31 nights so far.**

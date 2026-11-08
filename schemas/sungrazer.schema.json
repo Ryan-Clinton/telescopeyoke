@@ -24,6 +24,7 @@
     "installed": {"type": "string", "description": "hunt --install: the timer written and started."},
     "candidate": {"type": "integer", "description": "form: the candidate's number in the newest hunt."},
     "verdict": {"type": ["string", "null"], "description": "form: the hunt's verdict on it (unexplained, known comet, ...)."},
+    "cut": {"type": "integer", "description": "look: tracks not heading for the Sun left out of the list beyond the first 20; every track heading for the Sun is kept."},
     "submitted": {"type": "string", "description": "submitted: the report's ID, report_xx_YYYYMMDDHHMMSS."},
     "url": {"type": "string", "description": "form: the report form's address."},
     "form": {"type": "object", "description": "form: each field as the report form names it; Frames is [HHMM, x, y] rows in the project's frame, 0,0 upper left.",

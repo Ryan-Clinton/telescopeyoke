@@ -142,6 +142,7 @@ PLANT_LEN = 12       # pictures a fake comet runs through
 HUNT_HOURS = 24      # hunt: the last this many hours
 KEEP_DAYS = 3        # hunt: pictures older than this are deleted
 TOWARDS = 0.5        # hunt: a candidate heading in towards the Sun at least this squarely
+SHOWN = 20           # look: tracks listed, with a movie each; every one heading for the Sun is kept beyond it
 BLOCK = 64           # pixels square in which the noise is measured on its own
 PIXEL_PICTURES = 20  # pictures enough to measure each pixel's own noise over them
 CAPTION = 60         # pixels along the bottom left out: the date and time written there
@@ -729,19 +730,18 @@ def plant(images, mask, count, seed=0, strengths=STRENGTHS, window=WINDOW):
     return fakes
 
 
-def recovered(fakes, candidates, within=3.0):
-    """For each fake, whether a candidate's track passes through it."""
+def recovered(fakes, candidates, within=3.0, least=TRACK_LEN):
+    """For each fake, whether one candidate follows it: its track within
+    `within` pixels of the fake in at least `least` of the same pictures
+    (all of them, for a fake cut short by the last picture). One picture
+    in common is not enough: a track of noise crossing a fake's path once
+    would count."""
     out = []
     for f in fakes:
-        hit = False
-        for c in candidates:
-            for i, (x, y) in zip(c["pictures"], c["track"]):
-                if i in f["at"] and math.hypot(x - f["at"][i][0], y - f["at"][i][1]) <= within:
-                    hit = True
-                    break
-            if hit:
-                break
-        out.append(hit)
+        need = min(least, len(f["at"]))
+        out.append(any(sum(1 for i, (x, y) in zip(c["pictures"], c["track"])
+                           if i in f["at"] and math.hypot(x - f["at"][i][0], y - f["at"][i][1]) <= within) >= need
+                       for c in candidates))
     return out
 
 
@@ -788,7 +788,10 @@ def look(camera, hours=None, say=print, paths=None, until=None, raw=False, plant
         for r in rows:
             say(f"  {r['strength']:>3} times the noise: {r['found']} of {r['planted']} found")
         return answer
-    for n, c in enumerate(candidates[:20], 1):
+    inward = [c for c in candidates if c["towards_sun"] >= TOWARDS]
+    shown = inward + [c for c in candidates if c["towards_sun"] < TOWARDS][:max(0, SHOWN - len(inward))]
+    cut = len(candidates) - len(shown)
+    for n, c in enumerate(shown, 1):
         c["times"] = [stamp(paths[i].name).strftime("%Y-%m-%d %H:%M") for i in c["pictures"]]
         c["files"] = [paths[i].name for i in c["pictures"]]
         c["gaps"] = gaps(c["times"])
@@ -797,13 +800,16 @@ def look(camera, hours=None, say=print, paths=None, until=None, raw=False, plant
     answer = {"camera": camera, "raw": raw, "pictures": len(paths), "from": paths[0].name, "to": paths[-1].name,
               "points": len(found), "tracks": len(linked),
               "star_drift": None if drift is None else [round(float(v), 2) for v in drift],
-              "candidates": candidates[:20], "folder": str(out)}
+              "candidates": shown, "cut": cut, "folder": str(out)}
     records.write(out / "look.json", answer, schema="sungrazer", stamp=True)
     say(f"{len(paths)} pictures, {len(found)} points, {len(linked)} tracks; the stars drift "
         f"{answer['star_drift']} pixels in 12 minutes")
     if not candidates:
         say("No track moves other than as the stars do.")
-    for n, c in enumerate(candidates[:20], 1):
+    if cut:
+        say(f"{cut} tracks not heading for the Sun left out: only the first {SHOWN} are listed, and every one "
+            "heading for the Sun is kept.")
+    for n, c in enumerate(shown, 1):
         say(f"  {n}. {len(c['pictures'])} pictures from {c['times'][0]}, {c['pixels_per_12_min']} px in 12 min, "
             f"{'towards' if c['towards_sun'] > 0.5 else 'not towards'} the Sun, strength {c['strength']}"
             + (f", one track across {', '.join(c['gaps'])}" if c["gaps"] else "") + f": {c['movie']}")
