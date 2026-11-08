@@ -135,7 +135,8 @@ ARM = {"ccor1": 45}  # pixels left out beside the occulter's arm, where its edge
                      # on 25 Oct 2026 its glare 18-34 px out made 13 false inward tracks in a day
 CCOR = "https://noaa-nesdis-swfo-ccor-1-pds.s3.amazonaws.com"
 CCOR_LEVEL = "SWFO/GOES-19/CCOR-1/ccor1-l3"
-CCOR_NAME = re.compile(r"CCOR1_3_(\d{8})T(\d{6})_V\d+_NC\.fits")
+CCOR_NAME = re.compile(r"CCOR1_(?:3|1B)_(\d{8})T(\d{6})_V\d+_NC\.fits")
+CCOR_LIVE = "https://services.swpc.noaa.gov/products/ccor1/fits"   # level 1B, about 13 min after each picture
 CCOR_SCALE = 1e12    # CCOR-1's mean solar brightness units are about 1e-12: brought nearer 1
 STRENGTHS = (3, 4, 6, 8, 12, 16)   # fake comets' peak, times the noise of a picture less its neighbours
 PLANT_LEN = 12       # pictures a fake comet runs through
@@ -219,13 +220,27 @@ def stamp(name):
     return datetime.datetime.strptime(m.group(1) + m.group(2), "%Y%m%d%H%M").replace(tzinfo=datetime.timezone.utc)
 
 
-def fetch(hours, camera, say=print, get=requests.get, now=None, pause=PAUSE, raw=False):
-    """Fetch the last `hours` of pictures not already kept. Returns the paths."""
+def ccor_live_list(get=requests.get):
+    """CCOR-1's level-1B pictures at NOAA's Space Weather Prediction Center,
+    about 13 minutes after each is taken, back about three weeks: (address,
+    name)."""
+    reply = get(f"{CCOR_LIVE}/", timeout=60, headers={"User-Agent": "telescopeyoke comet hunt"})
+    reply.raise_for_status()
+    names = sorted(set(re.findall(r"CCOR1_1B_\d{8}T\d{6}_V\d+_NC\.fits", reply.text)))
+    return [(f"{CCOR_LIVE}/{n}", n) for n in names]
+
+
+def fetch(hours, camera, say=print, get=requests.get, now=None, pause=PAUSE, raw=False, live=False):
+    """Fetch the last `hours` of pictures not already kept. Returns the paths.
+    `live`: CCOR-1's level-1B pictures from the Space Weather Prediction
+    Center, minutes old, in place of the archive's level 3, a day late."""
     now = now or datetime.datetime.now(datetime.timezone.utc)
     since = now - datetime.timedelta(hours=hours)
     days = sorted({(since + datetime.timedelta(days=d)).strftime("%Y%m%d")
                    for d in range((now.date() - since.date()).days + 1)})
-    if camera == "ccor1":
+    if camera == "ccor1" and live:
+        wanted = [(url, n) for url, n in ccor_live_list(get) if since <= stamp(n) <= now]
+    elif camera == "ccor1":
         wanted = [(url, n) for d in days for url, n in ccor_day_list(d, get) if since <= stamp(n) <= now]
     elif raw:
         wanted = [(url, n) for d in days for url, n in raw_day_list(d, camera, get) if since <= stamp(n) <= now]
@@ -245,7 +260,7 @@ def fetch(hours, camera, say=print, get=requests.get, now=None, pause=PAUSE, raw
             fresh += 1
             time.sleep(pause)
         kept.append(path)
-    say(f"{len(kept)} {'raw ' if raw else ''}{camera.upper()} pictures from the {hours:g} h to {now:%Y-%m-%d %H:%M} "
+    say(f"{len(kept)} {'raw ' if raw else 'live ' if live else ''}{camera.upper()} pictures from the {hours:g} h to {now:%Y-%m-%d %H:%M} "
         f"({fresh} fetched, the rest already kept)")
     return kept
 
@@ -255,7 +270,15 @@ def fetch(hours, camera, say=print, get=requests.get, now=None, pause=PAUSE, raw
 def load(path):
     """A picture as brightness: a JPEG as it is; a raw picture less its
     offset, per second, square-rooted, with what was lost as NaN; a CCOR-1
-    picture as it is, its background already gone."""
+    picture as it is, its background already gone; a CCOR-1 level-1B
+    picture binned 2 x 2 to level 3's 1024 x 960, so every setting in
+    pixels holds for both."""
+    if Path(path).name.startswith("CCOR1_1B_"):
+        from astropy.io import fits
+        with fits.open(path) as f:
+            data = np.asarray(next(h for h in f if h.data is not None).data, dtype=np.float32)
+        h, w = data.shape[0] // 2 * 2, data.shape[1] // 2 * 2
+        return data[:h, :w].reshape(h // 2, 2, w // 2, 2).mean(axis=(1, 3)) * CCOR_SCALE
     if Path(path).name.startswith("CCOR1_"):
         from astropy.io import fits
         with fits.open(path) as f:
@@ -544,14 +567,25 @@ def moves_like(c, reports, mine=()):
 
 
 def report_page(rid, get=requests.get):
-    """One report's own page: {"found", "endorsed_by": [names]}."""
+    """One report's own page: {"found", "endorsed_by": [names], "id",
+    "date", "type", "group", "points": [(HHMM, x, y)]}."""
     page = get(REPORT_PAGE + rid.replace("_", ""), timeout=30, headers={"User-Agent": "telescopeyoke comet hunt"})
     if page.status_code == 404:
         return {"found": False, "endorsed_by": []}
     page.raise_for_status()
     field = re.search(r'field-name-field-endorsements.*?</div>\s*</div>', page.text, re.S)
     names = re.findall(r'field__item">([^<]+)<', field[0]) if field else []
-    return {"found": True, "endorsed_by": [n.strip() for n in names]}
+
+    def items(name):
+        block = re.search(rf'field-name-field-{name}.*?</div>\s*</div>', page.text, re.S)
+        return [re.sub(r"<[^>]+>", "", v).strip() for v in re.findall(r'field__item">(.*?)</div>', block[0], re.S)] \
+            if block else []
+    date = re.search(r'field-name-field-report-date.*?datetime="(\d{4}-\d{2}-\d{2})', page.text, re.S)
+    points = [(m[1] + m[2], float(m[3]), float(m[4])) for v in items("frames")
+              if (m := re.match(r"(\d{2}):?(\d{2})\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)", v))]
+    return {"found": True, "endorsed_by": [n.strip() for n in names], "id": rid, "date": date[1] if date else "",
+            "type": (items("sighting-type") or [""])[0], "group": (items("comet-group") or [""])[0],
+            "who": "", "points": points}
 
 
 def cambridge_line(name, camera, first, get=requests.get):
@@ -611,6 +645,51 @@ def submit(rid, n, camera):
     row["submitted"] = rid
     records.write(path, rows)
     return {"camera": camera, "pictures": len(row.get("times", [])), "candidate": n, "submitted": rid}
+
+
+def replay(camera, rid, start, end, hours, live=False, step=15, say=print, get=requests.get):
+    """The hunt run as it would have been at each moment from `start` to
+    `end`, every `step` minutes, on only the pictures taken by then (and,
+    for the archive, as if it had them at once), against a known comet:
+    the report `rid`'s positions. When the comet is first found heading in,
+    what else heads in (false alarms), and the processor time and memory
+    each look takes. Pictures must already be kept (fetch first)."""
+    import resource
+    ref = report_page(rid, get)
+    if not ref.get("points"):
+        raise SystemExit(f"{rid} has no positions on its page.")
+    rows, first = [], None
+    t = start
+    while t <= end:
+        began, cpu = time.time(), time.process_time()
+        try:
+            seen = look(camera, hours, say=lambda *_: None, until=t, live=live, movies=False)
+        except interface.Refusal:
+            seen = {"pictures": 0, "candidates": []}
+        inward = [c for c in seen["candidates"] if c["towards_sun"] >= TOWARDS]
+        hit = [c for c in inward if c.get("sungrazer_xy")
+               and public_match(c, [ref], near=2 * MATCH_PX)["state"] != "no matching public report found"]
+        row = {"until": t.strftime("%Y-%m-%d %H:%M"), "pictures": seen["pictures"], "towards_sun": len(inward),
+               "found": bool(hit), "false": len(inward) - len(hit),
+               "found_pictures": len(hit[0]["pictures"]) if hit else 0,
+               "cpu_s": round(time.process_time() - cpu, 1), "wall_s": round(time.time() - began, 1)}
+        rows.append(row)
+        if hit and first is None:
+            first = row["until"]
+        say(f"{row['until']}  {row['pictures']:3d} pictures  {'FOUND' if hit else '     '} "
+            f"({row['found_pictures']} pictures of it)  {row['false']} other heading in  {row['cpu_s']} s")
+        t += datetime.timedelta(minutes=step)
+    peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+    answer = {"camera": camera, "pictures": max((r["pictures"] for r in rows), default=0), "report": rid,
+              "level": "1B live" if live else "3 archive", "hours": hours, "first_found": first,
+              "false_alarms": sum(r["false"] for r in rows), "looks": len(rows),
+              "cpu_s_median": float(np.median([r["cpu_s"] for r in rows])) if rows else 0.0,
+              "peak_mb": round(peak), "rows": rows}
+    name = f"replay-{rid}-{'1b' if live else 'l3'}-{hours:g}h.json"
+    records.write(folder() / name, answer, schema="sungrazer", stamp=True)
+    say(f"First found at {first or 'never'}; {answer['false_alarms']} other tracks heading in over {len(rows)} "
+        f"looks; median {answer['cpu_s_median']} s of processor a look, {answer['peak_mb']} MB at most")
+    return answer
 
 
 def steady(track, most=STEADY):
@@ -745,11 +824,11 @@ def recovered(fakes, candidates, within=3.0, least=TRACK_LEN):
     return out
 
 
-def look(camera, hours=None, say=print, paths=None, until=None, raw=False, planted=0):
+def look(camera, hours=None, say=print, paths=None, until=None, raw=False, planted=0, live=False, movies=True):
     """Look through the kept pictures for moving points that are not stars:
     the `hours` before `until`, or before the newest picture kept."""
     if paths is None:
-        pattern = "CCOR1_3_*_NC.fits" if camera == "ccor1" else f"*_{camera}.fts" if raw else f"*_{camera}_1024.jpg"
+        pattern = ("CCOR1_1B_*_NC.fits" if live else "CCOR1_3_*_NC.fits") if camera == "ccor1" else f"*_{camera}.fts" if raw else f"*_{camera}_1024.jpg"
         paths = sorted((folder() / "pictures" / camera).glob(pattern))
         if until:
             paths = [p for p in paths if stamp(p.name) <= until]
@@ -774,9 +853,10 @@ def look(camera, hours=None, say=print, paths=None, until=None, raw=False, plant
     linked = stitch(tracks(found, len(images), minutes=minutes))
     drift = star_drift(linked)
     candidates = judge(linked, drift, shape, camera)
-    day = stamp(paths[-1].name).strftime("%Y%m%d-%H%M") + ("-raw" if raw else "")
+    day = stamp(paths[-1].name).strftime("%Y%m%d-%H%M") + ("-raw" if raw else "-live" if live else "")
     out = folder() / day
-    out.mkdir(parents=True, exist_ok=True)
+    if movies or fakes is not None:
+        out.mkdir(parents=True, exist_ok=True)
     if fakes is not None:
         hits = recovered(fakes, candidates)
         rows = [{"strength": st, "planted": sum(f["strength"] == st for f in fakes),
@@ -796,12 +876,13 @@ def look(camera, hours=None, say=print, paths=None, until=None, raw=False, plant
         c["files"] = [paths[i].name for i in c["pictures"]]
         c["gaps"] = gaps(c["times"])
         c["sungrazer_xy"] = [list(native(x, y, camera, shape)) for x, y in c["track"]]
-        c["movie"] = movie(images, c, out / f"candidate-{n}.gif")
+        c["movie"] = movie(images, c, out / f"candidate-{n}.gif") if movies else None
     answer = {"camera": camera, "raw": raw, "pictures": len(paths), "from": paths[0].name, "to": paths[-1].name,
               "points": len(found), "tracks": len(linked),
               "star_drift": None if drift is None else [round(float(v), 2) for v in drift],
               "candidates": shown, "cut": cut, "folder": str(out)}
-    records.write(out / "look.json", answer, schema="sungrazer", stamp=True)
+    if movies:
+        records.write(out / "look.json", answer, schema="sungrazer", stamp=True)
     say(f"{len(paths)} pictures, {len(found)} points, {len(linked)} tracks; the stars drift "
         f"{answer['star_drift']} pixels in 12 minutes")
     if not candidates:
@@ -961,6 +1042,8 @@ def where_bodies(path):
                 continue
             pa = math.radians(float(sun.position_angle(body).deg) - tilt)
             x, y = wcs.wcs_world2pix([[-sep * math.sin(pa), sep * math.cos(pa)]], 0)[0]
+            if Path(path).name.startswith("CCOR1_1B_"):      # binned 2 x 2 when loaded
+                x, y = (x - 0.5) / 2, (y - 0.5) / 2
             out[name] = (float(x), float(y))
     return out
 
@@ -1188,11 +1271,15 @@ def moment(text):
 
 def run(args, say=print):
     until = moment(args.until) if args.until else None
-    args.camera = args.camera or ("ccor1" if args.action in ("hunt", "form", "submitted") else "c3")
+    args.camera = args.camera or ("ccor1" if args.action in ("hunt", "form", "submitted", "replay") else "c3")
     if args.action == "hunt":
         if args.install:
             return install(args.camera, say)
         return hunt(args.camera, args.hours if args.hours != 12.0 else HUNT_HOURS, say, now=until)
+    if args.action == "replay":
+        if not (args.known and args.since and args.until):
+            raise SystemExit("./sungrazer.py replay --report ID --since TIME --until TIME [--hours H] [--live]")
+        return replay(args.camera, args.known, moment(args.since), until, args.hours, live=args.live, say=say)
     if args.action == "submitted":
         if not args.report:
             raise SystemExit("Give the report's ID: ./sungrazer.py submitted N report_xx_YYYYMMDDHHMMSS")
@@ -1212,18 +1299,22 @@ def run(args, say=print):
             f"form at {answer['url']})")
         return answer
     if args.action == "fetch":
-        paths = fetch(args.hours, args.camera, say, now=until, raw=args.raw)
+        paths = fetch(args.hours, args.camera, say, now=until, raw=args.raw, live=args.live)
         return {"camera": args.camera, "raw": args.raw, "pictures": len(paths),
                 "kept": str(folder() / "pictures" / args.camera)}
-    return look(args.camera, args.hours, say, until=until, raw=args.raw, planted=args.plant)
+    return look(args.camera, args.hours, say, until=until, raw=args.raw, planted=args.plant, live=args.live)
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("action", choices=("fetch", "look", "hunt", "form", "submitted"))
+    ap.add_argument("action", choices=("fetch", "look", "hunt", "form", "submitted", "replay"))
     ap.add_argument("n", nargs="?", type=int, default=1,
                     help="form, submitted: the candidate's number in the newest hunt")
     ap.add_argument("report", nargs="?", help="submitted: the report's ID, report_xx_YYYYMMDDHHMMSS")
+    ap.add_argument("--report", dest="known", help="replay: the known comet's report ID")
+    ap.add_argument("--since", help="replay: the first moment looked from, UTC (YYYY-MM-DDTHH:MM)")
+    ap.add_argument("--live", action="store_true",
+                    help="CCOR-1's level-1B pictures from the Space Weather Prediction Center, minutes old")
     ap.add_argument("--group", default="Kreutz", help="form: the comet group (default Kreutz)")
     ap.add_argument("--note", default="", help="form: words added to the Note to Admin (255 characters in all)")
     ap.add_argument("--camera", choices=("c3", "c2", "ccor1"),

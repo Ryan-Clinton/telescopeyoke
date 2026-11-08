@@ -405,6 +405,28 @@ the 66 pictures to 7 November 23:45 the two rules give the same answer:
 (31 s of processor time, 1.8 GB at most). Every track heading for the Sun
 is now kept, however many; only the others stop at 20 listed.
 
+**Replayed as it would have run, 8 November 2026.** `sungrazer.py replay`
+runs the hunt every 15 minutes through a known comet's hours on only the
+pictures taken by then, and checks each answer against the comet's
+report. `--live` reads CCOR-1's level-1B pictures from the Space Weather
+Prediction Center (binned 2 x 2 to level 3's frame; the blanked arm and
+corners, NaN there, masked as before). On the comet of 7 November
+(report_nu_20261108025621, first picture 19:15), processor time a look
+on the laptop (i7-7700HQ):
+
+| Pictures, window | First found | Other tracks heading in | Processor a look | Memory at most |
+|---|---|---|---|---|
+| Archive level 3, 24 h | 20:30 (5 pictures) | 0 | 28 s | 1.8 GB |
+| Archive level 3, 6 h | 20:30 | 0 | 10 s | 0.7 GB |
+| Live level 1B, 24 h | 20:30 | 0 | 72 s | 2.5 GB |
+| Live level 1B, 6 h | 20:30 | 0 | 15 s | 0.7 GB |
+
+The archive rows are as if its pictures had come at once; it publishes a
+day late. The live rows use only pictures the feed holds about 13
+minutes after each is taken, so a live hunt could have sent it at about
+20:45 UTC; the report went at 07:56 the next morning. One comet: the
+19 October one is the next replay.
+
 ## Variable stars
 
 **First measured 17 October 2026, on the six M31 nights so far.**
