@@ -21,9 +21,8 @@ own, starting with Sky-Watcher's SynScan family, and adds what much bigger
 systems do. It measures its own pointing, polar alignment, focus, drift,
 camera timing and image depth, and corrects for them; plans and runs a
 whole night; searches its pictures for novae and new transients, and public
-archives (spacecraft coronagraphs, Kepler and TESS light curves, radio SETI
-recordings) for what is strange; tells you when something matters, on your
-phone or through the house's lights and speaker; and can explain the night
+archives (Kepler and TESS light curves, radio SETI recordings) for what is
+strange; tells you when something matters, on your phone or through the house's lights and speaker; and can explain the night
 live to an audience. An AI agent can operate it beside you, by one rule:
 **AI proposes; deterministic code decides what is safe; a person decides
 what the telescope does.**
@@ -457,7 +456,6 @@ Comets: [COBS](https://cobs.si) and [JPL Horizons](https://ssd.jpl.nasa.gov/hori
 Bright supernovae: [the Rochester list of active ones](https://www.rochesterastronomy.org/snimages/snactive.html), in `./ty night` and `./tonight.py` when one brighter than magnitude 15.5 is up.
 The sky's events and the news: [in-the-sky.org](https://in-the-sky.org), [Universe Today](https://www.universetoday.com) and the [BAA](https://britastro.org), in `./ty night` and `./tonight.py`.
 Cloud imagery: [EUMETSAT](https://view.eumetsat.int).
-Coronagraph pictures: SOHO's LASCO and GOES-19's CCOR-1.
 Light curves: Kepler and TESS, from [MAST](https://archive.stsci.edu).
 Radio: [Breakthrough Listen's open data](https://seti.berkeley.edu/opendata).
 

@@ -156,5 +156,3 @@ yet found anything new.
   with the title, category and tags set for each target, the presenter and
   the chat's commands; one 9-minute freeze. YouTube from 1 November.
 - **Record:** [streaming](streaming.md).
-
-![The live broadcast's card about the comet hunt: three frames of the comet over a dimmed star field, with the hunt's own figures](results/stream-2026-10-20.jpg)

@@ -24,8 +24,8 @@ status page's own data:
 - a presenter (`streamstory.py`) that changes the panel's chapter in a loose
   broadcast clock: NOW, SCIENCE, HOW IT WORKS, TONIGHT and COMING UP; a LOOK
   CLOSELY or TELESCOPEYOKE line across the picture now and then; a larger
-  explainer every five minutes (stacking, a transit, a nova, how the search
-  works, and a comet the hunt recovered); and a slow crawl every ten;
+  explainer every five minutes (stacking, a transit, a nova and how the
+  search works); and a slow crawl every ten;
 - while the telescope focuses, the focus look: the focus curve as it is
   measured (star size against focuser position, the best so far ringed, the
   usual best as a line, the fitted focus once there is one), one star
@@ -216,8 +216,7 @@ cloud, below), and the stream stops at once when the night is over.
    as soon as the telescope goes on to a target.
 2. **Science.** The imaging runs: a nova patrol's mosaic, a transit's light
    curve, a picture building up, and a candidate's follow-up without its
-   place. The presenter's explainers (stacking, the search, a comet the
-   hunt recovered) run through it.
+   place. The presenter's explainers (stacking, the search) run through it.
 3. **Waiting for cloud.** The one card that is sent: what tonight hopes
    for and the setup steps, in place of a starless picture.
 
