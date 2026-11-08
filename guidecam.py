@@ -566,6 +566,35 @@ def guide_dry_run(args):
               "before each; stop on a fault")
 
 
+def focus_aid(cam, seconds, minutes, gain=None, say=print, speak=None):
+    """Hand focus of the guide scope: the guide star's HFD each frame, said
+    aloud (one decimal) and printed, with the best so far. The same star is
+    followed while it can be; lost, the brightest is found again. Nothing
+    moves but the person's hand on the focuser."""
+    import guider
+    if speak is None:
+        from host import speak
+    end, best, where = time.monotonic() + 60 * minutes, None, None
+    say(f"guide scope focus: {seconds:g} s frames for {minutes:g} min; a smaller number is better")
+    while time.monotonic() < end:
+        frame = cam.frame(seconds, gain)
+        star, why = guider.follow(frame, where) if where else (None, "")
+        if star is None:
+            star, why = guider.find_star(frame)
+        if star is None:
+            where = None
+            say(f"{time.strftime('%H:%M:%S')}  no star: {why}")
+            speak("no star")
+            continue
+        where = (star.x, star.y)
+        trend = "" if best is None else ("best" if star.hfd < best else "worse" if star.hfd > best * 1.1 else "steady")
+        best = star.hfd if best is None else min(best, star.hfd)
+        say(f"{time.strftime('%H:%M:%S')}  HFD {star.hfd:.1f} px  SNR {star.snr:.0f}  peak {star.peak:.0f}  "
+            f"best {best:.1f}  {trend}")
+        speak(f"{star.hfd:.1f}")
+    say(f"best HFD {best:.1f} px" if best is not None else "no star measured")
+
+
 def run_guider(args):
     import guider
     if args.action == "star":
@@ -684,6 +713,8 @@ def main(argv=None):
     t.add_argument("--no-wait", action="store_true", help="send it and return")
     w = sub.add_parser("star", help="find a guide star and follow it, no pulses")
     w.add_argument("--count", type=int, default=30, help="frames to follow it through")
+    f = sub.add_parser("focus", help="hand focus of the guide scope: the guide star's size said aloud each frame")
+    f.add_argument("--minutes", type=float, default=10.0, help="how long (default 10)")
     for name, helptext in (("calibrate", "pulse each way in steps and learn what each does"),
                            ("guide", "guide, reusing the kept calibration once checked")):
         g = sub.add_parser(name, help=helptext)
@@ -695,11 +726,11 @@ def main(argv=None):
             g.add_argument("--recalibrate", action="store_true", help="calibrate again first")
             g.add_argument("--dec-one-way", choices=("north", "south"),
                            help="correct Dec only this way, the way the polar drift pushes")
-    for name in ("star", "calibrate", "guide"):
+    for name in ("star", "calibrate", "guide", "focus"):
         sub.choices[name].add_argument("--exposure", type=float, default=2.0, help="guide exposure, seconds (0.5 to 4)")
         sub.choices[name].add_argument("--gain", type=int, help="the camera's gain, per cent (100 = none)")
     args = ap.parse_args(argv)
-    if args.action in ("star", "calibrate", "guide") and not 0.5 <= args.exposure <= 4:
+    if args.action in ("star", "calibrate", "guide", "focus") and not 0.5 <= args.exposure <= 4:
         sys.exit("The guide exposure is 0.5 to 4 s.")
     if args.action == "calibrate":
         args.recalibrate, args.minutes, args.dec_one_way = True, None, None
@@ -720,6 +751,10 @@ def main(argv=None):
             if not args.no_wait:
                 done = guider.wait_for(ident, run, order=args.order)
                 print(f"{args.order}: {done['outcome']}" + (f" ({done['reason']})" if done.get("reason") else ""))
+            return
+        if args.action == "focus":
+            with GuideCamera(role="focus", size=GUIDE_SIZE, speed=GUIDE_SPEED) as cam:
+                focus_aid(cam, args.exposure, args.minutes, args.gain)
             return
         if args.action in ("star", "calibrate", "guide"):
             run_guider(args)
