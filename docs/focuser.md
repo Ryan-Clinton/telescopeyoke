@@ -470,9 +470,11 @@ instead of the ULN2003, and `focuser.py` and `focus.py` counting full steps
 × microsteps instead of 28BYJ-48 half-steps, each with its test, before the
 first use on the sky.
 
-**9 November 2026, wiring the drive:** the red carrier came; the TMC2209
-seats by VIN (the driver's VM on the board's VIN side), as the board has no
-EN mark at the socket, only a separate EN jumper header. The 12 V goes into
+**9 November 2026, wiring the drive:** the red carrier came. It has no
+EN mark at the socket, only a separate EN jumper header, and seating the
+TMC2209 with its VM pin towards the VIN terminal was wrong: that way round,
+with 12 V on, the motor did not hold. The right way on this board is the
+driver's DIR end towards the VIN terminal. The 12 V goes into
 the green terminal (+ to VIN), and the Nano's GND under the same GND screw:
 there is no GND by STEP and DIR, nor a 5 V pin, so the board makes its own.
 The motor lead's black plug goes straight on the 1A/1B/2A/2B pins. With no
@@ -480,11 +482,11 @@ meter, the current is set from the Nano: a jumper wire from A2 to the
 driver pot's metal top, 12 V on, and `./focuser.py vref` shows the voltage
 live (measured against the Nano's 1.1 V reference, "nothing on A2" when the
 wire is off) while the pot is turned to about 1.1 V, about 0.8 A.
-The first driver came set at 0.92 V; turning its pot with the 12 V in took
-it to 0.17 V and the motor stopped holding, and the pot's head is half
-stripped. The spare, seated in its place, came set at 1.11 V (about
-0.79 A) and holds there: it is the one in use, untouched. The first is kept
-as the spare, unchecked: turned down, or harmed by a slip with the 12 V in.
+Seated the wrong way round it read 0.92 V, then 0.17 V, meaningless
+either way; its pot's head is half stripped from trying to turn it. Turned
+round, the same driver reads a steady 1.11 V (about 0.79 A) and holds the
+motor: it is the one in use. It ran the wrong way round under 12 V for a
+while, so if it fails to turn the motor, the untouched spare goes in.
 
 
 A printable degree dial for the focus knob is `./focusdial.py --diameter MM` (default 40): a strip for the knob's rim and a disc for its end, at true size with a 50 mm check bar, saved as `web/focus-dial.svg` and served by the status page. One degree on a 40 mm knob is about the f/5 critical focus zone.
