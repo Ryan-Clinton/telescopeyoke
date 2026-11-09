@@ -159,3 +159,88 @@ a bare MOSFET), 47 Ω 1 W resistors for the heaters, a 115 × 90 × 55 mm IP67
 box, PG7 glands and lever connectors. It is solder-free apart from the
 sensors' four-pin headers. The outdoor 5 V supply and the conformal coating
 were not ordered.
+
+## On the telescope first, 9 November 2026
+
+The person spends a lot of a night putting their head out to judge the
+cloud, so the first sensor goes on the telescope rather than the wall: an
+MLX90614 BAA and a BME280 on the focuser's Nano, sharing its I²C pins (A4
+SDA, A5 SCL), in or on the focuser's electronics box and looking along the
+tube. The thermistor's 5 V supply moves off A5 (to A1) to free the bus.
+Pointing along the tube rather than at the zenith means it reads the sky
+the telescope is imaging, through a changing air mass, so its "clear" is
+learned per altitude, not fixed. The wall box above stays the plan for
+later. The sensor boards come with their pins loose: the person is
+learning to solder for them.
+
+### Ordered, 9 November 2026 (AliExpress, due about 13 to 18 November)
+
+| Part | Count | For |
+|---|---|---|
+| MLX90614 GY-906-BAA | 2 | sky temperature; one for this telescope, one for a second unit |
+| BME280, 3.3 V | 2 | air temperature, humidity, pressure, so the dew point |
+| Nano, USB-C, ATmega328P, pins loose | 1 | spare, and soldering practice |
+| Heart-shaped LED solder kit | 1 | soldering practice before the sensor boards |
+| ANENG SZ308 multimeter (takes a 9 V PP3, not included) | 1 | checking joints for shorts, and readings the Nano can't take |
+
+The soldering iron (a 90 W adjustable kit with solder) is in the Amazon
+basket, not yet ordered. Nothing is written for the sensors until they
+are here and being fitted.
+
+## A network, later
+
+Two sensors ordered means a second unit is nearly free: the idea (9
+November 2026) is to build one for a friend in the same town, then put
+more at friends' and family's houses further away, and offer the design
+to the astrophotography group if the first ones work. A unit away from
+the telescope reports over WiFi, so it uses an ESP32 (about £3) instead of
+a Nano, with the same two sensors on the same wires: about £12 to 15 in
+parts, a printed box and a USB supply.
+
+**Why spread them out.** Most weather here comes from the west and
+south-west. A sensor 20 to 50 miles upwind sees cloud coming before it
+arrives, which a Meteosat picture (`clouds.py`) shows poorly at night for
+thin, high cloud, the kind that spoils frames. Hosts on hand: one on the
+north-west coast (first to see Atlantic weather from the north-west), one
+to the west beside City of Derry Airport (on the main track, and the
+airport's half-hourly METAR cloud reports are a free reference for
+setting that sensor's thresholds), one to the south-south-west in mid
+Ulster (the south-westerlies). The friend's unit in the same town gives no
+warning but checks this one: two sensors close together should agree, so
+a disagreement is a fault (dew on the lens, a dead supply, a bird), and it
+is the easy place to prove the box, power and reporting.
+
+**What a host gives.** WiFi, a socket, a view straight up away from
+chimneys, flues and walls. Nothing to do after. On any public map a host
+is a town or rough area, never a house.
+
+**How it could grow.** A sensor helps the people downwind (east) of it:
+Ireland is upwind of most of Britain, so south-west Scotland, Cumbria and
+north Wales gain from Irish sensors, and Stranraer gets Antrim's cloud an
+hour or two later. So each member wants someone upwind, which pulls the
+network west to the Atlantic coast, where hosts give the most warning and
+get the least back: they are the ones to credit and look after. In
+easterlies it runs the other way. Any mid-latitude region with westerlies
+works the same, so it could go well beyond Ireland.
+
+**What decides whether it spreads** is not the hardware but one shared
+data format and one place the readings go, and each sensor learning its
+own clear sky so people can build their own without careful calibration.
+The airports (Belfast, Derry, Dublin, Shannon, Cork) publish cloud reports
+that can check sensors near them. Published openly (parts list, box,
+firmware, wiring sheet), others can build and add their own.
+
+**Similar things that exist:** UKMON, the UK Meteor Network, grew the same
+way (amateurs' cameras on their houses, pooled); home weather station
+networks (Weather Underground, Netatmo, CWOP) show people will host a box
+for years, but none read the night sky; STARS4ALL's TESS meters are a
+sky-brightness network across several countries. A network of infrared
+sky sensors for astronomers was not found.
+
+**Who else would use it:** aurora chasers (is the north coast clear,
+now), landscape and Milky Way photographers, gardeners, farmers and fruit
+growers (a clear night is a frost night: the sensor measures the heat
+going out to the sky), road gritting and drivers (ice, fog, dew), solar
+panel owners and the grid (cloud in the next hour by day), moth trappers
+and bat surveyors (who want cloudy, mild nights), and weather research
+checking satellite cloud maps from the ground.
