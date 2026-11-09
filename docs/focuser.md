@@ -498,8 +498,14 @@ driver's own DIR pin. Ruled out with the Nano as a continuity tester
 (`./focuser.py vref`, A2 against GND, 12 V out, driver pulled): the board
 joins socket holes 3-4 through one coil and 5-6 through the other, and
 not 4 to 5, so the board's motor tracks, the plug (2B 2A 1A 1B) and the
-coils are right. That leaves the spare driver itself. The red A4988 that
-came with the motor did nothing either, its pot at 0.24 V.
+coils are right. That leaves the spare driver itself (it hums on minus
+with the driver held on between moves too). The red A4988 that came with
+the motor can't run on this board as it stands: the board grounds the
+socket's SLEEP pin (a TMC2209's CLK, grounded for its own clock) and leaves
+RESET floating, so the A4988 sleeps; its pot was turned to 0.31 V. To use
+it: SLEEP and RESET bent out of the socket and fed from the Nano's 5 V, MS1
+and MS2 on for 1/8 steps. Stopped there, 9 November: next is a new
+TMC2209, its pot read with the Nano before anything is turned.
 
 
 A printable degree dial for the focus knob is `./focusdial.py --diameter MM` (default 40): a strip for the knob's rim and a disc for its end, at true size with a 50 mm check bar, saved as `web/focus-dial.svg` and served by the status page. One degree on a 40 mm knob is about the f/5 critical focus zone.
