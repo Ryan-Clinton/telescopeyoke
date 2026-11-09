@@ -323,6 +323,18 @@ class Speaker:
                     pass
 
     def _run(self):
+        if not WINDOWS:
+            # spd-say --wait returns when the phrase has been said, so each
+            # one is finished and the next is the newest reading, never a
+            # queue of old ones nor one cut off half way (9 November 2026:
+            # two readings a second, each cancelling the last, stuttered).
+            while True:
+                words = self.waiting.get()
+                try:
+                    subprocess.run(["spd-say", "-r", "20", "--wait", words],
+                                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                except OSError:
+                    return
         try:
             child = subprocess.Popen(self.command, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                      stderr=subprocess.DEVNULL, text=True, encoding="utf-8",
@@ -345,11 +357,7 @@ _speaker = Speaker()
 
 def speak(words):
     """Say `words` through the computer's speaker without waiting for it."""
-    if WINDOWS:
-        _speaker.say(words)
-        return
-    subprocess.Popen(["spd-say", "-r", "20", words],
-                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    _speaker.say(words)
 
 
 # --- sounds for the focusing aid -----------------------------------------------
