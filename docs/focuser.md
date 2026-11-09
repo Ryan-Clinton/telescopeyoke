@@ -488,5 +488,18 @@ round, the same driver reads a steady 1.11 V (about 0.79 A) and holds the
 motor: it is the one in use. It ran the wrong way round under 12 V for a
 while, so if it fails to turn the motor, the untouched spare goes in.
 
+The new firmware (STEP/DIR/EN, half-steps kept as the unit, 25 microsteps
+to 64) turned nothing on that first driver: its STEP input died running
+backwards. On the spare (1.28 V, about 0.91 A, as it came) plus turns every
+time and minus only hums and clicks in place, whatever the order, speed
+(2 or 20 ms), wake time (5 or 200 ms) or motor plug orientation, with DIR
+from D10, tied to GND at the Nano or the board, or fed straight onto the
+driver's own DIR pin. Ruled out with the Nano as a continuity tester
+(`./focuser.py vref`, A2 against GND, 12 V out, driver pulled): the board
+joins socket holes 3-4 through one coil and 5-6 through the other, and
+not 4 to 5, so the board's motor tracks, the plug (2B 2A 1A 1B) and the
+coils are right. That leaves the spare driver itself. The red A4988 that
+came with the motor did nothing either, its pot at 0.24 V.
+
 
 A printable degree dial for the focus knob is `./focusdial.py --diameter MM` (default 40): a strip for the knob's rim and a disc for its end, at true size with a 50 mm check bar, saved as `web/focus-dial.svg` and served by the status page. One degree on a 40 mm knob is about the f/5 critical focus zone.

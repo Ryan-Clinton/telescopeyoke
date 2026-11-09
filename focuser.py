@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""The focuser's motor: a 28BYJ-48 stepper driven by an Arduino Nano.
+"""The focuser's motor: a NEMA 17 on a TMC2209, driven by an Arduino Nano.
 
     ./focuser.py flash         load firmware/focuser onto the Nano
     ./focuser.py test          a quarter turn one way, then back
-    ./focuser.py move 200      that many half-steps (4096 to a turn): plus takes the
+    ./focuser.py move 200      that many half-steps (4096 to a turn, the old 28BYJ-48's
+                               count, kept so every figure still means the same turn): plus takes the
                                drawtube out on the 150P, minus brings it in
     ./focuser.py bench --watch http://PHONE:4747/video
                                the step, the slack and how it comes back, off a
@@ -33,10 +34,12 @@ import host
 ROOT = Path(__file__).parent
 SKETCH = ROOT / "firmware" / "focuser"
 MATCH = "1a86"              # the CH340 chip on a Nano clone, as /dev/serial/by-id names it
-TURN = 4096                 # half-steps to one turn of the motor's shaft
+TURN = 4096                 # half-steps to one turn of the motor's shaft: the 28BYJ-48's, kept
+                            # as the unit for the NEMA 17 (1600 microsteps a turn; the firmware converts)
 MOST = 10 * TURN            # the firmware refuses more in one order
 STEP_SECONDS = 0.020       # as the firmware's STEP_MS
-MOTOR_MS = 30              # what open() sets: on 20 October 2026 two coils at 10 ms could not push the drawtube out, at 30 ms they could
+MOTOR_MS = 2               # what open() sets: 8 s a turn on the NEMA 17 (9 November 2026). The 28BYJ-48
+                           # needed 30: at 10 it could not push the drawtube out (20 October 2026)
 # The thermistor (firmware/focuser, :T): a 10 kΩ B3950 NTC from A0 to GND,
 # under 10 kΩ from A0 to the 5 V the Nano holds on A5.
 FIXED_OHMS = 10_000         # the resistor
@@ -140,6 +143,15 @@ class Focuser:
         half-steps and taking as long (20 October 2026: the motor could not
         push the drawtube out)."""
         order = ":F1" if on else ":F0"
+        reply = self.ask(order, 2)
+        if reply != f"OK {order[1:]}":
+            raise RuntimeError(f"the focuser answered {reply!r} to {order}: load the firmware "
+                               "with ./focuser.py flash")
+
+    def hold(self, on=True):
+        """Keep the driver on between moves, holding the shaft, until the
+        Nano next restarts; off when still is the default."""
+        order = ":H1" if on else ":H0"
         reply = self.ask(order, 2)
         if reply != f"OK {order[1:]}":
             raise RuntimeError(f"the focuser answered {reply!r} to {order}: load the firmware "
@@ -638,6 +650,8 @@ def main(argv=None):
                                            f"{MOTOR_MS}; slower is stronger)")
     ap.add_argument("--full", action="store_true",
                     help="two coils at every step, about a quarter more torque: now always so, kept for old notes")
+    ap.add_argument("--hold", action="store_true",
+                    help="for move and test: keep the driver on between moves, holding the shaft")
     ap.add_argument("--half", action="store_true",
                     help="half-steps, one coil at a time, as before 20 October 2026: weaker")
     args = ap.parse_args(argv)
@@ -681,6 +695,8 @@ def main(argv=None):
     try:
         if args.ms:
             focuser.speed(args.ms)
+        if args.hold:
+            focuser.hold()
         for steps in ([TURN // 4, -TURN // 4] if args.command == "test" else [args.steps]):
             focuser.move(steps)
             print(f"moved {steps:+d} half-steps")
