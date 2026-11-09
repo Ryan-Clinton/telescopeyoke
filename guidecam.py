@@ -566,41 +566,88 @@ def guide_dry_run(args):
               "before each; stop on a fault")
 
 
-def focus_aid(cam, seconds, minutes, gain=None, say=print, speak=None):
-    """Hand focus of the guide scope: the guide star's size each frame, said
-    aloud as a number (one decimal) and nothing else but "no stars"; printed
-    with the best so far. A star under the guider's SNR to find one is not
-    measured (cloud or haze gives a wrong size). The same star is followed
-    while it can be; lost, the brightest is found again, and the change is
-    printed. The size is guider.measure's: twice the flux-weighted mean
-    radius, within about 7 % of the true half-flux diameter for a round
-    star. Nothing moves but the person's hand on the focuser."""
+FOCUS_RADIUS = 30    # px (binned) round a star its light is summed within: a disc far out of focus fits
+FOCUS_SKY = 8        # px of ring outside that, for the background
+
+
+def focus_size(frame, where=None):
+    """The size of the brightest star (or the one near `where`), in or far out
+    of focus: its true half-flux diameter, from all its light within
+    FOCUS_RADIUS. guider.measure's box is 13 px, and a star out of focus is a
+    faint disc 30 px or more across: there it measured noise specks and said
+    1.4 (9 November 2026). Returns (x, y, hfd, snr, peak) or (None, why)."""
     import guider
+    from scipy import ndimage
+    f = frame.astype(float)
+    med, noise = guider.background(f)
+    smooth = ndimage.gaussian_filter(f, 3)
+    local = ndimage.maximum_filter(smooth, size=9)
+    ys, xs = np.nonzero((smooth == local) & (smooth > med + 2 * noise / 10))
+    if not len(xs):
+        return None, "no star above the background"
+    h, w = f.shape
+    r_out = FOCUS_RADIUS + FOCUS_SKY
+    inside = (xs >= r_out) & (ys >= r_out) & (xs < w - r_out) & (ys < h - r_out)
+    xs, ys = xs[inside], ys[inside]
+    if not len(xs):
+        return None, "no star away from the edge"
+    if where is not None:
+        near = np.hypot(xs - where[0], ys - where[1]) < 20
+        if near.any():
+            xs, ys = xs[near], ys[near]
+    k = int(np.argmax(smooth[ys, xs]))
+    cx, cy = int(xs[k]), int(ys[k])
+    cut = f[cy - r_out:cy + r_out + 1, cx - r_out:cx + r_out + 1]
+    yy, xx = np.mgrid[-r_out:r_out + 1, -r_out:r_out + 1]
+    r = np.hypot(xx, yy)
+    ring = cut[(r > FOCUS_RADIUS) & (r <= r_out)]
+    bg = float(np.median(ring))
+    sky_noise = max(float(np.median(np.abs(ring - bg))) * 1.4826, 0.5)
+    disc = r <= FOCUS_RADIUS
+    signal = (cut - bg)[disc]
+    flux = float(signal.sum())
+    snr = flux / (sky_noise * float(np.sqrt(disc.sum()))) if flux > 0 else 0.0
+    if snr < guider.SNR_FIND:
+        return None, f"the brightest star's SNR is {snr:.1f}, under {guider.SNR_FIND}"
+    # Centre on the light itself, then the radius holding half of it.
+    pos = np.clip(signal, 0, None)
+    mx = float((pos * xx[disc]).sum() / pos.sum())
+    my = float((pos * yy[disc]).sum() / pos.sum())
+    rr = np.hypot(xx[disc] - mx, yy[disc] - my)
+    order = np.argsort(rr)
+    half = np.searchsorted(np.cumsum(signal[order]), flux / 2)
+    hfd = 2 * float(rr[order][min(half, len(order) - 1)])
+    return (cx + mx, cy + my, hfd, snr, float(cut.max())), ""
+
+
+def focus_aid(cam, seconds, minutes, gain=None, say=print, speak=None):
+    """Hand focus of the guide scope: the brightest star's half-flux
+    diameter each frame (focus_size, which sees a star far out of focus as
+    well as a sharp one), said aloud as a number (one decimal) and nothing
+    else but "no stars"; printed with the best so far. The same star is
+    followed while it can be. Nothing moves but the person's hand on the
+    focuser."""
     if speak is None:
         from host import speak
     end, best, where = time.monotonic() + 60 * minutes, None, None
     say(f"guide scope focus: {seconds:g} s frames for {minutes:g} min; a smaller number is better")
     while time.monotonic() < end:
         frame = cam.frame(seconds, gain)
-        star, why = guider.follow(frame, where) if where else (None, "")
-        if star is None:
-            star, why = guider.find_star(frame)
-        if star is not None and star.snr < guider.SNR_FIND:
-            # Too faint to measure truly (cloud, haze): no number rather than a wrong one.
-            star, why = None, f"the star's SNR is {star.snr:.1f}, under {guider.SNR_FIND}"
-        if star is None:
+        found, why = focus_size(frame, where)
+        if found is None:
             where = None
             say(f"{time.strftime('%H:%M:%S')}  no stars: {why}")
             speak("no stars")
             continue
-        if where and abs(star.x - where[0]) + abs(star.y - where[1]) > 10:
-            say(f"{time.strftime('%H:%M:%S')}  another star, at {star.x:.0f}, {star.y:.0f}")
-        where = (star.x, star.y)
-        trend = "" if best is None else ("best" if star.hfd < best else "worse" if star.hfd > best * 1.1 else "steady")
-        best = star.hfd if best is None else min(best, star.hfd)
-        say(f"{time.strftime('%H:%M:%S')}  HFD {star.hfd:.1f} px  SNR {star.snr:.0f}  peak {star.peak:.0f}  "
+        x, y, hfd, snr, peak = found
+        if where and abs(x - where[0]) + abs(y - where[1]) > 10:
+            say(f"{time.strftime('%H:%M:%S')}  another star, at {x:.0f}, {y:.0f}")
+        where = (x, y)
+        trend = "" if best is None else ("best" if hfd < best else "worse" if hfd > best * 1.1 else "steady")
+        best = hfd if best is None else min(best, hfd)
+        say(f"{time.strftime('%H:%M:%S')}  HFD {hfd:.1f} px  SNR {snr:.0f}  peak {peak:.0f}  "
             f"best {best:.1f}  {trend}")
-        speak(f"{star.hfd:.1f}")
+        speak(f"{hfd:.1f}")
     say(f"best HFD {best:.1f} px" if best is not None else "no star measured")
 
 
