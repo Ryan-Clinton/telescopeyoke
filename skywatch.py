@@ -8,8 +8,9 @@ Each frame goes to the web page. Exits with a message saying whether the sky
 cleared, so whatever started it knows when to carry on.
 """
 import argparse
+import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import numpy as np
 from scipy import ndimage
@@ -51,7 +52,9 @@ def main():
     ap.add_argument("--every", type=float, default=60, help="seconds between frames")
     ap.add_argument("--exposure", type=float, default=2.0)
     args = ap.parse_args()
-    watch(args.until, args.every, args.exposure)
+    # Exit 1 when the deadline passes with no stars, so `skywatch && alert`
+    # summons nobody for cloud (9 November 2026: it flashed at once).
+    sys.exit(0 if watch(args.until, args.every, args.exposure) else 1)
 
 
 @activity.during("Watching for stars", "a {exposure:g} s frame every {every:g} s until {until}")
@@ -59,7 +62,9 @@ def watch(until, every, exposure):
     """Frames until stars show or `until` comes, with "Watching for stars"
     on the status page meanwhile."""
     hour, minute = (int(x) for x in until.split(":"))
-    end = datetime.now().replace(hour=hour, minute=minute, second=0)
+    end = datetime.now().replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if end <= datetime.now():
+        end += timedelta(days=1)   # 02:00 asked at 20:55 is tonight's, not this morning's
     streak = 0
     with Camera() as cam:
         while datetime.now() < end:
@@ -73,9 +78,10 @@ def watch(until, every, exposure):
             if streak >= 2:
                 print(f"STARS VISIBLE: frame saved as {save(mosaic, header)}", flush=True)
                 print(GO_NOW, flush=True)
-                return
+                return True
             time.sleep(max(0, every - (time.monotonic() - started)))
     print("No clear sky before the deadline.", flush=True)
+    return False
 
 
 if __name__ == "__main__":
