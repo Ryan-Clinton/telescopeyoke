@@ -33,9 +33,9 @@ guiding and dithering are one piece of work here, never guiding alone.
 | What | State |
 |---|---|
 | Guide camera and filter wheel together | ✅ on separate connections: guide camera on the laptop's own port and the filter wheel on the 183M's hub: 299 of 300 2 s guide frames (640 x 480, speed 0) in 10 minutes, no gap over 2.08 s, no library error, while the wheel made 37 of 37 turns through all 7 filters, the slowest 1.0 s (`./guidecam.py wheeltest`, 6 November 2026, about 21:35 to 21:45). Earlier, on the unpowered Trust hub off the 183M's internal hub, with both plugged in, the wheel never finishes its power-up turn and the guide camera stops sending frames. Each works alone (6 Nov 2026). Starlight Xpress recommends a powered hub "to ensure that the wheel motor has sufficient torque" [5] |
-| Guide scope focus | Not done |
+| Guide scope focus | ⚠️ first pass on stars, 8 November 2026: about 3.1 to 3.5 px HFD binned at gain 400 %, through haze, with `./guidecam.py focus` (spoken numbers); to finish on a bright star in clear sky ([record](nights/2026-11-08/guide-focus.md)) |
 | Guide scope fitted firmly, and the balance with it | Not checked on the sky |
-| Guiding software | Built, not run on the sky: `./guidecam.py star`, `calibrate`, `guide`, `status` and `tell` (`guider.py`; the shared maths in `guidemath.py`), the camera's lock, the heartbeat, orders, `shoot.py --guide` and `--guide --dither N [--dither-size ARCSEC]` |
+| Guiding software | Calibration tried on the sky 8 November 2026: the west leg passed twice (0.48 and 0.67 px/s), then the star was lost to a crowded field and to haze; none finished ([record](nights/2026-11-08/guide-focus.md)). Otherwise built, not run on the sky: `./guidecam.py star`, `calibrate`, `guide`, `status` and `tell` (`guider.py`; the shared maths in `guidemath.py`), the camera's lock, the heartbeat, orders, `shoot.py --guide` and `--guide --dither N [--dither-size ARCSEC]` |
 | Guide frames of 1 s and more | 6 November 2026, `./guidecam.py probe`: on the 183M's hub through the Trust hub, with the wheel unplugged, frames came with gaps of about 3 s even at 0.1 s, one frame in 12 s at 0.5 and 1 s, none at 2 s; the same in software trigger mode and at the slowest USB speed. The 2 November test took single frames only, so it was never seen. Guiding needs 2 s frames every few seconds. Later that evening, 2 x 2 binned (640 x 480) at USB speed 0: 149 of 150 2 s frames in 5 minutes, no gap over 2.08 s ([the fault](guide-camera-fault.md#what-cured-it)). Overnight, 14,399 of 14,400 in 8 hours, no gap over 2.08 s ([the fault](guide-camera-fault.md#still-to-do)). Since 79a2f2d the guider opens the camera that way, at 9.55"/px |
 | Long darks for the 183M at -5 °C | ✅ 120 s and 300 s masters, 20 frames each (6 to 7 November 2026, [record](nights/2026-11-06/darks-183m.md)): dark current at most about 0.002 ADU/s, about 0.3 % of the R sky |
 
@@ -403,8 +403,10 @@ These need daylight or the user's hands. None needs the sky.
    and says PASSED with 90 % of the frames, no gap over 4 s, no library
    error and every turn arriving. `docs/usb-hub.md` has the history: the last powered
    hub, the RSH-ST04, dropped its devices and was returned.
-2. **Guide scope focus**, on a distant roof edge in daylight, using
-   `./guidecam.py snap`. Lock the helical focuser.
+2. **Guide scope focus**, with `./guidecam.py focus --gain 400` (the star's
+   size spoken each frame) on a bright star, uncrowded, centred by plate
+   solve; lock the helical focuser. First pass 8 November 2026 through haze
+   ([record](nights/2026-11-08/guide-focus.md)).
 3. **Fitting.** The guide scope's shoe and rings fully tight. Forum
    experience is that guide-scope flexure and Newtonian mirror shift show
    as trailed or doubled stars while the guider reports good numbers [7].
