@@ -470,5 +470,16 @@ instead of the ULN2003, and `focuser.py` and `focus.py` counting full steps
 × microsteps instead of 28BYJ-48 half-steps, each with its test, before the
 first use on the sky.
 
+**9 November 2026, wiring the drive:** the red carrier came; the TMC2209
+seats by VIN (the driver's VM on the board's VIN side), as the board has no
+EN mark at the socket, only a separate EN jumper header. The 12 V goes into
+the green terminal (+ to VIN), and the Nano's GND under the same GND screw:
+there is no GND by STEP and DIR, nor a 5 V pin, so the board makes its own.
+The motor lead's black plug goes straight on the 1A/1B/2A/2B pins. With no
+meter, the current is set from the Nano: a jumper wire from A2 to the
+driver pot's metal top, 12 V on, and `./focuser.py vref` shows the voltage
+live (measured against the Nano's 1.1 V reference, "nothing on A2" when the
+wire is off) while the pot is turned to about 1.1 V, about 0.8 A.
+
 
 A printable degree dial for the focus knob is `./focusdial.py --diameter MM` (default 40): a strip for the knob's rim and a disc for its end, at true size with a 50 mm check bar, saved as `web/focus-dial.svg` and served by the status page. One degree on a 40 mm knob is about the f/5 critical focus zone.

@@ -19,6 +19,14 @@
 //                 which is held high as their 5 V (31 October 2026: the 5V
 //                 terminal is the motor board's); focuser.py turns it into
 //                 degrees. About 1023 is no thermistor, about 0 a short.
+//   :V         -> "V 1104": millivolts on A2, the average of 16, measured
+//                 against the Nano's own 1.1 V reference rather than trusting
+//                 its 5 V (about 4.7 V on USB). A wire from A2 to the TMC2209's
+//                 pot sets the motor's current without a meter (9 November
+//                 2026); focuser.py vref shows it as it is turned. "V -1" is
+//                 nothing on A2: a bare pin reads any voltage at all, so it is
+//                 first pulled up weakly, which the pot holds down and a bare
+//                 pin follows to near 5 V.
 //
 // The coils are off whenever the motor is still: the gearbox holds the shaft,
 // and a warm motor beside the tube spoils the seeing.
@@ -26,6 +34,7 @@
 const byte PINS[4] = {4, 5, 6, 7};
 const byte SENSE = A0;             // the thermistor and the resistor meet here
 const byte SUPPLY = A5;            // the resistor's other end: high from the start
+const byte PROBE = A2;             // :V, a wire to the driver's pot, only while setting it
 const byte HALF[8] = {0b0001, 0b0011, 0b0010, 0b0110,
                       0b0100, 0b1100, 0b1000, 0b1001};
 const long MOST = 40960;           // ten turns of the shaft: more is a mistake
@@ -63,6 +72,33 @@ void turn(long steps) {
   coils(0);
 }
 
+long vccMillivolts() {             // the 5 V as it really is, from the 1.1 V bandgap
+  ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+  delay(2);                        // let the reference settle
+  long sum = 0;
+  for (byte i = 0; i < 16; i++) {
+    ADCSRA |= _BV(ADSC);
+    while (bit_is_set(ADCSRA, ADSC)) {}
+    sum += ADC;
+  }
+  return 1125300L * 16 / sum;      // 1.1 V x 1023 x 1000, over the reading
+}
+
+long probeMillivolts() {
+  long vcc = vccMillivolts();
+  pinMode(PROBE, INPUT_PULLUP);
+  delay(5);
+  analogRead(PROBE);
+  bool bare = analogRead(PROBE) > 820;   // 4 V: the pot holds it nearer 1 V
+  pinMode(PROBE, INPUT);
+  if (bare) return -1;
+  delay(5);
+  analogRead(PROBE);               // the first reading after the switch is stale
+  long sum = 0;
+  for (byte i = 0; i < 16; i++) sum += analogRead(PROBE);
+  return sum * vcc / (16L * 1023);
+}
+
 void obey(const String &order) {
   if (order == ":?") {
     Serial.println("TY focuser 1");
@@ -87,6 +123,9 @@ void obey(const String &order) {
     for (byte i = 0; i < 16; i++) sum += analogRead(SENSE);
     Serial.print("T ");
     Serial.println(sum / 16);
+  } else if (order == ":V") {
+    Serial.print("V ");
+    Serial.println(probeMillivolts());
   } else {
     Serial.println("NO");
   }

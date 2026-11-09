@@ -14,6 +14,8 @@
                                on the telescope, the stick on the other knob: how
                                much of each turn reaches the focuser, each way
     ./focuser.py temp          the thermistor's temperature, in °C
+    ./focuser.py vref          the TMC2209's current setting, read live off a wire
+                               from A2 to its pot, for turning it to about 1.1 V
 
 Building and wiring it: docs/focuser.md. `./focus.py --motor` uses it to
 bring the stars to focus with nobody touching the telescope.
@@ -151,6 +153,16 @@ class Focuser:
             raise RuntimeError(f"the focuser answered {reply!r} to :T: load the firmware "
                                "with ./focuser.py flash")
         return celsius(int(reply[2:]))
+
+    def millivolts(self):
+        """The voltage on A2, in millivolts: the TMC2209's pot, with a wire
+        from A2 to it while it is set (9 November 2026). -1 with nothing
+        on A2."""
+        reply = self.ask(":V", 2)
+        if not reply.startswith("V "):
+            raise RuntimeError(f"the focuser answered {reply!r} to :V: load the firmware "
+                               "with ./focuser.py flash")
+        return int(reply[2:])
 
     def close(self):
         self.link.close()
@@ -578,9 +590,45 @@ def flash(port=None):
     sys.exit(f"Could not load the firmware on {port} as either kind of Nano.")
 
 
+VREF_TARGET = 1.1           # volts on the TMC2209's pot: about 0.8 A of the 17HS4401's 1.7
+AMPS_PER_VOLT = 0.71        # the common (BigTreeTech-style) TMC2209 module's sense resistors
+
+
+def vref(port=None, sleep=time.sleep):
+    """Show the TMC2209's pot voltage twice a second until Ctrl-C, for
+    turning it to VREF_TARGET with no meter: a wire from A2 to the pot's
+    metal top, the Nano's GND on the board's GND, 12 V on."""
+    focuser = Focuser.open(port, full=False, ms=None)
+    print(f"Turn the pot slowly towards {VREF_TARGET:.2f} V. Ctrl-C when it is there.")
+    last = None
+    try:
+        while True:
+            millivolts = focuser.millivolts()
+            volts = millivolts / 1000
+            if millivolts < 0:
+                line = "nothing on A2: put the wire's end on the pot's metal top"
+                volts = None
+            elif volts < 0.05:
+                line = f"{volts:.2f} V  nothing: is the wire on the pot, and the 12 V on?"
+            else:
+                off = volts - VREF_TARGET
+                hint = "there" if abs(off) <= 0.03 else ("lower it" if off > 0 else "raise it")
+                line = f"{volts:.2f} V  about {volts * AMPS_PER_VOLT:.2f} A  {hint}"
+            print("\r" + line.ljust(70), end="", flush=True)
+            last = volts if volts is not None else last
+            sleep(0.5)
+    except KeyboardInterrupt:
+        print()
+        if last is not None:
+            print(f"Last reading {last:.2f} V, about {last * AMPS_PER_VOLT:.2f} A. "
+                  "Take the wire off before the 12 V comes out.")
+    finally:
+        focuser.close()
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("command", choices=["flash", "test", "move", "angle", "bench", "load-test", "look", "temp"])
+    ap.add_argument("command", choices=["flash", "test", "move", "angle", "bench", "load-test", "look", "temp", "vref"])
     ap.add_argument("steps", nargs="?", type=int, help="for move: half-steps, minus for the other way")
     ap.add_argument("--pictures", nargs="+", help="for angle: the stick's angle in each picture")
     ap.add_argument("--watch", help="for bench: the camera looking down on the motor (a DroidCam "
@@ -619,6 +667,8 @@ def main(argv=None):
             sys.exit("No temperature: the thermistor reads as off or shorted. Check A0, GND and A5.")
         print(f"{degrees:.1f} °C")
         return
+    if args.command == "vref":
+        return vref(args.port)
     if args.command == "move" and not args.steps:
         ap.error("move needs a number of half-steps")
     if args.command in ("bench", "load-test") and not args.watch:
