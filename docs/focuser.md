@@ -480,6 +480,9 @@ meter, the current is set from the Nano: a jumper wire from A2 to the
 driver pot's metal top, 12 V on, and `./focuser.py vref` shows the voltage
 live (measured against the Nano's 1.1 V reference, "nothing on A2" when the
 wire is off) while the pot is turned to about 1.1 V, about 0.8 A.
+The driver came set at 0.92 V, about 0.65 A, and is left there for now (no
+screwdriver small enough to hand): still several times the 28BYJ-48's
+torque. Raise it towards 1.1 V only if the motor cannot move the camera.
 
 
 A printable degree dial for the focus knob is `./focusdial.py --diameter MM` (default 40): a strip for the knob's rim and a disc for its end, at true size with a 50 mm check bar, saved as `web/focus-dial.svg` and served by the status page. One degree on a 40 mm knob is about the f/5 critical focus zone.
