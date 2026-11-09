@@ -5,12 +5,24 @@
                        save it for the web page and print how cloudy it looks
     ./clouds.py --at 2026-11-05T04:30   the picture at that time (UT), saved
                        beside it as clouds-YYYYMMDD-HHMM.jpg: was it cloud?
+    ./clouds.py --airports   only the airports' cloud reports (METARs) near
+                       the site; a plain run prints them under the satellite's
 
 Source: EUMETSAT's public image service (view.eumetsat.int), 10.5 µm
 infrared, a new image every 10 minutes. Infrared works at night: clouds are
 cold and show bright, clear ground and sea are warm and show dark.
+
+The airports' reports come from aviationweather.gov: each airport's
+ceilometer looks straight up and gives the cloud's cover and base, every 30
+minutes while it is open. It sees only cloud below about 12,000 ft, so
+"CAVOK" or "NCD" says nothing about high thin cloud, which the satellite
+shows better. Most weather comes from the west, so an airport to the west
+sees cloud before it gets here. Temperature at the dew point there means
+fog or dew is coming.
 """
 import io
+import math
+import time
 from pathlib import Path
 
 import numpy as np
@@ -103,12 +115,78 @@ def over_site():
     return verdict(here, clear)
 
 
+AVIATION = "https://aviationweather.gov/api/data"
+COVER = {"FEW": "few (1-2/8)", "SCT": "scattered (3-4/8)", "BKN": "broken (5-7/8)",
+         "OVC": "overcast", "VV": "sky hidden (fog)"}
+SAYS = {"CAVOK": "no cloud below 5000 ft", "NCD": "no cloud detected below 12,000 ft",
+        "NSC": "no significant cloud", "SKC": "clear", "CLR": "clear below 12,000 ft"}
+
+
+def _distance(lat1, lon1, lat2, lon2):
+    """Kilometres and compass bearing from the first point to the second."""
+    p1, p2, dl = math.radians(lat1), math.radians(lat2), math.radians(lon2 - lon1)
+    km = 6371 * math.acos(min(1, math.sin(p1) * math.sin(p2) + math.cos(p1) * math.cos(p2) * math.cos(dl)))
+    deg = math.degrees(math.atan2(math.sin(dl) * math.cos(p2),
+                                  math.cos(p1) * math.sin(p2) - math.sin(p1) * math.cos(p2) * math.cos(dl)))
+    return km, "N NE E SE S SW W NW".split()[round((deg % 360) / 45) % 8]
+
+
+def airports(site, radius_km=150):
+    """The newest cloud report of every airport within radius_km of the site,
+    nearest first: dicts with the airport, its distance and direction from
+    the site, the report's age in minutes, its cloud layers, what it says,
+    the air and dew point (°C) and the raw METAR."""
+    lat, lon = site["latitude"], site["longitude"]
+    span_lat, span_lon = radius_km / 111, radius_km / (111 * math.cos(math.radians(lat)))
+    box = f"{lat - span_lat:.2f},{lon - span_lon:.2f},{lat + span_lat:.2f},{lon + span_lon:.2f}"
+    r = requests.get(f"{AVIATION}/metar", params={"bbox": box, "format": "json", "hours": 3}, timeout=30)
+    r.raise_for_status()
+    newest = {}
+    for m in r.json() if r.text.strip() else []:
+        if m["icaoId"] not in newest or m["obsTime"] > newest[m["icaoId"]]["obsTime"]:
+            newest[m["icaoId"]] = m
+    out = []
+    for m in newest.values():
+        km, way = _distance(lat, lon, m["lat"], m["lon"])
+        if km > radius_km:
+            continue
+        layers = [f"{COVER.get(c['cover'], c['cover'])} at {c['base']} ft" if c.get("base") is not None
+                  else COVER.get(c["cover"], c["cover"]) for c in m.get("clouds") or []]
+        out.append({"id": m["icaoId"], "name": m["name"].split(",")[0], "km": round(km), "from": way,
+                    "age_min": round((time.time() - m["obsTime"]) / 60), "layers": layers,
+                    "says": "; ".join(layers) or SAYS.get(m.get("cover"), m.get("cover") or "no cloud given"),
+                    "temp_c": m.get("temp"), "dew_c": m.get("dewp"), "raw": m["rawOb"]})
+    return sorted(out, key=lambda a: a["km"])
+
+
+def airport_lines(site):
+    """The airports' reports as lines to print, or one line saying none came."""
+    try:
+        found = airports(site)
+    except (requests.RequestException, ValueError) as problem:
+        return [f"No airport reports: {problem}"]
+    if not found:
+        return ["No airport reports within 150 km in the last 3 hours."]
+    lines = []
+    for a in found:
+        damp = ""
+        if a["temp_c"] is not None and a["dew_c"] is not None and a["temp_c"] - a["dew_c"] <= 1:
+            damp = f", air {a['temp_c']} °C at its dew point {a['dew_c']} °C: fog or dew"
+        old = f" ({a['age_min']} min ago, closed now?)" if a["age_min"] > 75 else f" ({a['age_min']} min ago)"
+        lines.append(f"{a['name']} {a['id']}, {a['km']} km {a['from']}: {a['says']}{damp}{old}")
+    return lines
+
+
 if __name__ == "__main__":
     import argparse
     import datetime as dt
     ap = argparse.ArgumentParser(description="Live (or past) cloud picture from Meteosat.")
     ap.add_argument("--at", metavar="YYYY-MM-DDTHH:MM", help="a past time, UT")
+    ap.add_argument("--airports", action="store_true", help="only the airports' cloud reports")
     args = ap.parse_args()
+    if args.airports:
+        print("\n".join(airport_lines(config.load()["site"])))
+        raise SystemExit
     when = dt.datetime.fromisoformat(args.at).replace(tzinfo=dt.timezone.utc) if args.at else None
     try:
         here, clear, saved = update(config.load()["site"], when)
@@ -116,3 +194,5 @@ if __name__ == "__main__":
         raise SystemExit(f"No satellite picture: {problem}. Try again in a few minutes.")
     print(f"over the site: {here:.0f}, clear areas: {clear:.0f} -> {verdict(here, clear)}")
     print(f"saved {saved}")
+    if not when:
+        print("\n".join(airport_lines(config.load()["site"])))

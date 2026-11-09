@@ -9,7 +9,9 @@ the Lunatico AAG CloudWatcher (about £400), for about £40 in parts and a
 printed case.
 
 The project already has two ways of judging cloud: `clouds.py`, the
-Meteosat picture (10 minutes old, kilometres across), and `skywatch.py`,
+Meteosat picture (10 minutes old, kilometres across) with the nearby
+airports' ceilometer reports under it (every 30 minutes while they are
+open, cloud below about 12,000 ft only), and `skywatch.py`,
 the camera through the telescope (only once the telescope is set up, and
 only where it points). The sensor is the third: this sky, now, all night,
 every night.
