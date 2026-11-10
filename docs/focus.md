@@ -78,6 +78,14 @@ with at every stage. On a level, the same size always gives the same pitch:
 A field with fewer than three stars still reaches level 3, on its brightest
 star alone.
 
+In twilight, or on a lone bright star, level 1's very short frames (0.05 s)
+may show only one or two stars as rings, and then the number said is the
+**ring's radius**, not the HFR, and the aid may stay on level 1. On
+10 November 2026 it said "4" for three minutes on NGC 7789 at 18:00; with
+`--exposure 1` it saw 14 stars, said HFR 2.1 and went to level 3 at once.
+Start with `--exposure 1` before full dark. A hand on the knob shakes the
+tube: the number to go by is the second after letting go (9 November).
+
 ## The size it reports
 
 The half-flux radius (HFR) is the radius holding half of a star's light.

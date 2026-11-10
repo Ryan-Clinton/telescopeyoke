@@ -91,3 +91,11 @@ puts in that room, and says nothing on the speaker; `--dry-run` names
 them. Lights are never picked by their own names: on 7 November 2026 the
 first version picked every light whose name began "Living room", one of
 those is in a child's bedroom, and it flashed there twice at night.
+
+A cloud watch that calls only the living room, and only for a real
+clearing: `./skywatch.py --until 02:00 --guide-check --flash "Living room"`.
+`--guide-check` counts a clearing only when the guide camera finds its star
+as well as the main camera seeing stars twice running: on 7 November thin
+cloud gave the main camera 10 to 28 stars while the guide camera saw none,
+and the lights were flashed for nothing. A deadline already past today is
+tonight's (9 November: `--until 02:00` at 20:55 ended at once and flashed).

@@ -3,6 +3,12 @@
 stop as soon as stars show, or at a set time.
 
     ./skywatch.py --until 22:00
+    ./skywatch.py --until 02:00 --guide-check --flash "Living room"
+
+With --guide-check a clearing counts only when the guide camera finds its
+star too (9 November 2026: thin cloud gave the main camera 10-28 stars
+while the guide camera saw none). With --flash ROOM, a clearing pulses
+that Hue room's lights only (alert.py flash).
 
 Each frame goes to the web page. Exits with a message saying whether the sky
 cleared, so whatever started it knows when to carry on.
@@ -51,14 +57,34 @@ def main():
     ap.add_argument("--until", default="22:00", help="give up at this time (HH:MM)")
     ap.add_argument("--every", type=float, default=60, help="seconds between frames")
     ap.add_argument("--exposure", type=float, default=2.0)
+    ap.add_argument("--guide-check", action="store_true",
+                    help="count a clearing only when the guide camera finds a star too")
+    ap.add_argument("--flash", metavar="ROOM", help="on a clearing, pulse this Hue room's lights")
     args = ap.parse_args()
     # Exit 1 when the deadline passes with no stars, so `skywatch && alert`
     # summons nobody for cloud (9 November 2026: it flashed at once).
-    sys.exit(0 if watch(args.until, args.every, args.exposure) else 1)
+    clear = watch(args.until, args.every, args.exposure, args.guide_check)
+    if clear and args.flash:
+        import alert
+        alert.flash(args.flash)
+    sys.exit(0 if clear else 1)
 
 
 @activity.during("Watching for stars", "a {exposure:g} s frame every {every:g} s until {until}")
-def watch(until, every, exposure):
+def guide_sees_star(seconds=2.0, gain=400):
+    """Whether the guide camera finds a guide star now (guider.find_star),
+    and why not."""
+    import guider
+    from guidecam import GUIDE_SIZE, GUIDE_SPEED, GuideCamera
+    with GuideCamera(role="skywatch", size=GUIDE_SIZE, speed=GUIDE_SPEED) as cam:
+        for _ in range(2):
+            star, why = guider.find_star(cam.frame(seconds, gain))
+            if star is not None:
+                return True, f"SNR {star.snr:.0f}"
+    return False, why
+
+
+def watch(until, every, exposure, guide_check=False):
     """Frames until stars show or `until` comes, with "Watching for stars"
     on the status page meanwhile."""
     hour, minute = (int(x) for x in until.split(":"))
@@ -75,6 +101,12 @@ def watch(until, every, exposure):
             print(f"{datetime.now():%H:%M:%S}  {stars} stars, sky level "
                   f"{np.median(mosaic):.0f}", flush=True)
             streak = streak + 1 if stars >= ENOUGH_STARS else 0
+            if streak >= 2 and guide_check:
+                seen, why = guide_sees_star()
+                print(f"{datetime.now():%H:%M:%S}  guide camera: "
+                      + ("star found, " + why if seen else f"no star ({why}): thin cloud, watching on"), flush=True)
+                if not seen:
+                    streak = 0
             if streak >= 2:
                 print(f"STARS VISIBLE: frame saved as {save(mosaic, header)}", flush=True)
                 print(GO_NOW, flush=True)
