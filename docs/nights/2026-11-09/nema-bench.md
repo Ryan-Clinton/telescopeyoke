@@ -170,8 +170,10 @@ file is the full sequence, with the evidence and the open questions.
   - MS3 is PDN_UART;
   - RESET is PDN, unconnected as BTT ships it;
   - SLEEP is CLK.
-- So the carrier's grounded SLEEP and floating RESET are right for a
-  standalone TMC2209, and its third switch, off, leaves PDN_UART low.
+- So the carrier's SLEEP and RESET suit a standalone TMC2209, and its
+  third switch, off, leaves PDN_UART low. (Superseded: this was written
+  believing the carrier grounds SLEEP. The empty-socket readings below show
+  it doesn't, so a BTT driver's CLK is held low only by its own pull-down.)
 - SpreadCycle is chosen by a resistor on the driver board, not a pin.
 - The sense resistors are 0.11 Ω. I = Vref / √2 holds for BTT's boards only.
 - The firmware's arithmetic checks out:

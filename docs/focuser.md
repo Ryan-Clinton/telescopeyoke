@@ -132,7 +132,10 @@ whole time the 12 V is in.
 1. **Check the board's connections:** 12 V out, Nano unplugged, driver out.
    With the meter on continuity, check the VIN hole (CN2 1) to the VIN
    screw, both GND holes (CN2 2 and 8) to the GND screw, and the Nano's GND to
-   the same screw.
+   the same screw. Then plug the Nano in, still with 12 V out, and read VDD
+   (CN2 7) against GND. The Nano's readings found about 2 V there, most likely
+   fed from the EN wire. If the meter finds more than that, find out why before
+   going on.
 2. **Check the board's logic supply:** driver still out, Nano plugged in,
    12 V in. Read VDD (CN2 7) against GND with the meter: about 5 V. Then 12 V
    out.
