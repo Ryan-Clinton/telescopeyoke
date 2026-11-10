@@ -71,7 +71,6 @@ VERIFY_STEPS = 3     # steps each way of the check on a reused calibration
 VERIFY_ANGLE = 30    # degrees a reused direction may be off
 VERIFY_SIZE = 0.35   # share a reused strength may be off
 RETURN_PX = 1.0      # px from where it started a check's way back must end
-RA_RETURN_SHARE = 0.5  # and for RA, this share of the move west more (its slack)
 SLACK_MOVED = 0.8    # px: the star has started to move (the Dec slack taken up); three times it, a leg that moved at all
 
 # The loop (PHD2's defaults as a start)
@@ -545,12 +544,15 @@ def verify(cam, seconds, cal, cols, west, gain=None, say=print, tick=None):
         results[direction] = np.subtract(end, start) / (VERIFY_STEPS * step)
         results[OPPOSITE[direction]] = np.subtract(home, end) / (VERIFY_STEPS * step)
         missed = math.hypot(home[0] - start[0], home[1] - start[1])
-        # RA's gears have slack too, never measured: the way back east may
-        # fall short by up to half the move west (10 Nov 2026: 1.2-1.4 px
-        # of a ~3 px move, every time, and a 4-minute recalibration each run).
-        moved = math.hypot(end[0] - start[0], end[1] - start[1])
-        allowed = RETURN_PX + (cal.get("backlash_s", 0.0) * float(np.hypot(*cols["north"]))
-                               if direction == "north" else RA_RETURN_SHARE * moved)
+        # East is not west reversed: on this mount an east pulse moves the
+        # star slower than a west one (calibrated 10 Nov 2026: W 0.82, E 0.65
+        # px/s), so the way back falls short by the difference, which the
+        # calibration already measured: (west + east) over the same time.
+        if direction == "north":
+            expected_miss = cal.get("backlash_s", 0.0) * float(np.hypot(*cols["north"]))
+        else:
+            expected_miss = float(np.hypot(*(cols["west"] + cols["east"]))) * VERIFY_STEPS * step
+        allowed = RETURN_PX + expected_miss
         if missed > allowed:
             return False, (f"{OPPOSITE[direction]} did not bring the star back: {missed:.1f} px from where "
                            f"it started, more than {allowed:.1f}")
@@ -559,12 +561,12 @@ def verify(cam, seconds, cal, cols, west, gain=None, say=print, tick=None):
     for direction, got in results.items():
         want = -cols[direction] if direction == "south" and measured_now == "negated" else cols[direction]
         strength, expected = float(np.hypot(*got)), float(np.hypot(*want))
-        if direction in ("south", "east"):
+        if direction == "south":
             # The way back after a reversal: shortened by the slack by design,
             # so only its direction is judged.
             off = math.degrees(math.acos(np.clip(np.dot(got, want) / max(strength * expected, 1e-9), -1, 1)))
             if strength < 0.1 * expected or off > 90:
-                return False, f"{direction} did not move the star back towards where it came from ({off:.0f} degrees off)"
+                return False, f"south did not move the star back towards where it came from ({off:.0f} degrees off)"
             continue
         if abs(strength / max(expected, 1e-9) - 1) > VERIFY_SIZE:
             return False, f"{direction} moved the star {strength:.2f} px/s against {expected:.2f}"
