@@ -1117,7 +1117,7 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
     stuck_after = 3 * seconds + 5 + RETRY_S + 2 * LONGEST_PULSE
     desk = desk or OrderDesk(run_id, say=say)
     beat = Heartbeat({"pid": os.getpid(), "pid_start": process_start(os.getpid()), "run": run_id,
-                      "exposure": seconds, "state": "starting", "camera_held": True},
+                      "exposure": seconds, "state": "starting", "camera_held": True, "dec_one_way": one_way},
                      stuck_after, state_path, say)
     errors = deque(maxlen=RMS_FRAMES)
     lock, state, reason = None, "starting", ""
@@ -1423,13 +1423,21 @@ class Supervisor:
         state = read_state()
         ok, _ = health(state)
         held = owner()
-        if ok and held and held.get("role") == "guider" and state.get("state") in ("guiding", "paused"):
+        if (ok and held and held.get("role") == "guider" and state.get("state") in ("guiding", "paused")
+                and state.get("dec_one_way") == self.dec_one_way):
             self.run, self.pid, self.pid_start = state["run"], state["pid"], state.get("pid_start")
             self.say(f"  guide: using the guider already running (run {self.run})")
             self.active = True
             self.creep_off()
             self.order("relock")
             return
+        if ok and held and held.get("role") == "guider" and state.get("dec_one_way") != self.dec_one_way:
+            # Guiding Dec another way than this run asks: that guider is ended
+            # and one started as asked, never used as it is.
+            self.say(f"  guide: the guider running pulses Dec {state.get('dec_one_way') or 'both ways'}, this run "
+                     f"asks {self.dec_one_way or 'both ways'}: starting one that does")
+            if state.get("pid") and not terminate(state["pid"], state.get("pid_start")):
+                raise Fault(f"The guider (process {state['pid']}) could not be ended: guided imaging stops.")
         self.creep_off()
         self.launch(GUIDE_START_S)
 
