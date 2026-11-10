@@ -51,6 +51,7 @@ COOL_WAIT_S = 900      # the longest a run waits for the sensor to get there, af
 # about 20 minutes from a sensor at 15 °C to -5 °C.
 TEC_LOWEST = -5.0
 RAMP_STEP_C, RAMP_EVERY_S = 0.5, 30.0
+RAMP_LEAD_C = 2.0      # the set point never runs more than this below the sensor (10 November 2026)
 COOL_POLL_S = 5.0
 FULL_POWER = 0.95      # a share of the cooler's most voltage taken as all it has
 STUCK_S = 180          # at full power this long with the sensor no colder: it cannot reach the target
@@ -479,6 +480,7 @@ class AltairCamera:
         level = degrees if now - degrees <= RAMP_STEP_C else now - RAMP_STEP_C
         self._set_point(level)
         self.target, self.level, self._stepped = degrees, level, clock()
+        self.held_since = None
         return True
 
     def _set_point(self, degrees):
@@ -497,9 +499,29 @@ class AltairCamera:
 
     def ramp(self, clock=time.monotonic):
         """One step further down towards the target when RAMP_EVERY_S has
-        passed since the last; True once the set point is the target."""
+        passed since the last, but only while the sensor follows: a sensor
+        more than RAMP_LEAD_C above the set point holds the ramp, and the set
+        point is brought back up to RAMP_STEP_C below the sensor, so the
+        cooler is never left far below it. 10 November 2026: with the 12 V
+        lead out the set point went on down to -5 °C on its timer while the
+        sensor warmed to 10.8 °C; plugged in, the cooler went flat out and
+        the sensor reached -21 °C within a minute. `held_since` is when the
+        ramp stopped following (None while it follows). True once the set
+        point is the target."""
         if self.target is None or not self.flags & TEC:
             return True
+        degrees = self.temperature()
+        if degrees is not None and degrees > self.level + RAMP_LEAD_C:
+            if getattr(self, "held_since", None) is None:
+                self.held_since = clock()
+            level = degrees - RAMP_STEP_C
+            try:
+                self._set_point(level)
+            except self.lib.HRESULTException as problem:
+                raise CameraError(f"the cooler would not take its set point back up to {level:g} °C: "
+                                  f"{_reason(problem)}")
+            self.level, self._stepped = level, clock()
+            return False
         if self.level > self.target and clock() - self._stepped >= RAMP_EVERY_S:
             level = max(self.target, self.level - RAMP_STEP_C)
             try:
@@ -507,7 +529,18 @@ class AltairCamera:
             except self.lib.HRESULTException as problem:
                 raise CameraError(f"the cooler would not take its next step to {level:g} °C: {_reason(problem)}")
             self.level, self._stepped = level, clock()
+            self.held_since = None
         return self.level <= self.target
+
+    def cooler_unpowered(self, clock=time.monotonic):
+        """True when the ramp has been held NO_POWER_S with the sensor not
+        following and the cooler drawing nothing (or not saying): the 12 V
+        supply is most likely not plugged in."""
+        held = getattr(self, "held_since", None)
+        if held is None or clock() - held < NO_POWER_S:
+            return False
+        power = self.tec_power()
+        return power is None or power[1] is None or power[1] <= 0
 
     def temperature(self):
         """The sensor's temperature in °C as the camera reports it; None on a
@@ -565,7 +598,10 @@ class AltairCamera:
             # A cooler drawing nothing while the sensor sits well above the set
             # point has no power (6 November 2026: 14 min at 0 %, the sensor
             # rising from 24.8 to 31.0 °C as the set point went down to -1.7 °C).
-            if share is not None and share <= 0 and degrees > self.level + NO_POWER_ABOVE_C:
+            # Since 10 November the ramp holds the set point near the sensor, so
+            # the sign is the ramp held (held_since) as well as the gap.
+            if share is not None and share <= 0 and (degrees > self.level + NO_POWER_ABOVE_C
+                                                     or getattr(self, "held_since", None) is not None):
                 idle = clock() if idle is None else idle
                 if clock() - idle >= NO_POWER_S:
                     raise CameraError(f"the cooler has drawn no power for {NO_POWER_S / 60:.0f} min while the sensor is "

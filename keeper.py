@@ -163,9 +163,13 @@ def serve(cam, say=print):
             if ready and not status["ready"]:
                 say(f"camera: sensor at {degrees:.1f} °C, its target {target:g} °C: ready")
             elif time.monotonic() - said >= SAY_EVERY_S and not ready:
+                unpowered = getattr(cam, "cooler_unpowered", lambda: False)()
+                note = ("; NOT FOLLOWING: the cooler draws nothing, set point held near the sensor: "
+                        "is the camera's 12 V lead plugged in?") if unpowered else ""
                 say(f"camera: cooling, sensor at {degrees} °C, set point {getattr(cam, 'level', None)} °C, "
-                    f"target {target} °C")
+                    f"target {target} °C{note}")
                 said = time.monotonic()
+            status["unpowered"] = bool(getattr(cam, "cooler_unpowered", lambda: False)())
             status.update(ready=ready, sensor_c=degrees, target_c=target, level_c=getattr(cam, "level", None))
             write_state(**status, pid=os.getpid())
             stopping.wait(POLL_S)
@@ -205,7 +209,9 @@ def words(status):
         return "not running"
     sensor = status.get("sensor_c")
     return (f"sensor at {sensor if sensor is None else f'{sensor:.1f}'} °C, target {status.get('target_c')} °C, "
-            + ("ready" if status.get("ready") else "still cooling"))
+            + ("ready" if status.get("ready") else
+               "NOT COOLING: the cooler draws nothing; is its 12 V lead plugged in?" if status.get("unpowered")
+               else "still cooling"))
 
 
 def stop(say=print, wait=900):
