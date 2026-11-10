@@ -230,8 +230,22 @@ def stop(say=print, wait=900):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("action", choices=["start", "status", "stop"])
+    ap.add_argument("--after-fault", action="store_true",
+                    help="with start: a person's go to cool again after the cooler failed safe "
+                         "(refused within 10 minutes of it)")
     args = ap.parse_args()
     if args.action == "start":
+        import altair
+        if args.after_fault:
+            try:
+                cleared = altair.clear_fault()
+            except altair.CameraError as problem:
+                raise SystemExit(f"Not started: {problem}.")
+            if cleared:
+                print(f"Cooler fault cleared ({cleared.get('reason')}); cooling again, watched.")
+        elif altair.fault_latched():
+            raise SystemExit(f"Not started: the cooler failed safe ({altair.fault_latched().get('reason')}). "
+                             "Secure the 12 V lead, then ./keeper.py start --after-fault (10 minutes after it).")
         start()
     elif args.action == "status":
         print("The camera keeper: " + words(ask(("status",), quiet=True)))
