@@ -84,10 +84,13 @@ file is the full sequence, with the evidence and the open questions.
      coils are right. Shorting each coil's pair made the shaft stiff, which
      confirms it.
 5. **The A4988.** It can't run on this carrier as it stands:
-   - the carrier grounds the socket position an A4988 uses for SLEEP (a
-     TMC2209's CLK, grounded to use its own clock);
-   - it leaves RESET floating;
+   - its SLEEP pin read 0 V, taken that night to mean the carrier grounds it;
+   - RESET is left floating;
    - so the A4988 sleeps.
+
+   On 10 November, the empty SLEEP hole read *not* low. So the 0 V came
+   from the A4988 board itself, which was in the socket when it was read,
+   not from the carrier (see the pin readings below).
 
    Its pot was turned to 0.31 V. Bending SLEEP and RESET out of the socket
    and feeding them 5 V from the Nano would work. The user declined that
@@ -110,9 +113,25 @@ file is the full sequence, with the evidence and the open questions.
 
 ## My mistakes
 
-- **The seating instruction ("VM towards VIN") was wrong** and most likely
-  killed driver 1. I gave it without checking this carrier's layout against
-  the driver's pinout first.
+- **I put driver 1 in backwards, and then argued against the fix.** From
+  the chat log of 9 November:
+  - **17:06:** I gave a sound rule: EN over EN and VM over VM, both checked
+    before pushing it in. The carrier has no EN mark at the socket, so it
+    couldn't be used.
+  - **17:12:** I replaced it with a guess: the driver's VM, GND and motor row
+    "on the side of the socket nearest VIN, where the 12 V and the motor
+    terminals are". On this carrier, the row with the VIN hole is the one
+    *further* from the motor's four pins (pin readings, 10 November). So
+    following it put the driver in the wrong row, which on a two-row socket
+    means turned round. The user followed it as written.
+  - **18:10:** I repeated it for the spare: "VM on the VIN side". The spare
+    wasn't put in then.
+  - **18:13:** the user saw the problem ("vin goes to dir"). I said no and
+    told them not to power it. They turned driver 1 round anyway, and it held
+    the motor at once (1.11 V).
+
+  Driver 1 ran backwards under 12 V before that, and never stepped
+  afterwards.
 - I left the DIR wire under the GND screw after one test without saying to
   move it back. The user caught it.
 - I misread a photo as showing a red jumper cap. There was none.
@@ -207,6 +226,47 @@ An unbranded TMC2209 with no pull-down of its own would see its clock pin
 floating here. That could make it unreliable, but no reason was found why it
 would fail in only one direction. The A4988's "sleep" is better explained by
 RESET being left floating.
+
+**Was the spare ever in backwards?** The user isn't sure, in the
+confusion. The chat log says no:
+- It first went in at 18:25, told to go "exactly the same way round as the
+  one that's in now", the corrected way.
+- On its first power-up it twitched the motor.
+- It read a steady 1.28 V, and it turned the motor every time in `+`.
+
+Driver 1 backwards did none of that: it didn't hold the motor, and its pot
+reading jumped about. A brief wrong seating during a swap can't be ruled out
+from the log. But damage from it would most likely look like driver 1's
+(holds, never steps), not a fault in one direction only.
+
+**The whole socket, read 10 November 2026** (12 V out, driver out, Nano GND
+on the carrier's GND, `./focuser.py vref` with the A2 lead in each hole):
+
+| Hole | CN2 (power and motor row) | Reading | CN3 (logic row) | Reading |
+|---|---|---|---|---|
+| 1 | VIN / VM (marked VIN) | climbing slowly from 1.5 V: the 12 V capacitor charging | EN | not low (Nano D8 holds it high) |
+| 2 | GND | 0 V | MS1 (switch 1, off) | 0 V |
+| 3 | 2B / A2 | not low | MS2 (switch 2, off) | not low |
+| 4 | 2A / A1 | not low | MS3 / PDN_UART (switch 3, off) | not low |
+| 5 | 1A / B1 | not low | RESET / PDN | not low |
+| 6 | 1B / B2 | not low | SLEEP / CLK | not low |
+| 7 | VDD / VCC_IO | steady 2.06 V (unpowered 5 V line, fed a little from the Nano's EN wire) | STEP | 0 V (Nano D9 low) |
+| 8 | GND | 0 V | DIR | 0 V (Nano D10 low) |
+
+"Not low" means floating, or held high (the Nano's reading tops out at about
+4 V).
+
+What the readings show:
+- EN, STEP and DIR read exactly as the Nano sets them after a restart, which
+  fixes the order of both rows.
+- The VIN hole is across from EN, as on a standard StepStick socket.
+- The power row is sound.
+- The three switches, all off, don't do the same thing: MS1 is low, MS2 and
+  MS3 are not.
+- CLK isn't grounded. A BTT driver holds it low with its own 20 kΩ pull-down;
+  an unbranded one might not.
+
+None of this depends on DIR.
 
 **My seating rule in this file was wrong as a rule.** The pins are matched by
 continuity, VM to the VIN hole, before power. The commissioning steps are in
