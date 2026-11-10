@@ -523,8 +523,9 @@ def verify(cam, seconds, cal, cols, west, gain=None, say=print, tick=None):
     VERIFY_ANGLE degrees and VERIFY_SIZE of the strength. Across the pier
     with Dec not yet known, a north move exactly reversed is recorded as
     what this mount does, once its strength has matched too. The way back
-    is checked as well: RA must return within RETURN_PX of where it
-    started, Dec within the measured slack's worth plus RETURN_PX. Returns
+    is checked as well: within RETURN_PX of where it started plus what the
+    calibration predicts it falls short by: for RA the difference between
+    its west and east rates, for Dec the measured slack. Returns
     (True, "") or (False, why)."""
     ra_step, dec_step = (cal["step_ms"]["ra"] / 1000, cal["step_ms"]["dec"] / 1000)
     star = first_star(cam, seconds, gain, say, tick=tick)

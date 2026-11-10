@@ -345,6 +345,20 @@ def clear_old_orders(since=None):
         ORDERS.unlink(missing_ok=True)
 
 
+def stop_waiting(name=None):
+    """Whether a stop is waiting for this run; taken if so. Any other order
+    is left for after the frame, where order() takes it."""
+    if not ORDERS.exists():
+        return False
+    try:
+        left = json.loads(ORDERS.read_text(encoding="utf-8"))
+    except ValueError:
+        return False
+    if not isinstance(left, dict) or left.get("order") != "stop":
+        return False
+    return order(name) == "stop"
+
+
 def order(name=None, now=None):
     """The order left for this run, if any; it is taken, so it acts once. An
     order named for another run is left for it, and a stale one thrown away."""
@@ -1506,6 +1520,12 @@ def image(args, session, exposure, moving, holding, tracker):
         until a run of frames in a row has been lost, which means cloud (or
         dawn, or dew) has ended the session."""
         if told["stop"]:
+            return False
+        if stop_waiting(args.name):
+            # Before the exposure starts, not after it: a stop sent while the
+            # guider was starting would otherwise cost one long frame.
+            print("  told to stop", flush=True)
+            told["stop"] = True
             return False
         if session.refocus:
             if not told.get("refocus"):

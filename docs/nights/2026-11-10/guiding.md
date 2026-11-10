@@ -24,5 +24,27 @@ a centroid wander of 0.13 px RMS with no pulses at all, so the guide
 camera barely sees errors this small. Unguided drift was about 0.04 px/s
 (about 20"/min).
 
-Not yet: a guided run with the main camera to see whether its stars stay
-round (`shoot.py --guide`), and any tuning of aggression or minimum moves.
+The 3.45" total includes the mean offsets; the scatter about them alone
+is about 2.1" (2.0" RA and 0.7" Dec SD combined). The offsets are the
+first thing to understand (drift left uncorrected, a calibration bias, or
+centroid noise at 9.55"/px) before any tuning of aggression or minimum
+moves.
+
+## First guided main-camera run: Eastern Veil (NGC 6992), Ha, 120 s
+
+`shoot.py NGC6992 --blocks Ha:40,OIII:50 --guide --exposure 120
+--focus-as-is`, from 18:52 (session `NGC6992/20261110-185205`), the 183M
+at -5 °C, 0.73"/px. The guider recalibrated (about 5 minutes) because the
+kept calibration's check failed again. The first five frames were all kept:
+FWHM 4.2–5.1 px (3.1–3.7"), roundness 0.84–0.87, 258–300 stars. Guide RMS
+0.97" at the start, 2.4–2.9" by 19:00–19:10. Plate solves through Ha
+failed (too few stars in a short frame), so the run's re-centring left
+the aim as it was.
+
+So 120 s guided frames on this mount keep round stars. Not yet compared
+with unguided 120 s frames, and no longer subs tried.
+
+Changed after this: the kept calibration's check now allows for east
+being slower than west by what the calibration measured, so a reuse need
+not recalibrate (to be seen at the next run's start); a stop sent while a
+run is starting is taken before its first exposure.
