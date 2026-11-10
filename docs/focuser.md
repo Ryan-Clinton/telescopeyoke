@@ -35,9 +35,10 @@ commissioned, focus is by hand (`./focus.py`, spoken numbers).
 All three microstep switches are off. The firmware assumes 1/8 steps (1600
 microsteps a turn), which on a TMC2209 is MS1 and MS2 both low. That isn't
 measured with power on: the empty socket read MS1 low and MS2 not low (below).
-The motion agrees with 1/8 so far. On 9 November the spare, sent half a turn,
-turned about half a turn; at 1/4 it would have turned a whole turn. The
-commissioning below checks it properly.
+On 10 November, with all three off, the spare turned exactly one turn for
+4096 half-steps: 1/8, as the firmware assumes. Every switch setting left the
+one-direction fault as it was ([the bench session](nights/2026-11-09/nema-bench.md)).
+The commissioning below checks it again on each new driver.
 
 **How the BTT driver's pins meet the carrier's socket.** From BTT's
 schematic and manual for the TMC2209 V1.2

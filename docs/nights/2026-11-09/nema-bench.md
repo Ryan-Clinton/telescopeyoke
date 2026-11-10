@@ -274,6 +274,26 @@ The Nano's readings are a first look. The meter's continuity range confirms
 them before the next power-up, including the 2.06 V on VDD, whose cause (the
 EN wire feeding it) is likely but not confirmed.
 
+**The spare with every switch setting, 10 November 2026.** The spare was
+seated by the pins (VM in the hole marked VIN), and the switches were changed
+with the 12 V out. For each setting, `./focuser.py move 2048` then
+`move -2048`:
+
+| Switches on | Plus (half a turn asked) | Minus |
+|---|---|---|
+| none (as used) | exactly one turn when 4096 was asked, so 1/8 confirmed; half a turn for 2048 | hum |
+| 3 | turned | hum |
+| 2 | turned | hum, quieter |
+| 1 | half a turn | hum, as before |
+| 1 and 2 | a tiny turn (finer steps) | hum, barely heard |
+
+The switches do reach the driver: with 1 and 2 on the steps got finer, and
+the hum changed with the setting. But minus failed in every setting, and
+plus worked in every one. The carrier's switch pins are therefore ruled out
+as the cause of the one-direction fault. What is left is the spare driver
+itself, or DIR as it arrives at its pin under power, which the meter or the
+chip's own report (IOIN, over UART) would show.
+
 **My seating rule in this file was wrong as a rule.** The pins are matched by
 continuity, VM to the VIN hole, before power. The commissioning steps are in
 [focuser.md](../../focuser.md#the-nema-17-drive-not-yet-commissioned); they
