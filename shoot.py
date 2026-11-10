@@ -816,16 +816,17 @@ def judged(log):
 
 
 def what_dimmed(log, last=CLOUD_STOP):
-    """what_dimmed_frames' answer, with the airports' cloud reports after it
+    """what_dimmed_frames' answer, with the sky's evidence after it (satellite,
+    airports, and whether they agree)
     (10 November 2026: the cloud data is the first thing to look at when the
     stars go, and an airport to the west sees cloud coming)."""
     said = what_dimmed_frames(log, last)
     try:
         import clouds
-        near = clouds.airports_brief()
+        near = clouds.evidence_words()
     except Exception:     # noqa: BLE001 - the message goes out without them
-        near = None
-    return f"{said}. {near}" if near else said
+        return said
+    return f"{said}. {near}"
 
 
 def what_dimmed_frames(log, last=CLOUD_STOP):
@@ -859,10 +860,11 @@ def what_dimmed_frames(log, last=CLOUD_STOP):
 
 
 def satellite():
-    """The Meteosat verdict over the site now (clouds.py), or None."""
+    """The Meteosat verdict over the site now (clouds.evidence, shared and
+    kept 5 minutes), or None when there is no fresh picture."""
     try:
         import clouds
-        return clouds.over_site()
+        return clouds.evidence()["satellite"]
     except Exception:
         return None
 

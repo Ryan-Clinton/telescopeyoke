@@ -16,9 +16,16 @@ The airports' reports come from aviationweather.gov: each airport's
 ceilometer looks straight up and gives the cloud's cover and base, every 30
 minutes while it is open. It sees only cloud below about 12,000 ft, so
 "CAVOK" or "NCD" says nothing about high thin cloud, which the satellite
-shows better. Most weather comes from the west, so an airport to the west
-sees cloud before it gets here. Temperature at the dew point there means
-fog or dew is coming.
+shows better. Each report gives the wind, so the airport upwind (most
+often to the west, not always) is the one that sees cloud before it gets
+here. An airport's air at its dew point means fog or dew there: a hint for
+here, not proof of dew on the mirrors.
+
+The satellite's verdict is a rough measure: the site's brightness against
+the darkest tenth of the map, not calibrated against the telescope's own
+frames, so it is evidence beside the camera, not proof either way.
+`evidence()` puts the two together, with the picture's age, shared through
+a file for 5 minutes by everything that reports dimmed or missing stars.
 """
 import io
 import math
@@ -39,9 +46,9 @@ WIDTH, HEIGHT = 1110, 510
 SPAN_LAT, SPAN_LON = 1.7, 3.7
 
 
-def _layer(name, box, transparent=False, when=None):
+def _layer(name, box, transparent=False, when=None, timeout=60):
     extra = {"time": when.strftime("%Y-%m-%dT%H:%M:00Z")} if when else {}
-    r = requests.get(WMS, timeout=60, params={**extra,
+    r = requests.get(WMS, timeout=timeout, params={**extra,
         "service": "WMS", "version": "1.3.0", "request": "GetMap", "layers": name,
         "styles": "", "crs": "EPSG:4326", "bbox": ",".join(f"{v:.3f}" for v in box),
         "width": WIDTH, "height": HEIGHT, "format": "image/png",
@@ -71,7 +78,21 @@ def coastline(box):
     return Image.open(kept)
 
 
-def update(site, when=None):
+def picture_time(timeout=8):
+    """When the newest infrared picture was taken (UTC), from the service's
+    own list, or None if it would not say."""
+    import datetime as dt
+    import re
+    try:
+        r = requests.get("https://view.eumetsat.int/geoserver/mtg_fd/ir105_hrfi/ows", timeout=timeout,
+                         params={"service": "WMS", "version": "1.3.0", "request": "GetCapabilities"})
+        found = re.search(r'<Dimension name="time" default="([^"]+)"', r.text)
+        return dt.datetime.fromisoformat(found.group(1).replace("Z", "+00:00")) if found else None
+    except (requests.RequestException, ValueError):
+        return None
+
+
+def update(site, when=None, timeout=60):
     """Fetch, annotate and save the image. Returns (brightness over the site,
     brightness of the darkest tenth of the map), both 0-255; the second is a
     stand-in for clear sky. `when` (UTC) is a past picture, saved under its
@@ -79,7 +100,7 @@ def update(site, when=None):
     stars were put down to dew without a look at the satellite."""
     lat, lon = site["latitude"], site["longitude"]
     box = (lat - SPAN_LAT, lon - SPAN_LON, lat + SPAN_LAT, lon + SPAN_LON)
-    infrared = _layer("mtg_fd:ir105_hrfi", box, when=when).convert("RGB")
+    infrared = _layer("mtg_fd:ir105_hrfi", box, when=when, timeout=timeout).convert("RGB")
     levels = np.asarray(infrared.convert("L"), dtype=float)
     x, y = WIDTH // 2, HEIGHT // 2
     here = float(levels[y - 4:y + 5, x - 4:x + 5].mean())
@@ -122,16 +143,20 @@ SAYS = {"CAVOK": "no cloud below 5000 ft", "NCD": "no cloud detected below 12,00
         "NSC": "no significant cloud", "SKC": "clear", "CLR": "clear below 12,000 ft"}
 
 
+def _compass(degrees):
+    return "N NE E SE S SW W NW".split()[round((degrees % 360) / 45) % 8]
+
+
 def _distance(lat1, lon1, lat2, lon2):
     """Kilometres and compass bearing from the first point to the second."""
     p1, p2, dl = math.radians(lat1), math.radians(lat2), math.radians(lon2 - lon1)
     km = 6371 * math.acos(min(1, math.sin(p1) * math.sin(p2) + math.cos(p1) * math.cos(p2) * math.cos(dl)))
     deg = math.degrees(math.atan2(math.sin(dl) * math.cos(p2),
                                   math.cos(p1) * math.sin(p2) - math.sin(p1) * math.cos(p2) * math.cos(dl)))
-    return km, "N NE E SE S SW W NW".split()[round((deg % 360) / 45) % 8]
+    return km, _compass(deg)
 
 
-def airports(site, radius_km=150):
+def airports(site, radius_km=150, timeout=30):
     """The newest cloud report of every airport within radius_km of the site,
     nearest first: dicts with the airport, its distance and direction from
     the site, the report's age in minutes, its cloud layers, what it says,
@@ -139,7 +164,7 @@ def airports(site, radius_km=150):
     lat, lon = site["latitude"], site["longitude"]
     span_lat, span_lon = radius_km / 111, radius_km / (111 * math.cos(math.radians(lat)))
     box = f"{lat - span_lat:.2f},{lon - span_lon:.2f},{lat + span_lat:.2f},{lon + span_lon:.2f}"
-    r = requests.get(f"{AVIATION}/metar", params={"bbox": box, "format": "json", "hours": 3}, timeout=30)
+    r = requests.get(f"{AVIATION}/metar", params={"bbox": box, "format": "json", "hours": 3}, timeout=timeout)
     r.raise_for_status()
     newest = {}
     for m in r.json() if r.text.strip() else []:
@@ -152,7 +177,12 @@ def airports(site, radius_km=150):
             continue
         layers = [f"{COVER.get(c['cover'], c['cover'])} at {c['base']} ft" if c.get("base") is not None
                   else COVER.get(c["cover"], c["cover"]) for c in m.get("clouds") or []]
+        wind = None
+        if m.get("wspd") is not None:
+            wind = ("calm" if not m["wspd"] else f"{m['wspd']} kt from "
+                    + (_compass(m["wdir"]) if isinstance(m.get("wdir"), (int, float)) else "varying directions"))
         out.append({"id": m["icaoId"], "name": m["name"].split(",")[0], "km": round(km), "from": way,
+                    "covers": [c["cover"] for c in m.get("clouds") or []], "wind": wind,
                     "age_min": round((time.time() - m["obsTime"]) / 60), "layers": layers,
                     "says": "; ".join(layers) or SAYS.get(m.get("cover"), m.get("cover") or "no cloud given"),
                     "temp_c": m.get("temp"), "dew_c": m.get("dewp"), "raw": m["rawOb"]})
@@ -171,32 +201,86 @@ def airport_lines(site):
     for a in found:
         damp = ""
         if a["temp_c"] is not None and a["dew_c"] is not None and a["temp_c"] - a["dew_c"] <= 1:
-            damp = f", air {a['temp_c']} °C at its dew point {a['dew_c']} °C: fog or dew"
+            damp = f", air {a['temp_c']} °C at its dew point {a['dew_c']} °C: fog or dew there"
         old = f" ({a['age_min']} min ago, closed now?)" if a["age_min"] > 75 else f" ({a['age_min']} min ago)"
-        lines.append(f"{a['name']} {a['id']}, {a['km']} km {a['from']}: {a['says']}{damp}{old}")
+        wind = f", wind {a['wind']}" if a["wind"] else ""
+        lines.append(f"{a['name']} {a['id']}, {a['km']} km {a['from']}: {a['says']}{damp}{wind}{old}")
     return lines
 
 
-def airports_brief(site=None):
-    """The airports' reports from the last 75 minutes in one line, for a
-    message about dimmed or missing stars, or None if none came."""
+EVIDENCE = config.DATA / "cache" / "cloud_evidence.json"
+FRESH_S = 300          # one look at the sky's evidence serves every script for 5 minutes
+SATELLITE_STALE_MIN = 40
+
+
+def evidence(max_age_s=FRESH_S):
+    """One look at the sky's evidence, shared by shoot.py, runwatch.py and
+    skywatch.py through a file kept for 5 minutes, fetched with short
+    timeouts so a slow service holds nothing up for long: the satellite's
+    verdict over the site and its picture's age, the airports' fresh
+    reports (75 minutes or less) and what the two together say."""
+    import json
     try:
-        found = [a for a in airports(site or config.load()["site"]) if a["age_min"] <= 75]
-    except Exception:     # noqa: BLE001 - a broken feed must not stop a run's message
-        return None
-    if not found:
-        return None
-    damp = lambda a: (a["temp_c"] is not None and a["dew_c"] is not None   # noqa: E731
-                      and a["temp_c"] - a["dew_c"] <= 1)
-    return "airports: " + "; ".join(f"{a['name'].split('/')[0]} {a['km']} km {a['from']} {a['says']}"
-                                    + (", at its dew point" if damp(a) else "") for a in found)
+        kept = json.loads(EVIDENCE.read_text())
+        if time.time() - kept["at"] < max_age_s:
+            return kept
+    except (OSError, ValueError, KeyError):
+        pass
+    site = config.load()["site"]
+    taken = picture_time()
+    age = None if taken is None else round((time.time() - taken.timestamp()) / 60)
+    try:
+        here, clear, _ = update(site, timeout=15)
+        seen = verdict(here, clear)
+    except (RuntimeError, requests.RequestException, OSError):
+        seen = None
+    stale = seen is not None and age is not None and age > SATELLITE_STALE_MIN
+    try:
+        near = [a for a in airports(site, timeout=8) if a["age_min"] <= 75]
+    except (requests.RequestException, ValueError):
+        near = None
+    out = {"at": time.time(), "satellite": None if stale else seen, "satellite_age_min": age,
+           "satellite_stale": stale, "airports": near, "together": together(None if stale else seen, near)}
+    try:
+        EVIDENCE.parent.mkdir(exist_ok=True)
+        EVIDENCE.write_text(json.dumps(out))
+    except OSError:
+        pass
+    return out
 
 
-def no_stars_lines():
-    """What the cloud data says when the camera sees no stars: the
-    satellite's verdict over the site and the airports' reports."""
-    seen = over_site()
-    return [f"satellite: {seen or 'no picture just now'} over the site"] + airport_lines(config.load()["site"])
+def together(seen, near):
+    """What the satellite and the airports within 80 km say between them.
+    Unknown is never clear; and clear on both still leaves thin high cloud,
+    which neither sees well, as well as dew or a fault."""
+    close = [a for a in near or [] if a["km"] <= 80]
+    low = [a for a in close if set(a["covers"]) & {"BKN", "OVC", "VV"}]
+    if seen is None and not close:
+        return "no satellite picture and no airport near: the sky is unknown, not clear"
+    if seen is None:
+        return "no satellite picture; " + ("the airports near have low cloud" if low else
+                                           "the airports near have no low cloud, which says nothing of high cloud")
+    cloudy = seen in ("cloud", "thin or broken cloud")
+    if cloudy and low:
+        return "the satellite and the airports agree: cloud"
+    if cloudy:
+        return ("the satellite sees cloud and the airports near have none low: high cloud, "
+                "which their ceilometers don't reach" if close else "the satellite sees cloud; no airport near to check it")
+    if low:
+        return "they disagree: low cloud at the airports near, none on the satellite here: look up"
+    return ("neither sees cloud here: thin high cloud is still possible, or dew, or a fault; look up"
+            if close else "the satellite sees no cloud; no airport near to check it; thin cloud is still possible")
+
+
+def evidence_words(found=None):
+    """The evidence as one line for a message about dimmed or missing stars."""
+    found = found or evidence()
+    sat = found["satellite"] or ("only a stale picture" if found.get("satellite_stale") else "no picture")
+    if found["satellite"] and found.get("satellite_age_min") is not None:
+        sat += f" ({found['satellite_age_min']} min old)"
+    near = "; ".join(f"{a['name'].split('/')[0]} {a['km']} km {a['from']} {a['says']}"
+                     + (f", wind {a['wind']}" if a["wind"] else "") for a in found["airports"] or [])
+    return f"satellite: {sat} over the site" + (f"; airports: {near}" if near else "") + f". {found['together']}"
 
 
 if __name__ == "__main__":

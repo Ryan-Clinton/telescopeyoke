@@ -44,15 +44,14 @@ def minutes(seconds):
 
 
 def cloud_data():
-    """The satellite and the airports in words, for the dimmed-stars line
-    (10 November 2026: the cloud data is the first look when stars go)."""
+    """The sky's evidence in words for the dimmed-stars line (clouds.evidence:
+    shared, kept 5 minutes, short timeouts). 10 November 2026: the cloud
+    data is the first look when stars go."""
     try:
         import clouds
-        seen = clouds.over_site()
-        near = clouds.airports_brief()
+        return [clouds.evidence_words()]
     except Exception:     # noqa: BLE001 - the line goes out without them
-        return ["no cloud data"]
-    return [f"satellite: {seen or 'no picture'} over the site"] + ([near] if near else [])
+        return ["no cloud data: the sky is unknown, not clear"]
 
 
 class Watch:

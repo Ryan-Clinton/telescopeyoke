@@ -108,8 +108,10 @@ def watch(until, every, exposure, guide_check=False):
             if streak >= 2 and guide_check:
                 seen, why = guide_sees_star()
                 print(f"{datetime.now():%H:%M:%S}  guide camera: "
-                      + ("star found, " + why if seen else f"no star ({why}): thin cloud, watching on"), flush=True)
+                      + ("star found, " + why if seen else f"no star ({why}): thin cloud, or the guide "
+                         "camera's focus or exposure; watching on"), flush=True)
                 if not seen:
+                    cloud_data()
                     streak = 0
             if streak >= 2:
                 print(f"STARS VISIBLE: frame saved as {save(mosaic, header)}", flush=True)
@@ -127,8 +129,7 @@ def cloud_data():
     10 November 2026, the cloud data is the first thing to look at."""
     try:
         import clouds
-        for line in clouds.no_stars_lines():
-            print(f"{datetime.now():%H:%M:%S}  {line}", flush=True)
+        print(f"{datetime.now():%H:%M:%S}  {clouds.evidence_words()}", flush=True)
     except Exception as problem:     # noqa: BLE001 - the watch goes on without it
         print(f"{datetime.now():%H:%M:%S}  no cloud data: {problem}", flush=True)
 

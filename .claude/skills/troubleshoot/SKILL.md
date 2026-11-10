@@ -49,17 +49,24 @@ step has been tried, and say what each gave:
 
 **A plate solve failed**
 
-In this order: cloud (ask what the sky looks like), focus (the `focus`
-skill), the exposure too short. A failed solve before focusing says
+In this order: cloud (run `./clouds.py` first, then ask what the sky
+looks like, saying what it showed), focus (the `focus` skill), the
+exposure too short. A failed solve before focusing says
 nothing about cloud.
 
 **The stars dimmed, or the camera sees none**
 
 Look at the satellite first: `./clouds.py` (now) or `./clouds.py --at
 2026-11-05T04:30` (when the stars dimmed, UT). Cloud over the site is
-cloud. Now, `./clouds.py` also gives the airports' reports: low cloud at
-Derry (west, upwind) is on its way, and an airport's air at its dew point
-makes dew likely here too; clear airports say nothing about high thin cloud. With the person asleep, that is the answer: never dew, which no one
+cloud. `./clouds.py` also gives the airports' reports with their wind: low
+cloud at the airport upwind is on its way; an airport's air at its dew
+point is fog or dew there, a hint for here and not proof of dew on the
+mirrors; clear airports say nothing about high thin cloud. The run's and
+skywatch's own lines give the satellite and airports together and say
+whether they agree; clear on both is not proof of a fault either, since
+thin high cloud slips past both. A camera that returns no frame, drops off
+USB or whose cooler fails is a fault, not weather: troubleshoot it at once.
+With the person asleep, that is the answer: never dew, which no one
 has seen, and never a step skipped for it (5 November 2026: dawn flats lost
 to "possible dew" while the satellite showed thin cloud all night). Awake,
 ask what the sky looks like too: haze has been called dew before.
