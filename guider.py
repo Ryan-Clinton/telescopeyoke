@@ -65,8 +65,9 @@ CAL_STEPS = 12       # steps the leg is planned in
 CAL_MOST_STEPS = 15
 CAL_LEAST_STEPS = 8  # fewer than this to cover the distance: steps too long
 CAL_LONGEST_MS = 3000
-CAL_SLACK_STEPS = 10  # most steps north before the Dec slack counts as taken up
+CAL_SLACK_STEPS = 20  # most steps north before the Dec slack counts as taken up (10 Nov 2026: over 15 s east of the pier)
 CAL_REVERSAL_STEPS = 6  # steps of each extra Dec reversal that measures the slack again
+CAL_STILL_FRAMES = 8  # frames with no pulses that measure the drift before calibrating
 VERIFY_STEPS = 3     # steps each way of the check on a reused calibration
 VERIFY_ANGLE = 30    # degrees a reused direction may be off
 VERIFY_SIZE = 0.35   # share a reused strength may be off
@@ -319,16 +320,47 @@ class Calibrator:
         self.cam, self.seconds, self.gain, self.say = cam, seconds, gain, say
         self.tick = tick
         self.where = None
+        self.last = None            # the newest position look() gave, drift taken off
+        self.drift = np.zeros(2)    # px/s the star moves with no pulses (still_drift())
+        self.since = None           # the time the drift is counted from
 
     def look(self):
+        """Where the star is, with the drift since still_drift() taken off:
+        what the pulses alone have done. The window follows the star itself."""
         if self.tick:
             self.tick()
-        frame, _ = self.cam.timed_frame(self.seconds, self.gain)
+        frame, times = self.cam.timed_frame(self.seconds, self.gain)
         star, why = follow(frame, self.where)
         if star is None:
             raise Fault(f"The star was lost during calibration: {why}.")
         self.where = (star.x, star.y)
-        return self.where
+        if self.since is None:
+            self.last = self.where
+        else:
+            gone = self.drift * (times["mid"] - self.since)
+            self.last = (star.x - float(gone[0]), star.y - float(gone[1]))
+        return self.last
+
+    def still_drift(self, frames=CAL_STILL_FRAMES):
+        """The star's drift with no pulses, measured over `frames` frames and
+        taken off every position after. 10 November 2026: on the east side
+        three calibrations came out 72-79 degrees between the axes, west at
+        1.29 px/s against east 0.52 on Alpheratz: the star drifting during
+        the legs, not the mount."""
+        track = []
+        for _ in range(frames):
+            if self.tick:
+                self.tick()
+            frame, times = self.cam.timed_frame(self.seconds, self.gain)
+            star, why = follow(frame, self.where)
+            if star is None:
+                raise Fault(f"The star was lost during calibration: {why}.")
+            self.where = (star.x, star.y)
+            track.append((times["mid"], star.x, star.y))
+        self.drift = guidemath.drift_rate(track, last=len(track))
+        self.since = track[-1][0]
+        self.last = self.where
+        return self.drift
 
     def step(self, direction, seconds):
         if self.tick:
@@ -348,7 +380,7 @@ class Calibrator:
         return points
 
     def back(self, direction, seconds, steps):
-        points = [self.where]
+        points = [self.last if self.last is not None else self.where]
         for _ in range(steps):
             points.append(self.step(direction, seconds))
         return points
@@ -389,6 +421,9 @@ def calibrate(cam, seconds, dec, west, gain=None, say=print, rate=GUIDE_RATE, ti
     c = Calibrator(cam, seconds, gain, say, tick)
     c.where = (star.x, star.y)
     columns, steps, notes = {}, {}, []
+    drift = c.still_drift()
+    say(f"  drift with no pulses: {drift[0]:+.3f}, {drift[1]:+.3f} px/s ({np.hypot(*drift) * SCALE * 60:.0f}\"/min), "
+        "taken off every leg")
 
     west_points = c.leg("west", ra_step)
     steps["west"] = len(west_points) - 1
@@ -531,6 +566,7 @@ def verify(cam, seconds, cal, cols, west, gain=None, say=print, tick=None):
     star = first_star(cam, seconds, gain, say, tick=tick)
     c = Calibrator(cam, seconds, gain, say, tick)
     c.where = (star.x, star.y)
+    c.still_drift()             # the kept columns are without drift; so must the check be
     results = {}
     for direction, step in (("west", ra_step), ("north", dec_step)):
         start = c.look()
