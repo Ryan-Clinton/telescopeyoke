@@ -69,6 +69,17 @@ tell them apart. Three things are not as expected:
 - so on the BTT driver, CLK is held low only by its own pull-down, and MS2
   and PDN_UART may be high (1/4 steps, no current cut at standstill).
 
+The power and motor row (CN2) read as it should, from the hole marked VIN:
+- VIN: a slow climb from 1.5 V as the 12 V line's capacitor charged;
+- GND: 0 V;
+- four motor pins: not low;
+- VDD: a steady 2.06 V, the unpowered 5 V line fed a little by the Nano's
+  EN wire through the board;
+- GND: 0 V.
+
+So the driver's VM pin goes in the hole marked VIN, and its EN pin in the
+CN3 hole across from it.
+
 None of these depends on DIR. With BTT's own pull-downs, the carrier still
 suits a standalone TMC2209. StealthChop versus SpreadCycle is set by a
 resistor on the BTT board itself (StealthChop as it comes), not by a pin. No
