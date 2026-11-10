@@ -52,7 +52,6 @@ COOL_WAIT_S = 900      # the longest a run waits for the sensor to get there, af
 TEC_LOWEST = -5.0
 RAMP_STEP_C, RAMP_EVERY_S = 0.5, 30.0
 RAMP_LEAD_C = 2.0      # the set point never runs more than this below the sensor (10 November 2026)
-OVERCOOL_S = 90.0      # s colder than ever set, after the cooler is switched on again, before it is stopped
 COOL_POLL_S = 5.0
 FULL_POWER = 0.95      # a share of the cooler's most voltage taken as all it has
 STUCK_S = 180          # at full power this long with the sensor no colder: it cannot reach the target
@@ -513,26 +512,17 @@ class AltairCamera:
             return True
         degrees = self.temperature()
         if degrees is not None and degrees < min(self.level, TEC_LOWEST) - RAMP_LEAD_C:
-            # Colder than it was ever set: 10 November 2026, the 12 V lead
-            # fell out and went back in, and the cooler ran flat out to
-            # -17.6 °C with its set point at +7.4 °C; a fresh open put it
-            # right. So the cooler is switched off and on again with its set
-            # point, as an open does; if the sensor is still that cold after
-            # OVERCOOL_S, the camera is stopped, which turns the cooler off.
-            first = getattr(self, "overcooled_since", None)
-            if first is None:
-                self.overcooled_since = clock()
-                option = getattr(self.lib, "ALTAIRCAM_OPTION_TEC", None)
-                if option is not None:
-                    self.handle.put_Option(option, 0)
-                    self.handle.put_Option(option, 1)
-                self._set_point(self.level)
-            elif clock() - first >= OVERCOOL_S:
-                raise CameraError(f"the sensor is at {degrees:.1f} °C with the cooler set to {self.level:g} °C and "
-                                  f"has not come back in {OVERCOOL_S:.0f} s: the camera is closed so the cooler "
-                                  "stops")
-            return False
-        self.overcooled_since = None
+            # Colder than it was ever set: the cooler is not obeying its set
+            # point, and closing the camera is the one thing shown to stop
+            # it, so the camera is closed at once. 10 November 2026: twice
+            # the 12 V lead fell out and went back in and the cooler ran
+            # flat out (-21 °C at 18:30; -17.6 °C at 21:25 with its set
+            # point at +7.4 °C), and a camera opened again at once went from
+            # -6 to -19.1 °C in 3 minutes with its set point at -5 °C.
+            self.disobeying = True      # warm_up() then turns the cooler off at once: set points do nothing
+            raise CameraError(f"the sensor is at {degrees:.1f} °C with the cooler set to {self.level:g} °C: the "
+                              "cooler is not obeying its set point, so the camera is closed and the cooler stops. "
+                              "Leave it closed 10 minutes before opening it again")
         if degrees is not None and degrees > self.level + RAMP_LEAD_C:
             if getattr(self, "held_since", None) is None:
                 self.held_since = clock()
@@ -666,7 +656,10 @@ class AltairCamera:
             if degrees is None or self.ambient is None:
                 say(f"camera: the warm-up cannot tell the sensor's temperature "
                     f"({'now' if degrees is None else 'from before cooling'}); the cooler goes off now")
-            if degrees is not None and self.ambient is not None and degrees < self.ambient - WARM_STEP_C:
+            if getattr(self, "disobeying", False):
+                say("camera: the cooler is not obeying its set point, so a slow warm-up cannot be done: "
+                    "the cooler goes off now")
+            elif degrees is not None and self.ambient is not None and degrees < self.ambient - WARM_STEP_C:
                 level = max(self.level, degrees)
                 say(f"camera: warming the sensor from {degrees:.1f} °C to {self.ambient:.1f} °C, "
                     f"{WARM_STEP_C:g} °C a minute, before the cooler is turned off")
