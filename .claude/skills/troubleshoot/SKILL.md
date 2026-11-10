@@ -53,7 +53,7 @@ In this order: cloud (ask what the sky looks like), focus (the `focus`
 skill), the exposure too short. A failed solve before focusing says
 nothing about cloud.
 
-**The stars dimmed**
+**The stars dimmed, or the camera sees none**
 
 Look at the satellite first: `./clouds.py` (now) or `./clouds.py --at
 2026-11-05T04:30` (when the stars dimmed, UT). Cloud over the site is

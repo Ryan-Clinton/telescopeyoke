@@ -17,8 +17,8 @@ allowed-tools: Bash(./ty mount goto * --dry-run) Bash(./ty shoot * --dry-run) Ba
    all is well and a line when frames stop, stop being kept, the share kept
    halves, the stars dim or come back, or the run ends. Tell the person at
    once about each line; for dimming stars, the satellite and the airports
-   first (`./clouds.py`: the watch's line already says what the satellite
-   shows; the airports to the west say what is coming, and one at its dew
+   first (the watch's line gives both; `./clouds.py` for the full reports;
+   the airports to the west say what is coming, and one at its dew
    point says fog or dew), then ask what the sky looks like before saying
    haze or dew.
 5. While they are inside nobody is watching the mount: make no move they

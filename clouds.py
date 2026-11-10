@@ -177,6 +177,28 @@ def airport_lines(site):
     return lines
 
 
+def airports_brief(site=None):
+    """The airports' reports from the last 75 minutes in one line, for a
+    message about dimmed or missing stars, or None if none came."""
+    try:
+        found = [a for a in airports(site or config.load()["site"]) if a["age_min"] <= 75]
+    except Exception:     # noqa: BLE001 - a broken feed must not stop a run's message
+        return None
+    if not found:
+        return None
+    damp = lambda a: (a["temp_c"] is not None and a["dew_c"] is not None   # noqa: E731
+                      and a["temp_c"] - a["dew_c"] <= 1)
+    return "airports: " + "; ".join(f"{a['name'].split('/')[0]} {a['km']} km {a['from']} {a['says']}"
+                                    + (", at its dew point" if damp(a) else "") for a in found)
+
+
+def no_stars_lines():
+    """What the cloud data says when the camera sees no stars: the
+    satellite's verdict over the site and the airports' reports."""
+    seen = over_site()
+    return [f"satellite: {seen or 'no picture just now'} over the site"] + airport_lines(config.load()["site"])
+
+
 if __name__ == "__main__":
     import argparse
     import datetime as dt

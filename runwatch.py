@@ -43,6 +43,18 @@ def minutes(seconds):
     return f"{seconds / 60:.0f} min"
 
 
+def cloud_data():
+    """The satellite and the airports in words, for the dimmed-stars line
+    (10 November 2026: the cloud data is the first look when stars go)."""
+    try:
+        import clouds
+        seen = clouds.over_site()
+        near = clouds.airports_brief()
+    except Exception:     # noqa: BLE001 - the line goes out without them
+        return ["no cloud data"]
+    return [f"satellite: {seen or 'no picture'} over the site"] + ([near] if near else [])
+
+
 class Watch:
     """What has been said about one run, so each change is said once."""
 
@@ -103,9 +115,9 @@ class Watch:
             elif recent > before * 0.8:
                 self.clear("halved", f"{name}: keeping {recent:.0%} again", lines)
         sky = alert.sky_from_frames([f.get("flux") for f in log])
-        if sky in ("cloud", "clouded"):
+        if sky in ("cloud", "clouded") and "dim" not in self.said:
             self.once("dim", f"{name}: the stars have dimmed ({'mostly gone' if sky == 'clouded' else 'thinly'}); "
-                             f"ask what the sky looks like", lines)
+                             + "; ".join(cloud_data()) + "; ask what the sky looks like", lines)
         elif sky == "clear":
             self.clear("dim", f"{name}: the stars are back", lines)
         return lines

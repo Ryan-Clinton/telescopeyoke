@@ -816,6 +816,19 @@ def judged(log):
 
 
 def what_dimmed(log, last=CLOUD_STOP):
+    """what_dimmed_frames' answer, with the airports' cloud reports after it
+    (10 November 2026: the cloud data is the first thing to look at when the
+    stars go, and an airport to the west sees cloud coming)."""
+    said = what_dimmed_frames(log, last)
+    try:
+        import clouds
+        near = clouds.airports_brief()
+    except Exception:     # noqa: BLE001 - the message goes out without them
+        near = None
+    return f"{said}. {near}" if near else said
+
+
+def what_dimmed_frames(log, last=CLOUD_STOP):
     """What the last rejected frames say about why, against the frames kept:
     the stars' brightness and the sky's, in words, with what to look at.
     The frames cannot tell high haze from dew on the mirrors (both dim the
