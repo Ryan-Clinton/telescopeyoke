@@ -12,7 +12,7 @@ file is the full sequence, with the evidence and the open questions.
 
 - **Motor:** 17HS4401 NEMA 17, 1.7 A rated. A 4-wire lead with a black
   4-pin plug.
-- **Carrier:** a red A4988/DRV8825-style screw-terminal carrier.
+- **Carrier:** a black A4988/DRV8825-style screw-terminal carrier.
   - Its socket's pins are labelled for an A4988.
   - It has a green 2-way terminal for the motor supply (VIN, GND).
   - The motor plug goes on 4 header pins, labelled 2B 2A 1A 1B left to right.
@@ -52,7 +52,9 @@ file is the full sequence, with the evidence and the open questions.
    - Its Vref read 0.92 V, then 0.17 V.
    - Its pot's head was half stripped trying to turn it.
 
-   The right way on this board is with the driver's DIR end towards VIN.
+   It went in the right way with the driver's DIR end towards VIN. That
+   was only how it looked on this board: the safe rule is to match the
+   driver's VM pin to the hole joined to VIN (see the review notes below).
    Turned round, it read a steady 1.11 V (about 0.79 A by the
    BigTreeTech formula A = V × 0.71) and held the motor stiff. **It never
    stepped:** it turned nothing in any direction. Most likely it was damaged
@@ -103,7 +105,7 @@ file is the full sequence, with the evidence and the open questions.
 | Carrier motor tracks, plug, coils | Good: continuity and the shorted-coil test |
 | Nano as a Vref meter (`:V`) | Steady, plausible readings (1.11, 1.28, 0.31 V); not yet checked against a meter |
 | Driver 1 | Dead: holds the motor, never steps |
-| Spare driver | Faulty: steps only with DIR high |
+| Spare driver | Steps only with DIR high: most likely the driver, not proven (no pin voltages measured) |
 | A4988 | Fine as far as known, but won't run on this carrier without rework |
 
 ## My mistakes
@@ -141,11 +143,34 @@ file is the full sequence, with the evidence and the open questions.
    average of 16, with a pull-up test for a bare pin? Should the pot be read
    with the motor unplugged?
 
-## When the new drivers come
+## After review, 10 November 2026
 
-1. 12 V out. Seat one with the DIR end the same way as the spare.
-2. Read its pot with `./focuser.py vref`: the A2 lead on the pot, 12 V in.
-   Do this before anything is turned.
-3. Run `./focuser.py test`, saying first what to watch. Check both directions.
-4. Once it turns both ways: fit it to the focuser on the reinforced bracket,
-   then `./focus.py --measure-backlash`.
+**Confirmed, from BTT's schematic and manual for the TMC2209 V1.2:**
+- The pins' positions against the carrier's A4988 socket:
+  - MS3 is PDN_UART;
+  - RESET is PDN, unconnected as BTT ships it;
+  - SLEEP is CLK.
+- So the carrier's grounded SLEEP and floating RESET are right for a
+  standalone TMC2209, and its third switch, off, leaves PDN_UART low.
+- SpreadCycle is chosen by a resistor on the driver board, not a pin.
+- The sense resistors are 0.11 Ω. I = Vref / √2 holds for BTT's boards only.
+- The firmware's arithmetic checks out:
+  - 25 microsteps per 64 half-steps, rounding down either way;
+  - the gap: `stepMs` × 64/25 ms;
+  - the bandgap: 1.1 V × 1023 × 1000 over the average reading.
+- The 10 µs pulse and 1 ms DIR setup are well above the TMC2209's minimums.
+  No code change.
+
+**Hypotheses, not proven:**
+- The spare driver's DIR input or logic is damaged. This fits everything
+  seen, but no pin voltage was measured.
+- A pin setting on the carrier: none of the fixed pins can explain a fault
+  that depends on DIR's level.
+- The unbranded drivers may not share BTT's pin order or resistors.
+- The "200 ms for StealthChop to tune" in the firmware is a reasonable wait,
+  not proof that it tuned.
+
+**My seating rule in this file was wrong as a rule.** The pins are matched by
+continuity, VM to the VIN hole, before power. The commissioning steps are in
+[focuser.md](../../focuser.md#the-nema-17-drive-not-yet-commissioned); they
+replace the list that stood here.

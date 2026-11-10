@@ -2,12 +2,108 @@
 
 [README](../README.md) · [All docs](README.md) · Guides: [First night](first-night.md) · [Setup](setup.md) · [Imaging](imaging.md) · [Calibration](calibration.md) · [Focus](focus.md) · Science: [Discovery](discovery.md) · [Results](results.md) · [Validation](validation.md) · [Data](data.md) · Developers: [Contributing](../CONTRIBUTING.md) · [Agents](agents/README.md)
 
-A 28BYJ-48 stepper motor on the focuser's shaft, driven by an Arduino Nano
-on a USB lead. `./focuser.py` loads the Nano and turns the motor;
-`./focus.py --motor` focuses with it, measuring the stars as it goes, with
-nobody's hand on the telescope.
+A stepper motor on the focuser's shaft, driven by an Arduino Nano on a USB
+lead. `./focuser.py` loads the Nano and turns the motor; `./focus.py
+--motor` focuses with it, measuring the stars as it goes, with nobody's hand
+on the telescope.
 
-## Parts
+**Status, 10 November 2026: being changed over and not usable.** The first
+drive, a 28BYJ-48 on a ULN2003 board (Parts and Wiring below), couldn't lift
+the drawtube with the 183M's train on. The firmware in `firmware/focuser/`
+now drives a NEMA 17 on a TMC2209 instead, and **no longer drives the
+28BYJ-48**. The NEMA 17 drive is **not commissioned**. On the bench it has
+turned in one direction only, on a driver that is probably faulty
+([the bench session](nights/2026-11-09/nema-bench.md)). Until it is
+commissioned, focus is by hand (`./focus.py`, spoken numbers).
+
+## The NEMA 17 drive (not yet commissioned)
+
+| Part | |
+|---|---|
+| Motor | 17HS4401 NEMA 17, 1.7 A, 4-wire lead with a black 4-pin plug |
+| Carrier | Black A4988/DRV8825-style screw-terminal board: green VIN/GND terminal, 3 microstep switches, EN/STEP/DIR header, its own logic supply |
+| Driver | BigTreeTech TMC2209 V1.3 (two on order, 9 November 2026). The two unbranded TMC2209s: one dead, one steps only with DIR high |
+| Supply | 12 V 2 A, + to VIN and − to GND on the green terminal |
+
+| Nano | Carrier |
+|---|---|
+| D8 | EN |
+| D9 | STEP |
+| D10 | DIR |
+| GND | GND on the green terminal, under the same screw as the 12 V − |
+
+All three microstep switches are off. On a TMC2209 that leaves MS1 and MS2
+low, which is 1/8 steps (1600 a turn).
+
+**How the BTT driver's pins meet the carrier's socket.** From BTT's
+schematic and manual for the TMC2209 V1.2
+([github.com/bigtreetech/BIGTREETECH-TMC2209-V1.2](https://github.com/bigtreetech/BIGTREETECH-TMC2209-V1.2)).
+The V1.3 is taken to be the same; check that against its printed labels when
+it comes. The socket positions are the A4988's.
+
+| Pos. | A4988 (carrier) | BTT TMC2209 | What the carrier does there |
+|---|---|---|---|
+| L1 | ENABLE | EN | Nano D8 |
+| L2 | MS1 | MS1 | switch 1, off |
+| L3 | MS2 | MS2 | switch 2, off |
+| L4 | MS3 | PDN_UART (20 kΩ pull-down on the driver) | switch 3, off |
+| L5 | RESET | PDN (unconnected unless rewired for UART) | floating |
+| L6 | SLEEP | CLK (low: the internal clock) | grounded |
+| L7 | STEP | STEP | Nano D9 |
+| L8 | DIR | DIR | Nano D10 |
+| R1 | VMOT | VM | 12 V |
+| R2 | GND | GND | GND |
+| R3–R6 | 2B 2A 1A 1B | A2 A1 B1 B2 | the motor plug |
+| R7 | VDD | VCC_IO | the carrier's logic supply |
+| R8 | GND | GND | GND |
+
+So the carrier suits a standalone TMC2209: CLK is grounded, PDN is left
+alone, and PDN_UART is low. StealthChop versus SpreadCycle is set by a
+resistor on the BTT board itself (StealthChop as it comes), not by a pin. No
+fixed setting can make the motor turn one way and not the other. The
+one-direction fault in the bench session is still unexplained: the driver is
+the likeliest cause, but it isn't proven.
+
+**Seating it: match the pins, not the board's ends.** EN (L1) sits opposite
+VM (R1), and DIR (L8) opposite GND (R8). "DIR end towards VIN" was only how
+it looked on this board, and the first driver was killed by seating it
+backwards. Before the first power-up:
+1. 12 V out, driver out.
+2. Find which socket hole is joined to the green terminal's VIN screw: the
+   meter on continuity, one probe on the screw.
+3. Find the holes joined to GND the same way. The Nano can find the GND holes
+   too: `./focuser.py vref` with A2 on the hole reads about 0 V.
+4. Seat the driver with its printed VM pin in the VIN hole and its GND pin
+   beside it in a GND hole.
+
+**The current.** BTT gives I(RMS) = Vref / √2 (× 0.71) with its 0.11 Ω
+sense resistors. 1.1 V is about 0.78 A RMS, and BTT's factory setting of
+1.2 ± 0.1 V is about 0.85 A. Turning the pot clockwise lowers it. The formula
+holds only for BTT's resistors. The unbranded drivers' resistors are
+unknown, so their volts weren't amps. A meter on the pot cross-checks
+`./focuser.py vref` (A2 against the 1.1 V bandgap).
+
+**Commissioning, when the BTT drivers and the meter come:**
+1. Seat one by the pins, as above, with 12 V out.
+2. 12 V in, motor plugged in. Read the pot with the meter and with `./focuser.py vref`
+   at once, and note both. Leave it near its factory 1.2 V unless it is
+   outside 1.0 to 1.3 V.
+3. Unloaded, on the bench: say what to watch, then `./focuser.py test`
+   (a quarter turn out and back, slowly). Check both directions turn. Feel the
+   driver and motor after a few runs: warm is fine, too hot to touch is not.
+4. Never plug or unplug the driver or the motor with 12 V in.
+5. If one direction fails again, stop: don't try a third driver. Measure DIR
+   high and low at the driver's own pin with the meter while the motor is
+   asked to move, and VCC_IO (R7) and VM. The same symptom on a BTT driver
+   would point at something shared, not the drivers.
+6. Only then fit it to the focuser on the reinforced bracket. Check it
+   lifts the camera and filter wheel outward and lets them down, see whether
+   the drawtube slips with the driver off between moves (`--hold` if it
+   does), and measure the gear slack (`./focus.py --measure-backlash`). The
+   firmware counts the steps it sends, not where the shaft is, so a stall
+   under load goes unnoticed until the stars say so.
+
+## Parts (the 28BYJ-48 drive, until 9 November 2026)
 
 | Part | Notes |
 |---|---|
@@ -30,7 +126,7 @@ The bracket itself is held by the focuser's own centre thumbscrew. That is
 also the screw that sets how stiffly the drawtube moves, so it has to hold
 the bracket without locking the tube.
 
-## Wiring
+## Wiring (the 28BYJ-48 drive)
 
 The motor's white plug fits the driver board one way round. The rest:
 
@@ -470,11 +566,12 @@ instead of the ULN2003, and `focuser.py` and `focus.py` counting full steps
 × microsteps instead of 28BYJ-48 half-steps, each with its test, before the
 first use on the sky.
 
-**9 November 2026, wiring the drive:** the red carrier came. It has no
+**9 November 2026, wiring the drive:** the black carrier came. It has no
 EN mark at the socket, only a separate EN jumper header, and seating the
 TMC2209 with its VM pin towards the VIN terminal was wrong: that way round,
-with 12 V on, the motor did not hold. The right way on this board is the
-driver's DIR end towards the VIN terminal. The 12 V goes into
+with 12 V on, the motor did not hold. It went in the right way with its DIR
+end towards the VIN terminal; the safe rule is to match the pins, in
+"Seating it" above. The 12 V goes into
 the green terminal (+ to VIN), and the Nano's GND under the same GND screw:
 there is no GND by STEP and DIR, nor a 5 V pin, so the board makes its own.
 The motor lead's black plug goes straight on the 1A/1B/2A/2B pins. With no

@@ -1,4 +1,4 @@
-// The focuser's motor: a 17HS4401 NEMA 17 on a TMC2209 driver (red carrier
+// The focuser's motor: a 17HS4401 NEMA 17 on a TMC2209 driver (black carrier
 // board, 12 V, microstep switches all off: 1/8, 1600 microsteps a turn),
 // EN on D8, STEP on D9, DIR on D10 of an Arduino Nano. focuser.py loads
 // this and talks to it. (Until 9 November 2026: a 28BYJ-48 on a ULN2003
