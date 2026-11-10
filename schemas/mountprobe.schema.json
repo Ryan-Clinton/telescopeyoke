@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/mountprobe.schema.json",
+  "title": "Mount probe",
+  "description": "data of: mountprobe.py --json. Stage 1 of docs/mount-probe.md: with no pulses and no mount moves, the guide camera's star and the main camera's plate solves tracked together, as pointing in arcsec north and west; each camera's drift, the two tracks' parting (flex) and each track's scatter. With --dry-run, what it would do.",
+  "type": "object",
+  "anyOf": [
+    {"required": ["stage", "would", "ra", "dec", "side", "calibration_usable"]},
+    {"required": ["stage", "at", "ra", "dec", "side", "minutes", "guide_points", "main_points", "guide", "main", "parting", "flex_threshold", "problems", "reading", "raw"]}
+  ],
+  "properties": {
+    "stage": {"const": 1},
+    "would": {"type": "string"},
+    "calibration_usable": {"type": "boolean", "description": "A kept guider calibration usable at this Dec and side: needed to read the guide star's moves as north and west."},
+    "at": {"type": "string", "description": "YYYYMMDD-HHMMSS local, also in the raw file's name."},
+    "ra": {"type": "number", "description": "Degrees, as the handset believed at the start."},
+    "dec": {"type": "number"},
+    "side": {"enum": ["east", "west"]},
+    "minutes": {"type": "number"},
+    "guide_points": {"type": "integer"},
+    "main_points": {"type": "integer"},
+    "guide": {"$ref": "#/$defs/track"},
+    "main": {"$ref": "#/$defs/track"},
+    "parting": {"type": ["object", "null"], "description": "Arcsec the guide track's line parts from the main camera's over the run, north and west.",
+                "properties": {"north": {"type": "number"}, "west": {"type": "number"}}},
+    "flex_threshold": {"type": "number", "description": "Arcsec (one guide pixel) a parting must pass to count as flex."},
+    "problems": {"type": "array", "items": {"type": "string"}},
+    "reading": {"type": "array", "items": {"type": "string"}},
+    "raw": {"type": "string", "description": "The JSON file with both tracks, (seconds, north, west) each point."}
+  },
+  "$defs": {"track": {"type": ["object", "null"],
+    "properties": {"north": {"$ref": "#/$defs/axis"}, "west": {"$ref": "#/$defs/axis"}}},
+    "axis": {"type": "object", "required": ["drift_per_min", "scatter"],
+      "properties": {"drift_per_min": {"type": "number", "description": "Arcsec a minute."},
+                     "scatter": {"type": "number", "description": "Arcsec about the straight line."}}}}
+}

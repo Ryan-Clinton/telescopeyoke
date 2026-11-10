@@ -1,6 +1,6 @@
 # Mount probe: the slack and flex across the sky (plan)
 
-Status: a plan, not built. Written 10 November 2026 after a night when the
+Status: stage 1 built (`./mountprobe.py`, not yet run on the sky); stages 2 and 3 a plan. Written 10 November 2026 after a night when the
 guider could not hold Dec on the Soul Nebula; revised the same night after
 review: built and run in three stages, the first passive.
 
