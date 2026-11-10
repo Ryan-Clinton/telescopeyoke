@@ -170,6 +170,31 @@ file is the full sequence, with the evidence and the open questions.
 - The "200 ms for StealthChop to tune" in the firmware is a reasonable wait,
   not proof that it tuned.
 
+**Neither TMC2209 is proven dead.**
+- Driver 1 held the motor but never stepped.
+- The spare steps only with DIR high.
+
+They sat in the same socket, with the same switches and wiring, and behaved
+differently. That points at the drivers, not the carrier. It still isn't
+proof, because:
+- the switch holes (MS1, MS2, MS3) haven't been checked for what they
+  connect to with the switches off;
+- nobody has asked a driver what it sees on its own pins.
+
+**What would settle it:**
+- **The switch holes, checked with the Nano.** 12 V out, driver out, Nano GND
+  on the carrier GND, then `./focuser.py vref` with the A2 lead in each hole:
+  - about 0 V is a hard ground;
+  - an in-between reading is a resistor to ground;
+  - "nothing on A2" is nothing there.
+- **Ask the chip itself.** A TMC2209 reports the level it sees on each of its
+  pins (DIR, STEP, EN, MS1, MS2, PDN_UART, SPREAD) through its own UART line
+  (PDN_UART, the MS3 position). Reaching that pin means the driver comes out
+  of the socket onto leads, so this waits for a go.
+
+An A4988 working on the same Nano and motor wouldn't prove the TMC2209 at
+fault: it bypasses the carrier's switch holes.
+
 **My seating rule in this file was wrong as a rule.** The pins are matched by
 continuity, VM to the VIN hole, before power. The commissioning steps are in
 [focuser.md](../../focuser.md#the-nema-17-drive-not-yet-commissioned); they
