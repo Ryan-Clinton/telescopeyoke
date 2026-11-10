@@ -497,6 +497,22 @@ class AltairCamera:
                 raise CameraError(f"the cooler was set to {tenths / 10:g} °C and says its target is "
                                   f"{held / 10:g} °C")
 
+    def obeying(self, degrees):
+        """Raises when the sensor is colder than the cooler was ever set: it
+        is not obeying its set point, and closing the camera is the one thing
+        shown to stop it. 10 November 2026: twice the 12 V lead fell out and
+        went back in and the cooler ran flat out (-21 °C at 18:30; -17.6 °C
+        at 21:25 with its set point at +7.4 °C), and a camera opened again at
+        once went from -6 to -19.1 °C in 3 minutes with its set point at
+        -5 °C. Checked by ramp() and before every exposure."""
+        if degrees is None or self.target is None or not self.flags & TEC:
+            return
+        if degrees < min(self.level, TEC_LOWEST) - RAMP_LEAD_C:
+            self.disobeying = True      # warm_up() then turns the cooler off at once: set points do nothing
+            raise CameraError(f"the sensor is at {degrees:.1f} °C with the cooler set to {self.level:g} °C: the "
+                              "cooler is not obeying its set point, so the camera is closed and the cooler stops. "
+                              "Leave it closed 10 minutes before opening it again")
+
     def ramp(self, clock=time.monotonic):
         """One step further down towards the target when RAMP_EVERY_S has
         passed since the last, but only while the sensor follows: a sensor
@@ -511,21 +527,20 @@ class AltairCamera:
         if self.target is None or not self.flags & TEC:
             return True
         degrees = self.temperature()
-        if degrees is not None and degrees < min(self.level, TEC_LOWEST) - RAMP_LEAD_C:
-            # Colder than it was ever set: the cooler is not obeying its set
-            # point, and closing the camera is the one thing shown to stop
-            # it, so the camera is closed at once. 10 November 2026: twice
-            # the 12 V lead fell out and went back in and the cooler ran
-            # flat out (-21 °C at 18:30; -17.6 °C at 21:25 with its set
-            # point at +7.4 °C), and a camera opened again at once went from
-            # -6 to -19.1 °C in 3 minutes with its set point at -5 °C.
-            self.disobeying = True      # warm_up() then turns the cooler off at once: set points do nothing
-            raise CameraError(f"the sensor is at {degrees:.1f} °C with the cooler set to {self.level:g} °C: the "
-                              "cooler is not obeying its set point, so the camera is closed and the cooler stops. "
-                              "Leave it closed 10 minutes before opening it again")
+        self.obeying(degrees)
         if degrees is not None and degrees > self.level + RAMP_LEAD_C:
             if getattr(self, "held_since", None) is None:
                 self.held_since = clock()
+            if self.cooler_unpowered(clock):
+                # The 12 V lead is out. The camera is closed now, so that when
+                # the lead goes back in the cooler is not left on to run away
+                # (10 November 2026, twice); cooling starts again only when a
+                # person opens it again (./keeper.py start).
+                self.disobeying = True
+                raise CameraError(f"the cooler has drawn nothing for {NO_POWER_S / 60:.0f} min with the sensor at "
+                                  f"{degrees:.1f} °C: its 12 V lead is out. The camera is closed so the cooler "
+                                  "cannot run away when the lead goes back in. Plug it in, wait 10 minutes, "
+                                  "then ./keeper.py start")
             level = degrees - RAMP_STEP_C
             try:
                 self._set_point(level)
@@ -723,6 +738,8 @@ class AltairCamera:
 
     def _expose(self, seconds, wait=None, set_time=True):
         lib, handle = self.lib, self.handle
+        if getattr(self, "target", None) is not None:
+            self.obeying(self.temperature())    # a camera opened without the keeper is checked too
         if set_time:        # False only for camera_probe.order_test: the time is set before the speed there
             handle.put_ExpoTime(max(1, round(seconds * 1e6)))
         handle.put_ExpoAGain(self.gain)
