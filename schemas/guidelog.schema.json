@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/guidelog.schema.json",
+  "title": "Guide log",
+  "description": "data of: guidelog.py --json. Each guiding run of a night's guide log judged from its frames: steady offset against scatter, how much of the error carries over from frame to frame, and what the pulses did. Read-only; nothing moves.",
+  "type": "object",
+  "required": ["date", "runs"],
+  "properties": {
+    "date": {"type": "string", "description": "YYYYMMDD of the guide log read."},
+    "runs": {"type": "array", "items": {
+      "type": "object",
+      "required": ["run", "start", "minutes", "frames", "lost", "snr", "total_rms", "scatter_rms", "ra", "dec", "reversals", "slack_share", "reading"],
+      "properties": {
+        "run": {"type": "string"},
+        "start": {"type": "string", "description": "HH:MM local."},
+        "minutes": {"type": "number"},
+        "frames": {"type": "integer", "description": "Frames guided with an error measured."},
+        "lost": {"type": "integer", "description": "Frames in another state (lost, relocking, paused)."},
+        "snr": {"type": "number", "description": "Median guide star SNR."},
+        "total_rms": {"type": "number", "description": "arcsec, offsets included."},
+        "scatter_rms": {"type": "number", "description": "arcsec, about the mean: what blurs the stars."},
+        "ra": {"$ref": "#/$defs/axis"},
+        "dec": {"$ref": "#/$defs/axis"},
+        "reversals": {"type": "integer"},
+        "slack_share": {"type": ["array", "null"], "items": {"type": "number"}, "description": "Least and most share of the Dec slack taken up."},
+        "reading": {"type": "array", "items": {"type": "string"}}
+      }
+    }}
+  },
+  "$defs": {"axis": {"type": "object",
+    "required": ["offset", "scatter", "carries_over", "pulsed_share", "before_pulse", "after_pulse"],
+    "properties": {
+      "offset": {"type": "number", "description": "Mean error, arcsec."},
+      "scatter": {"type": "number", "description": "SD of the error, arcsec."},
+      "carries_over": {"type": "number", "description": "Lag-1 correlation of the error: near 0 noise, near 1 a slow drift."},
+      "pulsed_share": {"type": "number"},
+      "before_pulse": {"type": ["number", "null"]},
+      "after_pulse": {"type": ["number", "null"]}
+    }}}
+}
