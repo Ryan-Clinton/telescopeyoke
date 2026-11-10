@@ -78,7 +78,12 @@ class Watch:
         if quiet > GIVE_UP:
             self.ended = True
             return [f"{name}: no frame for {minutes(quiet)}; the watch is ending"]
-        if quiet > STALLED:
+        # A frame is logged once checked, a frame behind the camera: with
+        # long frames (120 s, 10 Nov 2026) the gap between two logged frames
+        # alone is over STALLED, so the run's own pace is allowed twice over.
+        taken = [f["taken"] for f in log[-5:]]
+        pace = max((b - a for a, b in zip(taken, taken[1:])), default=0.0)
+        if quiet > STALLED + 2 * pace:
             self.once("stalled", f"{name}: no frame for {minutes(quiet)}: the camera or the run has stopped", lines)
             return lines
         self.clear("stalled", f"{name}: frames coming again", lines)
