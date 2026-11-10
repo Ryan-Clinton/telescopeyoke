@@ -157,6 +157,9 @@ def serve(cam, say=print):
             with calls:
                 ramped = cam.ramp()
                 degrees = cam.temperature()
+                # Kept so the cooler's draw in normal running is on record
+                # (does it ever read 0 while holding? the power-loss check assumes not).
+                status["tec_power"] = getattr(cam, "tec_power", lambda: None)()
             target = getattr(cam, "target", None)
             ready = ramped and degrees is not None and target is not None \
                 and abs(degrees - target) <= altair.TEC_READY

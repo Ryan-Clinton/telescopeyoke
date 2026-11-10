@@ -266,9 +266,10 @@ def latch_fault(reason, clock=time.time):
     proof it has cleared, so the next cooling is watched by obeying()."""
     import records
     try:
-        records.write(config.DATA / FAULT_FILE, {"reason": reason, "at": clock()})
+        records.write(config.DATA / FAULT_FILE, {"reason": reason, "at": clock(), "cleared_at": None})
+        return True
     except OSError:
-        pass
+        return False        # said in the fail-safe's error: never taken as kept
 
 
 def fault_latched():
@@ -286,7 +287,11 @@ def clear_fault(clock=time.time):
     if waited < FAULT_REST_S:
         raise CameraError(f"the cooler failed safe {waited / 60:.0f} min ago ({fault.get('reason')}); leave the "
                           f"camera closed {FAULT_REST_S / 60:.0f} minutes in all, with its 12 V lead secure")
-    (config.DATA / FAULT_FILE).unlink(missing_ok=True)
+    # Kept, marked cleared: cool() may start again, and the fault goes only
+    # once the cooler has held its target (ramp()), so a reopening that
+    # fails leaves it in place.
+    import records
+    records.write(config.DATA / FAULT_FILE, {**fault, "cleared_at": clock()})
     return fault
 
 
@@ -495,7 +500,7 @@ class AltairCamera:
         if not self.flags & TEC:
             return False
         fault = fault_latched()
-        if fault:
+        if fault and not fault.get("cleared_at"):
             # Every command that cools the camera comes through here, so none
             # can start the cooler again after a fault until a person clears it.
             raise CameraError(f"the cooler failed safe ({fault.get('reason')}): not cooled again until "
@@ -557,14 +562,40 @@ class AltairCamera:
             self.fail_safe(f"the sensor is at {degrees:.1f} °C with the cooler set to {self.level:g} °C: the "
                            "cooler is not obeying its set point")
 
+    def target_held(self):
+        """Raises when the cooler's own target is no longer the one we set.
+        The library says a target at or below -273 °C means the model's
+        default, and a cooler whose power was cut may come back on that:
+        a changed target is the trace of an interruption however short,
+        where polling the cooler's draw can miss one of a few seconds."""
+        readback = getattr(self.lib, "ALTAIRCAM_OPTION_TECTARGET", None)
+        if readback is None or self.target is None or not self.flags & TEC:
+            return
+        try:
+            held = self.handle.get_Option(readback)
+        except self.lib.HRESULTException:
+            return
+        if held != int(round(self.level * 10)):
+            self.fail_safe(f"the cooler's target is {held / 10:g} °C, not the {self.level:g} °C it was set to: "
+                           "it changed by itself, as after its power was cut")
+
     def fail_safe(self, why):
-        """Turn the cooler off at once (warm_up() skips its steps), keep the
-        fault so nothing cools the camera again until a person clears it,
-        and raise, which closes the camera."""
+        """Turn the cooler off here and now, whatever the caller does with
+        the error; keep the fault so nothing cools the camera again until a
+        person clears it; and raise, which closes the camera."""
         self.disobeying = True
-        latch_fault(why)
-        raise CameraError(f"{why}, so the camera is closed and the cooler stops. Secure the 12 V lead, leave "
-                          f"the camera closed {FAULT_REST_S / 60:.0f} minutes, then ./keeper.py start --after-fault")
+        option = getattr(self.lib, "ALTAIRCAM_OPTION_TEC", None)
+        off = "the cooler is switched off"
+        try:
+            if option is not None:
+                self.handle.put_Option(option, 0)
+        except Exception as problem:            # still latched and raised: the close turns it off
+            off = f"switching the cooler off failed ({problem}); closing the camera will"
+        kept = latch_fault(why)
+        raise CameraError(f"{why}: {off} and the camera closed. Secure the 12 V lead, leave the camera closed "
+                          f"{FAULT_REST_S / 60:.0f} minutes, then ./keeper.py start --after-fault"
+                          + ("" if kept else ". THE FAULT COULD NOT BE WRITTEN DOWN: do not start the keeper "
+                             "again tonight"))
 
     def ramp(self, clock=time.monotonic):
         """One step further down towards the target when RAMP_EVERY_S has
@@ -581,6 +612,7 @@ class AltairCamera:
             return True
         degrees = self.temperature()
         self.obeying(degrees)
+        self.target_held()
         # No reading: tolerated for a moment, never for long with the cooler on.
         if degrees is None:
             self.unread_since = getattr(self, "unread_since", None) or clock()
@@ -626,6 +658,9 @@ class AltairCamera:
                 raise CameraError(f"the cooler would not take its next step to {level:g} °C: {_reason(problem)}")
             self.level, self._stepped = level, clock()
             self.held_since = None
+        if (self.level <= self.target and degrees is not None and abs(degrees - self.target) <= TEC_READY
+                and (fault_latched() or {}).get("cleared_at")):
+            (config.DATA / FAULT_FILE).unlink(missing_ok=True)    # recovered: held its target after a fault
         return self.level <= self.target
 
     def cooler_unpowered(self, clock=time.monotonic):
@@ -826,12 +861,20 @@ class AltairCamera:
         self.early_frame = None  # the last of them, kept to be looked at, never returned
         self.back_s = None      # seconds from the trigger to the frame kept
         while True:
+            left = max(0, give_up - time.perf_counter())
             with self._changed:
                 arrived = self._changed.wait_for(lambda: self._ready or self._failure,
-                                                 timeout=max(0, give_up - time.perf_counter()))
+                                                 timeout=min(left, COOL_POLL_S))
                 failure = self._failure
                 if arrived and not failure:
                     self._ready -= 1      # one frame is there to be pulled
+            if not arrived and not failure and left > COOL_POLL_S:
+                # The cooler is watched through the exposure, from this same
+                # thread (no second caller into the library): a 300 s frame
+                # held the keeper's checks off for its whole length.
+                if getattr(self, "target", None) is not None:
+                    self.ramp()
+                continue
             if failure or not arrived:
                 break
             # Is it ours? No exposure can be back before its shutter has
