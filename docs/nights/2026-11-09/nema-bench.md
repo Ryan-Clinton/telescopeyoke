@@ -294,6 +294,23 @@ as the cause of the one-direction fault. What is left is the spare driver
 itself, or DIR as it arrives at its pin under power, which the meter or the
 chip's own report (IOIN, over UART) would show.
 
+**The A4988 in the socket, 10 November 2026.** It was seated by the pins
+(VMOT in the hole marked VIN), with switches 1 and 2 on and 3 off for 1/8.
+RESET and SLEEP were joined by a 10 kΩ resistor's leg, with the Nano's 5 V
+held to the other leg by hand. Its sense resistors are R100 (0.1 Ω, so
+I = Vref / 0.8).
+
+| Run | Result |
+|---|---|
+| RESET and SLEEP joined, no 5 V | nothing |
+| with 5 V, switches off | a crunchy hum both ways, no turn |
+| with 5 V, switches 1 and 2 on | a clean hum both ways, no turn |
+| dial raised from 0.31 V to 0.49 V (its end stop, about 0.61 A), twice | nothing |
+
+The hums show it woke at times, but it never turned either way. The 5 V
+held by hand is too unreliable a contact to read anything into the last two
+runs. Inconclusive: it adds nothing about the spare.
+
 **My seating rule in this file was wrong as a rule.** The pins are matched by
 continuity, VM to the VIN hole, before power. The commissioning steps are in
 [focuser.md](../../focuser.md#the-nema-17-drive-not-yet-commissioned); they
