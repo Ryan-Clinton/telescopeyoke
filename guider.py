@@ -1386,9 +1386,10 @@ class Supervisor:
     fault once before stopping guided imaging. It never lets a guided run
     carry on unguided: every way it gives up is a Fault."""
 
-    def __init__(self, exposure=2.0, say=print, popen=None, site=None):
+    def __init__(self, exposure=2.0, say=print, popen=None, site=None, dec_one_way=None):
         import subprocess
         self.exposure, self.say = exposure, say
+        self.dec_one_way = dec_one_way      # "north" or "south": Dec pulsed only that way (no slack to cross)
         self.popen = popen or subprocess.Popen
         self.site = site
         self.run = self.pid = self.pid_start = None
@@ -1437,7 +1438,8 @@ class Supervisor:
         RUN_LOG.parent.mkdir(parents=True, exist_ok=True)
         log = RUN_LOG.open("a", encoding="utf-8")
         proc = self.popen([sys.executable, str(config.ROOT / "guidecam.py"), "guide",
-                           "--exposure", f"{self.exposure:g}"],
+                           "--exposure", f"{self.exposure:g}"]
+                          + (["--dec-one-way", self.dec_one_way] if self.dec_one_way else []),
                           stdout=log, stderr=log, start_new_session=True)
         self.launched, self.pid = True, proc.pid
         self.say(f"  guide: guider started (process {proc.pid}); calibrating or checking its calibration")

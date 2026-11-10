@@ -978,6 +978,9 @@ def main():
                          "the stars come back, and ends at dawn or when the target nears the mount's limit")
     ap.add_argument("--assist", action="store_true",
                     help="trim the Dec motor's creep from the drift the frames show")
+    ap.add_argument("--dec-one-way", choices=("north", "south"),
+                    help="with --guide: pulse Dec only this way, against the drift, so its slack is never "
+                         "crossed (10 November 2026: both ways, Dec swung 10\" RMS and trailed the stars)")
     ap.add_argument("--guide", action="store_true",
                     help="autoguide through the guide camera's ST4 lead (docs/autoguiding.md): starts the guider "
                          "or uses one already guiding, pauses it around every GoTo, keeps the Dec creep off, and "
@@ -1239,7 +1242,8 @@ def run(args):
     if getattr(args, "guide", False):
         import guider
         site = (config.load() if config.FILE.exists() else config.example())["site"]
-        args.supervisor = guider.Supervisor(site=site, say=lambda line: print(line, flush=True))
+        args.supervisor = guider.Supervisor(site=site, say=lambda line: print(line, flush=True),
+                                            dec_one_way=getattr(args, "dec_one_way", None))
     try:
         if getattr(args, "ladder_lengths", None):
             return run_ladder(args)
