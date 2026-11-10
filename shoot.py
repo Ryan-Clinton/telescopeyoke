@@ -327,6 +327,24 @@ def tell(order, run=None):
     return {"order": order, "run": run, "note": "The run acts on it after its next frame."}
 
 
+STARTED = time.time()   # when this run began: an order given after it is for this run
+
+
+def clear_old_orders(since=None):
+    """Throw away an order left before this run began. One given since (a
+    stop sent while the guider was still calibrating, 10 Nov 2026) is kept
+    for the first frame to act on: wiping it lost that stop."""
+    since = STARTED if since is None else since
+    if not ORDERS.exists():
+        return
+    try:
+        at = json.loads(ORDERS.read_text(encoding="utf-8")).get("at")
+    except (ValueError, AttributeError):
+        at = None
+    if at is None or at < since:
+        ORDERS.unlink(missing_ok=True)
+
+
 def order(name=None, now=None):
     """The order left for this run, if any; it is taken, so it acts once. An
     order named for another run is left for it, and a stale one thrown away."""
@@ -1470,7 +1488,7 @@ def image(args, session, exposure, moving, holding, tracker):
         args.dither = args.dither or 10 ** 9      # a dither before the first frame, then none unless asked
         since_dither = args.dither
     rng = random.Random()
-    ORDERS.unlink(missing_ok=True)   # an order left for an earlier run is not for this one
+    clear_old_orders()   # an order left for an earlier run is not for this one
     told = {"stop": False, "recentre": False, "cloud": False, "cloudy": False}
     plain_check = [None]    # after a plain GoTo back: how many frames were kept before it
     plain_failed = [False]  # it missed: the next drift is centred with a plate solve
