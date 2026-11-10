@@ -195,6 +195,19 @@ proof, because:
 An A4988 working on the same Nano and motor wouldn't prove the TMC2209 at
 fault: it bypasses the carrier's switch holes.
 
+**The switch holes, checked 10 November 2026** (the full table is in
+[focuser.md](../../focuser.md#the-nema-17-drive-not-yet-commissioned)):
+- EN, STEP and DIR reached their holes as the Nano set them.
+- MS1 was held low.
+- MS2, MS3, RESET and SLEEP were not low.
+
+So the 9 November note that the carrier grounds SLEEP was wrong.
+
+An unbranded TMC2209 with no pull-down of its own would see its clock pin
+floating here. That could make it unreliable, but no reason was found why it
+would fail in only one direction. The A4988's "sleep" is better explained by
+RESET being left floating.
+
 **My seating rule in this file was wrong as a rule.** The pins are matched by
 continuity, VM to the VIN hole, before power. The commissioning steps are in
 [focuser.md](../../focuser.md#the-nema-17-drive-not-yet-commissioned); they

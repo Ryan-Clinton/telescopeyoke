@@ -43,22 +43,34 @@ it comes. The socket positions are the A4988's.
 
 | Pos. | A4988 (carrier) | BTT TMC2209 | What the carrier does there |
 |---|---|---|---|
-| L1 | ENABLE | EN | Nano D8 |
-| L2 | MS1 | MS1 | switch 1, off |
-| L3 | MS2 | MS2 | switch 2, off |
-| L4 | MS3 | PDN_UART (20 kΩ pull-down on the driver) | switch 3, off |
-| L5 | RESET | PDN (unconnected unless rewired for UART) | floating |
-| L6 | SLEEP | CLK (low: the internal clock) | grounded |
-| L7 | STEP | STEP | Nano D9 |
-| L8 | DIR | DIR | Nano D10 |
+| L1 | ENABLE | EN | Nano D8 (read high, as the Nano holds it, 10 Nov) |
+| L2 | MS1 | MS1 | switch 1, off: read 0 V, held low |
+| L3 | MS2 | MS2 | switch 2, off: read not low (floating or high) |
+| L4 | MS3 | PDN_UART (20 kΩ pull-down on the driver) | switch 3, off: read not low |
+| L5 | RESET | PDN (unconnected unless rewired for UART) | read not low |
+| L6 | SLEEP | CLK (low: the internal clock; BTT has a 20 kΩ pull-down) | read not low: **not grounded**, despite the 9 November note |
+| L7 | STEP | STEP | Nano D9 (read low) |
+| L8 | DIR | DIR | Nano D10 (read low) |
 | R1 | VMOT | VM | 12 V |
 | R2 | GND | GND | GND |
 | R3–R6 | 2B 2A 1A 1B | A2 A1 B1 B2 | the motor plug |
 | R7 | VDD | VCC_IO | the carrier's logic supply |
 | R8 | GND | GND | GND |
 
-So the carrier suits a standalone TMC2209: CLK is grounded, PDN is left
-alone, and PDN_UART is low. StealthChop versus SpreadCycle is set by a
+The readings in the last column were taken on 10 November 2026 with
+`./focuser.py vref`: 12 V out, driver out, the A2 lead in each CN3 hole,
+starting across from the hole marked VIN (CN2). EN, STEP and DIR read just
+as the Nano sets them after a restart (high, low, low), which confirms the
+order of the row. "Not low" can mean floating or held high; the Nano can't
+tell them apart. Three things are not as expected:
+- the three switches, all off, don't do the same thing: MS1 is low, MS2 and
+  MS3 are not;
+- the SLEEP hole, the TMC2209's CLK, is not grounded;
+- so on the BTT driver, CLK is held low only by its own pull-down, and MS2
+  and PDN_UART may be high (1/4 steps, no current cut at standstill).
+
+None of these depends on DIR. With BTT's own pull-downs, the carrier still
+suits a standalone TMC2209. StealthChop versus SpreadCycle is set by a
 resistor on the BTT board itself (StealthChop as it comes), not by a pin. No
 fixed setting can make the motor turn one way and not the other. The
 one-direction fault in the bench session is still unexplained: the driver is
