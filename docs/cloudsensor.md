@@ -191,6 +191,12 @@ are here and being fitted.
 
 ## A network, later
 
+The network now has its own project, **cloudyoke** (10 November 2026):
+[the page](https://ryanclinton.uk/cloudyoke/) and
+[the repository](https://github.com/Ryan-Clinton/cloudyoke), with the
+specification, the reference station's parts and live airport and
+ceilometer readings. What follows is the first thinking, kept as written.
+
 Two sensors ordered means a second unit is nearly free: the idea (9
 November 2026) is to build one for a friend in the same town, then put
 more at friends' and family's houses further away, and offer the design
