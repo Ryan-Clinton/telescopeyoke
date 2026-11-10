@@ -506,6 +506,8 @@ RESET floating, so the A4988 sleeps; its pot was turned to 0.31 V. To use
 it: SLEEP and RESET bent out of the socket and fed from the Nano's 5 V, MS1
 and MS2 on for 1/8 steps. Stopped there, 9 November: next is a new
 TMC2209, its pot read with the Nano before anything is turned.
+The whole bench session, with the evidence and open questions, is in
+[nights/2026-11-09/nema-bench.md](nights/2026-11-09/nema-bench.md).
 
 
 A printable degree dial for the focus knob is `./focusdial.py --diameter MM` (default 40): a strip for the knob's rim and a disc for its end, at true size with a 50 mm check bar, saved as `web/focus-dial.svg` and served by the status page. One degree on a 40 mm knob is about the f/5 critical focus zone.
