@@ -816,37 +816,49 @@ def judged(log):
 
 
 def what_dimmed(log, last=CLOUD_STOP):
-    """what_dimmed_frames' answer, with the sky's evidence after it (satellite,
-    airports, and whether they agree)
-    (10 November 2026: the cloud data is the first thing to look at when the
-    stars go, and an airport to the west sees cloud coming)."""
-    said = what_dimmed_frames(log, last)
+    """What the last rejected frames say about why, with the sky's evidence
+    after it: one shared look (clouds.evidence) at the satellite and the
+    airports and whether they agree, kept beside the frames' figures in
+    cloud_evidence.jsonl (10 November 2026: the cloud data is the first
+    thing to look at when the stars go)."""
+    levels = dimming(log, last)
+    found = None
     try:
         import clouds
-        near = clouds.evidence_words()
-    except Exception:     # noqa: BLE001 - the message goes out without them
-        return said
-    return f"{said}. {near}"
+        found = clouds.evidence(context=None if levels is None else
+                                {"stars_pct": round(100 * levels[0]), "sky_pct": round(100 * levels[1])})
+    except Exception:     # noqa: BLE001 - the message goes out without it
+        pass
+    said = what_dimmed_frames(levels, found["satellite"] if found else None)
+    return f"{said}. {clouds.evidence_words(found)}" if found else f"{said}. No cloud data: unknown, not clear"
 
 
-def what_dimmed_frames(log, last=CLOUD_STOP):
-    """What the last rejected frames say about why, against the frames kept:
-    the stars' brightness and the sky's, in words, with what to look at.
-    The frames cannot tell high haze from dew on the mirrors (both dim the
-    stars and leave the sky no brighter); the person outside can, by
-    looking up. On 15 October 2026 it was haze, not dew."""
+def dimming(log, last=CLOUD_STOP):
+    """The last frames' stars and sky against the frames kept, as fractions,
+    or None with fewer than three kept to compare."""
     log = judged(log)
     kept = [f for f in log if f["accepted"]]
     recent = log[-last:]
     if len(kept) < 3 or not recent:
-        return "cloud?"
+        return None
     stars = float(np.median([f["flux"] for f in recent])) / max(float(np.median([f["flux"] for f in kept])), 1e-6)
     sky = float(np.median([f["background"] for f in recent])) / max(float(np.median([f["background"] for f in kept])), 1e-6)
+    return stars, sky
+
+
+def what_dimmed_frames(levels, seen):
+    """What the frames' figures (dimming()) and the satellite's verdict say
+    about why, in words, with what to look at. The frames cannot tell high
+    haze from dew on the mirrors (both dim the stars and leave the sky no
+    brighter); the person outside can, by looking up. On 15 October 2026 it
+    was haze, not dew."""
+    if levels is None:
+        return "cloud?"
+    stars, sky = levels
     levels = f"stars at {100 * stars:.0f}% of their kept brightness, sky at {100 * sky:.0f}%"
     # The satellite first: 5 November 2026, dimmed stars were put down to dew
     # and the dawn flats skipped, while Meteosat showed cloud over the site
     # all night. Dew is only mentioned when the satellite sees no cloud.
-    seen = satellite()
     if seen in ("cloud", "thin or broken cloud"):
         return f"{levels}: {seen} over the site on the satellite"
     if sky > SKY_LIT:
@@ -854,19 +866,9 @@ def what_dimmed_frames(log, last=CLOUD_STOP):
     if stars < ALL_GONE:
         return f"{levels}: thick cloud, or something in front of the telescope"
     if seen is None:
-        return f"{levels}: haze or thin cloud (no satellite picture to tell)"
+        return f"{levels}: haze or thin cloud (no satellite verdict to tell)"
     return (f"{levels}: the satellite sees clear sky over the site, so haze too thin for it, or dew "
             "on the mirrors. Look up: if the sky is clear, look down the tube for dew")
-
-
-def satellite():
-    """The Meteosat verdict over the site now (clouds.evidence, shared and
-    kept 5 minutes), or None when there is no fresh picture."""
-    try:
-        import clouds
-        return clouds.evidence()["satellite"]
-    except Exception:
-        return None
 
 
 def capture_rule(args):

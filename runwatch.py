@@ -43,13 +43,17 @@ def minutes(seconds):
     return f"{seconds / 60:.0f} min"
 
 
-def cloud_data():
-    """The sky's evidence in words for the dimmed-stars line (clouds.evidence:
-    shared, kept 5 minutes, short timeouts). 10 November 2026: the cloud
-    data is the first look when stars go."""
+RECORD_S = 1800   # a look at the sky's evidence kept beside the run's frames this often
+
+
+def cloud_data(context=None):
+    """The sky's evidence in words (clouds.evidence: shared, kept 5 minutes,
+    25 s at most), kept in cloud_evidence.jsonl with `context`, what the
+    frames show then. 10 November 2026: the cloud data is the first look
+    when stars go."""
     try:
         import clouds
-        return [clouds.evidence_words()]
+        return [clouds.evidence_words(clouds.evidence(context=context))]
     except Exception:     # noqa: BLE001 - the line goes out without them
         return ["no cloud data: the sky is unknown, not clear"]
 
@@ -61,6 +65,7 @@ class Watch:
         self.session = Path(session)
         self.said = set()
         self.ended = False
+        self.recorded = 0.0
 
     def once(self, key, line, lines):
         if key not in self.said:
@@ -114,9 +119,17 @@ class Watch:
             elif recent > before * 0.8:
                 self.clear("halved", f"{name}: keeping {recent:.0%} again", lines)
         sky = alert.sky_from_frames([f.get("flux") for f in log])
+        context = {"session": name, "frames_say": sky,
+                   "kept_pct": round(100 * sum(f["accepted"] for f in log[-RECENT:]) / len(log[-RECENT:]))}
         if sky in ("cloud", "clouded") and "dim" not in self.said:
+            self.recorded = now
             self.once("dim", f"{name}: the stars have dimmed ({'mostly gone' if sky == 'clouded' else 'thinly'}); "
-                             + "; ".join(cloud_data()) + "; ask what the sky looks like", lines)
+                             + "; ".join(cloud_data(context)) + "; ask what the sky looks like", lines)
+        elif now - self.recorded > RECORD_S:
+            # The record for checking the satellite and the airports against
+            # the telescope's own frames, clear nights included.
+            self.recorded = now
+            cloud_data(context)
         elif sky == "clear":
             self.clear("dim", f"{name}: the stars are back", lines)
         return lines

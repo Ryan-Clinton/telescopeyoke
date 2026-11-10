@@ -2,7 +2,7 @@
 name: imaging-run
 description: Start, watch or switch an imaging run of one target. Use when the person asks to image or photograph an object ("image M31", "start a run"), to switch target ("switch to M33"), or after nightly-setup for the first target.
 compatibility: telescopeyoke at the telescope with the mount and camera plugged in, focused
-allowed-tools: Bash(./ty mount goto * --dry-run) Bash(./ty shoot * --dry-run) Bash(./ty watch-run --once) Bash(./ty session *) Bash(./ty tonight *)
+allowed-tools: Bash(./ty mount goto * --dry-run) Bash(./ty shoot * --dry-run) Bash(./ty watch-run --once) Bash(./ty session *) Bash(./ty tonight *) Bash(./clouds.py) Bash(./clouds.py *)
 ---
 
 # Imaging run

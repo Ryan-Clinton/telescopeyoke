@@ -2,7 +2,7 @@
 name: troubleshoot
 description: Find out what is wrong with the telescope, mount, camera or plate solving. Use when the person says it is not moving, moved wrongly, the camera has gone, a plate solve failed, or the stars have dimmed.
 compatibility: telescopeyoke on the computer at the telescope
-allowed-tools: Bash(./doctor.py --offline) Bash(./ty mount status) Bash(./ty status *) Bash(./ty session *) Bash(lsusb) Bash(./ty watch-run --once)
+allowed-tools: Bash(./doctor.py --offline) Bash(./ty mount status) Bash(./ty status *) Bash(./ty session *) Bash(lsusb) Bash(./ty watch-run --once) Bash(./clouds.py) Bash(./clouds.py *)
 ---
 
 # Troubleshoot

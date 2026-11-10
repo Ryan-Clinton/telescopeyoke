@@ -93,6 +93,7 @@ def watch(until, every, exposure, guide_check=False):
         end += timedelta(days=1)   # 02:00 asked at 20:55 is tonight's, not this morning's
     streak = 0
     looked = None    # when the cloud data was last printed
+    stars = None
     with Camera() as cam:
         while datetime.now() < end:
             started = time.monotonic()
@@ -103,7 +104,7 @@ def watch(until, every, exposure, guide_check=False):
                   f"{np.median(mosaic):.0f}", flush=True)
             streak = streak + 1 if stars >= ENOUGH_STARS else 0
             if stars < ENOUGH_STARS and (looked is None or time.monotonic() - looked > 1800):
-                cloud_data()
+                cloud_data(stars)
                 looked = time.monotonic()
             if streak >= 2 and guide_check:
                 seen, why = guide_sees_star()
@@ -111,7 +112,7 @@ def watch(until, every, exposure, guide_check=False):
                       + ("star found, " + why if seen else f"no star ({why}): thin cloud, or the guide "
                          "camera's focus or exposure; watching on"), flush=True)
                 if not seen:
-                    cloud_data()
+                    cloud_data(stars, guide="no star")
                     streak = 0
             if streak >= 2:
                 print(f"STARS VISIBLE: frame saved as {save(mosaic, header)}", flush=True)
@@ -119,17 +120,18 @@ def watch(until, every, exposure, guide_check=False):
                 return True
             time.sleep(max(0, every - (time.monotonic() - started)))
     print("No clear sky before the deadline.", flush=True)
-    cloud_data()
+    cloud_data(stars)
     return False
 
 
-def cloud_data():
+def cloud_data(stars=None, guide=None):
     """The satellite and the airports, printed when the camera sees no stars
     (at the first such frame, every half hour after, and at the deadline):
     10 November 2026, the cloud data is the first thing to look at."""
     try:
         import clouds
-        print(f"{datetime.now():%H:%M:%S}  {clouds.evidence_words()}", flush=True)
+        context = {"skywatch_stars": stars, **({"guide": guide} if guide else {})}
+        print(f"{datetime.now():%H:%M:%S}  {clouds.evidence_words(clouds.evidence(context=context))}", flush=True)
     except Exception as problem:     # noqa: BLE001 - the watch goes on without it
         print(f"{datetime.now():%H:%M:%S}  no cloud data: {problem}", flush=True)
 

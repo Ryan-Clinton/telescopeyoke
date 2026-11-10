@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """Live cloud picture from the Meteosat weather satellite.
 
-    ./clouds.py        fetch the newest infrared image, mark the site on it,
-                       save it for the web page and print how cloudy it looks
+    ./clouds.py        the sky's evidence now, the same look the run and the
+                       watches use: the satellite's newest picture (its time,
+                       and 30 min before), the airports' reports, what they
+                       say together; the picture saved for the web page
+    ./clouds.py --history [HOURS]   the looks kept, with what the camera
+                       measured at each: for checking the satellite's verdicts
     ./clouds.py --at 2026-11-05T04:30   the picture at that time (UT), saved
                        beside it as clouds-YYYYMMDD-HHMM.jpg: was it cloud?
     ./clouds.py --airports   only the airports' cloud reports (METARs) near
@@ -79,20 +83,25 @@ def coastline(box):
 
 
 def picture_time(timeout=8):
-    """When the newest infrared picture was taken (UTC), from the service's
-    own list, or None if it would not say."""
+    """When the newest infrared picture was taken (UTC): the time dimension's
+    default in the service's own capabilities, read as XML, or None if it
+    would not say. evidence() then asks for the picture at exactly that time,
+    so the picture and its time are the same one."""
     import datetime as dt
-    import re
+    import xml.etree.ElementTree as ET
     try:
         r = requests.get("https://view.eumetsat.int/geoserver/mtg_fd/ir105_hrfi/ows", timeout=timeout,
                          params={"service": "WMS", "version": "1.3.0", "request": "GetCapabilities"})
-        found = re.search(r'<Dimension name="time" default="([^"]+)"', r.text)
-        return dt.datetime.fromisoformat(found.group(1).replace("Z", "+00:00")) if found else None
-    except (requests.RequestException, ValueError):
-        return None
+        r.raise_for_status()
+        for node in ET.fromstring(r.content).iter():
+            if node.tag.rsplit("}", 1)[-1] == "Dimension" and node.get("name") == "time" and node.get("default"):
+                return dt.datetime.fromisoformat(node.get("default").replace("Z", "+00:00"))
+    except (requests.RequestException, ValueError, ET.ParseError):
+        pass
+    return None
 
 
-def update(site, when=None, timeout=60):
+def update(site, when=None, timeout=60, save="auto"):
     """Fetch, annotate and save the image. Returns (brightness over the site,
     brightness of the darkest tenth of the map), both 0-255; the second is a
     stand-in for clear sky. `when` (UTC) is a past picture, saved under its
@@ -115,25 +124,19 @@ def update(site, when=None, timeout=60):
     draw.ellipse([x - 7, y - 7, x + 7, y + 7], outline=(255, 40, 40), width=3)
     # Stretch vertically so distances look right at this latitude.
     true_height = round(WIDTH * SPAN_LAT / (SPAN_LON * np.cos(np.radians(lat))))
-    out = PICTURE.with_name(f"clouds-{when:%Y%m%d-%H%M}.jpg") if when else PICTURE
-    out.parent.mkdir(exist_ok=True)
-    infrared.resize((WIDTH, true_height)).save(out, quality=88)
+    # save: "auto" (the page's picture now, a dated one for a past time),
+    # "page" (the page's, for a time asked for as the newest), None (not kept).
+    out = None
+    if save:
+        out = PICTURE.with_name(f"clouds-{when:%Y%m%d-%H%M}.jpg") if when and save == "auto" else PICTURE
+        out.parent.mkdir(exist_ok=True)
+        infrared.resize((WIDTH, true_height)).save(out, quality=88)
     return here, clear, out
 
 
 def verdict(here, clear):
     """The satellite's word on the site: "cloud", "thin or broken cloud" or "probably clear"."""
     return "cloud" if here - clear > 20 else "probably clear" if here - clear < 10 else "thin or broken cloud"
-
-
-def over_site():
-    """The satellite's verdict on the site now (the page's picture updated
-    too), or None if no picture came."""
-    try:
-        here, clear, _ = update(config.load()["site"])
-    except (RuntimeError, requests.RequestException, OSError):
-        return None
-    return verdict(here, clear)
 
 
 AVIATION = "https://aviationweather.gov/api/data"
@@ -153,7 +156,7 @@ def _distance(lat1, lon1, lat2, lon2):
     km = 6371 * math.acos(min(1, math.sin(p1) * math.sin(p2) + math.cos(p1) * math.cos(p2) * math.cos(dl)))
     deg = math.degrees(math.atan2(math.sin(dl) * math.cos(p2),
                                   math.cos(p1) * math.sin(p2) - math.sin(p1) * math.cos(p2) * math.cos(dl)))
-    return km, _compass(deg)
+    return km, deg % 360
 
 
 def airports(site, radius_km=150, timeout=30):
@@ -172,7 +175,7 @@ def airports(site, radius_km=150, timeout=30):
             newest[m["icaoId"]] = m
     out = []
     for m in newest.values():
-        km, way = _distance(lat, lon, m["lat"], m["lon"])
+        km, bearing = _distance(lat, lon, m["lat"], m["lon"])
         if km > radius_km:
             continue
         layers = [f"{COVER.get(c['cover'], c['cover'])} at {c['base']} ft" if c.get("base") is not None
@@ -181,7 +184,10 @@ def airports(site, radius_km=150, timeout=30):
         if m.get("wspd") is not None:
             wind = ("calm" if not m["wspd"] else f"{m['wspd']} kt from "
                     + (_compass(m["wdir"]) if isinstance(m.get("wdir"), (int, float)) else "varying directions"))
-        out.append({"id": m["icaoId"], "name": m["name"].split(",")[0], "km": round(km), "from": way,
+        out.append({"id": m["icaoId"], "name": m["name"].split(",")[0], "km": round(km),
+                    "from": _compass(bearing), "bearing": round(bearing),
+                    "wind_from": m["wdir"] if isinstance(m.get("wdir"), (int, float)) else None,
+                    "wind_kt": m.get("wspd"),
                     "covers": [c["cover"] for c in m.get("clouds") or []], "wind": wind,
                     "age_min": round((time.time() - m["obsTime"]) / 60), "layers": layers,
                     "says": "; ".join(layers) or SAYS.get(m.get("cover"), m.get("cover") or "no cloud given"),
@@ -189,10 +195,11 @@ def airports(site, radius_km=150, timeout=30):
     return sorted(out, key=lambda a: a["km"])
 
 
-def airport_lines(site):
-    """The airports' reports as lines to print, or one line saying none came."""
+def airport_lines(site, found=None):
+    """The airports' reports (`found`, or fetched now) as lines to print, or
+    one line saying none came."""
     try:
-        found = airports(site)
+        found = airports(site) if found is None else found
     except (requests.RequestException, ValueError) as problem:
         return [f"No airport reports: {problem}"]
     if not found:
@@ -209,96 +216,221 @@ def airport_lines(site):
 
 
 EVIDENCE = config.DATA / "cache" / "cloud_evidence.json"
+HISTORY = config.DATA / "cache" / "cloud_evidence.jsonl"
 FRESH_S = 300          # one look at the sky's evidence serves every script for 5 minutes
+RETRY_S = 60           # a look with a source missing is tried again after a minute
+BUDGET_S = 25          # the whole look, both services at once, never takes longer
 SATELLITE_STALE_MIN = 40
+TREND_MIN = 30         # the satellite's picture this long before, for which way it is going
+UPWIND_DEG = 60        # an airport within this of the wind's direction is upwind
+NEAR_KM = 30           # an airport this close shares the site's sky
 
 
-def evidence(max_age_s=FRESH_S):
-    """One look at the sky's evidence, shared by shoot.py, runwatch.py and
-    skywatch.py through a file kept for 5 minutes, fetched with short
-    timeouts so a slow service holds nothing up for long: the satellite's
-    verdict over the site and its picture's age, the airports' fresh
-    reports (75 minutes or less) and what the two together say."""
-    import json
-    try:
-        kept = json.loads(EVIDENCE.read_text())
-        if time.time() - kept["at"] < max_age_s:
-            return kept
-    except (OSError, ValueError, KeyError):
-        pass
-    site = config.load()["site"]
+def _satellite(site):
+    """The satellite's verdict now and TREND_MIN before, with the picture's
+    time; the page's picture is the newest one. Unknown time: no verdict."""
+    import datetime as dt
     taken = picture_time()
-    age = None if taken is None else round((time.time() - taken.timestamp()) / 60)
+    if taken is None:
+        return {"satellite": None, "satellite_time": None, "satellite_was": None,
+                "satellite_why": "the service would not say when its newest picture was taken"}
+    age = (time.time() - taken.timestamp()) / 60
+    if age > SATELLITE_STALE_MIN:
+        return {"satellite": None, "satellite_time": taken.isoformat(), "satellite_was": None,
+                "satellite_why": f"its newest picture is {age:.0f} min old: stale"}
+    out = {"satellite_time": taken.isoformat(), "satellite_why": None}
     try:
-        here, clear, _ = update(site, timeout=15)
-        seen = verdict(here, clear)
+        out["satellite"] = verdict(*update(site, taken, timeout=15, save="page")[:2])
+    except (RuntimeError, requests.RequestException, OSError) as problem:
+        return {**out, "satellite": None, "satellite_was": None, "satellite_why": f"no picture: {problem}"}
+    try:
+        out["satellite_was"] = verdict(*update(site, taken - dt.timedelta(minutes=TREND_MIN),
+                                               timeout=15, save=None)[:2])
     except (RuntimeError, requests.RequestException, OSError):
-        seen = None
-    stale = seen is not None and age is not None and age > SATELLITE_STALE_MIN
-    try:
-        near = [a for a in airports(site, timeout=8) if a["age_min"] <= 75]
-    except (requests.RequestException, ValueError):
-        near = None
-    out = {"at": time.time(), "satellite": None if stale else seen, "satellite_age_min": age,
-           "satellite_stale": stale, "airports": near, "together": together(None if stale else seen, near)}
-    try:
-        EVIDENCE.parent.mkdir(exist_ok=True)
-        EVIDENCE.write_text(json.dumps(out))
-    except OSError:
-        pass
+        out["satellite_was"] = None
     return out
 
 
-def together(seen, near):
-    """What the satellite and the airports within 80 km say between them.
-    Unknown is never clear; and clear on both still leaves thin high cloud,
-    which neither sees well, as well as dew or a fault."""
-    close = [a for a in near or [] if a["km"] <= 80]
-    low = [a for a in close if set(a["covers"]) & {"BKN", "OVC", "VV"}]
-    if seen is None and not close:
-        return "no satellite picture and no airport near: the sky is unknown, not clear"
-    if seen is None:
-        return "no satellite picture; " + ("the airports near have low cloud" if low else
-                                           "the airports near have no low cloud, which says nothing of high cloud")
+def _gather(site):
+    """Both services at once, the whole look bounded by BUDGET_S."""
+    from concurrent.futures import ThreadPoolExecutor, wait
+    pool = ThreadPoolExecutor(max_workers=2)
+    sat, near = pool.submit(_satellite, site), pool.submit(airports, site, timeout=8)
+    wait([sat, near], timeout=BUDGET_S)
+    pool.shutdown(wait=False, cancel_futures=True)
+    found = {"satellite": None, "satellite_time": None, "satellite_was": None,
+             "satellite_why": f"no answer within {BUDGET_S} s"}
+    if sat.done() and not sat.exception():
+        found = sat.result()
+    found["airports"] = None
+    if near.done() and not near.exception():
+        found["airports"] = [a for a in near.result() if a["age_min"] <= 75]
+    return found
+
+
+def evidence(max_age_s=FRESH_S, context=None):
+    """One look at the sky's evidence, shared by clouds.py, shoot.py,
+    runwatch.py and skywatch.py through a file: the satellite's verdict over
+    the site with its picture's own time (unknown or over 40 minutes old is
+    no verdict) and 30 minutes before; the airports' reports of the last 75
+    minutes, each with its own age and wind; and what they say together.
+    Kept 5 minutes, or 1 when a source was missing; the whole look takes at
+    most 25 s. Every call is added to cloud_evidence.jsonl, with `context`
+    (what the camera measured then) when given, so the satellite's
+    thresholds can be checked against the telescope's own frames."""
+    import json
+    import os
+    found = None
+    try:
+        kept = json.loads(EVIDENCE.read_text())
+        if time.time() - kept["at"] < (RETRY_S if kept.get("partial") else max_age_s):
+            found = kept
+    except (OSError, ValueError, KeyError):
+        pass
+    if found is None:
+        found = _gather(config.load()["site"])
+        found["at"] = time.time()
+        found["partial"] = found["satellite"] is None or found["airports"] is None
+        found["together"] = together(found["satellite"], found["airports"], found.get("satellite_was"))
+        try:
+            EVIDENCE.parent.mkdir(exist_ok=True)
+            spare = EVIDENCE.with_suffix(f".{os.getpid()}.tmp")
+            spare.write_text(json.dumps(found))
+            os.replace(spare, EVIDENCE)   # whole or not at all, with two scripts at once
+        except OSError:
+            pass
+    try:
+        with HISTORY.open("a") as log:
+            log.write(json.dumps({"t": time.time(), "satellite": found["satellite"],
+                                  "satellite_was": found.get("satellite_was"),
+                                  "satellite_time": found.get("satellite_time"),
+                                  "airports": [{k: a[k] for k in ("id", "covers", "age_min")}
+                                               for a in found["airports"] or []],
+                                  "together": found["together"], "context": context}) + "\n")
+    except OSError:
+        pass
+    return found
+
+
+def _upwind(a):
+    """Whether the airport lies the way its own wind comes from. Surface wind
+    says where low cloud is coming from; high cloud can move differently."""
+    if a.get("wind_from") is None or (a.get("wind_kt") or 0) < 5:
+        return False
+    return abs((a["bearing"] - a["wind_from"] + 180) % 360 - 180) <= UPWIND_DEG
+
+
+def together(seen, near, was=None):
+    """What the satellite and the airports say between them. An airport
+    within 30 km shares the site's sky; one upwind says what is coming;
+    any other only says there is cloud in the region, which supports a
+    cloudy verdict loosely. Unknown is never clear; and clear on both still
+    leaves thin high cloud, which neither sees well, as well as dew or a
+    fault."""
+    near = near or []
+    low = [a for a in near if set(a["covers"]) & {"BKN", "OVC", "VV"}]
+    here = [a for a in low if a["km"] <= NEAR_KM]
+    coming = [a for a in low if a["km"] > NEAR_KM and _upwind(a)]
+    region = [a for a in low if a not in here and a not in coming]
+    named = lambda found: ", ".join(f"{a['name'].split('/')[0]} {a['km']} km {a['from']}" for a in found)  # noqa: E731
     cloudy = seen in ("cloud", "thin or broken cloud")
-    if cloudy and low:
-        return "the satellite and the airports agree: cloud"
-    if cloudy:
-        return ("the satellite sees cloud and the airports near have none low: high cloud, "
-                "which their ceilometers don't reach" if close else "the satellite sees cloud; no airport near to check it")
-    if low:
-        return "they disagree: low cloud at the airports near, none on the satellite here: look up"
-    return ("neither sees cloud here: thin high cloud is still possible, or dew, or a fault; look up"
-            if close else "the satellite sees no cloud; no airport near to check it; thin cloud is still possible")
+    trend = ""
+    if seen and was:
+        was_cloudy = was in ("cloud", "thin or broken cloud")
+        trend = {(True, False): f" (arrived in the last {TREND_MIN} min)",
+                 (False, True): f" (cloud {TREND_MIN} min ago: clearing)",
+                 (True, True): f" (there {TREND_MIN} min ago too)"}.get((cloudy, was_cloudy), "")
+    if seen is None and not near:
+        return "no satellite verdict and no airport report: the sky is unknown, not clear"
+    words = []
+    if seen is None:
+        words.append("no satellite verdict")
+    elif cloudy:
+        words.append(f"the satellite puts {seen} over the site{trend}")
+    else:
+        words.append(f"the satellite sees no cloud over the site{trend}")
+    if here:
+        words.append(f"low cloud at {named(here)}, close enough to share this sky")
+    if coming:
+        words.append(f"low cloud upwind at {named(coming)}: coming this way")
+    if region:
+        words.append(f"low cloud elsewhere in the region at {named(region)}, not upwind: "
+                     "only loose support")
+    if not low and near:
+        words.append("no low cloud at the airports" + (": high cloud, which their ceilometers don't reach"
+                                                       if cloudy else ""))
+    if not cloudy and not here:
+        words.append("thin high cloud is still possible, or dew, or a fault: look up")
+    elif seen is not None and not cloudy and here:
+        words.append("they disagree: look up")
+    return "; ".join(words)
 
 
 def evidence_words(found=None):
     """The evidence as one line for a message about dimmed or missing stars."""
     found = found or evidence()
-    sat = found["satellite"] or ("only a stale picture" if found.get("satellite_stale") else "no picture")
-    if found["satellite"] and found.get("satellite_age_min") is not None:
-        sat += f" ({found['satellite_age_min']} min old)"
+    if found["satellite"]:
+        sat = f"{found['satellite']} over the site"
+    else:
+        sat = f"no verdict ({found.get('satellite_why') or 'no picture'})"
     near = "; ".join(f"{a['name'].split('/')[0]} {a['km']} km {a['from']} {a['says']}"
                      + (f", wind {a['wind']}" if a["wind"] else "") for a in found["airports"] or [])
-    return f"satellite: {sat} over the site" + (f"; airports: {near}" if near else "") + f". {found['together']}"
+    return f"satellite: {sat}" + (f"; airports: {near}" if near else "") + f". {found['together']}"
+
+
+def history_lines(hours=24):
+    """The kept looks of the last `hours`, with what the camera measured, one
+    line each: the record for checking the satellite against the frames."""
+    import datetime as dt
+    import json
+    out = []
+    try:
+        rows = [json.loads(line) for line in HISTORY.read_text().splitlines() if line.strip()]
+    except (OSError, ValueError):
+        return ["no looks kept yet"]
+    for r in rows:
+        if r["t"] < time.time() - hours * 3600:
+            continue
+        c = r.get("context") or {}
+        camera = ", ".join(f"{k} {v}" for k, v in c.items()) or "no camera figures"
+        out.append(f"{dt.datetime.fromtimestamp(r['t']):%d %b %H:%M}  satellite {r['satellite'] or '-'}"
+                   f" (was {r.get('satellite_was') or '-'})  camera: {camera}")
+    return out or [f"no looks in the last {hours} h"]
 
 
 if __name__ == "__main__":
     import argparse
     import datetime as dt
-    ap = argparse.ArgumentParser(description="Live (or past) cloud picture from Meteosat.")
-    ap.add_argument("--at", metavar="YYYY-MM-DDTHH:MM", help="a past time, UT")
+    ap = argparse.ArgumentParser(description="The sky's evidence: Meteosat and the airports.")
+    ap.add_argument("--at", metavar="YYYY-MM-DDTHH:MM", help="a past time, UT: the satellite's picture then")
     ap.add_argument("--airports", action="store_true", help="only the airports' cloud reports")
+    ap.add_argument("--history", type=float, metavar="HOURS", nargs="?", const=24,
+                    help="the looks kept in the last HOURS (24), with what the camera measured")
     args = ap.parse_args()
+    if args.history:
+        print("\n".join(history_lines(args.history)))
+        raise SystemExit
     if args.airports:
         print("\n".join(airport_lines(config.load()["site"])))
         raise SystemExit
-    when = dt.datetime.fromisoformat(args.at).replace(tzinfo=dt.timezone.utc) if args.at else None
-    try:
-        here, clear, saved = update(config.load()["site"], when)
-    except (RuntimeError, requests.RequestException) as problem:
-        raise SystemExit(f"No satellite picture: {problem}. Try again in a few minutes.")
-    print(f"over the site: {here:.0f}, clear areas: {clear:.0f} -> {verdict(here, clear)}")
-    print(f"saved {saved}")
-    if not when:
-        print("\n".join(airport_lines(config.load()["site"])))
+    if args.at:
+        when = dt.datetime.fromisoformat(args.at).replace(tzinfo=dt.timezone.utc)
+        try:
+            here, clear, saved = update(config.load()["site"], when)
+        except (RuntimeError, requests.RequestException) as problem:
+            raise SystemExit(f"No satellite picture: {problem}. Try again in a few minutes.")
+        print(f"over the site: {here:.0f}, clear areas: {clear:.0f} -> {verdict(here, clear)}")
+        raise SystemExit(f"saved {saved}")
+    # Now: the same shared look the run and the watches use, fetched fresh.
+    found = evidence(max_age_s=0)
+    if found["satellite"]:
+        print(f"satellite: {found['satellite']} over the site, picture taken {found['satellite_time'][11:16]} UT"
+              + (f"; {TREND_MIN} min before: {found['satellite_was']}" if found.get("satellite_was") else ""))
+        print(f"saved {PICTURE}")
+    else:
+        print(f"satellite: no verdict ({found.get('satellite_why')})")
+    if found["airports"] is None:
+        print("airports: no answer")
+    else:
+        print("\n".join(airport_lines(config.load()["site"], found["airports"])))
+    print(found["together"])
