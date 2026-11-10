@@ -76,10 +76,10 @@ class Focuser:
 
     @classmethod
     def open(cls, port=None, full=True, ms=MOTOR_MS):
-        """The focuser, on two coils at every step unless `full` is false:
-        on 20 October 2026 half-steps could not push the drawtube out, nor
-        two coils at 10 ms a half-step with the camera on, but two coils at
-        `ms` 30 could, unaided."""
+        """The focuser, with :F1 sent unless `full` is false. On the 28BYJ-48
+        (until 9 November 2026) that meant two coils at every step, which
+        could push the drawtube out at `ms` 30 when half-steps could not. The
+        NEMA 17's firmware answers :F1 and changes nothing."""
         import serial
         link = serial.Serial(find_port(port), 9600, timeout=1)
         time.sleep(2)               # opening the port restarts a Nano; let it come up
@@ -138,10 +138,10 @@ class Focuser:
         self.step_seconds = ms / 1000
 
     def full(self, on=True):
-        """Two coils on at every step until the Nano next restarts: about a
-        quarter more torque than half-steps, moves still counted in
-        half-steps and taking as long (20 October 2026: the motor could not
-        push the drawtube out)."""
+        """:F1 or :F0. On the 28BYJ-48 (until 9 November 2026), two coils on at
+        every step: about a quarter more torque than half-steps. The NEMA 17's
+        firmware answers it and changes nothing; the driver sets the
+        torque."""
         order = ":F1" if on else ":F0"
         reply = self.ask(order, 2)
         if reply != f"OK {order[1:]}":
@@ -649,7 +649,7 @@ def main(argv=None):
     ap.add_argument("--ms", type=int, help=f"for move and test: milliseconds a half-step (default "
                                            f"{MOTOR_MS}; slower is stronger)")
     ap.add_argument("--full", action="store_true",
-                    help="two coils at every step, about a quarter more torque: now always so, kept for old notes")
+                    help="the 28BYJ-48's two-coil stepping; the NEMA 17 ignores it, kept for old notes")
     ap.add_argument("--hold", action="store_true",
                     help="for move and test: keep the driver on between moves, holding the shaft")
     ap.add_argument("--half", action="store_true",

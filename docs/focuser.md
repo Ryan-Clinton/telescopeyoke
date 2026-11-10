@@ -22,7 +22,7 @@ commissioned, focus is by hand (`./focus.py`, spoken numbers).
 |---|---|
 | Motor | 17HS4401 NEMA 17, 1.7 A, 4-wire lead with a black 4-pin plug |
 | Carrier | Black A4988/DRV8825-style screw-terminal board: green VIN/GND terminal, 3 microstep switches, EN/STEP/DIR header, its own logic supply |
-| Driver | BigTreeTech TMC2209 V1.3 (two on order, 9 November 2026). The two unbranded TMC2209s: one dead, one steps only with DIR high |
+| Driver | BigTreeTech TMC2209 V1.3 (two on order, 9 November 2026). The two unbranded TMC2209s: one holds the motor but has never turned it (it ran backwards under 12 V first, so it may be damaged); one turns it only with DIR high |
 | Supply | 12 V 2 A, + to VIN and − to GND on the green terminal |
 
 | Nano | Carrier |
@@ -32,8 +32,12 @@ commissioned, focus is by hand (`./focus.py`, spoken numbers).
 | D10 | DIR |
 | GND | GND on the green terminal, under the same screw as the 12 V − |
 
-All three microstep switches are off. On a TMC2209 that leaves MS1 and MS2
-low, which is 1/8 steps (1600 a turn).
+All three microstep switches are off. The firmware assumes 1/8 steps (1600
+microsteps a turn), which on a TMC2209 is MS1 and MS2 both low. That isn't
+measured with power on: the empty socket read MS1 low and MS2 not low (below).
+The motion agrees with 1/8 so far. On 9 November the spare, sent half a turn,
+turned about half a turn; at 1/4 it would have turned a whole turn. The
+commissioning below checks it properly.
 
 **How the BTT driver's pins meet the carrier's socket.** From BTT's
 schematic and manual for the TMC2209 V1.2
@@ -80,8 +84,23 @@ The power and motor row (CN2) read as it should, from the hole marked VIN:
 So the driver's VM pin goes in the hole marked VIN, and its EN pin in the
 CN3 hole across from it.
 
-None of these depends on DIR. With BTT's own pull-downs, the carrier still
-suits a standalone TMC2209. StealthChop versus SpreadCycle is set by a
+These readings are a first look, not proof. The Nano reads voltage, with a
+brief pull-up to spot a bare pin. It can't tell open from pulled up or fed
+through another circuit, and it doesn't measure resistance. The EN wire
+feeding VDD is a likely explanation for the 2.06 V, not a confirmed one. The
+meter's continuity and resistance ranges confirm the power holes, both GND
+holes and VDD before the first power-up (below).
+
+The holes read are fixed connections, so their levels don't change with
+DIR. With power on, these are still unmeasured: DIR at the driver's own pin
+in both directions, VCC_IO and VM during a failed move, and the driver's own
+report. A meter gives the DC levels. It can't show 10 µs STEP pulses, but
+STEP evidently gets through, since the spare turns in `+`. For the driver's
+own report, the TMC2209's IOIN register gives the levels it sees on ENN,
+MS1, MS2, DIAG, PDN_UART, STEP, SPREAD and DIR, read over UART.
+
+If BTT's own pull-downs are on the V1.3 as on the V1.2, the carrier suits a
+standalone TMC2209. StealthChop versus SpreadCycle is set by a
 resistor on the BTT board itself (StealthChop as it comes), not by a pin. No
 fixed setting can make the motor turn one way and not the other. The
 one-direction fault in the bench session is still unexplained: the driver is
@@ -89,8 +108,8 @@ the likeliest cause, but it isn't proven.
 
 **Seating it: match the pins, not the board's ends.** EN (L1) sits opposite
 VM (R1), and DIR (L8) opposite GND (R8). "DIR end towards VIN" was only how
-it looked on this board, and the first driver was killed by seating it
-backwards. Before the first power-up:
+it looked on this board, and the first driver ran backwards under 12 V after
+it was seated by that kind of guess. Before the first power-up:
 1. 12 V out, driver out.
 2. Find which socket hole is joined to the green terminal's VIN screw: the
    meter on continuity, one probe on the screw.
@@ -106,25 +125,46 @@ holds only for BTT's resistors. The unbranded drivers' resistors are
 unknown, so their volts weren't amps. A meter on the pot cross-checks
 `./focuser.py vref` (A2 against the 1.1 V bandgap).
 
-**Commissioning, when the BTT drivers and the meter come:**
-1. Seat one by the pins, as above, with 12 V out.
-2. 12 V in, motor plugged in. Read the pot with the meter and with `./focuser.py vref`
-   at once, and note both. Leave it near its factory 1.2 V unless it is
-   outside 1.0 to 1.3 V.
-3. Unloaded, on the bench: say what to watch, then `./focuser.py test`
-   (a quarter turn out and back, slowly). Check both directions turn. Feel the
-   driver and motor after a few runs: warm is fine, too hot to touch is not.
-4. Never plug or unplug the driver or the motor with 12 V in.
-5. If one direction fails again, stop: don't try a third driver. Measure DIR
-   high and low at the driver's own pin with the meter while the motor is
-   asked to move, and VCC_IO (R7) and VM. The same symptom on a BTT driver
-   would point at something shared, not the drivers.
-6. Only then fit it to the focuser on the reinforced bracket. Check it
-   lifts the camera and filter wheel outward and lets them down, see whether
-   the drawtube slips with the driver off between moves (`--hold` if it
-   does), and measure the gear slack (`./focus.py --measure-backlash`). The
-   firmware counts the steps it sends, not where the shaft is, so a stall
-   under load goes unnoticed until the stars say so.
+**Commissioning, when the BTT drivers and the meter come.** Every probe and
+lead goes on or comes off with the 12 V out. The motor stays plugged in the
+whole time the 12 V is in.
+1. **Check the board's connections:** 12 V out, Nano unplugged, driver out.
+   With the meter on continuity, check the VIN hole (CN2 1) to the VIN
+   screw, both GND holes (CN2 2 and 8) to the GND screw, and the Nano's GND to
+   the same screw.
+2. **Check the board's logic supply:** driver still out, Nano plugged in,
+   12 V in. Read VDD (CN2 7) against GND with the meter: about 5 V. Then 12 V
+   out.
+3. **Check the driver itself:** compare the V1.3's printed labels with the
+   pin table above, and read its sense resistors' marking (R110 is 0.11 Ω).
+   If either differs, stop and update the table.
+4. **Seat it** by the pins (VM in the hole marked VIN, EN across from it),
+   with 12 V out.
+5. **Read the pot with the driver off:** the Nano leaves EN high, so the
+   motor outputs are off. 12 V out, then the A2 lead on the pot top, then
+   12 V in. Run `./focuser.py vref`. 12 V out before moving the lead. Then put
+   the meter's probes on the pot top and a GND screw, 12 V in, and read it
+   again. Note both readings. Leave the pot near its factory 1.2 V unless it
+   is outside 1.0 to 1.3 V.
+6. **Turn it, unloaded, on the bench:** mark the shaft, say what to watch,
+   then `./focuser.py move 4096`. That should be exactly one turn at 1/8 (two
+   turns at 1/4, half a turn at 1/16). Then `./focuser.py move -4096` back.
+   Both directions must turn. After a few runs, feel the driver and motor:
+   warm is fine, too hot to touch is not.
+7. **Never plug or unplug the driver or the motor with 12 V in.**
+8. **If one direction fails again, stop.** Don't try a third driver. With
+   12 V out, put the meter's probes on the driver's DIR pin and GND. Then
+   12 V in and `./focuser.py move` each way, reading DIR during each. Do the
+   same for VCC_IO and VM. The same symptom on a BTT driver would point at
+   something shared, not the drivers.
+9. **Only then fit it to the focuser** on the reinforced bracket.
+   - Check it lifts the camera and filter wheel outward and lets them down.
+   - See whether the drawtube slips with the driver off between moves
+     (`--hold` if it does).
+   - Measure the gear slack (`./focus.py --measure-backlash`).
+
+   The firmware counts the steps it sends, not where the shaft is, so a
+   stall under load goes unnoticed until the stars say so.
 
 ## Parts (the 28BYJ-48 drive, until 9 November 2026)
 
@@ -609,8 +649,8 @@ motor: it is the one in use. It ran the wrong way round under 12 V for a
 while, so if it fails to turn the motor, the untouched spare goes in.
 
 The new firmware (STEP/DIR/EN, half-steps kept as the unit, 25 microsteps
-to 64) turned nothing on that first driver: its STEP input died running
-backwards. On the spare (1.28 V, about 0.91 A, as it came) plus turns every
+to 64) turned nothing on that first driver. It holds the motor but has never
+turned it; having run backwards under 12 V, it may be damaged. On the spare (1.28 V, about 0.91 A, as it came) plus turns every
 time and minus only hums and clicks in place, whatever the order, speed
 (2 or 20 ms), wake time (5 or 200 ms) or motor plug orientation, with DIR
 from D10, tied to GND at the Nano or the board, or fed straight onto the
@@ -618,13 +658,15 @@ driver's own DIR pin. Ruled out with the Nano as a continuity tester
 (`./focuser.py vref`, A2 against GND, 12 V out, driver pulled): the board
 joins socket holes 3-4 through one coil and 5-6 through the other, and
 not 4 to 5, so the board's motor tracks, the plug (2B 2A 1A 1B) and the
-coils are right. That leaves the spare driver itself (it hums on minus
-with the driver held on between moves too). The red A4988 that came with
-the motor can't run on this board as it stands: the board grounds the
-socket's SLEEP pin (a TMC2209's CLK, grounded for its own clock) and leaves
-RESET floating, so the A4988 sleeps; its pot was turned to 0.31 V. To use
-it: SLEEP and RESET bent out of the socket and fed from the Nano's 5 V, MS1
-and MS2 on for 1/8 steps. Stopped there, 9 November: next is a new
+coils are right. That points at the spare driver itself, not proven (it
+hums on minus with the driver held on between moves too). The red A4988 that came with
+the motor didn't run on this board: its SLEEP pin read 0 V, taken then to
+mean the board grounds that socket pin (a TMC2209's CLK), and RESET was
+floating, so the A4988 sleeps; its pot was turned to 0.31 V. (On 10
+November the empty SLEEP hole read not low, so that 0 V came through the
+A4988 itself, not the carrier; RESET floating is reason enough for it to
+sleep.) Feeding SLEEP and RESET from the Nano's 5 V, by bent pins or jumper
+leads, should wake it, but it is untried. Stopped there, 9 November: next is a new
 TMC2209, its pot read with the Nano before anything is turned.
 The whole bench session, with the evidence and open questions, is in
 [nights/2026-11-09/nema-bench.md](nights/2026-11-09/nema-bench.md).

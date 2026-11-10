@@ -2,8 +2,9 @@
 
 Written up the next day for an outside review. The motor was on the bench, not
 on the focuser. Short version: the firmware and wiring are proven as far as a
-Nano can prove them. The first TMC2209 was ruined by a wrong seating
-instruction. The spare turns one way only. The A4988 can't run on this
+Nano can prove them. The first TMC2209 ran backwards under 12 V after a
+wrong seating instruction; since then it holds the motor but has never
+turned it, so it may be damaged. The spare turns one way only. The A4988 can't run on this
 carrier. Two BigTreeTech TMC2209 V1.3s are on order. The running notes are in
 [focuser.md](../../focuser.md) under "9 November 2026, wiring the drive". This
 file is the full sequence, with the evidence and the open questions.
@@ -57,8 +58,8 @@ file is the full sequence, with the evidence and the open questions.
    driver's VM pin to the hole joined to VIN (see the review notes below).
    Turned round, it read a steady 1.11 V (about 0.79 A by the
    BigTreeTech formula A = V × 0.71) and held the motor stiff. **It never
-   stepped:** it turned nothing in any direction. Most likely it was damaged
-   while it was backwards under 12 V.
+   stepped:** it turned nothing in any direction. It may have been damaged
+   while it was backwards under 12 V; that isn't proven.
 2. **Spare driver**, seated the right way, Vref 1.28 V as it came (about 0.91 A).
    - The `+` direction turns every time.
    - The `−` direction only hums and clicks in place.
@@ -107,7 +108,7 @@ file is the full sequence, with the evidence and the open questions.
 | Wiring and shared ground | Good: DIR tied low at the carrier still fails |
 | Carrier motor tracks, plug, coils | Good: continuity and the shorted-coil test |
 | Nano as a Vref meter (`:V`) | Steady, plausible readings (1.11, 1.28, 0.31 V); not yet checked against a meter |
-| Driver 1 | Dead: holds the motor, never steps |
+| Driver 1 | Holds the motor, has never turned it; ran backwards under 12 V first, so may be damaged |
 | Spare driver | Steps only with DIR high: most likely the driver, not proven (no pin voltages measured) |
 | A4988 | Fine as far as known, but won't run on this carrier without rework |
 
@@ -266,7 +267,12 @@ What the readings show:
 - CLK isn't grounded. A BTT driver holds it low with its own 20 kΩ pull-down;
   an unbranded one might not.
 
-None of this depends on DIR.
+These fixed connections don't change with DIR. That doesn't isolate the
+fault: DIR at the driver's own pin in both directions, VCC_IO and VM during a
+failed move, and the driver's own report are still unmeasured with power on.
+The Nano's readings are a first look. The meter's continuity range confirms
+them before the next power-up, including the 2.06 V on VDD, whose cause (the
+EN wire feeding it) is likely but not confirmed.
 
 **My seating rule in this file was wrong as a rule.** The pins are matched by
 continuity, VM to the VIN hole, before power. The commissioning steps are in
