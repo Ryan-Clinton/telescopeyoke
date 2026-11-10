@@ -1065,6 +1065,16 @@ def alternatives(big, rec, clear, most=2):
     return out
 
 
+def _airports():
+    """The nearby airports' cloud reports now (clouds.airport_lines), or None
+    if none came: what the sky is doing upwind, beside the forecast."""
+    import clouds
+    try:
+        return clouds.airport_lines(config.load()["site"])
+    except Exception:     # noqa: BLE001 - a broken feed must not take the plan with it
+        return None
+
+
 def night(demo=False):
     """Tonight in brief: the verdict, when it is dark and clear, the Moon,
     and the discovery programmes' fields first, then the best targets;
@@ -1097,6 +1107,7 @@ def night(demo=False):
         "sky_brightness_mag_arcsec2": (rep["light_pollution"] or {}).get("sqm"),
         "spot": None if demo else config.SPOT,
         "skyline_measured": bool(_site(demo)["horizon"].get("skyline")),
+        "airports": None if demo else _airports(),
         "recommendation": rec,
         "discovery": discovery,
         "best_now": [_target(t) for t in rep["targets"] if t["now"]][:3],
@@ -1218,6 +1229,8 @@ def outlook(demo=False, tonight=None, open_candidates=None):
                   + (f", sets {hm(moon['set'])}" if moon.get("set") else ""))
     out.append(f"SKY: {t['verdict']}, {clear}, {t['mean_cloud_percent']}% cloud; dark {hm(t['darkness']['start'])}-"
                f"{hm(t['darkness']['end'])}; {moon_words}; " + "; ".join(t["notes"]))
+    for line in t.get("airports") or []:
+        out.append(f"AIRPORT NOW: {line}")
     found = candidates()["candidates"] if open_candidates is None else open_candidates
     again = [k for k in found if book.nights_seen(k) > 1]
     planned = " ".join(s["why"] for s in rec.get("steps") or [])

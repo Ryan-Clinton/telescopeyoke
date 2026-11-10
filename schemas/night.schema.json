@@ -43,6 +43,7 @@
     },
     "spot": {"type": ["string", "null"], "description": "Where in the garden the telescope stands (ty spot); null when none is named, and in the demo."},
     "skyline_measured": {"type": "boolean", "description": "Whether a measured skyline is in use for this spot; false means the windows go by the lowest altitude alone."},
+    "airports": {"type": ["array", "null"], "items": {"type": "string"}, "description": "The nearby airports' cloud reports now, one line each, nearest first (clouds.airport_lines); cloud below about 12,000 ft only. Null in the demo or when the feed failed."},
     "discovery": {
       "description": "The discovery programmes (programmes/*.toml), the night's first purpose: each field's window in darkness above the horizon limits and measured skyline, best first; window null when it is not up in darkness.",
       "type": "array",

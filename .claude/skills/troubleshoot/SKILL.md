@@ -57,7 +57,9 @@ nothing about cloud.
 
 Look at the satellite first: `./clouds.py` (now) or `./clouds.py --at
 2026-11-05T04:30` (when the stars dimmed, UT). Cloud over the site is
-cloud. With the person asleep, that is the answer: never dew, which no one
+cloud. Now, `./clouds.py` also gives the airports' reports: low cloud at
+Derry (west, upwind) is on its way, and an airport's air at its dew point
+makes dew likely here too; clear airports say nothing about high thin cloud. With the person asleep, that is the answer: never dew, which no one
 has seen, and never a step skipped for it (5 November 2026: dawn flats lost
 to "possible dew" while the satellite showed thin cloud all night). Awake,
 ask what the sky looks like too: haze has been called dew before.
