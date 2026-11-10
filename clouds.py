@@ -240,23 +240,36 @@ def _satellite(site):
                 "satellite_why": f"its newest picture is {age:.0f} min old: stale"}
     out = {"satellite_time": taken.isoformat(), "satellite_why": None}
     try:
-        out["satellite"] = verdict(*update(site, taken, timeout=15, save="page")[:2])
+        here, clear, _ = update(site, taken, timeout=15, save="page")
+        out.update(satellite=verdict(here, clear), satellite_here=round(here, 1), satellite_clear=round(clear, 1),
+                   satellite_margin=round(here - clear, 1))
     except (RuntimeError, requests.RequestException, OSError) as problem:
         return {**out, "satellite": None, "satellite_was": None, "satellite_why": f"no picture: {problem}"}
     try:
-        out["satellite_was"] = verdict(*update(site, taken - dt.timedelta(minutes=TREND_MIN),
-                                               timeout=15, save=None)[:2])
+        here, clear, _ = update(site, taken - dt.timedelta(minutes=TREND_MIN), timeout=15, save=None)
+        out.update(satellite_was=verdict(here, clear), satellite_was_margin=round(here - clear, 1))
     except (RuntimeError, requests.RequestException, OSError):
         out["satellite_was"] = None
     return out
 
 
+_LEFT = []   # this process's requests that outran the budget, still ending
+
+
 def _gather(site):
-    """Both services at once, the whole look bounded by BUDGET_S."""
+    """Both services at once, the whole look bounded by BUDGET_S. A request
+    still going at the budget is left to end on its own timeout (38 s at
+    most), and no new look starts in this process until it has, so slow
+    services never pile requests up."""
     from concurrent.futures import ThreadPoolExecutor, wait
+    _LEFT[:] = [f for f in _LEFT if not f.done()]
+    if _LEFT:
+        return {"satellite": None, "satellite_time": None, "satellite_was": None, "airports": None,
+                "satellite_why": "the last look's requests are still ending"}
     pool = ThreadPoolExecutor(max_workers=2)
     sat, near = pool.submit(_satellite, site), pool.submit(airports, site, timeout=8)
     wait([sat, near], timeout=BUDGET_S)
+    _LEFT.extend(f for f in (sat, near) if not f.done())
     pool.shutdown(wait=False, cancel_futures=True)
     found = {"satellite": None, "satellite_time": None, "satellite_was": None,
              "satellite_why": f"no answer within {BUDGET_S} s"}
@@ -266,6 +279,55 @@ def _gather(site):
     if near.done() and not near.exception():
         found["airports"] = [a for a in near.result() if a["age_min"] <= 75]
     return found
+
+
+def _kept(max_age_s):
+    """The shared look, if it is young enough: max_age_s, or RETRY_S when a
+    source was missing from it."""
+    import json
+    try:
+        kept = json.loads(EVIDENCE.read_text())
+        if time.time() - kept["at"] < (RETRY_S if kept.get("partial") else max_age_s):
+            return kept
+    except (OSError, ValueError, KeyError):
+        pass
+    return None
+
+
+def _refresh(max_age_s):
+    """A new look, taken by one script at a time: another that wants it
+    waits (BUDGET_S at most) for the first's look instead of fetching too.
+    (_gather says what happens to a request that outruns the budget.)"""
+    import fcntl
+    import json
+    import os
+    EVIDENCE.parent.mkdir(exist_ok=True)
+    with open(EVIDENCE.with_suffix(".lock"), "w") as lock:
+        give_up = time.monotonic() + BUDGET_S + 5
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() > give_up:
+                    return _kept(10 ** 9) or {"satellite": None, "airports": None, "partial": True,
+                                              "satellite_why": "another script's look is still running",
+                                              "together": together(None, None)}
+                time.sleep(0.5)
+        fresh = _kept(max_age_s) if max_age_s else None   # taken while this one waited
+        if fresh:
+            return fresh
+        found = _gather(config.load()["site"])
+        found["at"] = time.time()
+        found["partial"] = found["satellite"] is None or found["airports"] is None
+        found["together"] = together(found["satellite"], found["airports"], found.get("satellite_was"))
+        try:
+            spare = EVIDENCE.with_suffix(f".{os.getpid()}.tmp")
+            spare.write_text(json.dumps(found))
+            os.replace(spare, EVIDENCE)   # whole or not at all
+        except OSError:
+            pass
+        return found
 
 
 def evidence(max_age_s=FRESH_S, context=None):
@@ -279,32 +341,16 @@ def evidence(max_age_s=FRESH_S, context=None):
     (what the camera measured then) when given, so the satellite's
     thresholds can be checked against the telescope's own frames."""
     import json
-    import os
-    found = None
-    try:
-        kept = json.loads(EVIDENCE.read_text())
-        if time.time() - kept["at"] < (RETRY_S if kept.get("partial") else max_age_s):
-            found = kept
-    except (OSError, ValueError, KeyError):
-        pass
-    if found is None:
-        found = _gather(config.load()["site"])
-        found["at"] = time.time()
-        found["partial"] = found["satellite"] is None or found["airports"] is None
-        found["together"] = together(found["satellite"], found["airports"], found.get("satellite_was"))
-        try:
-            EVIDENCE.parent.mkdir(exist_ok=True)
-            spare = EVIDENCE.with_suffix(f".{os.getpid()}.tmp")
-            spare.write_text(json.dumps(found))
-            os.replace(spare, EVIDENCE)   # whole or not at all, with two scripts at once
-        except OSError:
-            pass
+    found = _kept(max_age_s) or _refresh(max_age_s)
     try:
         with HISTORY.open("a") as log:
             log.write(json.dumps({"t": time.time(), "satellite": found["satellite"],
                                   "satellite_was": found.get("satellite_was"),
+                                  **{k: found.get(k) for k in ("satellite_here", "satellite_clear",
+                                                               "satellite_margin", "satellite_was_margin")},
                                   "satellite_time": found.get("satellite_time"),
-                                  "airports": [{k: a[k] for k in ("id", "covers", "age_min")}
+                                  "airports": [{k: a.get(k) for k in ("id", "km", "bearing", "covers", "layers",
+                                                                      "wind_from", "wind_kt", "age_min")}
                                                for a in found["airports"] or []],
                                   "together": found["together"], "context": context}) + "\n")
     except OSError:
@@ -337,9 +383,9 @@ def together(seen, near, was=None):
     trend = ""
     if seen and was:
         was_cloudy = was in ("cloud", "thin or broken cloud")
-        trend = {(True, False): f" (arrived in the last {TREND_MIN} min)",
-                 (False, True): f" (cloud {TREND_MIN} min ago: clearing)",
-                 (True, True): f" (there {TREND_MIN} min ago too)"}.get((cloudy, was_cloudy), "")
+        trend = {(True, False): f" (its verdict {TREND_MIN} min ago was {was})",
+                 (False, True): f" (its verdict {TREND_MIN} min ago was {was})",
+                 (True, True): f" (the same {TREND_MIN} min ago)"}.get((cloudy, was_cloudy), "")
     if seen is None and not near:
         return "no satellite verdict and no airport report: the sky is unknown, not clear"
     words = []
@@ -352,7 +398,7 @@ def together(seen, near, was=None):
     if here:
         words.append(f"low cloud at {named(here)}, close enough to share this sky")
     if coming:
-        words.append(f"low cloud upwind at {named(coming)}: coming this way")
+        words.append(f"low cloud upwind at {named(coming)} by its surface wind: it may be heading here")
     if region:
         words.append(f"low cloud elsewhere in the region at {named(region)}, not upwind: "
                      "only loose support")

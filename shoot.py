@@ -826,7 +826,9 @@ def what_dimmed(log, last=CLOUD_STOP):
     try:
         import clouds
         found = clouds.evidence(context=None if levels is None else
-                                {"stars_pct": round(100 * levels[0]), "sky_pct": round(100 * levels[1])})
+                                {"stars_pct": round(100 * levels[0]), "sky_pct": round(100 * levels[1]),
+                                 **{k: f.get(k) for f in log[-1:] for k in ("exposure", "filter")
+                                    if f.get(k) is not None}})
     except Exception:     # noqa: BLE001 - the message goes out without it
         pass
     said = what_dimmed_frames(levels, found["satellite"] if found else None)

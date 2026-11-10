@@ -43,6 +43,26 @@ def minutes(seconds):
     return f"{seconds / 60:.0f} min"
 
 
+def frame_figures(log, session):
+    """The camera's figures for the record: the median star flux and sky of
+    the last frames and of all kept, the exposure and the filter."""
+    import statistics
+    import json
+    def median(rows, key):
+        values = [f[key] for f in rows if f.get(key) is not None]
+        return round(statistics.median(values), 1) if values else None
+    out = {"flux_recent": median(log[-RECENT:], "flux"), "flux_kept": median([f for f in log if f["accepted"]], "flux"),
+           "sky_recent": median(log[-RECENT:], "background"),
+           "sky_kept": median([f for f in log if f["accepted"]], "background"),
+           "stars_recent": median(log[-RECENT:], "stars")}
+    try:
+        meta = json.loads((Path(session) / "session.json").read_text())
+        out.update({k: meta.get(k) for k in ("exposure", "filter") if meta.get(k) is not None})
+    except (OSError, ValueError):
+        pass
+    return out
+
+
 RECORD_S = 1800   # a look at the sky's evidence kept beside the run's frames this often
 
 
@@ -120,18 +140,20 @@ class Watch:
                 self.clear("halved", f"{name}: keeping {recent:.0%} again", lines)
         sky = alert.sky_from_frames([f.get("flux") for f in log])
         context = {"session": name, "frames_say": sky,
-                   "kept_pct": round(100 * sum(f["accepted"] for f in log[-RECENT:]) / len(log[-RECENT:]))}
+                   "kept_pct": round(100 * sum(f["accepted"] for f in log[-RECENT:]) / len(log[-RECENT:])),
+                   **frame_figures(log, self.session)}
         if sky in ("cloud", "clouded") and "dim" not in self.said:
             self.recorded = now
             self.once("dim", f"{name}: the stars have dimmed ({'mostly gone' if sky == 'clouded' else 'thinly'}); "
                              + "; ".join(cloud_data(context)) + "; ask what the sky looks like", lines)
-        elif now - self.recorded > RECORD_S:
-            # The record for checking the satellite and the airports against
-            # the telescope's own frames, clear nights included.
-            self.recorded = now
-            cloud_data(context)
         elif sky == "clear":
             self.clear("dim", f"{name}: the stars are back", lines)
+        if now - self.recorded > RECORD_S:
+            # The record for checking the satellite and the airports against
+            # the telescope's own frames, clear nights included; apart from
+            # the lines above, so it never holds one back.
+            self.recorded = now
+            cloud_data(context)
         return lines
 
 
