@@ -305,11 +305,14 @@ I = Vref / 0.8).
 | RESET and SLEEP joined, no 5 V | nothing |
 | with 5 V, switches off | a crunchy hum both ways, no turn |
 | with 5 V, switches 1 and 2 on | a clean hum both ways, no turn |
-| dial raised from 0.31 V to 0.49 V (its end stop, about 0.61 A), twice | nothing |
+| dial raised from 0.31 V to 0.49 V (its end stop, about 0.61 A) | nothing twice (5 V contact lost), then a hum both ways |
+| the same, 5 V on the other leg, so the other pin gets it directly | a hum both ways, no turn |
 
-The hums show it woke at times, but it never turned either way. The 5 V
-held by hand is too unreliable a contact to read anything into the last two
-runs. Inconclusive: it adds nothing about the spare.
+The resistor bridged RESET and SLEEP, so whichever pin the 5 V was held on
+got it directly. With either pin fed directly, the A4988 woke and hummed
+but never turned either way, at about 0.61 A, where the spare TMC2209 turns
+in `+`. So the A4988 itself, or how it was woken, is the likeliest cause.
+Inconclusive: it adds nothing about the spare.
 
 **My seating rule in this file was wrong as a rule.** The pins are matched by
 continuity, VM to the VIN hole, before power. The commissioning steps are in
