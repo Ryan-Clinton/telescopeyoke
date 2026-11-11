@@ -88,6 +88,33 @@ def fit(track):
     return answer
 
 
+def ra_sign(guide, main):
+    """Which way the guide camera's RA reads on the sky: (+1 or -1, note).
+
+    The guide track's west comes from the ST4 "west" pulse's direction, and
+    what that pin does to the pointing is the mount's own convention, never
+    assumed: on 11 November 2026 the first probe read the RA drift as the
+    same size both ways but opposite (+13.1"/min west by the plate solves,
+    -13.9" by the guide camera), which read as 215" of flex. So the sign is
+    taken from the run: when both cameras' RA drift is clearly larger than
+    its scatter and they are opposite, the guide camera's RA is turned
+    round and that is said. When the drift is too small to tell, it is
+    left, and RA flex from it is not to be trusted."""
+    g, m = fit(guide), fit(main)
+    if not g or not m:
+        return 1, ""
+    gw, mw = g["west"], m["west"]
+    span = (max(r[0] for r in main) - min(r[0] for r in main)) / 60.0
+    clear = all(abs(a["drift_per_min"]) * span > 2 * max(a["scatter"], 0.1) for a in (gw, mw))
+    if not clear:
+        return 1, ("RA drift too small against its scatter to tell which way the guide camera's RA "
+                   "reads on the sky: RA flex not measured")
+    if gw["drift_per_min"] * mw["drift_per_min"] < 0:
+        return -1, ("the ST4 west pulse moves the pointing east as the plate solves see it: "
+                    "the guide camera's RA turned round to match")
+    return 1, ""
+
+
 def parting(guide, main):
     """How far the two tracks part over the run, arcsec north and west: the
     guide track's straight line against the main camera's, end against start."""
@@ -153,6 +180,11 @@ def probe(minutes, say=print):
         finally:
             stop.set()
             worker.join(timeout=MAIN_EXPOSURE + 60)
+    sign, sign_note = ra_sign(guide_track, main_track)
+    if sign < 0:
+        guide_track = [(t, n, -w) for t, n, w in guide_track]
+    if sign_note:
+        problems.append(sign_note)
     # Both tracks from the same moment: the guide track is moved to agree
     # with the main camera's first point, so only how they change is compared.
     if main_track and guide_track:
