@@ -698,8 +698,11 @@ def run_guider(args):
             except BaseException as failure:
                 beat.stop()
                 cam.stop_pulse()
+                reason = getattr(failure, "message", str(failure)) or type(failure).__name__
+                # Said before the state changes: the run ends the guider as soon as it reads the fault.
+                print(f"FAULT: {reason}", flush=True)
                 beat.update(state="fault" if not isinstance(failure, KeyboardInterrupt) else "stopped",
-                            reason=getattr(failure, "message", str(failure)) or type(failure).__name__)
+                            reason=reason)
                 raise
             else:
                 beat.stop()
