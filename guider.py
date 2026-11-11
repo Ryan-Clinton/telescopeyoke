@@ -1445,7 +1445,9 @@ class Supervisor:
         import sys
         RUN_LOG.parent.mkdir(parents=True, exist_ok=True)
         log = RUN_LOG.open("a", encoding="utf-8")
-        proc = self.popen([sys.executable, str(config.ROOT / "guidecam.py"), "guide",
+        # -u: unbuffered, so a guider ended before it guides still leaves its
+        # lines in the log (11 November 2026: two failed starts, nothing written).
+        proc = self.popen([sys.executable, "-u", str(config.ROOT / "guidecam.py"), "guide",
                            "--exposure", f"{self.exposure:g}"]
                           + (["--dec-one-way", self.dec_one_way] if self.dec_one_way else []),
                           stdout=log, stderr=log, start_new_session=True)
