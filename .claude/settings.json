@@ -21,7 +21,8 @@
       }
     ],
     "UserPromptSubmit": [
-      {"hooks": [{"type": "command", "command": "python3", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/log.py"], "timeout": 20}]}
+      {"hooks": [{"type": "command", "command": "python3", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/log.py"], "timeout": 20},
+                 {"type": "command", "command": "python3", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/sky.py"], "timeout": 45}]}
     ],
     "Stop": [
       {"hooks": [{"type": "command", "command": "python3", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/log.py"], "timeout": 20}]}

@@ -11,6 +11,11 @@
                        beside it as clouds-YYYYMMDD-HHMM.jpg: was it cloud?
     ./clouds.py --airports   only the airports' cloud reports (METARs) near
                        the site; a plain run prints them under the satellite's
+    ./clouds.py --approach   the nearest clear sky, which way and how fast the
+                       cloud moves (the last hour's three pictures), and when
+                       clear sky upwind gets here, with a range; run by
+                       .claude/hooks/sky.py whenever the person talks about
+                       the sky
 
 Source: EUMETSAT's public image service (view.eumetsat.int), 10.5 µm
 infrared, a new image every 10 minutes. Infrared works at night: clouds are
@@ -101,14 +106,19 @@ def picture_time(timeout=8):
     return None
 
 
+def _box(site):
+    lat, lon = site["latitude"], site["longitude"]
+    return (lat - SPAN_LAT, lon - SPAN_LON, lat + SPAN_LAT, lon + SPAN_LON)
+
+
 def update(site, when=None, timeout=60, save="auto"):
     """Fetch, annotate and save the image. Returns (brightness over the site,
     brightness of the darkest tenth of the map), both 0-255; the second is a
     stand-in for clear sky. `when` (UTC) is a past picture, saved under its
     own name so the page's live one is left alone: 5 November 2026, dimmed
     stars were put down to dew without a look at the satellite."""
-    lat, lon = site["latitude"], site["longitude"]
-    box = (lat - SPAN_LAT, lon - SPAN_LON, lat + SPAN_LAT, lon + SPAN_LON)
+    lat = site["latitude"]
+    box = _box(site)
     infrared = _layer("mtg_fd:ir105_hrfi", box, when=when, timeout=timeout).convert("RGB")
     levels = np.asarray(infrared.convert("L"), dtype=float)
     x, y = WIDTH // 2, HEIGHT // 2
@@ -444,6 +454,169 @@ def history_lines(hours=24):
     return out or [f"no looks in the last {hours} h"]
 
 
+APPROACH = config.DATA / "cache" / "cloud_approach.json"
+APPROACH_GAP_MIN = 30      # minutes between the pictures the cloud's movement is measured from
+APPROACH_MAX_PX = 60       # the most a picture's cloud may move between two of them (about 25-45 km)
+APPROACH_HOURS = 6         # how far ahead an arrival is looked for
+CLEAR_MARGIN, BROKEN_MARGIN = 10, 20   # as verdict(): brightness over the clear tenth
+
+
+def _levels(site, when, timeout=20):
+    return np.asarray(_layer("mtg_fd:ir105_hrfi", _box(site), when=when, timeout=timeout).convert("L"), float)
+
+
+def _shift(before, after):
+    """(dx, dy) pixels the picture moved from `before` to `after`, by phase
+    correlation over the whole map, or None when no clear peak."""
+    window = np.outer(np.hanning(before.shape[0]), np.hanning(before.shape[1]))
+    a = np.fft.fft2((before - before.mean()) * window)
+    b = np.fft.fft2((after - after.mean()) * window)
+    cross = np.conj(a) * b
+    surface = np.fft.ifft2(cross / np.maximum(np.abs(cross), 1e-9)).real
+    h, w = surface.shape
+    dy, dx = np.meshgrid(np.fft.fftfreq(h, 1 / h), np.fft.fftfreq(w, 1 / w), indexing="ij")
+    surface[(np.abs(dx) > APPROACH_MAX_PX) | (np.abs(dy) > APPROACH_MAX_PX)] = -np.inf
+    # What does not move (the land warmer than the sea, the map's edges)
+    # matches itself at no shift and would hide the cloud's movement: the
+    # cloud's own peak is looked for away from it. 12 November 2026: the
+    # first try read 0 km/h with the gap visibly moving.
+    surface[(np.abs(dx) <= 2) & (np.abs(dy) <= 2)] = -np.inf
+    noise = float(np.std(surface[np.isfinite(surface)]))
+    peak = np.unravel_index(int(np.argmax(surface)), surface.shape)
+    if surface[peak] < 4 * noise:
+        return None
+    return float(dx[peak]), float(dy[peak])
+
+
+def approach(site=None, fresh_s=0):
+    """Where the nearest clear sky is and when it gets here, from the
+    satellite's last three pictures (APPROACH_GAP_MIN apart): the cloud's
+    movement measured between them, then the clear sky upstream of the site
+    carried along it. Also the nearest clear area now, wherever it is.
+
+    12 November 2026: told of a big gap coming from Scotland, I reported the
+    camera's star count; working out by eye from two pictures that the
+    gap's edge was 45 km east and creeping west took a second request. This
+    gives that at once. Clouds also grow and melt as they move, so it is a
+    guide with a range, not a promise."""
+    import concurrent.futures
+    import datetime as dt
+    import json
+    from scipy.ndimage import uniform_filter
+    if fresh_s:
+        try:
+            kept = json.loads(APPROACH.read_text(encoding="utf-8"))
+            if time.time() - kept["t"] < fresh_s:
+                return kept
+        except (OSError, ValueError, KeyError):
+            pass
+    site = site or config.load()["site"]
+    taken = picture_time()
+    if taken is None:
+        return {"t": time.time(), "error": "the satellite service would not say when its newest picture was taken"}
+    times = [taken - dt.timedelta(minutes=APPROACH_GAP_MIN * k) for k in (2, 1, 0)]
+    try:
+        with concurrent.futures.ThreadPoolExecutor(3) as pool:
+            pictures = list(pool.map(lambda when: _levels(site, when), times))
+    except (RuntimeError, requests.RequestException, OSError) as problem:
+        return {"t": time.time(), "error": f"no satellite pictures: {problem}"}
+    lat = site["latitude"]
+    kx = 111.32 * math.cos(math.radians(lat)) * 2 * SPAN_LON / WIDTH     # km a pixel, east-west
+    ky = 111.32 * 2 * SPAN_LAT / HEIGHT                                   # km a pixel, north-south
+    now = uniform_filter(pictures[-1], 9)
+    ref = float(np.percentile(pictures[-1], 10))
+    cx, cy = WIDTH // 2, HEIGHT // 2
+    answer = {"t": time.time(), "picture": taken.isoformat(), "here": verdict(float(now[cy, cx]), ref)}
+
+    # The nearest clear area now, any direction.
+    clear = (now - ref) < CLEAR_MARGIN
+    ys, xs = np.nonzero(clear)
+    if len(xs):
+        east, north = (xs - cx) * kx, (cy - ys) * ky
+        dist = np.hypot(east, north)
+        i = int(np.argmin(dist))
+        answer["nearest_clear_km"] = round(float(dist[i]))
+        answer["nearest_clear_bearing"] = _compass(math.degrees(math.atan2(east[i], north[i])) % 360)
+
+    # The movement: the hour as a whole, and each half for the spread.
+    moves = []
+    for a, b, minutes in ((0, 2, 2 * APPROACH_GAP_MIN), (0, 1, APPROACH_GAP_MIN), (1, 2, APPROACH_GAP_MIN)):
+        s = _shift(pictures[a], pictures[b])
+        if s:
+            moves.append((s[0] / minutes, s[1] / minutes))       # pixels a minute
+    if not moves:
+        answer["movement"] = None
+        answer["lines"] = _approach_lines(answer)
+        return _keep_approach(answer)
+    vx, vy = moves[0]
+    east_kmh, north_kmh = vx * kx * 60, -vy * ky * 60
+    answer["speed_kmh"] = round(float(math.hypot(east_kmh, north_kmh)))
+    answer["moving_from"] = _compass((math.degrees(math.atan2(east_kmh, north_kmh)) + 180) % 360)
+
+    def arrival(v):
+        """(minutes until clear sky upstream reaches the site, minutes it lasts), None for either unknown."""
+        start = None
+        for minutes in range(0, APPROACH_HOURS * 60 + 1, 5):
+            x, y = round(cx - v[0] * minutes), round(cy - v[1] * minutes)
+            if not (0 <= x < WIDTH and 0 <= y < HEIGHT):
+                return start, None          # upstream runs off the map
+            is_clear = (now[y, x] - ref) < CLEAR_MARGIN
+            if start is None and is_clear:
+                start = minutes
+            elif start is not None and not is_clear:
+                return start, minutes - start
+        return start, None
+
+    tries = [arrival(v) for v in moves] + [arrival((moves[0][0] * f, moves[0][1] * f)) for f in (0.75, 1.25)]
+    starts = [s for s, _ in tries if s is not None]
+    best, lasts = arrival(moves[0])
+    answer["arrives_min"] = best
+    answer["arrives_range_min"] = [min(starts), max(starts)] if starts else None
+    answer["lasts_min"] = lasts
+    answer["lines"] = _approach_lines(answer)
+    return _keep_approach(answer)
+
+
+def _keep_approach(answer):
+    import json
+    try:
+        APPROACH.parent.mkdir(parents=True, exist_ok=True)
+        APPROACH.write_text(json.dumps(answer), encoding="utf-8")
+    except OSError:
+        pass
+    return answer
+
+
+def _approach_lines(a):
+    import datetime as dt
+    if a.get("error"):
+        return [f"cloud approach: {a['error']}"]
+    clock = lambda minutes: (dt.datetime.now() + dt.timedelta(minutes=minutes)).strftime("%H:%M")  # noqa: E731
+    out = [f"satellite picture {a['picture'][11:16]} UT: {a['here']} over the site"]
+    if a.get("nearest_clear_km") is not None:
+        out.append(f"nearest clear sky: {a['nearest_clear_km']} km {a['nearest_clear_bearing']}")
+    else:
+        out.append(f"no clear sky anywhere on the map (about {2 * SPAN_LAT * 111:.0f} x "
+                   f"{2 * SPAN_LON * 111 * math.cos(math.radians(55)):.0f} km)")
+    if a.get("movement", True) is None:
+        out.append("the cloud's movement could not be measured from the last hour's pictures")
+        return out
+    out.append(f"cloud moving from the {a['moving_from']} at about {a['speed_kmh']} km/h (last hour's pictures)")
+    if a.get("arrives_min") == 0:
+        out.append("clear sky is over the site now by the satellite"
+                   + (f", for about {a['lasts_min']} min more at this speed" if a.get("lasts_min") else ""))
+    elif a.get("arrives_min") is not None:
+        lo, hi = a["arrives_range_min"]
+        out.append(f"clear sky upwind reaches here about {clock(a['arrives_min'])} (in {a['arrives_min']} min; "
+                   f"range {clock(lo)}-{clock(hi)})"
+                   + (f", lasting about {a['lasts_min']} min" if a.get("lasts_min") else ", its end not on the map"))
+    else:
+        out.append(f"no clear sky upwind within {APPROACH_HOURS} h at this speed"
+                   + (": the clear area is not on the cloud's track" if a.get("nearest_clear_km") is not None else ""))
+    out.append("a guide: clouds grow and melt as they move")
+    return out
+
+
 if __name__ == "__main__":
     import argparse
     import datetime as dt
@@ -452,7 +625,14 @@ if __name__ == "__main__":
     ap.add_argument("--airports", action="store_true", help="only the airports' cloud reports")
     ap.add_argument("--history", type=float, metavar="HOURS", nargs="?", const=24,
                     help="the looks kept in the last HOURS (24), with what the camera measured")
+    ap.add_argument("--approach", action="store_true",
+                    help="the nearest clear sky, the cloud's movement, and when clear sky gets here")
+    ap.add_argument("--fresh", type=float, default=0, metavar="SECONDS",
+                    help="with --approach: reuse an answer this new instead of fetching again")
     args = ap.parse_args()
+    if args.approach:
+        print("\n".join(approach(fresh_s=args.fresh)["lines"]))
+        raise SystemExit
     if args.history:
         print("\n".join(history_lines(args.history)))
         raise SystemExit
