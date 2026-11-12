@@ -493,6 +493,18 @@ def _shift(before, after):
     return float(dx[peak]), float(dy[peak])
 
 
+def _failed(why, site):
+    """An approach answer with no pictures: said as it is, the airports'
+    reports in its place (12 November 2026, 23:07: EUMETSAT timed out and
+    --approach stopped on a KeyError instead)."""
+    lines = [f"satellite: {why}"]
+    try:
+        lines += airport_lines(site)
+    except Exception as problem:      # noqa: BLE001 - the answer goes out without them
+        lines.append(f"airports: none ({problem.__class__.__name__})")
+    return {"t": time.time(), "error": why, "lines": lines}
+
+
 def approach(site=None, fresh_s=0):
     """Where the nearest clear sky is and when it gets here, from the
     satellite's last hour of pictures (every pair 20-40 min apart, the median): the cloud's
@@ -518,13 +530,13 @@ def approach(site=None, fresh_s=0):
     site = site or config.load()["site"]
     taken = picture_time()
     if taken is None:
-        return {"t": time.time(), "error": "the satellite service would not say when its newest picture was taken"}
+        return _failed("the satellite service would not say when its newest picture was taken", site)
     times = [taken - dt.timedelta(minutes=STEP_MIN * k) for k in range(PICTURES - 1, -1, -1)]
     try:
         with concurrent.futures.ThreadPoolExecutor(PICTURES) as pool:
             pictures = list(pool.map(lambda when: _levels(site, when), times))
     except (RuntimeError, requests.RequestException, OSError) as problem:
-        return {"t": time.time(), "error": f"no satellite pictures: {problem}"}
+        return _failed(f"no satellite pictures: {problem}", site)
     lat = site["latitude"]
     kx = 111.32 * math.cos(math.radians(lat)) * 2 * SPAN_LON / WIDTH     # km a pixel, east-west
     ky = 111.32 * 2 * SPAN_LAT / HEIGHT                                   # km a pixel, north-south
