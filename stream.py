@@ -248,7 +248,15 @@ def night_over(st, now=None):
 
 
 def latest_age(now=None):
-    """Seconds since the camera's newest picture (web/latest.jpg), or None."""
+    """Seconds since the camera's newest picture (web/latest.jpg), or None.
+    None too when that picture is skywatch's cloud check: watching for a
+    clearing is not worth going on air for (12 November 2026, the person:
+    the stream was on air for 40 minutes of black frames)."""
+    try:
+        if json.loads((WEB / "latest.json").read_text(encoding="utf-8")).get("kind") == "sky check":
+            return None
+    except (OSError, ValueError, AttributeError):
+        pass
     try:
         return (now or time.time()) - (WEB / "latest.jpg").stat().st_mtime
     except OSError:
