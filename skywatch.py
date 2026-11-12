@@ -16,6 +16,7 @@ cleared, so whatever started it knows when to carry on.
 import argparse
 import sys
 import time
+from pathlib import Path
 from datetime import datetime, timedelta
 
 import numpy as np
@@ -84,6 +85,44 @@ def guide_sees_star(seconds=2.0, gain=400):
     return False, why
 
 
+def _wheel(*args):
+    import subprocess
+    return subprocess.run([sys.executable, str(Path(__file__).with_name("sxwheel.py")), *args],
+                          capture_output=True, text=True)
+
+
+def clear_filter(say=print):
+    """With the filter wheel in the light path, L in front of the camera, and
+    the filter that was there (to put back when the gap is found), or None.
+    The stars are counted in the filter that passes the most light. 12
+    November 2026: a run left Ha in, and from 21:45 to 03:42 the watch
+    counted 0 to 4 stars through it; turned to L, the same sky gave 86. A
+    wheel that will not turn is said and the watch goes on (its counts are
+    then low)."""
+    import filters
+    import sxwheel
+    if not filters.wheel_in_train():
+        return None
+    was = sxwheel.confirmed(say=lambda *_: None)
+    turned = _wheel("move", "L")
+    say("filter: L in the light path" + (f" ({was[1]} put back when the sky clears)" if was and was[1] != "L"
+                                          else "") if turned.returncode == 0 else
+        f"filter: the wheel did not turn to L ({turned.stdout.strip()} {turned.stderr.strip()}): "
+        "star counts through another filter read low", flush=True)
+    return was if was and was[1] != "L" and turned.returncode == 0 else None
+
+
+def restore_filter(was, say=print):
+    """The observing filter back in once the gap is found, so the run or
+    test that follows starts in its own filter."""
+    if not was:
+        return
+    turned = _wheel("move", str(was[0]))
+    say(f"filter: {was[1]} back in the light path" if turned.returncode == 0 else
+        f"filter: the wheel did not turn back to {was[1]} ({turned.stdout.strip()} {turned.stderr.strip()})",
+        flush=True)
+
+
 def watch(until, every, exposure, guide_check=False):
     """Frames until stars show or `until` comes, with "Watching for stars"
     on the status page meanwhile."""
@@ -94,6 +133,7 @@ def watch(until, every, exposure, guide_check=False):
     streak = 0
     looked = None    # when the cloud data was last printed
     stars = None
+    was = clear_filter()
     with Camera() as cam:
         while datetime.now() < end:
             started = time.monotonic()
@@ -118,6 +158,7 @@ def watch(until, every, exposure, guide_check=False):
                     streak = 0
             if streak >= 2:
                 print(f"STARS VISIBLE: frame saved as {save(mosaic, header)}", flush=True)
+                restore_filter(was)
                 print(GO_NOW, flush=True)
                 return True
             time.sleep(max(0, every - (time.monotonic() - started)))
