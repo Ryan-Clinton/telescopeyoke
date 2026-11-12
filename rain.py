@@ -5,9 +5,12 @@
                               how long) rain upwind reaches the site
     ./rain.py --json
     ./rain.py --watch --every 15 --until 06:00 --flash "Living room"
-                              look every 15 minutes; a line (and the room's
-                              lights pulsed blue) only when rain is due within
-                              WARN_MIN, starts, or clears again
+                              look every 15 minutes (every 60 when the forecast
+                              is clear and dry to the end and the radar has no
+                              rain within 100 km; every 10 with rain that
+                              near); a line (and the room's lights pulsed
+                              blue) only when rain is due within WARN_MIN,
+                              starts, or clears again
 
 The radar is RainViewer's public composite (api.rainviewer.com: the national
 radars, the Met Office's here, a picture every 10 minutes, the last two
@@ -180,15 +183,46 @@ def lines(a):
     return out
 
 
+CALM_EVERY_MIN = 60      # forecast clear and dry to the end, no rain on the radar near: this seldom
+CLOSE_EVERY_MIN = 10     # rain on the radar within CLOSE_KM: this often
+CLOSE_KM = 100
+CALM_CLOUD, CALM_RAIN = 20, 10   # the forecast's most cloud (%) and rain chance (%) left in the night, for calm
+
+
+def pace(a, every, until, weather=None):
+    """Minutes to the next look, and why: CLOSE_EVERY_MIN with rain near,
+    CALM_EVERY_MIN when the forecast says clear and dry to `until` and the
+    radar has nothing near, else `every`. 12 November 2026, the person: with
+    perfect clear skies forecast all night, these can be turned down."""
+    if a and a.get("nearest_km") is not None and a["nearest_km"] <= CLOSE_KM:
+        return CLOSE_EVERY_MIN, f"rain {a['nearest_km']} km away"
+    try:
+        if weather is None:
+            import feeds
+            site = config.load()["site"]
+            weather = feeds.weather(site["latitude"], site["longitude"])
+        now = time.time()
+        hours = [i for i, t in enumerate(weather["time"]) if now - 3600 <= t <= until.timestamp()]
+        cloud = max((weather["cloud_cover"][i] or 0) for i in hours)
+        wet = max((weather["precipitation_probability"][i] or 0) for i in hours)
+    except Exception:            # no forecast: the pace asked for
+        return every, "no forecast to go by"
+    if cloud <= CALM_CLOUD and wet < CALM_RAIN and (not a or a.get("nearest_km") is None
+                                                     or a["nearest_km"] > CLOSE_KM):
+        return max(every, CALM_EVERY_MIN), f"forecast clear and dry to the end (cloud at most {cloud}%, rain {wet}%)"
+    return every, f"forecast cloud up to {cloud}%, rain chance up to {wet}%"
+
+
 def watch(every, until, room=None, say=print):
-    """Look every `every` minutes until `until` (HH:MM); say a line only when
-    the warning changes: rain due within WARN_MIN, rain here, or clear again."""
+    """Look every `every` minutes until `until` (HH:MM), more or less often
+    as pace() says; say a line only when the warning changes (rain due
+    within WARN_MIN, rain here, or clear again) or the pace does."""
     import alert
     end = datetime.strptime(until, "%H:%M").replace(year=datetime.now().year, month=datetime.now().month,
                                                      day=datetime.now().day)
     if end < datetime.now():
         end += timedelta(days=1)
-    last = None
+    last, paced = None, None
     while datetime.now() < end:
         try:
             a = look()
@@ -211,7 +245,11 @@ def watch(every, until, room=None, say=print):
                     say(f"{datetime.now():%H:%M} rain watch on: " + "; ".join(a["lines"]))
                 last = state
             _keep(a)
-        time.sleep(every * 60)
+        minutes, why = pace(a, every, end)
+        if minutes != paced:
+            say(f"{datetime.now():%H:%M} rain watch: looking every {minutes:g} min ({why})")
+            paced = minutes
+        time.sleep(minutes * 60)
 
 
 def _keep(a):
