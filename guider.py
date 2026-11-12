@@ -84,6 +84,13 @@ DEC_SWITCH_FRAMES = 3
 DEC_FAST = 3         # an error this many times the minimum move switches Dec at once
 SLACK_START = 0.5    # share of the measured slack taken up on a Dec reversal, to start
 LONGEST_PULSE = 2.5  # seconds per axis per frame
+# A sticking Dec axis (10 November 2026, 22:16: one-way south pulses for half
+# a minute moved nothing, then it let go 20-30" at once): with a cap, Dec
+# pulses stop once this many seconds have gone out the same way with the
+# error not shrinking, and wait for the star to move; the lurch is roughly
+# what was stored up. Off unless asked (guidecam.py guide --dec-stuck S).
+DEC_MOVED = 0.8      # the error down to this share of where the pushing began: the axis moved
+DEC_ESCAPE = 2.0     # the error grown to this many times it: pushing again, the cap a fresh start
 RMS_FRAMES = 30
 
 # Limits: each is a fault
@@ -629,10 +636,13 @@ class Controller:
     switch, the Dec slack partly taken up on a reversal and adjusted by
     what follows, and the limits that make a fault."""
 
-    def __init__(self, cols, backlash=0.0, spread=0.0, exposure=2.0, one_way=None):
+    def __init__(self, cols, backlash=0.0, spread=0.0, exposure=2.0, one_way=None, stuck_s=None):
         self.columns = {AXIS_SIGN[k]: np.asarray(v, float) for k, v in cols.items()}
         self.backlash, self.spread, self.exposure = backlash, spread, exposure
         self.one_way = {"north": 1, "south": -1}.get(one_way)
+        self.stuck_s = stuck_s          # the cap on Dec pulses unanswered, seconds; None: no cap
+        self.dec_from = None            # (sign, |error| px) where the present run of Dec pushes began
+        self.unanswered = 0.0           # Dec pulse seconds sent since then
         self.ra_last = 0.0
         self.dec_dir = None
         self.dec_waiting = 0
@@ -703,6 +713,9 @@ class Controller:
             seconds.append(move / self.strength(axis, sign) if move else 0.0)
         if reversal and self.backlash > 0:
             seconds[1] += math.copysign(self.slack_share * self.backlash, seconds[1])
+        held = self.hold_dec(dec_px, seconds[1])
+        if held:
+            seconds[1] = 0.0
         wanted = list(seconds)
         seconds = [max(-LONGEST_PULSE, min(LONGEST_PULSE, s)) for s in seconds]
         total = abs(seconds[0]) + abs(seconds[1])
@@ -721,8 +734,26 @@ class Controller:
             if abs(self.sent[axis]) > CORRECTION_FAULT:
                 raise Fault(f"{self.sent[axis] / 60:+.1f}' of {axis} correction since the lock was set, "
                             f"past {CORRECTION_FAULT / 60:.0f}'.")
+        if seconds[1] and self.stuck_s:
+            self.unanswered += abs(seconds[1])
         return seconds, {"ra_px": ra_px, "dec_px": dec_px, "reversal": reversal,
-                         "slack_share": round(self.slack_share, 2)}
+                         "slack_share": round(self.slack_share, 2), "dec_held": held}
+
+    def hold_dec(self, dec_px, want_s):
+        """Whether this frame's Dec pulse is held back: the cap's seconds
+        already sent the same way, the error neither down to DEC_MOVED of
+        where the pushing began nor grown to DEC_ESCAPE times it."""
+        if not self.stuck_s:
+            return False
+        if not want_s:
+            self.dec_from, self.unanswered = None, 0.0     # nothing wanted: the run of pushes is over
+            return False
+        sign, size = (1 if want_s > 0 else -1), abs(dec_px)
+        if (self.dec_from is None or sign != self.dec_from[0] or size <= DEC_MOVED * self.dec_from[1]
+                or size >= DEC_ESCAPE * self.dec_from[1]):
+            self.dec_from, self.unanswered = (sign, size), 0.0
+            return False
+        return self.unanswered >= self.stuck_s
 
 
 def write_state(state, path=None):
@@ -1100,7 +1131,7 @@ class OrderDesk:
 # ------------------------------------------------- the loop
 
 def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, say=print,
-          state_path=None, log_folder=None, run_id=None, desk=None):
+          state_path=None, log_folder=None, run_id=None, desk=None, stuck_s=None):
     """The closed loop, with its heartbeat and its orders. Finds a star,
     locks on it and keeps it there until `minutes` pass, a `stop` order,
     Ctrl-C or SIGTERM, or a fault. The state file has the heartbeat every
@@ -1113,11 +1144,12 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
     folder = log_folder or LOG_FOLDER
     folder.mkdir(parents=True, exist_ok=True)
     log = folder / f"guide-{datetime.now():%Y%m%d}.jsonl"
-    ctl = Controller(cols, cal.get("backlash_s", 0.0), cal.get("backlash_spread_s", 0.0), seconds, one_way)
+    ctl = Controller(cols, cal.get("backlash_s", 0.0), cal.get("backlash_spread_s", 0.0), seconds, one_way, stuck_s)
     stuck_after = 3 * seconds + 5 + RETRY_S + 2 * LONGEST_PULSE
     desk = desk or OrderDesk(run_id, say=say)
     beat = Heartbeat({"pid": os.getpid(), "pid_start": process_start(os.getpid()), "run": run_id,
-                      "exposure": seconds, "state": "starting", "camera_held": True, "dec_one_way": one_way},
+                      "exposure": seconds, "state": "starting", "camera_held": True, "dec_one_way": one_way,
+                      "dec_stuck_s": stuck_s},
                      stuck_after, state_path, say)
     errors = deque(maxlen=RMS_FRAMES)
     lock, state, reason = None, "starting", ""
@@ -1276,7 +1308,7 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
                            ra_err=round(-info["ra_px"] * SCALE, 2), dec_err=round(-info["dec_px"] * SCALE, 2),
                            pulse_s=[round(sent[0], 3), round(sent[1], 3)], pulsed=pulsed,
                            delay_s=round(pulsed - times["mid"], 3), reversal=info["reversal"],
-                           slack_share=info["slack_share"])
+                           slack_share=info["slack_share"], dec_held=info["dec_held"], dec_stuck_s=stuck_s)
             rms = None
             if errors:
                 e = np.array(errors)

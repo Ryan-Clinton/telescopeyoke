@@ -708,7 +708,8 @@ def run_guider(args):
                 beat.stop()
                 if args.action == "guide":
                     _, stop_order = guider.guide(cam, cols, cal, args.exposure, args.gain, args.minutes,
-                                                 args.dec_one_way, run_id=run, desk=desk)
+                                                 args.dec_one_way, run_id=run, desk=desk,
+                                                 stuck_s=args.dec_stuck)
                 else:
                     beat.update(state="stopped", reason="calibrated")
     finally:
@@ -785,6 +786,9 @@ def main(argv=None):
             g.add_argument("--recalibrate", action="store_true", help="calibrate again first")
             g.add_argument("--dec-one-way", choices=("north", "south"),
                            help="correct Dec only this way, the way the polar drift pushes")
+            g.add_argument("--dec-stuck", type=float, metavar="SECONDS",
+                           help="a sticking Dec axis: hold Dec pulses once this many seconds have gone out "
+                                "the same way with the star not moving, until it moves (try 3)")
     for name in ("star", "calibrate", "guide", "focus"):
         sub.choices[name].add_argument("--exposure", type=float, default=2.0, help="guide exposure, seconds (0.5 to 4)")
         sub.choices[name].add_argument("--gain", type=int, help="the camera's gain, per cent (100 = none)")
@@ -792,7 +796,7 @@ def main(argv=None):
     if args.action in ("star", "calibrate", "guide", "focus") and not 0.5 <= args.exposure <= 4:
         sys.exit("The guide exposure is 0.5 to 4 s.")
     if args.action == "calibrate":
-        args.recalibrate, args.minutes, args.dec_one_way = True, None, None
+        args.recalibrate, args.minutes, args.dec_one_way, args.dec_stuck = True, None, None, None
     try:
         if args.action == "install":
             install()

@@ -153,9 +153,14 @@ def draw(rows, run_id, out, span=None):
             d.rectangle([cx, min(y_pulse(0), y_pulse(dec_p)), cx + bar, max(y_pulse(0), y_pulse(dec_p))],
                         fill=DEC_COLOUR)
 
+    for r in rows:
+        if r.get("dec_held"):       # a Dec pulse held back by the sticking cap
+            d.line([(x(r), y_pulse(0) - 4), (x(r), y_pulse(0) + 4)], fill=(240, 200, 60), width=2)
     start = datetime.fromtimestamp(t0)
+    cap = next((r["dec_stuck_s"] for r in rows if r.get("dec_stuck_s")), None)
     d.text((left, 18), f"Guiding {start:%d %b %Y %H:%M}, run {run_id}: {s['minutes']:.1f} min, "
-           f"{s['frames']} frames" + (f", {s['lost']} lost" if s["lost"] else ""),
+           f"{s['frames']} frames" + (f", {s['lost']} lost" if s["lost"] else "")
+           + (f", Dec cap {cap:g} s (held: yellow)" if cap else ""),
            fill=(230, 230, 235), font=big)
     d.text((left, 46), f"RMS  RA {s['ra']:.2f}\"   Dec {s['dec']:.2f}\"   total {s['total']:.2f}\"",
            fill=(230, 230, 235), font=mid)
