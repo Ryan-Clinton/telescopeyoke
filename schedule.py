@@ -62,7 +62,8 @@ MORNING = (3, 9)           # local hours in which a night may be ended: after it
 IDLE_MINUTES = 30          # guard: no frame kept for this long
 NIGHT_HOURS = 16           # a night's sessions: those begun within this many hours
 IMAGING = ("shoot.py", "patrol.py", "starwatch.py", "focus.py", "focuser.py", "polaralign.py", "camera_setup.py",
-           "mount.py", "direct.py", "console.py", "app.py", "planet.py", "skywatch.py", "snap.py", "tour.py")
+           "mount.py", "direct.py", "console.py", "app.py", "planet.py", "skywatch.py", "snap.py", "tour.py",
+           "guidecam.py", "mountprobe.py")
 TY_MOVING = ("shoot", "mount", "focus", "run", "polar-align", "goto")   # `ty` commands that drive the mount or camera
 LOOKED = config.DATA / "cache" / "night.looked"        # guard: the mount's place at its last look
 STILL = (0.02, 0.2, 15 * 60)   # guard: hours of RA, degrees of Dec, and seconds apart for "not moved between looks"
@@ -881,6 +882,25 @@ def unmoved(state, now):
     return 0 < gap <= STILL[2] and min(ra, 24 - ra) <= STILL[0] and abs(state["dec_deg"] - last["dec"]) <= STILL[1]
 
 
+def last_activity():
+    """When the telescope was last used for anything that is not a kept
+    frame: the guider's heartbeat and logs, a mount probe, the cloud watch's
+    frames, the camera's newest picture. 12 November 2026, 04:02: the guard
+    ended a night of guide-scope tests in a clear spell (calibration at
+    03:49, guiding at 04:02), parked the mount and warmed the camera, since
+    none of that kept a frame."""
+    places = [config.DATA / "cache" / "guide.json", config.DATA / "cache" / "guide-run.log",
+              config.DATA / "cache" / "sky_seen.jsonl", config.DATA / "web" / "latest.jpg"]
+    places += list((config.DATA / "frames" / "guide").glob("*"))
+    times = []
+    for place in places:
+        try:
+            times.append(place.stat().st_mtime)
+        except OSError:
+            pass
+    return max(times, default=0.0)
+
+
 def guard(say=print, send=None, run=subprocess.run, now=None, running=None):
     """End the night (`end`) if it is over and nobody has: morning, the
     night has imaged, nothing kept for IDLE_MINUTES, the schedule not
@@ -901,6 +921,8 @@ def guard(say=print, send=None, run=subprocess.run, now=None, running=None):
         return "nothing imaged tonight and the camera not kept"
     if sessions and now - max(s[2] for s in sessions) < IDLE_MINUTES * 60:
         return "still imaging"
+    if now - last_activity() < IDLE_MINUTES * 60:
+        return "the telescope was in use within the last half hour"
     try:
         if now - float(ENDED.read_text(encoding="utf-8")) < NIGHT_HOURS * 3600:
             return "already ended"
