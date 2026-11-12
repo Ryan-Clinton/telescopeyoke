@@ -84,6 +84,11 @@ MIN_ALTITUDE = 20
 # clear of the legs at every step, the counterweights 22 cm away at the
 # closest. With the 20° floor, nothing further round is any lower. It stays
 # here in the code, never a setting (AGENTS.md).
+# Not the only place the tube can meet a leg: on 12 November 2026 the back
+# of the tube (183M, wheel) caught the north leg at Dec +40°, east of the
+# pier, between hour angles -2 and -1 h, the tube half an inch too far back
+# in its rings, and the RA clutch slipped about 50° unnoticed
+# (docs/nights/2026-11-11/mount-collision.md).
 MAX_HOUR_ANGLE = 7.5
 # The clearance test may go this far, and no further, to find where it is.
 CLEARANCE_TEST_HOURS = 8.0
