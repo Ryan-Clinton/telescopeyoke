@@ -39,6 +39,9 @@ def main():
     except (OSError, subprocess.TimeoutExpired):
         return
     lines = done.stdout.strip()
+    if not lines and done.stderr.strip():
+        # Said, not swallowed: on 12 November 2026 a message got the radar and no satellite, with no word why.
+        lines = "satellite: clouds.py --approach failed: " + done.stderr.strip().splitlines()[-1]
     try:
         wet = subprocess.run([sys.executable, str(root / "rain.py")], cwd=root, capture_output=True, text=True,
                              timeout=30).stdout.strip()
