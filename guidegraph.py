@@ -5,6 +5,11 @@ and the pulses sent, from the guider's own frame log.
     ./guidegraph.py --list                 # the runs in the latest log
     ./guidegraph.py                        # the latest run, to web/guide-graph.png
     ./guidegraph.py --date 2026-11-10 --run 4b6d6721 --out ~/guide.png
+    ./guidegraph.py --no-send              # drawn, not sent
+
+Each graph drawn is sent to the person's phone by Telegram (notify.py), with
+its run and RMS as the caption (12 November 2026: "make the script do that
+from now on"); --no-send keeps it here.
 
 The same picture PHD2 draws, from frames/guide/guide-DATE.jsonl (one line a
 frame, written by guider.guide): RA blue, Dec red, in arcseconds against
@@ -175,6 +180,7 @@ def main():
     ap.add_argument("--list", action="store_true", help="list the runs in the log and stop")
     ap.add_argument("--out", default=str(OUT), help=f"where the PNG goes (default {OUT})")
     ap.add_argument("--span", type=float, help="the error axis, +/- this many arcseconds")
+    ap.add_argument("--no-send", action="store_true", help="do not send the graph by Telegram")
     args = ap.parse_args()
 
     logs = sorted(LOG_FOLDER.glob("guide-????????.jsonl"))
@@ -198,8 +204,13 @@ def main():
         sys.exit(f"no run {args.run or ''} with a star in {logs[-1].name}")
     run_id = picked[-1]
     out, s = draw(found[run_id], run_id, args.out, args.span)
-    print(f"{out}: run {run_id}, {s['minutes']:.1f} min, RMS RA {s['ra']:.2f}\" Dec {s['dec']:.2f}\" "
-          f"total {s['total']:.2f}\"")
+    words = (f"Guiding {datetime.fromtimestamp(when(found[run_id][0])):%d %b %H:%M}, run {run_id}: "
+             f"{s['minutes']:.1f} min, RMS RA {s['ra']:.2f}\" Dec {s['dec']:.2f}\" total {s['total']:.2f}\"")
+    print(f"{out}: {words}")
+    if not args.no_send:
+        import notify
+        went = notify.send(words, pictures=[(str(out), words)], documents=[(str(out), out.name)])
+        print("sent by Telegram" if went else "not sent by Telegram (the bot is not set up here, or it failed)")
 
 
 if __name__ == "__main__":
