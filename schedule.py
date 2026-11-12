@@ -15,7 +15,8 @@ each is expected to start and finish, for the console to show.
     ./schedule.py clear                   start a new schedule
     ./schedule.py end                     the night is over: park the mount and tell the person
     ./schedule.py guard                   the same, if a night's imaging has stopped and it is morning
-    ./schedule.py guard --install         run the guard every 10 minutes (a systemd user timer)
+    ./schedule.py guard --install         run the guard every 10 minutes (a systemd user timer),
+                                          and the satellite keeper (clouds.py --approach) beside it
 
 Each step has a label, its expected minutes, a command, and maybe a time
 not to start before; the times of the steps after a running one follow from
@@ -968,6 +969,21 @@ def install(say=print, run=subprocess.run, home=None):
     run(["systemctl", "--user", "enable", "--now", "ty-night-end.timer"], check=True)
     say(f"The night-end guard runs every 10 minutes ({place / 'ty-night-end.timer'}). "
         "Stop it: systemctl --user disable --now ty-night-end.timer")
+    # The satellite keeper beside it (12 November 2026): clouds.py --approach
+    # every 10 minutes, so each picture is kept as it comes out and a sky
+    # check never waits on EUMETSAT for the last hour's.
+    (place / "ty-satellite.service").write_text(
+        "[Unit]\nDescription=telescopeyoke: keep the newest satellite picture and the cloud's approach\n\n"
+        f"[Service]\nType=oneshot\nWorkingDirectory={root}\nTimeoutStartSec=8min\n"
+        f"ExecStart={sys.executable} {root / 'clouds.py'} --approach\n", encoding="utf-8")
+    (place / "ty-satellite.timer").write_text(
+        "[Unit]\nDescription=telescopeyoke: the satellite's pictures kept every 10 minutes\n\n"
+        "[Timer]\nOnBootSec=2min\nOnUnitActiveSec=10min\n\n[Install]\nWantedBy=timers.target\n",
+        encoding="utf-8")
+    run(["systemctl", "--user", "daemon-reload"], check=True)
+    run(["systemctl", "--user", "enable", "--now", "ty-satellite.timer"], check=True)
+    say(f"The satellite keeper runs every 10 minutes ({place / 'ty-satellite.timer'}). "
+        "Stop it: systemctl --user disable --now ty-satellite.timer")
 
 
 def mark_id(step_id, **fields):

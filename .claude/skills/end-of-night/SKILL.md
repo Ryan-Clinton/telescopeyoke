@@ -20,7 +20,8 @@ Only on the person's word. The imaging run stops at its own limits
    is let go by the warm-up (`./keeper.py stop`, or `schedule.py end`).
    What stays, always: the status page (`ty-serve`), the stream's watcher
    (`ty-stream`, idle when not imaging), the live client
-   (`ryanclinton-live`) and the night-end timer (`ty-night-end.timer`).
+   (`ryanclinton-live`), the night-end timer (`ty-night-end.timer`) and the
+   satellite keeper (`ty-satellite.timer`, both from `schedule.py guard --install`).
 2. Park only if they ask.
 3. The night's stacks on the desktop, in the background:
    `./restack.py SESSION --on desktop` for each session tonight.
