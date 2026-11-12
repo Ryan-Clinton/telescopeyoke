@@ -8,6 +8,7 @@
   "properties": {
     "error": {"type": "string"},
     "picture": {"type": "string", "description": "HH:MM local, the radar picture's time."},
+    "picture_at": {"type": "string", "description": "The radar picture's time, ISO with zone; arrival minutes count from it."},
     "rain_here": {"type": "boolean"},
     "nearest_km": {"type": ["integer", "null"], "description": "null: no rain on the map (about 250 km each way)."},
     "nearest_bearing": {"type": "string"},

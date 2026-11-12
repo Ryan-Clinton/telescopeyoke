@@ -16,6 +16,10 @@
                        clear sky upwind gets here, with a range; run by
                        .claude/hooks/sky.py whenever the person talks about
                        the sky
+    ./clouds.py --scores [DAYS]   each clear-sky and rain prediction kept
+                       (cache/sky_predictions.jsonl) against the first sight
+                       of it after (cache/sky_seen.jsonl: skywatch's star
+                       counts, the radar over the site): how early or late
 
 Source: EUMETSAT's public image service (view.eumetsat.int), 10.5 µm
 infrared, a new image every 10 minutes. Infrared works at night: clouds are
@@ -455,7 +459,8 @@ def history_lines(hours=24):
 
 
 APPROACH = config.DATA / "cache" / "cloud_approach.json"
-APPROACH_GAP_MIN = 30      # minutes between the pictures the cloud's movement is measured from
+STEP_MIN = 10              # the satellite's pictures come every 10 minutes
+PICTURES = 7               # the last hour's: the cloud's movement is measured between pairs of them
 APPROACH_MAX_PX = 60       # the most a picture's cloud may move between two of them (about 25-45 km)
 APPROACH_HOURS = 6         # how far ahead an arrival is looked for
 CLEAR_MARGIN, BROKEN_MARGIN = 10, 20   # as verdict(): brightness over the clear tenth
@@ -490,7 +495,7 @@ def _shift(before, after):
 
 def approach(site=None, fresh_s=0):
     """Where the nearest clear sky is and when it gets here, from the
-    satellite's last three pictures (APPROACH_GAP_MIN apart): the cloud's
+    satellite's last hour of pictures (every pair 20-40 min apart, the median): the cloud's
     movement measured between them, then the clear sky upstream of the site
     carried along it. Also the nearest clear area now, wherever it is.
 
@@ -514,9 +519,9 @@ def approach(site=None, fresh_s=0):
     taken = picture_time()
     if taken is None:
         return {"t": time.time(), "error": "the satellite service would not say when its newest picture was taken"}
-    times = [taken - dt.timedelta(minutes=APPROACH_GAP_MIN * k) for k in (2, 1, 0)]
+    times = [taken - dt.timedelta(minutes=STEP_MIN * k) for k in range(PICTURES - 1, -1, -1)]
     try:
-        with concurrent.futures.ThreadPoolExecutor(3) as pool:
+        with concurrent.futures.ThreadPoolExecutor(PICTURES) as pool:
             pictures = list(pool.map(lambda when: _levels(site, when), times))
     except (RuntimeError, requests.RequestException, OSError) as problem:
         return {"t": time.time(), "error": f"no satellite pictures: {problem}"}
@@ -538,17 +543,26 @@ def approach(site=None, fresh_s=0):
         answer["nearest_clear_km"] = round(float(dist[i]))
         answer["nearest_clear_bearing"] = _compass(math.degrees(math.atan2(east[i], north[i])) % 360)
 
-    # The movement: the hour as a whole, and each half for the spread.
+    # The movement: every pair of pictures 20 to 40 minutes apart, and the
+    # median of them. 12 November 2026: one hour-long pair read 51 px east
+    # while seven others read about 1 px a minute south; resting on that one
+    # moved the arrival by three hours.
     moves = []
-    for a, b, minutes in ((0, 2, 2 * APPROACH_GAP_MIN), (0, 1, APPROACH_GAP_MIN), (1, 2, APPROACH_GAP_MIN)):
-        s = _shift(pictures[a], pictures[b])
-        if s:
-            moves.append((s[0] / minutes, s[1] / minutes))       # pixels a minute
-    if not moves:
+    for a in range(PICTURES):
+        for b in range(a + 1, PICTURES):
+            minutes = (b - a) * STEP_MIN
+            if 20 <= minutes <= 40:
+                s = _shift(pictures[a], pictures[b])
+                if s:
+                    moves.append((s[0] / minutes, s[1] / minutes))       # pixels a minute
+    if len(moves) < 3:
         answer["movement"] = None
         answer["lines"] = _approach_lines(answer)
         return _keep_approach(answer)
-    vx, vy = moves[0]
+    vx, vy = float(np.median([m[0] for m in moves])), float(np.median([m[1] for m in moves]))
+    agree = [m for m in moves if math.hypot(m[0] - vx, m[1] - vy) <= 0.5 * max(math.hypot(vx, vy), 0.2)]
+    answer["pairs_agreeing"] = f"{len(agree)} of {len(moves)}"
+    moves = [(vx, vy)] + agree
     east_kmh, north_kmh = vx * kx * 60, -vy * ky * 60
     answer["move_kmh"] = [round(float(east_kmh), 1), round(float(north_kmh), 1)]   # east, north
     answer["speed_kmh"] = round(float(math.hypot(east_kmh, north_kmh)))
@@ -575,7 +589,95 @@ def approach(site=None, fresh_s=0):
     answer["arrives_range_min"] = [min(starts), max(starts)] if starts else None
     answer["lasts_min"] = lasts
     answer["lines"] = _approach_lines(answer)
+    note_prediction("clear", answer["picture"], best, answer["arrives_range_min"], lasts,
+                    speed_kmh=answer["speed_kmh"], moving_from=answer["moving_from"])
     return _keep_approach(answer)
+
+
+# Every prediction and every sight of the sky, kept so the predictions can
+# be scored against what happened (--scores). 12 November 2026, the
+# person: record the cloud predictions against reality for calibration.
+PREDICTIONS = config.DATA / "cache" / "sky_predictions.jsonl"
+SEEN = config.DATA / "cache" / "sky_seen.jsonl"
+CLEAR_STARS = 20       # stars in a sky-check frame counted as clear here (skywatch's own mark is ENOUGH_STARS)
+
+
+def _append(path, row):
+    import json
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as out:
+            out.write(json.dumps(row) + "\n")
+    except OSError:
+        pass
+
+
+def _at(picture, minutes):
+    """The local clock time `minutes` after a picture taken at `picture` (ISO, with zone)."""
+    import datetime as dt
+    when = dt.datetime.fromisoformat(picture).astimezone() + dt.timedelta(minutes=minutes)
+    return when
+
+
+def note_prediction(kind, picture, minutes, span, lasts, **extra):
+    """One prediction ("clear" or "rain") from one picture, kept once."""
+    import json
+    try:
+        for line in PREDICTIONS.read_text(encoding="utf-8").splitlines()[-50:]:
+            row = json.loads(line)
+            if row.get("kind") == kind and row.get("picture") == picture:
+                return                       # this picture's prediction is already kept
+    except (OSError, ValueError):
+        pass
+    _append(PREDICTIONS, {"t": time.time(), "kind": kind, "picture": picture,
+                          "arrives": _at(picture, minutes).isoformat() if minutes is not None else None,
+                          "range": [_at(picture, m).isoformat() for m in span] if span else None,
+                          "lasts_min": lasts, **extra})
+
+
+def note_seen(source, kind, yes, detail=""):
+    """What was seen at the site: kind "clear" (stars) or "rain", yes or no."""
+    _append(SEEN, {"t": time.time(), "source": source, "kind": kind, "yes": bool(yes), "detail": detail})
+
+
+def score_lines(days=14):
+    """Each prediction against the first sight of what it predicted, after the
+    picture it came from: how early or late it was, and inside its range or not."""
+    import datetime as dt
+    import json
+
+    def rows(path):
+        try:
+            return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        except (OSError, ValueError):
+            return []
+    since = time.time() - days * 86400
+    seen = sorted((r for r in rows(SEEN) if r["t"] >= since), key=lambda r: r["t"])
+    out, errors = [], []
+    for p in (r for r in rows(PREDICTIONS) if r["t"] >= since):
+        made = dt.datetime.fromisoformat(p["picture"]).timestamp()
+        looks = [s for s in seen if s["kind"] == p["kind"] and made <= s["t"] <= made + APPROACH_HOURS * 3600]
+        first = next((s for s in looks if s["yes"]), None)
+        said = dt.datetime.fromisoformat(p["arrives"]).strftime("%H:%M") if p.get("arrives") else "none due"
+        head = (f"{dt.datetime.fromisoformat(p['picture']).astimezone():%d %b %H:%M} {p['kind']}: "
+                f"predicted {said}")
+        if first is None:
+            out.append(head + (f"; not seen in {len(looks)} looks" if looks else "; nothing watching"))
+            continue
+        got = dt.datetime.fromtimestamp(first["t"])
+        if not p.get("arrives"):
+            out.append(head + f"; seen {got:%H:%M} ({first['source']})")
+            continue
+        late = (first["t"] - dt.datetime.fromisoformat(p["arrives"]).timestamp()) / 60
+        lo, hi = (dt.datetime.fromisoformat(v).timestamp() for v in p["range"])
+        errors.append(late)
+        out.append(head + f"; seen {got:%H:%M} ({first['source']}): {abs(late):.0f} min "
+                   + ("late" if late > 0 else "early") + ("; inside its range" if lo <= first["t"] <= hi
+                                                          else "; outside its range"))
+    if errors:
+        out.append(f"{len(errors)} scored: median error {float(np.median(errors)):+.0f} min "
+                   f"(+ means it came later than predicted), median size {float(np.median(np.abs(errors))):.0f} min")
+    return out or ["no predictions kept yet"]
 
 
 def _keep_approach(answer):
@@ -589,10 +691,10 @@ def _keep_approach(answer):
 
 
 def _approach_lines(a):
-    import datetime as dt
     if a.get("error"):
         return [f"cloud approach: {a['error']}"]
-    clock = lambda minutes: (dt.datetime.now() + dt.timedelta(minutes=minutes)).strftime("%H:%M")  # noqa: E731
+    # From the picture's time, not now: a kept answer read later says the same clock time.
+    clock = lambda minutes: _at(a["picture"], minutes).strftime("%H:%M")  # noqa: E731
     out = [f"satellite picture {a['picture'][11:16]} UT: {a['here']} over the site"]
     if a.get("nearest_clear_km") is not None:
         out.append(f"nearest clear sky: {a['nearest_clear_km']} km {a['nearest_clear_bearing']}")
@@ -602,13 +704,14 @@ def _approach_lines(a):
     if a.get("movement", True) is None:
         out.append("the cloud's movement could not be measured from the last hour's pictures")
         return out
-    out.append(f"cloud moving from the {a['moving_from']} at about {a['speed_kmh']} km/h (last hour's pictures)")
+    out.append(f"cloud moving from the {a['moving_from']} at about {a['speed_kmh']} km/h (last hour's pictures, "
+               f"{a.get('pairs_agreeing', '?')} pairs agreeing)")
     if a.get("arrives_min") == 0:
         out.append("clear sky is over the site now by the satellite"
                    + (f", for about {a['lasts_min']} min more at this speed" if a.get("lasts_min") else ""))
     elif a.get("arrives_min") is not None:
         lo, hi = a["arrives_range_min"]
-        out.append(f"clear sky upwind reaches here about {clock(a['arrives_min'])} (in {a['arrives_min']} min; "
+        out.append(f"clear sky upwind reaches here about {clock(a['arrives_min'])} ({a['arrives_min']} min after the picture; "
                    f"range {clock(lo)}-{clock(hi)})"
                    + (f", lasting about {a['lasts_min']} min" if a.get("lasts_min") else ", its end not on the map"))
     else:
@@ -630,7 +733,12 @@ if __name__ == "__main__":
                     help="the nearest clear sky, the cloud's movement, and when clear sky gets here")
     ap.add_argument("--fresh", type=float, default=0, metavar="SECONDS",
                     help="with --approach: reuse an answer this new instead of fetching again")
+    ap.add_argument("--scores", type=float, nargs="?", const=14, metavar="DAYS",
+                    help="the clear-sky and rain predictions kept in the last DAYS (14), against what was seen")
     args = ap.parse_args()
+    if args.scores:
+        print("\n".join(score_lines(args.scores)))
+        raise SystemExit
     if args.approach:
         print("\n".join(approach(fresh_s=args.fresh)["lines"]))
         raise SystemExit

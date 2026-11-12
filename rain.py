@@ -88,7 +88,9 @@ def look(site=None):
         frames = list(pool.map(lambda f: _frame(maps["host"], f["path"], x0, y0), chosen))
     now = frames[-1]
     taken = datetime.fromtimestamp(chosen[-1]["time"])
-    answer = {"picture": taken.strftime("%H:%M"), "rain_here": bool(now[int(sy), int(sx)])}
+    answer = {"picture": taken.strftime("%H:%M"), "picture_at": taken.astimezone().isoformat(),
+              "rain_here": bool(now[int(sy), int(sx)])}
+    clouds.note_seen("radar", "rain", answer["rain_here"], f"radar {answer['picture']}")
 
     ys, xs = np.nonzero(now)
     if len(xs):
@@ -144,6 +146,8 @@ def look(site=None):
     answer.update(arrives_min=best, lasts_min=lasts,
                   arrives_range_min=[min(starts), max(starts)] if starts else None)
     answer["lines"] = lines(answer)
+    clouds.note_prediction("rain", answer["picture_at"], best, answer["arrives_range_min"], lasts,
+                           speed_kmh=answer["speed_kmh"], moving_from=answer["moving_from"])
     return answer
 
 
@@ -156,7 +160,8 @@ def kind(lasts):
 def lines(a):
     if a.get("error"):
         return [f"rain: {a['error']}"]
-    clock = lambda m: (datetime.now() + timedelta(minutes=m)).strftime("%H:%M")  # noqa: E731
+    # From the radar picture's time, not now.
+    clock = lambda m: (datetime.fromisoformat(a["picture_at"]) + timedelta(minutes=m)).strftime("%H:%M")  # noqa: E731
     out = [f"radar {a['picture']}: " + ("RAIN OVER THE SITE" if a["rain_here"] else "no rain over the site")]
     if a["nearest_km"] is None:
         out.append("no rain within about 250 km")
@@ -168,7 +173,7 @@ def lines(a):
         out.append(f"no rain on its way here within {AHEAD_H} h at that speed")
     elif a["arrives_min"] > 0:
         lo, hi = a["arrives_range_min"]
-        out.append(f"rain reaches here about {clock(a['arrives_min'])} (in {a['arrives_min']} min; range "
+        out.append(f"rain reaches here about {clock(a['arrives_min'])} ({a['arrives_min']} min after the radar picture; range "
                    f"{clock(lo)}-{clock(hi)}): {kind(a.get('lasts_min'))}")
     elif a.get("lasts_min") is not None:
         out.append(f"rain here now: {kind(a['lasts_min'])} more")
