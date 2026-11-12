@@ -742,13 +742,69 @@ def release_camera(popen=subprocess.Popen):
     return True
 
 
+# What watches the sky or the guide star for a night and has no business
+# after it: stopped by tidy() at the night's end. The status page, the
+# stream's watcher and the night-end timer are services and stay.
+WATCHERS = ("skywatch.py", "rain.py", "mountprobe.py", "runwatch.py")
+
+
+def tidy(say=print, wait_s=20):
+    """Stop what was left watching for the night: the guider (by its own stop
+    order, so its pulses end cleanly), then each watcher by Ctrl-C (so it
+    closes what it holds), then by force if it is still there. Returns the
+    lines said. 12 November 2026: a rain watch, a cloud watch and a loop of
+    guide tests were all still running when the night was ended."""
+    import signal
+    said = []
+
+    def tell(line):
+        said.append(line)
+        say(line)
+    try:
+        import guider
+        state = guider.read_state() or {}
+        if state.get("pid") and alive(str(state["pid"])) and state.get("state") not in ("stopped", "fault"):
+            subprocess.run([sys.executable, str(Path(__file__).with_name("guidecam.py")), "tell", "stop"],
+                           cwd=str(Path(__file__).parent), capture_output=True, timeout=60)
+            tell("the guider: stopped")
+    except Exception as problem:            # the night's end goes on without it
+        tell(f"the guider could not be told to stop: {problem}")
+    found = []
+    for proc in Path("/proc").glob("[0-9]*"):
+        try:
+            line = [w.decode(errors="replace") for w in (proc / "cmdline").read_bytes().split(b"\0") if w]
+        except OSError:
+            continue
+        names = [Path(w).name for w in line]
+        if any(n in WATCHERS for n in names) and int(proc.name) != os.getpid():
+            found.append((int(proc.name), next(n for n in names if n in WATCHERS)))
+    for pid, name in found:
+        try:
+            os.kill(pid, signal.SIGINT)
+        except OSError:
+            continue
+    end_by = time.time() + wait_s
+    for pid, name in found:
+        while time.time() < end_by and Path(f"/proc/{pid}").exists():
+            time.sleep(0.5)
+        if Path(f"/proc/{pid}").exists():
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except OSError:
+                pass
+        tell(f"{name} (process {pid}): stopped")
+    return said
+
+
 def end(say=print, send=None, run=subprocess.run, now=None, home=None, start_flats=None):
-    """The night is over: send the mount home (mount.py, so its motion lock
-    and checks hold), check it got there, start the dawn flats, and tell the
-    person on their phone. Returns whether it is parked."""
+    """The night is over: stop what was left watching (tidy), send the mount
+    home (mount.py, so its motion lock and checks hold), check it got there,
+    start the dawn flats, and tell the person on their phone. Returns
+    whether it is parked."""
     import notify
     send = send or notify.send
     now = now or time.time()
+    tidy(say=say)
     sessions = tonight(now)
     got = summary(sessions)
     try:
@@ -836,9 +892,14 @@ def guard(say=print, send=None, run=subprocess.run, now=None, running=None):
     if not MORNING[0] <= hour < MORNING[1]:
         return "not morning"
     sessions = tonight(now)
-    if not sessions:
-        return "nothing imaged tonight"
-    if now - max(s[2] for s in sessions) < IDLE_MINUTES * 60:
+    import keeper
+    # A night of cloud keeps no frames but still leaves the camera cold and
+    # the mount tracking towards its limit: the camera kept counts as a
+    # night too (12 November 2026: nothing kept all night, nothing would
+    # have parked it).
+    if not sessions and not keeper.running():
+        return "nothing imaged tonight and the camera not kept"
+    if sessions and now - max(s[2] for s in sessions) < IDLE_MINUTES * 60:
         return "still imaging"
     try:
         if now - float(ENDED.read_text(encoding="utf-8")) < NIGHT_HOURS * 3600:
@@ -1172,6 +1233,8 @@ def main(argv=None):
     sub.add_parser("run")
     sub.add_parser("clear")
     sub.add_parser("end")
+    sub.add_parser("tidy", help="stop what was left watching for the night (the guider, sky, rain and run "
+                                "watches, the mount probe); the services stay")
     g = sub.add_parser("guard")
     g.add_argument("--install", action="store_true", help="run it every 10 minutes as a systemd user timer")
     args = ap.parse_args(argv)
@@ -1232,6 +1295,9 @@ def main(argv=None):
         save({"steps": [], "made": time.time()})
     elif args.action == "end":
         sys.exit(0 if end() else 1)
+    elif args.action == "tidy":
+        if not tidy():
+            print("Nothing was left watching.")
     elif args.action == "guard":
         if args.install:
             install()

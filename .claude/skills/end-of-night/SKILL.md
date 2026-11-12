@@ -13,6 +13,14 @@ Only on the person's word. The imaging run stops at its own limits
 1. `./ty session` and `./ty watch-run --once`: is a run still going?
    If so, and they said they are done, `./ty run stop` (it finishes the
    run and makes its picture).
+1b. Leave nothing running for the night: stop my own background loops
+   and Monitors first (TaskStop each; a loop would start its watcher
+   again), then `./schedule.py tidy` (the guider by its stop order, then
+   the sky, rain and run watches and the mount probe). The camera keeper
+   is let go by the warm-up (`./keeper.py stop`, or `schedule.py end`).
+   What stays, always: the status page (`ty-serve`), the stream's watcher
+   (`ty-stream`, idle when not imaging), the live client
+   (`ryanclinton-live`) and the night-end timer (`ty-night-end.timer`).
 2. Park only if they ask.
 3. The night's stacks on the desktop, in the background:
    `./restack.py SESSION --on desktop` for each session tonight.
