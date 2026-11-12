@@ -466,18 +466,47 @@ APPROACH_HOURS = 6         # how far ahead an arrival is looked for
 CLEAR_MARGIN, BROKEN_MARGIN = 10, 20   # as verdict(): brightness over the clear tenth
 
 
+SAT_KEPT = config.DATA / "cache" / "satellite"     # past pictures, one file each: they never change
+SAT_KEEP_HOURS = 6
+
+
+def _maybe_levels(site, when):
+    """_levels, or None when that picture will not come: the check goes on
+    with the ones that did."""
+    try:
+        return _levels(site, when)
+    except (RuntimeError, requests.RequestException, OSError):
+        return None
+
+
 def _levels(site, when, timeout=30, tries=3):
-    """One past picture as grey levels, tried again after a pause when the
-    service is slow: 12 November 2026, 23:07-23:15, view.eumetsat.int
-    answered its front page at once but gave 504s and read timeouts on
-    pictures, and one picture asked alone came back in 6 s."""
+    """One past picture as grey levels: from the pictures kept, or fetched
+    (tried again after a pause when the service is slow) and kept. A past
+    picture never changes, so each is fetched once: 12 November 2026,
+    23:07-23:20, view.eumetsat.int gave 504s and timeouts on timed pictures
+    while the newest came in 7 s, and fetching the whole hour again for
+    every check left the cloud's movement unknown for a quarter of an hour."""
+    box = _box(site)
+    kept = SAT_KEPT / f"ir105-{when:%Y%m%d%H%M}-{box[0]:.2f}_{box[1]:.2f}.png"
+    if kept.exists():
+        try:
+            return np.asarray(Image.open(kept).convert("L"), float)
+        except OSError:
+            kept.unlink(missing_ok=True)
     for attempt in range(tries):
         try:
-            return np.asarray(_layer("mtg_fd:ir105_hrfi", _box(site), when=when, timeout=timeout).convert("L"), float)
+            picture = _layer("mtg_fd:ir105_hrfi", box, when=when, timeout=timeout).convert("L")
+            break
         except (RuntimeError, requests.RequestException, OSError):
             if attempt == tries - 1:
                 raise
             time.sleep(3 * (attempt + 1))
+    SAT_KEPT.mkdir(parents=True, exist_ok=True)
+    picture.save(kept)
+    for old in SAT_KEPT.glob("ir105-*.png"):       # a few hours' worth is all any check needs
+        if time.time() - old.stat().st_mtime > SAT_KEEP_HOURS * 3600:
+            old.unlink(missing_ok=True)
+    return np.asarray(picture, float)
 
 
 def _shift(before, after):
@@ -550,9 +579,12 @@ def approach(site=None, fresh_s=0):
     times = [taken - dt.timedelta(minutes=STEP_MIN * k) for k in range(PICTURES - 1, -1, -1)]
     try:
         with concurrent.futures.ThreadPoolExecutor(2) as pool:      # gently: the service struggles with more
-            pictures = list(pool.map(lambda when: _levels(site, when), times))
+            pictures = list(pool.map(lambda when: _maybe_levels(site, when), times))
     except (RuntimeError, requests.RequestException, OSError) as problem:
         return _failed(f"no satellite pictures: {problem}", site)
+    if pictures[-1] is None:
+        return _failed("the newest satellite picture did not come", site)
+    missing = sum(p is None for p in pictures)
     lat = site["latitude"]
     kx = 111.32 * math.cos(math.radians(lat)) * 2 * SPAN_LON / WIDTH     # km a pixel, east-west
     ky = 111.32 * 2 * SPAN_LAT / HEIGHT                                   # km a pixel, north-south
@@ -560,6 +592,8 @@ def approach(site=None, fresh_s=0):
     ref = float(np.percentile(pictures[-1], 10))
     cx, cy = WIDTH // 2, HEIGHT // 2
     answer = {"t": time.time(), "picture": taken.isoformat(), "here": verdict(float(now[cy, cx]), ref)}
+    if missing:
+        answer["pictures_missing"] = f"{missing} of {PICTURES}"
 
     # The nearest clear area now, any direction.
     clear = (now - ref) < CLEAR_MARGIN
@@ -579,7 +613,7 @@ def approach(site=None, fresh_s=0):
     for a in range(PICTURES):
         for b in range(a + 1, PICTURES):
             minutes = (b - a) * STEP_MIN
-            if 20 <= minutes <= 40:
+            if 20 <= minutes <= 40 and pictures[a] is not None and pictures[b] is not None:
                 s = _shift(pictures[a], pictures[b])
                 if s:
                     moves.append((s[0] / minutes, s[1] / minutes))       # pixels a minute
@@ -733,7 +767,8 @@ def _approach_lines(a):
         out.append("the cloud's movement could not be measured from the last hour's pictures")
         return out
     out.append(f"cloud moving from the {a['moving_from']} at about {a['speed_kmh']} km/h (last hour's pictures, "
-               f"{a.get('pairs_agreeing', '?')} pairs agreeing)")
+               f"{a.get('pairs_agreeing', '?')} pairs agreeing"
+               + (f"; {a['pictures_missing']} pictures would not come" if a.get("pictures_missing") else "") + ")")
     if a.get("arrives_min") == 0:
         out.append("clear sky is over the site now by the satellite"
                    + (f", for about {a['lasts_min']} min more at this speed" if a.get("lasts_min") else ""))
