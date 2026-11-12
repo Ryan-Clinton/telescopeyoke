@@ -20,10 +20,33 @@ points, 2 solves) and is not used.
 - The guide camera's RA came out the same size as the main camera's but
   the opposite way, which read as 215" of RA flex. The ST4 "west" pin
   moves the pointing east as the plate solves see it, so the probe now
-  takes the guide camera's RA sign from the run itself (`ra_sign`).
+  takes the guide camera's sign on each axis from the run itself (`axis_sign`).
   Guiding is not affected: it uses the measured pulse directions, not
   their names.
 - With that, the two tracks part by 6.4" west (under one guide pixel,
   9.55") and 19.5" north (about two guide pixels) over the run. The
   north parting is a flex candidate only: it counts once a second run
   repeats it (docs/mount-probe.md).
+
+## Second run: IC 405, west of the pier, 12 November 04:30
+
+Dec +31.7 (the sky's: the handset, set again by eye at 04:22, was 3.4°
+out), about 60° up, 8 minutes. Raw tracks: the newest
+frames/guide/probe-20261112-*.json.
+
+| | main camera | guide camera (turned to the sky's way) |
+|---|---|---|
+| north drift | -10.2"/min | -10.1"/min |
+| west drift | +11.8"/min | +13.5"/min |
+| scatter north / west | 0.7" / 15.1" | 5.0" / 12.6" |
+
+- Dec read the other way round on this side (+10.1 by the pins), the
+  same as RA did east of the pier: the probe printed 152" of north flex
+  until `axis_sign` turned it. Both axes' signs now come from the run.
+- With that, the tracks part by 0.9" north: the first run's 19.5" north
+  candidate did not repeat. No north-south flex.
+- West they part by 12.9", but each track's west scatter is 13-15" (the
+  RA worm's periodic error over 8 minutes): not flex, not measurable at
+  this length.
+- Drift here is south 10"/min: one-way Dec pushes with the ST4 south pin on
+  this side (the pins' frame: the guide track's +10.1).

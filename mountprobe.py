@@ -88,30 +88,32 @@ def fit(track):
     return answer
 
 
-def ra_sign(guide, main):
-    """Which way the guide camera's RA reads on the sky: (+1 or -1, note).
+def axis_sign(guide, main, axis):
+    """Which way the guide camera's `axis` ("west" or "north") reads on the
+    sky: (+1 or -1, note).
 
-    The guide track's west comes from the ST4 "west" pulse's direction, and
-    what that pin does to the pointing is the mount's own convention, never
-    assumed: on 11 November 2026 the first probe read the RA drift as the
-    same size both ways but opposite (+13.1"/min west by the plate solves,
-    -13.9" by the guide camera), which read as 215" of flex. So the sign is
-    taken from the run: when both cameras' RA drift is clearly larger than
-    its scatter and they are opposite, the guide camera's RA is turned
-    round and that is said. When the drift is too small to tell, it is
-    left, and RA flex from it is not to be trusted."""
+    The guide track's directions come from the ST4 pins' pulses, and what a
+    pin does to the pointing is the mount's own, and turns round with the
+    side of the pier: never assumed. On 11 November 2026, east of the pier,
+    RA came out the same size both ways but opposite (+13.1"/min by the
+    plate solves, -13.9" by the guide camera), read as 215" of flex; on 12
+    November, west of the pier, Dec did (-10.2 against +10.1), read as 152".
+    So the sign is taken from the run: when both cameras' drift on the axis
+    is clearly larger than its scatter and they are opposite, the guide
+    camera's axis is turned round and that is said. When the drift is too
+    small to tell, it is left, and flex on that axis is not to be trusted."""
     g, m = fit(guide), fit(main)
     if not g or not m:
         return 1, ""
-    gw, mw = g["west"], m["west"]
+    ga, ma = g[axis], m[axis]
     span = (max(r[0] for r in main) - min(r[0] for r in main)) / 60.0
-    clear = all(abs(a["drift_per_min"]) * span > 2 * max(a["scatter"], 0.1) for a in (gw, mw))
+    clear = all(abs(a["drift_per_min"]) * span > 2 * max(a["scatter"], 0.1) for a in (ga, ma))
     if not clear:
-        return 1, ("RA drift too small against its scatter to tell which way the guide camera's RA "
-                   "reads on the sky: RA flex not measured")
-    if gw["drift_per_min"] * mw["drift_per_min"] < 0:
-        return -1, ("the ST4 west pulse moves the pointing east as the plate solves see it: "
-                    "the guide camera's RA turned round to match")
+        return 1, (f"{axis} drift too small against its scatter to tell which way the guide camera reads "
+                   f"it on the sky: {axis} flex not measured")
+    if ga["drift_per_min"] * ma["drift_per_min"] < 0:
+        return -1, (f"the guide camera's {axis} reads the other way round from the sky on this side: "
+                    "turned to match")
     return 1, ""
 
 
@@ -196,18 +198,29 @@ def probe(minutes, say=print):
         finally:
             stop.set()
             worker.join(timeout=MAIN_EXPOSURE + 60)
-    sign, sign_note = ra_sign(guide_track, main_track)
-    if sign < 0:
-        guide_track = [(t, n, -w) for t, n, w in guide_track]
-    if sign_note:
-        problems.append(sign_note)
+    # The guide track is in the ST4 pins' frame; each axis is turned to the
+    # sky's from the run itself (axis_sign). The one-way Dec pin is read in
+    # the pins' frame, before turning: the drift goes one way, the pin that
+    # pushes against it is the other.
+    raw_fit = fit(guide_track)
+    pin = (("south" if raw_fit["north"]["drift_per_min"] > 0 else "north") if raw_fit else None)
+    for axis, k in (("west", 2), ("north", 1)):
+        sign, sign_note = axis_sign(guide_track, main_track, axis)
+        if sign < 0:
+            guide_track = [tuple(-v if j == k else v for j, v in enumerate(r)) for r in guide_track]
+        if sign_note:
+            problems.append(sign_note)
     # Both tracks from the same moment: the guide track is moved to agree
     # with the main camera's first point, so only how they change is compared.
     if main_track and guide_track:
         t0 = main_track[0][0]
         near = min(guide_track, key=lambda r: abs(r[0] - t0))
         guide_track = [(t, n - near[1] + main_track[0][1], w - near[2] + main_track[0][2]) for t, n, w in guide_track]
-    return record(guide_track, main_track, problems, ra0, dec0, west, minutes)
+    answer = record(guide_track, main_track, problems, ra0, dec0, west, minutes)
+    answer["dec_one_way"] = pin
+    if pin:
+        answer["reading"].append(f"one-way Dec here: --dec-one-way {pin} (against the drift, in the pins' frame)")
+    return answer
 
 
 def record(guide_track, main_track, problems, ra0, dec0, west, minutes):

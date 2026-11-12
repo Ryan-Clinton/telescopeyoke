@@ -26,7 +26,8 @@
     "flex_threshold": {"type": "number", "description": "Arcsec (one guide pixel) a parting must pass to count as flex."},
     "problems": {"type": "array", "items": {"type": "string"}},
     "reading": {"type": "array", "items": {"type": "string"}},
-    "raw": {"type": "string", "description": "The JSON file with both tracks, (seconds, north, west) each point."}
+    "raw": {"type": "string", "description": "The JSON file with both tracks, (seconds, north, west) each point."},
+    "dec_one_way": {"type": ["string", "null"], "enum": ["north", "south", null], "description": "The --dec-one-way pin that pushes against the drift here (the ST4 pins' frame, not the sky's)."}
   },
   "$defs": {"track": {"type": ["object", "null"],
     "properties": {"north": {"$ref": "#/$defs/axis"}, "west": {"$ref": "#/$defs/axis"}}},
