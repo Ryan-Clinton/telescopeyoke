@@ -60,6 +60,7 @@ says what each script does.
 | `focus.py` | Hands-free focusing aid: a click and a tone for every frame measured, higher as focus improves, in three levels from quick binned frames to many stars on the full sensor. `--quiet` for no sound, `--numbers` for each reading spoken as a number, `--field` to go first to a bright star with many round it (this moves the telescope), `--scene` for a daytime view. `--report` says how quickly the last run answered a turn of the knob, level by level. |
 | `solve.py` | Plate-solves a frame: where is the telescope really pointing? |
 | `skywatch.py` | Photographs the sky every minute and stops when stars appear. |
+| `rain.py` | The nearest rain on the radar (RainViewer), its movement, and when rain reaches the site and for how long (a shower or more); `--watch --every 15 --flash ROOM` warns, the room's lights pulsed blue, when rain is due within 45 minutes. |
 | `doctor.py` | Checks what is installed and connected, and says what is ready: planner, mount, imaging. `--report` writes the same out to post as a hardware report, with the mount's model and the handset's firmware as the handset gives them, and your location left out; `--probe PORT` adds what answers on a serial port you name. |
 | `tour.py` | Records the demo being used, pressing the same buttons a person would: the animation at the top of this page, and a still of each screen. Ubuntu only. |
 | `replay.py` | Turns a centring run recorded with `mount.py goto --solve --record` into a GIF. |

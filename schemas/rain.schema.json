@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/rain.schema.json",
+  "title": "Rain on the radar",
+  "description": "data of: rain.py --json. The nearest rain on RainViewer's composite radar round the site, its movement, and when rain upwind reaches the site and for how long.",
+  "type": "object",
+  "anyOf": [{"required": ["error"]}, {"required": ["picture", "rain_here", "nearest_km", "lines"]}],
+  "properties": {
+    "error": {"type": "string"},
+    "picture": {"type": "string", "description": "HH:MM local, the radar picture's time."},
+    "rain_here": {"type": "boolean"},
+    "nearest_km": {"type": ["integer", "null"], "description": "null: no rain on the map (about 250 km each way)."},
+    "nearest_bearing": {"type": "string"},
+    "rain_share": {"type": "number", "description": "Fraction of the map with rain."},
+    "movement_from": {"type": ["string", "null"], "description": "Whether the movement is the rain's own or the satellite's cloud."},
+    "speed_kmh": {"type": "number"},
+    "moving_from": {"type": "string", "description": "Compass point the rain comes from."},
+    "arrives_min": {"type": ["integer", "null"], "description": "Minutes until rain upwind reaches the site; 0 now; null none within 4 h."},
+    "arrives_range_min": {"type": ["array", "null"], "items": {"type": "integer"}},
+    "lasts_min": {"type": ["integer", "null"], "description": "Minutes the rain lasts on the track; null when its end is beyond the map."},
+    "lines": {"type": "array", "items": {"type": "string"}}
+  }
+}

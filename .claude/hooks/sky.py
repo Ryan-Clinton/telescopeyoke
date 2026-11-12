@@ -39,6 +39,12 @@ def main():
     except (OSError, subprocess.TimeoutExpired):
         return
     lines = done.stdout.strip()
+    try:
+        wet = subprocess.run([sys.executable, str(root / "rain.py")], cwd=root, capture_output=True, text=True,
+                             timeout=30).stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        wet = ""
+    lines = "\n".join(part for part in (lines, wet) if part)
     if not lines:
         return
     print(json.dumps({"hookSpecificOutput": {

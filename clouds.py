@@ -550,6 +550,7 @@ def approach(site=None, fresh_s=0):
         return _keep_approach(answer)
     vx, vy = moves[0]
     east_kmh, north_kmh = vx * kx * 60, -vy * ky * 60
+    answer["move_kmh"] = [round(float(east_kmh), 1), round(float(north_kmh), 1)]   # east, north
     answer["speed_kmh"] = round(float(math.hypot(east_kmh, north_kmh)))
     answer["moving_from"] = _compass((math.degrees(math.atan2(east_kmh, north_kmh)) + 180) % 360)
 
