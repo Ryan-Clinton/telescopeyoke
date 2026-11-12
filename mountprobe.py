@@ -140,6 +140,22 @@ def probe(minutes, say=print):
         raise interface.Refusal("INVALID_REQUEST", f"The filter wheel did not turn to L: {turned.stdout.strip()} "
                                 f"{turned.stderr.strip()}")
     guide_track, main_track, problems = [], [], []
+    # Where the scope really points, from the sky: the handset's position is
+    # only a hint, searched near first and then blind. 12 November 2026: the
+    # handset was about 50° out in RA and every solve near it failed, so a
+    # probe in a clear spell got no main-camera track at all.
+    try:
+        first = scope.where_really(ra0, dec0, radius=5, exposure=MAIN_EXPOSURE, wider=180)
+    except Exception as problem:            # the probe goes on: the solves after it may still work
+        first, _ = None, problems.append(f"first plate solve: {problem}")
+    if first:
+        off = math.degrees(math.acos(min(1.0, math.sin(math.radians(dec0)) * math.sin(math.radians(first["dec"]))
+                                         + math.cos(math.radians(dec0)) * math.cos(math.radians(first["dec"]))
+                                         * math.cos(math.radians(first["ra"] - ra0)))))
+        if off > 1:
+            problems.append(f"the handset is {off:.1f}° from where the sky says the scope points; "
+                            "the sky's position is used")
+        ra0, dec0 = first["ra"], first["dec"]
     stop = threading.Event()
     began = time.time()
 
