@@ -22,6 +22,7 @@ import argparse
 import json
 import math
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -186,6 +187,9 @@ def main():
     ap.add_argument("--out", default=str(OUT), help=f"where the PNG goes (default {OUT})")
     ap.add_argument("--span", type=float, help="the error axis, +/- this many arcseconds")
     ap.add_argument("--no-send", action="store_true", help="do not send the graph by Telegram")
+    ap.add_argument("--fresh", type=float, metavar="MINUTES",
+                    help="only a run that ended within this many minutes; otherwise nothing is drawn or sent "
+                         "(12 November 2026: a guide run that found no star was followed by this morning's graph)")
     args = ap.parse_args()
 
     logs = sorted(LOG_FOLDER.glob("guide-????????.jsonl"))
@@ -208,6 +212,11 @@ def main():
     if not picked:
         sys.exit(f"no run {args.run or ''} with a star in {logs[-1].name}")
     run_id = picked[-1]
+    if args.fresh is not None:
+        ended = (time.time() - when(found[run_id][-1])) / 60
+        if ended > args.fresh:
+            sys.exit(f"the latest run with a star, {run_id}, ended {ended:.0f} min ago, not within {args.fresh:g}: "
+                     "no graph")
     out, s = draw(found[run_id], run_id, args.out, args.span)
     words = (f"Guiding {datetime.fromtimestamp(when(found[run_id][0])):%d %b %H:%M}, run {run_id}: "
              f"{s['minutes']:.1f} min, RMS RA {s['ra']:.2f}\" Dec {s['dec']:.2f}\" total {s['total']:.2f}\"")
