@@ -466,8 +466,18 @@ APPROACH_HOURS = 6         # how far ahead an arrival is looked for
 CLEAR_MARGIN, BROKEN_MARGIN = 10, 20   # as verdict(): brightness over the clear tenth
 
 
-def _levels(site, when, timeout=20):
-    return np.asarray(_layer("mtg_fd:ir105_hrfi", _box(site), when=when, timeout=timeout).convert("L"), float)
+def _levels(site, when, timeout=30, tries=3):
+    """One past picture as grey levels, tried again after a pause when the
+    service is slow: 12 November 2026, 23:07-23:15, view.eumetsat.int
+    answered its front page at once but gave 504s and read timeouts on
+    pictures, and one picture asked alone came back in 6 s."""
+    for attempt in range(tries):
+        try:
+            return np.asarray(_layer("mtg_fd:ir105_hrfi", _box(site), when=when, timeout=timeout).convert("L"), float)
+        except (RuntimeError, requests.RequestException, OSError):
+            if attempt == tries - 1:
+                raise
+            time.sleep(3 * (attempt + 1))
 
 
 def _shift(before, after):
@@ -498,6 +508,12 @@ def _failed(why, site):
     reports in its place (12 November 2026, 23:07: EUMETSAT timed out and
     --approach stopped on a KeyError instead)."""
     lines = [f"satellite: {why}"]
+    try:      # the newest picture alone, asked without a time, often still comes when the past ones do not
+        here, clear, _ = update(site)
+        lines.append(f"newest satellite picture alone: {verdict(here, clear)} over the site (no movement without "
+                     "the past pictures)")
+    except Exception as problem:      # noqa: BLE001
+        lines.append(f"newest satellite picture: none either ({problem.__class__.__name__})")
     try:
         lines += airport_lines(site)
     except Exception as problem:      # noqa: BLE001 - the answer goes out without them
@@ -533,7 +549,7 @@ def approach(site=None, fresh_s=0):
         return _failed("the satellite service would not say when its newest picture was taken", site)
     times = [taken - dt.timedelta(minutes=STEP_MIN * k) for k in range(PICTURES - 1, -1, -1)]
     try:
-        with concurrent.futures.ThreadPoolExecutor(PICTURES) as pool:
+        with concurrent.futures.ThreadPoolExecutor(2) as pool:      # gently: the service struggles with more
             pictures = list(pool.map(lambda when: _levels(site, when), times))
     except (RuntimeError, requests.RequestException, OSError) as problem:
         return _failed(f"no satellite pictures: {problem}", site)
