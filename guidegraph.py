@@ -32,6 +32,7 @@ import config
 
 LOG_FOLDER = config.DATA / "frames" / "guide"
 OUT = config.DATA / "web" / "guide-graph.png"
+SENT = config.DATA / "cache" / "guidegraph-sent.json"     # runs already sent, so a chain never sends one twice
 W, H = 1400, 760
 RA_COLOUR, DEC_COLOUR = (60, 130, 230), (220, 60, 60)
 FONT = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
@@ -223,10 +224,19 @@ def main():
     words = (f"Guiding {datetime.fromtimestamp(when(found[run_id][0])):%d %b %H:%M}, run {run_id}: "
              f"{s['minutes']:.1f} min, RMS RA {s['ra']:.2f}\" Dec {s['dec']:.2f}\" total {s['total']:.2f}\"")
     print(f"{out}: {words}")
-    if not args.no_send:
+    try:
+        sent = json.loads(SENT.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        sent = []
+    if not args.no_send and run_id in sent and not args.run:
+        print(f"run {run_id} was sent already (13 November 2026: a chain sent one twice); --run {run_id} sends it again")
+    elif not args.no_send:
         import notify
         went = notify.send(words, pictures=[(str(out), words)], documents=[(str(out), out.name)])
         print("sent by Telegram" if went else "not sent by Telegram (the bot is not set up here, or it failed)")
+        if went:
+            SENT.parent.mkdir(parents=True, exist_ok=True)
+            SENT.write_text(json.dumps((sent + [run_id])[-200:]), encoding="utf-8")
 
 
 if __name__ == "__main__":
