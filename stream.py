@@ -1496,16 +1496,30 @@ def quiet(tones):
     return None
 
 
+def _encodes(device, seconds=30):
+    """A second of encoding on `device` works. A card hung in the kernel
+    (13 November 2026: the AMD card after the laptop slept) leaves ffmpeg
+    unkillable, and subprocess.run's timeout then waits on it for ever: the
+    stream never started. Here a test past its time is left behind, killed
+    but not waited for, and the card counted as not working."""
+    p = subprocess.Popen(
+        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-vaapi_device", str(device), "-f", "lavfi",
+         "-i", "testsrc=size=320x240:rate=5", "-t", "1", "-vf", "format=nv12,hwupload", "-c:v", "h264_vaapi",
+         "-f", "null", "-"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        return p.wait(timeout=seconds) == 0
+    except subprocess.TimeoutExpired:
+        p.kill()
+        return False
+
+
 def working_device(devices=None, test=None):
     """The first video device whose hardware encoder really works, tried
     with a second of encoding; None if none does. This laptop has two:
     renderD128 (Intel, no driver for its encoder) failed, renderD129 (the
     AMD Radeon) worked (20 October 2026)."""
     devices = devices if devices is not None else sorted(Path("/dev/dri").glob("renderD*"))
-    test = test or (lambda d: subprocess.run(
-        ["ffmpeg", "-hide_banner", "-loglevel", "error", "-vaapi_device", str(d), "-f", "lavfi",
-         "-i", "testsrc=size=320x240:rate=5", "-t", "1", "-vf", "format=nv12,hwupload", "-c:v", "h264_vaapi",
-         "-f", "null", "-"], capture_output=True, timeout=30).returncode == 0)
+    test = test or _encodes
     for device in devices:
         try:
             if test(device):
