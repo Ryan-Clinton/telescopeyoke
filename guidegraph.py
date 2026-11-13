@@ -212,6 +212,8 @@ def main():
     if not picked:
         sys.exit(f"no run {args.run or ''} with a star in {logs[-1].name}")
     run_id = picked[-1]
+    if summary(found[run_id])["minutes"] < 1:
+        sys.exit(f"run {run_id} guided for under a minute ({summary(found[run_id])['frames']} frames): no graph")
     if args.fresh is not None:
         ended = (time.time() - when(found[run_id][-1])) / 60
         if ended > args.fresh:
