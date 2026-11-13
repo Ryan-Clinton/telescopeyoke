@@ -500,6 +500,8 @@ STEP_MIN = 10              # the satellite's pictures come every 10 minutes
 PICTURES = 7               # the last hour's: the cloud's movement is measured between pairs of them
 APPROACH_MAX_PX = 60       # the most a picture's cloud may move between two of them (about 25-45 km)
 APPROACH_HOURS = 6         # how far ahead an arrival is looked for
+LASTS_HOURS = 4            # and how far past an arrival its end is (13 November 2026: a gap due at 00:05
+                           # read "its end not on the map" only because the six hours ran out at 01:00)
 CLEAR_MARGIN, BROKEN_MARGIN = 10, 20   # as verdict(): brightness over the clear tenth
 GAPS = 3                   # the nearest clear areas each followed on its own
 GAP_MIN_KM2 = 1000         # a clear area smaller than this (about 30 x 30 km) is a speck, not a gap
@@ -625,10 +627,10 @@ def _gaps(pictures, now, ref, v, steer=None, main=None):
         east, north = (xs - cx) * kx, (cy - ys) * ky
         dist = np.hypot(east, north)
         i = int(np.argmin(dist))
-        found.append((float(dist[i]), int(xs[i]), int(ys[i]), east, north, len(xs) * kx * ky))
+        found.append((float(dist[i]), int(xs[i]), int(ys[i]), east, north, len(xs) * kx * ky, n))
     found.sort(key=lambda g: g[0])
     out = []
-    for dist, ex, ey, east, north, area in found[:GAPS]:
+    for dist, ex, ey, east, north, area, n in found[:GAPS]:
         h, w = GAP_WINDOW
         top = min(max(ey - h // 2, 0), v.height - h)
         left = min(max(ex - w // 2, 0), v.width - w)
@@ -657,17 +659,32 @@ def _gaps(pictures, now, ref, v, steer=None, main=None):
         e, nn = east[::step], north[::step]
 
         def track(f):
-            """(minutes until the gap is over the site or None, minutes it stays, closest km, at minutes)."""
+            """(minutes until the gap is over the site or None, minutes it stays, closest km, at minutes).
+            Over the site is read from the gap's own pixels, the point that
+            will be carried over the site looked up in them; the closest pass
+            from a sample of them. 13 November 2026: from the sample alone a
+            158,600 km2 gap was "over us about 5 min", the sample's holes
+            read as its end."""
             start = stay = None
             closest, at = None, None
-            for minutes in range(0, APPROACH_HOURS * 60 + 1, 5):
-                d = float(np.min(np.hypot(e + ve * f * minutes, nn + vn * f * minutes)))
+            for minutes in range(0, (APPROACH_HOURS + LASTS_HOURS) * 60 + 1, 5):
+                if start is None and minutes > APPROACH_HOURS * 60:
+                    break
+                if start is not None and stay is not None:
+                    break
+                x = round(cx - ve * f * minutes / kx)
+                y = round(cy + vn * f * minutes / ky)
+                inside = 0 <= x < v.width and 0 <= y < v.height
+                over = inside and labels[y, x] == n
+                d = 0.0 if over else float(np.min(np.hypot(e + ve * f * minutes, nn + vn * f * minutes)))
                 if closest is None or d < closest:
                     closest, at = d, minutes
-                if d <= GAP_HIT_KM and start is None:
+                if over and start is None:
                     start = minutes
-                elif start is not None and d > GAP_HIT_KM and stay is None:
+                elif start is not None and stay is None and inside and not over:
                     stay = minutes - start
+                elif start is not None and not inside:
+                    break           # its far side is off the map: its end unknown
             return start, stay, closest, at
 
         start, stay, closest, at = track(1)
@@ -876,7 +893,9 @@ def approach(site=None, fresh_s=0, view=APPROACH_VIEW):
     def arrival(m):
         """(minutes until clear sky upstream reaches the site, minutes it lasts), None for either unknown."""
         start = None
-        for minutes in range(0, APPROACH_HOURS * 60 + 1, 5):
+        for minutes in range(0, (APPROACH_HOURS + LASTS_HOURS) * 60 + 1, 5):
+            if start is None and minutes > APPROACH_HOURS * 60:
+                break
             x, y = round(cx - m[0] * minutes), round(cy - m[1] * minutes)
             if not (0 <= x < v.width and 0 <= y < v.height):
                 return start, None          # upstream runs off the map
