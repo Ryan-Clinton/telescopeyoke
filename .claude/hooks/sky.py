@@ -34,8 +34,11 @@ def main():
         return
     root = Path(os.environ.get("CLAUDE_PROJECT_DIR") or Path(__file__).resolve().parents[2])
     try:
-        done = subprocess.run([sys.executable, str(root / "clouds.py"), "--approach", "--fresh", "300"],
-                              cwd=root, capture_output=True, text=True, timeout=40)
+        # The satellite timer keeps an answer every 10 minutes: one up to 15
+        # minutes old is read at once, and the two together stay inside the
+        # hook's 45 s (13 November 2026: 40 s and 30 s in a row could lose both).
+        done = subprocess.run([sys.executable, str(root / "clouds.py"), "--approach", "--fresh", "900"],
+                              cwd=root, capture_output=True, text=True, timeout=25)
     except (OSError, subprocess.TimeoutExpired):
         return
     lines = done.stdout.strip()
@@ -43,8 +46,8 @@ def main():
         # Said, not swallowed: on 12 November 2026 a message got the radar and no satellite, with no word why.
         lines = "satellite: clouds.py --approach failed: " + done.stderr.strip().splitlines()[-1]
     try:
-        wet = subprocess.run([sys.executable, str(root / "rain.py")], cwd=root, capture_output=True, text=True,
-                             timeout=30).stdout.strip()
+        wet = subprocess.run([sys.executable, str(root / "rain.py"), "--fresh", "600"], cwd=root,
+                             capture_output=True, text=True, timeout=15).stdout.strip()
     except (OSError, subprocess.TimeoutExpired):
         wet = ""
     lines = "\n".join(part for part in (lines, wet) if part)

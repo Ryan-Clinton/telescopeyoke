@@ -49,6 +49,7 @@ WARN_MIN = 45            # rain due within this: a warning
 SHOWER_MIN = 30          # rain lasting no more than this on the track: a shower
 AHEAD_H = 4
 STATE = config.DATA / "cache" / "rain.json"
+MAX_RAIN_KMH = 100       # the fastest rain the movement is looked for at
 
 
 def _pixel(lat, lon):
@@ -110,7 +111,10 @@ def look(site=None):
     move, source = None, None
     if len(frames) == 3 and frames[0].sum() > 200 and now.sum() > 200:
         minutes = (chosen[-1]["time"] - chosen[0]["time"]) / 60
-        s = clouds._shift(frames[0].astype(float), now.astype(float))
+        # The search reaches 100 km/h over the pair's minutes: at 60 px, the
+        # cloud's limit, an hour's pair stopped at about 42 km/h here.
+        reach = max(60, int(MAX_RAIN_KMH * minutes / 60 / km))
+        s = clouds._shift(frames[0].astype(float), now.astype(float), max_px=min(reach, frames[0].shape[0] // 2 - 1))
         if s:
             move, source = (s[0] * km / minutes * 60, -s[1] * km / minutes * 60), "the rain's own movement"
     if move is None:
@@ -285,6 +289,8 @@ def _keep(a):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--json", action="store_true")
+    ap.add_argument("--fresh", type=float, default=0, metavar="SECONDS",
+                    help="reuse the last look if it is this new (the sky hook's), else look again")
     ap.add_argument("--watch", action="store_true", help="look again every --every minutes until --until")
     ap.add_argument("--every", type=float, default=15)
     ap.add_argument("--until", default="06:00", help="HH:MM")
@@ -295,6 +301,15 @@ def main():
         return
 
     def work():
+        if args.fresh:
+            try:
+                kept = json.loads(STATE.read_text(encoding="utf-8"))
+                if time.time() - kept["t"] < args.fresh and kept.get("lines"):
+                    if not args.json:
+                        print("\n".join(kept["lines"]))
+                    return kept
+            except (OSError, ValueError, KeyError):
+                pass
         a = look()
         _keep(a)
         if not args.json:

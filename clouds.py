@@ -556,7 +556,7 @@ def _levels(site, when, view, timeout=30, tries=3):
     return np.asarray(picture, float)
 
 
-def _shift(before, after):
+def _shift(before, after, max_px=APPROACH_MAX_PX):
     """(dx, dy) pixels the picture moved from `before` to `after`, by phase
     correlation over the whole map, or None when no clear peak."""
     window = np.outer(np.hanning(before.shape[0]), np.hanning(before.shape[1]))
@@ -566,7 +566,7 @@ def _shift(before, after):
     surface = np.fft.ifft2(cross / np.maximum(np.abs(cross), 1e-9)).real
     h, w = surface.shape
     dy, dx = np.meshgrid(np.fft.fftfreq(h, 1 / h), np.fft.fftfreq(w, 1 / w), indexing="ij")
-    surface[(np.abs(dx) > APPROACH_MAX_PX) | (np.abs(dy) > APPROACH_MAX_PX)] = -np.inf
+    surface[(np.abs(dx) > max_px) | (np.abs(dy) > max_px)] = -np.inf
     # What does not move (the land warmer than the sea, the map's edges)
     # matches itself at no shift and would hide the cloud's movement: the
     # cloud's own peak is looked for away from it. 12 November 2026: the
@@ -579,7 +579,7 @@ def _shift(before, after):
     # A peak on the edge of the search is the edge, not the cloud: 13
     # November 2026, five of twelve pairs read exactly 60 px east, the
     # limit, while the cloud was barely moving.
-    if abs(dx[peak]) >= APPROACH_MAX_PX or abs(dy[peak]) >= APPROACH_MAX_PX:
+    if abs(dx[peak]) >= max_px or abs(dy[peak]) >= max_px:
         return None
     return float(dx[peak]), float(dy[peak])
 
@@ -617,7 +617,7 @@ def _gaps(pictures, now, ref, v, taken, steer=None, main=None):
     if not count:
         return []
     here = labels[cy, cx]
-    found = []
+    found, xs_of, ys_of = [], {}, {}
     for n in range(1, count + 1):
         if n == here:
             continue
@@ -628,6 +628,7 @@ def _gaps(pictures, now, ref, v, taken, steer=None, main=None):
         dist = np.hypot(east, north)
         i = int(np.argmin(dist))
         found.append((float(dist[i]), int(xs[i]), int(ys[i]), east, north, len(xs) * kx * ky, n))
+        xs_of[n], ys_of[n] = xs, ys
     found.sort(key=lambda g: g[0])
     out = []
     for dist, ex, ey, east, north, area, n in found[:GAPS]:
@@ -654,6 +655,9 @@ def _gaps(pictures, now, ref, v, taken, steer=None, main=None):
             out.append(gap)
             continue
         gap["by"] = use[1]
+        trend = _trend(pictures, now, ref, v, xs_of[n], ys_of[n], use[0])
+        if trend is not None:
+            gap["grew_pct_h"] = trend
         path = _path(taken, move=use[0]) if use[1] == "satellite" else _path(taken, hourly=steer[use[1]]["hourly"])
         step = max(1, len(east) // 2000)
         e, nn = east[::step], north[::step]
@@ -694,6 +698,33 @@ def _gaps(pictures, now, ref, v, taken, steer=None, main=None):
                    closest_km=round(closest), closest_min=at)
         out.append(gap)
     return out
+
+
+def _trend(pictures, now, ref, v, xs, ys, move):
+    """How much a gap grew (+) or shrank (-) in the last hour, per cent:
+    its clear area now against the clear area an hour ago where the wind
+    had it then, in the same box. None when the hour-old picture is missing
+    or the box reaches the map's edge. A gap is carried along whole, but
+    clouds grow and melt as they move: this says which way this one is
+    going, as a moving edge and a growing one are not the same thing."""
+    from scipy.ndimage import uniform_filter
+    old = pictures[0]
+    if old is None:
+        return None
+    x0, x1, y0, y1 = int(xs.min()) - 10, int(xs.max()) + 11, int(ys.min()) - 10, int(ys.max()) + 11
+    hours = (PICTURES - 1) * STEP_MIN / 60
+    dx, dy = round(-move[0] * hours / v.kx), round(move[1] * hours / v.ky)
+    boxes = ((x0, x1, y0, y1), (x0 + dx, x1 + dx, y0 + dy, y1 + dy))
+    if any(a < 0 or b > v.width or c < 0 or d > v.height for a, b, c, d in boxes):
+        return None
+    then = (uniform_filter(old, 9) - float(np.percentile(old[:, v.near], 10))) < CLEAR_MARGIN
+    nowc = (now - ref) < CLEAR_MARGIN
+    a_now = int(nowc[y0:y1, x0:x1].sum())
+    b = boxes[1]
+    a_then = int(then[b[2]:b[3], b[0]:b[1]].sum())
+    if a_then == 0:
+        return None
+    return round(100 * (a_now / a_then - 1) / hours)
 
 
 def _wind_at(hourly, t):
@@ -845,6 +876,11 @@ def approach(site=None, fresh_s=0, view=APPROACH_VIEW):
     taken = picture_time()
     if taken is None:
         return _failed("the satellite service would not say when its newest picture was taken", site)
+    age = (time.time() - taken.timestamp()) / 60
+    if age > SATELLITE_STALE_MIN:
+        # As evidence() does: an old picture is not tonight's sky, so no
+        # arrival is worked out from it.
+        return _failed(f"its newest picture is {age:.0f} min old: stale, so no forecast from it", site)
     times = [taken - dt.timedelta(minutes=STEP_MIN * k) for k in range(PICTURES - 1, -1, -1)]
     try:
         with concurrent.futures.ThreadPoolExecutor(2) as pool:      # gently: the service struggles with more
@@ -879,6 +915,8 @@ def approach(site=None, fresh_s=0, view=APPROACH_VIEW):
     if steer:
         answer["layers"] = {k: {x: c[x] for x in ("hpa", "cover", "speed_kmh", "from")} for k, c in steer.items()}
         answer["main_layer"] = main
+    answer["centres"] = _centres(site, taken)
+    answer["earlier"] = _earlier(answer)
 
     # The nearest gaps, each followed by the cloud round it.
     answer["gaps"] = _gaps(pictures, now, ref, v, taken, steer, main)
@@ -988,6 +1026,9 @@ def _note_gap(answer):
                             speed_kmh=g["speed_kmh"], moving_from=g["moving_from"], gap_km=g["km"],
                             gap_bearing=g["bearing"], view=answer.get("view"), by=g.get("by"))
             return
+    # Nothing due is a prediction too: clear sky seen after it is a miss
+    # (scored by --scores), so it is kept as well.
+    note_prediction("clear", answer["picture"], None, None, None, view=answer.get("view"), by=answer.get("by"))
 
 
 # Every prediction and every sight of the sky, kept so the predictions can
@@ -1049,31 +1090,105 @@ def score_lines(days=14):
             return []
     since = time.time() - days * 86400
     seen = sorted((r for r in rows(SEEN) if r["t"] >= since), key=lambda r: r["t"])
-    out, errors = [], []
+    out, errors, spans = [], [], []
+    missed = false_alarms = 0
     for p in (r for r in rows(PREDICTIONS) if r["t"] >= since):
         made = dt.datetime.fromisoformat(p["picture"]).timestamp()
         looks = [s for s in seen if s["kind"] == p["kind"] and made <= s["t"] <= made + APPROACH_HOURS * 3600]
         first = next((s for s in looks if s["yes"]), None)
         said = dt.datetime.fromisoformat(p["arrives"]).strftime("%H:%M") if p.get("arrives") else "none due"
-        head = (f"{dt.datetime.fromisoformat(p['picture']).astimezone():%d %b %H:%M} {p['kind']}: "
-                f"predicted {said}")
+        head = (f"{dt.datetime.fromisoformat(p['picture']).astimezone():%d %b %H:%M} {p['kind']}"
+                + (f" ({p['by']})" if p.get("by") else "") + f": predicted {said}")
         if first is None:
-            out.append(head + (f"; not seen in {len(looks)} looks" if looks else "; nothing watching"))
+            if not looks:
+                out.append(head + "; nothing watching")
+            elif p.get("arrives") and looks[-1]["t"] > dt.datetime.fromisoformat(p["range"][1]).timestamp():
+                # Watched past the end of its range and never seen: a false alarm.
+                false_alarms += 1
+                out.append(head + f"; FALSE ALARM, not seen in {len(looks)} looks to {dt.datetime.fromtimestamp(looks[-1]['t']):%H:%M}")
+            else:
+                out.append(head + f"; not seen yet in {len(looks)} looks")
             continue
         got = dt.datetime.fromtimestamp(first["t"])
         if not p.get("arrives"):
-            out.append(head + f"; seen {got:%H:%M} ({first['source']})")
+            missed += 1
+            out.append(head + f"; MISSED, seen {got:%H:%M} ({first['source']})")
             continue
         late = (first["t"] - dt.datetime.fromisoformat(p["arrives"]).timestamp()) / 60
         lo, hi = (dt.datetime.fromisoformat(v).timestamp() for v in p["range"])
         errors.append(late)
-        out.append(head + f"; seen {got:%H:%M} ({first['source']}): {abs(late):.0f} min "
-                   + ("late" if late > 0 else "early") + ("; inside its range" if lo <= first["t"] <= hi
-                                                          else "; outside its range"))
+        line = (head + f"; seen {got:%H:%M} ({first['source']}): {abs(late):.0f} min " + ("late" if late > 0 else "early")
+                + ("; inside its range" if lo <= first["t"] <= hi else "; outside its range"))
+        # How long it lasted against how long it was said to: from the first
+        # sight to the first look after without it.
+        gone = next((s for s in looks if s["t"] > first["t"] and not s["yes"]), None)
+        if gone and p.get("lasts_min"):
+            lasted = (gone["t"] - first["t"]) / 60
+            spans.append(lasted - p["lasts_min"])
+            line += f"; lasted about {lasted:.0f} min against {p['lasts_min']} said"
+        out.append(line)
     if errors:
         out.append(f"{len(errors)} scored: median error {float(np.median(errors)):+.0f} min "
                    f"(+ means it came later than predicted), median size {float(np.median(np.abs(errors))):.0f} min")
+    if spans:
+        out.append(f"{len(spans)} with a length: median {float(np.median(spans)):+.0f} min (+ means it lasted longer)")
+    if missed or false_alarms:
+        out.append(f"{missed} missed (seen when none was due), {false_alarms} false alarms (due, watched, never seen)")
     return out or ["no predictions kept yet"]
+
+
+def _centres(site, taken):
+    """Each of the four forecasting centres' clear hours (cloud under
+    COVER_MIN %) in the next 8 h from the picture, as "HH-HH" spells: so a
+    satellite arrival can be set beside four models, not one. They share
+    much of their data, so their agreeing is support, not proof."""
+    import datetime as dt
+
+    import feeds
+    try:
+        w = feeds.weather_centres(site["latitude"], site["longitude"])
+    except Exception:      # noqa: BLE001 - the approach goes on without them
+        return None
+    if not w:
+        return None
+    t0 = taken.timestamp()
+    hours = [k for k, t in enumerate(w["time"]) if t0 - 1800 <= t <= t0 + 8 * 3600]
+    out = {}
+    for model, name in feeds.CENTRES.items():
+        cover = w[model]["cloud_cover"]
+        spells, start = [], None
+        for k in hours:
+            clear = cover[k] is not None and cover[k] < COVER_MIN
+            hh = dt.datetime.fromtimestamp(w["time"][k], dt.timezone.utc).strftime("%H:00")
+            if clear and start is None:
+                start = hh
+            elif not clear and start is not None:
+                spells.append(f"{start}-{hh}")
+                start = None
+        if start is not None:
+            spells.append(f"{start} on")
+        out[name] = spells
+    return out
+
+
+def _earlier(answer):
+    """The last clear-sky arrival kept from an earlier picture in the last 3
+    hours, in this view: so a changed estimate is said as changed."""
+    import datetime as dt
+    import json
+    try:
+        rows = [json.loads(line) for line in PREDICTIONS.read_text(encoding="utf-8").splitlines()[-200:]]
+    except (OSError, ValueError):
+        return None
+    now = dt.datetime.fromisoformat(answer["picture"])
+    for r in reversed(rows):
+        if r.get("kind") != "clear" or r.get("view") != answer.get("view") or r.get("picture") == answer["picture"]:
+            continue
+        then = dt.datetime.fromisoformat(r["picture"])
+        if 0 < (now - then).total_seconds() <= 3 * 3600:
+            return {"picture": r["picture"], "arrives": r.get("arrives")}
+        return None
+    return None
 
 
 def _keep_approach(answer):
@@ -1112,7 +1227,12 @@ def _gap_lines(a, clock):
     whether and when it gets here."""
     out = []
     for g in a.get("gaps", []):
-        head = f"gap {g['km']} km {g['bearing']} (about {g['area_km2']:.0f} km\u00b2)"
+        head = f"gap {g['km']} km {g['bearing']} (about {g['area_km2']:.0f} km\u00b2"
+        if g.get("grew_pct_h") is not None:
+            pct = g["grew_pct_h"]
+            head += (f", {'grew' if pct > 0 else 'shrank'} {abs(pct)}% in the last hour" if abs(pct) >= 10
+                     else ", about the same size as an hour ago")
+        head += ")"
         if g.get("by") is None:
             out.append(f"{head}: {_seen_words(g, 'its movement')}; no wind to carry it by")
             continue
@@ -1188,6 +1308,15 @@ def _approach_lines(a):
     else:
         out.append(f"no clear sky upwind within {APPROACH_HOURS} h at this speed"
                    + (": the clear area is not on the cloud's track" if a.get("nearest_clear_km") is not None else ""))
+    if a.get("centres"):
+        out.append("forecast centres' clear hours (cloud under 30%, UT): " + "; ".join(
+            f"{name} {', '.join(spells) or 'none'}" for name, spells in a["centres"].items()))
+    e = a.get("earlier")
+    if e:
+        before = _at(e["arrives"], 0).strftime("%H:%M") if e.get("arrives") else "none due"
+        now = clock(a["arrives_min"]) if a.get("arrives_min") is not None else "none due"
+        out.append(f"the {e['picture'][11:16]} picture said {before}; this one says {now}"
+                   + ("" if before == now else ": the estimate has moved"))
     out.append("a guide: clouds grow and melt as they move")
     return out
 

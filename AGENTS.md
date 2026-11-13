@@ -52,7 +52,7 @@ them and every file kept under `demo/`.
 | `policy.py` | What each command may do: `read_only`, `local_write`, `hardware` or `external`, every runnable script classed once; `classify_text` gives the worst class in a shell line, and anything unknown or hidden counts as `hardware`. The base of the safety hooks in `docs/skills-and-agents.md` |
 | `agentlog.py` | `ty agent-report`: the decision record the hooks keep in `cache/agent-log.jsonl` (what ran, who asked, what was refused; redacted), summed up |
 | `runwatch.py` | `ty watch-run`: watches an imaging run and prints a line only when frames stop, stop being kept, the share kept halves, the stars dim or come back, or the run ends |
-| `.claude/` | Claude Code's side: `settings.json` and `hooks/guard.py`, the safety hooks (fail closed: the motion lock, no inline hardware scripts, no subagent moving anything, no `pkill -f`, no secrets printed), `hooks/log.py`, the decision record, `hooks/sky.py`, which adds `./clouds.py --approach` (when clear sky gets here) and `./rain.py` (when rain does) to any message of the person's about the sky, `skills/`, thirteen procedures, and `agents/`, six agents that read and advise and never move anything (`docs/skills-and-agents.md`) |
+| `.claude/` | Claude Code's side: `settings.json` and `hooks/guard.py`, the safety hooks (fail closed: the motion lock, no inline hardware scripts, no subagent moving anything, no `pkill -f`, no secrets printed), `hooks/log.py`, the decision record, `hooks/sky.py`, which adds `./clouds.py --approach` (when clear sky gets here) and `./rain.py` (when rain does) to any message of the person's about the sky, read from the answers the satellite timer keeps when they are recent, `skills/`, thirteen procedures, and `agents/`, six agents that read and advise and never move anything (`docs/skills-and-agents.md`) |
 | `records.py` | Every kept JSON file: written whole or not at all, changed under a lock (`records.change`), checked against its schema before it replaces anything, and each scientific result stamped with the code that made it (`schemas/provenance.schema.json`) |
 | `alert.py` | Tells the house when cloud or rain arrives: a Hue light changes colour and a Google Home speaker says so. Reads the run's frames and the forecast; moves nothing |
 | `focuser.py`, `firmware/focuser/` | The focuser's motor: an Arduino Nano driving a small stepper, and the firmware it runs. `focuser.py` turns the motor; `focus.py --motor` uses it to focus on the stars in view |
@@ -160,6 +160,17 @@ a motor's creep rate. `mount.py stop` is always allowed.
   scientific result with `stamp=True` and its schema, a file two processes
   may change (a field's candidate book) through `records.change`. Change a
   kept record's shape and its schema together, or the write is refused.
+- The sky: before putting lost stars, bad frames or failed guiding down to
+  dew, focus or the kit, look at the satellite, the radar, the forecast and
+  the camera's figures (`./clouds.py --approach`, `./rain.py`,
+  `./clouds.py --history`). Say what was measured apart from what was
+  inferred (the satellite's own movement, a model's wind, the camera's
+  stars), and say "unknown" when the evidence does not settle it.
+- A cloud or rain arrival is a guide, not a promise: several of our own
+  calculations giving the same time is not a reason to trust it, and nor are
+  the four forecast centres agreeing (they share data). What a method is
+  worth is what `./clouds.py --scores` says it has done against what was
+  seen.
 - There are no tests and no CI (removed 4 November 2026 at the user's
   request). Before a commit: `ruff check` on the changed files.
 - What is proven on real hardware is recorded once, in `docs/validation.md`.
