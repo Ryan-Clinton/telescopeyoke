@@ -603,7 +603,7 @@ def _movement(pictures, rows=slice(None), cols=slice(None)):
     return vx, vy, agree, len(moves)
 
 
-def _gaps(pictures, now, ref, v, steer=None, main=None):
+def _gaps(pictures, now, ref, v, taken, steer=None, main=None):
     """The nearest clear areas, each with its own movement and where it goes:
     reaching the site (when, and for how long) or passing it (how near, and
     when). 13 November 2026: the person saw a big gap coming from the west;
@@ -654,7 +654,7 @@ def _gaps(pictures, now, ref, v, steer=None, main=None):
             out.append(gap)
             continue
         gap["by"] = use[1]
-        ve, vn = use[0][0] / 60, use[0][1] / 60          # km a minute
+        path = _path(taken, move=use[0]) if use[1] == "satellite" else _path(taken, hourly=steer[use[1]]["hourly"])
         step = max(1, len(east) // 2000)
         e, nn = east[::step], north[::step]
 
@@ -667,16 +667,17 @@ def _gaps(pictures, now, ref, v, steer=None, main=None):
             read as its end."""
             start = stay = None
             closest, at = None, None
-            for minutes in range(0, (APPROACH_HOURS + LASTS_HOURS) * 60 + 1, 5):
+            for k, (de, dn) in enumerate(path):
+                minutes = 5 * k
                 if start is None and minutes > APPROACH_HOURS * 60:
                     break
                 if start is not None and stay is not None:
                     break
-                x = round(cx - ve * f * minutes / kx)
-                y = round(cy + vn * f * minutes / ky)
+                x = round(cx - de * f / kx)
+                y = round(cy + dn * f / ky)
                 inside = 0 <= x < v.width and 0 <= y < v.height
                 over = inside and labels[y, x] == n
-                d = 0.0 if over else float(np.min(np.hypot(e + ve * f * minutes, nn + vn * f * minutes)))
+                d = 0.0 if over else float(np.min(np.hypot(e + de * f, nn + dn * f)))
                 if closest is None or d < closest:
                     closest, at = d, minutes
                 if over and start is None:
@@ -692,6 +693,33 @@ def _gaps(pictures, now, ref, v, steer=None, main=None):
         gap.update(arrives_min=start, lasts_min=stay, arrives_range_min=[min(starts), max(starts)] if starts else None,
                    closest_km=round(closest), closest_min=at)
         out.append(gap)
+    return out
+
+
+def _wind_at(hourly, t):
+    """The (east, north km/h) wind at unix time t, between the model's hours."""
+    if t <= hourly[0][0]:
+        return hourly[0][1:]
+    for (t0, e0, n0), (t1, e1, n1) in zip(hourly, hourly[1:]):
+        if t0 <= t <= t1:
+            f = (t - t0) / (t1 - t0)
+            return e0 + f * (e1 - e0), n0 + f * (n1 - n0)
+    return hourly[-1][1:]
+
+
+def _path(taken, move=None, hourly=None):
+    """How far the air has gone (east, north km) at each 5 minutes from the
+    picture, out to APPROACH_HOURS + LASTS_HOURS: at the satellite's own
+    steady movement, or at the model's wind hour by hour. 13 November 2026:
+    the 19:00 wind (25 km/h from 246 degrees) held all night put a gap's
+    edge here at 00:05 for 280 min; the model's wind, backing to 230
+    degrees and rising to 54 km/h by midnight, and its own cloud, said
+    clear about 22:00-01:00."""
+    out, e, n = [(0.0, 0.0)], 0.0, 0.0
+    for k in range(1, (APPROACH_HOURS + LASTS_HOURS) * 12 + 1):
+        ve, vn = move if hourly is None else _wind_at(hourly, taken.timestamp() + (k - 0.5) * 300)
+        e, n = e + ve / 12, n + vn / 12
+        out.append((e, n))
     return out
 
 
@@ -726,8 +754,13 @@ def _steering(site, when):
         if speed is None or d is None:
             continue
         r = math.radians(d)
+        hourly = []
+        for t_k, sp, dk in zip(w["time"], w.get(f"wind_speed_{hpa}hPa", []), w.get(f"wind_direction_{hpa}hPa", [])):
+            if sp is not None and dk is not None:
+                rk = math.radians(dk)
+                hourly.append((t_k, -sp * math.sin(rk), -sp * math.cos(rk)))
         out[layer] = {"hpa": hpa, "cover": w.get(f"cloud_cover_{layer}", [None])[i] or 0, "speed_kmh": round(speed),
-                      "from": _compass(d), "move": (-speed * math.sin(r), -speed * math.cos(r))}
+                      "from": _compass(d), "move": (-speed * math.sin(r), -speed * math.cos(r)), "hourly": hourly}
     return out or None
 
 
@@ -848,7 +881,7 @@ def approach(site=None, fresh_s=0, view=APPROACH_VIEW):
         answer["main_layer"] = main
 
     # The nearest gaps, each followed by the cloud round it.
-    answer["gaps"] = _gaps(pictures, now, ref, v, steer, main)
+    answer["gaps"] = _gaps(pictures, now, ref, v, taken, steer, main)
 
     # The movement: every pair of pictures 20 to 40 minutes apart, and the
     # median of them. 12 November 2026: one hour-long pair read 51 px east
@@ -880,9 +913,9 @@ def approach(site=None, fresh_s=0, view=APPROACH_VIEW):
     if use[1] == "satellite":
         # rain.py borrows the movement; only the satellite's own is lent.
         answer["move_kmh"] = [round(float(seen[0]), 1), round(float(seen[1]), 1)]   # east, north
-        moves = [(vx, vy)] + agree
+        paths = [_path(taken, move=seen)] + [_path(taken, move=(a[0] * kx * 60, -a[1] * ky * 60)) for a in agree]
     else:
-        moves = [(use[0][0] / 60 / kx, -use[0][1] / 60 / ky)]          # pixels a minute
+        paths = [_path(taken, hourly=steer[use[1]]["hourly"])]
     from scipy.ndimage import label
     labels, count = label((now - ref) < CLEAR_MARGIN)
     sizes = np.bincount(labels.ravel())
@@ -890,13 +923,14 @@ def approach(site=None, fresh_s=0, view=APPROACH_VIEW):
     big[0] = False
     wide_clear = big[labels]          # a speck of clear sky upwind is not a gap coming (13 November 2026)
 
-    def arrival(m):
+    def arrival(path, f=1.0):
         """(minutes until clear sky upstream reaches the site, minutes it lasts), None for either unknown."""
         start = None
-        for minutes in range(0, (APPROACH_HOURS + LASTS_HOURS) * 60 + 1, 5):
+        for k, (de, dn) in enumerate(path):
+            minutes = 5 * k
             if start is None and minutes > APPROACH_HOURS * 60:
                 break
-            x, y = round(cx - m[0] * minutes), round(cy - m[1] * minutes)
+            x, y = round(cx - de * f / kx), round(cy + dn * f / ky)
             if not (0 <= x < v.width and 0 <= y < v.height):
                 return start, None          # upstream runs off the map
             is_clear = bool(wide_clear[y, x])
@@ -906,12 +940,35 @@ def approach(site=None, fresh_s=0, view=APPROACH_VIEW):
                 return start, minutes - start
         return start, None
 
-    tries = [arrival(m) for m in moves] + [arrival((moves[0][0] * f, moves[0][1] * f)) for f in (0.75, 1.25)]
+    def stretches(path, after):
+        """The clear stretches (start, minutes; None when it runs on past the look) after `after`
+        minutes within LASTS_HOURS: a short break in a gap is not its end (13 November 2026, a
+        10 km cloudy patch read as a gap's 20 min)."""
+        out, start = [], None
+        for k, (de, dn) in enumerate(path):
+            minutes = 5 * k
+            if minutes <= after:
+                continue
+            x, y = round(cx - de / kx), round(cy + dn / ky)
+            if not (0 <= x < v.width and 0 <= y < v.height) or minutes > after + LASTS_HOURS * 60:
+                break
+            if wide_clear[y, x] and start is None:
+                start = minutes
+            elif not wide_clear[y, x] and start is not None:
+                out.append((start, minutes - start))
+                start = None
+        if start is not None:
+            out.append((start, None))
+        return out
+
+    tries = [arrival(path) for path in paths] + [arrival(paths[0], f) for f in (0.75, 1.25)]
     starts = [s for s, _ in tries if s is not None]
-    best, lasts = arrival(moves[0])
+    best, lasts = arrival(paths[0])
     answer["arrives_min"] = best
     answer["arrives_range_min"] = [min(starts), max(starts)] if starts else None
     answer["lasts_min"] = lasts
+    if best is not None and lasts:
+        answer["then"] = stretches(paths[0], best + lasts)[:3]
     answer["lines"] = _approach_lines(answer)
     if best is not None:
         speed, source = math.hypot(*use[0]), use[1]
@@ -1032,7 +1089,8 @@ def _keep_approach(answer):
 
 def _layer_words(a, layer):
     c = a["layers"][layer]
-    return f"the {layer} cloud's wind ({c['hpa']} hPa, from the {c['from']} at {c['speed_kmh']} km/h)"
+    return (f"the {layer} cloud's wind ({c['hpa']} hPa, from the {c['from']} at {c['speed_kmh']} km/h now, "
+            "the model's hour by hour after)")
 
 
 def _seen_words(x, what):
@@ -1116,6 +1174,17 @@ def _approach_lines(a):
         out.append(f"clear sky upwind reaches here about {clock(a['arrives_min'])} ({a['arrives_min']} min after the picture; "
                    f"range {clock(lo)}-{clock(hi)})"
                    + (f", lasting about {a['lasts_min']} min" if a.get("lasts_min") else ", its end not on the map"))
+        ended = a["arrives_min"] + (a.get("lasts_min") or 0)
+        for start, length in a.get("then", []):
+            out.append(f"  then cloud {clock(ended)}-{clock(start)}, clear again from {clock(start)}"
+                       + (f" for about {length} min" if length else ", its end past the look"))
+            if length is None:
+                break
+            ended = start + length
+        if a.get("then") is not None and a.get("lasts_min"):
+            last = a["then"][-1] if a["then"] else None
+            if not last or last[1] is not None:
+                out.append(f"  then cloud from {clock(ended)}")
     else:
         out.append(f"no clear sky upwind within {APPROACH_HOURS} h at this speed"
                    + (": the clear area is not on the cloud's track" if a.get("nearest_clear_km") is not None else ""))
