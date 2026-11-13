@@ -31,7 +31,10 @@
     ./clouds.py --scores [DAYS]   each clear-sky and rain prediction kept
                        (cache/sky_predictions.jsonl) against the first sight
                        of it after (cache/sky_seen.jsonl: skywatch's star
-                       counts, the radar over the site): how early or late
+                       counts, the radar over the site), and clear-or-not at
+                       30, 60, 90 and 120 min ahead (cache/sky_horizons.jsonl)
+                       against the sky staying as it was and the Met
+                       Office's hourly cloud: how early or late
 
 Source: EUMETSAT's public image service (view.eumetsat.int), 10.5 µm
 infrared, a new image every 10 minutes. Infrared works at night: clouds are
@@ -1011,6 +1014,15 @@ def approach(site=None, fresh_s=0, view=APPROACH_VIEW):
     answer["lasts_min"] = lasts
     if best is not None and lasts:
         answer["then"] = stretches(paths[0], best + lasts)[:3]
+    # Clear or not over the site at fixed times ahead, beside two baselines:
+    # the sky staying as it is now, and the Met Office's hourly cloud. Kept
+    # for --scores, which says whether this beats them at each horizon.
+    ahead = {}
+    for minutes in HORIZONS_MIN:
+        de, dn = paths[0][minutes // 5]
+        x, y = round(cx - de / kx), round(cy + dn / ky)
+        ahead[minutes] = bool(wide_clear[y, x]) if 0 <= x < v.width and 0 <= y < v.height else None
+    _note_horizons(answer, ahead, site, taken)
     _note_gap(answer)
     answer["lines"] = _approach_lines(answer)
     return _keep_approach(answer)
@@ -1083,6 +1095,76 @@ def note_prediction(kind, picture, minutes, span, lasts, **extra):
                           "arrives": _at(picture, minutes).isoformat() if minutes is not None else None,
                           "range": [_at(picture, m).isoformat() for m in span] if span else None,
                           "lasts_min": lasts, **extra})
+
+
+HORIZONS = config.DATA / "cache" / "sky_horizons.jsonl"
+HORIZONS_MIN = (30, 60, 90, 120)
+HORIZON_MATCH_MIN = 10     # a look this near a horizon's time judges it
+
+
+def _note_horizons(answer, ahead, site, taken):
+    """Each horizon's forecast from this picture, with the two baselines, kept once."""
+    import json
+    try:
+        for line in HORIZONS.read_text(encoding="utf-8").splitlines()[-30:]:
+            row = json.loads(line)
+            if row.get("picture") == answer["picture"] and row.get("view") == answer.get("view"):
+                return
+    except (OSError, ValueError):
+        pass
+    import feeds
+    met = {}
+    try:
+        w = feeds.weather_centres(site["latitude"], site["longitude"]) or {}
+        cover = w.get("ukmo_seamless", {}).get("cloud_cover", [])
+        for minutes in HORIZONS_MIN:
+            t = taken.timestamp() + minutes * 60
+            k = min(range(len(w["time"])), key=lambda i: abs(w["time"][i] - t))
+            met[minutes] = None if abs(w["time"][k] - t) > 3600 or cover[k] is None else cover[k] < COVER_MIN
+    except Exception:      # noqa: BLE001 - kept without the baseline
+        met = {}
+    _append(HORIZONS, {"t": time.time(), "picture": answer["picture"], "view": answer.get("view"),
+                       "method": answer.get("by"), "now_clear": answer["here"] == "probably clear",
+                       "ahead": {str(m): ahead.get(m) for m in HORIZONS_MIN},
+                       "met_office": {str(m): met.get(m) for m in HORIZONS_MIN}})
+
+
+def horizon_lines(days=14):
+    """At 30, 60, 90 and 120 minutes ahead: how often the satellite's
+    forecast, the sky staying as it was, and the Met Office's hourly cloud
+    were right, against the camera's looks within 10 minutes of each time.
+    The question this answers: does our own nowcast beat a national
+    forecast for this garden, and at which horizon."""
+    import datetime as dt
+    import json
+
+    def rows(path):
+        try:
+            return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        except (OSError, ValueError):
+            return []
+    since = time.time() - days * 86400
+    looks = [r for r in rows(SEEN) if r["t"] >= since and r["kind"] == "clear"]
+    tally = {m: {"satellite": [0, 0], "as now": [0, 0], "Met Office": [0, 0]} for m in HORIZONS_MIN}
+    for h in (r for r in rows(HORIZONS) if r["t"] >= since):
+        made = dt.datetime.fromisoformat(h["picture"]).timestamp()
+        for m in HORIZONS_MIN:
+            t = made + m * 60
+            near = [s for s in looks if abs(s["t"] - t) <= HORIZON_MATCH_MIN * 60 and s["t"] >= h["t"]]
+            if not near:
+                continue
+            seen = min(near, key=lambda s: abs(s["t"] - t))["yes"]
+            for name, said in (("satellite", h["ahead"].get(str(m))), ("as now", h.get("now_clear")),
+                               ("Met Office", h["met_office"].get(str(m)))):
+                if said is not None:
+                    tally[m][name][1] += 1
+                    tally[m][name][0] += said == seen
+    out = []
+    for m in HORIZONS_MIN:
+        parts = [f"{name} {ok}/{n}" for name, (ok, n) in tally[m].items() if n]
+        if parts:
+            out.append(f"{m} min ahead, right: " + ", ".join(parts))
+    return out or ["no horizon forecast judged yet: each needs a camera look within 10 min of its time"]
 
 
 def note_seen(source, kind, yes, detail=""):
@@ -1388,7 +1470,7 @@ if __name__ == "__main__":
                     "with no option the picture is saved as clouds-VIEW.jpg")
     args = ap.parse_args()
     if args.scores:
-        print("\n".join(score_lines(args.scores)))
+        print("\n".join(score_lines(args.scores) + horizon_lines(args.scores)))
         raise SystemExit
     if args.approach:
         print("\n".join(approach(fresh_s=args.fresh, view=args.view or APPROACH_VIEW)["lines"]))
