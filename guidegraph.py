@@ -213,6 +213,9 @@ def main():
     if not picked:
         sys.exit(f"no run {args.run or ''} with a star in {logs[-1].name}")
     run_id = picked[-1]
+    good = summary(found[run_id])
+    if good["lost"] > good["frames"] / 2:
+        sys.exit(f"run {run_id} lost its star in {good['lost']} of {good['frames']} frames (cloud): no graph")
     if summary(found[run_id])["minutes"] < 1:
         sys.exit(f"run {run_id} guided for under a minute ({summary(found[run_id])['frames']} frames): no graph")
     if args.fresh is not None:
