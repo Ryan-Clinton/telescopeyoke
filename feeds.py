@@ -28,6 +28,7 @@ SOURCES = {
     "weather8w": ("Open-Meteo", "https://open-meteo.com"),
     "weatherpast": ("Open-Meteo", "https://open-meteo.com"),
     "weathercentres": ("Open-Meteo, four centres", "https://open-meteo.com/en/docs#models"),
+    "winds": ("Open-Meteo, winds aloft", "https://open-meteo.com/en/docs"),
     "seeing": ("7Timer ASTRO", "https://www.7timer.info"),
     "lightpollution": ("Lorenz light-pollution atlas", "https://djlorenz.github.io/astronomy/lp/"),
     "news": ("in-the-sky.org and headlines", "https://in-the-sky.org"),
@@ -142,6 +143,26 @@ def weather_past(lat, lon, days=60):
             past_days=days, forecast_days=1, timeformat="unixtime", timezone="UTC",
         ).json()["hourly"]
     return _cached(f"weatherpast{days}_{lat:.3f}_{lon:.3f}", 1, fetch)
+
+
+# The winds at the cloud's own heights, and the model's low, mid and high
+# cloud: what tells clouds.py which layer the satellite saw moving. 13
+# November 2026: the close map read the cloud over the site as still, the
+# wide one 76 km/h from the W; the model had low cloud only, with 24 km/h
+# from the WSW at 850 hPa and 85 km/h from the W at 300 hPa.
+WIND_LEVELS = {"low": 850, "mid": 700, "high": 300}
+
+
+def winds(lat, lon):
+    """Hourly winds (km/h, direction from) at WIND_LEVELS' pressures, with
+    cloud_cover_low/mid/high, as a dict of lists; 'time' unix seconds (UTC)."""
+    hourly = ",".join([f"{k}_{p}hPa" for p in WIND_LEVELS.values() for k in ("wind_speed", "wind_direction")]
+                      + [f"cloud_cover_{layer}" for layer in WIND_LEVELS])
+
+    def fetch():
+        return _get("https://api.open-meteo.com/v1/forecast", latitude=lat, longitude=lon, hourly=hourly,
+                    past_days=1, forecast_days=2, timeformat="unixtime", timezone="UTC").json()["hourly"]
+    return _cached(f"winds_{lat:.3f}_{lon:.3f}", 1, fetch)
 
 
 # --- Seeing and transparency: 7Timer ASTRO (https://www.7timer.info) --------

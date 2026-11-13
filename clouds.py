@@ -16,7 +16,13 @@
                        clear sky upwind gets here, with a range; each of the
                        three nearest gaps followed by the cloud round it
                        (reaches here when, or misses by how much); an
-                       unsure or still movement said as that; run by
+                       unsure or still movement said as that; every
+                       movement put to the cloud layer whose wind it
+                       matches (Open-Meteo's winds at 850, 700 and 300 hPa
+                       and its low, mid and high cloud), and the clear sky
+                       carried by the wind of the layer that has the cloud
+                       when the satellite's own reading is another layer's,
+                       still or unsure; run by
                        .claude/hooks/sky.py whenever the person talks about
                        the sky
     ./clouds.py --view close|medium|wide   the picture in that view, saved as
@@ -500,6 +506,8 @@ GAP_MIN_KM2 = 1000         # a clear area smaller than this (about 30 x 30 km) i
 GAP_WINDOW = (120, 200)    # px (rows, columns), about 90 x 85 km: a gap's own movement is measured in this
 GAP_HIT_KM = 3             # a gap's edge this near the site counts as over it
 SLOW_KMH = 3               # under this the cloud is standing still, as near as the pictures tell
+MATCH_KMH = 12             # a movement within this of a layer's wind (or 40 % of the wind) is that layer's
+COVER_MIN = 30             # % : a model layer with less cloud than this is not the cloud over the site
 
 
 SAT_KEPT = config.DATA / "cache" / "satellite"     # past pictures, one file each: they never change
@@ -593,7 +601,7 @@ def _movement(pictures, rows=slice(None), cols=slice(None)):
     return vx, vy, agree, len(moves)
 
 
-def _gaps(pictures, now, ref, v):
+def _gaps(pictures, now, ref, v, steer=None, main=None):
     """The nearest clear areas, each with its own movement and where it goes:
     reaching the site (when, and for how long) or passing it (how near, and
     when). 13 November 2026: the person saw a big gap coming from the west;
@@ -627,20 +635,24 @@ def _gaps(pictures, now, ref, v):
         gap = {"km": round(dist), "bearing": _compass(math.degrees(math.atan2((ex - cx) * kx, (cy - ey) * ky)) % 360),
                "area_km2": round(area, -1)}
         m = _movement(pictures, slice(top, top + h), slice(left, left + w))
+        own = None
         if m is None:
             gap["movement"] = None
+        else:
+            vx, vy, agree, total = m
+            own = (vx * kx * 60, -vy * ky * 60)
+            gap["pairs_agreeing"] = f"{len(agree)} of {total}"
+            gap["speed_kmh"] = round(math.hypot(*own))
+            gap["moving_from"] = _from(own)
+            gap["unsure"] = 2 * len(agree) < total
+            if not gap["unsure"] and steer:
+                gap["seen_layer"] = _which_layer(own, steer)
+        use = _choose(own if m and not gap["unsure"] else None, gap.get("seen_layer"), steer, main)
+        if use is None:
             out.append(gap)
             continue
-        vx, vy, agree, total = m
-        gap["pairs_agreeing"] = f"{len(agree)} of {total}"
-        ve, vn = vx * kx, -vy * ky                     # km a minute
-        speed = math.hypot(ve, vn) * 60
-        gap["speed_kmh"] = round(speed)
-        gap["moving_from"] = _compass((math.degrees(math.atan2(ve, vn)) + 180) % 360)
-        gap["unsure"] = 2 * len(agree) < total
-        if gap["unsure"] or speed < SLOW_KMH:
-            out.append(gap)
-            continue
+        gap["by"] = use[1]
+        ve, vn = use[0][0] / 60, use[0][1] / 60          # km a minute
         step = max(1, len(east) // 2000)
         e, nn = east[::step], north[::step]
 
@@ -664,6 +676,74 @@ def _gaps(pictures, now, ref, v):
                    closest_km=round(closest), closest_min=at)
         out.append(gap)
     return out
+
+
+def _from(move):
+    """The compass point a movement (east, north) comes from."""
+    return _compass((math.degrees(math.atan2(move[0], move[1])) + 180) % 360)
+
+
+def _steering(site, when):
+    """The model's cloud and wind at each layer for the hour nearest `when`:
+    {"low": {hpa, cover, speed_kmh, from, move (east, north km/h)}, ...}, or
+    None when the model is not to be had. The satellite shows cloud moving
+    but not at what height; thin high streaks and low cloud under them move
+    differently (high cloud with the fast wind aloft). The model says which
+    layers have cloud and how each layer's wind blows, so a movement the
+    satellite measures is put to the layer whose wind it matches, as the
+    weather services' own cloud-motion winds are put to a height."""
+    import feeds
+    try:
+        w = feeds.winds(site["latitude"], site["longitude"])
+    except Exception:      # noqa: BLE001 - the approach goes on from the satellite alone
+        return None
+    if not w or not w.get("time"):
+        return None
+    t = when.timestamp()
+    i = min(range(len(w["time"])), key=lambda k: abs(w["time"][k] - t))
+    if abs(w["time"][i] - t) > 5400:
+        return None          # an old copy kept when the service failed: not this hour's
+    out = {}
+    for layer, hpa in feeds.WIND_LEVELS.items():
+        speed, d = w.get(f"wind_speed_{hpa}hPa", [None])[i], w.get(f"wind_direction_{hpa}hPa", [None])[i]
+        if speed is None or d is None:
+            continue
+        r = math.radians(d)
+        out[layer] = {"hpa": hpa, "cover": w.get(f"cloud_cover_{layer}", [None])[i] or 0, "speed_kmh": round(speed),
+                      "from": _compass(d), "move": (-speed * math.sin(r), -speed * math.cos(r))}
+    return out or None
+
+
+def _main_layer(steer):
+    """The layer with the most cloud by the model (the lowest of equals), or None under COVER_MIN everywhere."""
+    if not steer:
+        return None
+    cloudy = [(c["cover"], -n, layer) for n, (layer, c) in enumerate(steer.items()) if c["cover"] >= COVER_MIN]
+    return max(cloudy)[2] if cloudy else None
+
+
+def _which_layer(move, steer):
+    """The layer whose wind a movement (east, north km/h) matches, or None."""
+    best = None
+    for layer, c in steer.items():
+        miss = math.hypot(move[0] - c["move"][0], move[1] - c["move"][1])
+        if miss <= max(MATCH_KMH, 0.4 * c["speed_kmh"]) and (best is None or miss < best[1]):
+            best = (layer, miss)
+    return best[0] if best else None
+
+
+def _choose(seen, seen_layer, steer, main):
+    """The movement (east, north km/h) to carry clear sky by, and what it is
+    from: the satellite's own when it agrees with the cloud's layer (or the
+    model has no cloud layer to say), else that layer's wind; None when
+    neither will do. 13 November 2026: close and medium read the low cloud
+    as still, the wide view read 76 km/h from the W, the high wind; the
+    model's 850 hPa wind, 24 km/h from the WSW, was the low cloud's."""
+    if seen is not None and math.hypot(*seen) >= SLOW_KMH and (main is None or seen_layer == main):
+        return seen, "satellite"
+    if main is not None:
+        return steer[main]["move"], main
+    return None
 
 
 def _failed(why, site):
@@ -743,34 +823,55 @@ def approach(site=None, fresh_s=0, view=APPROACH_VIEW):
         answer["nearest_clear_km"] = round(float(dist[i]))
         answer["nearest_clear_bearing"] = _compass(math.degrees(math.atan2(east[i], north[i])) % 360)
 
+    # The model's layers: which has the cloud, and how each one's wind blows.
+    steer = _steering(site, taken)
+    main = _main_layer(steer)
+    if steer:
+        answer["layers"] = {k: {x: c[x] for x in ("hpa", "cover", "speed_kmh", "from")} for k, c in steer.items()}
+        answer["main_layer"] = main
+
     # The nearest gaps, each followed by the cloud round it.
-    answer["gaps"] = _gaps(pictures, now, ref, v)
+    answer["gaps"] = _gaps(pictures, now, ref, v, steer, main)
 
     # The movement: every pair of pictures 20 to 40 minutes apart, and the
     # median of them. 12 November 2026: one hour-long pair read 51 px east
     # while seven others read about 1 px a minute south; resting on that one
     # moved the arrival by three hours.
     m = _movement(pictures, cols=v.near)
+    seen = None
     if m is None:
         answer["movement"] = None
+    else:
+        vx, vy, agree, total = m
+        seen = (vx * kx * 60, -vy * ky * 60)
+        answer["pairs_agreeing"] = f"{len(agree)} of {total}"
+        answer["speed_kmh"] = round(float(math.hypot(*seen)))
+        answer["moving_from"] = _from(seen)
+        # Fewer than half the pairs agreeing is no movement to forecast from
+        # (13 November 2026: 4 of 12 read as "from the N at about 0 km/h").
+        if 2 * len(agree) < total:
+            answer["movement_unsure"] = True
+            seen = None
+        elif steer:
+            answer["seen_layer"] = _which_layer(seen, steer)
+    use = _choose(seen, answer.get("seen_layer"), steer, main)
+    if use is None:
         answer["lines"] = _approach_lines(answer)
         _note_gap(answer)
         return _keep_approach(answer)
-    vx, vy, agree, total = m
-    answer["pairs_agreeing"] = f"{len(agree)} of {total}"
-    east_kmh, north_kmh = vx * kx * 60, -vy * ky * 60
-    answer["speed_kmh"] = round(float(math.hypot(east_kmh, north_kmh)))
-    answer["moving_from"] = _compass((math.degrees(math.atan2(east_kmh, north_kmh)) + 180) % 360)
-    # Fewer than half the pairs agreeing is no movement to forecast from
-    # (13 November 2026: 4 of 12 read as "from the N at about 0 km/h").
-    # rain.py borrows move_kmh, so an unsure one is not given to it either.
-    if 2 * len(agree) < total:
-        answer["movement_unsure"] = True
-        answer["lines"] = _approach_lines(answer)
-        _note_gap(answer)
-        return _keep_approach(answer)
-    answer["move_kmh"] = [round(float(east_kmh), 1), round(float(north_kmh), 1)]   # east, north
-    moves = [(vx, vy)] + agree
+    answer["by"] = use[1]
+    if use[1] == "satellite":
+        # rain.py borrows the movement; only the satellite's own is lent.
+        answer["move_kmh"] = [round(float(seen[0]), 1), round(float(seen[1]), 1)]   # east, north
+        moves = [(vx, vy)] + agree
+    else:
+        moves = [(use[0][0] / 60 / kx, -use[0][1] / 60 / ky)]          # pixels a minute
+    from scipy.ndimage import label
+    labels, count = label((now - ref) < CLEAR_MARGIN)
+    sizes = np.bincount(labels.ravel())
+    big = (sizes * kx * ky >= GAP_MIN_KM2)
+    big[0] = False
+    wide_clear = big[labels]          # a speck of clear sky upwind is not a gap coming (13 November 2026)
 
     def arrival(m):
         """(minutes until clear sky upstream reaches the site, minutes it lasts), None for either unknown."""
@@ -779,7 +880,7 @@ def approach(site=None, fresh_s=0, view=APPROACH_VIEW):
             x, y = round(cx - m[0] * minutes), round(cy - m[1] * minutes)
             if not (0 <= x < v.width and 0 <= y < v.height):
                 return start, None          # upstream runs off the map
-            is_clear = (now[y, x] - ref) < CLEAR_MARGIN
+            is_clear = bool(wide_clear[y, x])
             if start is None and is_clear:
                 start = minutes
             elif start is not None and not is_clear:
@@ -794,8 +895,9 @@ def approach(site=None, fresh_s=0, view=APPROACH_VIEW):
     answer["lasts_min"] = lasts
     answer["lines"] = _approach_lines(answer)
     if best is not None:
+        speed, source = math.hypot(*use[0]), use[1]
         note_prediction("clear", answer["picture"], best, answer["arrives_range_min"], lasts,
-                        speed_kmh=answer["speed_kmh"], moving_from=answer["moving_from"], view=answer["view"])
+                        speed_kmh=round(speed), moving_from=_from(use[0]), view=answer["view"], by=source)
     else:
         _note_gap(answer)
     return _keep_approach(answer)
@@ -808,7 +910,7 @@ def _note_gap(answer):
         if g.get("arrives_min") is not None:
             note_prediction("clear", answer["picture"], g["arrives_min"], g["arrives_range_min"], g["lasts_min"],
                             speed_kmh=g["speed_kmh"], moving_from=g["moving_from"], gap_km=g["km"],
-                            gap_bearing=g["bearing"], view=answer.get("view"))
+                            gap_bearing=g["bearing"], view=answer.get("view"), by=g.get("by"))
             return
 
 
@@ -909,30 +1011,49 @@ def _keep_approach(answer):
     return answer
 
 
+def _layer_words(a, layer):
+    c = a["layers"][layer]
+    return f"the {layer} cloud's wind ({c['hpa']} hPa, from the {c['from']} at {c['speed_kmh']} km/h)"
+
+
+def _seen_words(x, what):
+    """What the satellite's own reading of `what` was, when it was not used."""
+    if x.get("movement", True) is None:
+        return f"{what} could not be measured"
+    if x.get("unsure") or x.get("movement_unsure"):
+        return f"{what} unsure ({x.get('pairs_agreeing')} pairs agreeing)"
+    reading = f"{what} read from the {x['moving_from']} at {x['speed_kmh']} km/h ({x.get('pairs_agreeing')} agreeing)"
+    if x.get("seen_layer"):
+        return f"{reading}, the {x['seen_layer']} cloud's wind"
+    if x["speed_kmh"] < SLOW_KMH:
+        return f"{reading}: still, as the land and sea are"
+    return f"{reading}, no layer's wind"
+
+
 def _gap_lines(a, clock):
     """One line for each of the nearest gaps: where it is, how it moves, and
     whether and when it gets here."""
     out = []
     for g in a.get("gaps", []):
         head = f"gap {g['km']} km {g['bearing']} (about {g['area_km2']:.0f} km\u00b2)"
-        if g.get("movement", True) is None:
-            out.append(f"{head}: its movement could not be measured")
-        elif g.get("unsure"):
-            out.append(f"{head}: its movement unsure ({g['pairs_agreeing']} pairs agreeing)")
-        elif g["speed_kmh"] < SLOW_KMH:
-            out.append(f"{head}: standing still ({g['pairs_agreeing']} pairs agreeing)")
+        if g.get("by") is None:
+            out.append(f"{head}: {_seen_words(g, 'its movement')}; no wind to carry it by")
+            continue
+        if g["by"] == "satellite":
+            moving = (f"moving from the {g['moving_from']} at about {g['speed_kmh']} km/h ({g['pairs_agreeing']} "
+                      "pairs agreeing" + (f", the {g['seen_layer']} cloud's wind" if g.get("seen_layer") else "") + ")")
         else:
-            moving = f"moving from the {g['moving_from']} at about {g['speed_kmh']} km/h ({g['pairs_agreeing']} pairs agreeing)"
-            if g.get("arrives_min") == 0:
-                out.append(f"{head}: {moving}; its edge is at the site now")
-            elif g.get("arrives_min") is not None:
-                lo, hi = g["arrives_range_min"]
-                out.append(f"{head}: {moving}; reaches here about {clock(g['arrives_min'])} (range {clock(lo)}-"
-                           f"{clock(hi)})" + (f", over us about {g['lasts_min']} min" if g.get("lasts_min") else ""))
-            elif g.get("closest_min"):
-                out.append(f"{head}: {moving}; misses us, closest {g['closest_km']} km about {clock(g['closest_min'])}")
-            else:
-                out.append(f"{head}: {moving}; moving away")
+            moving = f"carried by {_layer_words(a, g['by'])}; {_seen_words(g, 'the satellite')}"
+        if g.get("arrives_min") == 0:
+            out.append(f"{head}: {moving}; its edge is at the site now")
+        elif g.get("arrives_min") is not None:
+            lo, hi = g["arrives_range_min"]
+            out.append(f"{head}: {moving}; reaches here about {clock(g['arrives_min'])} (range {clock(lo)}-"
+                       f"{clock(hi)})" + (f", over us about {g['lasts_min']} min" if g.get("lasts_min") else ""))
+        elif g.get("closest_min"):
+            out.append(f"{head}: {moving}; misses us, closest {g['closest_km']} km about {clock(g['closest_min'])}")
+        else:
+            out.append(f"{head}: {moving}; moving away")
     return out
 
 
@@ -943,30 +1064,31 @@ def _approach_lines(a):
     clock = lambda minutes: _at(a["picture"], minutes).strftime("%H:%M")  # noqa: E731
     reach = f" ({a['view']} view, out to {a['map_km'][0]} km west)" if a.get("map_km") else ""
     out = [f"satellite picture {a['picture'][11:16]} UT{reach}: {a['here']} over the site"]
+    if a.get("layers"):
+        main = a.get("main_layer")
+        out.append("model's cloud: " + ", ".join(f"{k} {c['cover']}%" for k, c in a["layers"].items())
+                   + (f"; the {main} cloud is the one to watch, moving with {_layer_words(a, main)}" if main else
+                      "; no layer above 30%, so the satellite's own movement is used"))
+    else:
+        out.append("model's cloud layers: none to be had, so the satellite's movement is not checked")
     if a.get("nearest_clear_km") is not None:
         out.append(f"nearest clear sky: {a['nearest_clear_km']} km {a['nearest_clear_bearing']}")
     else:
         west, east, span = a.get("map_km", (236, 236, 189))
         out.append(f"no clear sky anywhere on the map ({west} km west, {east} km east, {span} km north and south)")
     out += _gap_lines(a, clock)
-    if a.get("movement", True) is None:
-        out.append("the whole map's movement could not be measured from the last hour's pictures")
-        return out
     missing = f"; {a['pictures_missing']} pictures would not come" if a.get("pictures_missing") else ""
-    if a.get("movement_unsure"):
-        out.append(f"the whole map's movement is unsure ({a.get('pairs_agreeing')} pairs agreeing{missing}: "
-                   "layers moving different ways), so no arrival from it; the gaps above are each followed on "
-                   "their own")
+    if a.get("by") is None:
+        out.append(f"{_seen_words(a, 'the whole map').capitalize()}{missing}; no wind to carry clear sky by")
         out.append("a guide: clouds grow and melt as they move")
         return out
-    if a["speed_kmh"] < SLOW_KMH:
-        out.append(f"the cloud is barely moving, under {SLOW_KMH} km/h (last hour's pictures, "
-                   f"{a.get('pairs_agreeing', '?')} pairs agreeing{missing}): clear sky comes here only by the "
-                   "cloud melting or the wind picking up, not by drifting in")
-        out.append("a guide: clouds grow and melt as they move")
-        return out
-    out.append(f"cloud moving from the {a['moving_from']} at about {a['speed_kmh']} km/h (last hour's pictures, "
-               f"{a.get('pairs_agreeing', '?')} pairs agreeing{missing})")
+    if a["by"] == "satellite":
+        out.append(f"cloud moving from the {a['moving_from']} at about {a['speed_kmh']} km/h (last hour's pictures, "
+                   f"{a.get('pairs_agreeing', '?')} pairs agreeing{missing}"
+                   + (f", the {a['seen_layer']} cloud's wind" if a.get("seen_layer") else "") + ")")
+    else:
+        out.append(f"clear sky upwind carried by {_layer_words(a, a['by'])}: {_seen_words(a, 'the whole map')}"
+                   f"{missing}")
     if a.get("arrives_min") == 0:
         out.append("clear sky is over the site now by the satellite"
                    + (f", for about {a['lasts_min']} min more at this speed" if a.get("lasts_min") else ""))
