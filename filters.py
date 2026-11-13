@@ -275,17 +275,51 @@ def keep_last_l(fwhm, where=None):
     save(store, where)
 
 
-def size_check(fwhm, store=None, tolerance=None):
-    """After a change: None when the first frame's star width is within the
-    tolerance of the last run in L, else why it needs refocusing. With no run
-    in L kept yet, None and nothing to compare (said by the caller)."""
+SAME_SET_S = 12 * 3600   # a run in the same parfocal set this recent is the size to check against
+
+
+def keep_last(name, fwhm, where=None, now=None):
+    """The stars' width in a run in `name`, kept for the size check of a
+    later change to a filter in the same parfocal set."""
+    store = load(where)
+    store.setdefault("last_by_filter", {})[name] = {"fwhm": round(float(fwhm), 3), "when": now or time.time()}
+    save(store, where)
+
+
+def reference_size(name, store=None, now=None):
+    """What a first frame in `name` is checked against: the newest run within
+    SAME_SET_S in a filter of the same parfocal set (they focus together, so
+    the same night's seeing is in both), else the last run in L. Returns
+    (fwhm, what it is) or (None, None). 13 November 2026: OIII's 6.4 px was
+    stopped against 5.1 px in L from an earlier night, with the same night's
+    Ha, a filter of OIII's set, at 6.2 to 6.3 px."""
     store = store if store is not None else load()
+    now = now or time.time()
+    group = next((g for g in sets() if name in g), [name])
+    recent = [(v["when"], v["fwhm"], f) for f, v in (store.get("last_by_filter") or {}).items()
+              if f in group and v.get("fwhm") and now - v.get("when", 0) <= SAME_SET_S]
+    if recent:
+        when, fwhm, f = max(recent)
+        return fwhm, f"the run in {f} at {time.strftime('%H:%M', time.localtime(when))}, a filter of the same set"
     last = (store.get("last_l") or {}).get("fwhm")
+    return (last, "the last run in L") if last else (None, None)
+
+
+def size_check(fwhm, store=None, tolerance=None, name=None):
+    """After a change: None when the first frame's star width is within the
+    tolerance of reference_size (the same set's recent run, else the last run
+    in L), else why it needs refocusing. With nothing kept to compare, None
+    (said by the caller)."""
+    store = store if store is not None else load()
+    if name is not None:
+        last, what = reference_size(name, store)
+    else:
+        last, what = (store.get("last_l") or {}).get("fwhm"), "the last run in L"
     tolerance = float(settings().get("size_tolerance", SIZE_TOLERANCE) if tolerance is None else tolerance)
     if not last or fwhm is None:
         return None
     if fwhm > tolerance * last:
-        return (f"the first frame's stars are {fwhm:.1f} px wide against {last:.1f} px in the last run in L, "
+        return (f"the first frame's stars are {fwhm:.1f} px wide against {last:.1f} px in {what}, "
                 f"more than {tolerance:g} times: refocus in this filter (./focus.py --walk-in) before going on")
     return None
 

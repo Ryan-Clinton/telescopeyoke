@@ -130,6 +130,7 @@ class Session:
         self.timings = stacking.Timings()
         self.preview_every, self.published = preview_every, 0.0
         self.size_check, self.refocus = False, None   # set after a filter change (filters.size_check)
+        self.filter_name = None
 
     def job(self, index, mosaic, header):
         """Arguments for stacking.live_frame for this frame, as things stand."""
@@ -191,7 +192,7 @@ class Session:
                 # After a filter change and its focus offset: the first kept
                 # frame's stars against the last run in L (filters.py).
                 self.size_check = False
-                self.refocus = filters.size_check(entry.get("fwhm"))
+                self.refocus = filters.size_check(entry.get("fwhm"), name=self.filter_name)
             self.publish()
         self.log.append(entry)
         stacking.append_log(self.folder, entry)
@@ -1508,6 +1509,7 @@ def held(args):
     session = Session(args.name, exposure, args.gain, save=not args.no_save, frames=args.frames or None)
     session.size_check = bool(args.light_path and args.light_path["changed"] and args.light_path["name"]
                               != filters.DEFAULT)
+    session.filter_name = args.light_path["name"] if args.light_path else None
     # "Imaging M31-P6: 4 of 19 frames of 16 s" on the status page for as long
     # as the run lives, and a camera that has stopped sending said plainly.
     with activity.imaging(session.name, args.frames or None, exposure, session.folder) as tracker:
@@ -1874,11 +1876,14 @@ def image(args, session, exposure, moving, holding, tracker):
     session.finish()
     if session.refocus:
         raise interface.Refusal("REFOCUS_NEEDED", f"Stopped after a filter change: {session.refocus}.")
-    if getattr(args, "light_path", None) and args.light_path["name"] == filters.DEFAULT and session.accepted:
-        # The stars' width in L, what a change to another filter is checked against.
+    if getattr(args, "light_path", None) and args.light_path.get("name") and session.accepted:
+        # The stars' width in this filter: what a change to another filter is
+        # checked against (L for any filter; this one for its parfocal set).
         widths = [f["fwhm"] for f in session.accepted[-10:] if f.get("fwhm")]
         if widths:
-            filters.keep_last_l(float(np.median(widths)))
+            filters.keep_last(args.light_path["name"], float(np.median(widths)))
+            if args.light_path["name"] == filters.DEFAULT:
+                filters.keep_last_l(float(np.median(widths)))
     used = len(session.accepted)
     if not used:
         raise interface.Refusal("NO_USABLE_FRAMES", "No usable frames.")
