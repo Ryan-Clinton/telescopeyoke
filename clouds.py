@@ -19,6 +19,9 @@
                        unsure or still movement said as that; run by
                        .claude/hooks/sky.py whenever the person talks about
                        the sky
+    ./clouds.py --view close|medium|wide   the picture in that view, saved as
+                       web/clouds-VIEW.jpg (close is the run's own,
+                       web/clouds.jpg); with --approach, the approach in it
     ./clouds.py --scores [DAYS]   each clear-sky and rain prediction kept
                        (cache/sky_predictions.jsonl) against the first sight
                        of it after (cache/sky_seen.jsonl: skywatch's star
@@ -57,17 +60,45 @@ import config
 ROOT = Path(__file__).parent
 PICTURE = config.DATA / "web" / "clouds.jpg"
 WMS = "https://view.eumetsat.int/geoserver/wms"
-WIDTH, HEIGHT = 1110, 510
-# Degrees of latitude and longitude shown either side of the site.
-SPAN_LAT, SPAN_LON = 1.7, 3.7
+# The map's three views: degrees of longitude west and east of the site,
+# of latitude either side, and pixels to the close view's one (2 is half
+# the detail). Close is the map the run's verdicts have always used; 13
+# November 2026, a gap the person could see coming over the Atlantic was
+# off it (it reached 236 km west), so --approach looks at the medium view
+# (about 630 km west, where most weather comes from, at the same detail),
+# and the wide one shows the Atlantic out to 20 degrees W.
+VIEWS = {"close": (3.7, 3.7, 1.7, 1), "medium": (9.9, 3.7, 1.7, 1), "wide": (20.0, 6.0, 6.0, 2)}
+APPROACH_VIEW = "medium"
 
 
-def _layer(name, box, transparent=False, when=None, timeout=60):
+class View:
+    """One view's box, size in pixels, the site's pixel and km a pixel."""
+
+    def __init__(self, site, name="close"):
+        west, east, span, scale = VIEWS[name]
+        lat, lon = site["latitude"], site["longitude"]
+        self.name = name
+        self.width = round(1110 * (west + east) / 7.4 / scale)
+        self.height = round(510 * 2 * span / 3.4 / scale)
+        self.x, self.y = round(self.width * west / (west + east)), self.height // 2
+        self.box = (lat - span, lon - west, lat + span, lon + east)
+        self.kx = 111.32 * math.cos(math.radians(lat)) * (west + east) / self.width     # km a pixel, east-west
+        self.ky = 111.32 * 2 * span / self.height                                       # km a pixel, north-south
+        # The site's own neighbourhood, the close view's width: the clear-sky
+        # reference (the darkest tenth) and the whole cloud's movement are
+        # measured over it in every view, so the wider ocean (warm, dark)
+        # does not change what counts as clear.
+        half = 555 // scale
+        self.near = slice(max(self.x - half, 0), min(self.x + half, self.width))
+        self.km = (west * 111 * math.cos(math.radians(lat)), east * 111 * math.cos(math.radians(lat)), span * 111)
+
+
+def _layer(name, box, size, transparent=False, when=None, timeout=60):
     extra = {"time": when.strftime("%Y-%m-%dT%H:%M:00Z")} if when else {}
     r = requests.get(WMS, timeout=timeout, params={**extra,
         "service": "WMS", "version": "1.3.0", "request": "GetMap", "layers": name,
         "styles": "", "crs": "EPSG:4326", "bbox": ",".join(f"{v:.3f}" for v in box),
-        "width": WIDTH, "height": HEIGHT, "format": "image/png",
+        "width": size[0], "height": size[1], "format": "image/png",
         "transparent": str(transparent).lower()})
     r.raise_for_status()
     try:
@@ -79,13 +110,13 @@ def _layer(name, box, transparent=False, when=None, timeout=60):
                            f"({r.headers.get('content-type', 'unknown')})") from error
 
 
-def coastline(box):
+def coastline(box, size):
     """Yellow coastline overlay for the map; fetched once and kept, since the
     service that draws it fails now and then. None if it has never worked."""
     kept = config.DATA / "cache" / "coastline_{:.2f}_{:.2f}.png".format(*box[:2])
     if not kept.exists():
         try:
-            lines = np.array(_layer("backgrounds:ne_10m_coastline", box, True).convert("RGBA"))
+            lines = np.array(_layer("backgrounds:ne_10m_coastline", box, size, True).convert("RGBA"))
         except requests.RequestException:
             return None
         lines[lines[..., 3] > 0] = (255, 220, 0, 255)
@@ -113,26 +144,21 @@ def picture_time(timeout=8):
     return None
 
 
-def _box(site):
-    lat, lon = site["latitude"], site["longitude"]
-    return (lat - SPAN_LAT, lon - SPAN_LON, lat + SPAN_LAT, lon + SPAN_LON)
-
-
-def update(site, when=None, timeout=60, save="auto"):
+def update(site, when=None, timeout=60, save="auto", view="close"):
     """Fetch, annotate and save the image. Returns (brightness over the site,
     brightness of the darkest tenth of the map), both 0-255; the second is a
     stand-in for clear sky. `when` (UTC) is a past picture, saved under its
     own name so the page's live one is left alone: 5 November 2026, dimmed
     stars were put down to dew without a look at the satellite."""
     lat = site["latitude"]
-    box = _box(site)
-    infrared = _layer("mtg_fd:ir105_hrfi", box, when=when, timeout=timeout).convert("RGB")
+    v = View(site, view)
+    infrared = _layer("mtg_fd:ir105_hrfi", v.box, (v.width, v.height), when=when, timeout=timeout).convert("RGB")
     levels = np.asarray(infrared.convert("L"), dtype=float)
-    x, y = WIDTH // 2, HEIGHT // 2
+    x, y = v.x, v.y
     here = float(levels[y - 4:y + 5, x - 4:x + 5].mean())
-    clear = float(np.percentile(levels, 10))
+    clear = float(np.percentile(levels[:, v.near], 10))
 
-    coast = coastline(box)
+    coast = coastline(v.box, (v.width, v.height))
     if coast:
         infrared.paste(coast, (0, 0), coast)
     draw = ImageDraw.Draw(infrared)
@@ -140,14 +166,16 @@ def update(site, when=None, timeout=60, save="auto"):
     # page, and the place is nobody else's business (20 October 2026).
     draw.ellipse([x - 7, y - 7, x + 7, y + 7], outline=(255, 40, 40), width=3)
     # Stretch vertically so distances look right at this latitude.
-    true_height = round(WIDTH * SPAN_LAT / (SPAN_LON * np.cos(np.radians(lat))))
+    west, east, span, _ = VIEWS[view]
+    true_height = round(v.width * 2 * span / ((west + east) * np.cos(np.radians(lat))))
     # save: "auto" (the page's picture now, a dated one for a past time),
     # "page" (the page's, for a time asked for as the newest), None (not kept).
     out = None
     if save:
-        out = PICTURE.with_name(f"clouds-{when:%Y%m%d-%H%M}.jpg") if when and save == "auto" else PICTURE
+        page = PICTURE if view == "close" else PICTURE.with_name(f"clouds-{view}.jpg")
+        out = page.with_name(f"{page.stem}-{when:%Y%m%d-%H%M}.jpg") if when and save == "auto" else page
         out.parent.mkdir(exist_ok=True)
-        infrared.resize((WIDTH, true_height)).save(out, quality=88)
+        infrared.resize((v.width, true_height)).save(out, quality=88)
     return here, clear, out
 
 
@@ -461,14 +489,14 @@ def history_lines(hours=24):
     return out or [f"no looks in the last {hours} h"]
 
 
-APPROACH = config.DATA / "cache" / "cloud_approach.json"
+APPROACH = config.DATA / "cache" / "cloud_approach.json"     # the medium view's; the others' beside it
 STEP_MIN = 10              # the satellite's pictures come every 10 minutes
 PICTURES = 7               # the last hour's: the cloud's movement is measured between pairs of them
 APPROACH_MAX_PX = 60       # the most a picture's cloud may move between two of them (about 25-45 km)
 APPROACH_HOURS = 6         # how far ahead an arrival is looked for
 CLEAR_MARGIN, BROKEN_MARGIN = 10, 20   # as verdict(): brightness over the clear tenth
 GAPS = 3                   # the nearest clear areas each followed on its own
-GAP_MIN_KM2 = 100          # a clear area smaller than this is a speck, not a gap
+GAP_MIN_KM2 = 1000         # a clear area smaller than this (about 30 x 30 km) is a speck, not a gap
 GAP_WINDOW = (120, 200)    # px (rows, columns), about 90 x 85 km: a gap's own movement is measured in this
 GAP_HIT_KM = 3             # a gap's edge this near the site counts as over it
 SLOW_KMH = 3               # under this the cloud is standing still, as near as the pictures tell
@@ -478,23 +506,23 @@ SAT_KEPT = config.DATA / "cache" / "satellite"     # past pictures, one file eac
 SAT_KEEP_HOURS = 6
 
 
-def _maybe_levels(site, when):
+def _maybe_levels(site, when, view):
     """_levels, or None when that picture will not come: the check goes on
     with the ones that did."""
     try:
-        return _levels(site, when)
+        return _levels(site, when, view)
     except (RuntimeError, requests.RequestException, OSError):
         return None
 
 
-def _levels(site, when, timeout=30, tries=3):
+def _levels(site, when, view, timeout=30, tries=3):
     """One past picture as grey levels: from the pictures kept, or fetched
     (tried again after a pause when the service is slow) and kept. A past
     picture never changes, so each is fetched once: 12 November 2026,
     23:07-23:20, view.eumetsat.int gave 504s and timeouts on timed pictures
     while the newest came in 7 s, and fetching the whole hour again for
     every check left the cloud's movement unknown for a quarter of an hour."""
-    box = _box(site)
+    box = view.box
     kept = SAT_KEPT / f"ir105-{when:%Y%m%d%H%M}-{box[0]:.2f}_{box[1]:.2f}.png"
     if kept.exists():
         try:
@@ -503,7 +531,8 @@ def _levels(site, when, timeout=30, tries=3):
             kept.unlink(missing_ok=True)
     for attempt in range(tries):
         try:
-            picture = _layer("mtg_fd:ir105_hrfi", box, when=when, timeout=timeout).convert("L")
+            picture = _layer("mtg_fd:ir105_hrfi", box, (view.width, view.height), when=when,
+                             timeout=timeout).convert("L")
             break
         except (RuntimeError, requests.RequestException, OSError):
             if attempt == tries - 1:
@@ -564,7 +593,7 @@ def _movement(pictures, rows=slice(None), cols=slice(None)):
     return vx, vy, agree, len(moves)
 
 
-def _gaps(pictures, now, ref, kx, ky):
+def _gaps(pictures, now, ref, v):
     """The nearest clear areas, each with its own movement and where it goes:
     reaching the site (when, and for how long) or passing it (how near, and
     when). 13 November 2026: the person saw a big gap coming from the west;
@@ -573,7 +602,7 @@ def _gaps(pictures, now, ref, kx, ky):
     was not on the cloud's track, so it could not say whether the gap would
     reach us. A gap is followed by the cloud round it, not the whole map."""
     from scipy.ndimage import label
-    cx, cy = WIDTH // 2, HEIGHT // 2
+    cx, cy, kx, ky = v.x, v.y, v.kx, v.ky
     labels, count = label((now - ref) < CLEAR_MARGIN)
     if not count:
         return []
@@ -593,8 +622,8 @@ def _gaps(pictures, now, ref, kx, ky):
     out = []
     for dist, ex, ey, east, north, area in found[:GAPS]:
         h, w = GAP_WINDOW
-        top = min(max(ey - h // 2, 0), HEIGHT - h)
-        left = min(max(ex - w // 2, 0), WIDTH - w)
+        top = min(max(ey - h // 2, 0), v.height - h)
+        left = min(max(ex - w // 2, 0), v.width - w)
         gap = {"km": round(dist), "bearing": _compass(math.degrees(math.atan2((ex - cx) * kx, (cy - ey) * ky)) % 360),
                "area_km2": round(area, -1)}
         m = _movement(pictures, slice(top, top + h), slice(left, left + w))
@@ -655,7 +684,11 @@ def _failed(why, site):
     return {"t": time.time(), "error": why, "lines": lines}
 
 
-def approach(site=None, fresh_s=0):
+def _approach_file(view):
+    return APPROACH if view == APPROACH_VIEW else APPROACH.with_name(f"cloud_approach-{view}.json")
+
+
+def approach(site=None, fresh_s=0, view=APPROACH_VIEW):
     """Where the nearest clear sky is and when it gets here, from the
     satellite's last hour of pictures (every pair 20-40 min apart, the median): the cloud's
     movement measured between them, then the clear sky upstream of the site
@@ -672,31 +705,31 @@ def approach(site=None, fresh_s=0):
     from scipy.ndimage import uniform_filter
     if fresh_s:
         try:
-            kept = json.loads(APPROACH.read_text(encoding="utf-8"))
+            kept = json.loads(_approach_file(view).read_text(encoding="utf-8"))
             if time.time() - kept["t"] < fresh_s:
                 return kept
         except (OSError, ValueError, KeyError):
             pass
     site = site or config.load()["site"]
+    v = View(site, view)
     taken = picture_time()
     if taken is None:
         return _failed("the satellite service would not say when its newest picture was taken", site)
     times = [taken - dt.timedelta(minutes=STEP_MIN * k) for k in range(PICTURES - 1, -1, -1)]
     try:
         with concurrent.futures.ThreadPoolExecutor(2) as pool:      # gently: the service struggles with more
-            pictures = list(pool.map(lambda when: _maybe_levels(site, when), times))
+            pictures = list(pool.map(lambda when: _maybe_levels(site, when, v), times))
     except (RuntimeError, requests.RequestException, OSError) as problem:
         return _failed(f"no satellite pictures: {problem}", site)
     if pictures[-1] is None:
         return _failed("the newest satellite picture did not come", site)
     missing = sum(p is None for p in pictures)
-    lat = site["latitude"]
-    kx = 111.32 * math.cos(math.radians(lat)) * 2 * SPAN_LON / WIDTH     # km a pixel, east-west
-    ky = 111.32 * 2 * SPAN_LAT / HEIGHT                                   # km a pixel, north-south
+    kx, ky = v.kx, v.ky
     now = uniform_filter(pictures[-1], 9)
-    ref = float(np.percentile(pictures[-1], 10))
-    cx, cy = WIDTH // 2, HEIGHT // 2
-    answer = {"t": time.time(), "picture": taken.isoformat(), "here": verdict(float(now[cy, cx]), ref)}
+    ref = float(np.percentile(pictures[-1][:, v.near], 10))
+    cx, cy = v.x, v.y
+    answer = {"t": time.time(), "picture": taken.isoformat(), "here": verdict(float(now[cy, cx]), ref),
+              "view": view, "map_km": [round(k) for k in v.km]}
     if missing:
         answer["pictures_missing"] = f"{missing} of {PICTURES}"
 
@@ -711,13 +744,13 @@ def approach(site=None, fresh_s=0):
         answer["nearest_clear_bearing"] = _compass(math.degrees(math.atan2(east[i], north[i])) % 360)
 
     # The nearest gaps, each followed by the cloud round it.
-    answer["gaps"] = _gaps(pictures, now, ref, kx, ky)
+    answer["gaps"] = _gaps(pictures, now, ref, v)
 
     # The movement: every pair of pictures 20 to 40 minutes apart, and the
     # median of them. 12 November 2026: one hour-long pair read 51 px east
     # while seven others read about 1 px a minute south; resting on that one
     # moved the arrival by three hours.
-    m = _movement(pictures)
+    m = _movement(pictures, cols=v.near)
     if m is None:
         answer["movement"] = None
         answer["lines"] = _approach_lines(answer)
@@ -739,12 +772,12 @@ def approach(site=None, fresh_s=0):
     answer["move_kmh"] = [round(float(east_kmh), 1), round(float(north_kmh), 1)]   # east, north
     moves = [(vx, vy)] + agree
 
-    def arrival(v):
+    def arrival(m):
         """(minutes until clear sky upstream reaches the site, minutes it lasts), None for either unknown."""
         start = None
         for minutes in range(0, APPROACH_HOURS * 60 + 1, 5):
-            x, y = round(cx - v[0] * minutes), round(cy - v[1] * minutes)
-            if not (0 <= x < WIDTH and 0 <= y < HEIGHT):
+            x, y = round(cx - m[0] * minutes), round(cy - m[1] * minutes)
+            if not (0 <= x < v.width and 0 <= y < v.height):
                 return start, None          # upstream runs off the map
             is_clear = (now[y, x] - ref) < CLEAR_MARGIN
             if start is None and is_clear:
@@ -753,7 +786,7 @@ def approach(site=None, fresh_s=0):
                 return start, minutes - start
         return start, None
 
-    tries = [arrival(v) for v in moves] + [arrival((moves[0][0] * f, moves[0][1] * f)) for f in (0.75, 1.25)]
+    tries = [arrival(m) for m in moves] + [arrival((moves[0][0] * f, moves[0][1] * f)) for f in (0.75, 1.25)]
     starts = [s for s, _ in tries if s is not None]
     best, lasts = arrival(moves[0])
     answer["arrives_min"] = best
@@ -762,7 +795,7 @@ def approach(site=None, fresh_s=0):
     answer["lines"] = _approach_lines(answer)
     if best is not None:
         note_prediction("clear", answer["picture"], best, answer["arrives_range_min"], lasts,
-                        speed_kmh=answer["speed_kmh"], moving_from=answer["moving_from"])
+                        speed_kmh=answer["speed_kmh"], moving_from=answer["moving_from"], view=answer["view"])
     else:
         _note_gap(answer)
     return _keep_approach(answer)
@@ -775,7 +808,7 @@ def _note_gap(answer):
         if g.get("arrives_min") is not None:
             note_prediction("clear", answer["picture"], g["arrives_min"], g["arrives_range_min"], g["lasts_min"],
                             speed_kmh=g["speed_kmh"], moving_from=g["moving_from"], gap_km=g["km"],
-                            gap_bearing=g["bearing"])
+                            gap_bearing=g["bearing"], view=answer.get("view"))
             return
 
 
@@ -810,7 +843,7 @@ def note_prediction(kind, picture, minutes, span, lasts, **extra):
     try:
         for line in PREDICTIONS.read_text(encoding="utf-8").splitlines()[-50:]:
             row = json.loads(line)
-            if row.get("kind") == kind and row.get("picture") == picture:
+            if row.get("kind") == kind and row.get("picture") == picture and row.get("view") == extra.get("view"):
                 return                       # this picture's prediction is already kept
     except (OSError, ValueError):
         pass
@@ -868,8 +901,9 @@ def score_lines(days=14):
 def _keep_approach(answer):
     import json
     try:
-        APPROACH.parent.mkdir(parents=True, exist_ok=True)
-        APPROACH.write_text(json.dumps(answer), encoding="utf-8")
+        out = _approach_file(answer.get("view", APPROACH_VIEW))
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(answer), encoding="utf-8")
     except OSError:
         pass
     return answer
@@ -907,12 +941,13 @@ def _approach_lines(a):
         return [f"cloud approach: {a['error']}"]
     # From the picture's time, not now: a kept answer read later says the same clock time.
     clock = lambda minutes: _at(a["picture"], minutes).strftime("%H:%M")  # noqa: E731
-    out = [f"satellite picture {a['picture'][11:16]} UT: {a['here']} over the site"]
+    reach = f" ({a['view']} view, out to {a['map_km'][0]} km west)" if a.get("map_km") else ""
+    out = [f"satellite picture {a['picture'][11:16]} UT{reach}: {a['here']} over the site"]
     if a.get("nearest_clear_km") is not None:
         out.append(f"nearest clear sky: {a['nearest_clear_km']} km {a['nearest_clear_bearing']}")
     else:
-        out.append(f"no clear sky anywhere on the map (about {2 * SPAN_LAT * 111:.0f} x "
-                   f"{2 * SPAN_LON * 111 * math.cos(math.radians(55)):.0f} km)")
+        west, east, span = a.get("map_km", (236, 236, 189))
+        out.append(f"no clear sky anywhere on the map ({west} km west, {east} km east, {span} km north and south)")
     out += _gap_lines(a, clock)
     if a.get("movement", True) is None:
         out.append("the whole map's movement could not be measured from the last hour's pictures")
@@ -961,12 +996,15 @@ if __name__ == "__main__":
                     help="with --approach: reuse an answer this new instead of fetching again")
     ap.add_argument("--scores", type=float, nargs="?", const=14, metavar="DAYS",
                     help="the clear-sky and rain predictions kept in the last DAYS (14), against what was seen")
+    ap.add_argument("--view", choices=list(VIEWS), help="close (about 240 km each way, the run's own), medium "
+                    "(out to about 630 km west, --approach's) or wide (the Atlantic to 20 degrees W, half the detail); "
+                    "with no option the picture is saved as clouds-VIEW.jpg")
     args = ap.parse_args()
     if args.scores:
         print("\n".join(score_lines(args.scores)))
         raise SystemExit
     if args.approach:
-        print("\n".join(approach(fresh_s=args.fresh)["lines"]))
+        print("\n".join(approach(fresh_s=args.fresh, view=args.view or APPROACH_VIEW)["lines"]))
         raise SystemExit
     if args.history:
         print("\n".join(history_lines(args.history)))
@@ -977,11 +1015,15 @@ if __name__ == "__main__":
     if args.at:
         when = dt.datetime.fromisoformat(args.at).replace(tzinfo=dt.timezone.utc)
         try:
-            here, clear, saved = update(config.load()["site"], when)
+            here, clear, saved = update(config.load()["site"], when, view=args.view or "close")
         except (RuntimeError, requests.RequestException) as problem:
             raise SystemExit(f"No satellite picture: {problem}. Try again in a few minutes.")
         print(f"over the site: {here:.0f}, clear areas: {clear:.0f} -> {verdict(here, clear)}")
         raise SystemExit(f"saved {saved}")
+    if args.view and args.view != "close":
+        here, clear, saved = update(config.load()["site"], view=args.view)
+        print(f"{args.view} view: {verdict(here, clear)} over the site; saved {saved}")
+        raise SystemExit
     # Now: the same shared look the run and the watches use, fetched fresh.
     found = evidence(max_age_s=0)
     if found["satellite"]:
