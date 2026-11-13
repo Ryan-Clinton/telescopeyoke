@@ -735,7 +735,7 @@ class Controller:
                 raise Fault(f"{self.sent[axis] / 60:+.1f}' of {axis} correction since the lock was set, "
                             f"past {CORRECTION_FAULT / 60:.0f}'.")
         if seconds[1] and self.stuck_s:
-            self.unanswered += abs(seconds[1])
+            self.unanswered += float(abs(seconds[1]))
         return seconds, {"ra_px": ra_px, "dec_px": dec_px, "reversal": reversal,
                          "slack_share": round(self.slack_share, 2), "dec_held": held}
 
@@ -753,7 +753,7 @@ class Controller:
                 or size >= DEC_ESCAPE * self.dec_from[1]):
             self.dec_from, self.unanswered = (sign, size), 0.0
             return False
-        return self.unanswered >= self.stuck_s
+        return bool(self.unanswered >= self.stuck_s)
 
 
 def write_state(state, path=None):
