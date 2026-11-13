@@ -32,7 +32,7 @@ import io
 import json
 import math
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import requests
@@ -117,6 +117,24 @@ def look(site=None):
         cloud = clouds.approach(site, fresh_s=900)
         if cloud.get("move_kmh"):
             move, source = tuple(cloud["move_kmh"]), "the cloud's movement on the satellite"
+    # The model's winds: rain is carried by the wind of its cloud's layer.
+    # A movement that matches no layer's wind is not the rain's (13 November
+    # 2026: the radar read rain 65 km N as 3 km/h from the NE while the
+    # model's 850 and 700 hPa winds blew 25-45 km/h from the SW); then the
+    # 700 hPa wind, the one rain is steered by, carries it hour by hour.
+    hourly = None
+    steer = clouds._steering(site, datetime.fromtimestamp(chosen[-1]["time"], timezone.utc))
+    if steer and "mid" in steer:
+        layer = clouds._which_layer(move, steer) if move is not None and math.hypot(*move) >= clouds.SLOW_KMH else None
+        if layer is None:
+            if move is not None:
+                answer["own_movement"] = (f"{source}: from the {clouds._from(move)} at {round(math.hypot(*move))} "
+                                          "km/h, no layer's wind")
+            c = steer["mid"]
+            move, hourly = c["move"], c["hourly"]
+            source = f"the model's {c['hpa']} hPa wind, hour by hour"
+        else:
+            source += f", the {layer} cloud's wind"
     answer["movement_from"] = source
     if move is None or answer["nearest_km"] is None:
         answer["arrives_min"] = 0 if answer["rain_here"] else None
@@ -130,10 +148,13 @@ def look(site=None):
 
     def along(m):
         """(minutes until rain upwind reaches the site, minutes it lasts on the track)."""
+        f = math.hypot(*m) / max(math.hypot(*move), 1e-9)          # the range: the same path, faster or slower
+        path = clouds._path(taken, move=move) if hourly is None else clouds._path(taken, hourly=hourly)
         start = None
-        for minutes in range(0, AHEAD_H * 60 + 1, 5):
-            x = round(sx - m[0] / km * minutes / 60)
-            y = round(sy + m[1] / km * minutes / 60)
+        for k, (de, dn) in enumerate(path[:AHEAD_H * 12 + 1]):
+            minutes = 5 * k
+            x = round(sx - de * f / km)
+            y = round(sy + dn * f / km)
             if not (0 <= x < size and 0 <= y < size):
                 return start, None
             wet = bool(near[y, x])
@@ -171,7 +192,8 @@ def lines(a):
         return out
     out.append(f"nearest rain {a['nearest_km']} km {a['nearest_bearing']}")
     if a.get("speed_kmh") is not None:
-        out.append(f"moving from the {a['moving_from']} at about {a['speed_kmh']} km/h ({a['movement_from']})")
+        out.append(f"moving from the {a['moving_from']} at about {a['speed_kmh']} km/h ({a['movement_from']})"
+                   + (f"; the radar's own reading, {a['own_movement']}, not used" if a.get("own_movement") else ""))
     if a.get("arrives_min") is None:
         out.append(f"no rain on its way here within {AHEAD_H} h at that speed")
     elif a["arrives_min"] > 0:
