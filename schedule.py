@@ -707,6 +707,38 @@ DAWN_FILTERS = ("B", "G", "R", "L")    # the sky brightens through dawn: the fai
 FLATS_LOG = config.DATA / "cache" / "dawn-flats.log"
 
 
+def night_filters(now=None, hours=NIGHT_HOURS):
+    """The filters tonight's frames were taken in, from each session's first
+    frame (the FILTER card is on the image's extension, not the primary)."""
+    from astropy.io import fits
+    now = now or time.time()
+    seen = []
+    for d in sorted((config.DATA / "frames").glob("*/2*")):
+        try:
+            begun = datetime.strptime(d.name[:15], "%Y%m%d-%H%M%S").timestamp()
+        except ValueError:
+            continue
+        first = next(iter(sorted(d.glob("light-*.fits"))), None)
+        if now - begun > hours * 3600 or first is None:
+            continue
+        try:
+            with fits.open(first) as f:
+                name = next((h.header["FILTER"] for h in f if h.header.get("FILTER")), None)
+        except OSError:
+            continue
+        if name and name not in seen:
+            seen.append(name)
+    return seen
+
+
+def dawn_filters(now=None):
+    """LRGB, then any other filter imaged tonight (Ha, OIII, SII), last: a
+    narrowband filter passes a sliver of the light, so it wants the
+    brightest sky. 13 November 2026: the Pacman in Ha and OIII, and only
+    LRGB flats would have been taken."""
+    return list(DAWN_FILTERS) + [f for f in night_filters(now) if f not in DAWN_FILTERS]
+
+
 def dawn_flats(popen=subprocess.Popen):
     """After a night with a cooled camera behind a filter wheel, take dawn
     sky flats in LRGB from where the telescope is parked, with nothing over
@@ -723,12 +755,13 @@ def dawn_flats(popen=subprocess.Popen):
     python = shlex.quote(sys.executable)
     # Then the camera keeper (keeper.py), if it holds the camera, warms the
     # sensor slowly and lets it go: the night's one warm-up, after the flats.
-    line = (f"{python} calibrate.py flat --twilight --tell --filters {' '.join(DAWN_FILTERS)}; "
+    wanted = dawn_filters()
+    line = (f"{python} calibrate.py flat --twilight --tell --filters {' '.join(wanted)}; "
             f"{python} keeper.py stop")
     FLATS_LOG.parent.mkdir(parents=True, exist_ok=True)
     with open(FLATS_LOG, "w", encoding="utf-8") as log:
         popen(["sh", "-c", line], stdout=log, stderr=subprocess.STDOUT, cwd=str(here), start_new_session=True)
-    return ("Dawn flats in B, G, R and L will be taken from where it is parked as the sky brightens, "
+    return (f"Dawn flats in {', '.join(wanted[:-1])} and {wanted[-1]} will be taken from where it is parked as the sky brightens, "
             "with nothing over the tube, and you will be told when they are kept or if they fail: "
             "leave the camera, wheel and focus as they are until then.")
 
