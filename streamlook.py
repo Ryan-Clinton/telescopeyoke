@@ -377,12 +377,15 @@ def sky_area(c, s, stack, single):
         under = plate(c, (x, y, x + w, y + 92), 0.72)
         c.wrap((x + 24, y + 14), line, "sans", 24, w - 48, "text", on=under, gap=1.25)
 
+    bottom = y + h - 16
     if s.get("combined"):
         under = plate(c, (x + 16, y + h - 48, x + min(470, w // 2), y + h - 16), 0.55)
         words = c.text((x + 28, y + h - 42), f"{s['combined']} exposures combined", "mono", 19, "secondary",
                        on=under)
         if s.get("new_exposures"):
             c.text((words[2] + 14, y + h - 42), f"+{s['new_exposures']}", "mono", 19, "live", on=under)
+        bottom = y + h - 56
+    instrument_plate(c, s.get("instruments"), x + 16, bottom, min(470, w // 2) - 16)
     if single is not None:
         iw, ih = 300, 200
         ix, iy = x + w - iw - 20, y + h - ih - 20
@@ -504,6 +507,165 @@ def about(c, s, x, y, width):
 
 
 FIGURE_ROW = 88
+
+# --- the light path now: filter, sensor, guiding ------------------------------------
+
+FILTER_S = 900            # the newest frame older than this: its filter is not said
+SENSOR_S = 60             # keeper.json older than this: the sensor's temperature is not said
+GUIDE_S = 30              # the guider's heartbeat older than this: no guiding shown
+GUIDE_WINDOW_S = 600      # the guiding graph shows this much of the run
+GUIDE_TAIL = 400_000      # bytes read from the end of the guide log
+GUIDING = ("guiding", "relocking", "paused", "lost")
+RA_COLOUR, DEC_COLOUR = (60, 130, 230), (220, 60, 60)     # guidegraph.py's, and PHD2's
+
+
+def newest_filter(session, now):
+    """The filter the wheel confirmed for the session's newest frame (its
+    FILTER card), or None: no wheel, no frame lately, or no session."""
+    if session is None:
+        return None
+    try:
+        newest = max(Path(session).glob("light-*.fits"), default=None)
+        if newest is None or now - newest.stat().st_mtime > FILTER_S:
+            return None
+        from astropy.io import fits
+        return fits.getheader(newest).get("FILTER") or None
+    except Exception:     # noqa: BLE001 - one unreadable header leaves the line out
+        return None
+
+
+def sensor_now(now):
+    """The cooled camera's sensor as keeper.py last wrote it, or None when
+    nothing holds the camera cold."""
+    import config
+    k = _kept(config.DATA / "cache" / "keeper.json")
+    if not k or k.get("sensor_c") is None or now - (k.get("updated") or 0) > SENSOR_S:
+        return None
+    return {"c": k["sensor_c"], "target": k.get("target_c"), "ready": bool(k.get("ready")),
+            "unpowered": bool(k.get("unpowered"))}
+
+
+def guiding_now(now):
+    """The guider's last GUIDE_WINDOW_S, from its frame log (guider.py): the
+    points (seconds ago, RA error, Dec error, in arcseconds; None where the
+    star was lost) and the RMS, or None when it is not guiding. Only files are read."""
+    import json
+
+    import config
+    g = _kept(config.DATA / "cache" / "guide.json")
+    if not g or g.get("state") not in GUIDING or now - (g.get("heartbeat") or 0) > GUIDE_S:
+        return None
+    logs = sorted((config.DATA / "frames" / "guide").glob("guide-????????.jsonl"))
+    if not logs:
+        return None
+    try:
+        with logs[-1].open("rb") as f:
+            f.seek(max(0, f.seek(0, 2) - GUIDE_TAIL))
+            lines = f.read().decode("utf-8", "replace").splitlines()[1:]
+    except OSError:
+        return None
+    points = []
+    for line in lines:
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        t = row.get("time")
+        t = t.get("mid") if isinstance(t, dict) else t
+        if row.get("run") != g.get("run") or not t or now - t > GUIDE_WINDOW_S:
+            continue
+        points.append((now - t, row.get("ra_err"), row.get("dec_err")) if "ra_err" in row else (now - t, None, None))
+    good = [p for p in points if p[1] is not None]
+    if not good:
+        return {"state": g["state"], "points": points, "rms": None}
+    ra = (sum(p[1] ** 2 for p in good) / len(good)) ** 0.5
+    dec = (sum(p[2] ** 2 for p in good) / len(good)) ** 0.5
+    return {"state": g["state"], "points": points, "rms": (ra ** 2 + dec ** 2) ** 0.5, "ra": ra, "dec": dec}
+
+
+def instruments(now, session=None, current=True):
+    """The light path now, for the picture: the filter, the sensor and the
+    guiding, each None when unknown or stale. Read from the files the
+    commands keep, never from the hardware; an earlier run's filter is not
+    said (`current` false)."""
+    found = {"filter": newest_filter(session, now) if current else None,
+             "sensor": sensor_now(now), "guiding": guiding_now(now)}
+    return found if any(found.values()) else None
+
+
+def instrument_words(i):
+    """"FILTER Ha · SENSOR −5.0 °C" for a line, or None."""
+    parts = []
+    if i.get("filter"):
+        parts.append(f"FILTER {i['filter']}")
+    sensor = i.get("sensor")
+    if sensor:
+        words = f"SENSOR {sensor['c']:.1f} °C".replace("-", "−")
+        if not sensor["ready"] and sensor.get("target") is not None:
+            words += f" → {sensor['target']:g}".replace("-", "−")
+        parts.append(words)
+    return " · ".join(parts) or None
+
+
+def instrument_plate(c, i, x, bottom, width):
+    """The filter and sensor line, and the guiding graph above it while
+    guiding, on a plate at the picture's lower left, built up from `bottom`."""
+    if not i:
+        return
+    line, g = instrument_words(i), i.get("guiding")
+    graph_h = 96 if g and g["points"] else 0
+    height = 16 + (28 if line else 0) + (graph_h + 32 if graph_h else 0)
+    top = bottom - height
+    under = plate(c, (x, top, x + width, bottom), 0.6)
+    y = top + 10
+    if graph_h:
+        rms = f"RMS {g['rms']:.2f}″" if g.get("rms") is not None else "no star"
+        state = "" if g["state"] == "guiding" else f" · {g['state'].upper()}"
+        c.text((x + 12, y), f"GUIDING · {rms}{state}", "mono", 17,
+               "secondary" if g["state"] == "guiding" else "attention", on=under)
+        c.text((x + width - 12, y), "RA", "mono", 17, RA_COLOUR, on=under, anchor="ra")
+        ra_w = c.measure("RA", "mono", 17)
+        c.text((x + width - 24 - ra_w, y), "DEC", "mono", 17, DEC_COLOUR, on=under, anchor="ra")
+        y += 28
+        guide_graph(c, g, x + 12, y, width - 24, graph_h)
+        y += graph_h + 4
+    if line:
+        sensor = i.get("sensor") or {}
+        c.text((x + 12, y), line, "mono", 19, "attention" if sensor.get("unpowered") else "text", on=under)
+
+
+def guide_graph(c, g, x, y, w, h):
+    """RA and Dec error against time, the newest at the right, ±scale
+    arcseconds with the scale the next of 2, 4, 8, 16 above three times the
+    larger RMS (one spike clipped at the edge, not flattening the rest);
+    lost frames as grey ticks along the foot."""
+    points = g["points"]
+    peak = 3 * max(g.get("ra") or 0, g.get("dec") or 0)
+    scale = next((s for s in (2, 4, 8, 16) if peak <= s), 16)
+    mid = y + h / 2
+    c.draw.line((x, mid, x + w, mid), fill=COLOURS["muted"], width=1)
+    for edge in (y, y + h):
+        c.draw.line((x, edge, x + w, edge), fill=COLOURS["raised"], width=1)
+    c.text((x + 2, y + 1), f"+{scale}″", "mono", 13, "secondary", on=COLOURS["background"])
+
+    def at(ago, value):
+        return x + w * (1 - ago / GUIDE_WINDOW_S), mid - (h / 2) * max(-1, min(1, value / scale))
+
+    for k, colour in ((1, RA_COLOUR), (2, DEC_COLOUR)):
+        run = []
+        for p in sorted(points, key=lambda p: -p[0]):
+            if p[k] is None:
+                if len(run) > 1:
+                    c.draw.line(run, fill=colour, width=2)
+                run = []
+                continue
+            run.append(at(p[0], p[k]))
+        if len(run) > 1:
+            c.draw.line(run, fill=colour, width=2)
+    for p in points:
+        if p[1] is None:
+            px = at(p[0], 0)[0]
+            c.draw.line((px, y + h - 6, px, y + h), fill=COLOURS["secondary"], width=1)
 
 
 def deep_sky_figures(s):
@@ -1293,8 +1455,9 @@ VERTICAL = (1080, 1920)
 def vertical(state, picture=None):
     """The 9:16 picture for phones (YouTube's vertical live, in the Shorts
     feed): the camera's picture large, and only the target, the mission,
-    where it has got and its open question. No figures, no panel: the
-    full 16:9 picture carries those."""
+    where it has got and its open question, and one line for the filter,
+    the sensor and the guiding. No figures, no panel: the full 16:9
+    picture carries those."""
     w, h = VERTICAL
     c = Canvas(w, h)
     m = state.get("mission") or {}
@@ -1342,6 +1505,12 @@ def vertical(state, picture=None):
     progress = state.get("lucky_stage") and state["lucky_stage"][1]
     if progress and y < h - 220:
         c.wrap((60, y + 10), progress.split(" · ")[0], "mono", 34, w - 120, "secondary")
+    i = state.get("instruments") or {}
+    line = " · ".join(p for p in (instrument_words(i),
+                                  f"GUIDING {i['guiding']['rms']:.2f}″ RMS"
+                                  if (i.get("guiding") or {}).get("rms") is not None else None) if p)
+    if line and y < h - 200:
+        c.text((w // 2, h - 180), line, "mono", 30, "secondary", anchor="ma")
     words, colour = live_state(state)
     if words:
         c.text((w // 2, h - 120), words, "bold", 34, colour, anchor="ma")
@@ -1911,6 +2080,10 @@ def picture_state(st, now=None, session=None):
         s["exposure"], s["stage"], s["next"] = None, None, None
         s["combined"] = s["kept"] = s["captured"] = s["integration_s"] = s["fwhm_arcsec"] = None
         s["live"] = live
+    try:
+        s["instruments"] = instruments(now, session, current=not (lucky or live or (d and not d["run_current"])))
+    except Exception:     # noqa: BLE001 - the picture never waits on the light path's line
+        s["instruments"] = None
     if d:
         import director
         s["show_latest"] = d["image"] == "latest"

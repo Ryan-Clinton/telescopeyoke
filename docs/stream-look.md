@@ -413,6 +413,22 @@ only one or two.
 Tracking drift, star counts and roundness stay on the status page, which is
 the place for them.
 
+### The light path: filter, sensor, guiding
+
+A small plate at the picture's lower left, above "N exposures combined"
+(`streamlook.instrument_plate`, 13 November 2026), each part shown only when
+it is known and fresh, and read only from files the commands keep, never
+from the hardware:
+
+| Part | From | Shown when |
+|---|---|---|
+| Filter | the FILTER card of the session's newest `light-*.fits` (the position the wheel confirmed) | that frame is under 15 min old and the run is the current one |
+| Sensor | `cache/keeper.json` (`sensor_c`, and `→ target` while still cooling; amber if the cooler draws nothing) | keeper.py wrote it in the last minute |
+| Guiding | the last 10 min of the guider's run in `frames/guide/guide-*.jsonl`: RA blue, Dec red as guidegraph.py draws them, ±2/4/8/16″ from three times the larger RMS, lost frames as grey ticks, and the RMS | `cache/guide.json` says guiding (or relocking, paused, lost, in amber) with a heartbeat under 30 s old |
+
+The 9:16 picture has the same as one line above LIVE: "FILTER Ha · SENSOR
+−5.0 °C · GUIDING 0.85″ RMS".
+
 ## Moments: short, then out of the way
 
 The panel above is what is on screen most of the time. These appear for a
