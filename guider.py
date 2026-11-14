@@ -1251,7 +1251,15 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
             if stopping:
                 break                       # no frame and no pulse after a stop
             if dithering and time.monotonic() - dithering["since"] > DITHER_SETTLE_MAX:
-                answer(dithering["order"], False, f"not settled within {DITHER_SETTLE_MAX:.0f} s")
+                # Still guiding on the moved lock: the dither is made, only slow
+                # to settle, and the next frame waits for settling as every frame
+                # does (Supervisor.settle marks it if not). 13 November 2026: two
+                # Pacman runs ended here on a dither still guiding at 50 s.
+                if state == "guiding":
+                    answer(dithering["order"], True, f"moved; not settled within {DITHER_SETTLE_MAX:.0f} s, "
+                                                     "the next frame waits for it")
+                else:
+                    answer(dithering["order"], False, f"not settled within {DITHER_SETTLE_MAX:.0f} s ({state})")
                 dithering = None
             if state == "paused":
                 time.sleep(0.5)

@@ -143,6 +143,9 @@ class Session:
             # calibrated from its own header.
             self.first_cards = cards
             self.calibration = stacking.Calibration(self.exposure, self.gain, cards)
+            # Said here, not before the first frame: that one had no offset or
+            # filter and read UNCALIBRATED on every 183M run (13 November 2026).
+            print(f"  calibration: {self.calibration.describe()}", flush=True)
         return (mosaic, cards, self.exposure, self.gain, str(self.folder), index, self.save,
                 self.accepted[-30:], self.reference)
 
@@ -1520,7 +1523,7 @@ def image(args, session, exposure, moving, holding, tracker):
     """The run's frames, from the first to the quality pass."""
     workers = max(1, stacking.cores() - 1)   # one core stays free for the camera and the stack
     print(f"{session.name}: {args.frames or 'an open-ended run of'} frames of {exposure:g} s at gain {args.gain}; "
-          f"calibration: {session.calibration.describe()}; {workers} workers", flush=True)
+          f"calibration: matched to the first frame's own header, said when it comes; {workers} workers", flush=True)
     index, since_centre, since_dither, started = 0, 0, 0, time.monotonic()
     jams = 0          # times in a row the camera was opened again without a frame
     if getattr(args, "dither_first", False):
