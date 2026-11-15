@@ -511,12 +511,18 @@ def call(words, dry_run=False, say_it=print, bridge=None, speak=None, send=None)
         return
     done, threads = [], []
     if not s.get("call_house"):
-        # Telegram only: the lights and the speaker wake the house.
-        bridge, speak = None, None
-        s = dict(s, speaker=None)
+        # The living room's lights only, by the Hue app's room, and no speaker:
+        # every light lit the children's bedroom (15 November 2026, 21:58).
+        # The person: "you can flash the living room light all you want".
+        try:
+            flash(s.get("call_room", "Living room"), "Red", say_it=say_it, bridge=bridge)
+            done.append(f"the {s.get('call_room', 'Living room')} lights went red")
+        except AlertError as error:
+            done.append(f"lights: {error}")
+        bridge, s = None, dict(s, speaker=None)
     try:
-        if not settings().get("call_house") and bridge is None:
-            raise AlertError("the house's lights are off for calls ([alerts] call_house)")
+        if bridge is None and not s.get("call_house"):
+            raise AlertError("no other lights for calls ([alerts] call_house)")
         bridge = bridge or Bridge(s.get("hue_address"), s.get("hue_key"))
         for light in bridge.lights():
             def lit(light=light):
