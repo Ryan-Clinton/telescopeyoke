@@ -9,16 +9,9 @@ what is specific to Claude and to this particular user.
 
 ## Working with this user
 
-- A complaint is about one fault: fix that fault, or set out the options
-  and let the user choose. Never switch off, disable or remove the
-  feature it came from, or anything near it, on my own. The rain watch
-  and its living room flash, Telegram, the speaker, the alerts and every
-  protection stay on unless the user says to turn that one off. On
-  15 November 2026 the schedule's call lit every light and woke the
-  children; I then switched off the speaker and the rain watch's
-  living room flash, which had done nothing wrong, with the telescope
-  open under a forecast shower. The user: "do you realise how angry i
-  would have been if i went outside and everything was drenched".
+- When the user complains about something, offer fixes or compromises;
+  never disable it. Never turn off the rain alert (15 November 2026: I
+  turned off its living room flash with the telescope out).
 
 - The nights are for discovery first (AGENTS.md): asked for the outlook or
   a plan, use the `discovery-night` skill and plan around `./ty night`'s
