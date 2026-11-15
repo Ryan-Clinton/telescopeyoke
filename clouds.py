@@ -22,7 +22,10 @@
                        and its low, mid and high cloud), and the clear sky
                        carried by the wind of the layer that has the cloud
                        when the satellite's own reading is another layer's,
-                       still or unsure; run by
+                       still or unsure; the airports the cloud passes
+                       first (ceilometers, the ground's check on a gap
+                       the satellite is unsure of) and when the sky they
+                       reported gets here; run by
                        .claude/hooks/sky.py whenever the person talks about
                        the sky
     ./clouds.py --view close|medium|wide   the picture in that view, saved as
@@ -277,6 +280,7 @@ BUDGET_S = 25          # the whole look, both services at once, never takes long
 SATELLITE_STALE_MIN = 40
 TREND_MIN = 30         # the satellite's picture this long before, for which way it is going
 UPWIND_DEG = 60        # an airport within this of the wind's direction is upwind
+ASIDE_KM = 40          # an upwind airport further than this off the cloud's track to here says little
 NEAR_KM = 30           # an airport this close shares the site's sky
 
 
@@ -418,6 +422,55 @@ def _upwind(a):
     if a.get("wind_from") is None or (a.get("wind_kt") or 0) < 5:
         return False
     return abs((a["bearing"] - a["wind_from"] + 180) % 360 - 180) <= UPWIND_DEG
+
+
+def _airports_upwind(found, move):
+    """The airports the cloud passes on its way here, by `move` (east, north
+    km/h, the movement the approach carries clear sky by): each one's report,
+    how far off the cloud's track to here it lies, and when the sky it
+    reported reaches here (its report's time plus the distance along the
+    track at that speed). A ceilometer looks straight up, so it says from the
+    ground whether a gap the satellite is unsure of is clear. 15 November
+    2026: the approach read the satellite alone while Islay, 69 km upwind,
+    reported broken cloud; the person asked for the airports in it."""
+    speed = math.hypot(*move)
+    if speed < SLOW_KMH:
+        return []
+    from_deg = (math.degrees(math.atan2(move[0], move[1])) + 180) % 360
+    out = []
+    for a in found:
+        off = math.radians((a["bearing"] - from_deg + 180) % 360 - 180)
+        along, aside = a["km"] * math.cos(off), abs(a["km"] * math.sin(off))
+        if along <= 0 or abs(math.degrees(off)) > UPWIND_DEG:
+            continue
+        reported = time.time() - a["age_min"] * 60
+        out.append({k: a[k] for k in ("id", "name", "km", "from", "says", "age_min", "covers")}
+                   | {"aside_km": round(aside), "reported": reported, "reaches": reported + along / speed * 3600})
+    on_track = [u for u in out if u["aside_km"] <= ASIDE_KM]
+    # None on the track: the one nearest it, said as a loose guide (15 November
+    # 2026: Islay, 69 km N with the cloud from the NW, about 47 km off it).
+    return on_track or [dict(min(out, key=lambda u: u["aside_km"]), loose=True)] if out else []
+
+
+def _airport_upwind_lines(a):
+    """The upwind airports' lines for the approach answer."""
+    import datetime as dt
+    ups = a.get("airports_upwind")
+    if ups is None:
+        return [f"airports: {a['airports_problem']}"] if a.get("airports_problem") else []
+    if not ups:
+        return [f"no airport upwind on the cloud's track (within {ASIDE_KM} km of it, 150 km out)"]
+    hhmm = lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).strftime("%H:%M")  # noqa: E731
+    out = []
+    for u in ups:
+        old = ", closed now?" if u["age_min"] > 75 else ""
+        due = (f"already past here (due {hhmm(u['reaches'])})" if u["reaches"] < a["t"]
+               else f"reaches here about {hhmm(u['reaches'])}")
+        out.append(f"{'nearest airport upwind (off the track: a loose guide)' if u.get('loose') else 'airport upwind'}: "
+                   f"{u['name'].split('/')[0]} {u['id']} {u['km']} km {u['from']}, {u['aside_km']} km "
+                   f"off the cloud's track: {u['says']} at {hhmm(u['reported'])} UT "
+                   f"({u['age_min']} min old at the look{old}); that sky {due}")
+    return out
 
 
 def together(seen, near, was=None):
@@ -889,6 +942,9 @@ def approach(site=None, fresh_s=0, view=APPROACH_VIEW):
         # arrival is worked out from it.
         return _failed(f"its newest picture is {age:.0f} min old: stale, so no forecast from it", site)
     times = [taken - dt.timedelta(minutes=STEP_MIN * k) for k in range(PICTURES - 1, -1, -1)]
+    near = concurrent.futures.ThreadPoolExecutor(1)       # the airports' reports while the pictures come
+    reports = near.submit(airports, site, timeout=8)
+    near.shutdown(wait=False)
     try:
         with concurrent.futures.ThreadPoolExecutor(2) as pool:      # gently: the service struggles with more
             pictures = list(pool.map(lambda when: _maybe_levels(site, when, v), times))
@@ -950,6 +1006,13 @@ def approach(site=None, fresh_s=0, view=APPROACH_VIEW):
         elif steer:
             answer["seen_layer"] = _which_layer(seen, steer)
     use = _choose(seen, answer.get("seen_layer"), steer, main)
+    try:
+        found = reports.result(timeout=10)
+        answer["airports_upwind"] = _airports_upwind(found, use[0]) if use else None
+        if use is None:
+            answer["airports_problem"] = "no movement to say which one is upwind"
+    except Exception as problem:      # noqa: BLE001 - the approach goes on from the satellite alone
+        answer["airports_problem"] = f"no reports ({problem.__class__.__name__})"
     if use is None:
         _note_gap(answer)
         answer["lines"] = _approach_lines(answer)
@@ -1414,6 +1477,7 @@ def _approach_lines(a):
     missing = f"; {a['pictures_missing']} pictures would not come" if a.get("pictures_missing") else ""
     if a.get("by") is None:
         out.append(f"{_seen_words(a, 'the whole map').capitalize()}{missing}; no wind to carry clear sky by")
+        out += _airport_upwind_lines(a)
         out += _tail_lines(a, clock)
         out.append("a guide: clouds grow and melt as they move")
         return out
@@ -1446,6 +1510,7 @@ def _approach_lines(a):
     else:
         out.append(f"no clear sky upwind within {APPROACH_HOURS} h at this speed"
                    + (": the clear area is not on the cloud's track" if a.get("nearest_clear_km") is not None else ""))
+    out += _airport_upwind_lines(a)
     out += _tail_lines(a, clock)
     out.append("a guide: clouds grow and melt as they move")
     return out
