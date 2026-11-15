@@ -143,7 +143,8 @@ def watch(until, every, exposure, guide_check=False):
             print(f"{datetime.now():%H:%M:%S}  {stars} stars, sky level "
                   f"{np.median(mosaic):.0f}", flush=True)
             import clouds
-            clouds.note_seen("camera", "clear", stars >= clouds.CLEAR_STARS, f"{stars} stars")   # for --scores
+            clouds.note_seen("camera", "clear", clouds.clear_from_stars(stars), f"{stars} stars",   # for --scores
+                             stars=stars, exposure_s=exposure)
             streak = streak + 1 if stars >= ENOUGH_STARS else 0
             if stars < ENOUGH_STARS and (looked is None or time.monotonic() - looked > 1800):
                 cloud_data(stars)

@@ -170,7 +170,9 @@ a motor's creep rate. `mount.py stop` is always allowed.
   calculations giving the same time is not a reason to trust it, and nor are
   the four forecast centres agreeing (they share data). What a method is
   worth is what `./clouds.py --scores` says it has done against what was
-  seen.
+  seen: the sky checks, the radar and every imaging frame. A forecast
+  counts as on time only inside its own range; one whose window the looks
+  do not cover is unjudged, never right or wrong.
 - There are no tests and no CI (removed 4 November 2026 at the user's
   request). Before a commit: `ruff check` on the changed files.
 - What is proven on real hardware is recorded once, in `docs/validation.md`.

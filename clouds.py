@@ -32,12 +32,17 @@
                        web/clouds-VIEW.jpg (close is the run's own,
                        web/clouds.jpg); with --approach, the approach in it
     ./clouds.py --scores [DAYS]   each clear-sky and rain prediction kept
-                       (cache/sky_predictions.jsonl) against the first sight
-                       of it after (cache/sky_seen.jsonl: skywatch's star
-                       counts, the radar over the site), and clear-or-not at
-                       30, 60, 90 and 120 min ahead (cache/sky_horizons.jsonl)
-                       against the sky staying as it was and the Met
-                       Office's hourly cloud: how early or late
+                       (cache/sky_predictions.jsonl) against what was seen
+                       after it was made (cache/sky_seen.jsonl: skywatch's
+                       star counts, 8-19 stars unknown, and the radar over
+                       the site; and every imaging frame, accepted as clear,
+                       rejected for cloud as cloud), clear-sky and rain
+                       apart: on time, early or late, missed, false alarm,
+                       or unjudged when the looks miss half its window or
+                       it made no forecast; and clear-or-not about 30, 60,
+                       90 and 120 min after each forecast was made
+                       (cache/sky_horizons.jsonl) against the sky staying
+                       as it was and the Met Office's hourly cloud
 
 Source: EUMETSAT's public image service (view.eumetsat.int), 10.5 µm
 infrared, a new image every 10 minutes. Infrared works at night: clouds are
@@ -1112,7 +1117,11 @@ def _note_gap(answer):
     nothing due (clear sky seen after that is a miss)."""
     sel = _selected(answer)
     answer["selected"] = sel
-    if sel is None:
+    if sel is None and answer.get("by") is None:
+        # No movement to carry clear sky by: no forecast at all, not "none due"
+        # (scored as right or a miss when it never said either).
+        note_prediction("clear", answer["picture"], None, None, None, view=answer.get("view"), by=None, abstain=True)
+    elif sel is None:
         note_prediction("clear", answer["picture"], None, None, None, view=answer.get("view"), by=answer.get("by"))
     else:
         note_prediction("clear", answer["picture"], sel["arrives_min"], sel["range"], sel["lasts_min"],
@@ -1124,7 +1133,9 @@ def _note_gap(answer):
 # person: record the cloud predictions against reality for calibration.
 PREDICTIONS = config.DATA / "cache" / "sky_predictions.jsonl"
 SEEN = config.DATA / "cache" / "sky_seen.jsonl"
-CLEAR_STARS = 20       # stars in a sky-check frame counted as clear here (skywatch's own mark is ENOUGH_STARS)
+CLEAR_STARS = 20       # stars in a sky-check frame counted as clear here
+CLOUD_STARS = 8        # under this, cloud (skywatch's ENOUGH_STARS, its mark to start); between: unknown
+COVER_BIN_S = 1800     # a forecast's window is judged only when looks fall in half of its half-hours
 
 
 def _append(path, row):
@@ -1133,8 +1144,9 @@ def _append(path, row):
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as out:
             out.write(json.dumps(row) + "\n")
-    except OSError:
-        pass
+    except OSError as problem:      # said, not hidden: a lost row is a gap in the scores
+        import sys
+        print(f"clouds: could not keep a row in {path.name}: {problem}", file=sys.stderr, flush=True)
 
 
 def _at(picture, minutes):
@@ -1193,11 +1205,13 @@ def _note_horizons(answer, ahead, site, taken):
 
 
 def horizon_lines(days=14):
-    """At 30, 60, 90 and 120 minutes ahead: how often the satellite's
-    forecast, the sky staying as it was, and the Met Office's hourly cloud
-    were right, against the camera's looks within 10 minutes of each time.
-    The question this answers: does our own nowcast beat a national
-    forecast for this garden, and at which horizon."""
+    """How often the satellite's forecast, the sky staying as it was, and the
+    Met Office's hourly cloud were right, against the looks within 10 minutes
+    of each forecast time. Grouped by how far ahead of the forecast being
+    MADE the time was, not of its picture: a picture up to 40 minutes old
+    makes a "30 minutes from the picture" forecast a few minutes from the
+    making, or past. The question this answers: does our own nowcast beat a
+    national forecast for this garden, and how far ahead."""
     import datetime as dt
     import json
 
@@ -1207,12 +1221,16 @@ def horizon_lines(days=14):
         except (OSError, ValueError):
             return []
     since = time.time() - days * 86400
-    looks = [r for r in rows(SEEN) if r["t"] >= since and r["kind"] == "clear"]
+    looks = [r for r in _looks(since) if r["kind"] == "clear"]
     tally = {m: {"satellite": [0, 0], "as now": [0, 0], "Met Office": [0, 0]} for m in HORIZONS_MIN}
     for h in (r for r in rows(HORIZONS) if r["t"] >= since):
         made = dt.datetime.fromisoformat(h["picture"]).timestamp()
         for m in HORIZONS_MIN:
             t = made + m * 60
+            lead = (t - h["t"]) / 60
+            if lead < 15:
+                continue           # hardly a forecast once it was made
+            bucket = min(HORIZONS_MIN, key=lambda b: abs(b - lead))
             near = [s for s in looks if abs(s["t"] - t) <= HORIZON_MATCH_MIN * 60 and s["t"] >= h["t"]]
             if not near:
                 continue
@@ -1220,24 +1238,81 @@ def horizon_lines(days=14):
             for name, said in (("satellite", h["ahead"].get(str(m))), ("as now", h.get("now_clear")),
                                ("Met Office", h["met_office"].get(str(m)))):
                 if said is not None:
-                    tally[m][name][1] += 1
-                    tally[m][name][0] += said == seen
+                    tally[bucket][name][1] += 1
+                    tally[bucket][name][0] += said == seen
     out = []
     for m in HORIZONS_MIN:
         parts = [f"{name} {ok}/{n}" for name, (ok, n) in tally[m].items() if n]
         if parts:
-            out.append(f"{m} min ahead, right: " + ", ".join(parts))
-    return out or ["no horizon forecast judged yet: each needs a camera look within 10 min of its time"]
+            out.append(f"about {m} min after the forecast was made, right: " + ", ".join(parts))
+    return out or ["no horizon forecast judged yet: each needs a look within 10 min of its time"]
+
+def note_seen(source, kind, yes, detail="", **extra):
+    """What was seen at the site: kind "clear" (stars) or "rain", yes, no or
+    None (unknown: kept, never scored)."""
+    _append(SEEN, {"t": time.time(), "source": source, "kind": kind, "yes": None if yes is None else bool(yes),
+                   "detail": detail, **extra})
 
 
-def note_seen(source, kind, yes, detail=""):
-    """What was seen at the site: kind "clear" (stars) or "rain", yes or no."""
-    _append(SEEN, {"t": time.time(), "source": source, "kind": kind, "yes": bool(yes), "detail": detail})
+def clear_from_stars(stars):
+    """A sky-check frame's star count as clear (True), cloud (False) or
+    unknown (None). skywatch starts a run at 8 stars in two frames; a frame of
+    8-19 stars is not cloud, and not yet the clear sky the scores count."""
+    return True if stars >= CLEAR_STARS else False if stars < CLOUD_STARS else None
+
+
+def _imaging_looks(since):
+    """Every imaging frame since `since` as a look at the sky, at the time it
+    was taken: accepted is clear, rejected for cloud is cloud, anything else
+    (trailed, focus, deferred) says nothing about the sky and is left out.
+    Read from the runs' own frames.jsonl, so a night's imaging judges the
+    forecasts without skywatch running beside it."""
+    import json
+
+    import outcome
+    out = []
+    for log in (config.DATA / "frames").glob("*/*/frames.jsonl"):
+        try:
+            if log.stat().st_mtime < since:
+                continue
+            rows = [json.loads(line) for line in log.read_text(encoding="utf-8").splitlines() if line.strip()]
+        except (OSError, ValueError):
+            continue
+        for f in rows:
+            if not isinstance(f.get("taken"), (int, float)) or f["taken"] < since:
+                continue
+            why = outcome.cause(f)
+            if f.get("accepted") or why == "cloud":
+                out.append({"t": f["taken"], "source": "imaging", "kind": "clear", "yes": bool(f.get("accepted")),
+                            "detail": f"{f.get('stars')} stars"})
+    return out
+
+
+def _looks(since):
+    """The sky seen since `since`, known looks only, oldest first: the sky
+    checks and radar kept in sky_seen.jsonl, and the imaging frames."""
+    import json
+    try:
+        kept = [json.loads(line) for line in SEEN.read_text(encoding="utf-8").splitlines() if line.strip()]
+    except (OSError, ValueError):
+        kept = []
+    rows = [r for r in kept if r["t"] >= since and r.get("yes") is not None] + _imaging_looks(since)
+    return sorted(rows, key=lambda r: r["t"])
+
+
+def _covered(looks, start, end):
+    """Whether looks fall in at least half the half-hours from start to end."""
+    bins = max(1, math.ceil((end - start) / COVER_BIN_S))
+    hit = {int((s["t"] - start) // COVER_BIN_S) for s in looks if start <= s["t"] <= end}
+    return len(hit) * 2 >= bins
 
 
 def score_lines(days=14):
-    """Each prediction against the first sight of what it predicted, after the
-    picture it came from: how early or late it was, and inside its range or not."""
+    """Each prediction against what was seen after it was made, clear-sky and
+    rain apart: on time (inside its range), came early or late (outside it:
+    the timing error kept, but not a forecast to plan by), missed, false
+    alarm, right that none came, and unjudged when the looks do not cover
+    its window (half its half-hours) or it made no forecast (no movement)."""
     import datetime as dt
     import json
 
@@ -1247,65 +1322,77 @@ def score_lines(days=14):
         except (OSError, ValueError):
             return []
     since = time.time() - days * 86400
-    seen = sorted((r for r in rows(SEEN) if r["t"] >= since), key=lambda r: r["t"])
-    out, errors, spans, events = [], [], [], set()
-    tally = {"hit": 0, "miss": 0, "false alarm": 0, "right, none came": 0, "not enough looks": 0}
+    seen = _looks(since)
+    out, summary = [], []
+    kinds = ("on time", "early or late", "missed", "false alarm", "right, none came", "not enough looks",
+             "no forecast")
+    stats = {}
     for p in (r for r in rows(PREDICTIONS) if r["t"] >= since):
+        st = stats.setdefault(p["kind"], {"tally": dict.fromkeys(kinds, 0), "errors": [], "spans": [],
+                                          "events": set()})
+        tally = st["tally"]
         # Judged only by what was seen after it was made (its own time, not
-        # its picture's, which is 10-20 minutes earlier).
+        # its picture's, which is 10-40 minutes earlier).
         issued = max(dt.datetime.fromisoformat(p["picture"]).timestamp(), p["t"])
         looks = [s for s in seen if s["kind"] == p["kind"] and issued <= s["t"] <= issued + APPROACH_HOURS * 3600]
         first = next((s for s in looks if s["yes"]), None)
         said = dt.datetime.fromisoformat(p["arrives"]).strftime("%H:%M") if p.get("arrives") else "none due"
         head = (f"{dt.datetime.fromisoformat(p['picture']).astimezone():%d %b %H:%M} {p['kind']}"
                 + (f" ({p['by']})" if p.get("by") else "") + f": predicted {said}")
+        if p.get("abstain") or (p["kind"] == "clear" and not p.get("arrives") and "by" in p and p["by"] is None):
+            tally["no forecast"] += 1
+            out.append(head.replace("predicted none due", "no forecast (no movement to carry clear sky by)"))
+            continue
         if not p.get("arrives"):
             if first is not None:
-                tally["miss"] += 1
-                events.add((p["kind"], round(first["t"])))
+                tally["missed"] += 1
+                st["events"].add(round(first["t"]))
                 out.append(head + f"; MISSED, seen {dt.datetime.fromtimestamp(first['t']):%H:%M} ({first['source']})")
-            elif looks and looks[-1]["t"] - issued >= (APPROACH_HOURS - 1) * 3600:
+            elif _covered(looks, issued, issued + APPROACH_HOURS * 3600):
                 tally["right, none came"] += 1
                 out.append(head + f"; right, none in {len(looks)} looks")
             else:
                 tally["not enough looks"] += 1
-                out.append(head + f"; not enough looks ({len(looks)})")
+                out.append(head + f"; not enough looks ({len(looks)}, not half its half-hours)")
             continue
         lo, hi = (dt.datetime.fromisoformat(v).timestamp() for v in p["range"])
         # Its window: the range, and the spell it said after it.
-        during = [s for s in looks if lo <= s["t"] <= hi + 60 * (p.get("lasts_min") or 60)]
+        w_end = hi + 60 * (p.get("lasts_min") or 60)
+        during = [s for s in looks if lo <= s["t"] <= w_end]
         if first is None:
-            if during:
+            if during and _covered(during, lo, w_end):
                 tally["false alarm"] += 1
                 out.append(head + f"; FALSE ALARM, not seen in {len(during)} looks during its window")
             else:
                 tally["not enough looks"] += 1
-                out.append(head + "; not enough looks during its window" + (f" ({len(looks)} outside it)" if looks else ""))
+                out.append(head + f"; not enough looks during its window ({len(during)} in it, {len(looks)} in all)")
             continue
-        tally["hit"] += 1
-        events.add((p["kind"], round(first["t"])))
+        inside = lo <= first["t"] <= hi
+        tally["on time" if inside else "early or late"] += 1
+        st["events"].add(round(first["t"]))
         late = (first["t"] - dt.datetime.fromisoformat(p["arrives"]).timestamp()) / 60
-        errors.append(late)
+        st["errors"].append(late)
         line = (head + f"; seen {dt.datetime.fromtimestamp(first['t']):%H:%M} ({first['source']}): {abs(late):.0f} min "
-                + ("late" if late > 0 else "early") + ("; inside its range" if lo <= first["t"] <= hi else "; outside its range"))
+                + ("late" if late > 0 else "early") + ("; inside its range" if inside else "; OUTSIDE its range"))
         gone = next((s for s in looks if s["t"] > first["t"] and not s["yes"]), None)
         if gone and p.get("lasts_min"):
             lasted = (gone["t"] - first["t"]) / 60
-            spans.append(lasted - p["lasts_min"])
+            st["spans"].append(lasted - p["lasts_min"])
             line += f"; lasted about {lasted:.0f} min against {p['lasts_min']} said"
         out.append(line)
-    n = sum(tally.values())
-    if n:
-        out.append(f"{n} forecasts: " + ", ".join(f"{v} {k}" for k, v in tally.items() if v)
-                   + f"; against {len(events)} separate sightings (forecasts made 10 minutes apart share one, "
-                   "so they are not independent)")
-    if errors:
-        out.append(f"arrival: median error {float(np.median(errors)):+.0f} min (+ means it came later than predicted), "
-                   f"median size {float(np.median(np.abs(errors))):.0f} min, over {len(errors)} forecasts")
-    if spans:
-        out.append(f"length: median {float(np.median(spans)):+.0f} min (+ means it lasted longer), over {len(spans)}")
-    return out or ["no predictions kept yet"]
-
+    for kind, st in stats.items():
+        n = sum(st["tally"].values())
+        summary.append(f"{kind}: {n} forecasts: " + ", ".join(f"{v} {k}" for k, v in st["tally"].items() if v)
+                       + f"; against {len(st['events'])} separate sightings (forecasts made 10 minutes apart "
+                       "share one, so they are not independent)")
+        if st["errors"]:
+            e = st["errors"]
+            summary.append(f"  arrival: median error {float(np.median(e)):+.0f} min (+ means it came later than "
+                           f"predicted), median size {float(np.median(np.abs(e))):.0f} min, over {len(e)}")
+        if st["spans"]:
+            summary.append(f"  length: median {float(np.median(st['spans'])):+.0f} min (+ means it lasted longer), "
+                           f"over {len(st['spans'])}")
+    return out + summary or ["no predictions kept yet"]
 
 def _centres(site, taken):
     """Each of the four forecasting centres' clear hours (cloud under
