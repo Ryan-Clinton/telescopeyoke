@@ -56,7 +56,10 @@ EVENTS = {
     "rain": ("Blue", "Rain is on the way. Cover the telescope."),
     "clear": ("Green", "The sky has cleared."),
 }
-DEFAULTS = {"seconds": 20, "brightness": 100, "restore": True, "every": 60}
+DEFAULTS = {"seconds": 20, "brightness": 100, "restore": True, "every": 60,
+            # The house's lights and speaker for call(): off unless the person turns them on for a night
+            # (15 November 2026, 21:58: the speaker and every light woke the children).
+            "call_house": False}
 
 # The sky as the run's frames show it: the light of each frame's measured
 # stars, set against the best the run has managed. Cloud dims the stars long
@@ -507,7 +510,13 @@ def call(words, dry_run=False, say_it=print, bridge=None, speak=None, send=None)
                "and send it by Telegram.")
         return
     done, threads = [], []
+    if not s.get("call_house"):
+        # Telegram only: the lights and the speaker wake the house.
+        bridge, speak = None, None
+        s = dict(s, speaker=None)
     try:
+        if not settings().get("call_house") and bridge is None:
+            raise AlertError("the house's lights are off for calls ([alerts] call_house)")
         bridge = bridge or Bridge(s.get("hue_address"), s.get("hue_key"))
         for light in bridge.lights():
             def lit(light=light):
