@@ -69,7 +69,9 @@ person at the knob, and only after asking them.** Before it: `./focus.py
 it is soft or sees no stars, ask the person whether it is cloud. Run the
 aid only when they say the sky is clear there and they are at the
 telescope to turn the knob; with nobody there, or cloud, it measures
-nothing. A focus left untouched does not go soft in minutes: cloud does.
+nothing. A focus left untouched does not go soft in minutes: cloud does. The readings take a few seconds to settle (the exposure finding its level, the
+stars steadying after a move): judge from the readings once they read steady, never
+from the first few.
 15 November 2026: I started the aid in Ha on Pacman unasked, from an
 old note, while cloud was passing; it read "no star in view", then HFR
 1.5 with nobody touching the knob. The person: "if im not there to tell
