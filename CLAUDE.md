@@ -13,6 +13,8 @@ what is specific to Claude and to this particular user.
   never disable it. Never turn off the rain alert (15 November 2026: I
   turned off its living room flash with the telescope out).
 
+- Asked for a rule or a memory, write what was asked and nothing more.
+
 - The nights are for discovery first (AGENTS.md): asked for the outlook or
   a plan, use the `discovery-night` skill and plan around `./ty night`'s
   `discovery` list.
