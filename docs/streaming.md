@@ -312,16 +312,31 @@ a minute. The address to watch is `youtube.com/@TelescopeYoke/live`, which
 leads to the broadcast whenever the channel is live. A connection to
 YouTube's ingest is not the stream being on air: check that address.
 
-**The stream asks YouTube whether it is live** (`YouTubeCheck`). Once it
-has been sending ten minutes (`YT_LIVE_S`), it asks YouTube every five
-(`YT_LOOK_S`, on its own thread) whether any broadcast is live. If none is,
-it says so in the log once for that start, with what YouTube says of the
-stream it receives and the broadcasts' state ("YouTube receives the stream
-(active/good) but no broadcast is live (ready)"), and sends the same line
-to the person's Telegram. The stream and the telescope carry on whatever
-the answer. Sending healthily, YouTube calling the stream healthy and
-viewers watching are three different things: the encoder's speed tells the
-first, this check the second, and the channel's page the third.
+**The stream keeps YouTube live itself** (`YouTubeKeeper` in `stream.py`,
+`youtube.diagnose`). From 90 s after the stream starts, it asks YouTube
+every minute (on its own thread) what stands between the stream and
+viewers, and does what that calls for:
+
+| YouTube says | The keeper does |
+|---|---|
+| live | nothing |
+| sign-in refused | sends a google.com/device code to Telegram (every 30 min until approved), then carries on |
+| no broadcast open | opens one bound to the stream, then starts the stream again |
+| a broadcast waits at "ready" (twice running) | starts the stream again: YouTube only starts a broadcast as a stream begins |
+| no stream arriving (twice running) | starts the stream again |
+| stuck at "Preparing stream" | tells the person: check Dual stream is off (only they can change it) |
+
+A start again is a few seconds' gap, on Twitch too: at most one in four
+minutes and four an hour. Anything still wrong after ten minutes goes to
+Telegram once per cause, and YouTube coming back goes there too.
+`./youtube.py status` gives the same verdict in one line. A healthy
+encoder, or YouTube calling the stream healthy, is not viewers watching:
+only a live broadcast is. Every failure from 21 October to 15 November
+2026 is in `docs/youtube-stream-problems.md`.
+
+**The sign-in lasts 7 days while the Google app is in "Testing"**
+(project `telescopeyoke`, Google Auth Platform, Audience). Publishing it
+needs a home page and privacy policy link on its Branding page.
 
 The video is encoded by the laptop's own video hardware (Intel Quick Sync,
 through VAAPI). At the start it runs Twitch's bandwidth test; it drops to

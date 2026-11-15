@@ -46,38 +46,26 @@ at the channel page, so the user ended up finding the failures. On
 | 13 Nov | "streams dont sem to be running" | The AMD graphics card hung when the laptop woke from sleep at 22:04; the stream's start-up test of the card got stuck | Falls back to encoding on the processors (3518785). **I said "YouTube and Twitch went live again at 23:20" without checking the channel page** |
 | 15 Nov | "youtube stream does not seem to be up", then "still not seeing anything on youtube" | Laptop sending fine since 19:50. Google refused the sign-in (`invalid_grant: Token has been expired or revoked`), so no broadcast was opened | 87b18fd: a refused sign-in is now noticed and a google.com/device code goes to Telegram every 30 min. The user's code wasn't used in time, so I approved it in Chrome at 21:03. The broadcast then sat at "ready" (point 3 again) until **I restarted the encoder at 21:10; live within a minute** |
 
+## Fixed on 15 November 2026 (82f9453)
+
+The stream now keeps YouTube live itself. Once a minute it asks YouTube
+what is wrong and fixes it: it sends a sign-in code to the phone, opens a
+broadcast, or restarts the encoder when a broadcast waits at "ready".
+Telegram is told what it couldn't fix after ten minutes, and when YouTube
+is back. That replaces the three separate pieces (the opening loop in
+`announce`, `YouTubeCheck`, and the sign-in check) with one,
+`YouTubeKeeper`, described in `docs/streaming.md`.
+
 ## Still open
 
-- **The sign-in will probably expire again.** On 1 November the OAuth app
-  was set up in Google Cloud project **`telescopeyoke`** as a "Testing" app
-  (that night's message to the user: "your own app in testing").
-  Google ends a Testing app's sign-ins after 7 days. Tonight's
-  check of the consent screen, which showed "In production", was on a
-  **different project** ("My First Project", `sage-ace-178811`), so it says
-  nothing about ours. The fix: Google Cloud console, project
-  `telescopeyoke`, Google Auth Platform, Audience, **Publish app**, then
-  sign in once more (a sign-in made while the app was in Testing still
-  expires). Until that's done, expect it to expire about 22 November.
-  It isn't proven that Testing is the cause. The record doesn't show when
-  the sign-in actually expired: it was made on 1 November and wasn't
-  checked between 4 and 15 November.
-- **A broadcast opened mid-stream still needs an encoder restart.** When the
-  sign-in comes back while the stream is already running (tonight's
-  case), `ensure_broadcast` opens a broadcast, YouTube refuses to start it
-  (`403 invalidTransition`) and it waits at "ready" for the next stream
-  start. 87b18fd doesn't restart the encoder after the phone sign-in. The
-  stream should restart its ffmpeg itself once it has opened a broadcast
-  that's sitting at "ready" (a few seconds' gap on Twitch).
-- **The phone sign-in needs someone to act within 30 minutes.** Google
-  won't let the laptop approve its own sign-in, so the best the laptop can
-  do is send a code. That's the reason publishing the app matters.
-- **"Sending" was taken for "live".** Several times the evidence was
-  ffmpeg's progress, open connections, or Studio's "healthy". None of
-  those means viewers can see it. The only check that counts is the public
-  `youtube.com/@TelescopeYoke/live` page reporting `isLiveNow: true`.
-  `YouTubeCheck` in `stream.py` now asks YouTube every 5 minutes and sends
-  a Telegram message after 10 minutes with no live broadcast. Check it
-  actually fires next time.
+- **The sign-in still expires every 7 days.** The Google app (project
+  `telescopeyoke`) was confirmed in **Testing** on 15 November. Publishing
+  it needs a home page and privacy policy link on the app's Branding page,
+  and ryanclinton.uk has no privacy page yet. Until it's published, a code
+  comes to Telegram about once a week. Approving it on the phone is all
+  it takes.
+- **Dual stream** can only be switched off by hand. The keeper says so if
+  the broadcast sticks at "Preparing stream".
 
 ## Checks when YouTube is blank
 
@@ -86,8 +74,8 @@ at the channel page, so the user ended up finding the failures. On
 2. "Not signed in" or `invalid_grant`: sign in again
    (`./stream.py youtube-login --client ~/.config/telescopeyoke/youtube-client.json`,
    or the Telegram code).
-3. A broadcast at `ready` while the stream is active: restart the stream's
-   encoder so YouTube sees a new stream start.
+3. A broadcast at `ready` while the stream is active: the keeper restarts
+   the encoder by itself within about two minutes.
 4. Stuck on "Preparing stream": check Dual stream is still off (Studio,
    Live, Stream settings).
 5. Only call it live once `youtube.com/@TelescopeYoke/live` reports
