@@ -99,3 +99,5 @@ as well as the main camera seeing stars twice running: on 7 November thin
 cloud gave the main camera 10 to 28 stars while the guide camera saw none,
 and the lights were flashed for nothing. A deadline already past today is
 tonight's (9 November: `--until 02:00` at 20:55 ended at once and flashed).
+
+**Calls for the person are Telegram only.** `alert.call` (the schedule's fetch when a step fails twice) pulsed every light on the bridge, a child's bedroom among them, and spoke on the speaker; on 15 November 2026 at 21:58 it woke the children. The lights and the speaker now join a call only with `[alerts] call_house = true`.
