@@ -63,6 +63,18 @@ way (17 October 2026: HFR 1.86 at the start, 3.52 after a stopped run).
 6. **Never stop a focus run part way.** If it must stop, say where the
    focuser is, measure with `--check`, and focus again.
 
+**The spoken hand-focus aid (`./focus.py` with no option) only with the
+person at the knob, and only after asking them.** Before it: `./focus.py
+--check` in the filter in use, say the number against the usual, and if
+it is soft or sees no stars, ask the person whether it is cloud. Run the
+aid only when they say the sky is clear there and they are at the
+telescope to turn the knob; with nobody there, or cloud, it measures
+nothing. A focus left untouched does not go soft in minutes: cloud does.
+15 November 2026: I started the aid in Ha on Pacman unasked, from an
+old note, while cloud was passing; it read "no star in view", then HFR
+1.5 with nobody touching the knob. The person: "if im not there to tell
+you if its cloud or not there is no point in running it".
+
 Never ask for a hand on the knob while the motor is plugged in; `./focus.py
 --field`, the hand-turned aid with tones, is only for a telescope without
 it, and only when `lsusb` shows no CH340 and the person has asked for it.
