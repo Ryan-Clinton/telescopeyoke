@@ -113,9 +113,79 @@ def _access(post=requests.post, clock=time.time):
                               "refresh_token": saved["refresh_token"], "grant_type": "refresh_token"},
                  timeout=30).json()
     if not found.get("access_token"):
+        REFUSED[0] = found.get("error_description") or found.get("error") or "refused"
         return None
+    REFUSED[0] = None
     _keep(dict(saved, access_token=found["access_token"], expires_at=clock() + found.get("expires_in", 0)))
     return found["access_token"]
+
+
+REFUSED = [None]            # why Google last refused the saved sign-in, None when it worked
+PHONE_EVERY_S = 1800        # a new sign-in code to the person's phone at most this often
+_phone = {"last": -1e9, "busy": False}
+
+
+def refused(post=requests.post):
+    """Why the saved sign-in no longer works ("Token has been expired or
+    revoked."), or None when it works or there is none. 15 November 2026:
+    Google refused it, no broadcast was opened, and the channel showed
+    nothing while the laptop streamed; nothing said why."""
+    if not signed_in():
+        return None
+    try:
+        return None if _access(post) else (REFUSED[0] or "refused")
+    except Exception:      # noqa: BLE001 - Google unreachable is not a refused sign-in
+        return None
+
+
+def sign_in_by_phone(say=print, send=None, post=requests.post, sleep=time.sleep, clock=time.monotonic):
+    """Sign in again with nobody at the laptop: Google's device code sent to
+    the person's Telegram (the link and the code to type), then wait for
+    them to approve it on their phone. Google lets only the account's owner
+    approve, so this is as far as it can go by itself. At most one at a time
+    and one every PHONE_EVERY_S. True once signed in."""
+    if _phone["busy"] or clock() - _phone["last"] < PHONE_EVERY_S:
+        return False
+    saved = _saved()
+    if not saved or not saved.get("client_id"):
+        return False
+    _phone.update(busy=True, last=clock())
+    send = send or (lambda text: __import__("notify").send(text, say=say))
+    try:
+        client, secret = saved["client_id"], saved["client_secret"]
+        start = post(DEVICE, data={"client_id": client, "scope": SCOPE}, timeout=30).json()
+        if "user_code" not in start:
+            say(f"YouTube sign-in could not be started: {start.get('error_description') or start.get('error')}")
+            return False
+        text = (f"YouTube's sign-in has run out ({REFUSED[0] or 'refused'}), so the channel shows nothing. "
+                f"To put it back, open {start['verification_url']} on your phone and enter {start['user_code']} "
+                f"(good for {start['expires_in'] // 60} min). Nothing else to do.")
+        say(text)
+        send(text)
+        deadline = clock() + start["expires_in"]
+        while clock() < deadline:
+            sleep(start.get("interval", 5))
+            found = post(TOKEN, data={"client_id": client, "client_secret": secret,
+                                      "device_code": start["device_code"],
+                                      "grant_type": "urn:ietf:params:oauth:grant-type:device_code"}, timeout=30).json()
+            if found.get("access_token"):
+                _keep({"client_id": client, "client_secret": secret, "access_token": found["access_token"],
+                       "refresh_token": found.get("refresh_token") or saved.get("refresh_token"),
+                       "expires_at": time.time() + found.get("expires_in", 0)})
+                REFUSED[0] = None
+                say("YouTube signed in again from the phone")
+                send("YouTube signed in again: the broadcast opens with the stream.")
+                return True
+            if found.get("error") not in ("authorization_pending", "slow_down"):
+                say(f"YouTube sign-in from the phone refused: {found.get('error_description') or found.get('error')}")
+                return False
+        say("YouTube sign-in code ran out unapproved; a new one goes in half an hour")
+        return False
+    except Exception as error:      # noqa: BLE001 - the stream goes on whatever Google says
+        say(f"YouTube sign-in by phone failed: {type(error).__name__}")
+        return False
+    finally:
+        _phone["busy"] = False
 
 
 def signed_in():

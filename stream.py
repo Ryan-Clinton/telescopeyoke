@@ -946,6 +946,8 @@ def announce(st, now, say=print, twitch_on=True, youtube_on=False):
                        "to date for ESA's Ariel mission.") if planet else None
             yt_title, description, yt_tags = youtube.listing(title, state, youtube.plan_lines(st.get("schedule")),
                                                              science)
+            if youtube.refused():
+                youtube.sign_in_by_phone(say=say)      # waits for the person's tap on their phone
             for _ in range(10):         # the stream takes a minute or two to reach YouTube
                 if youtube.ensure_broadcast(yt_title, description, say=say):
                     break
@@ -1000,8 +1002,20 @@ class YouTubeCheck:
         threading.Thread(target=self.ask, daemon=True).start()
 
     def ask(self):
+        import youtube
         try:
-            why = youtube_trouble(self.state())
+            found = self.state()
+            why = youtube_trouble(found)
+            if found is None and youtube.refused():
+                # The sign-in Google no longer takes: a code to the phone, and
+                # the broadcast opened once it is approved. Asked again every
+                # half hour until then (youtube.PHONE_EVERY_S).
+                self.say(f"{time.strftime('%H:%M')} YouTube sign-in refused ({youtube.REFUSED[0]}): "
+                         "a new one sent to the phone")
+                if youtube.sign_in_by_phone(say=self.say):
+                    youtube.ensure_broadcast("TelescopeYoke: live from the telescope",
+                                             "Live from a 150 mm telescope in a back garden.", say=self.say)
+                return
         except Exception:                # YouTube unreachable: ask again next time
             why = None
         finally:
