@@ -2,8 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-Read `AGENTS.md` first: it has the layout, the commands, the safety rules and
-the conventions, and applies to every agent. `docs/agents/architecture.md` is
+@AGENTS.md
+
+`AGENTS.md`, imported above, has the layout, the commands, the safety rules
+and the conventions, and applies to every agent. `docs/agents/architecture.md` is
 the one-page picture of how the scripts fit together. This file only adds
 what is specific to Claude.
 
@@ -11,10 +13,10 @@ what is specific to Claude.
 
 - Run anything expected to take more than a minute in the background and
   carry on with the next task.
-- There are no tests and no CI: the owner had them removed on 4 November
-  2026 after asking thirteen times for the testing to stop. Never write,
-  run or restore tests, never add CI, never make a commit wait. Before a
-  commit: `ruff check` on the changed files, then commit and push.
+- There are no tests and no CI, by the maintainer's choice: do not write,
+  run or restore them, add CI, or make a commit wait on anything. Before a
+  commit: `ruff check` on the changed files, then commit and push. What is
+  proven is proven on the telescope, and recorded in `docs/validation.md`.
 - The telescope's operational protections are not testing and stay:
   camera cooling (the slow ramp, never below -5 °C, the warm-up, stopping
   when the cooler fails), mount safety (`MOTION_LOCKED`, the limits, dry

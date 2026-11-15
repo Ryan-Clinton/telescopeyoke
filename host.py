@@ -10,6 +10,7 @@ redirected, so "°" survives a pipe and --json output is always UTF-8.
 import glob
 import os
 import queue
+import re
 import shutil
 import subprocess
 import sys
@@ -88,6 +89,42 @@ def serial_details():
     return [{"device": p.device, "description": p.description or "", "maker": p.manufacturer or "",
              "usb": f"{p.vid:04X}:{p.pid:04X}" if p.vid is not None and p.pid is not None else ""}
             for p in ports if WINDOWS or p.vid is not None]      # Linux lists sixteen ttyS that are nothing
+
+
+def usb_devices(listing=None):
+    """Every USB device the system knows of, as [{"usb": "VVVV:PPPP", "name"}],
+    from what the system already holds: nothing is sent to any device.
+    Linux reads /sys; Windows asks Plug and Play (PowerShell), whose answer
+    `listing` stands in for (its InstanceId and FriendlyName lines)."""
+    found = {}
+    if WINDOWS or listing is not None:
+        if listing is None:
+            command = ("Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -like 'USB\\VID_*' } | "
+                       "ForEach-Object { $_.InstanceId + '|' + $_.FriendlyName }")
+            try:
+                listing = subprocess.run(["powershell", "-NoProfile", "-Command", command],
+                                         capture_output=True, text=True, timeout=30).stdout
+            except (OSError, subprocess.SubprocessError):
+                return []
+        for line in listing.splitlines():
+            ids = re.search(r"VID_([0-9A-F]{4})&PID_([0-9A-F]{4})", line, re.I)
+            if ids:
+                usb = f"{ids.group(1)}:{ids.group(2)}".lower()
+                name = line.split("|", 1)[1].strip() if "|" in line else ""
+                # A device with several interfaces is listed once for each.
+                if usb not in found or (name and not found[usb]):
+                    found[usb] = name
+    else:
+        for folder in sorted(Path("/sys/bus/usb/devices").glob("*")):
+            try:
+                vendor = (folder / "idVendor").read_text().strip()
+                product = (folder / "idProduct").read_text().strip()
+            except OSError:
+                continue
+            parts = [(folder / part).read_text().strip() for part in ("manufacturer", "product")
+                     if (folder / part).exists()]
+            found.setdefault(f"{vendor}:{product}".lower(), " ".join(parts))
+    return [{"usb": usb, "name": name} for usb, name in sorted(found.items())]
 
 
 # The mount drivers someone with a working Windows setup is likely to have:

@@ -30,6 +30,7 @@
         "INVALID_REQUEST",
         "MOTION_LOCKED",
         "MOUNT_NOT_CONNECTED",
+        "NOT_READY",
         "NO_CONFIG",
         "NO_SESSION",
         "NO_SKY",

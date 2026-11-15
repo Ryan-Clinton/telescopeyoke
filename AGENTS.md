@@ -118,8 +118,8 @@ a motor's creep rate. `mount.py stop` is always allowed.
    and on the owner's rig (`CLAUDE.local.md`), what the person asks for and
    every slew of the night's plan is made at once: dry-run it and, if the
    dry run passes, send it. Either way never remove `MOTION_LOCKED`, and
-   never move on the example site (`mount.py` refuses: the site must be
-   the person's own).
+   never move on the example site (`Mount.may_move` refuses every movement,
+   whichever command asks, until config.toml has the person's own site).
 2. **The web server and the MCP server are read-only.** No motion, no
    capture, no writes; do not add any without authentication designed first.
    The control console (`console.py`) is the one place with buttons, and it

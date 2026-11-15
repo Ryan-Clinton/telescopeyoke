@@ -36,6 +36,7 @@ Defined in `interface.py`; `schemas/errors.schema.json` lists them.
 | Code | Retry? | Meaning |
 |---|---|---|
 | `MOTION_LOCKED` | no | A `MOTION_LOCKED` file blocks movement. Only a person removes it. |
+| `NOT_READY` | no | `doctor.py --json`: a part named in `--need` (default the planner) is not ready; the failing checks are in `data`. |
 | `SITE_NOT_SET` | no | `config.toml` still has the example location: `mount.py` will not use the mount until the person's own is set. |
 | `HANDSET_NOT_ANSWERING` | yes | Handset off, on its start-up screens, or lead out. |
 | `HANDSET_NOT_SET_UP` | no | Handset still shows its default date; it would move the mount wrongly. |

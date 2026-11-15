@@ -279,13 +279,23 @@ def check_camera_link():
     return answer
 
 
+def altair_checks():
+    """Altair's own checks, or one line saying they wait for the install:
+    altair.py needs numpy and astropy, which a fresh computer has not got."""
+    try:
+        import altair
+    except ImportError as missing:
+        return [(FAIL, f"the camera's checks wait for the Python libraries ({missing.name} is "
+                       "missing): run the installer first")]
+    return altair.checks()
+
+
 def check_camera():
     if _demo():
         return OK, "simulated camera (demo)"
     import config
     if config.hardware()["camera"]["backend"] == "altair":
-        import altair
-        return altair.checks()[-1]
+        return altair_checks()[-1]
     port = config.hardware()["indi"]["port"]
     try:
         from indi import Indi
@@ -336,8 +346,7 @@ def run(offline=False, skip_handset=False, name_site=True):
         # The pretend camera is the same on every system: no driver, no library.
         imaging += [check_camera()]
     elif config.hardware()["camera"]["backend"] == "altair":
-        import altair
-        imaging += altair.checks()
+        imaging += altair_checks()
     else:
         imaging += [check_program("indiserver", "INDI"), check_program(driver, "camera driver"),
                     check_indi_server(), check_camera()]
@@ -588,8 +597,16 @@ def main():
     if args.json:
         import interface
         result = interface.run("doctor", lambda: report(args.offline, args.skip_handset))
-        ok = result.get("data") and all(result["data"]["ready"][part] for part in need)
-        sys.exit(interface.emit(result) or (0 if ok else 1))
+        if result["ok"]:
+            # ok, the exit code and "needed" say the same thing: whether every
+            # part asked for is ready, not only that the check ran.
+            result["data"]["needed"] = need
+            missing = [part for part in need if not result["data"]["ready"][part]]
+            if missing:
+                result["ok"] = False
+                result["errors"].append(interface.error("NOT_READY", f"Not ready: {', '.join(missing)}. "
+                                                        "The failing checks are in data."))
+        sys.exit(interface.emit(result))
     if args.probe and not args.report:
         ap.error("--probe goes with --report")
     if args.report:

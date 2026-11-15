@@ -184,6 +184,9 @@ class Mount:
         """`demo` drives a simulated handset; `handset` supplies one directly
         (anything with the serial port's write/read_until interface)."""
         self.demo = demo or handset is not None or config.DEMO
+        # Read now, refused at the first move (self.may_move): stop and
+        # status need no site, so a missing or example one never stops them.
+        self.site_set = self.demo or own_site_set()
         self.recording = None   # folder to keep each solve frame and message in
         # A simulated mount has no camera behind it, except in the full demo,
         # which has a pretend camera and sky to solve.
@@ -206,7 +209,9 @@ class Mount:
             # board, and direct.py does the handset's part.
             import direct
             settings = config.hardware()["mount"]
-            site = (config.load() if config.FILE.exists() else config.example())["site"]
+            # The example's site only when there is none of its own, and then
+            # may_move refuses everything but stop: the clock is never used.
+            site = (config.load() if self.site_set else config.example())["site"]
             self.s = direct.DirectHandset(direct.Board(direct.open_link(settings, port)),
                                           lambda: true_sidereal(site))
         else:
@@ -322,7 +327,18 @@ class Mount:
 
     # --- motion -------------------------------------------------------------
 
+    def may_move(self):
+        """Every movement goes through here first (rate, tracking, creep,
+        pulse, GoTo, the handset's clock and place): whichever command asks,
+        none moves the real mount on the example site or none."""
+        if not self.site_set:
+            raise Refusal("SITE_NOT_SET", "config.toml has no location of its own (missing, unreadable or "
+                                          "still the example's): set your own latitude and longitude "
+                                          "before the mount is used. Stop still works.")
+
     def rate(self, axis, direction, rate):
+        if rate:
+            self.may_move()
         self.ask(bytes([ord("P"), 2, axis, direction, rate, 0, 0, 0]))
 
     def stop(self):
@@ -333,6 +349,8 @@ class Mount:
 
     def tracking(self, on):
         # Mode 2 is equatorial tracking, 0 is off.
+        if on:
+            self.may_move()
         self.ask(b"T" + bytes([2 if on else 0]))
 
     def dec_creep(self, rate):
@@ -340,6 +358,8 @@ class Mount:
         (positive raises the axis readout); 0 stops it. The handset takes the
         rate in quarter-arcsecond steps, so the rate actually set is returned."""
         steps = min(round(abs(rate) * 4), 0xFFFF)
+        if steps:
+            self.may_move()
         self.ask(bytes([ord("P"), 3, DEC, 6 if rate >= 0 else 7, steps >> 8, steps & 0xFF, 0, 0]))
         return math.copysign(steps / 4, rate) if steps else 0.0
 
@@ -355,6 +375,7 @@ class Mount:
         before it uses one, and tracking is switched on again after each."""
         if LOCK_FILE.exists():
             raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text(encoding='utf-8').strip()}")
+        self.may_move()
         rate = max(-PULSE_RATE, min(PULSE_RATE, rate))
         seconds = max(0.0, min(PULSE_LONGEST, seconds))
         steps = min(round(abs(rate) * 4), 0xFFFF)
@@ -650,6 +671,7 @@ class Mount:
 
     def goto(self, ra, dec):
         """Handset GoTo to a sky position in degrees; waits until it stops."""
+        self.may_move()
         with self.watching():
             if self.ask(f"r{encode(ra)},{encode(dec)}".encode()) != b"#":
                 raise Refusal("GOTO_REFUSED", "The handset refused the GoTo.")
@@ -766,6 +788,7 @@ class Mount:
         site's position, then measure its clock afresh. The handset must be
         at its main menu: this cannot press its keys. Moves nothing. Returns
         what the handset says its date and time are afterwards."""
+        self.may_move()
         now = time.gmtime()
         if self.ask(bytes([ord("H"), now.tm_hour, now.tm_min, now.tm_sec, now.tm_mon, now.tm_mday,
                            now.tm_year % 100, 0, 0])) != b"#":
@@ -1555,6 +1578,10 @@ def main():
             ap.error(f"{args.command} is for a real mount reached without its handset")
         use_demo_cache()
         site = config.example()["site"]
+    elif args.command in ("stop", "status") and not own_site_set():
+        # Stop must work whatever state config.toml is in (missing, broken,
+        # the example's); neither command needs to know where it is.
+        site = config.example()["site"]
     else:
         site = config.load()["site"]
     if args.command == "goto" and not args.target:
@@ -1643,12 +1670,27 @@ def nudge_step(cfg=None):
             "it is clear, go straight to focus.")
 
 
+def is_example_site(site):
+    example = config.example()["site"]
+    return (site["latitude"], site["longitude"]) == (example["latitude"], example["longitude"])
+
+
+def own_site_set():
+    """Whether config.toml has a location of its own: there, readable, and not
+    the example's. Never raises: stop and status must work without one."""
+    try:
+        return config.FILE.exists() and not is_example_site(config.load()["site"])
+    except Exception:      # noqa: BLE001 - an unreadable file is no site, not a crash
+        return False
+
+
 def refuse_example_site(site):
     """The limits (altitude, the meridian, the Sun) and the handset's time
     and place are worked out for the site: config.example.toml's, copied by
-    the installer and never changed, would judge every move for Greenwich."""
-    example = config.example()["site"]
-    if (site["latitude"], site["longitude"]) == (example["latitude"], example["longitude"]):
+    the installer and never changed, would judge every move for Greenwich.
+    The CLI says so before the port is opened; Mount.may_move holds it for
+    every other command that moves the mount."""
+    if is_example_site(site):
         raise Refusal("SITE_NOT_SET", "config.toml still has the example location: set your own "
                                       "latitude and longitude before the mount is used.")
 

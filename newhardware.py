@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """New hardware: notice it, ask what it is, and offer the report.
 
-    ./newhardware.py                 the serial devices plugged in, and which are new; nothing is sent to any
+    ./newhardware.py                 the serial devices plugged in, and which are new, then the USB cameras,
+                                     wheels and adapters with what TelescopeYoke can do with each; nothing is sent to any
     ./newhardware.py --known PORT    this one is yours and known (a focuser, say): not shown as new again
     ./newhardware.py --probe PORT    ask it what it is (only reads), write the report, and give the form filled in
     ./newhardware.py --watch         keep looking, and say so when something new is plugged in
@@ -47,6 +48,44 @@ REPORTS = config.DATA / "reports" / "hardware"
 FORM = "https://github.com/Ryan-Clinton/telescopeyoke/issues/new"
 LONGEST = 5000       # characters of the report put into the form's link; the rest is pasted from the file
 EVERY_S = 10         # --watch: seconds between looks
+
+# USB numbers worth naming when setting up a rig, with what TelescopeYoke can
+# do with each (docs/hardware.md, "What to expect of other equipment"). By
+# vendor and product, or vendor alone ("03c3"). A serial adapter says nothing
+# about what is behind it: a handset's lead, an EQDIR cable and an Arduino
+# all use the same few chips.
+SERIAL_ADAPTER = ("serial adapter", "seen: what is behind it is unknown until asked (--probe PORT, only reads)")
+USB_KINDS = {
+    "0403": SERIAL_ADAPTER,                                   # FTDI
+    "067b": SERIAL_ADAPTER,                                   # Prolific (Celestron's leads among others)
+    "10c4": SERIAL_ADAPTER,                                   # Silicon Labs CP210x
+    "1a86:7523": SERIAL_ADAPTER,                              # CH340 (the owner's focuser; many EQDIR cables)
+    "2341": ("Arduino", "seen: TelescopeYoke's focuser firmware runs on one (firmware/focuser), "
+                        "anything else does not"),
+    "16d0:0c77": ("Altair camera", "proven: the Hypercam 183C and 183M"),
+    "16d0:0b2a": ("Altair GPCAM guide camera", "proven as a guide camera on Linux (guidecam.py)"),
+    "16d0": ("Altair camera", "unproven on this model: Altair's library on Windows, INDI's driver on Linux"),
+    "1278:0920": ("Starlight Xpress filter wheel", "proven (sxwheel.py)"),
+    "1278": ("Starlight Xpress device", "not supported, except their USB filter wheel"),
+    "03c3": ("ZWO camera, wheel or focuser", "not supported on Windows; a ZWO camera is unproven "
+                                             "through INDI on Linux"),
+    "1618": ("QHY camera", "not supported on Windows; unproven through INDI on Linux"),
+    "a0a0": ("Player One camera", "not supported on Windows; unproven through INDI on Linux"),
+}
+
+
+def usb_inventory(devices=None, windows=host.WINDOWS):
+    """The USB devices plugged in that matter to a telescope, each with what
+    it is and what TelescopeYoke can do with it. Reads only."""
+    found = []
+    for d in host.usb_devices() if devices is None else devices:
+        kind = USB_KINDS.get(d["usb"]) or USB_KINDS.get(d["usb"].split(":")[0])
+        if kind:
+            what, support = kind
+            if not windows:
+                support = support.replace("not supported on Windows; ", "")
+            found.append({"usb": d["usb"], "name": d["name"], "kind": what, "support": support})
+    return found
 
 
 def key(d):
@@ -254,11 +293,17 @@ def run(args, say=print):
         say(f"  {d['state']:7} {d['device']}  {d['description']}{joined}  {d['maker']}  {d['usb']}")
     if not found:
         say("No USB serial devices plugged in.")
+    usb = usb_inventory()
+    if usb:
+        say("USB devices a telescope might use:")
+    for d in usb:
+        say(f"  {d['usb']}  {d['kind']} ({d['name'] or 'no name'}): {d['support']}")
     new = [d for d in found if d["state"] == "new"]
     if new:
         say("New: ./newhardware.py --probe PORT asks one what it is (it only reads; PORT \"wifi\" for a SynScan "
             "network, once joined); --known PORT if it is yours.")
-    return {"devices": [{k: d[k] for k in ("device", "description", "maker", "usb", "state")} for d in found]}
+    return {"devices": [{k: d[k] for k in ("device", "description", "maker", "usb", "state")} for d in found],
+            "usb": usb}
 
 
 def main():

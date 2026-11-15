@@ -55,6 +55,7 @@ ERRORS = {
     "NO_SESSION": (False, "No imaging run has been recorded yet."),
     "SITE_NOT_SET": (False, "Set your own latitude and longitude in config.toml: the mount's limits and the "
                             "handset's time and place are worked out for the site."),
+    "NOT_READY": (False, "Fix the checks marked FAIL in data, in order, then run the check again."),
     "NO_CONFIG": (False, "Copy config.example.toml to config.toml and set the location."),
     "DEMO_UNSUPPORTED": (False, "This needs the real camera; there is no demo of it."),
     "REMOTE_FAILED": (True, "The other computer could not be reached or the work failed there; "

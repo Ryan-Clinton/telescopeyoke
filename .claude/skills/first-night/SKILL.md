@@ -19,9 +19,11 @@ CH340 focuser, a cooled 183M, a Sharpie line, HFR figures) is about it.
 ## 1. What is here (reads only, nothing moves)
 
 `./doctor.py --offline --json` (it runs before the installer: a missing
-library is an answer, not a failure), `lsusb` on Linux, and
-`./newhardware.py`, which lists serial ports and SynScan Wi-Fi networks
-without sending them anything. Ask what they have where it does not show:
+library is an answer, not a failure) and `./newhardware.py`, which lists
+the serial ports, SynScan Wi-Fi networks and the USB cameras, wheels and
+adapters it knows, each with what TelescopeYoke can do with it, on Linux
+and Windows alike, without sending anything to any of them. A serial
+adapter (FTDI, Prolific, CH340) says nothing about what is behind it. Ask what they have where it does not show:
 mount and handset, telescope (aperture, focal length), camera, focuser,
 filter wheel.
 
@@ -54,12 +56,20 @@ send a device a question unless the person names its port and agrees
 
 ## 3. The first moves, beside the telescope
 
-Before any GoTo: the person beside the mount, in daylight or at dusk, the
-handset set up (`docs/agents/setup-routine.md` for a SynScan). Each move
-is said first and goes only on their go: a small `./mount.py goto` dry
-run, then sent; they watch which way it turns, that `./mount.py stop`
-stops it, and that the tube clears the tripod. Only after they say they
-want moves made without asking does the night's plan slew by itself.
+Before any GoTo: the person beside the mount, in daylight or at dusk,
+the mount at its home position (counterweight down, tube to the pole) and
+the handset set up (`docs/agents/setup-routine.md` for a SynScan). Each
+move is said first and goes only on their go, dry-run first:
+
+1. `./mount.py nudge` with a handset (a few degrees on Dec and back), or
+   `./mount.py directions` without one (they say which way it turned):
+   the right mount answers, and it turns the way it should.
+2. `./mount.py stop` while a short move is running: it stops.
+3. Then one GoTo to something high and near the meridian, watched, and
+   `./mount.py home`: the tube clears the tripod both ways.
+
+Say each result in a line. Only after they say they want moves made
+without asking does the night's plan slew by itself.
 
 ## 4. First light
 
