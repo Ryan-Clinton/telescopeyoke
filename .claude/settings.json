@@ -6,8 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3",
-            "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/guard.py", "all"],
+            "command": "sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/py\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/guard.py\" all",
             "onFailure": "block",
             "timeout": 20
           }
@@ -17,15 +16,41 @@
     "PostToolUse": [
       {
         "matcher": "Bash|PowerShell|Skill|Agent|Task",
-        "hooks": [{"type": "command", "command": "python3", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/log.py"], "timeout": 20}]
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/py\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/log.py\"",
+            "timeout": 20
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
-      {"hooks": [{"type": "command", "command": "python3", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/log.py"], "timeout": 20},
-                 {"type": "command", "command": "python3", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/sky.py"], "timeout": 45}]}
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/py\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/log.py\"",
+            "timeout": 20
+          },
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/py\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/sky.py\"",
+            "timeout": 45
+          }
+        ]
+      }
     ],
     "Stop": [
-      {"hooks": [{"type": "command", "command": "python3", "args": ["${CLAUDE_PROJECT_DIR}/.claude/hooks/log.py"], "timeout": 20}]}
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PROJECT_DIR}/.claude/hooks/py\" \"${CLAUDE_PROJECT_DIR}/.claude/hooks/log.py\"",
+            "timeout": 20
+          }
+        ]
+      }
     ]
   }
 }

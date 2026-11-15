@@ -11,6 +11,7 @@ and the real centring, focusing and stacking code runs on it.*
 **[Home page](https://ryan-clinton.github.io/telescopeyoke/) ·
 [Download 0.2.1](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.2.1/TelescopeYoke-v0.2.1.zip) ·
 [Try the demo, no telescope needed](#quick-start) ·
+[Set it up with Claude Code](#with-claude-code) ·
 [Results](docs/results.md) ·
 [What it has been tried on](docs/hardware.md) ·
 [All the docs](docs/README.md) ·
@@ -209,9 +210,28 @@ On Windows 10 or 11: install 64-bit Python 3.11 or newer from python.org
 [download TelescopeYoke-v0.2.1.zip](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.2.1/TelescopeYoke-v0.2.1.zip),
 unpack it, and double-click **`try-demo.cmd`**.
 
-That zip is release 0.2.1, which stays as it is; a hardware report says
-which release made it. `git clone https://github.com/Ryan-Clinton/telescopeyoke`
-gets the newest code instead, which changes from day to day.
+That zip is release 0.2.1 (6 October 2026), which stays as it is; a
+hardware report says which release or commit made it. It is older than
+almost everything below, the Claude Code setup included.
+`git clone https://github.com/Ryan-Clinton/telescopeyoke` gets the newest
+code instead, which changes from day to day: an experimental hardware
+preview, proven on one telescope (see [What it has been tried on](docs/hardware.md)).
+
+### With Claude Code
+
+```bash
+git clone https://github.com/Ryan-Clinton/telescopeyoke
+cd telescopeyoke
+claude
+```
+
+Then ask it to set up your telescope. It looks at what is plugged in
+without sending it anything, says for each device whether TelescopeYoke has
+driven one like it, has not yet, or cannot, and only then installs and
+writes your settings (the `first-night` skill). Nothing moves until you are
+beside the telescope and say so. On Windows, Claude Code's safety hooks
+need Git Bash and Python 3.11 or later as `python` or `py`
+([Setup](docs/setup.md#with-claude-code)).
 
 Either way a window opens on a pretend mount, camera and sky: a GoTo is
 centred by plate solving, the focusing aid follows a focuser you turn with

@@ -7,6 +7,12 @@ allowed-tools: Bash(./polaralign.py --dry-run *) Bash(./ty mount status)
 
 # Polar alignment
 
+**Written at the owner's rig** (a 150P on an EQ3 Pro, the cooled 183M, a
+home-built CH340 motor focuser, a Starlight Xpress wheel, their own
+computers and services). Their dated notes are about that kit. On another
+rig, skip what it does not have, and take its facts from `config.toml` and
+`./doctor.py --json`.
+
 Only needed when the tripod has moved or its marks are lost; otherwise the
 last alignment stands, so say that and skip it. The method and its pitfalls
 are in `docs/calibration.md` ("Polar alignment") and

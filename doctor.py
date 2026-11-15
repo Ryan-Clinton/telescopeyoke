@@ -74,6 +74,21 @@ def check_config(name_site=True):
     return OK, f"config.toml, site \"{site['name']}\"" if name_site else "config.toml, with a location set"
 
 
+def check_site_for_moves():
+    """The mount's limits are worked out for the site: the example's will not do."""
+    if _demo():
+        return OK, "the example site (demo)"
+    import config
+    try:
+        site = config.load()["site"]
+    except Exception:
+        return FAIL, "no site to move from: set your location in config.toml"
+    example = config.example()["site"]
+    if (site["latitude"], site["longitude"]) == (example["latitude"], example["longitude"]):
+        return FAIL, "the example location: mount.py will not move until config.toml has yours"
+    return OK, "a site of your own for the mount's limits"
+
+
 def check_network():
     try:
         socket.create_connection(("api.open-meteo.com", 443), timeout=5).close()
@@ -309,7 +324,7 @@ def run(offline=False, skip_handset=False, name_site=True):
     planner = [check_python(), check_libraries(), check_catalogue(), check_config(name_site)]
     if not offline:
         planner.append(check_network())
-    mount = [check_serial_access(), check_serial_lead()]
+    mount = [check_site_for_moves(), check_serial_access(), check_serial_lead()]
     if not skip_handset:
         mount.append(check_handset())
     mount.append(check_webcam())
@@ -559,15 +574,22 @@ def main():
     ap.add_argument("--json", action="store_true", help="answer in JSON (see schemas/)")
     ap.add_argument("--report", action="store_true",
                     help="write the check out to post as a hardware report; your location is left out")
+    ap.add_argument("--need", default="planner", metavar="PARTS",
+                    help="which must be ready for success, comma-separated from planner, mount, imaging "
+                         "(default planner)")
     ap.add_argument("--probe", metavar="PORT",
                     help="with --report: ask whatever is on this serial port (COM7, /dev/ttyUSB0) what it "
                          "is, as a handset and then as a motor board. Only reads; close EQMOD first")
     args = ap.parse_args()
+    need = [part.strip() for part in args.need.split(",") if part.strip()]
+    if not need or set(need) - {"planner", "mount", "imaging"}:
+        ap.error("--need takes planner, mount and imaging, comma-separated")
 
     if args.json:
         import interface
         result = interface.run("doctor", lambda: report(args.offline, args.skip_handset))
-        sys.exit(interface.emit(result) or (0 if result["data"]["ready"]["planner"] else 1))
+        ok = result.get("data") and all(result["data"]["ready"][part] for part in need)
+        sys.exit(interface.emit(result) or (0 if ok else 1))
     if args.probe and not args.report:
         ap.error("--probe goes with --report")
     if args.report:
@@ -577,7 +599,7 @@ def main():
     print("telescopeyoke system check\n")
     print(words(results))
     print("\nNo telescope? Everything can be tried with --demo: ./tonight.py --demo")
-    sys.exit(0 if ready(results)["planner"] else 1)
+    sys.exit(0 if all(ready(results)[part] for part in need) else 1)
 
 
 if __name__ == "__main__":

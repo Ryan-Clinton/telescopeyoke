@@ -46,3 +46,5 @@ mosaics/
 
 # Run and camera logs: kept privately (the memory repo), not published
 logs/
+# The owner's own Claude instructions (kept in their private memory repo)
+CLAUDE.local.md

@@ -1579,6 +1579,8 @@ def main():
 def dry_run(args, site):
     """Say what a command would do, as JSON or a sentence. Returns an exit code."""
     def plan():
+        if args.command not in ("status", "stop") and not args.demo:
+            refuse_example_site(site)
         if args.command == "goto":
             return plan_goto(" ".join(args.target), site)
         if args.command == "point":
@@ -1641,9 +1643,21 @@ def nudge_step(cfg=None):
             "it is clear, go straight to focus.")
 
 
+def refuse_example_site(site):
+    """The limits (altitude, the meridian, the Sun) and the handset's time
+    and place are worked out for the site: config.example.toml's, copied by
+    the installer and never changed, would judge every move for Greenwich."""
+    example = config.example()["site"]
+    if (site["latitude"], site["longitude"]) == (example["latitude"], example["longitude"]):
+        raise Refusal("SITE_NOT_SET", "config.toml still has the example location: set your own "
+                                      "latitude and longitude before the mount is used.")
+
+
 def act(args, site):
     """Carry a command out on the mount (or the simulated one). Returns the
     mount's state afterwards."""
+    if args.command not in ("status", "stop") and not args.demo:
+        refuse_example_site(site)
 
     if args.command in ("nudge", "zenith", "home", "goto", "point", "compensate", "pointing", "findhome",
                         "truehome", "directions") and LOCK_FILE.exists():

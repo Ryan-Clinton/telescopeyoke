@@ -53,6 +53,8 @@ ERRORS = {
     "FRAMES_APART": (False, "The filters' stacks frame different parts of the sky, so the target may be cut off: "
                             "take the colour again with a re-centre at each filter, or ask for it anyway."),
     "NO_SESSION": (False, "No imaging run has been recorded yet."),
+    "SITE_NOT_SET": (False, "Set your own latitude and longitude in config.toml: the mount's limits and the "
+                            "handset's time and place are worked out for the site."),
     "NO_CONFIG": (False, "Copy config.example.toml to config.toml and set the location."),
     "DEMO_UNSUPPORTED": (False, "This needs the real camera; there is no demo of it."),
     "REMOTE_FAILED": (True, "The other computer could not be reached or the work failed there; "

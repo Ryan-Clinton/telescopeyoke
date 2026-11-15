@@ -7,6 +7,12 @@ allowed-tools: Bash(./instrument.py) Bash(./instrument.py --json) Bash(./ty outl
 
 # Discovery night
 
+**Written at the owner's rig** (a 150P on an EQ3 Pro, the cooled 183M, a
+home-built CH340 motor focuser, a Starlight Xpress wheel, their own
+computers and services). Their dated notes are about that kit. On another
+rig, skip what it does not have, and take its facts from `config.toml` and
+`./doctor.py --json`.
+
 The night is `docs/discovery.md`, "Running a discovery night"; the patrol
 is `docs/agents/setup-routine.md` step 6b.
 
@@ -24,7 +30,7 @@ is `docs/agents/setup-routine.md` step 6b.
    - `./transits.py`;
    - asked to compare the forecasts or models: `./tonight.py --forecast`
      (the four centres side by side, hour by hour), its table in the answer;
-   - the last night's notes (`~/ryanclinton.uk/notes/DATE.md`): what was
+   - the last night's notes, where `CLAUDE.local.md` keeps them: what was
      patrolled and how the sky really was (fog the forecast missed).
 
    Answer from those at once, short and in plain words, at most about

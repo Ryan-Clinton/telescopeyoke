@@ -1,0 +1,12 @@
+#!/bin/sh
+# Runs a hook with the first Python 3.11 or later found: python3 on Linux,
+# python or the py launcher on Windows, where python3 may be missing or be
+# the Microsoft Store's stand-in (which only opens the Store). Claude Code
+# on Windows runs hook commands in Git Bash, which has sh.
+for candidate in python3 python "py -3"; do
+    if $candidate -c "import sys; sys.exit(sys.version_info < (3, 11))" >/dev/null 2>&1; then
+        exec $candidate "$@"
+    fi
+done
+echo "telescopeyoke: no Python 3.11 or later for the safety hooks (python3, python or py)" >&2
+exit 1

@@ -142,9 +142,11 @@ cannot be forgotten by a blacklist.
 4. **Agents never start a physical action**, and are given the fewest tools
    their job needs. An agent that reads the web has no shell and writes
    nothing; one with a shell reads no web pages.
-5. **Outward-facing or broad means manual.** `first-night`, `claim`
-   and `release` have `disable-model-invocation: true`: only
-   the person's `/NAME` starts them.
+5. **Outward-facing or broad means manual.** `claim` and `release` have
+   `disable-model-invocation: true`: only the person's `/NAME` starts them.
+   `first-night` starts from ordinary words ("set up my telescope"), so a
+   newcomer need not know it exists; it only reads until the person agrees
+   to the install, and moves nothing without their go.
 6. **Every agent stops.** Each has `maxTurns`.
 7. **Short, by reference.** A SKILL.md gives the order and the judgement;
    the detail stays in `docs/` and is read when needed. Under about 150
@@ -181,20 +183,26 @@ one front door, the same checks. The rest (`patrol.py`, `polaralign.py`,
   (`./doctor.py --offline`, `./ty mount status`; `lsusb` on Ubuntu, the
   device list `doctor.py` prints on Windows); the night's dry runs indoors;
   `settime`; where it is clear; `nudge` (when `[mount] nudge_check` is on), and whether they saw it; GoTo a
-  rich field and `./ty focus --motor`; polar alignment only if the tripod
+  rich field and focus (the `focus` skill: measure, then the walk-in on the
+  owner's rig, by hand elsewhere); polar alignment only if the tripod
   moved; the first target. One short line at a time, only what needs their
   hands or eyes. Each `hardware` step under rule 2.
 - **Finished:** the first target centred, or the person stopping.
 
 ### `first-night`
 
-- **Loads:** `/first-night` only.
+- **Loads:** when someone asks to install, set up or get started, or `/first-night`.
 - **Needs:** a fresh checkout, Python 3.11 or later, Ubuntu or Windows, the
   internet.
-- **Does:** `docs/first-night.md` and `docs/setup.md`: the installer, the
+- **Does:** first, reading only: `doctor.py --offline --json`, `lsusb`,
+  `newhardware.py`, and one line for each device from `docs/hardware.md`
+  (proven, unproven on this model, seen but not supported, not found), with
+  the hardware report offered for what cannot work. Then
+  `docs/first-night.md` and `docs/setup.md`: the installer, the
   site in `config.toml` (asked, never guessed, never committed), ASTAP and
-  its stars, `doctor.py` until clean, the camera's first frame indoors, then
-  `nightly-setup` with each step explained once.
+  its stars, `doctor.py --need mount,imaging` until clean, the camera's first
+  frame indoors, the first moves watched beside the mount on the person's
+  go, then `nightly-setup` with each step explained once.
 
 ### `focus`
 

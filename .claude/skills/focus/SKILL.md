@@ -7,6 +7,12 @@ allowed-tools: Bash(./focus.py --motor --dry-run) Bash(./ty mount status)
 
 # Focus
 
+**Written at the owner's rig** (a 150P on an EQ3 Pro, the cooled 183M, a
+home-built CH340 motor focuser, a Starlight Xpress wheel, their own
+computers and services). Their dated notes are about that kit. On another
+rig, skip what it does not have, and take its facts from `config.toml` and
+`./doctor.py --json`.
+
 **Measure first, always.** Focus that was not touched since it was last
 set is usually still good, and a focus run drives the drawtube well out
 and back: minutes of sky, and a risk of leaving it worse if stopped part

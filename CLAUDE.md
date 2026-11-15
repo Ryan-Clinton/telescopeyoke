@@ -5,25 +5,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Read `AGENTS.md` first: it has the layout, the commands, the safety rules and
 the conventions, and applies to every agent. `docs/agents/architecture.md` is
 the one-page picture of how the scripts fit together. This file only adds
-what is specific to Claude and to this particular user.
+what is specific to Claude.
 
-## Working with this user
+## Working on this project
 
-- When the user complains about something, offer fixes or compromises;
-  never disable it. Never turn off the rain alert (15 November 2026: I
-  turned off its living room flash with the telescope out).
-
-- Asked for a rule or a memory, write what was asked and nothing more.
-
-- The nights are for discovery first (AGENTS.md): asked for the outlook or
-  a plan, use the `discovery-night` skill and plan around `./ty night`'s
-  `discovery` list.
-
-- At the telescope, follow `docs/agents/setup-routine.md` step by step:
-  set the handset first, then ask the user where the sky is clear.
 - Run anything expected to take more than a minute in the background and
   carry on with the next task.
-- There are no tests and no CI: the user had them removed on 4 November
+- There are no tests and no CI: the owner had them removed on 4 November
   2026 after asking thirteen times for the testing to stop. Never write,
   run or restore tests, never add CI, never make a commit wait. Before a
   commit: `ruff check` on the changed files, then commit and push.
@@ -51,31 +39,25 @@ what is specific to Claude and to this particular user.
 - Before advising on the telescope, look at what is plugged in rather than
   asking: `lsusb`, `./doctor.py --offline` (handset lead, handset set up,
   camera, INDI) and `./mount.py status`, which only reads. Then advise from
-  that, and from what the user has already said.
-- If the user talks about alignment and the mount or camera shows on USB,
-  they are outside at the telescope in the cold. Give the next command to
-  run, short; no questions they have already answered, no advice on getting
-  the telescope outside, and no testing that makes them wait.
-- No approval asking for the mount: what the user asks for and every slew of
-  the night's plan go at once. When they
-  ask for a move from beside the telescope ("swing to Vega"), that is the go:
-  dry-run it and, if the dry run passes, send it at once. No warnings about
-  the mount moving, cables or standing clear; they know. A pole swing is
-  said in the same message as the move goes, as a fact, not a question.
-- When the user says what they can see ("it's clear to the north, can see
-  Polaris"), they are outside at the telescope and that is the go for the
-  next step of the routine that fits it. Dry-run it and start it at once:
-  no plan to approve, no "say go", no extra steps.
-- Every observing night, keep running notes for the user's diary in
-  `~/ryanclinton.uk/notes/DATE.md` (the evening's date): a bullet with the
-  time and the figures after each step or result, without being asked. The
-  titled diary entry is written from them only once the night is over.
-- The other way round: once the user has asked for a step, run it at once,
-  in the background, and keep it running; never wait for a second "go".
-  The focuser and the camera are not the mount: "start the walk-in" is
-  the go for that step and every retry of it. A step that cannot start (cloud, no stars) is retried by me until it
-  can. On 1 November 2026 I waited for "go" on a walk-in already asked for
-  and the cloud came in.
+  that, and from what the person has already said.
+
+## Someone else's telescope
+
+`CLAUDE.local.md` (ignored by git) holds one owner's conventions with their
+own Claude: standing approval for moves, what their nights are for, where
+their notes go. A fresh checkout has none of it. Without it:
+
+- Asked to install, set up, get started or connect equipment, use the
+  `first-night` skill: it finds what is plugged in and says what
+  TelescopeYoke supports before anything is installed or moved.
+- Nothing measured on the owner's rig (focus figures, the focuser, the
+  cooled camera, the filter slots) is a fact about this one. `config.toml`
+  and `./doctor.py --json` say what this rig is; ask for what they do not.
+- A mount move needs the person's go each time until they have watched the
+  first moves (`AGENTS.md`, "Mount moves") and said they want moves made
+  without asking.
+- Ask what they want from the night; the discovery programmes are one
+  choice among pictures of the Moon, planets and the deep sky.
 
 ## Commands
 

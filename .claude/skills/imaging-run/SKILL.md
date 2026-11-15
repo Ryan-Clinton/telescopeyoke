@@ -7,10 +7,17 @@ allowed-tools: Bash(./ty mount goto * --dry-run) Bash(./ty shoot * --dry-run) Ba
 
 # Imaging run
 
+**Written at the owner's rig** (a 150P on an EQ3 Pro, the cooled 183M, a
+home-built CH340 motor focuser, a Starlight Xpress wheel, their own
+computers and services). Their dated notes are about that kit. On another
+rig, skip what it does not have, and take its facts from `config.toml` and
+`./doctor.py --json`.
+
 1. The target: what they asked for, or the best from `./ty tonight` in the
    part of the sky they said is clear.
 2. `./ty mount goto TARGET --solve --dry-run`, then the GoTo itself, which
-   with no approval asked.
+   with no approval asked on a rig with standing approval (`AGENTS.md`,
+   safety rule 1); on any other, on the person's go.
 3. `./ty shoot TARGET --frames 0 --recentre 8` (dry-run first), in the
    background. Tell them it is running and they can go in.
 4. Start the watch as a Monitor: `./ty watch-run`. It prints nothing while

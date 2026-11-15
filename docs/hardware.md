@@ -96,6 +96,11 @@ lock (`MOTION_LOCKED`) stops every rig at once.
 
 ## What to expect of other equipment
 
+Four answers, and an agent setting up a new rig gives one of them for each
+device: ✅ proven (on this model), ⚠️ expected to work but unproven on this
+model, ❌ seen but not supported (it can be reported, not driven), and not
+found. Something showing on USB is only "seen".
+
 | Hardware | Status |
 |---|---|
 | Sky-Watcher Explorer 150P (150 mm f/5 Newtonian) | ✅ Used by the author, at 750 mm and with a 0.9x coma corrector at 675 mm |
@@ -108,4 +113,7 @@ lock (`MOTION_LOCKED`) stops every rig at once.
 | Other INDI cameras | ⚠️ Untested. Likely for mono or RGGB colour sensors: set the driver and sensor size in `config.toml`. |
 | Other telescopes | Set the focal length in `config.toml`. |
 | ASCOM, Alpaca | ❌ Not used yet. An ASCOM or EQMOD installation is noticed and left alone; see above. Alpaca is planned as the way to every ASCOM driver ([Mounts](mounts.md)). |
+| Other cameras on Windows (ZWO, QHY, Player One, ...) | ❌ Not supported: on Windows the camera is reached through Altair's own library only. On Linux, through INDI (the row above) |
+| Other filter wheels | ❌ Not supported: `sxwheel.py` drives Starlight Xpress USB wheels only. Without a wheel, colour cameras need none |
+| Other motor focusers | ❌ Not supported: `focuser.py` drives the home-built Arduino focuser (`firmware/focuser/`) only. Focusing by hand with `./focus.py` (spoken and tone guidance) works with any focuser |
 | Celestron, ZWO, iOptron and others | 🗓️ Planned, in order, in [Mounts](mounts.md); testers wanted. |

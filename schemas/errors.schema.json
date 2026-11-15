@@ -38,6 +38,7 @@
         "FRAMES_APART",
         "PLATE_SOLVE_FAILED",
         "REMOTE_FAILED",
+        "SITE_NOT_SET",
         "SLEW_TIMED_OUT",
         "TARGET_BELOW_ALTITUDE_LIMIT",
         "TARGET_BEYOND_HOUR_ANGLE_LIMIT",

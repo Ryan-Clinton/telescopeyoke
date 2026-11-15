@@ -7,15 +7,22 @@ on a laptop left beside the telescope. An Ubuntu application, with a Windows
 port on which the camera has taken frames but no mount has been driven. `README.md` is the user's guide; this file is the map for
 agents. Deeper notes are in `docs/agents/`.
 
-**What the nights are for now: discovery** (`docs/discovery.md`). Novae in
-M31 and M33 (`programmes/`), Tabby's star and exoplanet transits
-come first; pretty pictures fill what is left. Plan any
-night, or answer "what's the outlook", from `./ty night`'s `discovery` list
-(each programme's field and when it is up in darkness), not from the
-imaging planner's top targets. `./ty outlook` gives the short answer,
-its `recommendation` first: what to do with the clear spell from now,
-with time to set up when nothing is, and big targets as the other
-choice; the research and papers are `./ty research`.
+**What a night is for is the person's choice.** On the owner's rig it is
+discovery (`docs/discovery.md`): novae in M31 and M33 (`programmes/`),
+Tabby's star and exoplanet transits first, pretty pictures in what is left.
+Planning a discovery night starts from `./ty night`'s `discovery` list, not
+the imaging planner's top targets. `./ty outlook` gives the short answer,
+its `recommendation` first; the research and papers are `./ty research`.
+Someone new is asked what they want; their first night is usually first
+light on something big and bright (the `first-night` skill).
+
+**A new rig is not the owner's rig.** The skills and `docs/agents/` were
+written at one telescope (a 150P on an EQ3 Pro, Altair cameras, a home-made
+motor focuser, a Starlight Xpress wheel), and their dated notes are about
+that kit. On any other rig, take facts from `config.toml`,
+`./doctor.py --json` and `./newhardware.py`, and support from
+`docs/hardware.md` ("What to expect of other equipment"): a device that shows
+on USB is not a device TelescopeYoke can drive.
 
 ## Start here
 
@@ -104,9 +111,15 @@ a motor's creep rate. `mount.py stop` is always allowed.
 
 ## Safety invariants (do not weaken these)
 
-1. **No approval asking.** What the person asks for, and every slew of the
-   night's plan, is made at once: dry-run it and, if the dry run passes, send
-   it. Never remove `MOTION_LOCKED`.
+1. **Mount moves.** On a new rig every move waits for the person's go,
+   given beside the telescope, until they have watched the first moves
+   (which way each axis turns, that `stop` stops it, that the tube clears
+   the tripod) and said they want moves made without asking. After that,
+   and on the owner's rig (`CLAUDE.local.md`), what the person asks for and
+   every slew of the night's plan is made at once: dry-run it and, if the
+   dry run passes, send it. Either way never remove `MOTION_LOCKED`, and
+   never move on the example site (`mount.py` refuses: the site must be
+   the person's own).
 2. **The web server and the MCP server are read-only.** No motion, no
    capture, no writes; do not add any without authentication designed first.
    The control console (`console.py`) is the one place with buttons, and it

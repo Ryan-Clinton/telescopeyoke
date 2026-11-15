@@ -25,6 +25,27 @@ On Ubuntu and Debian, `install.sh` takes the Python libraries from the
 distribution's own packages. `pyproject.toml` lists the same libraries with
 the oldest versions known to work, and is what `pip install .` uses.
 
+## With Claude Code
+
+Clone the repository (the 0.2.1 zip is older than the Claude Code setup),
+run `claude` in the folder and ask it to set up your telescope; the
+`first-night` skill takes it from there.
+
+- **The safety hooks** (`.claude/settings.json`) run before every command
+  and file change, and refuse (fail closed) when they cannot run: moving the
+  mount from an inline script, removing `MOTION_LOCKED`, printing secrets.
+  They start through `.claude/hooks/py`, a short `sh` script that uses the
+  first Python 3.11 or later it finds as `python3`, `python` or `py -3`, so
+  the same settings work on Ubuntu and on Windows (where Claude Code runs
+  hooks in Git Bash). If none is found, every command is refused with a
+  line saying so: install Python, then start Claude Code again.
+- **Claude Code's version:** the hooks' fail-closed setting (`onFailure`)
+  is recent; they have been run with Claude Code 2.1.325. Update an older
+  one (`claude update`) before the first night.
+- **Your own instructions** go in `CLAUDE.local.md` beside `CLAUDE.md`
+  (ignored by git): standing approval for moves once you have watched the
+  first ones, what your nights are for, where notes go.
+
 ## The mount without its handset
 
 The tested way to reach the mount is a serial lead to the SynScan handset.
