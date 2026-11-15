@@ -519,7 +519,7 @@ def call(words, dry_run=False, say_it=print, bridge=None, speak=None, send=None)
             done.append(f"the {s.get('call_room', 'Living room')} lights went red")
         except AlertError as error:
             done.append(f"lights: {error}")
-        bridge, s = None, dict(s, speaker=None)
+        bridge = None
     try:
         if bridge is None and not s.get("call_house"):
             raise AlertError("no other lights for calls ([alerts] call_house)")
@@ -535,8 +535,11 @@ def call(words, dry_run=False, say_it=print, bridge=None, speak=None, send=None)
     except AlertError as error:
         done.append(f"lights: {error}")
     if s.get("speaker"):
+        # A few words out loud; the whole of it goes by Telegram (15 November
+        # 2026: the speaker read out a schedule step and its command line).
+        short = words.split(":")[0].split(".")[0][:60]
         try:
-            done.append((speak or announce)(words, s["speaker"], s.get("speaker_address"), s.get("volume")))
+            done.append((speak or announce)(short, s["speaker"], s.get("speaker_address"), s.get("volume")))
         except AlertError as error:
             done.append(f"speaker: {error}")
     if send is None:
