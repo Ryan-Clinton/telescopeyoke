@@ -26,6 +26,9 @@ Only on the person's word. The imaging run stops at its own limits
 3. The night's stacks on the desktop, in the background:
    `./restack.py SESSION --on desktop` for each session tonight.
 4. `./patrol.py --sweep` for any field with a reference.
+4b. `./clouds.py --scores 1 --keep`: the night's cloud and rain forecasts
+   against what was seen, kept dated in cache/sky_scores/ with the scoring
+   code's commit.
 5. One line on what the night got: frames kept, total time, and anything
    the patrol found. The full summary is `morning-summary`, tomorrow.
 6. Flats with the 183M: `schedule.py end` starts the dawn sky flats itself

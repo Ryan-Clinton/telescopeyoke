@@ -91,6 +91,9 @@ def _wheel(*args):
                           capture_output=True, text=True)
 
 
+FILTER_SURE = [True]   # False while the wheel would not turn to L: a low count may be the filter
+
+
 def clear_filter(say=print):
     """With the filter wheel in the light path, L in front of the camera, and
     the filter that was there (to put back when the gap is found), or None.
@@ -105,6 +108,7 @@ def clear_filter(say=print):
         return None
     was = sxwheel.confirmed(say=lambda *_: None)
     turned = _wheel("move", "L")
+    FILTER_SURE[0] = turned.returncode == 0
     say("filter: L in the light path" + (f" ({was[1]} put back when the sky clears)" if was and was[1] != "L"
                                           else "") if turned.returncode == 0 else
         f"filter: the wheel did not turn to L ({turned.stdout.strip()} {turned.stderr.strip()}): "
@@ -143,8 +147,8 @@ def watch(until, every, exposure, guide_check=False):
             print(f"{datetime.now():%H:%M:%S}  {stars} stars, sky level "
                   f"{np.median(mosaic):.0f}", flush=True)
             import clouds
-            clouds.note_seen("camera", "clear", clouds.clear_from_stars(stars), f"{stars} stars",   # for --scores
-                             stars=stars, exposure_s=exposure)
+            clouds.note_seen("camera", "clear", clouds.clear_from_stars(stars, FILTER_SURE[0]),   # for --scores
+                             f"{stars} stars", stars=stars, exposure_s=exposure, filter_sure=FILTER_SURE[0])
             streak = streak + 1 if stars >= ENOUGH_STARS else 0
             if stars < ENOUGH_STARS and (looked is None or time.monotonic() - looked > 1800):
                 cloud_data(stars)
