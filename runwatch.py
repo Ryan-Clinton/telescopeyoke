@@ -162,8 +162,8 @@ class Watch:
 
 def run(args, say=print, sleep=time.sleep, clock=time.time):
     session = Path(args.session) if args.session else newest_session()
-    if not (session / "frames.jsonl").exists():
-        raise interface.Refusal("NO_SESSION", f"No frames.jsonl in {session}.")
+    if not (session / "frames.jsonl").exists() and not (session / "session.json").exists():
+        raise interface.Refusal("NO_SESSION", f"No run in {session}: no session.json or frames.jsonl.")
     watch = Watch(session)
     said = []
     while True:
