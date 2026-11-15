@@ -33,10 +33,13 @@ HALVED = 0.5         # the share kept now, against before, that is worth saying
 
 def newest_session(base=None):
     base = base or config.DATA
-    logs = list((base / "frames").glob("*/*/frames.jsonl"))
-    if not logs:
+    # A run is there from its session.json, before its first frame is logged:
+    # with 300 s frames that is ten minutes (15 November 2026: the watch
+    # started then took Friday's run, called it 2650 min quiet and ended).
+    runs = list((base / "frames").glob("*/*/session.json")) + list((base / "frames").glob("*/*/frames.jsonl"))
+    if not runs:
         raise interface.Refusal("NO_SESSION", "No imaging run has been recorded yet.")
-    return max(logs, key=lambda p: p.stat().st_mtime).parent
+    return max(runs, key=lambda p: p.stat().st_mtime).parent
 
 
 def minutes(seconds):
