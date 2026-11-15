@@ -6,6 +6,30 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+## 0.3.0: an experimental hardware preview, set up with Claude Code
+
+Six weeks of nights on one telescope since 0.2.1, and the first release
+meant for other people's: clone it or unpack the zip, open Claude Code in
+the folder, and ask it to set up your telescope. Proven on a Sky-Watcher
+EQ3 Pro with a SynScan handset and Altair cameras; anything else is
+unproven or unsupported, and the setup says which before anything moves
+([hardware](docs/hardware.md)).
+
+- **Claude Code setup**: safety hooks that fail closed, skills from first
+  night to end of night, read-only agents; a new rig asks before every
+  move until its first moves have been watched; the mount refuses to move
+  on the example site.
+- **New hardware**: the cooled mono Altair 183M (kept cold all night), a
+  Starlight Xpress filter wheel, a home-built motor focuser, a guide
+  camera and autoguiding.
+- **Discovery**: nova patrols of M31 and M33 with image subtraction and
+  vetting, Tabby's star, exoplanet transits, variable stars, satellite
+  streaks named.
+- **The night**: cloud and rain arrival from satellite and radar, the
+  Moon and planets by lucky imaging, mosaics, a live stream.
+
+What changed, day by day:
+
 - **8 November 2026**: the radio SETI search (`seti.py`) has moved to its
   own project: it uses no telescope. Taken out with it: its schema and
   guide, its sweep in `ty research`, its candidates in `investigate.py`

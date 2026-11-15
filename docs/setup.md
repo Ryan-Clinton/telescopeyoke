@@ -27,8 +27,7 @@ the oldest versions known to work, and is what `pip install .` uses.
 
 ## With Claude Code
 
-Clone the repository (the 0.2.1 zip is older than the Claude Code setup),
-run `claude` in the folder and ask it to set up your telescope; the
+Clone the repository (or unpack the 0.3.0 zip), run `claude` in the folder and ask it to set up your telescope; the
 `first-night` skill takes it from there.
 
 - **The safety hooks** (`.claude/settings.json`) run before every command

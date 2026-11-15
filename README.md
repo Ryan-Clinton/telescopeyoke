@@ -9,7 +9,7 @@ complete pretend rig is built in (mount, camera, sky, focuser, cloud, drift),
 and the real centring, focusing and stacking code runs on it.*
 
 **[Home page](https://ryan-clinton.github.io/telescopeyoke/) ·
-[Download 0.2.1](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.2.1/TelescopeYoke-v0.2.1.zip) ·
+[Download 0.3.0](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.3.0/TelescopeYoke-v0.3.0.zip) ·
 [Try the demo, no telescope needed](#quick-start) ·
 [Set it up with Claude Code](#with-claude-code) ·
 [Results](docs/results.md) ·
@@ -199,23 +199,22 @@ by eye.
 On Ubuntu or Debian:
 
 ```bash
-wget https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.2.1/TelescopeYoke-v0.2.1.zip
-unzip TelescopeYoke-v0.2.1.zip
-cd TelescopeYoke-v0.2.1
+wget https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.3.0/TelescopeYoke-v0.3.0.zip
+unzip TelescopeYoke-v0.3.0.zip
+cd TelescopeYoke-v0.3.0
 ./install.sh --demo           # the Python libraries, then TelescopeYoke (demo) opens
 ```
 
 On Windows 10 or 11: install 64-bit Python 3.11 or newer from python.org
 (tick "Add python.exe to PATH"),
-[download TelescopeYoke-v0.2.1.zip](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.2.1/TelescopeYoke-v0.2.1.zip),
+[download TelescopeYoke-v0.3.0.zip](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.3.0/TelescopeYoke-v0.3.0.zip),
 unpack it, and double-click **`try-demo.cmd`**.
 
-That zip is release 0.2.1 (6 October 2026), which stays as it is; a
-hardware report says which release or commit made it. It is older than
-almost everything below, the Claude Code setup included.
-`git clone https://github.com/Ryan-Clinton/telescopeyoke` gets the newest
-code instead, which changes from day to day: an experimental hardware
-preview, proven on one telescope (see [What it has been tried on](docs/hardware.md)).
+That zip is release 0.3.0 (15 November 2026), an experimental hardware
+preview, which stays as it is; a hardware report says which release or
+commit made it. `git clone https://github.com/Ryan-Clinton/telescopeyoke` gets the newest
+code instead, which changes from day to day. Either is proven on one
+telescope (see [What it has been tried on](docs/hardware.md)).
 
 ### With Claude Code
 
