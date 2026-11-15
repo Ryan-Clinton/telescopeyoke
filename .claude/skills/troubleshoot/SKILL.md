@@ -7,11 +7,9 @@ allowed-tools: Bash(./doctor.py --offline) Bash(./ty mount status) Bash(./ty sta
 
 # Troubleshoot
 
-**Written at the owner's rig** (a 150P on an EQ3 Pro, the cooled 183M, a
-home-built CH340 motor focuser, a Starlight Xpress wheel, their own
-computers and services). Their dated notes are about that kit. On another
-rig, skip what it does not have, and take its facts from `config.toml` and
-`./doctor.py --json`.
+Written at the owner's rig (a 150P on an EQ3 Pro, the cooled 183M, a
+home-built CH340 motor focuser, a Starlight Xpress wheel); on another rig,
+the steps for kit it lacks can be skipped.
 
 Look before asking: `lsusb` (Ubuntu), `./doctor.py --offline`, `./ty mount
 status` and `./ty status` say what is plugged in and answering. Then go

@@ -96,8 +96,8 @@ lock (`MOTION_LOCKED`) stops every rig at once.
 
 ## What to expect of other equipment
 
-Four answers, and an agent setting up a new rig gives one of them for each
-device: ✅ proven (on this model), ⚠️ expected to work but unproven on this
+A suggested way to describe each device when setting up a new rig, in one
+of four answers: ✅ proven (on this model), ⚠️ expected to work but unproven on this
 model, ❌ seen but not supported (it can be reported, not driven), and not
 found. Something showing on USB is only "seen".
 

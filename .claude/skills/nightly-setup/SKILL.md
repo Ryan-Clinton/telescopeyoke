@@ -7,11 +7,9 @@ allowed-tools: Bash(./doctor.py --offline) Bash(./ty mount status) Bash(./ty cap
 
 # Nightly setup
 
-**Written at the owner's rig** (a 150P on an EQ3 Pro, the cooled 183M, a
-home-built CH340 motor focuser, a Starlight Xpress wheel, their own
-computers and services). Their dated notes are about that kit. On another
-rig, skip what it does not have, and take its facts from `config.toml` and
-`./doctor.py --json`.
+Written at the owner's rig (a 150P on an EQ3 Pro, the cooled 183M, a
+home-built CH340 motor focuser, a Starlight Xpress wheel); on another rig,
+the steps for kit it lacks can be skipped.
 
 The person is outside in the cold with their hands on the mount. The
 routine is `docs/agents/setup-routine.md`: read it now if it is not
@@ -57,12 +55,11 @@ says to skip.
 
 ## When a step moves something
 
-On a rig whose person has watched its first moves and asked for moves
-without asking (the owner's: `CLAUDE.local.md`), a move runs at once: what
-they ask for ("swing to Vega"), the routine step their sky report fits, and
-every slew of the plan. Dry-run it, then send it at once if the dry run
-passes. On any other rig, say what will move and wait for their go each
-time (`AGENTS.md`, safety rule 1). The safety hooks refuse what no one may do; the
+A move runs at once, with no approval asked: what they ask for ("swing to
+Vega"), the routine step their sky report fits, and every slew of the plan.
+Dry-run it, then send it at once if the dry run passes. A suggestion for a
+rig nobody has watched move yet: offer to say each move first, until they
+have seen it turn the right way and stop. The safety hooks refuse what no one may do; the
 project's commands refuse what is unsafe.
 
 ## The steps, in short

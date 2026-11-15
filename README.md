@@ -227,8 +227,7 @@ claude
 Then ask it to set up your telescope. It looks at what is plugged in
 without sending it anything, says for each device whether TelescopeYoke has
 driven one like it, has not yet, or cannot, and only then installs and
-writes your settings (the `first-night` skill). Nothing moves until you are
-beside the telescope and say so. On Windows, Claude Code's safety hooks
+writes your settings (the `first-night` skill). On Windows, Claude Code's safety hooks
 need Git Bash and Python 3.11 or later as `python` or `py`
 ([Setup](docs/setup.md#with-claude-code)).
 

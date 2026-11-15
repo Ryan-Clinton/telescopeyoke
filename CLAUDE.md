@@ -43,23 +43,20 @@ what is specific to Claude.
   camera, INDI) and `./mount.py status`, which only reads. Then advise from
   that, and from what the person has already said.
 
-## Someone else's telescope
+## Someone else's telescope: suggestions
 
-`CLAUDE.local.md` (ignored by git) holds one owner's conventions with their
-own Claude: standing approval for moves, what their nights are for, where
-their notes go. A fresh checkout has none of it. Without it:
+`CLAUDE.local.md` (ignored by git) holds one owner's own conventions with
+their Claude: what their nights are for, where their notes go. A fresh
+checkout has none of it. Some suggestions for a new rig:
 
-- Asked to install, set up, get started or connect equipment, use the
-  `first-night` skill: it finds what is plugged in and says what
-  TelescopeYoke supports before anything is installed or moved.
-- Nothing measured on the owner's rig (focus figures, the focuser, the
-  cooled camera, the filter slots) is a fact about this one. `config.toml`
-  and `./doctor.py --json` say what this rig is; ask for what they do not.
-- A mount move needs the person's go each time until they have watched the
-  first moves (`AGENTS.md`, "Mount moves") and said they want moves made
-  without asking.
+- Asked to install, set up or get started, the `first-night` skill finds
+  what is plugged in and what TelescopeYoke can do with it.
+- The owner's figures (focus, the focuser, the cooled camera, the filter
+  slots) may not hold for another rig: `config.toml` and
+  `./doctor.py --json` say what this one is.
+- On a mount nobody has watched move yet, offer to say each move first.
 - Ask what they want from the night; the discovery programmes are one
-  choice among pictures of the Moon, planets and the deep sky.
+  choice among the Moon, planets and the deep sky.
 
 ## Commands
 

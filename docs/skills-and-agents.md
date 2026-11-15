@@ -146,7 +146,7 @@ cannot be forgotten by a blacklist.
    `disable-model-invocation: true`: only the person's `/NAME` starts them.
    `first-night` starts from ordinary words ("set up my telescope"), so a
    newcomer need not know it exists; it only reads until the person agrees
-   to the install, and moves nothing without their go.
+   to the install, and suggests an order for the first moves.
 6. **Every agent stops.** Each has `maxTurns`.
 7. **Short, by reference.** A SKILL.md gives the order and the judgement;
    the detail stays in `docs/` and is read when needed. Under about 150
@@ -201,8 +201,8 @@ one front door, the same checks. The rest (`patrol.py`, `polaralign.py`,
   `docs/first-night.md` and `docs/setup.md`: the installer, the
   site in `config.toml` (asked, never guessed, never committed), ASTAP and
   its stars, `doctor.py --need mount,imaging` until clean, the camera's first
-  frame indoors, the first moves watched beside the mount on the person's
-  go, then `nightly-setup` with each step explained once.
+  frame indoors, a suggested order for the first moves, then
+  `nightly-setup` with each step explained once.
 
 ### `focus`
 

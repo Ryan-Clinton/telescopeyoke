@@ -16,13 +16,11 @@ its `recommendation` first; the research and papers are `./ty research`.
 Someone new is asked what they want; their first night is usually first
 light on something big and bright (the `first-night` skill).
 
-**A new rig is not the owner's rig.** The skills and `docs/agents/` were
-written at one telescope (a 150P on an EQ3 Pro, Altair cameras, a home-made
-motor focuser, a Starlight Xpress wheel), and their dated notes are about
-that kit. On any other rig, take facts from `config.toml`,
-`./doctor.py --json` and `./newhardware.py`, and support from
-`docs/hardware.md` ("What to expect of other equipment"): a device that shows
-on USB is not a device TelescopeYoke can drive.
+The skills and `docs/agents/` were written at one telescope (a 150P on an
+EQ3 Pro, Altair cameras, a home-made motor focuser, a Starlight Xpress
+wheel). For another rig, `config.toml`, `./doctor.py --json`,
+`./newhardware.py` and `docs/hardware.md` ("What to expect of other
+equipment") say what it has and what TelescopeYoke can do with it.
 
 ## Start here
 
@@ -111,14 +109,11 @@ a motor's creep rate. `mount.py stop` is always allowed.
 
 ## Safety invariants (do not weaken these)
 
-1. **Mount moves.** On a new rig every move waits for the person's go,
-   given beside the telescope, until they have watched the first moves
-   (which way each axis turns, that `stop` stops it, that the tube clears
-   the tripod) and said they want moves made without asking. After that,
-   and on the owner's rig (`CLAUDE.local.md`), what the person asks for and
-   every slew of the night's plan is made at once: dry-run it and, if the
-   dry run passes, send it. Either way never remove `MOTION_LOCKED`, and
-   never move on the example site (`Mount.may_move` refuses every movement,
+1. **No approval asking.** What the person asks for, and every slew of the
+   night's plan, is made at once: dry-run it and, if the dry run passes,
+   send it. (A suggestion for a mount nobody has watched move yet: offer to
+   say each move first.) Never remove `MOTION_LOCKED`, and never move on
+   the example site (`Mount.may_move` refuses every movement,
    whichever command asks, until config.toml has the person's own site).
 2. **The web server and the MCP server are read-only.** No motion, no
    capture, no writes; do not add any without authentication designed first.

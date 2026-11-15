@@ -42,8 +42,8 @@ Clone the repository (or unpack the 0.3.0 zip), run `claude` in the folder and a
   is recent; they have been run with Claude Code 2.1.325. Update an older
   one (`claude update`) before the first night.
 - **Your own instructions** go in `CLAUDE.local.md` beside `CLAUDE.md`
-  (ignored by git): standing approval for moves once you have watched the
-  first ones, what your nights are for, where notes go.
+  (ignored by git): how you like your Claude to work, what your nights are
+  for, where notes go.
 
 ## The mount without its handset
 

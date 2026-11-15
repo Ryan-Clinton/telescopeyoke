@@ -7,13 +7,11 @@ from the agent's side: what to run, in what order, and what to ask.
 **The agent runs the commands.** The person is outside in the cold with
 their hands on the mount. Never hand them a command to type. Tell them only
 what needs their hands or their eyes, in a line, and say before anything
-moves. On a rig that has had its first moves watched and been given
-standing approval (`AGENTS.md`, safety rule 1; the owner's rig), a move they
-ask for is the go: dry-run it, and if it passes, send it at once, with no warnings about cables,
+moves. A move they ask for is the go (`AGENTS.md`, safety rule 1): dry-run
+it, and if it passes, send it at once, with no warnings about cables,
 standing clear or the tube swinging; they know. So is telling you what they
 can see: "it's clear to the north, can see Polaris" means they are outside,
-and the next step that fits that sky starts now, without asking. On a new
-rig, each move waits for their go.
+and the next step that fits that sky starts now, without asking.
 
 **Look before asking.** `lsusb`, `./doctor.py --offline` and `./mount.py
 status` (which only reads) say what is plugged in, whether the handset is

@@ -27,8 +27,8 @@ adapter (FTDI, Prolific, CH340) says nothing about what is behind it. Ask what t
 mount and handset, telescope (aperture, focal length), camera, focuser,
 filter wheel.
 
-Then one line for each device: proven, unproven on this model, seen but
-not supported, or not found, from `docs/hardware.md`. Say plainly what
+Then, as a suggestion, one line for each device from `docs/hardware.md`:
+proven, unproven on this model, seen but not supported, or not found. Say plainly what
 cannot work yet (a Celestron mount, a ZWO camera on Windows, another
 make's filter wheel or motor focuser) and offer the hardware report
 (`./doctor.py --report`) or the Mount support form (`./newhardware.py`
@@ -56,10 +56,10 @@ send a device a question unless the person names its port and agrees
 
 ## 3. The first moves, beside the telescope
 
-Before any GoTo: the person beside the mount, in daylight or at dusk,
-the mount at its home position (counterweight down, tube to the pole) and
-the handset set up (`docs/agents/setup-routine.md` for a SynScan). Each
-move is said first and goes only on their go, dry-run first:
+A suggested order for a mount nobody has watched move yet, with the
+person beside it, the mount at home (counterweight down, tube to the pole)
+and the handset set up (`docs/agents/setup-routine.md` for a SynScan);
+offer it, and let them choose:
 
 1. `./mount.py nudge` with a handset (a few degrees on Dec and back), or
    `./mount.py directions` without one (they say which way it turned):
@@ -68,8 +68,7 @@ move is said first and goes only on their go, dry-run first:
 3. Then one GoTo to something high and near the meridian, watched, and
    `./mount.py home`: the tube clears the tripod both ways.
 
-Say each result in a line. Only after they say they want moves made
-without asking does the night's plan slew by itself.
+Say each result in a line.
 
 ## 4. First light
 
