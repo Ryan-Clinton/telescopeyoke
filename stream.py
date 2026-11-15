@@ -946,85 +946,102 @@ def announce(st, now, say=print, twitch_on=True, youtube_on=False):
                        "to date for ESA's Ariel mission.") if planet else None
             yt_title, description, yt_tags = youtube.listing(title, state, youtube.plan_lines(st.get("schedule")),
                                                              science)
-            if youtube.refused():
-                youtube.sign_in_by_phone(say=say)      # waits for the person's tap on their phone
-            for _ in range(10):         # the stream takes a minute or two to reach YouTube
-                if youtube.ensure_broadcast(yt_title, description, say=say):
+            # The broadcast itself is YouTubeKeeper's: this only gives it its words,
+            # once it is live (the stream takes a minute or two to reach YouTube).
+            for _ in range(10):
+                if youtube.set_broadcast(yt_title, description, yt_tags,
+                                         thumbnail=config.DATA / "web" / "stack.jpg", say=say):
                     break
                 time.sleep(30)
-            youtube.set_broadcast(yt_title, description, yt_tags, thumbnail=config.DATA / "web" / "stack.jpg",
-                                  say=say)
     threading.Thread(target=run, daemon=True).start()
 
 
-YT_LOOK_S = 300           # how often YouTube is asked whether its broadcast is live, while on air
-YT_LIVE_S = 600           # on air this long and YouTube's broadcast still not live: tell the person
+YT_LOOK_S = 60            # how often YouTube is asked what it shows, while on air
+YT_FIRST_S = 90           # the first look, once the stream has had time to reach YouTube
+YT_RESTART_GAP_S = 240    # never start the stream again for YouTube more often than this
+YT_RESTARTS_HOUR = 4      # nor more than this in an hour: then it is told, not tried
+YT_TELL_S = 600           # on air this long and YouTube still not live: tell the person
 
 
-def youtube_trouble(found):
-    """Why viewers cannot watch on YouTube although the stream is sent,
-    from youtube.state(), or None when a broadcast is live. YouTube can
-    call the stream it receives healthy while its broadcast sits at
-    "ready" or "testing" (Preparing stream): 1 November 2026, viewers saw
-    nothing and nothing said so."""
-    if found is None:
-        return None                     # not signed in: nothing to ask
-    casts = found.get("broadcasts") or []
-    if any(b.get("life") == "live" for b in casts):
-        return None
-    streams = found.get("streams") or []
-    receiving = ", ".join(f"{x.get('status')}/{x.get('health')}" for x in streams) or "no stream"
-    life = ", ".join(sorted({str(b.get("life")) for b in casts})) or "no broadcast"
-    return f"YouTube receives the stream ({receiving}) but no broadcast is live ({life})"
+class YouTubeKeeper:
+    """While on air to YouTube, makes sure viewers can watch: every
+    YT_LOOK_S, on its own thread, asks YouTube what stands in the way
+    (youtube.diagnose) and does what that calls for by itself. A refused
+    sign-in sends a code to the phone; no broadcast open, one waiting at
+    "ready", or no stream arriving starts the stream again (`restart_due`,
+    which the watch loop acts on), since YouTube only starts a broadcast as
+    a stream begins. Whatever is still wrong after YT_TELL_S goes to the
+    person's Telegram once, and so does YouTube coming back.
 
-
-class YouTubeCheck:
-    """While on air to YouTube, asks every YT_LOOK_S on its own thread
-    whether a broadcast is live; once the stream has been sent YT_LIVE_S
-    and none is, says so and sends it to the person's Telegram, once for
-    each start of the stream. Sending is healthy is not watching is live."""
+    Every failure of 21 October to 15 November 2026 in one place
+    (docs/youtube-stream-problems.md): the channel blank while the laptop
+    sent a healthy stream, found each time by the person."""
 
     def __init__(self, state=None, tell=None, say=print):
         import youtube
         self.state = state or youtube.state
         self.tell = tell or (lambda text: __import__("notify").send(text, say=say))
-        self.say, self.asked, self.told, self.since, self.busy = say, -1e9, False, None, False
+        self.say = say
+        self.since, self.asked, self.busy = None, -1e9, False
+        self.word, self.told, self.wanted, self.restarts = None, None, False, []
+        self.opened = False           # a broadcast opened: its title is to be set again
 
     def started(self, now):
-        self.since, self.told, self.asked = now, False, -1e9
+        self.since, self.asked, self.wanted = now, now - YT_LOOK_S + YT_FIRST_S, False
+
+    def stopped(self):
+        self.since, self.wanted = None, False
 
     def look(self, now):
-        if self.since is None or self.told or self.busy or now - self.asked < YT_LOOK_S \
-                or now - self.since < YT_LIVE_S:
+        if self.since is None or self.busy or now - self.asked < YT_LOOK_S:
             return
         self.asked, self.busy = now, True
         import threading
-        threading.Thread(target=self.ask, daemon=True).start()
+        threading.Thread(target=self.ask, args=(now,), daemon=True).start()
 
-    def ask(self):
+    def restart_due(self, now):
+        """True once when the stream should start again for YouTube."""
+        if not self.wanted:
+            return False
+        self.restarts = [t for t in self.restarts if now - t < 3600]
+        if (self.restarts and now - self.restarts[-1] < YT_RESTART_GAP_S) \
+                or len(self.restarts) >= YT_RESTARTS_HOUR:
+            return False
+        self.wanted = False
+        self.restarts.append(now)
+        return True
+
+    def ask(self, now):
         import youtube
         try:
-            found = self.state()
-            why = youtube_trouble(found)
-            if found is None and youtube.refused():
-                # The sign-in Google no longer takes: a code to the phone, and
-                # the broadcast opened once it is approved. Asked again every
-                # half hour until then (youtube.PHONE_EVERY_S).
-                self.say(f"{time.strftime('%H:%M')} YouTube sign-in refused ({youtube.REFUSED[0]}): "
-                         "a new one sent to the phone")
-                if youtube.sign_in_by_phone(say=self.say):
-                    youtube.ensure_broadcast("TelescopeYoke: live from the telescope",
-                                             "Live from a 150 mm telescope in a back garden.", say=self.say)
-                return
-        except Exception:                # YouTube unreachable: ask again next time
-            why = None
+            word, why = youtube.diagnose(self.state())
+            if word == "signin" and youtube.sign_in_by_phone(say=self.say):     # waits for the phone
+                word, why = youtube.diagnose(self.state())
+            if word == "open" and youtube.ensure_broadcast("TelescopeYoke: live from the telescope",
+                                                           "Live from a 150 mm telescope in a back garden.",
+                                                           say=self.say):
+                youtube._SENT["listing"] = None          # the new broadcast gets its own title
+                self.opened, self.wanted = True, True
+            elif word in ("restart", "no-ingest") and word == self.word:
+                # Twice running, a minute apart: a broadcast takes up to a
+                # minute to go live after a stream begins, never two.
+                self.wanted = True
+        except Exception as error:          # YouTube unreachable: ask again next time
+            self.say(f"{time.strftime('%H:%M')} YouTube not asked: {type(error).__name__}")
+            return
         finally:
             self.busy = False
-        if why and not self.told:
-            self.told = True
-            text = f"{time.strftime('%H:%M')} {why}: viewers on YouTube see nothing."
-            self.say(text)
-            self.tell(text)
+        if word != self.word:
+            self.say(f"{time.strftime('%H:%M')} YouTube: {why}")
+        self.word = word
+        if word == "live":
+            if self.told:
+                self.tell(f"{time.strftime('%H:%M')} YouTube is live again: youtube.com/@TelescopeYoke/live")
+            self.told = None
+        elif self.since is not None and now - self.since >= YT_TELL_S and self.told != word:
+            self.told = word
+            self.tell(f"{time.strftime('%H:%M')} YouTube shows nothing: {why}. "
+                      + ("Only you can change that." if word == "preparing" else "Still trying by itself."))
 
 
 def chat(say=print):
@@ -1234,7 +1251,7 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
     stream_keys = [k for _, _, k in found]
     twitch_on = to is None and "twitch" in names
     import youtube
-    youtube_on = to is None and "youtube" in names and youtube.signed_in()
+    youtube_on = to is None and "youtube" in names and youtube.usable()
     device = working_device()
     say(f"Video encoding on {device or 'the processors (no working video hardware)'}")
     size = (WIDTH, HEIGHT)
@@ -1253,7 +1270,7 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
     import director
     segment, segment_state, directed, looked_at, tones, voice = None, None, None, -1e9, None, None
     phones = None             # the 9:16 feed, while on air with a vertical key
-    on_youtube = YouTubeCheck(say=say) if youtube_on else None
+    on_youtube = YouTubeKeeper(say=say) if youtube_on else None
     reload, keys_looked_at = False, clock()
     try:
         while True:
@@ -1352,6 +1369,8 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
                 process, quiet_since, shown = None, None, None
                 if phones is not None:
                     phones, _ = None, phones.stop()
+                if on_youtube is not None:
+                    on_youtube.stopped()
                 if youtube_on:
                     # Opened with auto-stop off (a pause must not end it), so
                     # ended here, or the channel shows "live" with nothing coming.
@@ -1373,6 +1392,15 @@ def watch(to=None,say=print, sleep=time.sleep, clock=time.time, run=subprocess.P
             if process is not None:
                 if on_youtube is not None:
                     on_youtube.look(now)
+                    if on_youtube.opened:
+                        on_youtube.opened, announced = False, None     # its title set again
+                    if on_youtube.restart_due(now):
+                        # YouTube starts a broadcast only as a stream begins: a
+                        # few seconds' gap, on Twitch too (15 November 2026).
+                        say(f"{time.strftime('%H:%M')} starting the stream again for YouTube")
+                        ended(process, say)
+                        process, retry_at, tones = None, now + 5, quiet(tones)
+                        continue
                 if imaging(st) and now - measured_at > MEASURE_S:
                     measuring, measured_at = measure_transit(st, measuring, say), now
                 shown = composer.next(shown)

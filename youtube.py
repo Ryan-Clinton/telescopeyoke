@@ -4,7 +4,8 @@ set from what the telescope is doing, as twitch.py does for Twitch.
 
     ./stream.py youtube-login --client FILE   once: sign this laptop in to the channel
                                               (a code to enter at google.com/device)
-    ./youtube.py status                       what YouTube sees: the stream's ingest and
+    ./youtube.py status                       what stands between the stream and viewers
+                                              (one line), then the stream's ingest and
                                               every broadcast with its state
     ./youtube.py open                         open a broadcast on the arriving stream if
                                               none is open (the stream does this itself)
@@ -33,6 +34,7 @@ from pathlib import Path
 import requests
 
 TOKEN_FILE = Path(os.path.expanduser("~/.config/telescopeyoke/youtube.json"))
+CLIENT_FILE = Path(os.path.expanduser("~/.config/telescopeyoke/youtube-client.json"))   # kept since 1 Nov 2026
 SCOPE = "https://www.googleapis.com/auth/youtube"
 DEVICE = "https://oauth2.googleapis.com/device/code"
 TOKEN = "https://oauth2.googleapis.com/token"
@@ -146,9 +148,12 @@ def sign_in_by_phone(say=print, send=None, post=requests.post, sleep=time.sleep,
     and one every PHONE_EVERY_S. True once signed in."""
     if _phone["busy"] or clock() - _phone["last"] < PHONE_EVERY_S:
         return False
-    saved = _saved()
-    if not saved or not saved.get("client_id"):
-        return False
+    saved = _saved() or {}
+    if not saved.get("client_id"):
+        try:            # no sign-in kept at all: the app's own client file will do
+            saved["client_id"], saved["client_secret"] = client_from(CLIENT_FILE)
+        except (OSError, ValueError, KeyError):
+            return False
     _phone.update(busy=True, last=clock())
     send = send or (lambda text: __import__("notify").send(text, say=say))
     try:
@@ -191,6 +196,42 @@ def sign_in_by_phone(say=print, send=None, post=requests.post, sleep=time.sleep,
 def signed_in():
     saved = _saved()
     return bool(saved and saved.get("refresh_token"))
+
+
+def usable():
+    """Whether YouTube can be looked after at all: signed in, or able to
+    sign in again by phone from the app's client file."""
+    return signed_in() or CLIENT_FILE.exists()
+
+
+def diagnose(found):
+    """(word, why): the one thing standing between the stream and viewers
+    on YouTube, from state(), and so what to do about it:
+      "live"       a broadcast is live: nothing
+      "signin"     no working sign-in: a code to the phone
+      "no-ingest"  YouTube receives no stream: start the stream again
+      "open"       no broadcast open on the stream: open one, then start again
+      "restart"    a broadcast waits at "ready": it only starts when a stream
+                   begins (2 and 15 November 2026), so start the stream again
+      "preparing"  stuck at "Preparing stream": Dual stream on (30 October,
+                   1 November 2026), which only the person can switch off"""
+    if found is None:
+        return "signin", f"YouTube's sign-in is refused ({REFUSED[0] or 'not signed in'})"
+    casts, streams = found.get("broadcasts") or [], found.get("streams") or []
+    if any(b.get("life") == "live" for b in casts):
+        return "live", "a broadcast is live"
+    active = {x["id"] for x in streams if x.get("status") == "active"}
+    if not active:
+        seen = ", ".join(f"{x.get('status')}/{x.get('health')}" for x in streams) or "no stream"
+        return "no-ingest", f"YouTube is not receiving the stream ({seen})"
+    mine = [b for b in casts if b.get("bound") in active and b.get("life") in OPEN]
+    if not mine:
+        return "open", "no broadcast is open on the stream YouTube receives"
+    waiting = [b for b in mine if b.get("life") in ("created", "ready")]
+    if waiting:
+        return "restart", f"broadcast {waiting[0]['id']} waits at \"ready\" for a stream to begin"
+    return "preparing", (f"broadcast {mine[0]['id']} is stuck at \"{mine[0]['life']}\" (Preparing stream): "
+                         "check Dual stream is off in YouTube Studio, Live, Stream settings")
 
 
 def listing(title, state, plan_lines=(), science=None):
@@ -423,8 +464,11 @@ def main(argv=None):
         return 0 if ensure_broadcast("TelescopeYoke: live from the telescope",
                                      "Live from a 150 mm telescope in a back garden.") else 1
     found = state()
+    word, why = diagnose(found)
+    print(f"{word}: {why}")
     if found is None:
-        print("Not signed in to YouTube: ./stream.py youtube-login --client FILE")
+        print("Sign in: ./stream.py youtube-login --client ~/.config/telescopeyoke/youtube-client.json "
+              "(the stream also sends a code to the phone by itself)")
         return 1
     for x in found["streams"]:
         print(f"stream {x['id']}: {x['title']!r}, {x['status']}, health {x['health']}")
