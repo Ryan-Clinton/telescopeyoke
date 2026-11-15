@@ -576,6 +576,13 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
             if chooser:
                 # Its retries used up: a hard window that failed is owed (Phase 4).
                 owe_interrupted(step, done.returncode, say)
+            cloud = lost_to_cloud()
+            if cloud:
+                # Cloud, expected on a patchy night, is no reason to call anyone
+                # (15 November 2026, 21:58: a step lost to cloud set the house's
+                # lights and speaker off). The night goes on with the next step.
+                say(f"{datetime.now():%H:%M} {step['label']}: lost to cloud ({cloud}); going on, nobody called")
+                continue
             try:
                 offer = fill_words(fill())
             except Exception as problem:    # the offer is a help: the person is fetched all the same
@@ -583,6 +590,27 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
             (call or fetch)(f"The telescope needs you: {step['label']} stopped with an error"
                             + (f", and again after {RETRIES} more tries. " if RETRIES else ". ") + offer)
             return False
+
+
+def lost_to_cloud():
+    """Why a failed step was cloud's doing, or None: the guider's last fault
+    is a missing or lost star, or the satellite and airports put cloud over
+    the site (clouds.evidence)."""
+    try:
+        import guider
+        why = str((guider.read_state() or {}).get("reason") or "")
+        if any(w in why.lower() for w in ("guide star", "star was lost", "no star")):
+            return why.rstrip(".")
+    except Exception:      # noqa: BLE001 - no guider state: the sky is asked
+        pass
+    try:
+        import clouds
+        seen = clouds.evidence().get("satellite")
+        if seen in ("cloud", "thin or broken cloud"):
+            return f"the satellite puts {seen} over the site"
+    except Exception:      # noqa: BLE001 - no evidence: not called cloud
+        pass
+    return None
 
 
 def tonight(now=None, hours=NIGHT_HOURS):
