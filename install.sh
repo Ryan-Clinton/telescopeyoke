@@ -67,6 +67,11 @@ fi
 # The filter wheel's /dev/hidraw is root's alone unless a rule opens it.
 echo 'SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1278", ATTRS{idProduct}=="0920", MODE="0666"' |
     sudo tee /etc/udev/rules.d/99-sxwheel.rules >/dev/null
+# ModemManager probes every new serial port as a possible modem, and holds
+# the handset's lead (FTDI 0403:6015) while it does (15 November 2026: it
+# had ttyUSB0 each time the lead came back): told to leave it alone.
+echo 'ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6015", ENV{ID_MM_DEVICE_IGNORE}="1"' |
+    sudo tee /etc/udev/rules.d/99-ty-handset.rules >/dev/null
 sudo udevadm control --reload-rules
 
 # Serial access to the mount's handset.

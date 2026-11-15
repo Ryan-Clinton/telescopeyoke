@@ -69,12 +69,25 @@ class Wheel:
         try:
             device.open(VENDOR, PRODUCT)
         except (OSError, IOError):
+            # Dropped off USB with the hub it hangs from (15 November 2026):
+            # the hub port tried again before saying it is gone.
+            import usbguard
+            if not hid.enumerate(VENDOR, PRODUCT) and usbguard.recover(
+                    "wheel", say=lambda *a, **k: print(*a, file=sys.stderr, **k)).get("wheel") == "recovered":
+                device = hid.device()
+                device.open(VENDOR, PRODUCT)
+                return cls(device)
             if hid.enumerate(VENDOR, PRODUCT):
                 raise WheelError("The filter wheel is plugged in but may not be opened: its /dev/hidraw is "
                                  "root's alone. ./install.sh adds the udev rule (/etc/udev/rules.d/99-sxwheel.rules); "
                                  "then unplug and replug the camera's lead.")
             raise WheelError("No Starlight Xpress filter wheel found (USB 1278:0920). Is it plugged "
                              "into the camera's hub, and the camera powered?")
+        try:
+            import usbguard
+            usbguard.remember("wheel")
+        except Exception:      # noqa: BLE001 - keeping its place never stops the wheel
+            pass
         return cls(device)
 
     def close(self):

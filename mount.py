@@ -212,7 +212,14 @@ class Mount:
         else:
             # The handset's lead is recognised by its USB adapter's name.
             match = config.hardware()["mount"]["serial_match"]
+            asked = port
             port = port or host.serial_port(match) or host.serial_fallback()
+            if not host.WINDOWS and (port is None or not Path(port).exists()):
+                # Dropped off USB (15 November 2026: the hub it hangs from went
+                # at 20:00): the hub port tried again from here, not by a hand.
+                import usbguard
+                usbguard.recover("handset", say=lambda *a, **k: print(*a, file=sys.stderr, **k))
+                port = asked or host.serial_port(match) or host.serial_fallback()
             if port is None:
                 seen = ", ".join(f"{device} ({name})" for device, name in host.serial_ports())
                 raise Refusal("HANDSET_NOT_ANSWERING",
@@ -227,6 +234,12 @@ class Mount:
         if self.ask(b"Kx") != b"x#":
             raise Refusal("HANDSET_NOT_ANSWERING", "The handset is not answering. Is it on "
                           "and past its start-up screens?")
+        if not host.WINDOWS:
+            try:
+                import usbguard
+                usbguard.remember("handset")      # where it is, for recover() if it drops later
+            except Exception:      # noqa: BLE001 - keeping its place never stops the mount
+                pass
         # The handset answers even while still on its version screen, where it
         # has not read the mount's gearing and moves by the wrong amounts. Its
         # clock shows the default year 2022 until someone sets it up.
