@@ -290,8 +290,8 @@ one front door, the same checks. The rest (`patrol.py`, `polaralign.py`,
 
 - **Loads:** `/release` only.
 - **Does:** checks version, changelog, README, home page and download links
-  agree, runs `./release.py` for the zip, and stops: only a person runs
-  `./release.py --publish`.
+  agree, runs `./release.py` for the zip, and publishes with
+  `./release.py --publish` when the person has said to.
 
 The procedure for outside audits of the code belongs to the author alone
 and lives in their own `~/.claude/skills/`, not in the repository.
