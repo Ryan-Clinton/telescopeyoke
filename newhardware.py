@@ -102,7 +102,12 @@ def scrub(text):
 
 
 def in_use():
-    """The ports this rig already uses: the mount's lead and the focuser."""
+    """The ports this rig already uses: the mount's lead and the focuser, by
+    the adapter names in its own config.toml. A fresh checkout has none, and
+    the example's names (an FTDI lead) say nothing about someone else's
+    adapters, so then nothing is in use."""
+    if not config.FILE.exists():
+        return set()
     hw = config.hardware()
     used = set()
     try:
@@ -129,21 +134,34 @@ def load_known():
         return set()
 
 
-def wifi_networks(run=None):
-    """SynScan Wi-Fi networks in the computer's own list (Linux, NetworkManager),
-    as devices: {"device": "wifi", "description", "maker", "usb", "joined"}.
-    Reads the list only; nothing is sent to the adapter."""
+def wifi_networks(run=None, windows=host.WINDOWS):
+    """SynScan Wi-Fi networks in the computer's own list (Linux: NetworkManager;
+    Windows: netsh), as devices: {"device": "wifi", "description", "maker",
+    "usb", "joined"}. Joined means this computer is on it, not that the
+    adapter has answered anything. Reads the list only; nothing is sent to
+    the adapter."""
     import subprocess
     run = run or subprocess.run
+    seen = {}
     try:
-        done = run(["nmcli", "-t", "-f", "ACTIVE,SSID", "dev", "wifi"], capture_output=True, text=True, timeout=10)
+        if windows:
+            # netsh's labels stay "SSID" in every language; the networks in
+            # reach, then the one this computer has joined.
+            heard = run(["netsh", "wlan", "show", "networks"], capture_output=True, text=True, timeout=10).stdout
+            joined = run(["netsh", "wlan", "show", "interfaces"], capture_output=True, text=True, timeout=10).stdout
+            on = {m.strip() for m in re.findall(r"(?m)^\s*SSID\s*:\s*(.+)$", joined or "")}
+            for ssid in re.findall(r"(?m)^\s*SSID \d+\s*:\s*(.+)$", heard or "") + sorted(on):
+                ssid = ssid.strip()
+                if ssid.lower().startswith("synscan"):
+                    seen[ssid] = ssid in on
+        else:
+            done = run(["nmcli", "-t", "-f", "ACTIVE,SSID", "dev", "wifi"], capture_output=True, text=True, timeout=10)
+            for line in done.stdout.splitlines():
+                active, _, ssid = line.partition(":")
+                if ssid.lower().startswith("synscan"):
+                    seen[ssid] = seen.get(ssid, False) or active == "yes"
     except (OSError, subprocess.SubprocessError):
         return []
-    seen = {}
-    for line in done.stdout.splitlines():
-        active, _, ssid = line.partition(":")
-        if ssid.lower().startswith("synscan"):
-            seen[ssid] = seen.get(ssid, False) or active == "yes"
     return [{"device": "wifi", "description": f"SynScan Wi-Fi network {re.sub(r'_[A-Za-z0-9]+$', '_…', ssid)}",
              "maker": "Sky-Watcher", "usb": "", "joined": joined} for ssid, joined in seen.items()]
 

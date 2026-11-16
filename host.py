@@ -92,11 +92,12 @@ def serial_details():
 
 
 def usb_devices(listing=None):
-    """Every USB device the system knows of, as [{"usb": "VVVV:PPPP", "name"}],
-    from what the system already holds: nothing is sent to any device.
-    Linux reads /sys; Windows asks Plug and Play (PowerShell), whose answer
-    `listing` stands in for (its InstanceId and FriendlyName lines)."""
-    found = {}
+    """Every USB device plugged in, one entry each (two of the same make and
+    model are two entries), as [{"usb": "vvvv:pppp", "name"}], from what the
+    system already holds: nothing is sent to any device. Linux reads /sys;
+    Windows asks Plug and Play (PowerShell), whose answer `listing` stands in
+    for (its InstanceId and FriendlyName lines)."""
+    found = []
     if WINDOWS or listing is not None:
         if listing is None:
             command = ("Get-PnpDevice -PresentOnly | Where-Object { $_.InstanceId -like 'USB\\VID_*' } | "
@@ -107,24 +108,23 @@ def usb_devices(listing=None):
             except (OSError, subprocess.SubprocessError):
                 return []
         for line in listing.splitlines():
-            ids = re.search(r"VID_([0-9A-F]{4})&PID_([0-9A-F]{4})", line, re.I)
-            if ids:
-                usb = f"{ids.group(1)}:{ids.group(2)}".lower()
+            ids = re.search(r"VID_([0-9A-F]{4})&PID_([0-9A-F]{4})(&MI_)?", line, re.I)
+            # A device with several interfaces (&MI_) is listed again for
+            # each: the device itself is the line without one.
+            if ids and not ids.group(3):
                 name = line.split("|", 1)[1].strip() if "|" in line else ""
-                # A device with several interfaces is listed once for each.
-                if usb not in found or (name and not found[usb]):
-                    found[usb] = name
+                found.append({"usb": f"{ids.group(1)}:{ids.group(2)}".lower(), "name": name})
     else:
         for folder in sorted(Path("/sys/bus/usb/devices").glob("*")):
             try:
                 vendor = (folder / "idVendor").read_text().strip()
                 product = (folder / "idProduct").read_text().strip()
             except OSError:
-                continue
+                continue        # an interface, not a device
             parts = [(folder / part).read_text().strip() for part in ("manufacturer", "product")
                      if (folder / part).exists()]
-            found.setdefault(f"{vendor}:{product}".lower(), " ".join(parts))
-    return [{"usb": usb, "name": name} for usb, name in sorted(found.items())]
+            found.append({"usb": f"{vendor}:{product}".lower(), "name": " ".join(parts)})
+    return sorted(found, key=lambda d: d["usb"])
 
 
 # The mount drivers someone with a working Windows setup is likely to have:
@@ -248,7 +248,10 @@ def webcam_on(feature=None):
     with, and the person asked for every webcam feature to be switchable and
     off)."""
     import config
-    settings = config.hardware().get("webcam", {})
+    try:
+        settings = config.hardware().get("webcam", {})
+    except Exception:       # noqa: BLE001 - an unreadable config.toml turns nothing on (and stops no stop)
+        return False
     return bool(settings.get("enabled", False)) and (feature is None or bool(settings.get(feature, False)))
 
 

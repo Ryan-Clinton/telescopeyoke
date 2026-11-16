@@ -15,8 +15,10 @@
 
 ## What enforces them today
 
-The limits, the lock file and the handset check are in `mount.py` and covered
-by tests against `simulator.py`. The web API and the MCP server offer no
+The limits, the lock file and the handset check are in `mount.py`, in
+`Mount.may_move` and the plan every aimed move passes; a change to them is
+tried in the demo against `simulator.py` and proven at the telescope
+(`docs/validation.md`). There are no automated tests. The web API and the MCP server offer no
 motion at all. The control console (`console.py`) offers motion to a person
 at this computer only: it listens on `127.0.0.1`, needs a key made at
 start-up, shows the dry-run plan and moves only on that plan being

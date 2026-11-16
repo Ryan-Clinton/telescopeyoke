@@ -273,7 +273,10 @@ NAME = r"[a-z0-9][a-z0-9_-]{0,30}"
 def _spot():
     if DEMO or not FILE.exists():
         return None
-    name = _read(FILE).get("site", {}).get("spot") or None
+    try:
+        name = _read(FILE).get("site", {}).get("spot") or None
+    except (OSError, tomllib.TOMLDecodeError):
+        return None     # said by whatever reads the file next; importing config must not fail (mount.py stop)
     if name and not re.fullmatch(NAME, name):
         sys.exit(f"[site] spot in {FILE.name} is lower-case letters, digits, - and _ (it names a file): not {name!r}")
     return name

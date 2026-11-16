@@ -53,6 +53,7 @@ import contextlib
 import os
 import json
 import math
+import signal
 import sys
 import time
 from pathlib import Path
@@ -204,11 +205,11 @@ class Mount:
             self.s = handset or simulator.SimulatedHandset(slew_seconds=0.0 if quick else 2.0)
             if handset is None:
                 simulator.DEMO_SCOPE = self
-        elif config.hardware()["mount"].get("link", "handset") != "handset":
+        elif mount_settings().get("link", "handset") != "handset":
             # No handset: the Wi-Fi adapter or an EQDIR lead reaches the motor
             # board, and direct.py does the handset's part.
             import direct
-            settings = config.hardware()["mount"]
+            settings = mount_settings()
             # The example's site only when there is none of its own, and then
             # may_move refuses everything but stop: the clock is never used.
             site = (config.load() if self.site_set else config.example())["site"]
@@ -216,7 +217,7 @@ class Mount:
                                           lambda: true_sidereal(site))
         else:
             # The handset's lead is recognised by its USB adapter's name.
-            match = config.hardware()["mount"]["serial_match"]
+            match = mount_settings()["serial_match"]
             asked = port
             port = port or host.serial_port(match) or host.serial_fallback()
             if not host.WINDOWS and (port is None or not Path(port).exists()):
@@ -330,7 +331,10 @@ class Mount:
     def may_move(self):
         """Every movement goes through here first (rate, tracking, creep,
         pulse, GoTo, the handset's clock and place): whichever command asks,
-        none moves the real mount on the example site or none."""
+        none moves the real mount on the example site or none, or past the
+        lock file. Stopping (a zero rate, tracking off, stop) never comes here."""
+        if LOCK_FILE.exists():
+            raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text(encoding='utf-8').strip()}")
         if not self.site_set:
             raise Refusal("SITE_NOT_SET", "config.toml has no location of its own (missing, unreadable or "
                                           "still the example's): set your own latitude and longitude "
@@ -1569,6 +1573,13 @@ def main():
     args = ap.parse_args()
     if args.clearance_test and args.command != "point":
         ap.error("--clearance-test goes with point only")
+    # A slew is a motor left turning until this process says stop: killed
+    # (Claude Code's interrupt sends SIGTERM, a closed terminal SIGHUP), it
+    # would never say it. As SystemExit, act() stops the mount on the way out.
+    # Windows ends a process without a signal it can catch: there, Ctrl+C.
+    for name in ("SIGTERM", "SIGHUP"):
+        if hasattr(signal, name):
+            signal.signal(getattr(signal, name), lambda number, frame: sys.exit(128 + number))
 
     args.demo = args.demo or config.DEMO
     if args.demo and not config.DEMO:
@@ -1682,6 +1693,16 @@ def own_site_set():
         return config.FILE.exists() and not is_example_site(config.load()["site"])
     except Exception:      # noqa: BLE001 - an unreadable file is no site, not a crash
         return False
+
+
+def mount_settings():
+    """[mount] from config.toml, or the example's when the file cannot be read:
+    stop must reach the mount whatever state the file is in, and with no site
+    of its own may_move refuses everything else."""
+    try:
+        return config.hardware()["mount"]
+    except Exception:      # noqa: BLE001 - a broken file must not stop a stop
+        return config.example()["mount"]
 
 
 def refuse_example_site(site):

@@ -8,9 +8,9 @@ use the hardware, or reach the outside world.
 
 Every command a person or an agent can run is classed once, here, and
 everything that needs to know asks this: the safety hooks an agent works
-behind, the tests that check a skill only pre-approves what is safe, and
-the commands page. A new script fails the tests until it is given its
-class, so nothing is left out by being new.
+behind, the skills' pre-approved commands, and the commands page. A
+script with no class counts as hardware, so nothing new is let through by
+being new.
 
 - read_only: looks, plans, dry-runs; changes nothing anywhere.
 - local_write: writes files on this computer (stacks, records, caches,
@@ -24,8 +24,8 @@ class, so nothing is left out by being new.
 A command is its script's class unless its words say otherwise. --help
 makes any command read_only. Each script names its own safe words
 (--dry-run, --plan) and what they leave it as: they are that script's
-promise, checked by a test to be its real options, never assumed of a
-script that has not made it. Of the other words that change a class, the
+promise, and must be its real options; never assumed of a script that
+has not made it. Of the other words that change a class, the
 worst present decides, whatever their order. Anything not known is
 hardware: an unknown command is treated as the worst it could be.
 Nothing here moves the mount or uses the camera.

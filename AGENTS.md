@@ -113,8 +113,9 @@ a motor's creep rate. `mount.py stop` is always allowed.
    night's plan, is made at once: dry-run it and, if the dry run passes,
    send it. (A suggestion for a mount nobody has watched move yet: offer to
    say each move first.) Never remove `MOTION_LOCKED`, and never move on
-   the example site (`Mount.may_move` refuses every movement,
-   whichever command asks, until config.toml has the person's own site).
+   the example site (`Mount.may_move` refuses every movement, whichever
+   command asks, while the lock is there or until config.toml has the
+   person's own site; stopping never goes through it).
 2. **The web server and the MCP server are read-only.** No motion, no
    capture, no writes; do not add any without authentication designed first.
    The control console (`console.py`) is the one place with buttons, and it

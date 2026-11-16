@@ -6,6 +6,25 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+## 0.3.1: stopping and refusing, made sure
+
+Fixes to 0.3.0 for a rig other than the owner's.
+
+- **The mount**: every movement, whichever script asks, is refused while
+  the motion lock is there, as well as on the example site; a move killed
+  from outside (Claude Code's interrupt, a closed terminal) stops the
+  motors on Linux; `mount.py stop` works with a missing, example or
+  broken settings file.
+- **Moves on a new rig**: going first through the moves with the person
+  watching is a suggestion the setup makes, not a rule
+  ([first night](docs/first-night.md)).
+- **What is plugged in**: USB devices on Windows as well as Linux, one
+  line each; SynScan Wi-Fi networks on Windows (netsh); a fresh checkout
+  no longer calls an FTDI lead its mount's because the example's settings
+  name one. `doctor.py --need` answers `ok: false` when not ready, and
+  runs before the installer.
+- **Setup on Windows**: the setup skill runs the scripts through Python.
+
 ## 0.3.0: an experimental hardware preview, set up with Claude Code
 
 Six weeks of nights on one telescope since 0.2.1, and the first release
