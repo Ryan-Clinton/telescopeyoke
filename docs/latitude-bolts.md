@@ -10,7 +10,9 @@ you go.
 
 ## This mount's bolt
 
-The broken bolt won't turn in or out. It is probably bent, but nobody has
+The broken bolt is the south one, at the polar-scope end, so the long one.
+The user thinks it is the bolt that raises the axis. It won't turn in or out.
+It is probably bent, but nobody has
 checked. The other bolt still lowers the axis; raising it needs a hand on
 the head.
 
