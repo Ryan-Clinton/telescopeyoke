@@ -370,3 +370,19 @@ a TMC2209 is MS1 low and MS2 high. That fits the empty socket's reading on
 2.6% short is not explained. The slack is the coupler's: there is no
 gearbox. The phone's stream dropped twice when its screen locked; plugged
 into the laptop it held (the bench's Watcher now reopens the stream).
+
+With the firmware changed to 200 microsteps to 64 half-steps and flashed,
+the same dial (`cache/focuser-bench-20261116-1558.json`), the phone kept
+awake through adb:
+
+| | Measured |
+|---|---|
+| 512 half-steps | 44.57°: 4136 to a turn, 4096 on paper |
+| Small moves | 64: 5.57, 5.57, 5.31° (5.63 on paper); 16: 1.54, 1.49, 1.30° (1.41); 4: 0.31, 0.41, 0.35° (0.35) |
+| Slack, unloaded | 3.8 and 4.6 half-steps: about 0.35° |
+| Back to the same place | within 0.01° over three trips of 256 out and back |
+| Reading noise | 0.02° a picture |
+
+So a half-step means a turn of the knob again, as with the 28BYJ-48 (0.088°
+on 19 October), with an eighth of its slack and ten times closer return.
+Next: onto the focuser, the load test, and `./focus.py --measure-backlash`.
