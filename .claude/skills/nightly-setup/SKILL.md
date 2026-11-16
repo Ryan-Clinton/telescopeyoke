@@ -2,14 +2,17 @@
 name: nightly-setup
 description: Set up the telescope for the night with the person outside at it. Use when they say they are going out, are at the telescope, or report the sky ("clear to the north, can see Polaris"). Runs the setup routine one step at a time, from checking what is plugged in to the first target centred.
 compatibility: the telescopeyoke checkout on the computer at the telescope, with the mount's handset lead and the camera plugged in; Ubuntu or Windows
-allowed-tools: Bash(./doctor.py --offline) Bash(./ty mount status) Bash(./ty capabilities *) Bash(lsusb)
+allowed-tools: Bash(./doctor.py --offline) Bash(./ty mount status) Bash(./ty capabilities *) Bash(lsusb) Bash(./newhardware.py) Bash(./ty onboard *) Bash(./onboard.py *)
 ---
 
 # Nightly setup
 
-Written at the owner's rig (a 150P on an EQ3 Pro, the cooled 183M, a
-home-built CH340 motor focuser, a Starlight Xpress wheel); on another rig,
-the steps for kit it lacks can be skipped.
+**What this rig has** decides the steps: `./ty onboard --no-check`
+gives its kit (the camera, cooled or not, mono or colour, a filter wheel
+or not, a motor focuser or not) and anything of its first setup still to
+do (with the first moves not yet watched, offer the `first-night` skill's
+first moves). On the owner's rig, `docs/agents/owner-rig.md`
+has its devices and figures: read it.
 
 The person is outside in the cold with their hands on the mount. The
 routine is `docs/agents/setup-routine.md`: read it now if it is not
@@ -26,30 +29,19 @@ says to skip.
 
 ## Before each step
 
-1. Look first: `lsusb`, `./doctor.py --offline` and `./ty mount status`
-   (read only). Name every device `lsusb` lists before doing anything;
-   `doctor.py` does not check the focuser, so `lsusb` is the only place it
-   shows:
-
-   | USB ID      | What it is                           |
-   |-------------|--------------------------------------|
-   | `0403:6015` | FTDI lead to the SynScan handset     |
-   | `16d0:0c77` | Altair 183C camera                   |
-   | `16d0:0b2a` | Altair GPCAM guide camera (`./guidecam.py`) |
-   | `1a86:7523` | CH340: the motor focuser             |
-
-   Anything else on the list is named and left alone; no question about
-   it. If what the person said disagrees with the list
-   ("took the focuser off" while the CH340 shows), the list is what is
-   plugged in: ask that one question before acting on either. Never
-   start a command for a device you have not seen on the list, or leave
-   out one that is on it. 18 October 2026: the CH340 was on USB, I took
-   "took the autofocuser off earlier" to mean it was still off, and ran
-   the hand-turned aid instead of the motor.
+1. Look first: `./newhardware.py` (or `lsusb` on Ubuntu), `./doctor.py
+   --offline` and `./ty mount status` (read only). Name every device on
+   the list before doing anything, as this rig's devices are known (the
+   owner's: `docs/agents/owner-rig.md`); anything else is named and left
+   alone. If what the person said disagrees with the list, the list is
+   what is plugged in: ask that one question before acting on either.
+   Never start a command for a device not on the list, or leave out one
+   that is on it.
 2. Dry-run what the step will do (`--dry-run`); anything that fails, fails
    now, indoors in your words, not with them waiting.
-3. To see what the camera sees, `./snap.py --exposure 2 --gain 1500`: one
-   frame, on the status page. Never `shoot.py` for a look: it starts an
+3. To see what the camera sees, `./snap.py --exposure 2` (the owner's
+   rig: the gain in `docs/agents/owner-rig.md`): one frame, on the status
+   page. Never `shoot.py` for a look: it starts an
    imaging run, which makes a stack and a session that then show on the
    page as work done (18 October 2026: three looks at Deneb).
 
@@ -64,17 +56,18 @@ project's commands refuse what is unsafe.
 
 ## The steps, in short
 
-1. `./ty mount settime` once the handset is at its main menu, and with the
-   183M plugged in, `./keeper.py start` in the background at the same time:
-   the camera cools slowly while the rest of the setup goes on, and stays
-   open and cold for every step until the night's end.
+1. `./ty mount settime` once the handset is at its main menu, and with a
+   cooled camera (the kit says `cooled`), `./keeper.py start` in the
+   background at the same time: the camera cools slowly while the rest of
+   the setup goes on, and stays open and cold for every step until the
+   night's end. Not cooled: no keeper.
 2. Ask where the sky is clear, and choose every star from the answer.
 3. Only if the settime dry run says the motor check is on (`[mount]
    nudge_check`, off since 3 Nov 2026): `./ty mount nudge`, and ask whether
    they saw it tip and come back. If the screen says it moved and they say
    it did not, the motors stalled: power-cycle and back to 1. Off: straight
    to focus.
-4. Focus: the `focus` skill. It measures first (`./focus.py --check`, 15
+4. Focus: the `focus` skill, by motor or by hand as the rig has. It measures first (`./focus.py --check`, 15
    seconds) and says the level; it focuses only if that is soft or the
    person asks.
 5. Polar alignment only if the tripod moved: the `polar-align` skill.

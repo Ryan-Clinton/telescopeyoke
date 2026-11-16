@@ -183,8 +183,9 @@ one front door, the same checks. The rest (`patrol.py`, `polaralign.py`,
   (`./doctor.py --offline`, `./ty mount status`; `lsusb` on Ubuntu, the
   device list `doctor.py` prints on Windows); the night's dry runs indoors;
   `settime`; where it is clear; `nudge` (when `[mount] nudge_check` is on), and whether they saw it; GoTo a
-  rich field and focus (the `focus` skill: measure, then the walk-in on the
-  owner's rig, by hand elsewhere); polar alignment only if the tripod
+  rich field and focus (the `focus` skill: measure, then the walk-in with
+  a motor focuser, by hand without); the steps follow the rig's kit
+  (`./ty onboard`), and the owner's figures are `docs/agents/owner-rig.md`; polar alignment only if the tripod
   moved; the first target. One short line at a time, only what needs their
   hands or eyes. Each `hardware` step under rule 2.
 - **Finished:** the first target centred, or the person stopping.

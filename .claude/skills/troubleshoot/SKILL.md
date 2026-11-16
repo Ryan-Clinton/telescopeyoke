@@ -2,16 +2,16 @@
 name: troubleshoot
 description: Find out what is wrong with the telescope, mount, camera or plate solving. Use when the person says it is not moving, moved wrongly, the camera has gone, a plate solve failed, or the stars have dimmed.
 compatibility: telescopeyoke on the computer at the telescope
-allowed-tools: Bash(./doctor.py --offline) Bash(./ty mount status) Bash(./ty status *) Bash(./ty session *) Bash(lsusb) Bash(./ty watch-run --once) Bash(./clouds.py) Bash(./clouds.py *)
+allowed-tools: Bash(./newhardware.py) Bash(./doctor.py --offline) Bash(./ty mount status) Bash(./ty status *) Bash(./ty session *) Bash(lsusb) Bash(./ty watch-run --once) Bash(./clouds.py) Bash(./clouds.py *)
 ---
 
 # Troubleshoot
 
-Written at the owner's rig (a 150P on an EQ3 Pro, the cooled 183M, a
-home-built CH340 motor focuser, a Starlight Xpress wheel); on another rig,
-the steps for kit it lacks can be skipped.
+The causes below were met at the owner's rig, and most are any SynScan
+rig's; what this rig has is in `./ty onboard --no-check` and
+`./newhardware.py`, and the owner's devices in `docs/agents/owner-rig.md`.
 
-Look before asking: `lsusb` (Ubuntu), `./doctor.py --offline`, `./ty mount
+Look before asking: `./newhardware.py` (or `lsusb` on Ubuntu), `./doctor.py --offline`, `./ty mount
 status` and `./ty status` say what is plugged in and answering. Then go
 through the causes these have had before, in order, and say the first one
 the checks point to. Never touch `MOTION_LOCKED`: if it is there, say its
@@ -26,12 +26,12 @@ reason (`./ty capabilities`), and that only a person removes it.
    the screen says it moved, they say it did not. Power-cycle the mount,
    back to the handset's main menu.
 3. Nothing on USB, and nothing in `journalctl -k`: ask which socket it is
-   in before blaming the lead. The person knows which USB-C port is dead:
-   never tell them.
+   in before blaming the lead. The person knows their own computer's
+   sockets: ask, never tell them.
 
 **The camera has gone**
 
-The lead or the port first (`lsusb`), then whether INDI's driver is
+The lead or the port first (`./newhardware.py`, or `lsusb`), then whether INDI's driver is
 running (`./doctor.py --offline` says).
 
 **The camera sends no frames (a jam)**

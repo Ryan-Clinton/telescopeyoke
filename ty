@@ -19,6 +19,7 @@
                              the stars dim or come back, or the run ends (runwatch.py)
     ./ty rigs                every rig in one view: what each is and what it is doing
     ./ty characterise        what this rig has had measured about itself, and what it has not
+    ./ty onboard             how far a new rig's setup has got, and the next step (onboard.py)
     ./ty discovery           tonight's discovery work: the mosaic's panels, each session's answer, Tabby
     ./ty candidates          every field's open candidates, the most nights seen first
     ./ty spot                where in the garden the telescope stands, and every spot's skyline
@@ -40,7 +41,7 @@ import sys
 PASS_THROUGH = {"mount": "mount", "tonight": "tonight", "shoot": "shoot", "focus": "focus",
                 "solve": "solve", "restack": "restack", "console": "console", "watch-run": "runwatch",
                 "agent-report": "agentlog", "streak": "streak", "lucky": "lucky", "moon": "moon",
-                "collimation": "collimation"}
+                "collimation": "collimation", "onboard": "onboard"}
 
 
 def show(value, indent=0):

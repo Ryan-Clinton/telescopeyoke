@@ -9,7 +9,7 @@ complete pretend rig is built in (mount, camera, sky, focuser, cloud, drift),
 and the real centring, focusing and stacking code runs on it.*
 
 **[Home page](https://ryan-clinton.github.io/telescopeyoke/) ·
-[Download 0.3.2](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.3.2/TelescopeYoke-v0.3.2.zip) ·
+[Download 0.4.0](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.0/TelescopeYoke-v0.4.0.zip) ·
 [Try the demo, no telescope needed](#quick-start) ·
 [Set it up with Claude Code](#with-claude-code) ·
 [Results](docs/results.md) ·
@@ -199,18 +199,18 @@ by eye.
 On Ubuntu or Debian:
 
 ```bash
-wget https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.3.2/TelescopeYoke-v0.3.2.zip
-unzip TelescopeYoke-v0.3.2.zip
-cd TelescopeYoke-v0.3.2
+wget https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.0/TelescopeYoke-v0.4.0.zip
+unzip TelescopeYoke-v0.4.0.zip
+cd TelescopeYoke-v0.4.0
 ./install.sh --demo           # the Python libraries, then TelescopeYoke (demo) opens
 ```
 
 On Windows 10 or 11: install 64-bit Python 3.11 or newer from python.org
 (tick "Add python.exe to PATH"),
-[download TelescopeYoke-v0.3.2.zip](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.3.2/TelescopeYoke-v0.3.2.zip),
+[download TelescopeYoke-v0.4.0.zip](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.0/TelescopeYoke-v0.4.0.zip),
 unpack it, and double-click **`try-demo.cmd`**.
 
-That zip is release 0.3.2 (16 November 2026), an experimental hardware
+That zip is release 0.4.0 (16 November 2026), an experimental hardware
 preview, which stays as it is; a hardware report says which release or
 commit made it. `git clone https://github.com/Ryan-Clinton/telescopeyoke` gets the newest
 code instead, which changes from day to day. Either is proven on one

@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/onboard.schema.json",
+  "title": "Onboard",
+  "description": "data of: onboard.py --json (ty onboard --json). How far this rig is from a first night, each step with how it is known, and the next step. With --confirm STEP: the step kept and what it means.",
+  "type": "object",
+  "properties": {
+    "steps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "step",
+          "done",
+          "how_known",
+          "detail",
+          "next"
+        ],
+        "properties": {
+          "step": {
+            "type": "string"
+          },
+          "done": {
+            "type": "boolean"
+          },
+          "how_known": {
+            "type": "string",
+            "description": "checked now, measured, kept on disk, proven by use, set by the person, the person's word, the example's, or not yet"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "next": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "done": {
+      "type": "integer"
+    },
+    "of": {
+      "type": "integer"
+    },
+    "next": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "step": {
+          "type": "string"
+        },
+        "do": {
+          "type": "string"
+        }
+      }
+    },
+    "confirmed": {
+      "type": "string"
+    },
+    "meaning": {
+      "type": "string"
+    },
+    "kit": {
+      "type": "object",
+      "description": "What the skills choose their steps by.",
+      "properties": {
+        "camera": {
+          "type": "string"
+        },
+        "cooled": {
+          "type": "boolean"
+        },
+        "mono": {
+          "type": "boolean"
+        },
+        "filter_wheel": {
+          "type": "boolean"
+        },
+        "motor_focuser": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "true when the person has said so; null when not known"
+        }
+      }
+    }
+  }
+}

@@ -2,7 +2,7 @@
 name: first-night
 description: Take someone new from a fresh telescopeyoke checkout to their first picture. Use when they ask to install it, set it up, get started, get it working with their equipment, or type /first-night. Finds what is plugged in and says what is supported before anything is installed or moved.
 compatibility: a fresh telescopeyoke checkout, Python 3.11 or later, Ubuntu or Windows, the internet
-allowed-tools: Bash(./doctor.py --offline*) Bash(./doctor.py --json*) Bash(./newhardware.py) Bash(./ty capabilities *) Bash(lsusb) Bash(python doctor.py --offline*) Bash(python doctor.py --json*) Bash(python newhardware.py) Bash(py -3 doctor.py --offline*) Bash(py -3 doctor.py --json*) Bash(py -3 newhardware.py)
+allowed-tools: Bash(./ty onboard) Bash(./ty onboard --json*) Bash(./ty onboard --no-check*) Bash(./onboard.py) Bash(./onboard.py --json*) Bash(./onboard.py --no-check*) Bash(python onboard.py*) Bash(./doctor.py --offline*) Bash(./doctor.py --json*) Bash(./newhardware.py) Bash(./ty capabilities *) Bash(lsusb) Bash(python doctor.py --offline*) Bash(python doctor.py --json*) Bash(python newhardware.py) Bash(py -3 doctor.py --offline*) Bash(py -3 doctor.py --json*) Bash(py -3 newhardware.py)
 ---
 
 # First night
@@ -16,8 +16,17 @@ the first time it comes up.
 On Windows the scripts are run through Python: `python doctor.py ...` (or
 `py -3 doctor.py ...`) wherever this says `./doctor.py ...`.
 
-This is not the owner's rig. Nothing in the other skills' dated notes (a
-CH340 focuser, a cooled 183M, a Sharpie line, HFR figures) is about it.
+This is not the owner's rig: `docs/agents/owner-rig.md` is not about it.
+
+**Where it got to.** Start with `./ty onboard` (it runs before the
+installer too): each step of the first setup, how it is known, and the
+next. A setup broken off on another evening carries on from there, with
+nothing done again and nothing taken as done. When the person says they
+saw something no command can see, keep their word: `./ty onboard
+--confirm frame`, `moves`, `equipment` (the telescope and camera in the
+settings are theirs), `first-light`, or `motor-focuser` (the rig has the
+project's focuser, `docs/focuser.md`). Only on their word, never on your
+own judgement.
 
 ## 1. What is here (reads only, nothing moves)
 
@@ -58,7 +67,8 @@ send a device a question unless the person names its port and agrees
    where the files go, then carry on from that step when they are there.
 5. `./doctor.py --need mount,imaging` until both are ready, plugging things
    in as it asks; `--offline` needs no network.
-6. A first frame from the camera indoors (`./snap.py`), to see it works.
+6. A first frame from the camera indoors (`./snap.py`), to see it works;
+   once they have seen it, `--confirm frame`.
 
 ## 3. The first moves, beside the telescope
 
@@ -78,11 +88,13 @@ offer it, and let them choose:
 3. Then one GoTo to something high and near the meridian, watched, and
    `./mount.py home`: the tube clears the tripod both ways.
 
-Say each result in a line.
+Say each result in a line. Once they say it turned the right ways and
+stopped, `./ty onboard --confirm moves`.
 
 ## 4. First light
 
 At night, outside: the `nightly-setup` skill's order (focus, polar
 alignment, GoTo), explaining each step the first time, then `imaging-run`
 on something bright and big that the planner suggests (`./ty tonight`).
-Finished with their first picture.
+Finished with their first picture (`--confirm first-light` if it was not
+made by an imaging run here).

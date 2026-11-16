@@ -16,11 +16,13 @@ its `recommendation` first; the research and papers are `./ty research`.
 Someone new is asked what they want; their first night is usually first
 light on something big and bright (the `first-night` skill).
 
-The skills and `docs/agents/` were written at one telescope (a 150P on an
-EQ3 Pro, Altair cameras, a home-made motor focuser, a Starlight Xpress
-wheel). For another rig, `config.toml`, `./doctor.py --json`,
-`./newhardware.py` and `docs/hardware.md` ("What to expect of other
-equipment") say what it has and what TelescopeYoke can do with it.
+The skills choose their steps by what a rig has (`./ty onboard`'s kit);
+that one telescope's own devices and figures (a 150P on an EQ3 Pro,
+Altair cameras, a home-made motor focuser, a Starlight Xpress wheel) are
+in `docs/agents/owner-rig.md`. For another rig, `config.toml`,
+`./doctor.py --json`, `./newhardware.py` and `docs/hardware.md` ("What to
+expect of other equipment") say what it has and what TelescopeYoke can do
+with it.
 
 ## Start here
 
@@ -82,6 +84,7 @@ them and every file kept under `demo/`.
 | `notify.py` | Alerts to the person's phone by their own Telegram bot (`[telegram]` in config.toml): the patrol's unexplained candidates with their pictures and report packet, every finished stack's picture with the same picture attached at full size (Telegram shrinks a photo); claiming them is `docs/agents/claiming.md` |
 | `starwatch.py` | A watch on a star that dims without warning, Tabby's star first: a short look through the patrol, measured against the stars round it, and a warning when it is fainter than usual (`docs/discovery.md`, phase 9) |
 | `transits.py` | Known exoplanet transits: which can be taken whole from here tonight (NASA's Exoplanet Archive), and from a night's frames its verdict, the fitted depth and timing, the light curve drawn, the calibration and timing checks, BJD_TDB and the exposure headroom (`docs/discovery.md`, phase 9) |
+| `onboard.py` | `ty onboard`: how far a rig's first setup has got and the next step, each step with how it is known (checked, measured, kept on disk, or the person's word, kept by `--confirm`), and the rig's kit, which the skills choose their steps by. `docs/agents/owner-rig.md` is the owner's rig's devices and figures |
 | `newhardware.py` | Notices a new serial device or SynScan Wi-Fi network without sending it anything; on the person's choice asks it what it is (only reads: SynScan handset, motor board, LX200 family), writes the report with serial numbers left out, and gives the Mount support form filled in, never sent. `--watch --install` runs from boot |
 | `lighttest.py` | What a light round the house does to the sky: a run's frames with the light on against those with it off (sky level, stars, their brightness and width), in multiples of the frames' own scatter. Reads only |
 | `precision.py` | How precise a night's photometry is and what limits it: the frames measured with every aperture, colour channel, stripe treatment and comparison set, ranked by their scatter, with how it falls with averaging (beta) and what it follows (drift, star width, sky, airmass) |
@@ -128,7 +131,8 @@ a motor's creep rate. `mount.py stop` is always allowed.
    before), 40° from the Sun, and refusal when the handset is not set up.
    Without a handset (`direct.py`) the same refusals stand in for it: no
    movement until home has been recorded, and no GoTo until a person has
-   watched which way the Dec motor turns. Never record either for the user.
+   watched which way the Dec motor turns. Never record either for the user,
+   nor a `ty onboard --confirm` they have not given.
    `doctor.py --probe` sends a port only questions that read, and only a
    port a person named: never try ports in turn to see what is there.
 4. **Anything that changes how the mount moves is tried first in the demo
@@ -211,4 +215,5 @@ a motor's creep rate. `mount.py stop` is always allowed.
 - `docs/agents/mcp.md`: the MCP server and the web API
 - `docs/agents/examples.md`: worked examples of answering common requests
 - `docs/agents/setup-routine.md`: the order to run things in while a person is at the telescope
+- `docs/agents/owner-rig.md`: the owner's rig's devices and figures, which the skills read only there
 - `docs/agents/architecture.md`, `hardware.md`

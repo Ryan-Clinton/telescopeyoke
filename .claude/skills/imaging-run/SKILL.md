@@ -2,14 +2,15 @@
 name: imaging-run
 description: Start, watch or switch an imaging run of one target. Use when the person asks to image or photograph an object ("image M31", "start a run"), to switch target ("switch to M33"), or after nightly-setup for the first target.
 compatibility: telescopeyoke at the telescope with the mount and camera plugged in, focused
-allowed-tools: Bash(./ty mount goto * --dry-run) Bash(./ty shoot * --dry-run) Bash(./ty watch-run --once) Bash(./ty session *) Bash(./ty tonight *) Bash(./clouds.py) Bash(./clouds.py *)
+allowed-tools: Bash(./ty onboard *) Bash(./ty mount goto * --dry-run) Bash(./ty shoot * --dry-run) Bash(./ty watch-run --once) Bash(./ty session *) Bash(./ty tonight *) Bash(./clouds.py) Bash(./clouds.py *)
 ---
 
 # Imaging run
 
-Written at the owner's rig (a 150P on an EQ3 Pro, the cooled 183M, a
-home-built CH340 motor focuser, a Starlight Xpress wheel); on another rig,
-the steps for kit it lacks can be skipped.
+The kit decides the plan (`./ty onboard --no-check`): a colour camera
+takes the target in one go; a mono camera with a filter wheel takes it
+filter by filter (below). On the owner's rig, `docs/agents/owner-rig.md`
+("Imaging") has its figures.
 
 1. The target: what they asked for, or the best from `./ty tonight` in the
    part of the sky they said is clear.
@@ -27,15 +28,16 @@ the steps for kit it lacks can be skipped.
 5. While they are inside nobody is watching the mount: make no move they
    did not ask for.
 
-## Planning a picture with the mono camera
+## Planning a picture with a mono camera and filters
 
-A picture needs L, R, G and B of one target, about three hours between
-them: an hour or more of L and 30 to 40 minutes of each colour. Asked for
-several targets in one night, give each its minutes and say what that
-gets: under about an hour in all, a grey snapshot, not a picture.
-5 November 2026: five targets in one night gave 34 minutes of M33 in L and
-3 to 8 minutes of the rest, and no colour. `schedule.py end` reports each
-block's minutes kept against those planned.
+A picture needs every filter of its palette on one target, with time for
+each: on the owner's 183M about three hours for LRGB (an hour or more of
+L, 30 to 40 minutes of each colour). Asked for several targets in one
+night, give each its minutes and say what that gets: too little of the
+colours is a grey snapshot, not a picture (5 November 2026: five targets
+in one night gave 34 minutes of M33 in L and 3 to 8 minutes of the rest,
+and no colour). `schedule.py end` reports each block's minutes kept
+against those planned. A colour camera has none of this: one block.
 
 The filters: `./ty target TARGET --json` gives `palette` when Gary Imm's
 Compendium is here (`./compendium.py status`): the palette he gives for that

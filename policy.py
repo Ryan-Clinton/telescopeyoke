@@ -90,6 +90,7 @@ COMMANDS = {
     "lucky.py": ("hardware", {"stack": "local_write", "picture": "local_write", "mineral": "local_write"}, {}),     # capture uses the camera; stack and picture only read files
     "moon.py": ("hardware", {}, DRY),                          # moves the mount and uses the camera
     "investigate.py": ("local_write", {}, {}),     # asks the catalogues; keeps its record in cache/ and its report in docs/research/
+    "onboard.py": ("read_only", {"--confirm": "local_write"}, {}),   # the person's word for a setup step, kept
     "lighttest.py":("read_only", {}, {}),       # what a house light did to the sky, from a run's records
     "newhardware.py": ("read_only", {"--probe": "hardware", "--known": "local_write", "--watch": "local_write"}, {}),
     "precision.py": ("local_write", {}, {}),     # a night's frames measured every way; keeps its answer in the session
@@ -141,7 +142,7 @@ TY = {"run": "hardware"}
 TY_PASSES = {"mount": "mount.py", "tonight": "tonight.py", "shoot": "shoot.py", "focus": "focus.py",
              "solve": "solve.py", "restack": "restack.py", "console": "console.py", "watch-run": "runwatch.py",
              "agent-report": "agentlog.py", "streak": "streak.py",
-             "lucky": "lucky.py", "moon": "moon.py", "collimation": "collimation.py"}
+             "lucky": "lucky.py", "moon": "moon.py", "collimation": "collimation.py", "onboard": "onboard.py"}
 
 
 def script_of(word):

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Ryan-Clinton/telescopeyoke/schemas/onboard-record.schema.json",
+  "title": "Onboard record",
+  "description": "cache/onboard.json: the steps of a first setup the person has said they saw, each with when, and for equipment the settings it was given for.",
+  "type": "object",
+  "properties": {
+    "confirmed": {
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "equipment",
+          "frame",
+          "moves",
+          "first-light",
+          "motor-focuser"
+        ]
+      },
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "at"
+        ],
+        "properties": {
+          "at": {
+            "type": "string"
+          },
+          "equipment": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
+}

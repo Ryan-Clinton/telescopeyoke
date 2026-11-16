@@ -7,9 +7,10 @@ allowed-tools: Bash(./instrument.py) Bash(./instrument.py --json) Bash(./ty outl
 
 # Discovery night
 
-Written at the owner's rig (a 150P on an EQ3 Pro, the cooled 183M, a
-home-built CH340 motor focuser, a Starlight Xpress wheel); on another rig,
-the steps for kit it lacks can be skipped.
+The discovery programmes are the owner's choice of night, made at their
+rig; for another person, only when they ask for discovery
+(`docs/discovery.md`). The kit (`./ty onboard --no-check`) says which
+filters and camera a patrol can use.
 
 The night is `docs/discovery.md`, "Running a discovery night"; the patrol
 is `docs/agents/setup-routine.md` step 6b.

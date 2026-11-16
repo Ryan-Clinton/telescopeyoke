@@ -6,6 +6,21 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+## 0.4.0: setup that remembers, skills that follow the rig
+
+- **`ty onboard`**: how far a rig's first setup has got and the next
+  step, each step with how it is known: checked now, measured, kept on
+  disk, or the person's word (`--confirm moves` once they have watched
+  the first moves). A setup broken off one evening carries on the next.
+- **The telescope and camera in the settings**: shown as measured by a
+  plate solve, the person's, or still the example's; a plate solve that
+  disagrees with the settings' pixel scale is said.
+- **Skills by kit**: focusing, setting up, imaging and the night's end
+  choose their steps by what the rig has (a cooled camera, a filter
+  wheel, a motor focuser) instead of assuming the owner's; the owner's
+  devices and figures are one page of their own
+  ([owner's rig](docs/agents/owner-rig.md)).
+
 ## 0.3.2: every mount script stops when killed
 
 - **Stopping**: any script that drives the mount (GoTo, polar alignment,

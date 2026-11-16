@@ -4,6 +4,11 @@ For an agent on the laptop beside the telescope while a person is outside
 with it. The person's guide is `docs/first-night.md`; this is the same night
 from the agent's side: what to run, in what order, and what to ask.
 
+It was written at the owner's rig, and its dated notes are about that rig
+(`docs/agents/owner-rig.md`). What a rig has decides which steps apply:
+`./ty onboard --no-check` gives its kit (a cooled camera or not, a filter
+wheel, a motor focuser), and a step for kit it lacks is skipped.
+
 **The agent runs the commands.** The person is outside in the cold with
 their hands on the mount. Never hand them a command to type. Tell them only
 what needs their hands or their eyes, in a line, and say before anything
@@ -16,9 +21,11 @@ and the next step that fits that sky starts now, without asking.
 **Look before asking.** `lsusb`, `./doctor.py --offline` and `./mount.py
 status` (which only reads) say what is plugged in, whether the handset is
 past its start-up screens, and where the axes are. Name every device `lsusb`
-lists before doing anything: `0403:6015` the handset lead, `16d0:0c77` the
-camera, `16d0:0b2a` the guide camera (`./guidecam.py`), `1a86:7523` (CH340) the motor focuser, which `doctor.py` does not
-check. **Since 1 November 2026 there is no hub:** the RSH-ST04 kept
+(or `./newhardware.py`) lists before doing anything. On the owner's rig:
+`0403:6015` the handset lead, `16d0:0c77` the camera, `16d0:0b2a` the guide
+camera (`./guidecam.py`), `1a86:7523` (CH340) the motor focuser, which
+`doctor.py` does not check; on another, a CH340 can be any lead, and the
+motor focuser is the one the person has said it has. **Since 1 November 2026 there is no hub:** the RSH-ST04 kept
 dropping off the laptop and has been returned to Amazon
 (`docs/usb-hub.md`). The camera goes on the 3 m lead straight into a laptop
 USB-A socket, where it has never dropped off USB and on 1 November kept
@@ -76,8 +83,9 @@ with `./doctor.py --offline` ("handset answering and set up"), then
 It moves nothing. It gives the handset this laptop's date, time and site,
 and measures its clock. Every later step depends on it.
 
-At the same time, with the cooled camera (the 183M) plugged in, start the
-camera keeper in the background:
+At the same time, with a cooled camera (the owner's 183M) plugged in,
+start the camera keeper in the background (a camera that is not cooled
+has no keeper):
 
     ./keeper.py start
 
@@ -123,8 +131,9 @@ says it moved and they say it did not, the motors have stalled (6 October
 **Measure first, and tell the person the number** against the usual best
 ("HFR 1.86, usual 2.38: good"). Focus left untouched since it was last set
 is usually still good: then move on, and focus only if they ask
-(`./focus.py --walk-in`). Only when it is soft: the person sets the
-drawtube a touch **out** from the Sharpie line by hand, then
+(`./focus.py --walk-in`). Only when it is soft, and with the motor
+focuser: the person sets the drawtube a touch **out** from focus by hand
+(on the owner's rig, from the Sharpie line), then
 
     ./focus.py --walk-in       brings it in to the sharpest, downhill only
 
@@ -147,8 +156,8 @@ and a Monitor on the log, never through `tail`, which holds every line
 back; say only a fault or the end, never a line per reading. Never stop a run part way: on
 17 October 2026 a run started at HFR 1.86, needlessly, and once stopped left
 the focuser at 3.52. `./focus.py --field`, the hand-turned
-aid with tones, is only for a telescope without the motor: no CH340 on
-`lsusb`, and the person asked for it. Focus comes before anything that plate-solves: the polar alignment
+aid with tones, is only for a telescope without the motor focuser, and
+when the person has asked for it (the `focus` skill, "Without one"). Focus comes before anything that plate-solves: the polar alignment
 and every `--solve` work from the stars in a picture, and blurred stars give
 no answer. A failed plate solve before this step says nothing about cloud.
 

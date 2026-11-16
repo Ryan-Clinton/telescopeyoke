@@ -50,7 +50,8 @@ their Claude: what their nights are for, where their notes go. A fresh
 checkout has none of it. Some suggestions for a new rig:
 
 - Asked to install, set up or get started, the `first-night` skill finds
-  what is plugged in and what TelescopeYoke can do with it.
+  what is plugged in and what TelescopeYoke can do with it; `./ty onboard`
+  says how far a setup has got and what is next.
 - The owner's figures (focus, the focuser, the cooled camera, the filter
   slots) may not hold for another rig: `config.toml` and
   `./doctor.py --json` say what this one is.
