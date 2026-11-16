@@ -145,9 +145,9 @@ def open_link(settings, port=None):
     if not address:
         seen = Udp.find()
         if not seen:
-            raise Refusal("MOUNT_NOT_CONNECTED", "No SynScan Wi-Fi adapter answered. Join its network "
-                          "(SynScan_WiFi_xxxx), or put it on yours and set address under [mount] in "
-                          "config.toml.")
+            raise Refusal("MOUNT_NOT_CONNECTED", "No SynScan Wi-Fi adapter answered. Is the mount on with the "
+                          "adapter in, and the adapter on this router? Set its address under [mount] "
+                          "in config.toml, or join its own network (SynScan_WiFi_xxxx).")
         address = seen[0]
     return Udp(address)
 

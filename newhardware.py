@@ -219,7 +219,7 @@ def wifi_report(finder=None, describer=None):
     lines = [doctor.hardware_report(False, True, None), "", "SynScan Wi-Fi adapters on this network:"]
     found = finder()
     if not found:
-        lines.append("  none answered: join the adapter's network (SynScan_...) first, with the mount switched on")
+        lines.append("  none answered: is the mount switched on with the adapter in, and the adapter on this router (or this computer on its own SynScan_... network)?")
     for address in found:
         try:
             seen = describer(address)
