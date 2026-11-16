@@ -55,6 +55,32 @@ With the head off, the bolt carries no load. That shows which case it is:
   avoids the argument. A hardware-shop M8 bolt with a nut locked on as a
   handle, or a printed knob, works as well as the spare part.
 
+### Bolts that won't bend (16 November 2026)
+
+- **What decides bending is the steel's yield strength.** A grade 12.9
+  socket cap bolt yields at about 1080 MPa. Stainless A2-70 yields at about
+  450 MPa, and the soft stock bolts are lower still.
+- **Stainless isn't the upgrade it sounds like.** A Stargazers Lounge member
+  fitted Astro Developments' stainless bolts to an EQ5, and the long one
+  bent.
+- **Best choice: M8 grade 12.9 socket cap bolts**, at the measured lengths,
+  with a press-on or printed knob on the head. Grease the thread to stop
+  galling.
+- **Like for like:** Grover's Optics in Northallerton has the Sky-Watcher
+  bolt for the EQ3 Pro, long or short, at £20 to £30. Material not stated.
+
+### Caps
+
+No shop sells the side covers as a spare; only the polar-scope cap is
+listed. If one breaks:
+
+- Ask Sky-Watcher's UK distributor or First Light Optics' spares desk for
+  the part.
+- Or measure it and print one, or fit a black push-in blanking cap of the
+  same diameter.
+
+The covers only keep dirt off the pivot bolt.
+
 ## When the covers don't need to come off
 
 On this mount they do (above). In general, though, they usually don't. A latitude bolt just screws through the mount's casting and
