@@ -36,7 +36,7 @@ ROOT = Path(__file__).parent
 SKETCH = ROOT / "firmware" / "focuser"
 MATCH = "1a86"              # the CH340 chip on a Nano clone, as /dev/serial/by-id names it
 TURN = 4096                 # half-steps to one turn of the motor's shaft: the 28BYJ-48's, kept
-                            # as the unit for the NEMA 17 (1600 microsteps a turn; the firmware converts)
+                            # as the unit for the NEMA 17 (12800 microsteps a turn at 1/64; the firmware converts)
 MOST = 10 * TURN            # the firmware refuses more in one order
 STEP_SECONDS = 0.020       # as the firmware's STEP_MS
 MOTOR_MS = 2               # what open() sets: 8 s a turn on the NEMA 17 (9 November 2026). The 28BYJ-48
@@ -378,6 +378,11 @@ class Watcher:
                 if self.latest.stat().st_mtime > asked:
                     time.sleep(0.1)                  # let the file finish being written
                     shutil.copyfile(self.latest, into)
+                    # ffmpeg may still have been writing it: one copy was cut
+                    # short on 16 November 2026 and ended a run. Take the next.
+                    from PIL import Image
+                    with Image.open(into) as image:
+                        image.load()
                     return into
             except OSError:
                 pass

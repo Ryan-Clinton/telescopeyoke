@@ -1,13 +1,15 @@
 // The focuser's motor: a 17HS4401 NEMA 17 on a TMC2209 driver (black carrier
-// board, 12 V, microstep switches all off: 1/8, 1600 microsteps a turn),
-// EN on D8, STEP on D9, DIR on D10 of an Arduino Nano. focuser.py loads
-// this and talks to it. (Until 9 November 2026: a 28BYJ-48 on a ULN2003
+// board, 12 V, microstep switches all off), EN on D8, STEP on D9, DIR on D10
+// of an Arduino Nano. With the switches off the BTT TMC2209 V1.3 runs at
+// 1/64, 12800 microsteps a turn: MS1 low, MS2 not (measured on a dial, 16
+// November 2026; this assumed 1/8 until then, and turned an eighth as far).
+// focuser.py loads this and talks to it. (Until 9 November 2026: a 28BYJ-48 on a ULN2003
 // board, IN1..IN4 on D4..D7.)
 //
 // Moves are still counted in the old motor's half-steps, 4096 to a turn of
 // the shaft, so every figure kept in half-steps (the travel, filter offsets,
 // walk-in steps) still means the same turn of the focuser's knob. 4096
-// half-steps are 1600 microsteps, 25 to every 64: the firmware keeps the
+// half-steps are 12800 microsteps, 200 to every 64: the firmware keeps the
 // remainder, so moves out and back in again come to the same microstep.
 //
 // Orders are whole lines at 9600 baud, each starting with a colon, so stray
@@ -57,8 +59,8 @@ long halfSteps = 0;                // where the motor is since the Nano started,
 long micro = 0;                    // and in microsteps, as sent
 String line;
 
-long microFor(long half) {         // 25 microsteps to 64 half-steps, rounding down
-  long scaled = half * 25;
+long microFor(long half) {         // 200 microsteps to 64 half-steps, rounding down
+  long scaled = half * 200;
   return scaled >= 0 ? scaled / 64 : -((-scaled + 63) / 64);
 }
 
@@ -72,8 +74,8 @@ void turn(long steps) {
   digitalWrite(EN, LOW);
   delay(200);                      // the driver wakes and tunes StealthChop at standstill
                                    // (9 November 2026: at 5 ms one direction only hummed)
-  // the same time a half-step as before: 64 half-steps' worth over 25 microsteps
-  unsigned long gap = (unsigned long)stepMs * 64000UL / 25;
+  // the same time a half-step as before: 64 half-steps' worth over 200 microsteps
+  unsigned long gap = (unsigned long)stepMs * 64000UL / 200;
   for (long i = labs(left); i > 0; i--) {
     digitalWrite(STEP, HIGH);
     delayMicroseconds(10);
