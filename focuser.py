@@ -25,6 +25,7 @@ import argparse
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -327,26 +328,52 @@ class Watcher:
     picture file something else keeps up to date. One connection is held
     open for the whole run and the newest frame kept: a phone left without
     a viewer locks its screen and stops sending, and the first frames of a
-    fresh connection come before its focus has settled (19 October 2026)."""
+    fresh connection come before its focus has settled (19 October 2026).
 
-    def __init__(self, source, folder):
-        self.source, self.process = str(source), None
+    When the stream ends or the phone refuses the connection, it is opened
+    again a second later, for as long as the run lasts: a phone that has
+    locked latches on the moment it is unlocked, and is then held awake.
+    On 16 November 2026 a run held one connection, lost it after a minute
+    and stopped; on 19 October a loop like this one kept the phone going."""
+
+    def __init__(self, source, folder, say=None):
+        self.source, self.process, self.stopping = str(source), None, False
+        self.say = say or (lambda text: print(text, file=sys.stderr))
         self.latest = Path(folder) / "latest.jpg"
         if self.source.startswith(("http://", "https://", "/dev/")):
             grab = (["-reconnect", "1", "-reconnect_streamed", "1", "-reconnect_delay_max", "2"]
                     if self.source.startswith("http") else ["-f", "v4l2"])
-            self.process = subprocess.Popen(
-                ["ffmpeg", "-loglevel", "error", "-y", *grab, "-i", self.source, "-vf", "fps=4",
-                 "-update", "1", "-q:v", "2", str(self.latest)],
-                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.command = ["ffmpeg", "-loglevel", "error", "-y", *grab, "-i", self.source,
+                            "-vf", "fps=4", "-update", "1", "-q:v", "2", str(self.latest)]
+            self.keeper = threading.Thread(target=self.hold, daemon=True)
+            self.keeper.start()
         else:
             self.latest = Path(self.source)
 
-    def picture(self, into, wait=20):
-        """A copy of the newest frame made after this call, saved at `into`."""
+    def hold(self):
+        """Keep a connection open, opening it again whenever it ends."""
+        while not self.stopping:
+            self.process = subprocess.Popen(self.command, stdin=subprocess.DEVNULL,
+                                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            if self.stopping:                       # closed while it was opening
+                self.process.terminate()
+            self.process.wait()
+            if not self.stopping:
+                time.sleep(1)
+
+    def picture(self, into, wait=None):
+        """A copy of the newest frame made after this call, saved at `into`.
+        A phone is waited for up to ten minutes, said after ten seconds, so
+        someone can unlock it and the run carries on where it was."""
+        wait = wait or (600 if self.source.startswith("http") else 20)
         asked = time.time()
         until = time.monotonic() + wait
+        told = time.monotonic() + 10
         while time.monotonic() < until:
+            if told and time.monotonic() > told:
+                self.say(f"no picture from {self.source}: is the phone locked or DroidCam closed? "
+                         "Waiting for it; the run carries on when it comes back")
+                told = None
             try:
                 if self.latest.stat().st_mtime > asked:
                     time.sleep(0.1)                  # let the file finish being written
@@ -358,6 +385,7 @@ class Watcher:
         raise RuntimeError(f"no new picture from {self.source} in {wait} s: is the camera on?")
 
     def close(self):
+        self.stopping = True
         if self.process:
             self.process.terminate()
             self.process.wait(5)
@@ -428,12 +456,14 @@ def stick_reader(focuser, picture, settle=1.5, looks=3, sleep=time.sleep):
         # late (19 October 2026: a run read 64 half-steps as 1.4°, 3.2° and then
         # 17.5°), and pictures that agree with each other may all be from
         # before a move. Counted once, on a move of 22°, then waited out on
-        # every move after.
+        # every move after. Seen at 2°, ten times the reading noise: on
+        # 16 November 2026 the NEMA 17 on a TMC2209 turned 4.6° for 256,
+        # under the 5° this first waited for, and the run never started.
         focuser.move(256)
         sleep(settle)
         for count in range(1, 40):
             angle = look()
-            if angle is not None and abs(turned(first, angle)) > 5:
+            if angle is not None and abs(turned(first, angle)) > 2:
                 behind[0] = count - 1               # the first picture showing the move is not behind
                 break
         else:
