@@ -457,7 +457,11 @@ class Watcher:
             self.phone.close()
         if self.process:
             self.process.terminate()
-            self.process.wait(5)
+            try:
+                self.process.wait(5)
+            except subprocess.TimeoutExpired:   # one stuck reconnecting ignored it (16 November 2026)
+                self.process.kill()
+                self.process.wait(5)
 
 
 def look(source, settle=3.0, watcher=None, sleep=time.sleep):
