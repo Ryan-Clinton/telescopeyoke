@@ -322,6 +322,63 @@ def turned(before, after):
     return (after - before + 90) % 180 - 90
 
 
+DROIDCAM = "com.dev47apps.droidcam"
+
+
+class Phone:
+    """An Android phone on the laptop's USB, kept awake through adb while a
+    run watches it: its screen kept on while it is plugged in (Android's own
+    "stay awake while charging"), a wake-up every 20 seconds in case, and
+    DroidCam brought to the front if it has gone behind something. The
+    phone's own setting is put back after. Without adb, or with no phone
+    that has allowed this laptop's USB debugging, it does nothing but say
+    so once. On 16 November 2026 the Pixel locked every half minute
+    through a bench run, its held stream or not; a person had asked on
+    19 October for it to be poked every 20 seconds."""
+
+    def __init__(self, say=print):
+        self.say, self.before, self.stopping = say, None, False
+        if not shutil.which("adb"):
+            say("adb is not installed, so the phone is not kept awake (sudo apt install adb)")
+            return
+        state = self.adb("get-state")
+        if state != "device":
+            say("no phone allowing USB debugging on this laptop, so it is not kept awake: "
+                "plug it in, turn on USB debugging and allow this computer")
+            return
+        self.before = self.adb("shell", "settings", "get", "global", "stay_on_while_plugged_in")
+        self.adb("shell", "svc", "power", "stayon", "true")
+        self.wake()
+        say("the phone is kept awake over USB for this run")
+        threading.Thread(target=self.poke, daemon=True).start()
+
+    @staticmethod
+    def adb(*args):
+        try:
+            done = subprocess.run(["adb", *args], capture_output=True, text=True, timeout=10)
+            return done.stdout.strip()
+        except (OSError, subprocess.TimeoutExpired):
+            return ""
+
+    def wake(self):
+        self.adb("shell", "input", "keyevent", "KEYCODE_WAKEUP")
+        if DROIDCAM not in self.adb("shell", "dumpsys", "activity", "activities").split("mResumedActivity", 1)[-1][:300]:
+            self.adb("shell", "monkey", "-p", DROIDCAM, "-c", "android.intent.category.LAUNCHER", "1")
+
+    def poke(self):
+        while not self.stopping:
+            time.sleep(20)
+            if not self.stopping:
+                self.wake()
+
+    def close(self):
+        self.stopping = True
+        if self.before is not None:
+            # The phone's own "stay awake" setting as it was (0 is off).
+            self.adb("shell", "settings", "put", "global", "stay_on_while_plugged_in",
+                     self.before if self.before.isdigit() else "0")
+
+
 class Watcher:
     """The latest picture from a camera looking down on the motor: a phone
     running DroidCam (its http:// address), a webcam (/dev/video...), or a
@@ -334,7 +391,10 @@ class Watcher:
     DroidCam refused connections until it was unlocked. So when the stream
     ends or is refused, it is opened again a second later, for as long as
     the run lasts, and the run carries on the moment the phone is unlocked.
-    Keeping it awake is the phone's screen timeout."""
+
+    To stop it locking at all, a phone on the laptop's USB with USB debugging
+    allowed is kept awake through adb (Phone) for as long as the run lasts,
+    and given back its own setting after."""
 
     def __init__(self, source, folder, say=None):
         self.source, self.process, self.stopping = str(source), None, False
@@ -347,6 +407,7 @@ class Watcher:
                             "-vf", "fps=4", "-update", "1", "-q:v", "2", str(self.latest)]
             self.keeper = threading.Thread(target=self.hold, daemon=True)
             self.keeper.start()
+            self.phone = Phone(self.say) if self.source.startswith("http") else None
         else:
             self.latest = Path(self.source)
 
@@ -391,6 +452,8 @@ class Watcher:
 
     def close(self):
         self.stopping = True
+        if getattr(self, "phone", None):
+            self.phone.close()
         if self.process:
             self.process.terminate()
             self.process.wait(5)

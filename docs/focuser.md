@@ -372,8 +372,12 @@ the run holds one connection open for its whole length. That does not keep
 the phone awake: on 16 November 2026 the Pixel locked on its screen
 timeout mid-run, plugged into the laptop or not, and DroidCam refused
 connections until it was unlocked. The run reopens the stream every second
-and carries on when it comes back; set the phone's screen timeout longer
-than the run. The free DroidCam takes one viewer at a time.
+and carries on when it comes back. To stop it locking, an Android phone
+on the laptop's USB with USB debugging allowed for this laptop is kept
+awake through `adb` (`sudo apt install adb`) for the whole run: its screen
+kept on while plugged in, a wake-up every 20 seconds, DroidCam brought to
+the front, and the phone's own setting put back after. Without it, the run
+says so and goes on. The free DroidCam takes one viewer at a time.
 
 Off the telescope the gearbox has nothing to push against, so the slack
 it shows is the gearbox's alone; on the focuser, under the drawtube's
