@@ -326,15 +326,15 @@ class Watcher:
     """The latest picture from a camera looking down on the motor: a phone
     running DroidCam (its http:// address), a webcam (/dev/video...), or a
     picture file something else keeps up to date. One connection is held
-    open for the whole run and the newest frame kept: a phone left without
-    a viewer locks its screen and stops sending, and the first frames of a
+    open for the whole run and the newest frame kept: the first frames of a
     fresh connection come before its focus has settled (19 October 2026).
 
-    When the stream ends or the phone refuses the connection, it is opened
-    again a second later, for as long as the run lasts: a phone that has
-    locked latches on the moment it is unlocked, and is then held awake.
-    On 16 November 2026 a run held one connection, lost it after a minute
-    and stopped; on 19 October a loop like this one kept the phone going."""
+    A held connection does not keep a phone awake: on 16 November 2026 the
+    Pixel locked on its screen timeout mid-run, plugged in or not, and
+    DroidCam refused connections until it was unlocked. So when the stream
+    ends or is refused, it is opened again a second later, for as long as
+    the run lasts, and the run carries on the moment the phone is unlocked.
+    Keeping it awake is the phone's screen timeout."""
 
     def __init__(self, source, folder, say=None):
         self.source, self.process, self.stopping = str(source), None, False

@@ -367,10 +367,13 @@ camera that turns would. Each answer is kept in
 `cache/focuser-bench-DATE.json`, its pictures in `cache/focuser-bench/`,
 each with a marked copy showing what was found.
 
-A phone left with no viewer locks and stops sending, and the first frames
-of a new connection come before its focus settles, so the run holds one
-connection open for its whole length. The free DroidCam takes one viewer
-at a time.
+The first frames of a new connection come before its focus settles, so
+the run holds one connection open for its whole length. That does not keep
+the phone awake: on 16 November 2026 the Pixel locked on its screen
+timeout mid-run, plugged into the laptop or not, and DroidCam refused
+connections until it was unlocked. The run reopens the stream every second
+and carries on when it comes back; set the phone's screen timeout longer
+than the run. The free DroidCam takes one viewer at a time.
 
 Off the telescope the gearbox has nothing to push against, so the slack
 it shows is the gearbox's alone; on the focuser, under the drawtube's
