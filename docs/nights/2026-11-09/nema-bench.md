@@ -350,3 +350,23 @@ Driver 1 and the spare may well be good after all. The A4988's hums were
 also without this 5 V. Still to do: steps 6 to 9 of the commissioning
 (full turns against a mark, warmth after a few runs, then onto the
 focuser).
+
+## Bench run, 16 November 2026: the BTT driver runs at 1/64, not 1/8
+
+`./focuser.py bench`, a printed 20 mm dial on the coupler, watched by the
+Pixel on DroidCam (`cache/focuser-bench-20261116-1520.json`):
+
+| | Measured |
+|---|---|
+| 512 half-steps | 5.48° (5.6, 5.5, 5.6, 5.2): 33,653 to a turn, not 4096 |
+| Slack, unloaded | 38.6 half-steps one way, 25.8 the other: 0.4° and 0.3° |
+| Back to the same place | within 0.01° over three trips of 256 out and back |
+| Reading noise | 0.03° a picture |
+
+The firmware sends 25 microsteps for every 64 half-steps, assuming 1/8
+(1600 a turn). The turn measured is about eight times finer: 1/64, which on
+a TMC2209 is MS1 low and MS2 high. That fits the empty socket's reading on
+9 November (MS1 low, MS2 not low). At 1/64 exactly, 512 would be 5.63°; the
+2.6% short is not explained. The slack is the coupler's: there is no
+gearbox. The phone's stream dropped twice when its screen locked; plugged
+into the laptop it held (the bench's Watcher now reopens the stream).
