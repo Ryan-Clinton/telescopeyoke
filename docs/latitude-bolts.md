@@ -38,6 +38,11 @@ With the head off, the bolt carries no load. That shows which case it is:
   drilling out and the thread re-tapping, M8. That is a job for someone
   with a drill press, or a reason to ask Gary.
 
+**Ordered 16 November 2026:** two M8 x 80 mm grade 12.9 cap head bolts,
+threaded all the way up
+([eBay 236709921725](https://www.ebay.co.uk/itm/236709921725),
+£7.80 delivered), due 19 to 25 November. They turn with a 6 mm Allen key.
+
 ## The parts
 
 - **Thread: M8.** Teleskop-Express sells Sky-Watcher's own spare
