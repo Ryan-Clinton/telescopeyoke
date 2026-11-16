@@ -8,6 +8,34 @@ The forum threads are about the EQ3-2. The EQ3 Pro is the same head with
 motors fitted, so the latitude parts should be the same, but check yours as
 you go.
 
+## This mount's bolt
+
+The broken bolt won't turn in or out. It is probably bent, but nobody has
+checked. The other bolt still lowers the axis; raising it needs a hand on
+the head.
+
+Because this bolt won't turn either way, the easy routes are out:
+
+- It can't simply be unscrewed.
+- The forum trick of screwing it in a few turns and sawing off the bent end
+  needs a bolt that still turns inward.
+
+So the head has to come off its fork:
+
+1. Take the tube, the counterweights and the motors' leads off.
+2. Get the glued covers off (below).
+3. Hold the head and take out the pivot bolt and its lock nut. Note where
+   the two plastic spacers go.
+
+With the head off, the bolt carries no load. That shows which case it is:
+
+- **It turns now.** It was only jammed under the tab. Unscrew it.
+- **It still won't turn, and the bend is outside the casting.** Saw it off
+  above the casting, then unscrew the straight stub.
+- **It still won't turn, and the bend is inside the thread.** It needs
+  drilling out and the thread re-tapping, M8. That is a job for someone
+  with a drill press, or a reason to ask Gary.
+
 ## The parts
 
 - **Thread: M8.** Teleskop-Express sells Sky-Watcher's own spare
@@ -27,9 +55,9 @@ you go.
   avoids the argument. A hardware-shop M8 bolt with a nut locked on as a
   handle, or a printed knob, works as well as the spare part.
 
-## First: do the covers need to come off at all?
+## When the covers don't need to come off
 
-Usually not. A latitude bolt just screws through the mount's casting and
+On this mount they do (above). In general, though, they usually don't. A latitude bolt just screws through the mount's casting and
 pushes on the tab (the "paddle") under the head. To swap one that is
 straight enough to turn:
 
