@@ -55,6 +55,7 @@ import json
 import math
 import signal
 import sys
+import threading
 import time
 from pathlib import Path
 
@@ -180,10 +181,33 @@ def handset_firmware(raw):
     return None
 
 
+def _interrupted(number, frame):
+    raise KeyboardInterrupt
+
+
+def stop_on_termination():
+    """From here on SIGTERM and SIGHUP stop this process as Ctrl+C does.
+    A slew is a motor left turning until the process says stop; killed by
+    a signal Python does not handle (Claude Code's interrupt, a closed
+    terminal), it never would. As KeyboardInterrupt, every script's own
+    `except BaseException: scope.stop()` runs on the way out, and nothing
+    takes it for an ordinary refusal (shoot.py carries on past SystemExit).
+    A handler a script set itself (guider.py, focus.py) or an ignored
+    signal (nohup) is left as it is. Windows ends a process without a
+    signal it can catch: there, Ctrl+C, and the console's own stop."""
+    if threading.current_thread() is not threading.main_thread():
+        return
+    for name in ("SIGTERM", "SIGHUP"):
+        number = getattr(signal, name, None)
+        if number is not None and signal.getsignal(number) == signal.SIG_DFL:
+            signal.signal(number, _interrupted)
+
+
 class Mount:
     def __init__(self, port=None, watch=True, demo=False, handset=None):
         """`demo` drives a simulated handset; `handset` supplies one directly
         (anything with the serial port's write/read_until interface)."""
+        stop_on_termination()
         self.demo = demo or handset is not None or config.DEMO
         # Read now, refused at the first move (self.may_move): stop and
         # status need no site, so a missing or example one never stops them.
@@ -350,6 +374,10 @@ class Mount:
         for axis in (RA, DEC):
             self.rate(axis, POSITIVE, 0)
             self.rate(axis, NEGATIVE, 0)
+        # The Dec creep is the handset's other kind of rate (mode 3): whether
+        # a fixed rate of 0 also ends it is not known, so it is ended itself,
+        # as home() does before a seek. Tracking is left as it is.
+        self.dec_creep(0)
 
     def tracking(self, on):
         # Mode 2 is equatorial tracking, 0 is off.
@@ -1573,13 +1601,7 @@ def main():
     args = ap.parse_args()
     if args.clearance_test and args.command != "point":
         ap.error("--clearance-test goes with point only")
-    # A slew is a motor left turning until this process says stop: killed
-    # (Claude Code's interrupt sends SIGTERM, a closed terminal SIGHUP), it
-    # would never say it. As SystemExit, act() stops the mount on the way out.
-    # Windows ends a process without a signal it can catch: there, Ctrl+C.
-    for name in ("SIGTERM", "SIGHUP"):
-        if hasattr(signal, name):
-            signal.signal(getattr(signal, name), lambda number, frame: sys.exit(128 + number))
+    stop_on_termination()
 
     args.demo = args.demo or config.DEMO
     if args.demo and not config.DEMO:
@@ -1691,7 +1713,7 @@ def own_site_set():
     the example's. Never raises: stop and status must work without one."""
     try:
         return config.FILE.exists() and not is_example_site(config.load()["site"])
-    except Exception:      # noqa: BLE001 - an unreadable file is no site, not a crash
+    except (Exception, SystemExit):      # noqa: BLE001 - an unreadable file (or a bad spot name) is no site, not a crash
         return False
 
 

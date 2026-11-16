@@ -82,6 +82,10 @@
     "form": {
       "type": "string",
       "description": "--probe: the Mount support form, filled in, for the person to send or not."
+    },
+    "wifi_listed": {
+      "type": "boolean",
+      "description": "Whether the computer's Wi-Fi networks could be listed; false means a SynScan network in reach would not show."
     }
   }
 }

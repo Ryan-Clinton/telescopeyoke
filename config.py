@@ -278,10 +278,14 @@ def _spot():
     except (OSError, tomllib.TOMLDecodeError):
         return None     # said by whatever reads the file next; importing config must not fail (mount.py stop)
     if name and not re.fullmatch(NAME, name):
-        sys.exit(f"[site] spot in {FILE.name} is lower-case letters, digits, - and _ (it names a file): not {name!r}")
+        # Said by load(), not here: importing config must never fail (mount.py stop).
+        global SPOT_PROBLEM
+        SPOT_PROBLEM = f"[site] spot in {FILE.name} is lower-case letters, digits, - and _ (it names a file): not {name!r}"
+        return None
     return name
 
 
+SPOT_PROBLEM = None
 SPOT = _spot()
 
 
@@ -302,6 +306,8 @@ def load():
     if not FILE.exists():
         raise SystemExit("No config.toml. Copy config.example.toml to config.toml "
                          "and put your own location in it.")
+    if SPOT_PROBLEM:
+        raise SystemExit(SPOT_PROBLEM)
     cfg = _merged(_read(FILE))
     if SPOT and spot_file(SPOT).exists():
         for section, values in _read(spot_file(SPOT)).items():

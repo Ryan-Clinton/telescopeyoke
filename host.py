@@ -73,8 +73,26 @@ def serial_ports():
     """Every serial port seen, as (device, description) pairs."""
     if not WINDOWS:
         return [(port, Path(port).name) for port in sorted(glob.glob("/dev/serial/by-id/*"))]
-    from serial.tools import list_ports
+    try:
+        from serial.tools import list_ports
+    except ImportError:     # before the installer: Plug and Play's own list of ports
+        return windows_ports()
     return sorted((p.device, p.description or "") for p in list_ports.comports())
+
+
+def windows_ports(listing=None):
+    """The COM ports Windows has, as (device, name), from Plug and Play's
+    Ports class (whose FriendlyName lines `listing` stands in for): what
+    serial_ports gives before pyserial is installed. Reads only."""
+    if listing is None:
+        command = "Get-PnpDevice -PresentOnly -Class Ports | ForEach-Object { $_.FriendlyName }"
+        try:
+            listing = subprocess.run(["powershell", "-NoProfile", "-Command", command],
+                                     capture_output=True, text=True, timeout=30).stdout
+        except (OSError, subprocess.SubprocessError):
+            return []
+    return sorted((m.group(1), line.strip()) for line in listing.splitlines()
+                  if (m := re.search(r"\((COM\d+)\)", line)))
 
 
 def serial_details():
@@ -166,8 +184,11 @@ def serial_port(match):
     if not WINDOWS:
         ports = sorted(glob.glob(f"/dev/serial/by-id/*{match}*"))
         return ports[0] if ports else None
-    from serial.tools import list_ports
     wanted = match.lower()
+    try:
+        from serial.tools import list_ports
+    except ImportError:     # before the installer: by the names Windows gives the ports
+        return next((device for device, name in windows_ports() if wanted in name.lower()), None)
     for port in sorted(list_ports.comports(), key=lambda p: p.device):
         if wanted in " ".join(filter(None, (port.description, port.manufacturer, port.hwid))).lower():
             return port.device

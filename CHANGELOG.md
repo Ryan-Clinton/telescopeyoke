@@ -6,6 +6,20 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+## 0.3.2: every mount script stops when killed
+
+- **Stopping**: any script that drives the mount (GoTo, polar alignment,
+  the skyline survey, imaging's re-centring) now stops it when killed
+  from outside on Linux, as Ctrl+C does; stop also ends the Dec drift
+  correction; and an invalid spot name no longer keeps stop from
+  reaching the mount.
+- **Before the installer, on Windows**: `doctor.py` and `newhardware.py`
+  find the COM ports without pyserial.
+- **What is plugged in**: no lead is called the mount's while the
+  settings still have the example location; `newhardware.py` says when
+  it could not list Wi-Fi networks (`wifi_listed`), rather than showing
+  none.
+
 ## 0.3.1: stopping and refusing, made sure
 
 Fixes to 0.3.0 for a rig other than the owner's.

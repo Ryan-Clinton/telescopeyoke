@@ -106,7 +106,11 @@ def in_use():
     the adapter names in its own config.toml. A fresh checkout has none, and
     the example's names (an FTDI lead) say nothing about someone else's
     adapters, so then nothing is in use."""
-    if not config.FILE.exists():
+    try:
+        own = config.FILE.exists() and config.load()["site"]["latitude"] != config.example()["site"]["latitude"]
+    except (Exception, SystemExit):       # noqa: BLE001 - unreadable settings are no settings
+        own = False
+    if not own:     # a fresh checkout, or the example the installer copied, not yet filled in
         return set()
     hw = config.hardware()
     used = set()
@@ -138,8 +142,10 @@ def wifi_networks(run=None, windows=host.WINDOWS):
     """SynScan Wi-Fi networks in the computer's own list (Linux: NetworkManager;
     Windows: netsh), as devices: {"device": "wifi", "description", "maker",
     "usb", "joined"}. Joined means this computer is on it, not that the
-    adapter has answered anything. Reads the list only; nothing is sent to
-    the adapter."""
+    adapter has answered anything. None when the list could not be made
+    (no Wi-Fi tools, the adapter off, Windows' location setting refusing
+    it): then nothing seen proves nothing. Reads the list only; nothing is
+    sent to the adapter."""
     import subprocess
     run = run or subprocess.run
     seen = {}
@@ -147,7 +153,10 @@ def wifi_networks(run=None, windows=host.WINDOWS):
         if windows:
             # netsh's labels stay "SSID" in every language; the networks in
             # reach, then the one this computer has joined.
-            heard = run(["netsh", "wlan", "show", "networks"], capture_output=True, text=True, timeout=10).stdout
+            listed = run(["netsh", "wlan", "show", "networks"], capture_output=True, text=True, timeout=10)
+            if listed.returncode:
+                return None
+            heard = listed.stdout
             joined = run(["netsh", "wlan", "show", "interfaces"], capture_output=True, text=True, timeout=10).stdout
             on = {m.strip() for m in re.findall(r"(?m)^\s*SSID\s*:\s*(.+)$", joined or "")}
             for ssid in re.findall(r"(?m)^\s*SSID \d+\s*:\s*(.+)$", heard or "") + sorted(on):
@@ -156,12 +165,14 @@ def wifi_networks(run=None, windows=host.WINDOWS):
                     seen[ssid] = ssid in on
         else:
             done = run(["nmcli", "-t", "-f", "ACTIVE,SSID", "dev", "wifi"], capture_output=True, text=True, timeout=10)
+            if done.returncode:
+                return None
             for line in done.stdout.splitlines():
                 active, _, ssid = line.partition(":")
                 if ssid.lower().startswith("synscan"):
                     seen[ssid] = seen.get(ssid, False) or active == "yes"
     except (OSError, subprocess.SubprocessError):
-        return []
+        return None
     return [{"device": "wifi", "description": f"SynScan Wi-Fi network {re.sub(r'_[A-Za-z0-9]+$', '_…', ssid)}",
              "maker": "Sky-Watcher", "usb": "", "joined": joined} for ssid, joined in seen.items()]
 
@@ -170,7 +181,7 @@ def look(details=None, known=None, used=None, networks=None):
     """Each serial device, and each SynScan Wi-Fi network in reach, with
     whether it is in use by this rig, known, or new."""
     details = (host.serial_details() if details is None else details) + (
-        wifi_networks() if networks is None else networks)
+        (wifi_networks() or []) if networks is None else networks)
     known = load_known() if known is None else known
     used = in_use() if used is None else used
     out = []
@@ -305,12 +316,15 @@ def run(args, say=print):
     if args.watch:
         watch(say)
         return {}
-    found = look()
+    networks = wifi_networks()
+    found = look(networks=networks or [])
     for d in found:
         joined = " (joined)" if d.get("joined") else ""
         say(f"  {d['state']:7} {d['device']}  {d['description']}{joined}  {d['maker']}  {d['usb']}")
     if not found:
         say("No USB serial devices plugged in.")
+    if networks is None:
+        say("Wi-Fi networks could not be listed here, so a SynScan Wi-Fi adapter in reach would not show.")
     usb = usb_inventory()
     if usb:
         say("USB devices a telescope might use:")
@@ -321,7 +335,7 @@ def run(args, say=print):
         say("New: ./newhardware.py --probe PORT asks one what it is (it only reads; PORT \"wifi\" for a SynScan "
             "network, once joined); --known PORT if it is yours.")
     return {"devices": [{k: d[k] for k in ("device", "description", "maker", "usb", "state")} for d in found],
-            "usb": usb}
+            "usb": usb, "wifi_listed": networks is not None}
 
 
 def main():
