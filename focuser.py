@@ -23,6 +23,7 @@ bring the stars to focus with nobody touching the telescope.
 """
 import argparse
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -737,6 +738,10 @@ def vref(port=None, sleep=time.sleep):
 
 
 def main(argv=None):
+    # Killed, a run still closes what it opened: on 16 November 2026 two
+    # killed bench runs left their ffmpeg holding the phone's stream and the
+    # phone kept awake.
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("command", choices=["flash", "test", "move", "angle", "bench", "load-test", "look", "temp", "vref"])
     ap.add_argument("steps", nargs="?", type=int, help="for move: half-steps, minus for the other way")
