@@ -15,7 +15,8 @@ guide camera (`./guidecam.py`). The 183C (colour) was its first camera.
 
 The EQ3 Pro was serviced by Gary on 16 November 2026: the motors taken off,
 all the old yellow and brown grease cleaned out, new grease put in and the
-worm gears set; the bent south latitude bolt straightened the same evening.
+worm gears set (no thrust bearings fitted: Gary says they are not needed);
+the bent south latitude bolt straightened the same evening.
 Guiding figures from before that date (Dec slack, RMS) are from the old
 grease and worm settings.
 
