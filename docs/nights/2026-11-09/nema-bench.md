@@ -320,3 +320,33 @@ Inconclusive: it adds nothing about the spare.
 continuity, VM to the VIN hole, before power. The commissioning steps are in
 [focuser.md](../../focuser.md#the-nema-17-drive-not-yet-commissioned); they
 replace the list that stood here.
+
+## Found, 16 November 2026: the carrier's 5 V was never connected
+
+A BTT TMC2209 V1.3, seated by its pins (VM in the hole marked VIN), Vref
+1.3 V (about 0.92 A), did exactly what the spare did: `+` turned, `−`
+hummed, whichever went first. So the drivers were not the fault.
+
+- The meter on the driver's DIR pin: 0 V in `−`, 4.3 V in `+`. DIR reaches
+  the driver.
+- The meter on its VIO (VDD) pin, idle: 4.0 V, not 5 V.
+- The carrier's CN5 row (red, marked V) beeps to VIO; CN6 (black, marked G)
+  is ground. Nothing was plugged into CN5: the carrier has no 5 V of its
+  own and expects the controller to supply it.
+- The Nano's 5V terminal wired to a CN5 pin: **one turn each way, both
+  directions.**
+
+Without the 5 V, the driver's logic ran on what leaked in through the
+Nano's signal pins: enough while DIR was high, too little while it was low.
+That is the one-direction fault of 9 and 10 November, on every driver, and
+why moving DIR or the plug never changed it. The same symptom with VDD left
+empty is reported on the Arduino forum ("Nema 17 Stepper Motor only rotates
+in one direction / TMC2209 V1.2").
+
+Not explained: the meter read the DIR and VIO levels as negative (−4.3 V,
+−4.04 V) against the GND screw, while it read +12 V from GND to VIN.
+
+Driver 1 and the spare may well be good after all. The A4988's hums were
+also without this 5 V. Still to do: steps 6 to 9 of the commissioning
+(full turns against a mark, warmth after a few runs, then onto the
+focuser).

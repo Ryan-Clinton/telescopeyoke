@@ -11,17 +11,19 @@ on the telescope.
 drive, a 28BYJ-48 on a ULN2003 board (Parts and Wiring below), couldn't lift
 the drawtube with the 183M's train on. The firmware in `firmware/focuser/`
 now drives a NEMA 17 on a TMC2209 instead, and **no longer drives the
-28BYJ-48**. The NEMA 17 drive is **not commissioned**. On the bench it has
-turned in one direction only, on a driver that is probably faulty
-([the bench session](nights/2026-11-09/nema-bench.md)). Until it is
-commissioned, focus is by hand (`./focus.py`, spoken numbers).
+28BYJ-48**. The NEMA 17 drive is **not commissioned**. On the bench it
+turned in one direction only until 16 November 2026, when the cause was
+found: the carrier's 5 V row (CN5) had nothing on it. With the Nano's 5V
+there, a BTT TMC2209 V1.3 turns both ways
+([the bench session](nights/2026-11-09/nema-bench.md)). It isn't on the
+focuser yet; until it is, focus is by hand (`./focus.py`, spoken numbers).
 
 ## The NEMA 17 drive (not yet commissioned)
 
 | Part | |
 |---|---|
 | Motor | 17HS4401 NEMA 17, 1.7 A, 4-wire lead with a black 4-pin plug |
-| Carrier | Black A4988/DRV8825-style screw-terminal board: green VIN/GND terminal, 3 microstep switches, EN/STEP/DIR header, its own logic supply |
+| Carrier | Black A4988/DRV8825-style screw-terminal board: green VIN/GND terminal, 3 microstep switches, EN/STEP/DIR header, a 5 V row (CN5, V) and a ground row (CN6, G); no 5 V of its own |
 | Driver | BigTreeTech TMC2209 V1.3 (two on order, 9 November 2026). The two unbranded TMC2209s: one holds the motor but has never turned it (it ran backwards under 12 V first, so it may be damaged); one turns it only with DIR high |
 | Supply | 12 V 2 A, + to VIN and − to GND on the green terminal |
 
@@ -31,6 +33,15 @@ commissioned, focus is by hand (`./focus.py`, spoken numbers).
 | D9 | STEP |
 | D10 | DIR |
 | GND | GND on the green terminal, under the same screw as the 12 V − |
+| 5V | any pin of CN5, the red row marked V: the driver's logic supply (VDD, VIO on the BTT board) |
+
+**The carrier doesn't make its own 5 V.** CN5 (red, V) is joined to the
+socket's VDD hole and CN6 (black, G) to ground; the 5 V must come from the
+controller. Without it, the driver's logic ran on what leaked in from the
+Nano's signal wires: enough with DIR high, too little with DIR low, so the
+motor turned one way and hummed the other on every driver tried (9 to
+16 November 2026). With the Nano's 5V on CN5, a BTT TMC2209 V1.3 turned
+both ways on 16 November 2026.
 
 All three microstep switches are off. The firmware assumes 1/8 steps (1600
 microsteps a turn), which on a TMC2209 is MS1 and MS2 both low. That isn't
