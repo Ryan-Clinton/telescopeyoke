@@ -13,6 +13,12 @@ USB filter wheel (1 L, 2 R, 3 G, 4 B, 5 Ha, 6 SII, 7 OIII; LRGB and SHO
 parfocal); a home-built motor focuser (`docs/focuser.md`); an Altair GPCAM
 guide camera (`./guidecam.py`). The 183C (colour) was its first camera.
 
+The EQ3 Pro was serviced by Gary on 16 November 2026: the motors taken off,
+all the old yellow and brown grease cleaned out, new grease put in and the
+worm gears set; the bent south latitude bolt straightened the same evening.
+Guiding figures from before that date (Dec slack, RMS) are from the old
+grease and worm settings.
+
 ## On USB
 
 | USB ID      | What it is                           |

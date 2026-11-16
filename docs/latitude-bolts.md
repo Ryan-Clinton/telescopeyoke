@@ -10,6 +10,12 @@ you go.
 
 ## This mount's bolt
 
+**Straightened, 16 November 2026.** During Gary's service of the mount that
+evening the south bolt was straightened and turns again, so the head did not
+have to come off for it. The steps below are kept for a bolt that bends
+again; the new 12.9 bolts (ordered below) are still the lasting fix.
+
+
 The broken bolt is the south one, at the polar-scope end, so the long one.
 The user thinks it is the bolt that raises the axis. It won't turn in or out.
 It is probably bent, but nobody has
