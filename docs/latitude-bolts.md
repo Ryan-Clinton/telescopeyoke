@@ -66,6 +66,14 @@ With the head off, the bolt carries no load. That shows which case it is:
 - **Best choice: M8 grade 12.9 socket cap bolts**, at the measured lengths,
   with a press-on or printed knob on the head. Grease the thread to stop
   galling.
+- **They must be fully threaded.** Long socket cap bolts are usually
+  threaded for only 28 mm, which isn't enough travel.
+- **Two packs found on Amazon UK (16 November 2026):**
+  - [PATIKIL M8 x 80, 12.9, full thread, 10 pieces, £9.39](https://www.amazon.co.uk/dp/B0F1XZTLTP),
+    for the long bolt.
+  - [PATIKIL M8 x 50, 12.9, full thread, 25 pieces, £13.99](https://www.amazon.co.uk/dp/B0F1XK96V1),
+    for the short bolt.
+  - Check both lengths against the good bolt first.
 - **Like for like:** Grover's Optics in Northallerton has the Sky-Watcher
   bolt for the EQ3 Pro, long or short, at £20 to £30. Material not stated.
 
