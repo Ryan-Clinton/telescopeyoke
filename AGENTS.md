@@ -182,7 +182,7 @@ a motor's creep rate. `mount.py stop` is always allowed.
   stars), and say "unknown" when the evidence does not settle it.
 - A cloud or rain arrival is a guide, not a promise: several of our own
   calculations giving the same time is not a reason to trust it, and nor are
-  the four forecast centres agreeing (they share data). What a method is
+  the forecast centres agreeing (they share data). What a method is
   worth is what `./clouds.py --scores` says it has done against what was
   seen: the sky checks, the radar and every imaging frame, each judged by
   one star rule (20 or more clear, under 8 cloud, between unknown). The
@@ -190,6 +190,8 @@ a motor's creep rate. `mount.py stop` is always allowed.
   forecast counts as on time only inside its own range, its window is
   judged on its own (a false alarm however soon clear sky came after), and
   one with an hour of its stretch unseen is unjudged, never right or wrong.
+  Its horizon lines set the satellite beside each forecast centre's hourly
+  cloud (Meteosource among them from 16 November 2026), against the same looks.
   `--scores 1 --keep` at the night's end keeps that night's scores with the
   scoring code's commit, so a later change to the scoring can be told apart
   from a change in the forecasts.

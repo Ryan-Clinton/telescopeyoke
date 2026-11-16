@@ -28,6 +28,7 @@ SOURCES = {
     "weather8w": ("Open-Meteo", "https://open-meteo.com"),
     "weatherpast": ("Open-Meteo", "https://open-meteo.com"),
     "weathercentres": ("Open-Meteo, four centres", "https://open-meteo.com/en/docs#models"),
+    "meteosource": ("Meteosource", "https://www.meteosource.com"),
     "winds": ("Open-Meteo, winds aloft", "https://open-meteo.com/en/docs"),
     "seeing": ("7Timer ASTRO", "https://www.7timer.info"),
     "lightpollution": ("Lorenz light-pollution atlas", "https://djlorenz.github.io/astronomy/lp/"),
@@ -109,8 +110,13 @@ def weather(lat, lon):
 # four as ryanclinton.uk's Meanwhile page). Open-Meteo's default forecast is
 # one model: in the UK it is the Met Office's, and on 3 November 2026 it gave
 # one clear hour while ECMWF, ICON and GFS all cleared 00:00-03:00.
-CENTRES = {"ukmo_seamless": "Met Office", "ecmwf_ifs025": "ECMWF",
-           "icon_seamless": "DWD ICON", "gfs_seamless": "NOAA GFS"}
+OPEN_METEO_CENTRES = {"ukmo_seamless": "Met Office", "ecmwf_ifs025": "ECMWF",
+                      "icon_seamless": "DWD ICON", "gfs_seamless": "NOAA GFS"}
+# Meteosource (the Clear Skies app's forecast, shown by Gary on 16 November
+# 2026) is a fifth, with a key of the person's own in [meteosource] key. Its
+# free plan gives total cloud, rain, temperature and wind for 24 hours, and
+# blends models of its own, so it is scored as a forecast like the others.
+CENTRES = {**OPEN_METEO_CENTRES, "meteosource": "Meteosource"}
 CENTRE_VARS = ("cloud_cover,precipitation,precipitation_probability,temperature_2m,"
                "dew_point_2m,wind_speed_10m,visibility")
 
@@ -122,14 +128,57 @@ def weather_centres(lat, lon):
     def fetch():
         h = _get(
             "https://api.open-meteo.com/v1/forecast",
-            latitude=lat, longitude=lon, hourly=CENTRE_VARS, models=",".join(CENTRES),
+            latitude=lat, longitude=lon, hourly=CENTRE_VARS, models=",".join(OPEN_METEO_CENTRES),
             forecast_days=8, timeformat="unixtime", timezone="UTC",
         ).json()["hourly"]
         n = len(h["time"])
         return {"time": h["time"],
                 **{m: {v: h.get(f"{v}_{m}") or [None] * n for v in CENTRE_VARS.split(",")}
-                   for m in CENTRES}}
-    return _cached(f"weathercentres_{lat:.3f}_{lon:.3f}", 1, fetch)
+                   for m in OPEN_METEO_CENTRES}}
+    w = _cached(f"weathercentres_{lat:.3f}_{lon:.3f}", 1, fetch)
+    if w:
+        w = dict(w, meteosource=_meteosource_on(w["time"], meteosource(lat, lon)))
+    return w
+
+
+def _key(section):
+    try:
+        import config
+        return (config.load().get(section) or {}).get("key")
+    except Exception:      # noqa: BLE001 - no config: no key
+        return None
+
+
+def meteosource(lat, lon):
+    """Meteosource's hourly forecast for the next 24 h (free plan): {unix
+    hour: {cloud_cover, precipitation, temperature_2m, wind_speed_10m}}, or
+    None with no key or no answer. Kept an hour: 24 calls a day at most of
+    the plan's 400."""
+    key = _key("meteosource")
+    if not key:
+        return None
+
+    def fetch():
+        rows = requests.get("https://www.meteosource.com/api/v1/free/point", timeout=TIMEOUT, headers=HEADERS,
+                            params=dict(lat=f"{lat:.3f}", lon=f"{lon:.3f}", sections="hourly",
+                                        timezone="UTC", units="metric", key=key))
+        rows.raise_for_status()
+        out = {}
+        for r in rows.json()["hourly"]["data"]:
+            t = int(datetime.fromisoformat(r["date"]).replace(tzinfo=timezone.utc).timestamp())
+            wind = (r.get("wind") or {}).get("speed")
+            out[str(t)] = {"cloud_cover": (r.get("cloud_cover") or {}).get("total"),
+                           "precipitation": (r.get("precipitation") or {}).get("total"),
+                           "temperature_2m": r.get("temperature"),
+                           "wind_speed_10m": None if wind is None else round(wind * 3.6, 1)}   # m/s to km/h, as Open-Meteo
+        return out
+    return _cached(f"meteosource_{lat:.3f}_{lon:.3f}", 1, fetch)
+
+
+def _meteosource_on(times, ms):
+    """Meteosource's hours on Open-Meteo's time list, None where it does not reach."""
+    ms = ms or {}
+    return {v: [(ms.get(str(int(t))) or {}).get(v) for t in times] for v in CENTRE_VARS.split(",")}
 
 
 def weather_past(lat, lon, days=60):

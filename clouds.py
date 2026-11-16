@@ -1190,20 +1190,25 @@ def _note_horizons(answer, ahead, site, taken):
     except (OSError, ValueError):
         pass
     import feeds
-    met = {}
+    said = {}                  # each forecast centre's clear or not at each horizon
     try:
         w = feeds.weather_centres(site["latitude"], site["longitude"]) or {}
-        cover = w.get("ukmo_seamless", {}).get("cloud_cover", [])
-        for minutes in HORIZONS_MIN:
-            t = taken.timestamp() + minutes * 60
-            k = min(range(len(w["time"])), key=lambda i: abs(w["time"][i] - t))
-            met[minutes] = None if abs(w["time"][k] - t) > 3600 or cover[k] is None else cover[k] < COVER_MIN
-    except Exception:      # noqa: BLE001 - kept without the baseline
-        met = {}
+        for model, name in feeds.CENTRES.items():
+            cover = w.get(model, {}).get("cloud_cover") or []
+            said[name] = {}
+            for minutes in HORIZONS_MIN:
+                t = taken.timestamp() + minutes * 60
+                k = min(range(len(w["time"])), key=lambda i: abs(w["time"][i] - t))
+                said[name][minutes] = (None if k >= len(cover) or abs(w["time"][k] - t) > 3600
+                                       or cover[k] is None else cover[k] < COVER_MIN)
+    except Exception:      # noqa: BLE001 - kept without the baselines
+        said = {}
+    met = said.get("Met Office", {})
     _append(HORIZONS, {"t": time.time(), "picture": answer["picture"], "view": answer.get("view"),
                        "method": answer.get("by"), "now_clear": answer["here"] == "probably clear",
                        "ahead": {str(m): ahead.get(m) for m in HORIZONS_MIN},
-                       "met_office": {str(m): met.get(m) for m in HORIZONS_MIN}})
+                       "met_office": {str(m): met.get(m) for m in HORIZONS_MIN},
+                       "centres": {name: {str(m): v.get(m) for m in HORIZONS_MIN} for name, v in said.items()}})
 
 
 def horizon_lines(days=14):
@@ -1224,7 +1229,8 @@ def horizon_lines(days=14):
             return []
     since = time.time() - days * 86400
     looks = [r for r in _looks(since) if r["kind"] == "clear"]
-    tally = {m: {"satellite": [0, 0], "as the picture": [0, 0], "as last seen": [0, 0], "Met Office": [0, 0]}
+    import feeds
+    tally = {m: {name: [0, 0] for name in ("satellite", "as the picture", "as last seen", *feeds.CENTRES.values())}
              for m in HORIZONS_MIN}
     for h in (r for r in rows(HORIZONS) if r["t"] >= since):
         made = dt.datetime.fromisoformat(h["picture"]).timestamp()
@@ -1240,9 +1246,11 @@ def horizon_lines(days=14):
             seen = min(near, key=lambda s: abs(s["t"] - t))["yes"]
             before = [s for s in looks if h["t"] - 900 <= s["t"] <= h["t"]]
             last = before[-1]["yes"] if before else None
+            centres = h.get("centres") or {"Met Office": h.get("met_office") or {}}   # rows before 16 Nov 2026
             for name, said in (("satellite", h["ahead"].get(str(m))), ("as the picture", h.get("now_clear")),
-                               ("as last seen", last), ("Met Office", h["met_office"].get(str(m)))):
-                if said is not None:
+                               ("as last seen", last),
+                               *((n, (v or {}).get(str(m))) for n, v in centres.items())):
+                if said is not None and name in tally[bucket]:
                     tally[bucket][name][1] += 1
                     tally[bucket][name][0] += said == seen
     out = []
@@ -1495,9 +1503,9 @@ def keep_scores(lines, days):
     return out
 
 def _centres(site, taken):
-    """Each of the four forecasting centres' clear hours (cloud under
+    """Each forecasting centre's clear hours (cloud under
     COVER_MIN %) in the next 8 h from the picture, as "HH-HH" spells: so a
-    satellite arrival can be set beside four models, not one. They share
+    satellite arrival can be set beside several forecasts, not one. They share
     much of their data, so their agreeing is support, not proof."""
     import datetime as dt
 

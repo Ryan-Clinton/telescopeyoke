@@ -28,7 +28,7 @@ is `docs/agents/setup-routine.md` step 6b.
      sky, the candidates worth a second look, and only what is up tonight);
    - `./transits.py`;
    - asked to compare the forecasts or models: `./tonight.py --forecast`
-     (the four centres side by side, hour by hour), its table in the answer;
+     (the forecast centres side by side, hour by hour), its table in the answer;
    - the last night's notes, where `CLAUDE.local.md` keeps them: what was
      patrolled and how the sky really was (fog the forecast missed).
 
