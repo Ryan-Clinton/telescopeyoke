@@ -107,7 +107,8 @@ def in_use():
     the example's names (an FTDI lead) say nothing about someone else's
     adapters, so then nothing is in use."""
     try:
-        own = config.FILE.exists() and config.load()["site"]["latitude"] != config.example()["site"]["latitude"]
+        site, example = config.load()["site"], config.example()["site"]
+        own = config.FILE.exists() and (site["latitude"], site["longitude"]) != (example["latitude"], example["longitude"])
     except (Exception, SystemExit):       # noqa: BLE001 - unreadable settings are no settings
         own = False
     if not own:     # a fresh checkout, or the example the installer copied, not yet filled in

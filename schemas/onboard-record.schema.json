@@ -9,11 +9,14 @@
       "type": "object",
       "propertyNames": {
         "enum": [
+          "telescope",
+          "camera",
           "equipment",
           "frame",
           "moves",
           "first-light",
-          "motor-focuser"
+          "motor-focuser",
+          "manual-focuser"
         ]
       },
       "additionalProperties": {
@@ -27,6 +30,12 @@
           },
           "equipment": {
             "type": "object"
+          },
+          "settings": {
+            "type": "object"
+          },
+          "light_path": {
+            "type": "array"
           }
         }
       }

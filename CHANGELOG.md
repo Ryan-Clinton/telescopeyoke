@@ -6,6 +6,19 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+- **`ty onboard` says only what it knows**: the telescope and the camera
+  are separate steps, showing which settings were changed from the
+  example and which were not; a plate solve's match is the pixel scale
+  alone; a frame or picture counts only for the camera and light path
+  in use; imaging ready is checked now beside the mount; `--no-check`
+  no longer says every step is done; a hand focuser can be recorded
+  (`--confirm manual-focuser`); the kit says whether `keeper.py` can hold
+  the camera cold, and whether the camera is still the example's.
+- `newhardware.py` takes the settings as the person's by latitude and
+  longitude, not latitude alone.
+- The setup routine's account of the owner's camera lead and hub moved
+  to [owner's rig](docs/agents/owner-rig.md).
+
 ## 0.4.0: setup that remembers, skills that follow the rig
 
 - **`ty onboard`**: how far a rig's first setup has got and the next

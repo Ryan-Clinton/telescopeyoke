@@ -31,6 +31,28 @@ either (18 October 2026: the CH340 was on USB, I took "took the
 autofocuser off earlier" to mean it was still off, and ran the
 hand-turned aid instead of the motor).
 
+## The camera's lead, and a jam
+
+Since 1 November 2026 there is no hub: the RSH-ST04 kept
+dropping off the laptop and has been returned to Amazon
+(`docs/usb-hub.md`). The camera goes on the 3 m lead straight into a laptop
+USB-A socket, where it has never dropped off USB and on 1 November kept
+every 1 s frame at 5000 Mb/s. With no hub nothing can cut its power, so a
+jam (no frame at all) gets software steps first, then hands: (a) a command
+refused with `CAMERA_BUSY` names the process holding the camera
+(`cameralock.py`); stop a stale one with a plain `kill` and wait until it is
+gone; (b) a command that is retrying is recovering (`altair.py`'s `frame()`
+tries again, closes and reopens, then tries twice more): let it finish; (c)
+a fresh open, `./snap.py --exposure 0.01 --gain 100`; (d) only then pull the
+lead and put it back. With a hub that switches each
+port's power, `./camera_test.py --power-cycle` does that from the laptop,
+and with `power_cycle_on_jam = true` the camera does it by itself after a
+frame is lost twice; without one, the setting only says it could not
+(`docs/camera-fault.md`, "The evening of 1 November 2026"). The focuser's
+Nano on a laptop socket can turn the focuser inward but not lift the
+drawtube outward (`docs/focuser.md`, 30 October 2026); on 1 November its
+motor turned and the knob did not, so focus was by hand with the spoken aid.
+
 ## Setting up
 
 - With the 183M, `./keeper.py start` in the background at the settime

@@ -56,11 +56,13 @@ project's commands refuse what is unsafe.
 
 ## The steps, in short
 
-1. `./ty mount settime` once the handset is at its main menu, and with a
-   cooled camera (the kit says `cooled`), `./keeper.py start` in the
-   background at the same time: the camera cools slowly while the rest of
-   the setup goes on, and stays open and cold for every step until the
-   night's end. Not cooled: no keeper.
+1. `./ty mount settime` once the handset is at its main menu, and where
+   the kit says `keeper` (a cooled camera keeper.py can hold),
+   `./keeper.py start` in the background at the same time: the camera
+   cools slowly while the rest of the setup goes on, and stays open and
+   cold for every step until the night's end. Say it is cooling only once
+   `./keeper.py status` says so. A cooled camera without `keeper`: its own
+   software cools it, if at all; say so. Not cooled: no keeper.
 2. Ask where the sky is clear, and choose every star from the answer.
 3. Only if the settime dry run says the motor check is on (`[mount]
    nudge_check`, off since 3 Nov 2026): `./ty mount nudge`, and ask whether

@@ -2,7 +2,7 @@
 name: first-night
 description: Take someone new from a fresh telescopeyoke checkout to their first picture. Use when they ask to install it, set it up, get started, get it working with their equipment, or type /first-night. Finds what is plugged in and says what is supported before anything is installed or moved.
 compatibility: a fresh telescopeyoke checkout, Python 3.11 or later, Ubuntu or Windows, the internet
-allowed-tools: Bash(./ty onboard) Bash(./ty onboard --json*) Bash(./ty onboard --no-check*) Bash(./onboard.py) Bash(./onboard.py --json*) Bash(./onboard.py --no-check*) Bash(python onboard.py*) Bash(./doctor.py --offline*) Bash(./doctor.py --json*) Bash(./newhardware.py) Bash(./ty capabilities *) Bash(lsusb) Bash(python doctor.py --offline*) Bash(python doctor.py --json*) Bash(python newhardware.py) Bash(py -3 doctor.py --offline*) Bash(py -3 doctor.py --json*) Bash(py -3 newhardware.py)
+allowed-tools: Bash(./ty onboard) Bash(./ty onboard --json*) Bash(./ty onboard --no-check*) Bash(./onboard.py) Bash(./onboard.py --json*) Bash(./onboard.py --no-check*) Bash(python onboard.py*) Bash(py -3 onboard.py*) Bash(.\ty.cmd onboard*) Bash(./doctor.py --offline*) Bash(./doctor.py --json*) Bash(./newhardware.py) Bash(./ty capabilities *) Bash(lsusb) Bash(python doctor.py --offline*) Bash(python doctor.py --json*) Bash(python newhardware.py) Bash(py -3 doctor.py --offline*) Bash(py -3 doctor.py --json*) Bash(py -3 newhardware.py)
 ---
 
 # First night
@@ -14,19 +14,21 @@ nothing about telescopes yet: say what each step is for, once, in a line,
 the first time it comes up.
 
 On Windows the scripts are run through Python: `python doctor.py ...` (or
-`py -3 doctor.py ...`) wherever this says `./doctor.py ...`.
+`py -3 doctor.py ...`) wherever this says `./doctor.py ...`, and `ty` is
+`ty.cmd` (`.\ty.cmd onboard`, or `python onboard.py`).
 
 This is not the owner's rig: `docs/agents/owner-rig.md` is not about it.
 
 **Where it got to.** Start with `./ty onboard` (it runs before the
 installer too): each step of the first setup, how it is known, and the
 next. A setup broken off on another evening carries on from there, with
-nothing done again and nothing taken as done. When the person says they
-saw something no command can see, keep their word: `./ty onboard
---confirm frame`, `moves`, `equipment` (the telescope and camera in the
-settings are theirs), `first-light`, or `motor-focuser` (the rig has the
-project's focuser, `docs/focuser.md`). Only on their word, never on your
-own judgement.
+nothing done again and nothing taken as done. What works now (installed,
+the mount connected, imaging ready) is checked each time; what was done
+once (a frame, a picture) counts only for the camera and light path in
+use. When the person says something no command can see, keep their word:
+`./ty onboard --confirm telescope` or `camera` (those settings are theirs),
+`frame`, `moves`, `first-light`, or `motor-focuser` / `manual-focuser`.
+Only on their word, never on your own judgement.
 
 ## 1. What is here (reads only, nothing moves)
 

@@ -9,9 +9,10 @@ allowed-tools: Bash(./focus.py --motor --dry-run) Bash(./ty mount status) Bash(.
 
 **Which focuser.** `./ty onboard --no-check`, its kit line: the project's
 motor focuser (`docs/focuser.md`) only where the person has said the rig
-has one (`motor_focuser` true). A CH340 on USB is not one by itself: it
-is the chip on many leads. Not known: ask once, and on their word
-`./ty onboard --confirm motor-focuser`. On the owner's rig,
+has one (`motor_focuser` true); by hand where they said so (false). A
+CH340 on USB is not one by itself: it is the chip on many leads. Not
+known: ask once, and on their answer `./ty onboard --confirm
+motor-focuser` or `--confirm manual-focuser`, so it is not asked again. On the owner's rig,
 `docs/agents/owner-rig.md` ("Focus") says which it is: read it.
 
 **Measure first, always.** Focus that was not touched since it was last

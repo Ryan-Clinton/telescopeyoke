@@ -25,7 +25,7 @@
           },
           "how_known": {
             "type": "string",
-            "description": "checked now, measured, kept on disk, proven by use, set by the person, the person's word, the example's, or not yet"
+            "description": "checked now, measured, kept on disk, proven by use, set by the person, the person's word, or not yet"
           },
           "detail": {
             "type": "string"
@@ -35,6 +35,10 @@
               "string",
               "null"
             ]
+          },
+          "now": {
+            "type": "boolean",
+            "description": "true for a check of what works now (doctor.py); false for what was done once, or set"
           }
         }
       }
@@ -86,9 +90,24 @@
             "boolean",
             "null"
           ],
-          "description": "true when the person has said so; null when not known"
+          "description": "true: the project's motor focuser; false: a focuser by hand; null: not known (both by the person's word)"
+        },
+        "source": {
+          "enum": [
+            "settings",
+            "example"
+          ],
+          "description": "example: the camera is still the example settings', not the person's"
+        },
+        "keeper": {
+          "type": "boolean",
+          "description": "keeper.py can hold this camera cold (cooled, Altair's library, a tec_target)"
         }
       }
+    },
+    "checked": {
+      "type": "boolean",
+      "description": "false with --no-check: the steps doctor.py checks now were left out"
     }
   }
 }
