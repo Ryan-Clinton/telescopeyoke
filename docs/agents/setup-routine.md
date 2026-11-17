@@ -84,10 +84,11 @@ Through the adapter, two things the handset knew are kept on the laptop
 instead (`cache/direct_mount.json`): where home is and which way the Dec
 motor turns. Home is taken from the motor counts the board has when it is
 switched on, so switch it on at home; after a clutch slip, or switching on
-away from home, put it back at home by eye and `./mount.py sethome`. The
+away from home, the person puts it back at home by eye and, when they say
+it is there, the agent runs `./mount.py sethome`. The
 Dec direction is checked once, with the person watching
 (`./mount.py directions`), and kept until the motor is refitted; GoTo is
-refused until it has been. Never answer either for them.
+refused until it has been. Never answer the direction for them.
 
 At the same time, with a cooled camera (the owner's 183M) plugged in,
 start the camera keeper in the background (a camera that is not cooled

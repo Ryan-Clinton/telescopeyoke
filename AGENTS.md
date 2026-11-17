@@ -131,8 +131,10 @@ a motor's creep rate. `mount.py stop` is always allowed.
    before), 40° from the Sun, and refusal when the handset is not set up.
    Without a handset (`direct.py`) the same refusals stand in for it: no
    movement until home has been recorded, and no GoTo until a person has
-   watched which way the Dec motor turns. Never record either for the user,
-   nor a `ty onboard --confirm` they have not given.
+   watched which way the Dec motor turns. When the person says the tube is
+   at home, run `./mount.py sethome` for them: their word is the go. Never
+   answer the Dec direction for them, nor a `ty onboard --confirm` they have
+   not given.
    `doctor.py --probe` sends a port only questions that read, and only a
    port a person named: never try ports in turn to see what is there.
 4. **Anything that changes how the mount moves is tried first in the demo
