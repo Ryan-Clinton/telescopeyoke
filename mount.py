@@ -92,6 +92,13 @@ MIN_ALTITUDE = 20
 # in its rings, and the RA clutch slipped about 50° unnoticed
 # (docs/nights/2026-11-11/mount-collision.md).
 MAX_HOUR_ANGLE = 7.5
+# Low in the south near the meridian, the camera end meets the RA motor: on
+# 17 November 2026 (tube in its rings as then, 183M and wheel) it rubbed at
+# Dec -15° on the meridian (20° up), and the home move from there stalled.
+# Below LOW_SOUTH_DEC within LOW_SOUTH_HOURS of the meridian is refused, on
+# either side, until the tube is moved up its rings and this is measured again.
+LOW_SOUTH_DEC = -5.0
+LOW_SOUTH_HOURS = 1.5
 # The clearance test may go this far, and no further, to find where it is.
 CLEARANCE_TEST_HOURS = 8.0
 # While this file exists, nothing that moves the mount will run. Its contents
@@ -1135,6 +1142,11 @@ def _plan(hour_angle, dec, altitude, label, limit=None):
         raise Refusal("TARGET_BEYOND_HOUR_ANGLE_LIMIT",
                       f"{label} is {abs(hour_angle) / 15:.1f} h from the meridian, beyond the "
                       f"{limit} h limit; not slewing.")
+    if dec < LOW_SOUTH_DEC and abs(hour_angle) < LOW_SOUTH_HOURS * 15:
+        raise Refusal("TARGET_BELOW_ALTITUDE_LIMIT",
+                      f"{label} is at Dec {dec:+.1f}°, {abs(hour_angle) / 15:.1f} h from the meridian: "
+                      f"below Dec {LOW_SOUTH_DEC:+g}° within {LOW_SOUTH_HOURS:g} h of it the camera meets "
+                      "the RA motor (17 November 2026); not slewing.")
     west = hour_angle > 0
     # From the plan alone the side the mount is on now is not known: a west
     # target is a swing over the pole only from the east side (18 October
