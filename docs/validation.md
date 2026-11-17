@@ -628,6 +628,15 @@ focuser not touched since the stars.
   level and well clear at 7.5 h), and the way back home was clear. The
   hour-angle limit, 5.75 h before,
   is now 7.5 h.
+- **Mount clearance across the range, 17 November 2026, about 21:55**,
+  indoors, through the Wi-Fi adapter, with the person beside the mount
+  ([the record](nights/2026-11-17/clearance.md)): with the tube moved a few
+  centimetres up its rings, straight up, 20° up in the south, east and west,
+  Dec +40° at 1.5 h either side (where the tube caught the north leg on 12
+  November) and 7.4 h either side, each followed by `home`, all clear of the
+  legs and the RA motor, and the link held throughout. Before the tube was
+  moved, straight up put the mirror end on a leg and low south put the
+  camera on the RA motor.
 - **The two low gaps, 16:47-16:53**, from the person's phone photos and
   sky-map screenshots. The **south-west gap**, at bearings 210-228°, is open
   to about 20° (±5°, from a phone photo), where the kept skyline says 54°,
