@@ -108,7 +108,7 @@ found. Something showing on USB is only "seen".
 | Altair Hypercam 183M PRO TEC (mono, cooled) and a Starlight Xpress USB filter wheel | ✅ Used by the author from 4 November 2026; see the row above for what is still to prove |
 | Python 3.11 to 3.14 | ✅ Runs on Ubuntu (no automated tests) |
 | Windows 10 and 11 | ⚠️ The demo runs with no hardware. The camera has taken frames on Windows 11, indoors. No mount has been driven from Windows, and camera and mount have not been used together there. |
-| SynScan Wi-Fi adapter, or an EQDIR lead (no handset) | ⚠️ The adapter has been found and read on a real EQ3 (firmware, gearing, position). No mount has been moved through it yet; the EQDIR lead is untried. |
+| SynScan Wi-Fi adapter, or an EQDIR lead (no handset) | ⚠️ The adapter, on the home router, has driven a real EQ3: the Dec direction check, one GoTo and home (16 November 2026, no tube on). Pointing on the sky not yet plate-solved; the EQDIR lead is untried. |
 | EQ5, HEQ5, EQ6 with a SynScan handset | ⚠️ Untested. Likely: same serial protocol. |
 | Other INDI cameras | ⚠️ Untested. Likely for mono or RGGB colour sensors: set the driver and sensor size in `config.toml`. |
 | Other telescopes | Set the focal length in `config.toml`. |

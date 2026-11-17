@@ -55,7 +55,7 @@ outlook` puts it first.
 | Landmark azimuth | 🧪 |
 | Checking the telescope really turned | ⚠️ one real record, and it caught a real fault |
 | Skyline | ✅ the telescope's own survey by day, 17 October: 28 bearings, one look checked by eye (the hedge at 120°); the north below the mount's reach and the low south-west near the setting Sun not measured. ralphie-side, 2 November: a daylight skyline kept on the person's eye check (the house to 75° due north, 36-45° from east to south-south-west, open from 30-36° in the west-south-west and west); the south-west gap is probably lower than kept (see 2 November below). ⚠️ panoramas found, not tied to the compass |
-| Control without the handset | ⚠️ the Wi-Fi adapter read; nothing moved |
+| Control without the handset | ⚠️ the Wi-Fi adapter on the home router: Dec direction checked, one GoTo and home (16 November 2026, no tube on) |
 | Windows | ⚠️ camera frames indoors; no mount driven; no whole night 🧪 |
 | Dark and flat frames, gain sweep | 🧪 |
 | Discovery pipeline | ⚠️ subtraction, vetting and planted fakes on real M31 stacks; a known nova found again in ZTF archive images; no transient of our own yet (`docs/discovery.md`). M31-P8's recurring false candidates: the search's noise model underestimates one patch's noise 1.3-1.9 times; 2 of 34 candidates over four comparisons were 5 or more against their own surroundings, both on a cloudy 8-frame night ([4 November 2026](nights/2026-11-04/p8-false-candidates.md)) |
@@ -392,12 +392,18 @@ frame, with most of the galaxy's glow taken for sky. Those last are fixed
 and the picture remade from the same frames; the fixes have not yet been
 through a run on the real mount.
 
-Written but never moved a real mount: control without the handset, through
-the SynScan Wi-Fi adapter or an EQDIR lead (`direct.py`). The adapter has
-been found on the network and asked for its firmware, gearing, position and
-status, on a real EQ3. Every movement is tested only against a simulated
-motor board, and which way the Dec motor turns has to be checked on each
-mount, with someone watching, before a GoTo is allowed.
+Control without the handset, through the SynScan Wi-Fi adapter
+(`direct.py`): first moves on a real mount on 16 November 2026, the EQ3 Pro
+with no tube on, just after Gary's service. The adapter was on the home
+router (192.168.1.x, found by `./newhardware.py --probe wifi`), not its own
+network: an EQ3 board, firmware 1.07, 4,576,000 counts per turn.
+`./mount.py directions` tipped the saddle 5° and back; seen from behind,
+facing north, it turned anticlockwise (west), recorded. A GoTo to Capella
+(altitude 69°, hour angle -2 h, east) left the counterweight bar to the west
+and the saddle to the east, the right side; `./mount.py home` brought it back
+to 0.02°, 89.98°. Not yet proven: pointing on the sky (no tube, no plate
+solve), tracking, the west side, a meridian flip, Stop during a slew, or the
+EQDIR lead, which is untried.
 
 Written but never used with a real mount or camera: the application
 (`app.py`) and its companion page (`console.py`). The server, its refusals,
