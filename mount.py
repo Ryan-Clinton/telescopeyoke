@@ -95,9 +95,11 @@ MAX_HOUR_ANGLE = 7.5
 # Low in the south near the meridian, the camera end meets the RA motor: on
 # 17 November 2026 (tube in its rings as then, 183M and wheel) it rubbed at
 # Dec -15° on the meridian (20° up), and the home move from there stalled.
+# At Dec -5° the camera's plate and the leads under it sat on the RA motor's
+# box (photographed the same night), so the limit went up to Dec +5°.
 # Below LOW_SOUTH_DEC within LOW_SOUTH_HOURS of the meridian is refused, on
 # either side, until the tube is moved up its rings and this is measured again.
-LOW_SOUTH_DEC = -5.0
+LOW_SOUTH_DEC = 5.0
 LOW_SOUTH_HOURS = 1.5
 # The clearance test may go this far, and no further, to find where it is.
 CLEARANCE_TEST_HOURS = 8.0
