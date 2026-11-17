@@ -305,6 +305,24 @@ class DirectHandset:
         self._save()
         return self.state["home"]
 
+    def go_home(self, timeout=150):
+        """Turn both axes back to the recorded home with the board's own
+        moves, which start slowly, speed up and slow down to stop, as a GoTo
+        does: Dec first, so the tube is up by the pole before the RA axis
+        swings. The counts are turned back by their plain difference, the
+        way they came, so the counterweight bar never goes over the top."""
+        self._need_home()
+        self._stop()
+        self.board.ready()
+        for axis, index in ((DEC, 1), (RA, 0)):
+            self.board.move(axis, self.state["home"][index] - self.board.position(axis))
+            began = time.monotonic()
+            while self.board.status(axis)["running"]:
+                if time.monotonic() - began > timeout:
+                    self.board.halt(axis)
+                    raise Refusal("SLEW_TIMED_OUT", "The axis did not get home in time; stopped.")
+                time.sleep(0.5)
+
     def set_dec_sign(self, sign):
         self.state["dec_sign"] = sign
         self._save()

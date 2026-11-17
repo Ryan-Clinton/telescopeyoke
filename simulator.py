@@ -235,6 +235,24 @@ SKY = {"focus": 4, "cloud": False, "unplugged": False, "drift": True, "offset": 
 DEMO_SCOPE = None                 # the simulated mount in this program, if one has been opened
 
 
+def direct_demo(start, slew_seconds=2.0):
+    """direct.py's stand-in for the handset on a SimulatedBoard, home
+    recorded at the board's switch-on counts and the Dec direction checked,
+    with the axes starting at `start` ("RA,Dec", the handset's axis angles in
+    degrees). Its state is kept apart from the real mount's."""
+    import config
+    import direct
+    import records
+    ra, dec = (float(x) for x in start.split(","))
+    turn = SimulatedBoard.COUNTS / 360
+    at = (direct.POWER_ON + round(ra * turn), direct.POWER_ON + round((dec - 90) * turn))
+    state = config.DATA / "cache" / "demo_direct_mount.json"
+    state.parent.mkdir(parents=True, exist_ok=True)
+    records.write(state, {"home": [direct.POWER_ON, direct.POWER_ON], "dec_sign": 1}, indent=None)
+    board = SimulatedBoard(goto_seconds=slew_seconds, start=at)
+    return direct.DirectHandset(direct.Board(board), lambda: 0.0, state_file=state)
+
+
 def _sky_file():
     import config
     return config.DATA / "cache" / "demo_sky.json"

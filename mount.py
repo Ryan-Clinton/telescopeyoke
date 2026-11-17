@@ -226,7 +226,14 @@ class Mount:
         if self.demo:
             import simulator
             quick = os.environ.get("TY_DEMO_FAST") == "1"
-            self.s = handset or simulator.SimulatedHandset(slew_seconds=0.0 if quick else 2.0)
+            board_at = os.environ.get("TY_DEMO_BOARD")
+            if handset is None and board_at:
+                # direct.py on a pretend motor board, starting at these axis
+                # angles ("RA,Dec" in degrees): to try a change to the Wi-Fi
+                # adapter's code before it goes near the mount.
+                self.s = simulator.direct_demo(board_at, slew_seconds=0.0 if quick else 2.0)
+            else:
+                self.s = handset or simulator.SimulatedHandset(slew_seconds=0.0 if quick else 2.0)
             if handset is None:
                 simulator.DEMO_SCOPE = self
         elif mount_settings().get("link", "handset") != "handset":
@@ -731,6 +738,14 @@ class Mount:
         self.tracking(False)
         self.dec_creep(0)   # a drift correction left running would fight the seek
         with self.watching():
+            if hasattr(self.s, "board"):
+                # No handset: the board's own moves, which start slowly. The
+                # fixed-rate seek below starts a motor at 2.5°/s at once, and
+                # on the Wi-Fi adapter (17 November 2026) the motors buzzed and
+                # stalled: the RA axis turned 11° in two and a half minutes.
+                self.may_move()
+                self.s.go_home(SLEW_TIMEOUT)
+                return
             # Dec first, so the tube is up by the pole before the RA axis swings.
             self.seek(DEC, HOME_DEC_AXIS)
             self.seek(RA, HOME_RA_AXIS)
