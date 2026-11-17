@@ -308,20 +308,47 @@ class DirectHandset:
     def go_home(self, timeout=150):
         """Turn both axes back to the recorded home with the board's own
         moves, which start slowly, speed up and slow down to stop, as a GoTo
-        does: Dec first, so the tube is up by the pole before the RA axis
-        swings. The counts are turned back by their plain difference, the
-        way they came, so the counterweight bar never goes over the top."""
+        does. Both axes turn at once, as every GoTo out from home does, so
+        the way back is a GoTo's way out in reverse: the counterweight comes
+        down as the tube comes up. (Dec first, then RA, swung the tube's
+        mirror end down past the south-west leg from low in the south on 17
+        November 2026, with the RA axis still a quarter turn round.) The
+        counts are turned back by their plain difference, the way they came,
+        so the counterweight bar never goes over the top.
+
+        If the link stops answering while the motors turn, it keeps trying
+        to reach the board, for a minute, and stops both axes the moment it
+        answers: the board would otherwise carry on with nothing to stop it."""
         self._need_home()
         self._stop()
         self.board.ready()
-        for axis, index in ((DEC, 1), (RA, 0)):
+        for axis, index in ((RA, 0), (DEC, 1)):
             self.board.move(axis, self.state["home"][index] - self.board.position(axis))
-            began = time.monotonic()
-            while self.board.status(axis)["running"]:
-                if time.monotonic() - began > timeout:
-                    self.board.halt(axis)
-                    raise Refusal("SLEW_TIMED_OUT", "The axis did not get home in time; stopped.")
-                time.sleep(0.5)
+        began = time.monotonic()
+        while True:
+            try:
+                if not (self.board.status(RA)["running"] or self.board.status(DEC)["running"]):
+                    return
+            except Refusal:
+                self._stop_when_back()
+                raise
+            if time.monotonic() - began > timeout:
+                self._stop()
+                raise Refusal("SLEW_TIMED_OUT", "The mount did not get home in time; stopped.")
+            time.sleep(0.5)
+
+    def _stop_when_back(self, wait=60.0):
+        """Keep trying to stop both motors until the board answers or `wait`
+        seconds pass. True if they were stopped."""
+        end = time.monotonic() + wait
+        while time.monotonic() < end:
+            try:
+                for axis in (RA, DEC):
+                    self.board.ask("K", axis)
+                return True
+            except Refusal:
+                time.sleep(1)
+        return False
 
     def set_dec_sign(self, sign):
         self.state["dec_sign"] = sign
