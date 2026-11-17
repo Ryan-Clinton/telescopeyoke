@@ -20,6 +20,11 @@ the bent south latitude bolt straightened the same evening.
 Guiding figures from before that date (Dec slack, RMS) are from the old
 grease and worm settings.
 
+From 16 November 2026 the mount is reached through its SynScan Wi-Fi
+adapter on the house router (`[mount] link = "wifi"`), the handset kept in
+the box as a fallback. The router's Wi-Fi is sketchy at louie-side and
+fine at ralphie-side (the owner, 16 November); an extender if it has to be.
+
 ## On USB
 
 | USB ID      | What it is                           |

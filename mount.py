@@ -821,6 +821,15 @@ class Mount:
         at its main menu: this cannot press its keys. Moves nothing. Returns
         what the handset says its date and time are afterwards."""
         self.may_move()
+        if hasattr(self.s, "board"):
+            # No handset on this link (Wi-Fi adapter or EQDIR lead): the sums
+            # use this computer's clock and site, so there is nothing to set.
+            # The clock is still measured afresh, as after a handset's, so the
+            # night starts from new pointing corrections either way.
+            self.save_clock(site)
+            self.say("No handset on this link: it uses this computer's clock and site, so there is "
+                     "nothing to set. Pointing errors measured before this will be measured again.")
+            return {"handset_time": None, "clock_offset_deg": 0.0, "clock_offset_before_deg": None}
         now = time.gmtime()
         if self.ask(bytes([ord("H"), now.tm_hour, now.tm_min, now.tm_sec, now.tm_mon, now.tm_mday,
                            now.tm_year % 100, 0, 0])) != b"#":

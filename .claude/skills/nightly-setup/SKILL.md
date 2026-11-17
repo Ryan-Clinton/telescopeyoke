@@ -1,7 +1,7 @@
 ---
 name: nightly-setup
 description: Set up the telescope for the night with the person outside at it. Use when they say they are going out, are at the telescope, or report the sky ("clear to the north, can see Polaris"). Runs the setup routine one step at a time, from checking what is plugged in to the first target centred.
-compatibility: the telescopeyoke checkout on the computer at the telescope, with the mount's handset lead and the camera plugged in; Ubuntu or Windows
+compatibility: the telescopeyoke checkout on the computer at the telescope, with the mount's handset lead (or its SynScan Wi-Fi adapter on the router) and the camera plugged in; Ubuntu or Windows
 allowed-tools: Bash(./doctor.py --offline) Bash(./ty mount status) Bash(./ty capabilities *) Bash(lsusb) Bash(./newhardware.py) Bash(./ty onboard *) Bash(./onboard.py *)
 ---
 
@@ -56,7 +56,10 @@ project's commands refuse what is unsafe.
 
 ## The steps, in short
 
-1. `./ty mount settime` once the handset is at its main menu, and where
+1. `./ty mount settime` once the handset is at its main menu, or, with
+   `[mount] link = "wifi"`, once `./mount.py status` reads the adapter on
+   the router (no screens; switched on at home; `sethome` and `directions`
+   as `docs/agents/setup-routine.md` step 1 says), and where
    the kit says `keeper` (a cooled camera keeper.py can hold),
    `./keeper.py start` in the background at the same time: the camera
    cools slowly while the rest of the setup goes on, and stays open and

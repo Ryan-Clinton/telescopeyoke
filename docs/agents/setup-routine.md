@@ -55,16 +55,39 @@ the old and roughly how far the things in the way are from the old one.
 Polar alignment does not need Polaris (`polaralign.py` measures from three
 plate solves anywhere), so a spot without a view of the pole is fine.
 
-## 1. Set the handset
+## 1. Set the handset, or reach the Wi-Fi adapter
 
 They have put the mount in home by eye (counterweight bar down, tube at the
-pole), switched on and pressed ENTER through to the main menu. Check that
-with `./doctor.py --offline` ("handset answering and set up"), then
+pole) and switched on. `[mount] link` in config.toml says which way the
+laptop reaches it:
+
+- **The handset** (no `link`, or `link = "handset"`): they press ENTER
+  through to the main menu. Check that with `./doctor.py --offline`
+  ("handset answering and set up").
+- **The SynScan Wi-Fi adapter** (`link = "wifi"`), plugged in where the
+  handset would be: no screens to press through. It joins the house router,
+  not a network of its own: `./mount.py status` reads it at `[mount]
+  address` (or, with no address, wherever it answers on this network;
+  `./newhardware.py --probe wifi` finds it). Nothing answering: is the mount
+  on, and is the adapter in range of the router?
+
+Then, either way:
 
     ./mount.py settime
 
-It moves nothing. It gives the handset this laptop's date, time and site,
-and measures its clock. Every later step depends on it.
+It moves nothing. Through the handset it gives the handset this laptop's
+date, time and site; through the adapter there is nothing to set, as the
+laptop's own clock and site are used. Either way it measures the clock
+afresh, and every later step depends on it.
+
+Through the adapter, two things the handset knew are kept on the laptop
+instead (`cache/direct_mount.json`): where home is and which way the Dec
+motor turns. Home is taken from the motor counts the board has when it is
+switched on, so switch it on at home; after a clutch slip, or switching on
+away from home, put it back at home by eye and `./mount.py sethome`. The
+Dec direction is checked once, with the person watching
+(`./mount.py directions`), and kept until the motor is refitted; GoTo is
+refused until it has been. Never answer either for them.
 
 At the same time, with a cooled camera (the owner's 183M) plugged in,
 start the camera keeper in the background (a camera that is not cooled
