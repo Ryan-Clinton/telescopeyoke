@@ -75,6 +75,11 @@ ROOT = Path(__file__).parent
 # holds until the handset is switched off.
 CLOCK_FILE = config.DATA / "cache" / "handset_clock.json"
 MIN_ALTITUDE = 20
+# Highest an aim may go. Straight up, the 150P (183M train) puts its mirror
+# end on a tripod leg: on 17 November 2026 the zenith slew from home hit
+# one, nothing having moved since it was clear. 80° up (bearing 270°, and
+# Dec +40° 1.5 h either side, 69° up) was clear the same night.
+MAX_ALTITUDE = 80
 # Furthest from the meridian a GoTo may point, in hours. Beyond 6 h the
 # counterweight is above the tube, which is normal for this kind of mount;
 # what matters is where the tube, the camera and its lead meet a tripod leg.
@@ -831,13 +836,11 @@ class Mount:
                  "the motor sound? If not, switch the mount off and on.")
 
     def zenith(self, site):
-        # The handset's GoTo picks the correct side of the mount, but only
-        # behaves predictably from the home position.
-        if not self.at_home():
-            self.home()
-        self.goto(self.handset_sidereal(), site["latitude"])
-        self.tracking(False)
-        self.save_clock(site)
+        # Straight up puts the 150P's mirror end on a tripod leg (17 November
+        # 2026, the 183M train): refused, like every aim above MAX_ALTITUDE.
+        raise Refusal("GOTO_REFUSED",
+                      f"Straight up is refused: above {MAX_ALTITUDE}° the tube's mirror end meets a "
+                      "tripod leg (17 November 2026). ./mount.py point 270 80 is as high as it goes.")
 
     def set_clock(self, site):
         """Give the handset this computer's date and time (as UTC, with no
@@ -1150,6 +1153,10 @@ def _plan(hour_angle, dec, altitude, label, limit=None):
                       f"{label} is at Dec {dec:+.1f}°, {abs(hour_angle) / 15:.1f} h from the meridian: "
                       f"below Dec {LOW_SOUTH_DEC:+g}° within {LOW_SOUTH_HOURS:g} h of it the camera meets "
                       "the RA motor (17 November 2026); not slewing.")
+    if altitude > MAX_ALTITUDE:
+        raise Refusal("GOTO_REFUSED",
+                      f"{label} is {altitude:.0f}° up: above {MAX_ALTITUDE}° the tube's mirror end meets "
+                      "a tripod leg (17 November 2026); not slewing.")
     west = hour_angle > 0
     # From the plan alone the side the mount is on now is not known: a west
     # target is a swing over the pole only from the east side (18 October
@@ -1703,10 +1710,13 @@ def dry_run(args, site):
                                  "right if the mount really is at home."]}
         if LOCK_FILE.exists():
             raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text(encoding='utf-8').strip()}")
+        if args.command == "zenith":
+            raise Refusal("GOTO_REFUSED", f"Straight up is refused: above {MAX_ALTITUDE}° the tube's "
+                          "mirror end meets a tripod leg (17 November 2026).")
         notes = {"nudge": f"From home, tips the tube {NUDGE:g}° away from the pole on the Dec axis, holds "
                           "three seconds and brings it back. The counterweight bar does not move.",
                  "home": "Returns to the home position, by the axis readouts.",
-                 "zenith": "Goes home if not there, then slews to straight up.",
+                 "zenith": f"Refused: above {MAX_ALTITUDE}° the tube's mirror end meets a tripod leg.",
                  "compensate": "Slews about 25° twice on the side of the meridian it is on, "
                                "then returns.",
                  "directions": "Tips the tube 5° from home on the Dec axis, asks which way it "
