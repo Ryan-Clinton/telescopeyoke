@@ -67,6 +67,51 @@ def _kept(path, name, script, args, root, picture_key):
     return out
 
 
+def _airports(path):
+    """Every nearby airport's latest cloud, from the saved approach: the
+    ceilometers see the low cloud the satellite's infrared misses."""
+    try:
+        near = json.loads(path.read_text(encoding="utf-8")).get("airports_near") or []
+    except (OSError, ValueError):
+        return []
+    return [f"airport {a['name']} ({a['id']}) {a['km']} km {a['from']}: {a['says']}, "
+            f"{a['age_min']} min old at the look" for a in near]
+
+
+def _recent_looks(path, minutes=20):
+    try:
+        rows = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()[-40:]]
+    except (OSError, ValueError):
+        return []
+    return [r for r in rows if r.get("source") == "camera" and time.time() - r.get("t", 0) < minutes * 60]
+
+
+def _camera(path):
+    """What the telescope's own frames saw in the last 20 minutes."""
+    looks = _recent_looks(path)
+    if not looks:
+        return []
+    stars = [r.get("stars", 0) for r in looks]
+    return [f"telescope camera, last {len(looks)} looks over 20 min: stars {', '.join(map(str, stars[-8:]))} "
+            f"(newest {time.strftime('%H:%M', time.localtime(looks[-1]['t']))})"]
+
+
+def _disagree(approach, seen):
+    """A plain warning when the satellite says clear but the telescope sees
+    no stars (17 November 2026: half an hour of the satellite's gap given as
+    the answer while the camera and the airports said cloud)."""
+    looks = _recent_looks(seen, minutes=10)
+    try:
+        here = (json.loads(approach.read_text(encoding="utf-8")).get("lines") or [""])[0]
+    except (OSError, ValueError):
+        return []
+    if looks and all(not r.get("yes") for r in looks) and "clear" in here and "cloud over" not in here:
+        return ["DISAGREEMENT: the satellite says clear here but the telescope has seen no stars for "
+                f"{len(looks)} looks: probably cloud too low for its infrared to tell from the ground. Go by the camera and the "
+                "airports, not the satellite's arrival time."]
+    return []
+
+
 def main():
     try:
         prompt = json.load(sys.stdin).get("prompt") or ""
@@ -82,12 +127,17 @@ def main():
     except Exception:      # noqa: BLE001 - never blocks
         cache = root / "cache"
     lines = _kept(cache / "cloud_approach.json", "satellite", "clouds.py", ["--approach"], root, "picture")
+    lines += _airports(cache / "cloud_approach.json")
+    camera = _camera(cache / "sky_seen.jsonl")
+    lines += camera
+    lines += _disagree(cache / "cloud_approach.json", cache / "sky_seen.jsonl")
     lines += _kept(cache / "rain.json", "radar", "rain.py", [], root, "picture_at")
     print(json.dumps({"hookSpecificOutput": {
         "hookEventName": "UserPromptSubmit",
-        "additionalContext": ("The user's message is about the sky. The satellite and the radar, as last saved "
-                              "(./clouds.py --approach, ./rain.py); answer from this, with the arrival time and "
-                              "the answers' ages, before anything the camera saw:\n" + "\n".join(lines))}}))
+        "additionalContext": ("The user's message is about the sky. The satellite, every nearby airport, the "
+                              "telescope's own looks and the radar, as last saved (./clouds.py --approach, "
+                              "skywatch, ./rain.py). Use all of it: where they disagree, say so and go by "
+                              "the camera and the airports:\n" + "\n".join(lines))}}))
 
 
 if __name__ == "__main__":

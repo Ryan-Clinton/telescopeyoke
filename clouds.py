@@ -558,6 +558,7 @@ def history_lines(hours=24):
 
 
 APPROACH = config.DATA / "cache" / "cloud_approach.json"     # the medium view's; the others' beside it
+NEAR_AIRPORT_KM = 80        # airports kept with the approach, whichever way the cloud moves
 STEP_MIN = 10              # the satellite's pictures come every 10 minutes
 PICTURES = 7               # the last hour's: the cloud's movement is measured between pairs of them
 APPROACH_MAX_PX = 60       # the most a picture's cloud may move between two of them (about 25-45 km)
@@ -1015,6 +1016,11 @@ def approach(site=None, fresh_s=0, view=APPROACH_VIEW):
     try:
         found = reports.result(timeout=10)
         answer["airports_upwind"] = _airports_upwind(found, use[0]) if use else None
+        # Every airport near enough to say what the sky here is like, not only
+        # the upwind one (17 November 2026: Belfast City overcast at 1,100 ft
+        # while the satellite, blind to cloud that low, said clear).
+        answer["airports_near"] = [{k: a[k] for k in ("id", "name", "km", "from", "says", "age_min")}
+                                   for a in found if a["km"] <= NEAR_AIRPORT_KM]
         if use is None:
             answer["airports_problem"] = "no movement to say which one is upwind"
     except Exception as problem:      # noqa: BLE001 - the approach goes on from the satellite alone
