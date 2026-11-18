@@ -281,7 +281,7 @@ brightest star at the start and now, for the live stream's focus look
 ([streaming.md](streaming.md#focusing-and-polar-alignment-on-air)).
 
     ./focus.py --sweep               one sweep and fit, then back to the start: the curve only
-    ./focus.py --find                far out, no star measuring: half a turn at a time in, then out, until stars do
+    ./focus.py --find                far out, no star measuring: a sixteenth of a turn at a time in, then out (half a turn each way), until stars do
     ./focus.py --measure-step        from focus, in until the stars are 2.5 times their size; a quarter of that is the step
     ./focus.py --measure-backlash    the slack, on the steep side of the curve, twice; half as much again is kept
     ./focus.py --walk-in             from a little outside focus, set by hand: in 64 then 32 half-steps at a

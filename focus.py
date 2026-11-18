@@ -1067,10 +1067,14 @@ def motor_focus(motor, read, usual, say=progress, step=None, backlash=None, swee
     return dict(result, hfr=None, moved=0, found=False)
 
 
-def find_stars(motor, read, usual, say=progress, stride=2048, turns=2, ring=None, live=None):
-    """Far out of focus, where no star measures: half a turn at a time in,
-    then out, a check after each, until stars measure (HFR under CEILING),
-    so a sweep has something to fit. 18 October 2026: after the focuser was
+def find_stars(motor, read, usual, say=progress, stride=256, turns=0.5, ring=None, live=None):
+    """Far out of focus, where no star measures: a sixteenth of a turn at a
+    time in, then out, to half a turn each way, a check after each, until
+    stars measure (HFR under CEILING), so a sweep has something to fit.
+    18 November 2026: on the NEMA 17, coupled one to one, half a turn of the
+    knob is about half the drawtube's whole travel (the person's measure),
+    so the old half-turn steps and two turns each way were far too big.
+    18 October 2026: after the focuser was
     refitted, stars were found again 1.5 turns in. Leaves the focuser where
     they showed, or back at the start. Returns that place, or None.
 
@@ -1080,7 +1084,7 @@ def find_stars(motor, read, usual, say=progress, stride=2048, turns=2, ring=None
     2026: a search went a turn and a half in while the doughnuts did not
     shrink)."""
     drive = Drive(motor)
-    reach = turns * 4096 // stride
+    reach = int(turns * 4096 // stride)
     live = live or Broadcast("find", usual, path=None)
     live.stage("searching")
     start = ring(SWEEP_FRAMES) if ring else None
@@ -1104,8 +1108,8 @@ def find_stars(motor, read, usual, say=progress, stride=2048, turns=2, ring=None
                 break
             before = size or before
         drive.to(0)
-    live.done("not_found", "No stars measured within two turns either way: the focuser went back to where it "
-                           "started.")
+    live.done("not_found", f"No stars measured within {turns:g} turn either way: the focuser went back to where "
+                           "it started.")
     return None
 
 
@@ -1598,10 +1602,10 @@ def run_motor(args, mode="focus"):
                     seen_good(last, scale)
                 return result
             if mode == "find":
-                progress("looking for stars: half a turn at a time, in and then out")
+                progress("looking for stars: a sixteenth of a turn at a time, in and then out, to half a turn each way")
                 found = find_stars(drive, read, usual, say=say, ring=ring, live=live)
                 progress(f"Stars measure {found:+d} half-steps from the start." if found is not None else
-                         "No stars within two turns either way: the focuser is back where it started.")
+                         "No stars within half a turn either way: the focuser is back where it started.")
                 return {"found_at": found}
             if mode == "step":
                 progress("measuring the sweep step, out from focus")
@@ -1720,7 +1724,8 @@ def main():
                     help="from focus, measure how far the motor must turn to grow the stars 2.5 times; keeps a "
                          "quarter of it as the sweep step")
     ap.add_argument("--find", action="store_true",
-                    help="far out of focus: half a turn at a time in, then out, until stars measure")
+                    help="far out of focus: a sixteenth of a turn at a time in, then out (half a turn each way), "
+                         "until stars measure")
     ap.add_argument("--walk-in", action="store_true",
                     help="from a little outside focus, set by hand: in a few half-steps at a time, slowly, "
                          "measuring each, to the sharpest; for when the motor cannot lift the drawtube out")
