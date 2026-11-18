@@ -22,7 +22,7 @@ starting, a timeout). The rules (docs/skills-and-agents.md):
   or a token from the environment.
 - small-focus: no focus.py sweep (--motor, --sweep, --measure-step,
   --measure-backlash). The far-focus search is allowed from 18 November
-  2026: on the NEMA 17 its steps are a sixteenth of a turn, at most half a
+  2026: on the NEMA 17 its steps are a thirty-second of a turn, at most half a
   turn each way. On 23 October 2026 two --motor runs, each stopped part way,
   left the drawtube about an inch from the Sharpie line after the person
   had said it was a touch out; focusing is the walk-in, small steps in

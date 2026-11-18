@@ -1067,8 +1067,8 @@ def motor_focus(motor, read, usual, say=progress, step=None, backlash=None, swee
     return dict(result, hfr=None, moved=0, found=False)
 
 
-def find_stars(motor, read, usual, say=progress, stride=256, turns=0.5, ring=None, live=None):
-    """Far out of focus, where no star measures: a sixteenth of a turn at a
+def find_stars(motor, read, usual, say=progress, stride=128, turns=0.5, ring=None, live=None):
+    """Far out of focus, where no star measures: a thirty-second of a turn at a
     time in, then out, to half a turn each way, a check after each, until
     stars measure (HFR under CEILING), so a sweep has something to fit.
     18 November 2026: on the NEMA 17, coupled one to one, half a turn of the
@@ -1602,7 +1602,7 @@ def run_motor(args, mode="focus"):
                     seen_good(last, scale)
                 return result
             if mode == "find":
-                progress("looking for stars: a sixteenth of a turn at a time, in and then out, to half a turn each way")
+                progress("looking for stars: a thirty-second of a turn at a time, in and then out, to half a turn each way")
                 found = find_stars(drive, read, usual, say=say, ring=ring, live=live)
                 progress(f"Stars measure {found:+d} half-steps from the start." if found is not None else
                          "No stars within half a turn either way: the focuser is back where it started.")
@@ -1724,7 +1724,7 @@ def main():
                     help="from focus, measure how far the motor must turn to grow the stars 2.5 times; keeps a "
                          "quarter of it as the sweep step")
     ap.add_argument("--find", action="store_true",
-                    help="far out of focus: a sixteenth of a turn at a time in, then out (half a turn each way), "
+                    help="far out of focus: a thirty-second of a turn at a time in, then out (half a turn each way), "
                          "until stars measure")
     ap.add_argument("--walk-in", action="store_true",
                     help="from a little outside focus, set by hand: in a few half-steps at a time, slowly, "
