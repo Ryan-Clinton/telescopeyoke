@@ -626,10 +626,16 @@ class AltairCamera:
         # camera is closed then, so when the lead goes back in the cooler is
         # not on to run away (10 November 2026, twice), and cooling starts
         # again only from a person (./keeper.py start --after-fault).
+        # Only while the sensor is warmer than its set point: one already
+        # below it leaves the cooler nothing to do. 17 November 2026: carried
+        # out of the warm house, the sensor fell to 14.1 °C by itself with
+        # the set point at 15.0 °C, the cooler rightly drew nothing, and the
+        # keeper stopped the camera blaming a 12 V lead that was in.
         power = self.tec_power()
         share = power[1] if power else None
         ambient = getattr(self, "ambient", None)
-        if share is not None and share <= 0 and ambient is not None and ambient > self.level + POWER_NEEDED_C:
+        if (share is not None and share <= 0 and ambient is not None and ambient > self.level + POWER_NEEDED_C
+                and degrees is not None and degrees > self.level):
             self.powerless_since = getattr(self, "powerless_since", None) or clock()
             if clock() - self.powerless_since >= POWER_GONE_S:
                 self.fail_safe(f"the cooler has drawn nothing for {POWER_GONE_S:.0f} s with the air at about "
