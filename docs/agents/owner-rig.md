@@ -11,7 +11,8 @@ A Sky-Watcher 150P on an EQ3 Pro with a SynScan handset; the cooled mono
 Altair 183M behind a 0.9 coma corrector (675 mm) and a Starlight Xpress
 USB filter wheel (1 L, 2 R, 3 G, 4 B, 5 Ha, 6 SII, 7 OIII; LRGB and SHO
 parfocal); a home-built motor focuser (`docs/focuser.md`); an Altair GPCAM
-guide camera (`./guidecam.py`). The 183C (colour) was its first camera.
+guide camera (`./guidecam.py`) on an Orion Deluxe Mini 50 mm guide scope
+(162 mm, f/3.2: about 4.8"/px, a field of 1.7° by 1.3° full size). The 183C (colour) was its first camera.
 
 The EQ3 Pro was serviced by Gary on 16 November 2026: the motors taken off,
 all the old yellow and brown grease cleaned out, new grease put in and the
