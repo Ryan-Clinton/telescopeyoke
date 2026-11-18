@@ -184,6 +184,20 @@ def serve(cam, say=print):
         say("camera: the keeper is stopping: warming the sensor slowly, then closing the camera")
         with calls:
             cam.warm_up(say=say)
+            try:
+                degrees = cam.temperature()
+            except Exception:       # noqa: BLE001 - the message goes either way
+                degrees = None
+        warmed = ("The camera has warmed up" + (f" ({degrees:.1f} °C)" if degrees is not None else "")
+                  + " and its cooler is off: safe to switch off.")
+        say(f"camera: {warmed}")
+        try:
+            # The person asked to be told (18 November 2026): it is the last
+            # step before the power goes off at the night's end.
+            import notify
+            notify.send(warmed)
+        except Exception as problem:   # noqa: BLE001 - a help, never a step anything waits on
+            say(f"camera: the phone could not be told ({problem})")
         listener.close()
         for path in (SOCKET, STATE):
             try:
