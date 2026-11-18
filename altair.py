@@ -1017,6 +1017,12 @@ class AltairCamera:
                 if isinstance(problem, lib.HRESULTException):
                     problem = CameraError(_reason(problem))
                 unplugged = "unplugged" in str(problem)
+                # A cooler that failed safe is never tried again here: trying
+                # again opens the camera again, the one thing a runaway must
+                # not have (18 November 2026: the keeper's frame after a
+                # runaway to -7.2 °C retried and reopened it twice).
+                if getattr(self, "disobeying", False):
+                    raise problem
                 if attempt == 3 or (unplugged and not self._cycles_power()):
                     raise problem
                 # Said, never silent: on 31 October 2026 a run's first frame was
