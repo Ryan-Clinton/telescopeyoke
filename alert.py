@@ -496,6 +496,9 @@ def check(dry_run=False, say_it=print):
     return events
 
 
+CALL_WORDS = "The telescope needs your attention."   # all a call ever says out loud
+
+
 def call(words, dry_run=False, say_it=print, bridge=None, speak=None, send=None):
     """Get the person's attention when the telescope needs their hands or
     eyes: every light on the bridge pulses (red where it can), the speaker
@@ -506,8 +509,9 @@ def call(words, dry_run=False, say_it=print, bridge=None, speak=None, send=None)
     failing does not stop the others."""
     s = settings()
     if dry_run or config.DEMO:
-        say_it(f"Would pulse every light, say \"{words}\" on {s.get('speaker', 'no speaker chosen')} "
-               "and send it by Telegram.")
+        lights = "every light" if s.get("call_house") else f"the {s.get('call_room', 'Living room')} lights"
+        say_it(f"Would pulse {lights}, say \"{CALL_WORDS}\" on {s.get('speaker', 'no speaker chosen')} "
+               "and send the whole message by Telegram.")
         return
     done, threads = [], []
     if not s.get("call_house"):
@@ -535,11 +539,12 @@ def call(words, dry_run=False, say_it=print, bridge=None, speak=None, send=None)
     except AlertError as error:
         done.append(f"lights: {error}")
     if s.get("speaker"):
-        # A few words out loud; the whole of it goes by Telegram (15 November
-        # 2026: the speaker read out a schedule step and its command line).
-        short = words.split(":")[0].split(".")[0][:60]
+        # Always the same few words out loud; the whole of it goes by
+        # Telegram. 15 November 2026: the speaker read out a schedule step
+        # and its command line ("i do not want my speaker reading war and
+        # peace"); the person wants only that the telescope needs them.
         try:
-            done.append((speak or announce)(short, s["speaker"], s.get("speaker_address"), s.get("volume")))
+            done.append((speak or announce)(CALL_WORDS, s["speaker"], s.get("speaker_address"), s.get("volume")))
         except AlertError as error:
             done.append(f"speaker: {error}")
     if send is None:
