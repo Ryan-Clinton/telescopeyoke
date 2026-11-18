@@ -1080,9 +1080,19 @@ def find_stars(motor, read, usual, say=progress, stride=128, turns=0.5, ring=Non
 
     `ring(frames)` gives the size of the defocused stars' doughnuts, which
     no HFR can measure but which shrink steadily towards focus: a way they
-    grow on is the wrong way, and is left at once for the other (19 October
-    2026: a search went a turn and a half in while the doughnuts did not
-    shrink)."""
+    grow on from the start is the wrong way, and is left at once for the
+    other (19 October 2026: a search went a turn and a half in while the
+    doughnuts did not shrink). Doughnuts that shrank and then grew have
+    passed their smallest: the search ends there, at the smallest, rather
+    than going back to the start for the other way (18 November 2026: 142,
+    50, 61 px going in, and it went back and searched outward). Doughnuts
+    that were there and are gone mean the star has left the frame or the
+    cloud has covered it: the search stops and says so, back at the start
+    (the same night, the readings went on after the star had drifted out).
+
+    Returns {"at": the place it is left, "how": "found" (stars measure
+    there), "smallest" (the smallest doughnuts, no star measuring yet),
+    "lost" or "not_found" (both back at the start)}."""
     drive = Drive(motor)
     reach = int(turns * 4096 // stride)
     live = live or Broadcast("find", usual, path=None)
@@ -1090,7 +1100,7 @@ def find_stars(motor, read, usual, say=progress, stride=128, turns=0.5, ring=Non
     start = ring(SWEEP_FRAMES) if ring else None
     live.reading(0, None, "start", ring=start)
     for way in (-1, 1):
-        before = start
+        before, smallest = start, (start, 0)
         for k in range(1, reach + 1):
             live.stage("searching", k, reach)
             drive.to(way * k * stride)
@@ -1102,15 +1112,30 @@ def find_stars(motor, read, usual, say=progress, stride=128, turns=0.5, ring=Non
             if found["hfr"] is not None:
                 live.done("found", f"Stars measure again {abs(drive.at)} half-steps "
                                    f"{'in' if drive.at < 0 else 'out'} from the start.")
-                return drive.at
+                return {"at": drive.at, "how": "found"}
+            if ring and before and not size:
+                drive.to(0)
+                live.done("lost", "The doughnuts went from the frame (the star drifted out, or cloud): the "
+                                  "focuser is back where it started.")
+                return {"at": 0, "how": "lost"}
+            if size and (smallest[0] is None or size < smallest[0]):
+                smallest = (size, drive.at)
             if size and before and size > 1.05 * before:
+                if smallest[1] != 0:
+                    drive.to(smallest[1])
+                    say(f"  the doughnuts grew from {before:.0f} to {size:.0f} px after shrinking: left at the "
+                        f"smallest, {smallest[0]:.0f} px, {abs(smallest[1])} half-steps "
+                        f"{'in' if smallest[1] < 0 else 'out'}")
+                    live.done("smallest", f"Smallest doughnuts {abs(smallest[1])} half-steps "
+                                          f"{'in' if smallest[1] < 0 else 'out'} from the start; no star measures yet.")
+                    return {"at": smallest[1], "how": "smallest"}
                 say(f"  the doughnuts grew from {before:.0f} to {size:.0f} px: focus is the other way")
                 break
             before = size or before
         drive.to(0)
     live.done("not_found", f"No stars measured within {turns:g} turn either way: the focuser went back to where "
                            "it started.")
-    return None
+    return {"at": 0, "how": "not_found"}
 
 
 def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, closest=8, switch=8.0, near=1.5,
@@ -1604,9 +1629,15 @@ def run_motor(args, mode="focus"):
             if mode == "find":
                 progress("looking for stars: a thirty-second of a turn at a time, in and then out, to half a turn each way")
                 found = find_stars(drive, read, usual, say=say, ring=ring, live=live)
-                progress(f"Stars measure {found:+d} half-steps from the start." if found is not None else
-                         "No stars within half a turn either way: the focuser is back where it started.")
-                return {"found_at": found}
+                progress({"found": f"Stars measure {found['at']:+d} half-steps from the start.",
+                          "smallest": f"Left at the smallest doughnuts, {found['at']:+d} half-steps from the start; "
+                                      "focus is close: ./focus.py --walk-in from a little out, or --find again.",
+                          "lost": "The star left the frame or was clouded over: back where it started. Put it back "
+                                  "in view and run it again.",
+                          "not_found": "No stars within half a turn either way: the focuser is back where it "
+                                       "started."}[found["how"]])
+                return {"found_at": found["at"] if found["how"] == "found" else None, "left_at": found["at"],
+                        "how": found["how"]}
             if mode == "step":
                 progress("measuring the sweep step, out from focus")
                 found = measure_step(drive, read, usual, say=say, most=travel)
