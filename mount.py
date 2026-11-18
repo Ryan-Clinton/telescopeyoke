@@ -31,7 +31,8 @@
     ./mount.py truehome   drive to the home position findhome has just found,
                           for the two joints to be marked there. Then switch
                           the handset off and on with the mount on its marks,
-                          and run findhome again to see what is left.
+                          and run findhome again to see what is left. Without
+                          a handset it records that place as home itself.
     ./mount.py sync       photograph the sky where it is now, work out the real
                           aim, and remember the error for later GoTos. Do this
                           once after setting up, on any patch of stars.
@@ -645,6 +646,16 @@ class Mount:
             self.seek(RA, plan["ra_axis_deg"])
         self.tracking(False)
         ra_axis, dec_axis = self.axes()
+        if hasattr(self.s, "board"):
+            # Without a handset (direct.py) home is only where the motors were
+            # recorded, so the measured home is recorded here and now: the
+            # person asked for it (18 November 2026, after a clutch reset left
+            # home 3.2° and 5.7° out and sethome had to be run by hand).
+            counts = self.s.set_home()
+            self.say(f"At the measured home, and recorded as home (motor counts {counts[0]}, {counts[1]}). "
+                     "Mark both joints when you can; run ./mount.py findhome again to check it: it should "
+                     "find home within a tenth of a degree.")
+            return
         self.say(f"At the measured home: the axes read RA {wrap(ra_axis):+.2f}°, Dec {dec_axis:.2f}°. Mark both "
                  "joints now. Then switch the handset off and on with the mount on its marks, press ENTER "
                  "through to the main menu, run ./mount.py settime, polar-align if the tripod was moved, and "
@@ -1397,7 +1408,8 @@ def plan_true_home():
             "warnings": [f"Goes home by the axis readouts, then {abs(found['dec_home_error_deg']):.2f}° on the Dec "
                          f"axis and {abs(found['ra_home_error_deg']):.2f}° on the RA axis, to where home was "
                          "measured to be, and holds there with tracking off. If the tube is on the west side "
-                         "it comes back over the pole on the way, as for ./mount.py home.",
+                         "it comes back over the pole on the way, as for ./mount.py home. Without a handset "
+                         "(the Wi-Fi adapter or EQDIR) it is then recorded as home, as ./mount.py sethome does.",
                          "The readings are the motors' own, so the gears' slack (a few arcminutes) is not in "
                          "them; findhome after the restart shows what is left."]}
 
