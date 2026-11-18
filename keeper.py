@@ -246,7 +246,9 @@ def main():
                 raise SystemExit(f"Not started: {problem}.")
             if cleared:
                 print(f"Cooler fault cleared ({cleared.get('reason')}); cooling again, watched.")
-        elif altair.fault_latched():
+        elif altair.fault_latched() and not altair.fault_latched().get("cleared_at"):
+            # A fault a person has cleared is kept only until the sensor holds
+            # its target (altair.ramp); it does not stop the next start.
             raise SystemExit(f"Not started: the cooler failed safe ({altair.fault_latched().get('reason')}). "
                              "Secure the 12 V lead, then ./keeper.py start --after-fault (10 minutes after it).")
         start()
