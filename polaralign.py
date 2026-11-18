@@ -32,6 +32,7 @@ import argparse
 import json
 import math
 import os
+import sys
 import time
 
 import numpy as np
@@ -589,6 +590,13 @@ def broadcast(result, exposure=FRAME_S):
 
 
 def main():
+    # Each line out as it is printed, so a log being tailed (a run left in
+    # the background) shows progress, not nothing until the end
+    # (18 November 2026: a guiding calibration's log stayed empty for 5 min).
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except (AttributeError, ValueError):
+        pass
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--dry-run", action="store_true", help="say what it would do; no camera, no mount")
     ap.add_argument("--where", action="store_true",

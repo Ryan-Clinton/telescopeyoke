@@ -54,6 +54,13 @@ def count_stars(lum):
 
 
 def main():
+    # Each line out as it is printed, so a log being tailed (a run left in
+    # the background) shows progress, not nothing until the end
+    # (18 November 2026: a guiding calibration's log stayed empty for 5 min).
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except (AttributeError, ValueError):
+        pass
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--until", default="22:00", help="give up at this time (HH:MM)")
     ap.add_argument("--every", type=float, default=60, help="seconds between frames")

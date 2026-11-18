@@ -26,6 +26,7 @@ import argparse
 import os
 import secrets
 import signal
+import sys
 import threading
 import time
 
@@ -231,6 +232,13 @@ def stop(say=print, wait=900):
 
 
 def main():
+    # Each line out as it is printed, so a log being tailed (a run left in
+    # the background) shows progress, not nothing until the end
+    # (18 November 2026: a guiding calibration's log stayed empty for 5 min).
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except (AttributeError, ValueError):
+        pass
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("action", choices=["start", "status", "stop"])
     ap.add_argument("--after-fault", action="store_true",

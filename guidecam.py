@@ -747,6 +747,13 @@ def show_status():
 
 
 def main(argv=None):
+    # Each line out as it is printed, so a log being tailed (a run left in
+    # the background) shows progress, not nothing until the end
+    # (18 November 2026: a guiding calibration's log stayed empty for 5 min).
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except (AttributeError, ValueError):
+        pass
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="action")
     sub.add_parser("install", help="fetch the library this camera needs")

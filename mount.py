@@ -1603,6 +1603,13 @@ def report(mount):
 
 
 def main():
+    # Each line out as it is printed, so a log being tailed (a run left in
+    # the background) shows progress, not nothing until the end
+    # (18 November 2026: a guiding calibration's log stayed empty for 5 min).
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+    except (AttributeError, ValueError):
+        pass
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("command", choices=["status", "settime", "nudge", "zenith", "home", "stop", "goto", "point",
                                        "sync", "drift", "compensate", "pointing",
