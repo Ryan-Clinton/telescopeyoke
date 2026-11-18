@@ -19,7 +19,8 @@ is built). What is proven is decided in one place,
 | [Mounts](mounts.md) | reference | Which mounts can be reached and how, in the order planned. |
 | [Calibrating a mount, in order](calibration.md) | guide | Level, polar-align, find the true home and mark it, measure the pointing each side. |
 | [Focusing by ear](focus.md) | guide | Turn the knob and the laptop talks you onto focus. |
-| [The motor focuser](focuser.md) | record | The project's own focuser motor and what it can lift. |
+| [The motor focuser](focuser.md) | record | The project's own focuser motor and what it can lift: a NEMA 17 on a TMC2209, working since 18 November 2026. |
+| [Building the focuser](focuser-build.md) | story | From the first 28BYJ-48 on 12 October 2026 to the NEMA 17's first light. |
 | [How a picture is made](imaging.md) | guide | Calibration, frame checks, lining up, stacking, the quality pass. |
 | [Imaging the Moon](lucky-imaging.md) | guide | Short frames, no stars to solve on. |
 | [The mount is wonky; measure how wonky](tracking.md) | guide | Drift from a rough polar alignment, and how it is cancelled. |

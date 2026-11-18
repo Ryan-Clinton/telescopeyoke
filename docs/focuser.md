@@ -7,18 +7,40 @@ lead. `./focuser.py` loads the Nano and turns the motor; `./focus.py
 --motor` focuses with it, measuring the stars as it goes, with nobody's hand
 on the telescope.
 
-**Status, 10 November 2026: being changed over and not usable.** The first
-drive, a 28BYJ-48 on a ULN2003 board (Parts and Wiring below), couldn't lift
-the drawtube with the 183M's train on. The firmware in `firmware/focuser/`
-now drives a NEMA 17 on a TMC2209 instead, and **no longer drives the
-28BYJ-48**. The NEMA 17 drive is **not commissioned**. On the bench it
-turned in one direction only until 16 November 2026, when the cause was
-found: the carrier's 5 V row (CN5) had nothing on it. With the Nano's 5V
-there, a BTT TMC2209 V1.3 turns both ways
-([the bench session](nights/2026-11-09/nema-bench.md)). It isn't on the
-focuser yet; until it is, focus is by hand (`./focus.py`, spoken numbers).
+**Status, 18 November 2026: built and working on the telescope.** A NEMA
+17 on a BTT TMC2209 focused the 150P with the 183M's train on, by itself,
+from far out to HFR 1.67, and lifted the drawtube outward
+([the night](nights/2026-11-18/focuser.md)). The first drive, a 28BYJ-48 on
+a ULN2003 board (Parts and Wiring below), couldn't lift that train; the
+firmware in `firmware/focuser/` **no longer drives the 28BYJ-48**. Still to
+measure on the sky: the gear slack and the sweep step (`./focus.py
+--measure-backlash`, `--measure-step`), which the sweeps need before the
+guard lets them run. The whole story, from the first idea:
+[the build](focuser-build.md).
 
-## The NEMA 17 drive (not yet commissioned)
+## The NEMA 17 drive (commissioned 18 November 2026)
+
+On the telescope: the 150P's focuser is a Crayford (a smooth drawtube
+driven by friction from a smooth roller; no gears), its tension set on 17
+November 2026 with the camera vertical so the train's weight does not run
+it down. The motor sits on the printed bracket (Printables 436129) and turns
+the knob one to one: 4096 half-steps a turn, as the firmware still counts
+them, which at the driver's 1/64 is 12,800 microsteps (200 microsteps to 64
+half-steps). Half a turn of the knob is about half the drawtube's travel.
+A plus move takes the drawtube out. Run its 12 V lead with slack: on 18
+November it was found pulled tight across the mount, and may have been
+holding the tube back in Dec.
+
+The motor is far stronger than the 28BYJ-48, which stalled and ticked
+harmlessly at the ends of the travel. Nothing has met the ends with the
+NEMA 17: the far-focus search goes at most half a turn either way from
+where it starts, and the walk-in keeps within `[focuser] travel`.
+
+How it focuses now (18 November 2026): `./focus.py --check` first. If the
+stars are only rings, `./focus.py --find` steps a thirty-second of a turn at
+a time and ends at the smallest rings or where stars measure; then, from a
+little outside focus (the motor can set it there: `./focuser.py move 256`
+from just inside), `./focus.py --walk-in`.
 
 | Part | |
 |---|---|
@@ -43,9 +65,12 @@ motor turned one way and hummed the other on every driver tried (9 to
 16 November 2026). With the Nano's 5V on CN5, a BTT TMC2209 V1.3 turned
 both ways on 16 November 2026.
 
-All three microstep switches are off. The firmware assumes 1/8 steps (1600
-microsteps a turn), which on a TMC2209 is MS1 and MS2 both low. That isn't
-measured with power on: the empty socket read MS1 low and MS2 not low (below).
+All three microstep switches are off. **Measured on 16 November 2026 on a
+dial: the BTT driver runs at 1/64 like that** (12,800 microsteps a turn),
+and the firmware sends 200 microsteps for every 64 half-steps, so 4096
+half-steps are still one turn. The paragraph below, from before, assumed
+1/8 (1600 microsteps a turn, MS1 and MS2 both low); the empty socket read
+MS1 low and MS2 not low (below), which on a TMC2209 is 1/64.
 On 10 November, with all three off, the spare turned exactly one turn for
 4096 half-steps: 1/8, as the firmware assumes. Every switch setting left the
 one-direction fault as it was ([the bench session](nights/2026-11-09/nema-bench.md)).
@@ -174,9 +199,19 @@ whole time the 12 V is in.
    something shared, not the drivers.
 9. **Only then fit it to the focuser** on the reinforced bracket.
    - Check it lifts the camera and filter wheel outward and lets them down.
+     **Done, 18 November 2026:** about 0.4 turn outward under the 183M's
+     train, and the walk-in's last move back out lifted it too.
    - See whether the drawtube slips with the driver off between moves
-     (`--hold` if it does).
-   - Measure the gear slack (`./focus.py --measure-backlash`).
+     (`--hold` if it does). **Not measured;** no slip was seen on
+     18 November with the tension set as above.
+   - Measure the gear slack (`./focus.py --measure-backlash`). **Owed**: a
+     clear night and a rich field.
+
+Steps 1 to 8 were done on the bench from 9 to 16 November 2026
+([the bench session](nights/2026-11-09/nema-bench.md)). The driver turned
+out to run at 1/64, not 1/8 as first assumed, and the firmware was changed
+to match (74459b2); 512 half-steps then turned 44.6° (45° on paper), with
+4 half-steps of slack, back within 0.01°.
 
    The firmware counts the steps it sends, not where the shaft is, so a
    stall under load goes unnoticed until the stars say so.
@@ -236,8 +271,10 @@ Then:
     ./focuser.py move 200      that many half-steps; 4096 is one turn, minus is the other way
 
 On the 150P, with the motor in place of the knob on the bracket's side, a
-plus move takes the drawtube out and a minus move brings it in. The motor
-is too weak to harm anything at the end of the travel: it stalls and ticks.
+plus move takes the drawtube out and a minus move brings it in. The
+28BYJ-48 was too weak to harm anything at the end of the travel: it stalled
+and ticked. **The NEMA 17 is not:** keep its moves within the travel, as
+the commands do (see the drive's section above).
 
 ## Focusing with it
 

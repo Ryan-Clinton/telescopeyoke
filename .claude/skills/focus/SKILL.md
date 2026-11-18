@@ -42,17 +42,24 @@ Focus comes before anything that plate-solves.
 
 ## With the motor focuser: the walk-in
 
-`./focus.py --motor --dry-run` first. Then `./focus.py --walk-in` only,
-from the drawtube set by hand a touch **out** from focus (where focus
-was, if it has been marked). **Never `--motor`, `--measure-step` or
-`--measure-backlash`** with their 256-step, 1536-overshoot guesses: two
-of them, each stopped part way, once left the drawtube about an inch out.
+`./focus.py --motor --dry-run` first. Then `./focus.py --walk-in`, from
+the drawtube a touch **out** from focus. The owner's NEMA 17 lifts the
+drawtube (18 November 2026), so the motor sets it there
+(`./focuser.py move 256` from just inside); a rig whose motor cannot lift
+has it set by hand. Far out, stars only rings: `./focus.py --find` first
+(a thirty-second of a turn a step, half a turn each way; it ends at the
+smallest rings or where stars measure, and stops if the star leaves the
+frame). **Never `--motor`, `--measure-step` or `--measure-backlash`** with
+their 256-step, 1536-overshoot guesses (the guard refuses them): two of
+them, each stopped part way, once left the drawtube about an inch out.
 The method proved on 20 October 2026 is a small step out and tiny steps
 in, downhill only, stopping once the stars are clearly past their best,
 then one move back out to the best (`docs/focuser.md`). Nothing to
 measure first. The person's word on how far out it is beats the HFR: HFR
-13 can be a few tens of microns. Stars that vanish during a run mean the
-focuser, not cloud.
+13 can be a few tens of microns. Stars that vanish during a run: first
+whether the star is still in the frame (a GoTo off by up to a degree
+without a star alignment, or drift on a rough polar alignment: 18 November
+2026), then the focuser, and cloud last.
 
 - A walk-in that ends past its best tries one move back out and says
   whether the motor lifted the drawtube: report that line too.

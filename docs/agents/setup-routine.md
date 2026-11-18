@@ -139,9 +139,11 @@ says it moved and they say it did not, the motors have stalled (6 October
 ("HFR 1.86, usual 2.38: good"). Focus left untouched since it was last set
 is usually still good: then move on, and focus only if they ask
 (`./focus.py --walk-in`). Only when it is soft, and with the motor
-focuser: the person sets the drawtube a touch **out** from focus by hand
-(on the owner's rig, from the Sharpie line), then
+focuser: the drawtube goes a touch **out** from focus (by the motor where
+it can lift the drawtube, as the owner's NEMA 17 does since 18 November
+2026: `./focuser.py move 256` from just inside; by hand otherwise), then
 
+    ./focus.py --find          far out, stars only rings: a thirty-second of a turn a step to the smallest rings
     ./focus.py --walk-in       brings it in to the sharpest, downhill only
 
 **Never `./focus.py --motor`** (nor `--measure-step` or
@@ -151,8 +153,9 @@ an inch from the Sharpie line after the person had said focus was a touch
 out. The method proved on 20 October (two coils, 30 ms a half-step, out
 two turns with the camera on) is a small step out and tiny steps in: the
 walk-in. Their word on how far out it is beats the HFR: HFR 13 can be a
-few tens of microns. Stars that vanish during a run mean the focuser, not
-cloud.
+few tens of microns. Stars that vanish during a run: first whether the
+star is still in the frame (on 18 November 2026 a GoTo without a star
+alignment missed by 38', then 55'), then the focuser, then cloud.
 
 The motor focuser does it: nobody touches the telescope, so never ask for a
 hand on the knob. The Sharpie line on the drawtube (18 October 2026) marks
