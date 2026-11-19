@@ -125,6 +125,26 @@ DRIFT_FILE = config.DATA / "cache" / "drift_model.json"
 SURVEY_FILE = config.DATA / "cache" / "pointing_survey.json"
 HOME_FILE = config.DATA / "cache" / "home_fit.json"      # what `findhome` found, for `truehome`
 HOME_FRESH = 2 * 3600     # seconds a home measurement may be acted on
+# Each findhome keeps its frames, messages and fit here, one folder a run,
+# accepted or not, so a bad measurement can be looked at afterwards.
+HOME_RUNS = config.DATA / "cache" / "findhome"
+# How far an error of 1° in every plate solve could move the home found,
+# from the places' geometry alone: 0.9 with the eight places at Dec +40°,
+# 1.5 with six, 2.7 with two a side, 6 with four inside an hour of the
+# meridian. Past this the places cannot tell the home errors from the rest
+# of the model, however well they fit it (six places at two hour angles
+# fit a wrong home exactly).
+HOME_LEVERAGE = 3.0
+# Degrees: truehome counts as there when both axes read this close to the
+# measured home. Under twice the seek's last stop (0.03°); the motor
+# board's own moves land within a few counts.
+ARRIVED = 0.05
+# Degrees: within one side the aim's error changes smoothly from place to
+# place (tan(dec) times the polar error per radian of hour angle: 0.4° an
+# hour at Dec +40° with the axis 2° out). A bigger jump is a clutch
+# slipping or the tube held, not geometry (12 November 2026: a 15° move
+# showed 3.4°).
+JUMP = 2.0
 # Degrees: the model fits when the places sit this close to it. A first
 # figure, from made-up solves; to be set from the first real run's residuals.
 HOME_FITS = 0.15
@@ -553,12 +573,13 @@ class Mount:
                 time.sleep(60)
         return residual, sigma
 
-    def pointing_survey(self, site, hours=SURVEY_HOURS, dec=SURVEY_DEC, skyline=None):
+    def pointing_survey(self, site, hours=SURVEY_HOURS, dec=SURVEY_DEC, skyline=None, keep=True, for_home=False):
         """Go to each hour angle at one declination, as the handset believes
         them (no correction applied), plate-solve, and record how far out
         the aim really is. Returns pointing_summary()'s account, and keeps
-        each side's average as that side's pointing error."""
-        spots, _ = plan_survey(site, hours, dec, skyline)     # refuses here, before anything moves
+        each side's average as that side's pointing error if `keep`
+        (findhome keeps them only once its fit is accepted)."""
+        spots, _ = plan_survey(site, hours, dec, skyline, for_home)     # refuses here, before anything moves
         if not CLOCK_FILE.exists():
             self.save_clock(site)
         offset = json.loads(CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
@@ -585,34 +606,61 @@ class Mount:
                 raise moved.refusal(f"After a move of {abs(hours_out * 15 - last[0]):.0f}° the sky is "
                                     "where it was.")
             last = (hours_out * 15, actual[0])
-            rows.append({"hour_angle_h": hours_out, "side": side_name(west),
-                         "ha_error_deg": round(wrap(actual[0] - believed), 3),
-                         "dec_error_deg": round(actual[1] - wrap(dec_handset), 3)})
+            row = {"hour_angle_h": hours_out, "side": side_name(west),
+                   "ha_error_deg": round(wrap(actual[0] - believed), 3),
+                   "dec_error_deg": round(actual[1] - wrap(dec_handset), 3)}
+            before = next((r for r in reversed(rows) if r["side"] == row["side"]), None)
+            if before:
+                jump = math.hypot((row["ha_error_deg"] - before["ha_error_deg"]) * math.cos(math.radians(dec)),
+                                  row["dec_error_deg"] - before["dec_error_deg"])
+                if jump > JUMP:
+                    # The move showed, but not as far as it was made: a clutch
+                    # slipping, or the tube held. The axis readings no longer
+                    # say where the tube is, so nothing more is measured.
+                    self.stop()
+                    raise moved.refusal(f"Between hour angles {before['hour_angle_h']:+g} h and {hours_out:+g} h "
+                                        f"the aim's error jumped by {jump:.1f}°, where the geometry allows a few "
+                                        "tenths: a clutch may have slipped, or something held the tube.")
+            rows.append(row)
             self.say(f"hour angle {hours_out:+g} h ({rows[-1]['side']}): out by "
                      f"{rows[-1]['ha_error_deg']:+.2f}° in hour angle, {rows[-1]['dec_error_deg']:+.2f}° in Dec")
         found = pointing_summary(rows)
-        for name, side in found["sides"].items():
-            save_pointing_error([side["ha_error_deg"], side["dec_error_deg"]], west=name == "west")
+        if keep:
+            keep_pointing(found)
         found.update(rows=rows, dec_deg=dec, saved=time.time())
         SURVEY_FILE.parent.mkdir(parents=True, exist_ok=True)
         records.write(SURVEY_FILE, found)
-        self.say(found["verdict"])
+        if keep:
+            self.say(found["verdict"])
         return found
 
     def find_home(self, site, hours=SURVEY_HOURS, dec=SURVEY_DEC, skyline=None):
         """Measure where the home position really is. One uninterrupted run
         of plate solves either side of the meridian (pointing_survey), and a
         fit of home_fit()'s model to them. Nothing remembered from earlier is
-        used. Returns the fit and keeps it for true_home()."""
-        survey = self.pointing_survey(site, hours, dec, skyline)
+        used. Returns the fit; only one that is accepted is kept for
+        true_home(), and its places as the pointing errors."""
+        # Whatever was measured before is not to be acted on once a new
+        # measurement has begun, whether or not this one finishes.
+        if HOME_FILE.exists():
+            HOME_FILE.replace(HOME_FILE.with_name("home_fit.previous.json"))
+        run = HOME_RUNS / time.strftime("%Y%m%d-%H%M%S")
+        if not self.recording:
+            self.record(run)
+        survey = self.pointing_survey(site, hours, dec, skyline, keep=False, for_home=True)
         found = home_fit(survey["rows"], dec)
-        found.update(saved=time.time(), dec_deg=dec, rows=survey["rows"],
-                     goes_to={"ra_axis_deg": round(wrap(HOME_RA_AXIS - found["ra_home_error_deg"]), 3),
-                              "dec_axis_deg": round(HOME_DEC_AXIS - found["dec_home_error_deg"], 3)})
-        HOME_FILE.parent.mkdir(parents=True, exist_ok=True)
-        records.write(HOME_FILE, found)
+        link, counts = home_reference()
+        found.update(saved=time.time(), dec_deg=dec, rows=survey["rows"], goes_to=home_target(found),
+                     link=link, home_counts=counts)
+        records.write(run / "fit.json", found)
+        if found["fits"]:
+            keep_pointing(survey)
+            records.write(HOME_FILE, found)
         self.say(f"Home is out by {found['ra_home_error_deg']:+.2f}° on the RA axis and "
-                 f"{found['dec_home_error_deg']:+.2f}° on the Dec axis. The {found['places']} places sit "
+                 f"{found['dec_home_error_deg']:+.2f}° on the Dec axis"
+                 + ("" if found["ra_home_sigma_deg"] is None else
+                    f" (±{found['ra_home_sigma_deg']:.2f}° and ±{found['dec_home_sigma_deg']:.2f}°)")
+                 + f". The {found['places']} places sit "
                  f"{found['rms_deg']:.2f}° from that account of them"
                  + ("" if found["sway_deg"] is None else
                     f", and leaving any one out moves home by at most {found['sway_deg']:.2f}°")
@@ -638,20 +686,36 @@ class Mount:
         be marked. The handset still believes its old home until it is
         switched off and on with the mount on those marks."""
         plan = plan_true_home()          # refuses here, before anything moves
+        target = plan["ra_axis_deg"], plan["dec_axis_deg"]
         # Home first, as ./mount.py home goes, then the small step from there:
         # every later setting of home by the marks is then approached the same way.
         self.home()
         with self.watching():
-            self.seek(DEC, plan["dec_axis_deg"])
-            self.seek(RA, plan["ra_axis_deg"])
+            if hasattr(self.s, "board"):
+                # The board's own moves, as home makes: the fixed-rate seek
+                # buzzed and stalled the motors on the Wi-Fi adapter.
+                self.may_move()
+                self.s.go_axes(*target, SLEW_TIMEOUT)
+            else:
+                # The seek's last stage can stop a little short or past: one
+                # more try from there, then the readings decide.
+                for _ in range(2):
+                    self.seek(DEC, target[1])
+                    self.seek(RA, target[0])
         self.tracking(False)
         ra_axis, dec_axis = self.axes()
+        off = max(abs(wrap(ra_axis - target[0])), abs(dec_axis - target[1]))
+        if off > ARRIVED:
+            raise Refusal("SLEW_TIMED_OUT", f"The axes read RA {wrap(ra_axis):+.2f}°, Dec {dec_axis:.2f}°, "
+                          f"{off:.2f}° from the measured home (RA {wrap(target[0]):+.2f}°, Dec {target[1]:.2f}°): "
+                          "not there. Do not mark the joints. Run ./mount.py truehome again.")
         if hasattr(self.s, "board"):
             # Without a handset (direct.py) home is only where the motors were
             # recorded, so the measured home is recorded here and now: the
             # person asked for it (18 November 2026, after a clutch reset left
             # home 3.2° and 5.7° out and sethome had to be run by hand).
             counts = self.s.set_home()
+            forget_pointing()
             self.say(f"At the measured home, and recorded as home (motor counts {counts[0]}, {counts[1]}). "
                      "Mark both joints when you can; run ./mount.py findhome again to check it: it should "
                      "find home within a tenth of a degree.")
@@ -773,6 +837,7 @@ class Mount:
     def set_home(self):
         """Record that the mount is at its home position now. Moves nothing."""
         counts = self.direct().set_home()
+        forget_pointing()
         print(f"Home recorded at motor counts {counts[0]}, {counts[1]}. This holds until the mount "
               "is switched off or its clutches are loosened.")
 
@@ -1216,16 +1281,22 @@ def plan_point(azimuth, altitude, site, clearance_test=False):
     return dict(plan, azimuth_deg=azimuth)
 
 
-def plan_survey(site, hours=SURVEY_HOURS, dec=SURVEY_DEC, skyline=None):
+def plan_survey(site, hours=SURVEY_HOURS, dec=SURVEY_DEC, skyline=None, for_home=False):
     """The hour angles `pointing` would go to, east side first so that the
-    tube swings over the pole only once, checked against the limits and
-    against what is known to be in the way. Returns (hours, notes); raises a
-    Refusal if fewer than two are left on either side. Needs no hardware."""
+    tube swings over the pole only once, checked against the limits, the
+    Sun and what is known to be in the way. Returns (hours, notes); raises a
+    Refusal if fewer than two are left on either side, or, `for_home`, if
+    the places left cannot tell where home is (home_leverage). Needs no
+    hardware."""
     import polaralign
     spots, notes = [], []
-    for hours_out in sorted(hours):
+    if len(set(hours)) < len(hours):
+        notes.append("Each hour angle is visited once: a place seen again adds nothing to the geometry.")
+    for hours_out in sorted(set(hours)):
         altitude, azimuth = polaralign.to_altaz(polaralign.vector(hours_out * 15, dec), site["latitude"])
         _plan(hours_out * 15, dec, altitude, f"Hour angle {hours_out:+g} h")     # the lock and the hour-angle limit
+        if altitude > 0:
+            direction(azimuth % 360, altitude, site)        # refuses anywhere near the Sun while it is up
         if altitude < MIN_ALTITUDE:
             notes.append(f"Hour angle {hours_out:+g} h is only {altitude:.0f}° up there; left out.")
             continue
@@ -1242,6 +1313,13 @@ def plan_survey(site, hours=SURVEY_HOURS, dec=SURVEY_DEC, skyline=None):
             raise Refusal("INVALID_REQUEST", f"Fewer than two places are left to look at on the {name} side, "
                           "which is too few to say anything: " + " ".join(notes) + " Try another --dec or "
                           "other --hours.")
+    if for_home:
+        leverage = home_leverage([{"hour_angle_h": h, "side": "east" if h < 0 else "west"} for h in spots], dec)
+        if leverage > HOME_LEVERAGE:
+            raise Refusal("INVALID_REQUEST", f"These places cannot tell where home is: an error of 1° in the plate "
+                          f"solves could move it by {leverage:.1f}°, and it needs under {HOME_LEVERAGE:g}°. Spread "
+                          "them further from the meridian, or use more (the eight by default).")
+        notes.append(f"From these places, an error of 1° in every plate solve could move home by {leverage:.1f}°.")
     if any(h > 0 for h in spots):
         notes.append("The tube will swing over the pole once, between the east side and the west.")
     return spots, notes
@@ -1305,16 +1383,9 @@ def home_fit(rows, dec):
     shrink, slope = math.cos(math.radians(dec)), math.tan(math.radians(dec))
 
     def fit(rows):
-        """(the five answers, each place's miss from them, rms) for some of the rows."""
-        model, seen = [], []
-        for row in rows:
-            s = 1.0 if row["side"] == "east" else -1.0
-            h = math.radians(row["hour_angle_h"] * 15)
-            model.append([1, 0, s / shrink, -slope * math.cos(h), -slope * math.sin(h)])
-            seen.append(row["ha_error_deg"])
-            model.append([0, s, 0, math.sin(h), -math.cos(h)])
-            seen.append(row["dec_error_deg"])
-        model, seen = np.array(model), np.array(seen)
+        """(the five answers, rms) for some of the rows."""
+        model = home_model(rows, dec)
+        seen = np.array([v for row in rows for v in (row["ha_error_deg"], row["dec_error_deg"])])
         answer = np.linalg.lstsq(model, seen, rcond=None)[0]
         return answer, float(np.sqrt(np.mean((model @ answer - seen) ** 2)))
 
@@ -1327,14 +1398,23 @@ def home_fit(rows, dec):
         return {"hour_angle_h": row["hour_angle_h"], "side": row["side"], "ha_deg": round(float(in_ha), 3),
                 "dec_deg": round(float(in_dec), 3), "miss_deg": round(float(math.hypot(in_ha * shrink, in_dec)), 3)}
 
-    def enough(rows):
-        sides = {name: sum(r["side"] == name for r in rows) for name in ("east", "west")}
-        return min(sides.values()) >= 2 and len(rows) >= 5, sides
+    def enough(rows, limit=HOME_LEVERAGE):
+        """Two different places on each side and five in all, laid out so
+        that they tell home apart from the rest of the model. A place left
+        out in turn needs only that they tell the five apart at all: one
+        that leaves them weakly placed shows as sway (17 October 2026's
+        seven places, which found home, read 3.1 without their -3 h)."""
+        sides = {name: len({r["hour_angle_h"] for r in rows if r["side"] == name}) for name in ("east", "west")}
+        leverage = home_leverage(rows, dec)
+        return (min(sides.values()) >= 2 and len(rows) >= 5
+                and math.isfinite(leverage) and leverage <= limit), sides
 
     ok, sides = enough(rows)
     if not ok:
         raise Refusal("PLATE_SOLVE_FAILED", f"Too few places solved to find home: {sides['east']} on the east "
-                      f"side and {sides['west']} on the west. It needs two on each and five in all.")
+                      f"side and {sides['west']} on the west. It needs two on each and five in all, spread so "
+                      f"that a 1° error in the solves could move home by under {HOME_LEVERAGE:g}° "
+                      f"(these: {home_leverage(rows, dec):.1f}°).")
     answer, rms = fit(rows)
     used, left_out = rows, None
     # One bad place (a solve on the wrong stars, a gust) can spoil an account
@@ -1347,7 +1427,7 @@ def home_fit(rows, dec):
         trials = []
         for i in range(len(rows)):
             rest = rows[:i] + rows[i + 1:]
-            if enough(rest)[0]:
+            if enough(rest, limit=math.inf)[0]:
                 trial, trial_rms = fit(rest)
                 trials.append((trial_rms, i, trial, rest))
         return trials
@@ -1369,7 +1449,16 @@ def home_fit(rows, dec):
     # sound: home is where it is (17 October 2026, 10.7° out by eye). Only
     # the places' agreement decides.
     believable = rms <= HOME_FITS and sway is not None and sway <= HOME_SWAY
+    # How sure the two home errors are: the places' scatter about the fit
+    # carried through their geometry (the usual least-squares figure).
+    # With no figures to spare it cannot be said.
+    model, spare = home_model(used, dec), 2 * len(used) - 5
+    sigma = (np.sqrt(np.diag(np.linalg.inv(model.T @ model)))[:2] * rms * math.sqrt(2 * len(used) / spare)
+             if spare > 0 else None)
     return {"ra_home_error_deg": round(ra, 3), "dec_home_error_deg": round(dec_error, 3),
+            "ra_home_sigma_deg": None if sigma is None else round(float(sigma[0]), 3),
+            "dec_home_sigma_deg": None if sigma is None else round(float(sigma[1]), 3),
+            "leverage": round(home_leverage(used, dec), 2),
             "tube_not_square_deg": round(cone, 3), "polar_error_left_deg": round(math.hypot(p, q), 3),
             "rms_deg": round(rms, 3), "sway_deg": None if sway is None else round(sway, 3),
             "places": len(used), "fits": bool(believable),
@@ -1379,6 +1468,70 @@ def home_fit(rows, dec):
                 f"leaving one place out moves it {sway:.2f}°, and it needs {HOME_SWAY:g}°"),
             # An rms can hide one bad place among good ones: each place's own miss, for looking at.
             "residuals": [miss(row, answer) for row in used], "left_out": left_out}
+
+
+def home_model(rows, dec):
+    """home_fit()'s equations for these places, two rows each: what each of
+    the five unknowns does to the hour-angle error and to the Dec error."""
+    import numpy as np
+    shrink, slope = math.cos(math.radians(dec)), math.tan(math.radians(dec))
+    model = []
+    for row in rows:
+        s = 1.0 if row["side"] == "east" else -1.0
+        h = math.radians(row["hour_angle_h"] * 15)
+        model.append([1, 0, s / shrink, -slope * math.cos(h), -slope * math.sin(h)])
+        model.append([0, s, 0, math.sin(h), -math.cos(h)])
+    return np.array(model)
+
+
+def home_leverage(rows, dec):
+    """How far an error of 1° in every plate solve could move the home found
+    from these places (the larger of the two axes): their geometry alone,
+    before anything is measured. Infinite when they cannot tell the five
+    unknowns apart at all, as six places at two hour angles cannot."""
+    import numpy as np
+    model = home_model(rows, dec)
+    if len(model) < 5 or np.linalg.matrix_rank(model) < 5:
+        return math.inf
+    return float(np.sqrt(np.diag(np.linalg.inv(model.T @ model)))[:2].max())
+
+
+def home_target(found):
+    """The axis readings where a home measurement puts home."""
+    return {"ra_axis_deg": round(wrap(HOME_RA_AXIS - found["ra_home_error_deg"]), 3),
+            "dec_axis_deg": round(HOME_DEC_AXIS - found["dec_home_error_deg"], 3)}
+
+
+def home_reference():
+    """(the link, the motor counts home is recorded at) as they are now,
+    from the files alone. A handset keeps its home to itself (None): only
+    its clock being set again says it was restarted. Without one, home is
+    the counts direct.py recorded, which a sethome, a truehome or the board
+    switched off and on changes."""
+    import os
+    board = os.environ.get("TY_DEMO_BOARD") if config.DEMO else None
+    if not board and (config.DEMO or mount_settings().get("link", "handset") == "handset"):
+        return "handset", None
+    import direct
+    state = config.DATA / "cache" / "demo_direct_mount.json" if config.DEMO else direct.STATE_FILE
+    try:
+        return "direct", json.loads(state.read_text(encoding="utf-8")).get("home")
+    except (OSError, ValueError):
+        return "direct", None
+
+
+def keep_pointing(survey):
+    """Keep each side's average error from a pointing survey as that side's pointing error."""
+    for name, side in survey["sides"].items():
+        save_pointing_error([side["ha_error_deg"], side["dec_error_deg"]], west=name == "west")
+
+
+def forget_pointing():
+    """Home has just been recorded somewhere else (direct.py): every axis
+    reading has moved by the difference, and a pointing error or home
+    measured against the old one would be added to a home already moved."""
+    for gone in (POINTING_FILE, HOME_FILE):
+        gone.unlink(missing_ok=True)
 
 
 def plan_true_home():
@@ -1397,12 +1550,26 @@ def plan_true_home():
     if found["saved"] < since or age > HOME_FRESH:
         raise Refusal("INVALID_REQUEST", "The home measurement is from before the handset was last set up, or "
                       "more than two hours old. Run ./mount.py findhome again; nothing is moved on an old one.")
-    # Judged again from its own places, so a measurement is held to the rules as they are now.
-    refit = home_fit(found["rows"], found["dec_deg"]) if found.get("rows") else found
+    # Home as it was recorded when this was measured, or it measured a home
+    # that is no longer there. A handset's own restart cannot be seen from
+    # here: settime after switching it on is what says so.
+    if [found.get("link"), found.get("home_counts")] != list(home_reference()):
+        raise Refusal("INVALID_REQUEST", "Home has been recorded again, or the link changed, since this was "
+                      "measured (a sethome, a truehome, or the motor board switched off and on). Run "
+                      "./mount.py findhome again; nothing is moved on an old one.")
+    if not found.get("rows"):
+        raise Refusal("INVALID_REQUEST", "The home measurement has no places to check it by. Run "
+                      "./mount.py findhome again.")
+    # Judged again from its own places, so a measurement is held to the rules
+    # as they are now, and the move is made to what that judgement found.
+    refit = home_fit(found["rows"], found["dec_deg"])
     if not refit["fits"]:
         raise Refusal("INVALID_REQUEST", f"The last home measurement is not acted on: "
                       f"{refit.get('why_not') or 'it did not fit'}. Run ./mount.py findhome again.")
-    goes = found["goes_to"]
+    goes, kept = home_target(refit), found.get("goes_to")
+    changed = (max(abs(wrap(goes["ra_axis_deg"] - kept["ra_axis_deg"])),
+                   abs(goes["dec_axis_deg"] - kept["dec_axis_deg"])) if kept else 0.0)
+    found = dict(found, ra_home_error_deg=refit["ra_home_error_deg"], dec_home_error_deg=refit["dec_home_error_deg"])
     return {"would_move": True, "safe": True, "ra_axis_deg": goes["ra_axis_deg"], "dec_axis_deg": goes["dec_axis_deg"],
             "measured_minutes_ago": round(age / 60),
             "warnings": [f"Goes home by the axis readouts, then {abs(found['dec_home_error_deg']):.2f}° on the Dec "
@@ -1411,7 +1578,9 @@ def plan_true_home():
                          "it comes back over the pole on the way, as for ./mount.py home. Without a handset "
                          "(the Wi-Fi adapter or EQDIR) it is then recorded as home, as ./mount.py sethome does.",
                          "The readings are the motors' own, so the gears' slack (a few arcminutes) is not in "
-                         "them; findhome after the restart shows what is left."]}
+                         "them; findhome after the restart shows what is left."]
+            + ([f"Worked out again from its places, home is {changed:.2f}° from where it was kept when "
+                "measured: the fit has changed since. The new answer is the one used."] if changed > 0.01 else [])}
 
 
 def use_demo_cache():
@@ -1636,8 +1805,8 @@ def main():
                     help="with goto: aim this many arcminutes east and north of the object, to centre "
                          "one plate solving cannot, such as the Moon (west and south are negative)")
     ap.add_argument("--record", metavar="FOLDER",
-                    help="with goto --solve: keep each solve frame and message there, "
-                         "for replay.py to animate")
+                    help="keep each plate-solve frame and message there, for replay.py to animate "
+                         "(findhome keeps its own under cache/findhome/ unasked)")
     ap.add_argument("--clearance-test", action="store_true",
                     help=f"with point: go past the hour-angle limit, up to {CLEARANCE_TEST_HOURS:g} h and no lower "
                          f"than {MIN_ALTITUDE}°, to find with someone watching where the tube meets the tripod")
@@ -1698,7 +1867,8 @@ def dry_run(args, site):
         if args.command == "truehome":
             return plan_true_home()
         if args.command in ("pointing", "findhome"):
-            spots, notes = plan_survey(site, args.hours, args.dec, config.load().get("horizon") if not args.demo else None)
+            spots, notes = plan_survey(site, args.hours, args.dec, config.load().get("horizon") if not args.demo else None,
+                                       for_home=args.command == "findhome")
             return {"would_move": True, "safe": True, "hour_angles_h": spots, "dec_deg": args.dec,
                     "warnings": [f"Slews to {len(spots)} places at Dec {args.dec:+g}°, plate-solving at each."] + notes}
         if args.command == "sethome":

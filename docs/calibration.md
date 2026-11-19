@@ -176,8 +176,18 @@ rest of the night.
 - It reports the two home errors, and how far the places sit from that
   account of them: all together (`rms_deg`) and each by itself
   (`residuals`), because an rms can hide one bad place among five good ones.
-  Over 0.15°, or a home more than 10° out, and the answer is marked as not
-  fitting: nothing will be moved on it.
+  Over 0.15° and the answer is marked as not fitting: nothing will be moved
+  on it. How far out home is decides nothing (17 October: 10.7° out by eye,
+  and a sound measurement).
+- With it, how sure each home error is (`ra_home_sigma_deg`,
+  `dec_home_sigma_deg`: the places' scatter carried through their
+  geometry), and `leverage`, how far a 1° error in every solve could move
+  home with these places: 0.9 with the default eight at Dec +40°, 1.9 with
+  17 October's seven. Over 3 and the places cannot tell home from the rest
+  of the model, however well they fit it (six places at two hour angles fit
+  a wrong home exactly), so it is refused, in the dry run before anything
+  moves when the `--hours` asked for are laid out like that, and again if
+  failed solves leave them so. An hour angle given twice is visited once.
 - One place may be left out, never more: if the other places then fit and
   that one sits more than 0.3° from what they say, it is named, with how
   far out it is, and the answer comes from the rest. Look at its frame.
@@ -191,11 +201,42 @@ rest of the night.
   0.15° and 0.1° are first figures from made-up solves. The first real
   run's residuals are what they will be set from.
 
+What a run keeps:
+
+- Each run's frames, messages and fit, accepted or not, in
+  `cache/findhome/DATE-TIME/` (`fit.json`, `steps.json`, `frame-NN.jpg`):
+  the frame of a place left out is there to look at.
+- Starting a run puts the last measurement aside
+  (`home_fit.previous.json`): a run that fails leaves nothing for
+  `truehome` to act on. Only a fit that is accepted is kept for it, and
+  only then are the places' errors kept as each side's pointing error.
+- Within one side the aim's error changes smoothly from place to place, a
+  few tenths of a degree an hour at most. A jump of more than 2° between
+  two places on one side is a clutch slipping or the tube held (12
+  November: a 15° move showed 3.4°), and the run stops there.
+
 `./mount.py truehome` then drives to the home just measured: home by the
 axis readouts first, as `./mount.py home` goes, then the small step to the
 readings where true home lies, and holds with tracking off. `--dry-run`
-shows those readings first. It refuses unless the measurement was made in
-this session of the handset, within the last two hours, and fitted. Then:
+shows those readings first. It refuses unless the measurement was made
+since the handset's clock was last set (`settime`), within the last two
+hours, and fits when judged again by the rules as they are now; the move
+goes to where that judgement puts home. A handset's own restart cannot be
+seen from the computer: `settime` after switching it on is what marks a
+new session, so run it every time. Without a handset (the Wi-Fi adapter or
+EQDIR), the measurement also names the motor counts home was recorded at,
+and a `sethome`, a `truehome`, the board switched off and on, or a change
+of link since then refuses it.
+
+The step from home is made with the motor board's own moves without a
+handset, as `home` makes them (the fixed-rate turns buzzed and stalled the
+motors on the Wi-Fi adapter on 17 November), and with the handset's
+fixed-rate seek with one. Either way the axes must then read within 0.05°
+of the measured home, or it stops with "not there; do not mark the
+joints". Without a handset it records the place as home itself, and the
+pointing errors measured against the old home are dropped (as by
+`sethome`). The motor counts cannot see a clutch that slips: the second
+`findhome` is what checks the tube got there. Then:
 
 1. Mark both joints, across the gap, where they stand, with something that
    lasts a night of rain: a paint pen, nail varnish or a scratch. Wax crayon
@@ -221,6 +262,13 @@ What is and is not established:
   after the restart, shows.
 - The move is made by the motors' own readings, so slack in the gears is not
   in it. Coming to home the same way each time keeps that the same.
+- On the sky: with the handset, 17 October (10.66° and 5.12° out by eye;
+  0.19° and 0.05° on the marks after the restart, a little over the tenth
+  aimed for on the RA axis). Without one, through the Wi-Fi adapter, 18
+  November: home 3.2° and 5.7° out after a clutch reset, and `truehome`
+  reached it with the fixed-rate seek. Its step from home by the board's
+  own moves (since 19 November) has run in the demo on the simulated board
+  only.
 - A spirit level on the counterweight bar and the tube at the zenith is
   another way to the same end, but the turn from there back to home has not
   been worked through for this mount's readings, and nothing here uses it.

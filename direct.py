@@ -52,6 +52,7 @@ SIDEREAL = 360 / 86164.0905  # degrees per second
 RATES = {0: 0, 1: 0.002, 2: 0.004, 3: 0.008, 4: 0.07, 5: 0.13, 6: 0.27, 7: 1.0, 8: 2.5, 9: 3.4}
 FAST = 128 * SIDEREAL        # above this the motors need their high-speed mode
 LONG_WAY = 2.5               # degrees: a GoTo longer than this goes at high speed
+ARRIVED = 0.05               # degrees: a move to counts that stops further off has not arrived
 
 
 # --- reaching the board ----------------------------------------------------------
@@ -320,22 +321,43 @@ class DirectHandset:
         to reach the board, for a minute, and stops both axes the moment it
         answers: the board would otherwise carry on with nothing to stop it."""
         self._need_home()
+        self._move_to(list(self.state["home"]), timeout, "home")
+
+    def go_axes(self, ra_axis, dec_axis, timeout=150):
+        """Turn both axes to these angles (the handset's: home is RA 0°, Dec
+        90°) with the board's own moves, as go_home does: for `truehome`'s
+        small step from home, which the fixed-rate seek made with a jolt."""
+        self._need_home()
+        sign = self.state["dec_sign"] or 1      # as axes() reads them, so the two agree
+        self._move_to([self.state["home"][0] + self.board.counts(RA, (ra_axis + 180) % 360 - 180),
+                       self.state["home"][1] + sign * self.board.counts(DEC, dec_axis - 90)],
+                      timeout, "the measured home")
+
+    def _move_to(self, want, timeout, where):
+        """Turn both axes to these counts by their plain difference, wait for
+        both to stop, and refuse unless the counts read there: a stop is not
+        an arrival."""
         self._stop()
         self.board.ready()
         for axis, index in ((RA, 0), (DEC, 1)):
-            self.board.move(axis, self.state["home"][index] - self.board.position(axis))
+            self.board.move(axis, want[index] - self.board.position(axis))
         began = time.monotonic()
         while True:
             try:
                 if not (self.board.status(RA)["running"] or self.board.status(DEC)["running"]):
-                    return
+                    break
             except Refusal:
                 self._stop_when_back()
                 raise
             if time.monotonic() - began > timeout:
                 self._stop()
-                raise Refusal("SLEW_TIMED_OUT", "The mount did not get home in time; stopped.")
+                raise Refusal("SLEW_TIMED_OUT", f"The mount did not get to {where} in time; stopped.")
             time.sleep(0.5)
+        off = [abs(self.board.degrees(axis, want[index] - self.board.position(axis)))
+               for axis, index in ((RA, 0), (DEC, 1))]
+        if max(off) > ARRIVED:
+            raise Refusal("SLEW_TIMED_OUT", f"The motors stopped {off[0]:.2f}° (RA) and {off[1]:.2f}° (Dec) short "
+                          f"of {where}, by their own counts: stalled or held. Check it is free to move.")
 
     def _stop_when_back(self, wait=60.0):
         """Keep trying to stop both motors until the board answers or `wait`
