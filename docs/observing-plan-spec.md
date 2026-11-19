@@ -139,7 +139,10 @@ ZTF's scheduler is the same code in simulation (with historical weather)
 and on the sky. Policies are compared on simulated nights before use, and
 Rubin's survey strategy is tuned the same way.
 
-## What telescopeyoke has now (4 November 2026)
+## What telescopeyoke had then (4 November 2026)
+
+History: what the design started from. What is built now is in the Status
+above and `docs/validation.md`.
 
 | Piece | Today | Gap against the above |
 |---|---|---|

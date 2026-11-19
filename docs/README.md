@@ -14,6 +14,7 @@ is built). What is proven is decided in one place,
 | Page | Kind | What is in it |
 |---|---|---|
 | [From box to first galaxy](first-night.md) | guide | A first night for someone who knows none of the words. Says which steps are proven on a real mount. |
+| [The companion](companion.md) | guide | For an observatory that already works (NINA, PHD2, ASCOM): what went wrong in a night and why, from the frames it saves, without touching it. |
 | [Setup](setup.md) | guide | Installing, the camera driver, the plate solver, what the computer needs; Windows. |
 | [Hardware](hardware.md) | reference | What it has run on, what to expect of yours, how to send a report, EQMOD and ASCOM, more than one telescope. |
 | [Mounts](mounts.md) | reference | Which mounts can be reached and how, in the order planned. |

@@ -74,3 +74,15 @@ in another program's style with known faults planted (cloud, soft focus
 with a colder focuser, trailing with poor guiding, a gap where PHD2 lost
 its star and stopped, the sensor off its target), each found and put down
 to the right cause. Not yet beside anyone else's observatory.
+
+## Or letting TelescopeYoke run it
+
+The companion only watches. To have TelescopeYoke run the same equipment
+(its plate-solved GoTo and centring, its imaging run and quality pass),
+each part can be reached through its own ASCOM driver over Alpaca: in
+`config.toml`, `[mount] link = "alpaca"`, `[camera]`, `[filterwheel]` and
+`[focuser]` `backend = "alpaca"`, each with the driver's `address`
+(`./alpaca.py find` lists them), and `[guider] backend = "phd2"` for PHD2
+([Mounts](mounts.md), [Hardware](hardware.md), [Autoguiding](autoguiding.md)).
+That is on the development branch only, and tried on ASCOM's simulator and
+a pretend PHD2, never yet on real equipment: watch it first.
