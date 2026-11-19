@@ -24,7 +24,9 @@ time the camera opens, and only when that is the filter asked for
 The filters come in parfocal sets ([filterwheel] sets, by default
 "L,R,G,B;SII,Ha,OIII", from Gary, 4 November 2026): within a set no offset,
 and one offset from L's set to each other set. focus.py --auto
---prove-sets, once on the first clear night, focuses in every filter: a
+--prove-sets, once on the first clear night, focuses in L and then in
+each other filter with L again after it, each taken against the L focus
+either side so drift cancels: a
 filter further than the tolerance from its set's median gets its own offset
 from then on, and the result is kept. focus.py --auto --offset FILTER
 measures a set's offset once more: focus in L, the wheel to FILTER and
@@ -464,25 +466,52 @@ def measure_offset(name, drive, focus_run, wheel_to, say=print, temperature=None
             "l_hfr": first["best_hfr"], "f_hfr": second["best_hfr"], "temperature_c": temperature, **found}
 
 
+def mixed(groups):
+    """Every filter but L, the sets taken in turn (R, SII, G, Ha, B, OIII),
+    so neither set is all at one end of the night's run."""
+    rows = [[n for n in group if n != DEFAULT] for group in groups]
+    out = []
+    for k in range(max((len(r) for r in rows), default=0)):
+        out += [r[k] for r in rows if k < len(r)]
+    return out
+
+
 def prove_all(drive, focus_run, wheel_to, names=None, say=print, temperature=None, where=None):
-    """The proving night's run: focus in each filter (L first), each from
-    where the last left it, every focus arrived at moving inward
-    (focus.focus_motor); then prove_sets() on the best places. The drawtube
-    is left at the last filter's focus."""
-    names = names or [n for group in sets() for n in group]
-    names = [DEFAULT] + [n for n in names if n != DEFAULT]
-    positions = {}
-    for name in names:
+    """The proving night's run: focus in L, then each other filter with L
+    again after it (L, R, L, SII, L, G, L, Ha, L, B, L, OIII, L), the sets
+    mixed (mixed()). Each filter's place is taken against the mean of the L
+    focus before and after it, so focus creeping as the tube cools cancels
+    out, and the L runs show the creep and how well focus repeats (19
+    November 2026: in the order L, R, G, B the places went +72, +104, +111,
+    +108, and an L offset could not be told from a drift). Every focus is
+    arrived at moving inward (focus.focus_motor); then prove_sets() on the
+    places. The drawtube is left at L's focus."""
+    names = [n for n in (names or mixed(sets())) if n != DEFAULT]
+
+    def focus_in(name):
         wheel_to(name)
         began = drive.moved
         found = focus_run(drive)
-        positions[name] = began + found["best_at"]
-        say(f"sets: {name} best at {positions[name]:+d} (HFR {found['best_hfr']})")
+        at = began + found["best_at"]
+        say(f"sets: {name} best at {at:+d} (HFR {found['best_hfr']})")
+        return at
+
+    l_runs = [(time.time(), focus_in(DEFAULT))]
+    positions = {DEFAULT: 0}
+    for name in names:
+        at = focus_in(name)
+        l_runs.append((time.time(), focus_in(DEFAULT)))
+        between = (l_runs[-2][1] + l_runs[-1][1]) / 2
+        positions[name] = round(at - between)
+        say(f"sets: {name} is {positions[name]:+d} from L (L before {l_runs[-2][1]:+d}, after {l_runs[-1][1]:+d})")
+    places = [at for _, at in l_runs]
+    say(f"sets: L over the run: {', '.join(f'{p:+d}' for p in places)}; it moved {places[-1] - places[0]:+d} "
+        f"in {(l_runs[-1][0] - l_runs[0][0]) / 60:.0f} min, spread {statistics.pstdev(places):.0f} half-steps")
     proved = prove_sets(positions, where=where, temperature=temperature)
-    set_focused(names[-1], where)
+    set_focused(DEFAULT, where)
     say("sets: " + (f"confirmed {'; '.join(proved['confirmed'])}" if proved["confirmed"] else "none confirmed")
         + (f"; on their own offset: {', '.join(proved['own'])}" if proved["own"] else ""))
-    return proved
+    return dict(proved, l_runs=places)
 
 
 # --- what a filter's magnitudes are called (item 8) ---------------------------------

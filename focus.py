@@ -1540,8 +1540,10 @@ def run_motor(args, mode="focus"):
             raise interface.Refusal("INVALID_REQUEST", "--offset and --prove-sets measure focus offsets from L "
                                     "with --auto, on a light path with the filter wheel.")
         if args.dry_run and getattr(args, "prove_sets", False):
-            print("Would focus in each filter in turn, L first, each from where the last left it, and keep which "
-                  "filters focus with their parfocal set and which need their own offset. The mount does not move.")
+            print(f"Would focus in L, then each other filter with L again after it (L, "
+                  f"{', L, '.join(filters.mixed(filters.sets()))}, L), each filter taken against the L before and "
+                  "after it so drift cancels, and keep which filters focus with their parfocal set and which need "
+                  "their own offset. The mount does not move.")
             return {"would_move": True, "prove_sets": filters.sets()}
         if args.dry_run:
             print(f"Would turn the wheel to L and focus, turn the wheel to "
@@ -1804,7 +1806,8 @@ def main():
                          "measurement may be used on runs you start yourself (never scheduled ones) until three "
                          "nights prove it")
     ap.add_argument("--prove-sets", action="store_true",
-                    help="with --auto, once on the first clear night: focus in every filter, to confirm the "
+                    help="with --auto, once on the first clear night: focus in L, then each filter with L after "
+                         "it (L, R, L, SII, L, ...), to confirm the "
                          "parfocal sets ([filterwheel] sets); one outside its set gets its own offset")
     ap.add_argument("--measure-backlash", action="store_true",
                     help="measure the focuser gears' slack on the steep side of the curve; keeps half as much "
