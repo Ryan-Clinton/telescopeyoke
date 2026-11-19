@@ -1185,12 +1185,12 @@ class Mount:
         # The camera sometimes sends no frame, on both drivers (21 October
         # 2026: a polar check lost at its third picture). Open it afresh and
         # take the picture again before giving up.
-        trailed = 0
+        trailed, binned, switching = 0, 1, 0.0
         while True:
             for attempt in range(FRAME_TRIES):
                 try:
                     with Camera(gain=2000) as cam:
-                        mosaic, _ = cam.frame(exposure)
+                        mosaic, binned, switching = solve_frame(cam, exposure)
                     break
                 except IndiError:
                     if attempt == FRAME_TRIES - 1:
@@ -1234,7 +1234,9 @@ class Mount:
             found = solver.solve(image, ra_hint, dec_hint, wider)
         # Where the time went, for every plate solve (4 November 2026: a polar
         # check took minutes and nothing said which part).
-        print(f"{time.strftime('%H:%M:%S')} plate solve: camera and frame {framed - began:.1f} s, "
+        print(f"{time.strftime('%H:%M:%S')} plate solve: camera and frame {framed - began:.1f} s"
+              + (f" ({binned}x{binned} binned, {switching:.1f} s of it switching the binning)" if binned > 1 else "")
+              + ", "
               f"preparing {prepared - framed:.1f} s, solving {time.monotonic() - prepared:.1f} s"
               f"{'' if found else ', no solution'}", flush=True)
         if found:
@@ -1572,6 +1574,34 @@ def home_fit(rows, dec):
                 f"leaving one place out moves it {sway:.2f}°, and it needs {HOME_SWAY:g}°"),
             # An rms can hide one bad place among good ones: each place's own miss, for looking at.
             "residuals": [miss(row, answer) for row in used], "left_out": left_out}
+
+
+def solve_frame(cam, exposure):
+    """One plate-solve frame: binned (camera.PROFILES["solve"]) on a mono
+    camera, a quarter of the data down the lead, and the camera put back on
+    the full sensor afterwards whatever happens, as every other script
+    expects to find it (the keeper's camera included). A colour camera is
+    not binned: its pattern would be mixed. Returns (frame, binning used,
+    seconds spent switching), the switching kept apart so the night shows
+    whether binning pays for itself."""
+    mono = getattr(cam, "mono", False) or config.DEMO
+    if not mono:
+        return cam.frame(exposure)[0], 1, 0.0
+    began = time.monotonic()
+    try:
+        binned = cam.use("solve")
+    except Exception as failed:      # noqa: BLE001 - an older keeper without the profile: unbinned, as before
+        print(f"{time.strftime('%H:%M:%S')} plate solve: not binned ({failed})", flush=True)
+        return cam.frame(exposure)[0], 1, 0.0
+    switching = time.monotonic() - began
+    try:
+        mosaic = cam.frame(exposure)[0]
+    finally:
+        if binned > 1:
+            began = time.monotonic()
+            cam.use("imaging")
+            switching += time.monotonic() - began
+    return mosaic, binned, switching
 
 
 def still_swinging(lum):
