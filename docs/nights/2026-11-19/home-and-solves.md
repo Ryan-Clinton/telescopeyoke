@@ -46,3 +46,20 @@ the check holds the tube's squareness and the polar axis at the first
 findhome's, and the full one fits them again. Home is now about a tenth of
 a degree out (17 October's second findhome: 0.19° and 0.05°). Not moved
 again; the joints are not yet marked.
+
+## The second test: home set well out by eye (18:13-18:33 UT)
+
+After the balance, home was set by eye and recorded (`sethome`). The first
+findhome solved only two places: every west place looked into the
+next-door house, since the tube was 14° below where it was planned, and
+through haze several 1 s frames showed too few stars. With the survey
+aiming past the error already measured and a 4 s retry:
+
+| Step | Home (RA axis, Dec axis) | Places' scatter |
+|---|---|---|
+| findhome, 7 of 8 places | +7.79°, +14.00° (±0.05°, ±0.06°) | 0.04° |
+| truehome by the board's own moves | arrived; recorded at counts 8283039, 8196543 | |
+| findhome --check, 4 places, no fixed wait after the slews | -0.00°, -0.01° | 0.06° |
+
+The board's moves took out 7.8° and 14° and the sky agrees to a hundredth.
+No picture taken straight after a slew was trailed.
