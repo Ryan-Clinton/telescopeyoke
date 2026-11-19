@@ -41,8 +41,9 @@ twilight at 17:00 (stars bright enough for Vega); astronomical dark at
 | 8 | Next | **Does the drawtube hold focus** with the driver off and the 12 V out? | `./focus.py --check`, against step 2 | |
 | 9 | After | The night's imaging, the camera cold | | |
 
-WAY in step 6 is the way the polar drift pushes Dec, read from step 4's
-guiding (`docs/autoguiding.md`).
+WAY in step 6 is the way the polar drift pushes Dec (the option's own
+help), read from step 4's guiding: which way its Dec pulses mostly went.
+On 18 November nearly every Dec pulse went south.
 
 ## What each is judged against
 
