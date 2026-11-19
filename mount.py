@@ -177,7 +177,11 @@ SETTLE = 10       # seconds to wait after a slew before photographing: the skyli
 # picture say whether the tube has settled (still_swinging), up to the
 # worst seen: a 1 s frame at 0.73"/px trails visibly long before its
 # position is wrong by anything the 0.15° fit would notice.
-SETTLE_LEAST = 2
+# 0: the 17 October skyline survey's 1,098 looks were steady at the first
+# moment it could tell (1.7-2.0 s, two pictures) 97% of the time, and on 19
+# November 2 of about 27 survey pictures taken 2 s after a slew were trailed.
+# A trailed picture costs about 3 s to take again; the wait cost 2 s a place.
+SETTLE_LEAST = 0
 SETTLE_MOST = 26
 # Median roundness of the stars below which a picture counts as trailed: a
 # first figure. The 183M's settled 2 s frames of 18 November 2026 read 0.81
@@ -186,6 +190,7 @@ SETTLE_MOST = 26
 # about 2.6 star widths (some 8" on the 183M in a 1 s frame): the tube
 # still swinging, not seeing. Fewer stars than this and it is not judged.
 SETTLED_ROUND = 0.5
+LONGER_SOLVE = 4.0   # seconds: a survey place that does not solve at 1 s is tried once at this
 SETTLE_STARS = 5
 if config.DEMO:
     import os
@@ -629,8 +634,26 @@ class Mount:
         offset = json.loads(CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
         rows, last = [], None
         for hours_out in spots:
+            # Aimed so that the tube really lands on the place planned, which
+            # the limits and the skyline were checked for: once a place has
+            # solved, its error is taken off the GoTo (the other side's with
+            # Dec reversed, as a GoTo borrows it). 19 November 2026: home
+            # 14° out put every west place into the next-door house. The
+            # errors measured are still the mount's own (actual less what
+            # it believed), so the fit is unchanged. Not across the meridian:
+            # the side is chosen by what the mount believes.
+            ha_aim, dec_aim = hours_out * 15, dec
+            side = "west" if hours_out > 0 else "east"
+            seen = [r for r in rows if r["side"] == side]
+            if rows:
+                borrowed = seen or [dict(r, dec_error_deg=-r["dec_error_deg"]) for r in rows]
+                ha_miss = sum(r["ha_error_deg"] for r in borrowed) / len(borrowed)
+                dec_miss = sum(r["dec_error_deg"] for r in borrowed) / len(borrowed)
+                if (ha_aim - ha_miss) * ha_aim > 0 and abs(ha_aim - ha_miss) > NEAR_MERIDIAN * 15:
+                    ha_aim -= ha_miss
+                dec_aim -= dec_miss
             began = time.monotonic()
-            self.goto((true_sidereal(site) + offset - hours_out * 15) % 360, dec)
+            self.goto((true_sidereal(site) + offset - ha_aim) % 360, dec_aim)
             slewed = time.monotonic() - began
             self.tracking(True)
             time.sleep(SETTLE_LEAST)
@@ -643,6 +666,12 @@ class Mount:
             hint = (sidereal - (believed + guess[0]), wrap(dec_handset) + guess[1])
             found = self.where_really(*hint, radius=40, wider=90,
                                       settle_until=began + SETTLE_MOST - SETTLE_LEAST)
+            if not found:
+                # Too few stars in 1 s through haze or in a sparse field
+                # (19 November 2026: five to ten where solved frames had 20 or
+                # more): one longer picture before the place is given up.
+                self.say(f"hour angle {hours_out:+g} h: no plate solve at 1 s; trying {LONGER_SOLVE:g} s")
+                found = self.where_really(*hint, radius=40, wider=90, exposure=LONGER_SOLVE)
             if not found:
                 self.say(f"hour angle {hours_out:+g} h: no plate solve; left out")
                 continue
@@ -2217,6 +2246,12 @@ def act(args, site):
     if args.command in ("nudge", "zenith", "home", "goto", "point", "compensate", "pointing", "findhome",
                         "truehome", "directions") and LOCK_FILE.exists():
         raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text(encoding='utf-8').strip()}")
+    if args.command in AWAY + ("goto", "nudge", "compensate") and not sys.stdout.isatty() and not args.json:
+        # Read through a pipe (an agent's grep or tail), its lines are held
+        # until the end unless the reader passes each on at once: 19 November
+        # 2026, a findhome's progress sat unseen behind a plain grep.
+        print("(Each line is printed as it happens. Read it as it comes: grep --line-buffered and nothing "
+              "after it; a plain grep, cut, tail or sort holds every line until the end.)", flush=True)
 
     mount = Mount(args.port, watch=not args.no_watch, demo=args.demo)
     if args.record:
