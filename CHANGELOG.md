@@ -20,6 +20,9 @@ proven is `docs/validation.md` ("Current conclusions").
   Starlight Xpress wheel and the project's focuser do, so filter
   changes, confirmed positions in each frame and the walk-in use them
   unchanged. Tried on ASCOM's simulator only.
+- An imaging run's gain and exposure default to the rig's own (`[imaging]
+  gain` and `exposure`, in the Settings form), the owner's 1500 and 2 s
+  unless set: another camera's gain is in its own units.
 - **Guiding by PHD2** (`phd2.py`, `[guider] backend = "phd2"`): `shoot.py
   --guide` asks PHD2 to guide (its own calibration and star), dithers by
   it, stops it around each GoTo and guides again after, and gives each

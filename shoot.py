@@ -966,10 +966,11 @@ def main():
                          "rejected frames to --most; the two counted apart (goals.py)")
     ap.add_argument("--most", type=int, metavar="N",
                     help="with --accepted: the most frames to take (default: half as many again, at least 2 more)")
-    ap.add_argument("--exposure", default="2",
+    ap.add_argument("--exposure", default=None,
                     help="seconds per frame, 'auto' to test what the tracking allows, or with --guide 'ladder' "
                          "for the longest guided sub the kept ladder found round stars at (ladder.py)")
-    ap.add_argument("--gain", type=int, default=1500)
+    ap.add_argument("--gain", type=int, default=None,
+                    help="the camera's gain (default [imaging] gain, 1500 unless set: the owner's 183M)")
     ap.add_argument("--recentre", type=int, metavar="N", default=0,
                     help="also re-centre every N frames, whatever the drift")
     ap.add_argument("--no-recentre", action="store_true", help="never move the mount")
@@ -1071,6 +1072,14 @@ def main():
         ap.error("--dither-size is for --guide's dithers; an unguided dither is a GoTo about 1.5' off")
     if args.dither_size is None:
         args.dither_size = GUIDED_DITHER
+    # This rig's own usual frame and gain ([imaging] exposure and gain), the
+    # owner's 2 s and 1500 unless set: another camera's gain scale is its own.
+    asked_exposure = args.exposure is not None
+    usual = config.hardware().get("imaging", {})
+    if args.exposure is None:
+        args.exposure = str(usual.get("exposure") or 2)
+    if args.gain is None:
+        args.gain = int(usual.get("gain") or 1500)
     if args.exposure == "ladder" and not args.guide:
         ap.error("--exposure ladder is the longest guided sub the ladder found: it needs --guide")
     args.ladder_lengths = None
@@ -1080,7 +1089,7 @@ def main():
         import ladder
         if not args.guide:
             ap.error("--ladder measures guided subs: it needs --guide")
-        if args.blocks or args.minutes or args.accepted is not None or args.exposure != "2":
+        if args.blocks or args.minutes or args.accepted is not None or asked_exposure:
             ap.error("--ladder sets each length's exposure and frames itself: not with --blocks, --minutes, "
                      "--frames, --accepted or --exposure")
         if args.no_save:

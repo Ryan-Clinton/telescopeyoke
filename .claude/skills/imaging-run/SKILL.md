@@ -31,7 +31,8 @@ filter by filter (below). On the owner's rig, `docs/agents/owner-rig.md`
    Then what they asked for and the rig has: `--guide` where the rig has a
    guider (`docs/autoguiding.md`: it calibrates itself if it must), with
    `--exposure ladder` or the length they name and `--dither N`; `--gain`
-   at their camera's own setting (1500 is the owner's). Unguided, the 2 s
+   only to change it from the rig's own (`[imaging] gain`; 1500, the owner's,
+   unless set). Unguided, the 2 s
    default unless `--exposure auto` finds the tracking allows longer. Say
    the plan in one line (target, filters and minutes, exposure, guided or
    not, when it ends), then start it. Tell them it is running and they can

@@ -91,7 +91,9 @@ DEFAULTS = {
     # one plugged in ([cameras.NAME], docs/mono-upgrade.md).
     # processing_scale: 2, a mono camera's frames are stacked and searched in
     # 2x2 blocks, as the colour camera's always are; 1, at full resolution.
-    "imaging": {"camera": "", "processing_scale": 2},
+    # gain and exposure: this rig's usual for an imaging run (shoot.py's
+    # defaults), the owner's 183M's unless set.
+    "imaging": {"camera": "", "processing_scale": 2, "gain": 1500, "exposure": 2},
 }
 
 # Where ASTAP's installer puts the program and the star database on Windows.
@@ -431,6 +433,12 @@ SETTINGS = (
      "The camera profile ([cameras.NAME] in config.toml: 183c, 183m) to use when both cameras are plugged in. "
      "Blank: the one plugged in, matched to its profile when it opens; a camera with no profile is refused.",
      {"optional": True}),
+    ("imaging", "gain", "Imaging gain", "whole",
+     "The gain an imaging run uses unless told otherwise. 1500 is the owner's Altair 183M (Altair's percent); "
+     "another camera's gain is in its own units.", {"min": 0, "max": 10000}),
+    ("imaging", "exposure", "Imaging exposure (s)", "number",
+     "The frame an imaging run takes unless told otherwise: 2 s, the owner's unguided frame, unless set; "
+     "guided, the run's --exposure or the ladder decides.", {"min": 0.001, "max": 3600}),
     ("imaging", "processing_scale", "Processing scale, mono camera", "whole",
      "2: a mono camera's frames are stacked and searched in 2x2 blocks (about 1.5\" a pixel at 675 mm), as the "
      "colour camera's always are; stars here are about eight sensor pixels across, so nothing is lost and the "
