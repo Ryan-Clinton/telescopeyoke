@@ -452,7 +452,9 @@ class AltairCamera:
     def _power_cycle(self):
         """Cut the closed camera's power at the hub and give it back. True
         once it is on USB again; False when that is not set up or not
-        possible, said, so the caller opens it again as before."""
+        possible, said, so the caller opens it again as before. Only with a
+        hub that switches its ports' power: the owner's rig has had none
+        since 1 November 2026 (docs/agents/owner-rig.md)."""
         if not self._cycles_power():
             return False
         import usbpower

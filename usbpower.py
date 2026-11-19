@@ -1,6 +1,12 @@
 """Cut the camera's power at the powered hub's port, and give it back, from
 the laptop: what pressing the hub's port button twice does.
 
+There is no such hub on the owner's rig now: the Realtek hub this was
+written for was returned on 1 November 2026, and the 183M goes straight
+into a laptop socket, whose power cannot be cut (docs/agents/owner-rig.md).
+The small Terminus hub (1a40:0101) carrying the focuser and filter wheel
+does not switch its ports' power. Here, this finds nothing to switch.
+
 The camera's jam (docs/camera-fault.md) clears only when its power is cut:
 on 30 October and 1 November 2026 Altair's own replug, a software reset,
 could not bring it back, five seconds without power at the hub's button
