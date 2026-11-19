@@ -293,7 +293,8 @@ class Mount:
             site = (config.load() if self.site_set else config.example())["site"]
             self.s = alpaca.AlpacaHandset(alpaca.client_from(mount_settings()), lambda: true_sidereal(site),
                                           int(mount_settings().get("alpaca_dec_sign", -1)),
-                                          (site["latitude"], site["longitude"]))
+                                          (site["latitude"], site["longitude"]),
+                                          bool(mount_settings().get("alpaca_trust_site", False)))
         elif mount_settings().get("link", "handset") != "handset":
             # No handset: the Wi-Fi adapter or an EQDIR lead reaches the motor
             # board, and direct.py does the handset's part.
@@ -549,6 +550,8 @@ class Mount:
         knows nothing about this part of the sky."""
         if not CLOCK_FILE.exists():
             return None
+        if not getattr(self.s, "can_creep", True):
+            return None     # a mount whose driver cannot turn Dec that slowly (Alpaca, no MoveAxis): no creep
         model = self.drift_model(site)
         expected = model.predict(self.true_hour_angle(site))
         if expected is None:

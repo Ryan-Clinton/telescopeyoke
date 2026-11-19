@@ -157,20 +157,26 @@ def alpaca_blocked():
     one mount.py cannot use, or one whose site is not this one's."""
     import alpaca
     import config
+    settings = config.hardware()["mount"]
     try:
-        seen = alpaca.describe(alpaca.client_from(config.hardware()["mount"]))
+        client = alpaca.client_from(settings)
+        seen = alpaca.describe(client)
     except (Exception, SystemExit):
         return "ALPACA_NOT_ANSWERING"
-    if seen["connected"] and (seen["alignment"] != 2 or seen["system"] not in ("JNow (topocentric)", "J2000")):
+    if not seen["connected"]:
+        # Its geometry and site cannot be read until it is: not known to be
+        # ready, though mount.py connects it when used.
+        return "ALPACA_NOT_CONNECTED"
+    if seen["alignment"] != 2 or seen["system"] not in ("JNow (topocentric)", "J2000"):
         return "ALPACA_NOT_SUPPORTED"
     try:
         site = config.load()["site"]
-        latitude, longitude = seen["site"]
-        if abs(latitude - site["latitude"]) > 0.01 or abs((longitude - site["longitude"] + 180) % 360 - 180) > 0.01:
-            return "SITE_DIFFERS"
     except (Exception, SystemExit):
-        pass
-    return None
+        return "SITE_UNKNOWN"
+    problem = alpaca.site_problem(client, site["latitude"], site["longitude"])
+    if problem == "SITE_UNKNOWN" and settings.get("alpaca_trust_site"):
+        return None
+    return problem
 
 
 GOTO_REFUSED_WORDS = "and GoTo waits for it"
@@ -179,6 +185,9 @@ GOTO_REFUSED_WORDS = "and GoTo waits for it"
 GOTO_NEXT = {"HOME_NOT_RECORDED": "with the mount at home, ./mount.py sethome",
              "DEC_DIRECTION_UNWATCHED": "./mount.py directions, with someone watching the mount",
              "ALPACA_NOT_ANSWERING": "start the driver's Alpaca server; ./alpaca.py status",
+             "ALPACA_NOT_CONNECTED": "./mount.py status, which connects the driver (or connect it in its own program)",
+             "SITE_UNKNOWN": "set the site in the driver and ./mount.py settime; or alpaca_trust_site = true under "
+                             "[mount] if the driver has none to give",
              "ALPACA_NOT_SUPPORTED": "a German equatorial mount giving JNow or J2000 positions is needed",
              "SITE_DIFFERS": "./mount.py settime, which gives the driver this computer's site and clock"}
 
@@ -201,14 +210,12 @@ def check_alpaca():
         return FAIL, f"{name}: not a German equatorial mount (alignment mode {seen['alignment']}); not supported"
     if seen["system"] not in ("JNow (topocentric)", "J2000"):
         return FAIL, f"{name}: positions in {seen['system']}, which mount.py does not understand"
-    try:
-        site = config.load()["site"]
-        latitude, longitude = seen["site"]
-        if abs(latitude - site["latitude"]) > 0.01 or abs((longitude - site["longitude"] + 180) % 360 - 180) > 0.01:
-            return WARN, (f"{name}: its driver's site is not this one, {GOTO_REFUSED_WORDS}; ./mount.py settime "
-                          "gives it this computer's site and clock")
-    except (Exception, SystemExit):
-        pass
+    blocked = alpaca_blocked()
+    if blocked == "SITE_DIFFERS":
+        return WARN, (f"{name}: its driver's site is not this one, {GOTO_REFUSED_WORDS}; ./mount.py settime "
+                      "gives it this computer's site and clock")
+    if blocked == "SITE_UNKNOWN":
+        return WARN, (f"{name}: its driver does not say its site, {GOTO_REFUSED_WORDS}: {GOTO_NEXT['SITE_UNKNOWN']}")
     return OK, f"{name} ({seen['system']}), tried only on ASCOM's simulator so far"
 
 

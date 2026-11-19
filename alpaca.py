@@ -144,9 +144,13 @@ class AlpacaHandset:
     positions pass through in the handset's frame (the true equator and
     equinox of date), converted when the driver works in J2000."""
 
-    def __init__(self, client, sidereal, dec_sign=-1, site=None):
+    def __init__(self, client, sidereal, dec_sign=-1, site=None, trust_site=False):
         self.client, self.sidereal = client, sidereal
         self.site = site            # (latitude, longitude) this computer works by
+        # A driver that will not say its site cannot be checked against it:
+        # refused, unless the person has said its site is right
+        # ([mount] alpaca_trust_site = true).
+        self.trust_site = trust_site
         # Which way a positive MoveAxis turns the Dec axis is the driver's
         # choice. -1: as ASCOM's own simulator (OmniSim 0.4.0, 19 November
         # 2026), where plus lowered the handset's Dec axis reading on both
@@ -217,9 +221,14 @@ class AlpacaHandset:
             # The driver chooses the side of the pier and keeps its limits by
             # its own site: one not this computer's would disagree with every
             # limit here (doctor's SITE_DIFFERS).
-            latitude, longitude = _quiet(self.client, "sitelatitude"), _quiet(self.client, "sitelongitude")
-            if latitude is not None and longitude is not None and (
-                    abs(latitude - self.site[0]) > 0.01 or abs((longitude - self.site[1] + 180) % 360 - 180) > 0.01):
+            problem = site_problem(self.client, *self.site)
+            if problem == "SITE_UNKNOWN" and not self.trust_site:
+                raise Refusal("GOTO_REFUSED", "The mount's driver does not say where it is, so its site cannot be "
+                              "checked against this computer's. Set it in the driver and run ./mount.py settime; if "
+                              "the driver has no site to give and its own is right, alpaca_trust_site = true under "
+                              "[mount] in config.toml.")
+            if problem == "SITE_DIFFERS":
+                latitude, longitude = _quiet(self.client, "sitelatitude"), _quiet(self.client, "sitelongitude")
                 raise Refusal("GOTO_REFUSED", f"The mount's driver has its site at {latitude:.3f}°, {longitude:.3f}°, "
                               "not this computer's: ./mount.py settime gives it this one.")
         if self.client.get("atpark"):
@@ -238,6 +247,13 @@ class AlpacaHandset:
                 raise Refusal("GOTO_REFUSED", "The Alpaca telescope cannot slew to a position.")
         except DriverError as error:
             raise Refusal("GOTO_REFUSED", f"The mount's driver refused the GoTo: {error}") from None
+
+    @property
+    def can_creep(self):
+        """Whether the Dec axis can be turned slowly enough for the drift
+        creep (about an arcsecond a second): MoveAxis, and a rate range that
+        reaches down there. Without it mount.py leaves the creep off."""
+        return self.axis_moves[1] and any(r["Minimum"] <= 1 / 3600 for r in self.rates[1])
 
     def _rate(self, axis, speed):
         """Turn one axis at `speed` degrees a second on top of tracking, or stop it."""
@@ -399,6 +415,18 @@ def describe(client):
             "at_park": get("atpark"), "tracking": get("tracking"), "slewing": get("slewing"),
             "can": {what: get(what) for what in ("canslewasync", "canfindhome", "canpark", "cansettracking")}
             | {f"canmoveaxis{axis}": _quiet(client, "canmoveaxis", Axis=axis) for axis in (0, 1)}}
+
+
+def site_problem(client, latitude, longitude):
+    """None when the driver's site is this one; "SITE_DIFFERS" when it says
+    another; "SITE_UNKNOWN" when it will not say (not implemented, or
+    disconnected). Never taken as matching for want of an answer."""
+    there = _quiet(client, "sitelatitude"), _quiet(client, "sitelongitude")
+    if None in there:
+        return "SITE_UNKNOWN"
+    if abs(there[0] - latitude) > 0.01 or abs((there[1] - longitude + 180) % 360 - 180) > 0.01:
+        return "SITE_DIFFERS"
+    return None
 
 
 def _quiet(client, what, **params):

@@ -45,7 +45,9 @@
             "DEC_DIRECTION_UNWATCHED",
             "ALPACA_NOT_ANSWERING",
             "ALPACA_NOT_SUPPORTED",
-            "SITE_DIFFERS"
+            "SITE_DIFFERS",
+            "ALPACA_NOT_CONNECTED",
+            "SITE_UNKNOWN"
           ],
           "description": "why mount.py would refuse a GoTo on a mount that answers, or null; the same as doctor.ready()'s goto"
         }

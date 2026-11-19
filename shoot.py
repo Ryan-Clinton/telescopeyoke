@@ -1044,6 +1044,12 @@ def main():
             args.blocks = filters.blocks(args.blocks)
         except ValueError as problem:
             ap.error(f"--blocks: {problem} (here the number is minutes)")
+        others = {name.partition("@")[2] for name, _ in args.blocks} - {"", args.name}
+        if others and args.no_recentre:
+            # A block of another target with the mount left where it is would
+            # be that target's name on this one's frames.
+            ap.error(f"--blocks with another target ({', '.join(sorted(others))}) moves the mount to it: "
+                     "not with --no-recentre")
     args.frames = frames_asked(args.frames, args.minutes)
     if args.dither and args.no_recentre:
         ap.error("--dither moves the mount between frames; it cannot go with --no-recentre")
@@ -1116,14 +1122,21 @@ def plan(args):
         ok, _ = guider.health(state)
         out["guider"] = (f"uses the guider already {state.get('state')} (run {state.get('run')})" if ok
                          else "starts a guider after the first GoTo (calibrating, or checking the kept calibration)")
+    site = (config.load() if config.FILE.exists() else config.example())["site"]
     if not args.no_recentre:
-        site = (config.load() if config.FILE.exists() else config.example())["site"]
         try:
             goto = mount.plan_goto(args.name, site)
             goto.pop("side_note", None)
             out.update(would_move=True, goto=goto)
         except interface.Refusal as refusal:
-            # shoot.py carries on without the mount when it cannot be moved.
+            needs = [what for what, on in (("--guide", out["guided"]), ("--dither", out["dither_every"]),
+                                           ("--hold", out["hold_px"])) if on]
+            if needs:
+                # Guiding, dithering and the hold need the mount: a run that
+                # cannot reach its target is not one of those.
+                raise interface.Refusal(refusal.code_name, f"{refusal.message} ({', '.join(needs)} needs the "
+                                        "mount at the target)") from None
+            # Otherwise shoot.py carries on without the mount when it cannot be moved.
             out["goto"] = {"would_move": False, "error": refusal.as_error()}
     if getattr(args, "blocks", None):
         out["blocks"], target = [], args.name
