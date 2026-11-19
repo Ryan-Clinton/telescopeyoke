@@ -76,6 +76,11 @@ FOCUS_FILE = config.camera_folder() / "cache" / "focus.json"       # each camera
 LIVE_FILE = config.DATA / "cache" / "focus_live.json"
 FRAMES_FILE = config.DATA / "cache" / "focus_frames.jsonl"
 RUNS_FILE = config.camera_folder() / "cache" / "focus_runs.jsonl"
+# Every motor focus: when, the filter, the focuser's thermistor, where the
+# drawtube ended (focuser.position(), from its kept zero) and how sharp, so
+# focus can be set against the temperature through a night and across nights
+# (19 November 2026: focus crept outward about 6 half-steps a minute).
+FOCUS_LOG = config.camera_folder() / "cache" / "focus-log.jsonl"
 SOUNDS = config.DATA / "cache" / "sounds"
 CROP = 300          # half-width in pixels of the box shown around the star
 MIN_EXPOSURE, MAX_EXPOSURE = 0.001, 2.0
@@ -1319,6 +1324,30 @@ def focus_motor(motor, read, usual, say=progress, coarse=64, step=32, points=7, 
             "fit": fit, "readings": readings}
 
 
+def log_focus(motor, result, band):
+    """One line of FOCUS_LOG for a finished motor focus. Never raises: a
+    line not written is not worth a focus run failing over."""
+    import focuser
+    try:
+        thermistor = motor.temperature()
+    except Exception:
+        thermistor = None
+    kept = focuser.position()
+    fit = result.get("fit") or {}
+    line = {"time": time.time(), "filter": band, "focuser_c": thermistor and round(thermistor, 2),
+            "position": kept["position"] if kept else None, "zero": kept["zero"] if kept else None,
+            "hfr": result.get("best_hfr"), "ended_hfr": result.get("ended_hfr"),
+            "fitted": bool(fit.get("ok")), "r2": fit.get("r2"), "moved": result.get("ended_at")}
+    try:
+        FOCUS_LOG.parent.mkdir(parents=True, exist_ok=True)
+        with FOCUS_LOG.open("a", encoding="utf-8") as log:
+            log.write(json.dumps(line) + "\n")
+        progress(f"logged: {band or 'no filter'}, focuser {line['focuser_c']} °C, position "
+                 f"{line['position'] if line['position'] is not None else 'unknown (no zero kept)'}")
+    except OSError:
+        pass
+
+
 def practise_order(names, groups):
     """L, the other filters with the sets taken in turn, L, the same the
     other way round, L: every filter reached twice, from different filters,
@@ -1703,6 +1732,7 @@ def run_motor(args, mode="focus"):
                         lambda name: filters.turn_wheel(name, say=progress), say=progress, temperature=thermistor,
                         verified=args.verified)
                 result = focus_motor(drive, read, usual, say=say, ring=ring, live=live)
+                here = None
                 if filters.wheel_in_train():
                     # What the drawtube is now focused for: the filter the wheel says
                     # is in the path, so a change to another moves by the offsets' difference.
@@ -1710,6 +1740,7 @@ def run_motor(args, mode="focus"):
                     here = sxwheel.confirmed()
                     if here:
                         filters.set_focused(here[1])
+                log_focus(motor, result, here[1] if here else None)
                 if "doughnut" in seen:
                     # The doughnuts it started from show the collimation for free
                     # (collimation.py; 24 October 2026).

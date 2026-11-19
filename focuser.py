@@ -15,6 +15,8 @@
                                on the telescope, the stick on the other knob: how
                                much of each turn reaches the focuser, each way
     ./focuser.py temp          the thermistor's temperature, in °C
+    ./focuser.py position      where the drawtube is, in half-steps from the kept zero
+    ./focuser.py zero          call where it is now 0 (at a focus, or the Sharpie line)
     ./focuser.py vref          the TMC2209's current setting, read live off a wire
                                from A2 to its pot, for turning it to about 1.1 V
 
@@ -47,8 +49,39 @@ MOTOR_MS = 2               # what open() sets: 8 s a turn on the NEMA 17 (9 Nove
 FIXED_OHMS = 10_000         # the resistor
 NTC_OHMS = 10_000           # the thermistor at 25 °C
 NTC_BETA = 3950
+# Where the drawtube is, counted by every move any command makes, from a zero
+# a person or a focus run set (19 November 2026: each run counted from its own
+# start, so no two runs' focus places could be compared, nor set against the
+# temperature through a night). Lost if the knob is turned by hand.
+POSITION_FILE = "cache/focuser-position.json"     # under config.DATA
 # A Nano clone usually has the old bootloader; a genuine one the new.
 BOARDS = ("arduino:avr:nano:cpu=atmega328old", "arduino:avr:nano:cpu=atmega328")
+
+
+def position():
+    """The kept position {"position", "zero", "updated"}, or None before a zero."""
+    import records
+    return records.read(config.DATA / POSITION_FILE, empty=None) or None
+
+
+def set_zero(why):
+    """Here is 0 from now on; `why` says what the zero is."""
+    import records
+    records.write(config.DATA / POSITION_FILE, {"position": 0, "zero": why, "zeroed": time.time(),
+                                                 "updated": time.time()})
+
+
+def counted(steps):
+    """Add a move that was made to the kept position, if there is one."""
+    import records
+    path = config.DATA / POSITION_FILE
+    if not path.exists():
+        return None
+
+    def add(kept):
+        kept["position"] = int(kept["position"]) + int(steps)
+        kept["updated"] = time.time()
+    return records.change(path, add)[0]
 
 
 def find_port(port=None):
@@ -131,9 +164,11 @@ class Focuser:
             until = time.monotonic() + wait
             while time.monotonic() < until and not self.link.read(1).endswith(b"\n"):
                 pass
+            counted(steps)
             raise
         if reply != f"OK {sent}":
             raise RuntimeError(f"the focuser answered {reply!r} to a move of {steps}")
+        counted(steps)
 
     def speed(self, ms):
         """Step every `ms` milliseconds until the Nano next restarts, which
@@ -755,7 +790,8 @@ def main(argv=None):
     # phone kept awake.
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("command", choices=["flash", "test", "move", "angle", "bench", "load-test", "look", "temp", "vref"])
+    ap.add_argument("command", choices=["flash", "test", "move", "angle", "bench", "load-test", "look", "temp", "vref",
+                                           "position", "zero"])
     ap.add_argument("steps", nargs="?", type=int, help="for move: half-steps, minus for the other way")
     ap.add_argument("--pictures", nargs="+", help="for angle: the stick's angle in each picture")
     ap.add_argument("--watch", help="for bench: the camera looking down on the motor (a DroidCam "
@@ -780,6 +816,16 @@ def main(argv=None):
             print(f"{picture}: " + ("no protractor or stick found" if found is None else
                                     f"{found['angle']:.2f}°, protractor at {found['centre']} radius "
                                     f"{found['radius']}, stick {found['stick_pixels']} pixels (see {marked.name})"))
+        return
+    if args.command == "position":
+        kept = position()
+        print("No zero kept yet: ./focuser.py zero at a focus." if not kept else
+              f"{kept['position']:+d} half-steps from the zero ({kept['zero']}), counted "
+              f"{time.strftime('%d %b %H:%M', time.localtime(kept['updated']))}")
+        return
+    if args.command == "zero":
+        set_zero("set by hand at " + time.strftime("%d %b %H:%M"))
+        print("Here is 0 from now on; every move is counted from it.")
         return
     if args.command == "look":
         if not args.watch:

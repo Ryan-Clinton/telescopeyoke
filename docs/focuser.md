@@ -328,6 +328,10 @@ brightest star at the start and now, for the live stream's focus look
     ./focus.py --find                far out, no star measuring: a thirty-second of a turn at a time in, then out (half a turn each way), until stars do
     ./focus.py --measure-step        from focus, in until the stars are 2.5 times their size; a quarter of that is the step
     ./focus.py --measure-backlash    the slack, on the steep side of the curve, twice; half as much again is kept
+    ./focuser.py zero                call where the drawtube is now 0 (at a focus); every move after it is counted
+    ./focuser.py position            where it is from that zero
+    ./focus.py --practise L=0,R=32,...   move between filters by their places alone, no curve, the sets
+                                     crossed in turn, one reading at each
     ./focus.py --auto                from wherever it is, either way: the far search first if only rings show;
                                      far out, 64 half-steps at a time the way the stars shrink; near focus,
                                      seven places 32 apart measured moving inward and a curve fitted; then
