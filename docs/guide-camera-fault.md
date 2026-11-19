@@ -180,7 +180,14 @@ the window's **width** at full resolution decides it; 480 x 360 fails at
 every vertical offset tried; 320 x 240 streams in the middle and at both
 corners. Over 5 minutes at 2 s, 320 x 240 kept 149 of 150 at USB speed 0
 (gaps up to 2.03 s, none repeated), matching the binned mode over 5
-minutes; 148 at speed 4. Next: a whole night of it, then the same star
+minutes; 148 at speed 4. Later still: with USB speed 0 set **before** the stream starts
+(`--speed-first`), the width limit moved from about 384 to about 512;
+480 x 960 and 512 x 960 (about 41' x 76', full height) streamed in short
+runs, and 512 x 960 kept 148 of 150 over 5 minutes. Speed 0 set after the
+start, as before, did not do that. The library's own frame count matched
+the frames pulled in every run, failing ones included: the lost frames
+never reach the library. Full width still fails at every setting.
+Next: a whole night of it, then the same star
 binned and windowed on the sky, then (not built) a guider that finds the
 star binned and guides on a window round it, with its limits in
 arcseconds.

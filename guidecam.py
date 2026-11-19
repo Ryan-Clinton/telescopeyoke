@@ -87,6 +87,7 @@ class Driver:
         self.lib.Altaircam_Open.argtypes = [ctypes.c_char_p]
         self.buffer = None
         self.pull_error = None  # the last code from PullImage that was not "no frame yet"
+        self.pull_errors = 0    # how many such codes, for the probe
         self.events = []        # (time.monotonic(), code) for every event the library sends
 
     def _event(self, kind, ctx):
@@ -98,12 +99,13 @@ class Driver:
         n = self.lib.Altaircam_EnumV2(found)
         return [(d.model.contents.name.decode(), d.id) for d in found[:n]]
 
-    def open(self, ident, size=None, raw=False, roi=None, roi_at=None):
+    def open(self, ident, size=None, raw=False, roi=None, roi_at=None, speed=None):
         """Open and start the stream. `size` is the library's resolution
         index (0 is the full 1280 x 960); `raw` takes the sensor's data
         without the library's conversion; `roi` (width, height) reads only
         that window from the middle of the full-size sensor, or with its
-        top left corner at `roi_at` (x, y). All are set before the
+        top left corner at `roi_at` (x, y); `speed` sets the USB speed before
+        the stream starts (the guider sets it after). All are set before the
         stream starts, so a start or a setting the library refuses is a
         refusal here, with its code."""
         handle = self.lib.Altaircam_Open(ident)
@@ -125,8 +127,14 @@ class Driver:
             w, h = (v // 2 * 2 for v in roi)              # the library wants even numbers
             self.lib.Altaircam_put_Roi.argtypes = [ctypes.c_void_p] + [ctypes.c_uint] * 4
             x, y = (v // 2 * 2 for v in roi_at) if roi_at else ((1280 - w) // 4 * 2, (960 - h) // 4 * 2)
+            if w < 2 or h < 2 or x < 0 or y < 0 or x + w > 1280 or y + h > 960:
+                self.lib.Altaircam_Close(handle)
+                refuse(f"A {w} x {h} window at {x}, {y} does not fit the 1280 x 960 sensor.")
             self._checked(handle, f"a {w} x {h} window at {x}, {y}",
                           self.lib.Altaircam_put_Roi(handle, x, y, w, h))
+        if speed is not None:
+            self.lib.Altaircam_put_Speed.argtypes = [ctypes.c_void_p, ctypes.c_ushort]
+            self._checked(handle, f"USB speed {speed}", self.lib.Altaircam_put_Speed(handle, speed))
         width, height = ctypes.c_int(), ctypes.c_int()
         self.lib.Altaircam_get_Size(handle, ctypes.byref(width), ctypes.byref(height))
         self.buffer = ctypes.create_string_buffer(width.value * height.value * 3)
@@ -160,6 +168,7 @@ class Driver:
         if hr != 0:
             if hr & 0xFFFFFFFF not in (NOT_READY, PENDING):
                 self.pull_error = hr
+                self.pull_errors += 1
             return None
         return width.value, height.value, self.buffer.raw[:width.value * height.value]
 
@@ -185,6 +194,21 @@ class Driver:
         self.lib.Altaircam_get_Speed(handle, ctypes.byref(now))
         self.lib.Altaircam_get_MaxSpeed.argtypes = [ctypes.c_void_p]
         return now.value, self.lib.Altaircam_get_MaxSpeed(handle)
+
+    def realtime(self, handle, on):
+        """Real-time mode: the library hands over only the newest frame
+        (shorter delay, maybe fewer frames). Its answer; below zero is a refusal."""
+        self.lib.Altaircam_put_RealTime.argtypes = [ctypes.c_void_p, ctypes.c_int]
+        return self.lib.Altaircam_put_RealTime(handle, 1 if on else 0)
+
+    def frame_count(self, handle):
+        """The library's own count of frames since the stream started (get_FrameRate's
+        total), or None if it will not say: set against the frames pulled, it tells
+        frames the library had but never handed over from frames it never had."""
+        frames, ms, total = ctypes.c_uint(), ctypes.c_uint(), ctypes.c_uint()
+        self.lib.Altaircam_get_FrameRate.argtypes = [ctypes.c_void_p] + [ctypes.POINTER(ctypes.c_uint)] * 3
+        hr = self.lib.Altaircam_get_FrameRate(handle, ctypes.byref(frames), ctypes.byref(ms), ctypes.byref(total))
+        return None if hr < 0 else total.value
 
     def exposure_range(self, handle):
         """(shortest, longest) exposure in seconds the library allows."""
@@ -236,7 +260,7 @@ class GuideCamera:
     let go."""
 
     def __init__(self, driver=None, clock=time.monotonic, sleep=time.sleep, role="use", run=None, size=None, raw=False,
-                 speed=None, roi=None, roi_at=None):
+                 speed=None, roi=None, roi_at=None, speed_first=False):
         import guider
         # The guide camera's lock, taken before it is opened and let go only
         # after it is closed: no two commands ever use it, or its ST4 port, at once.
@@ -247,13 +271,17 @@ class GuideCamera:
             found = [c for c in self.driver.cameras() if c[0] == MODEL]
             if not found:
                 refuse(f"No guide camera ({MODEL}, USB {USB_ID}) found. Is it plugged in?")
-            opened = {k: v for k, v in (("size", size), ("raw", raw), ("roi", roi), ("roi_at", roi_at))
+            opened = {k: v for k, v in (("size", size), ("raw", raw), ("roi", roi), ("roi_at", roi_at),
+                                        ("speed", speed if speed_first else None))
                       if v is not None and v is not False}
+            self.handle = None
             self.handle, self.size = self.driver.open(found[0][1], **opened)
-            if speed is not None:
+            if speed is not None and not speed_first:
                 self.driver.speed(self.handle, speed)
             self.seconds = None
         except BaseException:
+            if getattr(self, "handle", None) is not None:   # opened, then refused: close it before the lock goes
+                self.driver.close(self.handle)
             self.owned.__exit__(None, None, None)
             raise
 
@@ -339,7 +367,7 @@ def keep(frame, seconds, gain, folder=None, now=None):
     return path
 
 
-def probe(cam, exposures, trigger=False, speed=None, window=12.0, say=print):
+def probe(cam, exposures, trigger=False, speed=None, window=12.0, realtime=False, say=print):
     """When frames arrive at each exposure: the camera's frames counted for
     `window` seconds after the exposure is set, video or triggered, at the
     given USB speed. For finding why long exposures send nothing."""
@@ -351,6 +379,9 @@ def probe(cam, exposures, trigger=False, speed=None, window=12.0, say=print):
         f"frames {cam.size[0]} x {cam.size[1]}")
     if trigger:
         say(f"  trigger mode: {d.triggered(h, True)}")
+    if realtime:
+        say(f"  real-time mode: {hresult(d.realtime(h, True))}")
+    counted = getattr(d, "frame_count", lambda h: None)
     events = getattr(d, "events", None)
     for seconds in exposures:
         hr = d.exposure(h, seconds)
@@ -361,6 +392,7 @@ def probe(cam, exposures, trigger=False, speed=None, window=12.0, say=print):
             pass
         began = cam.clock()
         seen = len(events) if events is not None else 0
+        errors, total = getattr(d, "pull_errors", 0), counted(h)
         arrivals, levels, shapes, digests, repeats = [], [], set(), None, 0
         if trigger:
             say(f"  trigger: {d.trigger(h)}")
@@ -385,6 +417,10 @@ def probe(cam, exposures, trigger=False, speed=None, window=12.0, say=print):
                f"{int((gaps[1:-1] > 2 * seconds).sum())} over {2 * seconds:g} s; {repeats} repeated; "
                f"levels {', '.join(f'{v:.1f}' for v in levels[:8])}; frames {', '.join(sorted(shapes))}"
                if arrivals else ""))
+        errors = getattr(d, "pull_errors", 0) - errors
+        after = counted(h)
+        library = f"the library counted {after - total}" if None not in (total, after) else "no library count"
+        say(f"  {library}; {errors} pull errors" + (f", the last {hresult(d.pull_error)}" if errors else ""))
         if events is not None:
             say_events(events[seen:], began, say)
 
@@ -794,6 +830,8 @@ def main(argv=None):
     q.add_argument("--raw", action="store_true", help="the sensor's raw data, not the library's converted frames")
     q.add_argument("--roi", help="WIDTHxHEIGHT: only that window from the middle, at full resolution (with --size 0)")
     q.add_argument("--roi-at", help="X,Y: the window's top left corner on the full sensor, instead of the middle")
+    q.add_argument("--speed-first", action="store_true", help="set --speed before the stream starts, not after")
+    q.add_argument("--realtime", action="store_true", help="the library's real-time mode: only the newest frame")
     k = sub.add_parser("wheeltest", help="the guide camera and the filter wheel together: frames while the wheel turns")
     k.add_argument("--minutes", type=float, default=10.0, help="how long (default 10)")
     k.add_argument("--every", type=float, default=15.0, help="seconds between turns of the wheel")
@@ -867,8 +905,10 @@ def main(argv=None):
         if args.action == "probe":
             roi = tuple(int(v) for v in args.roi.lower().split("x")) if args.roi else None
             at = tuple(int(v) for v in args.roi_at.split(",")) if args.roi_at else None
-            with GuideCamera(role="probe", size=args.size, raw=args.raw, roi=roi, roi_at=at) as cam:
-                probe(cam, [float(e) for e in args.exposures.split(",")], args.trigger, args.speed, args.window)
+            with GuideCamera(role="probe", size=args.size, raw=args.raw, roi=roi, roi_at=at,
+                             speed=args.speed if args.speed_first else None, speed_first=args.speed_first) as cam:
+                probe(cam, [float(e) for e in args.exposures.split(",")], args.trigger,
+                      None if args.speed_first else args.speed, args.window, args.realtime)
             return
         if args.action == "pulse" and args.dry_run:
             print(f"would: read the handset, wait {args.seconds:g} s still, then pulse north, south, east, "

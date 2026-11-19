@@ -130,31 +130,105 @@ Untried: push mode (`StartPushMode`), `put_RealTime` (hand over only the
 newest frame), `Flush`, `get_FrameRate`, and `put_Option` codes beyond
 raw (0x04) and trigger (0x0b).
 
-## The plan (revised)
+## Third set of tests (19 November 2026, late afternoon)
 
-1. **An overnight run of the window** at USB speed 0, against the binned
-   record: `./guidecam.py probe --size 0 --roi 320x240 --speed 0
-   --exposures 2 --window 28800`. The bar is the binned mode's, not 90%.
-2. **On the sky, no pulses:** the same star at 2 s, binned and in the
-   window, one after the other: centroid scatter in arcseconds, HFD,
-   SNR, and how late frames arrive.
-3. **Only then a guider that uses the window,** binned kept as the
-   fallback:
-   - find the star in a binned frame, then open a 320 pixel wide window
-     around it (`roi_at` exists in the driver; the guider does not use it);
-   - leave the window fixed while the star is safely inside: at 4.77"/px
-     a 320 x 240 window is about 25' x 19', far more than guiding moves;
-     whether the library can move a window while streaming, or only by
-     stopping and starting, is untested;
-   - the guider's limits are in binned pixels today (`guider.BIN = 2`:
-     minimum RA move, calibration distance, dither size, error fault).
-     They would be held in arcseconds and turned into pixels for the
-     mode in use. A calibration already records its binning and is
-     refused for another, so an old one is never reused.
-4. Better sampling will not fix the Dec error by itself: last night's
-   9.23" Dec against 2.03" RA is the mount (balance, slack, the focuser
-   lead), being tested separately tonight with the tube rebalanced.
+The probe now also reports the library's own frame count
+(`get_FrameRate`'s total) beside the frames pulled, and any pull errors;
+`--speed-first` sets the USB speed before the stream starts instead of
+after; `--realtime` turns on the library's real-time mode. A window that
+does not fit the sensor is refused before it is sent. 20 s per exposure,
+one run each.
 
-The USB speed is still set after the stream starts in the guider's own
-path, as in every run of the proven binned mode; the probe sets it the
-same way and reads it back ("USB speed 0 of 4").
+**The library's count matched the frames pulled in every run, with no
+pull errors**, failing runs included. The missing frames never reach the
+library: they are lost in the camera or on the USB below it, not queued
+or dropped inside the SDK or by the polling.
+
+USB speed 4 (the default), set as before:
+
+| Window (full resolution) | 0.5 s (about 39) | 2 s (10) |
+|---|---|---|
+| 320 x 480 | 37 | 8, a gap of 6 s |
+| 320 x 720 | 39 | 10 |
+| 320 x 960 | 37 | 10 |
+| 320 x 240 | 39 | 10 |
+| 352 x 240 | 36 | 10 |
+| 384 x 240 | 39 | 10 |
+| 416 x 240 | 29 | 8 |
+| 448 x 240 | 22 | 7 |
+| 480 x 240 | 13 | 2 |
+| 480 x 240, real-time mode | 15 | 7 |
+| 1280 x 960 | 2 | 1 |
+
+At speed 4 the width limit is about 384 to 416 pixels; height hardly
+matters (320 wide streams to the full 960 rows). Real-time mode does not
+help.
+
+**USB speed 0 set before the stream starts (`--speed 0 --speed-first`):**
+
+| Window (full resolution) | 0.5 s | 2 s |
+|---|---|---|
+| 480 x 240 (twice) | 39, 39 | 10, 10 |
+| 480 x 480 | 39 | 10 |
+| 512 x 240 | 39 | 10 |
+| 560 x 240 | 33 | 8 |
+| 640 x 240 | 25 | 4 |
+| 640 x 480 | 11 | 2 |
+| 960 x 720 | 2 | 1 |
+| 1280 x 960 | 8 | 0 |
+| **480 x 960** | **39** | **10** |
+| **512 x 960** | **39** | **10** |
+
+The order matters: speed 0 set after the stream starts (every earlier
+run, and the guider) left 480 wide failing, though the camera reads
+back 0; full size failed at speed 0 set either way.
+Set before, the width limit moves out to about 512. Whether a speed set
+after the start takes effect at all is not known.
+
+What it suggests: a slower USB speed lets wider lines through, and the
+failure depends on the width of a line, not the size of a frame. That
+fits a limit on how fast the camera can pass on each line at full
+resolution (a burst rate), and fits Altair's later GPCAM2 having more
+buffering, as reported, not checked here. Full width does not stream at
+any setting tried.
+
+A 512 x 960 window is about 41' x 76' at 4.77"/px: the full height of
+the sensor and two fifths of its width, full resolution.
+
+5 minutes, 512 x 960, speed 0 first, 2 s: **148 of 150**, one gap of 4.0 s
+(one frame missed), none repeated, the library's count 148, no pull
+errors. Close to the binned mode's 149 over 5 minutes, not yet as good.
+
+## The plan (revised again)
+
+1. **An overnight run of the best window** (512 x 960, or 480 x 960,
+   speed 0 set first) against the binned record of 14,399 of 14,400:
+   `./guidecam.py probe --size 0 --roi 512x960 --speed 0 --speed-first
+   --exposures 2 --window 28800`.
+2. **Whether the binned guider's speed is really applied:** the binned
+   mode streams either way, so this changes nothing tonight, but the
+   guider should set the speed before the stream starts, as the probe
+   now can.
+3. **On the sky, no guiding:** the same star at 2 s, binned and in the
+   window: centroid scatter in arcseconds, HFD and SNR; and short ST4
+   pulses between still frames, measuring how far the star moves in each
+   mode against the others (the pulse length alone is not the truth: the
+   mount's slack and response vary). The pulse timings also give each
+   mode's delay from a pulse to a frame that shows it, which stands in
+   for a camera timestamp.
+4. **Only then a guider that uses the window,** binned kept as the
+   fallback: find the star binned, open the window round it (`roi_at`,
+   now checked against the sensor's edges), keep the window fixed while
+   the star is safely inside, limits held in arcseconds and turned into
+   pixels for the mode in use; calibrations already record their binning
+   and are refused for another.
+5. Better sampling will not fix the Dec error by itself (9.23" Dec
+   against 2.03" RA on 18 November): that is the mount, tested
+   separately tonight with the tube rebalanced.
+
+Not tried, and why: a USB trace (`usbmon`) needs a kernel module loaded
+and root, and waits for the owner's say; the library's count already
+shows the frames never reach the SDK. Push mode (`StartPushMode`) needs
+this 1.24 library's callback layout, for which there is no header here.
+An older program (SharpCap 3.0 on Windows) would need the Windows PC;
+it stays the fallback named in [the fault](../../guide-camera-fault.md).
