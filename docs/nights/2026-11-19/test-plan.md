@@ -39,6 +39,10 @@ twilight at 17:00 (stars bright enough for Vega); astronomical dark at
 | 6 | Next | **Dec guided one way**, then the same with **the pile-up cap**; a graph each | `./guidecam.py guide --minutes 10 --exposure 2 --gain 400 --dec-one-way WAY`, then with `--dec-stuck 3`; `./guidegraph.py` after each | |
 | 7 | If asked for | A 50 g bag of sand moved, if the graphs say the balance is off; then step 4 again | | Yes |
 | 8 | Next | **Does the drawtube hold focus** with the driver off and the 12 V out? | `./focus.py --check`, against step 2 | |
+| 8a | After the guide scope tests (asked by the owner, 19 November) | The focuser's 12 V back in | | Yes, one line |
+| 8b | Next | **Focus in every filter:** a walk-in in each of L, R, G, B, Ha, SII, OIII, each filter's focus position in steps, so the offsets between them are known, not assumed parfocal | `./focus.py --walk-in --prove-sets` | |
+| 8c | Next | **Moving between filters, practised:** L to each other filter and back, a walk-in each time, kept as measurements of each set's offset; repeated so each offset has a scatter | `./focus.py --walk-in --offset FILTER`, for R, G, B, Ha, SII, OIII, then again | |
+| 8d | Next | **The gears' slack (backlash) and the sweep step**, measured on the stars: how many steps the motor turns before the drawtube follows, each way | `./focus.py --measure-backlash`, then `--measure-step` | The guard refuses both today (`small-focus` in `.claude/hooks/guard.py`); it needs the owner's word to allow these two for this step |
 | 9 | After | The night's imaging, the camera cold | | |
 
 WAY in step 6 is the way the polar drift pushes Dec (the option's own
