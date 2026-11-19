@@ -33,6 +33,8 @@ PORT = 4400
 SETTLE = {"pixels": 1.5, "time": 10, "timeout": 90}     # PHD2's own settle test, as NINA's defaults
 LOST_WAIT_S = 300          # lost or stopped this long while a frame waits: guided imaging stops
 CALL_S = 15.0
+READOUT_S = 2.0            # a guide frame's download and pulses on top of its exposure
+GAP_FACTOR = 2.0           # a gap between guide steps longer than this many cycles is time unguided
 
 
 class Fault(Refusal):
@@ -152,6 +154,7 @@ class Supervisor:
         self.launched = self.active = False
         self.restarts = 0
         self.scale = None
+        self.cycle = 2.0 + READOUT_S
         if dec_one_way:
             say("  guide: PHD2 keeps its own Dec guide mode; --dec-one-way is not passed to it")
 
@@ -184,6 +187,28 @@ class Supervisor:
         if not self.link.call("get_connected"):
             raise Fault("PHD2's camera and mount are not connected in PHD2: connect them there first.")
         self.scale = float(self.link.call("get_pixel_scale") or 0) or None
+        # Which PHD2 equipment profile, camera and mount: with phd2_profile
+        # set, any other profile is refused (a PHD2 guiding another telescope
+        # would give this rig's frames its guiding).
+        import config
+        profile = (self._quiet_call("get_profile") or {}).get("name")
+        wanted = config.hardware().get("guider", {}).get("phd2_profile")
+        if wanted and profile != wanted:
+            raise Fault(f"PHD2's equipment profile is {profile!r}, not {wanted!r} (phd2_profile under [guider]): "
+                        "not this rig's guiding.")
+        kit = self._quiet_call("get_current_equipment") or {}
+        names = ", ".join(f"{part} {(kit.get(part) or {}).get('name')}" for part in ("camera", "mount")
+                          if (kit.get(part) or {}).get("name"))
+        self.identity = f"PHD2 (profile {profile or 'unnamed'}{'; ' + names if names else ''})"
+        # The guide cycle PHD2 is set to, not one read from the gaps it leaves.
+        exposure = self._quiet_call("get_exposure")
+        self.cycle = (float(exposure) / 1000 if exposure else 2.0) + READOUT_S
+
+    def _quiet_call(self, method):
+        try:
+            return self.link.call(method)
+        except Fault:
+            return None
 
     def _guide(self, why):
         """PHD2 guiding and settled, with its own calibration (made if it has
@@ -260,8 +285,11 @@ class Supervisor:
             else:
                 troubled = None
                 recent = [e for e in self.link.steps(time.time() - 3 * 60, time.time()) if e["Event"] == "GuideStep"][-3:]
-                if len(recent) == 3 and all(math.hypot(e.get("RADistanceRaw", 0), e.get("DECDistanceRaw", 0))
-                                            < self.settle_rule["pixels"] for e in recent):
+                # The newest step fresh too: a stream that has stopped cannot
+                # pass on steps from before it stopped.
+                fresh = recent and time.time() - recent[-1].get("Timestamp", recent[-1]["_seen"]) <= GAP_FACTOR * self.cycle
+                if fresh and len(recent) == 3 and all(math.hypot(e.get("RADistanceRaw", 0), e.get("DECDistanceRaw", 0))
+                                                      < self.settle_rule["pixels"] for e in recent):
                     return True
                 if now - begun > self.settle_rule["time"] * 3:
                     return False
@@ -285,11 +313,15 @@ class Supervisor:
         rejected = sum(1 for e in rows if e["Event"] == "StarLost")
         scale = self.scale or 1.0
         errors = [d * scale for t, d in steps if t >= start]
-        times = [t for t, _ in steps]
-        gaps = [b - a for a, b in zip(times, times[1:]) if b > a]
-        cycle = sorted(gaps)[len(gaps) // 2] if len(gaps) >= 2 else 3.0
-        covered = min(len([t for t in times if t >= start]) * cycle, end - start)
-        lost = max(0.0, (end - start) - covered - cycle)
+        # Time unguided, from the steps' own times against the cycle PHD2 is
+        # set to: every stretch between steps (and from the frame's start to
+        # the first, and the last to its end) longer than GAP_FACTOR cycles
+        # counts, less the one cycle a step would cover. Never judged from
+        # the gaps themselves, which a stalled PHD2 would make long.
+        cycle = self.cycle
+        marks = [start] + [t for t, _ in steps if start <= t <= end] + [end]
+        lost = sum((b - a) - cycle for a, b in zip(marks, marks[1:]) if b - a > GAP_FACTOR * cycle)
+        covered = max(0.0, (end - start) - lost)
         state = self.link.call("get_app_state")
         ok, why = True, ""
         if state != "Guiding":
@@ -304,7 +336,7 @@ class Supervisor:
                 "max": round(max(errors), 2) if errors else None,
                 "lost_s": round(lost, 1), "rejected": rejected,
                 "coverage": round(covered / (end - start), 3) if end - start >= 2 * cycle else None,
-                "frames": len(steps), "guided": ok, "why": why}
+                "frames": len(steps), "guided": ok, "why": why, "by": getattr(self, "identity", "PHD2")}
 
     def stop(self):
         """PHD2 stopped if this run started it, and the creep put back; one

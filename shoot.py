@@ -1755,8 +1755,10 @@ def image(args, session, exposure, moving, holding, tracker):
                             went = supervisor.during(exposed, time.time())
                             # Guided only if the guider was still healthy and guiding as
                             # the frame ended, with guide frames during it.
-                            header["GUIDED"] = (bool(went["guided"]), "autoguided through the guide camera's ST4 lead"
+                            header["GUIDED"] = (bool(went["guided"]), f"autoguided by {went.get('by', 'the guider')}"[:68]
                                                 if went["guided"] else f"not guided to its end: {went['why']}"[:68])
+                            if went.get("by"):
+                                header["GUIDER"] = (str(went["by"])[:68], "what guided")
                             header["GUIDESET"] = (bool(settled), "guiding had settled when the frame began")
                             if went["rms"] is not None:
                                 header["GUIDERMS"] = (went["rms"], "guide error RMS during the frame, arcsec")

@@ -1696,7 +1696,7 @@ class Supervisor:
         return {"rms": round(float(np.sqrt(np.mean(np.square(errors)))), 2) if errors else None,
                 "max": round(max(errors), 2) if errors else None,
                 "lost_s": round(lost, 1), "rejected": rejected, "coverage": coverage,
-                "frames": len(rows), "guided": ok, "why": why}
+                "frames": len(rows), "guided": ok, "why": why, "by": "the GPCAM's ST4 lead (guider.py)"}
 
     def stop(self):
         """The guider stopped if this run started it, and the creep put back.

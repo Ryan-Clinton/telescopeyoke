@@ -182,6 +182,7 @@ def confirmed(hid=None, say=None):
     try:
         with Wheel.open(hid) as wheel:
             current, total = wheel.status()
+            own = list(getattr(wheel, "names", None) or [])     # an Alpaca wheel's driver names its filters
     except Exception as problem:
         if say:
             say(f"the filter wheel did not answer ({problem})")
@@ -191,6 +192,8 @@ def confirmed(hid=None, say=None):
             say("the filter wheel is turning, or still on its power-up turn")
         return None
     known = names()
+    if not any(known):
+        known = own             # the same names a move by name used (alpaca.Wheel.position)
     name = known[current - 1] if current <= len(known) else ""
     return current, name or f"position {current}"
 

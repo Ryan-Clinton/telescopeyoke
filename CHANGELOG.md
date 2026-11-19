@@ -30,6 +30,16 @@ proven is `docs/validation.md` ("Current conclusions").
   guided run never carries on unguided. Built to PHD2's published
   protocol and tried against a pretend PHD2 (`simulator.PretendPhd2`),
   not yet PHD2 itself.
+- What a frame says is what the equipment did: an Alpaca camera's GAIN is
+  read back from the driver (a gain outside its range, or not one of its
+  named gains, is refused, never moved into it); only a mono sensor or a
+  Bayer mosaic is read, its pattern from the driver; a cooled camera's
+  frames wait for its sensor to reach the driver's target (TY_ONTGT as
+  the Altair's); an Alpaca wheel's own filter names reach FILTER. PHD2's
+  guiding is judged against the cycle PHD2 is set to, so a stalled stream
+  of guide steps marks the frame unguided and cannot pass the settle
+  check; its profile can be required (`phd2_profile`), and each frame
+  names what guided it (GUIDER).
 - **A camera through ASCOM Alpaca** (`[camera] backend = "alpaca"`):
   frames with the same header the Altair camera gives (exposure, gain,
   start time, Bayer pattern or mono, temperature, binning), binned for

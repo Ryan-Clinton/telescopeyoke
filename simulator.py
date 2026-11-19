@@ -437,7 +437,8 @@ class PretendPhd2:
         import socket
         import threading
         self.cycle, self.scale, self.settle_s = cycle, scale, settle_s
-        self.state, self.frame, self.lose = "Stopped", 0, False
+        self.state, self.frame, self.lose, self.stalled = "Stopped", 0, False, False
+        self.profile = "pretend rig"
         self.server = socket.socket()
         self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server.bind(("127.0.0.1", port))
@@ -452,6 +453,10 @@ class PretendPhd2:
 
     def lose_star(self):
         self.lose = True
+
+    def stall(self, on=True):
+        """Stops sending guide steps while still saying it is guiding."""
+        self.stalled = on
 
     def _send(self, conn, message):
         import json
@@ -506,6 +511,13 @@ class PretendPhd2:
                     result = True
                 elif method == "get_pixel_scale":
                     result = self.scale
+                elif method == "get_exposure":
+                    result = int(max(self.cycle - 0.25, 0.05) * 1000)
+                elif method == "get_profile":
+                    result = {"id": 1, "name": self.profile}
+                elif method == "get_current_equipment":
+                    result = {"camera": {"name": "Pretend guide camera", "connected": True},
+                              "mount": {"name": "Pretend mount", "connected": True}}
                 elif method == "guide":
                     self.state = "Guiding"
                     self._event("StartGuiding")
@@ -529,7 +541,7 @@ class PretendPhd2:
         import random
         while True:
             time.sleep(self.cycle)
-            if self.state != "Guiding":
+            if self.state != "Guiding" or self.stalled:
                 continue
             self.frame += 1
             if self.lose:

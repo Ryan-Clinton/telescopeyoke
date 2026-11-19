@@ -538,6 +538,7 @@ def _quiet_put(client, what, **params):
         pass
 
 
+ON_TARGET_C = 1.0          # a sensor this near its target is on it (as altair.ON_TARGET)
 PATTERNS = {(0, 0): "RGGB", (1, 0): "GRBG", (0, 1): "GBRG", (1, 1): "BGGR"}
 IMAGE_TYPES = {1: "<i2", 2: "<i4", 3: "<f8", 4: "<f4", 5: "<u8", 6: "u1", 7: "<i8", 8: "<u2"}
 
@@ -554,16 +555,44 @@ class Camera:
         self.client = device_client("camera", "camera")
         get = lambda what: _quiet(self.client, what)
         self.name = get("name") or "Alpaca camera"
-        self.mono = get("sensortype") in (0, None)
-        self.pattern = None if self.mono else PATTERNS.get((get("bayeroffsetx") or 0, get("bayeroffsety") or 0), "RGGB")
+        # ASCOM's SensorType: 0 mono, 1 colour already decoded (three
+        # planes), 2 a Bayer mosaic (its corner by BayerOffsetX/Y), 3 and 4
+        # CMYG, 5 LRGB. Only a mono or an RGGB-family mosaic is read here; the
+        # rest are refused, never given a Bayer pattern they do not have.
+        kind = get("sensortype")
+        if kind not in (0, 2):
+            names = {1: "colour already decoded", 3: "CMYG", 4: "CMYG2", 5: "LRGB", None: "not given"}
+            raise Refusal("INVALID_REQUEST", f"The camera's sensor type is {names.get(kind, kind)}: only a mono "
+                          "sensor or a Bayer (RGGB family) mosaic is supported here.")
+        self.mono = kind == 0
+        offsets = (get("bayeroffsetx"), get("bayeroffsety"))
+        if not self.mono and None in offsets:
+            raise Refusal("INVALID_REQUEST", "The colour camera's driver does not say where its Bayer pattern "
+                          "starts (BayerOffsetX/Y), so no colour pattern is assumed: not supported.")
+        self.pattern = None if self.mono else PATTERNS[(offsets[0] % 2, offsets[1] % 2)]
         self.size = (get("cameraxsize"), get("cameraysize"))
         self.most_binning = get("maxbinx") or 1
-        self.gain = gain
+        # The gain set and then read back: a frame's GAIN is what the camera
+        # says it has, never what was asked. One outside the driver's range
+        # is refused, not moved into it ([imaging] gain is in this camera's
+        # own units: 1500 is the owner's Altair percent).
         low, high = get("gainmin"), get("gainmax")
-        if low is not None and high is not None:
-            # The project's gains are Altair's percent (100 to 5000); another
-            # driver's range is its own: the asked gain held inside it.
-            _quiet_put(self.client, "gain", Gain=int(min(max(gain, low), high)))
+        named = get("gains") or []
+        if low is not None and high is not None and not low <= gain <= high:
+            raise Refusal("INVALID_REQUEST", f"Gain {gain} is outside this camera's {low} to {high}: set "
+                          "[imaging] gain (or --gain) in its own units.")
+        if low is None and named and not 0 <= gain < len(named):
+            # Named gains: Gain is the place in the list.
+            listed = ", ".join(f"{i} {n}" for i, n in enumerate(named))
+            raise Refusal("INVALID_REQUEST", f"This camera's gains are named, and {gain} is not one of them: "
+                          f"[imaging] gain is the number of one of {listed}.")
+        try:
+            self.client.put("gain", Gain=int(gain))
+        except DriverError as error:
+            if low is not None:
+                raise Refusal("INVALID_REQUEST", f"The camera's driver would not take gain {gain}: {error}") from None
+        self.gain = get("gain")         # None where the driver has no gain to give
+        self.target = get("setccdtemperature") if get("cooleron") else None
         self.binning = 1
         self._bin(1)
 
@@ -603,6 +632,29 @@ class Camera:
     def temperature(self):
         return _quiet(self.client, "ccdtemperature")
 
+    def settle(self, say=print, sleep=time.sleep, wait=1800, clock=time.monotonic, **_):
+        """Waits until a cooled sensor is at its driver's target (within
+        ON_TARGET_C, three readings running): shoot.py asks before taking
+        frames. The cooler itself is the driver's program's to run. A camera
+        with no cooler, or its cooler off, needs no wait."""
+        self.target = _quiet(self.client, "setccdtemperature") if _quiet(self.client, "cooleron") else None
+        if self.target is None:
+            return True
+        end, said, steady = clock() + wait, 0.0, 0
+        while True:
+            degrees = self.temperature()
+            steady = steady + 1 if degrees is not None and abs(degrees - self.target) <= ON_TARGET_C else 0
+            if steady >= 3:
+                say(f"camera: sensor at {degrees:.1f} °C, its target {self.target:g} °C (the driver's cooler)")
+                return True
+            if clock() >= end:
+                raise Refusal("CAMERA_BUSY", f"The sensor is at {degrees} °C, not its target {self.target:g} °C, "
+                                             f"after {wait / 60:.0f} min: no frames taken off target.")
+            if clock() - said >= 60:
+                say(f"camera: waiting for the sensor to reach {self.target:g} °C (now {degrees} °C)")
+                said = clock()
+            sleep(2)
+
     def frame(self, seconds, sleep=time.sleep, clock=time.monotonic):
         import datetime as dt
 
@@ -623,7 +675,8 @@ class Camera:
         mosaic = np.clip(image.T, 0, 65535).astype(np.uint16)      # ASCOM's [x][y] to rows
         header = fits.Header()
         header["EXPTIME"] = (float(seconds), "seconds")
-        header["GAIN"] = (self.gain, "camera gain asked")
+        if self.gain is not None:
+            header["GAIN"] = (self.gain, "camera gain, as the driver reads it back")
         header["DATE-OBS"] = (started.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3], "UTC, start of exposure")
         if self.mono:
             header["TY_MONO"] = (True, "mono sensor: no colour pattern")
@@ -632,6 +685,12 @@ class Camera:
         degrees = self.temperature()
         if degrees is not None:
             header["CCD-TEMP"] = (round(float(degrees), 1), "sensor temperature, C")
+        if self.target is not None:
+            header["SET-TEMP"] = (float(self.target), "cooler target, C (the driver's)")
+            if degrees is not None:
+                # As altair.py: kept either way, one off target left out of science stacks.
+                header["TY_ONTGT"] = (abs(float(degrees) - float(self.target)) <= ON_TARGET_C,
+                                      f"sensor within {ON_TARGET_C:g} C of SET-TEMP")
         header["XBINNING"] = (int(self.binning), "binning the camera applied")
         from camera import SETTINGS, identify
         identify(header, SETTINGS, model=self.name)
