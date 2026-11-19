@@ -145,7 +145,14 @@ def open_link(settings, port=None):
         return Serial(found, settings.get("baud", 9600))
     address = settings.get("address")
     if not address:
-        seen = Udp.find()
+        # Asked again before giving up: 19 November 2026, the adapter missed
+        # the first ask three times in a night, and a guider ended on it.
+        seen = None
+        for attempt in range(3):
+            seen = Udp.find()
+            if seen:
+                break
+            time.sleep(1)
         if not seen:
             raise Refusal("MOUNT_NOT_CONNECTED", "No SynScan Wi-Fi adapter answered. Is the mount on with the "
                           "adapter in, and the adapter on this router? Set its address under [mount] "

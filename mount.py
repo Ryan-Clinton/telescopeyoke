@@ -1263,21 +1263,34 @@ class Mount:
         # 2026: a polar check lost at its third picture). Open it afresh and
         # take the picture again before giving up.
         trailed, binned, switching = 0, 1, 0.0
-        while True:
-            for attempt in range(FRAME_TRIES):
-                try:
-                    with Camera(gain=2000) as cam:
-                        mosaic, binned, switching = solve_frame(cam, exposure)
+        # A narrowband filter lets through too few stars in a short frame to
+        # solve (19 November 2026: two GoTos to NGC 281 in Ha found no
+        # solution, then solved at once in L). L goes in for the solve frames
+        # and the filter that was in goes back; a filter not put back stops
+        # its run's frames anyway (shoot.in_the_path).
+        restore = narrowband_in_path()
+        if restore:
+            import filters
+            filters.turn_wheel(filters.DEFAULT, say=lambda line: print(f"  for the plate solve: {line}", flush=True))
+        try:
+            while True:
+                for attempt in range(FRAME_TRIES):
+                    try:
+                        with Camera(gain=2000) as cam:
+                            mosaic, binned, switching = solve_frame(cam, exposure)
+                        break
+                    except IndiError:
+                        if attempt == FRAME_TRIES - 1:
+                            raise
+                        print(f"{time.strftime('%H:%M:%S')} the camera sent no picture; trying again", flush=True)
+                if settle_until is None or time.monotonic() >= settle_until or not still_swinging(luminance(mosaic)):
                     break
-                except IndiError:
-                    if attempt == FRAME_TRIES - 1:
-                        raise
-                    print(f"{time.strftime('%H:%M:%S')} the camera sent no picture; trying again", flush=True)
-            if settle_until is None or time.monotonic() >= settle_until or not still_swinging(luminance(mosaic)):
-                break
-            trailed += 1
-            print(f"{time.strftime('%H:%M:%S')} the stars are trailed: still settling; another picture", flush=True)
-            time.sleep(1)
+                trailed += 1
+                print(f"{time.strftime('%H:%M:%S')} the stars are trailed: still settling; another picture", flush=True)
+                time.sleep(1)
+        finally:
+            if restore:
+                filters.turn_wheel(restore, say=lambda line: print(f"  after the plate solve: {line}", flush=True))
         when = Time.now()
         framed = time.monotonic()
         snap.publish(mosaic, kind="plate-solve frame", detail=f"{exposure:g} s")
@@ -1661,6 +1674,24 @@ def home_fit(rows, dec):
                 f"leaving one place out moves it {sway:.2f}°, and it needs {HOME_SWAY:g}°"),
             # An rms can hide one bad place among good ones: each place's own miss, for looking at.
             "residuals": [miss(row, answer) for row in used], "left_out": left_out}
+
+
+def narrowband_in_path():
+    """The filter in the light path when it is not in L's parfocal set (Ha,
+    SII, OIII), as the wheel confirms it; None otherwise, with no wheel, or
+    when it cannot be read. Never raises."""
+    try:
+        import filters
+        if not filters.wheel_in_train():
+            return None
+        import sxwheel
+        here = sxwheel.confirmed()
+        if not here:
+            return None
+        name = here[1]
+        return name if name not in filters.sets()[0] else None
+    except Exception:
+        return None
 
 
 def solve_frame(cam, exposure):
