@@ -1634,8 +1634,12 @@ class Supervisor:
         log = RUN_LOG.open("a", encoding="utf-8")
         # -u: unbuffered, so a guider ended before it guides still leaves its
         # lines in the log (11 November 2026: two failed starts, nothing written).
+        # The guide camera's gain from [guider] gain, 400 unless set: started
+        # without one it ran at the camera's default, and on 19 November 2026
+        # a faint guide star (peak 18 at gain 400) was not found at all.
+        gain = int(config.hardware().get("guider", {}).get("gain", 400))
         proc = self.popen([sys.executable, "-u", str(config.ROOT / "guidecam.py"), "guide",
-                           "--exposure", f"{self.exposure:g}"]
+                           "--exposure", f"{self.exposure:g}", "--gain", str(gain)]
                           + (["--dec-one-way", self.dec_one_way] if self.dec_one_way else []),
                           stdout=log, stderr=log, start_new_session=True)
         self.launched, self.pid = True, proc.pid
