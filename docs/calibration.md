@@ -223,8 +223,15 @@ What a run keeps:
   watching (`./mount.py point --clearance-test`; 2 and 17 November,
   `docs/validation.md`), to be done again when the camera or the tube's
   place in its rings changes.
+- After each slew it waits 2 s, not a fixed 10, and lets the picture say
+  whether the tube has settled: stars trailed past a median roundness of
+  0.5 (in the middle 1024 pixels; the 183M's settled frames read 0.81 to
+  0.94) are taken again a second later, up to 26 s, the worst settling
+  seen. The fit works to 0.15°, so what matters is a picture that solves,
+  not stars landing to the arcsecond. Polar alignment's pictures settle
+  the same way, up to its 5 s. Not yet run on the mount.
 - Each place keeps how long its slew and its plate solve took
-  (`slew_s`, `settle_s`, `solve_s`), and the run says the totals: where a
+  (`slew_s`, `settle_s`, `solve_s`, `trailed_frames`), and the run says the totals: where a
   faster survey has to save time is measured, not guessed.
 - A polar alignment run (`./polaralign.py`) sets the last home measurement
   aside, and the account `--check` uses: the bolts or the tripod may have

@@ -172,9 +172,25 @@ SURVEY_DEC = 40.0
 ENOUGH = 0.25
 SETTLE = 10       # seconds to wait after a slew before photographing: the skyline survey of
                   # 17 October 2026 found the tube steady after 2 s half the time, 26 s at worst
+# The surveys (findhome, pointing) need a picture that solves, not stars
+# landing to the arcsecond, so they wait only this long and then let the
+# picture say whether the tube has settled (still_swinging), up to the
+# worst seen: a 1 s frame at 0.73"/px trails visibly long before its
+# position is wrong by anything the 0.15° fit would notice.
+SETTLE_LEAST = 2
+SETTLE_MOST = 26
+# Median roundness of the stars below which a picture counts as trailed: a
+# first figure. The 183M's settled 2 s frames of 18 November 2026 read 0.81
+# to 0.94 in the middle of the frame, and one 4 s frame 0.56. A trail as
+# long as a star is wide reads about 0.83, twice as long 0.59, and this is
+# about 2.6 star widths (some 8" on the 183M in a 1 s frame): the tube
+# still swinging, not seeing. Fewer stars than this and it is not judged.
+SETTLED_ROUND = 0.5
+SETTLE_STARS = 5
 if config.DEMO:
     import os
     SETTLE = 0 if os.environ.get("TY_DEMO_FAST") == "1" else 2
+    SETTLE_LEAST = min(SETTLE_LEAST, SETTLE)
 
 # Raw axis angles, in degrees, as the handset's "z" query reports them.
 HOME_RA_AXIS = 0.0
@@ -603,7 +619,7 @@ class Mount:
             self.goto((true_sidereal(site) + offset - hours_out * 15) % 360, dec)
             slewed = time.monotonic() - began
             self.tracking(True)
-            time.sleep(SETTLE)
+            time.sleep(SETTLE_LEAST)
             began = time.monotonic()
             west = over_pole(self.axes()[1])
             guess = load_pointing_error(west)
@@ -611,7 +627,8 @@ class Mount:
             ra_handset, dec_handset = self.radec()
             believed = wrap(sidereal + offset - ra_handset)
             hint = (sidereal - (believed + guess[0]), wrap(dec_handset) + guess[1])
-            found = self.where_really(*hint, radius=40, wider=90)
+            found = self.where_really(*hint, radius=40, wider=90,
+                                      settle_until=began + SETTLE_MOST - SETTLE_LEAST)
             if not found:
                 self.say(f"hour angle {hours_out:+g} h: no plate solve; left out")
                 continue
@@ -626,7 +643,8 @@ class Mount:
             row = {"hour_angle_h": hours_out, "side": side_name(west),
                    "ha_error_deg": round(wrap(actual[0] - believed), 3),
                    "dec_error_deg": round(actual[1] - wrap(dec_handset), 3),
-                   "slew_s": round(slewed, 1), "settle_s": SETTLE, "solve_s": round(time.monotonic() - began, 1)}
+                   "slew_s": round(slewed, 1), "settle_s": SETTLE_LEAST, "trailed_frames": found["trailed"],
+                   "solve_s": round(time.monotonic() - began, 1)}
             before = next((r for r in reversed(rows) if r["side"] == row["side"]), None)
             if before:
                 jump = math.hypot((row["ha_error_deg"] - before["ha_error_deg"]) * math.cos(math.radians(dec)),
@@ -646,7 +664,8 @@ class Mount:
             # Where the time went, so that a faster survey starts from the real cost.
             self.say(f"Time over {len(rows)} places: slewing {sum(r['slew_s'] for r in rows):.0f} s, settling "
                      f"{sum(r['settle_s'] for r in rows):.0f} s, pictures and plate solves "
-                     f"{sum(r['solve_s'] for r in rows):.0f} s.")
+                     f"{sum(r['solve_s'] for r in rows):.0f} s ({sum(r['trailed_frames'] for r in rows)} pictures "
+                     "taken again because the tube was still settling).")
         found = pointing_summary(rows)
         if keep:
             keep_pointing(found)
@@ -1139,11 +1158,16 @@ class Mount:
         here_ha, here_dec = self.true_hour_angle(site), wrap(self.radec()[1]) + pointing[1]
         return math.hypot(wrap(here_ha - hour_angle) * math.cos(math.radians(dec)), here_dec - dec)
 
-    def where_really(self, ra_hint, dec_hint, radius=30, exposure=1.0, wider=None):
+    def where_really(self, ra_hint, dec_hint, radius=30, exposure=1.0, wider=None, settle_until=None):
         """Photograph the sky and plate-solve it. Returns the J2000 position
         of the frame centre as {"ra", "dec"} in degrees, or None. With
         `wider`, a frame that does not solve within `radius` is searched again
-        out to `wider` degrees: the same picture, not a new one."""
+        out to `wider` degrees: the same picture, not a new one. With
+        `settle_until` (a time.monotonic()), a frame whose stars are trailed,
+        the tube still swinging from the slew, is taken again a second later
+        until they are round or that time comes: the frame itself says the
+        tube has settled, and no fixed wait is needed. The answer then says
+        how many frames were trailed (`trailed`)."""
         began = time.monotonic()
         import solve as solver
         import numpy as np
@@ -1157,15 +1181,22 @@ class Mount:
         # The camera sometimes sends no frame, on both drivers (21 October
         # 2026: a polar check lost at its third picture). Open it afresh and
         # take the picture again before giving up.
-        for attempt in range(FRAME_TRIES):
-            try:
-                with Camera(gain=2000) as cam:
-                    mosaic, _ = cam.frame(exposure)
+        trailed = 0
+        while True:
+            for attempt in range(FRAME_TRIES):
+                try:
+                    with Camera(gain=2000) as cam:
+                        mosaic, _ = cam.frame(exposure)
+                    break
+                except IndiError:
+                    if attempt == FRAME_TRIES - 1:
+                        raise
+                    print(f"{time.strftime('%H:%M:%S')} the camera sent no picture; trying again", flush=True)
+            if settle_until is None or time.monotonic() >= settle_until or not still_swinging(luminance(mosaic)):
                 break
-            except IndiError:
-                if attempt == FRAME_TRIES - 1:
-                    raise
-                print(f"{time.strftime('%H:%M:%S')} the camera sent no picture; trying again", flush=True)
+            trailed += 1
+            print(f"{time.strftime('%H:%M:%S')} the stars are trailed: still settling; another picture", flush=True)
+            time.sleep(1)
         when = Time.now()
         framed = time.monotonic()
         snap.publish(mosaic, kind="plate-solve frame", detail=f"{exposure:g} s")
@@ -1196,6 +1227,7 @@ class Mount:
               f"{'' if found else ', no solution'}", flush=True)
         if found:
             found["when"] = when  # solving can take a while; the sky moves on
+            found["trailed"] = trailed
             # Kept for shoot.py's drift assist, which needs to know which way
             # up the camera is.
             (config.DATA / "cache").mkdir(exist_ok=True)
@@ -1528,6 +1560,20 @@ def home_fit(rows, dec):
                 f"leaving one place out moves it {sway:.2f}°, and it needs {HOME_SWAY:g}°"),
             # An rms can hide one bad place among good ones: each place's own miss, for looking at.
             "residuals": [miss(row, answer) for row in used], "left_out": left_out}
+
+
+def still_swinging(lum):
+    """Whether a picture's stars are trailed: the tube still moving from a
+    slew. The middle 1024 pixels square only, to keep it quick; the median
+    roundness of its brightest stars (1 round, falling as they trail).
+    With too few stars to judge (cloud, a sparse field) it is taken as
+    settled: the solve says whether the picture is any use."""
+    import stacking
+    h, w = lum.shape
+    middle = lum[max(0, h // 2 - 512):h // 2 + 512, max(0, w // 2 - 512):w // 2 + 512]
+    import numpy as np
+    stars = stacking.find_stars(middle, limit=30)
+    return len(stars) >= SETTLE_STARS and float(np.median(stars[:, 4])) < SETTLED_ROUND
 
 
 def home_model(rows, dec):

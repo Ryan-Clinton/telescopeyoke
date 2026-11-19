@@ -48,7 +48,8 @@ STEP = 25.0  # degrees of RA-axis rotation between the three photographs
 # small turn still finds the axis; it is never more than STEP, which is as
 # far as the positions have been tried on the real mount.
 LEAST = 5.0
-# Seconds to wait after each turn before photographing. A GoTo elsewhere
+# Seconds at most to wait after each turn before photographing: it waits
+# mount.SETTLE_LEAST, then takes pictures until the stars are round. A GoTo elsewhere
 # waits mount.SETTLE for the stars to stop creeping, so that they land where
 # they were sent; here it does not matter where on its circle a photograph
 # lands, only that it is on it, and a one-second frame does not streak.
@@ -319,7 +320,7 @@ def _measure(scope, site, step=STEP, skyline=None):
             if i:
                 scope.goto((mount.true_sidereal(site) + offset - target_ha) % 360, dec_handset)
                 scope.tracking(True)
-                time.sleep(min(mount.SETTLE, SETTLE))
+                time.sleep(min(mount.SETTLE_LEAST, SETTLE))
             # Tell the solver roughly where to look, then widen if needed:
             # where the handset believes it is, put right by the pointing
             # error last measured on this side. Without that the search
@@ -327,7 +328,10 @@ def _measure(scope, site, step=STEP, skyline=None):
             error = mount.load_pointing_error(mount.over_pole(scope.axes()[1]))
             hint_ra = mount.true_sidereal(site) - (target_ha + error[0])
             hint_dec = dec_handset + error[1]
-            found = scope.where_really(hint_ra, hint_dec, radius=40, wider=90)
+            # Trailed stars are taken again until round (mount.still_swinging),
+            # up to the wait it used to make: the picture says when it settled.
+            found = scope.where_really(hint_ra, hint_dec, radius=40, wider=90,
+                                       settle_until=time.monotonic() + SETTLE - mount.SETTLE_LEAST if i else None)
             if found:
                 # Where it really pointed is the pointing error on this side:
                 # kept, so the next picture's hint (read back above), tonight's
