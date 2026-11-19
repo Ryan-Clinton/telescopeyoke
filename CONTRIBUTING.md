@@ -64,5 +64,7 @@ through the plan a person confirms.
 
 ## What is out of scope
 
-ASCOM, mobile apps, plugin systems, cloud services, a sequencing language,
-large front-end frameworks. NINA and KStars/Ekos do those well.
+ASCOM's Windows-only COM interface (ASCOM drivers are reached through
+Alpaca, `alpaca.py`), mobile apps, plugin systems, cloud services, a
+sequencing language, large front-end frameworks. NINA and KStars/Ekos do
+those well; `companion.py` works beside them rather than replacing them.

@@ -6,6 +6,13 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+- **The companion** (`companion.py`, [Companion](docs/companion.md)): for an
+  observatory that already runs a night with its own software. It reads
+  the frames the capture program saves (FITS or XISF) and PHD2's guiding,
+  live or from its log, and says what spoiled frames (cloud, a brighter
+  sky, soft or trailed stars, the sensor off target, the guide star lost)
+  and where the night's time went, measured apart from inferred. It
+  sends nothing to any device.
 - **A mount through ASCOM Alpaca** (`alpaca.py`, `[mount] link = "alpaca"`):
   any mount with an ASCOM driver, on this computer or a Windows one on
   the network, through the same motion lock, limits and dry runs.

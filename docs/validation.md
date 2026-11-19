@@ -58,6 +58,7 @@ outlook` puts it first.
 | Control without the handset | ⚠️ the Wi-Fi adapter on the home router: Dec direction checked, one GoTo and home (16 November 2026, no tube on) |
 | A mount through ASCOM Alpaca | 🧪 ASCOM's own Alpaca simulator (OmniSim 0.4.0, 19 November 2026) only: GoTo both sides of the pier, a stop mid-slew, home, RA and Dec rates; no real mount |
 | A camera, filter wheel and focuser through ASCOM Alpaca | 🧪 ASCOM's own Alpaca simulator only (OmniSim 0.4.0, 19 November 2026): frames full and binned, a short imaging run end to end, the wheel by name and number, the focuser out and back; no real device |
+| The companion (another observatory's night, read only) | ⚠️ the owner's own frames (5 November 2026, 693 frames: gaps, soft, dimmed and trailed found) and a made-up night with planted faults, each found; not yet beside anyone else's observatory |
 | Guiding by PHD2 | 🧪 a pretend PHD2 (`simulator.PretendPhd2`) only: a guided run's frames carried GUIDED and GUIDERMS from its guide steps; not yet PHD2 itself |
 | Windows | ⚠️ camera frames indoors; no mount driven; no whole night 🧪 |
 | Dark and flat frames, gain sweep | 🧪 |

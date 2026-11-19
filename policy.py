@@ -94,6 +94,7 @@ COMMANDS = {
     "lighttest.py":("read_only", {}, {}),       # what a house light did to the sky, from a run's records
     "alpaca.py": ("read_only", {}, {}),
     "phd2.py": ("read_only", {}, {}),
+    "companion.py": ("read_only", {"watch": "local_write"}, {}),   # reads another program's frames; touches no device
     "newhardware.py": ("read_only", {"--probe": "hardware", "--known": "local_write", "--watch": "local_write"}, {}),
     "precision.py": ("local_write", {}, {}),     # a night's frames measured every way; keeps its answer in the session
     "plant.py": ("local_write", {}, {}),

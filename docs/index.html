@@ -84,7 +84,7 @@
   <li><b>Explains itself live</b>: a YouTube and Twitch broadcast with the stack building up, a presenter that says what and why, and chat commands viewers can ask but not operate.</li>
   <li><b>Works with an AI agent</b>: every command answers in a fixed JSON shape, skills and specialist agents hold the routines, and code that does not depend on the agent decides what may move.</li>
 </ul>
-<p>It runs on your own computer. No account, no cloud service, no ASCOM.</p>
+<p>It runs on your own computer. No account, no cloud service.</p>
 
 <h2>Real results</h2>
 <div class="pair">
@@ -135,7 +135,7 @@ cd TelescopeYoke-v0.4.0
   <tr class="wanted"><td>a mount with an EQStar or other EQMOD-style controller</td><td>none</td><td>any</td><td>Linux or Windows</td><td>wanted: whether it answers at all</td><td>could be you</td></tr>
 </table>
 </div>
-<p>EQ5, HEQ5 and EQ6 mounts with a SynScan handset speak the same serial protocol, so they are likely to work, but nobody has tried. On Linux the camera is read through INDI; on Windows only Altair cameras are supported. ASCOM is not used, and an EQMOD or ASCOM setup you already have is left alone: close EQMOD while TelescopeYoke has the mount's port, and the other way round.</p>
+<p>EQ5, HEQ5 and EQ6 mounts with a SynScan handset speak the same serial protocol, so they are likely to work, but nobody has tried. On Linux the camera is read through INDI; on Windows, in the 0.4.0 release, only Altair cameras are supported. In development since 19 November 2026, and tried only on ASCOM's own simulator so far: a mount, camera, focuser and filter wheel through their ASCOM drivers (Alpaca), guiding by PHD2, and a <a href="companion.md">companion</a> that watches an observatory you already run, from the frames it saves and PHD2, without touching it.</p>
 
 <div class="note">
   <b>Looking for testers.</b> If you have one of these mounts, a report from you is worth more than any new feature, and you do not have to let it move your mount. <code>./doctor.py --report</code> only looks at what is connected: it writes out what the handset says the mount is, its firmware, and what was found, with your location left out. Paste that into a
