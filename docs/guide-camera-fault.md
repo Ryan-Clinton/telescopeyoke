@@ -135,6 +135,49 @@ gets through. The library's own table says size 1 is 2 x 2 binning
 about 9.6"/px through the 162 mm guide scope instead of 4.8"/px. Binning
 also adds four pixels' light to each.
 
+## 19 November 2026: a full-resolution window streams
+
+Binned frames are 9.55"/px through the 162 mm guide scope; measuring
+guiding near 0.7" (the aim after the mount's service) wants the full
+4.77"/px. So full size was tried again in daylight, the cap on (levels
+about 2.2 of 255), the camera straight into a laptop socket (`1-5`, 480M,
+no hub), the filter wheel and focuser on the 183M's hub. Each row is one
+run of `./guidecam.py probe` with a 20 s window per exposure (the 0.01 to
+0.25 s row, 15 s):
+
+| Frames | 0.01 s | 0.1 s | 0.25 s | 0.5 s | 2 s |
+|---|---|---|---|---|---|
+| Binned 640 x 480 (`--size 1`), speed 4 | | | | 39, gaps up to 0.63 s | 10 of 10 |
+| Full 1280 x 960, speed 4 | 24 in 15 s | 16 in 15 s | 2 in 15 s | 5, gaps up to 10 s | 0 |
+| Full, software trigger | | | | 3 | 0 |
+| Full, raw | | | | 1 | 1 |
+| Full, speed 0 | | | | 2 | 0 |
+| Full, trigger and raw | | | | 2 | 0 |
+| **Window 320 x 240 at full resolution** (`--size 0 --roi 320x240`) | | | | **39, gaps up to 0.61 s** | **10 of 10** (and 5 of 5 in 12 s, frames checked 320 x 240) |
+| Window 480 x 360 | | | | | 5, a gap of 10 s |
+| Window 640 x 480 | | | | 17, gaps up to 4.5 s | 1 |
+
+What it shows:
+
+- Full size fails as it did on 6 November, in every mode, at every
+  exposure and both USB speeds, with no hub: not the hub, the port or the
+  exposure.
+- **A 640 x 480 window fails where 640 x 480 binned works**, with the
+  same number of pixels and the same 480 rows. So the amount of data is
+  not what decides it; reading the sensor at full resolution is, and only
+  a small window of it gets through.
+- A 320 x 240 window at full resolution streams every frame: about
+  25' x 19' of sky at 4.77"/px, room for one guide star. Only short runs
+  so far; the 5-minute pass (below) has not been run on it.
+- The window is set with the library's `put_Roi` before the stream
+  starts, centred, its numbers even; `get_Size` still says 1280 x 960
+  afterwards, but the frames that arrive are the window's size (the
+  probe now reports what arrives).
+
+Next, if it passes the 5-minute test: the guider finds the star in a
+binned frame, then guides on a 320 x 240 full-resolution window centred
+on it. Not built.
+
 ## Still to do
 
 1. **The guider on the sky.** Since 79a2f2d `star`, `calibrate` and
