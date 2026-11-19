@@ -85,7 +85,9 @@ SMOOTH = {1: 1, 2: 2, 3: 3}             # readings each level steadies over
 PERCENT = {1: 10.0, 2: 6.0, 3: 4.0}     # the smallest change each level calls a change
 ENOUGH = 10         # stars in the middle of a full-size frame that make the rest not worth measuring
 SURE = 3            # readings in a row that settle a change of level
-MOTOR_MS = 40       # ms a half-step for --auto: the NEMA 17 focused at it on 18 and 19 November 2026
+MOTOR_MS = 10       # ms a half-step for --auto (19 November 2026: 40, the 28BYJ-48's slowest and strongest,
+                    # made a focus run spend a fifth of its time turning; the NEMA 17's own 20 lifts it)
+AUTO_FRAMES = 2     # frames at each place --auto measures: a third of a run's time went on the third
 STILL = 0.05        # stars within this share of the start ...
 STILL_AFTER = 512   # ... after this many half-steps in: the drawtube is not moving
 HOLD = 5            # readings that must stay on the best before "Focus good"
@@ -1220,7 +1222,7 @@ def focus_motor(motor, read, usual, say=progress, coarse=64, step=32, points=7, 
 
     def measure(doing):
         for _ in range(tries):
-            found = sample(read, SWEEP_FRAMES, usual)
+            found = sample(read, AUTO_FRAMES, usual)
             if found["hfr"] is not None:
                 break
         readings.append((state["at"], found["hfr"]))
@@ -1554,7 +1556,7 @@ def run_motor(args, mode="focus"):
         port = focuser.find_port()
         print(f"Would turn the focuser on {port} either way at {MOTOR_MS} ms a half-step: the far search first if "
               "no star measures; far out, 64 half-steps at a time the way the stars shrink; near focus, 7 places "
-              f"32 half-steps apart measured moving inward ({SWEEP_FRAMES} frames each) and a curve fitted; then "
+              f"32 half-steps apart measured moving inward ({AUTO_FRAMES} frames each) and a curve fitted; then "
               f"to its focus. Every place measured and the end are arrived at moving inward with the gears' slack "
               f"({settings['backlash']} half-steps{'' if settings['backlash_measured'] else ', a guess until measured'}) "
               "taken up. The mount does not move.")
@@ -1613,7 +1615,7 @@ def run_motor(args, mode="focus"):
             if mode == "auto":
                 if hasattr(motor, "speed"):
                     motor.speed(MOTOR_MS)
-                progress(f"focusing either way at {MOTOR_MS} ms a half-step, {SWEEP_FRAMES} frames of "
+                progress(f"focusing either way at {MOTOR_MS} ms a half-step, {AUTO_FRAMES} frames of "
                          f"{MOTOR_EXPOSURE:g} s after each move")
                 import filters
                 if getattr(args, "prove_sets", False):
