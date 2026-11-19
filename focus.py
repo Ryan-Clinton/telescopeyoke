@@ -1172,7 +1172,7 @@ def find_stars(motor, read, usual, say=progress, stride=128, turns=0.5, ring=Non
     return {"at": 0, "how": "not_found"}
 
 
-def focus_motor(motor, read, usual, say=progress, coarse=64, step=32, points=7, far=2.0, most=40, patience=2,
+def focus_motor(motor, read, usual, say=progress, coarse=64, step=32, points=7, far=1.5, most=40, patience=2,
                 tries=3, sweeps=3, ring=None, live=None, slack=None):
     """Focus with the motor, moving either way: the NEMA 17 lifts the drawtube
     as well as lowering it (18 November 2026), so nothing is set out of focus
@@ -1308,6 +1308,53 @@ def focus_motor(motor, read, usual, say=progress, coarse=64, step=32, points=7, 
     return {"best_hfr": fit["hfr"] if fit and fit["ok"] else best, "best_at": target, "ended_at": state["at"],
             "ended_hfr": ended if ended is not None else best, "way": {1: "out", -1: "in", 0: "none"}[way],
             "fit": fit, "readings": readings}
+
+
+def practise_order(names, groups):
+    """L, the other filters with the sets taken in turn, L, the same the
+    other way round, L: every filter reached twice, from different filters,
+    and the sets crossed at almost every move (the person, 19 November 2026:
+    "mix the readings up between the sets to make your guesses fully
+    tested")."""
+    import filters
+    known = set(names)
+    first = [n for n in filters.mixed(groups) if n in known]
+    lead = [filters.DEFAULT] if filters.DEFAULT in known else []
+    return lead + first + lead + first[::-1] + lead
+
+
+def practise_moves(motor, read, usual, positions, here, wheel_to, order, say=progress, slack=None, frames=3):
+    """Move between filters by their focus places alone, no curve: for each
+    filter in `order`, the wheel to it, the focuser to its place in
+    `positions` (half-steps, any zero), arriving moving inward with the
+    gears' slack taken up, and one reading of `frames` frames. Starts with
+    the focuser at `here`'s focus. Returns [{"filter", "from", "moved",
+    "at", "hfr"}]."""
+    slack = focuser_settings()["backlash"] if slack is None else slack
+    state = {"at": positions[here], "inward": True}
+
+    def go(place):
+        if place != state["at"]:
+            motor.move(place - state["at"])
+            state["inward"], state["at"] = place < state["at"], place
+
+    def arrive(place):
+        if not state["inward"] or place >= state["at"] or state["at"] - place < slack:
+            go(max(place, state["at"]) + slack)
+        go(place)
+
+    done, last = [], here
+    for name in order:
+        wheel_to(name)
+        before = state["at"]
+        arrive(positions[name])
+        hfr = sample(read, frames, usual)["hfr"]
+        done.append({"filter": name, "from": last, "moved": positions[name] - before, "at": positions[name],
+                     "hfr": hfr})
+        say(f"  {last:>4} -> {name:<4} moved {positions[name] - before:+4d} to {positions[name]:+4d}: "
+            f"HFR {hfr if hfr is not None else 'none'}")
+        last = name
+    return done
 
 
 def measure_step(motor, read, usual, say=progress, backlash=None, increment=16, most=4096):
@@ -1518,6 +1565,7 @@ def stop_on_term():
 
 
 MODE_WORDS = {"focus": "to the sharpest", "auto": "focusing either way", "find": "finding focus",
+              "practise": "moving between filters",
               "sweep": "one focus sweep", "step": "measuring the motor's step",
               "backlash": "measuring the backlash"}
 
@@ -1561,6 +1609,14 @@ def run_motor(args, mode="focus"):
               f"({settings['backlash']} half-steps{'' if settings['backlash_measured'] else ', a guess until measured'}) "
               "taken up. The mount does not move.")
         return {"would_move": True, "port": port, "usual_hfr": round(usual, 2), "motor_ms": MOTOR_MS}
+    if args.dry_run and mode == "practise":
+        import filters
+        names = [part.partition("=")[0].strip() for part in args.practise.split(",")]
+        order = practise_order(names, filters.sets())
+        print(f"Would move between filters by their places alone, no curve: {' '.join(order)}; each arrived at "
+              f"moving inward with the gears' slack ({settings['backlash']} half-steps) taken up, one reading of "
+              "3 frames at each. The mount does not move.")
+        return {"would_move": True, "order": order}
     if args.dry_run:
         port = focuser.find_port()
         print(f"Would turn the focuser on {port}: {SWEEP_POINTS} positions {settings['step']} half-steps apart "
@@ -1663,6 +1719,33 @@ def run_motor(args, mode="focus"):
                 if last <= 1.5 * usual:
                     seen_good(last, scale)
                 return result
+            if mode == "practise":
+                import filters
+                import sxwheel
+                positions = {}
+                for part in args.practise.split(","):
+                    name, _, value = part.partition("=")
+                    positions[name.strip()] = int(value)
+                now_in = sxwheel.confirmed()
+                here = now_in[1] if now_in else None
+                if here not in positions:
+                    raise interface.Refusal("INVALID_REQUEST", f"The wheel has {here or 'no confirmed filter'} in "
+                                            f"the path, which has no place in --practise: focus in one of "
+                                            f"{', '.join(positions)} first (./focus.py --auto).")
+                if hasattr(motor, "speed"):
+                    motor.speed(MOTOR_MS)
+                order = practise_order(list(positions), filters.sets())
+                progress(f"moving between filters by their places alone, no curve, from {here}: "
+                         f"{' '.join(order)}; one reading of 3 frames at each")
+                done = practise_moves(drive, read, usual, positions, here,
+                                      lambda name: filters.turn_wheel(name, say=lambda _: None), order, say=say)
+                filters.set_focused(done[-1]["filter"])
+                by = {}
+                for d in done:
+                    if d["hfr"] is not None:
+                        by.setdefault(d["filter"], []).append(d["hfr"])
+                progress("by filter: " + "; ".join(f"{n} {', '.join(str(h) for h in v)}" for n, v in by.items()))
+                return {"practise": done, "positions": positions, "start": here}
             if mode == "find":
                 progress("looking for stars: a thirty-second of a turn at a time, in and then out, to half a turn each way")
                 found = find_stars(drive, read, usual, say=say, ring=ring, live=live)
@@ -1807,6 +1890,10 @@ def main():
                     help="with --offset, when you watched it and the stars were sharp in both filters: this one "
                          "measurement may be used on runs you start yourself (never scheduled ones) until three "
                          "nights prove it")
+    ap.add_argument("--practise", metavar="FILTER=PLACE,...",
+                    help="move between filters by their focus places alone (half-steps, e.g. L=0,R=32,SII=-8), "
+                         "no curve: the sets crossed in turn, each filter reached twice, one reading at each; "
+                         "starts from the focus of the filter in the path")
     ap.add_argument("--prove-sets", action="store_true",
                     help="with --auto, once on the first clear night: focus in L, then each filter with L after "
                          "it (L, R, L, SII, L, ...), to confirm the "
@@ -1824,7 +1911,7 @@ def main():
     if not args.scene:
         say_where(file=sys.stderr if args.json else sys.stdout)
     for flag, mode in (("sweep", "sweep"), ("find", "find"), ("measure_step", "step"),
-                       ("measure_backlash", "backlash"), ("auto", "auto")):
+                       ("measure_backlash", "backlash"), ("auto", "auto"), ("practise", "practise")):
         if getattr(args, flag):
             return interface.main("focus.motor", lambda: run_motor(args, mode), args.json)
     if args.check:
