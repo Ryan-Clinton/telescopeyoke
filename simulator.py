@@ -424,3 +424,117 @@ def solve(image, ra_hint=None, dec_hint=None, radius=30, **_):
     spot = SkyCoord(HADec(ha=hour_angle * u.deg, dec=dec * u.deg,
                           obstime=Time.now(), location=mount.location(site))).transform_to(ICRS())
     return dict(answer, ra=spot.ra.deg, dec=spot.dec.deg)
+
+
+class PretendPhd2:
+    """A pretend PHD2 for trying phd2.py with no PHD2: its event server's
+    protocol (JSON lines on TCP; calls answered by id, events as they
+    happen), with guide steps every `cycle` seconds a little off the star,
+    dithers, pauses and stops. `lose_star()` makes it lose the star once.
+    Not PHD2: its timings and errors are made up."""
+
+    def __init__(self, cycle=0.5, scale=1.5, settle_s=1.0, port=0):
+        import socket
+        import threading
+        self.cycle, self.scale, self.settle_s = cycle, scale, settle_s
+        self.state, self.frame, self.lose = "Stopped", 0, False
+        self.server = socket.socket()
+        self.server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.server.bind(("127.0.0.1", port))
+        self.server.listen(4)
+        self.port = self.server.getsockname()[1]
+        self.clients, self.lock = [], threading.Lock()
+        threading.Thread(target=self._accept, daemon=True).start()
+        threading.Thread(target=self._steps, daemon=True).start()
+
+    def address(self):
+        return f"127.0.0.1:{self.port}"
+
+    def lose_star(self):
+        self.lose = True
+
+    def _send(self, conn, message):
+        import json
+        try:
+            conn.sendall((json.dumps(message) + "\r\n").encode())
+        except OSError:
+            pass
+
+    def _event(self, name, **fields):
+        with self.lock:
+            for conn in list(self.clients):
+                self._send(conn, {"Event": name, "Timestamp": time.time(), "Host": "pretend", "Inst": 1, **fields})
+
+    def _accept(self):
+        import threading
+        while True:
+            conn, _ = self.server.accept()
+            with self.lock:
+                self.clients.append(conn)
+            self._send(conn, {"Event": "Version", "Timestamp": time.time(), "PHDVersion": "pretend", "MsgVersion": 1})
+            self._send(conn, {"Event": "AppState", "Timestamp": time.time(), "State": self.state})
+            threading.Thread(target=self._serve, args=(conn,), daemon=True).start()
+
+    def _settle(self, ok=True):
+        import threading
+
+        def later():
+            self._event("SettleBegin")
+            time.sleep(self.settle_s)
+            self._event("SettleDone", Status=0 if ok else 1, Error="" if ok else "star lost")
+        threading.Thread(target=later, daemon=True).start()
+
+    def _serve(self, conn):
+        import json
+        pending = b""
+        while True:
+            try:
+                data = conn.recv(4096)
+            except OSError:
+                return
+            if not data:
+                return
+            pending += data
+            while b"\n" in pending:
+                line, pending = pending.split(b"\n", 1)
+                call = json.loads(line)
+                method, ident = call.get("method"), call.get("id")
+                result = 0
+                if method == "get_app_state":
+                    result = self.state
+                elif method == "get_connected":
+                    result = True
+                elif method == "get_pixel_scale":
+                    result = self.scale
+                elif method == "guide":
+                    self.state = "Guiding"
+                    self._event("StartGuiding")
+                    self._settle()
+                elif method == "dither":
+                    self._event("GuidingDithered", dx=call["params"]["amount"], dy=0)
+                    self._settle()
+                elif method == "stop_capture":
+                    self.state = "Stopped"
+                    self._event("GuidingStopped")
+                elif method == "set_paused":
+                    self.state = "Paused"
+                    self._event("Paused")
+                elif method not in ("set_exposure", "loop"):
+                    self._send(conn, {"jsonrpc": "2.0", "error": {"code": 1, "message": f"no method {method}"},
+                                      "id": ident})
+                    continue
+                self._send(conn, {"jsonrpc": "2.0", "result": result, "id": ident})
+
+    def _steps(self):
+        import random
+        while True:
+            time.sleep(self.cycle)
+            if self.state != "Guiding":
+                continue
+            self.frame += 1
+            if self.lose:
+                self.lose = False
+                self._event("StarLost", Frame=self.frame, Status=-1, ErrorCode=1)
+                continue
+            self._event("GuideStep", Frame=self.frame, Time=self.frame * self.cycle, Mount="pretend",
+                        RADistanceRaw=random.gauss(0, 0.3), DECDistanceRaw=random.gauss(0, 0.3))

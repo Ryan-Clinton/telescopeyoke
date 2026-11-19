@@ -1420,6 +1420,15 @@ def check_note(path=None, now=None):
 MARGIN_S = 10.0            # guide frames this long before an imaging frame began are read for its coverage
 
 
+def supervisor(**kwargs):
+    """The guiding shoot.py --guide uses: the project's own guider, or PHD2
+    with [guider] backend = "phd2" (phd2.py), which answers the same."""
+    if config.hardware().get("guider", {}).get("backend") == "phd2":
+        import phd2
+        return phd2.Supervisor(**kwargs)
+    return Supervisor(**kwargs)
+
+
 class Supervisor:
     """What shoot.py --guide does with the guider: starts one (or uses one
     already guiding), pauses it around every GoTo and relocks after, keeps

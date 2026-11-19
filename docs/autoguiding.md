@@ -648,3 +648,25 @@ spare. Results go in `docs/nights/DATE/` like the rest.
 11. [Stargazers Lounge: EQ5 periodic error correction](https://stargazerslounge.com/topic/157386-eq5-periodic-error-correction)
 12. [astrojolo: mount periodic error](https://astrojolo.com/gears/mount-periodic-error/)
 13. [EQMOD PECPrep](https://eq-mod.sourceforge.net/docs/PECPrep.pdf); EQ3-2's 130-tooth wheel: [IceInSpace](https://iceinspace.com.au/forum/archive/index.php/t-143412.html)
+
+## Through PHD2
+
+For a rig whose guiding is PHD2 (any guide camera and mount connection PHD2
+has), `[guider] backend = "phd2"` and `phd2_address` ("HOST:PORT",
+127.0.0.1:4400 unless set) make `shoot.py --guide` use PHD2 through its
+server (Tools > Enable Server) in place of the project's guider (`phd2.py`).
+PHD2 keeps its own calibration, star, exposure and Dec guide mode. The run
+asks it to guide and waits for it to settle; stops it before each GoTo and
+asks again after; dithers by it (its own direction, the size from
+`--dither-size`); and measures each frame's guiding from PHD2's guide steps
+(RMS and largest error in arcseconds by PHD2's pixel scale, lost-star
+events, coverage), written as the same GUIDED, GUIDERMS and GUIDEMAX. A
+lost or stopped PHD2 is asked to guide again once; after that, or after
+five minutes not guiding, guided imaging stops. PHD2 is stopped at the end
+only if the run started it. `./phd2.py status` reads its state.
+
+Built 19 November 2026 to PHD2's published event-server protocol, and
+tried against a pretend PHD2 (`simulator.PretendPhd2`): start, settle, a
+dither, a pause and resume around a GoTo, a lost star marking its frame
+unguided, one restart, and a whole guided `shoot.py` run whose frames
+carried the guide cards. Not yet against PHD2 itself.

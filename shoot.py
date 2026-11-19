@@ -1116,7 +1116,10 @@ def plan(args):
            "guided": bool(getattr(args, "guide", False))}
     if out["guided"] and out["dither_every"]:
         out["dither"] = f"the guider's lock, {args.dither_size:g}\" (half to all of it, a random way), no GoTo"
-    if out["guided"]:
+    if out["guided"] and config.hardware().get("guider", {}).get("backend") == "phd2":
+        import phd2
+        out["guider"] = f"PHD2 at {phd2.address()}: asked to guide after the first GoTo, or used if already guiding"
+    elif out["guided"]:
         import guider
         state = guider.read_state()
         ok, _ = guider.health(state)
@@ -1270,7 +1273,7 @@ def run(args):
     if getattr(args, "guide", False):
         import guider
         site = (config.load() if config.FILE.exists() else config.example())["site"]
-        args.supervisor = guider.Supervisor(site=site, say=lambda line: print(line, flush=True),
+        args.supervisor = guider.supervisor(site=site, say=lambda line: print(line, flush=True),
                                             dec_one_way=getattr(args, "dec_one_way", None))
     try:
         if getattr(args, "ladder_lengths", None):

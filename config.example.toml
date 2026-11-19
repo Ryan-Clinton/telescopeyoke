@@ -216,3 +216,7 @@ archive = ""
 # arcseconds a pixel. The guide camera is the Altair GPCAM (guidecam.py).
 # [guider]
 # focal_mm = 162
+# Guiding by PHD2 instead (phd2.py): its server on (Tools > Enable Server),
+# its camera and mount connected in PHD2, then
+# backend = "phd2"
+# phd2_address = "127.0.0.1:4400"

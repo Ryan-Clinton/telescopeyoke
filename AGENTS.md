@@ -54,6 +54,7 @@ them and every file kept under `demo/`.
 | `moved.py` | Whether the telescope really turned, judged from two pictures or two plate solves; raises `MOUNT_NOT_MOVING` |
 | `horizon.py`, `panorama.py` | The skyline from where the telescope stands: measured by the telescope, or taken from a phone panorama. Kept in `cache/horizon.json`; the planner keeps targets above it |
 | `direct.py` | The mount without its handset (Wi-Fi adapter or EQDIR lead): stands in for the handset so `mount.py` is unchanged |
+| `phd2.py` | `shoot.py --guide` through PHD2 (`[guider] backend = "phd2"`): asks it to guide, dither, stop around GoTos, and measures each frame's guiding from PHD2's own guide steps, answering as `guider.Supervisor` does. Built to PHD2's published protocol and tried against `simulator.PretendPhd2`, not yet PHD2 itself |
 | `alpaca.py` | The mount through its ASCOM driver over the network (Alpaca, `link = "alpaca"`): stands in for the handset the same way; `find` and `status` only read. Also another maker's camera, filter wheel and focuser (`backend = "alpaca"`), answering as `altair.py`, `sxwheel.py` and `focuser.py` do. Tried on ASCOM's simulator, no real device yet |
 | `camera.py`, `indi.py`, `altair.py`, `keeper.py`, `snap.py`, `liveview.py`, `focus.py` | Camera (through INDI, or Altair's own library; `keeper.py` holds the cooled camera open and cold all night for every command) and focusing |
 | `host.py` | Everything that differs between Linux and Windows, in one place |

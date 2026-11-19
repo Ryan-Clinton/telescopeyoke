@@ -20,6 +20,13 @@ proven is `docs/validation.md` ("Current conclusions").
   Starlight Xpress wheel and the project's focuser do, so filter
   changes, confirmed positions in each frame and the walk-in use them
   unchanged. Tried on ASCOM's simulator only.
+- **Guiding by PHD2** (`phd2.py`, `[guider] backend = "phd2"`): `shoot.py
+  --guide` asks PHD2 to guide (its own calibration and star), dithers by
+  it, stops it around each GoTo and guides again after, and gives each
+  frame the same GUIDED, GUIDERMS and GUIDEMAX from PHD2's guide steps. A
+  guided run never carries on unguided. Built to PHD2's published
+  protocol and tried against a pretend PHD2 (`simulator.PretendPhd2`),
+  not yet PHD2 itself.
 - **A camera through ASCOM Alpaca** (`[camera] backend = "alpaca"`):
   frames with the same header the Altair camera gives (exposure, gain,
   start time, Bayer pattern or mono, temperature, binning), binned for
