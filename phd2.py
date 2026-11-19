@@ -37,6 +37,16 @@ READOUT_S = 2.0            # a guide frame's download and pulses on top of its e
 GAP_FACTOR = 2.0           # a gap between guide steps longer than this many cycles is time unguided
 
 
+def unguided(times, start, end, cycle):
+    """Seconds of start..end with no guide step near enough: every stretch
+    between steps (and from the start to the first, and the last to the
+    end) longer than GAP_FACTOR cycles counts, less the one cycle a step
+    would cover. `cycle` is what the guider is set to, never read from the
+    gaps themselves, which a stalled stream would make long."""
+    marks = [start] + sorted(t for t in times if start <= t <= end) + [end]
+    return sum((b - a) - cycle for a, b in zip(marks, marks[1:]) if b - a > GAP_FACTOR * cycle)
+
+
 class Fault(Refusal):
     """PHD2 cannot guide as asked: guided imaging stops (a Refusal, as
     guider.Fault is, so shoot.py ends the guided run the same way)."""
@@ -319,8 +329,7 @@ class Supervisor:
         # counts, less the one cycle a step would cover. Never judged from
         # the gaps themselves, which a stalled PHD2 would make long.
         cycle = self.cycle
-        marks = [start] + [t for t, _ in steps if start <= t <= end] + [end]
-        lost = sum((b - a) - cycle for a, b in zip(marks, marks[1:]) if b - a > GAP_FACTOR * cycle)
+        lost = unguided([t for t, _ in steps], start, end, cycle)
         covered = max(0.0, (end - start) - lost)
         state = self.link.call("get_app_state")
         ok, why = True, ""

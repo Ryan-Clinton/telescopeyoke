@@ -9,12 +9,17 @@ a **record** says what happened on a dated night or test, and a
 is built). What is proven is decided in one place,
 [Validation](validation.md).
 
+## I already run an observatory
+
+| Page | Kind | What it is |
+|---|---|---|
+| [The companion](companion.md) | guide | For an observatory that already works (NINA, PHD2, ASCOM): what went wrong in a night and why, from the frames it saves, without touching it. |
+
 ## I have a SynScan mount and want to try it
 
 | Page | Kind | What is in it |
 |---|---|---|
 | [From box to first galaxy](first-night.md) | guide | A first night for someone who knows none of the words. Says which steps are proven on a real mount. |
-| [The companion](companion.md) | guide | For an observatory that already works (NINA, PHD2, ASCOM): what went wrong in a night and why, from the frames it saves, without touching it. |
 | [Setup](setup.md) | guide | Installing, the camera driver, the plate solver, what the computer needs; Windows. |
 | [Hardware](hardware.md) | reference | What it has run on, what to expect of yours, how to send a report, EQMOD and ASCOM, more than one telescope. |
 | [Mounts](mounts.md) | reference | Which mounts can be reached and how, in the order planned. |
@@ -68,7 +73,7 @@ is built). What is proven is decided in one place,
 | Page | Kind | What is in it |
 |---|---|---|
 | [Adding the 183M, filter wheel and corrector](mono-upgrade.md) | specification | The cooled mono train: what changed and why. |
-| [Autoguiding](autoguiding.md) | specification | Guiding through the guide camera's ST4 lead, with dithering. The ST4 lead works; star, calibration and loop are built but have not guided, and the camera does not yet deliver 2 s frames on its hub. |
+| [Autoguiding](autoguiding.md) | specification | Guiding through the guide camera's ST4 lead, with dithering, or by PHD2. Proven: 120 s guided subs (10 November 2026); longer subs not yet. PHD2: tried against a pretend PHD2 only. |
 | [The guide camera's dropped frames](guide-camera-fault.md) | record | Why the guide camera does not stream: what was measured, what is ruled out, what others found, what is left to try. |
 | [The main camera's lost-frame fault](camera-fault.md) | record | The 183C's fault from the first sign to the latest test. |
 | [The camera's row stripes](banding.md) | record | What others found, and what was measured here. |

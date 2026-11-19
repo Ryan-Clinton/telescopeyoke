@@ -56,6 +56,7 @@
     <a class="main" href="#try">Try the demo</a>
     <a href="https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.0/TelescopeYoke-v0.4.0.zip">Download 0.4.0</a>
     <a href="#hardware">Supported hardware</a>
+    <a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/companion.md">Already run an observatory? The companion</a>
     <a href="https://github.com/Ryan-Clinton/telescopeyoke">Source on GitHub</a>
   </div>
 </header>
@@ -135,7 +136,7 @@ cd TelescopeYoke-v0.4.0
   <tr class="wanted"><td>a mount with an EQStar or other EQMOD-style controller</td><td>none</td><td>any</td><td>Linux or Windows</td><td>wanted: whether it answers at all</td><td>could be you</td></tr>
 </table>
 </div>
-<p>EQ5, HEQ5 and EQ6 mounts with a SynScan handset speak the same serial protocol, so they are likely to work, but nobody has tried. On Linux the camera is read through INDI; on Windows, in the 0.4.0 release, only Altair cameras are supported. In development since 19 November 2026, and tried only on ASCOM's own simulator so far: a mount, camera, focuser and filter wheel through their ASCOM drivers (Alpaca), guiding by PHD2, and a <a href="companion.md">companion</a> that watches an observatory you already run, from the frames it saves and PHD2, without touching it.</p>
+<p>EQ5, HEQ5 and EQ6 mounts with a SynScan handset speak the same serial protocol, so they are likely to work, but nobody has tried. On Linux the camera is read through INDI; on Windows, in the 0.4.0 release, only Altair cameras are supported. In development since 19 November 2026, and tried only on ASCOM's own simulator so far: a mount, camera, focuser and filter wheel through their ASCOM drivers (Alpaca), guiding by PHD2, and a <a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/companion.md">companion</a> that watches an observatory you already run, from the frames it saves and PHD2, without touching it.</p>
 
 <div class="note">
   <b>Looking for testers.</b> If you have one of these mounts, a report from you is worth more than any new feature, and you do not have to let it move your mount. <code>./doctor.py --report</code> only looks at what is connected: it writes out what the handset says the mount is, its firmware, and what was found, with your location left out. Paste that into a

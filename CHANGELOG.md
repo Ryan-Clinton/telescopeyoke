@@ -12,7 +12,11 @@ proven is `docs/validation.md` ("Current conclusions").
   live or from its log, and says what spoiled frames (cloud, a brighter
   sky, soft or trailed stars, the sensor off target, the guide star lost)
   and where the night's time went, measured apart from inferred. It
-  sends nothing to any device.
+  sends nothing to any device. Frames with nothing to judge them
+  against are unassessable, never kept; a frame is guided only with
+  guide steps all through it (the same rule as the PHD2 guider); only
+  frames of one setup (night, target, filter, camera, gain, exposure,
+  scale) are compared; every file is accounted for.
 - **A mount through ASCOM Alpaca** (`alpaca.py`, `[mount] link = "alpaca"`):
   any mount with an ASCOM driver, on this computer or a Windows one on
   the network, through the same motion lock, limits and dry runs.

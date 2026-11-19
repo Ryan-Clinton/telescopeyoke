@@ -11,6 +11,7 @@ and the real centring, focusing and stacking code runs on it.*
 **[Home page](https://ryan-clinton.github.io/telescopeyoke/) ·
 [Download 0.4.0](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.0/TelescopeYoke-v0.4.0.zip) ·
 [Try the demo, no telescope needed](#quick-start) ·
+[Already run an observatory? The companion](docs/companion.md) ·
 [Set it up with Claude Code](#with-claude-code) ·
 [Results](docs/results.md) ·
 [What it has been tried on](docs/hardware.md) ·

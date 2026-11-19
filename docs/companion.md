@@ -39,7 +39,11 @@ the figures point that way, not that they prove it.
 
 ## Running it (Windows)
 
-Install TelescopeYoke as [Setup](setup.md) says for Windows (Python 3.11
+**The companion is not in the 0.4.0 download**: it was added on 19
+November 2026, after that release. Until a release has it, take the
+development version: on [the project's page](https://github.com/Ryan-Clinton/telescopeyoke),
+Code > Download ZIP (or `git clone https://github.com/Ryan-Clinton/telescopeyoke`),
+unpack it, and install as [Setup](setup.md) says for Windows (Python 3.11
 or newer, then `install.ps1`). No `config.toml` is needed for this. Then,
 in the TelescopeYoke folder:
 
@@ -61,9 +65,65 @@ frame and a NOTE only when something changes; or the morning after:
 python companion.py report "C:\path\to\tonights\frames" --phd2-log "C:\Users\NAME\Documents\PHD2\PHD2_GuideLog_DATE.txt"
 ```
 
-which measures the night's frames and says where the time went, target by
-target and filter by filter. `--json` gives the same as data. Frames can be
-FITS or XISF (uncompressed or zlib; LZ4 and zstd are not read yet).
+which measures the night's frames and says where the time went, setup by
+setup. `--json` gives the same as data.
+
+Point it at **one night's lights**. Frames are only compared with others of
+the same setup: the same night (noon to noon), target, filter, camera,
+gain, exposure and pixel scale, so a folder holding several nights or
+setups is split, never given one baseline. Frames can be FITS or XISF
+(uncompressed or zlib). **In NINA**: Options > Imaging > Image file type
+FITS, or XISF with compression none or zlib (LZ4 and Zstandard are not
+read yet; `check` says so file by file).
+
+## How to read a report
+
+For each setup it gives four figures, kept apart:
+
+- **measured**: the exposure time of every light frame it read;
+- **acceptable**: what is left once the frames spoiled by something it can
+  see are taken out, judged against that setup's own best frames that
+  night (not against any standard, and not the same as fit for science);
+- **unassessable**: frames it had nothing to judge against (fewer than
+  three frames of that setup with stars, a capped camera for instance):
+  never counted as good;
+- **no frames**: stretches with nothing saved, beyond the usual gap
+  between frames, **explained** when PHD2's log or a change of target or
+  setup shows why, **unexplained** otherwise.
+
+Every file found is accounted for: measured, or left out with why
+(calibration frames, stacks, an unreadable or unsupported file). With
+PHD2's log, a frame counts as guided only with guide steps all through it,
+by the same rule TelescopeYoke's own PHD2 guiding uses (one step in a
+five-minute frame is a guiding gap, not guiding).
+
+What it cannot see: frames the capture program rejected and never saved,
+and what the program did in a gap (focusing, a meridian flip, a download,
+a camera recovery). That needs the program's own log, which is not read yet.
+
+## A real report
+
+The owner's own night of 5 November 2026 (the 183M, five targets, no
+guiding then), read as if it were another observatory's, trimmed:
+
+```
+706 files: 693 light frames measured; 13 left out, no single-plane image (a stack or a colour picture).
+M33 L (183m, gain 1500, 16 s) 00:23-01:41: 57 min measured; 37 min acceptable by its own best frames (139 of 213 frames), FWHM 3.86 px
+    15 min (56 frames) dimmed: likely cloud or haze
+    5 min (18 frames) trailed: likely the mount's tracking or the wind (no guiding to compare)
+M33 G (183m, gain 1500, 16 s) 02:34-03:04: 27 min measured; 25 min acceptable by its own best frames (93 of 100 frames), FWHM 2.91 px
+M81-M82 L (183m, gain 1500, 16 s) 04:21-04:51: 32 min measured; 13 min acceptable by its own best frames (50 of 119 frames), FWHM 2.18 px
+    12 min (45 frames) dimmed: likely cloud or haze (the sky brighter too)
+    6 min (22 frames) soft: likely focus or seeing
+No frames 01:15-01:33 (18 min beyond the usual gap): not known: nothing it reads says (the capture program's own log would)
+No frames 04:03-04:21 (19 min beyond the usual gap): changed from M106 L to M81-M82 L (measured)
+Where the time went: no frames (explained) 44 min, dimmed 38 min, no frames (unexplained) 36 min, trailed 11 min, soft 6 min
+```
+
+That night's record agrees: five targets in one night gave 34 minutes of
+M33 in L and little colour (`docs/nights/2026-11-04/183m-first-night.md`).
+The 36 unexplained minutes are where the capture program's own log, which
+the companion does not yet read, would have to say.
 
 ## What has been tried
 

@@ -141,17 +141,17 @@ def measure(path):
     if Path(path).suffix.lower() == ".xisf":
         found = read_xisf(path)
         if found is None:
-            return None                  # a colour or multi-channel image: not a raw frame
+            return {"file": str(path), "skip": "a colour or multi-channel XISF: not a raw frame"}
         data, header = found
     else:
         with fits.open(path, memmap=False) as hdus:
             hdu = next((h for h in hdus if getattr(h, "data", None) is not None and h.data.ndim == 2), None)
             if hdu is None:
-                return None              # a stack or a colour picture: not a raw frame
+                return {"file": str(path), "skip": "no single-plane image (a stack or a colour picture)"}
             data, header = hdu.data, hdu.header
     kind = str(header.get("IMAGETYP") or header.get("FRAME") or "light").strip().lower()
     if "light" not in kind:
-        return None                      # a dark, flat or bias: the night's calibration, not its sky
+        return {"file": str(path), "skip": f"a calibration frame ({kind})"}
     start = _when(header)
     exposure = _number(header, "EXPTIME", "EXPOSURE")
     # The 2x2 sum: a colour mosaic's colour cells, a mono frame's blocks, as the project's own frames.
@@ -185,10 +185,16 @@ class GuideLog:
     in the computer's own local time, which is how they are read."""
 
     def __init__(self, paths):
-        self.steps, self.dithers, self.sessions, self.scale = [], [], [], None
+        self.steps, self.dithers, self.sessions, self.scale, self.exposure = [], [], [], None, None
         for path in paths:
             self._read(Path(path))
         self.steps.sort()
+        # The guide cycle: PHD2's own exposure (its log says it) and a
+        # readout; only without it, the night's usual spacing of steps.
+        import phd2
+        spacing = [b[0] - a[0] for a, b in zip(self.steps, self.steps[1:]) if 0 < b[0] - a[0] < 60]
+        self.cycle = (self.exposure + phd2.READOUT_S if self.exposure else
+                      statistics.median(spacing) if spacing else 3.0)
 
     def _read(self, path):
         begun, columns = None, None
@@ -207,6 +213,9 @@ class GuideLog:
             found = re.search(r"Pixel scale = ([\d.]+) arc-sec/px", line)
             if found:
                 self.scale = float(found.group(1))
+            found = re.search(r"Exposure = (\d+) ?ms", line)
+            if found:
+                self.exposure = int(found.group(1)) / 1000
             if line.startswith("Frame,Time,"):
                 columns = next(csv.reader([line]))
                 continue
@@ -229,7 +238,7 @@ class GuideLog:
 
     def during(self, start, end):
         return _judge([s for s in self.steps if start <= s[0] <= end], self.scale,
-                      any(a <= start and (b is None or b >= end) for a, b in self.sessions))
+                      any(a <= start and (b is None or b >= end) for a, b in self.sessions), start, end, self.cycle)
 
     def events_between(self, start, end):
         lost = sum(1 for t, d in self.steps if start <= t <= end and d is None)
@@ -251,13 +260,17 @@ class GuideLive:
             self.scale = float(self.link.call("get_pixel_scale") or 0) or None
         except Exception:      # noqa: BLE001 - a scale it will not give leaves pixels
             self.scale = None
+        try:
+            self.cycle = float(self.link.call("get_exposure")) / 1000 + phd2.READOUT_S
+        except Exception:      # noqa: BLE001 - PHD2's usual 2 s and a readout
+            self.cycle = 2.0 + phd2.READOUT_S
 
     def during(self, start, end):
         rows = self.link.steps(start, end)
         steps = [(e.get("Timestamp", e["_seen"]),
                   None if e["Event"] == "StarLost" else math.hypot(e.get("RADistanceRaw", 0), e.get("DECDistanceRaw", 0)))
                  for e in rows]
-        return _judge(steps, self.scale, bool(steps))
+        return _judge(steps, self.scale, bool(steps), start, end, self.cycle)
 
     def events_between(self, start, end):
         rows = self.link.steps(start, end)
@@ -265,23 +278,45 @@ class GuideLive:
                 "guiding_started": [], "guiding_ended": []}
 
 
-def _judge(steps, scale, on):
-    good = [d for _, d in steps if d is not None]
-    errors = [d * (scale or 1.0) for d in good]
-    return {"guided": on and bool(good), "steps": len(steps), "star_lost": len(steps) - len(good),
+def _judge(steps, scale, on, start, end, cycle):
+    """How guiding went in one frame, by the same rule as the PHD2 guider
+    (phd2.unguided): guided only with guide steps all through it, not one
+    step in a long exposure."""
+    import phd2
+    good = [(t, d) for t, d in steps if d is not None]
+    errors = [d * (scale or 1.0) for _, d in good]
+    lost = phd2.unguided([t for t, _ in good], start, end, cycle)
+    guided = on and bool(good) and lost <= 0.5 * cycle
+    return {"guided": guided, "steps": len(steps), "star_lost": len(steps) - len(good),
+            "unguided_s": round(lost, 1), "coverage": round(max(0.0, 1 - lost / (end - start)), 3) if end > start else None,
             "rms": round(math.sqrt(sum(e * e for e in errors) / len(errors)), 2) if errors else None,
             "max": round(max(errors), 2) if errors else None, "unit": "arcsec" if scale else "px"}
 
 
 # ---------------------------------------------------------------- judging
 
+MIN_COMPARED = 3      # fewer frames with stars than this in a setup: nothing to judge them against
+
+
+def setup(row):
+    """What frames must share to be judged against each other: the night
+    (from noon to noon, local), target, filter, camera, gain, exposure and
+    pixel scale. A folder holding several nights or setups is split, never
+    given one baseline."""
+    night = dt.datetime.fromtimestamp(row["start"] - 12 * 3600).date().isoformat() if row.get("start") else "?"
+    return (night, row.get("object", "?"), row.get("filter", "?"), row.get("camera") or "", row.get("gain"),
+            row.get("exposure"), round(row["scale"], 2) if row.get("scale") else None)
+
+
 def references(rows):
-    """For each target and filter, its best frames' figures: the sharper
-    half of those with stars, so a spoiled stretch cannot set the bar."""
+    """For each setup, its best frames' figures: the brighter half of those
+    with stars, then the sharper half of those, so a spoiled stretch cannot
+    set the bar. A setup with fewer than MIN_COMPARED frames with stars has
+    none: its frames are unassessable, never taken as good."""
     out = {}
-    for key in {(r["object"], r["filter"]) for r in rows}:
-        mine = [r for r in rows if (r["object"], r["filter"]) == key and r.get("fwhm_px") and r.get("stars")]
-        if not mine:
+    for key in {setup(r) for r in rows}:
+        mine = [r for r in rows if setup(r) == key and r.get("fwhm_px") and r.get("stars")]
+        if len(mine) < MIN_COMPARED:
             continue
         # The brighter half first (thin cloud shrinks stars as it dims them,
         # so the sharpest alone could be the cloudiest), then the sharper half of those.
@@ -299,14 +334,17 @@ def references(rows):
     return out
 
 
+UNASSESSABLE = "unassessable"
+
+
 def judge(row, ref):
     """What spoiled a frame, if anything: [(cause, measured, inferred)],
     empty for a good frame. `measured` is what the figures show; `inferred`
-    the likeliest reason, which they do not prove."""
-    if row.get("error"):
-        return [("unreadable", row["error"], "")]
+    the likeliest reason, which they do not prove. With nothing to judge it
+    against (no reference for its setup) it is UNASSESSABLE, never good."""
     if not ref:
-        return []
+        return [(UNASSESSABLE, "fewer than three frames with stars in its setup (night, target, filter, camera, "
+                               "gain, exposure, scale): nothing to judge it against", "")]
     found = []
     guide = row.get("guide") or {}
     if not row.get("stars") or row["stars"] < DIM * ref["stars"] or (row.get("flux") or 0) < DIM * ref["flux"]:
@@ -338,6 +376,8 @@ def judge(row, ref):
                       "still cooling, or the cooler at its limit"))
     if guide.get("star_lost"):
         found.append(("guide star lost", f"PHD2 lost its star {guide['star_lost']} time(s) during it", ""))
+    if guide and guide.get("unguided_s", 0) > 0 and not guide.get("guided"):
+        found.append(("guiding gap", f"{guide['unguided_s']:.0f} s of it with no guide step", ""))
     return found
 
 
@@ -355,6 +395,8 @@ def gaps(rows, guide=None):
         why = []
         if (a["object"], a["filter"]) != (b["object"], b["filter"]):
             why.append(f"changed from {a['object']} {a['filter']} to {b['object']} {b['filter']} (measured)")
+        elif setup(a) != setup(b):
+            why.append("the camera's settings changed (measured)")
         if guide:
             seen = guide.events_between(a["end"], b["start"])
             if seen["star_lost"]:
@@ -378,31 +420,40 @@ def _clock(t):
     return dt.datetime.fromtimestamp(t).strftime("%H:%M") if t else "?"
 
 
-def gather(folder, guide=None, say=None):
-    rows = []
-    for path in frames(folder):
-        try:
-            row = measure(path)
-        except Exception as problem:      # noqa: BLE001 - one bad file is said, not the end of the night
-            row = {"file": str(path), "error": f"{problem.__class__.__name__}: {problem}", "object": "unreadable",
-                   "filter": "-"}
-        if row is None:
+def read_one(path):
+    """measure(), with what cannot be read said rather than raised."""
+    try:
+        return measure(path)
+    except Exception as problem:          # noqa: BLE001 - one bad file is said, not the end of the night
+        return {"file": str(path), "skip": f"not readable: {problem}", "unreadable": True}
+
+
+def gather(folder, guide=None, say=None, paths=None):
+    """(frames measured, files left out with why): every file found is one
+    or the other."""
+    rows, left = [], []
+    for path in paths if paths is not None else frames(folder):
+        row = read_one(path)
+        if "skip" in row:
+            left.append(row)
             continue
         if guide and row.get("start") and row.get("end"):
             row["guide"] = guide.during(row["start"], row["end"])
         rows.append(row)
         if say:
             say(f"  measured {Path(row['file']).name}")
-    return rows
+    return rows, left
 
 
-def report(rows, guide=None):
-    """The night in words and data: per target and filter, and the gaps."""
+def report(rows, guide=None, left=()):
+    """The night in words and data: per setup, the gaps, and every file
+    left out with why."""
     refs = references(rows)
     parts, lost = {}, {}
     for row in rows:
-        key = (row.get("object", "?"), row.get("filter", "?"))
+        key = setup(row)
         part = parts.setdefault(key, {"frames": 0, "kept": 0, "seconds": 0.0, "kept_seconds": 0.0, "causes": {},
+                                      "unassessable": 0, "unassessable_seconds": 0.0,
                                       "fwhm": [], "guide_rms": [], "first": None, "last": None})
         causes = judge(row, refs.get(key))
         row["causes"] = [{"cause": c, "measured": m, "inferred": i} for c, m, i in causes]
@@ -417,6 +468,9 @@ def report(rows, guide=None):
             part["kept_seconds"] += seconds
             if row.get("fwhm_arcsec") or row.get("fwhm_px"):
                 part["fwhm"].append(row.get("fwhm_arcsec") or row["fwhm_px"])
+        elif causes[0][0] == UNASSESSABLE:
+            part["unassessable"] += 1
+            part["unassessable_seconds"] += seconds
         else:
             main = causes[0]
             part["causes"].setdefault(main[0], {"frames": 0, "seconds": 0.0, "inferred": main[2]})
@@ -426,21 +480,36 @@ def report(rows, guide=None):
         if (row.get("guide") or {}).get("rms") is not None:
             part["guide_rms"].append(row["guide"]["rms"])
     holes = gaps(rows, guide)
-    for _, _, minutes, _ in holes:
-        lost["no frames"] = lost.get("no frames", 0.0) + minutes * 60
+    for _, _, minutes, why in holes:
+        known = not why[0].startswith("not known")
+        name = "no frames (explained)" if known else "no frames (unexplained)"
+        lost[name] = lost.get(name, 0.0) + minutes * 60
     arcsec = any(r.get("fwhm_arcsec") for r in rows)
-    return {"frames": len(rows), "parts": parts, "gaps": holes, "lost": lost, "fwhm_unit": "arcsec" if arcsec else "px",
-            "rows": rows}
+    reasons = {}
+    for row in left:
+        reason = row["skip"].split(":")[0] if row.get("unreadable") else row["skip"]
+        reasons[reason] = reasons.get(reason, 0) + 1
+    return {"frames": len(rows), "files": len(rows) + len(left), "left_out": reasons, "parts": parts, "gaps": holes,
+            "lost": lost, "fwhm_unit": "arcsec" if arcsec else "px", "rows": rows}
 
 
 def words(night):
-    lines = [f"{night['frames']} frames."]
-    for (target, band), p in sorted(night["parts"].items(), key=lambda kv: kv[1]["first"] or 0):
-        kept = f"{p['kept_seconds'] / 60:.0f} of {p['seconds'] / 60:.0f} min kept ({p['kept']} of {p['frames']} frames)"
+    lines = [f"{night['files']} files: {night['frames']} light frames measured"
+             + "".join(f"; {n} left out, {why}" for why, n in sorted(night["left_out"].items())) + "."]
+    several = len({k[0] for k in night["parts"]}) > 1
+    for key, p in sorted(night["parts"].items(), key=lambda kv: kv[1]["first"] or 0):
+        when, target, band, camera, gain, exposure, _ = key
+        kit = ", ".join(x for x in (camera, f"gain {gain:g}" if gain is not None else "",
+                                    f"{exposure:g} s" if exposure else "") if x)
+        kept = (f"{p['seconds'] / 60:.0f} min measured; {p['kept_seconds'] / 60:.0f} min acceptable by its own best "
+                f"frames ({p['kept']} of {p['frames']} frames)")
+        if p["unassessable"]:
+            kept += f"; {p['unassessable_seconds'] / 60:.0f} min ({p['unassessable']} frames) unassessable"
         sharp = f", FWHM {statistics.median(p['fwhm']):.2f}{'″' if night['fwhm_unit'] == 'arcsec' else ' px'}" \
             if p["fwhm"] else ""
         guided = f", guide RMS {statistics.median(p['guide_rms']):.2f}" if p["guide_rms"] else ""
-        lines.append(f"{target} {band} ({_clock(p['first'])}-{_clock(p['last'])}): {kept}{sharp}{guided}")
+        lines.append(f"{(when + ' ') if several else ''}{target} {band}{f' ({kit})' if kit else ''} "
+                     f"{_clock(p['first'])}-{_clock(p['last'])}: {kept}{sharp}{guided}")
         for cause, c in sorted(p["causes"].items(), key=lambda kv: -kv[1]["seconds"]):
             lines.append(f"    {c['seconds'] / 60:.0f} min ({c['frames']} frames) {cause}"
                          + (f": likely {c['inferred']}" if c["inferred"] else ""))
@@ -449,8 +518,10 @@ def words(night):
     if night["lost"]:
         worst = sorted(night["lost"].items(), key=lambda kv: -kv[1])
         lines.append("Where the time went: " + ", ".join(f"{cause} {seconds / 60:.0f} min" for cause, seconds in worst))
-    lines.append("Measured: star counts, sharpness, shape, sky level, temperatures, guide steps. 'Likely' is "
-                 "inferred from them, not proven.")
+    lines.append("Measured: star counts, sharpness, shape, sky level, temperatures, guide steps. 'Acceptable' is "
+                 "judged against the same setup's best frames that night, not a standard; 'likely' is inferred, not "
+                 "proven. Frames the capture program never saved, and what it did in a gap (focusing, a meridian "
+                 "flip, a download), are not seen here.")
     return "\n".join(lines)
 
 
@@ -483,19 +554,16 @@ def watch(folder, guide=None, say=print, poll=5.0, sleep=time.sleep, once=False)
                 sizes[path] = size
                 continue
             seen.add(path)
-            try:
-                row = measure(path)
-            except Exception as problem:  # noqa: BLE001 - a file it cannot read is said and passed by
-                say(f"  could not read {path.name}: {problem}")
-                continue
-            if row is None:
+            row = read_one(path)
+            if "skip" in row:
+                say(f"  {path.name} left out: {row['skip']}")
                 continue
             if guide and row.get("start") and row.get("end"):
                 row["guide"] = guide.during(row["start"], row["end"])
             rows.append(row)
             record([row], name)
             last_new = time.time()
-            causes = judge(row, references(rows).get((row.get("object"), row.get("filter"))))
+            causes = [c for c in judge(row, references(rows).get(setup(row))) if c[0] != UNASSESSABLE]
             sharp = f"FWHM {row['fwhm_arcsec']:.2f}″" if row.get("fwhm_arcsec") else \
                 f"FWHM {row['fwhm_px']:.2f} px" if row.get("fwhm_px") else "no stars"
             guided = f", guide RMS {row['guide']['rms']}" if (row.get("guide") or {}).get("rms") is not None else ""
@@ -539,8 +607,14 @@ def main(argv=None):
         return
     if args.command == "check":
         found = frames(args.folder)
-        print(f"{len(found)} frames under {args.folder}")
-        row = next((r for r in map(measure, found[:20]) if r), None)
+        rows, left = gather(args.folder, paths=found[:20])
+        print(f"{len(found)} files under {args.folder}; of the first {min(20, len(found))}: {len(rows)} light frames "
+              f"it can measure, {len(left)} left out")
+        for item in left[:5]:
+            print(f"  {Path(item['file']).name}: {item['skip']}")
+        if any("compression" in item["skip"] for item in left):
+            print("  For NINA: Options > Imaging > Image file type FITS, or XISF with no compression or zlib.")
+        row = rows[0] if rows else None
         if row:
             print("the first, as read:", {k: row.get(k) for k in ("object", "filter", "exposure", "gain", "sensor_c",
                                                                   "target_c", "focuser", "focuser_c", "scale", "stars")})
@@ -551,7 +625,8 @@ def main(argv=None):
             print(f"PHD2 log: {len(guide.steps)} guide steps, {len(guide.sessions)} guiding stretches, "
                   f"pixel scale {guide.scale or 'not given'}")
         return
-    night = report(gather(args.folder, guide, say=lambda line: print(line, file=sys.stderr)), guide)
+    rows, left = gather(args.folder, guide, say=lambda line: print(line, file=sys.stderr))
+    night = report(rows, guide, left)
     if args.json:
         print(json.dumps({k: v for k, v in night.items() if k != "parts"}
                          | {"parts": {f"{t} {f}": p for (t, f), p in night["parts"].items()}}, default=str, indent=1))
