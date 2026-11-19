@@ -98,10 +98,11 @@ class Driver:
         n = self.lib.Altaircam_EnumV2(found)
         return [(d.model.contents.name.decode(), d.id) for d in found[:n]]
 
-    def open(self, ident, size=None, raw=False):
+    def open(self, ident, size=None, raw=False, roi=None):
         """Open and start the stream. `size` is the library's resolution
         index (0 is the full 1280 x 960); `raw` takes the sensor's data
-        without the library's conversion. Both can only be set before the
+        without the library's conversion; `roi` (width, height) reads only
+        that window from the middle of the full-size sensor. All three are set before the
         stream starts, so a start or a setting the library refuses is a
         refusal here, with its code."""
         handle = self.lib.Altaircam_Open(ident)
@@ -116,6 +117,14 @@ class Driver:
         if raw:
             self.lib.Altaircam_put_Option.argtypes = [ctypes.c_void_p, ctypes.c_uint, ctypes.c_int]
             self._checked(handle, "raw mode", self.lib.Altaircam_put_Option(handle, 0x04, 1))
+        if roi:
+            # 19 November 2026: full size lost nearly every frame in every mode,
+            # at every exposure and USB speed, straight into the laptop, while
+            # binned kept every one. A window keeps full resolution with less to send.
+            w, h = (v // 2 * 2 for v in roi)              # the library wants even numbers
+            self.lib.Altaircam_put_Roi.argtypes = [ctypes.c_void_p] + [ctypes.c_uint] * 4
+            self._checked(handle, f"a {w} x {h} window",
+                          self.lib.Altaircam_put_Roi(handle, (1280 - w) // 4 * 2, (960 - h) // 4 * 2, w, h))
         width, height = ctypes.c_int(), ctypes.c_int()
         self.lib.Altaircam_get_Size(handle, ctypes.byref(width), ctypes.byref(height))
         self.buffer = ctypes.create_string_buffer(width.value * height.value * 3)
@@ -223,7 +232,7 @@ class GuideCamera:
     let go."""
 
     def __init__(self, driver=None, clock=time.monotonic, sleep=time.sleep, role="use", run=None, size=None, raw=False,
-                 speed=None):
+                 speed=None, roi=None):
         import guider
         # The guide camera's lock, taken before it is opened and let go only
         # after it is closed: no two commands ever use it, or its ST4 port, at once.
@@ -234,7 +243,7 @@ class GuideCamera:
             found = [c for c in self.driver.cameras() if c[0] == MODEL]
             if not found:
                 refuse(f"No guide camera ({MODEL}, USB {USB_ID}) found. Is it plugged in?")
-            opened = {k: v for k, v in (("size", size), ("raw", raw)) if v}
+            opened = {k: v for k, v in (("size", size), ("raw", raw), ("roi", roi)) if v is not None and v is not False}
             self.handle, self.size = self.driver.open(found[0][1], **opened)
             if speed is not None:
                 self.driver.speed(self.handle, speed)
@@ -347,7 +356,7 @@ def probe(cam, exposures, trigger=False, speed=None, window=12.0, say=print):
             pass
         began = cam.clock()
         seen = len(events) if events is not None else 0
-        arrivals, levels = [], []
+        arrivals, levels, shapes = [], [], set()
         if trigger:
             say(f"  trigger: {d.trigger(h)}")
         while cam.clock() - began < window:
@@ -355,6 +364,7 @@ def probe(cam, exposures, trigger=False, speed=None, window=12.0, say=print):
             if got:
                 arrivals.append(cam.clock() - began)
                 levels.append(np.frombuffer(got[2], np.uint8).mean())
+                shapes.add(f"{got[0]} x {got[1]}")     # what really came, a window included
                 if trigger:
                     d.trigger(h)
             else:
@@ -363,7 +373,8 @@ def probe(cam, exposures, trigger=False, speed=None, window=12.0, say=print):
         say(f"{seconds:g} s: {len(arrivals)} frames in {window:g} s"
             + (f", at {', '.join(f'{a:.2f}' for a in arrivals[:8])} s; gaps up to {gaps.max():.2f} s, "
                f"{int((gaps[1:] > 2 * seconds).sum())} over {2 * seconds:g} s; "
-               f"levels {', '.join(f'{v:.1f}' for v in levels[:8])}" if arrivals else ""))
+               f"levels {', '.join(f'{v:.1f}' for v in levels[:8])}; frames {', '.join(sorted(shapes))}"
+               if arrivals else ""))
         if events is not None:
             say_events(events[seen:], began, say)
 
@@ -771,6 +782,7 @@ def main(argv=None):
     q.add_argument("--window", type=float, default=12.0, help="seconds to count frames at each exposure")
     q.add_argument("--size", type=int, help="the library's resolution index (0 is 1280 x 960; higher is smaller)")
     q.add_argument("--raw", action="store_true", help="the sensor's raw data, not the library's converted frames")
+    q.add_argument("--roi", help="WIDTHxHEIGHT: only that window from the middle, at full resolution (with --size 0)")
     k = sub.add_parser("wheeltest", help="the guide camera and the filter wheel together: frames while the wheel turns")
     k.add_argument("--minutes", type=float, default=10.0, help="how long (default 10)")
     k.add_argument("--every", type=float, default=15.0, help="seconds between turns of the wheel")
@@ -842,7 +854,8 @@ def main(argv=None):
                 ok = wheel_test(cam, wheel, args.minutes, every=args.every)
             sys.exit(0 if ok else 1)
         if args.action == "probe":
-            with GuideCamera(role="probe", size=args.size, raw=args.raw) as cam:
+            roi = tuple(int(v) for v in args.roi.lower().split("x")) if args.roi else None
+            with GuideCamera(role="probe", size=args.size, raw=args.raw, roi=roi) as cam:
                 probe(cam, [float(e) for e in args.exposures.split(",")], args.trigger, args.speed, args.window)
             return
         if args.action == "pulse" and args.dry_run:
