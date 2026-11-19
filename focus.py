@@ -1295,7 +1295,16 @@ def focus_motor(motor, read, usual, say=progress, coarse=64, step=32, points=7, 
         say(f"  no curve fitted ({fit['reason']})" + (", moving the sweep" if fit["reason"] == "edge" else ""))
         if fit["reason"] != "edge":
             break
-        centre += fit["toward"] * (points // 2) * step
+        # Centred on where the fit put focus (or the sharpest reading), not
+        # moved a half-sweep: 19 November 2026, focus at about +40 sat
+        # between a sweep round 0 and one round +96, and the sweeps went
+        # back and forth between them three times.
+        lowest = min((p for p in points_ if p["hfr"] is not None), key=lambda p: p["hfr"], default=None)
+        aim = fit["focus"] if fit["focus"] is not None else lowest["at"] if lowest else None
+        if aim is None or abs(round(aim) - centre) < step // 2:
+            centre += fit["toward"] * step
+        else:
+            centre = round(aim)
     target = round(fit["focus"]) if fit and fit["ok"] else best_at
     if way == 0:
         way = 1 if target > start_at else -1 if target < start_at else 0
