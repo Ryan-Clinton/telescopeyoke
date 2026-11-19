@@ -237,7 +237,9 @@ def draw_calibration(cal, out):
             pulse = cal["step_ms"]["ra" if leg in ("west", "east") else "dec"] / 1000
             before = looks[i - 1] if i else looks[0]
             went = math.hypot(part[-1]["x"] - before["x"], part[-1]["y"] - before["y"]) * scale
-            due = len(part) * pulse * cal["rate"]
+            # RA's pulses move the star by the rate times cos(Dec) on the sky
+            due = len(part) * pulse * cal["rate"] * (math.cos(math.radians(cal["dec"]))
+                                                     if leg in ("west", "east") else 1)
             rows.append((leg, colour, f"{leg}: {len(part)} steps of {pulse:.1f} s, moved {went:.0f}\", "
                                       f"pulses due {due:.0f}\" ({went / due:.0%})" if due else leg))
         i += len(part)
