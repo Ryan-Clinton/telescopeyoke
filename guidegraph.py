@@ -244,7 +244,7 @@ def draw_calibration(cal, out):
                                       f"pulses due {due:.0f}\" ({went / due:.0%})" if due else leg))
         i += len(part)
     when = datetime.fromisoformat(cal["made"]).astimezone()
-    d.text((left, 15), f"Guide calibration {when:%d %b %Y %H:%M}, Dec {cal['dec']:+.1f}, "
+    d.text((left, 15), f"{cal.get('kind', 'Guide calibration')} {when:%d %b %Y %H:%M}, Dec {cal['dec']:+.1f}, "
                        f"{'west' if cal['west'] else 'east'} of the pier, {cal['scale']:.2f}\"/px", font=big,
            fill=(230, 230, 235))
     d.text((left, 44), "how far the guide star has moved from its start, look by look; each leg's own colour",
@@ -271,7 +271,7 @@ def calibration_graph(args):
         sys.exit("the last calibration measured fewer than two places: nothing to draw")
     out, rows = draw_calibration(cal, args.out if args.out != str(OUT) else CAL_OUT)
     when = datetime.fromisoformat(cal["made"]).astimezone()
-    words = (f"Guide calibration {when:%d %b %H:%M}, Dec {cal['dec']:+.1f}: "
+    words = (f"{cal.get('kind', 'Guide calibration')} {when:%d %b %H:%M}, Dec {cal['dec']:+.1f}: "
              + "; ".join(r[2] for r in rows if r[0] in ("north", "south"))[:600]
              + f". Outcome: {cal['outcome'][:200]}")
     print(f"{out}: {words}")

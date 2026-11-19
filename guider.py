@@ -435,7 +435,7 @@ def calibrate(cam, seconds, dec, west, gain=None, say=print, rate=GUIDE_RATE, ti
     looks, outcome = [], "failed"
     try:
         cal = _calibrate(cam, seconds, dec, west, gain, say, rate, tick, looks)
-        outcome = "kept"
+        outcome = "kept" if cal.get("dec_guided", True) else f"kept for RA only: {cal.get('dec_fault')}"
         return cal
     except Fault as problem:
         outcome = str(problem)
@@ -450,6 +450,83 @@ def calibrate(cam, seconds, dec, west, gain=None, say=print, rate=GUIDE_RATE, ti
                 "outcome": outcome, "looks": looks}, indent=1), encoding="utf-8")
         except OSError:
             pass
+
+
+DEC_TEST_STEPS = 80     # north steps, then south, of the Dec test: 2 minutes of pulses each way at 1.5 s
+
+
+def dec_test(cam, seconds, dec, west, gain=None, steps=DEC_TEST_STEPS, rate=GUIDE_RATE, say=print, tick=None):
+    """Whether the Dec slack ever ends: north in calibration's steps, `steps`
+    of them, the star measured after each, then south the same, nothing
+    judged and nothing kept as a calibration. The track goes to
+    CAL_STEPS_FILE as a calibration's does (guidegraph.py --calibration
+    draws it): flat then a steady climb is slack, and how long it stays
+    flat is how big; jumps and stalls are sticking; flat throughout is a
+    drive that does not drive (19 November 2026: calibration's 15 steps
+    after the slack moved the star 0.3 px, the Dec motor turning at the
+    guide rate). Returns the track."""
+    motion_check()
+    _, dec_step = step_seconds(dec, rate)
+    star = first_star(cam, seconds, gain, say, tick=tick)
+    looks = []
+    c = Calibrator(cam, seconds, gain, say, tick, looks=looks)
+    c.where = (star.x, star.y)
+    c.still_drift()
+    say(f"Dec test at Dec {dec:+.1f}: {steps} north steps of {dec_step:.2f} s, then {steps} south, the star "
+        "measured after each")
+    outcome = "stopped"
+    try:
+        start = c.look()
+        for direction in ("north", "south"):
+            leg_start = c.last
+            for k in range(1, steps + 1):
+                here = c.step(direction, dec_step)
+                if k % 10 == 0:
+                    moved = math.hypot(here[0] - leg_start[0], here[1] - leg_start[1]) * SCALE
+                    due = k * dec_step * rate
+                    say(f"  {direction} {k} steps ({k * dec_step:.0f} s): star moved {moved:.0f}\" of {due:.0f}\" due")
+        end = c.last
+        outcome = (f"Dec test, {steps} steps each way: the star ended "
+                   f"{math.hypot(end[0] - start[0], end[1] - start[1]) * SCALE:.0f}\" from its start")
+    finally:
+        try:
+            CAL_STEPS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            CAL_STEPS_FILE.write_text(json.dumps({
+                "kind": "Dec test", "made": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "dec": dec, "west": west, "scale": SCALE, "rate": rate,
+                "step_ms": {"ra": 0, "dec": round(dec_step * 1000)}, "outcome": outcome, "looks": looks},
+                indent=1), encoding="utf-8")
+        except OSError:
+            pass
+    say(outcome)
+    return looks
+
+
+def ra_only(columns, steps, ra_step, dec_step, dec, west, rate, why, say=print):
+    """A calibration that guides RA alone: RA's measured columns, and for Dec
+    a direction at right angles to RA at the nominal rate, only so the star's
+    error can be split into its RA part. "dec_guided" false: the controller
+    sends Dec no pulses (Controller.pulses), and verify() checks RA alone."""
+    west_col = np.asarray(columns["west"], float)
+    unit = west_col / max(float(np.hypot(*west_col)), 1e-9)
+    north = np.array([-unit[1], unit[0]]) * rate / SCALE
+    columns = dict(columns, north=north, south=-north)
+    ra_rate = float(np.hypot(*west_col)) * SCALE / max(math.cos(math.radians(dec)), 0.05)
+    cal = {
+        "made": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        **light_path(), "scale": SCALE, "dec": dec, "west": west,
+        "columns": {k: [float(v[0]), float(v[1])] for k, v in columns.items()},
+        "steps": steps, "step_ms": {"ra": round(ra_step * 1000), "dec": round(dec_step * 1000)},
+        "angle_deg": round(math.degrees(math.atan2(west_col[1], west_col[0])), 1), "axes_apart_deg": None,
+        "ra_rate": round(ra_rate, 2), "dec_rate": None, "backlash_s": 0.0, "backlash_spread_s": 0.0,
+        "dec_after_flip": None, "dec_guided": False, "dec_fault": why,
+        "notes": [f"Dec does not follow guide pulses ({why}): RA guided alone, Dec sent no pulses"],
+        "usable": True, "first_night_pass": False,
+    }
+    say(f"  Dec did not follow: {why}")
+    say(f"  kept RA alone (guide rate {ra_rate:.1f}\"/s): RA will be guided, Dec sent no pulses and left to drift")
+    keep_calibration(cal)
+    return cal
 
 
 def _calibrate(cam, seconds, dec, west, gain, say, rate, tick, looks):
@@ -479,18 +556,25 @@ def _calibrate(cam, seconds, dec, west, gain, say, rate, tick, looks):
     say(f"  east: {steps['west']} steps back, {np.hypot(*columns['east']):.2f} px/s")
 
     # The Dec slack: north until the star starts to move.
-    start = c.look()
-    for n in range(CAL_SLACK_STEPS):
-        here = c.step("north", dec_step)
-        if math.hypot(here[0] - start[0], here[1] - start[1]) >= SLACK_MOVED:
-            break
-    else:
-        raise Fault(f"{CAL_SLACK_STEPS} north steps of {dec_step:.2f} s did not move the star: "
-                    "Dec slack longer than that, or the ST4 north line is not working.")
-    say(f"  Dec slack taken up after {n + 1} north steps")
-    north_points = c.leg("north", dec_step)
-    steps["north"] = len(north_points) - 1
-    _enough("north", north_points, steps["north"])
+    try:
+        start = c.look()
+        for n in range(CAL_SLACK_STEPS):
+            here = c.step("north", dec_step)
+            if math.hypot(here[0] - start[0], here[1] - start[1]) >= SLACK_MOVED:
+                break
+        else:
+            raise Fault(f"{CAL_SLACK_STEPS} north steps of {dec_step:.2f} s did not move the star: "
+                        "Dec slack longer than that, or the ST4 north line is not working.")
+        say(f"  Dec slack taken up after {n + 1} north steps")
+        north_points = c.leg("north", dec_step)
+        steps["north"] = len(north_points) - 1
+        _enough("north", north_points, steps["north"])
+    except Fault as problem:
+        # RA measured well and Dec did not follow: keep RA and guide it alone,
+        # Dec sent no pulses at all, never pulses from a rate that is noise
+        # (19 November 2026: the person, "it is what it is"; the Dec motor
+        # turned at the guide rate and the tube did not follow).
+        return ra_only(columns, steps, ra_step, dec_step, dec, west, rate, str(problem), say)
     columns["north"] = _rate(north_points, dec_step)
     north_strength = float(np.hypot(*columns["north"]))
     say(f"  north: {steps['north']} steps, {north_strength:.2f} px/s")
@@ -611,7 +695,9 @@ def verify(cam, seconds, cal, cols, west, gain=None, say=print, tick=None):
     c.where = (star.x, star.y)
     c.still_drift()             # the kept columns are without drift; so must the check be
     results = {}
-    for direction, step in (("west", ra_step), ("north", dec_step)):
+    # A calibration that kept RA alone checks RA alone: Dec is never pulsed.
+    checked = (("west", ra_step), ("north", dec_step)) if cal.get("dec_guided", True) else (("west", ra_step),)
+    for direction, step in checked:
         start = c.look()
         if direction == "north":                    # the slack first, as in calibration
             for _ in range(CAL_SLACK_STEPS):
@@ -672,9 +758,10 @@ class Controller:
     switch, the Dec slack partly taken up on a reversal and adjusted by
     what follows, and the limits that make a fault."""
 
-    def __init__(self, cols, backlash=0.0, spread=0.0, exposure=2.0, one_way=None, stuck_s=None):
+    def __init__(self, cols, backlash=0.0, spread=0.0, exposure=2.0, one_way=None, stuck_s=None, dec_guided=True):
         self.columns = {AXIS_SIGN[k]: np.asarray(v, float) for k, v in cols.items()}
         self.backlash, self.spread, self.exposure = backlash, spread, exposure
+        self.dec_guided = dec_guided    # False: a calibration that kept RA alone (ra_only); Dec gets no pulses
         self.one_way = {"north": 1, "south": -1}.get(one_way)
         self.stuck_s = stuck_s          # the cap on Dec pulses unanswered, seconds; None: no cap
         self.dec_from = None            # (sign, |error| px) where the present run of Dec pushes began
@@ -750,7 +837,7 @@ class Controller:
         if reversal and self.backlash > 0:
             seconds[1] += math.copysign(self.slack_share * self.backlash, seconds[1])
         held = self.hold_dec(dec_px, seconds[1])
-        if held:
+        if held or not self.dec_guided:
             seconds[1] = 0.0
         wanted = list(seconds)
         seconds = [max(-LONGEST_PULSE, min(LONGEST_PULSE, s)) for s in seconds]
@@ -1180,7 +1267,10 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
     folder = log_folder or LOG_FOLDER
     folder.mkdir(parents=True, exist_ok=True)
     log = folder / f"guide-{datetime.now():%Y%m%d}.jsonl"
-    ctl = Controller(cols, cal.get("backlash_s", 0.0), cal.get("backlash_spread_s", 0.0), seconds, one_way, stuck_s)
+    ctl = Controller(cols, cal.get("backlash_s", 0.0), cal.get("backlash_spread_s", 0.0), seconds, one_way, stuck_s,
+                     dec_guided=cal.get("dec_guided", True))
+    if not ctl.dec_guided:
+        say("guiding RA only: the calibration found Dec does not follow guide pulses; Dec is sent none")
     stuck_after = 3 * seconds + 5 + RETRY_S + 2 * LONGEST_PULSE
     desk = desk or OrderDesk(run_id, say=say)
     beat = Heartbeat({"pid": os.getpid(), "pid_start": process_start(os.getpid()), "run": run_id,

@@ -747,6 +747,14 @@ def run_guider(args):
             def tick():
                 beat.progress()
                 desk.between_pulses()
+            if args.action == "dectest":
+                try:
+                    guider.dec_test(cam, args.exposure, dec, west, args.gain, steps=args.steps, tick=tick)
+                finally:
+                    beat.stop()
+                    cam.stop_pulse()
+                    beat.update(state="stopped", reason="Dec test done")
+                return
             try:
                 cal = None if args.recalibrate else guider.load_calibration()
                 cols, why = guider.reuse(cal, dec, west) if cal else (
@@ -859,11 +867,16 @@ def main(argv=None):
     f = sub.add_parser("focus", help="hand focus of the guide scope: the guide star's size said aloud each frame")
     f.add_argument("--minutes", type=float, default=10.0, help="how long (default 10)")
     for name, helptext in (("calibrate", "pulse each way in steps and learn what each does"),
-                           ("guide", "guide, reusing the kept calibration once checked")):
+                           ("guide", "guide, reusing the kept calibration once checked"),
+                           ("dectest", "north in calibration's steps for 2 minutes, then south, the star measured "
+                                       "after each: does the Dec slack ever end (./guidegraph.py --calibration "
+                                       "draws it)")):
         g = sub.add_parser(name, help=helptext)
         g.add_argument("--dec", type=float, help="the target's Dec, in place of the handset's (the handset is still asked that the mount tracks)")
         g.add_argument("--side", choices=("east", "west"), help="side of the pier, in place of the handset's")
         g.add_argument("--dry-run", action="store_true", help="say what it would do, open nothing")
+        if name == "dectest":
+            g.add_argument("--steps", type=int, default=80, help="steps each way (default 80: 2 minutes at 1.5 s)")
         if name == "guide":
             g.add_argument("--minutes", type=float, help="stop after this long (default: until Ctrl-C)")
             g.add_argument("--recalibrate", action="store_true", help="calibrate again first")
@@ -872,11 +885,11 @@ def main(argv=None):
             g.add_argument("--dec-stuck", type=float, metavar="SECONDS",
                            help="a sticking Dec axis: hold Dec pulses once this many seconds have gone out "
                                 "the same way with the star not moving, until it moves (try 3)")
-    for name in ("star", "calibrate", "guide", "focus"):
+    for name in ("star", "calibrate", "guide", "focus", "dectest"):
         sub.choices[name].add_argument("--exposure", type=float, default=2.0, help="guide exposure, seconds (0.5 to 4)")
         sub.choices[name].add_argument("--gain", type=int, help="the camera's gain, per cent (100 = none)")
     args = ap.parse_args(argv)
-    if args.action in ("star", "calibrate", "guide", "focus") and not 0.5 <= args.exposure <= 4:
+    if args.action in ("star", "calibrate", "guide", "focus", "dectest") and not 0.5 <= args.exposure <= 4:
         sys.exit("The guide exposure is 0.5 to 4 s.")
     if args.action == "calibrate":
         args.recalibrate, args.minutes, args.dec_one_way, args.dec_stuck = True, None, None, None
@@ -902,7 +915,11 @@ def main(argv=None):
             with GuideCamera(role="focus", size=GUIDE_SIZE, speed=GUIDE_SPEED) as cam:
                 focus_aid(cam, args.exposure, args.minutes, args.gain)
             return
-        if args.action in ("star", "calibrate", "guide"):
+        if args.action == "dectest" and args.dry_run:
+            print(f"would: find a guide star; {args.steps} north pulses of calibration's Dec step, the star "
+                  "measured after each, then as many south; nothing kept but the track")
+            return
+        if args.action in ("star", "calibrate", "guide", "dectest"):
             run_guider(args)
             return
         if args.action == "wheeltest":
