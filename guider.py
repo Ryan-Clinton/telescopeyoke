@@ -274,7 +274,7 @@ def first_star(cam, seconds, gain=None, say=print, patience=300.0, sleep=time.sl
         sleep(RETRY_S)
 
 
-def watch(cam, seconds, count, gain=None, say=print):
+def watch(cam, seconds, count, gain=None, say=print, scale=SCALE, window=WINDOW):
     """Stage 1: find a star and follow it through `count` frames with no
     pulses, saying where it is each frame and, at the end, how much it
     wandered. Returns the per-frame rows."""
@@ -283,7 +283,7 @@ def watch(cam, seconds, count, gain=None, say=print):
     rows, where = [], (star.x, star.y)
     for n in range(count):
         frame, times = cam.timed_frame(seconds, gain)
-        found, why = follow(frame, where)
+        found, why = follow(frame, where, window=window)
         if not found:
             say(f"{n + 1:3}: lost ({why})")
             continue
@@ -296,7 +296,8 @@ def watch(cam, seconds, count, gain=None, say=print):
         xy = np.array([r[1:] for r in rows])
         jitter = float(np.sqrt(np.mean(np.sum((xy - xy.mean(axis=0)) ** 2, axis=1))))
         drift = guidemath.drift_rate(rows, last=len(rows))
-        say(f"wander: {jitter:.2f} px RMS ({jitter * SCALE:.1f}\"); drift {drift[0]:+.3f}, {drift[1]:+.3f} px/s")
+        say(f"wander: {jitter:.2f} px RMS ({jitter * scale:.1f}\"); drift {drift[0]:+.3f}, {drift[1]:+.3f} px/s "
+            f"({drift[0] * scale:+.2f}, {drift[1] * scale:+.2f} \"/s)")
     return rows
 
 

@@ -56,6 +56,7 @@ DUPLICATES = 3        # the same frame again this many times running: a camera f
 # (6 November 2026, docs/guide-camera-fault.md). guider.BIN must match.
 GUIDE_SIZE = 1
 GUIDE_SPEED = 0
+COMPARE_WINDOW = (512, 960)   # the widest full-resolution window that streamed (19 November 2026)
 
 
 def refuse(why):
@@ -714,7 +715,19 @@ def run_guider(args):
         with GuideCamera(role="star", size=GUIDE_SIZE, speed=GUIDE_SPEED) as cam:
             shortest, longest = cam.driver.exposure_range(cam.handle)
             print(f"guide camera exposures {shortest * 1000:g} ms to {longest:g} s")
-            guider.watch(cam, args.exposure, args.count, args.gain)
+            rows = guider.watch(cam, args.exposure, args.count, args.gain)
+        if args.compare_window and rows:
+            # The same star at full resolution, in the widest window that
+            # streams (19 November 2026: 512 x 960 at USB speed 0 set before
+            # the stream starts), straight after the binned frames: the two
+            # wanders, in arcseconds, side by side. No pulses either way.
+            w, h = COMPARE_WINDOW
+            x, y = rows[-1][1] * 2, rows[-1][2] * 2           # binned pixels to the full sensor's
+            at = (int(min(max(x - w / 2, 0), 1280 - w)), int(min(max(y - h / 2, 0), 960 - h)))
+            print(f"the same star at full resolution: a {w} x {h} window at {at[0]}, {at[1]}")
+            with GuideCamera(role="star", size=0, roi=(w, h), roi_at=at, speed=0, speed_first=True) as cam:
+                guider.watch(cam, args.exposure, args.count, args.gain,
+                             scale=guider.SCALE / guider.BIN, window=guider.WINDOW * guider.BIN)
         return
     import uuid
     run = uuid.uuid4().hex[:8]
@@ -841,6 +854,8 @@ def main(argv=None):
     t.add_argument("--no-wait", action="store_true", help="send it and return")
     w = sub.add_parser("star", help="find a guide star and follow it, no pulses")
     w.add_argument("--count", type=int, default=30, help="frames to follow it through")
+    w.add_argument("--compare-window", action="store_true",
+                   help="then the same star at full resolution in a 512 x 960 window, the same count")
     f = sub.add_parser("focus", help="hand focus of the guide scope: the guide star's size said aloud each frame")
     f.add_argument("--minutes", type=float, default=10.0, help="how long (default 10)")
     for name, helptext in (("calibrate", "pulse each way in steps and learn what each does"),
