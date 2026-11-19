@@ -28,6 +28,11 @@ apply unchanged. It adds no protection against a program on the same
 computer running `mount.py` itself. Rule 1 is a convention: nothing in the code can tell a person's
 request from an agent's own idea when both run the same command.
 
+**Weather is advice, not protection.** `clouds.py` and `rain.py` choose
+when to observe and warn the house (`alert.py`); nothing here closes a
+roof or covers a telescope. A telescope left out unattended needs its own
+local protection, and TelescopeYoke should obey it, never stand in for it.
+
 ## Planned: approval that an agent cannot grant itself
 
 Not built. The design, for when motion is ever offered to agents through

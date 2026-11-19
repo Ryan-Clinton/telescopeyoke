@@ -54,6 +54,14 @@ proven is `docs/validation.md` ("Current conclusions").
   and the gain only where its driver offers them, by the names it uses
   (ZWO's raw format, `CCD_GAIN`); `camera_setup.py` names the maker's own
   driver rather than AltairCapture for a camera that is not an Altair.
+- The imaging skill builds the run from what was asked and what the rig
+  has (filters, guiding, exposure, gain, a goal) and says the plan first.
+- `ty context` no longer tells every rig its nights are for discovery:
+  that is the owner's; another person is asked.
+- The guide scope's focal length is a setting (`[guider] focal_mm`).
+- End of night: by hand the mount is parked only when asked;
+  `schedule.py end` parks by itself. Weather is advice, not protection
+  (`docs/agents/safety.md`).
 
 ## 0.4.0: setup that remembers, skills that follow the rig
 

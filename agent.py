@@ -1491,11 +1491,11 @@ def context(demo=False):
     """A short plain-text briefing for a model starting a session."""
     caps, now = capabilities(), status()
     lines = [f"telescopeyoke {VERSION}", "",
-             "Mission (docs/discovery.md, \"What the project is for\"): discovery first. New transients and "
-             "novae with the telescope; strange stars (Tabby's star, dippers) in the archives; "
-             "the person wants the weird and wonderful, so a research lead this telescope can watch tonight "
-             "comes before a routine patrol. Plan with ./ty night (its research section) and the "
-             "discovery-night skill; on a cloudy day, the cloudy-day skill.", ""]
+             "What a night is for is the person's choice: ask, unless their CLAUDE.local.md says. On the "
+             "owner's rig it is discovery first (docs/discovery.md): new transients and novae, strange stars "
+             "(Tabby's star, dippers), a research lead this telescope can watch tonight before a routine "
+             "patrol; plan that with ./ty night and the discovery-night skill. Someone else's may be deep-sky "
+             "pictures, transits, the Moon and planets. On a cloudy day, the cloudy-day skill.", ""]
     try:
         tonight = night(demo)
         window = ""

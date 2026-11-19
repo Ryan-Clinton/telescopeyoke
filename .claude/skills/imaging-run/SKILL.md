@@ -17,7 +17,15 @@ filter by filter (below). On the owner's rig, `docs/agents/owner-rig.md`
 2. `./ty mount goto TARGET --solve --dry-run`, then the GoTo itself, which
    with no approval asked.
 3. `./ty shoot TARGET --frames 0 --recentre 8` (dry-run first), in the
-   background. Tell them it is running and they can go in.
+   background, with what they asked for and the rig has: `--blocks` for a
+   mono camera and wheel (below); `--guide` where the guider has a kept
+   calibration (`docs/autoguiding.md`), then `--exposure ladder` or the
+   length they name and `--dither N`; `--gain` at their camera's own
+   setting (1500 is the owner's); `--minutes` or `--accepted N` for a stated
+   goal. Unguided, the 2 s default unless `--exposure auto` finds the
+   tracking allows longer. Say the plan in one line (target, filters and minutes,
+   exposure, guided or not, when it ends), then start it. Tell them it is
+   running and they can go in.
 4. Start the watch as a Monitor: `./ty watch-run`. It prints nothing while
    all is well and a line when frames stop, stop being kept, the share kept
    halves, the stars dim or come back, or the run ends. Tell the person at

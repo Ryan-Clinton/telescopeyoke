@@ -203,3 +203,8 @@ follow_up_share = 0.25
 # A folder on a bigger disk where finished Moon videos are moved, leaving a
 # link behind, when the data disk runs low (./storage.py). Empty: never moved.
 archive = ""
+
+# The guide scope (docs/autoguiding.md): its focal length sets the guider's
+# arcseconds a pixel. The guide camera is the Altair GPCAM (guidecam.py).
+# [guider]
+# focal_mm = 162

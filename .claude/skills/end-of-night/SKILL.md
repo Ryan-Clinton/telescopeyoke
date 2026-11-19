@@ -25,7 +25,9 @@ Only on the person's word. The imaging run stops at its own limits
    of a cooled camera is let go by the warm-up (`./keeper.py stop`, or
    `schedule.py end`). Services the person installed to run always (the
    owner's are in `docs/agents/owner-rig.md`) stay.
-2. Park only if they ask.
+2. By hand, park only if they ask. `schedule.py end` (the scheduler's
+   own end, or the night-end timer at dawn) parks by itself: that is the
+   unattended end, and its flats need the mount home.
 3. Where the person stacks on another computer (the owner: the desktop),
    `./restack.py SESSION --on HOST` for each session tonight, in the
    background.

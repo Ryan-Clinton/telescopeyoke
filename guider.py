@@ -35,10 +35,12 @@ import config
 import guidemath
 import interface
 
-FOCAL_MM = 162.0
+# The guide scope's focal length is the rig's ([guider] focal_mm); the
+# pixel size is the GPCAM's, the one guide camera guidecam.py drives.
+FOCAL_MM = float(config.hardware().get("guider", {}).get("focal_mm", 162.0))
 PIXEL_UM = 3.75
 BIN = 2                  # the camera is read 2 x 2 binned (guidecam.GUIDE_SIZE): full size drops frames
-SCALE = 206.265 * PIXEL_UM * BIN / FOCAL_MM     # arcseconds a guide pixel: 9.55 binned (4.77 at full size)
+SCALE = 206.265 * PIXEL_UM * BIN / FOCAL_MM     # arcseconds a guide pixel: 9.55 binned at 162 mm (4.77 at full size)
 
 # The limits below in guide pixels are for 2 x 2 binning: each is half its
 # full-size value, so it is the same on the sky.
