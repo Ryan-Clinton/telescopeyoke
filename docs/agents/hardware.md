@@ -110,8 +110,9 @@ and reach the motor board directly. The board counts motor steps and knows
 nothing about the sky, so `direct.DirectHandset` answers the handset commands
 `mount.py` sends and does the handset's sums itself.
 
-Read from a real EQ3 through the Wi-Fi adapter (and nothing more: **no real
-mount has been moved through this link**):
+Read from a real EQ3 through the Wi-Fi adapter (moved through it since: on
+16 November 2026, no tube on, the Dec direction checked and one GoTo and
+home; `docs/validation.md`):
 
 - The adapter answers on UDP port 11880. On the network it makes itself
   (`SynScan_WiFi_xxxx`, open) it is 192.168.4.1. It can also join the home

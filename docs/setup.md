@@ -49,8 +49,9 @@ Clone the repository (or unpack the release zip), run `claude` in the folder and
 
 The tested way to reach the mount is a serial lead to the SynScan handset.
 It can also be reached with the handset unplugged, through the SynScan Wi-Fi
-adapter or an EQDIR lead. **No real mount has been moved this way yet**; the
-adapter has only been found and read.
+adapter or an EQDIR lead. Proven so far: on 16 November 2026 the Wi-Fi
+adapter on the EQ3 Pro, with no tube on, had its Dec direction checked and
+made one GoTo and home ([validation](validation.md)). No EQDIR lead yet.
 
 1. In `config.toml` under `[mount]`, set `link = "wifi"` (or `"eqdir"`).
    The Wi-Fi adapter is found by asking the network. It makes its own

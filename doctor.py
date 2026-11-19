@@ -126,7 +126,27 @@ def check_serial_access():
     return host.serial_access()
 
 
-GOTO_REFUSED = "so GoTo is refused"     # a warning with this in it: connected, but not ready for a GoTo
+def goto_blocked():
+    """Why mount.py would refuse a GoTo on a mount that answers, as a stable
+    code, or None: from the direct link's kept state, never a message's
+    words. A handset (or the demo) keeps its own setting-up, which
+    check_handset reads."""
+    if _demo() or mount_link() == "handset":
+        return None
+    import direct
+    try:
+        state = json.loads(direct.STATE_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        state = {}
+    if not state.get("home"):
+        return "HOME_NOT_RECORDED"
+    if state.get("dec_sign") is None:
+        return "DEC_DIRECTION_UNWATCHED"
+    return None
+
+
+GOTO_NEXT = {"HOME_NOT_RECORDED": "with the mount at home, ./mount.py sethome",
+             "DEC_DIRECTION_UNWATCHED": "./mount.py directions, with someone watching the mount"}
 
 
 def check_direct():
@@ -151,7 +171,7 @@ def check_direct():
         return FAIL, (f"{board}: it has not been told where home is. With the mount at home, "
                       "run ./mount.py sethome")
     if state.get("dec_sign") is None:
-        return WARN, (f"{board}: the Dec motor's direction has not been checked, {GOTO_REFUSED}. "
+        return WARN, (f"{board}: the Dec motor's direction has not been checked, so GoTo is refused. "
                       "With someone watching the mount, run ./mount.py directions")
     return OK, f"{board}, home recorded and Dec direction checked"
 
@@ -307,10 +327,14 @@ def check_camera():
         client.close()
     except OSError:
         return FAIL, "camera not checked: no INDI server"
-    cameras = [d for d in devices if any(name == "CCD_EXPOSURE" or name == "CONNECTION"
-                                         for dev, name in client.props if dev == d)]
+    # The device camera.py would open, by the same rule: a filter wheel or a
+    # mount's driver has a CONNECTION too, and is not a camera.
+    cameras = [d for d in devices if "Altair" in d or any(name == "CCD_EXPOSURE"
+                                                          for dev, name in client.props if dev == d)]
     if not cameras:
         return FAIL, "no camera on the INDI server (is it plugged in?)"
+    if len(cameras) > 1:
+        return WARN, f"camera: {cameras[0]}, the one used; also on the server: {', '.join(cameras[1:])}"
     return OK, f"camera: {cameras[0]}"
 
 
@@ -364,7 +388,7 @@ def ready(results):
     mount = passed["planner"] and passed["mount"]
     # Connected is not ready for a GoTo: a direct link refuses every GoTo
     # until a person has watched which way the Dec motor turns.
-    goto = mount and not any(GOTO_REFUSED in message for _, message in results.get("mount", []))
+    goto = mount and goto_blocked() is None
     return {"planner": passed["planner"], "mount": mount, "goto": goto,
             "imaging": passed["planner"] and passed["imaging"]}
 
@@ -599,8 +623,8 @@ def main():
                          "is, as a handset and then as a motor board. Only reads; close EQMOD first")
     args = ap.parse_args()
     need = [part.strip() for part in args.need.split(",") if part.strip()]
-    if not need or set(need) - {"planner", "mount", "imaging"}:
-        ap.error("--need takes planner, mount and imaging, comma-separated")
+    if not need or set(need) - {"planner", "mount", "goto", "imaging"}:
+        ap.error("--need takes planner, mount, goto and imaging, comma-separated")
 
     if args.json:
         import interface

@@ -39,6 +39,15 @@ proven is `docs/validation.md` ("Current conclusions").
   guiding has held 120 s subs.
 - The first-night skill asks what the person wants first and aims for
   the smallest success their equipment allows.
+- GoTo readiness is read from the mount's kept state, not a message:
+  `./doctor.py --need goto`, `ty capabilities`'s `goto_blocked`, and a
+  "GoTo allowed" step `ty onboard` always shows.
+- Without a handset, home and the Dec direction belong to the motor board
+  they were found on: another board answering has them found again.
+- `doctor.py` counts as the camera only what `camera.py` would open (a
+  filter wheel's driver is not a camera), and says when there are two.
+- Setup, the agents' hardware notes and the autoguiding page now say
+  what validation records.
 
 ## 0.4.0: setup that remembers, skills that follow the rig
 

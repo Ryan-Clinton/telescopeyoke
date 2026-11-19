@@ -56,6 +56,9 @@ def capabilities():
         "mount": {
             "available": planner and good("serial_access", "mount_lead"),
             "connected": parts["mount_lead"]["status"] == doctor.OK,
+            # The same answer as doctor.ready()'s goto: what would refuse a
+            # GoTo on a mount that answers (a direct link not yet set up).
+            "goto_blocked": doctor.goto_blocked(),
             "read_commands": ["status"],
             "motion_commands": ["goto", "point", "zenith", "home", "compensate"],
             "always_allowed": ["stop"],

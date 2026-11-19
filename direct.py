@@ -32,6 +32,7 @@ Proven on a real adapter so far: finding it, and the questions that read
 """
 import json
 import socket
+import sys
 import time
 from pathlib import Path
 
@@ -288,6 +289,21 @@ class DirectHandset:
         state = {"home": None, "dec_sign": None}
         if self.state_file.exists():
             state.update(json.loads(self.state_file.read_text(encoding="utf-8")))
+        # Home and the Dec direction belong to the board they were found on:
+        # another board (a different model, firmware or gearing) answering
+        # the same link has them found again, with someone watching. A
+        # rewired motor on the same board is not seen here: the person says
+        # so, and `./mount.py directions` is run again.
+        model, firmware = self.board.version()
+        board = [model, firmware, self.board.counts_per_turn[RA]]
+        if state.get("board") not in (None, board):
+            print(f"A different motor board answers (model {model}, firmware {firmware}) from the one home and "
+                  "the Dec direction were found on: both are forgotten. With the mount at home, "
+                  "./mount.py sethome, then ./mount.py directions with someone watching.", file=sys.stderr)
+            state["home"], state["dec_sign"] = None, None
+        if state.get("board") != board:
+            state["board"] = board
+            self._save(state)
         now = [self.board.position(RA), self.board.position(DEC)]
         if now == [POWER_ON, POWER_ON] and state["home"] != now:
             # Just switched on, and nothing has moved it or changed its counts:

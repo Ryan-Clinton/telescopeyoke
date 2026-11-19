@@ -200,10 +200,11 @@ def steps(check=True):
     if check:
         add("mount connected", ready["mount"], "checked now", "the mount's lead and handset, as doctor.py finds them",
             "./doctor.py --need mount, plugging in as it asks", now=True)
-        if ready["mount"] and not ready.get("goto", True):
-            add("GoTo allowed", False, "checked now", "connected, but the Dec motor's direction has not been "
-                "watched, so mount.py refuses every GoTo", "./mount.py directions, with someone watching the mount",
-                now=True)
+        blocked = doctor.goto_blocked()
+        add("GoTo allowed", ready["goto"], "checked now",
+            "the mount answers and nothing in its setting-up refuses a GoTo" if ready["goto"] else
+            f"refused: {blocked}" if blocked else "not until the mount is connected",
+            doctor.GOTO_NEXT.get(blocked, "connect the mount first"), now=True)
         add("imaging ready", ready["imaging"], "checked now",
             "the camera, its driver and the plate solver, as doctor.py finds them",
             "./doctor.py --need imaging, plugging in as it asks", now=True)

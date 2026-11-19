@@ -75,8 +75,10 @@ send a device a question unless the person names its port and agrees
 4. The ASTAP star database (`docs/setup.md`, step 2). A download that needs
    the person (a vendor's camera SDK behind a login): give the link and
    where the files go, then carry on from that step when they are there.
-5. `./doctor.py --need mount,imaging` until both are ready, plugging things
-   in as it asks; `--offline` needs no network.
+5. `./doctor.py --need` what their aim needs, until it is ready, plugging
+   things in as it asks (`--offline` needs no network): `imaging` for a
+   camera alone; `mount,imaging` to go on to the moves; `goto` before the
+   first GoTo. A mount TelescopeYoke cannot drive is never asked for.
 6. A first frame from the camera indoors (`./snap.py`), to see it works;
    once they have seen it, `--confirm frame`.
 

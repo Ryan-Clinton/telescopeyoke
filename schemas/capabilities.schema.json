@@ -37,6 +37,14 @@
       "properties": {
         "available": {
           "type": "boolean"
+        },
+        "goto_blocked": {
+          "enum": [
+            null,
+            "HOME_NOT_RECORDED",
+            "DEC_DIRECTION_UNWATCHED"
+          ],
+          "description": "why mount.py would refuse a GoTo on a mount that answers, or null; the same as doctor.ready()'s goto"
         }
       }
     },
