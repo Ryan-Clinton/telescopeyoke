@@ -139,9 +139,17 @@ serial_match = "FTDI"
 # The motor focuser (docs/focuser.md). travel: the furthest, in half-steps
 # either way, a focus run may turn it from where it started.
 [focuser]
+# Another maker's focuser through its ASCOM driver: backend = "alpaca",
+# address = "HOST:PORT", device = 0, and alpaca_steps, its steps to one
+# half-step of the project's own focuser (the walk-in's step sizes are in
+# those): to be found on the sky. Tried on ASCOM's simulator only.
 travel = 512
 
 [filterwheel]
+# Another maker's wheel through its ASCOM driver (alpaca.py; ./alpaca.py find
+# lists the servers): backend = "alpaca", address = "HOST:PORT", device = 0.
+# Its own names are used until filters below are set. Tried on ASCOM's
+# simulator only.
 # The Starlight Xpress USB wheel's filters, position 1 first, a gap left empty
 # (sxwheel.py). Blank: the positions go by number. Fill it in only after
 # looking: ./sxwheel.py move 1, see which filter is in the light path, and so

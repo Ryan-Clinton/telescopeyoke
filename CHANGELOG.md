@@ -15,6 +15,11 @@ proven is `docs/validation.md` ("Current conclusions").
   are waited for by the driver's own word; a driver without MoveAxis
   does GoTo and tracking only; a driver whose site is not this one's is
   refused a GoTo until `./mount.py settime`; the doctor only reads.
+- **A filter wheel and a focuser through ASCOM Alpaca** (`backend =
+  "alpaca"` under `[filterwheel]` or `[focuser]`): they answer as the
+  Starlight Xpress wheel and the project's focuser do, so filter
+  changes, confirmed positions in each frame and the walk-in use them
+  unchanged. Tried on ASCOM's simulator only.
 - `shoot.py --dry-run` fails when a later GoTo or filter change in the
   plan would be refused; the imaging skill's command shapes follow what
   `shoot.py` allows together.

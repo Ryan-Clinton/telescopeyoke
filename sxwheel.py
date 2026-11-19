@@ -64,6 +64,13 @@ class Wheel:
 
     @classmethod
     def open(cls, hid=None):
+        if config.hardware().get("filterwheel", {}).get("backend") == "alpaca":
+            # Another maker's wheel through its ASCOM driver (alpaca.py).
+            import alpaca
+            try:
+                return alpaca.Wheel.open()
+            except (Exception, SystemExit) as problem:
+                raise WheelError(f"the Alpaca filter wheel: {getattr(problem, 'message', problem)}") from None
         hid = hid or _hid()
         device = hid.device()
         try:

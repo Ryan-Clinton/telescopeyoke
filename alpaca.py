@@ -392,6 +392,152 @@ class AlpacaHandset:
         return b""
 
 
+def device_client(section, kind):
+    """The Alpaca device a settings section names ([filterwheel] or
+    [focuser] backend = "alpaca", address, device), connected: never one
+    found by asking the network. alpaca_name, when set, must match."""
+    import config
+    settings = config.hardware().get(section, {})
+    if not settings.get("address"):
+        raise Refusal("INVALID_REQUEST", f"[{section}] backend = \"alpaca\" needs address = \"HOST:PORT\" (and "
+                      "device, if not 0); ./alpaca.py find lists them.")
+    client = Client(settings["address"], settings.get("device", 0), kind=kind)
+    wanted = settings.get("alpaca_name")
+    if wanted and _quiet(client, "name") != wanted:
+        raise Refusal("INVALID_REQUEST", f"The Alpaca {kind} at {settings['address']} says it is "
+                      f"{_quiet(client, 'name')!r}, not {wanted!r} (alpaca_name under [{section}]).")
+    if not client.get("connected"):
+        client.put("connected", Connected=True)
+    return client
+
+
+class Wheel:
+    """An Alpaca filter wheel, answering as sxwheel.Wheel does: positions
+    from 1, status() (current or 0 while turning, number of filters),
+    move(wanted) and position(wanted, total). ASCOM counts from 0 and says
+    -1 while it turns."""
+
+    TIMEOUT = 30.0
+
+    def __init__(self, client):
+        self.client = client
+        self.names = list(client.get("names") or [])
+
+    @classmethod
+    def open(cls, hid=None):
+        return cls(device_client("filterwheel", "filterwheel"))
+
+    def close(self):
+        pass
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+    def status(self):
+        where = self.client.get("position")
+        return (where + 1 if where is not None and where >= 0 else 0), len(self.names)
+
+    def position(self, wanted, total, known=None):
+        import sxwheel
+        known = sxwheel.names() if known is None else known
+        if not any(known):
+            known = self.names             # the driver's own names until config.toml gives them
+        return sxwheel.Wheel.position(self, wanted, total, known)
+
+    def move(self, wanted, timeout=TIMEOUT, sleep=time.sleep, clock=time.monotonic):
+        import sxwheel
+        number = self.position(wanted, len(self.names))
+        if self.status()[0] == number:
+            return number
+        try:
+            self.client.put("position", Position=number - 1)
+        except DriverError as error:
+            raise sxwheel.WheelError(f"the filter wheel's driver refused filter {number}: {error}") from None
+        end = clock() + timeout
+        while True:
+            sleep(0.25)
+            current, _ = self.status()
+            if current == number:
+                return number
+            if clock() > end:
+                raise sxwheel.WheelError(f"the filter wheel did not reach filter {number} within {timeout:g} s "
+                                         f"(it says {current or 'still turning'})")
+
+
+class Focuser:
+    """An Alpaca focuser, answering as focuser.Focuser does: move(steps) in
+    the project's half-steps (plus is out), each scaled by [focuser]
+    alpaca_steps (the driver's steps to one half-step of the project's own
+    focuser, 1 unless set: the walk-in's step sizes were measured on that
+    one, so another focuser's scale is to be found on the sky), waiting
+    until it has stopped; temperature() from the driver; speed() and full()
+    do nothing (the driver keeps its own)."""
+
+    TIMEOUT = 120.0
+
+    def __init__(self, client, scale=1.0):
+        self.client, self.scale = client, float(scale)
+        self.absolute = bool(client.get("absolute"))
+        self.most = int(_quiet(client, "maxincrement") or _quiet(client, "maxstep") or 0)
+        self.top = int(_quiet(client, "maxstep") or 0)
+
+    @classmethod
+    def open(cls, port=None, full=True, ms=None):
+        import config
+        return cls(device_client("focuser", "focuser"),
+                   config.hardware().get("focuser", {}).get("alpaca_steps", 1))
+
+    def move(self, steps, sleep=time.sleep, clock=time.monotonic):
+        n = round(steps * self.scale)
+        if not n:
+            return
+        if self.most and abs(n) > self.most:
+            raise ValueError(f"a move is at most {self.most} of the focuser's steps, not {n}")
+        try:
+            if self.absolute:
+                target = self.client.get("position") + n
+                if target < 0 or (self.top and target > self.top):
+                    raise ValueError(f"the focuser's travel is 0 to {self.top}: a move to {target} is outside it")
+                self.client.put("move", Position=target)
+            else:
+                self.client.put("move", Position=n)
+        except DriverError as error:
+            raise RuntimeError(f"the focuser's driver refused a move of {n}: {error}") from None
+        end = clock() + self.TIMEOUT
+        try:
+            while self.client.get("ismoving"):
+                if clock() > end:
+                    self.client.put("halt")
+                    raise RuntimeError("the focuser did not stop moving in time; halted")
+                sleep(0.2)
+        except KeyboardInterrupt:
+            # Unlike the Nano, an Alpaca focuser can be stopped part way.
+            _quiet_put(self.client, "halt")
+            raise
+
+    def speed(self, ms):
+        pass
+
+    def full(self):
+        pass
+
+    def temperature(self):
+        return _quiet(self.client, "temperature")
+
+    def close(self):
+        pass
+
+
+def _quiet_put(client, what, **params):
+    try:
+        client.put(what, **params)
+    except (DriverError, Refusal):
+        pass
+
+
 def _precess(ra, dec, to_j2000):
     """Between the true equator and equinox of date and J2000, degrees."""
     import sky  # noqa: F401 - astropy's settings for offline use

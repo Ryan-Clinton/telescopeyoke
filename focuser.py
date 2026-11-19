@@ -54,7 +54,10 @@ BOARDS = ("arduino:avr:nano:cpu=atmega328old", "arduino:avr:nano:cpu=atmega328")
 def find_port(port=None):
     """The Nano's port: the one named, or the one whose USB adapter matches.
     Never a guess, since the handset's lead is a serial port too."""
-    match = config.hardware().get("focuser", {}).get("serial_match", MATCH)
+    settings = config.hardware().get("focuser", {})
+    if settings.get("backend") == "alpaca":
+        return f"Alpaca {settings.get('address')}"      # another maker's focuser through its ASCOM driver
+    match = settings.get("serial_match", MATCH)
     found = port or host.serial_port(match)
     if not found:
         seen = ", ".join(f"{device} ({name})" for device, name in host.serial_ports())
@@ -81,7 +84,12 @@ class Focuser:
         """The focuser, with :F1 sent unless `full` is false. On the 28BYJ-48
         (until 9 November 2026) that meant two coils at every step, which
         could push the drawtube out at `ms` 30 when half-steps could not. The
-        NEMA 17's firmware answers :F1 and changes nothing."""
+        NEMA 17's firmware answers :F1 and changes nothing. With [focuser]
+        backend = "alpaca", another maker's focuser through its ASCOM driver
+        (alpaca.Focuser), answering the same."""
+        if config.hardware().get("focuser", {}).get("backend") == "alpaca":
+            import alpaca
+            return alpaca.Focuser.open(port, full, ms)
         import serial
         link = serial.Serial(find_port(port), 9600, timeout=1)
         time.sleep(2)               # opening the port restarts a Nano; let it come up
