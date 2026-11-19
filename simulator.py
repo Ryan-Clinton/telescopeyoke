@@ -398,7 +398,9 @@ def solve(image, ra_hint=None, dec_hint=None, radius=30, **_):
     eye leaves. So a GoTo with centring has something real to correct."""
     if sky()["cloud"]:
         return None                      # no stars through cloud, as for real
-    scale = 1.32
+    # Per pixel of the picture given, as a real solve's: 1.32"/px on the
+    # unbinned frame's 2x2 pixels (SHAPE), twice that on a binned one's.
+    scale = 1.32 * SHAPE[1] / image.shape[1]
     answer = {"rotation": 0.0, "scale": scale, "seconds": 0.4,
               "cd": [[-scale / 3600, 0.0], [0.0, scale / 3600]]}
     scope = DEMO_SCOPE

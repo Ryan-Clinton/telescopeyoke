@@ -148,10 +148,15 @@ def sessions():
         from astropy.io import fits
     except ImportError:
         return
-    places = sorted({p.parent for p in folder.rglob("*.fits")}, key=lambda p: p.stat().st_mtime, reverse=True)
-    for place in places:
-        first = min(place.glob("*.fits"))
+    def changed(place):
         try:
+            return place.stat().st_mtime
+        except OSError:         # a folder tidied away while this looked
+            return 0.0
+    places = sorted({p.parent for p in folder.rglob("*.fits")}, key=changed, reverse=True)
+    for place in places:
+        try:
+            first = min(place.glob("*.fits"))
             with fits.open(first) as hdus:
                 head = hdus[1].header if len(hdus) > 1 else hdus[0].header
         except (OSError, ValueError):

@@ -89,6 +89,12 @@ offer it, and let them choose:
    or the mount's power switch.
 3. Then one GoTo to something high and near the meridian, watched, and
    `./mount.py home`: the tube clears the tripod both ways.
+4. A suggestion: before an unwatched night, one GoTo low in the south
+   (25° up) and one near the zenith, watched. The limits in `mount.py`
+   (20° up, 7.5 h from the meridian) were measured clear on one rig; on
+   another, the camera end can reach the RA motor or the mirror end a
+   leg (the owner's, 17 November 2026, before the tube was moved in
+   its rings). Again after the tube or the camera train is moved.
 
 Say each result in a line. Once they say it turned the right ways and
 stopped, `./ty onboard --confirm moves`.

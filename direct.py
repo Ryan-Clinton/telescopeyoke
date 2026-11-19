@@ -346,9 +346,16 @@ class DirectHandset:
             try:
                 if not (self.board.status(RA)["running"] or self.board.status(DEC)["running"]):
                     break
-            except Refusal:
-                self._stop_when_back()
-                raise
+            except Refusal as lost:
+                # Said either way: with the link gone, nothing here can stop
+                # a move the board has already taken.
+                if self._stop_when_back():
+                    raise Refusal(lost.code_name, f"{lost.message} The link came back and both motors were "
+                                                  "told to stop.") from None
+                raise Refusal(lost.code_name, f"{lost.message} The link did not come back in a minute: whether "
+                                              "the motors stopped is not known, and the board may still be "
+                                              "finishing its move. Look at the mount, and switch its power off "
+                                              "if it is still turning or pressing on anything.") from None
             if time.monotonic() - began > timeout:
                 self._stop()
                 raise Refusal("SLEW_TIMED_OUT", f"The mount did not get to {where} in time; stopped.")

@@ -116,7 +116,7 @@ class Focuser:
         sent = steps * self.sign            # plus is always out, whichever way the wires are on
         try:
             reply = self.ask(f":M{sent:+d}", wait)
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, SystemExit):     # Ctrl-C, or main()'s SIGTERM, which exits
             # The Nano finishes a move once ordered: wait for its answer, so
             # whoever counts where the motor is can count this move, and the
             # answer is not taken for the next order's.

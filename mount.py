@@ -1239,6 +1239,16 @@ class Mount:
               + ", "
               f"preparing {prepared - framed:.1f} s, solving {time.monotonic() - prepared:.1f} s"
               f"{'' if found else ', no solution'}", flush=True)
+        if found and binned > 1:
+            # The solver's scale and cd are per pixel of the binned picture;
+            # put them back on the unbinned frame's 2x2 pixels, as every solve
+            # before binning, so onboard's scale check, the drift assist's
+            # shifts (the stacker's pixels) and mosaic all read them as before
+            # (solve.py does the same for its own coarse retry).
+            found["scale"] /= binned
+            if "cd" in found:
+                found["cd"] = [[v / binned for v in row] for row in found["cd"]]
+            found["binning"] = binned
         if found:
             found["when"] = when  # solving can take a while; the sky moves on
             found["trailed"] = trailed
@@ -1250,7 +1260,7 @@ class Mount:
             # (last_solve). Read after the frame: opening the camera is what
             # tells the settings which camera is in use.
             camera, focal = config.light_path()
-            records.write(LAST_SOLVE, {k: found[k] for k in ("ra", "dec", "rotation", "scale", "cd") if k in found}
+            records.write(LAST_SOLVE, {k: found[k] for k in ("ra", "dec", "rotation", "scale", "cd", "binning") if k in found}
                           | {"camera": camera, "focal_mm": focal, "saved": time.time()}, indent=None)
         return found
 

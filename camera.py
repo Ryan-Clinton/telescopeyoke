@@ -48,7 +48,8 @@ BACKEND = SETTINGS["camera"]["backend"]   # "indi", or "altair" for Altair's own
 # alone, so its quick frames may be binned whatever that does to the colour
 # pattern. Imaging is never binned: the darks, the colour and the plate
 # scale all assume the full sensor. Plate-solve frames (mount.where_really)
-# are binned on a mono camera: a quarter of the data down the lead (a 1 s
+# are binned on a mono camera that says it is one (Altair's library and the
+# keeper do; through INDI they stay unbinned, as before): a quarter of the data down the lead (a 1 s
 # frame 1.12 s where the full sensor took 1.54 s, 6 October 2026), and the
 # solver is given the field's size, not the pixel scale (1.46"/px on the
 # 183M's 2x2 frames, solved). [camera] solve_binning = 1 turns it off.

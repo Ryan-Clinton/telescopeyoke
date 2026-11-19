@@ -1572,12 +1572,10 @@ def _earlier(answer):
 
 
 def _keep_approach(answer):
-    import json
     try:
-        out = _approach_file(answer.get("view", APPROACH_VIEW))
-        out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(json.dumps(answer), encoding="utf-8")
-    except OSError:
+        import records      # whole or not at all: the sky hook reads it while it is written
+        records.write(_approach_file(answer.get("view", APPROACH_VIEW)), answer, indent=None)
+    except (OSError, TypeError, ValueError):
         pass
     return answer
 

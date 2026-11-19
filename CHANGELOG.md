@@ -18,6 +18,19 @@ proven is `docs/validation.md` ("Current conclusions").
   longitude, not latitude alone.
 - The setup routine's account of the owner's camera lead and hub moved
   to [owner's rig](docs/agents/owner-rig.md).
+- **A binned plate solve keeps the old scale**: the scale and the camera's
+  angle it keeps are per pixel of the unbinned frame again, as the drift
+  assist, `ty onboard` and `mosaic.py` read them (a 2x2 binned solve had
+  them twice as large).
+- A bad spot name in `config.toml` is a failed check in `doctor.py`, not
+  a crash.
+- A lost Wi-Fi link during a direct-drive move says whether the stop got
+  through; if not, to look at the mount and switch its power off.
+- The motor focuser's far search turns round at `[focuser] travel`
+  rather than being stopped there; a killed `focuser.py` waits for the
+  Nano's answer to the move it had sent.
+- The sky briefing starts one fresh look at a time, and the saved
+  satellite and radar answers are written whole.
 
 ## 0.4.0: setup that remembers, skills that follow the rig
 

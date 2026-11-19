@@ -29,6 +29,7 @@ WORDS = re.compile(r"\b(cloud\w*|gaps?|clear\w*|overcast|rain\w*|showers?|foreca
 
 
 FRESH_MIN = {"satellite": 15, "radar": 15}     # an answer older than this is said as old, and a new look started
+LOOK_MIN = 5                                    # a look started this recently is taken to be still going
 STALE_PICTURE_MIN = 40                          # clouds.SATELLITE_STALE_MIN: an older picture is not tonight's sky
 
 
@@ -58,7 +59,17 @@ def _kept(path, name, script, args, root, picture_key):
     elif age is not None and age > FRESH_MIN[name]:
         out = [f"{name}: the saved answer is {age:.0f} min old"] + out
     if kept is None or age is None or age > FRESH_MIN[name] or (picture_age or 0) > STALE_PICTURE_MIN:
+        # One look at a time: a message every minute while the answer is old
+        # would otherwise start a look each (a look takes a minute or two).
+        started = path.with_name(path.stem + ".looking")
         try:
+            if time.time() - started.stat().st_mtime < LOOK_MIN * 60:
+                out.append(f"{name}: a fresh look is already under way; it is in a later message's briefing")
+                return out
+        except OSError:
+            pass
+        try:
+            started.touch()
             subprocess.Popen([sys.executable, str(root / script), *args], cwd=root, start_new_session=True,
                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             out.append(f"{name}: a fresh look has been started; it is in the next message's briefing")

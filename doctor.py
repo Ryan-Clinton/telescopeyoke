@@ -66,7 +66,7 @@ def check_config(name_site=True):
         return WARN, "no config.toml: copy config.example.toml and set your location"
     try:
         site = config.load()["site"]
-    except Exception as error:   # a typo in the file should be reported, not crash
+    except (Exception, SystemExit) as error:   # a typo, or a bad spot name (SystemExit), is reported, not a crash
         return FAIL, f"config.toml cannot be read: {error}"
     example = config.example()["site"]
     if (site["latitude"], site["longitude"]) == (example["latitude"], example["longitude"]):
@@ -81,7 +81,7 @@ def check_site_for_moves():
     import config
     try:
         site = config.load()["site"]
-    except Exception:
+    except (Exception, SystemExit):
         return FAIL, "no site to move from: set your location in config.toml"
     example = config.example()["site"]
     if (site["latitude"], site["longitude"]) == (example["latitude"], example["longitude"]):

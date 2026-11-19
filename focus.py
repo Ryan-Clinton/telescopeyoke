@@ -1094,7 +1094,11 @@ def find_stars(motor, read, usual, say=progress, stride=128, turns=0.5, ring=Non
     there), "smallest" (the smallest doughnuts, no star measuring yet),
     "lost" or "not_found" (both back at the start)}."""
     drive = Drive(motor)
-    reach = int(turns * 4096 // stride)
+    # No further than the focuser's travel ([focuser] travel, which the
+    # Settled motor holds a run to): turn round at it rather than be stopped
+    # there, out from the start.
+    limit = min(int(turns * 4096), getattr(motor, "travel", None) or MOTOR_TRAVEL)
+    reach = limit // stride
     live = live or Broadcast("find", usual, path=None)
     live.stage("searching")
     start = ring(SWEEP_FRAMES) if ring else None
@@ -1133,8 +1137,8 @@ def find_stars(motor, read, usual, say=progress, stride=128, turns=0.5, ring=Non
                 break
             before = size or before
         drive.to(0)
-    live.done("not_found", f"No stars measured within {turns:g} turn either way: the focuser went back to where "
-                           "it started.")
+    live.done("not_found", f"No stars measured within {reach * stride} half-steps either way: the focuser went "
+                           "back to where it started.")
     return {"at": 0, "how": "not_found"}
 
 

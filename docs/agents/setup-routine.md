@@ -90,9 +90,8 @@ Dec direction is checked once, with the person watching
 (`./mount.py directions`), and kept until the motor is refitted; GoTo is
 refused until it has been. Never answer the direction for them.
 
-At the same time, with a cooled camera (the owner's 183M) plugged in,
-start the camera keeper in the background (a camera that is not cooled
-has no keeper):
+At the same time, start the camera keeper in the background (only where `./ty onboard`'s kit
+says `keeper`: a cooled camera on Altair's own library):
 
     ./keeper.py start
 

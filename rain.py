@@ -280,9 +280,9 @@ def watch(every, until, room=None, say=print):
 
 def _keep(a):
     try:
-        STATE.parent.mkdir(parents=True, exist_ok=True)
-        STATE.write_text(json.dumps({**a, "t": time.time()}), encoding="utf-8")
-    except OSError:
+        import records      # whole or not at all: the sky hook reads it while it is written
+        records.write(STATE, {**a, "t": time.time()}, indent=None)
+    except (OSError, TypeError, ValueError):
         pass
 
 
