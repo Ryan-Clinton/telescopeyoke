@@ -70,6 +70,9 @@ setup = "default"
 # mono = true
 # cooled = true
 # readout_speed = 0
+# The camera's fan, set each time it opens (the camera does not keep it).
+# On a ToupTek-made camera (Altair's are) the cooler stops with the fan.
+# fan = "on"
 # The cooler's target in °C, one value for the season so one set of darks
 # serves, never below -5 (no gain below it on this sensor). The cooler goes
 # down to it slowly, 1 °C a minute from the sensor's own temperature (never

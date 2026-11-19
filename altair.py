@@ -55,6 +55,8 @@ RAMP_LEAD_C = 2.0      # the set point never runs more than this below the senso
 COOL_POLL_S = 5.0
 POWER_GONE_S = 15.0    # the cooler drawing nothing this long, with the air warmer than its target: no 12 V
 POWER_SETTLE_S = 60.0  # ...judged only once the cooler has been on this long (19 November 2026)
+RUNAWAY_BELOW_C = 5.0  # the sensor this far below the set point twice running: a runaway (19 November 2026)
+RUNAWAY_POWER = 0.5    # ...with the cooler at this share of its power or more
 POWER_NEEDED_C = 3.0   # the air this much warmer than the set point: the cooler must always be drawing something
 UNREAD_S = 30.0        # no temperature reading this long with the cooler on: it fails safe
 FULL_POWER = 0.95      # a share of the cooler's most voltage taken as all it has
@@ -258,7 +260,10 @@ FAULT_FILE = "cache/cooler-fault.json"
 FAULT_REST_S = 600     # closed this long after a cooler fault before it may be opened again
 
 
-def latch_fault(reason, clock=time.time):
+NO_POWER, RUNAWAY, OTHER = "no_power", "runaway", "other"   # a kept fault's kind
+
+
+def latch_fault(reason, clock=time.time, kind=OTHER):
     """Keep that the cooler failed safe, so no command cools the camera
     again until a person clears it (./keeper.py start --after-fault). The
     ten minutes' rest is from one night: 10 November 2026, opened again at
@@ -267,7 +272,7 @@ def latch_fault(reason, clock=time.time):
     proof it has cleared, so the next cooling is watched by obeying()."""
     import records
     try:
-        records.write(config.DATA / FAULT_FILE, {"reason": reason, "at": clock(), "cleared_at": None})
+        records.write(config.DATA / FAULT_FILE, {"reason": reason, "kind": kind, "at": clock(), "cleared_at": None})
         return True
     except OSError:
         return False        # said in the fail-safe's error: never taken as kept
@@ -286,8 +291,10 @@ def clear_fault(clock=time.time):
         return None
     waited = clock() - float(fault.get("at") or 0)
     # A fault where the cooler drew nothing left nothing to rest from: no
-    # rest (the user's go, 19 November 2026). A runaway still rests.
-    drew_nothing = "has drawn nothing" in str(fault.get("reason") or "")
+    # rest (the user's go, 19 November 2026). A runaway, or any other, rests.
+    # A fault kept before the kinds were (19 November) is read by its words.
+    drew_nothing = fault.get("kind") == NO_POWER or (
+        "kind" not in fault and "has drawn nothing" in str(fault.get("reason") or ""))
     if waited < FAULT_REST_S and not drew_nothing:
         raise CameraError(f"the cooler failed safe {waited / 60:.0f} min ago ({fault.get('reason')}); leave the "
                           f"camera closed {FAULT_REST_S / 60:.0f} minutes in all, with its 12 V lead secure")
@@ -378,6 +385,14 @@ class AltairCamera:
                 handle.put_Option(lib.ALTAIRCAM_OPTION_BLACKLEVEL, int(camera["offset"]))
             if camera.get("fan") in ("on", "off") and hasattr(lib, "ALTAIRCAM_OPTION_FAN"):
                 handle.put_Option(lib.ALTAIRCAM_OPTION_FAN, -1 if camera["fan"] == "on" else 0)
+                # Set is not the same as on: read it back where the camera says.
+                try:
+                    running = handle.get_Option(lib.ALTAIRCAM_OPTION_FAN)
+                except Exception:
+                    running = None
+                if running is not None and (running != 0) != (camera["fan"] == "on"):
+                    print(f"camera: the fan was set {camera['fan']} and reads back {running}",
+                          file=sys.stderr, flush=True)
             handle.put_Option(lib.ALTAIRCAM_OPTION_TRIGGER, 1)    # one exposure per request
             self.width, self.height = self._size()
             fourcc, self.bits = handle.get_RawFormat()
@@ -567,7 +582,25 @@ class AltairCamera:
             return
         if degrees < min(self.level, TEC_LOWEST) - RAMP_LEAD_C:
             self.fail_safe(f"the sensor is at {degrees:.1f} °C with the cooler set to {self.level:g} °C: the "
-                           "cooler is not obeying its set point")
+                           "cooler is not obeying its set point", kind=RUNAWAY)
+        # Sooner, by the set point itself, on two readings in a row: 19
+        # November 2026 the sensor went from 14.7 to -7.3 °C with the set
+        # point at 13.8 before the floor above was crossed. Two readings, as
+        # one bad reading on 18 November (11.3, -4.6, 4.9 °C in minutes) would
+        # otherwise stop a cooler that was obeying. Only with the cooler
+        # working hard: a sensor colder than its set point with the cooler
+        # idle is the air (carried out into the cold) or the warm-up's set
+        # point rising ahead of it, not a runaway.
+        power = self.tec_power() if degrees < self.level - RUNAWAY_BELOW_C else None
+        working = power is not None and power[1] is not None and power[1] >= RUNAWAY_POWER
+        if degrees < self.level - RUNAWAY_BELOW_C and working:
+            self.below_count = getattr(self, "below_count", 0) + 1
+            if self.below_count >= 2:
+                self.fail_safe(f"the sensor is at {degrees:.1f} °C, {self.level - degrees:.1f} °C below the "
+                               f"cooler's set point of {self.level:g} °C, twice running: the cooler is not "
+                               "obeying its set point", kind=RUNAWAY)
+        else:
+            self.below_count = 0
 
     def target_held(self):
         """Raises when the cooler's own target is no longer the one we set.
@@ -586,7 +619,7 @@ class AltairCamera:
             self.fail_safe(f"the cooler's target is {held / 10:g} °C, not the {self.level:g} °C it was set to: "
                            "it changed by itself, as after its power was cut")
 
-    def fail_safe(self, why):
+    def fail_safe(self, why, kind=OTHER):
         """Turn the cooler off here and now, whatever the caller does with
         the error; keep the fault so nothing cools the camera again until a
         person clears it; and raise, which closes the camera."""
@@ -598,9 +631,10 @@ class AltairCamera:
                 self.handle.put_Option(option, 0)
         except Exception as problem:            # still latched and raised: the close turns it off
             off = f"switching the cooler off failed ({problem}); closing the camera will"
-        kept = latch_fault(why)
-        raise CameraError(f"{why}: {off} and the camera closed. Secure the 12 V lead, leave the camera closed "
-                          f"{FAULT_REST_S / 60:.0f} minutes, then ./keeper.py start --after-fault"
+        kept = latch_fault(why, kind=kind)
+        wait = "" if kind == NO_POWER else f"leave the camera closed {FAULT_REST_S / 60:.0f} minutes, "
+        raise CameraError(f"{why}: {off} and the camera closed. Secure the 12 V lead, {wait}"
+                          "then ./keeper.py start --after-fault"
                           + ("" if kept else ". THE FAULT COULD NOT BE WRITTEN DOWN: do not start the keeper "
                              "again tonight"))
 
@@ -643,15 +677,30 @@ class AltairCamera:
         ambient = getattr(self, "ambient", None)
         # 19 November 2026: 15 s after the cooler went on, the sensor 0.5 °C
         # above its first set point, it drew nothing with the 12 V lead in,
-        # twice. A lead truly out is still caught within POWER_SETTLE_S +
-        # POWER_GONE_S, and by NO_POWER_S below.
+        # twice. A lead truly out is caught within POWER_SETTLE_S + NO_POWER_S
+        # (about 3 minutes) by the check just below, whatever the air.
         settled = clock() - getattr(self, "cooler_on_at", float("-inf")) >= POWER_SETTLE_S
+        # Nothing drawn at all for NO_POWER_S with the sensor above its set
+        # point, whatever the air: 19 November 2026 the lead was out for 30
+        # minutes and neither check here fired, as the ramp kept the set point
+        # near the sensor (so the air was never 3 °C above it) and each step
+        # down reset held_since below. A cooler that is powered draws
+        # something within a minute of a set point below the sensor.
+        if settled and share is not None and share <= 0 and degrees is not None and degrees > self.level:
+            self.drawless_since = getattr(self, "drawless_since", None) or clock()
+            if clock() - self.drawless_since >= NO_POWER_S:
+                self.fail_safe(f"the cooler has drawn nothing for {NO_POWER_S / 60:.0f} min with the sensor at "
+                               f"{degrees:.1f} °C, above its set point of {self.level:g} °C: its 12 V lead is out",
+                               kind=NO_POWER)
+        else:
+            self.drawless_since = None
         if (settled and share is not None and share <= 0 and ambient is not None
                 and ambient > self.level + POWER_NEEDED_C and degrees is not None and degrees > self.level):
             self.powerless_since = getattr(self, "powerless_since", None) or clock()
             if clock() - self.powerless_since >= POWER_GONE_S:
                 self.fail_safe(f"the cooler has drawn nothing for {POWER_GONE_S:.0f} s with the air at about "
-                               f"{ambient:.0f} °C and its target {self.target:g} °C: its 12 V lead is out")
+                               f"{ambient:.0f} °C and its target {self.target:g} °C: its 12 V lead is out",
+                               kind=NO_POWER)
         else:
             self.powerless_since = None
         if degrees is not None and degrees > self.level + RAMP_LEAD_C:
@@ -659,7 +708,7 @@ class AltairCamera:
                 self.held_since = clock()
             if self.cooler_unpowered(clock):
                 self.fail_safe(f"the cooler has drawn nothing for {NO_POWER_S / 60:.0f} min with the sensor at "
-                               f"{degrees:.1f} °C: its 12 V lead is out")
+                               f"{degrees:.1f} °C: its 12 V lead is out", kind=NO_POWER)
             level = degrees - RAMP_STEP_C
             try:
                 self._set_point(level)
