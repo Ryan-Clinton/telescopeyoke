@@ -181,9 +181,13 @@ rest of the night.
   and a sound measurement).
 - With it, how sure each home error is (`ra_home_sigma_deg`,
   `dec_home_sigma_deg`: the places' scatter carried through their
-  geometry), and `leverage`, how far a 1° error in every solve could move
-  home with these places: 0.9 with the default eight at Dec +40°, 1.9 with
-  17 October's seven. Over 3 and the places cannot tell home from the rest
+  geometry), and `leverage`, how uncertain home would be with these places
+  if each solve had a random, independent error of 1°: 0.9 with the default
+  eight at Dec +40°, 1.9 with 17 October's seven. It is a measure of how
+  well the places are laid out, not a bound: an error every solve shares
+  (the camera's angle, flexure, an axis reading wrong) is not in it, and
+  only the second `findhome` or `findhome --check` shows those. Over 3 and
+  the places cannot tell home from the rest
   of the model, however well they fit it (six places at two hour angles fit
   a wrong home exactly), so it is refused, in the dry run before anything
   moves when the `--hours` asked for are laid out like that, and again if
@@ -213,7 +217,30 @@ What a run keeps:
 - Within one side the aim's error changes smoothly from place to place, a
   few tenths of a degree an hour at most. A jump of more than 2° between
   two places on one side is a clutch slipping or the tube held (12
-  November: a 15° move showed 3.4°), and the run stops there.
+  November: a 15° move showed 3.4°), and the run stops there. It is found
+  after the move, as every check by plate solve is: it does not keep the
+  tube off the tripod. What does is the clearance tested by a person
+  watching (`./mount.py point --clearance-test`; 2 and 17 November,
+  `docs/validation.md`), to be done again when the camera or the tube's
+  place in its rings changes.
+- Each place keeps how long its slew and its plate solve took
+  (`slew_s`, `settle_s`, `solve_s`), and the run says the totals: where a
+  faster survey has to save time is measured, not guessed.
+- A polar alignment run (`./polaralign.py`) sets the last home measurement
+  aside, and the account `--check` uses: the bolts or the tripod may have
+  turned, and nothing on the computer can see that.
+
+Polar alignment's own three pictures say whether home looks out, at no
+extra cost. On one side of the meridian the miss in hour angle is the RA
+axis's home error plus the tube's squareness (over cos Dec) plus at most
+the polar error times tan Dec, and the miss in Dec is the Dec axis's home
+error plus at most the polar error. What is left past the polar error just
+measured, a generous 0.5° for the tube and 0.25° for the solves is at
+least that much home error, and it is said, with `./mount.py findhome` as
+the next step. One side cannot separate the RA home from the tube, so it is
+a warning, never a measurement: nothing moves on it. 18 November's misses
+(3.2° and 6.1° with a polar error of 0.43°) would have read at least 1.9°
+and 5.4°; findhome found 3.2° and 5.7°.
 
 `./mount.py truehome` then drives to the home just measured: home by the
 axis readouts first, as `./mount.py home` goes, then the small step to the
@@ -235,17 +262,27 @@ fixed-rate seek with one. Either way the axes must then read within 0.05°
 of the measured home, or it stops with "not there; do not mark the
 joints". Without a handset it records the place as home itself, and the
 pointing errors measured against the old home are dropped (as by
-`sethome`). The motor counts cannot see a clutch that slips: the second
-`findhome` is what checks the tube got there. Then:
+`sethome`). The motor counts cannot see a clutch that slips, so it says
+home is recorded, not that it is right: the sky says that. Then:
 
 1. Mark both joints, across the gap, where they stand, with something that
    lasts a night of rain: a paint pen, nail varnish or a scratch. Wax crayon
-   and chalk wash off, and then home has to be found again.
+   and chalk wash off, and then home has to be found again. (Without a
+   handset, check first, step 3, then mark.)
 2. Switch the handset off and on with the mount on its marks, and press
    ENTER through to its main menu (`./mount.py settime` saves typing the date).
-3. Run `./mount.py findhome` again. It should now find home within a tenth
-   of a degree; what it finds is the slack in the gears and the width of the
-   marks.
+3. Run `./mount.py findhome --check`. It goes to four places (-3, -1, +1
+   and +3 h) instead of eight and finds only the two home errors, with the
+   tube's squareness and the polar axis held at what the accepted
+   `findhome` found: a new home does not change those. It should find home
+   within a tenth of a degree; what it finds is the slack in the gears and
+   the width of the marks. If the places do not agree with that account
+   (over 0.15°: the bolts turned, a bad solve), or home is still out, it
+   says to run the full `findhome`. It needs an accepted `findhome` at the
+   same Dec, on the same link, in the last six hours, with no polar
+   alignment run since; it is a check, and nothing is kept for `truehome`.
+   On the first night with a change to how truehome moves, run the full
+   `findhome` as well.
 
 From then on, home is two marks lined up.
 
@@ -268,7 +305,8 @@ What is and is not established:
   November: home 3.2° and 5.7° out after a clutch reset, and `truehome`
   reached it with the fixed-rate seek. Its step from home by the board's
   own moves (since 19 November) has run in the demo on the simulated board
-  only.
+  only, and so has `findhome --check` (it finds the same home as the demo's
+  full fit from half the places).
 - A spirit level on the counterweight bar and the tube at the zenith is
   another way to the same end, but the turn from there back to home has not
   been worked through for this mount's readings, and nothing here uses it.

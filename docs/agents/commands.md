@@ -126,7 +126,9 @@ error; it checks all three positions against the limits first, and takes
 slews as `pointing` and works out where home really is, keeping each run under `cache/findhome/` and
 refusing places laid out too poorly to tell home apart (`docs/calibration.md`); `ty mount truehome` then
 goes there, only on an accepted measurement from the same session and the same recorded home, checks the
-axes read within 0.05° of it, and holds. `ty mount settime` sets the handset's clock and position and
+axes read within 0.05° of it, and holds; `ty mount findhome --check` then checks the new home on the sky
+from four places. `./polaralign.py` sets a home measured before it aside, and says when its own pictures
+show home is out (`home_out_at_least_deg`). `ty mount settime` sets the handset's clock and position and
 moves nothing. `ty mount nudge` tips the tube 5° from home and back. `ty mount pointing` slews
 to eight hour angles, four each side of the meridian, plate-solving at each, and swings the tube over the pole
 once; check it with `--dry-run` first. `camera_test.py --trail` stops the mount following the sky for one

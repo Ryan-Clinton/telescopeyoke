@@ -128,8 +128,20 @@ HOME_FRESH = 2 * 3600     # seconds a home measurement may be acted on
 # Each findhome keeps its frames, messages and fit here, one folder a run,
 # accepted or not, so a bad measurement can be looked at afterwards.
 HOME_RUNS = config.DATA / "cache" / "findhome"
-# How far an error of 1° in every plate solve could move the home found,
-# from the places' geometry alone: 0.9 with the eight places at Dec +40°,
+# From the last accepted findhome, the parts a new home leaves alone (the
+# tube's squareness, the polar axis), for `findhome --check`. Set aside by a
+# polar alignment run, which may follow a turn of the bolts.
+GEOMETRY_FILE = config.DATA / "cache" / "home_geometry.json"
+GEOMETRY_FRESH = 6 * 3600   # seconds: a night's session, the tripod untouched
+# Hours from the meridian for `findhome --check`: two each side are enough
+# for two unknowns with figures to spare (8 for 2).
+CHECK_HOURS = (-3.0, -1.0, 1.0, 3.0)
+# Degrees: home this close counts as right (the second findhome of 17
+# October 2026 found 0.19° and 0.05°; the aim is a tenth).
+HOME_RIGHT = 0.1
+# How uncertain the home found would be with a random error of 1° in each
+# plate solve, from the places' geometry alone (home_leverage: a figure
+# for conditioning, not a bound): 0.9 with the eight places at Dec +40°,
 # 1.5 with six, 2.7 with two a side, 6 with four inside an hour of the
 # meridian. Past this the places cannot tell the home errors from the rest
 # of the model, however well they fit it (six places at two hour angles
@@ -573,21 +585,26 @@ class Mount:
                 time.sleep(60)
         return residual, sigma
 
-    def pointing_survey(self, site, hours=SURVEY_HOURS, dec=SURVEY_DEC, skyline=None, keep=True, for_home=False):
+    def pointing_survey(self, site, hours=SURVEY_HOURS, dec=SURVEY_DEC, skyline=None, keep=True, for_home=False,
+                        check=False):
         """Go to each hour angle at one declination, as the handset believes
         them (no correction applied), plate-solve, and record how far out
         the aim really is. Returns pointing_summary()'s account, and keeps
         each side's average as that side's pointing error if `keep`
-        (findhome keeps them only once its fit is accepted)."""
-        spots, _ = plan_survey(site, hours, dec, skyline, for_home)     # refuses here, before anything moves
+        (findhome keeps them only once its fit is accepted). Each place
+        keeps how long its slew and its plate solve took."""
+        spots, _ = plan_survey(site, hours, dec, skyline, for_home, check)     # refuses here, before anything moves
         if not CLOCK_FILE.exists():
             self.save_clock(site)
         offset = json.loads(CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
         rows, last = [], None
         for hours_out in spots:
+            began = time.monotonic()
             self.goto((true_sidereal(site) + offset - hours_out * 15) % 360, dec)
+            slewed = time.monotonic() - began
             self.tracking(True)
             time.sleep(SETTLE)
+            began = time.monotonic()
             west = over_pole(self.axes()[1])
             guess = load_pointing_error(west)
             sidereal = true_sidereal(site)
@@ -608,7 +625,8 @@ class Mount:
             last = (hours_out * 15, actual[0])
             row = {"hour_angle_h": hours_out, "side": side_name(west),
                    "ha_error_deg": round(wrap(actual[0] - believed), 3),
-                   "dec_error_deg": round(actual[1] - wrap(dec_handset), 3)}
+                   "dec_error_deg": round(actual[1] - wrap(dec_handset), 3),
+                   "slew_s": round(slewed, 1), "settle_s": SETTLE, "solve_s": round(time.monotonic() - began, 1)}
             before = next((r for r in reversed(rows) if r["side"] == row["side"]), None)
             if before:
                 jump = math.hypot((row["ha_error_deg"] - before["ha_error_deg"]) * math.cos(math.radians(dec)),
@@ -624,6 +642,11 @@ class Mount:
             rows.append(row)
             self.say(f"hour angle {hours_out:+g} h ({rows[-1]['side']}): out by "
                      f"{rows[-1]['ha_error_deg']:+.2f}° in hour angle, {rows[-1]['dec_error_deg']:+.2f}° in Dec")
+        if rows:
+            # Where the time went, so that a faster survey starts from the real cost.
+            self.say(f"Time over {len(rows)} places: slewing {sum(r['slew_s'] for r in rows):.0f} s, settling "
+                     f"{sum(r['settle_s'] for r in rows):.0f} s, pictures and plate solves "
+                     f"{sum(r['solve_s'] for r in rows):.0f} s.")
         found = pointing_summary(rows)
         if keep:
             keep_pointing(found)
@@ -634,12 +657,15 @@ class Mount:
             self.say(found["verdict"])
         return found
 
-    def find_home(self, site, hours=SURVEY_HOURS, dec=SURVEY_DEC, skyline=None):
+    def find_home(self, site, hours=SURVEY_HOURS, dec=SURVEY_DEC, skyline=None, check=False):
         """Measure where the home position really is. One uninterrupted run
         of plate solves either side of the meridian (pointing_survey), and a
         fit of home_fit()'s model to them. Nothing remembered from earlier is
         used. Returns the fit; only one that is accepted is kept for
-        true_home(), and its places as the pointing errors."""
+        true_home(), and its places as the pointing errors. `check` is
+        check_home() instead."""
+        if check:
+            return self.check_home(site, hours, dec, skyline)
         # Whatever was measured before is not to be acted on once a new
         # measurement has begun, whether or not this one finishes.
         if HOME_FILE.exists():
@@ -656,6 +682,10 @@ class Mount:
         if found["fits"]:
             keep_pointing(survey)
             records.write(HOME_FILE, found)
+            # The parts of the account that a new home leaves as they were,
+            # for check_home() after truehome and the restart.
+            records.write(GEOMETRY_FILE, {k: found[k] for k in (
+                "tube_not_square_deg", "polar_p_deg", "polar_q_deg", "dec_deg", "saved", "link")})
         self.say(f"Home is out by {found['ra_home_error_deg']:+.2f}° on the RA axis and "
                  f"{found['dec_home_error_deg']:+.2f}° on the Dec axis"
                  + ("" if found["ra_home_sigma_deg"] is None else
@@ -678,6 +708,30 @@ class Mount:
             size = math.hypot(found["ra_home_error_deg"], found["dec_home_error_deg"])
             self.say("That is close enough to mark as it stands." if size < 0.1 else
                      "Next: ./mount.py truehome --dry-run, then ./mount.py truehome, and mark both joints there.")
+        return found
+
+    def check_home(self, site, hours=None, dec=SURVEY_DEC, skyline=None):
+        """After truehome (and the restart on the marks, with a handset):
+        whether home is now right, from four places instead of eight. The
+        tube's squareness and the polar axis are taken from the last
+        accepted findhome, which a new home does not change; only the two
+        home errors are found. A check, not a measurement: nothing is kept
+        for truehome, and if the places do not agree with that account (the
+        polar axis turned since, a bad solve) it says to run findhome."""
+        geometry = load_geometry(dec)        # refuses here, before anything moves
+        hours = CHECK_HOURS if hours is None or tuple(hours) == SURVEY_HOURS else hours
+        run = HOME_RUNS / (time.strftime("%Y%m%d-%H%M%S") + "-check")
+        if not self.recording:
+            self.record(run)
+        survey = self.pointing_survey(site, hours, dec, skyline, keep=False, for_home=True, check=True)
+        found = home_check(survey["rows"], dec, geometry)
+        found.update(saved=time.time(), dec_deg=dec, rows=survey["rows"])
+        records.write(run / "check.json", found)
+        self.say(f"With the tube's squareness and the polar axis from the findhome of "
+                 f"{time.strftime('%H:%M', time.localtime(geometry['saved']))}, home is now out by "
+                 f"{found['ra_home_error_deg']:+.2f}° on the RA axis and {found['dec_home_error_deg']:+.2f}° on "
+                 f"the Dec axis; the {found['places']} places sit {found['rms_deg']:.2f}° from that account.")
+        self.say(found["verdict"])
         return found
 
     def true_home(self):
@@ -717,13 +771,15 @@ class Mount:
             counts = self.s.set_home()
             forget_pointing()
             self.say(f"At the measured home, and recorded as home (motor counts {counts[0]}, {counts[1]}). "
-                     "Mark both joints when you can; run ./mount.py findhome again to check it: it should "
-                     "find home within a tenth of a degree.")
+                     "The motors' counts say it is there; the sky has not yet said so (a slipping clutch "
+                     "would not show in the counts). Check it with ./mount.py findhome --check (four places), "
+                     "then mark both joints.")
             return
         self.say(f"At the measured home: the axes read RA {wrap(ra_axis):+.2f}°, Dec {dec_axis:.2f}°. Mark both "
                  "joints now. Then switch the handset off and on with the mount on its marks, press ENTER "
-                 "through to the main menu, run ./mount.py settime, polar-align if the tripod was moved, and "
-                 "run ./mount.py findhome again: it should find home within a tenth of a degree.")
+                 "through to the main menu, run ./mount.py settime, and check it with ./mount.py findhome "
+                 "--check (four places): home should be within a tenth of a degree. If the tripod was moved, "
+                 "polar-align and run ./mount.py findhome in full instead.")
 
     def compensate(self, site):
         """Wonky alignment mode: measure how far the polar axis is out, say
@@ -1281,7 +1337,7 @@ def plan_point(azimuth, altitude, site, clearance_test=False):
     return dict(plan, azimuth_deg=azimuth)
 
 
-def plan_survey(site, hours=SURVEY_HOURS, dec=SURVEY_DEC, skyline=None, for_home=False):
+def plan_survey(site, hours=SURVEY_HOURS, dec=SURVEY_DEC, skyline=None, for_home=False, check=False):
     """The hour angles `pointing` would go to, east side first so that the
     tube swings over the pole only once, checked against the limits, the
     Sun and what is known to be in the way. Returns (hours, notes); raises a
@@ -1314,12 +1370,15 @@ def plan_survey(site, hours=SURVEY_HOURS, dec=SURVEY_DEC, skyline=None, for_home
                           "which is too few to say anything: " + " ".join(notes) + " Try another --dec or "
                           "other --hours.")
     if for_home:
-        leverage = home_leverage([{"hour_angle_h": h, "side": "east" if h < 0 else "west"} for h in spots], dec)
+        leverage = home_leverage([{"hour_angle_h": h, "side": "east" if h < 0 else "west"} for h in spots], dec,
+                                 fixed=check)
         if leverage > HOME_LEVERAGE:
-            raise Refusal("INVALID_REQUEST", f"These places cannot tell where home is: an error of 1° in the plate "
-                          f"solves could move it by {leverage:.1f}°, and it needs under {HOME_LEVERAGE:g}°. Spread "
-                          "them further from the meridian, or use more (the eight by default).")
-        notes.append(f"From these places, an error of 1° in every plate solve could move home by {leverage:.1f}°.")
+            raise Refusal("INVALID_REQUEST", f"These places cannot tell where home is: a random error of 1° in "
+                          f"each plate solve would leave home uncertain by about {leverage:.1f}°, and it needs under "
+                          f"{HOME_LEVERAGE:g}°. Spread them further from the meridian, or use more (the eight by "
+                          "default).")
+        notes.append(f"From these places, a random error of 1° in each plate solve would leave home uncertain "
+                     f"by about {leverage:.1f}°.")
     if any(h > 0 for h in spots):
         notes.append("The tube will swing over the pole once, between the east side and the west.")
     return spots, notes
@@ -1413,8 +1472,8 @@ def home_fit(rows, dec):
     if not ok:
         raise Refusal("PLATE_SOLVE_FAILED", f"Too few places solved to find home: {sides['east']} on the east "
                       f"side and {sides['west']} on the west. It needs two on each and five in all, spread so "
-                      f"that a 1° error in the solves could move home by under {HOME_LEVERAGE:g}° "
-                      f"(these: {home_leverage(rows, dec):.1f}°).")
+                      f"that a random 1° error in each solve would leave home uncertain by under "
+                      f"{HOME_LEVERAGE:g}° (these: {home_leverage(rows, dec):.1f}°).")
     answer, rms = fit(rows)
     used, left_out = rows, None
     # One bad place (a solve on the wrong stars, a gust) can spoil an account
@@ -1460,6 +1519,7 @@ def home_fit(rows, dec):
             "dec_home_sigma_deg": None if sigma is None else round(float(sigma[1]), 3),
             "leverage": round(home_leverage(used, dec), 2),
             "tube_not_square_deg": round(cone, 3), "polar_error_left_deg": round(math.hypot(p, q), 3),
+            "polar_p_deg": round(p, 4), "polar_q_deg": round(q, 4),
             "rms_deg": round(rms, 3), "sway_deg": None if sway is None else round(sway, 3),
             "places": len(used), "fits": bool(believable),
             "why_not": None if believable else (
@@ -1484,16 +1544,75 @@ def home_model(rows, dec):
     return np.array(model)
 
 
-def home_leverage(rows, dec):
-    """How far an error of 1° in every plate solve could move the home found
-    from these places (the larger of the two axes): their geometry alone,
-    before anything is measured. Infinite when they cannot tell the five
-    unknowns apart at all, as six places at two hour angles cannot."""
+def home_leverage(rows, dec, fixed=False):
+    """How uncertain the home found from these places would be (the larger
+    of the two axes) if each plate solve had a random, independent error of
+    1°: their geometry alone, before anything is measured. A figure for
+    conditioning, not a bound: an error shared by every solve (the camera's
+    angle, flexure, a wrong axis reading) is not in it. Infinite when the
+    places cannot tell the unknowns apart at all, as six places at two hour
+    angles cannot. `fixed`: only the two home errors are unknown, the rest
+    taken from an earlier fit (check_home)."""
     import numpy as np
-    model = home_model(rows, dec)
-    if len(model) < 5 or np.linalg.matrix_rank(model) < 5:
+    model = home_model(rows, dec)[:, :2] if fixed else home_model(rows, dec)
+    unknowns = model.shape[1]
+    if len(model) < unknowns or np.linalg.matrix_rank(model) < unknowns:
         return math.inf
     return float(np.sqrt(np.diag(np.linalg.inv(model.T @ model)))[:2].max())
+
+
+def home_check(rows, dec, geometry):
+    """The two home errors from places measured after a new home, with the
+    tube's squareness and the polar axis held at what `geometry` (an
+    accepted home_fit) found; how far the places sit from that account; and
+    a verdict. Agreement is judged as home_fit judges it (HOME_FITS)."""
+    import numpy as np
+    sides = {name: len({r["hour_angle_h"] for r in rows if r["side"] == name}) for name in ("east", "west")}
+    if min(sides.values()) < 2 or not math.isfinite(home_leverage(rows, dec, fixed=True)):
+        raise Refusal("PLATE_SOLVE_FAILED", f"Too few places solved to check home: {sides['east']} on the east "
+                      f"side and {sides['west']} on the west. It needs two on each.")
+    model = home_model(rows, dec)
+    seen = np.array([v for row in rows for v in (row["ha_error_deg"], row["dec_error_deg"])])
+    seen = seen - model[:, 2:] @ np.array([geometry["tube_not_square_deg"], geometry["polar_p_deg"],
+                                           geometry["polar_q_deg"]])
+    answer = np.linalg.lstsq(model[:, :2], seen, rcond=None)[0]
+    rms = float(np.sqrt(np.mean((model[:, :2] @ answer - seen) ** 2)))
+    ra, dec_error = (float(v) for v in answer)
+    agrees, right = rms <= HOME_FITS, max(abs(ra), abs(dec_error)) <= HOME_RIGHT
+    verdict = ("The places do not agree with the earlier account of the tube and the polar axis (the bolts "
+               f"turned since, or a bad solve): {rms:.2f}° where it needs {HOME_FITS:g}°. Nothing is settled; "
+               "run ./mount.py findhome." if not agrees else
+               f"Home is right, within the {HOME_RIGHT:g}° aimed for." if right else
+               f"Home is still more than {HOME_RIGHT:g}° out. Run ./mount.py findhome for a full measurement "
+               "before moving it again.")
+    return {"ra_home_error_deg": round(ra, 3), "dec_home_error_deg": round(dec_error, 3), "rms_deg": round(rms, 3),
+            "places": len(rows), "agrees": agrees, "home_right": bool(agrees and right), "verdict": verdict}
+
+
+def load_geometry(dec):
+    """The last accepted findhome's tube and polar axis, for check_home, or a
+    refusal: none, from another declination, from a different link, or
+    older than a night's session."""
+    try:
+        geometry = json.loads(GEOMETRY_FILE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        raise Refusal("INVALID_REQUEST", "No accepted findhome to check against (a polar alignment since sets it "
+                      "aside, as the bolts may have turned). Run ./mount.py findhome.")
+    if time.time() - geometry["saved"] > GEOMETRY_FRESH or geometry["dec_deg"] != dec \
+            or geometry["link"] != home_reference()[0]:
+        raise Refusal("INVALID_REQUEST", f"The last accepted findhome is more than {GEOMETRY_FRESH // 3600} hours "
+                      f"old, at another declination (it was at {geometry['dec_deg']:+g}°), or on another link. "
+                      "Run ./mount.py findhome.")
+    return geometry
+
+
+def forget_home_measurement():
+    """The polar axis may just have been turned: a home measured before is
+    of a mount that may no longer stand that way, so it is set aside, and
+    so is the account `findhome --check` would use."""
+    for gone in (HOME_FILE, GEOMETRY_FILE):
+        if gone.exists():
+            gone.replace(gone.with_name(gone.stem + ".previous.json"))
 
 
 def home_target(found):
@@ -1801,6 +1920,9 @@ def main():
     ap.add_argument("--hours", type=float, nargs="+", default=list(SURVEY_HOURS), metavar="H",
                     help="with pointing and findhome: the hour angles to visit, in hours from the meridian (east is negative)")
     ap.add_argument("--dec", type=float, default=SURVEY_DEC, help="with pointing: the declination to visit them at")
+    ap.add_argument("--check", action="store_true",
+                    help="with findhome: after truehome, check home from four places, the tube and the polar "
+                         "axis taken from the last accepted findhome; nothing is kept for truehome")
     ap.add_argument("--aim-off", type=float, nargs=2, default=[0.0, 0.0], metavar=("EAST", "NORTH"),
                     help="with goto: aim this many arcminutes east and north of the object, to centre "
                          "one plate solving cannot, such as the Moon (west and south are negative)")
@@ -1866,6 +1988,15 @@ def dry_run(args, site):
                                  nudge_step(config.example() if args.demo else None)]}
         if args.command == "truehome":
             return plan_true_home()
+        if args.command == "findhome" and args.check:
+            geometry = load_geometry(args.dec)
+            hours = CHECK_HOURS if tuple(args.hours) == SURVEY_HOURS else args.hours
+            spots, notes = plan_survey(site, hours, args.dec, config.load().get("horizon") if not args.demo else None,
+                                       for_home=True, check=True)
+            return {"would_move": True, "safe": True, "hour_angles_h": spots, "dec_deg": args.dec,
+                    "warnings": [f"Slews to {len(spots)} places at Dec {args.dec:+g}°, plate-solving at each, and "
+                                 "finds the two home errors with the tube and the polar axis as the findhome of "
+                                 f"{time.strftime('%H:%M', time.localtime(geometry['saved']))} found them."] + notes}
         if args.command in ("pointing", "findhome"):
             spots, notes = plan_survey(site, args.hours, args.dec, config.load().get("horizon") if not args.demo else None,
                                        for_home=args.command == "findhome")
@@ -1993,7 +2124,7 @@ def act(args, site):
             elif args.command == "pointing":
                 mount.pointing_survey(site, args.hours, args.dec, config.load().get("horizon"))
             elif args.command == "findhome":
-                mount.find_home(site, args.hours, args.dec, config.load().get("horizon"))
+                mount.find_home(site, args.hours, args.dec, config.load().get("horizon"), check=args.check)
             elif args.command == "truehome":
                 mount.true_home()
             elif args.command == "sethome":

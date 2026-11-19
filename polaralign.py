@@ -54,6 +54,35 @@ LEAST = 5.0
 # lands, only that it is on it, and a one-second frame does not streak.
 SETTLE = 5
 CLEAR = 3.0   # degrees a photograph must be above anything known to be in the way
+# The last measurement's raw misses (where each picture really was against
+# where the mount believed it aimed) and the Dec they were at, for home_hint().
+LAST_AIMS = {"aims": [], "dec": None}
+# Degrees the tube may be out of square to the Dec axis without saying so
+# (findhome on 18 November 2026: 0.06°), and what the solves and the slack
+# may add, when judging whether the misses say anything about home.
+CONE_ALLOWED = 0.5
+MISS_ALLOWED = 0.25
+
+
+def home_hint(aims, dec, polar_total):
+    """Whether this measurement's own pictures say the home position is out,
+    with no move or picture of its own. On one side of the meridian the
+    aim's miss is the RA axis's home error plus the tube's squareness over
+    cos(dec) plus the polar error times tan(dec) at most, in hour angle; and
+    the Dec axis's home error plus the polar error at most, in Dec. So what
+    is left past the polar error just measured, and a generous allowance for
+    the tube, is at least that much home error. One side cannot say more:
+    it cannot tell the RA home from the tube, and only findhome's two sides
+    find them. Returns (RA axis at least, Dec axis at least) in degrees, or
+    None with too few pictures."""
+    if len(aims) < 2 or dec is None:
+        return None
+    ha = sum(a[0] for a in aims) / len(aims)
+    de = sum(a[1] for a in aims) / len(aims)
+    cos_dec = max(math.cos(math.radians(dec)), 0.1)
+    ra_least = abs(ha) - abs(math.tan(math.radians(dec))) * polar_total - CONE_ALLOWED / cos_dec - MISS_ALLOWED
+    dec_least = abs(de) - polar_total - MISS_ALLOWED
+    return max(ra_least, 0.0), max(dec_least, 0.0)
 # The newest measurement, kept through a power cycle (the drift model is not):
 # the bolts do not move when the handset is switched off. ./polaris.py looks
 # less far when this says the axis is close, and `ty characterise` reports it.
@@ -282,6 +311,8 @@ def _measure(scope, site, step=STEP, skyline=None):
     # three positions are checked before the first move.
     planned = positions(start_ha, dec_handset, mount.over_pole(scope.axes()[1]), site, step, skyline)
     points = []
+    aims = LAST_AIMS["aims"] = []
+    LAST_AIMS["dec"] = dec_handset
     try:
         for i, (target_ha, _) in enumerate(planned):
             tell(picture=i + 1, taken=i)
@@ -308,8 +339,9 @@ def _measure(scope, site, step=STEP, skyline=None):
                 # declination at the moment of the picture, against the handset's.
                 west = mount.over_pole(scope.axes()[1])
                 actual = mount.where(found, site, found["when"])
-                mount.save_pointing_error([mount.wrap(actual[0] - target_ha), actual[1] - mount.wrap(dec_handset)],
-                                          west)
+                aim = [mount.wrap(actual[0] - target_ha), actual[1] - mount.wrap(dec_handset)]
+                mount.save_pointing_error(aim, west)
+                aims.append(aim)        # the raw miss, for home_hint(); not the hint it was solved from
             if not found:
                 if i:
                     # Not left pointing at whatever hid the stars.
@@ -726,6 +758,19 @@ def run(args):
               "east_of_north": azimuth > 0, "too_high": altitude > 0, "advice": words, "measured": time.time()}
     if checked:
         result["cross_check"] = checked
+    # The pictures also say something about home, at no cost: a miss bigger
+    # than the polar error and the tube can explain is home set wrong.
+    hint = home_hint(LAST_AIMS["aims"], LAST_AIMS["dec"], total) if repeat == 1 else None
+    if hint is not None:
+        result["home_out_at_least_deg"] = {"ra_axis": round(hint[0], 2), "dec_axis": round(hint[1], 2)}
+        if max(hint) > 0:
+            print(f"\nThe pictures also miss where the mount aimed by more than this polar error and the tube can "
+                  f"explain: home looks out by at least {hint[0]:.1f}° on the RA axis and {hint[1]:.1f}° on the "
+                  "Dec axis. Once the polar axis is done: ./mount.py findhome, and if it is accepted, "
+                  "./mount.py truehome --dry-run, then ./mount.py truehome.")
+    # A home measured before this is of a mount that may have been turned
+    # since, by the bolts or the tripod: set aside, never acted on.
+    mount.forget_home_measurement()
     # What the turns made since the last measurement did, if they were given.
     if turned and any(turned):
         try:
