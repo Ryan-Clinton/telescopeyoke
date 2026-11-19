@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""One colour picture from a mono camera's stacks in L, R, G and B.
+"""One colour picture from a mono camera's stacks in L, R, G and B, or in narrowband.
 
-    ./colour.py "NGC 281"              the newest stack in each filter -> web/NGC281-colour.jpg
+    ./colour.py "NGC 281"              the deepest stack in each filter -> web/NGC281-colour.jpg
     ./colour.py "NGC 281" --night 20261104      only that night's sessions
     ./colour.py "NGC 281" --saturation 1.6      stronger colour
+    ./colour.py "NGC 281" --palette SHO         the Hubble palette -> web/NGC281-SHO.jpg
+    ./colour.py "NGC 281" --palette HOO         Ha red, OIII green and blue -> web/NGC281-HOO.jpg
 
 The 183M takes one filter at a time (shoot.py --filter, --blocks), and each
 filter's session is stacked on its own: stacking never mixes filters. This
@@ -18,6 +20,13 @@ Without L, the R, G and B stacks make the picture alone; without all three of
 R, G and B, there is no colour and it says so. Filters that frame different
 sky (sharing under 75% of the frame) are refused, as the target would be cut
 off (--any-coverage makes it anyway). Nothing is moved or exposed.
+
+Narrowband (--palette): SHO puts SII in red, Ha in green and OIII in blue
+(the Hubble palette); HOO puts Ha in red and OIII in both green and blue,
+the nebula's own colours more or less, and needs no SII. Every filter is
+lined up on the Ha stack, which has the most stars, and the balance is made
+on the stars as for R, G and B, so the stars come out near white and the
+nebula takes the palette's colours. There is no L to take the detail from.
 """
 import argparse
 import json
@@ -32,6 +41,11 @@ import process
 import stacking
 
 COLOURS = ("R", "G", "B")
+# palette: (the filter in red, in green, in blue), the filter lined up on,
+# the filter giving the detail (None: the colour's own brightness)
+PALETTES = {"LRGB": (COLOURS, "L", "L"),
+            "SHO": (("SII", "Ha", "OIII"), "Ha", None),
+            "HOO": (("Ha", "OIII", "OIII"), "Ha", None)}
 
 
 def sessions(name, night=None):
@@ -81,21 +95,25 @@ def lined_up(image, reference):
 MIN_COVERED = 0.75   # share of the frame every filter must cover for the target to be in the picture
 
 
-def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED):
+def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette="LRGB"):
     """The colour picture (8-bit RGB array) and what went into it."""
-    have = [b for b in ("L",) + COLOURS if b in stacks]
-    if not all(b in stacks for b in COLOURS):
-        missing = ", ".join(b for b in COLOURS if b not in stacks)
-        raise interface.Refusal("NO_SESSION", f"No stack in {missing}: a colour picture needs R, G and B "
-                                f"(have {', '.join(have) or 'none'}).")
-    base = "L" if "L" in stacks else "R"
+    channels, base, detail_band = PALETTES[palette]
+    needed = tuple(dict.fromkeys(channels))
+    extra = (detail_band,) if detail_band else ()
+    have = [b for b in extra + needed if b in stacks]
+    if not all(b in stacks for b in needed):
+        missing = ", ".join(b for b in needed if b not in stacks)
+        raise interface.Refusal("NO_SESSION", f"No stack in {missing}: a {palette} picture needs "
+                                f"{', '.join(needed)} (have {', '.join(have) or 'none'}).")
+    if base not in stacks:
+        base = channels[0]
     images = {b: brightness(stacks[b]) for b in have}
     rows = min(i.shape[0] for i in images.values())
     cols = min(i.shape[1] for i in images.values())
     images = {b: i[:rows, :cols] for b, i in images.items()}
     ref_image = np.nan_to_num(images[base])
     reference = {"square": stacking.centre_square(ref_image), "stars": stacking.find_stars(ref_image)}
-    used = {base: {"stack": str(stacks[base]), "matched": None}}
+    used = {"palette": palette, base: {"stack": str(stacks[base]), "matched": None}}
     for band in have:
         if band == base:
             continue
@@ -110,10 +128,10 @@ def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED):
                                     f"{base} stack (at least {stacking.LINED_UP} are needed): "
                                     "the colours would not line up.")
     valid = np.all([np.isfinite(i) for i in images.values()], axis=0)
-    rgb = np.stack([np.where(valid, images[b], 0) for b in COLOURS], axis=2)
+    rgb = np.stack([np.where(valid, images[b], 0) for b in channels], axis=2)
     colour = process.process(rgb, saturation=saturation).astype(np.float32)
-    if "L" in images:
-        grey = np.where(valid, images["L"], 0)
+    if detail_band in images:
+        grey = np.where(valid, images[detail_band], 0)
         detail = process.process(np.repeat(grey[..., None], 3, axis=2), saturation=1.0)[..., 0].astype(np.float32)
         # The colour's own brightness swapped for L's: hue and saturation from
         # R, G and B, detail and depth from L.
@@ -151,6 +169,8 @@ def main():
     ap.add_argument("name", help="the object, as given to shoot.py")
     ap.add_argument("--night", metavar="YYYYMMDD", help="only sessions begun that date")
     ap.add_argument("--saturation", type=float, default=1.25, help="colour strength; 1 is as shot")
+    ap.add_argument("--palette", choices=sorted(PALETTES), default="LRGB",
+                    help="LRGB (default), SHO (SII red, Ha green, OIII blue) or HOO (Ha red, OIII green and blue)")
     ap.add_argument("--any-coverage", action="store_true",
                     help="make the picture even when the filters share under 75%% of the frame")
     ap.add_argument("--json", action="store_true", help="answer in JSON at the end")
@@ -161,12 +181,14 @@ def main():
 def run(args):
     stacks = sessions(args.name, args.night)
     print("stacks: " + (", ".join(f"{b} {p.parent.name}" for b, p in sorted(stacks.items())) or "none"))
-    picture, used = combine(stacks, args.saturation, min_covered=0.0 if args.any_coverage else MIN_COVERED)
-    out = config.DATA / "web" / f"{stacking.folder_name(args.name)}-colour.jpg"
+    picture, used = combine(stacks, args.saturation, min_covered=0.0 if args.any_coverage else MIN_COVERED,
+                            palette=args.palette)
+    suffix = "colour" if args.palette == "LRGB" else args.palette
+    out = config.DATA / "web" / f"{stacking.folder_name(args.name)}-{suffix}.jpg"
     out.parent.mkdir(exist_ok=True)
     Image.fromarray(picture).save(out, quality=93)
     print(f"saved {out}")
-    result = {"name": args.name, "picture": str(out), "filters": used}
+    result = {"name": args.name, "palette": args.palette, "picture": str(out), "filters": used}
     (out.with_suffix(".json")).write_text(json.dumps(result, indent=1), encoding="utf-8")
     return result
 

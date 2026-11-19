@@ -83,7 +83,7 @@ The cooled camera, discovery and research scripts:
 |---|---|
 | `keeper.py` | Keeps the cooled camera open and cold for the whole night: `start` cools it slowly (1 °C a minute) to its target, every command borrows it from there, and one slow warm-up comes at the night's end. |
 | `sxwheel.py` | The Starlight Xpress USB filter wheel: which filter is in the light path, and moves to another with the position confirmed. |
-| `colour.py` | One colour picture from a mono camera's L, R, G and B stacks, cropped to the area every filter covers; it refuses one whose filters share under 75% of the frame. |
+| `colour.py` | One colour picture from a mono camera's L, R, G and B stacks, or narrowband with `--palette SHO` or `HOO`, cropped to the area every filter covers; it refuses one whose filters share under 75% of the frame. |
 | `instrument.py` | What the camera in use is ready for and what it still needs (darks, flats, focus offsets, references) before its science counts. |
 | `cameras.py` | The camera profiles and light paths (trains). |
 | `corners.py` | Star shapes in the corners against the middle: the corrector's spacing, a tilt or the collimation. |
