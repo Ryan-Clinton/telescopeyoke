@@ -1619,8 +1619,11 @@ def solve_frame(cam, exposure):
     not binned: its pattern would be mixed. Returns (frame, binning used,
     seconds spent switching), the switching kept apart so the night shows
     whether binning pays for itself."""
+    from camera import PROFILES
     mono = getattr(cam, "mono", False) or config.DEMO
-    if not mono:
+    # Judged here, not in the camera's process: a keeper started with
+    # another setting would otherwise bin all the same.
+    if not mono or PROFILES["solve"] == 1:
         return cam.frame(exposure)[0], 1, 0.0
     began = time.monotonic()
     try:

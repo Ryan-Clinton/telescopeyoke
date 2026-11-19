@@ -52,9 +52,12 @@ BACKEND = SETTINGS["camera"]["backend"]   # "indi", "altair" for Altair's own li
 # keeper do; through INDI they stay unbinned, as before): a quarter of the data down the lead (a 1 s
 # frame 1.12 s where the full sensor took 1.54 s, 6 October 2026), and the
 # solver is given the field's size, not the pixel scale (1.46"/px on the
-# 183M's 2x2 frames, solved). [camera] solve_binning = 1 turns it off.
+# 183M's 2x2 frames, solved). Off unless [camera] solve_binning = 2: on the
+# sky through the keeper, 19 November 2026, switching the binning on and
+# back cost 2.8-3.0 s a picture and made each solve's frame 4.6 s, slower
+# than the full sensor's 1.5-3.6 s.
 PROFILES = {"imaging": 1, "focus_fine": 1, "focus_fast": 2,
-            "solve": int(SETTINGS["camera"].get("solve_binning", 2))}
+            "solve": int(SETTINGS["camera"].get("solve_binning", 1))}
 
 
 # What camera_test.py --trail measured: how long the shutter was really open.
