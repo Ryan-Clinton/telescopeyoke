@@ -233,6 +233,14 @@ class Camera:
     def close(self):
         self.client.close()
 
+    def offered(self, name, wait=5):
+        """A property's elements if the driver publishes it (waiting a little:
+        some publish theirs a moment after connecting), or None."""
+        try:
+            return self.client.wait_for(self.name, name, wait)["items"]
+        except IndiError:
+            return None
+
     def _open(self):
         if MANAGE_SERVER and replugged():
             start_driver(self.port)
@@ -262,14 +270,25 @@ class Camera:
             # The first mode listed is the full sensor. Something (a test, a
             # crash) left a smaller one selected.
             c.set(self.name, "CCD_RESOLUTION", **{next(iter(modes)): "On"})
-        c.set(self.name, "CCD_BINNING", HOR_BIN=1, VER_BIN=1)
+        # Only what this driver offers: another maker's INDI camera may have
+        # no binning, name its raw format otherwise (ZWO's ASI_IMG_RAW16), or
+        # keep its gain apart (CCD_GAIN), and set() waits for a property
+        # that never comes.
+        if self.offered("CCD_BINNING"):
+            c.set(self.name, "CCD_BINNING", HOR_BIN=1, VER_BIN=1)
         self.binning = 1
-        c.set(self.name, "CCD_CAPTURE_FORMAT", INDI_RAW="On")
+        formats = self.offered("CCD_CAPTURE_FORMAT") or {}
+        raw = "INDI_RAW" if "INDI_RAW" in formats else next((f for f in formats if "RAW" in f.upper()), None)
+        if raw:
+            c.set(self.name, "CCD_CAPTURE_FORMAT", **{raw: "On"})
         if (c.get(self.name, "CCD_TRANSFER_FORMAT") or {}).get("FORMAT_FITS", "On") != "On":
             # Left on native transfer (camera_test.py did, when its trial of
             # it timed out), every frame arrives as something that is not FITS.
             c.set(self.name, "CCD_TRANSFER_FORMAT", FORMAT_FITS="On")
-        c.set(self.name, "CCD_CONTROLS", Gain=self.gain)
+        if "Gain" in (self.offered("CCD_CONTROLS") or {}):
+            c.set(self.name, "CCD_CONTROLS", Gain=self.gain)
+        elif self.offered("CCD_GAIN", wait=1):
+            c.set(self.name, "CCD_GAIN", GAIN=self.gain)
         # Set every time the camera is opened, so a restart of the driver
         # cannot put them back to its own defaults (17 October 2026: after
         # one, broad stripes crossed every frame).

@@ -220,13 +220,16 @@ def setup(args):
     device = host.camera_device(match)
     if device is None:
         steps.add("usb", FAIL, f"no camera named \"{match}\" is plugged in. Plug it in, into a "
-                               "blue USB 3 socket if there is one, and run this again.")
+                               "blue USB 3 socket if there is one, and run this again. Another maker's "
+                               "camera: set [camera] usb_match in config.toml to a word of the name "
+                               "./newhardware.py shows for it.")
         return finish(steps, backend)
     if not device["ready"]:
+        maker = ("AltairCapture from altairastro.help, which brings the driver" if "altair" in match.lower()
+                 else "the camera maker's own driver")
         steps.add("usb", TODO, f"{device['name']} is plugged in, but {device['detail']}. Install "
-                               "AltairCapture from altairastro.help, which brings the driver, check "
-                               "the camera shows a picture in it, close it, and run this again.",
-                  device=device)
+                               f"{maker}, check the camera shows a picture in the maker's own program, "
+                               "close it, and run this again.", device=device)
         return finish(steps, backend)
     steps.add("usb", OK, f"{device['name']} is plugged in ({device['detail']})", device=device)
 

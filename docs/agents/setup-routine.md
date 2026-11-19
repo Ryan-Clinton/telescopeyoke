@@ -13,8 +13,9 @@ wheel, a motor focuser), and a step for kit it lacks is skipped.
 their hands on the mount. Never hand them a command to type. Tell them only
 what needs their hands or their eyes, in a line, and say before anything
 moves. A move they ask for is the go (`AGENTS.md`, safety rule 1): dry-run
-it, and if it passes, send it at once, with no warnings about cables,
-standing clear or the tube swinging; they know. So is telling you what they
+it, and if it passes, send it at once. On a rig its owner knows, no
+warnings about cables, standing clear or the tube swinging: they know. On
+a new one, say the swing in the same line, the first few times. So is telling you what they
 can see: "it's clear to the north, can see Polaris" means they are outside,
 and the next step that fits that sky starts now, without asking.
 

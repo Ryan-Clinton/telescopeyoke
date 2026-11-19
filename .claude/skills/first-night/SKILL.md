@@ -50,7 +50,9 @@ has answered; and an empty list where the system's Wi-Fi tools are missing
 proves nothing. A serial
 adapter (FTDI, Prolific, CH340) says nothing about what is behind it. Ask what they have where it does not show:
 mount and handset, telescope (aperture, focal length), camera, focuser,
-filter wheel.
+filter wheel. Unsure of a model or a figure: a photo of its label helps
+(a tube's label usually reads like "D=150mm F=750mm"; a camera's model is
+on its body).
 
 Then, as a suggestion, one line for each device from `docs/hardware.md`:
 proven, unproven on this model, seen but not supported, or not found. Say plainly what
@@ -72,12 +74,14 @@ send a device a question unless the person names its port and agrees
 3. Their telescope and camera in `config.toml` (focal length, the camera
    and its sensor): the example's 150P and Altair 183C are one person's
    kit, not defaults.
-4. The ASTAP star database (`docs/setup.md`, step 2). A download that needs
+4. The ASTAP star database (`docs/setup.md`, step 2), once they want the
+   sky: a camera alone does not need it. A download that needs
    the person (a vendor's camera SDK behind a login): give the link and
    where the files go, then carry on from that step when they are there.
 5. `./doctor.py --need` what their aim needs, until it is ready, plugging
-   things in as it asks (`--offline` needs no network): `imaging` for a
-   camera alone; `mount,imaging` to go on to the moves; `goto` before the
+   things in as it asks (`--offline` needs no network): `camera` for a
+   frame alone (no plate solver or star database needed); `imaging` for
+   the sky; `mount,imaging` to go on to the moves; `goto` before the
    first GoTo. A mount TelescopeYoke cannot drive is never asked for.
 6. A first frame from the camera indoors (`./snap.py`), to see it works;
    once they have seen it, `--confirm frame`.

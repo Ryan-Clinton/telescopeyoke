@@ -368,29 +368,34 @@ def run(offline=False, skip_handset=False, name_site=True):
     others = check_other_mount_software()
     if others:
         mount.append(others)
-    imaging = [check_solver(), check_star_database()]
+    # The camera alone (a frame indoors needs nothing more), then what
+    # imaging adds to it: the plate solver and its star database, a
+    # 400 MB download no first frame needs.
     if config.DEMO:
         # The pretend camera is the same on every system: no driver, no library.
-        imaging += [check_camera()]
+        camera = [check_camera()]
     elif config.hardware()["camera"]["backend"] == "altair":
-        imaging += altair_checks()
+        camera = altair_checks()
     else:
-        imaging += [check_program("indiserver", "INDI"), check_program(driver, "camera driver"),
-                    check_indi_server(), check_camera()]
-    imaging += [check_camera_link(), check_speech(), check_tones()]
-    return {"planner": planner, "mount": mount, "imaging": imaging}
+        camera = [check_program("indiserver", "INDI"), check_program(driver, "camera driver"),
+                  check_indi_server(), check_camera()]
+    camera.append(check_camera_link())
+    imaging = [check_solver(), check_star_database(), check_speech(), check_tones()]
+    return {"planner": planner, "mount": mount, "camera": camera, "imaging": imaging}
 
 
 def ready(results):
-    """{section: bool}. Mount and imaging also need the planner's basics."""
+    """{section: bool}. Each also needs the planner's basics, and imaging
+    the camera."""
     passed = {name: all(status != FAIL for status, _ in checks)
               for name, checks in results.items()}
     mount = passed["planner"] and passed["mount"]
     # Connected is not ready for a GoTo: a direct link refuses every GoTo
     # until a person has watched which way the Dec motor turns.
     goto = mount and goto_blocked() is None
-    return {"planner": passed["planner"], "mount": mount, "goto": goto,
-            "imaging": passed["planner"] and passed["imaging"]}
+    camera = passed["planner"] and passed.get("camera", True)
+    return {"planner": passed["planner"], "mount": mount, "goto": goto, "camera": camera,
+            "imaging": camera and passed["imaging"]}
 
 
 def report(offline=False, skip_handset=False):
@@ -623,8 +628,8 @@ def main():
                          "is, as a handset and then as a motor board. Only reads; close EQMOD first")
     args = ap.parse_args()
     need = [part.strip() for part in args.need.split(",") if part.strip()]
-    if not need or set(need) - {"planner", "mount", "goto", "imaging"}:
-        ap.error("--need takes planner, mount, goto and imaging, comma-separated")
+    if not need or set(need) - {"planner", "mount", "goto", "camera", "imaging"}:
+        ap.error("--need takes planner, mount, goto, camera and imaging, comma-separated")
 
     if args.json:
         import interface

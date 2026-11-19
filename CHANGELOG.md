@@ -48,6 +48,12 @@ proven is `docs/validation.md` ("Current conclusions").
   filter wheel's driver is not a camera), and says when there are two.
 - Setup, the agents' hardware notes and the autoguiding page now say
   what validation records.
+- **A camera alone is its own check**: `./doctor.py --need camera` needs
+  no plate solver or star database, for a first frame indoors.
+- Another maker's INDI camera: `camera.py` sets binning, the raw format
+  and the gain only where its driver offers them, by the names it uses
+  (ZWO's raw format, `CCD_GAIN`); `camera_setup.py` names the maker's own
+  driver rather than AltairCapture for a camera that is not an Altair.
 
 ## 0.4.0: setup that remembers, skills that follow the rig
 
