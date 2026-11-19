@@ -23,7 +23,7 @@ Quirks worth knowing before changing code:
   of its swing, tube on top pointing at the pole.
 - **West of the meridian the tube swings over the pole;** the Dec axis then
   reads past 90° and several signs reverse (`Mount.west()`).
-- **After a slew the stars streak for up to 30 s** while the gears settle.
+- **After a slew the stars can streak for up to 26 s** while the gears settle, but 97% of the time they are steady at once (17 October, 1,098 looks): the plate-solve picture is taken straight away and taken again only while its stars are trailed (`mount.still_swinging`).
 - **The camera's INDI device name contains a dot,** which the stock INDI
   command-line tools cannot address; hence `indi.py`.
 - **Frames take about 4 s plus five times the exposure** with this driver on

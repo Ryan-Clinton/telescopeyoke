@@ -223,14 +223,31 @@ What a run keeps:
   watching (`./mount.py point --clearance-test`; 2 and 17 November,
   `docs/validation.md`), to be done again when the camera or the tube's
   place in its rings changes.
-- After each slew it waits 2 s, not a fixed 10, and lets the picture say
-  whether the tube has settled: stars trailed past a median roundness of
+- After each slew it waits for nothing, not a fixed 10 s, and lets the
+  picture say whether the tube has settled: stars trailed past a median roundness of
   0.5 (in the middle 1024 pixels; the 183M's settled frames read 0.81 to
   0.94) are taken again a second later, up to 26 s, the worst settling
   seen. The fit works to 0.15°, so what matters is a picture that solves,
   not stars landing to the arcsecond. Polar alignment's pictures settle
-  the same way, up to its 5 s. On the sky 19 November: settling took 16 s
-  over eight places, one picture retaken.
+  the same way, up to its 5 s, and so does GoTo centring, up to 10 s. On the
+  sky 19 November: with a 2 s wait, 16 s of settling over eight places and
+  one picture retaken; with none, no picture retaken over four. The 17
+  October skyline survey's 1,098 looks were steady at the first moment it
+  could tell 97% of the time.
+- Once a place has solved, the next GoTo is aimed past the error measured
+  (the other side's, Dec reversed, before that side has one), so the tube
+  lands on the place the limits and the skyline were checked for: with
+  home 14° out on 19 November, every west place looked into the next-door
+  house. Not across the meridian. The errors measured, and the fit, are
+  the same.
+- A place that does not solve at 1 s (haze, a sparse field: five to ten
+  stars) is tried once more at 4 s before it is left out.
+- It starts on the side of the meridian the tube is on, from the far end,
+  so it swings over the pole once; and its GoTos skip the catch-up move
+  for the sky turned on during the slew (without a handset), which a
+  survey does not need. A full findhome in clear sky took 161-183 s on 19
+  November, about three quarters of it slewing; the swing over the pole
+  alone 48 s.
 - Each place keeps how long its slew and its plate solve took
   (`slew_s`, `settle_s`, `solve_s`, `trailed_frames`), and the run says the totals: where a
   faster survey has to save time is measured, not guessed.

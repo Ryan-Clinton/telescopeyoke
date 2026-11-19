@@ -63,3 +63,30 @@ aiming past the error already measured and a 4 s retry:
 
 The board's moves took out 7.8° and 14° and the sky agrees to a hundredth.
 No picture taken straight after a slew was trailed.
+
+## Where the time goes, and what changed for it
+
+Each place's slew, settle and solve times are now kept (`slew_s`,
+`settle_s`, `solve_s`, `trailed_frames`) and summed at the end of a run.
+
+| Part | Before | 19 November |
+|---|---|---|
+| Wait after a slew | 10 s fixed (5 s in polar alignment) | none: the picture is retaken only while its stars are trailed (median roundness under 0.5) |
+| One plate solve | 3.5-5.5 s | about 3 s: the hot pixels are put back at those pixels alone (1.9 s to 0.09 s, the same picture) |
+| A 1 h step between places | | 8.7 s |
+| The swing over the pole | | 48 s, once per survey |
+| A full findhome, clear sky | 15 minutes planned | 161-183 s |
+
+Tried and not kept: plate-solve frames binned 2x2, which cost 2.8-3.0 s a
+picture switching the binning through the keeper (`solve_binning = 2`
+turns it back on). Not worth it: shorter exposures or video mode for the
+solves, which would save about a second at most while the slews are three
+quarters of the time.
+
+Made after these runs and tried only in the demo (578bbf1): a survey
+starts on the side of the meridian the tube is on, its GoTos skip the
+catch-up move, and every GoTo looks for its end four times a second. The
+next findhome's slew times show what they save.
+
+Owed: the joints to be marked at this home; the skyline survey again by
+day, since the tube moved up its rings on 17 November.

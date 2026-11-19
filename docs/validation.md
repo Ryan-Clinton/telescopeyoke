@@ -50,7 +50,7 @@ outlook` puts it first.
 | Imaging and stacking | ⚠️ runs of 48 and 207 frames, and M31 runs since; long stacks reach a noise floor; dithering tried once (two M31 runs, 17 October) and made no measurable difference to planted-star depth (17.38 ± 0.02 against 17.36 ± 0.02); darks and flats not yet tested |
 | Drift model and Dec correction | ⚠️ an earlier, cruder version only |
 | Daytime Polaris | ❌ searched three times, not found; sensor blemishes were told from stars |
-| `findhome` and marking home | ✅ 17 October: from 10.66° out by eye to 0.19° on the marks. 19 November, through the Wi-Fi adapter: findhome 0.52°/1.11° out, truehome by the board's own moves, then `findhome --check` 0.03°/0.00° and a full findhome 0.11°/0.04° ([record](nights/2026-11-19/home-and-solves.md)) |
+| `findhome` and marking home | ✅ 17 October: from 10.66° out by eye to 0.19° on the marks. 19 November, through the Wi-Fi adapter: findhome 0.52°/1.11° out, truehome by the board's own moves, then `findhome --check` 0.03°/0.00° and a full findhome 0.11°/0.04°; then, home set 7.8° and 14.0° out by eye, findhome, truehome and `findhome --check` 0.00°/0.01° ([record](nights/2026-11-19/home-and-solves.md)) |
 | Pointing survey | ✅ 17 October: one correction for each side is enough |
 | Landmark azimuth | 🧪 |
 | Checking the telescope really turned | ⚠️ one real record, and it caught a real fault |
@@ -235,10 +235,10 @@ order that wastes no setting-up ([why this order](calibration.md)). None has bee
 | 3 | Polar repeatability | `./mount.py goto NAME --solve` on a star east of south, then `./polaralign.py --step 12 --repeat 5` | 10 minutes | The bolts left alone throughout. |
 | 3a | What a turn of the azimuth bolts does (experiment 17) | Two half turns of one bolt, the same way, a measurement after each: `./polaralign.py --step 12 --turned 0.5 0` | 6 minutes | The bolts centred before the first measurement. |
 | 4 | Real exposure from star trails | `./camera_test.py --trail` | 1 minute | Where step 3 left it: bright stars, away from the pole. |
-| 5 | The true home, measured | `./mount.py findhome --dry-run`, then `./mount.py findhome` | 15 minutes | Someone watching: the tube swings over the pole once. Read each place's own miss, not only the rms, and look at the frame of any place it left out. |
+| 5 | The true home, measured | `./mount.py findhome --dry-run`, then `./mount.py findhome` | 3 minutes (161-183 s on 19 November) | Someone watching: the tube swings over the pole once. Read each place's own miss, not only the rms, and look at the frame of any place it left out. |
 | 6 | Go there and mark it | `./mount.py truehome --dry-run`; if the readings are sane, `./mount.py truehome`; mark both joints | 5 minutes | A marker. |
 | 7 | Restart on the marks | Switch off and on with the marks lined up, ENTER through the handset's screens, `./mount.py settime` | 3 minutes | |
-| 8 | The true home, checked | `./mount.py findhome` again | 15 minutes | It should read within a tenth or two of a degree. |
+| 8 | The true home, checked | `./mount.py findhome --check` (four places), or `findhome` in full | 2 minutes, or 3 | It should read within a tenth or two of a degree. |
 | 9 | Pointing each side, with home right | `./mount.py pointing` | 15 minutes | |
 
 Movement checking needs no step of its own: steps 3, 5, 8 and 9 are judged by

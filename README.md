@@ -382,7 +382,7 @@ Known limits:
   five times the exposure); on the USB 3 lead it has used since 6 October
   2026 a 1 s frame takes about 1.5 s. The 183M adds 0.43 s to each frame.
 - After a slew the stars streak for up to half a minute while the gears
-  settle; the scripts wait before photographing.
+  settle (rarely: 97% of the time they are steady at once); a plate-solve picture is taken again while its stars are trailed.
 - With a rough polar alignment the aim drifts by an arcsecond or more per
   second, which limits exposures to a couple of seconds.
 - The handset's GoTo overshoots right next to the pole, so `home` steers by
