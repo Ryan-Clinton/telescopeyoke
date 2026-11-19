@@ -67,7 +67,10 @@ CAL_STEPS = 12       # steps the leg is planned in
 CAL_MOST_STEPS = 15
 CAL_LEAST_STEPS = 8  # fewer than this to cover the distance: steps too long
 CAL_LONGEST_MS = 3000
-CAL_SLACK_STEPS = 20  # most steps north before the Dec slack counts as taken up (10 Nov 2026: over 15 s east of the pier)
+CAL_SLACK_STEPS = 60  # most steps north before the Dec slack counts as taken up (10 Nov 2026: over 15 s east of the
+                      # pier; 19 November 2026, after the service: a creep for 13 steps, a jump as the gears caught,
+                      # then the full rate, and on other runs longer than 27 steps)
+SLACK_RATE_SHARE = 0.5  # the slack is taken up only once a step moves the star this share of the rate due
 CAL_REVERSAL_STEPS = 6  # steps of each extra Dec reversal that measures the slack again
 CAL_STILL_FRAMES = 8  # frames with no pulses that measure the drift before calibrating
 VERIFY_STEPS = 3     # steps each way of the check on a reused calibration
@@ -558,9 +561,17 @@ def _calibrate(cam, seconds, dec, west, gain, say, rate, tick, looks):
     # The Dec slack: north until the star starts to move.
     try:
         start = c.look()
+        # Taken up once the star has moved and a step moves it at near the
+        # rate due: not on the creep before the gears catch (19 November 2026,
+        # 13 steps of creep, then a jump, then the full rate).
+        due_px = rate * dec_step / SCALE
+        last = start
         for n in range(CAL_SLACK_STEPS):
             here = c.step("north", dec_step)
-            if math.hypot(here[0] - start[0], here[1] - start[1]) >= SLACK_MOVED:
+            moved = math.hypot(here[0] - start[0], here[1] - start[1])
+            step_px = math.hypot(here[0] - last[0], here[1] - last[1])
+            last = here
+            if moved >= SLACK_MOVED and step_px >= SLACK_RATE_SHARE * due_px:
                 break
         else:
             raise Fault(f"{CAL_SLACK_STEPS} north steps of {dec_step:.2f} s did not move the star: "
