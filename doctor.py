@@ -136,8 +136,10 @@ def goto_blocked():
     code, or None: from the direct link's kept state, never a message's
     words. A handset (or the demo) keeps its own setting-up, which
     check_handset reads."""
-    if _demo() or mount_link() in ("handset", "alpaca"):
-        return None       # an Alpaca driver keeps its own home, as a handset does
+    if _demo() or mount_link() == "handset":
+        return None
+    if mount_link() == "alpaca":
+        return alpaca_blocked()
     import direct
     try:
         state = json.loads(direct.STATE_FILE.read_text(encoding="utf-8"))
@@ -150,8 +152,35 @@ def goto_blocked():
     return None
 
 
+def alpaca_blocked():
+    """goto_blocked() for an Alpaca telescope, from what its driver says:
+    one mount.py cannot use, or one whose site is not this one's."""
+    import alpaca
+    import config
+    try:
+        seen = alpaca.describe(alpaca.client_from(config.hardware()["mount"]))
+    except (Exception, SystemExit):
+        return "ALPACA_NOT_ANSWERING"
+    if seen["connected"] and (seen["alignment"] != 2 or seen["system"] not in ("JNow (topocentric)", "J2000")):
+        return "ALPACA_NOT_SUPPORTED"
+    try:
+        site = config.load()["site"]
+        latitude, longitude = seen["site"]
+        if abs(latitude - site["latitude"]) > 0.01 or abs((longitude - site["longitude"] + 180) % 360 - 180) > 0.01:
+            return "SITE_DIFFERS"
+    except (Exception, SystemExit):
+        pass
+    return None
+
+
+GOTO_REFUSED_WORDS = "and GoTo waits for it"
+
+
 GOTO_NEXT = {"HOME_NOT_RECORDED": "with the mount at home, ./mount.py sethome",
-             "DEC_DIRECTION_UNWATCHED": "./mount.py directions, with someone watching the mount"}
+             "DEC_DIRECTION_UNWATCHED": "./mount.py directions, with someone watching the mount",
+             "ALPACA_NOT_ANSWERING": "start the driver's Alpaca server; ./alpaca.py status",
+             "ALPACA_NOT_SUPPORTED": "a German equatorial mount giving JNow or J2000 positions is needed",
+             "SITE_DIFFERS": "./mount.py settime, which gives the driver this computer's site and clock"}
 
 
 def check_alpaca():
@@ -161,11 +190,13 @@ def check_alpaca():
     import config
     try:
         client = alpaca.client_from(config.hardware()["mount"])
-        client.put("connected", Connected=True)
-        seen = alpaca.describe(client)
+        seen = alpaca.describe(client)      # reads only: connecting is left to mount.py
     except (Exception, Refusal) as error:
         return FAIL, f"Alpaca telescope not answering: {getattr(error, 'message', error)}"
     name = seen["name"] or "Alpaca telescope"
+    if not seen["connected"]:
+        return WARN, (f"{name}: its driver is not connected (another program may have it, or nothing yet); "
+                      "mount.py connects it when it is used, and this check reads only")
     if seen["alignment"] != 2:
         return FAIL, f"{name}: not a German equatorial mount (alignment mode {seen['alignment']}); not supported"
     if seen["system"] not in ("JNow (topocentric)", "J2000"):
@@ -174,8 +205,8 @@ def check_alpaca():
         site = config.load()["site"]
         latitude, longitude = seen["site"]
         if abs(latitude - site["latitude"]) > 0.01 or abs((longitude - site["longitude"] + 180) % 360 - 180) > 0.01:
-            return WARN, (f"{name}: its driver's site is not this one; ./mount.py settime gives it this "
-                          "computer's site and clock")
+            return WARN, (f"{name}: its driver's site is not this one, {GOTO_REFUSED_WORDS}; ./mount.py settime "
+                          "gives it this computer's site and clock")
     except (Exception, SystemExit):
         pass
     return OK, f"{name} ({seen['system']}), tried only on ASCOM's simulator so far"

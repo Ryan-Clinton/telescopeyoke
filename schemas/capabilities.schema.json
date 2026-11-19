@@ -42,7 +42,10 @@
           "enum": [
             null,
             "HOME_NOT_RECORDED",
-            "DEC_DIRECTION_UNWATCHED"
+            "DEC_DIRECTION_UNWATCHED",
+            "ALPACA_NOT_ANSWERING",
+            "ALPACA_NOT_SUPPORTED",
+            "SITE_DIFFERS"
           ],
           "description": "why mount.py would refuse a GoTo on a mount that answers, or null; the same as doctor.ready()'s goto"
         }

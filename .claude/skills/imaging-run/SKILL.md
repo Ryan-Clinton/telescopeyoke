@@ -16,16 +16,26 @@ filter by filter (below). On the owner's rig, `docs/agents/owner-rig.md`
    part of the sky they said is clear.
 2. `./ty mount goto TARGET --solve --dry-run`, then the GoTo itself, which
    with no approval asked.
-3. `./ty shoot TARGET --frames 0 --recentre 8` (dry-run first), in the
-   background, with what they asked for and the rig has: `--blocks` for a
-   mono camera and wheel (below); `--guide` where the guider has a kept
-   calibration (`docs/autoguiding.md`), then `--exposure ladder` or the
-   length they name and `--dither N`; `--gain` at their camera's own
-   setting (1500 is the owner's); `--minutes` or `--accepted N` for a stated
-   goal. Unguided, the 2 s default unless `--exposure auto` finds the
-   tracking allows longer. Say the plan in one line (target, filters and minutes,
-   exposure, guided or not, when it ends), then start it. Tell them it is
-   running and they can go in.
+3. The run, dry-run first (`--dry-run`: it fails if any later GoTo or
+   filter change would be refused), then in the background. One of these
+   shapes, which `shoot.py` keeps apart:
+
+   | Asked for | Command |
+   |---|---|
+   | until cloud or dawn | `--frames 0 --recentre 8` |
+   | N frames | `--frames N` |
+   | M minutes | `--minutes M` (no `--frames`) |
+   | N good frames | `--accepted N --minutes M` |
+   | filters in turn (mono and wheel) | `--blocks Ha:90,OIII:120` (no `--frames`, `--minutes` or `--accepted`) |
+
+   Then what they asked for and the rig has: `--guide` where the rig has a
+   guider (`docs/autoguiding.md`: it calibrates itself if it must), with
+   `--exposure ladder` or the length they name and `--dither N`; `--gain`
+   at their camera's own setting (1500 is the owner's). Unguided, the 2 s
+   default unless `--exposure auto` finds the tracking allows longer. Say
+   the plan in one line (target, filters and minutes, exposure, guided or
+   not, when it ends), then start it. Tell them it is running and they can
+   go in.
 4. Start the watch as a Monitor: `./ty watch-run`. It prints nothing while
    all is well and a line when frames stop, stop being kept, the share kept
    halves, the stars dim or come back, or the run ends. Tell the person at

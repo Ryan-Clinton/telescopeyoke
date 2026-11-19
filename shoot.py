@@ -1136,7 +1136,8 @@ def plan(args):
                     goto.pop("side_note", None)
                     out.setdefault("later_gotos", []).append(goto)
                 except interface.Refusal as refusal:
-                    out.setdefault("refused", []).append({"target": target, "why": str(refusal)})
+                    out.setdefault("refused", []).append({"target": target, "why": str(refusal),
+                                                          "code": refusal.code_name})
             out["blocks"].append({"target": target, "filter": name, "minutes": round(minutes, 1)})
             if getattr(args, "block_exposures", None):
                 out["blocks"][-1].update(exposure_s=args.block_exposures[len(out["blocks"]) - 1],
@@ -1146,9 +1147,17 @@ def plan(args):
                 if not args.focus_as_is:
                     filters.steps_between(filters.DEFAULT, name)
             except interface.Refusal as refusal:
-                out.setdefault("refused", []).append({"filter": name, "why": str(refusal)})
+                out.setdefault("refused", []).append({"filter": name, "why": str(refusal),
+                                                      "code": refusal.code_name})
     for key, value in out.items():
         print(f"{key}: {value}")
+    if out.get("refused"):
+        # A plan with a later GoTo or a filter change that would be refused
+        # is not one to start: the dry run fails, with the first reason's
+        # code, so a caller cannot take it for a plan that will run.
+        first = out["refused"][0]
+        raise interface.Refusal(first["code"], "Not a plan to start: " + "; ".join(
+            f"{r.get('target') or r.get('filter')}: {r['why']}" for r in out["refused"]))
     return out
 
 

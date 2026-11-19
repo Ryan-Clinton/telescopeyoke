@@ -144,8 +144,9 @@ class AlpacaHandset:
     positions pass through in the handset's frame (the true equator and
     equinox of date), converted when the driver works in J2000."""
 
-    def __init__(self, client, sidereal, dec_sign=-1):
+    def __init__(self, client, sidereal, dec_sign=-1, site=None):
         self.client, self.sidereal = client, sidereal
+        self.site = site            # (latitude, longitude) this computer works by
         # Which way a positive MoveAxis turns the Dec axis is the driver's
         # choice. -1: as ASCOM's own simulator (OmniSim 0.4.0, 19 November
         # 2026), where plus lowered the handset's Dec axis reading on both
@@ -162,9 +163,14 @@ class AlpacaHandset:
         if self.system not in (1, 2):
             raise Refusal("HANDSET_NOT_SUPPORTED", f"The Alpaca telescope gives its positions as "
                           f"{SYSTEMS.get(self.system, self.system)}; only JNow and J2000 are understood here.")
-        self.can = {what: bool(client.get(what)) for what in
+        self.can = {what: bool(_quiet(client, what)) for what in
                     ("canslewasync", "canslew", "cansettracking", "canfindhome", "canpark", "canunpark")}
-        self.rates = {axis: client.get("axisrates", Axis=axis) or [] for axis in (0, 1)}
+        # MoveAxis is optional in ASCOM: a mount without it still does GoTo
+        # and tracking; the small moves (the drift creep, the photometric
+        # hold, the nudge) are refused on it, and a stop does not ask it.
+        self.axis_moves = {axis: bool(_quiet(client, "canmoveaxis", Axis=axis)) for axis in (0, 1)}
+        self.rates = {axis: (_quiet(client, "axisrates", Axis=axis) or []) if self.axis_moves[axis] else []
+                      for axis in (0, 1)}
         self.moving = {0: 0.0, 1: 0.0}
 
     # -- frames
@@ -189,7 +195,7 @@ class AlpacaHandset:
         pole in the handset's terms. ASCOM's pierEast (0) is the mount on the
         east of the pier looking west; pierWest (1) looking east; unknown
         (-1) is judged from the hour angle, the handset's way."""
-        side = self.client.get("sideofpier")
+        side = _quiet(self.client, "sideofpier")      # optional in ASCOM
         if side in (0, 1):
             return side == 0
         if ra is None:
@@ -207,6 +213,15 @@ class AlpacaHandset:
     # -- movement
 
     def _goto(self, ra, dec):
+        if self.site:
+            # The driver chooses the side of the pier and keeps its limits by
+            # its own site: one not this computer's would disagree with every
+            # limit here (doctor's SITE_DIFFERS).
+            latitude, longitude = _quiet(self.client, "sitelatitude"), _quiet(self.client, "sitelongitude")
+            if latitude is not None and longitude is not None and (
+                    abs(latitude - self.site[0]) > 0.01 or abs((longitude - self.site[1] + 180) % 360 - 180) > 0.01):
+                raise Refusal("GOTO_REFUSED", f"The mount's driver has its site at {latitude:.3f}°, {longitude:.3f}°, "
+                              "not this computer's: ./mount.py settime gives it this one.")
         if self.client.get("atpark"):
             if not self.can["canunpark"]:
                 raise Refusal("GOTO_REFUSED", "The mount is parked and its driver cannot unpark it from here.")
@@ -227,6 +242,11 @@ class AlpacaHandset:
     def _rate(self, axis, speed):
         """Turn one axis at `speed` degrees a second on top of tracking, or stop it."""
         index = 0 if axis == RA else 1
+        if not self.axis_moves[index]:
+            if speed:
+                raise Refusal("INVALID_REQUEST", f"The mount's driver cannot turn the {'RA' if axis == RA else 'Dec'} "
+                              "axis at a rate (no MoveAxis): GoTo and tracking only.")
+            return
         if speed and not any(r["Minimum"] <= abs(speed) <= r["Maximum"] for r in self.rates[index]):
             allowed = ", ".join(f"{r['Minimum']:g} to {r['Maximum']:g}" for r in self.rates[index]) or "none"
             raise Refusal("INVALID_REQUEST", f"The driver cannot turn the {'RA' if axis == RA else 'Dec'} axis at "
@@ -239,42 +259,52 @@ class AlpacaHandset:
     def _stop(self):
         """Every way it can be moving, stopped: a stop is never refused for
         one that failed."""
+        if _quiet(self.client, "atpark"):
+            return                      # parked is stopped; ASCOM refuses AbortSlew there
+        actions = [lambda: self.client.put("abortslew")]
+        actions += [lambda axis=axis: self.client.put("moveaxis", Axis=axis, Rate=0)
+                    for axis in (0, 1) if self.axis_moves[axis]]
         failed = []
-        for action in (lambda: self.client.put("abortslew"),
-                       lambda: self.client.put("moveaxis", Axis=0, Rate=0),
-                       lambda: self.client.put("moveaxis", Axis=1, Rate=0)):
+        for action in actions:
             try:
                 action()
             except (DriverError, Refusal) as error:
                 failed.append(str(error))
         self.moving = {0: 0.0, 1: 0.0}
-        if len(failed) == 3:
+        if len(failed) == len(actions):
             raise Refusal("HANDSET_NOT_ANSWERING", "Nothing reached the mount's driver to stop it: "
                           + "; ".join(failed) + ". Switch the mount off at the mount if it is moving.")
 
     def go_home(self, timeout=150):
-        """The driver's own home (FindHome), or its park position, then
-        tracking off: where the handset's home is, counterweight down and the
-        tube to the pole, on the drivers the project knows of. Waits."""
+        """The driver's own home (FindHome), or else its park position, and
+        waits until the driver says it is there (AtHome, or AtPark) and still:
+        Park and FindHome may return before the mount arrives. A parked mount
+        is left parked; the next GoTo unparks it. Tracking off at home."""
+        if self.can["canfindhome"]:
+            action, there = "findhome", "athome"
+        elif self.can["canpark"]:
+            action, there = "park", "atpark"
+        else:
+            raise Refusal("INVALID_REQUEST", "The Alpaca telescope can neither find home nor park.")
+        if action == "findhome" and _quiet(self.client, "atpark"):
+            self.client.put("unpark")
         try:
-            if self.can["canfindhome"]:
-                self.client.put("findhome", timeout=timeout + 30)
-            elif self.can["canpark"]:
-                self.client.put("park", timeout=timeout + 30)
-                if self.can["canunpark"]:
-                    self.client.put("unpark")
-            else:
-                raise Refusal("INVALID_REQUEST", "The Alpaca telescope can neither find home nor park.")
+            self.client.put(action, timeout=timeout + 30)
         except DriverError as error:
-            raise Refusal("SLEW_TIMED_OUT", f"The mount's driver did not get home: {error}") from None
+            raise Refusal("SLEW_TIMED_OUT", f"The mount's driver did not {action}: {error}") from None
         end = time.monotonic() + timeout
-        while self.client.get("slewing"):
+        while not (_quiet(self.client, there) and not self.client.get("slewing")):
             if time.monotonic() > end:
                 self._stop()
-                raise Refusal("SLEW_TIMED_OUT", "The mount did not get home in time; stopped.")
+                raise Refusal("SLEW_TIMED_OUT", f"The driver did not say it was there ({there}) in time; stopped.")
             time.sleep(0.5)
-        if self.can["cansettracking"]:
+        if action == "findhome" and self.can["cansettracking"]:
             self.client.put("tracking", Tracking=False)
+
+    def at_home(self):
+        """Whether the driver says it is at its home or parked: its own home,
+        which need not be the handset's (mount.at_home asks this first)."""
+        return bool(_quiet(self.client, "athome") or _quiet(self.client, "atpark"))
 
     def set_site(self, latitude, longitude):
         """The driver's site and clock from this computer's, so its sky and
@@ -329,7 +359,7 @@ class AlpacaHandset:
             self._goto(ra, dec if dec < 180 else dec - 360)
             return b"#"
         if kind == b"T":
-            if self.can["cansettracking"]:
+            if self.can["cansettracking"] and not (c[1] == 0 and _quiet(self.client, "atpark")):
                 self.client.put("tracking", Tracking=c[1] != 0)
             return b"#"
         if kind == b"M":
@@ -367,26 +397,39 @@ def describe(client):
             "connected": get("connected"), "alignment": get("alignmentmode"),
             "system": SYSTEMS.get(get("equatorialsystem")), "site": [get("sitelatitude"), get("sitelongitude")],
             "at_park": get("atpark"), "tracking": get("tracking"), "slewing": get("slewing"),
-            "can": {what: get(what) for what in ("canslewasync", "canfindhome", "canpark", "cansettracking")}}
+            "can": {what: get(what) for what in ("canslewasync", "canfindhome", "canpark", "cansettracking")}
+            | {f"canmoveaxis{axis}": _quiet(client, "canmoveaxis", Axis=axis) for axis in (0, 1)}}
 
 
-def _quiet(client, what):
+def _quiet(client, what, **params):
+    """A property, or None where the driver has not implemented it (or will
+    not say while disconnected)."""
     try:
-        return client.get(what)
+        return client.get(what, **params)
     except DriverError:
         return None
 
 
 def client_from(settings):
+    """The telescope config.toml names, never one found by asking the
+    network: with two servers or two telescopes the first to answer could
+    be another mount. Named by address and device; with alpaca_name set,
+    the driver must still say that name."""
     address = settings.get("address")
     if not address:
-        seen = find()
-        if not seen:
-            raise Refusal("MOUNT_NOT_CONNECTED", "No Alpaca server answered on this network. Start the driver's "
-                          "Alpaca server (ASCOM Remote, or the driver's own), or set address = \"HOST:PORT\" "
-                          "under [mount] in config.toml.")
-        address = seen[0]
-    return Client(address, settings.get("device", 0))
+        seen = ", ".join(find()) or "none answered"
+        raise Refusal("MOUNT_NOT_CONNECTED", "Which Alpaca telescope is not set: put address = \"HOST:PORT\" "
+                      "(and device, if not 0) under [mount] in config.toml. ./alpaca.py find lists them; "
+                      f"on this network: {seen}.")
+    client = Client(address, settings.get("device", 0))
+    wanted = settings.get("alpaca_name")
+    if wanted:
+        said = _quiet(client, "name")
+        if said != wanted:
+            raise Refusal("MOUNT_NOT_CONNECTED", f"The Alpaca telescope at {address}, device "
+                          f"{settings.get('device', 0)}, says it is {said!r}, not {wanted!r} (alpaca_name under "
+                          "[mount]): not the mount this was set up for.")
+    return client
 
 
 def main(argv=None):

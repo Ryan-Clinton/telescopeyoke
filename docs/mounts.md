@@ -89,15 +89,24 @@ also how the Windows port drives mounts other than SynScan. Testers: any
 Windows user with a working ASCOM driver (EQMOD, GS Server, iOptron
 Commander, the ZWO and Celestron drivers).
 
-Built 19 November 2026 (`alpaca.py`): `[mount] link = "alpaca"` and
-`address = "HOST:PORT"` (`./alpaca.py find` lists the servers on the
-network); `./mount.py settime` gives the driver this computer's site and
-clock. It stands in for the handset as `direct.py` does, so the motion
-lock, limits and dry runs are unchanged. Tried against ASCOM's own Alpaca simulator (OmniSim 0.4.0, 19 November 2026), not
-yet a real mount. German equatorial mounts only. Home is the driver's
-(FindHome, else park), which need not be the handset's; which way a
-positive Dec rate turns is the driver's choice (`[mount] alpaca_dec_sign`,
--1 as the simulator). Not yet: sync, the driver's own pulse guiding.
+Built 19 November 2026 (`alpaca.py`): `[mount] link = "alpaca"`,
+`address = "HOST:PORT"` and `device` (0 unless the server has several);
+`./alpaca.py find` lists the servers and their devices, and nothing is ever
+picked from that list by itself. `alpaca_name` set to the driver's name
+makes a different telescope at that address a refusal. `./mount.py settime`
+gives the driver this computer's site and clock, and until it has them a
+GoTo is refused (doctor's `SITE_DIFFERS`). It stands in for the handset as
+`direct.py` does, so the motion lock, limits and dry runs are unchanged.
+German equatorial mounts only. Home is the driver's FindHome, else its
+park, each waited for until the driver says it is there (AtHome, AtPark);
+a parked mount stays parked until the next GoTo. A driver without MoveAxis
+does GoTo and tracking only: the drift creep and small moves are refused
+on it. Which way a positive Dec rate turns is the driver's choice
+(`alpaca_dec_sign`, -1 as the simulator). The doctor only reads: it never
+connects the driver. Tried against ASCOM's own simulator (OmniSim 0.4.0),
+not yet a real mount: still to see on one, the reported position against
+a plate solve on both sides of the pier, a meridian crossing, a reconnect,
+and the Dec direction. Not yet: sync, the driver's own pulse guiding.
 
 **5. ZWO AM3/AM5/AM7 natively.** ZWO's own protocol over USB or Wi-Fi, on
 a small LX200 core that OnStep would share. Testers: an AM5 owner.

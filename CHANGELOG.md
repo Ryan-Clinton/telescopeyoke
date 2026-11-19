@@ -10,7 +10,14 @@ proven is `docs/validation.md` ("Current conclusions").
   any mount with an ASCOM driver, on this computer or a Windows one on
   the network, through the same motion lock, limits and dry runs.
   `./alpaca.py find` lists the servers. Tried on ASCOM's own simulator,
-  not yet a real mount ([Mounts](docs/mounts.md)).
+  not yet a real mount ([Mounts](docs/mounts.md)). The telescope is the
+  one named in the settings, never the first to answer; home and park
+  are waited for by the driver's own word; a driver without MoveAxis
+  does GoTo and tracking only; a driver whose site is not this one's is
+  refused a GoTo until `./mount.py settime`; the doctor only reads.
+- `shoot.py --dry-run` fails when a later GoTo or filter change in the
+  plan would be refused; the imaging skill's command shapes follow what
+  `shoot.py` allows together.
 - **`ty onboard` says only what it knows**: the telescope and the camera
   are separate steps, showing which settings were changed from the
   example and which were not; a plate solve's match is the pixel scale

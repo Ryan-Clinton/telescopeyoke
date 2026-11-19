@@ -292,7 +292,8 @@ class Mount:
             import alpaca
             site = (config.load() if self.site_set else config.example())["site"]
             self.s = alpaca.AlpacaHandset(alpaca.client_from(mount_settings()), lambda: true_sidereal(site),
-                                          int(mount_settings().get("alpaca_dec_sign", -1)))
+                                          int(mount_settings().get("alpaca_dec_sign", -1)),
+                                          (site["latitude"], site["longitude"]))
         elif mount_settings().get("link", "handset") != "handset":
             # No handset: the Wi-Fi adapter or an EQDIR lead reaches the motor
             # board, and direct.py does the handset's part.
@@ -411,6 +412,8 @@ class Mount:
         return "tracking" if 8 < rate < 25 else "stopped"
 
     def at_home(self):
+        if hasattr(self.s, "at_home"):
+            return self.s.at_home()        # an Alpaca driver's own home or park
         ra_axis, dec_axis = self.axes()
         return abs(wrap(HOME_RA_AXIS - ra_axis)) < 0.3 and abs(HOME_DEC_AXIS - dec_axis) < 0.3
 
