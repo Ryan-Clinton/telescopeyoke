@@ -50,7 +50,7 @@ outlook` puts it first.
 | Imaging and stacking | ⚠️ runs of 48 and 207 frames, and M31 runs since; long stacks reach a noise floor; dithering tried once (two M31 runs, 17 October) and made no measurable difference to planted-star depth (17.38 ± 0.02 against 17.36 ± 0.02); darks and flats not yet tested |
 | Drift model and Dec correction | ⚠️ an earlier, cruder version only |
 | Daytime Polaris | ❌ searched three times, not found; sensor blemishes were told from stars |
-| `findhome` and marking home | ✅ 17 October: from 10.66° out by eye to 0.19° on the marks |
+| `findhome` and marking home | ✅ 17 October: from 10.66° out by eye to 0.19° on the marks. 19 November, through the Wi-Fi adapter: findhome 0.52°/1.11° out, truehome by the board's own moves, then `findhome --check` 0.03°/0.00° and a full findhome 0.11°/0.04° ([record](nights/2026-11-19/home-and-solves.md)) |
 | Pointing survey | ✅ 17 October: one correction for each side is enough |
 | Landmark azimuth | 🧪 |
 | Checking the telescope really turned | ⚠️ one real record, and it caught a real fault |

@@ -768,10 +768,13 @@ def run(args):
     if hint is not None:
         result["home_out_at_least_deg"] = {"ra_axis": round(hint[0], 2), "dec_axis": round(hint[1], 2)}
         if max(hint) > 0:
+            out = " and ".join(f"{v:.1f}° on the {axis} axis" for axis, v in (("RA", hint[0]), ("Dec", hint[1]))
+                               if round(v, 1) > 0)
             print(f"\nThe pictures also miss where the mount aimed by more than this polar error and the tube can "
-                  f"explain: home looks out by at least {hint[0]:.1f}° on the RA axis and {hint[1]:.1f}° on the "
-                  "Dec axis. Once the polar axis is done: ./mount.py findhome, and if it is accepted, "
-                  "./mount.py truehome --dry-run, then ./mount.py truehome.")
+                  f"explain: home looks out by at least {out or 'a little'}. Once the polar axis is done: "
+                  "./mount.py findhome, and if it is accepted, ./mount.py truehome --dry-run, then "
+                  "./mount.py truehome. (19 November 2026: at least 0.2° on Dec here; findhome found 0.52° "
+                  "and 1.11°.)")
     # A home measured before this is of a mount that may have been turned
     # since, by the bolts or the tripod: set aside, never acted on.
     mount.forget_home_measurement()

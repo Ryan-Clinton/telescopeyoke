@@ -229,7 +229,8 @@ What a run keeps:
   0.94) are taken again a second later, up to 26 s, the worst settling
   seen. The fit works to 0.15°, so what matters is a picture that solves,
   not stars landing to the arcsecond. Polar alignment's pictures settle
-  the same way, up to its 5 s. Not yet run on the mount.
+  the same way, up to its 5 s. On the sky 19 November: settling took 16 s
+  over eight places, one picture retaken.
 - Each place keeps how long its slew and its plate solve took
   (`slew_s`, `settle_s`, `solve_s`, `trailed_frames`), and the run says the totals: where a
   faster survey has to save time is measured, not guessed.
@@ -311,9 +312,11 @@ What is and is not established:
   aimed for on the RA axis). Without one, through the Wi-Fi adapter, 18
   November: home 3.2° and 5.7° out after a clutch reset, and `truehome`
   reached it with the fixed-rate seek. Its step from home by the board's
-  own moves (since 19 November) has run in the demo on the simulated board
-  only, and so has `findhome --check` (it finds the same home as the demo's
-  full fit from half the places).
+  own moves, on the sky 19 November: findhome 0.52° and 1.11° out,
+  truehome arrived, `findhome --check` then 0.03° and 0.00°, and a full
+  findhome after it 0.11° and 0.04° ([the record](nights/2026-11-19/home-and-solves.md)):
+  the check reads a little closer than the full fit, which fits the tube
+  and the polar axis again.
 - A spirit level on the counterweight bar and the tube at the zenith is
   another way to the same end, but the turn from there back to home has not
   been worked through for this mount's readings, and nothing here uses it.
