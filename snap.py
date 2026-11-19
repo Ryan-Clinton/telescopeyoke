@@ -54,7 +54,8 @@ def publish(mosaic, path=PREVIEW, kind="single frame", detail="", quick=False, m
 def save(mosaic, header):
     FRAMES.mkdir(exist_ok=True)
     path = FRAMES / f"{datetime.now():%Y%m%d-%H%M%S}.fits"
-    fits.PrimaryHDU(mosaic, header).writeto(path)
+    # The demo's camera gives its header as a plain dict, as the library's does.
+    fits.PrimaryHDU(mosaic, fits.Header(header) if isinstance(header, dict) else header).writeto(path)
     return path
 
 
