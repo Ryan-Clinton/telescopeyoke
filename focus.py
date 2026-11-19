@@ -542,6 +542,42 @@ def field(site, skyline, west=None, placed=None):
     return name, plan
 
 
+def say_where(file=sys.stdout):
+    """Say where to focus before anything is measured: a rich star field,
+    the Double Cluster first, never a lone bright star. 19 November 2026:
+    a focus run began on Vega's sparse field, and the person asked why it
+    was not on the Double Cluster. The first of polaralign's rich fields
+    (NGC 869 leads them) well up and clear of the skyline; not
+    polaralign.where(), which also needs room for the polar check's turns.
+    Reads only: nothing moves; any failure just leaves the line out."""
+    try:
+        import horizon
+        import mount
+        import polaralign
+        cfg = config.load()
+        site, skyline = cfg["site"], cfg.get("horizon", {})
+        sidereal = mount.true_sidereal(site)
+        best = None
+        for name in polaralign.RICH_FIELDS:
+            t = mount.find_target(name)
+            if not t:
+                continue
+            ha = mount.wrap(sidereal - t["ra"])
+            altitude, azimuth = polaralign.to_altaz(polaralign.vector(ha, t["dec"]), site["latitude"])
+            if altitude >= polaralign.FOCUS_ALTITUDE and altitude >= horizon.in_the_way(skyline, azimuth % 360) + ROOM:
+                best = (name, altitude)
+                break
+    except Exception:            # noqa: BLE001 - advice only, never a reason not to focus
+        return
+    if not best:
+        print("Focus on a rich star field such as the Double Cluster (NGC 869); none of them is "
+              "well up and clear just now.", file=file, flush=True)
+        return
+    print(f"Focus on a rich star field, not a lone bright star: {best[0]}, {best[1]:.0f}° up, is the first "
+          f"well placed now (the Double Cluster, NGC 869, leads the list). Point there first: "
+          f"./mount.py goto \"{best[0]}\" --solve", file=file, flush=True)
+
+
 def bearing(hour_angle, dec, site):
     """Compass bearing in degrees of a place in the sky, from the garden."""
     import polaralign
@@ -1784,6 +1820,8 @@ def main():
         sys.stdout.reconfigure(line_buffering=True)
     except (AttributeError, ValueError):     # not a real stream (a test's)
         pass
+    if not args.scene:
+        say_where(file=sys.stderr if args.json else sys.stdout)
     for flag, mode in (("sweep", "sweep"), ("find", "find"), ("measure_step", "step"),
                        ("measure_backlash", "backlash"), ("walk_in", "walk")):
         if getattr(args, flag):
