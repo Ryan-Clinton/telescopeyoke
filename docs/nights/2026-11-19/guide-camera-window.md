@@ -70,46 +70,91 @@ near that, we want full resolution.
 The frames that arrived were checked to be 320 x 240 and 480 x 360.
 `get_Size` still reports 1280 x 960 after `put_Roi`.
 
-## Our conclusions
+## Our conclusions (revised after the second set of tests, below)
 
 1. Full size fails as before, in every mode, at every exposure, at both
    USB speeds, with no hub. So it isn't the hub, the port or the exposure.
-2. A 640 x 480 window fails where 640 x 480 binned works. Both have the
-   same pixel count and 480 rows. So the amount of data isn't what
-   decides it; reading the sensor at full resolution is. Only a small
-   window gets through.
-3. A 320 x 240 full-resolution window streams every frame. That's about
-   25' x 19' of sky at 4.77"/px, room for one guide star.
+2. A 640 x 480 window fails where 640 x 480 binned works: the number of
+   pixels sent alone does not explain it. The cause is not known. The
+   second set of tests points at the window's **width** at full
+   resolution, not its height, its pixel count or its position (below);
+   why is not known (the sensor's line timing, the camera's firmware or
+   the library could each do it).
+3. A 320 pixel wide window at full resolution streams every frame, as
+   well as the binned mode does over 5 minutes at USB speed 0.
 
-## The plan
+## Second set of tests (19 November 2026, afternoon)
 
-- First, the 5-minute pass on the window: `probe --size 0 --roi 320x240
-  --exposures 2 --window 300`. It needs at least 90% of the frames
-  expected, no gap over 4 s, and no library error.
-- If it passes, change the guider: find the star in a binned frame, then
-  guide on a 320 x 240 full-resolution window centred on it. When the
-  star nears the window's edge, either move the window or go back to
-  binned.
+Same set-up (cap on, laptop socket, no hub), USB speed 4 unless said,
+20 s per exposure. The probe now counts the wait after the last frame as
+a gap, counts frames whose bytes repeat the one before (a stale buffer;
+even capped, new frames' noise differs), sets and checks the USB speed's
+return code, and takes the window's corner (`--roi-at X,Y`).
 
-## Questions
+| Window (full resolution) | Pixels | 0.5 s | 2 s |
+|---|---|---|---|
+| 320 x 360 | 115,200 | 39, gaps ≤ 0.61 s | 10 of 10 |
+| 480 x 240 | 115,200 | 5, gaps up to 8.5 s | 2 |
+| 480 x 360 at y 296 | 172,800 | 6 | 0 |
+| 480 x 360 at y 300 | 172,800 | 3 | 2 |
+| 480 x 360 at y 304 | 172,800 | 9 | 2 |
+| 320 x 240 at the top left corner (0, 0) | 76,800 | 38, gaps ≤ 0.99 s | 10 of 10 |
+| 320 x 240 at the bottom right (960, 720) | 76,800 | 39, gaps ≤ 0.60 s | 10 of 10 |
 
-1. Is conclusion 2 sound, given one run per row? What else could make a
-   640 x 480 window fail when binned 640 x 480 works? For example, does
-   the MT9M034 or this library change pixel clock, line timing or USB
-   packet size between binned and full-resolution windows?
-2. Does `put_Roi` before the stream starts behave differently from after,
-   in this library generation? Should the window's offsets be multiples
-   of something larger than 2?
-3. Is there a setting we've missed that could make full size work in this
-   old library? For example: frame-rate or bandwidth options
-   (`put_Option` codes), `put_Speed` in other steps, a different pull
-   buffer depth, push mode instead of pull mode, or 16-bit / bit-depth
-   options.
-4. For guiding, is a 320 x 240 window at 4.77"/px a better choice than
-   the whole field binned at 9.55"/px? Consider centroid precision on a
-   2 s guide star with this sensor, a field that small, a star lost to
-   cloud, and dithering.
-5. Is there anything in the test method that would make these numbers
-   misleading? For example: draining the queue before counting, polling
-   every 10 ms, or the first frame after an exposure change being taken
-   at the old exposure.
+No repeated frames in any run.
+
+- 320 x 360 and 480 x 240 have the same number of pixels: the taller,
+  narrower one streams, the wider one does not. Width decides it, not
+  pixel count or rows.
+- 480 x 360 fails at all three vertical offsets: no sign of an
+  alignment rule beyond even numbers.
+- 320 x 240 streams at the middle and at both corners: position does
+  not matter.
+
+Five minutes, 320 x 240 in the middle, 2 s exposures (150 expected):
+
+| USB speed | Frames | Longest gap | Repeated |
+|---|---|---|---|
+| 0 | **149** | 2.03 s | 0 |
+| 4 | 148 | 4.00 s (one) | 0 |
+
+At speed 0 that matches the binned baseline over the same 5 minutes
+(149 of 150, gaps up to 2.08 s, 6 November). The binned mode's real
+record is 14,399 of 14,400 over 8 hours; the window has not run that
+long.
+
+What the library offers (its exports, checked with `nm`): no frame
+number or hardware timestamp (no `PullImageV2` or frame metadata, no
+`get_FinalSize`), so lateness can only be judged by arrival times.
+Untried: push mode (`StartPushMode`), `put_RealTime` (hand over only the
+newest frame), `Flush`, `get_FrameRate`, and `put_Option` codes beyond
+raw (0x04) and trigger (0x0b).
+
+## The plan (revised)
+
+1. **An overnight run of the window** at USB speed 0, against the binned
+   record: `./guidecam.py probe --size 0 --roi 320x240 --speed 0
+   --exposures 2 --window 28800`. The bar is the binned mode's, not 90%.
+2. **On the sky, no pulses:** the same star at 2 s, binned and in the
+   window, one after the other: centroid scatter in arcseconds, HFD,
+   SNR, and how late frames arrive.
+3. **Only then a guider that uses the window,** binned kept as the
+   fallback:
+   - find the star in a binned frame, then open a 320 pixel wide window
+     around it (`roi_at` exists in the driver; the guider does not use it);
+   - leave the window fixed while the star is safely inside: at 4.77"/px
+     a 320 x 240 window is about 25' x 19', far more than guiding moves;
+     whether the library can move a window while streaming, or only by
+     stopping and starting, is untested;
+   - the guider's limits are in binned pixels today (`guider.BIN = 2`:
+     minimum RA move, calibration distance, dither size, error fault).
+     They would be held in arcseconds and turned into pixels for the
+     mode in use. A calibration already records its binning and is
+     refused for another, so an old one is never reused.
+4. Better sampling will not fix the Dec error by itself: last night's
+   9.23" Dec against 2.03" RA is the mount (balance, slack, the focuser
+   lead), being tested separately tonight with the tube rebalanced.
+
+The USB speed is still set after the stream starts in the guider's own
+path, as in every run of the proven binned mode; the probe sets it the
+same way and reads it back ("USB speed 0 of 4").

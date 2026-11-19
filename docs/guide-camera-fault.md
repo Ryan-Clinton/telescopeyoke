@@ -174,9 +174,16 @@ What it shows:
   afterwards, but the frames that arrive are the window's size (the
   probe now reports what arrives).
 
-Next, if it passes the 5-minute test: the guider finds the star in a
-binned frame, then guides on a 320 x 240 full-resolution window centred
-on it. Not built.
+The same afternoon, more windows ([the night's record](nights/2026-11-19/guide-camera-window.md)):
+320 x 360 streams and 480 x 240 does not, at the same pixel count, so
+the window's **width** at full resolution decides it; 480 x 360 fails at
+every vertical offset tried; 320 x 240 streams in the middle and at both
+corners. Over 5 minutes at 2 s, 320 x 240 kept 149 of 150 at USB speed 0
+(gaps up to 2.03 s, none repeated), matching the binned mode over 5
+minutes; 148 at speed 4. Next: a whole night of it, then the same star
+binned and windowed on the sky, then (not built) a guider that finds the
+star binned and guides on a window round it, with its limits in
+arcseconds.
 
 ## Still to do
 
