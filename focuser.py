@@ -17,6 +17,9 @@
     ./focuser.py temp          the thermistor's temperature, in °C
     ./focuser.py position      where the drawtube is, in half-steps from the kept zero
     ./focuser.py zero          call where it is now 0 (at a focus, or the Sharpie line)
+    ./focuser.py shuttle 270 --times 10 --ms 10
+                               out and back that far, that many times, ending where it began:
+                               with ./focus.py --check before and after, whether big moves lose steps
     ./focuser.py vref          the TMC2209's current setting, read live off a wire
                                from A2 to its pot, for turning it to about 1.1 V
 
@@ -791,11 +794,12 @@ def main(argv=None):
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("command", choices=["flash", "test", "move", "angle", "bench", "load-test", "look", "temp", "vref",
-                                           "position", "zero"])
+                                           "position", "zero", "shuttle"])
     ap.add_argument("steps", nargs="?", type=int, help="for move: half-steps, minus for the other way")
     ap.add_argument("--pictures", nargs="+", help="for angle: the stick's angle in each picture")
     ap.add_argument("--watch", help="for bench: the camera looking down on the motor (a DroidCam "
                                     "http:// address, a /dev/video device, or a picture file kept up to date)")
+    ap.add_argument("--times", type=int, default=10, help="for shuttle: how many times out and back")
     ap.add_argument("--port", help="the Nano's serial port, if it is not found by name")
     ap.add_argument("--ms", type=int, help=f"for move and test: milliseconds a half-step (default "
                                            f"{MOTOR_MS}; slower is stronger)")
@@ -831,6 +835,24 @@ def main(argv=None):
         if not args.watch:
             ap.error("look needs --watch, the camera to take the picture from")
         print(look(args.watch))
+        return
+    if args.command == "shuttle":
+        # Out and back by the same amount, `times` over, ending where it began
+        # with the last move inward: does the drawtube come back to the same
+        # place after big moves at this speed? ./focus.py --check before and
+        # after says (19 November 2026: focus moved 99 half-steps over a run
+        # of big moves at 10 ms, and drift could not be told from lost steps).
+        steps = args.steps or ap.error("shuttle needs half-steps, e.g. ./focuser.py shuttle 270 --times 10")
+        focuser = Focuser.open(args.port, ms=args.ms or 10)
+        try:
+            for k in range(args.times):
+                focuser.move(abs(steps))
+                focuser.move(-abs(steps))
+                print(f"  out and back {abs(steps)} half-steps: {k + 1} of {args.times}", flush=True)
+        finally:
+            focuser.close()
+        print(f"Done: {args.times} times out and back {abs(steps)} half-steps at {args.ms or 10} ms a half-step, "
+              "ended where it began, the last move inward.")
         return
     if args.command == "temp":
         focuser = Focuser.open(args.port, full=False, ms=None)
