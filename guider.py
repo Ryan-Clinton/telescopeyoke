@@ -326,9 +326,11 @@ class Calibrator:
     """Moves the star through ST4 in steps and measures each, keeping the
     star in its window throughout."""
 
-    def __init__(self, cam, seconds, gain=None, say=print, tick=None):
+    def __init__(self, cam, seconds, gain=None, say=print, tick=None, looks=None):
         self.cam, self.seconds, self.gain, self.say = cam, seconds, gain, say
         self.tick = tick
+        self.looks = [] if looks is None else looks     # every look, for the calibration's graph
+        self.doing = "start"
         self.where = None
         self.last = None            # the newest position look() gave, drift taken off
         self.drift = np.zeros(2)    # px/s the star moves with no pulses (still_drift())
@@ -349,6 +351,8 @@ class Calibrator:
         else:
             gone = self.drift * (times["mid"] - self.since)
             self.last = (star.x - float(gone[0]), star.y - float(gone[1]))
+        self.looks.append({"t": round(time.time(), 2), "leg": self.doing,
+                           "x": round(float(self.last[0]), 2), "y": round(float(self.last[1]), 2)})
         return self.last
 
     def still_drift(self, frames=CAL_STILL_FRAMES):
@@ -376,6 +380,7 @@ class Calibrator:
         if self.tick:
             self.tick()                     # orders (a stop) are taken here, before the pulse
         motion_check()
+        self.doing = direction
         self.cam.pulse(direction, seconds)
         return self.look()
 
@@ -419,8 +424,36 @@ def _slack_of(points, step, strength, unit):
     return max((len(points) - 1) * step - max(went, 0.0) / strength, 0.0)
 
 
+CAL_STEPS_FILE = config.DATA / "cache" / "guide-cal-steps.json"
+
+
 def calibrate(cam, seconds, dec, west, gain=None, say=print, rate=GUIDE_RATE, tick=None):
-    """Stage 2: west and back east, then north and back south (the Dec
+    """Stage 2 (_calibrate), with every look's star position kept in
+    CAL_STEPS_FILE, a failed calibration's too, for its graph
+    (guidegraph.py --calibration). 19 November 2026: a calibration failed on
+    the Dec axis and nothing was kept to show the mount's servicer."""
+    looks, outcome = [], "failed"
+    try:
+        cal = _calibrate(cam, seconds, dec, west, gain, say, rate, tick, looks)
+        outcome = "kept"
+        return cal
+    except Fault as problem:
+        outcome = str(problem)
+        raise
+    finally:
+        ra_step, dec_step = step_seconds(dec, rate)
+        try:
+            CAL_STEPS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            CAL_STEPS_FILE.write_text(json.dumps({
+                "made": datetime.now(timezone.utc).isoformat(timespec="seconds"), "dec": dec, "west": west,
+                "scale": SCALE, "rate": rate, "step_ms": {"ra": round(ra_step * 1000), "dec": round(dec_step * 1000)},
+                "outcome": outcome, "looks": looks}, indent=1), encoding="utf-8")
+        except OSError:
+            pass
+
+
+def _calibrate(cam, seconds, dec, west, gain, say, rate, tick, looks):
+    """West and back east, then north and back south (the Dec
     slack taken up first), then two short Dec reversals to measure the
     slack again. Returns the calibration (also kept in CAL_FILE)."""
     motion_check()
@@ -428,7 +461,7 @@ def calibrate(cam, seconds, dec, west, gain=None, say=print, rate=GUIDE_RATE, ti
     say(f"calibrating at Dec {dec:+.1f}, {'west' if west else 'east'} of the pier: steps of "
         f"{ra_step * 1000:.0f} ms in RA, {dec_step * 1000:.0f} ms in Dec")
     star = first_star(cam, seconds, gain, say, tick=tick)
-    c = Calibrator(cam, seconds, gain, say, tick)
+    c = Calibrator(cam, seconds, gain, say, tick, looks=looks)
     c.where = (star.x, star.y)
     columns, steps, notes = {}, {}, []
     drift = c.still_drift()

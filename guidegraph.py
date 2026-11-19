@@ -6,6 +6,7 @@ and the pulses sent, from the guider's own frame log.
     ./guidegraph.py                        # the latest run, to web/guide-graph.png
     ./guidegraph.py --date 2026-11-10 --run 4b6d6721 --out ~/guide.png
     ./guidegraph.py --no-send              # drawn, not sent
+    ./guidegraph.py --calibration          # the last guide calibration, step by step, a failed one too
 
 Each graph drawn is sent to the person's phone by Telegram (notify.py), with
 its run and RMS as the caption (12 November 2026: "make the script do that
@@ -180,8 +181,108 @@ def draw(rows, run_id, out, span=None):
     return out, s
 
 
+CAL_STEPS = config.DATA / "cache" / "guide-cal-steps.json"     # guider.CAL_STEPS_FILE
+CAL_OUT = config.DATA / "web" / "guide-calibration.png"
+LEG_COLOURS = {"west": (60, 130, 230), "east": (90, 170, 250), "north": (220, 60, 60), "south": (250, 140, 110),
+               "start": (120, 120, 130)}
+
+
+def legs(looks):
+    """The looks cut into runs of one direction: [(leg, [looks])]."""
+    out = []
+    for look in looks:
+        if out and out[-1][0] == look["leg"]:
+            out[-1][1].append(look)
+        else:
+            out.append((look["leg"], [look]))
+    return out
+
+
+def draw_calibration(cal, out):
+    """The last calibration's star track, step by step: how far the star had
+    moved from where it began, in arcseconds, each leg coloured, and for each
+    leg how far it went against how far its pulses should have moved it
+    (19 November 2026: a calibration failing on Dec, for the mount's servicer)."""
+    looks, scale = cal["looks"], cal["scale"]
+    x0, y0 = looks[0]["x"], looks[0]["y"]
+    moved = [math.hypot(k["x"] - x0, k["y"] - y0) * scale for k in looks]
+    top_v = max(30.0, max(moved) * 1.15)
+    img = Image.new("RGB", (W, H), (18, 18, 22))
+    d = ImageDraw.Draw(img)
+    small, mid, big = _font(15), _font(18), _font(22)
+    left, right, top, bottom = 80, W - 30, 70, 520
+
+    def px(i):
+        return left + i / max(len(looks) - 1, 1) * (right - left)
+
+    def py(v):
+        return bottom - v / top_v * (bottom - top)
+
+    step = 10 if top_v <= 60 else 30 if top_v <= 200 else 60
+    v = 0.0
+    while v <= top_v:
+        d.line([(left, py(v)), (right, py(v))], fill=(40, 40, 48))
+        d.text((10, py(v) - 8), f'{v:.0f}"', font=small, fill=(150, 150, 160))
+        v += step
+    rows, i = [], 0
+    for leg, part in legs(looks):
+        colour = LEG_COLOURS.get(leg, (200, 200, 200))
+        points = [(px(i + k), py(moved[i + k])) for k in range(len(part))]
+        if i:
+            points = [(px(i - 1), py(moved[i - 1]))] + points       # joined to the leg before
+        d.line(points, fill=colour, width=3)
+        for p in points[1:]:
+            d.ellipse([p[0] - 3, p[1] - 3, p[0] + 3, p[1] + 3], fill=colour)
+        if leg in ("west", "east", "north", "south"):
+            pulse = cal["step_ms"]["ra" if leg in ("west", "east") else "dec"] / 1000
+            before = looks[i - 1] if i else looks[0]
+            went = math.hypot(part[-1]["x"] - before["x"], part[-1]["y"] - before["y"]) * scale
+            due = len(part) * pulse * cal["rate"]
+            rows.append((leg, colour, f"{leg}: {len(part)} steps of {pulse:.1f} s, moved {went:.0f}\", "
+                                      f"pulses due {due:.0f}\" ({went / due:.0%})" if due else leg))
+        i += len(part)
+    when = datetime.fromisoformat(cal["made"]).astimezone()
+    d.text((left, 15), f"Guide calibration {when:%d %b %Y %H:%M}, Dec {cal['dec']:+.1f}, "
+                       f"{'west' if cal['west'] else 'east'} of the pier, {cal['scale']:.2f}\"/px", font=big,
+           fill=(230, 230, 235))
+    d.text((left, 44), "how far the guide star has moved from its start, look by look; each leg's own colour",
+           font=small, fill=(150, 150, 160))
+    y = 545
+    for _, colour, words in rows[:9]:
+        d.rectangle([left, y + 4, left + 14, y + 18], fill=colour)
+        d.text((left + 24, y), words, font=mid, fill=(220, 220, 225))
+        y += 24
+    d.text((left, H - 40), f"outcome: {cal['outcome'][:150]}", font=mid,
+           fill=(120, 220, 140) if cal["outcome"] == "kept" else (240, 120, 100))
+    Path(out).parent.mkdir(parents=True, exist_ok=True)
+    img.save(out)
+    return Path(out), rows
+
+
+def calibration_graph(args):
+    """--calibration: draw the last calibration's track and send it."""
+    try:
+        cal = json.loads(CAL_STEPS.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        sys.exit("no calibration's steps kept yet: they are kept from 19 November 2026 on")
+    if len(cal.get("looks") or []) < 2:
+        sys.exit("the last calibration measured fewer than two places: nothing to draw")
+    out, rows = draw_calibration(cal, args.out if args.out != str(OUT) else CAL_OUT)
+    when = datetime.fromisoformat(cal["made"]).astimezone()
+    words = (f"Guide calibration {when:%d %b %H:%M}, Dec {cal['dec']:+.1f}: "
+             + "; ".join(r[2] for r in rows if r[0] in ("north", "south"))[:600]
+             + f". Outcome: {cal['outcome'][:200]}")
+    print(f"{out}: {words}")
+    if not args.no_send:
+        import notify
+        went = notify.send(words, pictures=[(str(out), words[:900])], documents=[(str(out), out.name)])
+        print("sent by Telegram" if went else "not sent by Telegram (the bot is not set up here, or it failed)")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("--calibration", action="store_true",
+                    help="the last guide calibration's star track, step by step, leg by leg, a failed one too")
     ap.add_argument("--date", help="the log's date, YYYY-MM-DD (default: the latest log)")
     ap.add_argument("--run", help="the run id, or its start (default: the latest run)")
     ap.add_argument("--list", action="store_true", help="list the runs in the log and stop")
@@ -192,6 +293,8 @@ def main():
                     help="only a run that ended within this many minutes; otherwise nothing is drawn or sent "
                          "(12 November 2026: a guide run that found no star was followed by this morning's graph)")
     args = ap.parse_args()
+    if args.calibration:
+        return calibration_graph(args)
 
     logs = sorted(LOG_FOLDER.glob("guide-????????.jsonl"))
     if args.date:
