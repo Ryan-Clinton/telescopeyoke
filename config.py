@@ -459,7 +459,7 @@ SETTINGS = (
     ("filterwheel", "sets", "Filter wheel: parfocal sets", "text",
      "Filters that focus together, each set's names separated by commas and the sets by a semicolon "
      "(L,R,G,B;SII,Ha,OIII). No focus offset within a set; one from L's set to each other set, measured on "
-     "three nights before it is used. A filter the proving night (./focus.py --walk-in --prove-sets) finds "
+     "three nights before it is used. A filter the proving night (./focus.py --auto --prove-sets) finds "
      "outside its set gets its own offset.", {"optional": True}),
     ("filterwheel", "check_every_s", "Filter wheel: check during a run (s)", "whole",
      "How often a run asks the wheel again which filter is in the light path, besides each time the camera "

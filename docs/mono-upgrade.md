@@ -207,19 +207,19 @@ item files its settings and records by camera.
    read back the position, apply the focus offset, let it settle, then
    expose. A frame is only labelled with a filter the wheel has confirmed;
    a failed move stops the step rather than keeping mislabelled frames.
-6. **Focus per filter** (`focus.py`, `focuser.py`). Walk-in in L as now.
+6. **Focus per filter** (`focus.py`, `focuser.py`). Motor focus (`--auto`) in L as now.
    The filters come in two parfocal sets (Gary, 4 Nov 2026): L, R, G and B
    focus together, and SII, Ha and OIII focus together. So the offsets are
    kept by set, not by filter: none within a set, and one offset from the
    LRGB set to the SHO set.
-   - **Proving it once:** on the first clear night, a walk-in in each of
+   - **Proving it once:** on the first clear night, a motor focus in each of
      the seven filters. Filters in a set that land within the focus
      tolerance at f/4.5 of each other confirm it; one that doesn't gets
      its own offset, and the result is recorded.
    - **The set-to-set offset:** measured at least three times on different
      nights, approaching from the same side so the motor's slack is taken
      up the same way, kept as mean and spread; a spread bigger than the
-     tolerance means a walk-in after every change between sets instead.
+     tolerance means a motor focus after every change between sets instead.
      Temperature noted with each, so drift can be fitted later.
    After a wheel move and offset, the first frame's star size is checked
    against the last frame in L; worse than tolerance means refocus, not
@@ -358,7 +358,7 @@ Daylight, indoors or out, before the sky is dark:
 Dark:
 
 6. Collimation checked after the mirror moved (Gary).
-7. Walk-in focus in L on a rich field; record the position and HFR.
+7. Motor focus (`./focus.py --auto`) in L on a rich field; record the position and HFR.
 8. Plate solve at 675 mm; check the solved scale is 0.73"/px (1.47 after
    2x2) and set the focal length from the solve.
 9. The usual polar alignment and GoTo.

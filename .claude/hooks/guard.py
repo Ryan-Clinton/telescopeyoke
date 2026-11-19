@@ -25,8 +25,8 @@ starting, a timeout). The rules (docs/skills-and-agents.md):
   2026: on the NEMA 17 its steps are a thirty-second of a turn, at most half a
   turn each way. On 23 October 2026 two --motor runs, each stopped part way,
   left the drawtube about an inch from the Sharpie line after the person
-  had said it was a touch out; focusing is the walk-in, small steps in
-  (docs/agents/setup-routine.md, step 4).
+  had said it was a touch out; focusing is ./focus.py --auto, small steps
+  whichever way the stars sharpen (docs/agents/setup-routine.md, step 4).
 """
 import fnmatch
 import json
@@ -266,8 +266,8 @@ def small_focus(payload):
             sweep = FOCUS_SWEEP.search(piece)
             if sweep:
                 raise Refused(f"focus.py {sweep.group(0)} is refused: on 23 October 2026 the sweep moved the "
-                              "drawtube about an inch from the Sharpie line. Focus with ./focus.py --walk-in, "
-                              "from the drawtube a touch out, small steps in.")
+                              "drawtube about an inch from the Sharpie line. Focus with ./focus.py --auto: "
+                              "small steps whichever way the stars sharpen.")
 
 
 # The two below are for agents only, set in their own frontmatter

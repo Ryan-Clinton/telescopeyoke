@@ -899,7 +899,7 @@ def photometry(command):
 
 
 SETUP_MINUTES = 20    # out of the house to the first field when nothing is set up: power, settime, the
-                      # focus walk-in and the first GoTo with its plate solve (an estimate from the nights
+                      # motor focus and the first GoTo with its plate solve (an estimate from the nights
                       # of October and November 2026 with the feet on their stickers; a moved tripod is longer)
 READY_WITHIN = 3600   # a plate solve this recent (seconds) means the telescope is out, aimed and working
 SLACK = 0.2           # the share of a marginal clear spell left unplanned: setup over-runs, cloud, fog

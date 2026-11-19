@@ -16,25 +16,25 @@ run's first frame, so no exposure is in flight): the focus offset is worked
 out first (a filter with no usable offset stops the step before the wheel
 turns), the wheel is moved, its position read back, the focuser moved by the
 difference of the two filters' offsets (the last move inward, as every
-walk-in approaches, so the gears' slack lies the same way), then a pause to
+motor focus ends, so the gears' slack lies the same way), then a pause to
 settle. Frames are labelled only with the position the wheel confirms each
 time the camera opens, and only when that is the filter asked for
 (shoot.in_the_path); a failed move stops the step.
 
 The filters come in parfocal sets ([filterwheel] sets, by default
 "L,R,G,B;SII,Ha,OIII", from Gary, 4 November 2026): within a set no offset,
-and one offset from L's set to each other set. focus.py --walk-in
---prove-sets, once on the first clear night, walks in in every filter: a
+and one offset from L's set to each other set. focus.py --auto
+--prove-sets, once on the first clear night, focuses in every filter: a
 filter further than the tolerance from its set's median gets its own offset
-from then on, and the result is kept. focus.py --walk-in --offset FILTER
-measures a set's offset once more: a walk-in in L, out OFFSET_BACK
-half-steps, the wheel to FILTER and a walk-in there, the difference kept
+from then on, and the result is kept. focus.py --auto --offset FILTER
+measures a set's offset once more: focus in L, the wheel to FILTER and
+focus there, from where L's focus left it, the difference kept
 with the night, the focuser's thermistor temperature and the side
 approached from. An offset is used only when measured on at least NEEDED
 different nights (each night's mean counted once), all approached inward,
 with a spread (sample standard deviation) within the tolerance
 ([filterwheel] offset_tolerance, half-steps); otherwise a change between
-sets needs a walk-in.
+sets needs focusing in the new filter.
 After a change, the first kept frame's star width is checked against the
 last run in L: wider by more than [filterwheel] size_tolerance times means
 refocus (REFOCUS_NEEDED), not carry on. Kept per camera and train, in
@@ -51,10 +51,9 @@ import records
 
 DEFAULT = "L"          # a step that names no filter: the most light, and the patrols' band
 NEEDED = 3             # measurements of an offset, on different nights, before it is used
-OFFSET_TOLERANCE = 16  # half-steps: the walk-in's finest move; provisional until steps per mm are measured
+OFFSET_TOLERANCE = 16  # half-steps: the motor focus's fine move; provisional until steps per mm are measured
 SIZE_TOLERANCE = 1.25  # a first frame this many times wider than the last in L means refocus
 SETTLE_S = 2.0         # after the focuser's move, before the first exposure
-OFFSET_BACK = 256      # half-steps out from L's focus before the walk-in in another filter
 
 
 def settings(cfg=None):
@@ -213,7 +212,7 @@ def prove_sets(positions, tolerance=None, where=None, night=None, temperature=No
     Returns {"confirmed": [sets], "own": [filters], "positions"}."""
     tolerance = float(settings().get("offset_tolerance", OFFSET_TOLERANCE) if tolerance is None else tolerance)
     if DEFAULT not in positions:
-        raise interface.Refusal("INVALID_REQUEST", "The proving night needs a walk-in in L: offsets are from L.")
+        raise interface.Refusal("INVALID_REQUEST", "The proving night needs focus in L: offsets are from L.")
     store = load(where)
     own, confirmed = [], []
     for group in sets():
@@ -257,8 +256,8 @@ def steps_between(current, wanted, store=None, tolerance=None):
         value, why = offset_of(name, store, tolerance)
         if value is None:
             raise interface.Refusal("REFOCUS_NEEDED", f"No usable focus offset for {name} ({why}): it needs its "
-                                    f"own walk-in (./focus.py --walk-in with {name} in the light path), or the "
-                                    f"offset measured (./focus.py --walk-in --offset {name}) on {NEEDED} nights.")
+                                    f"own focus (./focus.py --auto with {name} in the light path), or the "
+                                    f"offset measured (./focus.py --auto --offset {name}) on {NEEDED} nights.")
         moves.append(value)
     return int(round(moves[1] - moves[0]))
 
@@ -320,7 +319,7 @@ def size_check(fwhm, store=None, tolerance=None, name=None):
         return None
     if fwhm > tolerance * last:
         return (f"the first frame's stars are {fwhm:.1f} px wide against {last:.1f} px in {what}, "
-                f"more than {tolerance:g} times: refocus in this filter (./focus.py --walk-in) before going on")
+                f"more than {tolerance:g} times: refocus in this filter (./focus.py --auto) before going on")
     return None
 
 
@@ -396,7 +395,7 @@ def change(wanted, say=print, open_wheel=None, open_focuser=None, sleep=time.sle
                                     f"focus to {wanted}'s ({problem}): no frames kept out of focus.") from None
         try:
             if steps > 0:
-                motor.move(steps + slack)     # out past it, then in: the last move inward, as a walk-in
+                motor.move(steps + slack)     # out past it, then in: the last move inward, as a motor focus ends
                 if slack:
                     motor.move(-slack)
             else:
@@ -432,27 +431,26 @@ def turn_wheel(wanted, say=print, open_wheel=None):
     return number
 
 
-def measure_offset(name, drive, walk, wheel_to, say=print, temperature=None, back=OFFSET_BACK, where=None,
-                   verified=False):
+def measure_offset(name, drive, focus_run, wheel_to, say=print, temperature=None, where=None, verified=False):
     """One measurement of filter `name`'s focus offset from L, with the
-    motor (`drive`, a focus.Settled), a walk-in (`walk(drive)`, returning
-    focus.walk_in's result) and `wheel_to(filter)`: L in the path, a walk-in;
-    out `back` half-steps; `name` in the path, a walk-in from there; the
-    difference of the two best places, both approached inward, is kept with
-    the night and the temperature. The drawtube is left at `name`'s focus."""
+    motor (`drive`, a focus.Settled), a motor focus (`focus_run(drive)`,
+    returning focus.focus_motor's result) and `wheel_to(filter)`: L in the
+    path, focused; `name` in the path, focused from there (the motor moves
+    either way, so nothing is backed out first); the difference of the two
+    best places, both arrived at moving inward, is kept with the night and
+    the temperature. The drawtube is left at `name`'s focus."""
     if key_of(name, load(where)) == key_of(DEFAULT, load(where)):
         raise interface.Refusal("INVALID_REQUEST", f"{name} is in L's parfocal set ({key_of(DEFAULT, load(where))}): "
                                 "its offset is 0. Measure a filter from the other set (Ha), or prove the sets "
                                 "(--prove-sets).")
     wheel_to(DEFAULT)
     began = drive.moved                       # the drive counts half-steps from where the run began
-    first = walk(drive)
-    at_l = began + first["best_at"]           # a walk-in counts from where it started
-    say(f"offset: L best at {at_l:+d} (HFR {first['best_hfr']}); out {back} half-steps, then {name}")
-    drive.move(back)
+    first = focus_run(drive)
+    at_l = began + first["best_at"]           # a focus run counts from where it started
+    say(f"offset: L best at {at_l:+d} (HFR {first['best_hfr']}); now {name}")
     wheel_to(name)
     began = drive.moved
-    second = walk(drive)
+    second = focus_run(drive)
     at_f = began + second["best_at"]
     offset = at_f - at_l
     keep_measurement(name, offset, temperature=temperature, l_hfr=first["best_hfr"], f_hfr=second["best_hfr"],
@@ -466,20 +464,18 @@ def measure_offset(name, drive, walk, wheel_to, say=print, temperature=None, bac
             "l_hfr": first["best_hfr"], "f_hfr": second["best_hfr"], "temperature_c": temperature, **found}
 
 
-def prove_all(drive, walk, wheel_to, names=None, say=print, temperature=None, back=OFFSET_BACK, where=None):
-    """The proving night's run: a walk-in in each filter (L first), backing
-    out `back` half-steps before each after the first, so every focus is
-    approached inward; then prove_sets() on the best places. The drawtube is
-    left at the last filter's focus."""
+def prove_all(drive, focus_run, wheel_to, names=None, say=print, temperature=None, where=None):
+    """The proving night's run: focus in each filter (L first), each from
+    where the last left it, every focus arrived at moving inward
+    (focus.focus_motor); then prove_sets() on the best places. The drawtube
+    is left at the last filter's focus."""
     names = names or [n for group in sets() for n in group]
     names = [DEFAULT] + [n for n in names if n != DEFAULT]
     positions = {}
-    for i, name in enumerate(names):
-        if i:
-            drive.move(back)
+    for name in names:
         wheel_to(name)
         began = drive.moved
-        found = walk(drive)
+        found = focus_run(drive)
         positions[name] = began + found["best_at"]
         say(f"sets: {name} best at {positions[name]:+d} (HFR {found['best_hfr']})")
     proved = prove_sets(positions, where=where, temperature=temperature)

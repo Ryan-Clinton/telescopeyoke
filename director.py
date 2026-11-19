@@ -508,6 +508,6 @@ def examples(now):
         "slew": dict(base, status=old_m31, target={"name": "M33", "kind": "deep_sky", "set_at": now - 5,
                                                          "state": "slewing"},
                      phase="goto", image_age=None),
-        "focus": dict(base, status=old_m31, target=None, phase="focus_walk", image_age=2, procedure="focus"),
+        "focus": dict(base, status=old_m31, target=None, phase="focus_auto", image_age=2, procedure="focus"),
         "end": dict(base, status=old_m31, target=None, phase=None, image_age=7200, schedule_over=True),
     }

@@ -344,12 +344,12 @@ PHASES = {"Moving": "goto", "Plate solving": "solve",
 # The focus motor's other modes, from the words its line carries
 # (focus.MODE_WORDS; a test keeps the two in step). "Focusing" is the hand
 # aid by ear, which the stream does not show.
-MODES = {"walking in to the sharpest": "focus_walk", "finding focus": "focus_find",
+MODES = {"focusing either way": "focus_auto", "finding focus": "focus_find",
          "measuring the motor's step": "focus_calibrate", "measuring the backlash": "focus_calibrate"}
 # What the stream goes on air for, besides imaging. polar_adjust has no
 # process of its own (a person is turning the bolts): polaralign.py's
 # stream file says so, not an activity line.
-BROADCAST = ("focus_check", "focus_sweep", "focus_walk", "focus_find", "focus_fit", "focus_verify",
+BROADCAST = ("focus_check", "focus_sweep", "focus_auto", "focus_find", "focus_fit", "focus_verify",
              "polar_measure", "polar_adjust", "polar_recheck", "lucky", "live", "mineral")
 # The steps of getting to a target, for the stream's between-targets card.
 ORDER = ["goto", "solve", "focus", "imaging"]
@@ -367,7 +367,7 @@ def step_of(found):
 
 def phase(entries=None):
     """The newest phase being done now (goto, solve, focus_check,
-    focus_sweep, focus_walk, focus_find, focus_fit, focus_verify,
+    focus_sweep, focus_auto, focus_find, focus_fit, focus_verify,
     polar_measure, polar_recheck, imaging), or None."""
     entries = now() if entries is None else entries
     found = []

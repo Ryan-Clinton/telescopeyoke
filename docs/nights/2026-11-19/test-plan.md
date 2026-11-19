@@ -32,7 +32,7 @@ twilight at 17:00 (stars bright enough for Vega); astronomical dark at
 |---|---|---|---|---|
 | 0 | Dusk | Mount on at home, the time set, the camera keeper started early so the 183M is at -5 °C by 17:00, the focuser's 12 V in | `./mount.py status`, `./mount.py settime`, `./keeper.py start` (background) | Switch-on, 12 V lead |
 | 1 | ~17:00 | GoTo Vega with a plate solve. Also the binned solve frames' check: each solve line's frame time against 18 November's 1.5-3.6 s, the solves still succeed, the keeper holds -5 °C | `./mount.py goto Vega --solve` | |
-| 2 | Next | Focus: measure first, then the far-focus search on the sky (untried since 6055f3d), then the walk-in. The final HFR is step 8's baseline | `./focus.py --check`; `./focuser.py move 1600`; `./focus.py --find`; `./focus.py --walk-in` | |
+| 2 | Next | Focus: measure first, then the far-focus search on the sky (untried since 6055f3d), then the motor focus. The final HFR is step 8's baseline | `./focus.py --check`; `./focuser.py move 1600`; `./focus.py --find`; `./focus.py --auto` | |
 | 3 | ~17:15 | ~~The focuser's 12 V lead out~~ Skipped: the owner taped the lead to the mount clear of the tube (19 November, before dark), so it stays in for the guiding tests | | |
 | 4 | ~17:15-17:35 | **The balance test, matched to 18 November.** NGC 7662 then sits at the hour angle Capella had for last night's run (-2.7 h, east side; Dec +42.5 against +46), so the mount carries the tube the same way | `./mount.py goto "NGC 7662" --solve`; `./guidecam.py guide --recalibrate --minutes 10 --exposure 2 --gain 400`; `./guidegraph.py` | |
 | 5 | Next | **The window comparison:** the same star binned, then at full resolution in the 512 x 960 window; the wander of each in arcseconds. No pulses | `./guidecam.py star --count 30 --compare-window` | |
@@ -40,8 +40,8 @@ twilight at 17:00 (stars bright enough for Vega); astronomical dark at
 | 7 | If asked for | A 50 g bag of sand moved, if the graphs say the balance is off; then step 4 again | | Yes |
 | 8 | Next | **Does the drawtube hold focus** with the driver off and the 12 V out? | `./focus.py --check`, against step 2 | |
 | 8a | After the guide scope tests (asked by the owner, 19 November) | The focuser's 12 V is already in (step 3 skipped) | | |
-| 8b | Next | **Focus in every filter:** a walk-in in each of L, R, G, B, Ha, SII, OIII, each filter's focus position in steps, so the offsets between them are known, not assumed parfocal | `./focus.py --walk-in --prove-sets` | |
-| 8c | Next | **Moving between filters, practised:** L to each other filter and back, a walk-in each time, kept as measurements of each set's offset; repeated so each offset has a scatter | `./focus.py --walk-in --offset FILTER`, for R, G, B, Ha, SII, OIII, then again | |
+| 8b | Next | **Focus in every filter:** a motor focus in each of L, R, G, B, Ha, SII, OIII, each filter's focus position in steps, so the offsets between them are known, not assumed parfocal | `./focus.py --auto --prove-sets` | |
+| 8c | Next | **Moving between filters, practised:** L to each other filter and back, a motor focus each time, kept as measurements of each set's offset; repeated so each offset has a scatter | `./focus.py --auto --offset FILTER`, for R, G, B, Ha, SII, OIII, then again | |
 | 8d | Next | **The gears' slack (backlash) and the sweep step**, measured on the stars: how many steps the motor turns before the drawtube follows, each way | `./focus.py --measure-backlash`, then `--measure-step` | The guard refuses both today (`small-focus` in `.claude/hooks/guard.py`); it needs the owner's word to allow these two for this step |
 | 9 | After | The night's imaging, the camera cold | | |
 

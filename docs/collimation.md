@@ -24,9 +24,9 @@ as a share of the ring's radius, the median over the frames:
 
 It also says which way the shadow sits in the frame, for whoever adjusts it.
 
-**It runs by itself.** A walk-in (`./focus.py --walk-in`) starts from the
-drawtube set a touch out by hand, where the stars are doughnuts, so it
-checks the collimation on its first doughnuts and says the result, then
+**It runs by itself.** A motor focus (`./focus.py --auto`) that starts out
+of focus, where the stars are doughnuts, checks the collimation on its
+first doughnuts and says the result, then
 keeps it in the history. A check every focusing night costs nothing, and
 the history shows drift over the weeks.
 

@@ -81,19 +81,19 @@ motor turned and the knob did not, so focus was by hand with the spoken aid.
   hand-turned aid, whatever was said earlier about taking it off.
 - The motor is a NEMA 17 on a BTT TMC2209 since 18 November 2026, when it
   focused the 183M's train by itself, from rings 470 px across to HFR 1.67
-  (`docs/nights/2026-11-18/focuser.md`). It lifts the drawtube, so the
-  motor sets it a little out for a walk-in (`./focuser.py move 256` from
-  just inside focus): no hand on the knob. A plus move is out; 4096
+  (`docs/nights/2026-11-18/focuser.md`). It lifts the drawtube, so
+  `./focus.py --auto` moves it either way from wherever it is: no hand on
+  the knob, no move first. A plus move is out; 4096
   half-steps is a turn of the knob, half a turn about half the travel.
 - Far out (rings, no star measuring): `./focus.py --find`, a thirty-second
-  of a turn a step, half a turn each way at most; then `--walk-in`.
+  of a turn a step, half a turn each way at most; `--auto` runs it itself.
 - The sweeps (`--motor`, `--measure-step`, `--measure-backlash`) stay
   refused by the guard until the slack and step are measured on the sky: on
   23 October 2026 two of them, each stopped part way, left the old drive's
   drawtube about an inch from the Sharpie line.
 - Its 12 V lead runs with slack: pulled tight on 18 November, it may have
   held the tube back in Dec.
-- A walk-in's collimation line saying "off": Gary collimates it
+- A focus run's collimation line saying "off": Gary collimates it
   (`docs/collimation.md`).
 
 ## Imaging

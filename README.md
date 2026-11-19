@@ -339,7 +339,7 @@ was involved. Everything is also run against the simulated rig.
 | The cooled mono camera (183M) and filter wheel | ✅ 4-5 November 2026: held at -5 °C all session with the camera kept open, all seven filters, plate solves in 0.2-0.3 s, M33 in L. ❌ Colour from L, R, G and B: the first try's filters drifted apart (fixed, not yet rerun); filter focus offsets not measured | ✅ | ✅ |
 | Focusing: measuring the stars | ✅ the reading fell from 11 to about 2 as focus was reached; HFR 2.0 by hand on the 183M | ✅ | ✅ |
 | Focusing: click, tone and three levels | not yet | not yet | ✅ |
-| Motor focuser (`focus.py --walk-in`, `--find`) | ✅ focused the 150P with the 183C to HFR 2.47 (15 October 2026, a 28BYJ-48); ✅ with the 183M's heavier train to HFR 1.67 on a NEMA 17 and TMC2209 (18 November 2026). The full sweep (`--motor`) waits for the gear slack to be measured | ✅ | ✅ |
+| Motor focuser (`focus.py --auto`, `--find`) | ✅ focused the 150P with the 183C to HFR 2.47 (15 October 2026, a 28BYJ-48); ✅ with the 183M's heavier train to HFR 1.67 on a NEMA 17 and TMC2209 (18 November 2026). The full sweep (`--motor`) waits for the gear slack to be measured | ✅ | ✅ |
 | Shutter time corrected (`camera.py`) | ✅ a 10 s frame's trails show 9.6 s open, from 6.4 s | ✅ | ✅ |
 | Drift model and Dec correction | ⚠️ an earlier, cruder version only | ⚠️ the same | ✅ |
 | Daytime Polaris | ⚠️ searched three times, Polaris not found | ⚠️ the search only | ✅ |
@@ -396,7 +396,7 @@ as not yet done):
 
 - Flats for the 183M in each filter, then a colour picture with the
   drift fix in, and a measured depth against the 183C.
-- The filter focus offsets proved on the sky (`./focus.py --walk-in --prove-sets`),
+- The filter focus offsets proved on the sky (`./focus.py --auto --prove-sets`),
   so the narrowband filters can be used without "focus as is".
 - The NEMA 17 focuser's gear slack and sweep step measured on the sky, so the full focus sweep can run.
 - A known nova recovered from this rig's own frames; a transit timed

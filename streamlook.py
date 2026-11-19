@@ -1273,8 +1273,8 @@ FOCUS_KINDS = {"check": ("FOCUS CHECK", "Three pictures: how sharp the stars are
                                      "star sizes, and it goes to the curve's lowest point."),
                "sweep": ("FOCUS CURVE", "The motor sweeps the focuser through focus to measure the curve, "
                                         "then goes back to where it started."),
-               "walk": ("FOCUS WALK-IN", "From a little outside focus, the motor brings the focuser in a few "
-                                         "steps at a time, measuring after each, to the sharpest."),
+               "auto": ("FOCUSING", "The motor steps the focuser whichever way the stars get sharper, a few "
+                                     "steps at a time, measuring after each, and ends on the sharpest."),
                "find": ("FINDING THE STARS", "Far out of focus no star measures: the motor turns half a turn "
                                              "at a time, in and then out, until they do.")}
 
@@ -1636,17 +1636,18 @@ def focus_examples(now):
     story = {"chapter": "HOW IT WORKS", "card": ("HOW FOCUSING WORKS", [
         "Star size against focuser position makes a V-shaped curve. A curve fitted through every point finds "
         "its bottom more surely than any one reading."])}
-    walk = dict(base, kind="walk", stage="finest steps", position=None, positions=None, start_hfr=3.4,
-                readings=[(0, 3.4), (-64, 3.0), (-128, 2.7), (-160, 2.5), (-176, 2.36), (-192, 2.29)],
-                hfr=2.29, best_hfr=2.29, best_at=-192, steps=steps_of(["doughnuts", "coming in", "finest steps",
-                                                                         "done"], "finest steps"))
+    auto = dict(base, kind="auto", stage="coming to focus", position=None, positions=None, start_hfr=3.4,
+                readings=[(0, 3.4), (32, 3.9), (-32, 3.0), (-64, 2.7), (-96, 2.5), (-112, 2.36), (-128, 2.29)],
+                hfr=2.29, best_hfr=2.29, best_at=-128, steps=steps_of(["finding stars", "which way",
+                                                                        "coming to focus", "to the best", "done"],
+                                                                       "coming to focus"))
     fitted = dict(base, stage="verify", fit={"ok": True, "focus": -560, "hfr": 2.2, "r2": 0.97},
                   readings=sweep + [(-768, 3.0), (-560, 2.19)], best_hfr=2.19, best_at=-560, hfr=2.19,
                   tonight_best_hfr=2.19,
                   steps=steps_of(["measure", "sweep", "fit", "verify"], "verify", True))
     return {
         "focus": {"kind": "focus", "target": "", "now": now, "focus": base, "story": story},
-        "focus-walk": {"kind": "focus", "target": "", "now": now, "focus": walk, "story": story},
+        "focus-auto": {"kind": "focus", "target": "", "now": now, "focus": auto, "story": story},
         "focus-complete": {"kind": "focus", "target": "", "now": now, "story": story,
                            "focus": dict(fitted, card=focus_card({"outcome": "complete", "start_hfr": 5.07,
                                                                   "end_hfr": 2.19}))},

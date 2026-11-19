@@ -210,7 +210,7 @@ def steps_owed(cfg, camera, bands, programmes, patrol_band):
                 or "not yet proved" in b["focus_offset"]]
     if unproven:
         out.append({"step": "filter focus offsets", "why": f"not proven for {', '.join(unproven)}",
-                    "needs_sky": True, "command": "./focus.py --walk-in --prove-sets"})
+                    "needs_sky": True, "command": "./focus.py --auto --prove-sets"})
     refs = [p for p in programmes if p.get("references") == 0]
     if refs:
         out.append({"step": f"references in {patrol_band or 'the patrol band'}",

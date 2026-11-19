@@ -34,13 +34,17 @@ holding the tube back in Dec.
 The motor is far stronger than the 28BYJ-48, which stalled and ticked
 harmlessly at the ends of the travel. Nothing has met the ends with the
 NEMA 17: the far-focus search goes at most half a turn either way from
-where it starts, and the walk-in keeps within `[focuser] travel`.
+where it starts, and `--auto` keeps within `[focuser] travel`.
 
-How it focuses now (18 November 2026): `./focus.py --check` first. If the
-stars are only rings, `./focus.py --find` steps a thirty-second of a turn at
-a time and ends at the smallest rings or where stars measure; then, from a
-little outside focus (the motor can set it there: `./focuser.py move 256`
-from just inside), `./focus.py --walk-in`.
+How it focuses now (19 November 2026): `./focus.py --check` first, then
+`./focus.py --auto` from wherever the focuser is. With only rings it runs
+the far search (`--find`: a thirty-second of a turn at a time, to the
+smallest rings or where stars measure); then one small step out, and in if
+out is worse, to see which way focus lies; small steps that way until the
+stars have been worse three times after their best; then to the best,
+arriving moving in with the gears' slack taken up. The NEMA 17 moves the
+drawtube either way, so nothing is set out of focus first and there is no
+inward-only rule; that was the 28BYJ-48's.
 
 | Part | |
 |---|---|
@@ -312,7 +316,7 @@ single reading can say which way focus lies:
 Every reading is numbered with its step and shown on the status page;
 each sweep is drawn as text in the log. A run never goes more than two
 turns from where it started. Each kept run is in `cache/focus_runs.jsonl`.
-As it goes, a run (and `--check`, `--walk-in`, `--find`, `--sweep`) also
+As it goes, a run (and `--check`, `--auto`, `--find`, `--sweep`) also
 keeps its stage, readings and result in `cache/focus_stream.json`, with the
 brightest star at the start and now, for the live stream's focus look
 ([streaming.md](streaming.md#focusing-and-polar-alignment-on-air)).
@@ -321,11 +325,11 @@ brightest star at the start and now, for the live stream's focus look
     ./focus.py --find                far out, no star measuring: a thirty-second of a turn at a time in, then out (half a turn each way), until stars do
     ./focus.py --measure-step        from focus, in until the stars are 2.5 times their size; a quarter of that is the step
     ./focus.py --measure-backlash    the slack, on the steep side of the curve, twice; half as much again is kept
-    ./focus.py --walk-in             from a little outside focus, set by hand: in 64 then 32 half-steps at a
-                                     time, slowly (40 ms a half-step), measuring each, to the sharpest;
-                                     then back out past the best by the gears' slack (the measured backlash,
-                                     or 256) and in to it, saying whether the motor lifted it;
-                                     the collimation is checked on its first doughnuts (collimation.md)
+    ./focus.py --auto                from wherever it is, either way: the far search first if only rings show;
+                                     one step out (and in) to find which way; 64, 32, 16 or 8 half-steps at a
+                                     time that way (40 ms a half-step), measuring each, to the sharpest; then
+                                     to the best, arriving moving in with the slack (the measured backlash,
+                                     or 32) taken up; the collimation is checked on its first doughnuts
 
 No move of a run goes further than `[focuser] travel` (512 half-steps by
 default, overshoot included) from where it started: a move beyond it is
@@ -335,7 +339,7 @@ on guessed sizes, stopped part way twice and started again, left the
 drawtube about an inch out. Since then:
 
 - `--motor` and `--sweep` refuse until the step and slack are measured
-  (`--walk-in` to focus, then `--measure-step` and `--measure-backlash`),
+  (`--auto` to focus, then `--measure-step` and `--measure-backlash`),
   and refuse a sweep whose ends and overshoot would not fit in the travel;
 - stars that measured at the start and are gone near it partway through a
   sweep stop the run and send the focuser back to the start: that is the

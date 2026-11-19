@@ -471,7 +471,7 @@ class Focuser:
     """An Alpaca focuser, answering as focuser.Focuser does: move(steps) in
     the project's half-steps (plus is out), each scaled by [focuser]
     alpaca_steps (the driver's steps to one half-step of the project's own
-    focuser, 1 unless set: the walk-in's step sizes were measured on that
+    focuser, 1 unless set: the motor focus's step sizes were measured on that
     one, so another focuser's scale is to be found on the sky), waiting
     until it has stopped; temperature() from the driver; speed() and full()
     do nothing (the driver keeps its own)."""

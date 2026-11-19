@@ -85,11 +85,9 @@ SMOOTH = {1: 1, 2: 2, 3: 3}             # readings each level steadies over
 PERCENT = {1: 10.0, 2: 6.0, 3: 4.0}     # the smallest change each level calls a change
 ENOUGH = 10         # stars in the middle of a full-size frame that make the rest not worth measuring
 SURE = 3            # readings in a row that settle a change of level
-WALK_MS = 40        # ms a half-step for --walk-in: the slowest and strongest tried on 19 October 2026
-GROWN = 1.05        # doughnuts count as grown only past this share of the last size
+MOTOR_MS = 40       # ms a half-step for --auto: the NEMA 17 focused at it on 18 and 19 November 2026
 STILL = 0.05        # stars within this share of the start ...
 STILL_AFTER = 512   # ... after this many half-steps in: the drawtube is not moving
-DROP = 0.85         # a walk-in counts readings past its best only once the stars are this far below the start
 HOLD = 5            # readings that must stay on the best before "Focus good"
 # Half-flux radius at good focus, in arcseconds: HFR 2 on the 150P with the
 # 183C. A starting figure only. Once runs have ended on "Focus good", what
@@ -568,7 +566,7 @@ def say_where(file=sys.stdout):
         return
     print(f"Focus on {name}, {plan['altitude_deg']:.0f}° up: a rich star field first (the Double Cluster "
           f"leads), a bright star only when none is well up. Point there first: ./mount.py goto \"{name}\" "
-          "--solve, or ./focus.py --field", file=file, flush=True)
+          "--solve", file=file, flush=True)
 
 
 def bearing(hour_angle, dec, site):
@@ -613,8 +611,9 @@ SWEEP_FRAMES = 3        # frames at each position: their median and scatter
 CHECK_FRAMES = 5        # frames to check the fitted focus with
 SWEEPS = 4              # sweeps a run may take, moving or widening it, before giving up
 STEP = 64               # half-steps between sweep positions until --measure-step has measured it
-BACKLASH = 256          # half-steps of slack to overshoot until --measure-backlash has measured it: small
-                        # enough that a sweep and its overshoot fit inside the travel ([focuser] travel)
+BACKLASH = 32           # half-steps of slack to overshoot until --measure-backlash has measured it: the
+                        # NEMA 17's measured 4 on the bench (16 November 2026) eight times over, for the
+                        # drawtube's load; the 256 before was the 28BYJ-48's
 SETTLE_S = 1.0          # seconds after a move before a frame, for the tube to stop shaking
 NOISE = 0.4             # a "star" this many times smaller than the usual best is a hot pixel
 CEILING = 12.0          # HFR beyond this is the measuring box's size, not the star's
@@ -652,7 +651,7 @@ def motor_refusal(mode, settings, travel):
         return None
     if not (settings["step_measured"] and settings["backlash_measured"]):
         return ("Refused: the focuser's step and backlash are only guesses until measured (on 23 October 2026 "
-                "a sweep on guesses left the drawtube about an inch out). From focus, by ./focus.py --walk-in, "
+                "a sweep on guesses left the drawtube about an inch out). From focus, by ./focus.py --auto, "
                 "run ./focus.py --measure-step and ./focus.py --measure-backlash first.")
     reach = SWEEP_POINTS // 2 * settings["step"] + settings["backlash"]
     if reach > travel:
@@ -673,7 +672,7 @@ STAR_NOW = STREAM_FILE.with_name("focus_star_now.png")
 STAGES = {"check": ["measure"],
           "focus": ["measure", "sweep", "fit", "verify"],
           "sweep": ["measure", "sweep", "fit"],
-          "walk": ["doughnuts", "coming in", "finest steps", "done"],
+          "auto": ["finding stars", "which way", "coming to focus", "to the best", "done"],
           "find": ["searching"]}
 
 
@@ -1171,44 +1170,35 @@ def find_stars(motor, read, usual, say=progress, stride=128, turns=0.5, ring=Non
     return {"at": 0, "how": "not_found"}
 
 
-def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, closest=8, switch=8.0, near=1.5,
-            close=1.15, most=160, tries=3, patience=3, spike=1.8, ring=None, ring_step=128, ring_most=4096,
-            live=None, back_out=True, slack=None):
-    """Focus from a little outside it, moving only inward, a few half-steps
-    at a time, measuring after each, until the stars have been worse three times
-    running after their best; returns {"best_hfr", "best_at", "ended_at",
-    "ended_hfr", "readings"}. Where the motor can push the drawtube in but
-    not lift it out (19 October 2026, the camera's weight on the drawtube),
-    a person sets it a little out by hand and this brings it in: then it
-    reached HFR 1.58 in 32-step moves. Moves of `coarse` while the HFR is
-    over `switch`, `fine` below. A reading that comes back empty is taken
-    again, up to `tries` times; then it stops where it is, since a jump
-    there once overshot focus. Within `near` x the usual best it moves
-    `finest` at a time, and it ends `patience` moves past the best, at most
-    `patience` x `finest` inside it. A reading over `spike` x the best is
-    taken again before it counts: on 21 October 2026 one passing cloud read
-    6.3 between 2.92 and 2.55, and two moves past the best ended a run that
-    still had finer focus to find.
+def focus_motor(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, closest=8, switch=8.0,
+                near=1.5, close=1.15, most=200, tries=3, patience=3, spike=1.8, ring=None, live=None, slack=None):
+    """Focus with the motor, moving either way: the NEMA 17 lifts the drawtube
+    as well as lowering it (18 November 2026), so nothing needs setting out of
+    focus first and no move is bigger than the stars call for.
 
-    With `back_out`, a run that ended past its best then tries the one small
-    move back out to the best, and says whether the motor lifted the
-    drawtube: 24 October 2026, it ended 24 half-steps inside the best (2.55
-    against 2.16), and the person asked for that move to be tried rather
-    than assumed impossible. The result gains "back_out": {"steps", "hfr",
-    "lifted"}, and "ended_at" and "ended_hfr" are where it then is. The move
-    back goes out past the best by the gears' `slack` (the measured
-    backlash, or BACKLASH) and then in to it, so the slack is taken up both
-    ways and the drawtube is left resting on the gears' inward side: a move
-    of only the 24 to 48 half-steps it had gone past was lost in the slack
-    before the drawtube could rise. On 30 October 2026 the motor lifted the
-    drawtube with the camera on over half a turn, so it is worth trying."""
+    Measures where it is; with no star measuring, the far search first
+    (find_stars, `ring` giving the doughnuts' size). Then one small step out:
+    better, and focus is outward; worse, and it tries the same step the
+    other side of the start; worse both ways, and the start was the best.
+    Then on that way a step at a time, sized by the best HFR so far (`coarse`
+    over `switch`, `fine` under it, `finest` within `near` x the usual best,
+    `closest` within `close` x it), until the stars have been worse
+    `patience` times running after their best. A reading over `spike` x the
+    best is taken again before it counts (21 October 2026: one passing cloud
+    read 6.3 between 2.92 and 2.55). Last, to the best place, always
+    arriving with an inward move and the gears' `slack` taken up first (out
+    past it by the slack, then in), so the drawtube ends resting the same
+    way every time. 19 November 2026: from HFR 3.38 the night began with a
+    move of 1600 half-steps out, the old way's need to start outside focus.
+
+    Returns {"best_hfr", "best_at", "ended_at", "ended_hfr", "way", "readings"},
+    places in half-steps from the start, out positive."""
     def still():
-        """The stars no different after STILL_AFTER half-steps in: the motor
-        turned and the drawtube did not move (1 November 2026: the knob
-        stayed put through three quarter-turn tests)."""
+        """The stars no different over STILL_AFTER half-steps of turning: the
+        motor turned and the drawtube did not move (1 November 2026)."""
         live.done("failed", "The stars did not change as the focuser turned: the drawtube is not moving.")
         raise interface.Refusal("FOCUSER_NOT_MOVING", f"The stars did not change over {STILL_AFTER} half-steps "
-                                                      "(an eighth of a turn) in: the motor is turning but the "
+                                                      "(an eighth of a turn): the motor is turning but the "
                                                       "drawtube is not moving. Check that the coupler grips the "
                                                       "knob's shaft.")
 
@@ -1218,100 +1208,101 @@ def walk_in(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, clo
             if hfr is not None:
                 return hfr
         return None
-    live = live or Broadcast("walk", usual, path=None)
+
+    def size(best):
+        return (closest if best < close * usual else finest if best < near * usual
+                else fine if best < switch else coarse)
+
+    live = live or Broadcast("auto", usual, path=None)
+    at, last_in = 0, False
+
+    def go(place):
+        nonlocal at, last_in
+        if place != at:
+            motor.move(place - at)
+            last_in, at = place < at, place
+
     now = reading()
-    at = 0
     if now is None and ring:
-        # Doughnuts, too wide for an HFR (21 October 2026, set "a touch out"
-        # by hand): in `ring_step` at a time while they shrink, until the
-        # stars measure. Doughnuts that grow mean focus is not inward.
-        live.stage("doughnuts")
-        size = ring(SWEEP_FRAMES)
-        live.reading(at, None, "doughnuts", ring=size)
-        if size is not None:
-            say(f"  start: doughnuts {size:.0f} px; in {ring_step} at a time until the stars measure")
-        grew, start_size = 0, size
-        while size is not None and now is None and at > -ring_most:
-            motor.move(-ring_step)
-            at -= ring_step
-            now = reading()
-            if now is None:
-                was, size = size, ring(SWEEP_FRAMES)
-                live.reading(at, None, "doughnuts", ring=size)
-                say(f"  in {ring_step} (at {at:+d}): doughnuts {size if size is None else round(size)} px")
-                # Grown only by more than the reading's own scatter: on 1 November
-                # 2026, 58, 58 and 59 px ended a run as "grown".
-                grew = grew + 1 if size is not None and size > GROWN * was else 0
-                if size is not None and start_size and at <= -STILL_AFTER and abs(size / start_size - 1) < STILL:
-                    still()
-                if grew >= 2:
-                    live.done("failed", "The doughnuts grew as the focuser went in: focus is the other way.")
-                    raise interface.Refusal("NO_STARS", f"The doughnuts grew as it went in ({at:+d} half-steps "
-                                                        "from the start): focus is outward. Set the drawtube a "
-                                                        "little out of focus by hand and run this again.")
+        live.stage("finding stars")
+        say("  no star measures here: the far search first")
+        found = find_stars(motor, read, usual, say=say, ring=ring, live=live)
+        at = found["at"]
+        now = reading()
     if now is None:
-        live.done("failed", "No stars measured here, so the focus walk could not start.")
-        raise interface.Refusal("NO_STARS", "No stars measure here. Set the drawtube a little out of focus by "
-                                            "hand, where the stars still measure, and run this again.")
-    best, best_at, worse, readings = now, at, 0, [(at, now)]
-    live.stage("coming in")
+        live.done("failed", "No stars measured here, so focusing could not start.")
+        raise interface.Refusal("NO_STARS", "No stars measure here, near or far out of focus: point at a rich "
+                                            "star field (the line at the start names one) and run this again.")
+    readings = [(at, now)]
+    live.stage("which way")
     live.reading(at, now, "start")
     say(f"  start: HFR {now}")
-    for _ in range(most):
-        # Sized by the best so far, not the last reading: on 21 October 2026
-        # one bad reading past the best went back to 32-step moves and
-        # ended 80 half-steps inside focus.
-        step = (closest if best < close * usual else finest if best < near * usual
-                else fine if best < switch else coarse)
-        if step in (finest, closest) and live.state["stage"] != "finest steps":
-            live.stage("finest steps")
-        motor.move(-step)
-        at -= step
-        now = reading()
-        if now is not None and now > spike * best and best < switch:
-            say(f"  in {step} (at {at:+d}): HFR {now}, a cloud? measuring again")
-            now = reading()
-        say(f"  in {step} (at {at:+d}): HFR {now if now is not None else 'none'}")
-        if now is None:
-            say("  no reading after three tries: stopped here")
+    best, best_at, start_at = now, at, at
+
+    # Which way: one step out, then if need be the same step in from the start.
+    step = size(best)
+    way = 0
+    for trial in (1, -1):
+        go(start_at + trial * step)
+        here = reading()
+        if here is not None and here > spike * best:
+            here = reading()
+        say(f"  {'out' if trial > 0 else 'in'} {step} (at {at:+d}): HFR {here if here is not None else 'none'}")
+        if here is None:
+            continue
+        readings.append((at, here))
+        live.reading(at, here, "out" if trial > 0 else "in")
+        if here < best:
+            best, best_at, way = here, at, trial
             break
-        readings.append((at, now))
-        live.reading(at, now, "in")
-        if at <= -STILL_AFTER and all(abs(h / readings[0][1] - 1) < STILL for _, h in readings):
-            still()
-        if now < best:
-            best, best_at, worse = now, at, 0
-        elif best < DROP * readings[0][1]:
-            # Past focus only once the stars have clearly shrunk: on 1 November
-            # 2026 they read 9.75 to 9.99 for 384 half-steps, a noisy "best"
-            # of 9.75 then three readings a hair above it stopped the run a
-            # tenth of a turn in, from a start set past the line by eye.
-            worse += 1
-            if worse >= patience:
+    if way:
+        live.stage("coming to focus")
+        say(f"  focus is {'out' if way > 0 else 'in'}ward")
+        worse = 0
+        for _ in range(most):
+            step = size(best)
+            go(at + way * step)
+            now = reading()
+            if now is not None and now > spike * best and best < switch:
+                say(f"  {'out' if way > 0 else 'in'} {step} (at {at:+d}): HFR {now}, a cloud? measuring again")
+                now = reading()
+            say(f"  {'out' if way > 0 else 'in'} {step} (at {at:+d}): HFR {now if now is not None else 'none'}")
+            if now is None:
+                say("  no reading after three tries: stopped here")
                 break
-    result = {"best_hfr": best, "best_at": best_at, "ended_at": at, "ended_hfr": now, "readings": readings}
-    if back_out and now is not None and at < best_at:
-        steps = best_at - at
-        slack = focuser_settings()["backlash"] if slack is None else slack
-        live.stage("lifting back")
-        say(f"  out {steps + slack} past the best, then in {slack} to it, to take up the gears' slack")
-        motor.move(steps + slack)
-        if slack:
-            motor.move(-slack)
-        back = reading()
-        lifted = back is not None and back < 0.9 * now
-        say(f"  back out {steps} to the best: HFR {back if back is not None else 'none'} "
-            f"({'it lifted' if lifted else 'no better: the motor did not lift it'})")
-        result["back_out"] = {"steps": steps, "hfr": back, "lifted": lifted}
-        if back is not None:
-            readings.append((best_at, back))
-            result.update(ended_at=best_at if lifted else at, ended_hfr=back)
+            readings.append((at, now))
+            live.reading(at, now, "out" if way > 0 else "in")
+            if abs(at - start_at) >= STILL_AFTER and all(abs(h / readings[0][1] - 1) < STILL for _, h in readings):
+                still()
+            if now < best:
+                best, best_at, worse = now, at, 0
+            else:
+                worse += 1
+                if worse >= patience:
+                    break
+    else:
+        say("  no better either way: the start was the best")
+
+    # To the best, arriving moving inward with the slack taken up.
+    slack = focuser_settings()["backlash"] if slack is None else slack
+    live.stage("to the best")
+    if at > best_at and last_in:
+        go(best_at)
+    else:
+        go(best_at + slack)
+        go(best_at)
+    ended = reading()
+    say(f"  at the best ({best_at:+d}), arrived moving in: HFR {ended if ended is not None else 'none'}")
+    if ended is not None:
+        readings.append((at, ended))
+        live.reading(at, ended, "best")
     live.stage("done")
-    live.done("complete", None, end_hfr=result["ended_hfr"] if result["ended_hfr"] is not None else best)
-    return result
+    live.done("complete", None, end_hfr=ended if ended is not None else best)
+    return {"best_hfr": best, "best_at": best_at, "ended_at": at, "ended_hfr": ended if ended is not None else best,
+            "way": {1: "out", -1: "in", 0: "none"}[way], "readings": readings}
 
 
-def measure_step(motor, read, usual, say=progress, backlash=None, increment=64, most=4096):
+def measure_step(motor, read, usual, say=progress, backlash=None, increment=16, most=4096):
     """From focus, in by `increment` at a time until the stars are 2.5 times
     the size they were: a sweep step is a quarter of that distance, so the
     ends of a nine-position sweep reach well up the curve's sides. Then back
@@ -1351,13 +1342,15 @@ def dead_band(offsets, sizes):
     return best[1]
 
 
-def measure_backlash(motor, read, usual, step, say=progress, increment=64, most=3072, repeats=2):
+def measure_backlash(motor, read, usual, step, say=progress, increment=8, most=512, repeats=2):
     """The gears' slack, measured on the steep side of the curve where a
     small move changes the stars: in by four sweep steps, then out by
     `increment` at a time; the turning done before the stars begin to change
     is the slack. Twice, and half as much again as the larger kept, as the
     established programs advise: too much costs only time. Start at focus,
-    as a focus run leaves it. Returns it, or None."""
+    as a focus run leaves it. Returns it, or None. Eight half-steps at a
+    time, to 512: sized for the NEMA 17, whose slack measured 4 on the bench
+    (16 November 2026); the 64 and 3072 before were the 28BYJ-48's."""
     drive, found = Drive(motor), []
     drive.loaded_in = True      # a focus run ends with an inward move, so start from focus
     for time_ in range(repeats):
@@ -1516,7 +1509,7 @@ def stop_on_term():
     return lambda: signal.signal(signal.SIGTERM, before)
 
 
-MODE_WORDS = {"focus": "to the sharpest", "walk": "walking in to the sharpest", "find": "finding focus",
+MODE_WORDS = {"focus": "to the sharpest", "auto": "focusing either way", "find": "finding focus",
               "sweep": "one focus sweep", "step": "measuring the motor's step",
               "backlash": "measuring the backlash"}
 
@@ -1537,26 +1530,26 @@ def run_motor(args, mode="focus"):
         raise interface.Refusal("INVALID_REQUEST", refused)
     if getattr(args, "offset", None) or getattr(args, "prove_sets", False):
         import filters
-        if mode != "walk" or not filters.wheel_in_train():
+        if mode != "auto" or not filters.wheel_in_train():
             raise interface.Refusal("INVALID_REQUEST", "--offset and --prove-sets measure focus offsets from L "
-                                    "with --walk-in, on a light path with the filter wheel.")
+                                    "with --auto, on a light path with the filter wheel.")
         if args.dry_run and getattr(args, "prove_sets", False):
-            print(f"Would walk in with each filter in turn, L first, going out {filters.OFFSET_BACK} half-steps "
-                  "before each after the first, and keep which filters focus with their parfocal set and which "
-                  "need their own offset. The mount does not move.")
+            print("Would focus in each filter in turn, L first, each from where the last left it, and keep which "
+                  "filters focus with their parfocal set and which need their own offset. The mount does not move.")
             return {"would_move": True, "prove_sets": filters.sets()}
         if args.dry_run:
-            print(f"Would turn the wheel to L and walk in, go out {filters.OFFSET_BACK} half-steps, turn the wheel to "
-                  f"{args.offset} and walk in again, and keep the difference as one measurement of {args.offset}'s "
+            print(f"Would turn the wheel to L and focus, turn the wheel to "
+                  f"{args.offset} and focus again, and keep the difference as one measurement of {args.offset}'s "
                   "offset. The mount does not move.")
             return {"would_move": True, "offset": args.offset}
-    if args.dry_run and mode == "walk":
+    if args.dry_run and mode == "auto":
         port = focuser.find_port()
-        print(f"Would turn the focuser on {port} inward only, 64, 32 then 16 half-steps at a time at {WALK_MS} ms a "
-              f"half-step, {SWEEP_FRAMES} frames after each, until the stars have been worse three times after their "
-              "best, then back out past the best by the gears' slack and in to it. Start it a little outside focus, "
-              "where the stars still measure. The mount does not move.")
-        return {"would_move": True, "port": port, "usual_hfr": round(usual, 2), "walk_ms": WALK_MS}
+        print(f"Would turn the focuser on {port} either way at {MOTOR_MS} ms a half-step: the far search first if "
+              "no star measures, then one small step out (and in, if out is worse) to find which way focus is, "
+              f"then 64, 32, 16 or 8 half-steps at a time that way, {SWEEP_FRAMES} frames after each, until the "
+              "stars have been worse three times after their best; then to the best, arriving moving in with the "
+              f"gears' slack ({settings['backlash']} half-steps) taken up. The mount does not move.")
+        return {"would_move": True, "port": port, "usual_hfr": round(usual, 2), "motor_ms": MOTOR_MS}
     if args.dry_run:
         port = focuser.find_port()
         print(f"Would turn the focuser on {port}: {SWEEP_POINTS} positions {settings['step']} half-steps apart "
@@ -1608,32 +1601,32 @@ def run_motor(args, mode="focus"):
                 if "lum" in seen:
                     show(seen["lum"], "focus: " + line)
             drive = Settled(motor, travel=travel)
-            if mode == "walk":
+            if mode == "auto":
                 if hasattr(motor, "speed"):
-                    motor.speed(WALK_MS)
-                progress(f"walking in at {WALK_MS} ms a half-step, {SWEEP_FRAMES} frames of "
+                    motor.speed(MOTOR_MS)
+                progress(f"focusing either way at {MOTOR_MS} ms a half-step, {SWEEP_FRAMES} frames of "
                          f"{MOTOR_EXPOSURE:g} s after each move")
                 import filters
                 if getattr(args, "prove_sets", False):
-                    # Once, the first clear night: a walk-in in every filter (filters.py).
+                    # Once, the first clear night: focus in every filter (filters.py).
                     try:
                         thermistor = motor.temperature()
                     except Exception:
                         thermistor = None
                     return filters.prove_all(
-                        drive, lambda d: walk_in(d, read, usual, say=say, ring=ring, live=live),
+                        drive, lambda d: focus_motor(d, read, usual, say=say, ring=ring, live=live),
                         lambda name: filters.turn_wheel(name, say=progress), say=progress, temperature=thermistor)
                 if getattr(args, "offset", None):
-                    # A filter's focus offset from L: a walk-in in each (filters.py).
+                    # A filter's focus offset from L: focus in each (filters.py).
                     try:
                         thermistor = motor.temperature()
                     except Exception:
                         thermistor = None
                     return filters.measure_offset(
-                        args.offset, drive, lambda d: walk_in(d, read, usual, say=say, ring=ring, live=live),
+                        args.offset, drive, lambda d: focus_motor(d, read, usual, say=say, ring=ring, live=live),
                         lambda name: filters.turn_wheel(name, say=progress), say=progress, temperature=thermistor,
                         verified=args.verified)
-                result = walk_in(drive, read, usual, say=say, ring=ring, live=live)
+                result = focus_motor(drive, read, usual, say=say, ring=ring, live=live)
                 if filters.wheel_in_train():
                     # What the drawtube is now focused for: the filter the wheel says
                     # is in the path, so a change to another moves by the offsets' difference.
@@ -1648,13 +1641,13 @@ def run_motor(args, mode="focus"):
                     checked = collimation.check(seen["doughnut"])
                     progress(collimation.words(checked))
                     if checked:
-                        collimation.keep(checked, "walk-in")
+                        collimation.keep(checked, "motor focus")
                         result["collimation"] = checked
                 progress(f"Best HFR {result['best_hfr']} at {result['best_at']:+d} half-steps; ended at "
                          f"{result['ended_at']:+d}, HFR {result['ended_hfr']}.")
                 # Where it ended, if that is good, counts as focused for the
                 # patrol's readiness (21 October 2026: it said "last focused
-                # 52 hours ago" straight after a walk-in to HFR 2.31).
+                # 52 hours ago" straight after focusing to HFR 2.31).
                 last = result["readings"][-1][1]
                 if last <= 1.5 * usual:
                     seen_good(last, scale)
@@ -1664,7 +1657,7 @@ def run_motor(args, mode="focus"):
                 found = find_stars(drive, read, usual, say=say, ring=ring, live=live)
                 progress({"found": f"Stars measure {found['at']:+d} half-steps from the start.",
                           "smallest": f"Left at the smallest doughnuts, {found['at']:+d} half-steps from the start; "
-                                      "focus is close: ./focus.py --walk-in from a little out, or --find again.",
+                                      "focus is close: ./focus.py --auto, or --find again.",
                           "lost": "The star left the frame or was clouded over: back where it started. Put it back "
                                   "in view and run it again.",
                           "not_found": "No stars within half a turn either way: the focuser is back where it "
@@ -1682,7 +1675,7 @@ def run_motor(args, mode="focus"):
                 progress("measuring the gears' slack")
                 # Out no further than the travel, the return's overshoot too.
                 found = measure_backlash(drive, read, usual, settings["step"], say=say,
-                                         most=min(3072, travel - travel % 64))
+                                         most=min(512, travel - travel % 8))
                 if found:
                     keep_focuser(backlash=found)
                 progress(f"Backlash to overshoot: {found} half-steps" + (", kept." if found else ": not measured."))
@@ -1718,14 +1711,14 @@ def run_motor(args, mode="focus"):
     except KeyboardInterrupt:
         # Stopped part way (Ctrl-C, or the SIGTERM of a background stop):
         # on 23 October 2026 two runs stopped mid-sweep left the drawtube
-        # wound out. Back to the start, the last move inward. A walk-in
-        # moves inward only and stays where it is: going home would turn
-        # the drawtube out, and throw away the way in.
-        if drive is not None and drive.moved and mode != "walk":
+        # wound out. Back to the start, the last move inward. A focus run
+        # (--auto) stays where it is: its moves are small and going home
+        # would throw away the way it found.
+        if drive is not None and drive.moved and mode != "auto":
             progress(f"stopped: taking the focuser back {-drive.moved:+d} half-steps to where it started")
             drive.home(settings["backlash"])
-        live.done("failed", "The walk-in was stopped before it finished; the focuser stays where it is."
-                  if mode == "walk" else
+        live.done("failed", "Focusing was stopped before it finished; the focuser stays where it is."
+                  if mode == "auto" else
                   "The focus run was stopped before it finished; the focuser went back to where it started.")
         raise
     except BaseException:
@@ -1790,18 +1783,19 @@ def main():
     ap.add_argument("--find", action="store_true",
                     help="far out of focus: a thirty-second of a turn at a time in, then out (half a turn each way), "
                          "until stars measure")
-    ap.add_argument("--walk-in", action="store_true",
-                    help="from a little outside focus, set by hand: in a few half-steps at a time, slowly, "
-                         "measuring each, to the sharpest; for when the motor cannot lift the drawtube out")
+    ap.add_argument("--auto", action="store_true",
+                    help="focus with the motor from wherever it is, moving either way: the far search first if no "
+                         "star measures, then small steps the way the stars get sharper, ending on the best with "
+                         "the gears' slack taken up")
     ap.add_argument("--offset", metavar="FILTER",
-                    help="with --walk-in, on a light path with the filter wheel: a walk-in in L, out a little, a "
-                         "walk-in in FILTER, and the difference kept as one measurement of its set's focus offset")
+                    help="with --auto, on a light path with the filter wheel: focus in L, out a little, focus in "
+                         "FILTER, and the difference kept as one measurement of its set's focus offset")
     ap.add_argument("--verified", action="store_true",
                     help="with --offset, when you watched it and the stars were sharp in both filters: this one "
                          "measurement may be used on runs you start yourself (never scheduled ones) until three "
                          "nights prove it")
     ap.add_argument("--prove-sets", action="store_true",
-                    help="with --walk-in, once on the first clear night: a walk-in in every filter, to confirm the "
+                    help="with --auto, once on the first clear night: focus in every filter, to confirm the "
                          "parfocal sets ([filterwheel] sets); one outside its set gets its own offset")
     ap.add_argument("--measure-backlash", action="store_true",
                     help="measure the focuser gears' slack on the steep side of the curve; keeps half as much "
@@ -1816,7 +1810,7 @@ def main():
     if not args.scene:
         say_where(file=sys.stderr if args.json else sys.stdout)
     for flag, mode in (("sweep", "sweep"), ("find", "find"), ("measure_step", "step"),
-                       ("measure_backlash", "backlash"), ("walk_in", "walk")):
+                       ("measure_backlash", "backlash"), ("auto", "auto")):
         if getattr(args, flag):
             return interface.main("focus.motor", lambda: run_motor(args, mode), args.json)
     if args.check:

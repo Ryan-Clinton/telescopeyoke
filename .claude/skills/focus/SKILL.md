@@ -30,7 +30,7 @@ way (17 October 2026: HFR 1.86 at the start, 3.52 after a stopped run).
    the number, and that the first good focus becomes the usual.
 3. **Good** (within 10% of the usual best): say so and move on. Do not
    focus unless the person asks.
-4. **Soft**, or asked: with the motor focuser, the walk-in below; without
+4. **Soft**, or asked: with the motor focuser, `./focus.py --auto` below; without
    one, the hand aid below.
 5. Report the HFR it ends on. Well above the usual: suggest the cause in
    this order: cloud or haze (ask what the sky looks like), dew on the
@@ -40,29 +40,28 @@ way (17 October 2026: HFR 1.86 at the start, 3.52 after a stopped run).
 
 Focus comes before anything that plate-solves.
 
-## With the motor focuser: the walk-in
+## With the motor focuser: `./focus.py --auto`
 
-`./focus.py --motor --dry-run` first. Then `./focus.py --walk-in`, from
-the drawtube a touch **out** from focus. The owner's NEMA 17 lifts the
-drawtube (18 November 2026), so the motor sets it there
-(`./focuser.py move 256` from just inside); a rig whose motor cannot lift
-has it set by hand. Far out, stars only rings: `./focus.py --find` first
-(a thirty-second of a turn a step, half a turn each way; it ends at the
-smallest rings or where stars measure, and stops if the star leaves the
-frame). **Never `--motor`, `--measure-step` or `--measure-backlash`** with
-their 256-step, 1536-overshoot guesses (the guard refuses them): two of
-them, each stopped part way, once left the drawtube about an inch out.
-The method proved on 20 October 2026 is a small step out and tiny steps
-in, downhill only, stopping once the stars are clearly past their best,
-then one move back out to the best (`docs/focuser.md`). Nothing to
-measure first. The person's word on how far out it is beats the HFR: HFR
+`./focus.py --auto --dry-run` first, then `./focus.py --auto` from
+wherever the focuser is: no move beforehand, nothing set out of focus.
+The NEMA 17 moves the drawtube either way (18 November 2026). With no
+star measuring it runs the far search itself (`--find`: a thirty-second
+of a turn a step, half a turn each way, to the smallest rings, stopping
+if the star leaves the frame). Then one small step out, and in if out is
+worse, to see which way focus lies; small steps that way (64, 32, 16 or 8
+half-steps, by how sharp the stars already are) until they have been
+worse three times after their best; then to the best, arriving moving in
+with the gears' slack taken up. **Never `--motor`, `--measure-step` or
+`--measure-backlash`** (the guard refuses them): on 23 October 2026 two
+sweeps on the old motor, each stopped part way, left the drawtube about
+an inch out. The person's word on how far out it is beats the HFR: HFR
 13 can be a few tens of microns. Stars that vanish during a run: first
 whether the star is still in the frame (a GoTo off by up to a degree
 without a star alignment, or drift on a rough polar alignment: 18 November
 2026), then the focuser, and cloud last.
 
-- A walk-in that ends past its best tries one move back out and says
-  whether the motor lifted the drawtube: report that line too.
+- It says which way focus lay and the HFR it ended on at the best: report
+  those.
 - It checks the collimation on its first doughnuts: say that line once,
   and if it says "off", that the mirrors want collimating
   (`docs/collimation.md`).

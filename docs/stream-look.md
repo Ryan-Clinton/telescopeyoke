@@ -807,8 +807,8 @@ each has a look of its own in place of the stack and the object panel.
 - The two squares are the brightest star in view, magnified: as it was at
   the start of the run, and in the newest picture.
 - The steps are the run's own (`focus.STAGES`): a check measures; a focus
-  run measures, sweeps, fits and verifies; a walk-in has doughnuts, coming
-  in, finest steps and done; the search for stars searches. A count is
+  run measures, sweeps, fits and verifies; `--auto` has finding stars,
+  which way, coming to focus, to the best and done; the search for stars searches. A count is
   shown only where it is known: "picture 2 of 3" for a check, "position 4
   of 9" in a sweep, "step 3 of 4" in the search.
 - When it ends a card is held for ten seconds (`streamlook.CARD_S`):
@@ -983,7 +983,7 @@ registered for the channel), and the chat's read-only commands
   - between targets;
   - the end card;
   - the target introduction;
-  - focusing (a sweep, a walk-in, each result card) and polar alignment
+  - focusing (a sweep, a motor focus, each result card) and polar alignment
     (measuring, waiting for an adjustment, complete, failed), from their
     own files.
   The parts each state has are checked by drawing into a recorder, not by

@@ -20,9 +20,8 @@ The first centring move measures how a move on the sky shows in the picture
 (which way is east, how many pixels an arcminute), once for each side of the
 pier; it is kept, so later nights skip it.
 
-Focus is not done here: the motor focuser can only walk in (docs/focuser.md),
-so a focus that has gone soft needs the drawtube set a touch out by hand.
-`--focus-check STAR` measures it on a star field first and stops if it is
+Focus is not done here: a focus that has gone soft is ./focus.py --auto on a
+star field first. `--focus-check STAR` measures it on a star field first and stops if it is
 soft. 24 October 2026: the Moon centred by hand-reckoned aim-offs, a fixed
 exposure and a hand-typed region; this does all three from the picture.
 """
@@ -278,8 +277,8 @@ def run(args, scope=None, cam=None, site=None, say=print):
         checked = subprocess.run([sys.executable, str(ROOT / "focus.py"), "--check"], capture_output=True, text=True)
         say(checked.stdout.strip().splitlines()[-1] if checked.stdout.strip() else "focus check gave no answer")
         if "soft" in checked.stdout:
-            raise SystemExit("Focus is soft: set the drawtube a touch out by hand, then ./focus.py --walk-in "
-                             "on a star field, before the Moon.")
+            raise SystemExit("Focus is soft: ./focus.py --auto on a rich star field "
+                             "before the Moon.")
     if scope is None:
         import mount
         scope = mount.Mount(watch=False)

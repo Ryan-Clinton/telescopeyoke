@@ -41,9 +41,8 @@ has its own mode, `./ty moon`, built on the lucky-imaging engine `lucky.py`.
 
 The number of frames is cut to what fits on the disk with 3 GB left free:
 frames are kept 8 bits a pixel (the top 8 of the camera's 12), so a
-2,900-pixel square is about 8.4 MB a frame. Focus is not done here: the
-motor can only walk in (`focuser.md`), so a soft focus needs the drawtube
-set a touch out by hand. `--focus-check STAR` measures focus first and stops
+2,900-pixel square is about 8.4 MB a frame. Focus is not done here: a
+soft focus is `./focus.py --auto` on a rich star field first. `--focus-check STAR` measures focus first and stops
 if it is soft.
 
 ## The engine (lucky.py)

@@ -17,9 +17,9 @@ ring's radius, and says what that means:
     5 to 10 %    slightly off: fine for deep sky, worth a look before a Barlow night
     over 10 %    off: time to have it collimated
 
-It moves nothing and needs the stars out of focus, as they are when the
-drawtube has been set a touch out by hand for the walk-in; the walk-in runs
-this check by itself on its first doughnuts. Every check is kept in
+It moves nothing and needs the stars out of focus, as they are at the start
+of a motor focus far out (./focus.py --auto), which runs this check by
+itself on its first doughnuts. Every check is kept in
 cache/collimation.jsonl, so drift shows over the weeks.
 
 24 October 2026: Gary collimates the telescope with a laser; this says
@@ -143,8 +143,8 @@ def keep(result, source):
 
 def words(result):
     if result is None:
-        return ("No doughnut with a shadow in it: the stars are in focus or too faint. Set the drawtube a touch "
-                "out by hand, as for the walk-in, with a bright star in view.")
+        return ("No doughnut with a shadow in it: the stars are in focus or too faint. Take the focus out "
+                "(./focuser.py move 600) with a bright star in view.")
     return (f"Collimation {result['verdict']}: the shadow is {100 * result['offset']:.0f}% of the ring's radius "
             f"off centre, towards the {result['towards']} of the frame (doughnuts {result['ring_px']} px).")
 

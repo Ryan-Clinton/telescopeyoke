@@ -31,8 +31,8 @@ status page's own data:
   usual best as a line, the fitted focus once there is one), one star
   magnified at the start and now, the start, current and best HFR, "usual
   best 2.28 · tonight's best so far 2.19", "position 4 of 9", and the steps
-  ticked off (measure, sweep, fit, verify; a walk-in has doughnuts, coming
-  in, finest steps, done); with the focus run's tones as the stream's sound;
+  ticked off (measure, sweep, fit, verify; `--auto` has finding stars, which
+  way, coming to focus, to the best, done); with the focus run's tones as the stream's sound;
 - while the mount is polar aligned, the polar look: a bullseye with the true
   pole at the centre, the axis at its measured azimuth and altitude errors
   and the drift limit as a square, picture 1, 2 and 3 ticked off, every
@@ -161,7 +161,7 @@ go, never from their log:
 
 | File (under `cache/`) | Written by | What it holds |
 |---|---|---|
-| `focus_stream.json` | `focus.py --motor`, `--walk-in`, `--find`, `--sweep`, `--check` (`focus.Broadcast`) | kind, stage, steps, every reading with the focuser's position, start, current, best and usual HFR, the fit, how it ended and why |
+| `focus_stream.json` | `focus.py --motor`, `--auto`, `--find`, `--sweep`, `--check` (`focus.Broadcast`) | kind, stage, steps, every reading with the focuser's position, start, current, best and usual HFR, the fit, how it ended and why |
 | `focus_star_start.png`, `focus_star_now.png` | the same | the brightest star in a small square, at the start and now |
 | `polar_stream.json` | `polaralign.py` (`polaralign.tell`) | stage (measuring, adjust, complete, failed), picture n of 3, a recheck or not, every round tonight, the error now and the round before, the drift per axis, the drift limit, the advice |
 
