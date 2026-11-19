@@ -126,6 +126,9 @@ def check_serial_access():
     return host.serial_access()
 
 
+GOTO_REFUSED = "so GoTo is refused"     # a warning with this in it: connected, but not ready for a GoTo
+
+
 def check_direct():
     """The mount reached without its handset: what answers, and whether it
     has been told the two things a handset would know. Reads only."""
@@ -148,8 +151,8 @@ def check_direct():
         return FAIL, (f"{board}: it has not been told where home is. With the mount at home, "
                       "run ./mount.py sethome")
     if state.get("dec_sign") is None:
-        return WARN, (f"{board}: the Dec motor's direction has not been checked, so GoTo is "
-                      "refused. With someone watching the mount, run ./mount.py directions")
+        return WARN, (f"{board}: the Dec motor's direction has not been checked, {GOTO_REFUSED}. "
+                      "With someone watching the mount, run ./mount.py directions")
     return OK, f"{board}, home recorded and Dec direction checked"
 
 
@@ -358,8 +361,11 @@ def ready(results):
     """{section: bool}. Mount and imaging also need the planner's basics."""
     passed = {name: all(status != FAIL for status, _ in checks)
               for name, checks in results.items()}
-    return {"planner": passed["planner"],
-            "mount": passed["planner"] and passed["mount"],
+    mount = passed["planner"] and passed["mount"]
+    # Connected is not ready for a GoTo: a direct link refuses every GoTo
+    # until a person has watched which way the Dec motor turns.
+    goto = mount and not any(GOTO_REFUSED in message for _, message in results.get("mount", []))
+    return {"planner": passed["planner"], "mount": mount, "goto": goto,
             "imaging": passed["planner"] and passed["imaging"]}
 
 
@@ -383,6 +389,8 @@ def words(results):
         lines.append("")
     verdict = ready(results)
     return "\n".join(lines + [f"Ready for {section + ':':9} {'YES' if verdict[section] else 'NO'}"
+                              + (" (connected; GoTo refused until the Dec direction is watched)"
+                                 if section == "mount" and verdict["mount"] and not verdict["goto"] else "")
                               for section in results])
 
 

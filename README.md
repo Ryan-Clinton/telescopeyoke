@@ -345,7 +345,7 @@ was involved. Everything is also run against the simulated rig.
 | Skyline from a phone panorama | does not need them | ⚠️ three real panoramas; not yet tied to the compass | ✅ |
 | The telescope's own skyline survey | ⚠️ by night, a torch trial only | ✅ by day, 17 October 2026: 28 bearings in 34 minutes; 2 November, a second spot's skyline | ✅ |
 | Azimuth from a landmark | not yet | not yet | ✅ |
-| Control without the handset (Wi-Fi, EQDIR) | not yet | ⚠️ the Wi-Fi adapter read; nothing moved | ✅ |
+| Control without the handset (Wi-Fi, EQDIR) | not yet | ⚠️ the Wi-Fi adapter: Dec direction checked, one GoTo and home, no tube on (16 November 2026) | ✅ |
 | The application window | not yet | ⚠️ opened on Ubuntu, in the demo only | ✅ |
 | Windows | not yet | ⚠️ camera frames indoors; no mount driven | ✅ |
 | Checking that the telescope really turned | not yet | ⚠️ by day: one real record, and it caught a real fault; 109 checked looks on a working mount, none stopped wrongly | ✅ |
@@ -431,7 +431,7 @@ Later, if people ask for them:
   rely on. Today's hand-written one speaks the protocol directly to avoid a dependency;
   the telescope logic stays in `agent.py` either way.
 - The agent scenarios in `evals/` run with a real model in the loop.
-- Guiding through the guide camera's ST4 lead: the lead moves the mount, and the guider's star, calibration and loop are built, but nothing has guided yet; the guide camera does not yet deliver frames steadily enough ([Autoguiding](docs/autoguiding.md)).
+- Guiding through the guide camera's ST4 lead: proven for 120 s subs (10 November 2026: 10 minutes on Vega at RMS 3.45", then round stars in 120 s Ha frames of the Eastern Veil); longer subs not yet ([Autoguiding](docs/autoguiding.md)).
 
 Not planned: ASCOM's Windows-only COM interface (Alpaca reaches the same drivers, and is planned: [Mounts](docs/mounts.md)), mobile apps, a React front end, cloud services, Docker images, plugin systems, a sequencing language. Bigger
 projects (NINA, KStars/Ekos) do those well; this one stays small, readable,

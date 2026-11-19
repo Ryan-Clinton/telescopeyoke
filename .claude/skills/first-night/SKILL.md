@@ -19,6 +19,14 @@ On Windows the scripts are run through Python: `python doctor.py ...` (or
 
 This is not the owner's rig: `docs/agents/owner-rig.md` is not about it.
 
+**What they want first.** Ask, and aim for the smallest success that fits
+what they have: no telescope yet, the demo (`./app.py --demo`); a camera
+that works but a mount TelescopeYoke cannot drive, a frame indoors and a
+plain line on what the mount needs (`docs/mounts.md`), with the hardware
+report offered; the whole rig supported, the steps below. Polar surveys,
+home calibration, the motor focuser and the discovery programmes come
+later, if ever.
+
 **Where it got to.** Start with `./ty onboard` (it runs before the
 installer too): each step of the first setup, how it is known, and the
 next. A setup broken off on another evening carries on from there, with

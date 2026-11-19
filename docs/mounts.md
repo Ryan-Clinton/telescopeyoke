@@ -37,7 +37,7 @@ move, then a GoTo, then a night.
 | Family | How it is reached | Status |
 |---|---|---|
 | Sky-Watcher with a SynScan handset (EQ3/EQ5/HEQ5/EQ6/EQ6-R/AZ-EQ) | the handset's serial protocol, 9600 baud | ✅ EQ3 Pro, firmware 3.35. Same protocol on the rest: wanted, testers |
-| Sky-Watcher with no handset: EQDIR lead, the Wi-Fi adapter, the USB socket on the mount (EQ6-R, newer HEQ5), AZ-GTi, Star Adventurer GTi, Wave | the motor board's own protocol (the one EQMOD speaks): serial at 9600, the mount's USB at 115200, Wi-Fi on UDP 11880 | ⚠️ built (`direct.py`); the Wi-Fi adapter read, nothing moved yet. Testers wanted |
+| Sky-Watcher with no handset: EQDIR lead, the Wi-Fi adapter, the USB socket on the mount (EQ6-R, newer HEQ5), AZ-GTi, Star Adventurer GTi, Wave | the motor board's own protocol (the one EQMOD speaks): serial at 9600, the mount's USB at 115200, Wi-Fi on UDP 11880 | ⚠️ built (`direct.py`); through the Wi-Fi adapter on the EQ3 Pro, Dec direction checked, one GoTo and home, no tube on (16 November 2026). Testers wanted |
 | Celestron with a NexStar hand controller (NexStar SE, Evolution through its controller, Advanced VX, CGEM, CGX, CPC, StarSense) | the same hand-controller protocol family as SynScan: 9600 baud, the same commands for position, GoTo, stop and slow moves | 🗓️ planned first: a small variant of the SynScan class |
 | Any mount INDI drives (about 100 drivers: iOptron, Celestron Wi-Fi, Losmandy, 10Micron, OnStep, ZWO and more) | an INDI client for mounts, beside the one already used for cameras | 🗓️ planned: the general route on Linux |
 | Any mount with an ASCOM or Alpaca driver | ASCOM Alpaca, HTTP and JSON on the network: ASCOM Remote on Windows, INDIGO's Alpaca agent on Linux | 🗓️ planned: the general route on Windows, and the Windows port's way to every mount |
@@ -59,8 +59,9 @@ on the mount at 115200 (already a setting: `[mount] baud`), and Wi-Fi on
 UDP 11880 (already `link = "wifi"`). Testers: an EQ6-R or HEQ5 on its USB
 socket, an AZ-GTi or Star Adventurer GTi on Wi-Fi, any mount on an EQDIR
 lead. The first will be the author's own SynScan Wi-Fi adapter on the EQ3
-Pro, which has been read (firmware, gearing, position) but has not yet moved
-the mount. Steps: the doctor's probe; `./mount.py status`; `./mount.py
+Pro, which has read it (firmware, gearing, position) and, on 16 November
+2026 with no tube on, checked the Dec direction and made one GoTo and home
+([validation](validation.md)). Steps: the doctor's probe; `./mount.py status`; `./mount.py
 directions` with the person watching (which way the Dec motor turns); one
 `nudge`; a GoTo with centring.
 

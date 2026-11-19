@@ -8,8 +8,8 @@ frames steadily.** The guide camera, an Altair GPCAM MT9M034M (mono,
 1280 x 960, USB 2, ID `16d0:0b2a`), will not send a steady stream of
 full-size frames on this laptop: at 2 s it sends one every 3 to 18 s.
 Binned and slowed, it sent 149 of 150 in 5 minutes ([below](#what-cured-it)).
-The guider opens it that way since 79a2f2d; nothing has guided yet
-([Autoguiding](autoguiding.md)).
+The guider opens it that way since 79a2f2d, and guided with it on 10
+November 2026 ([Autoguiding](autoguiding.md)).
 
 ## What works
 

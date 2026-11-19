@@ -31,6 +31,14 @@ proven is `docs/validation.md` ("Current conclusions").
   Nano's answer to the move it had sent.
 - The sky briefing starts one fresh look at a time, and the saved
   satellite and radar answers are written whole.
+- **Connected is not ready for a GoTo**: `doctor.py` gives `goto` beside
+  `mount`, and `ty onboard` shows a "GoTo allowed" step while a direct
+  link waits for the Dec direction to be watched.
+- The README, mounts page and guide-camera notes now say what validation
+  records: Wi-Fi control has made a GoTo and home (no tube on), and
+  guiding has held 120 s subs.
+- The first-night skill asks what the person wants first and aims for
+  the smallest success their equipment allows.
 
 ## 0.4.0: setup that remembers, skills that follow the rig
 
