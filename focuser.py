@@ -842,17 +842,21 @@ def main(argv=None):
         # place after big moves at this speed? ./focus.py --check before and
         # after says (19 November 2026: focus moved 99 half-steps over a run
         # of big moves at 10 ms, and drift could not be told from lost steps).
+        # Minus goes in first and ends with a lift, to see whether the camera's
+        # weight on the drawtube makes the way round matter (the person, 19
+        # November 2026).
         steps = args.steps or ap.error("shuttle needs half-steps, e.g. ./focuser.py shuttle 270 --times 10")
+        way = "out and back" if steps > 0 else "in and back"
         focuser = Focuser.open(args.port, ms=args.ms or 10)
         try:
             for k in range(args.times):
-                focuser.move(abs(steps))
-                focuser.move(-abs(steps))
-                print(f"  out and back {abs(steps)} half-steps: {k + 1} of {args.times}", flush=True)
+                focuser.move(steps)
+                focuser.move(-steps)
+                print(f"  {way} {abs(steps)} half-steps: {k + 1} of {args.times}", flush=True)
         finally:
             focuser.close()
-        print(f"Done: {args.times} times out and back {abs(steps)} half-steps at {args.ms or 10} ms a half-step, "
-              "ended where it began, the last move inward.")
+        print(f"Done: {args.times} times {way} {abs(steps)} half-steps at {args.ms or 10} ms a half-step, "
+              f"ended where it began, the last move {'inward' if steps > 0 else 'outward'}.")
         return
     if args.command == "temp":
         focuser = Focuser.open(args.port, full=False, ms=None)
