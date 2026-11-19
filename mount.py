@@ -286,6 +286,11 @@ class Mount:
                 # angles ("RA,Dec" in degrees): to try a change to the Wi-Fi
                 # adapter's code before it goes near the mount.
                 self.s = simulator.direct_demo(board_at, slew_seconds=0.0 if quick else 2.0)
+                # The clock the real link is given, so the pretend board picks
+                # the side of the meridian as the real one does (it had a
+                # sidereal time of 0, and put a -1 h place on the west side).
+                demo_site = config.example()["site"]
+                self.s.sidereal = lambda: true_sidereal(demo_site)
             else:
                 self.s = handset or simulator.SimulatedHandset(slew_seconds=0.0 if quick else 2.0)
             if handset is None:
@@ -633,6 +638,11 @@ class Mount:
             self.save_clock(site)
         offset = json.loads(CLOCK_FILE.read_text(encoding="utf-8"))["offset_deg"]
         rows, last = [], None
+        if over_pole(self.axes()[1]):
+            # Already on the west side: that side first, from the far end,
+            # then over the pole once to the east (19 November 2026: starting
+            # east from the west side swung over the pole twice, 25-30 s more).
+            spots = sorted((h for h in spots if h > 0), reverse=True) + sorted((h for h in spots if h <= 0), reverse=True)
         for hours_out in spots:
             # Aimed so that the tube really lands on the place planned, which
             # the limits and the skyline were checked for: once a place has
@@ -653,7 +663,7 @@ class Mount:
                     ha_aim -= ha_miss
                 dec_aim -= dec_miss
             began = time.monotonic()
-            self.goto((true_sidereal(site) + offset - ha_aim) % 360, dec_aim)
+            self.goto((true_sidereal(site) + offset - ha_aim) % 360, dec_aim, catch_up=False)
             slewed = time.monotonic() - began
             self.tracking(True)
             time.sleep(SETTLE_LEAST)
@@ -901,18 +911,31 @@ class Mount:
             self.rate(axis, direction, 0)
             time.sleep(0.5)
 
-    def goto(self, ra, dec):
-        """Handset GoTo to a sky position in degrees; waits until it stops."""
+    def goto(self, ra, dec, catch_up=True):
+        """Handset GoTo to a sky position in degrees; waits until it stops.
+        `catch_up` False, without a handset: no second move for the sky
+        turned on during the slew (a survey measures from wherever the mount
+        believes it is)."""
         self.may_move()
         with self.watching():
-            if self.ask(f"r{encode(ra)},{encode(dec)}".encode()) != b"#":
+            direct = hasattr(self.s, "board")
+            if direct and not catch_up:
+                self.s.catch_up = 0      # read when the GoTo is sent, and put back at once
+            try:
+                answer = self.ask(f"r{encode(ra)},{encode(dec)}".encode())
+            finally:
+                if direct:
+                    self.s.catch_up = 1
+            if answer != b"#":
                 raise Refusal("GOTO_REFUSED", "The handset refused the GoTo.")
             began = time.monotonic()
             while self.slewing():
                 if time.monotonic() - began > SLEW_TIMEOUT:
                     self.stop()
                     raise Refusal("SLEW_TIMED_OUT", "GoTo did not finish in time; stopped.")
-                time.sleep(1)
+                # A quarter of a second: a whole second's poll left up to a
+                # second idle at the end of every slew (19 November 2026).
+                time.sleep(0.25)
         if config.DEMO:
             import simulator
             simulator.recentred()    # the pretend sky is centred on wherever it was sent

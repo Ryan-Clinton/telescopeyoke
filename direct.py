@@ -280,6 +280,10 @@ class DirectHandset:
         self.reply = b""
         self.tracking = False
         self.target = None          # (ra, dec, corrections left) while a GoTo is under way
+        # Catch-up moves after a GoTo, for the sky turned on while it slewed.
+        # A survey sets 0: it measures from wherever the mount believes it
+        # is, so the catch-up (a second start and stop) only costs time.
+        self.catch_up = 1
         self.slew = {RA: 0.0, DEC: 0.0}    # degrees/second asked for by fixed-rate slews
         self.state = self._load()
 
@@ -516,7 +520,7 @@ class DirectHandset:
             return f"{_hex(ra_axis)},{_hex(dec_axis)}#".encode()
         if kind == b"r":
             ra, dec = (int(x, 16) / 2**32 * 360 for x in c[1:].decode().split(","))
-            self._goto(ra, dec if dec < 180 else dec - 360)
+            self._goto(ra, dec if dec < 180 else dec - 360, self.catch_up)
             return b"#"
         if kind == b"T":
             self._need_home()
