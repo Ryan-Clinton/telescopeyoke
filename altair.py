@@ -54,6 +54,7 @@ RAMP_STEP_C, RAMP_EVERY_S = 0.5, 30.0
 RAMP_LEAD_C = 2.0      # the set point never runs more than this below the sensor (10 November 2026)
 COOL_POLL_S = 5.0
 POWER_GONE_S = 15.0    # the cooler drawing nothing this long, with the air warmer than its target: no 12 V
+POWER_SETTLE_S = 60.0  # ...judged only once the cooler has been on this long (19 November 2026)
 POWER_NEEDED_C = 3.0   # the air this much warmer than the set point: the cooler must always be drawing something
 UNREAD_S = 30.0        # no temperature reading this long with the cooler on: it fails safe
 FULL_POWER = 0.95      # a share of the cooler's most voltage taken as all it has
@@ -284,7 +285,10 @@ def clear_fault(clock=time.time):
     if not fault:
         return None
     waited = clock() - float(fault.get("at") or 0)
-    if waited < FAULT_REST_S:
+    # A fault where the cooler drew nothing left nothing to rest from: no
+    # rest (the user's go, 19 November 2026). A runaway still rests.
+    drew_nothing = "has drawn nothing" in str(fault.get("reason") or "")
+    if waited < FAULT_REST_S and not drew_nothing:
         raise CameraError(f"the cooler failed safe {waited / 60:.0f} min ago ({fault.get('reason')}); leave the "
                           f"camera closed {FAULT_REST_S / 60:.0f} minutes in all, with its 12 V lead secure")
     # Kept, marked cleared: cool() may start again, and the fault goes only
@@ -515,6 +519,7 @@ class AltairCamera:
         option = getattr(lib, "ALTAIRCAM_OPTION_TEC", None)
         if option is not None:
             handle.put_Option(option, 1)
+        self.cooler_on_at = clock()
         now = self.temperature()
         if now is None:
             raise CameraError("the cooler is on but the sensor's temperature cannot be read, so no dark could be "
@@ -636,8 +641,13 @@ class AltairCamera:
         power = self.tec_power()
         share = power[1] if power else None
         ambient = getattr(self, "ambient", None)
-        if (share is not None and share <= 0 and ambient is not None and ambient > self.level + POWER_NEEDED_C
-                and degrees is not None and degrees > self.level):
+        # 19 November 2026: 15 s after the cooler went on, the sensor 0.5 °C
+        # above its first set point, it drew nothing with the 12 V lead in,
+        # twice. A lead truly out is still caught within POWER_SETTLE_S +
+        # POWER_GONE_S, and by NO_POWER_S below.
+        settled = clock() - getattr(self, "cooler_on_at", float("-inf")) >= POWER_SETTLE_S
+        if (settled and share is not None and share <= 0 and ambient is not None
+                and ambient > self.level + POWER_NEEDED_C and degrees is not None and degrees > self.level):
             self.powerless_since = getattr(self, "powerless_since", None) or clock()
             if clock() - self.powerless_since >= POWER_GONE_S:
                 self.fail_safe(f"the cooler has drawn nothing for {POWER_GONE_S:.0f} s with the air at about "
