@@ -1515,7 +1515,8 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
 
 # ------------------------------------------------- shoot.py's side: a guided run
 
-GUIDE_START_S = 480.0      # a new guider has this long to calibrate and reach `guiding`
+GUIDE_START_S = 900.0      # a new guider has this long to calibrate and reach `guiding` (19 November 2026: with
+                           # up to 60 steps for the Dec slack, a calibration on the west side ran past 480 s)
 RESTART_S = 180.0          # a restarted guider, its calibration reused, has this long
 SETTLE_PX = 0.5            # guide px (about 5"): every error under this...
 SETTLE_FRAMES = 2          # ...for this many guide frames running, spanning at least SETTLE_SPAN
