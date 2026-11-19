@@ -40,7 +40,7 @@ move, then a GoTo, then a night.
 | Sky-Watcher with no handset: EQDIR lead, the Wi-Fi adapter, the USB socket on the mount (EQ6-R, newer HEQ5), AZ-GTi, Star Adventurer GTi, Wave | the motor board's own protocol (the one EQMOD speaks): serial at 9600, the mount's USB at 115200, Wi-Fi on UDP 11880 | ⚠️ built (`direct.py`); through the Wi-Fi adapter on the EQ3 Pro, Dec direction checked, one GoTo and home, no tube on (16 November 2026). Testers wanted |
 | Celestron with a NexStar hand controller (NexStar SE, Evolution through its controller, Advanced VX, CGEM, CGX, CPC, StarSense) | the same hand-controller protocol family as SynScan: 9600 baud, the same commands for position, GoTo, stop and slow moves | 🗓️ planned first: a small variant of the SynScan class |
 | Any mount INDI drives (about 100 drivers: iOptron, Celestron Wi-Fi, Losmandy, 10Micron, OnStep, ZWO and more) | an INDI client for mounts, beside the one already used for cameras | 🗓️ planned: the general route on Linux |
-| Any mount with an ASCOM or Alpaca driver | ASCOM Alpaca, HTTP and JSON on the network: ASCOM Remote on Windows, INDIGO's Alpaca agent on Linux | 🗓️ planned: the general route on Windows, and the Windows port's way to every mount |
+| Any mount with an ASCOM or Alpaca driver | ASCOM Alpaca, HTTP and JSON on the network: ASCOM Remote on Windows, INDIGO's Alpaca agent on Linux | ⚠️ built (`alpaca.py`, `link = "alpaca"`); tried against ASCOM's own Alpaca simulator (OmniSim 0.4.0, 19 November 2026): GoTo on both sides of the pier, a stop in mid-slew, home, the RA and Dec rates; no real mount yet. Testers wanted |
 | ZWO AM3, AM5, AM7 | ZWO's published LX200-based protocol, serial at 9600 or Wi-Fi on TCP 4030 | 🗓️ planned: the first native driver of the LX200 family (OnStep would follow) |
 | iOptron, Losmandy Gemini, 10Micron, Avalon, Rainbow, Celestron Wi-Fi (AUX) | their own languages | through INDI or Alpaca, not native drivers |
 
@@ -88,6 +88,16 @@ tracking, side of pier), finding the server by Alpaca's discovery broadcast
 also how the Windows port drives mounts other than SynScan. Testers: any
 Windows user with a working ASCOM driver (EQMOD, GS Server, iOptron
 Commander, the ZWO and Celestron drivers).
+
+Built 19 November 2026 (`alpaca.py`): `[mount] link = "alpaca"` and
+`address = "HOST:PORT"` (`./alpaca.py find` lists the servers on the
+network); `./mount.py settime` gives the driver this computer's site and
+clock. It stands in for the handset as `direct.py` does, so the motion
+lock, limits and dry runs are unchanged. Tried against ASCOM's own Alpaca simulator (OmniSim 0.4.0, 19 November 2026), not
+yet a real mount. German equatorial mounts only. Home is the driver's
+(FindHome, else park), which need not be the handset's; which way a
+positive Dec rate turns is the driver's choice (`[mount] alpaca_dec_sign`,
+-1 as the simulator). Not yet: sync, the driver's own pulse guiding.
 
 **5. ZWO AM3/AM5/AM7 natively.** ZWO's own protocol over USB or Wi-Fi, on
 a small LX200 core that OnStep would share. Testers: an AM5 owner.

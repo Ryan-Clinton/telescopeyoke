@@ -12,6 +12,7 @@
 | `ty capabilities` | what is available, motion limits, each component's state | |
 | `ty status` | mount / camera / imaging / solver states | |
 | `ty doctor` | readiness and every check | same as `doctor.py --skip-handset` |
+| `alpaca.py find`, `alpaca.py status` | the Alpaca servers on the network and their devices; what the configured Alpaca telescope says | reads only |
 | `doctor.py --need mount,imaging` | the same check; succeeds only if every part named is ready (`planner`, `mount`, `goto`, `camera`, `imaging`; default `planner`; `camera` is the camera alone, `imaging` adds the plate solver; `goto` is the mount answering with nothing in its setting-up refusing a GoTo). With `--json`, `ok`, the exit code and `data.needed` agree: a part not ready is a `NOT_READY` error | the mount part fails on the example site |
 | `doctor.py --report --skip-handset` | the check as text to post as a hardware report: the system, every check, the site's name left out | no `--json`; without `--skip-handset` it also asks the handset its firmware version and the mount's model, so it then belongs in the next table |
 | `ty spot` / `ty spot NAME` | where in the garden the telescope stands, and every spot with whether its skyline is measured / it stands at NAME from now on (its own `spots/NAME.toml` and skyline; the first spot named takes what was measured so far) | |

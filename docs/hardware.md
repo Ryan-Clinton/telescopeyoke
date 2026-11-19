@@ -112,7 +112,7 @@ found. Something showing on USB is only "seen".
 | EQ5, HEQ5, EQ6 with a SynScan handset | ⚠️ Untested. Likely: same serial protocol. |
 | Other INDI cameras | ⚠️ Untested. Likely for mono or RGGB colour sensors: set the driver and sensor size in `config.toml`. |
 | Other telescopes | Set the focal length in `config.toml`. |
-| ASCOM, Alpaca | ❌ Not used yet. An ASCOM or EQMOD installation is noticed and left alone; see above. Alpaca is planned as the way to every ASCOM driver ([Mounts](mounts.md)). |
+| ASCOM, Alpaca | ⚠️ A mount through its Alpaca driver (`alpaca.py`): built, tried only against ASCOM's own simulator ([Mounts](mounts.md)). Cameras, focusers and filter wheels through Alpaca: not yet. An ASCOM or EQMOD installation is noticed and left alone; see above. |
 | Other cameras on Windows (ZWO, QHY, Player One, ...) | ❌ Not supported: on Windows the camera is reached through Altair's own library only. On Linux, through INDI (the row above) |
 | Other filter wheels | ❌ Not supported: `sxwheel.py` drives Starlight Xpress USB wheels only. Without a wheel, colour cameras need none |
 | Other motor focusers | ❌ Not supported: `focuser.py` drives the home-built Arduino focuser (`firmware/focuser/`) only. Focusing by hand with `./focus.py` (spoken and tone guidance) works with any focuser |

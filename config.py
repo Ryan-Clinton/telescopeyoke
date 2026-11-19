@@ -459,11 +459,13 @@ SETTINGS = (
      {"min": 30, "max": 3600}),
     ("mount", "link", "Mount reached by", "choice",
      "handset: a serial lead to the SynScan handset. wifi: the SynScan Wi-Fi adapter. eqdir: an EQDIR lead. "
-     "The last two have no handset.", {"choices": ["handset", "wifi", "eqdir"]}),
+     "The last two have no handset. alpaca: the mount's ASCOM driver over the network (address HOST:PORT).",
+     {"choices": ["handset", "wifi", "eqdir", "alpaca"]}),
     ("mount", "serial_match", "Serial lead's name contains", "text",
      "Part of the USB adapter's name: FTDI for the usual lead, Prolific for a handset's own USB socket.", {}),
-    ("mount", "address", "Wi-Fi adapter's address", "text",
-     "Blank finds the adapter by asking the network. It is 192.168.4.1 on the network the adapter makes itself.",
+    ("mount", "address", "Wi-Fi adapter's or Alpaca server's address", "text",
+     "Blank finds it by asking the network. The Wi-Fi adapter is 192.168.4.1 on the network it makes itself; "
+     "an Alpaca server is HOST:PORT.",
      {"optional": True}),
     ("solver", "program", "Plate solver program", "text", "Blank uses astap_cli where it is usually installed.",
      {"optional": True}),

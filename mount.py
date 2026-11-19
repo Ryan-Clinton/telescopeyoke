@@ -285,6 +285,14 @@ class Mount:
                 self.s = handset or simulator.SimulatedHandset(slew_seconds=0.0 if quick else 2.0)
             if handset is None:
                 simulator.DEMO_SCOPE = self
+        elif mount_settings().get("link") == "alpaca":
+            # Through ASCOM Alpaca: the mount's own driver, on this computer
+            # or another, knows the sky as the handset does; alpaca.py
+            # answers the handset's commands from it (docs/mounts.md).
+            import alpaca
+            site = (config.load() if self.site_set else config.example())["site"]
+            self.s = alpaca.AlpacaHandset(alpaca.client_from(mount_settings()), lambda: true_sidereal(site),
+                                          int(mount_settings().get("alpaca_dec_sign", -1)))
         elif mount_settings().get("link", "handset") != "handset":
             # No handset: the Wi-Fi adapter or an EQDIR lead reaches the motor
             # board, and direct.py does the handset's part.
@@ -888,8 +896,9 @@ class Mount:
         self.tracking(False)
         self.dec_creep(0)   # a drift correction left running would fight the seek
         with self.watching():
-            if hasattr(self.s, "board"):
-                # No handset: the board's own moves, which start slowly. The
+            if hasattr(self.s, "go_home"):
+                # No handset: the board's own moves (or an Alpaca driver's
+                # own home), which start slowly. The
                 # fixed-rate seek below starts a motor at 2.5°/s at once, and
                 # on the Wi-Fi adapter (17 November 2026) the motors buzzed and
                 # stalled: the RA axis turned 11° in two and a half minutes.
@@ -987,6 +996,16 @@ class Mount:
         at its main menu: this cannot press its keys. Moves nothing. Returns
         what the handset says its date and time are afterwards."""
         self.may_move()
+        if hasattr(self.s, "set_site"):
+            # An Alpaca driver keeps its own site and clock: given this
+            # computer's, so its sky and the limits here agree.
+            latitude, longitude = self.s.set_site(site["latitude"], site["longitude"])
+            self.save_clock(site)
+            far = abs(latitude - site["latitude"]) > 0.01 or abs(wrap(longitude - site["longitude"])) > 0.01
+            self.say("The mount's driver has its site and clock from this computer."
+                     + (f" It still says {latitude:.3f}°, {longitude:.3f}°: set the site in the driver itself."
+                        if far else ""))
+            return {"handset_time": None, "clock_offset_deg": 0.0, "clock_offset_before_deg": None}
         if hasattr(self.s, "board"):
             # No handset on this link (Wi-Fi adapter or EQDIR lead): the sums
             # use this computer's clock and site, so there is nothing to set.

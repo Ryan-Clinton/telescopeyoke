@@ -56,6 +56,7 @@ outlook` puts it first.
 | Checking the telescope really turned | ⚠️ one real record, and it caught a real fault |
 | Skyline | ✅ the telescope's own survey by day, 17 October: 28 bearings, one look checked by eye (the hedge at 120°); the north below the mount's reach and the low south-west near the setting Sun not measured. ralphie-side, 2 November: a daylight skyline kept on the person's eye check (the house to 75° due north, 36-45° from east to south-south-west, open from 30-36° in the west-south-west and west); the south-west gap is probably lower than kept (see 2 November below). ⚠️ panoramas found, not tied to the compass |
 | Control without the handset | ⚠️ the Wi-Fi adapter on the home router: Dec direction checked, one GoTo and home (16 November 2026, no tube on) |
+| A mount through ASCOM Alpaca | 🧪 ASCOM's own Alpaca simulator (OmniSim 0.4.0, 19 November 2026) only: GoTo both sides of the pier, a stop mid-slew, home, RA and Dec rates; no real mount |
 | Windows | ⚠️ camera frames indoors; no mount driven; no whole night 🧪 |
 | Dark and flat frames, gain sweep | 🧪 |
 | Discovery pipeline | ⚠️ subtraction, vetting and planted fakes on real M31 stacks; a known nova found again in ZTF archive images; no transient of our own yet (`docs/discovery.md`). M31-P8's recurring false candidates: the search's noise model underestimates one patch's noise 1.3-1.9 times; 2 of 34 candidates over four comparisons were 5 or more against their own surroundings, both on a cloudy 8-frame night ([4 November 2026](nights/2026-11-04/p8-false-candidates.md)) |

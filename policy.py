@@ -92,6 +92,7 @@ COMMANDS = {
     "investigate.py": ("local_write", {}, {}),     # asks the catalogues; keeps its record in cache/ and its report in docs/research/
     "onboard.py": ("read_only", {"--confirm": "local_write"}, {}),   # the person's word for a setup step, kept
     "lighttest.py":("read_only", {}, {}),       # what a house light did to the sky, from a run's records
+    "alpaca.py": ("read_only", {}, {}),
     "newhardware.py": ("read_only", {"--probe": "hardware", "--known": "local_write", "--watch": "local_write"}, {}),
     "precision.py": ("local_write", {}, {}),     # a night's frames measured every way; keeps its answer in the session
     "plant.py": ("local_write", {}, {}),

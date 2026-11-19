@@ -6,6 +6,11 @@ proven is `docs/validation.md` ("Current conclusions").
 
 ## Not yet released
 
+- **A mount through ASCOM Alpaca** (`alpaca.py`, `[mount] link = "alpaca"`):
+  any mount with an ASCOM driver, on this computer or a Windows one on
+  the network, through the same motion lock, limits and dry runs.
+  `./alpaca.py find` lists the servers. Tried on ASCOM's own simulator,
+  not yet a real mount ([Mounts](docs/mounts.md)).
 - **`ty onboard` says only what it knows**: the telescope and the camera
   are separate steps, showing which settings were changed from the
   example and which were not; a plate solve's match is the pixel scale

@@ -433,7 +433,7 @@ Later, if people ask for them:
 - The agent scenarios in `evals/` run with a real model in the loop.
 - Guiding through the guide camera's ST4 lead: proven for 120 s subs (10 November 2026: 10 minutes on Vega at RMS 3.45", then round stars in 120 s Ha frames of the Eastern Veil); longer subs not yet ([Autoguiding](docs/autoguiding.md)).
 
-Not planned: ASCOM's Windows-only COM interface (Alpaca reaches the same drivers, and is planned: [Mounts](docs/mounts.md)), mobile apps, a React front end, cloud services, Docker images, plugin systems, a sequencing language. Bigger
+Not planned: ASCOM's Windows-only COM interface (Alpaca reaches the same drivers: a mount through Alpaca is built and tried on ASCOM's simulator, [Mounts](docs/mounts.md)), mobile apps, a React front end, cloud services, Docker images, plugin systems, a sequencing language. Bigger
 projects (NINA, KStars/Ekos) do those well; this one stays small, readable,
 and aimed at ordinary SynScan gear.
 

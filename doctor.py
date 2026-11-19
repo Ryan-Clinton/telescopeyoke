@@ -115,6 +115,9 @@ def find_serial_port():
     if mount_link() == "wifi":
         import direct
         return settings.get("address") or next(iter(direct.Udp.find(wait=0.7)), None)
+    if mount_link() == "alpaca":
+        import alpaca
+        return settings.get("address") or next(iter(alpaca.find(wait=0.7)), None)
     return host.serial_port(settings["serial_match"])
 
 
@@ -123,6 +126,8 @@ def check_serial_access():
         return OK, "serial access (not needed: the mount is simulated)"
     if mount_link() == "wifi":
         return OK, "serial access (not needed: the mount is reached over Wi-Fi)"
+    if mount_link() == "alpaca":
+        return OK, "serial access (not needed: the mount is reached through its Alpaca driver)"
     return host.serial_access()
 
 
@@ -131,8 +136,8 @@ def goto_blocked():
     code, or None: from the direct link's kept state, never a message's
     words. A handset (or the demo) keeps its own setting-up, which
     check_handset reads."""
-    if _demo() or mount_link() == "handset":
-        return None
+    if _demo() or mount_link() in ("handset", "alpaca"):
+        return None       # an Alpaca driver keeps its own home, as a handset does
     import direct
     try:
         state = json.loads(direct.STATE_FILE.read_text(encoding="utf-8"))
@@ -147,6 +152,33 @@ def goto_blocked():
 
 GOTO_NEXT = {"HOME_NOT_RECORDED": "with the mount at home, ./mount.py sethome",
              "DEC_DIRECTION_UNWATCHED": "./mount.py directions, with someone watching the mount"}
+
+
+def check_alpaca():
+    """The mount through its ASCOM driver: what it is, and whether mount.py
+    can use it. Reads only (connecting is not moving)."""
+    import alpaca
+    import config
+    try:
+        client = alpaca.client_from(config.hardware()["mount"])
+        client.put("connected", Connected=True)
+        seen = alpaca.describe(client)
+    except (Exception, Refusal) as error:
+        return FAIL, f"Alpaca telescope not answering: {getattr(error, 'message', error)}"
+    name = seen["name"] or "Alpaca telescope"
+    if seen["alignment"] != 2:
+        return FAIL, f"{name}: not a German equatorial mount (alignment mode {seen['alignment']}); not supported"
+    if seen["system"] not in ("JNow (topocentric)", "J2000"):
+        return FAIL, f"{name}: positions in {seen['system']}, which mount.py does not understand"
+    try:
+        site = config.load()["site"]
+        latitude, longitude = seen["site"]
+        if abs(latitude - site["latitude"]) > 0.01 or abs((longitude - site["longitude"] + 180) % 360 - 180) > 0.01:
+            return WARN, (f"{name}: its driver's site is not this one; ./mount.py settime gives it this "
+                          "computer's site and clock")
+    except (Exception, SystemExit):
+        pass
+    return OK, f"{name} ({seen['system']}), tried only on ASCOM's simulator so far"
 
 
 def check_direct():
@@ -179,6 +211,14 @@ def check_direct():
 def check_serial_lead():
     if _demo():
         return OK, "simulated mount (demo)"
+    if mount_link() == "alpaca":
+        import alpaca
+        import config
+        try:
+            client = alpaca.client_from(config.hardware()["mount"])
+            return OK, f"Alpaca telescope \"{client.get('name')}\" at {client.address}"
+        except (Exception, Refusal) as error:      # a Refusal is a SystemExit
+            return FAIL, f"Alpaca telescope not reached: {getattr(error, 'message', error)}"
     if mount_link() == "wifi":
         where = find_serial_port()
         if where:
@@ -200,6 +240,8 @@ def check_serial_lead():
 def check_handset():
     if _demo():
         return OK, "simulated handset, set up (demo)"
+    if mount_link() == "alpaca":
+        return check_alpaca()
     if mount_link() != "handset":
         return check_direct()
     port = find_serial_port()
