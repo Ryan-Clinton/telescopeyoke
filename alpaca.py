@@ -538,6 +538,128 @@ def _quiet_put(client, what, **params):
         pass
 
 
+PATTERNS = {(0, 0): "RGGB", (1, 0): "GRBG", (0, 1): "GBRG", (1, 1): "BGGR"}
+IMAGE_TYPES = {1: "<i2", 2: "<i4", 3: "<f8", 4: "<f4", 5: "<u8", 6: "u1", 7: "<i8", 8: "<u2"}
+
+
+class Camera:
+    """An Alpaca camera, answering as altair.AltairCamera does: frame(seconds)
+    gives (uint16 mosaic, FITS header) with EXPTIME, GAIN, DATE-OBS,
+    BAYERPAT or TY_MONO, CCD-TEMP and XBINNING as the rest of the pipeline
+    reads them; use(profile) bins; mono and name. [camera] backend =
+    "alpaca", address = "HOST:PORT", device. Cooling is left to the driver's
+    own program for now: keeper.py is Altair's alone."""
+
+    def __init__(self, gain=300):
+        self.client = device_client("camera", "camera")
+        get = lambda what: _quiet(self.client, what)
+        self.name = get("name") or "Alpaca camera"
+        self.mono = get("sensortype") in (0, None)
+        self.pattern = None if self.mono else PATTERNS.get((get("bayeroffsetx") or 0, get("bayeroffsety") or 0), "RGGB")
+        self.size = (get("cameraxsize"), get("cameraysize"))
+        self.most_binning = get("maxbinx") or 1
+        self.gain = gain
+        low, high = get("gainmin"), get("gainmax")
+        if low is not None and high is not None:
+            # The project's gains are Altair's percent (100 to 5000); another
+            # driver's range is its own: the asked gain held inside it.
+            _quiet_put(self.client, "gain", Gain=int(min(max(gain, low), high)))
+        self.binning = 1
+        self._bin(1)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+    def close(self):
+        pass
+
+    def _bin(self, n):
+        self.client.put("binx", BinX=n)
+        self.client.put("biny", BinY=n)
+        self.client.put("startx", StartX=0)
+        self.client.put("starty", StartY=0)
+        self.client.put("numx", NumX=self.size[0] // n)
+        self.client.put("numy", NumY=self.size[1] // n)
+        self.binning = n
+
+    def use(self, profile):
+        """As camera.Camera.use: binned on a mono sensor where the driver can."""
+        from camera import PROFILES
+        wanted = PROFILES[profile]
+        if wanted != self.binning and wanted <= self.most_binning:
+            try:
+                self._bin(wanted)
+            except DriverError:
+                self._bin(1)
+        return self.binning
+
+    def settings(self, fan=None, offset=None, speed=None):
+        if offset is not None:
+            _quiet_put(self.client, "offset", Offset=int(offset))
+
+    def temperature(self):
+        return _quiet(self.client, "ccdtemperature")
+
+    def frame(self, seconds, sleep=time.sleep, clock=time.monotonic):
+        import datetime as dt
+
+        import numpy as np
+        from astropy.io import fits
+        started = dt.datetime.now(dt.timezone.utc)
+        try:
+            self.client.put("startexposure", Duration=float(seconds), Light=True)
+        except DriverError as error:
+            raise RuntimeError(f"the camera's driver would not start an exposure: {error}") from None
+        end = clock() + 30 + 1.5 * seconds
+        while not self.client.get("imageready"):
+            if clock() > end:
+                _quiet_put(self.client, "abortexposure")
+                raise RuntimeError(f"the camera sent no picture within {30 + 1.5 * seconds:.0f} s")
+            sleep(min(0.5, max(0.05, seconds / 10)))
+        image = self._image()
+        mosaic = np.clip(image.T, 0, 65535).astype(np.uint16)      # ASCOM's [x][y] to rows
+        header = fits.Header()
+        header["EXPTIME"] = (float(seconds), "seconds")
+        header["GAIN"] = (self.gain, "camera gain asked")
+        header["DATE-OBS"] = (started.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3], "UTC, start of exposure")
+        if self.mono:
+            header["TY_MONO"] = (True, "mono sensor: no colour pattern")
+        else:
+            header["BAYERPAT"] = self.pattern
+        degrees = self.temperature()
+        if degrees is not None:
+            header["CCD-TEMP"] = (round(float(degrees), 1), "sensor temperature, C")
+        header["XBINNING"] = (int(self.binning), "binning the camera applied")
+        from camera import SETTINGS, identify
+        identify(header, SETTINGS, model=self.name)
+        return mosaic, header
+
+    def _image(self):
+        """The picture, as ASCOM's ImageBytes where the server offers it (a
+        tenth of the size of JSON), else the JSON array."""
+        import numpy as np
+        request = urllib.request.Request(
+            f"{self.client.base}imagearray?ClientID={CLIENT_ID}&ClientTransactionID={next(self.client.ids)}",
+            headers={"Accept": "application/imagebytes"})
+        with urllib.request.urlopen(request, timeout=120) as answer:
+            body, kind = answer.read(), answer.headers.get("Content-Type", "")
+        if "imagebytes" in kind:
+            fields = np.frombuffer(body[:44], "<i4")
+            error, start, sent_as, rank, x, y = fields[1], fields[4], fields[6], fields[7], fields[8], fields[9]
+            if error:
+                raise RuntimeError(f"the camera's driver sent error {error:#x} with the picture")
+            if rank != 2:
+                raise RuntimeError("the camera sent a colour (three-plane) picture: only a raw mosaic is used here")
+            return np.frombuffer(body[start:], IMAGE_TYPES[int(sent_as)]).reshape(x, y)
+        found = json.loads(body.decode("utf-8"))
+        if found.get("ErrorNumber"):
+            raise RuntimeError(f"the camera's driver: {found.get('ErrorMessage')}")
+        return np.array(found["Value"])
+
+
 def _precess(ra, dec, to_j2000):
     """Between the true equator and equinox of date and J2000, degrees."""
     import sky  # noqa: F401 - astropy's settings for offline use

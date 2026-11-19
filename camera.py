@@ -40,7 +40,7 @@ TIMEOUT_FACTOR = 10
 WHITE = 2 ** SETTINGS["camera"]["bit_depth"] - 1  # brightest raw value
 
 
-BACKEND = SETTINGS["camera"]["backend"]   # "indi", or "altair" for Altair's own library
+BACKEND = SETTINGS["camera"]["backend"]   # "indi", "altair" for Altair's own library, or "alpaca"
 
 # What a caller wants its frames for, and the binning that asks of the
 # camera. A caller names the purpose with cam.use(); only this layer and the
@@ -216,6 +216,10 @@ class Camera:
         if cls is Camera and BACKEND == "altair":
             from altair import AltairCamera
             return AltairCamera(gain=gain)
+        if cls is Camera and BACKEND == "alpaca":
+            # Any camera with an ASCOM driver, through Alpaca (alpaca.py).
+            import alpaca
+            return alpaca.Camera(gain=gain)
         return super().__new__(cls)
 
     def __init__(self, port=PORT, gain=300):

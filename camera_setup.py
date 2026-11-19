@@ -207,7 +207,8 @@ def run(args):
 def setup(args):
     backend = config.hardware()["camera"]["backend"]
     steps = Steps()
-    print(f"Camera setup ({'Altair library' if backend == 'altair' else 'INDI driver'})\n", flush=True)
+    print(f"Camera setup ({'Altair library' if backend == 'altair' else 'Alpaca' if backend == 'alpaca' else 'INDI driver'})\n",
+          flush=True)
 
     bits = struct.calcsize("P") * 8
     version = ".".join(str(v) for v in sys.version_info[:3])
@@ -216,6 +217,16 @@ def setup(args):
         return finish(steps, backend)
     steps.add("python", OK, f"Python {version}, {bits}-bit")
 
+    if backend == "alpaca":
+        # Through its ASCOM driver on the network: no USB here to look at.
+        import doctor
+        status, message = doctor.check_camera()
+        steps.add("alpaca", FAIL if status == doctor.FAIL else OK, message)
+        if status == doctor.FAIL:
+            return finish(steps, backend)
+        if not args.check:
+            test_frame(steps, args.exposure, args.gain)
+        return finish(steps, backend)
     match = config.hardware()["camera"].get("usb_match", "ALTAIR")
     device = host.camera_device(match)
     if device is None:

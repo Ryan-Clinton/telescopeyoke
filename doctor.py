@@ -393,12 +393,32 @@ def altair_checks():
     return altair.checks()
 
 
+def check_alpaca_device(section, kind):
+    """An Alpaca device a settings section names: whether its server
+    answers and what it says it is. Reads only: never connects it."""
+    import alpaca
+    import config
+    settings = config.hardware().get(section, {})
+    if not settings.get("address"):
+        return FAIL, f"[{section}] backend = \"alpaca\" has no address: ./alpaca.py find lists the servers"
+    try:
+        client = alpaca.Client(settings["address"], settings.get("device", 0), kind=kind, timeout=5)
+        name, connected = client.get("name"), client.get("connected")
+    except (Exception, Refusal) as error:
+        return FAIL, f"Alpaca {kind} not answering at {settings['address']}: {getattr(error, 'message', error)}"
+    return OK, (f"Alpaca {kind} \"{name or kind}\" at {settings['address']}"
+                + ("" if connected else ", not connected yet (opening it connects it)")
+                + "; tried only on ASCOM's simulator so far")
+
+
 def check_camera():
     if _demo():
         return OK, "simulated camera (demo)"
     import config
     if config.hardware()["camera"]["backend"] == "altair":
         return altair_checks()[-1]
+    if config.hardware()["camera"]["backend"] == "alpaca":
+        return check_alpaca_device("camera", "camera")
     port = config.hardware()["indi"]["port"]
     try:
         from indi import Indi
@@ -456,10 +476,13 @@ def run(offline=False, skip_handset=False, name_site=True):
         camera = [check_camera()]
     elif config.hardware()["camera"]["backend"] == "altair":
         camera = altair_checks()
+    elif config.hardware()["camera"]["backend"] == "alpaca":
+        camera = [check_camera()]
     else:
         camera = [check_program("indiserver", "INDI"), check_program(driver, "camera driver"),
                   check_indi_server(), check_camera()]
-    camera.append(check_camera_link())
+    if config.hardware()["camera"]["backend"] != "alpaca":     # no USB here to look at
+        camera.append(check_camera_link())
     imaging = [check_solver(), check_star_database(), check_speech(), check_tones()]
     return {"planner": planner, "mount": mount, "camera": camera, "imaging": imaging}
 

@@ -20,6 +20,13 @@ proven is `docs/validation.md` ("Current conclusions").
   Starlight Xpress wheel and the project's focuser do, so filter
   changes, confirmed positions in each frame and the walk-in use them
   unchanged. Tried on ASCOM's simulator only.
+- **A camera through ASCOM Alpaca** (`[camera] backend = "alpaca"`):
+  frames with the same header the Altair camera gives (exposure, gain,
+  start time, Bayer pattern or mono, temperature, binning), binned for
+  plate solves on a mono sensor, read as ASCOM's ImageBytes where the
+  server offers it. The doctor and `camera_setup.py` check it without
+  connecting. Cooling stays with the driver's own program. Tried on
+  ASCOM's simulator only.
 - `shoot.py --dry-run` fails when a later GoTo or filter change in the
   plan would be refused; the imaging skill's command shapes follow what
   `shoot.py` allows together.
