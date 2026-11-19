@@ -6,9 +6,10 @@
     ./focus.py --tones         the click and rising tone for each reading, in place of
                                the spoken number (the number is the default: 1 November
                                2026, "all i hear are beeps i want numbers")
-    ./focus.py --field         first slew to a bright star in a rich part of
-                               the sky (this MOVES the telescope)
-    ./focus.py --field --dry-run   say which star; nothing moves
+    ./focus.py --field         first slew to a rich star field (the Double
+                               Cluster first; a bright star when none is up)
+                               (this MOVES the telescope)
+    ./focus.py --field --dry-run   say which field; nothing moves
     ./focus.py --scene         on rooftops or trees, in daylight
     ./focus.py --check         how sharp the stars are now, against the usual best; nothing turns
     ./focus.py --motor         the motor focuser does it, unless focus is already as good as usual
@@ -514,16 +515,22 @@ ROOM = 5.0           # degrees to keep above anything known to be in the way
 
 
 def field(site, skyline, west=None, placed=None):
-    """The best placed of FIELDS to focus on, as (name, plan), or (None, why).
-    Highest wins, but a star on the side of the meridian the tube is already
-    on (`west`) is taken first if it is high enough, so that the tube need
-    not swing over the pole and back. `skyline` is config's [horizon];
-    `placed` stands in for mount.plan_goto in the tests."""
+    """The best placed field to focus on, as (name, plan), or (None, why):
+    one of polaralign's rich star fields (the Double Cluster leads them)
+    when any is well up and clear, else one of the bright stars in FIELDS
+    (the person, 19 November 2026: the cluster first, bright stars when it
+    fails). The rich fields in their own order, the bright stars highest
+    first; within each, one on the side of the meridian
+    the tube is already on (`west`) is taken first if it is high enough, so
+    that the tube need not swing over the pole and back. `skyline` is
+    config's [horizon]; `placed` stands in for mount.plan_goto in the tests."""
     import horizon
     import mount
+    import polaralign
     placed = placed or mount.plan_goto
     choices = []
-    for name in FIELDS:
+    for name in polaralign.RICH_FIELDS + list(FIELDS):
+        rich = name in polaralign.RICH_FIELDS
         try:
             plan = placed(name, site)
         except interface.Refusal as refusal:
@@ -535,47 +542,33 @@ def field(site, skyline, west=None, placed=None):
         if altitude < HIGH_ENOUGH or altitude < horizon.in_the_way(skyline, bearing(hour_angle, dec, site)) + ROOM:
             continue
         same_side = west is not None and (plan["pier_side"] == "west") == west
-        choices.append((same_side, altitude, name, plan))
+        # Rich fields in polaralign's order (the Double Cluster first), bright
+        # stars by height.
+        order = -polaralign.RICH_FIELDS.index(name) if rich else altitude
+        choices.append((rich, same_side, order, name, plan))
     if not choices:
-        return None, "None of the stars it focuses on is well up and clear just now."
-    _, _, name, plan = max(choices)
+        return None, "None of the star fields it focuses on is well up and clear just now."
+    _, _, _, name, plan = max(choices)
     return name, plan
 
 
 def say_where(file=sys.stdout):
-    """Say where to focus before anything is measured: a rich star field,
-    the Double Cluster first, never a lone bright star. 19 November 2026:
-    a focus run began on Vega's sparse field, and the person asked why it
-    was not on the Double Cluster. The first of polaralign's rich fields
-    (NGC 869 leads them) well up and clear of the skyline; not
-    polaralign.where(), which also needs room for the polar check's turns.
+    """Say where to focus before anything is measured: field()'s choice, a
+    rich star field with the Double Cluster first, a bright star only when
+    none is well up. 19 November 2026: a focus run began on Vega's sparse
+    field, and the person asked why it was not on the Double Cluster.
     Reads only: nothing moves; any failure just leaves the line out."""
     try:
-        import horizon
-        import mount
-        import polaralign
         cfg = config.load()
-        site, skyline = cfg["site"], cfg.get("horizon", {})
-        sidereal = mount.true_sidereal(site)
-        best = None
-        for name in polaralign.RICH_FIELDS:
-            t = mount.find_target(name)
-            if not t:
-                continue
-            ha = mount.wrap(sidereal - t["ra"])
-            altitude, azimuth = polaralign.to_altaz(polaralign.vector(ha, t["dec"]), site["latitude"])
-            if altitude >= polaralign.FOCUS_ALTITUDE and altitude >= horizon.in_the_way(skyline, azimuth % 360) + ROOM:
-                best = (name, altitude)
-                break
+        name, plan = field(cfg["site"], cfg.get("horizon", {}))
     except Exception:            # noqa: BLE001 - advice only, never a reason not to focus
         return
-    if not best:
-        print("Focus on a rich star field such as the Double Cluster (NGC 869); none of them is "
-              "well up and clear just now.", file=file, flush=True)
+    if not name:
+        print(f"Focus on a rich star field such as the Double Cluster (NGC 869): {plan}", file=file, flush=True)
         return
-    print(f"Focus on a rich star field, not a lone bright star: {best[0]}, {best[1]:.0f}° up, is the first "
-          f"well placed now (the Double Cluster, NGC 869, leads the list). Point there first: "
-          f"./mount.py goto \"{best[0]}\" --solve", file=file, flush=True)
+    print(f"Focus on {name}, {plan['altitude_deg']:.0f}° up: a rich star field first (the Double Cluster "
+          f"leads), a bright star only when none is well up. Point there first: ./mount.py goto \"{name}\" "
+          "--solve, or ./focus.py --field", file=file, flush=True)
 
 
 def bearing(hour_angle, dec, site):

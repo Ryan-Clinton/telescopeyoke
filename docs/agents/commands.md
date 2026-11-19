@@ -139,7 +139,7 @@ frame and starts it again. Any of these, and `goto --solve` and `horizon.py --tr
 look at the mount. `ty mount drift` changes the Dec motor's creep. `ty mount stop` halts
 everything and is always allowed. `shoot.py` re-centres the target as it
 drifts unless given `--no-recentre`. `focus.py --field` first slews to the
-best placed of a short list of bright stars with many round them, keeping
+best placed rich star field (the Double Cluster first), or of a short list of bright stars with many round them when none is up, keeping
 to the side of the meridian the tube is on when one there is high enough,
 and clear of the directions listed as blocked; `--dry-run` names the star.
 `starwatch.py STAR` (`tabby`: KIC 8462852) images a watched star through the
