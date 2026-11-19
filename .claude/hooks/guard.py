@@ -20,8 +20,10 @@ starting, a timeout). The rules (docs/skills-and-agents.md):
 - no-self-kill: no pkill -f or pgrep -f, which match their own command line.
 - no-secrets-out: nothing prints config.toml whole, its Telegram section,
   or a token from the environment.
-- small-focus: no focus.py sweep (--motor, --sweep, --measure-step,
-  --measure-backlash). The far-focus search is allowed from 18 November
+- small-focus: no focus.py sweep (--motor, --sweep, --measure-step).
+  --measure-backlash is allowed from 19 November 2026, on the person's go:
+  sized for the NEMA 17, 8 half-steps at a time, 512 at most, within
+  [focuser] travel. The far-focus search is allowed from 18 November
   2026: on the NEMA 17 its steps are a thirty-second of a turn, at most half a
   turn each way. On 23 October 2026 two --motor runs, each stopped part way,
   left the drawtube about an inch from the Sharpie line after the person
@@ -247,7 +249,7 @@ def no_secrets_out(payload):
 
 
 # argparse takes any unambiguous start of an option: --mot is --motor, --fin is --find.
-FOCUS_SWEEP = re.compile(r"(?<![\w-])--(mo|sw|measure-s|measure-b)[\w-]*")
+FOCUS_SWEEP = re.compile(r"(?<![\w-])--(mo|sw|measure-s)[\w-]*")
 
 
 def small_focus(payload):

@@ -672,7 +672,7 @@ STAR_NOW = STREAM_FILE.with_name("focus_star_now.png")
 STAGES = {"check": ["measure"],
           "focus": ["measure", "sweep", "fit", "verify"],
           "sweep": ["measure", "sweep", "fit"],
-          "auto": ["finding stars", "which way", "coming to focus", "to the best", "done"],
+          "auto": ["finding stars", "coming to focus", "curve", "to the best", "done"],
           "find": ["searching"]}
 
 
@@ -1170,136 +1170,142 @@ def find_stars(motor, read, usual, say=progress, stride=128, turns=0.5, ring=Non
     return {"at": 0, "how": "not_found"}
 
 
-def focus_motor(motor, read, usual, say=progress, coarse=64, fine=32, finest=16, closest=8, switch=8.0,
-                near=1.5, close=1.15, most=200, tries=3, patience=3, spike=1.8, ring=None, live=None, slack=None):
+def focus_motor(motor, read, usual, say=progress, coarse=64, step=32, points=7, far=2.0, most=40, patience=2,
+                tries=3, sweeps=3, ring=None, live=None, slack=None):
     """Focus with the motor, moving either way: the NEMA 17 lifts the drawtube
-    as well as lowering it (18 November 2026), so nothing needs setting out of
-    focus first and no move is bigger than the stars call for.
+    as well as lowering it (18 November 2026), so nothing is set out of focus
+    first and no move is bigger than the stars call for.
 
-    Measures where it is; with no star measuring, the far search first
-    (find_stars, `ring` giving the doughnuts' size). Then one small step out:
-    better, and focus is outward; worse, and it tries the same step the
-    other side of the start; worse both ways, and the start was the best.
-    Then on that way a step at a time, sized by the best HFR so far (`coarse`
-    over `switch`, `fine` under it, `finest` within `near` x the usual best,
-    `closest` within `close` x it), until the stars have been worse
-    `patience` times running after their best. A reading over `spike` x the
-    best is taken again before it counts (21 October 2026: one passing cloud
-    read 6.3 between 2.92 and 2.55). Last, to the best place, always
-    arriving with an inward move and the gears' `slack` taken up first (out
-    past it by the slack, then in), so the drawtube ends resting the same
-    way every time. 19 November 2026: from HFR 3.38 the night began with a
-    move of 1600 half-steps out, the old way's need to start outside focus.
+    Every place that is measured to choose focus is arrived at moving inward
+    with the gears' `slack` taken up first (out past it by the slack, then
+    in), so every reading is in the same frame of the gears and the slack
+    never hides a move. 19 November 2026: near focus, single steps of 8
+    half-steps changed the stars less than the seeing does between frames,
+    and the step back the other way was lost in the slack, so the way to
+    focus was often guessed wrong.
 
-    Returns {"best_hfr", "best_at", "ended_at", "ended_hfr", "way", "readings"},
-    places in half-steps from the start, out positive."""
+    With no star measuring, the far search first (find_stars, `ring` giving
+    the doughnuts' size). Far out (HFR over `far` x the usual best), steps
+    of `coarse` the way the stars shrink, until they are near or have grown
+    `patience` times. Near focus, a curve: `points` places `step` apart
+    across the best so far, measured one after another moving inward, a
+    hyperbola fitted (fit_curve); a fit at the sweep's edge moves the sweep
+    that way, up to `sweeps` times. Then to the fitted focus (or the best
+    reading, if no curve fitted), arriving moving inward.
+
+    Returns {"best_hfr", "best_at", "ended_at", "ended_hfr", "way", "fit",
+    "readings"}, places in half-steps from the start, out positive."""
     def still():
-        """The stars no different over STILL_AFTER half-steps of turning: the
-        motor turned and the drawtube did not move (1 November 2026)."""
         live.done("failed", "The stars did not change as the focuser turned: the drawtube is not moving.")
         raise interface.Refusal("FOCUSER_NOT_MOVING", f"The stars did not change over {STILL_AFTER} half-steps "
                                                       "(an eighth of a turn): the motor is turning but the "
                                                       "drawtube is not moving. Check that the coupler grips the "
                                                       "knob's shaft.")
 
-    def reading():
-        for _ in range(tries):
-            hfr = sample(read, SWEEP_FRAMES, usual)["hfr"]
-            if hfr is not None:
-                return hfr
-        return None
-
-    def size(best):
-        return (closest if best < close * usual else finest if best < near * usual
-                else fine if best < switch else coarse)
-
     live = live or Broadcast("auto", usual, path=None)
-    at, last_in = 0, False
+    slack = focuser_settings()["backlash"] if slack is None else slack
+    state = {"at": 0, "inward": False}
+    readings = []
 
     def go(place):
-        nonlocal at, last_in
-        if place != at:
-            motor.move(place - at)
-            last_in, at = place < at, place
+        if place != state["at"]:
+            motor.move(place - state["at"])
+            state["inward"], state["at"] = place < state["at"], place
 
-    now = reading()
+    def arrive(place):
+        """To `place`, the last move inward and at least `slack` of it."""
+        if not state["inward"] or place >= state["at"] or state["at"] - place < slack:
+            go(max(place, state["at"]) + slack)
+        go(place)
+
+    def measure(doing):
+        for _ in range(tries):
+            found = sample(read, SWEEP_FRAMES, usual)
+            if found["hfr"] is not None:
+                break
+        readings.append((state["at"], found["hfr"]))
+        live.reading(state["at"], found["hfr"], doing)
+        say(f"  {doing} (at {state['at']:+d}): HFR {found['hfr'] if found['hfr'] is not None else 'none'}")
+        return found
+
+    now = sample(read, SWEEP_FRAMES, usual)["hfr"]
     if now is None and ring:
         live.stage("finding stars")
         say("  no star measures here: the far search first")
         found = find_stars(motor, read, usual, say=say, ring=ring, live=live)
-        at = found["at"]
-        now = reading()
+        state["at"] = found["at"]
+        now = sample(read, SWEEP_FRAMES, usual)["hfr"]
     if now is None:
         live.done("failed", "No stars measured here, so focusing could not start.")
         raise interface.Refusal("NO_STARS", "No stars measure here, near or far out of focus: point at a rich "
                                             "star field (the line at the start names one) and run this again.")
-    readings = [(at, now)]
-    live.stage("which way")
-    live.reading(at, now, "start")
+    start_at = state["at"]
+    readings.append((start_at, now))
+    live.reading(start_at, now, "start")
     say(f"  start: HFR {now}")
-    best, best_at, start_at = now, at, at
+    best, best_at, way = now, start_at, 0
 
-    # Which way: one step out, then if need be the same step in from the start.
-    step = size(best)
-    way = 0
-    for trial in (1, -1):
-        go(start_at + trial * step)
-        here = reading()
-        if here is not None and here > spike * best:
-            here = reading()
-        say(f"  {'out' if trial > 0 else 'in'} {step} (at {at:+d}): HFR {here if here is not None else 'none'}")
-        if here is None:
-            continue
-        readings.append((at, here))
-        live.reading(at, here, "out" if trial > 0 else "in")
-        if here < best:
-            best, best_at, way = here, at, trial
-            break
-    if way:
+    # Far out: big steps, which change the stars far more than the seeing.
+    if best > far * usual:
         live.stage("coming to focus")
-        say(f"  focus is {'out' if way > 0 else 'in'}ward")
-        worse = 0
-        for _ in range(most):
-            step = size(best)
-            go(at + way * step)
-            now = reading()
-            if now is not None and now > spike * best and best < switch:
-                say(f"  {'out' if way > 0 else 'in'} {step} (at {at:+d}): HFR {now}, a cloud? measuring again")
-                now = reading()
-            say(f"  {'out' if way > 0 else 'in'} {step} (at {at:+d}): HFR {now if now is not None else 'none'}")
-            if now is None:
-                say("  no reading after three tries: stopped here")
+        for trial in (1, -1):
+            arrive(start_at + trial * coarse) if trial < 0 else go(start_at + coarse)
+            here = measure("out" if trial > 0 else "in")["hfr"]
+            if here is not None and here < best:
+                best, best_at, way = here, state["at"], trial
                 break
-            readings.append((at, now))
-            live.reading(at, now, "out" if way > 0 else "in")
-            if abs(at - start_at) >= STILL_AFTER and all(abs(h / readings[0][1] - 1) < STILL for _, h in readings):
+        worse = 0
+        for _ in range(most if way else 0):
+            if best <= far * usual:
+                break
+            go(state["at"] + way * coarse)
+            here = measure("out" if way > 0 else "in")["hfr"]
+            if here is None:
+                break
+            if abs(state["at"] - start_at) >= STILL_AFTER and all(abs(h / now - 1) < STILL for _, h in readings if h):
                 still()
-            if now < best:
-                best, best_at, worse = now, at, 0
+            if here < best:
+                best, best_at, worse = here, state["at"], 0
             else:
                 worse += 1
                 if worse >= patience:
                     break
-    else:
-        say("  no better either way: the start was the best")
 
-    # To the best, arriving moving inward with the slack taken up.
-    slack = focuser_settings()["backlash"] if slack is None else slack
+    # Near focus: a curve through it, every point arrived at moving inward.
+    live.stage("curve")
+    centre, fit = best_at, None
+    for _ in range(sweeps):
+        top = centre + (points // 2) * step
+        arrive(top)
+        points_ = []
+        for k in range(points):
+            if k:
+                go(top - k * step)
+            found = measure("curve")
+            points_.append({"at": state["at"], "hfr": found["hfr"], "scatter": found["scatter"]})
+            if found["hfr"] is not None and found["hfr"] < best:
+                best, best_at = found["hfr"], state["at"]
+        fit = fit_curve(points_, step)
+        live.fitted(fit)
+        if fit["ok"]:
+            say(f"  curve fitted: focus at {fit['focus']:+.0f}, HFR {fit['hfr']} (R² {fit['r2']})")
+            break
+        say(f"  no curve fitted ({fit['reason']})" + (", moving the sweep" if fit["reason"] == "edge" else ""))
+        if fit["reason"] != "edge":
+            break
+        centre += fit["toward"] * (points // 2) * step
+    target = round(fit["focus"]) if fit and fit["ok"] else best_at
+    if way == 0:
+        way = 1 if target > start_at else -1 if target < start_at else 0
+
     live.stage("to the best")
-    if at > best_at and last_in:
-        go(best_at)
-    else:
-        go(best_at + slack)
-        go(best_at)
-    ended = reading()
-    say(f"  at the best ({best_at:+d}), arrived moving in: HFR {ended if ended is not None else 'none'}")
-    if ended is not None:
-        readings.append((at, ended))
-        live.reading(at, ended, "best")
+    arrive(target)
+    ended = measure("at the best")["hfr"]
     live.stage("done")
     live.done("complete", None, end_hfr=ended if ended is not None else best)
-    return {"best_hfr": best, "best_at": best_at, "ended_at": at, "ended_hfr": ended if ended is not None else best,
-            "way": {1: "out", -1: "in", 0: "none"}[way], "readings": readings}
+    return {"best_hfr": fit["hfr"] if fit and fit["ok"] else best, "best_at": target, "ended_at": state["at"],
+            "ended_hfr": ended if ended is not None else best, "way": {1: "out", -1: "in", 0: "none"}[way],
+            "fit": fit, "readings": readings}
 
 
 def measure_step(motor, read, usual, say=progress, backlash=None, increment=16, most=4096):
@@ -1545,10 +1551,11 @@ def run_motor(args, mode="focus"):
     if args.dry_run and mode == "auto":
         port = focuser.find_port()
         print(f"Would turn the focuser on {port} either way at {MOTOR_MS} ms a half-step: the far search first if "
-              "no star measures, then one small step out (and in, if out is worse) to find which way focus is, "
-              f"then 64, 32, 16 or 8 half-steps at a time that way, {SWEEP_FRAMES} frames after each, until the "
-              "stars have been worse three times after their best; then to the best, arriving moving in with the "
-              f"gears' slack ({settings['backlash']} half-steps) taken up. The mount does not move.")
+              "no star measures; far out, 64 half-steps at a time the way the stars shrink; near focus, 7 places "
+              f"32 half-steps apart measured moving inward ({SWEEP_FRAMES} frames each) and a curve fitted; then "
+              f"to its focus. Every place measured and the end are arrived at moving inward with the gears' slack "
+              f"({settings['backlash']} half-steps{'' if settings['backlash_measured'] else ', a guess until measured'}) "
+              "taken up. The mount does not move.")
         return {"would_move": True, "port": port, "usual_hfr": round(usual, 2), "motor_ms": MOTOR_MS}
     if args.dry_run:
         port = focuser.find_port()
@@ -1674,8 +1681,10 @@ def run_motor(args, mode="focus"):
             if mode == "backlash":
                 progress("measuring the gears' slack")
                 # Out no further than the travel, the return's overshoot too.
+                # In four steps, then out far enough to pass the sharpest: the
+                # reading beyond it is not used (measure_backlash).
                 found = measure_backlash(drive, read, usual, settings["step"], say=say,
-                                         most=min(512, travel - travel % 8))
+                                         most=min(4 * settings["step"] + 64, 512, travel - travel % 8))
                 if found:
                     keep_focuser(backlash=found)
                 progress(f"Backlash to overshoot: {found} half-steps" + (", kept." if found else ": not measured."))

@@ -39,10 +39,13 @@ where it starts, and `--auto` keeps within `[focuser] travel`.
 How it focuses now (19 November 2026): `./focus.py --check` first, then
 `./focus.py --auto` from wherever the focuser is. With only rings it runs
 the far search (`--find`: a thirty-second of a turn at a time, to the
-smallest rings or where stars measure); then one small step out, and in if
-out is worse, to see which way focus lies; small steps that way until the
-stars have been worse three times after their best; then to the best,
-arriving moving in with the gears' slack taken up. The NEMA 17 moves the
+smallest rings or where stars measure); far out, 64 half-steps at a time
+the way the stars shrink; near focus, seven places 32 half-steps apart,
+measured one after another moving inward, and a curve fitted through
+them; then to its focus. Every place measured, and the end, is arrived at
+moving inward with the gears' slack taken up, so the slack never hides a
+move (19 November 2026: single 8-step moves near focus changed the stars
+less than the seeing does, and the step back was lost in the slack). The NEMA 17 moves the
 drawtube either way, so nothing is set out of focus first and there is no
 inward-only rule; that was the 28BYJ-48's.
 
@@ -326,10 +329,11 @@ brightest star at the start and now, for the live stream's focus look
     ./focus.py --measure-step        from focus, in until the stars are 2.5 times their size; a quarter of that is the step
     ./focus.py --measure-backlash    the slack, on the steep side of the curve, twice; half as much again is kept
     ./focus.py --auto                from wherever it is, either way: the far search first if only rings show;
-                                     one step out (and in) to find which way; 64, 32, 16 or 8 half-steps at a
-                                     time that way (40 ms a half-step), measuring each, to the sharpest; then
-                                     to the best, arriving moving in with the slack (the measured backlash,
-                                     or 32) taken up; the collimation is checked on its first doughnuts
+                                     far out, 64 half-steps at a time the way the stars shrink; near focus,
+                                     seven places 32 apart measured moving inward and a curve fitted; then
+                                     to its focus; every place arrived at moving in with the slack (the
+                                     measured backlash, or 32) taken up; the collimation is checked on its
+                                     first doughnuts
 
 No move of a run goes further than `[focuser] travel` (512 half-steps by
 default, overshoot included) from where it started: a move beyond it is

@@ -47,12 +47,12 @@ wherever the focuser is: no move beforehand, nothing set out of focus.
 The NEMA 17 moves the drawtube either way (18 November 2026). With no
 star measuring it runs the far search itself (`--find`: a thirty-second
 of a turn a step, half a turn each way, to the smallest rings, stopping
-if the star leaves the frame). Then one small step out, and in if out is
-worse, to see which way focus lies; small steps that way (64, 32, 16 or 8
-half-steps, by how sharp the stars already are) until they have been
-worse three times after their best; then to the best, arriving moving in
-with the gears' slack taken up. **Never `--motor`, `--measure-step` or
-`--measure-backlash`** (the guard refuses them): on 23 October 2026 two
+if the star leaves the frame). Far out, 64 half-steps at a time the way
+the stars shrink; near focus, seven places 32 half-steps apart measured
+moving inward and a curve fitted through them; then to its focus. Every
+place it measures, and the end, is arrived at moving inward with the
+gears' slack taken up (`--measure-backlash` measures it; 32 until then). **Never `--motor` or `--measure-step`**
+(the guard refuses them): on 23 October 2026 two
 sweeps on the old motor, each stopped part way, left the drawtube about
 an inch out. The person's word on how far out it is beats the HFR: HFR
 13 can be a few tens of microns. Stars that vanish during a run: first
@@ -60,8 +60,7 @@ whether the star is still in the frame (a GoTo off by up to a degree
 without a star alignment, or drift on a rough polar alignment: 18 November
 2026), then the focuser, and cloud last.
 
-- It says which way focus lay and the HFR it ended on at the best: report
-  those.
+- It says where the curve put focus and the HFR it ended on: report those.
 - It checks the collimation on its first doughnuts: say that line once,
   and if it says "off", that the mirrors want collimating
   (`docs/collimation.md`).

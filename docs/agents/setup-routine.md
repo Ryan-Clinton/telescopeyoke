@@ -141,13 +141,13 @@ is usually still good: then move on, and focus only if they ask
 (`./focus.py --auto`). Only when it is soft, and with the motor focuser,
 from wherever the focuser is (no move first):
 
-    ./focus.py --auto          either way to the sharpest: the far search itself if only rings show
+    ./focus.py --auto          either way to the sharpest: the far search itself if only rings show, a fitted curve near focus
 
-**Never `./focus.py --motor`** (nor `--measure-step` or
-`--measure-backlash`) with their 256-step, 1536-overshoot guesses: on 23
+**Never `./focus.py --motor`** (nor `--measure-step`): on 23
 October 2026 two of them, each stopped part way, left the drawtube about
 an inch from the Sharpie line after the person had said focus was a touch
-out. `--auto` makes only small steps, whichever way the stars sharpen.
+out. `--auto` makes only small steps, whichever way the stars sharpen,
+each place arrived at moving inward with the slack taken up.
 Their word on how far out it is beats the HFR: HFR 13 can be a
 few tens of microns. Stars that vanish during a run: first whether the
 star is still in the frame (on 18 November 2026 a GoTo without a star

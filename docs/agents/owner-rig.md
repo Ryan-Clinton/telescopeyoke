@@ -87,10 +87,10 @@ motor turned and the knob did not, so focus was by hand with the spoken aid.
   half-steps is a turn of the knob, half a turn about half the travel.
 - Far out (rings, no star measuring): `./focus.py --find`, a thirty-second
   of a turn a step, half a turn each way at most; `--auto` runs it itself.
-- The sweeps (`--motor`, `--measure-step`, `--measure-backlash`) stay
-  refused by the guard until the slack and step are measured on the sky: on
+- The sweeps (`--motor`, `--measure-step`) stay refused by the guard: on
   23 October 2026 two of them, each stopped part way, left the old drive's
-  drawtube about an inch from the Sharpie line.
+  drawtube about an inch from the Sharpie line. `--measure-backlash`
+  (8 half-steps at a time, from focus) is allowed from 19 November 2026.
 - Its 12 V lead runs with slack: pulled tight on 18 November, it may have
   held the tube back in Dec.
 - A focus run's collimation line saying "off": Gary collimates it
