@@ -199,15 +199,18 @@ class GuideLog:
     def _read(self, path):
         begun, columns = None, None
         for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            if line.startswith("Calibration Begins at"):
+                begun, columns = None, None      # calibration's rows are not guide steps
+                continue
             found = re.match(r"Guiding Begins at (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)", line)
             if found:
-                begun = dt.datetime.strptime(found.group(1), "%Y-%m-%d %H:%M:%S").timestamp()
+                begun = local(found.group(1), "%Y-%m-%d %H:%M:%S")
                 self.sessions.append([begun, None])
                 columns = None
                 continue
             found = re.match(r"Guiding Ends at (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)", line)
             if found and self.sessions:
-                self.sessions[-1][1] = dt.datetime.strptime(found.group(1), "%Y-%m-%d %H:%M:%S").timestamp()
+                self.sessions[-1][1] = local(found.group(1), "%Y-%m-%d %H:%M:%S")
                 begun = None
                 continue
             found = re.search(r"Pixel scale = ([\d.]+) arc-sec/px", line)
@@ -229,7 +232,7 @@ class GuideLog:
                 when = begun + float(row["Time"])
             except (KeyError, ValueError):
                 continue
-            dropped = row.get("mount", "").strip('"') == "DROP" or bool(row.get("ErrorCode", "0").strip() not in ("", "0"))
+            dropped = row.get("mount", "").strip('"') == "DROP"   # PHD2's FrameDropped row (guidinglog.cpp)
             try:
                 ra, dec = float(row.get("RARawDistance") or 0), float(row.get("DECRawDistance") or 0)
             except ValueError:
@@ -239,6 +242,18 @@ class GuideLog:
     def during(self, start, end):
         return _judge([s for s in self.steps if start <= s[0] <= end], self.scale,
                       any(a <= start and (b is None or b >= end) for a, b in self.sessions), start, end, self.cycle)
+
+    def sparse(self):
+        """Stretches PHD2 was guiding with far fewer guide steps than its
+        cycle makes: [(start, end, steps)]. Its state said guiding; its own
+        steps did not."""
+        out = []
+        for a, b in self.sessions:
+            b = b if b is not None else (self.steps[-1][0] if self.steps else a)
+            steps = sum(1 for t, _ in self.steps if a <= t <= b)
+            if b - a >= 4 * self.cycle and steps * self.cycle < 0.5 * (b - a):
+                out.append((a, b, steps))
+        return out
 
     def events_between(self, start, end):
         lost = sum(1 for t, d in self.steps if start <= t <= end and d is None)
@@ -291,6 +306,203 @@ def _judge(steps, scale, on, start, end, cycle):
             "unguided_s": round(lost, 1), "coverage": round(max(0.0, 1 - lost / (end - start)), 3) if end > start else None,
             "rms": round(math.sqrt(sum(e * e for e in errors) / len(errors)), 2) if errors else None,
             "max": round(max(errors), 2) if errors else None, "unit": "arcsec" if scale else "px"}
+
+
+# ---------------------------------------------------------------- NINA's own log
+
+ZONE = None          # the zone the logs' local times are in (--tz); None: this computer's
+
+
+def local(text, fmt):
+    """A local time from a log, as UTC seconds: in ZONE when given (a log
+    from another computer's clock), else this computer's own zone."""
+    when = dt.datetime.strptime(text, fmt)
+    if ZONE:
+        from zoneinfo import ZoneInfo
+        when = when.replace(tzinfo=ZoneInfo(ZONE))
+    return when.timestamp()
+
+
+# NINA's sequencer logs every step "Starting Category: C, Item: NAME, ..."
+# and "Finishing ..." (or "Failed: ..."), and every trigger "Starting
+# Trigger: NAME" (NINA.Sequencer, SequenceItem.Run and SequenceTrigger.Run,
+# read from NINA's source). What each step is, for the time it took:
+KINDS = {"RunAutofocus": "autofocus", "AutofocusAfterExposures": "autofocus",
+         "AutofocusAfterFilterChange": "autofocus", "AutofocusAfterHFRIncreaseTrigger": "autofocus",
+         "AutofocusAfterTemperatureChangeTrigger": "autofocus", "AutofocusAfterTimeTrigger": "autofocus",
+         "Center": "centring (plate solving)", "CenterAndRotate": "centring (plate solving)",
+         "SolveAndSync": "centring (plate solving)", "SolveAndRotate": "centring (plate solving)",
+         "CenterAfterDriftTrigger": "centring (plate solving)", "SlewScopeToRaDec": "slewing",
+         "SlewScopeToAltAz": "slewing", "Dither": "dithering", "DitherAfterExposures": "dithering",
+         "MeridianFlipTrigger": "meridian flip", "ProgrammableMeridianFlipTrigger": "meridian flip",
+         "StartGuiding": "starting guiding", "StopGuiding": "guiding stopped", "RestoreGuiding": "starting guiding",
+         "WaitForTime": "waiting", "WaitForTimeSpan": "waiting", "WaitUntil": "waiting",
+         "WaitForAltitude": "waiting", "WaitUntilAboveHorizon": "waiting", "WaitForSunAltitude": "waiting",
+         "WaitForMoonAltitude": "waiting", "WaitUntilSafe": "waiting for safe conditions",
+         "TriggerOnUnsafe": "unsafe conditions", "CoolCamera": "camera cooling", "WarmCamera": "camera warming",
+         "SwitchFilter": "filter change", "ParkScope": "parking", "UnparkScope": "unparking",
+         "FindHome": "finding home", "OpenDomeShutter": "dome", "CloseDomeShutter": "dome",
+         "SynchronizeDome": "dome", "ReconnectTrigger": "reconnecting", "ReconnectOnDownloadFailure": "reconnecting",
+         "ConnectAllEquipment": "connecting", "ConnectEquipment": "connecting"}
+LINE = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?)\|([A-Z]+)\|([^|]*)\|([^|]*)\|([^|]*)\|(.*)$")
+
+
+def night_span(day):
+    """Noon to noon from the date given, in the logs' zone, as UTC seconds."""
+    start = local(f"{day} 12:00:00", "%Y-%m-%d %H:%M:%S")
+    return start, start + 24 * 3600
+
+
+def logs_only(nina, guide=None):
+    """A night from NINA's log alone, with PHD2's guiding for each exposure
+    when its log is given: no frame is measured."""
+    lines = nina.summary()
+    if guide and nina.exposures:
+        judged = [guide.during(e["start"], e["start"] + e["seconds"]) for e in nina.exposures]
+        inside = [j for j, e in zip(judged, nina.exposures)
+                  if any(a <= e["start"] and (b is None or b >= e["start"] + e["seconds"]) for a, b in guide.sessions)]
+        guided = sum(1 for j in inside if j["guided"])
+        lost = sum(j["star_lost"] for j in inside)
+        lines.append(f"Guiding (PHD2's log): {len(inside)} of {len(nina.exposures)} exposures taken while PHD2 was "
+                     f"guiding; {guided} of those guided all through, {len(inside) - guided} with gaps in the guide "
+                     f"steps; the star lost {lost} time(s) during them")
+        for a, b, steps in guide.sparse():
+            lines.append(f"PHD2 said it was guiding {_clock(a)}-{_clock(b)} ({b - a:.0f} s) with {steps} guide "
+                         f"step(s), where its {guide.cycle:.0f} s cycle makes about {(b - a) / guide.cycle:.0f}: "
+                         "the exposures then were not guided all through (measured from its log)")
+        rms = [j["rms"] for j in inside if j["rms"] is not None]
+        if rms:
+            lines.append(f"Guide error during exposures: median RMS {statistics.median(rms):.2f} "
+                         f"{inside[0]['unit']}, worst {max(rms):.2f}")
+    lines.append("From the logs alone: no frame was measured, so nothing here says whether the pictures were good.")
+    return lines
+
+
+class NinaLog:
+    """NINA's log (%LOCALAPPDATA%\\NINA\\Logs), read: each exposure started
+    and each file saved, the sequencer's steps with when they began and
+    ended (or failed), the safety monitor's changes, devices lost, and
+    errors. Its times are the computer's local time (ZONE)."""
+
+    def __init__(self, paths):
+        self.exposures, self.saves, self.steps, self.events, self.errors = [], [], [], [], []
+        open_steps = {}
+        for path in paths:
+            for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
+                found = LINE.match(line)
+                if not found:
+                    continue
+                stamp, level, source, method, _, text = found.groups()
+                when = local(stamp[:26], "%Y-%m-%dT%H:%M:%S.%f" if "." in stamp else "%Y-%m-%dT%H:%M:%S")
+                self._take(when, level, source, method, text.strip(), open_steps)
+        for (name, kind), began in open_steps.items():
+            self.steps.append({"kind": kind, "name": name, "start": began, "end": None, "failed": False})
+        self.steps.sort(key=lambda s: s["start"])
+
+    def _take(self, when, level, source, method, text, open_steps):
+        found = re.match(r"Starting Exposure - Exposure Time: ([\d.]+)s; Filter: ([^;]*);", text)
+        if found:
+            self.exposures.append({"start": when, "seconds": float(found.group(1)), "filter": found.group(2).strip()})
+            return
+        found = re.match(r"Successfully saved file at (.*)", text)
+        if found:
+            self.saves.append({"time": when, "file": found.group(1)})
+            return
+        found = re.match(r"(Starting|Finishing|Failed:) (?:Category: [^,]*, )?(Item|Trigger): (\w+)", text)
+        if found:
+            verb, _, name = found.groups()
+            kind = KINDS.get(name)
+            if kind is None or name == "TakeExposure":
+                return
+            key = (name, kind)
+            if verb == "Starting":
+                if name.endswith("Trigger") or name in ("TriggerOnUnsafe", "RestoreGuiding"):
+                    # A trigger logs its start only; what it runs logs the rest.
+                    self.steps.append({"kind": kind, "name": name, "start": when, "end": None, "failed": False})
+                else:
+                    open_steps[key] = when
+            else:
+                began = open_steps.pop(key, None)
+                if began is not None:
+                    self.steps.append({"kind": kind, "name": name, "start": began, "end": when,
+                                       "failed": verb == "Failed:"})
+            return
+        found = re.search(r"SafetyMonitorInfo state changed to (\w+)", text)
+        if found:
+            self.events.append((when, f"the safety monitor said {found.group(1).lower()}"))
+            return
+        if method == "UsbDeviceWatcher_DeviceRemoved":
+            self.events.append((when, "a USB device was removed"))
+            return
+        if method in ("OpenShutter", "CloseShutter"):
+            self.events.append((when, "the dome shutter " + ("opened" if method == "OpenShutter" else "closed")))
+            return
+        if level == "ERROR":
+            self.errors.append((when, f"{source}: {text[:140]}"))
+
+    def only(self, start, end):
+        """Keep only what happened between two times (one night)."""
+        self.exposures = [e for e in self.exposures if start <= e["start"] < end]
+        self.saves = [s for s in self.saves if start <= s["time"] < end]
+        self.steps = [s for s in self.steps if start <= s["start"] < end]
+        self.events = [e for e in self.events if start <= e[0] < end]
+        self.errors = [e for e in self.errors if start <= e[0] < end]
+
+    def between(self, start, end):
+        """What NINA logged between two times, in words, with the seconds
+        each kind of step took inside the window."""
+        said = []
+        took = {}
+        for step in self.steps:
+            a, b = step["start"], step["end"] if step["end"] is not None else step["start"]
+            if b < start or a > end:
+                continue
+            seconds = max(0.0, min(b, end) - max(a, start))
+            name = step["kind"] + (" (failed)" if step["failed"] else "")
+            took[name] = took.get(name, 0.0) + seconds
+        for name, seconds in sorted(took.items(), key=lambda kv: -kv[1]):
+            said.append(f"NINA: {name}" + (f" {seconds / 60:.1f} min" if seconds >= 30 else ""))
+        started = [e for e in self.exposures if start <= e["start"] <= end]
+        saved = [s for s in self.saves if start <= s["time"] <= end]
+        if len(started) > len(saved):
+            said.append(f"NINA: {len(started) - len(saved)} exposure(s) started and not saved")
+        for when, what in self.events:
+            if start <= when <= end:
+                said.append(f"NINA: {what} at {_clock(when)}")
+        errors = [text for when, text in self.errors if start <= when <= end]
+        if errors:
+            said.append(f"NINA: {len(errors)} error(s), the first: {errors[0]}")
+        return said
+
+    def summary(self):
+        """The night by NINA's log alone: exposures started and saved by
+        filter and length, the time each kind of step took, events, errors."""
+        lines = []
+        groups = {}
+        for e in self.exposures:
+            groups.setdefault((e["filter"] or "no filter", e["seconds"]), []).append(e)
+        for (band, seconds), started in sorted(groups.items(), key=lambda kv: kv[1][0]["start"]):
+            lines.append(f"{band}, {seconds:g} s: {len(started)} exposures started, "
+                         f"{len(started) * seconds / 60:.0f} min of exposure, {_clock(started[0]['start'])}-"
+                         f"{_clock(started[-1]['start'])}")
+        lines.append(f"Files saved: {len(self.saves)} of {len(self.exposures)} exposures started")
+        took = {}
+        for step in self.steps:
+            if step["end"] is not None:
+                name = step["kind"] + (" (failed)" if step["failed"] else "")
+                took[name] = took.get(name, 0.0) + step["end"] - step["start"]
+        if took:
+            lines.append("Time in the sequencer's steps: " + ", ".join(
+                f"{name} {seconds / 60:.0f} min" for name, seconds in sorted(took.items(), key=lambda kv: -kv[1])))
+        kinds = {}
+        for _, what in self.events:
+            key = re.sub(r" at .*", "", what)
+            kinds[key] = kinds.get(key, 0) + 1
+        if kinds:
+            lines.append("Events: " + ", ".join(f"{what} ({n})" for what, n in sorted(kinds.items())))
+        if self.errors:
+            lines.append(f"Errors: {len(self.errors)}, the first {_clock(self.errors[0][0])}: {self.errors[0][1]}")
+        return lines
 
 
 # ---------------------------------------------------------------- judging
@@ -381,7 +593,7 @@ def judge(row, ref):
     return found
 
 
-def gaps(rows, guide=None):
+def gaps(rows, guide=None, nina=None):
     """Stretches with no frame, longer than the night's usual time between
     frames by GAP_MIN_S: [(from, to, minutes, what was happening)]."""
     timed = sorted((r for r in rows if r.get("start") and r.get("end")), key=lambda r: r["start"])
@@ -412,15 +624,22 @@ def gaps(rows, guide=None):
                 why.append(f"{seen['dithers']} dither(s), the settling after them (measured)")
             if not seen["guiding_on"]:
                 why.append("no guiding at all then (measured)")
-        out.append((a["end"], b["start"], (gap - usual) / 60, why or ["not known: nothing it reads says (the "
-                                                                    "capture program's own log would)"]))
+        if nina:
+            why += [f"{w} (logged)" for w in nina.between(a["end"], b["start"])]
+        out.append((a["end"], b["start"], (gap - usual) / 60, why or [
+            "not known: nothing it reads says" + ("" if nina else " (the capture program's own log, --nina-log, would)")]))
     return out
 
 
 # ---------------------------------------------------------------- the report
 
 def _clock(t):
-    return dt.datetime.fromtimestamp(t).strftime("%H:%M") if t else "?"
+    if not t:
+        return "?"
+    if ZONE:
+        from zoneinfo import ZoneInfo
+        return dt.datetime.fromtimestamp(t, ZoneInfo(ZONE)).strftime("%H:%M")
+    return dt.datetime.fromtimestamp(t).strftime("%H:%M")
 
 
 def read_one(path):
@@ -448,7 +667,7 @@ def gather(folder, guide=None, say=None, paths=None):
     return rows, left
 
 
-def report(rows, guide=None, left=()):
+def report(rows, guide=None, left=(), nina=None):
     """The night in words and data: per setup, the gaps, and every file
     left out with why."""
     refs = references(rows)
@@ -483,7 +702,7 @@ def report(rows, guide=None, left=()):
             lost[main[0]] = lost.get(main[0], 0.0) + seconds
         if (row.get("guide") or {}).get("rms") is not None:
             part["guide_rms"].append(row["guide"]["rms"])
-    holes = gaps(rows, guide)
+    holes = gaps(rows, guide, nina)
     for _, _, minutes, why in holes:
         known = not why[0].startswith("not known")
         name = "no frames (explained)" if known else "no frames (unexplained)"
@@ -495,6 +714,7 @@ def report(rows, guide=None, left=()):
         reason = row["skip"].split(":")[0] if row.get("unreadable") else row["skip"]
         reasons[reason] = reasons.get(reason, 0) + 1
     return {"frames": len(rows), "files": len(rows) + len(left), "left_out": reasons, "parts": parts, "gaps": holes,
+            "sparse": guide.sparse() if isinstance(guide, GuideLog) else [],
             "lost": lost, "rows": rows}
 
 
@@ -525,6 +745,9 @@ def words(night):
                          + (f": likely {c['inferred']}" if c["inferred"] else ""))
     for start, end, minutes, why in night["gaps"]:
         lines.append(f"No frames {_clock(start)}-{_clock(end)} ({minutes:.0f} min beyond the usual gap): " + "; ".join(why))
+    for a, b, steps in night.get("sparse", []):
+        lines.append(f"PHD2 said it was guiding {_clock(a)}-{_clock(b)} ({b - a:.0f} s) with only {steps} guide step(s) "
+                     "(measured from its log)")
     if night["lost"]:
         worst = sorted(night["lost"].items(), key=lambda kv: -kv[1])
         lines.append("Where the time went: " + ", ".join(f"{cause} {seconds / 60:.0f} min" for cause, seconds in worst))
@@ -605,14 +828,26 @@ def watch(folder, guide=None, say=print, poll=5.0, sleep=time.sleep, once=False)
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("command", choices=["report", "watch", "check"])
-    ap.add_argument("folder", help="where the capture program saves the night's frames")
+    ap.add_argument("folder", nargs="?", help="where the capture program saves the night's frames (report: "
+                                              "optional with --nina-log, for a night from the logs alone)")
     ap.add_argument("--phd2-log", nargs="+", metavar="FILE", help="PHD2's guide log(s) for the night")
+    ap.add_argument("--nina-log", nargs="+", metavar="FILE", help="NINA's log(s) for the night")
+    ap.add_argument("--night", metavar="YYYY-MM-DD", help="only the night that begins on this date (noon to noon)")
+    ap.add_argument("--tz", metavar="ZONE", help="the zone the logs' local times are in, such as Europe/Rome "
+                                                 "(default: this computer's)")
     ap.add_argument("--phd2", metavar="HOST:PORT", help="for watch: listen to PHD2's event server")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
-    if not Path(args.folder).is_dir():
+    global ZONE
+    ZONE = args.tz
+    if args.folder and not Path(args.folder).is_dir():
         sys.exit(f"No folder {args.folder}")
+    if not args.folder and not (args.command == "report" and args.nina_log):
+        sys.exit("A frames folder is needed (report can do without one given --nina-log)")
     guide = GuideLog(args.phd2_log) if args.phd2_log else None
+    nina = NinaLog(args.nina_log) if args.nina_log else None
+    if args.night and nina:
+        nina.only(*night_span(args.night))
     if args.command == "watch":
         if args.phd2:
             guide = GuideLive(args.phd2)
@@ -641,13 +876,21 @@ def main(argv=None):
             print(f"PHD2 log: {len(guide.steps)} guide steps, {len(guide.sessions)} guiding stretches, "
                   f"pixel scale {guide.scale or 'not given'}")
         return
+    if not args.folder:
+        lines = logs_only(nina, guide)
+        print(json.dumps(lines, indent=1) if args.json else "\n".join(lines))
+        return
     rows, left = gather(args.folder, guide, say=lambda line: print(line, file=sys.stderr))
-    night = report(rows, guide, left)
+    if args.night:
+        span = night_span(args.night)
+        rows = [r for r in rows if r.get("start") and span[0] <= r["start"] < span[1]]
+    night = report(rows, guide, left, nina)
     if args.json:
         print(json.dumps({k: v for k, v in night.items() if k != "parts"}
-                         | {"parts": {f"{t} {f}": p for (t, f), p in night["parts"].items()}}, default=str, indent=1))
+                         | {"parts": {" | ".join(str(x) for x in key): p for key, p in night["parts"].items()}},
+                         default=str, indent=1))
     else:
-        print(words(night))
+        print(words(night) + ("\n" + "\n".join(nina.summary()) if nina else ""))
 
 
 if __name__ == "__main__":

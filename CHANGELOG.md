@@ -20,6 +20,13 @@ proven is `docs/validation.md` ("Current conclusions").
   Gaps are counted within a night, never the day between two; FWHM is in
   arcseconds only for a setup whose frames all give a pixel scale; live,
   a setup with too few frames yet says it is not judged, never "good".
+  NINA's own log (`--nina-log`) explains the gaps between frames (autofocus,
+  centring, flips, dithers, waits, unsaved exposures, the safety monitor,
+  lost USB devices, errors), and a night can be read from NINA's and PHD2's
+  logs alone; `--night` and `--tz` for logs of several nights or another
+  zone. PHD2's log is read as PHD2 writes it (only DROP rows are a lost
+  star; calibration rows are not guiding), and a stretch where PHD2 said
+  it was guiding with too few steps is named.
 - **A mount through ASCOM Alpaca** (`alpaca.py`, `[mount] link = "alpaca"`):
   any mount with an ASCOM driver, on this computer or a Windows one on
   the network, through the same motion lock, limits and dry runs.

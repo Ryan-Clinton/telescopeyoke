@@ -97,9 +97,38 @@ PHD2's log, a frame counts as guided only with guide steps all through it,
 by the same rule TelescopeYoke's own PHD2 guiding uses (one step in a
 five-minute frame is a guiding gap, not guiding).
 
-What it cannot see: frames the capture program rejected and never saved,
-and what the program did in a gap (focusing, a meridian flip, a download,
-a camera recovery). That needs the program's own log, which is not read yet.
+What it cannot see without NINA's log: frames the capture program rejected
+and never saved, and what the program did in a gap.
+
+## NINA's own log
+
+Given NINA's log (`%LOCALAPPDATA%\NINA\Logs`, one file a session), the
+companion reads what NINA did: every exposure started and every file saved
+(so exposures that were never saved show), each step of the sequencer with
+when it began and ended or failed (autofocus, centring, slews, dithers,
+meridian flips, waits, parking, reconnecting, as NINA's own source writes
+them), the safety monitor's changes, the dome shutter, USB devices lost,
+and errors. A gap between frames is then explained by what NINA logged in
+it, with the minutes each step took:
+
+```
+python companion.py report "C:\path\to\frames" --phd2-log "...\PHD2_GuideLog_DATE.txt" --nina-log "...\NINA\Logs\DATE.log"
+```
+
+Without the frames, the logs alone give a night of their own (no frame is
+measured, so it says nothing of the pictures' quality): exposures started
+and saved by filter, the time in each kind of step, events and errors, and
+with PHD2's log how many exposures were guided all through, and any stretch
+where PHD2 said it was guiding with far fewer guide steps than its cycle
+makes:
+
+```
+python companion.py report --nina-log "...\DATE.log" --phd2-log "...\PHD2_GuideLog_DATE.txt" --night 2026-11-07
+```
+
+`--night` keeps one night (noon to noon) of a log covering several;
+`--tz Europe/Rome` reads logs written on a computer in another zone (both
+programs write their own local time).
 
 ## A real report
 
@@ -126,6 +155,20 @@ The 36 unexplained minutes are where the capture program's own log, which
 the companion does not yet read, would have to say.
 
 ## What has been tried
+
+**Real logs from other observatories** (19-20 November 2026): a NINA 3.2
+log and the PHD2 guide log of the same night, published on GitHub by
+another observatory's owner (no licence given, so not copied here): it
+read 3,346 exposures, 3,328 saved, the dome shutter, the safety monitor,
+19 USB devices removed and the camera's errors, and found a five-minute
+stretch where PHD2 said it was guiding with one guide step, so the
+exposures then were not guided all through (that night's PHD2 drove its
+own simulator camera). And four PHD2 logs from another observer's rig,
+published as examples of good and bad guiding: the good night read with
+no star lost and 0.75" RMS, the bad one with 243 lost and 0.99". The
+NINA sequencer lines (autofocus, flips, centring) were checked against
+NINA's own source and tried on a log written in that format; no real
+sequencer night has been read yet.
 
 On the owner's own real frames (5 November 2026, five targets, 693 frames:
 it found the gaps between targets and filters, two 18-minute stretches with
