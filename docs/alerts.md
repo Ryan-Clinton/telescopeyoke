@@ -118,6 +118,11 @@ times, until "I'm up" is pressed on the phone.
     ./alert.py wake     # a test push
 
 On the phone: install ntfy, subscribe to the topic it names on ntfy.sh, and
-in that topic's settings allow it through Do Not Disturb. The topic is the
+in that topic's settings allow it through Do Not Disturb. On Android the
+sound is the phone's, not ntfy's: Settings, Apps, ntfy, Notifications, the
+Max priority channel (it came silent: it only vibrated, 20 November 2026).
+Leave ntfy's "Keep alerting for highest priority" off: with it on, I'm up
+stopped the pushes but the phone rang on until the app was opened; the
+push every minute is what keeps on at the person. The topic is the
 only lock on ntfy.sh, so it is random and kept out of the repository, and
 the words pushed say nothing of where the telescope is.
