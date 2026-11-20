@@ -20,7 +20,8 @@
         "frames": {"type": ["integer", "null"]},
         "sessions": {"type": "array", "items": {"type": "string"}},
         "made": {"type": "number"},
-        "held_back": {"type": "array", "items": {"type": "string"}, "description": "Open candidates the stack could contain, made with --force regardless."}
+        "held_back": {"type": "array", "items": {"type": "string"}, "description": "Open candidates the stack could contain, made with --force regardless."},
+        "chosen_by": {"type": "object", "description": "Why this stack was chosen: of the deepest few, the one whose subtractions from the field's other nights left the fewest candidates (reference.trial), with each night's counts."}
       }
     }
   },

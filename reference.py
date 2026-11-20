@@ -2,13 +2,19 @@
 """The picture each field's new nights are compared with.
 
     ./reference.py M31                  what is kept for M31, and what could be
-    ./reference.py M31 --make           keep the deepest measured M31 stack as its reference
+    ./reference.py M31 --make           keep the best measured M31 stack as its reference
+    ./reference.py M31 --trial          which it would be, and why, keeping nothing
+    ./reference.py M31 --make --deepest the deepest, without the trial
     ./reference.py M31 --make --from frames/M31/20261013-232632
     ./reference.py M31 --locate         keep where the reference's frame lies on the sky
     ./reference.py --list
 
-A reference is a stack whose depth.py measurement is kept beside it: the
-deepest one is chosen, by where half the planted stars were found. It is
+A reference is a stack whose depth.py measurement is kept beside it. Of
+the deepest few (TRIAL_MOST, within TRIAL_WITHIN mag of the deepest, by
+where half the planted stars were found), the one chosen is the one whose
+subtractions from the field's other nights leave the fewest candidates:
+depth alone chose M31-P8's v2, which left 22 against 2 on a cloudy night
+and was withdrawn (docs/nights/2026-11-04/p8-false-candidates.md). It is
 copied to reference/NAME/vN.fits with a record of where it came from, how
 deep it reaches and how sharp its stars are, so a candidate found against it
 can always say which reference it was. A new version never replaces an old
@@ -102,6 +108,69 @@ def measured_stacks(name):
     return sorted(out, key=lambda r: -r["mag_50"])
 
 
+TRIAL_MOST = 3        # the deepest stacks tried as the reference
+TRIAL_WITHIN = 0.3    # mag of the deepest: shallower ones are not tried
+TRIAL_NIGHTS = 4      # the field's other nights each is tried against, newest first
+
+
+def trial(name, candidates=None, say=print):
+    """Which measured stack to keep as the reference: of the deepest few,
+    the one whose subtractions from the field's other nights (the same
+    nights for each, made with none of them) leave the fewest candidates in
+    all; ties to the deeper. Candidates there are, nearly all, what the
+    subtraction leaves: on M31-P8's three other nights, v1 left 2, 4 and 2
+    and the deeper v2 3, 1 and 22 (measured 20 November 2026). Returns
+    (the chosen stack's row, the trial), the trial None when fewer than two
+    stacks or no night could be tried."""
+    from astropy.io import fits
+
+    import difference
+    candidates = measured_stacks(name) if candidates is None else candidates
+    if not candidates:
+        return None, None
+    band = stack_band(candidates[0]["stack"])
+    pool = [c for c in candidates if c["mag_50"] >= candidates[0]["mag_50"] - TRIAL_WITHIN
+            and stack_band(c["stack"]) == band][:TRIAL_MOST]
+    if len(pool) < 2:
+        return candidates[0], None
+    used = {Path(s).resolve() for c in pool for s in made_from(Path(c["stack"]))}
+    folder_of = config.DATA / "frames" / stacking.folder_name(name)
+    nights = [p for p in sorted(folder_of.glob("*/final.fits"), reverse=True)
+              if not used & {Path(s).resolve() for s in made_from(p)} and stack_band(str(p)) == band]
+    planes = {}
+
+    def plane(path):
+        if path not in planes:
+            data = depth.brightness(fits.getdata(path))
+            planes[path] = (data, depth.plate(data, name))
+        return planes[path]
+    tried = []
+    for night in nights:
+        if len(tried) == TRIAL_NIGHTS:
+            break
+        counts = []
+        try:
+            new, new_wcs = plane(night)
+            for c in pool:
+                ref, ref_wcs = plane(c["stack"])
+                counts.append(len(difference.subtract(new, ref, new_wcs, ref_wcs)[0]["candidates"]))
+        except (SystemExit, OSError, ValueError) as why:
+            # A night one reference cannot be subtracted from is left out for
+            # them all: each is judged on the same nights.
+            say(f"  {night.parent.name}: left out ({why})")
+            continue
+        say(f"  {night.parent.name}: " + ", ".join(f"{n} against {Path(c['stack']).parent.name}"
+                                                  for n, c in zip(counts, pool)))
+        tried.append({"night": str(night.parent), "candidates": counts})
+    if not tried:
+        return candidates[0], None
+    totals = [sum(t["candidates"][i] for t in tried) for i in range(len(pool))]
+    best = min(range(len(pool)), key=lambda i: (totals[i], -pool[i]["mag_50"]))
+    return pool[best], {"rule": "fewest candidates left on the field's other nights, of the deepest few",
+                        "nights": tried, "stacks": [{"stack": c["stack"], "mag_50": c["mag_50"],
+                                                     "candidates": t} for c, t in zip(pool, totals)]}
+
+
 def made_from(stack):
     """The sessions a stack was made from: its own folder, or for a stack of
     several sessions (frames/NAME/combined/) the ones its restack.json names."""
@@ -180,9 +249,11 @@ def stack_band(stack):
         return CURRENT
 
 
-def make(name, source=None, force=False, solver=None):
-    """Keep a stack as the field's next reference version."""
+def make(name, source=None, force=False, solver=None, deepest=False, say=print):
+    """Keep a stack as the field's next reference version: the trial's
+    choice, or the deepest with `deepest`, or `source`."""
     candidates = measured_stacks(name)
+    chosen_by = None
     if source:
         stack = depth.find_stack(source)
         chosen = next((c for c in candidates if Path(c["stack"]).resolve() == stack.resolve()), None)
@@ -192,8 +263,10 @@ def make(name, source=None, force=False, solver=None):
     elif not candidates:
         raise interface.Refusal("NO_SESSION", f"No measured stack of {name}: run ./depth.py {name} --plant "
                                 "on its best session first.")
-    else:
+    elif deepest:
         chosen = candidates[0]
+    else:
+        chosen, chosen_by = trial(name, candidates, say)
     sessions = made_from(Path(chosen["stack"]))
     # The stack's own frame decides which candidates it could hold: a frame
     # sits off the catalogue's centre, and its corners reach past any circle.
@@ -222,6 +295,8 @@ def make(name, source=None, force=False, solver=None):
         depth_partial.replace(depth.record_path(target))
         record = dict(chosen, version=number, file=str(target), source=chosen["stack"],
                       sessions=sessions, made=time.time(), held_back=held)
+        if chosen_by:
+            record["chosen_by"] = chosen_by
         if band not in (None, CURRENT):
             record["band"] = band
         records.write(where / f"v{number}.json", record, schema="reference#/$defs/version", stamp=True,
@@ -271,8 +346,15 @@ def run(args, say=print):
         say(f"{args.name}: centre RA {where['ra']:.4f}, Dec {where['dec']:+.4f}, "
             f"{where['width_px']} x {where['height_px']} px; kept with its depth record")
         return {"name": args.name, "versions": kept(args.name), "footprint": where}
+    if getattr(args, "trial", False):
+        chosen, tried = trial(args.name, say=say)
+        if chosen is None:
+            raise interface.Refusal("NO_SESSION", f"No measured stack of {args.name}.")
+        say(f"would keep {chosen['stack']} (G {chosen['mag_50']})"
+            + ("" if tried else ": the only one deep enough, or no other night to try it on"))
+        return {"name": args.name, "would_keep": chosen, "trial": tried}
     if args.make:
-        record = make(args.name, args.source, args.force)
+        record = make(args.name, args.source, args.force, deepest=args.deepest, say=say)
         say(f"{args.name} v{record['version']}: {record['source']}, half of planted stars found at "
             f"G {record['mag_50']}, stars {record['fwhm_arcsec']}\"; kept as {record['file']}")
         return {"name": args.name, "made": record, "versions": kept(args.name)}
@@ -289,8 +371,12 @@ def run(args, say=print):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("name", nargs="?", help="the field: an object or a mosaic panel (M31-P3)")
-    ap.add_argument("--make", action="store_true", help="keep the deepest measured stack as the next version")
-    ap.add_argument("--from", dest="source", help="with --make: this stack instead of the deepest")
+    ap.add_argument("--make", action="store_true",
+                    help="keep the best measured stack as the next version (see --trial)")
+    ap.add_argument("--trial", action="store_true",
+                    help="which stack --make would keep, from its subtractions from the field's other nights")
+    ap.add_argument("--deepest", action="store_true", help="with --make: the deepest, without the trial")
+    ap.add_argument("--from", dest="source", help="with --make: this stack instead")
     ap.add_argument("--force", action="store_true",
                     help="with --make: even if the stack could contain an open candidate")
     ap.add_argument("--locate", action="store_true",
