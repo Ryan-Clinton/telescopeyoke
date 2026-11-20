@@ -15,6 +15,15 @@
     "frame_gap_s": {"$ref": "#/$defs/spread"},
     "frame_gap_s_by_exposure": {"type": "object", "additionalProperties": {"$ref": "#/$defs/spread"}},
     "move_s": {"$ref": "#/$defs/spread", "description": "Inferred: last frame of one session to the first of the next, the same night, up to 20 minutes."},
+    "acquisition": {
+      "type": "object", "description": "Measured: shoot.py's own record of when each stage ended (session.json's stages, from 20 November 2026), each stage from the one before it the run had.",
+      "required": ["stages", "asked_to_first_kept_s"],
+      "properties": {
+        "stages": {"type": "object", "propertyNames": {"enum": ["filter", "on_target", "guiding", "camera", "first_frame", "first_kept"]},
+                   "additionalProperties": {"$ref": "#/$defs/spread"}},
+        "asked_to_first_kept_s": {"$ref": "#/$defs/spread"}
+      }
+    },
     "long_gaps": {
       "type": "object", "required": ["per_hour", "seconds_each", "hours", "kind"],
       "properties": {"per_hour": {"$ref": "#/$defs/spread"}, "seconds_each": {"$ref": "#/$defs/spread"},

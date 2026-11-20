@@ -31,10 +31,10 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 10 | Hardware onboarding and compatibility | done 20 Nov 2026, re-checked; 3, 4, 8 and 9 open |
 | 11 | NINA/PHD2 companion | done 20 Nov 2026, re-checked |
 | 12 | State management and data integrity | done 20 Nov 2026, re-checked |
-| 13 | Observing scheduler and scientific yield | done 20 Nov 2026, re-checked; 7 planned |
+| 13 | Observing scheduler and scientific yield | done 20 Nov 2026, re-checked; 7 done after |
 | 14 | Weather and environmental decisions | done 20 Nov 2026, re-checked |
-| 15 | Operational performance | done 20 Nov 2026, re-checked; 1-4 and 6 planned |
-| 16 | Network security and external integrations | done 20 Nov 2026, re-checked; 2, 5 and 8 planned |
+| 15 | Operational performance | done 20 Nov 2026, re-checked; 2-4 and 6 done after |
+| 16 | Network security and external integrations | done 20 Nov 2026, re-checked; 2, 5 and 8 done after |
 | 17 | Public releases and installation | done 20 Nov 2026, re-checked; release 0.4.2 waits for the owner |
 | 18 | Architecture, documentation and maintainability | done 20 Nov 2026, re-checked; 7 and 8 deferred |
 
@@ -488,7 +488,7 @@ The goals, windows and dispatch phases are off on the owner's rig ([goals], [win
 | 4 | A ranking that fails takes the list in order, dropping protected windows | P1 | Confirmed and fixed | It falls back to `windows.choose` (protected starts and their cut-offs kept), and to the list only if that fails too |
 | 5 | A second look has no time limit of its own | P1 | Partly right, fixed | Its frames stay the depth it needs, and it now has `--minutes` at 1.5 times its minutes (`SHOOT_CAP`). Asking the next step's time in the single-field path, as the mosaic path does, is planned |
 | 6 | A missing local score counts towards "strong" | P1 | Confirmed and fixed | Strong needs the local score measured and at least 5 |
-| 7 | A protected event is started however late | P2 | Agreed and planned | A latest useful start for each time-critical step, after which the miss is recorded |
+| 7 | A protected event is started however late | P2 | Agreed; fixed after the loop | `windows.missed`: a hard or deadline step's latest useful start is its own `latest`, else half its minutes into its window (or half its minutes before its deadline); later, the runner skips it with the reason and owes it |
 | 8 | The programme's own cap is ignored by the patrol | P2 | Confirmed and fixed | The patrol's capture uses the capture rule's `cap_minutes` when goals are on |
 | 9 | Night replay cannot show more discoveries | P2 | Agreed, no change | The replay already says what it does not model; no claim of more discoveries is made from it |
 
@@ -531,11 +531,11 @@ The rain alert stays on in every case (the owner's rule, 15 November 2026): thes
 | # | Finding | Severity | Verdict | What was done |
 |---|---|---|---|---|
 | 1 | The patrol's plain GoTo then shoot.py's own | P1 | Smaller than claimed, no change | The second is the plate-solved centring: its `aim()` sends a GoTo to the same place from where the first arrived (so a short or no movement), then corrects it; and the first's refusal or failure stops the patrol before the camera is opened. Removing it changes how the mount moves on every patrol; worth measuring first (2) |
-| 2 | No time from asking to a first usable frame | P1 | Agreed and planned | The session to keep each stage's time (asked, filter and focus, arrived and centred, guider and camera ready, first frame, first kept, first used), from the records it already has, so the minutes lost are measured before more is changed |
-| 3 | A single run's solved re-centre closes the camera without the keeper | P1 | Agreed and planned | Not on the owner's rig (the keeper holds the 183M all night); for a rig without one, lending the camera to the re-centre as the blocks do |
-| 4 | The patrol budgets with fixed figures beside measured ones | P2 | Agreed and planned | `history.costs()` frame gaps and setup by camera and exposure, the fixed figures kept as the fallback |
+| 2 | No time from asking to a first usable frame | P1 | Agreed; fixed after the loop | `shoot.py` keeps each stage's end in session.json's `stages` (asked, filter, on_target, guiding, camera, first_frame, first_kept), and `./history.py` gives each stage's median and from asking to the first kept frame (measured; none yet, from tonight). The patrol's own GoTo before shoot.py is not in it |
+| 3 | A single run's solved re-centre closes the camera without the keeper | P1 | Agreed; fixed after the loop | `shoot.lent_held`: a cooled camera with no keeper is opened once and lent to the run's re-centres and solves, as the blocks have done since 5 Nov; the owner's rig (keeper) and cameras with no cooler unchanged |
+| 4 | The patrol budgets with fixed figures beside measured ones | P2 | Agreed; fixed after the loop | `./history.py` keeps every night's costs in `cache/history-costs.json` (14 days fresh; the patrol starts a quiet `--keep` when none is); the patrol plans with the measured frame gap for its exposure and the median gap between sessions when 20 or more are kept, else the fixed figures. Today: 1.7 s and 4.0 minutes against 5.6 s and 2.5 (34 frames in 10 minutes of 16 s, where it was 28). Night replay keeps the fixed figures |
 | 5 | A second look says "10 minutes" and may take 15 | P2 | Confirmed and fixed | It says its minutes of exposure and frames, and the most minutes it may take |
-| 6 | Two minutes for focus always added to a protected setup | P2 | Agreed and planned | Only when a focus is due, timed from the focus runs' own records |
+| 6 | Two minutes for focus always added to a protected setup | P2 | Agreed; fixed after the loop | `windows.focus_seconds`: none when the last focus is under 6 h old at the window's start; else the median length focus runs now record (`seconds`, 3 or more), else 2 minutes |
 
 ## 15, re-audited at f5a1be3
 

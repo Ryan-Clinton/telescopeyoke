@@ -9,6 +9,7 @@ one night's figure (docs/observing-plan-spec.md, Phase 5).
 
     ./history.py                 every night kept
     ./history.py --since 2026-10-18
+    ./history.py --keep          keep every night's costs and say nothing (the patrol's plan reads them)
     ./history.py --json
 
 It reads the sessions' own records only. What is inferred (a gap between
@@ -75,7 +76,7 @@ def sessions(since=None, data=None, before=None):
         plan = outcome._json(folder / "session.json") or {}
         out.append({"folder": folder, "field": folder.parent.name, "night": night.isoformat(),
                     "exposure": plan.get("exposure"), "log": log, "first": times[0], "last": times[-1],
-                    "times": times})
+                    "times": times, "stages": plan.get("stages") or {}})
     return sorted(out, key=lambda s: s["first"])
 
 
@@ -150,6 +151,32 @@ def moves(rows):
         if a["night"] == b["night"] and 0 < gap <= MOVE_MAX_S:
             out.append(gap)
     return out
+
+
+# The stages of getting to a first kept frame, as shoot.py keeps them in
+# each session.json (from 20 November 2026): each is measured from the one
+# before it that the run had (a run without guiding has no "guiding").
+STAGES = {"filter": "filter set", "on_target": "GoTo and centring", "guiding": "guiding started",
+          "camera": "camera ready", "first_frame": "first frame", "first_kept": "first kept frame"}
+
+
+def acquisition(rows):
+    """Seconds each stage took, from shoot.py's own record of when each
+    ended (measured), and from asking to the first kept frame in all."""
+    out = {name: [] for name in STAGES}
+    total = []
+    for s in rows:
+        st = {k: v for k, v in s.get("stages", {}).items() if isinstance(v, (int, float))}
+        if "asked" not in st:
+            continue
+        before = st["asked"]
+        for name in STAGES:
+            if name in st:
+                out[name].append(st[name] - before)
+                before = st[name]
+        if "first_kept" in st:
+            total.append(st["first_kept"] - st["asked"])
+    return {"stages": {name: spread(v) for name, v in out.items()}, "asked_to_first_kept_s": spread(total)}
 
 
 def rejections(rows):
@@ -234,6 +261,7 @@ def costs(since=None, data=None, before=None):
         "frame_gap_s": spread(frame_gaps(rows)),
         "frame_gap_s_by_exposure": frame_gaps_by_exposure(rows),
         "move_s": spread(moves(rows)),
+        "acquisition": acquisition(rows),
         "long_gaps": long_gaps(rows),
         "camera_retries": recorded_retries(rows),
         "rejections": rejections(rows),
@@ -255,6 +283,11 @@ def words(c, say=print):
         if gap and gap["n"] >= 20:
             show(f"  {exposure} s frames", gap, " s")
     show("between sessions (GoTo, solves, camera start; inferred)", c["move_s"], " s")
+    a = c["acquisition"]
+    show("from asking to the first kept frame (measured)", a["asked_to_first_kept_s"], " s")
+    for name, label in STAGES.items():
+        if a["stages"][name]:
+            show(f"  {label}", a["stages"][name], " s")
     g = c["long_gaps"]
     show(f"long gaps an hour ({g['kind']}, {g['hours']} h)", g["per_hour"])
     show("  each one lost", g["seconds_each"], " s")
@@ -268,9 +301,35 @@ def words(c, say=print):
     show("measured depth less the model", c["depth_model_error"], " mag")
 
 
+KEPT = config.DATA / "cache" / "history-costs.json"   # every night's costs, as last measured
+KEPT_DAYS = 14       # older than this, kept costs are not used: the camera or the rig may have changed
+
+
+def keep(c):
+    """Keep every night's costs, for what needs them quickly (the patrol's
+    plan): measuring them reads every frame log, about half a minute."""
+    import records
+    records.write(KEPT, c, schema="history", indent=None)
+
+
+def kept(now=None):
+    """The kept costs, or None when there are none or they are older than
+    KEPT_DAYS."""
+    import json
+    import time
+    try:
+        if (now or time.time()) - KEPT.stat().st_mtime > KEPT_DAYS * 86400:
+            return None
+        return json.loads(KEPT.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
 def run(args, say=print):
     since = date.fromisoformat(args.since) if args.since else None
     c = costs(since)
+    if since is None:
+        keep(c)
     words(c, say)
     return c
 
@@ -279,7 +338,11 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--since", help="only nights from this date (YYYY-MM-DD)")
     ap.add_argument("--json", action="store_true", help="answer in JSON")
+    ap.add_argument("--keep", action="store_true", help="only keep every night's costs, saying nothing")
     args = ap.parse_args()
+    if args.keep:
+        keep(costs())
+        return
     interface.main("history", lambda: run(args), args.json)
 
 

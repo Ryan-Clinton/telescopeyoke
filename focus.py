@@ -99,6 +99,13 @@ FOCUS_FILE = config.camera_folder() / "cache" / "focus.json"       # each camera
 LIVE_FILE = config.DATA / "cache" / "focus_live.json"
 FRAMES_FILE = config.DATA / "cache" / "focus_frames.jsonl"
 RUNS_FILE = config.camera_folder() / "cache" / "focus_runs.jsonl"
+STARTED = None     # when this focus command started (main), so a run's record says how long it took
+
+
+def took():
+    """{"seconds": ...} since this focus command started, or {} when it was
+    not started as one."""
+    return {"seconds": round(time.time() - STARTED, 1)} if STARTED else {}
 # Every motor focus: when, the filter, the focuser's thermistor, where the
 # drawtube ended (focuser.position(), from its kept zero) and how sharp, so
 # focus can be set against the temperature through a night and across nights
@@ -1520,7 +1527,7 @@ def seen_good(hfr, scale):
         RUNS_FILE.parent.mkdir(parents=True, exist_ok=True)
         with RUNS_FILE.open("a", encoding="utf-8") as log:
             log.write(json.dumps({"saved": time.time(), "checked_hfr": round(hfr, 2),
-                                  "checked_arcsec": round(hfr * scale, 2)}) + "\n")
+                                  "checked_arcsec": round(hfr * scale, 2), **took()}) + "\n")
     except OSError:     # a note lost is not worth a check failing over
         pass
 
@@ -1922,7 +1929,7 @@ def run_motor(args, mode="focus"):
         if hfr <= 1.5 * usual:
             with RUNS_FILE.open("a", encoding="utf-8") as log:
                 log.write(json.dumps({"saved": time.time(), "best_hfr": round(hfr, 2),
-                                      "best_arcsec": round(hfr * scale, 2), "motor": True}) + "\n")
+                                      "best_arcsec": round(hfr * scale, 2), "motor": True, **took()}) + "\n")
         else:
             progress(f"That is {hfr / usual:.1f} times the usual best, so it is not kept as what good focus is.")
     else:
@@ -1987,6 +1994,8 @@ def main():
                     help="measure the focuser gears' slack on the steep side of the curve; keeps half as much "
                          "again as the overshoot")
     args = ap.parse_args()
+    global STARTED
+    STARTED = time.time()
     # Written to a file, stdout is held back in blocks: line by line, a log
     # being tailed shows each line as it is printed.
     try:
@@ -2215,7 +2224,7 @@ def run(args):
         # What this run reached, for the next one to set its levels by.
         with RUNS_FILE.open("a", encoding="utf-8") as log:
             log.write(json.dumps({"saved": time.time(), "frames": frame, "best_hfr": round(tracker.best, 2),
-                                  "best_arcsec": round(tracker.best * scale, 2), "timing": timing}) + "\n")
+                                  "best_arcsec": round(tracker.best * scale, 2), "timing": timing, **took()}) + "\n")
     return dict(reading, frames=frame, timing=timing)
 
 

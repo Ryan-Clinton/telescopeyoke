@@ -106,17 +106,22 @@ def clock_state(run=subprocess.run):
 class Session:
     """One run on one target: the folder, the running stack and the log."""
 
-    def __init__(self, name, exposure, gain, save=True, frames=None, preview_every=PREVIEW_EVERY):
+    def __init__(self, name, exposure, gain, save=True, frames=None, preview_every=PREVIEW_EVERY, stages=None):
         self.name = stacking.folder_name(name)
         self.folder = config.DATA / "frames" / self.name / f"{datetime.now():%Y%m%d-%H%M%S}"
         self.folder.mkdir(parents=True, exist_ok=True)
         # What was asked for, so the web page can say "frame 31 of 200".
         # And whether the computer's clock was kept to time, for timing transits,
         # and what kind of object it is, so the stream shows the Moon as the Moon.
+        # And when each stage of getting here ended (`stages`, Unix seconds),
+        # so the minutes from asking to a first kept frame are measured, not
+        # guessed: ./history.py sums them over the nights.
         import sky
+        self.stages = dict(stages or {}, camera=time.time())
         records.write(self.folder / "session.json",
                       {"name": self.name, "frames": frames, "exposure": exposure, "gain": gain,
-                       "object_kind": sky.object_kind(name), "clock": clock_state()}, indent=None)
+                       "object_kind": sky.object_kind(name), "clock": clock_state(), "stages": self.stages},
+                      indent=None)
         self.exposure, self.gain, self.save = exposure, gain, save
         self.calibration = stacking.Calibration(exposure, gain)
         self.reference, self.stack = None, None
@@ -131,6 +136,19 @@ class Session:
         self.preview_every, self.published = preview_every, 0.0
         self.size_check, self.refocus = False, None   # set after a filter change (filters.size_check)
         self.filter_name = None
+
+    def stage(self, name):
+        """Note the first time `name` happened in session.json's stages.
+        Only a record: never raises, never holds a frame up."""
+        if name in self.stages:
+            return
+        self.stages[name] = time.time()
+        try:
+            records.change(self.folder / "session.json",
+                           lambda kept: kept.setdefault("stages", {}).update({name: self.stages[name]}),
+                           empty={}, indent=None)
+        except Exception:
+            pass
 
     def job(self, index, mosaic, header):
         """Arguments for stacking.live_frame for this frame, as things stand."""
@@ -199,6 +217,9 @@ class Session:
             self.publish()
         self.log.append(entry)
         stacking.append_log(self.folder, entry)
+        self.stage("first_frame")
+        if entry["accepted"]:
+            self.stage("first_kept")
         index = entry["index"]
         if entry["accepted"]:
             return (f"{index:03d} ACCEPT  FWHM {entry['fwhm']:.1f}  round {entry['roundness']:.2f}  "
@@ -1059,6 +1080,7 @@ def main():
                     help="say what would be done; no camera, no mount")
     ap.add_argument("--json", action="store_true", help="answer in JSON once the run is over")
     args = ap.parse_args()
+    args.asked = time.time()        # the first stage of the run's timings (Session.stage)
     if args.accepted is not None:
         if args.accepted < 1 or not args.minutes:
             ap.error("--accepted needs a count of 1 or more and --minutes, the time it may run to")
@@ -1317,7 +1339,7 @@ def run(args):
             return run_ladder(args)
         if getattr(args, "blocks", None):
             return in_blocks(args)
-        return held(args)
+        return lent_held(args)
     finally:
         if args.supervisor:
             # The guider stopped (if this run started it) and the Dec creep put back.
@@ -1525,8 +1547,34 @@ def filter_for_run(args, say=None):
     return done
 
 
+def lent_held(args):
+    """held(), with a cooled camera opened once and lent to the run's own
+    re-centres and their plate solves, as the blocks do, so its cooler is
+    never stopped between them. Only where nothing else keeps it cold: the
+    camera keeper (keeper.py) already does, and a camera with no cooler is
+    opened by each as before. TY_NO_LEND opens it each time, as before."""
+    import camera
+    if os.environ.get("TY_NO_LEND") or camera._LENT or camera.kept() or args.no_recentre:
+        return held(args)
+    kept = Camera(gain=args.gain)
+    if getattr(kept, "warm_up", None) is None:
+        kept.close()                    # no cooler: nothing to keep cold
+        return held(args)
+    try:
+        with camera.lend(kept):
+            return held(args)
+    finally:
+        warm(kept)
+        kept.close()
+
+
 def held(args):
+    # When each stage ended, for the session's record: asked (when the
+    # command started; for a later block, when the block did), the filter
+    # set, on target (the GoTo and its centring), guiding.
+    stages = {"asked": args.__dict__.pop("asked", None) or time.time()}
     args.light_path = filter_for_run(args)      # before anything is exposed, the camera closed
+    stages["filter"] = time.time()
     moving = not args.no_recentre
     import camera
     if moving and (not getattr(args, "same_target", False) or camera._LENT):
@@ -1544,6 +1592,8 @@ def held(args):
         # plate solve, which would close the camera and stop its cooler.
         moving = go(args, args.name, solve=False)
         time.sleep(DITHER_SETTLE_S)
+    if moving:
+        stages["on_target"] = time.time()
     # --blocks, a block of the same target as the one before: already on it,
     # so no plate-solved re-centre. 5 November 2026: the solve kept the camera
     # closed about a minute, the 183M's cooler stopped, and each block began
@@ -1555,6 +1605,7 @@ def held(args):
             raise interface.Refusal("INVALID_REQUEST", "--guide needs the mount, and it could not be reached.")
         # After the first GoTo, so the guider calibrates on the target.
         supervisor.start()
+        stages["guiding"] = time.time()
     holding = None
     if moving and getattr(args, "hold", None):
         try:
@@ -1571,7 +1622,8 @@ def held(args):
     else:
         exposure = float(args.exposure)
 
-    session = Session(args.name, exposure, args.gain, save=not args.no_save, frames=args.frames or None)
+    session = Session(args.name, exposure, args.gain, save=not args.no_save, frames=args.frames or None,
+                      stages=stages)
     session.size_check = bool(args.light_path and args.light_path["changed"] and args.light_path["name"]
                               != filters.DEFAULT)
     session.filter_name = args.light_path["name"] if args.light_path else None

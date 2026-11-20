@@ -24,7 +24,8 @@ runner (schedule.py) asks it which step goes now, with [plan] windows on.
 """
 import time
 
-FOCUS_CHECK_S = 120     # a focus check before a protected window: "a 2-minute job" (4 Nov 2026), assumed until measured
+FOCUS_CHECK_S = 120     # a focus check before a protected window: "a 2-minute job" (4 Nov 2026), until measured
+FOCUS_FRESH_H = 6.0     # a focus this recent at the window's start needs no check: patrol.FOCUS_STALE
 SETUP_FALLBACK_S = 150  # the GoTo, solves and camera start when history has no moves: patrol.OVERHEAD's 2.5 minutes
 MIN_FLEXIBLE_S = 10 * 60  # a flexible step given less than this before a protected start waits instead: 2 minutes
                          # of its own and schedule.BACKSTOP_S taken off for the hard stop, with room to spare
@@ -52,17 +53,44 @@ def protection(step):
     return "flexible"
 
 
-def setup_seconds(c, hard):
-    """Seconds a protected start reserves before it: the move between
+def focus_seconds(at=None, runs=None, last=None):
+    """A focus check's seconds before a protected start at `at` (unix
+    seconds): none when the last focus is still fresh then, else the
+    median length of the focus runs that recorded one (3 or more; their
+    `seconds`, from 20 November 2026), else FOCUS_CHECK_S."""
+    try:
+        if runs is None or last is None:
+            import focus
+            last = focus.last_focused() if last is None else last
+            runs = [] if runs is None else runs
+            if not runs and focus.RUNS_FILE.exists():
+                import json
+                for line in focus.RUNS_FILE.read_text(encoding="utf-8").splitlines():
+                    try:
+                        runs.append(float(json.loads(line)["seconds"]))
+                    except (ValueError, KeyError, TypeError):
+                        pass
+    except Exception:
+        return FOCUS_CHECK_S
+    if last is not None and (at or time.time()) - last <= FOCUS_FRESH_H * 3600:
+        return 0.0
+    if len(runs) >= 3:
+        runs = sorted(runs)
+        return runs[len(runs) // 2]
+    return FOCUS_CHECK_S
+
+
+def setup_seconds(c, hard, at=None):
+    """Seconds a protected start at `at` reserves before it: the move between
     targets (GoTo, plate solves, camera start, from every night's gaps
-    between sessions) and a focus check. The 90th percentile before a hard
-    window, the median elsewhere."""
+    between sessions) and a focus check when one will be due. The 90th
+    percentile before a hard window, the median elsewhere."""
     move = (c or {}).get("move_s")
     if move:
         seconds = move["p90"] if hard else move["median"]
     else:
         seconds = SETUP_FALLBACK_S
-    return float(seconds) + FOCUS_CHECK_S
+    return float(seconds) + focus_seconds(at)
 
 
 def _clock(text, now, when=None):
@@ -78,15 +106,44 @@ def frames_from(step, now, when=None):
     return _clock(step["not_before"], now, when) - 60 * float(step.get("uncertainty") or 0)
 
 
+LATE_SHARE = 0.5   # a time-critical step with less than this share of its minutes left is missed, not started
+
+
+def missed(step, now, when=None):
+    """Why a time-critical step (hard or deadline) is past use at `now`, or
+    None. Its latest useful start is its own `latest` (a clock time) if it
+    has one; else, for a hard window, its frames' start with half its
+    minutes gone; for a deadline, half its minutes before the deadline.
+    Started later, it would be cut to under half, or begun after its event."""
+    kind = protection(step)
+    if kind not in ("hard", "deadline"):
+        return None
+    minutes = float(step.get("minutes") or 0)
+    if step.get("latest"):
+        latest = _clock(step["latest"], now, when)
+    elif kind == "deadline":
+        latest = _clock(step["deadline"], now, when) - 60 * LATE_SHARE * minutes
+    elif step.get("not_before") and minutes:
+        latest = frames_from(step, now, when) + 60 * LATE_SHARE * minutes
+    else:
+        return None
+    if now <= latest:
+        return None
+    return (f"missed: its latest useful start was {time.strftime('%H:%M', time.localtime(latest))}, "
+            f"{(now - latest) / 60:.0f} minutes ago")
+
+
 def launch_at(step, now, c, when=None):
     """When the runner starts a protected step: its frames' start less its
     setup. A deadline step: the latest start that still finishes by its
     deadline. None for a flexible step."""
     kind = protection(step)
     if kind in ("hard", "person") and step.get("not_before"):
-        return frames_from(step, now, when) - setup_seconds(c, kind == "hard")
+        at = frames_from(step, now, when)
+        return at - setup_seconds(c, kind == "hard", at)
     if kind == "deadline":
-        return _clock(step["deadline"], now, when) - 60 * float(step["minutes"]) - setup_seconds(c, False)
+        at = _clock(step["deadline"], now, when) - 60 * float(step["minutes"])
+        return at - setup_seconds(c, False, at)
     return None
 
 
@@ -103,7 +160,7 @@ def cutoff(steps, now, c, when=None):
         at = launch_at(s, now, c, when)
         if at is None:
             continue
-        length = 60 * float(s["minutes"]) + setup_seconds(c, protection(s) == "hard")
+        length = 60 * float(s["minutes"]) + setup_seconds(c, protection(s) == "hard", at)
         (movable if protection(s) == "deadline" else blocks).append([at, at + length])
     # Each deadline step at its latest start, moved earlier past any block
     # it would overlap, latest deadline first; once placed it is a block too.
@@ -168,6 +225,6 @@ def words(step, now, c=None, when=None):
     started = time.strftime("%H:%M", time.localtime(at)) if at else "?"
     if kind == "deadline":
         return f"deadline {step['deadline']}: starts by {started} at the latest"
-    reserve = setup_seconds(c, kind == "hard") / 60
+    reserve = setup_seconds(c, kind == "hard", at) / 60
     return (f"{kind}: frames from {time.strftime('%H:%M', time.localtime(frames_from(step, now, when)))}, "
             f"started {started} with {reserve:.0f} minutes for its setup")

@@ -423,7 +423,8 @@ def owe_interrupted(step, code, say=print):
         import obligations
         from datetime import date, timedelta as days
         obligations.owe("interrupted", step["label"], f"{step['label']} again, at its next window",
-                        f"its protected window ended with an error (exit {code})",
+                        "its window was missed: it could not start in time" if code == "missed"
+                        else f"its protected window ended with an error (exit {code})",
                         (date.today() + days(days=30)).isoformat(), ref=step.get("id", ""))
     except Exception as problem:     # a record, never a reason to stop
         say(f"    not recorded as owed: {problem.__class__.__name__}: {problem}")
@@ -625,6 +626,16 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
                 # A minute at a time, then the plan again: it may have changed.
                 sleep(min(60, until - time.time()))
                 continue
+        import windows
+        late = windows.missed(step, time.time())
+        if late:
+            # A transit or a deadline started too late gets too little of its
+            # event to be worth the minutes (Audit 13, 7): recorded, owed as
+            # an interrupted window is, and the night goes on.
+            mark_id(step["id"], status="skipped", started=time.time(), finished=time.time(), why=late)
+            say(f"{datetime.now():%H:%M} {step['label']}: not started, {late}")
+            owe_interrupted(step, "missed", say)
+            continue
         command, left = prepared(step, time.time(), last_field(), cut=cut)
         if command is None:
             mark_id(step["id"], status="skipped", started=time.time(), finished=time.time())

@@ -187,7 +187,7 @@ def steps(p, dry_run=False):
     # on its frames, one with stalls runs on to the cap to get them
     # (4 November 2026: panels 3, 5 and 6 lost 2.4-3 of their 5.5 minutes to
     # stalls and came out with too few frames to search).
-    frames = frames_for(p["minutes"], p["exposure"])
+    frames = frames_for(p["minutes"], p["exposure"], measured_costs())
     extra = ["--dry-run"] if dry_run else []
     count = ["--frames", str(frames)]
     import goals
@@ -709,19 +709,56 @@ STALL_SHARE = 0.25
 SHOOT_CAP = 1.5           # shoot.py may run this many times a field's minutes to make up stalled frames
 
 
-def visit_minutes(minutes):
+MEASURED_LEAST = 20       # measurements a kept figure needs before it replaces the fixed one
+
+
+def measured_costs(refresh=True):
+    """Every night's measured costs as history.py last kept them, or None
+    (then the fixed figures above are used). When there are none recent, a
+    quiet `./history.py --keep` is started for next time: measuring takes
+    about half a minute, which a patrol does not wait for."""
+    import history
+    found = history.kept()
+    if found is None and refresh and not config.DEMO:
+        try:
+            import subprocess
+            subprocess.Popen([sys.executable, str(Path(__file__).with_name("history.py")), "--keep"],
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+        except OSError:
+            pass
+    return found
+
+
+def overhead(costs=None):
+    """Minutes a field costs beyond its capture: the median measured gap
+    between sessions (the GoTo, solves and camera start) when enough are
+    kept, else OVERHEAD."""
+    move = (costs or {}).get("move_s")
+    return round(move["median"] / 60, 2) if move and move["n"] >= MEASURED_LEAST else OVERHEAD
+
+
+def frame_gap(exposure, costs=None):
+    """Seconds between frames beyond the exposure: the median measured for
+    this exposure when enough are kept, else FRAME_GAP_S."""
+    gap = (costs or {}).get("frame_gap_s_by_exposure", {}).get(f"{exposure:g}")
+    return gap["median"] if gap and gap["n"] >= MEASURED_LEAST else FRAME_GAP_S
+
+
+def visit_minutes(minutes, costs=None):
     """What one field is planned to cost, as every plan and budget counts it:
-    its frames, a quarter more for camera stalls, and the GoTo before it."""
-    return minutes * (1 + STALL_SHARE) + OVERHEAD
+    its frames, a quarter more for camera stalls, and the GoTo before it
+    (measured, given the kept `costs`)."""
+    return minutes * (1 + STALL_SHARE) + overhead(costs)
 
 
 # The patrol's choices as it runs, as functions of the clock: patrol.run
 # keeps to them, and nightreplay.py replays a night with the same ones
 # rather than a copy (the Phase 5 audit, 4 November 2026).
 
-def frames_for(minutes, exposure):
-    """The frames a field's minutes give at the camera's real pace."""
-    return max(1, round(60 * minutes / (exposure + FRAME_GAP_S)))
+def frames_for(minutes, exposure, costs=None):
+    """The frames a field's minutes give at the camera's real pace (measured,
+    given the kept `costs`)."""
+    return max(1, round(60 * minutes / (exposure + frame_gap(exposure, costs))))
 
 
 def second_look_frames(minutes, exposure):
@@ -1014,8 +1051,9 @@ def run(args, say=print):
     def room_for(minutes):
         return room(deadline, clock(), minutes)
 
-    visit = visit_minutes(p["minutes"])             # shoot.py's cap, and the GoTo before it
-    look = visit_minutes(CONFIRM_MINUTES)            # a second look, with the GoTo back
+    kept_costs = measured_costs()
+    visit = visit_minutes(p["minutes"], kept_costs)   # shoot.py's cap, and the GoTo before it
+    look = visit_minutes(CONFIRM_MINUTES, kept_costs)  # a second look, with the GoTo back
     for number, name in enumerate(chosen, 1):
         if not args.dry_run and not room_for(visit):
             left = max(0.0, (deadline - clock()) / 60)
