@@ -199,19 +199,26 @@ def make(name, source=None, force=False, solver=None):
                                 f"({', '.join(held)}); a reference must not hold what it is looking for. "
                                 "Settle them first (candidates.py), choose another stack (--from), or --force.")
     band = stack_band(chosen["stack"])
-    versions = kept(name, band)
-    number = len(versions) + 1
     where = folder(name, band)
     where.mkdir(parents=True, exist_ok=True)
-    target = where / f"v{number}.fits"
-    shutil.copyfile(chosen["stack"], target)
-    record = dict(chosen, version=number, file=str(target), source=chosen["stack"],
-                  sessions=sessions, made=time.time(), held_back=held)
-    if band not in (None, CURRENT):
-        record["band"] = band
-    records.write(where / f"v{number}.json", record, schema="reference#/$defs/version", stamp=True)
-    # Its depth goes with it, so difference.py finds the zero point.
-    shutil.copyfile(chosen["record"], depth.record_path(target))
+    # The version's number taken and its files published under the field's
+    # lock (two makes never take one number), and its record, which is what
+    # makes it a kept version (kept()), written last: the stack and its depth
+    # are whole and in place before anything reads it as a reference.
+    with records.locked(where / "versions"):
+        number = len(kept(name, band)) + 1
+        target = where / f"v{number}.fits"
+        partial = where / f".v{number}.fits.partial"
+        shutil.copyfile(chosen["stack"], partial)
+        partial.replace(target)
+        depth_partial = where / f".v{number}-depth.partial"
+        shutil.copyfile(chosen["record"], depth_partial)     # its depth, so difference.py finds the zero point
+        depth_partial.replace(depth.record_path(target))
+        record = dict(chosen, version=number, file=str(target), source=chosen["stack"],
+                      sessions=sessions, made=time.time(), held_back=held)
+        if band not in (None, CURRENT):
+            record["band"] = band
+        records.write(where / f"v{number}.json", record, schema="reference#/$defs/version", stamp=True)
     return record
 
 

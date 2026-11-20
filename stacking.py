@@ -8,6 +8,7 @@ ordinary seeing better than the sensor's native 0.66.
 """
 import functools
 import json
+import sys
 import multiprocessing
 import os
 import re
@@ -1268,11 +1269,19 @@ def read_log(session):
     the earlier one (a deferred frame whose raw file could not be written)."""
     lines = Path(session) / "frames.jsonl"
     if lines.exists():
-        found = {}
+        found, torn = {}, 0
         for line in lines.read_text(encoding="utf-8").splitlines():
-            if line.strip():
+            if not line.strip():
+                continue
+            try:
                 entry = json.loads(line)
-                found[entry.get("index", len(found))] = entry
+            except ValueError:
+                torn += 1           # a line cut short by an interrupted write: left out, never made up
+                continue
+            found[entry.get("index", len(found))] = entry
+        if torn:
+            print(f"{lines}: {torn} line(s) that are not whole left out; the file is kept as it is",
+                  file=sys.stderr)
         return list(found.values())
     path = Path(session) / "frames.json"   # sessions from before the line-per-frame log
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else []

@@ -30,7 +30,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 9 | Demo claims versus real-world proof | done 20 Nov 2026, re-checked |
 | 10 | Hardware onboarding and compatibility | done 20 Nov 2026, re-checked; 3, 4, 8 and 9 open |
 | 11 | NINA/PHD2 companion | done 20 Nov 2026, re-checked |
-| 12 | State management and data integrity | not started |
+| 12 | State management and data integrity | done 20 Nov 2026; re-check asked |
 | 13 | Observing scheduler and scientific yield | not started |
 | 14 | Weather and environmental decisions | not started |
 | 15 | Operational performance | not started |
@@ -451,4 +451,18 @@ Documentation only; `docs/validation.md` is the authority and is unchanged.
 | 4 | `sparse()` and `interruptions()` still use the log's one cycle | P1 | Confirmed and fixed | Each uses its own session's cycle (`at()`) |
 | 5 | A frame being written when the watch starts is marked seen and never read | P2 | Confirmed and fixed | Only a frame that reads is taken in at the start; one that does not is left to the loop, which waits for it to stop growing |
 | 6 | A save before its exposure could have ended is still given to it | P2 | Confirmed and fixed | A save more than 5 s before an exposure's end (`SAVE_EARLY_S`) is tried against the one before, and belongs to none if that does not fit either |
+
+## 12. State management and data integrity, 20 November 2026
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | Schedule changes read, change and write with no lock | P1 | Confirmed and fixed | `schedule.transaction`: `add`, `skip`, `move`, `mark`, `mark_id`, `add_session` and `end_session` each hold the plan's lock (`records.locked`) across their read and write; none calls another |
+| 2 | Obligations can be lost between a refresh and an owe | P1 | Confirmed and fixed | `refresh`, `owe` and `spend` each hold the store's lock across their read and write |
+| 3 | The run's one order file: one order over another, one taken unread | P1 | Confirmed and fixed | The orders are a queue in that file, added to and taken under its lock; a stop is taken before any other, and an order for another run stays. An acknowledgement file, as the guider's orders have, is planned |
+| 4 | Two runners can both pass the PID check | P1 | Confirmed and fixed | The runner holds an operating-system lock (`cache/schedule.runner.lock`) for its life; the PID file stays for saying who |
+| 5 | The storage disk's move then link can lose a frame's path | P1 | Confirmed and fixed | Copied under a partial name, its size checked, renamed into place; the link made beside the original and swapped in for it, so the path always holds the original or a link to a whole copy |
+| 6 | A reference version can be half published, two can take one number | P1 | Confirmed and fixed | Under the field's lock: the stack and its depth copied whole and renamed into place, and the version's record, which makes it kept, written last |
+| 7 | One torn line hides a whole session's frame log | P1 | Confirmed and fixed | A line that is not whole is left out and said; nothing is made up, and the file is left as it is |
+| 8 | Activity history written directly, its runs list without a lock | P2 | Confirmed and fixed | `records.write` for the last activity and `records.change` for the runs, still never failing the run |
+| 9 | No common rule for reading older records | P2 | Agreed and planned | For the candidate books, obligations, references and calibration first: each reader to say the versions it reads and refuse a newer one |
 

@@ -54,8 +54,19 @@ def move(path, store, data=None):
         return None
     target = Path(store) / path.resolve().relative_to(data.resolve())
     target.parent.mkdir(parents=True, exist_ok=True)
-    shutil.move(str(path), str(target))
-    path.symlink_to(target)
+    # Copied whole under another name and checked, renamed into place, the
+    # link made beside the original and swapped in for it: at every moment
+    # the frame is at its own path, the original or the link to a whole copy.
+    partial = target.with_name(f".{target.name}.partial")
+    shutil.copy2(str(path), str(partial))
+    if partial.stat().st_size != path.stat().st_size:
+        partial.unlink(missing_ok=True)
+        raise OSError(f"the copy of {path.name} on the storage disk came out a different size; the original stays")
+    partial.replace(target)
+    link = path.with_name(f".{path.name}.link")
+    link.unlink(missing_ok=True)
+    link.symlink_to(target)
+    link.replace(path)              # the original's name now the link; its data on the storage disk
     return target
 
 

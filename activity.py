@@ -136,22 +136,26 @@ def _ended(entry, when, stopped=False):
     """Note a line that has ended: as the last thing done, and for an
     imaging run against its session too, so the page can say when a run
     that never finished stopped."""
+    # Written whole (records.write) and the runs' list changed under its
+    # lock, so two runs ending together both stay; a failure here is only
+    # the console's loss, never the run's.
+    import records
     try:
-        _last_file().write_text(json.dumps(dict(entry, ended=when, stopped=stopped)), encoding="utf-8")
+        records.write(_last_file(), dict(entry, ended=when, stopped=stopped), indent=None)
     except Exception:
         pass
     if not entry.get("session"):
         return
+
+    def add(runs):
+        if not isinstance(runs, dict):
+            runs.clear()
+        runs[entry["session"]] = {"ended": when, "stopped": stopped, "frames": entry.get("frames"),
+                                  "planned": entry.get("planned")}
+        for old in sorted(runs, key=lambda k: runs[k].get("ended") or 0)[:-KEEP_RUNS]:
+            del runs[old]
     try:
-        runs = json.loads(_runs_file().read_text(encoding="utf-8"))
-        runs = runs if isinstance(runs, dict) else {}
-    except (OSError, ValueError):
-        runs = {}
-    runs[entry["session"]] = {"ended": when, "stopped": stopped, "frames": entry.get("frames"),
-                              "planned": entry.get("planned")}
-    runs = dict(sorted(runs.items(), key=lambda item: item[1].get("ended") or 0)[-KEEP_RUNS:])
-    try:
-        _runs_file().write_text(json.dumps(runs), encoding="utf-8")
+        records.change(_runs_file(), add, empty={}, indent=None)
     except Exception:
         pass
 

@@ -129,6 +129,20 @@ def _key(o):
     return f"{o['kind']}:{o['field']}:{o.get('ref', '')}"
 
 
+def _under_lock(change):
+    """A change to the store made whole under its file's lock (records.locked),
+    as the candidate books are: the runner owing a transit while a refresh
+    runs keeps both. Never nested."""
+    import functools
+
+    @functools.wraps(change)
+    def locked_change(*args, path=None, **kwargs):
+        with records.locked(Path(path or FILE)):
+            return change(*args, path=path, **kwargs)
+    return locked_change
+
+
+@_under_lock
 def refresh(today=None, data=None, path=None, nights=3):
     """The store brought up to date from the candidate books and the last
     `nights` nights' outcomes; past obligations expired, met ones done."""
@@ -219,6 +233,7 @@ def _depth_of(data, field, session_name):
         return None
 
 
+@_under_lock
 def owe(kind, field, what, why, until, ref="", path=None):
     """An obligation the runner records itself (an interrupted transit, a
     failed plate solve)."""
@@ -275,6 +290,7 @@ def allowance_left(used, night_seconds, follow_up_share):
     return True, f"uncertain: {used / 60:.0f} of the night's {allowed / 60:.0f} follow-up minutes used before it"
 
 
+@_under_lock
 def spend(seconds, now=None, path=None):
     store = load(path)
     key = evening_key(now)

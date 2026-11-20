@@ -80,6 +80,18 @@ def load():
         return {"steps": []}
 
 
+def transaction(change):
+    """A change to the plan made whole under its lock: read, changed and
+    written with no other process's change between (a session's block
+    marked done while the runner marks a step). Never nested: a decorated
+    function calls no other."""
+    @functools.wraps(change)
+    def locked_change(*args, **kwargs):
+        with records.locked(FILE):
+            return change(*args, **kwargs)
+    return locked_change
+
+
 NIGHTS = config.DATA / "cache" / "schedules"   # each night's plan, kept for replaying it (nightreplay.py)
 
 
@@ -197,6 +209,7 @@ def due(plan=None, now=None):
     return queued["label"] if queued else None
 
 
+@transaction
 def add(label, minutes, command, not_before_=None, pid=None, until=None, protect=None, deadline=None,
         uncertainty=None):
     """A step at the end of tonight's plan. `protect` ("hard" for an
@@ -260,6 +273,7 @@ def find(ref, plan):
     raise interface.Refusal("INVALID_REQUEST", f"No step {ref} in tonight's schedule.")
 
 
+@transaction
 def skip(ref):
     """A queued step left out, while the schedule runs: the runner reads the
     plan again before every step (1 November 2026: changing the plan meant
@@ -273,6 +287,7 @@ def skip(ref):
     return plan["steps"][i]["label"]
 
 
+@transaction
 def move(ref, position):
     """A queued step moved to `position` (1 is the first), among the rest."""
     plan = load()
@@ -309,6 +324,7 @@ def next_step(tell=None):
     return (tell or shoot.tell)("stop")
 
 
+@transaction
 def mark(index, **fields):
     plan = load()
     plan["steps"][index].update(fields)
@@ -469,6 +485,29 @@ def prepared(step, now, last=None, sunset=last_sunset, cut=None):
     return command, left
 
 
+_RUNNER_LOCK = []      # the open file holding the runner's lock, for this process's life
+
+
+def hold_runner_lock():
+    """True once this process holds the runner's lock (or already did)."""
+    if _RUNNER_LOCK:
+        return True
+    RUNNER.parent.mkdir(parents=True, exist_ok=True)
+    handle = open(RUNNER.with_name(RUNNER.name + ".lock"), "a+b")
+    try:
+        if sys.platform == "win32":
+            import msvcrt
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+        handle.close()
+        return False
+    _RUNNER_LOCK.append(handle)
+    return True
+
+
 def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=None):
     """The queued steps in order. A step given by process id is waited for;
     the rest are started here, each when the one before has ended and not
@@ -481,13 +520,15 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
     November 2026 a runner started at 02:03 ran M81 and SN 2026sqf with the
     code from before steps were told their time, and both were cut off
     unstacked."""
-    try:
-        other = RUNNER.read_text(encoding="utf-8").strip()
-    except OSError:
-        other = ""
-    if other and other != str(os.getpid()) and alive(other):
-        # One runner a rig: a second would take the first's running step for
-        # abandoned and start the next one alongside it.
+    # One runner a rig, by an operating-system lock held as long as this
+    # runner lives (gone with it however it ends): a second would take the
+    # first's running step for abandoned and start the next alongside it.
+    # The PID file stays, for saying who; it no longer decides.
+    if not hold_runner_lock():
+        try:
+            other = RUNNER.read_text(encoding="utf-8").strip()
+        except OSError:
+            other = "?"
         say(f"The schedule is already being run (process {other}): not starting a second runner.")
         return False
     try:
@@ -1114,6 +1155,7 @@ def install(say=print, run=subprocess.run, home=None):
         "Stop it: systemctl --user disable --now ty-satellite.timer")
 
 
+@transaction
 def mark_id(step_id, **fields):
     plan = load()
     for step in plan["steps"]:
@@ -1122,6 +1164,7 @@ def mark_id(step_id, **fields):
     save(plan)
 
 
+@transaction
 def add_session(blocks, pid):
     """The blocks of one imaging session (shoot.py --blocks), one step each,
     owned by that process: it marks them itself (mark_block) and the runner
@@ -1161,6 +1204,7 @@ def mark_block(step_id, status, kept_minutes=None):
     mark_id(step_id, status=status, **fields)
 
 
+@transaction
 def end_session(pid):
     """A session's process has gone: its blocks still queued are skipped and
     one still running is done (its frames are kept), with the time."""

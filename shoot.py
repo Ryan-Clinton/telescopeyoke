@@ -327,8 +327,29 @@ def tell(order, run=None):
         raise interface.Refusal("INVALID_REQUEST", f"Unknown order '{order}'. Known: "
                                 + ", ".join(KNOWN_ORDERS))
     ORDERS.parent.mkdir(exist_ok=True)
-    ORDERS.write_text(json.dumps({"order": order, "run": run, "at": time.time()}), encoding="utf-8")
+    # Added to the orders waiting, under their lock: two close together are
+    # both kept, never the second written over the first (a stop included).
+    with records.locked(ORDERS):
+        waiting = _orders()
+        waiting.append({"order": order, "run": run, "at": time.time()})
+        ORDERS.write_text(json.dumps(waiting), encoding="utf-8")
     return {"order": order, "run": run, "note": "The run acts on it after its next frame."}
+
+
+def _orders():
+    """The orders waiting, oldest first; the one-order file of before
+    20 November 2026 (a dict, or a bare word before 1 November) read too."""
+    try:
+        text = ORDERS.read_text(encoding="utf-8").strip()
+    except OSError:
+        return []
+    try:
+        left = json.loads(text)
+    except ValueError:
+        return [{"order": text, "run": None, "at": None}] if text else []
+    if isinstance(left, dict):
+        return [left]
+    return [o for o in left if isinstance(o, dict)] if isinstance(left, list) else []
 
 
 STARTED = time.time()   # when this run began: an order given after it is for this run
@@ -341,12 +362,12 @@ def clear_old_orders(since=None):
     since = STARTED if since is None else since
     if not ORDERS.exists():
         return
-    try:
-        at = json.loads(ORDERS.read_text(encoding="utf-8")).get("at")
-    except (ValueError, AttributeError):
-        at = None
-    if at is None or at < since:
-        ORDERS.unlink(missing_ok=True)
+    with records.locked(ORDERS):
+        kept = [o for o in _orders() if o.get("at") is not None and o["at"] >= since]
+        if kept:
+            ORDERS.write_text(json.dumps(kept), encoding="utf-8")
+        else:
+            ORDERS.unlink(missing_ok=True)
 
 
 def stop_waiting(name=None):
@@ -354,35 +375,28 @@ def stop_waiting(name=None):
     is left for after the frame, where order() takes it."""
     if not ORDERS.exists():
         return False
-    try:
-        left = json.loads(ORDERS.read_text(encoding="utf-8"))
-    except ValueError:
-        return False
-    if not isinstance(left, dict) or left.get("order") != "stop":
-        return False
-    return order(name) == "stop"
+    return order(name, only="stop") == "stop"
 
 
-def order(name=None, now=None):
+def order(name=None, now=None, only=None):
     """The order left for this run, if any; it is taken, so it acts once. An
-    order named for another run is left for it, and a stale one thrown away."""
+    order named for another run is left for it, and a stale one thrown away.
+    A stop waiting is taken before any other; `only` takes that order alone.
+    Read and taken under the orders' lock, so one left meanwhile is kept."""
     if not ORDERS.exists():
         return None
-    text = ORDERS.read_text(encoding="utf-8").strip()
-    try:
-        left = json.loads(text)
-    except ValueError:
-        left = {"order": text, "run": None, "at": None}      # as written before 1 November 2026
-    if not isinstance(left, dict):
-        left = {"order": text, "run": None, "at": None}
     now = time.time() if now is None else now
-    if left.get("at") is not None and now - left["at"] > ORDER_STALE_S:
-        ORDERS.unlink(missing_ok=True)
-        return None
-    if left.get("run") and name and left["run"] != name:
-        return None
-    ORDERS.unlink(missing_ok=True)
-    return left.get("order") if left.get("order") in KNOWN_ORDERS else None
+    with records.locked(ORDERS):
+        waiting = [o for o in _orders() if o.get("at") is None or now - o["at"] <= ORDER_STALE_S]
+        mine = [o for o in waiting if not (o.get("run") and name and o["run"] != name)
+                and o.get("order") in KNOWN_ORDERS and (only is None or o["order"] == only)]
+        taken = next((o for o in mine if o["order"] == "stop"), mine[0] if mine else None)
+        left = [o for o in waiting if o is not taken]
+        if left:
+            ORDERS.write_text(json.dumps(left), encoding="utf-8")
+        else:
+            ORDERS.unlink(missing_ok=True)
+    return taken["order"] if taken else None
 
 
 def go(args, target, aim_off=(0.0, 0.0), solve=None):
