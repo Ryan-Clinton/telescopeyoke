@@ -27,7 +27,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 6 | Camera, cooling, filters and focusing | done 20 Nov 2026, re-checked |
 | 7 | Scientific discovery reliability | done 20 Nov 2026, re-checked |
 | 8 | Calibration and scientific measurement accuracy | done 20 Nov 2026, re-checked |
-| 9 | Demo claims versus real-world proof | not started |
+| 9 | Demo claims versus real-world proof | done 20 Nov 2026; re-check asked |
 | 10 | Hardware onboarding and compatibility | not started |
 | 11 | NINA/PHD2 companion | not started |
 | 12 | State management and data integrity | not started |
@@ -379,4 +379,19 @@ Results already recorded are not remade; each new one is stamped with the code t
 | 4 | The ephemeris's standard is assumed | P1 | Confirmed and fixed | The archive gives it per planet (`pl_tranmid_systemref`: on 20 Nov 2026 2,733 BJD, 796 BJD-TDB, 1,436 JD, 112 HJD, 49 blank). BJD and HJD middles are met with BJD_TDB, JD with JD; a blank one, or no site, is fitted in JD and its early or late said to be uncertain by up to 8 minutes. The planet list is fetched again for the new column |
 | 5 | Cached light curves from before the change are reused | P2 | Confirmed and fixed | `variables.VERSION` is 2, so they are measured again with each frame's own masters; old records keep their stamp |
 | 6 | The transit report names the 183C's calibration files for the 183M | P2 | Confirmed and fixed | It says the frames' own calibration: a matched camera's missing masters, or the 183C's dark and flat |
+
+## 9. Demo claims versus real-world proof, 20 November 2026
+
+Documentation only; `docs/validation.md` is the authority and is unchanged.
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | The homepage says each piece of a night has run on the real mount | P1 | Confirmed and fixed | It now says the steps and GoTos have; the night's end (parking and telling you) has not yet run by itself through a real night (validation: "the whole not yet through a real night") |
+| 2 | The homepage sells the click and tone, which only the demo has run | P1 | Confirmed and fixed | Spoken numbers first, as used under real stars (and the default since 8 Nov); the click, tone and "Focus good" with `--tones`, said to be the demo's so far |
+| 3 | Windows install and launch said with more confidence than the record | P1 | Confirmed and fixed | README and homepage say `try-demo.cmd`, `install.ps1`, the Start Menu and the window are untried on a real Windows machine; the Windows camera's indoor frames are said as proven |
+| 4 | The demo's plate solves are the simulator's | P2 | Confirmed and fixed | The README says so beside the tour, and that the centring code is the real one and ASTAP is proven apart |
+| 5 | The command references still call guiding unproven | P2 | Confirmed and fixed | `docs/commands.md` and `docs/agents/commands.md` give the 10 Nov and 19-20 Nov figures, the Dec drive's fault and that 300 s is not yet proven |
+| 6 | The page's search description lists EQ5, HEQ5 and EQ6 bare | P2 | Confirmed and fixed | "run on an EQ3 Pro; EQ5, HEQ5 and EQ6 untried" |
+| 7 | The README's evidence table puts ZTF archive data under the simulated rig, and says everything runs there | P2 | Confirmed and fixed | The cell says real archive data, not the rig, beside the planted fakes; "everything" is now "most of it", the column saying which |
+| 8 | "Tested" in the agents' page reads as proof | P2 | Confirmed and fixed | A project command is "a script of the project's", with validation.md as the word on what is proven; the hooks' list says it was checked when built and there are no tests now; the page's own note on "tested" stays |
 

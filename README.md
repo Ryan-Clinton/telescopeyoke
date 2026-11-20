@@ -223,7 +223,9 @@ cd TelescopeYoke-v0.4.1
 On Windows 10 or 11: install 64-bit Python 3.11 or newer from python.org
 (tick "Add python.exe to PATH"),
 [download TelescopeYoke-v0.4.1.zip](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.1/TelescopeYoke-v0.4.1.zip),
-unpack it, and double-click **`try-demo.cmd`**.
+unpack it, and double-click **`try-demo.cmd`**. Not yet run on a real Windows
+machine: on Windows the camera has taken frames indoors, but `try-demo.cmd`,
+`install.ps1`, the Start Menu entries and the application's window are untried.
 
 That zip is release 0.4.1 (20 November 2026), an experimental hardware
 preview, which stays as it is; a hardware report says which release or
@@ -247,7 +249,9 @@ need Git Bash and Python 3.11 or later as `python` or `py`
 ([Setup](docs/setup.md#with-claude-code)).
 
 Either way a window opens on a pretend mount, camera and sky: a GoTo is
-centred by plate solving, the focusing aid follows a focuser you turn with
+centred by plate solving (the demo's solves are the simulator's answers, worked out from the pretend
+mount; the centring that uses them is the real code, and ASTAP's solving of real skies is proven
+apart), the focusing aid follows a focuser you turn with
 a button, and an imaging run stacks frames and rejects the ones taken after
 you bring the cloud over. It runs the same commands as a real night and
 keeps its files in a folder of its own (`demo/`), apart from anything real.
@@ -339,7 +343,8 @@ The laptop cannot see what the telescope is about to hit.
 What has been proven, and where. "Real stars" means on the author's EQ3 Pro
 and 150P on Ubuntu, at night, with the Hypercam 183C unless the row says
 the 183M; "real equipment" means the hardware answered or moved but no star
-was involved. Everything is also run against the simulated rig.
+was involved. Most of it also runs against the simulated rig; the last column says which, and
+real archive data (not this rig's) is said as such.
 
 | Feature | Under real stars | On real equipment | Simulated rig |
 |---|---|---|---|
@@ -364,7 +369,7 @@ was involved. Everything is also run against the simulated rig.
 | The application window | not yet | ⚠️ opened on Ubuntu, in the demo only | ✅ |
 | Windows | not yet | ⚠️ camera frames indoors; no mount driven | ✅ |
 | Checking that the telescope really turned | not yet | ⚠️ by day: one real record, and it caught a real fault; 109 checked looks on a working mount, none stopped wrongly | ✅ |
-| Discovery: subtraction, candidates, vetting | ⚠️ on real M31 and M33 stacks, with planted fakes; no find of our own yet | ✅ | ✅ a known nova found again in ZTF's archive images |
+| Discovery: subtraction, candidates, vetting | ⚠️ on real M31 and M33 stacks, with planted fakes; no find of our own yet | ✅ | ✅ planted fakes; and on real archive data, not the rig: a known nova found again in ZTF's images |
 | Kepler and TESS archive search (`archive.py`, `investigate.py`) | does not need them | ✅ Tabby's star's four known dips found and nothing else (3 November 2026); 16 leads looked into, none unexplained | ✅ |
 | Lights, speaker and phone alerts (`alert.py`) | does not need them | ✅ cloud and rain alerts on a real light and speaker; the call that woke the author when a run stopped (20 October 2026) | ✅ |
 | Live stream on Twitch and YouTube (`stream.py`) | ✅ Twitch on air 20 October 2026 on the WASP-12 b run; YouTube on air 1 November 2026 | ✅ | ✅ |

@@ -32,7 +32,7 @@ task is predictable, a model only where judgement adds something.**
 
 | Kind | What it is | Use it here for |
 |---|---|---|
-| **Project command** | A tested script (`mount.py`, `patrol.py`) | Everything the telescope does, and every check on it. Never a model's job |
+| **Project command** | A script of the project's (`mount.py`, `patrol.py`); what it is proven to do on real equipment is `docs/validation.md`'s, not this page's | Everything the telescope does, and every check on it. Never a model's job |
 | **Background job** | A plain script started in the background, which wakes Claude only when something changes | Watching a run |
 | **Skill** (`.claude/skills/NAME/SKILL.md`) | A procedure loaded into the session talking to the person, when its description matches or they type `/NAME` | Anything done *with* the person: setup, focusing, a run, a claim |
 | **Subagent** (`.claude/agents/NAME.md`) | A separate Claude with its own context, tools, model and turn limit, returning a summary | Interpretation that is long or noisy: vetting a candidate, reading the web, reviewing a change |
@@ -69,7 +69,7 @@ line by choice:** no agent ever starts a physical action, and the main
 session runs a checked project command only when the person has asked for
 that action (AGENTS.md, safety rule 1). From JW-ASTClaw it takes the
 independent layers and the decision record; from StarWhisper, keeping the
-instrument logic in tested code.
+instrument logic in the project's own commands.
 
 ## Safety layers
 
@@ -374,9 +374,9 @@ differently).
 | `no-secrets-out` | Bash, Read | Printing the `[telegram]` section or a token from `config.toml` |
 | `log` | every tool (PostToolUse) | Nothing: it writes the decision record (below) |
 
-The hooks are tested like security code: each, fed the JSON Claude Code
-sends, must refuse every one of these and let through their read-only
-twins:
+The hooks are meant to refuse every one of these, fed the JSON Claude Code
+sends, and let through their read-only twins (checked when they were built;
+there are no tests now):
 
 ```
 rm ./MOTION_LOCKED           truncate -s 0 MOTION_LOCKED     : > MOTION_LOCKED

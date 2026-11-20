@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TelescopeYoke: a robotic observatory and discovery station for affordable GoTo telescopes</title>
-<meta name="description" content="Free, open-source robotic observatory software for Sky-Watcher SynScan mounts (EQ3, EQ5, HEQ5, EQ6): self-centring GoTos by plate solving, polar alignment, focusing, stacking and whole nights run with an AI agent, plus nova patrols and Kepler archive searches. Already run NINA and PHD2? A read-only companion says what spoiled last night. Linux, with a Windows port. Try the demo with no telescope.">
+<meta name="description" content="Free, open-source robotic observatory software for Sky-Watcher SynScan mounts (run on an EQ3 Pro; EQ5, HEQ5 and EQ6 untried): self-centring GoTos by plate solving, polar alignment, focusing, stacking and whole nights run with an AI agent, plus nova patrols and Kepler archive searches. Already run NINA and PHD2? A read-only companion says what spoiled last night. Linux, with a Windows port. Try the demo with no telescope.">
 <link rel="canonical" href="https://ryan-clinton.github.io/telescopeyoke/">
 <meta property="og:title" content="TelescopeYoke: a robotic observatory and discovery station for affordable GoTo telescopes">
 <meta property="og:type" content="website">
@@ -72,14 +72,14 @@
 <p>You already own the mount, the handset and a camera. TelescopeYoke is the part a smart telescope has and yours does not. It is built around one idea: measure the imperfections of modest equipment instead of pretending they are not there.</p>
 <ul>
   <li><b>Home position set by eye?</b> It photographs the sky, plate-solves where the telescope really ended up, and corrects until the target is in the middle. On its first real night an EQ3 that started about ten degrees out centred M27.</li>
-  <li><b>Manual focuser?</b> Keep your hand on it and listen: a click when your last turn has been measured, a tone that rises as the stars sharpen, and "Focus good. Hold" at the end.</li>
+  <li><b>Manual focuser?</b> Keep your hand on it and listen: each frame's star size is said as a number, as used under real stars. With <code>--tones</code>, a click when your last turn has been measured, a tone that rises as the stars sharpen, and "Focus good. Hold" at the end; those have run on the demo's stars only so far.</li>
   <li><b>House and trees in the way?</b> Give it a phone panorama and it learns your garden's skyline, so the planner stops recommending targets you cannot see.</li>
   <li><b>Polar alignment rough?</b> Three plate solves measure it and say which way to turn each adjuster , and an experimental mode tries it before dark from Polaris alone.</li>
   <li><b>Takes and stacks the pictures</b>: short exposures, each one checked, poor ones rejected, the rest lined up and added, with every raw frame kept so the picture can be rebuilt later.</li>
   <li><b>Plans the night</b>: darkness, Moon, cloud, and a GO / MARGINAL / NO-GO verdict, with targets ranked for your own sky.</li>
   <li><b>Controls Sky-Watcher SynScan mounts</b> through the handset's serial lead, correcting for a handset clock that is wrong.</li>
   <li><b>Keeps the mount inside its limits</b>. Every move is checked against the limits first. A move you make in the application is shown as a plan and goes only when you confirm it; a night's schedule you have agreed runs its own moves through the same checks.</li>
-  <li><b>Runs the whole night</b>: the agreed steps in order, a failed step fetches you, and at the end it parks the mount and tells you. Each piece has run on the real mount; a whole night ended by it alone has not yet.</li>
+  <li><b>Runs the whole night</b>: the agreed steps in order, a failed step fetches you, and at the end it parks the mount and tells you. The steps and their GoTos have run on the real mount; the night's end (parking and telling you) has not yet run by itself through a real night.</li>
   <li><b>Hunts for something new</b>: novae in M31 and M33 by image subtraction, exoplanet transits; each find checked before it reaches you, with the evidence.</li>
   <li><b>Researches without the telescope</b>: Kepler and TESS light curves searched for stars that dim like Tabby's, each lead checked against Gaia, SIMBAD and VSX. No discovery yet, and it says so.</li>
   <li><b>Runs a cooled mono camera and filter wheel</b>: cooled slowly once and held cold all night, several filters and targets in one cold session. Its first colour picture failed; the fix is not yet rerun.</li>
@@ -126,7 +126,7 @@ cd TelescopeYoke-v0.4.1
 <ul>
   <li>Install 64-bit Python 3.11 or newer from python.org, ticking "Add python.exe to PATH".</li>
   <li><a href="https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.1/TelescopeYoke-v0.4.1.zip">Download TelescopeYoke-v0.4.1.zip</a> and unpack it.</li>
-  <li>Double-click <code>try-demo.cmd</code>.</li>
+  <li>Double-click <code>try-demo.cmd</code> (not yet run on a real Windows machine: the Windows camera has taken frames, the installer and window have not been tried).</li>
 </ul>
 <p>A window opens with tonight's report. Pick a target, press "Centre with plate solve", and watch it find and correct its own pointing error. Then try Focus and Imaging; "The pretend sky" lets you bring cloud over or pull the camera's lead out, to see what it does when a night goes wrong.</p>
 <div class="pair">

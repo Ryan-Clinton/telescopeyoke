@@ -87,7 +87,7 @@ The cooled camera, discovery and research scripts:
 | `instrument.py` | What the camera in use is ready for and what it still needs (darks, flats, focus offsets, references) before its science counts. |
 | `cameras.py` | The camera profiles and light paths (trains). |
 | `corners.py` | Star shapes in the corners against the middle: the corrector's spacing, a tilt or the collimation. |
-| `guidecam.py` | The guide camera: finds it, takes frames, tests its ST4 lead to the mount (`pulse`), and guides: `star`, `calibrate`, `guide` (not yet proven on the sky; `docs/autoguiding.md`). |
+| `guidecam.py` | The guide camera: finds it, takes frames, tests its ST4 lead to the mount (`pulse`), and guides: `star`, `calibrate`, `guide` (proven on the sky for 120 s subs: Vega held 10 minutes at RMS 3.45" and round 120 s Eastern Veil frames, 10 November 2026; RA alone kept 12 round 120 s IC 405 frames, 19-20 November, with the Dec drive faulty since its service; 300 s subs not yet; `docs/autoguiding.md`). |
 | `patrol.py` | A discovery patrol of one field, from pointing the telescope to the morning's answer: is there anything new? |
 | `vet.py`, `candidates.py`, `realbogus.py` | Each candidate checked against catalogues, asteroids and the rig's own history; followed from night to night; scored real or bogus from this rig's own nights. |
 | `depth.py` | How faint a stack really reaches, from fake stars planted in it. |
@@ -101,7 +101,7 @@ The cooled camera, discovery and research scripts:
 
 ### Guiding, in order
 
-Not yet proven on the sky ([Autoguiding](autoguiding.md)). The mount must be tracking. **Moves the mount** marks the ones that send ST4 pulses; each has `--dry-run`, and each checks the motion lock before every pulse.
+Proven on the sky for 120 s subs: Vega held 10 minutes at RMS 3.45" and round 120 s Eastern Veil frames, 10 November 2026; RA alone kept 12 round 120 s IC 405 frames, 19-20 November, with the Dec drive faulty since its service; 300 s subs not yet ([Autoguiding](autoguiding.md), [validation](validation.md)). The mount must be tracking. **Moves the mount** marks the ones that send ST4 pulses; each has `--dry-run`, and each checks the motion lock before every pulse.
 
 | Step | Command | Moves the mount |
 |---|---|---|
