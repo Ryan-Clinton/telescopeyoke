@@ -39,9 +39,12 @@ result is recorded.
    (only the Pro has it), so the 183M's 12 V still goes in by hand, after
    the camera is warmed in software, never with the cooler running (19
    November 16:31: it ran away to -7.3 °C that way). It came with one
-   5.5 × 2.1 DC lead, as SVBONY's box list says: a second is needed for
-   the mount and the camera both. Two 1.5 m (5 ft) 5.5 × 2.1 male-to-male
-   leads (a twin pack) were ordered on 20 November, due 24 November.
+   5.5 × 2.1 DC lead, as SVBONY's box list says, only about 10 cm long:
+   too short to reach anything. Leads are needed for the mount, the camera
+   and the focuser. Two 1.5 m (5 ft) 5.5 × 2.1 male-to-male
+   leads (a twin pack) were ordered on 20 November, due 24 November, for
+   the mount and the camera; the focuser's (its socket is 5.5 × 2.5) is
+   still to make.
 7. **The 183M after a power cut**: a procedure that brings it back without
    the cooler running away. Gary: if the cooler ran with the 12 V out, warm
    it to ambient in software before the 12 V goes back in, then the normal
