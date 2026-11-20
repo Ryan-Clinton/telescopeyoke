@@ -51,6 +51,11 @@ motion lock, calibration refusals, fail-closed checks) are not testing and
 stay. A change to how the mount moves is still tried in the demo first
 (safety invariant 4), once, for that change.
 
+Testing is raised again only on evidence that other people are actually
+using TelescopeYoke, that the audits are leaving a pile of bugs, or that
+development is slowing because bugs testing would have caught are lived
+with for a long time. Until then, don't raise it.
+
 ## Start here
 
 ```bash

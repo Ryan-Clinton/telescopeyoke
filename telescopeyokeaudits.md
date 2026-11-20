@@ -10,6 +10,33 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 > never caught a real fault. The full reasons are in `AGENTS.md`, "No
 > testing, and why". A finding is checked by reading the code and proven
 > on the telescope; the fix gets `ruff check` and nothing else.
+> Testing is raised again only on evidence that other people are actually
+> using TelescopeYoke, that the audits are leaving a pile of bugs, or that
+> development is slowing because bugs testing would have caught are being
+> lived with for a long time. Until then, don't raise it.
+
+## Status
+
+| # | Audit | Status |
+|---|---|---|
+| 1 | Mount safety and movement | not started |
+| 2 | Hardware failure and recovery | not started |
+| 3 | AI agent autonomy and permissions | not started |
+| 4 | Autonomous full-night operation | not started |
+| 5 | Guiding and calibration | not started |
+| 6 | Camera, cooling, filters and focusing | not started |
+| 7 | Scientific discovery reliability | not started |
+| 8 | Calibration and scientific measurement accuracy | not started |
+| 9 | Demo claims versus real-world proof | not started |
+| 10 | Hardware onboarding and compatibility | not started |
+| 11 | NINA/PHD2 companion | not started |
+| 12 | State management and data integrity | not started |
+| 13 | Observing scheduler and scientific yield | not started |
+| 14 | Weather and environmental decisions | not started |
+| 15 | Operational performance | not started |
+| 16 | Network security and external integrations | not started |
+| 17 | Public releases and installation | not started |
+| 18 | Architecture, documentation and maintainability | not started |
 
 ## **1. Initial assessment**
 
