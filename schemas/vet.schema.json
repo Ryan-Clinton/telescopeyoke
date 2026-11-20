@@ -26,10 +26,11 @@
           "asteroids",
           "variables",
           "reported",
-          "gaia"
+          "gaia",
+          "gaia_moving"
         ]
       },
-      "description": "The catalogues that answered."
+      "description": "The catalogues that answered: gaia_moving is Gaia's stars moving 0.1\"/yr or more, carried to the night."
     },
     "halves_checked": {
       "type": "boolean"

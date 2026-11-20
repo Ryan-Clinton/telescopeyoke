@@ -703,7 +703,7 @@ class Camera:
         header["EXPTIME"] = (float(seconds), "seconds")
         if self.gain is not None:
             header["GAIN"] = (self.gain, "camera gain, as the driver reads it back")
-        header["DATE-OBS"] = (started.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3], "UTC, start of exposure")
+        header["DATE-OBS"] = (started.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3], "UTC, when the exposure was asked for")
         if self.mono:
             header["TY_MONO"] = (True, "mono sensor: no colour pattern")
         else:

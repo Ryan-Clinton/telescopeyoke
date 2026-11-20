@@ -366,8 +366,8 @@ Results already recorded are not remade; each new one is stamped with the code t
 | 4 | Transit middles in JD (UTC) against an ephemeris in BJD_TDB | P1 | Confirmed and fixed | The fit is made in BJD_TDB when the site is known, and every fit says its `time_standard` (schema updated); without a site it says the early or late is uncertain by up to 8 minutes |
 | 5 | The calibration check reads only each folder's first frame | P1 | Confirmed and fixed | `stacking.require_frames` reads every frame's header and checks each set of settings (camera, train, filter and the dark's cards) once |
 | 6 | The 183C's stacks say TY_CALIB with no masters | P2 | Confirmed and fixed | TY_CALIB stays "may enter science"; a 183C stack also says `TY_CALFUL`, whether dark, bias and flat were all applied |
-| 7 | DATE-OBS is when the exposure was asked for, about 0.4-0.5 s before it began | P2 | Agreed and planned | A card with the measured lag and its uncertainty, for transit timing |
-| 8 | Gaia positions are J2016, not the night's | P2 | Agreed and planned | Proper motion carried to the frame's epoch where Gaia gives it, and a position uncertainty on reported candidates |
+| 7 | DATE-OBS is when the exposure was asked for, about 0.4-0.5 s before it began | P2 | Agreed; said after the loop, not measured | The header's comment now says DATE-OBS is when the camera was triggered, and a transit's timing record says the start lag is not measured and may make every time early by about half a second. Measuring it needs `camera_probe.pulsed` with the camera and a light in the dark, not done tonight with the telescope out |
+| 8 | Gaia positions are J2016, not the night's | P2 | Agreed; fixed after the loop for the vetting | vet asks ESA's archive for the field's stars moving 0.1"/yr or more (`gaia_moving`), carries them from 2016.0 to the night by their proper motion, and matches candidates against them too (8 such stars in M31's field). The kept Gaia circles that depth's zero points use are unchanged. A position uncertainty on reported candidates is not added |
 
 ## 8, re-audited at 30a8907
 

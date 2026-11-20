@@ -55,6 +55,10 @@ ASTEROID_WITHIN = 30.0    # arcsec: a known asteroid this close at mid-session i
 VARIABLE_WITHIN = 5.0     # arcsec, for VSX
 REPORTED_WITHIN = 5.0     # arcsec, for a listed nova or supernova
 GAIA_WITHIN = 2.0         # arcsec: a Gaia star this close is the candidate's own star
+# Gaia's places are for 2016.0. A star moving 0.1"/yr or more has moved a
+# second of arc or more by now, enough to miss GAIA_WITHIN: those few are
+# asked for apart, with their motion, and put where they are on the night.
+FAST_MAS_YR = 100
 HALF_SCORE = 3.0          # each half must show it at least this strongly
 DESIGNATION = re.compile(r"J(\d{2})(\d{2})(\d{2})(\d{2})([+-])(\d{2})(\d{2})(\d{2})(\d)")
 
@@ -345,6 +349,14 @@ def clues(e):
     return out
 
 
+def moved(checks):
+    """Gaia's stars for the match: its 2016 places, and the fast movers
+    where they are on the night (when they could be asked)."""
+    if checks.get("gaia") is None:
+        return None
+    return checks["gaia"] + (checks.get("gaia_moving") or [])
+
+
 def vet(record, checks, half_scores=None, ref=None, zeropoint=None, radius=4.0):
     """The evidence and verdict for every candidate. `checks` holds what was
     fetched: asteroids, variables, reported, gaia (lists of rows)."""
@@ -358,7 +370,7 @@ def vet(record, checks, half_scores=None, ref=None, zeropoint=None, radius=4.0):
             for key, rows, within in (("asteroid", checks.get("asteroids"), ASTEROID_WITHIN),
                                       ("variable", checks.get("variables"), VARIABLE_WITHIN),
                                       ("reported", checks.get("reported"), REPORTED_WITHIN),
-                                      ("gaia", checks.get("gaia"), GAIA_WITHIN)):
+                                      ("gaia", moved(checks), GAIA_WITHIN)):
                 if rows is None:
                     kinds[key] = "not known"
                     continue
@@ -374,6 +386,31 @@ def vet(record, checks, half_scores=None, ref=None, zeropoint=None, radius=4.0):
         e["verdict"] = verdict(e)
         e["clues"] = clues(e)
         out.append(e)
+    return out
+
+
+def fast_movers(ra, dec, radius, jd, get=None):
+    """Gaia DR3 stars in the circle moving FAST_MAS_YR or more, as gaia rows
+    ({"ra", "dec", "g"}) at their places on `jd`, carried from 2016.0 by
+    their proper motion (ESA's archive)."""
+    get = get or requests.get
+    reply = get(depth.ESA_TAP, timeout=(10, 60), params={
+        "REQUEST": "doQuery", "LANG": "ADQL", "FORMAT": "csv",
+        "QUERY": ("SELECT ra, dec, phot_g_mean_mag, pmra, pmdec FROM gaiadr3.gaia_source WHERE "
+                  f"1=CONTAINS(POINT('ICRS',ra,dec),CIRCLE('ICRS',{ra:.5f},{dec:+.5f},{radius:.3f})) "
+                  f"AND pm >= {FAST_MAS_YR}")})
+    reply.raise_for_status()
+    years = (jd - 2457389.0) / 365.25          # from Gaia DR3's epoch, 2016.0 (JD 2457389.0)
+    out = []
+    for line in reply.text.strip().splitlines()[1:]:
+        try:
+            a, d, g, pmra, pmdec = (float(x) for x in line.split(","))
+        except ValueError:
+            continue
+        # pmra is already times cos(dec): in RA it is divided back out.
+        a += pmra * years / 3.6e6 / max(np.cos(np.radians(d)), 1e-6)
+        d += pmdec * years / 3.6e6
+        out.append({"ra": float(a), "dec": float(d), "g": g, "moved": True})
     return out
 
 
@@ -433,7 +470,8 @@ def run(args, say=print):
                            ("variables", lambda: variables(centre_ra, centre_dec, reach)),
                            ("reported", lambda: reported((year - 1, year))),
                            ("gaia", lambda: [{"ra": a, "dec": d, "g": g}
-                                             for a, d, g, *_ in depth.gaia(centre_ra, centre_dec, reach)])):
+                                             for a, d, g, *_ in depth.gaia(centre_ra, centre_dec, reach)]),
+                           ("gaia_moving", lambda: fast_movers(centre_ra, centre_dec, reach, jd))):
             try:
                 checks[key] = fetch()
                 say(f"  {key}: {len(checks[key])} in the field")

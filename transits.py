@@ -354,6 +354,12 @@ def checks(session, jd, mag, middle, hours, site=None):
             if "flat" not in calibration.masters:
                 out["calibration"].append("no flat field: each star's light changes as it drifts over the sensor")
         out["timing"]["frame_time"] = "DATE-OBS, the start of each exposure, plus half the exposure"
+        # DATE-OBS is when the camera was triggered; the exposure starts after
+        # it by a lag not yet measured here (a review on 20 November 2026 put
+        # it near half a second). Every time is early by it, alike.
+        out["timing"]["start_lag"] = ("not measured: DATE-OBS is when the camera was triggered, and the exposure "
+                                      "starts a little after (perhaps half a second), so each time may be early "
+                                      "by that much; it moves a mid-transit time, not a depth")
         # Whether the exposure is the shutter's real time: camera.py writes TY_ASKED when it
         # applied the trail-measured share (the 183C's clock runs fast through its library).
         if head.get("TY_ASKED") is not None:

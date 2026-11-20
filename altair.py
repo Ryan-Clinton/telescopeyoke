@@ -1106,8 +1106,11 @@ class AltairCamera:
         header = fits.Header()
         header["EXPTIME"] = (float(seconds), "seconds")
         header["GAIN"] = (self.gain, "camera gain, percent")
-        # When the exposure started, not when the frame arrived.
-        header["DATE-OBS"] = (started.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3], "UTC, start of exposure")
+        # When the camera was triggered, not when the frame arrived. The
+        # exposure itself begins a little after, by an amount not yet
+        # measured on this camera (camera_probe.pulsed can: a light switched
+        # at known times after the trigger); transits.py says so.
+        header["DATE-OBS"] = (started.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3], "UTC, when the exposure was triggered")
         if not self.mono:
             header["BAYERPAT"] = self.pattern
         else:
