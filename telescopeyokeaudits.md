@@ -23,7 +23,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 2 | Hardware failure and recovery | done 20 Nov 2026, re-checked |
 | 3 | AI agent autonomy and permissions | done 20 Nov 2026, re-checked |
 | 4 | Autonomous full-night operation | done 20 Nov 2026, re-checked |
-| 5 | Guiding and calibration | done 20 Nov 2026; re-check asked |
+| 5 | Guiding and calibration | done 20 Nov 2026, re-checked |
 | 6 | Camera, cooling, filters and focusing | not started |
 | 7 | Scientific discovery reliability | not started |
 | 8 | Calibration and scientific measurement accuracy | not started |
@@ -295,4 +295,13 @@ This initial pass was an architectural and risk assessment, not an exhaustive li
 | 7 | PHD2 "Guiding" with no guide steps keeps the run going | P1 | Confirmed and fixed (untried on PHD2 itself) | No fresh guide step for `LOST_WAIT_S`, kept across frames, is a fault that stops guided imaging, as a stopped PHD2 is |
 | 8 | PHD2's errors in arcseconds from an assumed 1"/px | P1 | Confirmed and fixed (untried on PHD2 itself) | No scale from PHD2, no RMS or largest error in arcseconds; GUIDED is still judged from the steps |
 | 9 | Drift taken off over a long Dec test is not labelled uncertain | P2 | Agreed and planned | For the Dec drive's investigation once its mechanics are checked (owner-jobs item 2); no long calibrations run in its place |
+
+## 5, re-audited at 0381373
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | GUIDEMOD (and GUIDER) dropped before the frame is saved | P1 | Confirmed and fixed | Both are in `stacking.KEPT`, so they reach the saved FITS |
+| 2 | An RA-only dither projected from a random direction can shrink to nothing | P1 | Confirmed and fixed | With Dec not guided, `Supervisor.dither()` puts the whole distance along RA, one way or the other, and returns what it asked for |
+| 3 | Three south steps need not be running | P1 | Confirmed and fixed | South counts only with three steps running that moved the star; its column is taken from the first such run |
+| 4 | A dither not settled in 50 s is answered as made | P2 | Smaller than claimed, no change | The answer says "moved; not settled", the lock has moved, and the next frame waits for settling or is marked (13 Nov 2026: answering it as failed ended two runs) |
 

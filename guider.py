@@ -755,14 +755,19 @@ def _calibrate(cam, seconds, dec, west, gain, say, rate, tick, looks):
     # The south column from the steps after the slack, as the motor turns as fast either way.
     moving = [i for i in range(1, len(south_points))
               if np.dot(np.subtract(south_points[i], south_points[i - 1]), -unit) > 0.5 * north_strength * dec_step]
-    if len(moving) < 3:
+    # Three steps running that moved it: a drive that answers once and stalls
+    # again is not taken for a south that works.
+    runs = [i for i in moving if i + 1 in moving and i + 2 in moving]
+    moved_any = len(moving)
+    moving = [i for i in moving if runs and i >= runs[0]]
+    if not runs:
         # South did not move the star: a Dec that answers one way only (19-20
         # November 2026, the failing way flipping with the balance) is not
         # given a south made up from north and guided both ways. RA alone, as
         # when north fails.
         return ra_only(columns, steps, ra_step, dec_step, dec, west, rate,
-                       f"{len(south_points) - 1} south steps moved the star in {len(moving)}: Dec answered "
-                       "north only", say)
+                       f"{len(south_points) - 1} south steps moved the star in {moved_any}, never three "
+                       "running: Dec answered north only", say)
     columns["south"] = _rate(south_points[moving[0] - 1:], dec_step)
     for direction, sign in (("north", 1), ("south", -1)):
         points = c.back(direction, dec_step, CAL_REVERSAL_STEPS)
@@ -1878,6 +1883,14 @@ class Supervisor:
         distance = size * (0.5 + 0.5 * rng.random())
         angle = rng.random() * 2 * math.pi
         dx, dy = distance * math.cos(angle), distance * math.sin(angle)
+        cal = load_calibration() or {}
+        if cal.get("dec_guided", True) is False and cal.get("columns", {}).get("west"):
+            # RA alone: the whole distance along RA, one way or the other, so
+            # the dither is as big as asked and one the guider can reach.
+            ra = np.asarray(cal["columns"]["west"], float)
+            unit = ra / max(float(np.hypot(*ra)), 1e-9)
+            way = 1 if rng.random() < 0.5 else -1
+            dx, dy = way * distance * unit[0], way * distance * unit[1]
         done = self.order("dither", (round(dx, 3), round(dy, 3)))
         return (dx, dy), done.get("reason", "")
 
