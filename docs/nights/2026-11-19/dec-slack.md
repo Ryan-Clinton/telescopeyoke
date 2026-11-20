@@ -190,3 +190,50 @@ Tonight stays on RA-only guiding at 120 s. A polar alignment at 00:30
 measured 0.3° (0.15° east, 0.24° low); the bolts were left alone: with Dec
 guided the error would not matter, and with RA only it is what keeps the
 Dec drift one way.
+
+## The controlled test, run (20 November, 00:57-01:03)
+
+`./guidecam.py dectest --engage --cycles 1` (commit d03b044) at IC 405,
+Dec +21.9, east of the pier, guide camera at gain 400 (e98e25c; at its
+default gain the first try at 00:56 found no star). The Dec creep was set
+to 0 first. Nothing else moved during it: the imaging run was stopped and
+no GoTo was made after the run's own at 00:51. Records:
+[dec-engage-test-0059.txt](dec-records/dec-engage-test-0059.txt) (what it
+printed), [dec-engage-test-0059.json](dec-records/dec-engage-test-0059.json)
+(every look, drift taken off) and
+[guide-cal-2359-ra-only.json](dec-records/guide-cal-2359-ra-only.json)
+(the calibration whose RA direction the table below is split by).
+
+**North never engaged in 80 steps; the test stopped there**, as designed,
+before any rest or reversal. Steps of 1.5 s, 10.6" due each, 850" in all.
+The track split along the calibrated RA direction and across it (Dec):
+
+| Steps | Along Dec | Along RA |
+|---|---|---|
+| 0-10 | 6" | +10" |
+| 10-35 | a further 47", steadily (about 2" a step: a fifth of the rate) | back to -11" |
+| 35-80 | **nothing**: within 3" of -57" for 45 steps (480" of pulses) | wandering within ±10", back to 0 |
+
+What it shows:
+
+- **Not slack of any size**: slack is nothing, then the full rate. This
+  was a slow movement of about 55", then a complete stop with the pulses
+  still going out.
+- **Not the last direction**: the creep was off and no reversal or GoTo
+  came before it within the test.
+- **The same as 23:52** (60 steps, nothing) **and 22:31** (12-20% of the
+  rate).
+
+What it does not show:
+
+- **Which way the 55" went.** The calibration in force (23:59) kept RA
+  alone; its north is the perpendicular to RA, with a sign assumed, not
+  measured. The 55" could be the axis following the north pulses at a
+  fifth of the rate, or settling south against them.
+- **Where the movement is lost**: the motor not turning, the worm turning
+  without driving the wheel, or the clutch slipping, look the same from
+  the guide camera. The daylight drive-response test, or a person's hand
+  on the motor housing and an eye on a tape mark across the clutch while
+  pulses go, separates them.
+- RA's ±10" wander during the test is about the size of the seeing and of
+  the drift left after the drift measured before the test was taken off.

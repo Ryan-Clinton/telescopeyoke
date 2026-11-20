@@ -1,0 +1,48 @@
+{
+ "made": "2026-11-19T23:59:04+00:00",
+ "camera": "GPCAMMT9M034M",
+ "focal_mm": 162,
+ "binning": 2,
+ "scale": 9.549305555555556,
+ "dec": 21.99516534805298,
+ "west": false,
+ "columns": {
+  "west": [
+   -0.24261134924789923,
+   0.7023596179395348
+  ],
+  "east": [
+   0.20762926041555846,
+   -0.6200165351170186
+  ],
+  "north": [
+   -0.702764741686781,
+   -0.24275128841356497
+  ],
+  "south": [
+   0.702764741686781,
+   0.24275128841356497
+  ]
+ },
+ "steps": {
+  "west": 12
+ },
+ "step_ms": {
+  "ra": 1600,
+  "dec": 1500
+ },
+ "angle_deg": 109.1,
+ "axes_apart_deg": null,
+ "ra_rate": 7.65,
+ "dec_rate": null,
+ "backlash_s": 0.0,
+ "backlash_spread_s": 0.0,
+ "dec_after_flip": null,
+ "dec_guided": false,
+ "dec_fault": "60 north steps of 1.50 s did not move the star: Dec slack longer than that, or the ST4 north line is not working.",
+ "notes": [
+  "Dec does not follow guide pulses (60 north steps of 1.50 s did not move the star: Dec slack longer than that, or the ST4 north line is not working.): RA guided alone, Dec sent no pulses"
+ ],
+ "usable": true,
+ "first_night_pass": false
+}

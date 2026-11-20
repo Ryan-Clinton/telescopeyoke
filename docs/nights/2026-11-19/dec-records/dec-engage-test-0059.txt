@@ -1,0 +1,6 @@
+Dec creep set to 0"/s (off) for the test
+Dec engage test at Dec +21.9: steps of 1.50 s (10.6" due each), 1 cycle(s)
+  first north: NOT engaged in 80 steps
+Dec engage test stopped: north never engaged in 80 steps
+
+[exited with code 0]
