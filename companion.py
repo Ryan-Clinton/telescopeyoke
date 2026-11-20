@@ -186,6 +186,8 @@ class GuideLog:
 
     def __init__(self, paths):
         self.steps, self.dithers, self.sessions, self.scale, self.exposure = [], [], [], None, None
+        self.spans = []             # (first, last) time each log covers: outside them, guiding is not known
+        self.settings = {}          # session start -> (pixel scale, guide exposure) PHD2 gave for it
         for path in paths:
             self._read(Path(path))
         self.steps.sort()
@@ -196,29 +198,53 @@ class GuideLog:
         self.cycle = (self.exposure + phd2.READOUT_S if self.exposure else
                       statistics.median(spacing) if spacing else 3.0)
 
+    def covers(self, start, end):
+        """Whether a log was being written over the whole of start to end."""
+        return any(a <= start and end <= b for a, b in self.spans)
+
+    def at(self, when):
+        """(pixel scale, guide cycle) of the session `when` falls in, else
+        the log's last given: each frame judged by its own session's."""
+        import phd2
+        for a, b in self.sessions:
+            if a <= when and (b is None or when <= b) and a in self.settings:
+                scale, exposure = self.settings[a]
+                return (scale or self.scale), (exposure + phd2.READOUT_S if exposure else self.cycle)
+        return self.scale, self.cycle
+
     def _read(self, path):
         begun, columns = None, None
+        first = last = None
         for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            stamp = re.search(r"(\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)", line)
+            if stamp and re.match(r"(Guiding|Calibration) (Begins|Ends) at|Log enabled at|PHD2 version", line):
+                seen_at = local(stamp.group(1), "%Y-%m-%d %H:%M:%S", "phd2")
+                first = seen_at if first is None else min(first, seen_at)
+                last = seen_at if last is None else max(last, seen_at)
             if line.startswith("Calibration Begins at"):
                 begun, columns = None, None      # calibration's rows are not guide steps
                 continue
             found = re.match(r"Guiding Begins at (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)", line)
             if found:
-                begun = local(found.group(1), "%Y-%m-%d %H:%M:%S")
+                begun = local(found.group(1), "%Y-%m-%d %H:%M:%S", "phd2")
                 self.sessions.append([begun, None])
                 columns = None
                 continue
             found = re.match(r"Guiding Ends at (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)", line)
             if found and self.sessions:
-                self.sessions[-1][1] = local(found.group(1), "%Y-%m-%d %H:%M:%S")
+                self.sessions[-1][1] = local(found.group(1), "%Y-%m-%d %H:%M:%S", "phd2")
                 begun = None
                 continue
             found = re.search(r"Pixel scale = ([\d.]+) arc-sec/px", line)
             if found:
                 self.scale = float(found.group(1))
+                if begun is not None:
+                    self.settings[begun] = (self.scale, self.settings.get(begun, (None, None))[1])
             found = re.search(r"Exposure = (\d+) ?ms", line)
             if found:
                 self.exposure = int(found.group(1)) / 1000
+                if begun is not None:
+                    self.settings[begun] = (self.settings.get(begun, (None, None))[0], self.exposure)
             if line.startswith("Frame,Time,"):
                 columns = next(csv.reader([line]))
                 continue
@@ -238,10 +264,15 @@ class GuideLog:
             except ValueError:
                 ra = dec = 0.0
             self.steps.append((when, None if dropped else math.hypot(ra, dec)))
+            first = when if first is None else min(first, when)
+            last = when if last is None else max(last, when)
+        if first is not None:
+            self.spans.append((first, last))
 
     def during(self, start, end):
-        return _judge([s for s in self.steps if start <= s[0] <= end], self.scale,
-                      any(a <= start and (b is None or b >= end) for a, b in self.sessions), start, end, self.cycle)
+        scale, cycle = self.at(start)
+        return _judge([s for s in self.steps if start <= s[0] <= end], scale,
+                      any(a <= start and (b is None or b >= end) for a, b in self.sessions), start, end, cycle)
 
     def sparse(self):
         """Stretches PHD2 was guiding with far fewer guide steps than its
@@ -270,7 +301,7 @@ class GuideLog:
         lost = sum(1 for t, d in self.steps if start <= t <= end and d is None)
         dithers = sum(1 for t in self.dithers if start <= t <= end)
         on = [s for s in self.sessions if s[0] <= end and (s[1] is None or s[1] >= start)]
-        return {"star_lost": lost, "dithers": dithers, "guiding_on": bool(on),
+        return {"star_lost": lost, "dithers": dithers, "guiding_on": bool(on), "covered": self.covers(start, end),
                 "guiding_started": [s[0] for s in self.sessions if start < s[0] < end],
                 "guiding_ended": [s[1] for s in self.sessions if s[1] and start < s[1] < end]}
 
@@ -322,16 +353,23 @@ def _judge(steps, scale, on, start, end, cycle):
 # ---------------------------------------------------------------- NINA's own log
 
 ZONE = None          # the zone the logs' local times are in (--tz); None: this computer's
+# Each log's own zone and clock offset where they differ (NINA on one PC,
+# PHD2 on another): --nina-tz/--phd2-tz, and seconds to add to its times to
+# put them on the frames' UTC (--nina-offset/--phd2-offset). Never measured
+# here: the report says the alignment is assumed.
+ZONES, OFFSETS = {"nina": None, "phd2": None}, {"nina": 0.0, "phd2": 0.0}
 
 
-def local(text, fmt):
-    """A local time from a log, as UTC seconds: in ZONE when given (a log
-    from another computer's clock), else this computer's own zone."""
+def local(text, fmt, source=None):
+    """A local time from a log, as UTC seconds: in the source's own zone, or
+    ZONE when given (a log from another computer's clock), else this
+    computer's; plus the source's clock offset."""
     when = dt.datetime.strptime(text, fmt)
-    if ZONE:
+    zone = ZONES.get(source) or ZONE
+    if zone:
         from zoneinfo import ZoneInfo
-        when = when.replace(tzinfo=ZoneInfo(ZONE))
-    return when.timestamp()
+        when = when.replace(tzinfo=ZoneInfo(zone))
+    return when.timestamp() + OFFSETS.get(source, 0.0)
 
 
 # NINA's sequencer logs every step "Starting Category: C, Item: NAME, ..."
@@ -387,6 +425,13 @@ def base_name(path):
     return re.split(r"[\\/]", path)[-1]
 
 
+def file_key(path):
+    """A file as its folder and name (M33/LIGHT_001.fits), the same from
+    NINA's Windows path and from the folder read here: two targets' LIGHT_001
+    are two files, not one."""
+    return "/".join(re.split(r"[\\/]", str(path))[-2:]).lower()
+
+
 def logs_data(nina, guide=None):
     """The same night as data, for --json: exposures by purpose, the steps'
     time by kind, events, errors, NINA's judgement, and PHD2's gaps."""
@@ -433,6 +478,9 @@ def logs_only(nina, guide=None):
     return lines
 
 
+SAVE_WITHIN_S = 120   # a file saved more than this after its exposure's end belongs to no exposure
+
+
 class NinaLog:
     """NINA's log (%LOCALAPPDATA%\\NINA\\Logs), read: each exposure started
     and each file saved, the sequencer's steps with when they began and
@@ -455,11 +503,30 @@ class NinaLog:
                 if not found:
                     continue
                 stamp, level, source, method, _, text = found.groups()
-                when = local(stamp[:26], "%Y-%m-%dT%H:%M:%S.%f" if "." in stamp else "%Y-%m-%dT%H:%M:%S")
+                when = local(stamp[:26], "%Y-%m-%dT%H:%M:%S.%f" if "." in stamp else "%Y-%m-%dT%H:%M:%S", "nina")
                 self._take(when, level, source, method, text.strip(), open_steps)
         for (name, kind), began in open_steps.items():
             self.steps.append({"kind": kind, "name": name, "start": began, "end": None, "failed": False})
         self.steps.sort(key=lambda s: s["start"])
+        # The logs in any order (later-session.log earlier-session.log), or
+        # one given twice: one time order, each event once, before anything
+        # is matched by time (bisect needs it sorted).
+        def once(items, when):
+            seen, out = set(), []
+            for item in sorted(items, key=when):
+                key = repr(item)
+                if key not in seen:
+                    seen.add(key)
+                    out.append(item)
+            return out
+        self.exposures = once(self.exposures, lambda e: e["start"])
+        self.saves = once(self.saves, lambda s: s["time"])
+        self.detections = once(self.detections, lambda d: d[0])
+        self.focuser_moves = once(self.focuser_moves, lambda t: t)
+        self.solver_saves = once(self.solver_saves, lambda t: t)
+        self.targets = once(self.targets, lambda t: t[0])
+        self.events = once(self.events, lambda e: e[0])
+        self.errors = once(self.errors, lambda e: e[0])
 
     def _take(self, when, level, source, method, text, open_steps):
         found = re.search(r"Target: (.+?) RA: ", text)       # a sequence step naming its target
@@ -540,8 +607,16 @@ class NinaLog:
         if self._solved is not None:
             return
         import bisect
-        starts = sorted(e["start"] for e in self.exposures)
-        owner = lambda when: starts[bisect.bisect_right(starts, when) - 1] if starts and when >= starts[0] else None  # noqa: E731
+        ordered_e = sorted(self.exposures, key=lambda e: e["start"])
+        starts = [e["start"] for e in ordered_e]
+
+        def owner(when):
+            # The last exposure started before it, and only if it could have
+            # ended by then (its length and two minutes): else unmatched.
+            i = bisect.bisect_right(starts, when) - 1
+            if i < 0 or when - starts[i] > ordered_e[i]["seconds"] + SAVE_WITHIN_S:
+                return None
+            return starts[i]
         self._saved = {owner(s["time"]) for s in self.saves} - {None}
         self._file = {owner(s["time"]): s for s in self.saves}
         self._solved = {owner(when) for when in self.solver_saves} - {None}
@@ -696,9 +771,11 @@ class NinaLog:
         for name, seconds in sorted(took.items(), key=lambda kv: -kv[1]):
             said.append(f"NINA: {name}" + (f" {seconds / 60:.1f} min" if seconds >= 30 else ""))
         started = [e for e in self.exposures if start <= e["start"] <= end and self.purpose(e) == "frames"]
-        saved = [s for s in self.saves if start <= s["time"] <= end]
-        if len(started) > len(saved):
-            said.append(f"NINA: {len(started) - len(saved)} exposure(s) for frames started and not saved")
+        # Each exposure judged by the save matched to it (saved()), so one
+        # begun late in the window and saved after it is not called unsaved.
+        unsaved = [e for e in started if not self.saved(e)]
+        if unsaved:
+            said.append(f"NINA: {len(unsaved)} exposure(s) for frames started and not saved")
         for when, what in self.events:
             if start <= when <= end:
                 said.append(f"NINA: {what} at {_clock(when)}")
@@ -878,7 +955,9 @@ def gaps(rows, guide=None, nina=None):
             if seen["dithers"]:
                 why.append(f"{seen['dithers']} dither(s), the settling after them (measured)")
             if not seen["guiding_on"]:
-                why.append("no guiding at all then (measured)")
+                # Only where the log was being written: outside it, unknown.
+                why.append("no guiding at all then (measured)" if seen.get("covered", True) else
+                           "PHD2's log given does not cover then: whether it was guiding is not known")
         excess = gap - usual
         filled = {}
         if nina:
@@ -981,16 +1060,22 @@ def report(rows, guide=None, left=(), nina=None):
     reconciled = None
     if nina:
         lights = [e for e in nina.exposures if nina.purpose(e) == "frames"]
-        saved = {base_name(nina.saved_file(e)["file"]) for e in lights if nina.saved(e)}
-        every_save = {base_name(s["file"]) for s in nina.saves}
-        found = {Path(r["file"]).name for r in rows} | {Path(r["file"]).name for r in left}
-        measured = {Path(r["file"]).name for r in rows}
-        judged = {Path(r["file"]).name for r in rows if not any(c["cause"] == UNASSESSABLE for c in r["causes"])}
+        # By folder and name; by name alone only when the frames were copied
+        # into folders of other names (no folder-and-name matches at all).
+        key = file_key
+        if not ({file_key(s["file"]) for s in nina.saves} & {file_key(r["file"]) for r in rows + left}):
+            key = lambda path: base_name(str(path)).lower()  # noqa: E731
+        saved = {key(nina.saved_file(e)["file"]) for e in lights if nina.saved(e)}
+        every_save = {key(s["file"]) for s in nina.saves}
+        found = {key(r["file"]) for r in rows} | {key(r["file"]) for r in left}
+        measured = {key(r["file"]) for r in rows}
+        judged = {key(r["file"]) for r in rows if not any(c["cause"] == UNASSESSABLE for c in r["causes"])}
         reconciled = {"started": len(lights), "saved": len(saved), "found": len(saved & found),
                       "measured": len(saved & measured), "judged": len(saved & judged),
                       "saved_not_found": sorted(saved - found), "found_not_logged": sorted(found - every_save)}
     return {"frames": len(rows), "files": len(rows) + len(left), "left_out": reasons, "parts": parts, "gaps": holes,
             "reconciled": reconciled,
+            "timeless": sum(1 for r in rows if not (r.get("start") and r.get("end"))),
             "interruptions": guide.interruptions() if isinstance(guide, GuideLog) else [],
             "sparse": guide.sparse() if isinstance(guide, GuideLog) else [],
             "lost": lost, "rows": rows}
@@ -1048,8 +1133,18 @@ def words(night):
         lines.append("Where the time went: " + ", ".join(f"{cause} {seconds / 60:.0f} min" for cause, seconds in worst))
     lines.append("Measured: star counts, sharpness, shape, sky level, temperatures, guide steps. 'Acceptable' is "
                  "judged against the same setup's best frames that night, not a standard; 'likely' is inferred, not "
-                 "proven. Frames the capture program never saved, and what it did in a gap (focusing, a meridian "
-                 "flip, a download), are not seen here.")
+                 "proven. " + ("Unsaved exposures and the steps in a gap are from NINA's log, as it says them."
+                               if night.get("reconciled") is not None else
+                               "Frames the capture program never saved, and what it did in a gap (focusing, a "
+                               "meridian flip, a download), are not seen here."))
+    # The clocks are taken as given (--tz, and --nina-/--phd2-tz and -offset):
+    # never measured against each other here.
+    lines.append("The logs' clocks are taken to agree with the frames' UTC" +
+                 (f" after the offsets given ({', '.join(f'{k} {v:+g} s' for k, v in OFFSETS.items() if v)})"
+                  if any(OFFSETS.values()) else "") + ": a log from a computer whose clock was off moves what is "
+                 "matched to each frame.")
+    if night.get("timeless"):
+        lines.append(f"{night['timeless']} frame(s) had no start time: measured for quality, left out of the timeline.")
     return "\n".join(lines)
 
 
@@ -1072,7 +1167,13 @@ def watch(folder, guide=None, say=print, poll=5.0, sleep=time.sleep, once=False)
     name = dt.date.today().isoformat()
     for path in frames(folder):
         seen.add(path)                       # what was there before: the night so far is not re-said
-    say(f"watching {folder}: {len(seen)} frames already there; nothing is sent to any device")
+        # ...but it is the night's reference: joined part way, each new frame
+        # is still judged against that setup's best so far.
+        row = read_one(path)
+        if "skip" not in row:
+            rows.append(row)
+    say(f"watching {folder}: {len(seen)} frames already there, {len(rows)} of them the night's reference so far; "
+        "nothing is sent to any device")
     while True:
         for path in frames(folder):
             if path in seen:
@@ -1130,11 +1231,17 @@ def main(argv=None):
     ap.add_argument("--night", metavar="YYYY-MM-DD", help="only the night that begins on this date (noon to noon)")
     ap.add_argument("--tz", metavar="ZONE", help="the zone the logs' local times are in, such as Europe/Rome "
                                                  "(default: this computer's)")
+    for source in ("nina", "phd2"):
+        ap.add_argument(f"--{source}-tz", metavar="ZONE", help=f"the zone {source.upper()}'s log is in, if not --tz's")
+        ap.add_argument(f"--{source}-offset", type=float, default=0.0, metavar="SECONDS",
+                        help=f"seconds to add to {source.upper()}'s log times, when its computer's clock was off")
     ap.add_argument("--phd2", metavar="HOST:PORT", help="for watch: listen to PHD2's event server")
     ap.add_argument("--json", action="store_true")
     args = ap.parse_args(argv)
     global ZONE
     ZONE = args.tz
+    ZONES.update(nina=args.nina_tz, phd2=args.phd2_tz)
+    OFFSETS.update(nina=args.nina_offset, phd2=args.phd2_offset)
     if args.folder and not Path(args.folder).is_dir():
         sys.exit(f"No folder {args.folder}")
     if not args.folder and not (args.command == "report" and args.nina_log):

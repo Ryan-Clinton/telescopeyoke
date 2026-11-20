@@ -29,7 +29,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 8 | Calibration and scientific measurement accuracy | done 20 Nov 2026, re-checked |
 | 9 | Demo claims versus real-world proof | done 20 Nov 2026, re-checked |
 | 10 | Hardware onboarding and compatibility | done 20 Nov 2026, re-checked; 3, 4, 8 and 9 open |
-| 11 | NINA/PHD2 companion | not started |
+| 11 | NINA/PHD2 companion | done 20 Nov 2026; re-check asked |
 | 12 | State management and data integrity | not started |
 | 13 | Observing scheduler and scientific yield | not started |
 | 14 | Weather and environmental decisions | not started |
@@ -425,4 +425,19 @@ Documentation only; `docs/validation.md` is the authority and is unchanged.
 | 2 | The INDI device chosen is not tied to the profile its frames are labelled with | P1 | Confirmed and fixed | A profile that names its `model` refuses an INDI device whose name does not hold it |
 | 3 | A managed INDI server not yet started let the doctor call imaging ready | P1 | Confirmed (a regression of 25ca017) and fixed | It is a FAIL again, saying the camera has not been seen yet and `./snap.py` opens it |
 | 4 | Findings 3, 4, 8 and 9 are explained, not changed | P2 | Agreed | They stay open in the status table. The owner's rig has never given its word for "first moves" (its GoTos prove it by use), so requiring the word would mark a rig that has moved for weeks as not set up: binding the word to the mount's identity comes with it |
+
+## 11. NINA/PHD2 companion, 20 November 2026
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | One zone for every log, no clock offset, alignment never doubted | P1 | Partly right, fixed | `--nina-tz`/`--phd2-tz` and `--nina-offset`/`--phd2-offset` give each log its own zone and clock offset; the report now says the clocks are taken to agree with the frames' UTC, after any offsets. Measuring the offset from the data is not attempted |
+| 2 | Several NINA logs in the wrong order break the time matching | P1 | Confirmed and fixed | After reading, every list (exposures, saves, detections, focuser moves, targets, events, errors) is put in time order, and a line given twice counts once |
+| 3 | A save is given to the last exposure started, however long before | P1 | Confirmed and fixed | Only within the exposure's length and two minutes (`SAVE_WITHIN_S`); otherwise it belongs to none |
+| 4 | Files are matched by name alone, so two targets' LIGHT_001 are one | P1 | Confirmed and fixed | By folder and name (`file_key`); by name alone only when the frames were copied into folders of other names and nothing matches that way |
+| 5 | No PHD2 session in a gap is "no guiding (measured)" even outside the log | P1 | Confirmed and fixed | Each log's span is kept; outside every span the report says PHD2's log does not cover then and guiding is not known |
+| 6 | One pixel scale and cycle for every PHD2 session | P1 | Confirmed and fixed | Each session keeps the scale and exposure PHD2 gave for it, and a frame is judged by its own session's |
+| 7 | Unsaved frames counted as starts minus saves in a window | P1 | Confirmed and fixed | Counted from each exposure's own matched save |
+| 8 | The live watch ignores the frames already there as its reference | P2 | Confirmed and fixed | They are read into the reference without being said again |
+| 9 | Frames with no start time weaken the timeline silently | P2 | Confirmed and fixed | The report says how many were measured but left out of the timeline |
+| 10 | The report says unsaved frames are not seen even with NINA's log | P2 | Confirmed and fixed | With NINA's log it says they are from the log |
 
