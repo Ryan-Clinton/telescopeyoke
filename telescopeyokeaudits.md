@@ -575,10 +575,10 @@ The rain alert stays on in every case (the owner's rule, 15 November 2026): thes
 | 2 | install.sh does not check for Python 3.11 | P1 | Confirmed and fixed | It stops before installing anything on an older python3, naming Ubuntu 24.04 or Debian 12 as having it. Its comment no longer mentions CI |
 | 3 | No upgrade procedure | P1 | Confirmed and fixed (documented) | The README says what to copy from the old folder (`config.toml`, `rigs/`, `cache/`, `calibration/`, `frames/`, `horizon/`, `web/`), to run the installer again for the launchers, and that the old folder is the way back. Separating data from code is planned |
 | 4 | A zip of main reports itself as a release | P1 | Confirmed and fixed | `release.py` adds a `RELEASE` file (tag and commit) to the zip; `doctor.py` reports "release TAG (commit)" from it, and a zip without one as having no release record |
-| 5 | Windows install leaves out the optional libraries | P2 | Agreed and planned | The Windows setup notes to name `pip install astroquery hidapi` for TESS and the filter wheel, and sxwheel.py's message for Windows |
-| 6 | No record of the library versions proven | P2 | Agreed and planned | The versions on the owner's laptop recorded in docs/validation.md with the next release |
+| 5 | Windows install leaves out the optional libraries | P2 | Agreed; fixed after the loop | `install.ps1` installs pyproject's `archive` and `wheel` extras (astroquery, hidapi), a failure not fatal and said; sxwheel.py's message names pip on Windows |
+| 6 | No record of the library versions proven | P2 | Agreed; fixed after the loop | docs/validation.md, "The software the proofs above ran on": the owner's laptop's versions, older ones unproven |
 | 7 | Windows claims need qualifying | P2 | Already so | The README says the camera has taken frames indoors and that the installer, demo launcher, Start Menu entries and window are untried |
-| - | A SHA-256 with each zip | - | Agreed and planned | With the next release |
+| - | A SHA-256 with each zip | - | Agreed; fixed after the loop | `release.py` writes `NAME.zip.sha256`, publishes it beside the zip and puts the sum in the notes |
 
 ## 17, re-audited at 1bacb9d
 

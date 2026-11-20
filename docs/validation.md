@@ -98,6 +98,15 @@ The account of everything tried so far, feature by feature, is at the end:
 | 16 | Does the handset take its clock from the computer? | `./mount.py settime` with the handset at its main menu, then read its date on its own screen. | Yes, once: 7 October 2026, at the main menu, it read back the computer's time to the second and its sidereal clock came to 0.01° from true. The date on its own screen was not looked at. |
 | 17 | Can it predict what a turn of a bolt does? | During polar alignment: measure; turn the left azimuth bolt in exactly half a turn; measure again saying so (`--turned 0.5 0`, or the screen); then another half turn the same way and measure again. | Partly, 17 October 2026, not in exact half turns: a quarter turn moved the axis about 0.2° east (the program learnt 0.72° a turn from it), and the next adjustment, told nothing, moved it 2.9°, about 1.7° a turn if it was the advised one and three quarters. The learnt figure was too small: the advice in turns is not yet to be believed. |
 
+### The software the proofs above ran on
+
+The owner's laptop, Ubuntu, 20 November 2026: Python 3.14.4, numpy 2.3.5,
+astropy 7.2.0, scipy 1.16.3, pillow 12.1.1, requests 2.32.5, pyserial 3.5,
+jsonschema 4.19.2, sgp4 2.22, astroquery 0.4.11, hidapi 0.15.0, gTTS 2.5.4,
+pychromecast 14.0.9; astrometry.net 0.98 and INDI 1.9.9 from Ubuntu's
+packages. `pyproject.toml` gives the oldest versions allowed, which have not
+all been tried: an older one than these is unproven here.
+
 ## Why frames are slow: what has been checked
 
 A 1 s exposure takes about 9 s to arrive and a 2 s one about 14 s. Checked on

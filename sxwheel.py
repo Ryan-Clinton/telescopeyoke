@@ -54,8 +54,9 @@ def _hid():
             return __import__(name)
         except ImportError:
             continue
-    raise WheelError("The Python hidapi module is missing: sudo apt-get install python3-hid "
-                     "(./install.sh does it).")
+    raise WheelError("The Python hidapi module is missing: python -m pip install hidapi (install.ps1 does it)"
+                     if sys.platform == "win32" else
+                     "The Python hidapi module is missing: sudo apt-get install python3-hid (./install.sh does it).")
 
 
 class Wheel:

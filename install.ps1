@@ -55,6 +55,14 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "pywebview did not install; TelescopeYoke will open its window with Edge instead."
 }
 
+# The optional libraries Ubuntu's installer puts in from its packages:
+# astroquery for TESS light curves (pyproject's "archive"), hidapi for the
+# Starlight Xpress filter wheel ("wheel"). Each is needed only for that.
+python -m pip install ".[archive,wheel]"
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "astroquery or hidapi did not install: TESS light curves and the filter wheel need them (python -m pip install astroquery hidapi)."
+}
+
 # TelescopeYoke and its demo in the Start Menu.
 python app.py --install-launcher
 

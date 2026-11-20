@@ -52,9 +52,11 @@ def disagreements(version=agent.VERSION):
     return wrong
 
 
-def notes(version=agent.VERSION):
+def notes(version=agent.VERSION, digest=None):
     tag, name, address = names(version)
     _, text = changes(version)
+    check = (f"\nSHA-256 of {name}: `{digest}` (also in {name}.sha256). To check it: `sha256sum {name}`\n"
+             f"on Ubuntu, `Get-FileHash {name}` in PowerShell.\n") if digest else ""
     return f"""![The demo: tonight's report, a GoTo centred by plate solving, focusing, and an imaging run]({REPO}/raw/{tag}/docs/tour.gif)
 
 **To try it, with no telescope:** download [{name}]({address}) and unpack it.
@@ -67,8 +69,7 @@ sky open in a window; nothing real is connected or moved.
 [hardware report]({REPO}/issues/new?template=hardware-report.md). It only
 looks at what is connected; you do not have to let it move the mount.
 
-{text}
-"""
+{text}{check}"""
 
 
 def git(*args):
@@ -84,7 +85,12 @@ def build(version=agent.VERSION):
     import zipfile
     with zipfile.ZipFile(OUT / name, "a") as z:
         z.writestr(f"{name[:-4]}/RELEASE", f"{tag} {git('rev-parse', 'HEAD')}\n")
-    (OUT / "notes.md").write_text(notes(version), encoding="utf-8")
+    # Its SHA-256, published beside it and in the notes, so a download can be
+    # checked against what was built here.
+    import hashlib
+    digest = hashlib.sha256((OUT / name).read_bytes()).hexdigest()
+    (OUT / f"{name}.sha256").write_text(f"{digest}  {name}\n", encoding="utf-8")
+    (OUT / "notes.md").write_text(notes(version, digest), encoding="utf-8")
     return OUT / name, OUT / "notes.md"
 
 
@@ -111,7 +117,7 @@ def main():
         sys.exit("This commit is not what is on GitHub's main branch. Push first.")
     if git("tag", "--list", tag):
         sys.exit(f"{tag} already exists.")
-    subprocess.run(["gh", "release", "create", tag, str(archive), "--target", git("rev-parse", "HEAD"),
+    subprocess.run(["gh", "release", "create", tag, str(archive), f"{archive}.sha256", "--target", git("rev-parse", "HEAD"),
                     "--title", f"{tag}: {title}", "--notes-file", str(words)], cwd=ROOT, check=True)
     print(f"Published. The zip is at {address}")
 
