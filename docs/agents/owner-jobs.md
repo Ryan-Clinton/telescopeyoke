@@ -40,8 +40,8 @@ result is recorded.
    the camera is warmed in software, never with the cooler running (19
    November 16:31: it ran away to -7.3 °C that way). It came with one
    5.5 × 2.1 DC lead, as SVBONY's box list says: a second is needed for
-   the mount and the camera both. A 1.5 m (5 ft) 5.5 × 2.1 male-to-male
-   lead was ordered on 20 November, due 24 November.
+   the mount and the camera both. Two 1.5 m (5 ft) 5.5 × 2.1 male-to-male
+   leads (a twin pack) were ordered on 20 November, due 24 November.
 7. **The 183M after a power cut**: a procedure that brings it back without
    the cooler running away. Gary: if the cooler ran with the 12 V out, warm
    it to ambient in software before the 12 V goes back in, then the normal
