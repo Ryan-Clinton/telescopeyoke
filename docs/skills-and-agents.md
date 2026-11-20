@@ -11,8 +11,8 @@
 Built 17 October 2026: the command classes
 (`policy.py`), the safety hooks and the decision record (`.claude/hooks/`,
 `agentlog.py`, `./ty agent-report`), the run watch (`./ty watch-run`), fourteen skills in `.claude/skills/` and six
-agents in `.claude/agents/`. Proven so far only in this
-session: none has yet been used at the telescope. Written 17 October 2026,
+agents in `.claude/agents/`. Used at the telescope since (below, and
+docs/validation.md). Written 17 October 2026,
 revised the same day. This specifies Claude Code skills,
 subagents, hooks and two plain background jobs for the procedures this
 project already has, so that any session does them the same way every
@@ -341,8 +341,7 @@ any `hardware` or `external` command from a subagent, whatever its tools.
 
 ## The background jobs (no model)
 
-- **`run-watch`**: a small command, `./ty watch-run` (to be written, with
-  its test), reads `frames.jsonl` and the camera state every minute and
+- **`run-watch`**: a small command, `./ty watch-run` (`runwatch.py`), reads `frames.jsonl` and the camera state every minute and
   prints a line only on a change worth acting on: no frame kept for 5
   minutes, the share kept falling by half, the stars' brightness falling
   (from `alert.py`'s own measure), the run ending. The session starts it

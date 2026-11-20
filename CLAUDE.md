@@ -64,7 +64,7 @@ checkout has none of it. Some suggestions for a new rig:
 
 ## Commands
 
-There is no build step and no linter; the scripts run from the checkout.
+There is no build step; the scripts run from the checkout. `ruff check` is the one check.
 
 ```bash
 ./install.sh                                # distro packages

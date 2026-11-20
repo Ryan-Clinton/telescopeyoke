@@ -47,9 +47,11 @@ Only on the person's word. The imaging run stops at its own limits
    the patrol found. The full summary is `morning-summary`, tomorrow.
 6. Flats for a camera with matched calibration (the owner's 183M):
    `schedule.py end` starts the dawn sky flats itself after parking
-   (cache/dawn-flats.log). Ending by hand before dawn, start them the same
-   way: `./calibrate.py flat --filters FILTERS --twilight` in the
-   background, with the filters the night used. Never skip them for dew no one has seen or cloud: an
+   (cache/dawn-flats.log): never start them a second time. Only when the
+   night was ended without `schedule.py end`, or its message says the flats
+   could not be started, start them by hand:
+   `./calibrate.py flat --filters FILTERS --twilight` in the background,
+   with the filters the night used. Never skip them for dew no one has seen or cloud: an
    overcast dawn makes good flats. Tell the person in one line to leave the
    camera, wheel and focus alone until they are done, and if they pack up
    first, the flats are lost: say so before, not after.

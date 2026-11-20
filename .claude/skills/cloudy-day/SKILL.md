@@ -8,8 +8,9 @@ allowed-tools: Bash(./ty candidates *) Bash(./ty characterise *) Bash(./ty agent
 # A cloudy day
 
 A cloudy day is research time: the telescope is not the only instrument.
-Start these at once, each in the background, without offering them, and
-say each result when it lands (docs/discovery.md, docs/archive.md):
+Start A and B at once, each in the background, without offering them; C
+waits for A's batch. Say each result when it lands (docs/discovery.md,
+docs/archive.md):
 
 A. **Kepler's archive:** `./archive.py screen --batch 200` (on the
    desktop for big batches) carries the screen of Kepler's stars on from

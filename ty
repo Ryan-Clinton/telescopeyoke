@@ -32,7 +32,10 @@
 
 Add --json to any of them for a machine-readable answer in one fixed shape
 (see schemas/ and docs/agents/). Add --demo to try it with no telescope.
-Nothing here moves the mount except "ty mount" commands that say they do.
+The views here only read. The pass-throughs drive hardware when the
+script does: "ty mount" motion commands, "ty shoot" (it re-centres), "ty
+focus" (the focuser; --field also slews), "ty moon", and the camera through
+"ty lucky capture" and "ty collimation". policy.py classes every one.
 """
 import argparse
 import json

@@ -880,17 +880,19 @@ def dawn_flats(popen=subprocess.Popen):
     camera = config.camera_name()
     if stacking.dark_method(camera) != "matched" or not config.hardware()["train"].get("filterwheel"):
         return None
-    import shlex
     here = Path(__file__).parent
-    python = shlex.quote(sys.executable)
     # Then the camera keeper (keeper.py), if it holds the camera, warms the
     # sensor slowly and lets it go: the night's one warm-up, after the flats.
+    # The two in turn by Python itself, not a Unix shell, so Windows runs them too.
     wanted = dawn_filters()
-    line = (f"{python} calibrate.py flat --twilight --tell --filters {' '.join(wanted)}; "
-            f"{python} keeper.py stop")
+    flats = ["calibrate.py", "flat", "--twilight", "--tell", "--filters", *wanted]
+    line = ("import subprocess, sys\n"
+            f"subprocess.run([sys.executable, *{flats!r}])\n"
+            "subprocess.run([sys.executable, 'keeper.py', 'stop'])\n")
     FLATS_LOG.parent.mkdir(parents=True, exist_ok=True)
     with open(FLATS_LOG, "w", encoding="utf-8") as log:
-        popen(["sh", "-c", line], stdout=log, stderr=subprocess.STDOUT, cwd=str(here), start_new_session=True)
+        popen([sys.executable, "-c", line], stdout=log, stderr=subprocess.STDOUT, cwd=str(here),
+              start_new_session=True)
     return (f"Dawn flats in {', '.join(wanted[:-1])} and {wanted[-1]} will be taken from where it is parked as the sky brightens, "
             "with nothing over the tube, and you will be told when they are kept or if they fail: "
             "leave the camera, wheel and focus as they are until then.")
@@ -998,7 +1000,11 @@ def end(say=print, send=None, run=subprocess.run, now=None, home=None, start_fla
                  if parked else
                  f"Observation is over. Tonight: {got}. The telescope could NOT be parked: it is still "
                  f"{state.get('state', 'where it was')}. Please check it.")
-        flats = (start_flats or dawn_flats)() if parked and sessions else None
+        try:
+            flats = (start_flats or dawn_flats)() if parked and sessions else None
+        except OSError as problem:      # could not start: the camera is still warmed below
+            say(f"The dawn flats could not be started ({problem}).")
+            flats = None
         if flats:
             words += f" {flats}"
         elif release_camera():

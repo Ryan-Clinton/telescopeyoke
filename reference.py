@@ -129,8 +129,9 @@ def stack_footprint(stack, record=None, name=None, solver=None):
         except Exception:        # no solver, no stars, no file: the caller stays cautious
             return None
         if record and record.is_file():
-            kept["footprint"] = solve
-            record.write_text(json.dumps(kept, indent=1), encoding="utf-8")
+            import records
+            # Under the record's lock and whole: a depth record is a result.
+            records.change(record, lambda r: r.__setitem__("footprint", solve), empty={})
     return footprint.from_solve(solve, f"plate solve of {stack}")
 
 

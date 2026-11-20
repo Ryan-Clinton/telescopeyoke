@@ -15,7 +15,7 @@ core functions ───┼── --json (interface.py envelope)
 - `mount.py` speaks the SynScan handset's serial protocol. It measures the
   handset's clock error, keeps a pointing error from plate solves, and
   applies the limits. `tracking.py` models drift from a rough polar
-  alignment. `simulator.py` stands in for the handset in tests and `--demo`.
+  alignment. `simulator.py` stands in for the handset in `--demo` (and once did in the tests, removed 4 November 2026).
 - `indi.py` is a small INDI client; `camera.py` turns it into "give me a frame".
   A caller that wants other than the full sensor names a purpose,
   `cam.use("focus_fast")`, and the camera layer (`camera.py`, `altair.py`,

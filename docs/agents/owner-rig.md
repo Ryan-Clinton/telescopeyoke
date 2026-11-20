@@ -107,7 +107,8 @@ motor turned and the knob did not, so focus was by hand with the spoken aid.
 ## The night's end
 
 - Flats with the 183M: `schedule.py end` starts the dawn sky flats itself
-  after parking (cache/dawn-flats.log). Ending by hand before dawn:
+  after parking (cache/dawn-flats.log); never a second time. Only when
+  the night ended without it, or it says they could not be started:
   `./calibrate.py flat --filters B G R L --twilight` in the background.
 - The night's diary entry: written from the running notes and published
   through the inbox (`~/ryanclinton.uk/POSTING.md`) at the end of every

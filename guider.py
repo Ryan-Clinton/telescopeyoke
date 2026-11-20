@@ -821,9 +821,9 @@ def _calibrate(cam, seconds, dec, west, gain, say, rate, tick, looks):
 
 
 def keep_calibration(cal, path=None):
-    path = path or CAL_FILE
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(cal, indent=1), encoding="utf-8")
+    import records
+    # Whole or not at all: a write cut short must not lose the last good calibration.
+    records.write(path or CAL_FILE, cal)
 
 
 def load_calibration(path=None):
