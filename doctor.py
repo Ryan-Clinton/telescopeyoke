@@ -434,7 +434,9 @@ def check_camera():
         if config.hardware()["indi"].get("manage_server"):
             # Started when the camera is opened: not a failure, and not a check
             # of the camera either.
-            return WARN, "camera not checked yet: the INDI server starts when the camera is first opened"
+            # Not ready until it has been seen: the server is not a camera.
+            return FAIL, ("camera not checked yet: the INDI server starts when the camera is first opened; "
+                          "./snap.py opens it and says")
         return FAIL, "camera not checked: no INDI server"
     # The device camera.py would open, by the same rule: a filter wheel or a
     # mount's driver has a CONNECTION too, and is not a camera.

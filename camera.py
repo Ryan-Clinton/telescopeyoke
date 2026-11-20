@@ -275,6 +275,12 @@ class Camera:
             self.name = cameras[0] if cameras else None
         if self.name is None:
             raise Refusal("CAMERA_NOT_CONNECTED", "No camera found. Is it plugged in?")
+        model = config.hardware()["camera"].get("model")
+        if model and str(model).lower() not in self.name.lower():
+            # The frames are labelled from the profile: a device that is not
+            # the profile's camera never has its frames called that camera's.
+            raise Refusal("CAMERA_NOT_CONNECTED", f"The INDI camera {self.name} is not the profile's camera "
+                          f"(model {model}): choose the profile for it, or name the right device under [indi].")
         c.connect(self.name)
         # The next two exist only on Altair/ToupTek drivers.
         if c.get(self.name, "CCD_AUTO_EXPOSURE"):

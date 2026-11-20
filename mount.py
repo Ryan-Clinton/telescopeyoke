@@ -52,7 +52,6 @@ plugged in:  ./mount.py --demo goto M27
 import argparse
 import contextlib
 import os
-import glob
 import json
 import math
 import signal
@@ -320,21 +319,15 @@ class Mount:
             # The handset's lead is recognised by its USB adapter's name.
             match = mount_settings()["serial_match"]
             asked = port
-            if not port and not host.WINDOWS:
-                leads = sorted(glob.glob(f"/dev/serial/by-id/*{match}*"))
-                if len(leads) > 1:
-                    # Two leads of the handset's kind (two telescopes on one
-                    # computer): never the first one found.
-                    raise Refusal("MOUNT_NOT_CONNECTED", f"{len(leads)} serial leads match \"{match}\" "
-                                  f"({', '.join(Path(p).name for p in leads)}): name this mount's with --port, "
-                                  "or a serial_match only its lead has.")
-            port = port or host.serial_port(match) or host.serial_fallback()
+            # One lead of the handset's kind, or a refusal naming them: never
+            # the first of two (two telescopes on one computer).
+            port = port or host.one_serial_port(match, "handset") or host.serial_fallback()
             if not host.WINDOWS and (port is None or not Path(port).exists()):
                 # Dropped off USB (15 November 2026: the hub it hangs from went
                 # at 20:00): the hub port tried again from here, not by a hand.
                 import usbguard
                 usbguard.recover("handset", say=lambda *a, **k: print(*a, file=sys.stderr, **k))
-                port = asked or host.serial_port(match) or host.serial_fallback()
+                port = asked or host.one_serial_port(match, "handset") or host.serial_fallback()
             if port is None:
                 seen = ", ".join(f"{device} ({name})" for device, name in host.serial_ports())
                 raise Refusal("HANDSET_NOT_ANSWERING",

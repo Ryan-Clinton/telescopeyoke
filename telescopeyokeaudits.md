@@ -28,7 +28,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 7 | Scientific discovery reliability | done 20 Nov 2026, re-checked |
 | 8 | Calibration and scientific measurement accuracy | done 20 Nov 2026, re-checked |
 | 9 | Demo claims versus real-world proof | done 20 Nov 2026, re-checked |
-| 10 | Hardware onboarding and compatibility | done 20 Nov 2026; re-check asked |
+| 10 | Hardware onboarding and compatibility | done 20 Nov 2026, re-checked; 3, 4, 8 and 9 open |
 | 11 | NINA/PHD2 companion | not started |
 | 12 | State management and data integrity | not started |
 | 13 | Observing scheduler and scientific yield | not started |
@@ -409,11 +409,20 @@ Documentation only; `docs/validation.md` is the authority and is unchanged.
 |---|---|---|---|---|
 | 1 | Two INDI cameras: the first is used, labelled as the profile's | P1 | Confirmed and fixed | `camera.py` refuses two eligible INDI cameras unless `[indi] camera` names one, and uses only that one; the doctor says the same (a FAIL, no longer a WARN) |
 | 2 | The mount can be the first lead or Wi-Fi adapter found | P1 | Partly right, fixed | Two leads matching `serial_match`, or two Wi-Fi adapters answering, are refused, naming them. The `/dev/ttyUSB0` fallback is smaller than claimed: the handset's echo test (`Kx` answered `x#`) refuses anything that is not a SynScan handset before any command |
-| 3 | First moves counted done from corrected GoTos | P1 | Smaller than claimed, no change | The step already says how it is known ("proven by use ... not the same as someone watching") apart from the person's word, and without a handset `direct.py` refuses GoTos until a person has watched the Dec direction, whatever onboarding says. Binding the word to the mount's identity is planned |
-| 4 | One changed setting marks a whole part set | P1 | Smaller than claimed, no change | The step lists what is still the example's ("still the example's: ..."), and the plate solve's scale check judges focal length and pixel size together |
+| 3 | First moves counted done from corrected GoTos | P1 | Smaller than claimed; open (see 10, re-checked) | The step already says how it is known ("proven by use ... not the same as someone watching") apart from the person's word, and without a handset `direct.py` refuses GoTos until a person has watched the Dec direction, whatever onboarding says. Binding the word to the mount's identity is planned |
+| 4 | One changed setting marks a whole part set | P1 | Smaller than claimed; open (see 10, re-checked) | The step lists what is still the example's ("still the example's: ..."), and the plate solve's scale check judges focal length and pixel size together |
 | 5 | The first-night skill and newhardware call Alpaca-reachable devices impossible | P1 | Confirmed and fixed | Both say "experimental through its ASCOM driver (Alpaca), tried only on ASCOM's simulator" where that route exists, apart from proven and unsupported |
 | 6 | The doctor tells an Alpaca user to close their ASCOM driver | P2 | Confirmed and fixed | With `[mount] link = "alpaca"` it says to leave the driver and its Alpaca server running |
 | 7 | A managed INDI server not yet running fails the camera check | P2 | Confirmed and fixed | It is a WARN: the server starts when the camera is first opened, and the camera is not yet checked |
 | 8 | Two identical USB adapters share one identity in newhardware | P2 | Agreed and planned | A private local identity per device (serial number or port path), kept out of the public report |
 | 9 | First-frame evidence does not name the light path's train | P2 | Agreed and planned | Use TELESCOP with the camera profile and focal length |
+
+## 10, re-audited at 25ca017
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | The ambiguous-lead refusal covers only Linux's handset path | P1 | Confirmed and fixed | `host.one_serial_port()` is the one rule: the handset path (before and after a USB recovery), the EQDIR lead and Windows' COM ports all refuse two matching leads |
+| 2 | The INDI device chosen is not tied to the profile its frames are labelled with | P1 | Confirmed and fixed | A profile that names its `model` refuses an INDI device whose name does not hold it |
+| 3 | A managed INDI server not yet started let the doctor call imaging ready | P1 | Confirmed (a regression of 25ca017) and fixed | It is a FAIL again, saying the camera has not been seen yet and `./snap.py` opens it |
+| 4 | Findings 3, 4, 8 and 9 are explained, not changed | P2 | Agreed | They stay open in the status table. The owner's rig has never given its word for "first moves" (its GoTos prove it by use), so requiring the word would mark a rig that has moved for weeks as not set up: binding the word to the mount's identity comes with it |
 

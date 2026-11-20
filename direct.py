@@ -138,7 +138,7 @@ def open_link(settings, port=None):
     """The link config.toml asks for: [mount] link = "wifi" or "eqdir"."""
     if settings.get("link") == "eqdir":
         import host
-        found = port or host.serial_port(settings.get("serial_match", "FTDI"))
+        found = port or host.one_serial_port(settings.get("serial_match", "FTDI"), "EQDIR lead")
         if not found:
             raise Refusal("MOUNT_NOT_CONNECTED", "No EQDIR lead found. Plug it in, or name its port "
                           "with --port.")

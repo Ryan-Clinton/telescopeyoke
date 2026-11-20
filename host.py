@@ -179,6 +179,30 @@ def ascom_drivers(registered=None):
                                  if any(key.lower() == found.lower() for found in registered)]
 
 
+def serial_ports_matching(match):
+    """Every port whose USB adapter's name contains `match`, in order."""
+    if not WINDOWS:
+        return sorted(glob.glob(f"/dev/serial/by-id/*{match}*"))
+    wanted = match.lower()
+    try:
+        from serial.tools import list_ports
+    except ImportError:
+        return [device for device, name in windows_ports() if wanted in name.lower()]
+    return [p.device for p in sorted(list_ports.comports(), key=lambda p: p.device)
+            if wanted in " ".join(filter(None, (p.description, p.manufacturer, p.hwid))).lower()]
+
+
+def one_serial_port(match, what):
+    """The one port matching `match`, or None; two or more is a refusal
+    naming them: a mount is never driven through whichever lead came first."""
+    found = serial_ports_matching(match)
+    if len(found) > 1:
+        from interface import Refusal
+        raise Refusal("MOUNT_NOT_CONNECTED", f"{len(found)} serial leads match \"{match}\" for the {what} "
+                      f"({', '.join(found)}): name its port with --port, or set a serial_match only its lead has.")
+    return found[0] if found else None
+
+
 def serial_port(match):
     """The port of the lead whose USB adapter's name contains `match`, or None."""
     if not WINDOWS:
