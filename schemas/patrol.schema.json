@@ -63,6 +63,8 @@
       }
     },
     "dry_run": {"type": "boolean", "description": "--dry-run: nothing was searched or taken."},
-    "would_search": {"type": "array", "items": {"type": "string"}, "description": "--sweep --dry-run: the sessions a sweep would search."}
+    "would_search": {"type": "array", "items": {"type": "string"}, "description": "--sweep --dry-run: the sessions a sweep would search."},
+    "alerted": {"type": "array", "items": {"type": "string"}, "description": "the candidate book's IDs the person was alerted to"},
+    "alert_delivered": {"type": "boolean", "description": "whether the alert reached the person's phone"}
   }
 }

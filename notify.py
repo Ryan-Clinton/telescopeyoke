@@ -141,7 +141,8 @@ def candidate_alert(name, session, vetted, followed, pictures, reports):
     """The text for the patrol's unexplained candidates, one paragraph each."""
     lines = [f"{name}: {len(vetted)} unexplained candidate{'s' if len(vetted) != 1 else ''} in {Path(session).name}"]
     for n, c in enumerate(vetted, 1):
-        book = next((f for f in followed if abs(f["ra"] - c["ra"]) < 1e-3 and abs(f["dec"] - c["dec"]) < 1e-3), None)
+        import candidates
+        book = next((f for f in followed if candidates.arcsec((f["ra"], f["dec"]), (c["ra"], c["dec"])) < 3.6), None)
         lines.append(f"\n{n}. {book['id'] if book else ''} RA {c['ra']:.5f} Dec {c['dec']:+.5f}, "
                      f"G {c.get('mag') or 0:.2f}, {c['score']:.1f} sigma, halves {c.get('halves')}")
         if book:

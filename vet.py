@@ -104,6 +104,12 @@ VIZIER_MIRRORS = (VIZIER_URL, "https://vizier.idia.ac.za/viz-bin/asu-tsv", "http
 VSX_KEPT_DAYS = 30      # VSX for a field is fetched again after this long
 
 
+def vsx_table(text):
+    """Whether an answer is VizieR's VSX table (its Name column), even an
+    empty one, rather than an empty or error page."""
+    return any(line.split("\t")[0].strip() == "Name" for line in text.splitlines() if not line.startswith("#"))
+
+
 def variables(ra, dec, radius_deg, get=None):
     """Known variable stars in a circle, from VSX: (name, ra, dec, type).
     Kept on disk for VSX_KEPT_DAYS, with any kept circle that holds this one
@@ -123,6 +129,10 @@ def variables(ra, dec, radius_deg, get=None):
         apart = math.hypot((ra - cra) * math.cos(math.radians(dec)), dec - cdec)
         if apart + radius_deg <= cradius and time.time() - kept.stat().st_mtime < VSX_KEPT_DAYS * 86400:
             text = kept.read_text(encoding="utf-8")
+            if not vsx_table(text):
+                kept.unlink()       # kept before answers were judged: asked again, never taken for "none"
+                text = None
+                continue
             break
     if text is None:
         failures = []
@@ -132,8 +142,7 @@ def variables(ra, dec, radius_deg, get=None):
                     "-source": "B/vsx/vsx", "-c": f"{ra:.5f} {dec:+.5f}", "-c.rd": f"{radius_deg:.3f}",
                     "-out": "Name,RAJ2000,DEJ2000,Type", "-out.max": "50000"})
                 reply.raise_for_status()
-                if not any(line.split("\t")[0].strip() == "Name" for line in reply.text.splitlines()
-                           if not line.startswith("#")):
+                if not vsx_table(reply.text):
                     # Answered, but not VizieR's table (an empty page, an error
                     # page): never kept as "no known variables here".
                     failures.append(f"{url.split('/')[2]}: no VSX table in its answer")

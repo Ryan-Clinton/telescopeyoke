@@ -639,11 +639,15 @@ def run(args, say=print):
     owner = None
     if args.reference:
         ref_path = depth.find_stack(args.reference)
-        # Which reference may be chosen; that it is another night's may not.
-        kept, kept_owner = reference.for_field(name, band)
-        if Path(ref_path).resolve().parent == new_path.resolve().parent or (
-                kept is not None and Path(kept).resolve() == Path(ref_path).resolve()
-                and new_path.parent.resolve() in reference.sessions_used(kept_owner, band)):
+        # Which reference may be chosen; that it is another night's may not:
+        # the sessions of the very file named, from a kept version's record
+        # (any version, not only the newest) or the stack's own (made_from).
+        made_with = {Path(s).resolve() for s in reference.made_from(Path(ref_path))}
+        for field in {name, reference.for_field(name, band)[1]} - {None}:
+            for version in reference.kept(field, band):
+                if Path(version.get("file", "")).resolve() == Path(ref_path).resolve():
+                    made_with.update(Path(s).resolve() for s in version.get("sessions", []))
+        if new_path.parent.resolve() in made_with:
             raise interface.Refusal("INVALID_REQUEST", f"{ref_path} is, or was made with, {new_path.parent}: a "
                                     "night is never compared with itself.")
     else:

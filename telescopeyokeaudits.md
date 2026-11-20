@@ -25,7 +25,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 4 | Autonomous full-night operation | done 20 Nov 2026, re-checked |
 | 5 | Guiding and calibration | done 20 Nov 2026, re-checked |
 | 6 | Camera, cooling, filters and focusing | done 20 Nov 2026, re-checked |
-| 7 | Scientific discovery reliability | done 20 Nov 2026; re-check asked |
+| 7 | Scientific discovery reliability | done 20 Nov 2026, re-checked |
 | 8 | Calibration and scientific measurement accuracy | not started |
 | 9 | Demo claims versus real-world proof | not started |
 | 10 | Hardware onboarding and compatibility | not started |
@@ -343,4 +343,14 @@ Verdicts and searches already recorded are not remade: every change below applie
 | 7 | A second look can call a candidate a false alarm without the depth to | P1 | Confirmed and fixed | A candidate not seen again is a false alarm only where the second look's limit there reached its brightest; otherwise it is said to be not ruled out |
 | 8 | References are chosen by depth, not subtraction quality | P1 | Agreed and planned | The M31-P8 record (4 candidates against 24 from a deeper reference) is the evidence; a quality measure for choosing references is a change of its own, made against the recorded subtractions |
 | 9 | The real/bogus model is not checked against the code it was trained for; its score is called a probability | P2 | Agreed and planned | The score stays advisory (it never dismisses a candidate); checking the model's provenance against the subtraction code, and saying "score" where it is not a calibrated probability, are planned |
+
+## 7, re-audited at ae9ae91
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | An older reference version, or any stack named by path, escapes the independence check | P1 | Confirmed and fixed | `difference.py` takes the sessions of the very file named: every kept version's record whose file it is, and the stack's own (`reference.made_from`) |
+| 2 | Alerts still match candidates by raw RA | P1 | Confirmed and fixed | `patrol.alert` and `notify.candidate_alert` match with `candidates.arcsec` (3.6", the old 0.001° box), across RA 0 |
+| 3 | A search's answer and its alert's delivery are not told apart | P1 | Confirmed and fixed | The patrol record now keeps `alerted` and `alert_delivered` (schema updated), written again after the alert; an undelivered alert is said in the run's log and reaches the agent as "(not delivered)"; nothing is sent twice. `outcome.search_state` takes a failed `search.json` over an earlier answer |
+| 4 | A bad VSX answer cached before the fix is still trusted | P1 | Confirmed and fixed | A cached answer is judged as a fresh one (`vsx_table`), and one that fails is deleted and asked again |
+| 5 | A second look with one seen again says nothing of the rest | P2 | Confirmed and fixed | Every alerted candidate is said as seen again, gone where the look was deep enough, or not ruled out |
 

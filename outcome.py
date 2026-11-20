@@ -146,6 +146,11 @@ def search_state(session, programme=None, working=None):
     Only "running" is pending: a failed or never-started search is not left
     waiting for ever (the Phase 1 audit, 4 November 2026)."""
     session = Path(session)
+    job = _json(session / "search.json")
+    if job is not None and job.get("state") == "failed":
+        # The search's own last word first: one that wrote its answer and
+        # then failed (its alert, say) is failed, not searched.
+        return "failed", job.get("error") or "the search failed"
     record = _json(session / "patrol.json")
     if record is not None:
         for line in record.get("summary", []):

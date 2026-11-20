@@ -305,6 +305,8 @@ def _analyse(session, say=print, chain=None, both_halves=True, alerting=True):
     if chain is None and alerting:
         answer["alerted"] = alert(name, session, answer, say)
         answer["seen_again"] = seen_again(name, session, answer, say)
+        # The record says who was alerted, and whether the alert arrived.
+        records.write(session / "patrol.json", answer, schema="patrol", stamp=True, default=str)
     return answer
 
 
@@ -369,16 +371,19 @@ def second_look_said(name, first, second, say=print, send=None):
             limit, peak = (k.get("tonight") or {}).get("limit"), k.get("peak")
             return limit is not None and peak is not None and limit >= peak
         unsure = [i for i in alerted if i not in back and not ruled_out(i)]
+        gone = [i for i in alerted if i not in back and i not in unsure]
+        # Every candidate said, each as one of three: seen again, gone where
+        # the look was deep enough, or not ruled out.
+        parts = []
         if back:
-            words = (f"{name}: second look done. {len(back)} of {len(alerted)} candidate(s) seen again "
-                     f"({', '.join(back)}): look hard, nothing is claimed yet.")
-        elif not unsure:
-            words = (f"{name}: second look done. None of the {len(alerted)} candidate(s) seen again, where it was "
-                     "deep enough to show them: a false alarm, nothing new here.")
-        else:
-            words = (f"{name}: second look done. None of the {len(alerted)} candidate(s) seen again, but "
-                     f"{len(unsure)} ({', '.join(unsure)}) not ruled out: the second look did not reach as faint as "
-                     "they were, or its depth there is not known.")
+            parts.append(f"seen again: {', '.join(back)} (look hard, nothing is claimed yet)")
+        if gone:
+            parts.append(f"not seen again where it was deep enough to show them: {', '.join(gone)}"
+                         + (" (a false alarm, nothing new here)" if not back and not unsure else ""))
+        if unsure:
+            parts.append(f"not ruled out: {', '.join(unsure)} (the second look did not reach as faint as they "
+                         "were, or its depth there is not known)")
+        words = f"{name}: second look done at {len(alerted)} candidate(s). " + "; ".join(parts) + "."
     (send or notify.send)(words, say=say)
     return words
 
@@ -438,13 +443,14 @@ def alert(name, session, result, say=print, packet=None, send=None):
     report packet made (report.py), and the text and pictures sent
     (notify.py). Returns the book's IDs alerted. `packet` and `send` stand
     in for report.py and notify.py (for the tests)."""
+    import candidates
     import notify
     vetted = unexplained(result)
     if not vetted:
         return []
     followed = result.get("followed") or []
     ids = [f["id"] for f in followed
-           if any(abs(f["ra"] - c["ra"]) < 1e-3 and abs(f["dec"] - c["dec"]) < 1e-3 for c in vetted)]
+           if any(candidates.arcsec((f["ra"], f["dec"]), (c["ra"], c["dec"])) < 3.6 for c in vetted)]
     if packet is None:
         import report
         packet = lambda wanted: report.run(argparse.Namespace(id=wanted, quick=False, json=False), say=lambda *_: None)
@@ -459,8 +465,12 @@ def alert(name, session, result, say=print, packet=None, send=None):
     pictures = [(path, f"{name} candidate {n}: the night, the reference, the difference")
                 for n, path in enumerate(result.get("pictures", []), 1)]
     sent = (send or notify.send)(text, pictures=pictures, say=say)
-    if sent:
-        say(f"  alert sent: {len(vetted)} unexplained")
+    # Whether it reached the phone, kept apart from the search having run:
+    # one that did not is said, and shows "(not delivered)" to the agent
+    # (cache/sent.jsonl, .claude/hooks/news.py); nothing is sent twice.
+    result["alert_delivered"] = bool(sent)
+    say(f"  alert sent: {len(vetted)} unexplained" if sent else
+        f"  ALERT NOT DELIVERED: {len(vetted)} unexplained; the phone was not reached")
     return ids
 
 
