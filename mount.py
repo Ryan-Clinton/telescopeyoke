@@ -1087,6 +1087,9 @@ class Mount:
         reversal are the slack, and a way that never moves is the fault of
         job 2 (docs/agents/owner-jobs.md). Returns the readings."""
         self.may_move()
+        # Tracking on first: a refused command stops the motors, so a test
+        # retried after a cloudy refusal ran untracked (20 November 2026).
+        self.tracking(True)
         error = load_pointing_error(self.west())
         hint_ra = true_sidereal(site) - self.true_hour_angle(site)
         first = self.where_really(hint_ra, wrap(self.radec()[1]) + error[1], radius=20)
