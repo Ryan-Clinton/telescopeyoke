@@ -7,7 +7,7 @@ TelescopeYoke was written at: read it when working at that rig (its
 
 ## What it is
 
-A Sky-Watcher 150P on an EQ3 Pro with a SynScan handset; the cooled mono
+A Sky-Watcher 150P on an EQ3 Pro (on its SynScan Wi-Fi adapter since 16 November 2026); the cooled mono
 Altair 183M behind a 0.9 coma corrector (675 mm) and a Starlight Xpress
 USB filter wheel (1 L, 2 R, 3 G, 4 B, 5 Ha, 6 SII, 7 OIII; LRGB and SHO
 parfocal); a home-built motor focuser (`docs/focuser.md`); an Altair GPCAM
@@ -116,3 +116,19 @@ motor turned and the knob did not, so focus was by hand with the spoken aid.
   watcher (`ty-stream`), the live client (`ryanclinton-live`), the
   night-end timer (`ty-night-end.timer`) and the satellite keeper
   (`ty-satellite.timer`).
+
+## As of 20 November 2026
+
+- **Dec guiding**: since the service Dec moves one way only under guide
+  pulses, the failing way flipping with the balance
+  ([dec-slack.md](../nights/2026-11-19/dec-slack.md)); RA-only guiding
+  keeps 120 s frames round. The jobs owed are [owner-jobs.md](owner-jobs.md).
+- **Latitude bolts**: the rear bolt in lowers the axis, the front bolt in
+  raises it (13 October 2026); the old rear bolt rises then jerks lower.
+- **Focuser**: backlash 156 half-steps (measured 19 November); the
+  drawtube slips about 4 half-steps a round trip since the tension screw
+  was eased. `--measure-step` stays refused by the small-focus guard.
+- **Guide camera**: gain 400 (`[guider] gain`, the default since
+  20 November); the guide scope dews below about 2 °C.
+- **Stacking**: the desktop has no Python for `restack.py --on desktop`
+  yet: stack on the laptop.
