@@ -1162,15 +1162,24 @@ def find_stars(motor, read, usual, say=progress, stride=128, turns=0.5, ring=Non
     # No further than the focuser's travel ([focuser] travel, which the
     # Settled motor holds a run to): turn round at it rather than be stopped
     # there, out from the start.
-    limit = min(int(turns * 4096), getattr(motor, "travel", None) or MOTOR_TRAVEL)
+    # Past half a turn only while the doughnuts keep shrinking, up to the
+    # travel (20 November 2026: after the focuser was worked on, focus was
+    # about 2,200 half-steps out; twice the search stopped at half a turn
+    # with the doughnuts still shrinking, 159 to 48 px, and went back).
+    travel = getattr(motor, "travel", None) or MOTOR_TRAVEL
+    limit = min(int(turns * 4096), travel)
     reach = limit // stride
+    furthest = travel // stride
     live = live or Broadcast("find", usual, path=None)
     live.stage("searching")
     start = ring(SWEEP_FRAMES) if ring else None
     live.reading(0, None, "start", ring=start)
     for way in (-1, 1):
         before, smallest = start, (start, 0)
-        for k in range(1, reach + 1):
+        shrinking = False
+        for k in range(1, furthest + 1):
+            if k > reach and not shrinking:
+                break
             live.stage("searching", k, reach)
             drive.to(way * k * stride)
             found = sample(read, SWEEP_FRAMES, usual)
@@ -1211,9 +1220,13 @@ def find_stars(motor, read, usual, say=progress, stride=128, turns=0.5, ring=Non
                     return {"at": smallest[1], "how": "smallest"}
                 say(f"  the doughnuts grew from {before:.0f} to {size:.0f} px: focus is the other way")
                 break
+            shrinking = bool(size and before and size < before)
+            if k == reach and shrinking:
+                say(f"  half a turn {'in' if way < 0 else 'out'} and the doughnuts still shrinking: "
+                    "on while they shrink")
             before = size or before
         drive.to(0)
-    live.done("not_found", f"No stars measured within {reach * stride} half-steps either way: the focuser went "
+    live.done("not_found", f"No stars measured within {reach * stride} half-steps either way (further only while the doughnuts shrank): the focuser went "
                            "back to where it started.")
     return {"at": 0, "how": "not_found"}
 
