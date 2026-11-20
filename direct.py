@@ -488,9 +488,16 @@ class DirectHandset:
         self.board.turn(RA, self.slew[RA] + (SIDEREAL if self.tracking else 0))
 
     def _stop(self):
+        """Both axes halted, each tried whether or not the other answered."""
         self.target, self.tracking, self.slew = None, False, {RA: 0.0, DEC: 0.0}
-        self.board.halt(RA)
-        self.board.halt(DEC)
+        first = None
+        for axis in (RA, DEC):
+            try:
+                self.board.halt(axis)
+            except Exception as error:
+                first = first or error
+        if first:
+            raise first
 
     # -- the serial-port interface mount.py uses
 

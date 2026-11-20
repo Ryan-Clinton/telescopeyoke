@@ -410,7 +410,31 @@ class Mount:
         return self._pair(b"z")
 
     def slewing(self):
-        return self.ask(b"L").startswith(b"1")
+        """Whether a GoTo is still under way. A reply that is neither yes nor
+        no (none in the serial timeout, or garbled) is asked again, never
+        taken for "stopped": a move taken as ended while the motors still
+        turn has the next command, or the first frame, start mid-slew."""
+        for _ in range(4):
+            reply = self.ask(b"L")
+            if reply[:1] in (b"0", b"1"):
+                return reply[:1] == b"1"
+            time.sleep(0.25)
+        raise Refusal("HANDSET_NOT_ANSWERING", "The handset stopped saying whether the mount is still moving.")
+
+    @contextlib.contextmanager
+    def stopped_if_it_fails(self):
+        """A move that fails part way (one axis started and the next command
+        refused, a reply lost) is stopped on its way out, as far as anything
+        still reaches the mount, whoever called it and whatever they catch."""
+        try:
+            yield
+        except BaseException:
+            self.move_failed = True
+            try:
+                self.stop()
+            except Exception:       # noqa: BLE001 - the first error is the one raised
+                pass
+            raise
 
     def state(self):
         """'slewing', 'tracking' or 'stopped', by asking and by watching the
@@ -897,6 +921,10 @@ class Mount:
     def seek(self, axis, target):
         """Turn one axis to a raw angle with fixed-rate slews, steering by the
         axis readout rather than trusting the handset's GoTo."""
+        with self.stopped_if_it_fails():
+            self._seek(axis, target)
+
+    def _seek(self, axis, target):
         index = 0 if axis == RA else 1
         error = lambda: wrap(target - self.axes()[index])
         start = error()
@@ -937,7 +965,7 @@ class Mount:
         turned on during the slew (a survey measures from wherever the mount
         believes it is)."""
         self.may_move()
-        with self.watching():
+        with self.watching(), self.stopped_if_it_fails():
             direct = hasattr(self.s, "board")
             if direct and not catch_up:
                 self.s.catch_up = 0      # read when the GoTo is sent, and put back at once
@@ -973,7 +1001,7 @@ class Mount:
     def home(self):
         self.tracking(False)
         self.dec_creep(0)   # a drift correction left running would fight the seek
-        with self.watching():
+        with self.watching(), self.stopped_if_it_fails():
             if hasattr(self.s, "go_home"):
                 # No handset: the board's own moves (or an Alpaca driver's
                 # own home), which start slowly. The

@@ -87,6 +87,15 @@ def counted(steps):
     return records.change(path, add)[0]
 
 
+def forget_position():
+    """A move whose end the Nano did not confirm: where the drawtube is is
+    no longer known, so the kept position goes until the next zero, rather
+    than a count that may be wrong."""
+    path = config.DATA / POSITION_FILE
+    if path.exists():
+        path.unlink()
+
+
 def find_port(port=None):
     """The Nano's port: the one named, or the one whose USB adapter matches.
     Never a guess, since the handset's lead is a serial port too."""
@@ -164,12 +173,16 @@ class Focuser:
             # The Nano finishes a move once ordered: wait for its answer, so
             # whoever counts where the motor is can count this move, and the
             # answer is not taken for the next order's.
-            until = time.monotonic() + wait
-            while time.monotonic() < until and not self.link.read(1).endswith(b"\n"):
-                pass
-            counted(steps)
+            until, ended = time.monotonic() + wait, False
+            while time.monotonic() < until and not ended:
+                ended = self.link.read(1).endswith(b"\n")
+            if ended:
+                counted(steps)
+            else:
+                forget_position()
             raise
         if reply != f"OK {sent}":
+            forget_position()
             raise RuntimeError(f"the focuser answered {reply!r} to a move of {steps}")
         counted(steps)
 

@@ -127,6 +127,11 @@ def serve(cam, say=print):
                         raise ValueError(f"the keeper does not know {kind!r}")
                     link.send((True, answer))
                 except BaseException as problem:
+                    if getattr(cam, "disobeying", False):
+                        # The cooler failed safe inside this request: the
+                        # keeper ends now (its cooler off, the camera closed)
+                        # rather than ramping a faulted cooler on.
+                        stopping.set()
                     try:
                         link.send((False, (problem.__class__.__name__, str(problem),
                                            getattr(problem, "code_name", None))))
@@ -188,8 +193,15 @@ def serve(cam, say=print):
                 degrees = cam.temperature()
             except Exception:       # noqa: BLE001 - the message goes either way
                 degrees = None
-        warmed = ("The camera has warmed up" + (f" ({degrees:.1f} °C)" if degrees is not None else "")
-                  + " and its cooler is off: safe to switch off.")
+        ambient = getattr(cam, "ambient", None)
+        if degrees is not None and ambient is not None and degrees < ambient - 2 * altair.WARM_STEP_C:
+            # The warm-up was cut short (its time up, a refused step, a
+            # faulted cooler): said as it is, not as a finished warm-up.
+            warmed = (f"The camera's warm-up was cut short at {degrees:.1f} °C, below the {ambient:.1f} °C it "
+                      "started from; its cooler is off. Leave it a few minutes before switching off.")
+        else:
+            warmed = ("The camera has warmed up" + (f" ({degrees:.1f} °C)" if degrees is not None else "")
+                      + " and its cooler is off: safe to switch off.")
         say(f"camera: {warmed}")
         try:
             # The person asked to be told (18 November 2026): it is the last
@@ -242,6 +254,10 @@ def stop(say=print, wait=900):
     end = time.monotonic() + wait
     while time.monotonic() < end and running():
         time.sleep(5)
+    if running():
+        say(f"The camera keeper has not gone after {wait / 60:.0f} minutes: whether the camera is warm "
+            "and closed is not known. ./keeper.py status")
+        return False
     return True
 
 

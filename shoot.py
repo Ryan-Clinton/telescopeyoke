@@ -418,6 +418,14 @@ def recentre(target, aim_off=(0.0, 0.0), solve=None):
         if solving:
             UNSOLVED[0] = outcome != "centred"
     except SystemExit as problem:
+        if getattr(scope, "move_failed", False) or getattr(problem, "code_name", None) == "MOUNT_NOT_MOVING":
+            # The move had begun and failed part way, or the telescope did not
+            # turn: the mount was stopped (tracking with it) and where it points
+            # is not known, so the run ends here rather than taking frames of
+            # wherever it is.
+            raise
+        # Refused before anything moved (a limit, the Sun): the mount still
+        # tracks where it was, and the run goes on, its frames judged as ever.
         print(f"  could not re-centre: {problem}", flush=True)
     except BaseException:
         scope.stop()
@@ -1732,15 +1740,7 @@ def image(args, session, exposure, moving, holding, tracker):
                     # wheel (the 183C's) is never asked, and its frames carry no
                     # FILTER, as before.
                     in_path = in_the_path(getattr(args, "light_path", None)) if wheel_in_train() else None
-                    # And again every few minutes of a long stretch with no reopen:
-                    # a wheel that moved or dropped off USB stops the run before
-                    # the next frame is kept.
-                    wheel_every = float(config.hardware().get("filterwheel", {}).get("check_every_s", 300))
-                    wheel_asked = time.monotonic()
                     while go_on():
-                        if in_path is not None and time.monotonic() - wheel_asked >= wheel_every:
-                            in_path = in_the_path(getattr(args, "light_path", None))
-                            wheel_asked = time.monotonic()
                         supervisor = getattr(args, "supervisor", None)
                         settled = supervisor.settle() if supervisor else None
                         exposed = time.time()
@@ -1750,6 +1750,13 @@ def image(args, session, exposure, moving, holding, tracker):
                             jammed = problem          # the camera is closed on the way out of this block
                             reopening = jams < JAM_REOPENS
                             break
+                        if in_path is not None:
+                            # And again as each frame ends, before it is kept: the
+                            # SX wheel turns to position 1 when its power comes back,
+                            # so a wheel asked only every few minutes could label
+                            # minutes of L frames Ha. One that moved, or no longer
+                            # answers, stops the run with this frame not kept.
+                            in_path = in_the_path({"position": in_path[0], "name": in_path[1]})
                         sxwheel.cards(header, in_path)
                         if supervisor:
                             went = supervisor.during(exposed, time.time())
