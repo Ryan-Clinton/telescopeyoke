@@ -121,6 +121,22 @@ def reaches_lock(word, cwd, recursive=False):
     return recursive and target in lock.parents    # rm -r of a folder that holds it
 
 
+GIT_VALUED = {"-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path", "--config-env",
+              "--super-prefix", "--list-cmds", "--attr-source"}
+
+
+def git_subcommand(words):
+    """git's words from its subcommand on: its global options (git -C . clean
+    -xfd, git -c x=y rm) come first and are skipped, so the subcommand is
+    judged whatever goes before it."""
+    words = list(words)
+    while words and words[0].startswith("-"):
+        option = words.pop(0)
+        if option in GIT_VALUED and words:
+            words.pop(0)
+    return words
+
+
 def motion_lock(payload):
     tool, data = payload.get("tool_name"), payload.get("tool_input") or {}
     cwd = payload.get("cwd") or str(PROJECT)
@@ -149,6 +165,8 @@ def motion_lock(payload):
     for words in parts(command):
         name = Path(words[0]).name.lower()
         rest = words[1:]
+        if name == "git":
+            rest = git_subcommand(rest)
         if name == "git" and rest[:1] == ["clean"] and any("x" in w.lower() for w in rest if w.startswith("-")):
             raise Refused(f"git clean -x would delete {LOCK} with the other ignored files.")
         if name == "git" and rest[:1] in (["checkout"], ["restore"], ["stash"], ["rm"]) and \
@@ -225,6 +243,16 @@ def no_secrets_out(payload):
                 re.search(r"rigs/[^/]+\.toml$", data.get("file_path", "").replace("\\", "/")):
             raise Refused("config.toml holds the Telegram bot's token: read the setting you need with a command "
                           "that prints only that (config.py, ./doctor.py), never the whole file.")
+        return
+    if tool == "Grep":
+        # A search of the settings file is a read of it: only the one setting
+        # asked for, never the token, never every line.
+        where = [str(data.get(k) or "") for k in ("path", "glob")]
+        pattern = str(data.get("pattern", ""))
+        if any(SETTINGS_FILE.search(w) or w.endswith("*.toml") for w in where) and \
+                (re.search(r"telegram|token|chat|bot", pattern, re.I) or pattern.strip() in ("", ".", ".*", "^", "$")):
+            raise Refused("That search would show config.toml's Telegram token or the whole file: search for the "
+                          "one setting needed, e.g. ^latitude.")
         return
     if tool not in SHELL_TOOLS:
         return

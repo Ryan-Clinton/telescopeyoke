@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""Claude Code's PostToolUse hook: one line in the decision record
-(agentlog.py) for each shell command, skill and agent that has run.
+"""Claude Code's PostToolUse and PostToolUseFailure hook: one line in the
+decision record (agentlog.py) for each shell command, skill and agent that
+has run or failed, and each edit to a file the telescope's safety rests on.
 
 It enforces nothing, so it never blocks: whatever goes wrong here, it exits
 0 and the work goes on. What it writes is redacted first (agentlog.redact).
@@ -23,8 +24,11 @@ def main():
             agentlog.write(agentlog.person(payload))
         elif hook == "Stop" and not payload.get("stop_hook_active"):
             agentlog.write(agentlog.turn_end(payload))
-        elif payload.get("tool_name") in ("Bash", "PowerShell", "Skill", "Agent", "Task"):
-            agentlog.write(agentlog.event(payload))
+        elif payload.get("tool_name") in ("Bash", "PowerShell", "Skill", "Agent", "Task", "Edit", "Write",
+                                          "MultiEdit", "NotebookEdit"):
+            row = agentlog.event(payload)
+            if row:
+                agentlog.write(row)
     except Exception:   # a record lost is better than work stopped
         pass
     return 0

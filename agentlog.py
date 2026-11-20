@@ -169,13 +169,28 @@ def scope_of(command):
     return None, None
 
 
+# The files whose change changes what the telescope may do: the mount, the
+# cooler, the focuser, the policy and the hooks. An edit to one is recorded.
+SAFETY_FILES = re.compile(r"(^|/)(mount|direct|alpaca|simulator|policy|focuser|keeper|altair|moved|polaralign)\.py$"
+                          r"|(^|/)\.claude/(settings[^/]*\.json|hooks/[^/]+)$")
+
+
 def event(payload, now=None):
-    """The record's line for one tool call that has run (PostToolUse)."""
+    """The record's line for one tool call that has run (PostToolUse), or
+    failed (PostToolUseFailure)."""
     now = now or time.time()
     tool = payload.get("tool_name")
     data = payload.get("tool_input") or {}
     session = payload.get("session_id")
     row = {"time": now, "session": session, "agent": payload.get("agent_type"), "tool": tool}
+    if payload.get("hook_event_name") == "PostToolUseFailure":
+        row["failed"] = True
+    if tool in ("Edit", "Write", "MultiEdit", "NotebookEdit"):
+        where = str(data.get("file_path") or data.get("notebook_path") or "").replace("\\", "/")
+        if not SAFETY_FILES.search(where):
+            return None
+        row.update(event="edited", path=where[-200:])
+        return row
     earlier = [r for r in read(days=2, now=now) if r.get("session") == session]
     if tool == "Skill":
         row.update(event="skill", skill=data.get("skill") or data.get("name"))

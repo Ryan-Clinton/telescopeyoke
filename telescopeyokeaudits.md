@@ -21,7 +21,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 |---|---|---|
 | 1 | Mount safety and movement | done 20 Nov 2026, re-checked |
 | 2 | Hardware failure and recovery | done 20 Nov 2026, re-checked |
-| 3 | AI agent autonomy and permissions | not started |
+| 3 | AI agent autonomy and permissions | done 20 Nov 2026; re-check asked |
 | 4 | Autonomous full-night operation | not started |
 | 5 | Guiding and calibration | not started |
 | 6 | Camera, cooling, filters and focusing | not started |
@@ -234,4 +234,16 @@ This initial pass was an architectural and risk assessment, not an exhaustive li
 | 3 | A refused re-centre still returns True | P1 | Smaller than claimed, no change | Inside a run the re-centre is always to the run's own target, and the run's first GoTo is planned and refused before it starts (`plan_goto` in `main`); a refusal mid-run leaves the mount tracking that target |
 | 4 | The focuser counts any newline, and a serial failure keeps the old position | P1 | Confirmed and fixed | An interrupted move is counted only on its own `OK N` answer; any other failure after the order forgets the kept position |
 | 5 | The keeper can still say "warmed up" without knowing | P1 | Confirmed and fixed | `warm_up()` returns whether the cooler took the off command; the keeper says "not known" when it did not, or the sensor could not be read |
+
+## 3. AI agent autonomy and permissions, 20 November 2026
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | The agent can edit the safety code and the hooks | P0 | Right, and in conflict with the owner's way of working; waiting for the owner | The owner has Claude make code changes itself, in view, the mount's included (today's audits changed `mount.py` and `guard.py`). The movement limits are enforced in `Mount.may_move` and the plans, whatever the hooks say, and every edit to a safety file is now recorded (7). Blocking agent edits to `guard.py`, `policy.py` and `.claude/settings.json` is the owner's call |
+| 2 | `ty spot NAME` and `ty research --html/--pull` count as read-only | P1 | Confirmed and fixed | `policy.classify`: `spot NAME` and `research --html` are `local_write`, `research --pull` is `external`, any word ty does not know is `hardware`; ty's options are read wherever they stand (`ty --json spot NAME` included) |
+| 3 | `git -C . clean -xfd` gets past the lock's guard | P0 | Confirmed and fixed | `guard.git_subcommand()` skips git's global options before the subcommand is judged: `-C`, `-c`, `--work-tree=` and the rest now refused as `git clean -x` is |
+| 4 | Claude's own move clears a suspected slip | P1 | By design, no change | In the main session a move is made only when the person asks for it (CLAUDE.local.md), which is the person's go; the night plan's moves run as `TY_SCHEDULED` and are refused |
+| 5 | Grep and @-mentions reach config.toml past the secrets hook | P1 | Confirmed and fixed | `.claude/settings.json` denies `Read(./config.toml)` and `Read(./rigs/*.toml)`; the guard now also judges Grep, refusing a search of the settings file for the token or every line |
+| 6 | `news.py` is not registered | P2 | Confirmed and fixed | Registered for SessionStart and UserPromptSubmit; run by hand it gave the 19 messages since it last ran (one of them a "warmed up ... safe to switch off" at -8.8 °C, the case 2.8 fixed) |
+| 7 | The record misses edits to safety files and failed commands | P2 | Confirmed and fixed | `agentlog.event` records an edit to the mount, cooler, focuser, policy and hook files (path only), and PostToolUseFailure rows are marked `failed` |
 

@@ -142,6 +142,13 @@ COMMANDS = {
 # ty's own subcommands; the ones it passes straight to a script are classed
 # as that script.
 TY = {"run": "hardware"}
+# ty's own views, which only read; anything else ty might be given is the
+# worst it could be. Two of them write with a word more: `spot NAME` moves
+# the rig to another spot (its settings, its skyline), `research --html`
+# writes a page and `--pull` brings records from the desktop.
+TY_READS = {"capabilities", "status", "context", "doctor", "night", "targets", "target", "session",
+            "observing", "rigs", "characterise", "candidates", "discovery", "spot", "research", "outlook"}
+TY_VALUED = {"--limit", "--kind", "--frames"}
 TY_PASSES = {"mount": "mount.py", "tonight": "tonight.py", "shoot": "shoot.py", "focus": "focus.py",
              "solve": "solve.py", "restack": "restack.py", "console": "console.py", "watch-run": "runwatch.py",
              "agent-report": "agentlog.py", "streak": "streak.py",
@@ -203,9 +210,28 @@ def classify(argv):
             rest = rest[2:]           # which telescope or camera: the command after it decides
         if rest and rest[0] in TY_PASSES:
             script, rest = TY_PASSES[rest[0]], rest[1:]
-        elif rest and not rest[0].startswith("-"):
-            return TY.get(rest[0], "read_only")
         else:
+            # ty's own words: its options (some taking a value) may come
+            # before or after them, as argparse allows.
+            given, words_left = [], list(rest)
+            while words_left:
+                w = words_left.pop(0)
+                if w in TY_VALUED:
+                    words_left[:1] = []
+                elif not w.startswith("-"):
+                    given.append(w)
+            if not given:
+                return "read_only"
+            if given[0] in TY:
+                return TY[given[0]]
+            if given[0] not in TY_READS:
+                return "hardware"
+            if given[0] == "spot" and len(given) > 1:
+                return "local_write"
+            if given[0] == "research" and "--pull" in rest:
+                return "external"
+            if given[0] == "research" and "--html" in rest:
+                return "local_write"
             return "read_only"
     if script not in COMMANDS:
         return "hardware"
