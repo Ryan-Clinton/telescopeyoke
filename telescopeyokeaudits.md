@@ -30,7 +30,7 @@ The architecture is reasonably well documented, and the project makes a valuable
 
 However, **I would now concentrate on whether the different systems work reliably together**, rather than auditing individual features in isolation.
 
-The existing operating instructions also explicitly rule out adding automated tests or CI. I'll respect that decision. My recommendations instead centre on code inspection, recorded evidence, simulator demonstrations, operational safeguards and real-world verification.
+The existing operating instructions also explicitly rule out adding automated tests or CI. I'll respect that decision. My recommendations instead centre on code inspection, recorded evidence, operational safeguards and real-world verification.
 
 ### **What concerns me most**
 
@@ -84,7 +84,7 @@ P0 = immediate priority · P1 = important · P2 = improvement and maturity
 | **6**  | P1       | **Camera, cooling, filters and focusing**           | Cross-module review of `altair.py`, `camera.py`, `keeper.py`, `shoot.py`, `focus.py` and `sxwheel.py`. Ensure state changes cannot corrupt an imaging session or damage equipment.                              |
 | **7**  | P1       | **Scientific discovery reliability**                | Examine difference imaging, reference selection, candidate vetting, real/bogus classification, detection thresholds and false positives. Can the system distinguish a real discovery from processing artefacts? |
 | **8**  | P1       | **Calibration and scientific measurement accuracy** | Darks, flats, bad pixels, filter matching, photometric precision, depth estimates, timestamps and astrometric measurements. Check the scientific assumptions against recorded results.                          |
-| **9**  | P1       | **Simulation versus real-world behaviour**          | Does the simulator realistically reproduce timing delays, USB faults, mount backlash, missed commands, cooling faults and pier-side changes? Identify any simulation success that could mislead an operator.    |
+| **9**  | P1       | **Demo claims versus real-world proof**             | Find anywhere the docs, the README or Claude treat something that only ran in the demo as proven on the telescope. The simulator stays as it is, for the demo and for trying a mount change first; it is not to be extended into a test bed. |
 | **10** | P1       | **Hardware onboarding and compatibility**           | Follow a new user with unfamiliar equipment through `doctor.py`, `onboard.py`, `newhardware.py`, INDI, Alpaca and Windows support. Check where automatic discovery or setup assumptions break down.             |
 | **11** | P1       | **NINA/PHD2 companion**                             | Audit log parsing, clock alignment, missing exposures, imaging gaps and cause attribution. Check how confidently it distinguishes facts from interpretations, especially with unfamiliar rigs.                  |
 | **12** | P1       | **State management and data integrity**             | Concurrent processes, file locks, atomic writes, schema evolution, interrupted writes and stale state. Can one module make decisions using information another module has already invalidated?                  |
@@ -143,7 +143,7 @@ Establish whether the hardware can be operated safely, interrupted safely, and r
 
 **Second: Audits 5–9**
 
-Examine whether the equipment and scientific pipeline are producing reliable observations, and whether the simulator is giving us justified confidence.
+Examine whether the equipment and scientific pipeline are producing reliable observations, and whether anything is claimed as proven that has only run in the demo.
 
 **Third: Audits 10–14**
 
