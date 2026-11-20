@@ -180,12 +180,14 @@ class Focuser:
                     heard += self.link.read(1)
             except Exception:       # noqa: BLE001 - the port went: the position is forgotten below
                 pass
-            if heard.decode(errors="replace").strip() == f"OK {sent}":
+            self.confirmed = heard.decode(errors="replace").strip() == f"OK {sent}"
+            if self.confirmed:
                 counted(steps)
             else:
                 forget_position()
             raise
         except Exception:
+            self.confirmed = False
             forget_position()       # the order may have gone and the link with it
             raise
         if reply != f"OK {sent}":

@@ -1663,13 +1663,28 @@ def image(args, session, exposure, moving, holding, tracker):
             asked_more.update(key=key, answer=more())
         return asked_more["answer"]
 
+    saving = []         # (future, index) of raw files kept for the quality pass
+
     def collect(everything=False):
         """Take finished frames into the stack, in the order they were taken.
-        With `everything`, wait for all of them."""
+        With `everything`, wait for all of them. A deferred raw file that
+        could not be written is said and logged, never left counted as kept
+        for the quality pass."""
         while waiting and (everything or waiting[0][0].done()
                            or session.reference is None):
             future, taken = waiting.popleft()
             print(session.absorb(future.result(), taken), flush=True)
+        for job in [j for j in saving if everything or j[0].done()]:
+            saving.remove(job)
+            problem = job[0].exception()
+            if problem is not None:
+                entry = {"index": job[1], "accepted": False, "deferred": False, "save_failed": True, "fwhm": None,
+                         "stars": 0, "reason": f"raw file not written: {problem}"[:200]}
+                # In place of its "kept for the quality pass" entry, here and in
+                # the log (stacking.read_log keeps a frame's last entry).
+                session.log[:] = [entry if e.get("index") == job[1] else e for e in session.log]
+                stacking.append_log(session.folder, entry)
+                print(f"{job[1]:03d} LOST    {entry['reason']}", flush=True)
 
     with stacking.worker_pool(workers) as pool:
         session.drawer = pool       # the page's picture is drawn by these workers, never a new process
@@ -1796,7 +1811,8 @@ def image(args, session, exposure, moving, holding, tracker):
                             # file is kept and the quality pass will use it.
                             cards = {k: header[k] for k in stacking.KEPT if k in header}
                             if session.save:
-                                pool.submit(stacking.save_only, mosaic, cards, str(session.folder), index)
+                                saving.append((pool.submit(stacking.save_only, mosaic, cards, str(session.folder),
+                                                           index), index))
                             print(session.defer(index), flush=True)
                         else:
                             # Until the first good frame has become the reference

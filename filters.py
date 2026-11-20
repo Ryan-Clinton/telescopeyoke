@@ -181,7 +181,9 @@ def offsets(store=None, tolerance=None):
         # A first night: one measurement the person watched and marked
         # verified may be used on a run they start themselves, never on a
         # scheduled (unattended) one, and frames say it was provisional.
-        checked = [m for m in ms if m.get("verified")]
+        # Approached inward too, as every usable offset is: backlash would
+        # otherwise put the provisional focus a slack's width out.
+        checked = [m for m in ms if m.get("verified") and m.get("approach", "in") == "in"]
         out[key] = {"mean": round(statistics.mean(values), 1), "spread": None if spread is None else round(spread, 1),
                     "count": len(ms), "nights": nights, "usable": why is None, "why": why,
                     "provisional": None if why is None or not checked else round(checked[-1]["offset"], 1),
@@ -339,6 +341,13 @@ def change(wanted, say=print, open_wheel=None, open_focuser=None, sleep=time.sle
     leave the light path in a state no frame should be kept in."""
     import sxwheel
     store = load(where)
+    if (store.get("focused_for") or {}).get("unknown"):
+        # A filter change's focus move failed part way: the drawtube is
+        # somewhere between two filters' focus, and an offset from either
+        # would be wrong. A focus run (which sets the filter it focused in)
+        # clears this.
+        raise interface.Refusal("REFOCUS_NEEDED", "The last filter change's focus move did not finish, so where the "
+                                "focus is is not known: focus again (./focus.py --auto) before changing filter.")
     try:
         wheel = (open_wheel or sxwheel.Wheel.open)()
     except sxwheel.WheelError as problem:
@@ -395,6 +404,11 @@ def change(wanted, say=print, open_wheel=None, open_focuser=None, sleep=time.sle
         except Exception as problem:
             raise interface.Refusal("REFOCUS_NEEDED", f"The focuser could not be opened to move from {focused}'s "
                                     f"focus to {wanted}'s ({problem}): no frames kept out of focus.") from None
+        # Unknown from the first turn until the last: a move cut part way
+        # leaves no focus reference that is wrong.
+        store = load(where)
+        store["focused_for"] = {"filter": None, "unknown": True, "between": [focused, wanted], "when": time.time()}
+        save(store, where)
         try:
             if steps > 0:
                 motor.move(steps + slack)     # out past it, then in: the last move inward, as a motor focus ends
@@ -410,7 +424,7 @@ def change(wanted, say=print, open_wheel=None, open_focuser=None, sleep=time.sle
             if close:
                 close()
         sleep(SETTLE_S)
-    if focused != wanted and not as_is:
+    if steps or (focused != wanted and not as_is):
         set_focused(wanted, where)
     return {"position": number, "name": wanted, "from": focused, "steps": steps, "changed": focused != wanted,
             "as_is": bool(as_is and focused != wanted)}

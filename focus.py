@@ -41,6 +41,7 @@ through their lowest and come back to stay on it.
 Runs for 15 minutes (Ctrl+C to stop sooner); the web page shows the picture.
 """
 import argparse
+import contextlib
 import json
 import os
 import queue
@@ -64,6 +65,28 @@ import snap
 import stacking
 from camera import PORT, WHITE, Camera, luminance
 from indi import IndiError
+
+
+def let_go(cam):
+    """A cooled camera this command opened itself warmed slowly before it
+    closes (shoot.warm, bounded and never raising); one lent by a session in
+    this process stays cold for its owner, and the keeper's (camera.Kept)
+    warms only at the night's end."""
+    import camera as camera_module
+    if isinstance(cam, camera_module.Lent):
+        return
+    import shoot
+    shoot.warm(cam)
+
+
+@contextlib.contextmanager
+def focusing_camera(port, gain):
+    """Camera(port, gain), let go with its warm-up (let_go)."""
+    with Camera(port, gain) as cam:
+        try:
+            yield cam
+        finally:
+            let_go(cam)
 
 ROOT = Path(__file__).parent
 PREVIEW = config.DATA / "web" / "latest.jpg"
@@ -1529,7 +1552,7 @@ def run_check(args):
     live = Broadcast("check", usual, picture=lambda: seen.get("lum"))
     progress(f"opening the camera (INDI port {args.port})")
     try:
-        with Camera(args.port, MOTOR_GAIN) as cam:
+        with focusing_camera(args.port, MOTOR_GAIN) as cam:
             frames = Watched(cam, MOTOR_EXPOSURE)
             progress(f"camera open; checking focus: 3 frames of {MOTOR_EXPOSURE:g} s after one thrown away")
             frames.frame()                          # the first frame after opening can be stale
@@ -1586,7 +1609,14 @@ class Settled:
         try:
             self.motor.move(n)
         except KeyboardInterrupt:
-            self.moved += n     # focuser.Focuser.move lets a move ordered finish before it stops
+            # focuser.Focuser.move lets a move ordered finish before it stops,
+            # and says whether the Nano confirmed it: if not, where the
+            # drawtube is from the start is not known (None), and no move
+            # back is made from a guess.
+            self.moved = self.moved + n if getattr(self.motor, "confirmed", True) and self.moved is not None else None
+            raise
+        except Exception:
+            self.moved = None   # the order may have gone part way: not known
             raise
         self.moved += n         # where it is from the start, for a run cut short
         self.wait(SETTLE_S)
@@ -1686,7 +1716,7 @@ def run_motor(args, mode="focus"):
     # focuser's own measurements (step, backlash) are not shown.
     live = Broadcast(mode, usual, path=STREAM_FILE if mode in STAGES else None, picture=lambda: seen.get("lum"))
     try:
-        with Camera(args.port, MOTOR_GAIN) as cam:
+        with focusing_camera(args.port, MOTOR_GAIN) as cam:
             frames = Watched(cam, MOTOR_EXPOSURE)
             progress(f"camera open; one frame of {MOTOR_EXPOSURE:g} s thrown away (the first can be stale)")
             frames.frame()
@@ -1861,7 +1891,10 @@ def run_motor(args, mode="focus"):
         # wound out. Back to the start, the last move inward. A focus run
         # (--auto) stays where it is: its moves are small and going home
         # would throw away the way it found.
-        if drive is not None and drive.moved and mode != "auto":
+        if drive is not None and drive.moved is None and mode != "auto":
+            progress("stopped: the focuser's last move was not confirmed, so where it is is not known; it is "
+                     "left where it is (zero it again, ./focuser.py zero, before trusting its position)")
+        elif drive is not None and drive.moved and mode != "auto":
             progress(f"stopped: taking the focuser back {-drive.moved:+d} half-steps to where it started")
             drive.home(settings["backlash"])
         live.done("failed", "Focusing was stopped before it finished; the focuser stays where it is."
@@ -2139,15 +2172,18 @@ def run(args):
         pass
     finally:
         if pending is not None:
-            # Let the exposure under way finish before the camera is closed.
+            # Let the exposure under way finish before the camera is closed:
+            # long enough for the camera's own retries and reopen (altair.py,
+            # three tries), and said if even that is not enough.
             try:
-                pending.get(timeout=exposure + 3)
+                pending.get(timeout=3 * (exposure + 30))
             except queue.Empty:
-                pass
+                print("camera: the last focus frame did not finish; closing the camera anyway", file=sys.stderr)
         try:
             cam.use("imaging")      # leave it as every other script expects to find it
         except Exception:
             pass
+        let_go(cam)
         cam.close()
     # The middle figure of each timing over the run.
     timing = {}

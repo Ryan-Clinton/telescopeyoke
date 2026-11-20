@@ -622,14 +622,22 @@ def on_target(paths, say=print):
     more than 0.5 °C off its target (TY_ONTGT false, altair.py), saying how
     many. Frames without the card (the 183C, or a camera with no cooler) are
     all kept, as before. The stream and quick looks never call this."""
-    kept, off = [], 0
+    kept, off, unknown = [], 0, 0
     for path in paths:
-        if fits.getheader(path, 1).get("TY_ONTGT") is False:
+        header = fits.getheader(path, 1)
+        if header.get("TY_ONTGT") is False:
             off += 1
+        elif "SET-TEMP" in header and "TY_ONTGT" not in header:
+            # A cooled camera's frame whose sensor could not be read: not
+            # known to match its darks, so not science. (None of the 1,067
+            # cooled frames kept by 20 November 2026 is one.)
+            unknown += 1
         else:
             kept.append(path)
     if off:
         say(f"Left out {off} of {len(paths)} frames: the sensor was more than 0.5 °C off its target.")
+    if unknown:
+        say(f"Left out {unknown} of {len(paths)} frames: the cooled sensor's temperature could not be read.")
     return kept
 
 
@@ -1238,10 +1246,16 @@ def last_capture(session):
 
 
 def read_log(session):
-    """Every frame's entry so far."""
+    """Every frame's entry so far. A later entry for the same frame replaces
+    the earlier one (a deferred frame whose raw file could not be written)."""
     lines = Path(session) / "frames.jsonl"
     if lines.exists():
-        return [json.loads(line) for line in lines.read_text(encoding="utf-8").splitlines() if line.strip()]
+        found = {}
+        for line in lines.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                entry = json.loads(line)
+                found[entry.get("index", len(found))] = entry
+        return list(found.values())
     path = Path(session) / "frames.json"   # sessions from before the line-per-frame log
     return json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
 

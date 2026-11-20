@@ -24,7 +24,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 3 | AI agent autonomy and permissions | done 20 Nov 2026, re-checked |
 | 4 | Autonomous full-night operation | done 20 Nov 2026, re-checked |
 | 5 | Guiding and calibration | done 20 Nov 2026, re-checked |
-| 6 | Camera, cooling, filters and focusing | not started |
+| 6 | Camera, cooling, filters and focusing | done 20 Nov 2026; re-check asked |
 | 7 | Scientific discovery reliability | not started |
 | 8 | Calibration and scientific measurement accuracy | not started |
 | 9 | Demo claims versus real-world proof | not started |
@@ -304,4 +304,19 @@ This initial pass was an architectural and risk assessment, not an exhaustive li
 | 2 | An RA-only dither projected from a random direction can shrink to nothing | P1 | Confirmed and fixed | With Dec not guided, `Supervisor.dither()` puts the whole distance along RA, one way or the other, and returns what it asked for |
 | 3 | Three south steps need not be running | P1 | Confirmed and fixed | South counts only with three steps running that moved the star; its column is taken from the first such run |
 | 4 | A dither not settled in 50 s is answered as made | P2 | Smaller than claimed, no change | The answer says "moved; not settled", the lock has moved, and the next frame waits for settling or is marked (13 Nov 2026: answering it as failed ended two runs) |
+
+## 6. Camera, cooling, filters and focusing, 20 November 2026
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | An interrupted focus run goes back by a count it does not know | P1 | Confirmed and fixed | `focuser.Focuser.move` says whether the Nano confirmed the move (`confirmed`); the focus run's count becomes unknown when it did not, and the run is then left where it is with a word to zero again, never moved back from a guess |
+| 2 | A filter change's focus move that fails part way leaves a wrong focus reference | P1 | Confirmed and fixed | The reference is marked unknown before the first turn and set only when every move is done; while it is unknown a filter change refuses (REFOCUS_NEEDED) until a focus run sets it |
+| 3 | A focus command that opened a cooled camera closes it cold | P1 | Confirmed and fixed | `focus.let_go()`: a camera focus opened itself is warmed slowly (`shoot.warm`) before it closes, in `--check`, the motor focus and the interactive view; one lent by a session or kept by the keeper is left cold |
+| 4 | A cooled frame of unknown sensor temperature passes as on target | P1 | Confirmed and fixed | `stacking.on_target` leaves out a frame with SET-TEMP and no TY_ONTGT, and says so. Measured first: none of the 1,067 cooled frames on disk is one, so no recorded result changes |
+| 5 | The interactive view can close the camera mid-exposure | P1 | Confirmed and fixed | It waits up to three times the exposure plus 30 s (the camera's own retries) for the last frame, and says so if even that runs out |
+| 6 | A deferred raw save that fails is still counted as kept for the quality pass | P1 | Confirmed and fixed | The run keeps each deferred save's result; a failure replaces that frame's entry ("raw file not written"), and `stacking.read_log` keeps a frame's last entry |
+| 7 | A provisional offset need not have approached focus inward | P2 | Confirmed and fixed | Only a verified measurement that approached inward can be provisional; no offsets are kept yet, so nothing in use changes |
+| - | The 19 Nov cooler record's open questions | - | Agreed | Hardware questions, not settled by code; they stay open in the record |
+
+Demo after the changes: `./focus.py --check` (HFR 1.75 against 1.97) and a three-frame `./shoot.py M81` ran as before.
 
