@@ -684,7 +684,12 @@ def source():
     """Which copy of the code this is: a release's zip, or a git checkout and its commit."""
     import subprocess
     if not (ROOT / ".git").exists():
-        return "from a release zip"
+        try:
+            tag, commit = (ROOT / "RELEASE").read_text(encoding="utf-8").split()[:2]
+            return f"release {tag} (commit {commit[:7]})"
+        except (OSError, ValueError):
+            # A zip of main from GitHub, or 0.4.1 and earlier: not a known release.
+            return "a zip with no release record (an older release, or a download of the newest code)"
     try:
         commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, capture_output=True,
                                 text=True, timeout=10, **host.QUIET).stdout.strip()

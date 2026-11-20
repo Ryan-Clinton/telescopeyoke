@@ -35,7 +35,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 14 | Weather and environmental decisions | done 20 Nov 2026, re-checked |
 | 15 | Operational performance | done 20 Nov 2026, re-checked; 1-4 and 6 planned |
 | 16 | Network security and external integrations | done 20 Nov 2026, re-checked; 2, 5 and 8 planned |
-| 17 | Public releases and installation | not started |
+| 17 | Public releases and installation | done 20 Nov 2026; re-check asked |
 | 18 | Architecture, documentation and maintainability | not started |
 
 ## **1. Initial assessment**
@@ -566,4 +566,17 @@ The rain alert stays on in every case (the owner's rule, 15 November 2026): thes
 | 3 | A custom plain `rtmp://` address can still carry the key | P2 | Confirmed and fixed | Left out of the stream with the reason said: give its `rtmps://` address |
 | 4 | MCP params `[]` and non-object arguments accepted | P2 | Confirmed and fixed | Params must be an object or absent; a tool's arguments must be an object, else "Invalid params". Each tool's own handler still checks its fields |
 | - | RTMPS still to be proven on a live stream | - | Agreed | Recorded in docs/validation.md after the next stream |
+
+## 17. Public releases and installation, 20 November 2026
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | Release 0.4.1 lacks the Sun refusal for named GoTos | P0 | Confirmed; release waits for the owner's go | The README now says so beside the download, and to use 0.4.1's GoTo by night only. Release 0.4.2 with the fix, and a note on the 0.4.1 release page, wait for the owner (releases are his) |
+| 2 | install.sh does not check for Python 3.11 | P1 | Confirmed and fixed | It stops before installing anything on an older python3, naming Ubuntu 24.04 or Debian 12 as having it. Its comment no longer mentions CI |
+| 3 | No upgrade procedure | P1 | Confirmed and fixed (documented) | The README says what to copy from the old folder (`config.toml`, `rigs/`, `cache/`, `calibration/`, `frames/`, `horizon/`, `web/`), to run the installer again for the launchers, and that the old folder is the way back. Separating data from code is planned |
+| 4 | A zip of main reports itself as a release | P1 | Confirmed and fixed | `release.py` adds a `RELEASE` file (tag and commit) to the zip; `doctor.py` reports "release TAG (commit)" from it, and a zip without one as having no release record |
+| 5 | Windows install leaves out the optional libraries | P2 | Agreed and planned | The Windows setup notes to name `pip install astroquery hidapi` for TESS and the filter wheel, and sxwheel.py's message for Windows |
+| 6 | No record of the library versions proven | P2 | Agreed and planned | The versions on the owner's laptop recorded in docs/validation.md with the next release |
+| 7 | Windows claims need qualifying | P2 | Already so | The README says the camera has taken frames indoors and that the installer, demo launcher, Start Menu entries and window are untried |
+| - | A SHA-256 with each zip | - | Agreed and planned | With the next release |
 

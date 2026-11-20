@@ -9,7 +9,7 @@
 # Python libraries come from the distribution's packages (python3-astropy and
 # so on), which is the simplest route on Ubuntu and Debian. pyproject.toml
 # lists the same libraries with the oldest versions known to work; it is what
-# CI and "pip install ." use.
+# "pip install ." uses (the Windows installer).
 #
 # It does not build a camera driver or download the plate solver's star
 # database; it prints what is left to do at the end.
@@ -18,6 +18,14 @@ cd "$(dirname "$0")"
 
 if [ "${1:-}" = "--check" ]; then
     exec ./doctor.py
+fi
+
+# Python 3.11 or newer (tomllib): Ubuntu 22.04's 3.10 and Debian 11's 3.9
+# would install everything and then fail on the first command.
+if ! python3 -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then
+    echo "TelescopeYoke needs Python 3.11 or newer; this python3 is $(python3 -V 2>&1 || echo missing)." >&2
+    echo "Ubuntu 24.04 or Debian 12 (or newer) have it." >&2
+    exit 1
 fi
 
 planner_only=false

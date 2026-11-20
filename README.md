@@ -229,7 +229,15 @@ machine: on Windows the camera has taken frames indoors, but `try-demo.cmd`,
 
 That zip is release 0.4.1 (20 November 2026), an experimental hardware
 preview, which stays as it is; a hardware report says which release or
-commit made it. `git clone https://github.com/Ryan-Clinton/telescopeyoke` gets the newest
+commit made it. **0.4.1 does not refuse a GoTo to a named target within 40°
+of the Sun** (pointing by altitude and azimuth does): the newest code does,
+and the next release will. Until then, use 0.4.1's GoTo by night only.
+
+To move to a newer release, unpack it beside the old one and copy across
+what the old folder keeps of yours, none of which is in the zip:
+`config.toml`, `rigs/`, `cache/`, `calibration/`, `frames/`, `horizon/` and
+`web/`. Then run its `install.sh` (or `install.ps1`) again, which points the
+launchers at the new folder. The old folder is the way back. `git clone https://github.com/Ryan-Clinton/telescopeyoke` gets the newest
 code instead, which changes from day to day. Either is proven on one
 telescope (see [What it has been tried on](docs/hardware.md)).
 

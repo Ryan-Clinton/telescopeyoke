@@ -79,6 +79,11 @@ def build(version=agent.VERSION):
     tag, name, _ = names(version)
     OUT.mkdir(exist_ok=True)
     git("archive", "--format=zip", f"--prefix={name[:-4]}/", "-o", str(OUT / name), "HEAD")
+    # Which release and commit the zip is, for doctor.py's hardware report: a
+    # zip of main downloaded from GitHub has no such file, and says so.
+    import zipfile
+    with zipfile.ZipFile(OUT / name, "a") as z:
+        z.writestr(f"{name[:-4]}/RELEASE", f"{tag} {git('rev-parse', 'HEAD')}\n")
     (OUT / "notes.md").write_text(notes(version), encoding="utf-8")
     return OUT / name, OUT / "notes.md"
 
