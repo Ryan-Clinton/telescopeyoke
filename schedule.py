@@ -835,6 +835,7 @@ def go_home(home=None, wait=600):
 
 DAWN_FILTERS = ("B", "G", "R", "L")    # the sky brightens through dawn: the faintest-through filter first
 FLATS_LOG = config.DATA / "cache" / "dawn-flats.log"
+FLATS_PID = config.DATA / "cache" / "dawn-flats.pid"   # the flats waiting for twilight, so a second end starts none
 
 
 def night_filters(now=None, hours=NIGHT_HOURS):
@@ -884,6 +885,13 @@ def dawn_flats(popen=subprocess.Popen):
     # Then the camera keeper (keeper.py), if it holds the camera, warms the
     # sensor slowly and lets it go: the night's one warm-up, after the flats.
     # The two in turn by Python itself, not a Unix shell, so Windows runs them too.
+    # Once a night: a second `schedule.py end` must not start a second set
+    # against the same camera and wheel while the first waits for twilight.
+    try:
+        if alive(int(FLATS_PID.read_text(encoding="utf-8"))):
+            return "The dawn flats are already waiting for the twilight (cache/dawn-flats.log)."
+    except (OSError, ValueError):
+        pass
     wanted = dawn_filters()
     flats = ["calibrate.py", "flat", "--twilight", "--tell", "--filters", *wanted]
     line = ("import subprocess, sys\n"
@@ -891,8 +899,10 @@ def dawn_flats(popen=subprocess.Popen):
             "subprocess.run([sys.executable, 'keeper.py', 'stop'])\n")
     FLATS_LOG.parent.mkdir(parents=True, exist_ok=True)
     with open(FLATS_LOG, "w", encoding="utf-8") as log:
-        popen([sys.executable, "-c", line], stdout=log, stderr=subprocess.STDOUT, cwd=str(here),
-              start_new_session=True)
+        child = popen([sys.executable, "-c", line], stdout=log, stderr=subprocess.STDOUT, cwd=str(here),
+                      start_new_session=True)
+    if getattr(child, "pid", None):
+        FLATS_PID.write_text(str(child.pid), encoding="utf-8")
     return (f"Dawn flats in {', '.join(wanted[:-1])} and {wanted[-1]} will be taken from where it is parked as the sky brightens, "
             "with nothing over the tube, and you will be told when they are kept or if they fail: "
             "leave the camera, wheel and focus as they are until then.")
@@ -936,25 +946,22 @@ def tidy(say=print, wait_s=20):
             tell("the guider: stopped")
     except Exception as problem:            # the night's end goes on without it
         tell(f"the guider could not be told to stop: {problem}")
+    import host
     found = []
-    for proc in Path("/proc").glob("[0-9]*"):
-        try:
-            line = [w.decode(errors="replace") for w in (proc / "cmdline").read_bytes().split(b"\0") if w]
-        except OSError:
-            continue
-        names = [Path(w).name for w in line]
-        if any(n in WATCHERS for n in names) and int(proc.name) != os.getpid():
-            found.append((int(proc.name), next(n for n in names if n in WATCHERS)))
+    for pid, line in host.processes():       # Linux and Windows alike
+        names = [Path(w.strip('"')).name for w in line]
+        if any(n in WATCHERS for n in names) and pid != os.getpid():
+            found.append((pid, next(n for n in names if n in WATCHERS)))
     for pid, name in found:
         try:
-            os.kill(pid, signal.SIGINT)
+            host.interrupt(pid)
         except OSError:
             continue
     end_by = time.time() + wait_s
     for pid, name in found:
-        while time.time() < end_by and Path(f"/proc/{pid}").exists():
+        while time.time() < end_by and alive(pid):
             time.sleep(0.5)
-        if Path(f"/proc/{pid}").exists():
+        if alive(pid):
             try:
                 os.kill(pid, signal.SIGTERM)
             except OSError:

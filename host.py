@@ -69,6 +69,45 @@ def alive(pid):
         return False
 
 
+def processes():
+    """[(pid, [command words])] of the running processes: /proc on Linux,
+    the process table through PowerShell on Windows; [] if neither answers."""
+    if WINDOWS:
+        import json
+        try:
+            out = subprocess.run(["powershell", "-NoProfile", "-Command",
+                                  "Get-CimInstance Win32_Process | Select-Object ProcessId,CommandLine | ConvertTo-Json"],
+                                 capture_output=True, text=True, timeout=30, **QUIET).stdout
+            rows = json.loads(out or "[]")
+        except (OSError, subprocess.TimeoutExpired, ValueError):
+            return []
+        rows = [rows] if isinstance(rows, dict) else rows
+        import shlex
+        found = []
+        for r in rows:
+            try:
+                found.append((int(r["ProcessId"]), shlex.split(r.get("CommandLine") or "", posix=False)))
+            except (KeyError, TypeError, ValueError):
+                continue
+        return found
+    found = []
+    for proc in glob.glob("/proc/[0-9]*"):
+        try:
+            with open(f"{proc}/cmdline", "rb") as f:
+                words = [w.decode(errors="replace") for w in f.read().split(b"\0") if w]
+        except OSError:
+            continue
+        found.append((int(proc.rsplit("/", 1)[1]), words))
+    return found
+
+
+def interrupt(pid):
+    """Ask a process to stop as Ctrl-C would, so it closes what it holds.
+    Windows cannot send another console's process a Ctrl-C: it is ended."""
+    import signal
+    os.kill(pid, signal.SIGTERM if WINDOWS else signal.SIGINT)
+
+
 def serial_ports():
     """Every serial port seen, as (device, description) pairs."""
     if not WINDOWS:

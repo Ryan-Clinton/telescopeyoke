@@ -36,7 +36,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 15 | Operational performance | done 20 Nov 2026, re-checked; 1-4 and 6 planned |
 | 16 | Network security and external integrations | done 20 Nov 2026, re-checked; 2, 5 and 8 planned |
 | 17 | Public releases and installation | done 20 Nov 2026, re-checked; release 0.4.2 waits for the owner |
-| 18 | Architecture, documentation and maintainability | done 20 Nov 2026; re-check asked |
+| 18 | Architecture, documentation and maintainability | done 20 Nov 2026, re-checked; 7 and 8 deferred |
 
 ## **1. Initial assessment**
 
@@ -592,11 +592,20 @@ The rain alert stays on in every case (the owner's rule, 15 November 2026): thes
 | # | Finding | Severity | Verdict | What was done |
 |---|---|---|---|---|
 | 1 | AGENTS.md and `ty` say only `ty mount` moves anything | P1 | Confirmed and fixed | Both now name the pass-throughs that drive hardware (`ty mount` motion, `ty shoot`, `ty focus`, `ty moon`, the camera through `ty lucky capture` and `ty collimation`) and make `policy.py` the reference |
-| 2 | Dawn flats launched through `sh -c`; a failed launch skips the warm-up | P1 | Confirmed and fixed | The flats then `keeper.py stop` run in turn by Python itself (`python -c`), so Windows runs them too; if they cannot be started, `end()` says so and the camera is still warmed and let go (`release_camera`). `tidy()`'s /proc listing is Linux-only and harmless elsewhere (it finds nothing); moving it behind `host.py` planned |
+| 2 | Dawn flats launched through `sh -c`; a failed launch skips the warm-up | P1 | Confirmed and fixed | The flats then `keeper.py stop` run in turn by Python itself (`python -c`), so Windows runs them too; if they cannot be started, `end()` says so and the camera is still warmed and let go (`release_camera`). `tidy()`'s /proc listing was Linux-only (corrected in the re-check below: it was not harmless) |
 | 3 | The end-of-night skill can start the flats twice | P1 | Confirmed and fixed | The skill and owner-rig.md: `schedule.py end` starts them, never a second time; by hand only when the night ended without it or it says they could not be started |
 | 4 | Kept JSON written outside records.py | P1 | Confirmed, two fixed | The guide calibration through `records.write` (whole or not at all); a reference's footprint added through `records.change` (under its lock). `focus.keep` is the live view's small file, not a record, and its Windows fallback is there on purpose: left |
 | 5 | cloudy-day starts all three research jobs at once | P2 | Confirmed and fixed | A and B at once; C waits for A's batch |
 | 6 | Stale statements in the docs | P2 | Confirmed and fixed | Fourteen skills; the skills used at the telescope since; `ty watch-run` built (`runwatch.py`); the simulator in `--demo` (the tests removed 4 November 2026); CLAUDE.md: `ruff check` is the one check |
 | 7 | Command tables kept in several places | P2 | Agreed, no change now | The two pass-through tables agree; deriving one from the other planned when a command is next added |
 | 8 | Large modules | P2 | Agreed, no refactor | As the audit says: split a responsibility out only when its feature needs work, night-end first |
+
+## 18, re-audited at 6e97677
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | The upgrade note said to leave the motion lock behind | P0 | Right, my mistake, fixed | The README now says to copy the motion lock too: it stops the mount for a reason, and a new folder without it would not. Only `.lock` and `.part` files are left behind |
+| 2 | `ty run` and `ty`'s writing views missed | P1 | Confirmed and fixed | `ty` names `ty spot NAME` and `ty research --html` (write here), `--pull` (fetches) and `ty run` (an order for the imaging run, which drives the telescope); AGENTS.md's safe list leaves out `ty run` |
+| 3 | `tidy()` finds no watchers on Windows | P1 | Confirmed and fixed | `host.processes()` lists processes on both (/proc; the process table through PowerShell on Windows) and `host.interrupt()` stops them (Ctrl-C on Linux; on Windows, where another console cannot be sent one, it is ended). Untried on Windows |
+| 4 | A second `schedule.py end` could start the flats twice | P2 | Confirmed and fixed | The waiting flats' process is kept in `cache/dawn-flats.pid`; while it runs, another end says they are already waiting and starts none |
 

@@ -32,10 +32,13 @@
 
 Add --json to any of them for a machine-readable answer in one fixed shape
 (see schemas/ and docs/agents/). Add --demo to try it with no telescope.
-The views here only read. The pass-throughs drive hardware when the
-script does: "ty mount" motion commands, "ty shoot" (it re-centres), "ty
-focus" (the focuser; --field also slews), "ty moon", and the camera through
-"ty lucky capture" and "ty collimation". policy.py classes every one.
+Most views here only read. "ty spot NAME" and "ty research --html" write
+files here, "ty research --pull" fetches, and "ty run" leaves an order for
+the imaging run, which drives the telescope. The pass-throughs drive
+hardware when the script does: "ty mount" motion commands, "ty shoot" (it
+re-centres), "ty focus" (the focuser; --field also slews), "ty moon", and
+the camera through "ty lucky capture" and "ty collimation". policy.py
+classes every one, and is the reference.
 """
 import argparse
 import json

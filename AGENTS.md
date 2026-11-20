@@ -136,10 +136,10 @@ With none named it is `config.toml` and the repository root, as before.
 
 ## Safe without hardware
 
-All of `ty` except the pass-throughs that drive hardware: `ty mount` with a
-motion command, `ty shoot` (it re-centres), `ty focus` (the focuser, and
-`--field` slews), `ty moon`, and the camera through `ty lucky capture` and
-`ty collimation`. Anything with `--demo`; anything with `--dry-run`;
+All of `ty` except `ty run` (an order for the imaging run) and the
+pass-throughs that drive hardware: `ty mount` with a motion command, `ty
+shoot` (it re-centres), `ty focus` (the focuser, and `--field` slews), `ty
+moon`, and the camera through `ty lucky capture` and `ty collimation`. Anything with `--demo`; anything with `--dry-run`;
 `doctor.py`. `policy.py` is the reference: it classes every command.
 
 ## Commands that move the telescope

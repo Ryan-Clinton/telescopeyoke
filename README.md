@@ -244,7 +244,9 @@ of which is in the zip:
 - the camera makers' libraries you installed: `vendor/`;
 - remembered measurements, which can be made again: `cache/`, `web/`.
 
-Leave behind files ending `.lock` or `.part`, and the motion lock. Then run
+Copy the motion lock, `MOTION_LOCKED`, too if there is one: it stops the
+mount for a reason, and a new folder without it would not. Leave behind
+files ending `.lock` or `.part` (left by programs now stopped). Then run
 the new folder's `install.sh` (or `install.ps1`), which points the launchers
 at it. The old folder is the way back. `git clone https://github.com/Ryan-Clinton/telescopeyoke` gets the newest
 code instead, which changes from day to day. Either is proven on one
