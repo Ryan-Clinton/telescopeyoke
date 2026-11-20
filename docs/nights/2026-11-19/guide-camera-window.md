@@ -223,8 +223,13 @@ errors. Close to the binned mode's 149 over 5 minutes, not yet as good.
    pixels for the mode in use; calibrations already record their binning
    and are refused for another.
 5. Better sampling will not fix the Dec error by itself (9.23" Dec
-   against 2.03" RA on 18 November): that is the mount, tested
-   separately tonight with the tube rebalanced.
+   against 2.03" RA on 18 November): that is the mount. That night the
+   tube was rebalanced with 1 kg of sand and Dec still did not follow at
+   guide rate ([dec-guiding.md](dec-guiding.md), [dec-slack.md](dec-slack.md)).
+
+Step 3's comparison (`./guidecam.py star --count 30 --compare-window`,
+4a63f67) was in the night's plan but not run; it is owed on the next
+clear night.
 
 Not tried, and why: a USB trace (`usbmon`) needs a kernel module loaded
 and root, and waits for the owner's say; the library's count already

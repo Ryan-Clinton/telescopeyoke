@@ -50,7 +50,12 @@ guiding and dithering are one piece of work here, never guiding alone.
 
 The guide camera is read 2 x 2 binned at USB speed 0: at full size it drops
 frames whatever the setting, and binned it sent 149 of 150 2 s frames in 5
-minutes (6 November 2026, [the fault](guide-camera-fault.md)).
+minutes (6 November 2026, [the fault](guide-camera-fault.md)). Since 19
+November 2026 a window of the sensor up to 512 x 960 streams at full
+resolution (4.77"/px) when USB speed 0 is set before the stream starts;
+the guider does not use it yet: an on-sky comparison
+(`./guidecam.py star --compare-window`) and an overnight run come first
+([the window](nights/2026-11-19/guide-camera-window.md)).
 
 - **Guide ratio:** 6.5 against the 183M binned 2x2, within the usual rule of
   thumb (forum advice says under 5 to 10 [2]); 13 against it unbinned, past
