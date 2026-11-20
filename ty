@@ -44,10 +44,11 @@ import argparse
 import json
 import sys
 
-PASS_THROUGH = {"mount": "mount", "tonight": "tonight", "shoot": "shoot", "focus": "focus",
-                "solve": "solve", "restack": "restack", "console": "console", "watch-run": "runwatch",
-                "agent-report": "agentlog", "streak": "streak", "lucky": "lucky", "moon": "moon",
-                "collimation": "collimation", "onboard": "onboard"}
+from policy import TY_PASSES
+
+# The pass-throughs are policy.py's one table, so a command added there is
+# classed and run alike, and none can be run here unclassed.
+PASS_THROUGH = {word: script.removesuffix(".py") for word, script in TY_PASSES.items()}
 
 
 def show(value, indent=0):

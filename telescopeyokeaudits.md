@@ -597,7 +597,7 @@ The rain alert stays on in every case (the owner's rule, 15 November 2026): thes
 | 4 | Kept JSON written outside records.py | P1 | Confirmed, two fixed | The guide calibration through `records.write` (whole or not at all); a reference's footprint added through `records.change` (under its lock). `focus.keep` is the live view's small file, not a record, and its Windows fallback is there on purpose: left |
 | 5 | cloudy-day starts all three research jobs at once | P2 | Confirmed and fixed | A and B at once; C waits for A's batch |
 | 6 | Stale statements in the docs | P2 | Confirmed and fixed | Fourteen skills; the skills used at the telescope since; `ty watch-run` built (`runwatch.py`); the simulator in `--demo` (the tests removed 4 November 2026); CLAUDE.md: `ruff check` is the one check |
-| 7 | Command tables kept in several places | P2 | Agreed, no change now | The two pass-through tables agree; deriving one from the other planned when a command is next added |
+| 7 | Command tables kept in several places | P2 | Agreed, fixed after the loop | `ty` takes its pass-throughs from `policy.TY_PASSES`, the one table: a command added there is classed and run alike, and `ty` cannot run one that is not classed. Tried: `ty onboard`, `ty tonight`, `ty mount status` through it. The skills' and docs' lists of commands stay prose |
 | 8 | Large modules | P2 | Agreed, no refactor | As the audit says: split a responsibility out only when its feature needs work, night-end first |
 
 ## 18, re-audited at 6e97677
