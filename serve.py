@@ -338,24 +338,24 @@ def lan_address():
 SERVICE = "ty-serve.service"
 
 
-def unit(root=None, python=None, data=None, port=8080):
+def unit(root=None, python=None, data=None, port=8080, bind="0.0.0.0"):
     """The systemd user service that keeps the status page served. On 22
     October 2026 the laptop rebooted at 21:51 and nothing started serve.py
     again, so the status page showed nothing through a patrol."""
     root = Path(root or Path(__file__).resolve().parent)
     python = python or sys.executable
     env = f"Environment=TY_DATA={data}\n" if data else ""
-    extra = f" --port {port}" if port != 8080 else ""
+    extra = (f" --port {port}" if port != 8080 else "") + (f" --bind {bind}" if bind != "0.0.0.0" else "")
     return (f"[Unit]\nDescription=telescopeyoke: the status page on port {port}\n"
             f"After=network-online.target\n\n"
             f"[Service]\nWorkingDirectory={root}\n{env}ExecStart={python} -u {root / 'serve.py'}{extra}\n"
             f"Restart=always\nRestartSec=10\n\n[Install]\nWantedBy=default.target\n")
 
 
-def install(port=8080, say=print, run=subprocess.run, home=None):
+def install(port=8080, say=print, run=subprocess.run, home=None, bind="0.0.0.0"):
     place = Path(home or Path.home()) / ".config" / "systemd" / "user"
     place.mkdir(parents=True, exist_ok=True)
-    (place / SERVICE).write_text(unit(data=os.environ.get("TY_DATA"), port=port), encoding="utf-8")
+    (place / SERVICE).write_text(unit(data=os.environ.get("TY_DATA"), port=port, bind=bind), encoding="utf-8")
     run(["systemctl", "--user", "daemon-reload"], check=True)
     run(["systemctl", "--user", "enable", "--now", SERVICE], check=True)
     say(f"Installed {place / SERVICE}: the status page is served on port {port} from boot, and started "
@@ -378,7 +378,7 @@ def main(argv=None):
     if args.install:
         if args.demo:
             ap.error("--install serves the real page, not --demo")
-        return install(args.port)
+        return install(args.port, bind=args.bind)
 
     WEB.mkdir(exist_ok=True)
     threading.Thread(target=rebuild_forever, args=(args.every, args.top, args.demo),

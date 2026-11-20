@@ -34,7 +34,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 13 | Observing scheduler and scientific yield | done 20 Nov 2026, re-checked; 7 planned |
 | 14 | Weather and environmental decisions | done 20 Nov 2026, re-checked |
 | 15 | Operational performance | done 20 Nov 2026, re-checked; 1-4 and 6 planned |
-| 16 | Network security and external integrations | done 20 Nov 2026; re-check asked |
+| 16 | Network security and external integrations | done 20 Nov 2026, re-checked; 2, 5 and 8 planned |
 | 17 | Public releases and installation | not started |
 | 18 | Architecture, documentation and maintainability | not started |
 
@@ -556,4 +556,14 @@ The rain alert stays on in every case (the owner's rule, 15 November 2026): thes
 | 6 | The Compendium download has no size ceiling | P2 | Confirmed and fixed | Refused past 200 MB, and refused when its contents unpack to more than 800 MB; nothing is kept then |
 | 7 | MCP and API inputs not bounded | P2 | Confirmed and fixed | An MCP message that is not an object, or whose params are not one, answers "Invalid request"; the API's `limit` is a number from 1 to 500, a bad one the default |
 | 8 | Public status kept private by string replacement | P2 | Agreed and planned | A list of the fields that may be published, the rest left out by construction |
+
+## 16, re-audited at 5fcf92a
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | `--install --bind` installed a service on every network | P1 | Confirmed and fixed | The address goes into the service's command (`unit(..., bind=)`), the default unchanged |
+| 2 | `chmod 0600` is not owner-only on Windows | P1 | Right, planned | On Windows a checkout under the user's own folder is already theirs only by its default permissions; an explicit ACL is planned for a checkout elsewhere. Files written before 5fcf92a keep their mode until next written (the owner's config.toml can be made private by hand: `chmod 600 config.toml`) |
+| 3 | A custom plain `rtmp://` address can still carry the key | P2 | Confirmed and fixed | Left out of the stream with the reason said: give its `rtmps://` address |
+| 4 | MCP params `[]` and non-object arguments accepted | P2 | Confirmed and fixed | Params must be an object or absent; a tool's arguments must be an object, else "Invalid params". Each tool's own handler still checks its fields |
+| - | RTMPS still to be proven on a live stream | - | Agreed | Recorded in docs/validation.md after the next stream |
 

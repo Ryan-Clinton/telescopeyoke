@@ -124,6 +124,8 @@ def tool_list():
 def call_tool(name, arguments):
     if name not in TOOLS:
         raise KeyError(name)
+    if not isinstance(arguments, (dict, type(None))):
+        raise TypeError("arguments must be an object")
     result = interface.run(name, lambda: TOOLS[name][3](arguments or {}))
     text = json.dumps(result, default=interface.jsonable)
     return {"content": [{"type": "text", "text": text}],
@@ -132,7 +134,7 @@ def call_tool(name, arguments):
 
 def handle(message):
     """Answer one JSON-RPC message; None for notifications."""
-    if not isinstance(message, dict) or not isinstance(message.get("params") or {}, dict):
+    if not isinstance(message, dict) or not isinstance(message.get("params", {}), (dict, type(None))):
         return {"jsonrpc": "2.0", "id": message.get("id") if isinstance(message, dict) else None,
                 "error": {"code": -32600, "message": "Invalid request"}}
     method, params, ident = message.get("method"), message.get("params") or {}, message.get("id")
@@ -164,6 +166,8 @@ def handle(message):
             return reply(call_tool(params.get("name"), params.get("arguments")))
         except KeyError:
             return fail(-32602, f"Unknown tool: {params.get('name')}")
+        except TypeError as problem:
+            return fail(-32602, str(problem))
     if method == "resources/list":
         return reply({"resources": [{"uri": uri, "name": name, "mimeType": "application/json"}
                                     for uri, (name, _) in RESOURCES.items()]})

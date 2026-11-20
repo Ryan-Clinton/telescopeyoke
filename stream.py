@@ -170,9 +170,18 @@ def keep_key(text, service=None):
 
 def destination(s, stream_key):
     if s["service"] == "custom":
-        return s["url"].replace("{key}", stream_key) if s["url"] else None
+        if not s["url"]:
+            return None
+        if plain_with_key(s["url"], stream_key):
+            return None
+        return s["url"].replace("{key}", stream_key)
     template = INGEST.get(s["service"])
     return template.format(key=stream_key) if template else None
+
+
+def plain_with_key(url, stream_key):
+    """Plain rtmp:// carrying the key would send it unencrypted: refused."""
+    return url.startswith("rtmp://") and ("{key}" in url or bool(stream_key) and stream_key in url)
 
 
 def destinations(s):
@@ -188,6 +197,9 @@ def destinations(s):
         address = destination(dict(s, service=name), stream_key) if stream_key else None
         if address:
             found.append((name, address, stream_key))
+        elif stream_key and name == "custom" and s.get("url") and plain_with_key(s["url"], stream_key):
+            left.append((name, f"{NAMES[name]} left out: its url is plain rtmp://, which would send the "
+                               "stream key unencrypted; give its rtmps:// address."))
         elif stream_key:
             left.append((name, f"{NAMES[name]} left out: no [stream] url in config.toml."))
         else:
