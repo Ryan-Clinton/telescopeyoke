@@ -61,9 +61,10 @@ against those planned. A colour camera has none of this: one block.
 The filters: `./ty target TARGET --json` gives `palette` when Gary Imm's
 Compendium is here (`./compendium.py status`): the palette he gives for that
 kind of nebula (SHO, HOO, Ha+RGB or LRGB) and what his class says of its
-light. Offer it as his, with its filters as `--blocks`
-(`Ha:N,OIII:N` for HOO), and the person chooses; with no palette, LRGB as
-above. It is advice: nothing picks a filter from it on its own.
+light. Use it, saying it is his, with its filters as `--blocks`
+(`Ha:N,OIII:N` for HOO), without waiting for the person to choose (they
+can change it); with no palette, LRGB as above. Nothing in the code picks
+a filter from it on its own: the plan does.
 
 ## Switching target
 
