@@ -21,7 +21,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 |---|---|---|
 | 1 | Mount safety and movement | done 20 Nov 2026, re-checked |
 | 2 | Hardware failure and recovery | done 20 Nov 2026, re-checked |
-| 3 | AI agent autonomy and permissions | done 20 Nov 2026; re-check asked |
+| 3 | AI agent autonomy and permissions | done 20 Nov 2026, re-checked |
 | 4 | Autonomous full-night operation | not started |
 | 5 | Guiding and calibration | not started |
 | 6 | Camera, cooling, filters and focusing | not started |
@@ -246,4 +246,13 @@ This initial pass was an architectural and risk assessment, not an exhaustive li
 | 5 | Grep and @-mentions reach config.toml past the secrets hook | P1 | Confirmed and fixed | `.claude/settings.json` denies `Read(./config.toml)` and `Read(./rigs/*.toml)`; the guard now also judges Grep, refusing a search of the settings file for the token or every line |
 | 6 | `news.py` is not registered | P2 | Confirmed and fixed | Registered for SessionStart and UserPromptSubmit; run by hand it gave the 19 messages since it last ran (one of them a "warmed up ... safe to switch off" at -8.8 °C, the case 2.8 fixed) |
 | 7 | The record misses edits to safety files and failed commands | P2 | Confirmed and fixed | `agentlog.event` records an edit to the mount, cooler, focuser, policy and hook files (path only), and PostToolUseFailure rows are marked `failed` |
+
+## 3, re-audited at 89f215a
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | Wrapped git (`env git clean -x`, `sh -c "git clean -x"`) still gets past the lock's guard | P0 | Confirmed and fixed | `git clean` with `-x` or `-X` is refused anywhere in the line (`GIT_CLEAN_X`), and each command is unwrapped (`env`, `nohup`, `timeout` ...) before git's subcommand is judged; `env git rm` of the lock is refused too. A line that only mentions it (a commit message) is refused as well: written to a file instead |
+| 2 | `.+` and `^.*$` get through the settings-search guard | P1 | Confirmed and fixed | A search of the settings file is allowed only when the whole pattern names one setting (`^latitude`, `focal_length_mm\s*=`); everything else is refused |
+| 3 | Failed commands are counted as hardware commands that ran | P2 | Confirmed and fixed | A failed call is recorded as `event: failed` and left out of the hardware count |
+| - | The owner's choices (Claude edits safety code; a person's ask is the go) | - | Agreed with the reviewer | They are trust decisions, written as such in rows 1 and 4 above, not technical enforcement |
 

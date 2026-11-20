@@ -201,7 +201,7 @@ def event(payload, now=None):
         return row
     command = data.get("command", "")
     kind = policy.classify_text(command)
-    row.update(event="ran", command=redact(command)[:500], cls=kind)
+    row.update(event="failed" if row.get("failed") else "ran", command=redact(command)[:500], cls=kind)
     if kind == "hardware":
         words, said_at = last_words(payload.get("transcript_path"))
         before = next((r for r in reversed(earlier) if r.get("cls") == "hardware"), None)
@@ -253,7 +253,9 @@ def report(rows):
     def skill(name):
         return by_skill.setdefault(name, {"loaded": 0, "ran": 0, "refused": 0, "turns": 0, "questions": 0,
                                           "corrected": 0, "interrupted": 0})
-    moves = [r for r in rows if r.get("cls") == "hardware"]
+    # A command that failed (PostToolUseFailure) is counted as failed, never
+    # as one of the hardware commands that ran.
+    moves = [r for r in rows if r.get("cls") == "hardware" and not r.get("failed")]
     for r in rows:
         if r.get("event") == "skill":
             skill(r["skill"])["loaded"] += 1

@@ -162,7 +162,10 @@ def motion_lock(payload):
     if tool not in SHELL_TOOLS:
         return
     command = data.get("command", "")
+    if GIT_CLEAN_X.search(command):
+        raise Refused(f"git clean -x would delete {LOCK} with the other ignored files.")
     for words in parts(command):
+        words = policy.unwrapped(words) or words     # env, nohup, timeout ... git: git decides
         name = Path(words[0]).name.lower()
         rest = words[1:]
         if name == "git":
@@ -236,6 +239,14 @@ def no_self_kill(payload):
             raise Refused("pkill -f and pgrep -f match their own command line: wait on the PID (kill -0 PID).")
 
 
+# A search of the settings file is allowed only for a setting by its name
+# (^latitude, focal_length_mm\s*=): never a pattern that matches anything.
+ONE_SETTING = re.compile(r"\^?[A-Za-z_]\w*(\\s\*)?=?")
+# git clean -x anywhere in a line, however it is started (env, nohup, sh -c "..."):
+# it deletes the ignored files, the motion lock among them.
+GIT_CLEAN_X = re.compile(r"\bgit\b[^;&|\n]*\bclean\b[^;&|\n]*\s-[A-Za-z]*[xX]")
+
+
 def no_secrets_out(payload):
     tool, data = payload.get("tool_name"), payload.get("tool_input") or {}
     if tool == "Read":
@@ -250,7 +261,7 @@ def no_secrets_out(payload):
         where = [str(data.get(k) or "") for k in ("path", "glob")]
         pattern = str(data.get("pattern", ""))
         if any(SETTINGS_FILE.search(w) or w.endswith("*.toml") for w in where) and \
-                (re.search(r"telegram|token|chat|bot", pattern, re.I) or pattern.strip() in ("", ".", ".*", "^", "$")):
+                (re.search(r"telegram|token|chat|bot", pattern, re.I) or not ONE_SETTING.fullmatch(pattern)):
             raise Refused("That search would show config.toml's Telegram token or the whole file: search for the "
                           "one setting needed, e.g. ^latitude.")
         return
