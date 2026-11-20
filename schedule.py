@@ -403,7 +403,7 @@ def choose_step(steps, say=print, now=None, cfg=None, sky=None, owed=None, costs
         # The ranking failed: the protected windows still hold (windows.choose,
         # no ranking), and only if that fails too the list in order.
         try:
-            step, cut, hold = windows.choose(steps, now, costs if isinstance(costs, dict) else None)
+            step, cut, hold = windows.choose(steps, now, costs if isinstance(costs, dict) else {})   # {}: the setup defaults
             say(f"{datetime.now():%H:%M} next step not ranked ({problem.__class__.__name__}: {problem}); "
                 "taken by the protected windows alone")
             return step, cut, hold

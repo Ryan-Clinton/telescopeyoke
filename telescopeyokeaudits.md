@@ -31,7 +31,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 10 | Hardware onboarding and compatibility | done 20 Nov 2026, re-checked; 3, 4, 8 and 9 open |
 | 11 | NINA/PHD2 companion | done 20 Nov 2026, re-checked |
 | 12 | State management and data integrity | done 20 Nov 2026, re-checked |
-| 13 | Observing scheduler and scientific yield | done 20 Nov 2026; re-check asked |
+| 13 | Observing scheduler and scientific yield | done 20 Nov 2026, re-checked; 7 planned |
 | 14 | Weather and environmental decisions | not started |
 | 15 | Operational performance | not started |
 | 16 | Network security and external integrations | not started |
@@ -491,4 +491,13 @@ The goals, windows and dispatch phases are off on the owner's rig ([goals], [win
 | 7 | A protected event is started however late | P2 | Agreed and planned | A latest useful start for each time-critical step, after which the miss is recorded |
 | 8 | The programme's own cap is ignored by the patrol | P2 | Confirmed and fixed | The patrol's capture uses the capture rule's `cap_minutes` when goals are on |
 | 9 | Night replay cannot show more discoveries | P2 | Agreed, no change | The replay already says what it does not model; no claim of more discoveries is made from it |
+
+## 13, re-audited at d52437e
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | A short field's later success outside three nights does not clear it | P1 | Confirmed and fixed | While a short field is owed, the refresh reads back FIELD_DAYS (10) nights, so a night that met it clears it after days off |
+| 2 | A second look's cap ignores the time left; the single field does not ask the next step | P1 | Confirmed and fixed | Its `--minutes` is the smaller of 1.5 times its minutes and the patrol's time left; the single-field path asks `due_step()` as the mosaic does |
+| 3 | The replay's caps no longer match the live patrol's | P1 | Confirmed (a mismatch of d52437e) and fixed | The replay uses the programme's own cap kept to the budget, and caps the second look as the live one is |
+| 4 | The fallback can fail again on the costs | P2 | Confirmed and fixed | It passes `{}` (the setup defaults) when the costs could not be had |
 

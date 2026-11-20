@@ -478,7 +478,7 @@ CONFIRM_MINUTES = 10   # a second look at a field with an unexplained candidate,
 clock = time.monotonic  # the patrol's budget is kept on this (the tests move it on by hand)
 
 
-def second_look(p, name, say=print, dry_run=False, run_command=None, search=None):
+def second_look(p, name, say=print, dry_run=False, run_command=None, search=None, most_minutes=None):
     """More frames of the same field, at once, searched as the first were:
     a real object is there again, most false ones are not. No GoTo: the
     telescope is already there. It dithers before the first frame, so a
@@ -489,8 +489,11 @@ def second_look(p, name, say=print, dry_run=False, run_command=None, search=None
     # Its frames are the depth it needs; its own cap (SHOOT_CAP times its
     # minutes) keeps a slow camera or a recovery from running it into the
     # next step's time.
+    # ...and never more than the time left (`most_minutes`: the patrol's
+    # budget, before the next step's start).
+    cap = minutes * SHOOT_CAP if most_minutes is None else max(1.0, min(minutes * SHOOT_CAP, most_minutes))
     cmd = [sys.executable, str(ROOT / "shoot.py"), name, "--frames", str(frames), "--exposure", str(p["exposure"]),
-           "--gain", str(p["gain"]), "--minutes", f"{minutes * SHOOT_CAP:g}", "--dither-first",
+           "--gain", str(p["gain"]), "--minutes", f"{cap:.1f}", "--dither-first",
            *(["--dry-run"] if dry_run else [])]
     say(f"== a second look at {name}: {minutes:g} minutes more")
     if not dry_run:
@@ -1065,10 +1068,12 @@ def run(args, say=print):
         if unexplained(entry["analysis"]):
             # The telescope is still on the field: no GoTo back to allow for.
             weighed = follow_up(name, entry["analysis"])
-            why = second_look_put_off(None, room_for(CONFIRM_MINUTES * (1 + STALL_SHARE)), budget=budget,
+            # The next step asked, as the mosaic's panels ask it (due_step).
+            why = second_look_put_off(due_step(), room_for(CONFIRM_MINUTES * (1 + STALL_SHARE)), budget=budget,
                                       weighed=weighed)
             began_look = time.time()
-            entry["second_look"] = {"stopped": why} if why else second_look(p, name, say)
+            left = (deadline - clock()) / 60 if deadline else None
+            entry["second_look"] = {"stopped": why} if why else second_look(p, name, say, most_minutes=left)
             if not why:
                 spent(weighed, time.time() - began_look)
             second_look_said(name, entry["analysis"], entry["second_look"], say)
@@ -1095,7 +1100,8 @@ def run(args, say=print):
                 say(f"== back to {entry['field']} for a second look")
                 if subprocess.run(goto, stdout=sys.stdout, env=dict(os.environ, TY_PATROL="1")).returncode == 0:
                     began_look = time.time()
-                    entry["second_look"] = second_look(p, entry["field"], say)
+                    left = (deadline - clock()) / 60 if deadline else None
+                    entry["second_look"] = second_look(p, entry["field"], say, most_minutes=left)
                     spent(weighed, time.time() - began_look)
                 else:
                     entry["second_look"] = {"stopped": "the GoTo back to it failed"}

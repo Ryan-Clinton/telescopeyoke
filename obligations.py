@@ -176,6 +176,10 @@ def refresh(today=None, data=None, path=None, nights=3):
                     "why": "seen again on another night (level 3)",
                     "until": w["until"], "worth": w["verdict"] == "now", "weighed": w}
     met = {}            # field -> its latest session that met its goals, in the window
+    if any(o.get("kind") == "field short" and o.get("state") == "open" for o in store["obligations"]):
+        # A short field still owed: its history back to its own shortfall
+        # (FIELD_DAYS), so a night that met it clears it even after days off.
+        nights = max(nights, FIELD_DAYS)
     # Oldest night first, so a later night's success clears an earlier one's
     # shortfall, never the other way round.
     for back in reversed(range(nights)):

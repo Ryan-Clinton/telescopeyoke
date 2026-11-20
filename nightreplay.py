@@ -463,7 +463,9 @@ class Goals(Current):
             prior = {"fwhm": near["fwhm"], "sky": near["sky"]}
         rule = goals.capture_rule(g, 1.0, exposure=exposure, model=run.cond.costs.get("depth_model"), prior=prior)
         if rule:
-            rule["cap_minutes"] = minutes      # shoot.py's --minutes: the patrol's cap, kept to its budget
+            # As the live patrol (patrol.steps): the programme's own cap times
+            # the field's minutes, kept to the patrol's budget.
+            rule["cap_minutes"] = min(minutes, round(minutes / patrol.SHOOT_CAP * g.get("cap", patrol.SHOOT_CAP), 1))
         return rule
 
 
@@ -766,7 +768,11 @@ class Run:
                 self.deferred_looks += 1
                 continue
             frames = patrol.second_look_frames(patrol.CONFIRM_MINUTES, p["exposure"])
-            look = self.capture(step["label"], v.field, "second look", frames, None, p["exposure"], hard,
+            # Its time capped as the live second look's (patrol.second_look).
+            look_cap = patrol.CONFIRM_MINUTES * patrol.SHOOT_CAP
+            if deadline is not None:
+                look_cap = max(1.0, min(look_cap, (deadline - self.t) / 60))
+            look = self.capture(step["label"], v.field, "second look", frames, look_cap, p["exposure"], hard,
                                 goals or outcome.programme_for(v.field)[1])
             self.follow_up_used += look.end - look.start
 
