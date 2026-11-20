@@ -497,11 +497,12 @@ def second_look(p, name, say=print, dry_run=False, run_command=None, search=None
            *(["--dry-run"] if dry_run else [])]
     # Its exposure and its time said apart: the frames are the minutes of
     # exposure, the clock may run to the cap.
-    say(f"== a second look at {name}: {minutes:g} minutes of exposure ({frames} frames), at most {cap:.0f} min")
+    room = (f"at most {cap:.0f} min" if cap >= minutes else f"only {cap:.0f} min of it available before the next step")
+    say(f"== a second look at {name}: {minutes:g} minutes of exposure asked ({frames} frames), {room}")
     if not dry_run:
         import director
         director.decide("Something unexplained turned up in this field",
-                        f"Taking {minutes:g} minutes more exposure of it, at most {cap:.0f} minutes",
+                        f"Asking {minutes:g} minutes more exposure of it, {room}",
                         "A real new star will be there again on other pixels; a glitch of the camera will not.")
     say("$ " + " ".join(Path(c).name if c.endswith(".py") else c for c in cmd[1:]))
     began = time.time()
