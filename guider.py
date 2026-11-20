@@ -765,9 +765,24 @@ def _calibrate(cam, seconds, dec, west, gain, say, rate, tick, looks):
         # November 2026, the failing way flipping with the balance) is not
         # given a south made up from north and guided both ways. RA alone, as
         # when north fails.
-        return ra_only(columns, steps, ra_step, dec_step, dec, west, rate,
-                       f"{len(south_points) - 1} south steps moved the star in {moved_any}, never three "
-                       "running: Dec answered north only", say)
+        cal = ra_only(columns, steps, ra_step, dec_step, dec, west, rate,
+                      f"{len(south_points) - 1} south steps moved the star in {moved_any}, never three "
+                      "running: Dec answered north only", say)
+        # North was measured, so north can be guided one way only, against a
+        # drift that carries the star south (Gary, 20 November 2026: guide
+        # Dec one way, against the drift, so the motor never turns back into
+        # the slack). `guide --dec-one-way north` uses it; without that Dec
+        # stays unguided as before. South is north turned round, only to
+        # split the star's error into its two parts.
+        north = [float(v) for v in columns["north"]]
+        cal["columns"]["north"] = north
+        cal["columns"]["south"] = [-north[0], -north[1]]
+        cal["dec_rate"] = round(north_strength * SCALE, 2)
+        cal["dec_works"] = "north"
+        cal["notes"].append("north measured: guide --dec-one-way north guides Dec north only")
+        say(f"  north measured ({cal['dec_rate']:.1f}\"/s): --dec-one-way north can guide Dec that way only")
+        keep_calibration(cal)
+        return cal
     columns["south"] = _rate(south_points[moving[0] - 1:], dec_step)
     for direction, sign in (("north", 1), ("south", -1)):
         points = c.back(direction, dec_step, CAL_REVERSAL_STEPS)
@@ -1449,8 +1464,13 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
     folder = log_folder or LOG_FOLDER
     folder.mkdir(parents=True, exist_ok=True)
     log = folder / f"guide-{datetime.now():%Y%m%d}.jsonl"
+    # A Dec that answered one way only is guided that way when asked to
+    # (cal["dec_works"], 20 November 2026), and not at all otherwise.
+    one_way_ok = bool(one_way) and cal.get("dec_works") == one_way
     ctl = Controller(cols, cal.get("backlash_s", 0.0), cal.get("backlash_spread_s", 0.0), seconds, one_way, stuck_s,
-                     dec_guided=cal.get("dec_guided", True))
+                     dec_guided=cal.get("dec_guided", True) or one_way_ok)
+    if one_way_ok and not cal.get("dec_guided", True):
+        say(f"guiding Dec {one_way} only: the calibration found Dec answers {one_way} only")
     if not ctl.dec_guided:
         say("guiding RA only: the calibration found Dec does not follow guide pulses; Dec is sent none")
     stuck_after = 3 * seconds + 5 + RETRY_S + 2 * LONGEST_PULSE
