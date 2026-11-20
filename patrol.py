@@ -495,10 +495,13 @@ def second_look(p, name, say=print, dry_run=False, run_command=None, search=None
     cmd = [sys.executable, str(ROOT / "shoot.py"), name, "--frames", str(frames), "--exposure", str(p["exposure"]),
            "--gain", str(p["gain"]), "--minutes", f"{cap:.1f}", "--dither-first",
            *(["--dry-run"] if dry_run else [])]
-    say(f"== a second look at {name}: {minutes:g} minutes more")
+    # Its exposure and its time said apart: the frames are the minutes of
+    # exposure, the clock may run to the cap.
+    say(f"== a second look at {name}: {minutes:g} minutes of exposure ({frames} frames), at most {cap:.0f} min")
     if not dry_run:
         import director
-        director.decide("Something unexplained turned up in this field", f"Taking {minutes:g} minutes more of it",
+        director.decide("Something unexplained turned up in this field",
+                        f"Taking {minutes:g} minutes more exposure of it, at most {cap:.0f} minutes",
                         "A real new star will be there again on other pixels; a glitch of the camera will not.")
     say("$ " + " ".join(Path(c).name if c.endswith(".py") else c for c in cmd[1:]))
     began = time.time()

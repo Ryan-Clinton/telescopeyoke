@@ -33,7 +33,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 12 | State management and data integrity | done 20 Nov 2026, re-checked |
 | 13 | Observing scheduler and scientific yield | done 20 Nov 2026, re-checked; 7 planned |
 | 14 | Weather and environmental decisions | done 20 Nov 2026, re-checked |
-| 15 | Operational performance | not started |
+| 15 | Operational performance | done 20 Nov 2026; re-check asked |
 | 16 | Network security and external integrations | not started |
 | 17 | Public releases and installation | not started |
 | 18 | Architecture, documentation and maintainability | not started |
@@ -525,4 +525,15 @@ The rain alert stays on in every case (the owner's rule, 15 November 2026): thes
 | 2 | A stale forecast copy can clear a rain alert | P1 | Confirmed and fixed | `alert.check` takes a stale or unavailable Open-Meteo forecast as not known, so it can never clear the rain state |
 | 3 | A failed radar look can slow the watch to its relaxed pace | P1 | Confirmed and fixed | Without a fresh picture (none, an error, or stale) the watch keeps its normal pace; the relaxed one is only for a fresh radar showing nothing near |
 | 4 | One-centre coverage judged by the spell's best hour | P2 | Confirmed and fixed | By its weakest hour (`min`) |
+
+## 15. Operational performance, 20 November 2026
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | The patrol's plain GoTo then shoot.py's own | P1 | Smaller than claimed, no change | The second is the plate-solved centring from where the first arrived (a correction of arcminutes, not a slew), and the first's refusal or failure stops the patrol before the camera is opened. Removing it changes how the mount moves on every patrol; worth measuring first (2) |
+| 2 | No time from asking to a first usable frame | P1 | Agreed and planned | The session to keep each stage's time (asked, filter and focus, arrived and centred, guider and camera ready, first frame, first kept, first used), from the records it already has, so the minutes lost are measured before more is changed |
+| 3 | A single run's solved re-centre closes the camera without the keeper | P1 | Agreed and planned | Not on the owner's rig (the keeper holds the 183M all night); for a rig without one, lending the camera to the re-centre as the blocks do |
+| 4 | The patrol budgets with fixed figures beside measured ones | P2 | Agreed and planned | `history.costs()` frame gaps and setup by camera and exposure, the fixed figures kept as the fallback |
+| 5 | A second look says "10 minutes" and may take 15 | P2 | Confirmed and fixed | It says its minutes of exposure and frames, and the most minutes it may take |
+| 6 | Two minutes for focus always added to a protected setup | P2 | Agreed and planned | Only when a focus is due, timed from the focus runs' own records |
 
