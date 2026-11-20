@@ -36,7 +36,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 15 | Operational performance | done 20 Nov 2026, re-checked; 2-4 and 6 done after |
 | 16 | Network security and external integrations | done 20 Nov 2026, re-checked; 2, 5 and 8 done after |
 | 17 | Public releases and installation | done 20 Nov 2026, re-checked; release 0.4.2 waits for the owner |
-| 18 | Architecture, documentation and maintainability | done 20 Nov 2026, re-checked; 7 and 8 deferred |
+| 18 | Architecture, documentation and maintainability | done 20 Nov 2026, re-checked; 7 done after; 8 (no refactor) by agreement |
 
 ## **1. Initial assessment**
 
