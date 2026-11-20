@@ -37,6 +37,16 @@ filter that night, so no figure from another telescope is assumed. Then:
 What it measured is always said apart from what it infers: "likely" means
 the figures point that way, not that they prove it.
 
+Questions it answers from what was saved, without being at the telescope:
+
+- PHD2 said it was guiding, so why are the frames trailed?
+- Why did NINA stop taking frames for twenty minutes?
+- Was it cloud, focus or guiding that spoiled the second half?
+- How many usable minutes did the night give, and where did the rest go?
+
+Tried a night with it? [Post what it said](https://github.com/Ryan-Clinton/telescopeyoke/issues/new?template=companion-night.md):
+a night from another observatory is the evidence it has least of.
+
 With Claude Code in the TelescopeYoke folder, asking "why did last night
 go wrong?" runs the `night-review` skill, which finds the logs and runs
 the companion for you.

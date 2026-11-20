@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://ryan-clinton.github.io/telescopeyoke/sitemap.xml

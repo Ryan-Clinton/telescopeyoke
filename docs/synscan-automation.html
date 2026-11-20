@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sky-Watcher SynScan automation: plate-solved GoTo centring, polar alignment and whole nights</title>
+<meta name="description" content="Free software that drives an ordinary Sky-Watcher SynScan mount through its handset: plate-solved GoTos that centre themselves despite a rough home position, polar alignment by the stars, motor focus and whole imaging nights. Proven on an EQ3 Pro.">
+<link rel="canonical" href="https://ryan-clinton.github.io/telescopeyoke/synscan-automation.html">
+<meta property="og:title" content="Sky-Watcher SynScan automation: plate-solved GoTo centring, polar alignment and whole nights">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://ryan-clinton.github.io/telescopeyoke/synscan-automation.html">
+<meta property="og:description" content="Free software that drives an ordinary Sky-Watcher SynScan mount through its handset: plate-solved GoTos that centre themselves despite a rough home position, polar alignment by the stars, motor focus and whole imaging nights. Proven on an EQ3 Pro.">
+<meta property="og:image" content="https://ryan-clinton.github.io/telescopeyoke/social-preview.png">
+<link rel="icon" href="logo.svg">
+<style>
+  :root { --ground: #0c0e14; --panel: #151924; --rule: #2a3040; --ink: #e6e8ee; --quiet: #9aa3b5; --go: #6fcf97; --warn: #f2c14e; --link: #8ab4ff; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--ground); color: var(--ink); font: 17px/1.55 system-ui, "Segoe UI", Ubuntu, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 0 16px 60px; }
+  header { padding: 44px 0 8px; }
+  h1 { font-size: 2.3rem; margin: 0 0 6px; letter-spacing: .01em; }
+  h2 { font-size: 1.4rem; margin: 52px 0 10px; }
+  p { margin: 10px 0; }
+  a { color: var(--link); }
+  .lead { font-size: 1.3rem; margin: 0; }
+  .quiet { color: var(--quiet); }
+  .buttons { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 26px; }
+  .buttons a { text-decoration: none; padding: 10px 18px; border-radius: 8px; border: 1px solid var(--rule); color: var(--ink); background: var(--panel); font-weight: 600; }
+  .buttons a.main { background: var(--go); border-color: var(--go); color: #06210f; }
+  img { max-width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--rule); display: block; }
+  figure { margin: 0; }
+  figcaption { color: var(--quiet); font-size: .92rem; margin-top: 6px; }
+  .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin: 14px 0; }
+  ul { padding-left: 22px; }
+  li { margin: 5px 0; }
+  .note { border-left: 3px solid var(--warn); background: var(--panel); padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 18px 0; }
+  pre { background: var(--panel); border: 1px solid var(--rule); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font-size: .92rem; }
+  code { font-family: ui-monospace, "Cascadia Mono", "Ubuntu Mono", monospace; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: .95rem; min-width: 640px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--rule); vertical-align: top; }
+  th { color: var(--quiet); font-weight: 600; }
+  .wanted td { color: var(--quiet); }
+  footer { margin-top: 60px; color: var(--quiet); font-size: .92rem; border-top: 1px solid var(--rule); padding-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+<p class="quiet" style="margin-top:24px"><a href="./">TelescopeYoke</a> · <a href="nina-phd2-night-analysis.html">NINA and PHD2 night analysis</a> · <a href="synscan-automation.html">SynScan automation</a> · <a href="ascom-alpaca.html">ASCOM Alpaca</a></p>
+<header>
+<h1>A SynScan mount that centres its own GoTos</h1>
+<p class="lead">TelescopeYoke drives an ordinary Sky-Watcher SynScan mount through its handset (or an EQDIR lead or Wi-Fi adapter) and measures what a careful setup would otherwise have to get right by hand.</p>
+<div class="buttons"><a class="main" href="./#try">Try the demo, no telescope needed</a><a href="https://github.com/Ryan-Clinton/telescopeyoke/releases/latest">Download</a></div>
+</header>
+
+<h2>GoTo pointing errors, corrected by plate solving</h2>
+<p>A GoTo from a home position set by eye lands off target. TelescopeYoke photographs the sky, plate-solves where the telescope really ended up, corrects and repeats. On its first real night an EQ3 that started about ten degrees out centred M27 in three corrections: 107&prime; off, then 6&prime;, then 1&prime;.</p>
+
+<h2>Home found by measurement, not by the marks</h2>
+<p>After a polar alignment it measures where home really is, from plate solves either side of the meridian, drives there and has you mark the joints. Proven under real stars on 17 October 2026: an EQ3 set 10.66&deg; out by eye, found to 0.19&deg;.</p>
+
+<h2>And the rest of a night</h2>
+<ul>
+<li>Polar alignment by plate solving, saying which bolt to turn and which way (<a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/calibration.md">Calibrating a mount</a>).</li>
+<li>Focusing with a motor focuser, or by ear with a manual one (<a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/focus.md">Focus</a>).</li>
+<li>Whole nights imaged and stacked, with re-centring between blocks and the cloud noticed (<a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/imaging.md">Imaging</a>).</li>
+<li>Limits kept in the code: 20&deg; minimum altitude, the meridian, the Sun; every move a dry run first.</li>
+</ul>
+<p>The full list, each with how far it is proven: <a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/features.md">What makes it different</a>.</p>
+
+<div class="note"><b>Which mounts.</b> Proven on one mount, a Sky-Watcher EQ3 Pro with a SynScan handset. EQ5, HEQ5 and EQ6 handsets speak the same protocol, so they are likely to work, but nobody has tried them yet. <a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/mounts.md">Mounts</a> says what is planned; a <a href="https://github.com/Ryan-Clinton/telescopeyoke/issues/new?template=hardware-report.md">hardware report</a> from yours is the most useful thing anyone can send.</div>
+
+<footer>TelescopeYoke is free and MIT licensed. What is proven on real hardware is kept in one place: <a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/validation.md#current-conclusions">Validation</a>. Not made or endorsed by Sky-Watcher, NINA, PHD2 or ASCOM.</footer>
+</main>
+</body>
+</html>
