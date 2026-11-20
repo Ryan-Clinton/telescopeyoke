@@ -169,34 +169,20 @@ the companion does not yet read, would have to say.
 
 ## What has been tried
 
-**Real logs from other observatories** (19-20 November 2026): a NINA 3.2
-log and the PHD2 guide log of the same night, published on GitHub by
-another observatory's owner (no licence given, so not copied here): it
-read 3,346 exposures, 3,328 saved, the dome shutter, the safety monitor,
-19 USB devices removed and the camera's errors, and found a five-minute
-stretch where PHD2 said it was guiding with one guide step, so the
-exposures then were not guided all through (that night's PHD2 drove its
-own simulator camera). And four PHD2 logs from another observer's rig,
-published as examples of good and bad guiding: the good night read with
-no star lost and 0.75" RMS, the bad one with 243 lost and 0.99". The
-NINA sequencer lines were checked against NINA's own source, and then
-read on three real sequencer nights published by two more observatories
-(NINA 3.1 and 3.2): one night's 27 ten-minute lights told from its
-autofocus runs, its plate solves and a focusing run by hand, 23 of them
-acceptable by NINA's own star detection; sky flats at many lengths kept as
-frames; and a night whose 307 exposures were a framing loop never saved,
-said as such rather than judged. Reading them found and fixed four
-mistakes of the companion's own: drift-solved lights called plate solving,
-flats called focusing, autofocus frames counted as unsaved, and a loop
-judged as if kept.
+**Real logs from other observatories**, read offline (19-20 November 2026,
+companion as of commit `73c78d2` and after): logs their owners published on
+GitHub, not copied here because they carry no licence. To check the same:
 
-On the owner's own real frames (5 November 2026, five targets, 693 frames:
-it found the gaps between targets and filters, two 18-minute stretches with
-no frames, and the soft, dimmed and trailed frames), and on a made-up night
-in another program's style with known faults planted (cloud, soft focus
-with a colder focuser, trailing with poor guiding, a gap where PHD2 lost
-its star and stopped, the sensor off its target), each found and put down
-to the right cause. Not yet beside anyone else's observatory.
+| Log | Where | What the companion read |
+|---|---|---|
+| A NINA 3.2 night and its PHD2 guide log (a dome observatory) | [digital-stargate-manual, session 2026-11-07](https://github.com/maininimassimo-bit/digital-stargate-manual/tree/HEAD/data/sessions/2026/11/2026-11-07_2026-11-08) | 3,346 exposures, 3,307 of them snapshots; the dome, the safety monitor, 19 USB removals, the camera's errors; PHD2 silent 00:37-00:43 while it said it was guiding (that night's PHD2 drove its own simulator camera) |
+| A NINA 3.2 sequencer night | [the same, session 2026-09-13](https://github.com/maininimassimo-bit/digital-stargate-manual/tree/HEAD/data/sessions/2026/09/2026-09-13_2026-09-14) | M 27: 27 ten-minute lights told from 42 autofocus, 7 plate-solving and 13 focusing exposures; 23 of the 27 acceptable by NINA's own star detection |
+| Two NINA 3.1 and 3.2 nights | [obsybox, logexploit](https://github.com/aegiskeller/obsybox/tree/HEAD/logexploit/zzz_logfiles) | sky flats, their wizard's trial exposures and a bias counted as calibration; a framing loop of 307 exposures never saved, said as such |
+| Four PHD2 guide logs of good and bad guiding | [PHD2Insight, samples](https://github.com/ste7e/PHD2Insight/tree/HEAD/samples) | the good night with no star lost, 0.75" RMS; the bad one 243 lost, 0.99" |
+
+What this is not: no third-party night with its frames, logs and guiding
+together has been read, and the companion has not yet run live beside
+anyone else's observatory.
 
 ## Or letting TelescopeYoke run it
 

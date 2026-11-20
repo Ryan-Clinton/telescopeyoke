@@ -30,6 +30,12 @@ proven is `docs/validation.md` ("Current conclusions").
   Each NINA exposure is given its purpose (autofocus, plate solving,
   focusing, or a frame), and saved frames are judged by NINA's own star
   detection when the log has it.
+  A gap is explained only by the minutes NINA's steps fill, the rest
+  unexplained; NINA's saves are reconciled with the files found (started,
+  saved, found, measured, judged, and what is missing or stray); NINA's
+  judgement is by target too; calibration and snapshots are not science;
+  PHD2's silences inside a session are named; nights end at the local
+  noon on clock-change days; the logs-only `--json` is structured.
 - **A mount through ASCOM Alpaca** (`alpaca.py`, `[mount] link = "alpaca"`):
   any mount with an ASCOM driver, on this computer or a Windows one on
   the network, through the same motion lock, limits and dry runs.

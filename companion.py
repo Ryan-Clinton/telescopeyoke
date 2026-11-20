@@ -255,6 +255,17 @@ class GuideLog:
                 out.append((a, b, steps))
         return out
 
+    def interruptions(self, least=60.0):
+        """Stretches inside a guiding session with no guide step at all,
+        longer than GAP_FACTOR cycles and `least` seconds: [(from, to)]."""
+        import phd2
+        out = []
+        for a, b in self.sessions:
+            b = b if b is not None else (self.steps[-1][0] if self.steps else a)
+            times = [a] + [t for t, _ in self.steps if a <= t <= b] + [b]
+            out += [(x, y) for x, y in zip(times, times[1:]) if y - x > max(phd2.GAP_FACTOR * self.cycle, least)]
+        return out
+
     def events_between(self, start, end):
         lost = sum(1 for t, d in self.steps if start <= t <= end and d is None)
         dithers = sum(1 for t in self.dithers if start <= t <= end)
@@ -348,9 +359,52 @@ LINE = re.compile(r"^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?)\|([A-Z]+)\|([^|]
 
 
 def night_span(day):
-    """Noon to noon from the date given, in the logs' zone, as UTC seconds."""
-    start = local(f"{day} 12:00:00", "%Y-%m-%d %H:%M:%S")
-    return start, start + 24 * 3600
+    """Noon to the next noon from the date given, in the logs' zone, as UTC
+    seconds: each noon worked out on its own, so a night across a change
+    of the clocks is 23 or 25 hours, as it really is."""
+    first = dt.date.fromisoformat(day)
+    following = first + dt.timedelta(days=1)
+    return (local(f"{first} 12:00:00", "%Y-%m-%d %H:%M:%S"),
+            local(f"{following} 12:00:00", "%Y-%m-%d %H:%M:%S"))
+
+
+TYPES = ("DARKFLAT", "FLATDARK", "FLAT", "DARK", "BIAS", "LIGHT", "SNAPSHOT")
+CALIBRATION = {"flat", "dark", "bias", "darkflat", "flatdark"}
+
+
+def path_type(path):
+    """The image type a saved file's path gives, as NINA's patterns put it
+    (LIGHT_..., or a FLAT folder), or None."""
+    parts = re.split(r"[\\/]", path)
+    name = parts[-1].upper()
+    for kind in TYPES:
+        if name.startswith(kind + "_") or kind in (p.upper() for p in parts[:-1]):
+            return kind.lower()
+    return None
+
+
+def base_name(path):
+    return re.split(r"[\\/]", path)[-1]
+
+
+def logs_data(nina, guide=None):
+    """The same night as data, for --json: exposures by purpose, the steps'
+    time by kind, events, errors, NINA's judgement, and PHD2's gaps."""
+    stamp = lambda t: dt.datetime.fromtimestamp(t, dt.timezone.utc).isoformat()  # noqa: E731
+    exposures = [{"start": stamp(e["start"]), "seconds": e["seconds"], "filter": e["filter"],
+                  "purpose": nina.purpose(e), "type": nina.image_type(e), "target": nina.target(e),
+                  "saved": base_name(nina.saved_file(e)["file"]) if nina.saved(e) else None} for e in nina.exposures]
+    took = {}
+    for step in nina.steps:
+        if step["end"] is not None:
+            name = step["kind"] + (" (failed)" if step["failed"] else "")
+            took[name] = round(took.get(name, 0.0) + step["end"] - step["start"], 1)
+    return {"exposures": exposures, "step_seconds": took,
+            "events": [{"time": stamp(t), "what": w} for t, w in nina.events],
+            "errors": [{"time": stamp(t), "text": w} for t, w in nina.errors],
+            "nina_quality": nina.quality(),
+            "guiding_gaps": [{"from": stamp(a), "to": stamp(b), "seconds": round(b - a)} for a, b in
+                             (guide.interruptions() if guide else [])]}
 
 
 def logs_only(nina, guide=None):
@@ -366,10 +420,10 @@ def logs_only(nina, guide=None):
         lines.append(f"Guiding (PHD2's log): {len(inside)} of {len(nina.exposures)} exposures taken while PHD2 was "
                      f"guiding; {guided} of those guided all through, {len(inside) - guided} with gaps in the guide "
                      f"steps; the star lost {lost} time(s) during them")
-        for a, b, steps in guide.sparse():
-            lines.append(f"PHD2 said it was guiding {_clock(a)}-{_clock(b)} ({b - a:.0f} s) with {steps} guide "
-                         f"step(s), where its {guide.cycle:.0f} s cycle makes about {(b - a) / guide.cycle:.0f}: "
-                         "the exposures then were not guided all through (measured from its log)")
+        for a, b in guide.interruptions():
+            hit = sum(1 for e in nina.exposures if e["start"] < b and e["start"] + e["seconds"] > a)
+            lines.append(f"PHD2 had no guide step {_clock(a)}-{_clock(b)} ({b - a:.0f} s) while it said it was "
+                         f"guiding; {hit} exposure(s) overlap it (measured from its log)")
         rms = [j["rms"] for j in inside if j["rms"] is not None]
         if rms:
             lines.append(f"Guide error during exposures: median RMS {statistics.median(rms):.2f} "
@@ -391,6 +445,9 @@ class NinaLog:
         self._solved = None
         self.detections = []        # NINA's own star detection on an image: (time, HFR, stars, eccentricity)
         self.focuser_moves = []     # times the focuser was moved
+        self.targets = []           # (time, name): the target the sequence turned to
+        self.typed = []             # the sequencer's TakeExposure steps: {"start", "end", "type"}
+        self._taking = None
         open_steps = {}
         for path in paths:
             for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
@@ -405,6 +462,18 @@ class NinaLog:
         self.steps.sort(key=lambda s: s["start"])
 
     def _take(self, when, level, source, method, text, open_steps):
+        found = re.search(r"Target: (.+?) RA: ", text)       # a sequence step naming its target
+        if found and found.group(1).strip():
+            self.targets.append((when, found.group(1).strip()))
+        found = re.match(r"(Starting|Finishing|Failed:) (?:Category: [^,]*, )?Item: TakeExposure\b(.*)", text)
+        if found:
+            if found.group(1) == "Starting":
+                kind = re.search(r"ImageType (\w+)", found.group(2))
+                self._taking = (when, kind.group(1).lower() if kind else None)
+            elif self._taking:
+                self.typed.append({"start": self._taking[0], "end": when, "type": self._taking[1]})
+                self._taking = None
+            return
         found = re.match(r"Starting Exposure - Exposure Time: ([\d.]+)s; Filter: ([^;]*);", text)
         if found:
             self.exposures.append({"start": when, "seconds": float(found.group(1)), "filter": found.group(2).strip()})
@@ -428,7 +497,9 @@ class NinaLog:
             return
         found = re.match(r"Successfully saved file at (.*)", text)
         if found:
-            self.saves.append({"time": when, "file": found.group(1)})
+            # NINA writes the save's timings straight after the path.
+            path = re.sub(r"\. Duration Total:.*$", "", found.group(1)).strip()
+            self.saves.append({"time": when, "file": path, "type": path_type(path)})
             return
         found = re.match(r"(Starting|Finishing|Failed:) (?:Category: [^,]*, )?(Item|Trigger): (\w+)", text)
         if found:
@@ -472,6 +543,7 @@ class NinaLog:
         starts = sorted(e["start"] for e in self.exposures)
         owner = lambda when: starts[bisect.bisect_right(starts, when) - 1] if starts and when >= starts[0] else None  # noqa: E731
         self._saved = {owner(s["time"]) for s in self.saves} - {None}
+        self._file = {owner(s["time"]): s for s in self.saves}
         self._solved = {owner(when) for when in self.solver_saves} - {None}
         self._focusing = set()
         moves = self.focuser_moves
@@ -490,6 +562,38 @@ class NinaLog:
         self._index()
         return exposure["start"] in self._saved
 
+    def saved_file(self, exposure):
+        self._index()
+        return self._file.get(exposure["start"])
+
+    def image_type(self, exposure):
+        """light, flat, dark, bias, snapshot...: from the sequencer's
+        TakeExposure step it fell inside, else from its saved file's path;
+        None when neither says."""
+        for step in self.typed:
+            if step["start"] <= exposure["start"] <= step["end"] and step["type"]:
+                return step["type"]
+        saved = self.saved_file(exposure)
+        return saved["type"] if saved else None
+
+    def target(self, exposure):
+        """The target the sequence last turned to before it, or None."""
+        named = [name for when, name in self.targets if when <= exposure["start"]]
+        return named[-1] if named else None
+
+    def covered(self, start, end):
+        """How much of start..end NINA's logged steps fill, by kind, each
+        second counted once (the earlier step first): {kind: seconds}."""
+        spans = sorted((max(s["start"], start), min(s["end"], end), s["kind"] + (" (failed)" if s["failed"] else ""))
+                       for s in self.steps if s["end"] is not None and s["end"] > start and s["start"] < end)
+        out, reached = {}, start
+        for a, b, kind in spans:
+            a = max(a, reached)
+            if b > a:
+                out[kind] = out.get(kind, 0.0) + (b - a)
+                reached = b
+        return out
+
     def purpose(self, exposure):
         """What an exposure was for: "autofocus" or "plate solving" by the
         sequencer step it fell inside; "plate solving" too when NINA saved
@@ -503,9 +607,22 @@ class NinaLog:
                     return "autofocus"
                 if step["kind"].startswith("centring") or step["kind"] == "meridian flip":
                     return "plate solving"
+        kind = self.image_type(exposure)
+        if kind in CALIBRATION:
+            return "calibration"
+        if kind == "snapshot":
+            return "snapshots"
         self._index()
         if exposure["start"] in self._saved:
             return "frames"
+        # An unsaved trial just before calibration frames of the same filter
+        # (NINA's flat wizard finding its exposure) is part of the calibration.
+        later = [e for e in self.exposures if e["start"] > exposure["start"] and e["start"] in self._saved]
+        if later:
+            following = min(later, key=lambda e: e["start"])
+            if (following["filter"] == exposure["filter"] and self.image_type(following) in CALIBRATION
+                    and following["start"] - (exposure["start"] + exposure["seconds"]) <= 120):
+                return "calibration"
         if exposure["start"] in self._solved:
             return "plate solving"
         if exposure["start"] in self._focusing:
@@ -533,10 +650,14 @@ class NinaLog:
         groups = {}
         for i, e in enumerate(self.exposures):
             if i in seen and self.purpose(e) == "frames" and self.saved(e):     # the frames kept, not a loop
-                groups.setdefault((e["filter"] or "no filter", e["seconds"]), []).append(seen[i])
+                groups.setdefault((self.target(e), e["filter"] or "no filter", e["seconds"]), []).append(seen[i])
         lines = [] if groups or not self.detections else [
             "NINA's star detection ran only on frames it did not save: nothing kept to judge"]
-        for (band, seconds), rows in groups.items():
+        if groups and all(target is None for target, _, _ in groups):
+            lines.append("The log names no target, so frames of different targets with the same filter and length "
+                         "are judged together: fewer stars may be a sparser field, not cloud")
+        for (target, band, seconds), rows in groups.items():
+            band = f"{target} {band}" if target else band
             good = [r for r in rows if r["hfr"] and r["stars"]]
             if len(good) < MIN_COMPARED:
                 lines.append(f"{band}, {seconds:g} s: {len(rows)} frames with NINA's star detection, too few to judge")
@@ -593,26 +714,32 @@ class NinaLog:
         kinds = {}
         for e in self.exposures:
             kinds.setdefault(self.purpose(e), []).append(e)
-        for purpose in ("frames", "autofocus", "plate solving", "focusing"):
+        for purpose in ("frames", "calibration", "snapshots", "autofocus", "plate solving", "focusing"):
             mine = kinds.get(purpose, [])
             if not mine:
                 continue
             groups = {}
             for e in mine:
-                groups.setdefault(e["filter"] or "no filter", []).append(e)
+                label = e["filter"] or "no filter"
+                if purpose == "calibration":
+                    label = f"{(self.image_type(e) or 'trial').upper()} {label}"
+                elif purpose == "frames" and self.target(e):
+                    label = f"{self.target(e)} {label}"
+                groups.setdefault(label, []).append(e)
             for band, started in sorted(groups.items(), key=lambda kv: kv[1][0]["start"]):
                 lengths = sorted({e["seconds"] for e in started})
                 length = (f"{lengths[0]:g} s" if len(lengths) == 1 else
                           ", ".join(f"{s:g}" for s in lengths) + " s" if len(lengths) <= 3 else
                           f"{len(lengths)} lengths, {lengths[0]:g} to {lengths[-1]:g} s")
-                lines.append(f"{'' if purpose == 'frames' else f'for {purpose}: '}{band}, {length}: {len(started)} "
+                lines.append(f"{'lights: ' if purpose == 'frames' else f'{purpose}: '}{band}, {length}: {len(started)} "
                              f"exposures, {sum(e['seconds'] for e in started) / 60:.0f} min of exposure, "
                              f"{_clock(started[0]['start'])}-{_clock(started[-1]['start'])}")
         frames = len(kinds.get("frames", []))
         kept = sum(1 for e in kinds.get("frames", []) if self.saved(e))
-        lines.append(f"Saved as files: {kept} of the {frames} exposures for frames"
-                     + (f" ({len(self.exposures) - frames} more for autofocus, plate solving or focusing, not meant to be "
-                        "saved)" if len(self.exposures) > frames else ""))
+        lines.append(f"Science lights: {kept} saved of {frames} exposures, "
+                     f"{sum(e['seconds'] for e in kinds.get('frames', []) if self.saved(e)) / 60:.0f} min saved"
+                     + (f"; {len(self.exposures) - frames} more exposures for calibration, snapshots, autofocus, plate "
+                        "solving or focusing, not counted as science" if len(self.exposures) > frames else ""))
         lines += self.quality()
         took = {}
         for step in self.steps:
@@ -752,10 +879,20 @@ def gaps(rows, guide=None, nina=None):
                 why.append(f"{seen['dithers']} dither(s), the settling after them (measured)")
             if not seen["guiding_on"]:
                 why.append("no guiding at all then (measured)")
+        excess = gap - usual
+        filled = {}
         if nina:
             why += [f"{w} (logged)" for w in nina.between(a["end"], b["start"])]
-        out.append((a["end"], b["start"], (gap - usual) / 60, why or [
-            "not known: nothing it reads says" + ("" if nina else " (the capture program's own log, --nina-log, would)")]))
+            filled = nina.covered(a["end"], b["start"])
+            total = sum(filled.values())
+            if total > excess:
+                # The usual gap holds some of it (a download, a dither):
+                # what is left over is shared in proportion.
+                filled = {kind: seconds * excess / total for kind, seconds in filled.items()}
+        unexplained = max(0.0, excess - sum(filled.values()))
+        out.append((a["end"], b["start"], excess / 60, why or [
+            "nothing it reads says" + ("" if nina else " (the capture program's own log, --nina-log, would)")],
+            filled, unexplained))
     return out
 
 
@@ -831,17 +968,30 @@ def report(rows, guide=None, left=(), nina=None):
         if (row.get("guide") or {}).get("rms") is not None:
             part["guide_rms"].append(row["guide"]["rms"])
     holes = gaps(rows, guide, nina)
-    for _, _, minutes, why in holes:
-        known = not why[0].startswith("not known")
-        name = "no frames (explained)" if known else "no frames (unexplained)"
-        lost[name] = lost.get(name, 0.0) + minutes * 60
+    for _, _, _, _, filled, unexplained in holes:
+        for kind, seconds in filled.items():
+            lost[f"no frames: {kind}"] = lost.get(f"no frames: {kind}", 0.0) + seconds
+        lost["no frames, unexplained"] = lost.get("no frames, unexplained", 0.0) + unexplained
     for part in parts.values():
         part["units"] = sorted(part.get("units") or ())      # for --json
     reasons = {}
     for row in left:
         reason = row["skip"].split(":")[0] if row.get("unreadable") else row["skip"]
         reasons[reason] = reasons.get(reason, 0) + 1
+    reconciled = None
+    if nina:
+        lights = [e for e in nina.exposures if nina.purpose(e) == "frames"]
+        saved = {base_name(nina.saved_file(e)["file"]) for e in lights if nina.saved(e)}
+        every_save = {base_name(s["file"]) for s in nina.saves}
+        found = {Path(r["file"]).name for r in rows} | {Path(r["file"]).name for r in left}
+        measured = {Path(r["file"]).name for r in rows}
+        judged = {Path(r["file"]).name for r in rows if not any(c["cause"] == UNASSESSABLE for c in r["causes"])}
+        reconciled = {"started": len(lights), "saved": len(saved), "found": len(saved & found),
+                      "measured": len(saved & measured), "judged": len(saved & judged),
+                      "saved_not_found": sorted(saved - found), "found_not_logged": sorted(found - every_save)}
     return {"frames": len(rows), "files": len(rows) + len(left), "left_out": reasons, "parts": parts, "gaps": holes,
+            "reconciled": reconciled,
+            "interruptions": guide.interruptions() if isinstance(guide, GuideLog) else [],
             "sparse": guide.sparse() if isinstance(guide, GuideLog) else [],
             "lost": lost, "rows": rows}
 
@@ -849,6 +999,16 @@ def report(rows, guide=None, left=(), nina=None):
 def words(night):
     lines = [f"{night['files']} files: {night['frames']} light frames measured"
              + "".join(f"; {n} left out, {why}" for why, n in sorted(night["left_out"].items())) + "."]
+    r = night.get("reconciled")
+    if r:
+        lines.append(f"Against NINA's log: {r['started']} science exposures started, {r['saved']} saved, {r['found']} of "
+                     f"those found here, {r['measured']} measured, {r['judged']} judged")
+        if r["saved_not_found"]:
+            lines.append(f"    saved by NINA but not in this folder: {len(r['saved_not_found'])}, the first "
+                         + ", ".join(r["saved_not_found"][:3]))
+        if r["found_not_logged"]:
+            lines.append(f"    in this folder but not saved in this log: {len(r['found_not_logged'])}, the first "
+                         + ", ".join(r["found_not_logged"][:3]))
     several = len({k[0] for k in night["parts"]}) > 1
     for key, p in sorted(night["parts"].items(), key=lambda kv: kv[1]["first"] or 0):
         when, target, band, camera, gain, exposure, _ = key
@@ -871,8 +1031,15 @@ def words(night):
         for cause, c in sorted(p["causes"].items(), key=lambda kv: -kv[1]["seconds"]):
             lines.append(f"    {c['seconds'] / 60:.0f} min ({c['frames']} frames) {cause}"
                          + (f": likely {c['inferred']}" if c["inferred"] else ""))
-    for start, end, minutes, why in night["gaps"]:
-        lines.append(f"No frames {_clock(start)}-{_clock(end)} ({minutes:.0f} min beyond the usual gap): " + "; ".join(why))
+    for start, end, minutes, why, filled, unexplained in night["gaps"]:
+        known = sum(filled.values())
+        lines.append(f"No frames {_clock(start)}-{_clock(end)} ({minutes:.0f} min beyond the usual gap"
+                     + (f"; {known / 60:.0f} min filled by NINA's logged steps, {unexplained / 60:.0f} min not"
+                        if filled else ", none of it accounted for by a logged step") + "): " + "; ".join(why))
+    for a, b in night.get("interruptions", []):
+        hit = sum(1 for r in night["rows"] if r.get("start") and r["start"] < b and (r.get("end") or r["start"]) > a)
+        lines.append(f"PHD2 had no guide step {_clock(a)}-{_clock(b)} ({b - a:.0f} s) while guiding; {hit} frame(s) "
+                     "overlap it (measured from its log)")
     for a, b, steps in night.get("sparse", []):
         lines.append(f"PHD2 said it was guiding {_clock(a)}-{_clock(b)} ({b - a:.0f} s) with only {steps} guide step(s) "
                      "(measured from its log)")
@@ -1005,8 +1172,10 @@ def main(argv=None):
                   f"pixel scale {guide.scale or 'not given'}")
         return
     if not args.folder:
-        lines = logs_only(nina, guide)
-        print(json.dumps(lines, indent=1) if args.json else "\n".join(lines))
+        if args.json:
+            print(json.dumps(logs_data(nina, guide), indent=1))
+        else:
+            print("\n".join(logs_only(nina, guide)))
         return
     rows, left = gather(args.folder, guide, say=lambda line: print(line, file=sys.stderr))
     if args.night:
