@@ -39,6 +39,7 @@
       "in_transit_points": {"type": "integer"}, "out_of_transit_points": {"type": "integer"},
       "time_standard": {"type": "string", "description": "the time the middle and early_late_min are in (BJD_TDB, or JD_UTC when the site is not known)"}}},
     "jd": {"type": "array", "items": {"type": "number"}},
+    "time_offset_days": {"type": "number", "description": "the fit's time standard less the frames' JD (UTC), over the night"},
     "mag": {"type": "array", "items": {"type": ["number", "null"]}},
     "kind": {"enum": ["inferred", "measured"]},
     "ensemble": {"type": "object", "required": ["count", "stars", "scatter_mmag"], "description": "The target's comparison ensemble: up to 8 stars nearest it in G, within 1.5 mag and 0.5 in BP-RP; a filtered night's (the 183M's) curve is measured against it.",

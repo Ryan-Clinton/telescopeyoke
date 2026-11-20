@@ -231,6 +231,16 @@ def run(session, keep=0.85, say=print, workers=None, profile=False):
     # Which masters went in, and whether the stack is calibrated: a matched
     # camera's (the 183M's) stack with any master missing is labelled
     # uncalibrated, a quick look that never enters science or a search.
+    # Judged from every set of settings among the frames that went into the
+    # stack, as the workers calibrated them, not each session's first frame.
+    used = {}
+    for f in chosen:
+        head = stacking.fits.getheader(f["path"], 1)
+        key = stacking.worker_cards(head)
+        if key not in used:
+            used[key] = (stacking._calibration(float(head.get("EXPTIME", 0)), int(float(head.get("GAIN", 0))), key),
+                         head)
+    calibrations = list(used.values()) or calibrations
     missing = [m for c, _ in calibrations for m in getattr(c, "missing", ())]
     calibrated = not missing
     cards = stacking.stack_cards(calibrations[0][0], calibrations[0][1])

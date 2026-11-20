@@ -673,8 +673,11 @@ def sweep_stacks(paths, seconds_list, say=print):
     out, n = {}, 0
     for path in paths[:wanted[-1][0]]:
         if n:
-            mosaic, _ = stacking.load_light(path)
-            rgb = stacking.prepare(mosaic, calibration, mono=mono)
+            mosaic, head = stacking.load_light(path)
+            # Each frame its own masters, one calibration per set of settings.
+            rgb = stacking.prepare(mosaic, stacking._calibration(float(head.get("EXPTIME", 0)),
+                                                                 int(float(head.get("GAIN", 0))),
+                                                                 stacking.worker_cards(head)), mono=mono)
             rgb, _ = stacking.register(rgb, rgb.sum(axis=2), stacking.find_stars(rgb.sum(axis=2)),
                                        reference)
         stack.add(rgb)

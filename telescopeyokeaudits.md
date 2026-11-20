@@ -26,7 +26,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 5 | Guiding and calibration | done 20 Nov 2026, re-checked |
 | 6 | Camera, cooling, filters and focusing | done 20 Nov 2026, re-checked |
 | 7 | Scientific discovery reliability | done 20 Nov 2026, re-checked |
-| 8 | Calibration and scientific measurement accuracy | done 20 Nov 2026; re-check asked |
+| 8 | Calibration and scientific measurement accuracy | done 20 Nov 2026, re-checked |
 | 9 | Demo claims versus real-world proof | not started |
 | 10 | Hardware onboarding and compatibility | not started |
 | 11 | NINA/PHD2 companion | not started |
@@ -368,4 +368,15 @@ Results already recorded are not remade; each new one is stamped with the code t
 | 6 | The 183C's stacks say TY_CALIB with no masters | P2 | Confirmed and fixed | TY_CALIB stays "may enter science"; a 183C stack also says `TY_CALFUL`, whether dark, bias and flat were all applied |
 | 7 | DATE-OBS is when the exposure was asked for, about 0.4-0.5 s before it began | P2 | Agreed and planned | A card with the measured lag and its uncertainty, for transit timing |
 | 8 | Gaia positions are J2016, not the night's | P2 | Agreed and planned | Proper motion carried to the frame's epoch where Gaia gives it, and a position uncertainty on reported candidates |
+
+## 8, re-audited at 30a8907
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | Vetting and the depth sweep use the first frame's calibration for all | P1 | Confirmed and fixed | Each frame is calibrated with its own masters (`stacking._calibration` on its own cards, one load per set of settings) |
+| 2 | Restack certifies a stack from each session's first frame | P1 | Confirmed and fixed | TY_CALIB and TY_MISS come from every set of settings among the frames that went into the stack |
+| 3 | The transit chart draws BJD middles on a UTC axis | P1 | Confirmed (a regression of 30a8907) and fixed | The record keeps the night's offset (`time_offset_days`, schema updated) and the chart puts the predicted and fitted middles back on UTC. The planner's windows stay in UTC with the ephemeris's middle: minutes against an hour's baseline either side, no change |
+| 4 | The ephemeris's standard is assumed | P1 | Confirmed and fixed | The archive gives it per planet (`pl_tranmid_systemref`: on 20 Nov 2026 2,733 BJD, 796 BJD-TDB, 1,436 JD, 112 HJD, 49 blank). BJD and HJD middles are met with BJD_TDB, JD with JD; a blank one, or no site, is fitted in JD and its early or late said to be uncertain by up to 8 minutes. The planet list is fetched again for the new column |
+| 5 | Cached light curves from before the change are reused | P2 | Confirmed and fixed | `variables.VERSION` is 2, so they are measured again with each frame's own masters; old records keep their stamp |
+| 6 | The transit report names the 183C's calibration files for the 183M | P2 | Confirmed and fixed | It says the frames' own calibration: a matched camera's missing masters, or the 183C's dark and flat |
 

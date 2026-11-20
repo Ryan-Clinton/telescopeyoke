@@ -44,7 +44,7 @@ import records
 
 ARCHIVE = "https://exoplanetarchive.ipac.caltech.edu/TAP/sync"
 QUERY = ("select pl_name,hostname,ra,dec,sy_vmag,pl_orbper,pl_tranmid,pl_trandur,pl_trandep,"
-         "pl_orbpererr1,pl_tranmiderr1 "
+         "pl_orbpererr1,pl_tranmiderr1,pl_tranmid_systemref "
          "from pscomppars where pl_trandep>0.3 and sy_vmag<{faintest} and dec>-20 and pl_tranmid is not null "
          "and pl_orbper is not null and pl_trandur is not null")
 FRESH_DAYS = 7       # the planet list is fetched again after this long
@@ -76,7 +76,7 @@ def planets(get=requests.get, now=None):
     the copy kept this week."""
     path = store()
     now = now or time.time()
-    old = path.exists() and "pl_tranmiderr1" not in path.read_text(encoding="utf-8").split("\n", 1)[0]
+    old = path.exists() and "pl_tranmid_systemref" not in path.read_text(encoding="utf-8").split("\n", 1)[0]
     if old or not path.exists() or now - path.stat().st_mtime > FRESH_DAYS * 86400:
         reply = get(ARCHIVE, timeout=120, params={"query": QUERY.format(faintest=FAINTEST), "format": "csv"})
         reply.raise_for_status()
@@ -89,7 +89,10 @@ def planets(get=requests.get, now=None):
                          "v": float(r["sy_vmag"]) if r["sy_vmag"] else None, "period": float(r["pl_orbper"]),
                          "epoch": float(r["pl_tranmid"]), "hours": float(r["pl_trandur"]),
                          "depth": float(r["pl_trandep"]),
-                         "period_error": _err(r.get("pl_orbpererr1")), "epoch_error": _err(r.get("pl_tranmiderr1"))})
+                         "period_error": _err(r.get("pl_orbpererr1")), "epoch_error": _err(r.get("pl_tranmiderr1")),
+                         # The archive does not put every middle in one standard
+                         # (20 Nov 2026: 2,733 BJD, 796 BJD-TDB, 1,436 JD, 112 HJD, 49 blank).
+                         "epoch_standard": (r.get("pl_tranmid_systemref") or "").strip() or None})
         except (KeyError, ValueError):
             continue
     return rows
@@ -255,6 +258,9 @@ def draw(answer, path, size=(900, 420)):
     jd = np.array(answer["jd"], float)
     mag = np.array([np.nan if m is None else m for m in answer["mag"]], float)
     ok = np.isfinite(mag)
+    # The fit was made in the ephemeris's standard (ephemeris_times): its
+    # middles are put back by the night's offset so they sit on the UTC axis.
+    offset = float(answer.get("time_offset_days") or 0.0)
     image = Image.new("RGB", size, "white")
     pen = ImageDraw.Draw(image)
     if ok.sum() < 2:
@@ -262,6 +268,7 @@ def draw(answer, path, size=(900, 420)):
         return str(path)
     jd, mag = jd[ok], mag[ok]
     middle, half = answer.get("predicted_middle"), answer["hours"] / 48
+    middle = middle - offset if middle else middle
     outside = (np.abs(jd - middle) > half) if middle else np.ones_like(jd, bool)
     base = float(np.median(mag[outside] if outside.any() else mag))
     flux = 100 * (10 ** (-0.4 * (mag - base)) - 1)                 # percent against the baseline
@@ -284,7 +291,7 @@ def draw(answer, path, size=(900, 420)):
         pen.ellipse([x(t) - 3, y(f) - 3, x(t) + 3, y(f) + 3], fill="black")
     fitted = answer.get("fit")
     if fitted:
-        m, d = fitted["middle"], -fitted["depth"]
+        m, d = fitted["middle"] - offset, -fitted["depth"]
         pen.line([(left, y(0)), (x(m - half), y(0)), (x(m - half), y(d)), (x(m + half), y(d)),
                   (x(m + half), y(0)), (right, y(0))], fill=(200, 40, 40), width=2)
     for f in (0, -answer["expected_depth"]):
@@ -335,13 +342,17 @@ def checks(session, jd, mag, middle, hours, site=None):
     if frames:
         head = stacking.load_light(frames[0])[1]
         exposure, gain = float(head.get("EXPTIME", 0)), int(float(head.get("GAIN", 0)))
-        if not stacking.master_path("dark", exposure, gain).exists():
-            darks = sorted(stacking.CALIBRATION.glob(f"dark-*-g{gain}.fits"))
-            out["calibration"].append(f"no dark matched to the {exposure:g} s frames at gain {gain}"
-                                      + (f" (only {', '.join(d.stem for d in darks)})" if darks else "")
-                                      + ": the bias alone was taken off")
-        if not stacking.master_path("flat").exists():
-            out["calibration"].append("no flat field: each star's light changes as it drifts over the sensor")
+        # The frames' own masters, as the measurement chose them (a matched
+        # camera's library, or the 183C's files), never the 183C's names alone.
+        calibration = stacking.Calibration(exposure, gain, head)
+        if getattr(calibration, "matched", False):
+            out["calibration"] += [f"missing: {m}" for m in calibration.missing]
+        else:
+            if "dark" not in calibration.masters:
+                out["calibration"].append(f"no dark matched to the {exposure:g} s frames at gain {gain}: "
+                                          "the bias alone was taken off")
+            if "flat" not in calibration.masters:
+                out["calibration"].append("no flat field: each star's light changes as it drifts over the sensor")
         out["timing"]["frame_time"] = "DATE-OBS, the start of each exposure, plus half the exposure"
         # Whether the exposure is the shutter's real time: camera.py writes TY_ASKED when it
         # applied the trail-measured share (the 183C's clock runs fast through its library).
@@ -377,6 +388,27 @@ def checks(session, jd, mag, middle, hours, site=None):
         out["timing"]["bjd_tdb"] = "each point's time as BJD_TDB is in bjd_tdb"
         out["_where"] = where
     return out
+
+
+def ephemeris_times(jd, p, site):
+    """(frame times in the ephemeris's own standard, what that standard is):
+    barycentric or heliocentric middles (within seconds of each other) are
+    met with BJD_TDB made from the site; JD middles with the frames' JD; one
+    whose standard is not given, or with no site to make BJD from, with JD,
+    its early or late said to be uncertain by up to 8 minutes."""
+    jd = np.asarray(jd, float)
+    given = (p.get("epoch_standard") or "").upper()
+    if given.startswith(("BJD", "HJD")) and site is not None and len(jd):
+        from astropy.coordinates import EarthLocation
+        import astropy.units as u
+        here = EarthLocation(lat=site["latitude"] * u.deg, lon=site["longitude"] * u.deg,
+                             height=site.get("elevation_m", 0) * u.m)
+        note = "" if given in ("BJD-TDB", "BJD") else f" (the ephemeris is {given}: within a minute of it)"
+        return np.asarray(bjd_tdb(jd, p["ra"], p["dec"], here), float), "BJD_TDB" + note
+    if given == "JD":
+        return jd, "JD_UTC, as the ephemeris is (JD)"
+    why = f"the ephemeris is {given} and the site is not known" if given else "the ephemeris's standard is not given"
+    return jd, f"JD_UTC: {why}, so early or late is uncertain by up to 8 min"
 
 
 def bjd_tdb(jd, ra, dec, where):
@@ -522,18 +554,10 @@ def measure(session, planet, size=BIN, say=print, rows=None, night=None):
         site = config.load()["site"]
     except (SystemExit, KeyError, OSError):
         site = None
-    # The fit in the ephemeris's own time: the Exoplanet Archive's transit
-    # middles are BJD_TDB as a rule, and a JD (UTC) frame time is up to about
-    # 8 minutes off it, which an early or late middle must not be. With no
-    # site to make BJD_TDB from, JD is used and the record says so.
-    times, standard = jd, "JD_UTC against an ephemeris taken as BJD_TDB: early or late uncertain by up to 8 min"
-    if site is not None and len(jd):
-        from astropy.coordinates import EarthLocation
-        import astropy.units as u
-        here = EarthLocation(lat=site["latitude"] * u.deg, lon=site["longitude"] * u.deg,
-                             height=site.get("elevation_m", 0) * u.m)
-        times, standard = np.asarray(bjd_tdb(jd, p["ra"], p["dec"], here), float), \
-            "BJD_TDB, as the ephemeris is taken to be (the archive's usual standard)"
+    # The fit in the ephemeris's own time standard, which the archive gives
+    # per planet: a JD (UTC) frame time is up to about 8 minutes off a
+    # barycentric middle, which an early or late middle must not be.
+    times, standard = ephemeris_times(jd, p, site)
     middles = transits_between(p, times.min() - 0.5, times.max() + 0.5)
     predicted = min(middles, key=lambda m: abs(m - times.mean())) if middles else None
     result = fit(times, mag, predicted, p["hours"]) if predicted is not None else None
@@ -547,7 +571,8 @@ def measure(session, planet, size=BIN, say=print, rows=None, night=None):
               "fit": result, "verdict": verdict(result, p["depth"]), "checks": looked, "ensemble": group,
               **({"band": f"{band}, instrumental, relative to the comparison ensemble"} if band else {}),
               "jd": [round(t, 5) for t in jd], "mag": [None if not np.isfinite(m) else round(float(m), 4)
-                                                       for m in mag], "kind": "measured"}
+                                                       for m in mag], "kind": "measured",
+              "time_offset_days": round(float(np.mean(np.asarray(times) - np.asarray(jd))), 7) if len(jd) else 0.0}
     if where is not None:
         answer["bjd_tdb"] = [round(float(t), 6) for t in bjd_tdb(jd, p["ra"], p["dec"], where)]
     records.write(session / f"transit-{p['planet'].replace(' ', '')}.json", answer, schema="transits", stamp=True)

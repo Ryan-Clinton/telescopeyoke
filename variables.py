@@ -59,7 +59,8 @@ LEAST = 8            # points a light curve needs before it can be called variab
 MATCH = 6.0          # arcseconds to a VSX star
 GLOW = 1.2           # a star on light this many times the picture's median sky is on a galaxy: left out
 SURFACE = 30         # stars a batch needs before its zero point is a surface rather than one number
-VERSION = 1          # of the kept measurements: a change in what is measured makes them again
+VERSION = 2          # of the kept measurements: a change in what is measured makes them again
+# 2: from 20 November 2026 each frame is calibrated with its own masters (vet.stacked)
 STEP = 0.5           # magnitudes in each bin of the usual scatter
 DIP_RUN = 3          # points in a row that make a dip
 DIP_SIGMA = 3.0      # each that many times the usual scatter fainter than the star's median

@@ -234,7 +234,12 @@ def stacked(groups, done=lambda part: None):
     for part in groups:
         stack = stacking.Stack(rgb.shape)
         for path in part:
-            frame = stacking.prepare(stacking.load_light(path)[0], calibration, mono=mono)
+            raw, head = stacking.load_light(path)
+            # Each frame its own masters (a camera reopened part way can
+            # change a setting); one calibration per set, loaded once.
+            frame = stacking.prepare(raw, stacking._calibration(float(head.get("EXPTIME", 0)),
+                                                                int(float(head.get("GAIN", 0))),
+                                                                stacking.worker_cards(head)), mono=mono)
             frame, _ = stacking.register(frame, frame.sum(axis=2), stacking.find_stars(frame.sum(axis=2)),
                                          reference)
             stack.add(frame)
