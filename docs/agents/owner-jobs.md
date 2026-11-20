@@ -14,6 +14,10 @@ result is recorded.
    meridian with the tube near vertical; the owner thinks the tube catches
    the tripod leg there and lowered the scope. The 17 November check
    (`docs/nights/2026-11-17/clearance.md`) passed east of the pier only.
+   20 November, by hand: after the tube was lowered, only one position
+   lets the tube's back end touch a leg: tube straight up on the east side
+   of the mount, against the leg carrying the SynScan Wi-Fi box. Not yet
+   checked whether the limits keep a GoTo out of it.
 2. **The Dec drive**: Dec moves one way only, and the failing way flips
    with the balance ([dec-slack.md](../nights/2026-11-19/dec-slack.md)).
    Gary (20 November): he did not work on Dec at the 16 November service,
