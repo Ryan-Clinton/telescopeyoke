@@ -1157,6 +1157,17 @@ def find_stars(motor, read, usual, say=progress, stride=128, turns=0.5, ring=Non
                 live.done("lost", "The doughnuts went from the frame (the star drifted out, or cloud): the "
                                   "focuser is back where it started.")
                 return {"at": 0, "how": "lost"}
+            # Real doughnuts change size as the focuser moves; ones that stay
+            # the same over two moves of a stride are not stars (20 November
+            # 2026: "30 px" at every place from +60 to -452 with the tube
+            # dewed over, and the search went 512 half-steps chasing them).
+            if size and start and k >= 2 and abs(size - start) <= 0.05 * start:
+                drive.to(0)
+                say(f"  the doughnuts stayed {size:.0f} px over {k * stride} half-steps: not stars (cloud, dew "
+                    "or nothing in view); back at the start")
+                live.done("lost", "Nothing that changes with focus: no stars in view (cloud or dew). The focuser "
+                                  "is back where it started.")
+                return {"at": 0, "how": "lost"}
             if size and (smallest[0] is None or size < smallest[0]):
                 smallest = (size, drive.at)
             if size and before and size > 1.05 * before:
