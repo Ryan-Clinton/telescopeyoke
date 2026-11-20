@@ -28,7 +28,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 7 | Scientific discovery reliability | done 20 Nov 2026, re-checked |
 | 8 | Calibration and scientific measurement accuracy | done 20 Nov 2026, re-checked |
 | 9 | Demo claims versus real-world proof | done 20 Nov 2026, re-checked |
-| 10 | Hardware onboarding and compatibility | not started |
+| 10 | Hardware onboarding and compatibility | done 20 Nov 2026; re-check asked |
 | 11 | NINA/PHD2 companion | not started |
 | 12 | State management and data integrity | not started |
 | 13 | Observing scheduler and scientific yield | not started |
@@ -402,4 +402,18 @@ Documentation only; `docs/validation.md` is the authority and is unchanged.
 | 1 | The page's search descriptions still say "whole nights run with an AI agent" | P1 | Confirmed and fixed | Both say "nights run with an AI agent (a whole night ended by it alone not yet tried)" |
 | 2 | The ZTF result is still in the simulated rig's column | P2 | Confirmed and fixed | The cell keeps the planted fakes; the ZTF result is a line under the table, as real astronomy that is neither this rig nor the simulator |
 | 3 | Alpaca, PHD2 and the companion are said as one level of proof | P2 | Confirmed and fixed | Three claims: Alpaca on ASCOM's simulator, PHD2 against a pretend PHD2, the companion on the owner's 693-frame night and three observatories' published logs, not yet live |
+
+## 10. Hardware onboarding and compatibility, 20 November 2026
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | Two INDI cameras: the first is used, labelled as the profile's | P1 | Confirmed and fixed | `camera.py` refuses two eligible INDI cameras unless `[indi] camera` names one, and uses only that one; the doctor says the same (a FAIL, no longer a WARN) |
+| 2 | The mount can be the first lead or Wi-Fi adapter found | P1 | Partly right, fixed | Two leads matching `serial_match`, or two Wi-Fi adapters answering, are refused, naming them. The `/dev/ttyUSB0` fallback is smaller than claimed: the handset's echo test (`Kx` answered `x#`) refuses anything that is not a SynScan handset before any command |
+| 3 | First moves counted done from corrected GoTos | P1 | Smaller than claimed, no change | The step already says how it is known ("proven by use ... not the same as someone watching") apart from the person's word, and without a handset `direct.py` refuses GoTos until a person has watched the Dec direction, whatever onboarding says. Binding the word to the mount's identity is planned |
+| 4 | One changed setting marks a whole part set | P1 | Smaller than claimed, no change | The step lists what is still the example's ("still the example's: ..."), and the plate solve's scale check judges focal length and pixel size together |
+| 5 | The first-night skill and newhardware call Alpaca-reachable devices impossible | P1 | Confirmed and fixed | Both say "experimental through its ASCOM driver (Alpaca), tried only on ASCOM's simulator" where that route exists, apart from proven and unsupported |
+| 6 | The doctor tells an Alpaca user to close their ASCOM driver | P2 | Confirmed and fixed | With `[mount] link = "alpaca"` it says to leave the driver and its Alpaca server running |
+| 7 | A managed INDI server not yet running fails the camera check | P2 | Confirmed and fixed | It is a WARN: the server starts when the camera is first opened, and the camera is not yet checked |
+| 8 | Two identical USB adapters share one identity in newhardware | P2 | Agreed and planned | A private local identity per device (serial number or port path), kept out of the public report |
+| 9 | First-frame evidence does not name the light path's train | P2 | Agreed and planned | Use TELESCOP with the camera profile and focal length |
 

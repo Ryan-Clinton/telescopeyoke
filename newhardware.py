@@ -67,10 +67,13 @@ USB_KINDS = {
     "16d0": ("Altair camera", "unproven on this model: Altair's library on Windows, INDI's driver on Linux"),
     "1278:0920": ("Starlight Xpress filter wheel", "proven (sxwheel.py)"),
     "1278": ("Starlight Xpress device", "not supported, except their USB filter wheel"),
-    "03c3": ("ZWO camera, wheel or focuser", "not supported on Windows; a ZWO camera is unproven "
-                                             "through INDI on Linux"),
-    "1618": ("QHY camera", "not supported on Windows; unproven through INDI on Linux"),
-    "a0a0": ("Player One camera", "not supported on Windows; unproven through INDI on Linux"),
+    "03c3": ("ZWO camera, wheel or focuser", "not supported on Windows except through its ASCOM driver "
+                                             "(Alpaca, experimental: tried only on ASCOM's simulator); a ZWO "
+                                             "camera is unproven through INDI on Linux"),
+    "1618": ("QHY camera", "not supported on Windows except through its ASCOM driver (Alpaca, experimental: tried "
+                           "only on ASCOM's simulator); unproven through INDI on Linux"),
+    "a0a0": ("Player One camera", "not supported on Windows except through its ASCOM driver (Alpaca, experimental: "
+                                  "tried only on ASCOM's simulator); unproven through INDI on Linux"),
 }
 
 
@@ -83,7 +86,7 @@ def usb_inventory(devices=None, windows=host.WINDOWS):
         if kind:
             what, support = kind
             if not windows:
-                support = support.replace("not supported on Windows; ", "")
+                support = support.split("; ", 1)[-1] if support.startswith("not supported on Windows") else support
             found.append({"usb": d["usb"], "name": d["name"], "kind": what, "support": support})
     return found
 

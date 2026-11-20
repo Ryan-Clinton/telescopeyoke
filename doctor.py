@@ -310,8 +310,13 @@ def check_other_mount_software():
     found = host.ascom_drivers()
     if not found:
         return None
-    return OK, (f"{', '.join(found)} installed. telescopeyoke does not use ASCOM and leaves it alone; it talks "
-                "to the mount's COM port itself, so close EQMOD or whatever else has that port first")
+    import config
+    if config.hardware().get("mount", {}).get("link") == "alpaca":
+        # Chosen on purpose: the mount is driven through that very driver.
+        return OK, (f"{', '.join(found)} installed. The mount is set to go through its ASCOM driver (Alpaca), so "
+                    "leave that driver and its Alpaca server running; only nothing else should drive the mount")
+    return OK, (f"{', '.join(found)} installed. telescopeyoke does not use ASCOM for the mount here and leaves it "
+                "alone; it talks to the mount's COM port itself, so close EQMOD or whatever else has that port first")
 
 
 def check_program(name, purpose):
@@ -426,6 +431,10 @@ def check_camera():
         devices = client.devices()
         client.close()
     except OSError:
+        if config.hardware()["indi"].get("manage_server"):
+            # Started when the camera is opened: not a failure, and not a check
+            # of the camera either.
+            return WARN, "camera not checked yet: the INDI server starts when the camera is first opened"
         return FAIL, "camera not checked: no INDI server"
     # The device camera.py would open, by the same rule: a filter wheel or a
     # mount's driver has a CONNECTION too, and is not a camera.
@@ -433,8 +442,14 @@ def check_camera():
                                                           for dev, name in client.props if dev == d)]
     if not cameras:
         return FAIL, "no camera on the INDI server (is it plugged in?)"
+    named = config.hardware().get("indi", {}).get("camera")
+    if named:
+        return (OK, f"camera: {named}") if named in cameras else \
+            (FAIL, f"camera {named} ([indi] camera) is not on the server: {', '.join(cameras)} are")
     if len(cameras) > 1:
-        return WARN, f"camera: {cameras[0]}, the one used; also on the server: {', '.join(cameras[1:])}"
+        # As camera.py does: two cameras, and none named, is no camera chosen.
+        return FAIL, f"{len(cameras)} cameras on the INDI server ({', '.join(cameras)}): name the imaging one " \
+                     "as camera under [indi] in config.toml"
     return OK, f"camera: {cameras[0]}"
 
 

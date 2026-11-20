@@ -55,9 +55,11 @@ filter wheel. Unsure of a model or a figure: a photo of its label helps
 on its body).
 
 Then, as a suggestion, one line for each device from `docs/hardware.md`:
-proven, unproven on this model, seen but not supported, or not found. Say plainly what
-cannot work yet (a Celestron mount, a ZWO camera on Windows, another
-make's filter wheel or motor focuser) and offer the hardware report
+proven, unproven on this model, experimental through its ASCOM driver (Alpaca:
+another maker's mount, camera, filter wheel or focuser, tried only on ASCOM's
+simulator so far), seen but not supported, or not found. Say plainly which is
+which: an Alpaca route is there to try with its driver, never proven on that
+device; and offer the hardware report
 (`./doctor.py --report`) or the Mount support form (`./newhardware.py`
 fills it in, the person sends it) instead of a night of trying. Never
 send a device a question unless the person names its port and agrees

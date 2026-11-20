@@ -262,8 +262,17 @@ class Camera:
             start_driver(self.port)
             self.client = Indi(port=self.port)
         c = self.client
-        self.name = next((d for d in c.devices() if c.get(d, "CCD_EXPOSURE")
-                          or "Altair" in d), None)
+        cameras = [d for d in c.devices() if c.get(d, "CCD_EXPOSURE") or "Altair" in d]
+        named = config.hardware().get("indi", {}).get("camera")
+        if named:
+            self.name = named if named in cameras else None
+        elif len(cameras) > 1:
+            # Two cameras on one server (a guide camera beside the main one):
+            # never the first, with the frames labelled as the other's profile.
+            raise Refusal("CAMERA_NOT_CONNECTED", f"{len(cameras)} INDI cameras: {', '.join(cameras)}. Name the "
+                          "imaging one as camera under [indi] in config.toml.")
+        else:
+            self.name = cameras[0] if cameras else None
         if self.name is None:
             raise Refusal("CAMERA_NOT_CONNECTED", "No camera found. Is it plugged in?")
         c.connect(self.name)

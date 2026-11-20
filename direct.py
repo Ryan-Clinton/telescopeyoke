@@ -157,6 +157,11 @@ def open_link(settings, port=None):
             raise Refusal("MOUNT_NOT_CONNECTED", "No SynScan Wi-Fi adapter answered. Is the mount on with the "
                           "adapter in, and the adapter on this router? Set its address under [mount] "
                           "in config.toml, or join its own network (SynScan_WiFi_xxxx).")
+        if len(seen) > 1:
+            # Two mounts' adapters on one router: never whichever answered first.
+            raise Refusal("MOUNT_NOT_CONNECTED", f"{len(seen)} SynScan Wi-Fi adapters answered "
+                          f"({', '.join(seen)}): set the one this rig's mount has as address under [mount] "
+                          "in config.toml.")
         address = seen[0]
     return Udp(address)
 
