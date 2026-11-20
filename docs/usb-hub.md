@@ -97,6 +97,9 @@ Amazon UK £55.99.
   The camera's own (Mean Well GST40A12-P1J: 12 V, 3.34 A, 40 W, centre
   positive, 5.5 × 2.1 plug; read 20 November 2026) is too small to feed
   the box with the camera on it: the camera alone can draw about 3 A.
+  The mount's (AL-1250: 12 V, 5 A, centre positive; read 20 November
+  2026) is big enough for the box with the camera and the focuser on it;
+  the Mean Well then does for the mount (5.5 × 2.1, the EQ3 Pro's socket).
 - **USB:** its outputs only switch on once its USB lead to the laptop is
   plugged in. The Nano and the handset go on it first. The camera stays
   straight into the laptop until the box has proved itself.
