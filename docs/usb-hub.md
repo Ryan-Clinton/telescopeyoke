@@ -94,6 +94,9 @@ Amazon UK £55.99.
   its 12 V outputs (5.5 × 2.1, the EQ3 Pro's socket) on the supplied lead.
   The supply must give at least 3 A, ideally 5 A. Which supply (the
   mount's, or the 12 V one ordered from Alibaba) waits on their labels.
+  The camera's own (Mean Well GST40A12-P1J: 12 V, 3.34 A, 40 W, centre
+  positive, 5.5 × 2.1 plug; read 20 November 2026) is too small to feed
+  the box with the camera on it: the camera alone can draw about 3 A.
 - **USB:** its outputs only switch on once its USB lead to the laptop is
   plugged in. The Nano and the handset go on it first. The camera stays
   straight into the laptop until the box has proved itself.
