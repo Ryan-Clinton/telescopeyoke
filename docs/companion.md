@@ -37,6 +37,10 @@ filter that night, so no figure from another telescope is assumed. Then:
 What it measured is always said apart from what it infers: "likely" means
 the figures point that way, not that they prove it.
 
+With Claude Code in the TelescopeYoke folder, asking "why did last night
+go wrong?" runs the `night-review` skill, which finds the logs and runs
+the companion for you.
+
 ## Running it (Windows)
 
 **The companion is not in the 0.4.0 download**: it was added on 19

@@ -10,7 +10,7 @@
 
 Built 17 October 2026: the command classes
 (`policy.py`), the safety hooks and the decision record (`.claude/hooks/`,
-`agentlog.py`, `./ty agent-report`), the run watch (`./ty watch-run`), thirteen skills in `.claude/skills/` and six
+`agentlog.py`, `./ty agent-report`), the run watch (`./ty watch-run`), fourteen skills in `.claude/skills/` and six
 agents in `.claude/agents/`. Proven so far only in this
 session: none has yet been used at the telescope. Written 17 October 2026,
 revised the same day. This specifies Claude Code skills,
@@ -249,6 +249,14 @@ one front door, the same checks. The rest (`patrol.py`, `polaralign.py`,
 - **Loads:** "how did last night go", "what did we get".
 - **Does:** `night-analyst`'s five lines: frames kept, depth, candidates new
   and open, what went wrong, what tonight should do.
+
+### `night-review`
+
+- **Loads:** someone running their own capture program asking why last
+  night went badly, where the time went, how much usable data they got.
+- **Does:** `companion.py check`, then `report` with the frames folder and
+  NINA's and PHD2's logs (or the logs alone); says what was measured apart
+  from what is likely, and touches nothing on their rig.
 
 ### `cloudy-day`
 
