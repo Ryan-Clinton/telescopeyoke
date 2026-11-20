@@ -217,7 +217,8 @@ def pair(address=None):
         raise AlertError(f"The bridge at {address} said: {reply['error'].get('description', reply['error'])}. "
                          "Press the round button on top of it and run this again within half a minute.")
     PAIRING.parent.mkdir(parents=True, exist_ok=True)
-    records.write(PAIRING, {"hue_address": address, "hue_key": reply["success"]["username"]}, indent=None)
+    records.write(PAIRING, {"hue_address": address, "hue_key": reply["success"]["username"]}, indent=None,
+                  private=True)
     return address
 
 

@@ -19,7 +19,6 @@ are read, with the standard library.
 import argparse
 import csv
 import re
-import shutil
 import sys
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -330,6 +329,9 @@ def keep(book):
     return status()
 
 
+MOST_BYTES = 200 << 20     # a download bigger than this is not his workbook
+
+
 def fetch():
     """Download the workbook from his link, then read it in."""
     WORKBOOK.parent.mkdir(parents=True, exist_ok=True)
@@ -337,7 +339,18 @@ def fetch():
     request = urllib.request.Request(URL, headers={"User-Agent": "telescopeyoke (personal observing planner)"})
     print(f"Downloading the Compendium (about 36 MB) from {PAGE} ...", file=sys.stderr)
     with urllib.request.urlopen(request, timeout=120) as r, part.open("wb") as f:
-        shutil.copyfileobj(r, f)
+        got = 0
+        while chunk := r.read(1 << 20):
+            got += len(chunk)
+            if got > MOST_BYTES:          # the workbook is about 36 MB
+                f.close()
+                part.unlink()
+                raise interface.Refusal("REMOTE_FAILED", f"The download passed {MOST_BYTES >> 20} MB: "
+                                        "not the workbook. Nothing was kept.")
+            f.write(chunk)
+    if zipfile.is_zipfile(part) and sum(i.file_size for i in zipfile.ZipFile(part).infolist()) > 4 * MOST_BYTES:
+        part.unlink()
+        raise interface.Refusal("REMOTE_FAILED", "The download unpacks to far more than the workbook: nothing was kept.")
     if not zipfile.is_zipfile(part):
         part.unlink()
         raise interface.Refusal("INVALID_REQUEST", "The link gave a web page, not the workbook: "

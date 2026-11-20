@@ -34,7 +34,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 13 | Observing scheduler and scientific yield | done 20 Nov 2026, re-checked; 7 planned |
 | 14 | Weather and environmental decisions | done 20 Nov 2026, re-checked |
 | 15 | Operational performance | done 20 Nov 2026, re-checked; 1-4 and 6 planned |
-| 16 | Network security and external integrations | not started |
+| 16 | Network security and external integrations | done 20 Nov 2026; re-check asked |
 | 17 | Public releases and installation | not started |
 | 18 | Architecture, documentation and maintainability | not started |
 
@@ -543,4 +543,17 @@ The rain alert stays on in every case (the owner's rule, 15 November 2026): thes
 |---|---|---|---|---|
 | 1 | The second GoTo's description was incomplete | - | Right | Corrected above: `aim()` sends a GoTo to the same place before measuring the miss. Both agree to keep it until the acquisition timings (2) show its cost |
 | 2 | "at most 3 minutes" for 10 minutes asked reads wrongly | P2 | Confirmed and fixed | When the time left is less than the minutes asked, it says how few are available before the next step |
+
+## 16. Network security and external integrations, 20 November 2026
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | Stream keys sent over plain RTMP | P1 | Confirmed and fixed | YouTube and Twitch go to their RTMPS (TLS) ingest points; this ffmpeg has `rtmps`. Twitch is still found by `live.twitch.tv`, so its bandwidth test is unchanged. Not yet tried on a real stream: the next stream is its proof, recorded in docs/validation.md then |
+| 2 | Hue bridge's certificate not checked | P1 | Agreed and planned | Pinning the bridge's certificate when it is paired (the button still needed) and refusing another. Planned rather than done now: a mistake here silences the rain alert, which is never to be quietened, so it waits for a daytime pairing at the bridge |
+| 3 | Credential files written with the default permissions | P1 | Confirmed and fixed | `config.save` makes its partial and backup readable by this user only; `records.write(..., private=True)` does the same, used for `cache/hue.json`. Files written before keep their mode until next written |
+| 4 | Status server listens on every network | P2 | Confirmed and fixed | `serve.py --bind ADDRESS`; the default stays every network (the LAN page), and the help says to firewall others or give the LAN's address |
+| 5 | Alpaca and PHD2 trust the network | P2 | Agreed, no change | Their own protocols have no authentication; addresses are named by the person, never searched. Response-size limits for Alpaca images planned |
+| 6 | The Compendium download has no size ceiling | P2 | Confirmed and fixed | Refused past 200 MB, and refused when its contents unpack to more than 800 MB; nothing is kept then |
+| 7 | MCP and API inputs not bounded | P2 | Confirmed and fixed | An MCP message that is not an object, or whose params are not one, answers "Invalid request"; the API's `limit` is a number from 1 to 500, a bad one the default |
+| 8 | Public status kept private by string replacement | P2 | Agreed and planned | A list of the fields that may be published, the rest left out by construction |
 

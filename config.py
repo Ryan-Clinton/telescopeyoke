@@ -622,9 +622,15 @@ def save(changes, path=None):
     for (section, key), value in changes.items():
         if section_of(read_back, section).get(key) != value:
             raise ValueError(f"{section}.{key} could not be written safely; the file was left alone.")
+    # It can hold the Telegram bot's token: this user only, backup included.
     if path.exists():
-        path.with_suffix(".toml.bak").write_text(old, encoding="utf-8")
+        backup = path.with_suffix(".toml.bak")
+        backup.touch(mode=0o600)
+        backup.chmod(0o600)
+        backup.write_text(old, encoding="utf-8")
     partial = path.with_suffix(".toml.part")
+    partial.touch(mode=0o600)
+    partial.chmod(0o600)
     partial.write_text(new, encoding="utf-8")
     partial.replace(path)
     return new

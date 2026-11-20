@@ -129,9 +129,10 @@ def check(record, name):
         raise Rejected(f"{name} record does not match its schema at {where}: {problem.message}") from None
 
 
-def write(path, record, schema=None, stamp=False, record_version=1, indent=1, default=None):
+def write(path, record, schema=None, stamp=False, record_version=1, indent=1, default=None, private=False):
     """Keep `record` at `path` as JSON, whole or not at all. Returns what
-    was written (the record, with its provenance when stamped)."""
+    was written (the record, with its provenance when stamped). `private`
+    (a key or token in it) keeps it readable by this user only."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     if stamp and isinstance(record, dict):
@@ -145,6 +146,8 @@ def write(path, record, schema=None, stamp=False, record_version=1, indent=1, de
             raise
     partial = path.with_name(path.name + ".part")
     with open(partial, "w", encoding="utf-8") as f:
+        if private:
+            os.chmod(partial, 0o600)       # before the secret is in it
         f.write(text)
         f.flush()
         os.fsync(f.fileno())

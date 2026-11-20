@@ -94,10 +94,12 @@ START_S = 120           # a run whose newest frame is younger than this is imagi
 LOOK_S = 2              # how often the focus and polar files are looked at while watching
 STOP_S = 300            # no new frame for this long: stop streaming
 SCHEDULE_OLD_S = 18 * 3600   # a schedule last started longer ago than this is another night's
+# RTMPS (TLS): the stream key is in the address, and plain RTMP sends it
+# unencrypted. Both services publish these secure ingest points.
 INGEST = {
-    "youtube": "rtmp://a.rtmp.youtube.com/live2/{key}",
-    "twitch": "rtmp://live.twitch.tv/app/{key}",
-    "youtube-vertical": "rtmp://a.rtmp.youtube.com/live2/{key}",
+    "youtube": "rtmps://a.rtmps.youtube.com:443/live2/{key}",
+    "twitch": "rtmps://live.twitch.tv:443/app/{key}",
+    "youtube-vertical": "rtmps://a.rtmps.youtube.com:443/live2/{key}",
 }
 
 

@@ -290,14 +290,21 @@ class Handler(SimpleHTTPRequestHandler):
         import interface
         name = url.path[len("/api/v1/"):].strip("/")
         query = {k: v[0] for k, v in parse_qs(url.query).items()}
+
+        def limit(default, most=500):
+            # A count from the address: a bad one is the default, a big one capped.
+            try:
+                return max(1, min(most, int(query.get("limit", default))))
+            except ValueError:
+                return default
         routes = {
             "status": agent.status,
             "capabilities": agent.capabilities,
             "night": lambda: agent.night(self.demo),
-            "targets": lambda: agent.targets(int(query.get("limit", 10)), query.get("kind"),
+            "targets": lambda: agent.targets(limit(10), query.get("kind"),
                                              query.get("now") in ("1", "true"), self.demo),
             "session/current": lambda: agent.session(query.get("frames") in ("1", "true"),
-                                                     int(query.get("limit", 50))),
+                                                     limit(50)),
             "context": lambda: {"text": agent.context(self.demo)},
             "observing": lambda: agent.observing(self.demo),
         }
@@ -358,6 +365,9 @@ def install(port=8080, say=print, run=subprocess.run, home=None):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--port", type=int, default=8080)
+    ap.add_argument("--bind", default="0.0.0.0",
+                    help="address to listen on (every network by default: the house's LAN is trusted, "
+                         "so firewall others such as a VPN, or give this LAN's own address)")
     ap.add_argument("--every", type=float, default=10, help="minutes between rebuilds")
     ap.add_argument("--top", type=int, default=40, help="targets to list")
     ap.add_argument("--demo", action="store_true",
@@ -384,7 +394,7 @@ def main(argv=None):
     Handler.demo = args.demo
     handler = functools.partial(Handler, directory=str(WEB))
     print(f"Serving on http://{lan_address()}:{args.port}  (Ctrl+C to stop)", flush=True)
-    ThreadingHTTPServer(("0.0.0.0", args.port), handler).serve_forever()
+    ThreadingHTTPServer((args.bind, args.port), handler).serve_forever()
 
 
 if __name__ == "__main__":

@@ -132,6 +132,9 @@ def call_tool(name, arguments):
 
 def handle(message):
     """Answer one JSON-RPC message; None for notifications."""
+    if not isinstance(message, dict) or not isinstance(message.get("params") or {}, dict):
+        return {"jsonrpc": "2.0", "id": message.get("id") if isinstance(message, dict) else None,
+                "error": {"code": -32600, "message": "Invalid request"}}
     method, params, ident = message.get("method"), message.get("params") or {}, message.get("id")
     if ident is None:
         return None   # a notification, such as notifications/initialized
