@@ -339,7 +339,7 @@ KINDS = {"RunAutofocus": "autofocus", "AutofocusAfterExposures": "autofocus",
          "WaitForTime": "waiting", "WaitForTimeSpan": "waiting", "WaitUntil": "waiting",
          "WaitForAltitude": "waiting", "WaitUntilAboveHorizon": "waiting", "WaitForSunAltitude": "waiting",
          "WaitForMoonAltitude": "waiting", "WaitUntilSafe": "waiting for safe conditions",
-         "TriggerOnUnsafe": "unsafe conditions", "CoolCamera": "camera cooling", "WarmCamera": "camera warming",
+         "TriggerOnUnsafe": "unsafe conditions", "WhenUnsafe": "unsafe conditions", "CoolCamera": "camera cooling", "WarmCamera": "camera warming",
          "SwitchFilter": "filter change", "ParkScope": "parking", "UnparkScope": "unparking",
          "FindHome": "finding home", "OpenDomeShutter": "dome", "CloseDomeShutter": "dome",
          "SynchronizeDome": "dome", "ReconnectTrigger": "reconnecting", "ReconnectOnDownloadFailure": "reconnecting",
@@ -374,7 +374,8 @@ def logs_only(nina, guide=None):
         if rms:
             lines.append(f"Guide error during exposures: median RMS {statistics.median(rms):.2f} "
                          f"{inside[0]['unit']}, worst {max(rms):.2f}")
-    lines.append("From the logs alone: no frame was measured, so nothing here says whether the pictures were good.")
+    lines.append("From the logs alone: no frame was measured here; any judgement of the frames is NINA's own star "
+                 "detection, where its log has it.")
     return lines
 
 
@@ -386,6 +387,10 @@ class NinaLog:
 
     def __init__(self, paths):
         self.exposures, self.saves, self.steps, self.events, self.errors = [], [], [], [], []
+        self.solver_saves = []      # an exposure NINA saved to its plate solver's folder was taken to solve
+        self._solved = None
+        self.detections = []        # NINA's own star detection on an image: (time, HFR, stars, eccentricity)
+        self.focuser_moves = []     # times the focuser was moved
         open_steps = {}
         for path in paths:
             for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
@@ -404,6 +409,23 @@ class NinaLog:
         if found:
             self.exposures.append({"start": when, "seconds": float(found.group(1)), "filter": found.group(2).strip()})
             return
+        # NINA's star detection (NINA.Image StarDetection.Detect), in its
+        # older form "Average HFR: h, HFR MAD: m, Detected Stars n" and its
+        # newer "Average HFR: h, Average FWHM: f, Average Eccentricity: e,
+        # HFR σ: s, Detected Stars n".
+        found = re.match(r"Average HFR: ([\d.eE+-]+|NaN),.*?Detected Stars (\d+)", text)
+        if found:
+            ecc = re.search(r"Average Eccentricity: ([\d.eE+-]+)", text)
+            hfr = float(found.group(1)) if found.group(1) != "NaN" else None
+            self.detections.append((when, hfr, int(found.group(2)), float(ecc.group(1)) if ecc else None))
+            return
+        if text.startswith("Moving Focuser to position"):
+            self.focuser_moves.append(when)
+            return
+        found = re.match(r"Saved image to (.*PlateSolver.*)", text)
+        if found:
+            self.solver_saves.append(when)
+            return
         found = re.match(r"Successfully saved file at (.*)", text)
         if found:
             self.saves.append({"time": when, "file": found.group(1)})
@@ -416,7 +438,7 @@ class NinaLog:
                 return
             key = (name, kind)
             if verb == "Starting":
-                if name.endswith("Trigger") or name in ("TriggerOnUnsafe", "RestoreGuiding"):
+                if name.endswith("Trigger") or name in ("TriggerOnUnsafe", "RestoreGuiding", "WhenUnsafe"):
                     # A trigger logs its start only; what it runs logs the rest.
                     self.steps.append({"kind": kind, "name": name, "start": when, "end": None, "failed": False})
                 else:
@@ -440,9 +462,99 @@ class NinaLog:
         if level == "ERROR":
             self.errors.append((when, f"{source}: {text[:140]}"))
 
+    def _index(self):
+        """Once: which exposures NINA saved as a file, which it saved for its
+        plate solver, and which were taken with the focuser moved before and
+        after them (by exposure start)."""
+        if self._solved is not None:
+            return
+        import bisect
+        starts = sorted(e["start"] for e in self.exposures)
+        owner = lambda when: starts[bisect.bisect_right(starts, when) - 1] if starts and when >= starts[0] else None  # noqa: E731
+        self._saved = {owner(s["time"]) for s in self.saves} - {None}
+        self._solved = {owner(when) for when in self.solver_saves} - {None}
+        self._focusing = set()
+        moves = self.focuser_moves
+        ordered = sorted(self.exposures, key=lambda e: e["start"])
+        for before, e, after in zip([None] + ordered, ordered, ordered[1:] + [None]):
+            if before is None or after is None or e["start"] in self._saved:
+                continue
+            if before["filter"] != e["filter"] or after["filter"] != e["filter"]:
+                continue          # a move at a filter change is the filter's focus offset, not focusing
+            moved_before = bisect.bisect_left(moves, before["start"]) < bisect.bisect_left(moves, e["start"])
+            moved_after = bisect.bisect_left(moves, e["start"]) < bisect.bisect_left(moves, after["start"])
+            if moved_before and moved_after:
+                self._focusing.add(e["start"])
+
+    def saved(self, exposure):
+        self._index()
+        return exposure["start"] in self._saved
+
+    def purpose(self, exposure):
+        """What an exposure was for: "autofocus" or "plate solving" by the
+        sequencer step it fell inside; "plate solving" too when NINA saved
+        it only for its plate solver (a light it saved as a file, solved
+        afterwards for drift, stays a frame); "focusing" when the focuser
+        moved before and after it within one filter, outside autofocus (by
+        hand, or a plug-in); else "frames", the sequence's own."""
+        for step in self.steps:
+            if step["end"] is not None and step["start"] <= exposure["start"] <= step["end"]:
+                if step["kind"] == "autofocus":
+                    return "autofocus"
+                if step["kind"].startswith("centring") or step["kind"] == "meridian flip":
+                    return "plate solving"
+        self._index()
+        if exposure["start"] in self._saved:
+            return "frames"
+        if exposure["start"] in self._solved:
+            return "plate solving"
+        if exposure["start"] in self._focusing:
+            return "focusing"
+        return "frames"
+
+    def measured(self):
+        """The frames with NINA's own star detection on them: each
+        detection belongs to the last exposure started before it, within
+        the exposure and two minutes."""
+        import bisect
+        starts = [e["start"] for e in self.exposures]
+        out = {}
+        for when, hfr, stars, ecc in self.detections:
+            i = bisect.bisect_right(starts, when) - 1
+            if i >= 0 and when - starts[i] <= self.exposures[i]["seconds"] + 120:
+                out[i] = {"hfr": hfr, "stars": stars, "ecc": ecc}
+        return out
+
+    def quality(self):
+        """The sequence's own frames judged by NINA's star detection, each
+        setup (filter and length) against its own best: the half with most
+        stars, then the sharper half of those. [lines]."""
+        seen = self.measured()
+        groups = {}
+        for i, e in enumerate(self.exposures):
+            if i in seen and self.purpose(e) == "frames" and self.saved(e):     # the frames kept, not a loop
+                groups.setdefault((e["filter"] or "no filter", e["seconds"]), []).append(seen[i])
+        lines = [] if groups or not self.detections else [
+            "NINA's star detection ran only on frames it did not save: nothing kept to judge"]
+        for (band, seconds), rows in groups.items():
+            good = [r for r in rows if r["hfr"] and r["stars"]]
+            if len(good) < MIN_COMPARED:
+                lines.append(f"{band}, {seconds:g} s: {len(rows)} frames with NINA's star detection, too few to judge")
+                continue
+            many = sorted(good, key=lambda r: -r["stars"])[:(len(good) + 1) // 2]
+            best = sorted(many, key=lambda r: r["hfr"])[:(len(many) + 1) // 2]
+            hfr, stars = statistics.median(r["hfr"] for r in best), statistics.median(r["stars"] for r in best)
+            dimmed = sum(1 for r in rows if not r["stars"] or r["stars"] < DIM * stars)
+            soft = sum(1 for r in good if r["stars"] >= DIM * stars and r["hfr"] > SOFT * hfr)
+            lines.append(f"{band}, {seconds:g} s: {len(rows) - dimmed - soft} of {len(rows)} frames acceptable by NINA's "
+                         f"own star detection (best HFR {hfr:.2f} px, {stars:.0f} stars); {dimmed} with fewer stars "
+                         f"(likely cloud or haze), {soft} soft")
+        return lines
+
     def only(self, start, end):
         """Keep only what happened between two times (one night)."""
         self.exposures = [e for e in self.exposures if start <= e["start"] < end]
+        self._solved = None
         self.saves = [s for s in self.saves if start <= s["time"] < end]
         self.steps = [s for s in self.steps if start <= s["start"] < end]
         self.events = [e for e in self.events if start <= e[0] < end]
@@ -462,10 +574,10 @@ class NinaLog:
             took[name] = took.get(name, 0.0) + seconds
         for name, seconds in sorted(took.items(), key=lambda kv: -kv[1]):
             said.append(f"NINA: {name}" + (f" {seconds / 60:.1f} min" if seconds >= 30 else ""))
-        started = [e for e in self.exposures if start <= e["start"] <= end]
+        started = [e for e in self.exposures if start <= e["start"] <= end and self.purpose(e) == "frames"]
         saved = [s for s in self.saves if start <= s["time"] <= end]
         if len(started) > len(saved):
-            said.append(f"NINA: {len(started) - len(saved)} exposure(s) started and not saved")
+            said.append(f"NINA: {len(started) - len(saved)} exposure(s) for frames started and not saved")
         for when, what in self.events:
             if start <= when <= end:
                 said.append(f"NINA: {what} at {_clock(when)}")
@@ -478,14 +590,30 @@ class NinaLog:
         """The night by NINA's log alone: exposures started and saved by
         filter and length, the time each kind of step took, events, errors."""
         lines = []
-        groups = {}
+        kinds = {}
         for e in self.exposures:
-            groups.setdefault((e["filter"] or "no filter", e["seconds"]), []).append(e)
-        for (band, seconds), started in sorted(groups.items(), key=lambda kv: kv[1][0]["start"]):
-            lines.append(f"{band}, {seconds:g} s: {len(started)} exposures started, "
-                         f"{len(started) * seconds / 60:.0f} min of exposure, {_clock(started[0]['start'])}-"
-                         f"{_clock(started[-1]['start'])}")
-        lines.append(f"Files saved: {len(self.saves)} of {len(self.exposures)} exposures started")
+            kinds.setdefault(self.purpose(e), []).append(e)
+        for purpose in ("frames", "autofocus", "plate solving", "focusing"):
+            mine = kinds.get(purpose, [])
+            if not mine:
+                continue
+            groups = {}
+            for e in mine:
+                groups.setdefault(e["filter"] or "no filter", []).append(e)
+            for band, started in sorted(groups.items(), key=lambda kv: kv[1][0]["start"]):
+                lengths = sorted({e["seconds"] for e in started})
+                length = (f"{lengths[0]:g} s" if len(lengths) == 1 else
+                          ", ".join(f"{s:g}" for s in lengths) + " s" if len(lengths) <= 3 else
+                          f"{len(lengths)} lengths, {lengths[0]:g} to {lengths[-1]:g} s")
+                lines.append(f"{'' if purpose == 'frames' else f'for {purpose}: '}{band}, {length}: {len(started)} "
+                             f"exposures, {sum(e['seconds'] for e in started) / 60:.0f} min of exposure, "
+                             f"{_clock(started[0]['start'])}-{_clock(started[-1]['start'])}")
+        frames = len(kinds.get("frames", []))
+        kept = sum(1 for e in kinds.get("frames", []) if self.saved(e))
+        lines.append(f"Saved as files: {kept} of the {frames} exposures for frames"
+                     + (f" ({len(self.exposures) - frames} more for autofocus, plate solving or focusing, not meant to be "
+                        "saved)" if len(self.exposures) > frames else ""))
+        lines += self.quality()
         took = {}
         for step in self.steps:
             if step["end"] is not None:

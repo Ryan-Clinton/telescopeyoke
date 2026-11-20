@@ -115,9 +115,18 @@ it, with the minutes each step took:
 python companion.py report "C:\path\to\frames" --phd2-log "...\PHD2_GuideLog_DATE.txt" --nina-log "...\NINA\Logs\DATE.log"
 ```
 
-Without the frames, the logs alone give a night of their own (no frame is
-measured, so it says nothing of the pictures' quality): exposures started
-and saved by filter, the time in each kind of step, events and errors, and
+Each exposure is given its purpose: **autofocus** or **plate solving** by
+the sequencer step it fell inside (or a plate solver's copy NINA saved of
+it), **focusing** when the focuser moved before and after it within one
+filter outside autofocus (a move at a filter change is that filter's focus
+offset), else a **frame**. Only frames count against "saved", and only
+frames NINA saved as files are judged.
+
+Without the frames, the logs alone give a night of their own: exposures by
+purpose, filter and length, how many frames were saved, the frames judged
+by **NINA's own star detection** where its log has it (its HFR and star
+count against that filter and length's best), the time in each kind of
+step, events and errors, and
 with PHD2's log how many exposures were guided all through, and any stretch
 where PHD2 said it was guiding with far fewer guide steps than its cycle
 makes:
@@ -166,9 +175,16 @@ exposures then were not guided all through (that night's PHD2 drove its
 own simulator camera). And four PHD2 logs from another observer's rig,
 published as examples of good and bad guiding: the good night read with
 no star lost and 0.75" RMS, the bad one with 243 lost and 0.99". The
-NINA sequencer lines (autofocus, flips, centring) were checked against
-NINA's own source and tried on a log written in that format; no real
-sequencer night has been read yet.
+NINA sequencer lines were checked against NINA's own source, and then
+read on three real sequencer nights published by two more observatories
+(NINA 3.1 and 3.2): one night's 27 ten-minute lights told from its
+autofocus runs, its plate solves and a focusing run by hand, 23 of them
+acceptable by NINA's own star detection; sky flats at many lengths kept as
+frames; and a night whose 307 exposures were a framing loop never saved,
+said as such rather than judged. Reading them found and fixed four
+mistakes of the companion's own: drift-solved lights called plate solving,
+flats called focusing, autofocus frames counted as unsaved, and a loop
+judged as if kept.
 
 On the owner's own real frames (5 November 2026, five targets, 693 frames:
 it found the gaps between targets and filters, two 18-minute stretches with

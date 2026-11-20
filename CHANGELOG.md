@@ -27,6 +27,9 @@ proven is `docs/validation.md` ("Current conclusions").
   zone. PHD2's log is read as PHD2 writes it (only DROP rows are a lost
   star; calibration rows are not guiding), and a stretch where PHD2 said
   it was guiding with too few steps is named.
+  Each NINA exposure is given its purpose (autofocus, plate solving,
+  focusing, or a frame), and saved frames are judged by NINA's own star
+  detection when the log has it.
 - **A mount through ASCOM Alpaca** (`alpaca.py`, `[mount] link = "alpaca"`):
   any mount with an ASCOM driver, on this computer or a Windows one on
   the network, through the same motion lock, limits and dry runs.
