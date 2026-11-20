@@ -131,7 +131,10 @@ motor turned and the knob did not, so focus was by hand with the spoken aid.
 - **Dec guiding**: since the service Dec moves one way only under guide
   pulses, the failing way flipping with the balance
   ([dec-slack.md](../nights/2026-11-19/dec-slack.md)); RA-only guiding
-  keeps 120 s frames round. The jobs owed are [owner-jobs.md](owner-jobs.md).
+  keeps 120 s frames round. 20 November: south does not move at all,
+  north sticks then jumps 20-30"; `--dec-one-way north` guides north only
+  but cannot undo a jump ([dec-one-way.md](../nights/2026-11-20/dec-one-way.md)).
+  The jobs owed are [owner-jobs.md](owner-jobs.md).
 - **Latitude bolts**: the rear bolt in lowers the axis, the front bolt in
   raises it (13 October 2026); the old rear bolt rises then jerks lower.
 - **Focuser**: backlash 16 and 32 half-steps at two reversals, 48 kept

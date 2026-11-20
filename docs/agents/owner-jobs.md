@@ -23,7 +23,10 @@ result is recorded.
    Gary (20 November): he did not work on Dec at the 16 November service,
    and it is probably the gears not meshing right. For Gary: the worm
    mesh first, then grub screws on the worm gear, worm end-play, the
-   clutch. A hand-rock test first.
+   clutch. A hand-rock test first. 20 November, on the main camera
+   (`./mount.py dectest`): south moves nothing at all, north sticks then
+   jumps 20-30" ([dec-one-way.md](../nights/2026-11-20/dec-one-way.md));
+   the same west of the meridian is still to measure.
 3. **The balance**, checked and recorded both ways before the next Dec
    test: on 20 November the 700 g of sand at the back came off and the tube
    was rebalanced (the change not recorded).
@@ -84,6 +87,6 @@ result is recorded.
 14. **The guide camera window on a star**: `./guidecam.py star --count 30
     --compare-window`, binned against the full-resolution window, then the
     ST4-pulse comparison before any guider change.
-15. **The Dec pile-up cap A/B** (`./guidecam.py guide --minutes 10
-    --dec-one-way WAY`, then the same with `--dec-stuck 3`): on hold until
-    the Dec drive moves both ways (job 2).
+15. **The Dec pile-up cap A/B**: run 20 November with Dec north only
+    ([dec-one-way.md](../nights/2026-11-20/dec-one-way.md)): `--dec-stuck
+    3` did not stop the jumps. Again only once job 2 is done.
