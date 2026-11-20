@@ -40,8 +40,10 @@ board's own axis positions around each 5 s pulse, the mount tracking:
 
 ## What it shows
 
-- **The Dec motor turns, at exactly the guide rate (7.1"/s), both ways.**
-  The ST4 lead and the motor board are fine.
+- **The motor board counts Dec steps at exactly the guide rate (7.1"/s),
+  both ways**: the ST4 lead and the board pass. The count is the steps the
+  board sends to an open-loop stepper, so it does not show the motor shaft
+  turned (see [dec-slack.md](dec-slack.md)).
 - **The tube does not follow the Dec motor at guide rate.** After the
   slack, 22 s of north pulses moved the star 3 to 15" where the motor
   turned about 160".

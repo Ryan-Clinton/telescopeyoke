@@ -28,7 +28,7 @@ never run with Dec pulses going out.
 |---|---|---|---|---|---|
 | 20:31 | calibration, M34 | +43.1 | 12 steps | barely moves | [dec-guiding.md](dec-guiding.md) |
 | 20:44 | calibration, M34 | +43.2 | 8 steps | 15" for 24 steps, 256" due | [dec-guiding.md](dec-guiding.md) |
-| 20:46 | pulse test (motor board's own axis counts) | | | the Dec motor turns 35.7" each way in 5 s: exactly the guide rate | [dec-guiding.md](dec-guiding.md) |
+| 20:46 | pulse test (motor board's own axis counts) | | | the board's Dec count moves 35.7" each way in 5 s: exactly the guide rate (the count, not the shaft) | [dec-guiding.md](dec-guiding.md) |
 | 21:24 | Dec test, north | +57.1 | about 10-13 steps of creep, then a ~55" jump | full rate (11"/step) | [dectest-2124.txt](dec-records/dectest-2124.txt) |
 | 21:31 | calibration | +57.2 | 4 steps north; reversals 8.8-17.7 s, "at least" | north 0.80 px/s, full rate | (guide-calibration.png sent to Telegram) |
 | 22:31 | Dec test, clutch "a little" tighter | +43.2 | never caught up | north 77" of 639" due (12%), south 127" (20%) | [dectest-2231.txt](dec-records/dectest-2231.txt) |
@@ -42,14 +42,34 @@ reversals about 8-15 s, every time.)
 
 ## What is settled
 
-- **The electronics are fine.** The Dec motor turns at exactly the guide
-  rate both ways (20:46); the ST4 lead and motor board pass.
+- **The ST4 lead and the motor board pass**: north and south pulses move
+  the board's Dec count 35.7" each way in 5 s, exactly the guide rate
+  (20:46). That count is the steps the board sends (`scope.axes()`, the
+  SynScan position); the motor is an open-loop stepper, so it does **not**
+  show that the motor shaft turned, that the worm turned, or that the axis
+  followed. Where the movement is lost, between the board and the tube, is
+  not yet known.
 - **The loose clutch was the slipping.** The 3° slip at 22:20, the 12% and
   20% at 22:31 and the tube moving by hand at 23:07 all go with a clutch
   too light; with it tight (23:16 on) Dec has held: both GoTos to IC 405
   landed within 1', and the mount's Dec stayed +22.00° for an hour.
-- **When the gears do catch, Dec moves at the full guide rate** (21:24,
+- **When the drive does catch, Dec moves at the full guide rate** (21:24,
   21:31, 23:16, 23:29).
+
+## Slack, or something sticking
+
+Two different faults, not to be run together:
+
+- **slack** (backlash): movement lost after a reversal, the same each time
+  from the same side, then a steady full rate;
+- **sticking** (stiction, or a drive that engages only now and then): the
+  axis holds against the motor until the force builds, then lets go with a
+  jump, at any time, reversal or not.
+
+21:24 looks like sticking: 13 north steps of creep, a jump of about 55",
+then full rate. 23:52 does too: Dec had not been reversed by the guider
+(it had run unguided), and 60 steps moved nothing. The page below says
+"slack" for the steps before the star moved, whichever it was.
 
 ## What is not settled
 
@@ -73,6 +93,16 @@ reversals about 8-15 s, every time.)
    either failed to start or dropped Dec. Nothing sends an extra pulse
    the size of the slack on a reversal; one-way guiding was chosen instead.
 4. **The calibration's 60-step limit** is less than 23:52 needed.
+5. **22:31 does not add up as Dec movement.** North moved the star 77",
+   south 127", and it ended 153" from its start: for opposite moves it
+   would be about 50". The two legs went about 86° apart. The clutch was
+   slipping then; drift is taken off before the legs, but the track itself
+   was not kept, so whether the tube moved sideways, sagged or the drift
+   changed is unknown.
+6. **A calibration that kept RA alone was never tried on Dec again.** The
+   check on a reused calibration checked RA only. Changed with this page:
+   the check now sends north steps first (up to 60), and if the star moves
+   it refuses the old calibration, so a fresh one guides Dec again.
 
 ## The guided run, RA only (23:54 on)
 
@@ -83,9 +113,9 @@ nothing and drifted **south at a steady 2.8"/min** (10" every 40 looks, to
 between 120 s frames, the same way every time
 ([ic405-guided-frames.jsonl](dec-records/ic405-guided-frames.jsonl)).
 
-That steady drift with Dec not pulsed is not the gears: it is the polar
-axis, which drifts Dec at about 0.26"/min for each arcminute it is out, so
-about 10' out. The tripod and tube were handled fitting the hot water
+A steady drift with Dec not pulsed is most likely the polar axis, which
+drifts Dec at about 0.26"/min for each arcminute it is out, so about 10'
+out (inferred, not measured; a creeping Dec axis would look the same). The tripod and tube were handled fitting the hot water
 bottle and dew shield; the 17:41 polar alignment had it 0.2° (12') out.
 
 The frames are still good at 120 s: 5 kept, FWHM 5.9-6.1 px, roundness
@@ -94,14 +124,29 @@ The frames are still good at 120 s: 5 kept, FWHM 5.9-6.1 px, roundness
 
 ## The test that would settle it
 
-At one pointing, clutch untouched: four north/south cycles of 80 steps,
-the star measured after every step (about 12 minutes,
-`./guidecam.py dectest --steps 80`, run four times). Then:
+First find **where** the movement is lost, before any more calibration
+changes or long Dec tests. Daylight, the tube on a distant landmark, the
+clutch tight and untouched, nothing else moving:
 
-- **the slack repeats** (within a few steps): raise the calibration's limit
-  above it and guide Dec one way for real; measure Dec's RMS in a guided
-  run.
-- **it wanders**: that is the worm's mesh, for Gary with these logs; the
-  nights stay RA-only at 120 s with the polar axis kept close.
+1. A strip of tape as a flag on the Dec motor's shaft or the worm's end,
+   and a chalk line across the Dec axis and its housing.
+2. `./guidecam.py pulse --seconds 5`, several times in the same direction,
+   then the other: the person watches the flag, the worm and the line.
+3. The main camera on the landmark before and after each set
+   (`moved.py` judges two pictures): the tube's own movement, measured
+   apart from the board's count and from the guide camera.
 
-Not yet run: the owner asked for this write-up first.
+| What is seen when the star (or landmark) does not move | Where it is |
+|---|---|
+| the motor flag does not turn | the motor or its drive from the board |
+| the motor turns, the worm does not | the coupling between them (grub screw, gears) |
+| the worm turns, the axis does not | the worm's mesh with the wheel, binding, or the clutch |
+| the axis turns, the picture does not | the camera, the guide scope's mounting, or the measuring |
+
+Only once that is known: a repeat Dec test at one pointing (four
+north/south cycles of 80 steps is about 40 minutes, not 12: 23:16's test
+took about 8 minutes for 120 steps, about 4 s a step), to size the slack
+for one-way Dec guiding.
+
+Tonight stays on RA-only guiding at 120 s; a fresh polar alignment would
+take the Dec drift down. The daylight test needs the owner at the mount.

@@ -706,7 +706,17 @@ def verify(cam, seconds, cal, cols, west, gain=None, say=print, tick=None):
     c.where = (star.x, star.y)
     c.still_drift()             # the kept columns are without drift; so must the check be
     results = {}
-    # A calibration that kept RA alone checks RA alone: Dec is never pulsed.
+    # A calibration that kept RA alone checks RA alone, but first tries Dec
+    # again: whatever stopped it may have cleared (19 November 2026: Dec
+    # followed at 23:29, not at 23:52), and without this it was never tried
+    # again until someone forced a calibration.
+    if not cal.get("dec_guided", True):
+        start = c.look()
+        for _ in range(CAL_SLACK_STEPS):
+            here = c.step("north", dec_step)
+            if math.hypot(here[0] - start[0], here[1] - start[1]) >= SLACK_MOVED:
+                return False, "Dec follows guide pulses again: calibrating afresh to guide it"
+        say(f"  Dec still does not follow: {CAL_SLACK_STEPS} north steps moved nothing; RA only")
     checked = (("west", ra_step), ("north", dec_step)) if cal.get("dec_guided", True) else (("west", ra_step),)
     for direction, step in checked:
         start = c.look()
