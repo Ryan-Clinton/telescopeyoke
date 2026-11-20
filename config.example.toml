@@ -48,6 +48,10 @@ setup = "default"
 # and the default on Linux. "altair" is Altair's own library, with its files
 # in vendor/altair/; it is the default on Windows, where INDI does not run.
 # backend = "altair"
+# "alpaca": any camera with an ASCOM driver, over the network (alpaca.py;
+# ./alpaca.py find lists the servers), with address = "HOST:PORT" and
+# device = 0. Its cooling stays with the driver's own program; frames wait
+# for the sensor to reach the driver's target. Tried on ASCOM's simulator only.
 # With the "altair" backend only:
 # serial = "..."          which camera to use when more than one is plugged in
 # readout_speed = 1       the camera's readout speed level; unset leaves it as it is
@@ -100,6 +104,11 @@ camera = ""
 # colour camera's always are, or at full resolution (1). The raw frames kept
 # are the full sensor either way.
 processing_scale = 2
+# An imaging run's gain and exposure unless told otherwise (shoot.py's
+# defaults): 1500 and 2 s are the owner's 183M; another camera's gain is in
+# its own units.
+# gain = 1500
+# exposure = 2
 
 [mount]
 # The distance from one tripod foot to the next, in centimetres. With it, the
@@ -124,6 +133,14 @@ serial_match = "FTDI"
 # The Wi-Fi adapter's address. Leave it out to find the adapter by asking the
 # network; it is 192.168.4.1 on the network the adapter makes itself.
 # address = "192.168.4.1"
+# "alpaca": the mount's own ASCOM driver over the network (alpaca.py), with
+# address = "HOST:PORT" (never found by itself: ./alpaca.py find lists the
+# servers), device = 0, alpaca_name = the driver's name to refuse any other,
+# alpaca_dec_sign = -1 (which way a positive Dec rate turns: the driver's
+# choice), alpaca_trust_site = true only for a driver that cannot give its
+# site. ./mount.py settime gives the driver this computer's site and clock.
+# Tried on ASCOM's simulator only.
+# link = "alpaca"
 
 # The plate solver. Leave this out to use astap_cli with its database in
 # /opt/astap on Linux, or astap_cli.exe from PATH or C:/Program Files/astap on

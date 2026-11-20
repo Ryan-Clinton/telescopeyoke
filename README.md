@@ -436,7 +436,7 @@ Later, if people ask for them:
 
 Already have an observatory that works? [The companion](docs/companion.md) watches its night from the frames it saves and PHD2, and says what went wrong and why, without touching it.
 
-Not planned: ASCOM's Windows-only COM interface (Alpaca reaches the same drivers: a mount through Alpaca is built and tried on ASCOM's simulator, [Mounts](docs/mounts.md)), mobile apps, a React front end, cloud services, Docker images, plugin systems, a sequencing language. Bigger
+Not planned: ASCOM's Windows-only COM interface (Alpaca reaches the same drivers: a mount, camera, focuser and filter wheel through Alpaca, and guiding by PHD2, are built and tried on simulators only, [Mounts](docs/mounts.md), [Hardware](docs/hardware.md)), mobile apps, a React front end, cloud services, Docker images, plugin systems, a sequencing language. Bigger
 projects (NINA, KStars/Ekos) do those well; this one stays small, readable,
 and aimed at ordinary SynScan gear.
 

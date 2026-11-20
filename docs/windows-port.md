@@ -5,7 +5,10 @@
 This is a work order for an agent (or a person) working on a Windows machine.
 The aim is that someone with the tested gear (SynScan handset, Altair
 Hypercam 183C, a webcam) can run telescopeyoke natively on Windows 10 or 11,
-with no WSL and no ASCOM.
+with no WSL and no ASCOM. (Since 19 November 2026, on the development
+branch, ASCOM drivers can also be reached through Alpaca, over the network:
+[Hardware](hardware.md#already-using-eqmod-or-ascom). The native path below
+still uses no ASCOM.)
 
 Read `AGENTS.md` first. Its safety rules and conventions apply to all of this.
 
@@ -39,7 +42,8 @@ laptop; the SDK zip may be newer.
    "portable" one, however tidy.
 2. **Do not move a real mount.** Use `--demo` and `--dry-run`. A real move
    happens only when the person at the telescope asks for that move.
-3. **No ASCOM, no WSL, no new framework.** Keep to the design principles in
+3. **No ASCOM COM interface, no WSL, no new framework** (ASCOM drivers only
+   through Alpaca, `alpaca.py`, never the Windows-only COM route). Keep to the design principles in
    `AGENTS.md`. New dependencies allowed: `tzdata` (Windows only). Nothing
    else without a reason written in the pull request.
 4. **Say what was proven.** The README's hardware table and "What has been proven"

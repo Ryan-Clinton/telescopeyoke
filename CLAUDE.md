@@ -58,6 +58,9 @@ checkout has none of it. Some suggestions for a new rig:
 - On a mount nobody has watched move yet, offer to say each move first.
 - Ask what they want from the night; the discovery programmes are one
   choice among the Moon, planets and the deep sky.
+- Someone whose own software already runs their nights (NINA, PHD2) and
+  asks why one went badly: the `night-review` skill runs `companion.py`,
+  which reads their frames and logs and touches nothing on their rig.
 
 ## Commands
 

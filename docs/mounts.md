@@ -95,7 +95,11 @@ Built 19 November 2026 (`alpaca.py`): `[mount] link = "alpaca"`,
 picked from that list by itself. `alpaca_name` set to the driver's name
 makes a different telescope at that address a refusal. `./mount.py settime`
 gives the driver this computer's site and clock, and until it has them a
-GoTo is refused (doctor's `SITE_DIFFERS`). It stands in for the handset as
+GoTo is refused (doctor's `SITE_DIFFERS`); a driver that will not say its
+site is refused too (`SITE_UNKNOWN`) unless `alpaca_trust_site = true`
+says its own is right, and one not yet connected is not counted ready
+(`ALPACA_NOT_CONNECTED`; mount.py connects it when used). Without MoveAxis
+slow enough for it, the drift creep stays off. It stands in for the handset as
 `direct.py` does, so the motion lock, limits and dry runs are unchanged.
 German equatorial mounts only. Home is the driver's FindHome, else its
 park, each waited for until the driver says it is there (AtHome, AtPark);
