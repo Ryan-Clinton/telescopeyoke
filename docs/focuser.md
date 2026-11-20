@@ -23,7 +23,7 @@ guard lets them run. The whole story, from the first idea:
 On the telescope: the 150P's focuser is a Crayford (a smooth drawtube
 driven by friction from a smooth roller; no gears), its tension set on 17
 November 2026 with the camera vertical so the train's weight does not run
-it down. The motor sits on the printed bracket (Printables 436129) and turns
+it down. The motor sits on the printed bracket ([Printables 436129](https://www.printables.com/model/436129)) and turns
 the knob one to one: 4096 half-steps a turn, as the firmware still counts
 them, which at the driver's 1/64 is 12,800 microsteps (200 microsteps to 64
 half-steps). Half a turn of the knob is about half the drawtube's travel.
@@ -52,7 +52,7 @@ inward-only rule; that was the 28BYJ-48's.
 | Part | |
 |---|---|
 | Motor | 17HS4401 NEMA 17, 1.7 A, 4-wire lead with a black 4-pin plug |
-| Bracket | Printed: Printables 436129, the motor turning the knob one to one |
+| Bracket | Printed: [Printables 436129](https://www.printables.com/model/436129), on the 150P's Crayford, the motor turning the knob one to one through its coupler |
 | Carrier | Black A4988/DRV8825-style screw-terminal board: green VIN/GND terminal, 3 microstep switches, EN/STEP/DIR header, a 5 V row (CN5, V) and a ground row (CN6, G); no 5 V of its own |
 | Driver | BigTreeTech TMC2209 V1.3 (two on order, 9 November 2026). The two unbranded TMC2209s: one holds the motor but has never turned it (it ran backwards under 12 V first, so it may be damaged); one turns it only with DIR high |
 | Supply | 12 V 2 A, + to VIN and − to GND on the green terminal |

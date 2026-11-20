@@ -28,6 +28,7 @@ and the real centring, focusing and stacking code runs on it.*
 | Fix a home position or polar alignment set by eye | [Calibrating a mount](docs/calibration.md): home found from 10.66° out to 0.19° on a real EQ3 |
 | Know why a night run by NINA and PHD2 went wrong | [The companion](https://ryan-clinton.github.io/telescopeyoke/nina-phd2-night-analysis.html) |
 | Have Claude Code help run a telescope, with code keeping control of what moves | [With Claude Code](#with-claude-code), [A person and an AI, together](#a-person-and-an-ai-together), [For programs and AI agents](docs/agents/README.md) |
+| Hunt for novae and new transients, or time exoplanet transits | [Discovery](docs/discovery.md) and [results so far](docs/results.md), each with its limits: no transient of its own found yet |
 | Search Kepler and TESS light curves for strange dips, with no telescope | [Searching the Kepler archive](docs/archive.md) |
 | Build a motor focuser, or fix a camera, guide camera or USB fault | [The motor focuser](docs/focuser.md), and [faults by hardware](docs/README.md#faults-by-hardware) |
 

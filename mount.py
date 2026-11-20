@@ -1399,6 +1399,21 @@ def direction(azimuth, altitude, site):
     return hadec.ha.deg, hadec.dec.deg
 
 
+def refuse_near_sun(hour_angle, dec, site):
+    """A GoTo by name is held to the same 40° from the Sun as a point by
+    bearing (direction()): Venus by day or a thin Moon at dusk is in the
+    catalogue like anything else."""
+    import sky  # noqa: F401
+    from astropy import units as u
+    from astropy.coordinates import AltAz, HADec, SkyCoord, get_sun
+    from astropy.time import Time
+    now, here = Time.now(), location(site)
+    spot = SkyCoord(ha=hour_angle * u.deg, dec=dec * u.deg, frame=HADec(obstime=now, location=here))
+    sun = get_sun(now).transform_to(AltAz(obstime=now, location=here))
+    if sun.alt.deg > -1 and spot.transform_to(sun.frame).separation(sun).deg < 40:
+        raise Refusal("TARGET_NEAR_SUN", "That is within 40° of the Sun; not slewing.")
+
+
 NEAR_MERIDIAN = 0.33     # hours from the meridian inside which the handset's choice of side is not to be relied on
 
 
@@ -1442,6 +1457,7 @@ def plan_goto(name, site):
     if altitude < MIN_ALTITUDE:
         raise Refusal("TARGET_BELOW_ALTITUDE_LIMIT",
                       f"{target['id']} is only {altitude:.0f}° up; not slewing.")
+    refuse_near_sun(hour_angle, dec, site)
     plan = _plan(hour_angle, dec, altitude, target["id"])
     hidden = behind(hour_angle, dec, altitude, site)
     if hidden:

@@ -4,6 +4,14 @@ What each release changed, in short, with a link to where it is explained.
 This is history: how to use a feature is in the guides, and what has been
 proven is `docs/validation.md` ("Current conclusions").
 
+## Not yet released
+
+- **A GoTo by name keeps 40° from the Sun** (`mount.py`): pointing by
+  bearing always refused anywhere within 40° of the Sun while it is up, but
+  a GoTo to a named object (Venus by day, a thin Moon at dusk) was checked
+  only for altitude and the meridian. It now raises `TARGET_NEAR_SUN` the
+  same way, in every command that plans a GoTo.
+
 ## 0.4.1: the companion, and other makers' equipment through Alpaca
 
 - **The companion** (`companion.py`, [Companion](docs/companion.md)): for an
