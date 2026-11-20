@@ -29,7 +29,11 @@ Only on the person's word. The imaging run stops at its own limits
    own end, or the night-end timer at dawn) parks by itself: that is the
    unattended end, and its flats need the mount home.
 3. Where the person stacks on another computer (the owner: the desktop),
-   `./restack.py SESSION --on HOST` for each session tonight, in the
+   `./restack.py SESSION --on HOST` for each session tonight (SESSION is
+   the folder, `frames/OBJECT/DATE-TIME`), and where the other computer
+   cannot (unreachable, or no Python with astropy there), `./restack.py
+   SESSION` here instead, never left undone (20 November 2026: the desktop
+   had no Python, nothing was stacked until the person asked), in the
    background.
 4. `./patrol.py --sweep` for any field with a reference.
 4b. `./clouds.py --scores 1 --keep`: the night's cloud and rain forecasts
