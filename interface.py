@@ -8,7 +8,9 @@ changes with SCHEMA_VERSION.
 """
 import contextlib
 import json
+import os
 import sys
+import time
 import traceback
 from datetime import datetime, timezone
 
@@ -63,6 +65,32 @@ ERRORS = {
     "INVALID_REQUEST": (False, "Check the command's arguments."),
     "INTERNAL_ERROR": (False, "Unexpected failure; see the message."),
 }
+
+# Refusals that cloud cannot cause: a step that ends on one of these is a
+# fault to be told, whatever the satellite shows (schedule.py's runner).
+NOT_CLOUD = {"MOTION_LOCKED", "HANDSET_NOT_ANSWERING", "HANDSET_NOT_SET_UP", "HANDSET_NOT_SUPPORTED",
+             "MOUNT_NOT_CONNECTED", "SLEW_TIMED_OUT", "GOTO_REFUSED", "MOUNT_NOT_MOVING", "FOCUSER_NOT_MOVING",
+             "FILTER_NOT_CONFIRMED", "CALIBRATION_MISSING", "CAMERA_BUSY", "CAMERA_NOT_CONNECTED", "SITE_NOT_SET",
+             "NO_CONFIG"}
+# Set by the runner for each step it starts: where a refusal's code is kept,
+# so it knows why a step failed and not only that it did.
+REFUSAL_FILE = "TY_REFUSAL_FILE"
+
+
+def note_refusal(refusal):
+    """Keep a refusal's code and message where the runner asked (REFUSAL_FILE),
+    the latest over any before. Never raises: a note lost is the runner's
+    loss, never the command's."""
+    where = os.environ.get(REFUSAL_FILE)
+    if not where:
+        return
+    try:
+        with open(where, "w", encoding="utf-8") as f:
+            json.dump({"code": refusal.code_name, "message": refusal.message, "pid": os.getpid(),
+                       "at": time.time()}, f)
+    except OSError:
+        pass
+
 
 MOUNT_STATES = ("offline", "connected", "slewing", "tracking", "stopped", "unknown")
 CAMERA_STATES = ("offline", "idle", "capturing")
@@ -122,6 +150,7 @@ def run(command, work):
     try:
         result = work()
     except Refusal as refusal:
+        note_refusal(refusal)
         return envelope(command, errors=[refusal.as_error()])
     except SystemExit as stop:   # an older-style refusal with no code yet
         return envelope(command, errors=[error("INTERNAL_ERROR", str(stop))])
@@ -139,7 +168,11 @@ def main(command, work, as_json=False):
     whatever it prints goes to stderr and one envelope goes to stdout, so a
     program reading stdout gets JSON and nothing else."""
     if not as_json:
-        return work()
+        try:
+            return work()
+        except Refusal as refusal:
+            note_refusal(refusal)
+            raise
     with contextlib.redirect_stdout(sys.stderr):
         result = run(command, work)
     raise SystemExit(emit(result))

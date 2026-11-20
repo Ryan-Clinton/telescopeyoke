@@ -657,7 +657,10 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
             try:
                 # TY_SCHEDULED: the step runs unattended, so what needs a person
                 # watching (a focus offset measured only once) is refused in it.
-                done = start(command, env={**os.environ, "TY_SCHEDULED": "1"})
+                refused = config.DATA / "cache" / "step-refusal.json"
+                refused.unlink(missing_ok=True)
+                done = start(command, env={**os.environ, "TY_SCHEDULED": "1",
+                                           interface.REFUSAL_FILE: str(refused)})
             except Exception as error:
                 # A step that cannot even start is a failed step, not the end
                 # of the runner: on 20 October 2026 a command cut wrongly
@@ -687,7 +690,13 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
             if chooser:
                 # Its retries used up: a hard window that failed is owed (Phase 4).
                 owe_interrupted(step, done.returncode, say)
-            cloud = lost_to_cloud(since=step.get("started"))
+            why = step_refusal(step.get("started"))
+            if why:
+                say(f"{datetime.now():%H:%M} {step['label']}: refused, {why['code']}: {why['message']}")
+            # A refusal cloud cannot cause (a filter the wheel did not confirm,
+            # the camera gone, the mount not answering) is a fault, told
+            # whatever the satellite shows (Audit 4, 5; Audit 14, 6).
+            cloud = None if why and why["code"] in interface.NOT_CLOUD else lost_to_cloud(since=step.get("started"))
             if cloud:
                 # Cloud, expected on a patchy night, is no reason to call anyone
                 # (15 November 2026, 21:58: a step lost to cloud set the house's
@@ -701,6 +710,17 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
             (call or fetch)(f"The telescope needs you: {step['label']} stopped with an error"
                             + (f", and again after {RETRIES} more tries. " if RETRIES else ". ") + offer)
             return False
+
+
+def step_refusal(since=None):
+    """The code and message of the refusal the step that just failed ended
+    on ({"code", "message"}), from interface.REFUSAL_FILE, or None (none
+    kept, or one kept before the step started)."""
+    try:
+        why = json.loads((config.DATA / "cache" / "step-refusal.json").read_text(encoding="utf-8"))
+        return why if since is None or why.get("at", 0) >= since else None
+    except (OSError, ValueError):
+        return None
 
 
 def lost_to_cloud(since=None):
