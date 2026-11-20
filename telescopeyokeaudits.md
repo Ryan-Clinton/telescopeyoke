@@ -22,7 +22,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 1 | Mount safety and movement | done 20 Nov 2026, re-checked |
 | 2 | Hardware failure and recovery | done 20 Nov 2026, re-checked |
 | 3 | AI agent autonomy and permissions | done 20 Nov 2026, re-checked |
-| 4 | Autonomous full-night operation | done 20 Nov 2026; re-check asked |
+| 4 | Autonomous full-night operation | done 20 Nov 2026, re-checked |
 | 5 | Guiding and calibration | not started |
 | 6 | Camera, cooling, filters and focusing | not started |
 | 7 | Scientific discovery reliability | not started |
@@ -270,4 +270,15 @@ This initial pass was an architectural and risk assessment, not an exhaustive li
 | 8 | Old guider evidence can call a hardware failure cloud | P1 | Partly right, fixed | The guider's reason counts only when written since the step started; the satellite's cloud still counts, as the person asked (15 Nov: no alarm for a step lost to cloud) |
 | 9 | The cloud live view is not stopped at the night's end | P1 | Confirmed and fixed | `liveview.py` is in `WATCHERS`, so `tidy()` stops it before the dawn flats |
 | 10 | The cloud watch puts the filter back only when it finds stars | P2 | Confirmed and fixed | The filter goes back in the watch's `finally`, however it ends |
+
+## 4, re-audited at aec4d99
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | `--minutes` added to `--blocks` and `--ladder` runs, which refuse it | P0 | Confirmed (a regression of aec4d99) and fixed | `prepared()` leaves `--minutes` off a run that times itself (`--blocks`, `--ladder`), with or without an end time; the backstop still applies |
+| 2 | A second runner would take the first's running step for abandoned | P0 | Confirmed and fixed | `run()` refuses to start while another live process holds `cache/schedule.runner` |
+| 3 | The morning guard says nothing when the mount does not answer | P0 | Confirmed and fixed | It tells the person once (the night then counts as ended), warms the camera, and never moves the mount |
+| 4 | A run with its own `--minutes` gets no backstop | P1 | Confirmed and fixed | Every imaging step with no end time is backstopped at the longer of the step's minutes and the run's own |
+| 5 | The satellite's cloud can still cover a hardware failure | P1 | Agreed and planned | The runner sees only the exit code (1 for every refusal), so it cannot yet tell a refused filter wheel from cloud. Planned: a run's refusal code kept beside its session for the runner to read; until then the person's rule (no alarm for a step lost to cloud, 15 Nov) stands |
+| 6 | The 12-hour rule misreads a daytime ask for 02:00 | P2 | Smaller than claimed, no change | A cloud watch is started when its step runs, at night; a watch asked for by day sees no stars anyway |
 

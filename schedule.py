@@ -422,13 +422,22 @@ def prepared(step, now, last=None, sunset=last_sunset, cut=None):
     own = not_before(step["until"], now, sunset) if step.get("until") else None
     ends = [x for x in (own, cut) if x is not None]
     shooting = any(Path(c).name == "shoot.py" for c in command[:2])
-    if shooting and not ends and step.get("minutes") and "--minutes" not in command:
+    # --blocks and --ladder time themselves and refuse --minutes (shoot.py).
+    timed_itself = any(w in command for w in ("--blocks", "--ladder"))
+    if shooting and not ends and step.get("minutes"):
         # An imaging step with no end time is told its minutes all the same,
         # so it cannot run on into the next step or the morning; the hard stop
-        # is the backstop, BACKSTOP_S after.
-        command = command + ["--minutes", f"{step['minutes']:g}"]
+        # is the backstop, BACKSTOP_S after the longer of the step's minutes
+        # and the run's own --minutes, whatever the run was given.
+        own = command[command.index("--minutes") + 1] if "--minutes" in command[:-1] else None
+        if own is None and not timed_itself:
+            command = command + ["--minutes", f"{step['minutes']:g}"]
+        try:
+            longest = max(float(step["minutes"]), float(own or 0))
+        except ValueError:
+            longest = float(step["minutes"])
         command = ["timeout", "--signal=INT", f"--kill-after={KILL_AFTER_S}",
-                   str(round(60 * step["minutes"]) + BACKSTOP_S)] + command
+                   str(round(60 * longest) + BACKSTOP_S)] + command
     if patrolling and not ends and "--budget" not in command:
         # A patrol is told the step's minutes and takes the panels that fit
         # (4 November 2026: 8 panels in a 45-minute step ran 99 minutes).
@@ -453,7 +462,8 @@ def prepared(step, now, last=None, sunset=last_sunset, cut=None):
             # the hard stop is a backstop only (1 November 2026: steps cut off
             # mid-picture, and private timers that stopped the wrong run).
             # A patrol's --minutes is each field's; its whole time is --budget.
-            command = command + ["--budget" if patrolling else "--minutes", f"{(left - early) / 60:.1f}"]
+            if patrolling or not timed_itself:
+                command = command + ["--budget" if patrolling else "--minutes", f"{(left - early) / 60:.1f}"]
             left += BACKSTOP_S - early
         command = ["timeout", "--signal=INT", f"--kill-after={KILL_AFTER_S}", str(left)] + command
     return command, left
@@ -471,6 +481,15 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
     November 2026 a runner started at 02:03 ran M81 and SN 2026sqf with the
     code from before steps were told their time, and both were cut off
     unstacked."""
+    try:
+        other = RUNNER.read_text(encoding="utf-8").strip()
+    except OSError:
+        other = ""
+    if other and other != str(os.getpid()) and alive(other):
+        # One runner a rig: a second would take the first's running step for
+        # abandoned and start the next one alongside it.
+        say(f"The schedule is already being run (process {other}): not starting a second runner.")
+        return False
     try:
         RUNNER.parent.mkdir(parents=True, exist_ok=True)
         RUNNER.write_text(str(os.getpid()), encoding="utf-8")
@@ -1036,6 +1055,19 @@ def guard(say=print, send=None, run=subprocess.run, now=None, running=None):
         # cold all morning is warmed and let go.
         let_go = release_camera()
         why = "the mount did not answer" if state is None else "already at home"
+        if state is None:
+            # Said to the person once (the night then counts as ended, so the
+            # next look says nothing more): never a move, which may not be safe.
+            import notify
+            words = ("The morning guard could not reach the mount: whether the telescope is parked is not known. "
+                     "Please check it." + (" The camera is being warmed slowly, then let go." if let_go else ""))
+            say(words)
+            (send or notify.send)(words, say=say)
+            try:
+                ENDED.parent.mkdir(parents=True, exist_ok=True)
+                ENDED.write_text(str(now), encoding="utf-8")
+            except OSError:
+                pass
         return why + ("; the camera is being warmed and let go" if let_go else "")
     if not unmoved(state, now):
         return "not yet seen tracking unmoved"
