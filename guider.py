@@ -464,8 +464,29 @@ ENGAGE_CONTROL = 10     # steps of the same-way control after the rest
 ENGAGE_FARTHEST = 900   # arcsec from the start: past this the test stops
 
 
+class _NativeDec:
+    """The guide camera with its Dec pulses sent as the mount's own slow
+    move (the handset's variable rate, mount.Mount.pulse) in place of the
+    ST4 lead: the same rate and length, by the other control path."""
+
+    def __init__(self, cam, scope, rate, west):
+        self.cam, self.scope, self.rate, self.west = cam, scope, rate, west
+
+    def __getattr__(self, name):
+        return getattr(self.cam, name)
+
+    def pulse(self, direction, seconds):
+        import mount
+        if direction not in ("north", "south"):
+            return self.cam.pulse(direction, seconds)
+        # A positive rate raises the Dec axis readout: north east of the
+        # pier, south once the tube is over the pole (the readout past 90°).
+        north = -self.rate if self.west else self.rate
+        self.scope.pulse(mount.DEC, north if direction == "north" else -north, seconds, creep=0.0)
+
+
 def dec_engage_test(cam, seconds, dec, west, gain=None, cycles=1, rate=GUIDE_RATE, say=print, tick=None,
-                    sleep=time.sleep):
+                    sleep=time.sleep, native=False):
     """The controlled Dec test (docs/nights/2026-11-19/dec-slack.md): the
     creep set to 0, then north in calibration's steps until the star moves
     at ENGAGE_SHARE of the rate for ENGAGE_RUN steps in a row; a rest of
@@ -477,10 +498,23 @@ def dec_engage_test(cam, seconds, dec, west, gain=None, cycles=1, rate=GUIDE_RAT
     The track goes to CAL_STEPS_FILE. Returns the results."""
     import mount
     motion_check()
-    set_to = mount.Mount(watch=False).dec_creep(0)
+    scope = mount.Mount(watch=False)
+    set_to = scope.dec_creep(0)
     say(f"Dec creep set to {set_to:g}\"/s (off) for the test")
+    if native:
+        cam = _NativeDec(cam, scope, rate, west)
+        say("Dec moved by the mount's own slow move (the handset's variable rate), not the ST4 lead")
     _, dec_step = step_seconds(dec, rate)
     due = dec_step * rate / SCALE           # px a step should move the star
+    # Only movement across the RA direction counts, and only the way the
+    # leg is going: RA's direction is measured by every calibration, kept
+    # or RA-only; Dec's sign is learned from the first leg that engages.
+    kept = load_calibration()
+    ra = np.array(kept["columns"]["west"], dtype=float) if kept and "columns" in kept else None
+    across = None if ra is None else np.array([-ra[1], ra[0]]) / max(float(np.hypot(*ra)), 1e-9)
+    if across is None:
+        say("  no calibration to say which way RA is: any movement counts (not told apart from RA)")
+    sign = {}                               # direction -> +1/-1 along `across`, once seen engaged
     star = first_star(cam, seconds, gain, say, tick=tick)
     looks = []
     c = Calibrator(cam, seconds, gain, say, tick, looks=looks)
@@ -489,17 +523,39 @@ def dec_engage_test(cam, seconds, dec, west, gain=None, cycles=1, rate=GUIDE_RAT
     start = c.look()
     results, outcome = [], "stopped"
 
+    def counted(step_vec, direction, leg_vec):
+        """This step's movement in px along Dec the way the leg goes, or its
+        size when RA's direction is not known."""
+        if across is None:
+            return float(np.hypot(*step_vec))
+        along = float(np.dot(step_vec, across))
+        want = sign.get(direction)
+        if want is None:
+            other = sign.get(OPPOSITE[direction])
+            want = -other if other else (1.0 if float(np.dot(leg_vec, across)) >= 0 else -1.0)
+        return along * want
+
+    def axis():
+        try:
+            return round(scope.axes()[1] * 3600, 1)     # the board's Dec count, arcsec: not the shaft
+        except Exception:
+            return None
+
     def engage(direction, label):
         before, run, k = c.last, 0, 0
+        leg_start = c.last
         while k < ENGAGE_MOST:
             k += 1
             here = c.step(direction, dec_step)
-            moved = math.hypot(here[0] - before[0], here[1] - before[1])
+            looks[-1]["dec_axis"] = axis()
+            moved = counted(np.subtract(here, before), direction, np.subtract(here, leg_start))
             before = here
             run = run + 1 if moved >= ENGAGE_SHARE * due else 0
             if math.hypot(here[0] - start[0], here[1] - start[1]) * SCALE > ENGAGE_FARTHEST:
                 raise Fault(f"the star is more than {ENGAGE_FARTHEST}\" from where the test began")
             if run == ENGAGE_RUN:
+                if across is not None and direction not in sign:
+                    sign[direction] = 1.0 if float(np.dot(np.subtract(here, leg_start), across)) >= 0 else -1.0
                 slack = k - ENGAGE_RUN
                 say(f"  {label} {direction}: engaged after {slack} steps ({slack * dec_step:.0f} s) of no or "
                     f"little movement, then {ENGAGE_RUN} steps at {ENGAGE_SHARE:.0%} of the rate or more")
@@ -518,9 +574,11 @@ def dec_engage_test(cam, seconds, dec, west, gain=None, cycles=1, rate=GUIDE_RAT
             sleep(5)
             waited += 5
         before, first, shares = c.look(), None, []
+        leg_start = before
         for k in range(1, ENGAGE_CONTROL + 1):
             here = c.step(direction, dec_step)
-            share = math.hypot(here[0] - before[0], here[1] - before[1]) / due
+            looks[-1]["dec_axis"] = axis()
+            share = counted(np.subtract(here, before), direction, np.subtract(here, leg_start)) / due
             before = here
             shares.append(round(share, 2))
             if first is None and share >= ENGAGE_SHARE:

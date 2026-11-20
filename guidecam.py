@@ -751,7 +751,7 @@ def run_guider(args):
                 try:
                     if args.engage:
                         guider.dec_engage_test(cam, args.exposure, dec, west, args.gain, cycles=args.cycles,
-                                               tick=tick)
+                                               tick=tick, native=args.native)
                     else:
                         guider.dec_test(cam, args.exposure, dec, west, args.gain, steps=args.steps, tick=tick)
                 finally:
@@ -886,6 +886,9 @@ def main(argv=None):
                                 "80%% of the rate), a 2-minute rest and 10 steps the same way, then reverse; stops "
                                 "at 80 steps without engaging or 15' from the start")
             g.add_argument("--cycles", type=int, default=1, help="with --engage: south-then-north cycles (default 1)")
+            g.add_argument("--native", action="store_true",
+                           help="with --engage: move Dec by the mount's own slow move (the handset's variable "
+                                "rate) in place of the ST4 lead, same rate and steps")
         if name == "guide":
             g.add_argument("--minutes", type=float, help="stop after this long (default: until Ctrl-C)")
             g.add_argument("--recalibrate", action="store_true", help="calibrate again first")
@@ -932,7 +935,9 @@ def main(argv=None):
             return
         if args.action == "dectest" and args.dry_run and args.engage:
             import guider
-            print(f"would: set the Dec creep to 0, find a guide star, engage north, rest {guider.ENGAGE_IDLE_S} s "
+            print(f"would: set the Dec creep to 0, find a guide star, engage north "
+                  f"({'by the mount at its own slow rate' if args.native else 'through the ST4 lead'}), "
+                  f"rest {guider.ENGAGE_IDLE_S} s "
                   f"and step north {guider.ENGAGE_CONTROL} times, then reverse south and north the same, "
                   f"{args.cycles} cycle(s); stop at {guider.ENGAGE_MOST} steps without engaging or "
                   f"{guider.ENGAGE_FARTHEST}\" from the start")
