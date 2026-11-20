@@ -9,7 +9,7 @@ complete pretend rig is built in (mount, camera, sky, focuser, cloud, drift),
 and the real centring, focusing and stacking code runs on it.*
 
 **[Home page](https://ryan-clinton.github.io/telescopeyoke/) ·
-[Download 0.4.1](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.1/TelescopeYoke-v0.4.1.zip) ·
+[Download 0.4.2](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.2/TelescopeYoke-v0.4.2.zip) ·
 [Try the demo, no telescope needed](#quick-start) ·
 [Already run an observatory? The companion](https://ryan-clinton.github.io/telescopeyoke/nina-phd2-night-analysis.html) ·
 [SynScan automation](https://ryan-clinton.github.io/telescopeyoke/synscan-automation.html) ·
@@ -214,24 +214,25 @@ by eye.
 On Ubuntu or Debian:
 
 ```bash
-wget https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.1/TelescopeYoke-v0.4.1.zip
-unzip TelescopeYoke-v0.4.1.zip
-cd TelescopeYoke-v0.4.1
+wget https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.2/TelescopeYoke-v0.4.2.zip
+unzip TelescopeYoke-v0.4.2.zip
+cd TelescopeYoke-v0.4.2
 ./install.sh --demo           # the Python libraries, then TelescopeYoke (demo) opens
 ```
 
 On Windows 10 or 11: install 64-bit Python 3.11 or newer from python.org
 (tick "Add python.exe to PATH"),
-[download TelescopeYoke-v0.4.1.zip](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.1/TelescopeYoke-v0.4.1.zip),
+[download TelescopeYoke-v0.4.2.zip](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.2/TelescopeYoke-v0.4.2.zip),
 unpack it, and double-click **`try-demo.cmd`**. Not yet run on a real Windows
 machine: on Windows the camera has taken frames indoors, but `try-demo.cmd`,
 `install.ps1`, the Start Menu entries and the application's window are untried.
 
-That zip is release 0.4.1 (20 November 2026), an experimental hardware
+That zip is release 0.4.2 (20 November 2026), an experimental hardware
 preview, which stays as it is; a hardware report says which release or
-commit made it. **0.4.1 does not refuse a GoTo to a named target within 40°
-of the Sun** (pointing by altitude and azimuth does): the newest code does,
-and the next release will. Until then, use 0.4.1's GoTo by night only.
+commit made it. **The release before it, 0.4.1, does not refuse a GoTo to a
+named target within 40° of the Sun** (pointing by altitude and azimuth
+does): 0.4.2 does. Anyone on 0.4.1 should move to 0.4.2, or use its GoTo by
+night only.
 
 To move to a newer release, close TelescopeYoke and stop anything running
 from the old folder (an imaging run, the status page's service), unpack the

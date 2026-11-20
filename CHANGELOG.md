@@ -4,13 +4,53 @@ What each release changed, in short, with a link to where it is explained.
 This is history: how to use a feature is in the guides, and what has been
 proven is `docs/validation.md` ("Current conclusions").
 
-## Not yet released
+## 0.4.2: a GoTo by name keeps clear of the Sun, and eighteen reviews' fixes
+
+The fixes from eighteen reviews of the whole project, made on 20 November
+2026; each finding, its verdict and its commit are in
+`telescopeyokeaudits.md`.
 
 - **A GoTo by name keeps 40° from the Sun** (`mount.py`): pointing by
   bearing always refused anywhere within 40° of the Sun while it is up, but
   a GoTo to a named object (Venus by day, a thin Moon at dusk) was checked
   only for altitude and the meridian. It now raises `TARGET_NEAR_SUN` the
-  same way, in every command that plans a GoTo.
+  same way, in every command that plans a GoTo. 0.4.1 has no such refusal.
+- **The mount**: an aimed-off GoTo checks the place it really points at
+  against every limit; stop turns tracking off and confirms the mount has
+  stopped; a failed move blocks unattended moves until someone has looked;
+  each polar-alignment position is checked against the Sun.
+- **A night left to run by itself**: the camera is let go when the mount is
+  silent; a hung step is stopped and then ended; one runner at a time; a
+  step's own refusal (the wheel, the camera, the mount) fetches the person
+  whatever the satellite's cloud; a transit or deadline started too late to
+  be of use is skipped and owed; dawn flats start once, without a Unix shell.
+- **The camera and the filter wheel**: the wheel's position is checked after
+  every frame; a cooler fault ends the keeper; a cooled camera with no keeper
+  stays open through a single run's re-centres, as the blocks' does.
+- **Weather**: a radar picture over 30 minutes old never clears a warning; a
+  missing forecast is "not known", never "no rain"; the rain alert can only
+  come sooner. The Hue bridge's certificate is kept at pairing and checked
+  (`./alert.py pin` after a reset).
+- **Discovery**: vetting fixes for the RA wrap-round and for catalogues that
+  did not answer; Gaia's fast-moving stars are carried to the night; the
+  real-bogus model's output is called a score, and an older model is said.
+- **Records**: kept files written whole and changed under a lock; the
+  schedule, obligations and run orders under locks; each imaging session
+  keeps when each stage to its first kept frame ended, and
+  `./history.py` sums them.
+- **Network**: YouTube and Twitch stream over RTMPS (not yet tried live);
+  the stream key never goes over plain RTMP; the settings' and Hue key's
+  files are readable by their owner only; `serve.py --bind`; Alpaca answers
+  and the Compendium download are size-bounded; place fields are never
+  published.
+- **Setting up**: two cameras, leads or Wi-Fi adapters that could be meant
+  are refused; a camera that does not match its profile is refused;
+  onboarding counts a setting as the person's only when every value is
+  changed, measured or confirmed, and the word for first moves holds for its
+  mount.
+- **Installing**: `install.sh` stops on Python older than 3.11; Windows
+  installs astroquery and hidapi; each zip carries a `RELEASE` file and is
+  published with its SHA-256.
 
 ## 0.4.1: the companion, and other makers' equipment through Alpaca
 

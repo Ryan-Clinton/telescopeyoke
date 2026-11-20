@@ -54,7 +54,7 @@
   <p class="quiet">Free and open source. Runs on a laptop beside the telescope: Linux, with a Windows port.</p>
   <div class="buttons">
     <a class="main" href="#try">Try the demo</a>
-    <a href="https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.1/TelescopeYoke-v0.4.1.zip">Download 0.4.1</a>
+    <a href="https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.2/TelescopeYoke-v0.4.2.zip">Download 0.4.2</a>
     <a href="#hardware">Supported hardware</a>
     <a href="nina-phd2-night-analysis.html">Already using NINA and PHD2? What went wrong last night</a>
     <a href="synscan-automation.html">A SynScan mount that centres itself</a>
@@ -113,19 +113,19 @@ M33 L (183m, gain 1500, 16 s) 00:23-01:41: 57 min measured; 37 min acceptable by
     5 min (18 frames) trailed: likely the mount's tracking or the wind (no guiding to compare)
 No frames 01:15-01:33 (18 min beyond the usual gap): not known: nothing it reads says
 Where the time went: no frames (explained) 44 min, dimmed 38 min, no frames (unexplained) 36 min, trailed 11 min, soft 6 min</pre>
-<p>In the 0.4.1 download. Tried on the author's frames, on made-up nights with known faults, and offline on NINA and PHD2 logs other observatories have published (it told one night's 27 ten-minute lights of M 27 from its autofocus, plate-solving and focusing frames, judged them by NINA's own star detection, and found a five-minute stretch where PHD2 said it was guiding with no guide step); not yet live beside anyone else's observatory. <a href="nina-phd2-night-analysis.html">More, with another observatory's night</a> and <a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/companion.md">how to run it</a>.</p>
+<p>In the download since 0.4.1. Tried on the author's frames, on made-up nights with known faults, and offline on NINA and PHD2 logs other observatories have published (it told one night's 27 ten-minute lights of M 27 from its autofocus, plate-solving and focusing frames, judged them by NINA's own star detection, and found a five-minute stretch where PHD2 said it was guiding with no guide step); not yet live beside anyone else's observatory. <a href="nina-phd2-night-analysis.html">More, with another observatory's night</a> and <a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/companion.md">how to run it</a>.</p>
 
 <h2 id="try">Try the demo: no telescope needed</h2>
 <p>The demo is the whole application on a pretend telescope. Nothing is connected to your mount and nothing can move, so it is safe to try on the computer that sits beside real equipment.</p>
 <p><b>Ubuntu or Debian</b></p>
-<pre><code>wget https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.1/TelescopeYoke-v0.4.1.zip
-unzip TelescopeYoke-v0.4.1.zip
-cd TelescopeYoke-v0.4.1
+<pre><code>wget https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.2/TelescopeYoke-v0.4.2.zip
+unzip TelescopeYoke-v0.4.2.zip
+cd TelescopeYoke-v0.4.2
 ./install.sh --demo</code></pre>
 <p><b>Windows 10 or 11</b></p>
 <ul>
   <li>Install 64-bit Python 3.11 or newer from python.org, ticking "Add python.exe to PATH".</li>
-  <li><a href="https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.1/TelescopeYoke-v0.4.1.zip">Download TelescopeYoke-v0.4.1.zip</a> and unpack it.</li>
+  <li><a href="https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.2/TelescopeYoke-v0.4.2.zip">Download TelescopeYoke-v0.4.2.zip</a> and unpack it.</li>
   <li>Double-click <code>try-demo.cmd</code> (not yet run on a real Windows machine: the Windows camera has taken frames, the installer and window have not been tried).</li>
 </ul>
 <p>A window opens with tonight's report. Pick a target, press "Centre with plate solve", and watch it find and correct its own pointing error. Then try Focus and Imaging; "The pretend sky" lets you bring cloud over or pull the camera's lead out, to see what it does when a night goes wrong.</p>
