@@ -48,9 +48,9 @@ result is recorded.
    safe; check whether one bad temperature reading can trip the runaway
    check (18 November 20:40 looked like one).
 8. **Dew**: the guide scope's USB dew strap fitted (from one of the SV241's
-   USB ports; the plain SV241 has no dew outputs), and the dew shields
-   from Gary (20 November) fitted (the 150P dewed over about 02:00-02:50
-   on 20 November).
+   USB ports; the plain SV241 has no dew outputs). The dew shields from
+   Gary (20 November) are not a job: they go on each night at setup
+   (`owner-rig.md`).
 9. **The skyline survey again** (`./horizon.py --trace`): the tube moved up
    its rings on 17 November and was lowered on 20 November.
 10. **Darks for the 183M**, cap on, -5 °C: 60 s, then 180 s and 240 s (20

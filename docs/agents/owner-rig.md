@@ -74,6 +74,10 @@ motor turned and the knob did not, so focus was by hand with the spoken aid.
   step: the camera cools slowly (1 °C a minute) to -5 °C while the setup
   goes on, and stays open and cold until the night's end.
 - A look at what the camera sees: `./snap.py --exposure 2 --gain 1500`.
+- The dew shields (from Gary, 20 November 2026) go on every night at
+  setup, after the lens caps come off. They are not permanent: they come
+  off at the night's end so the caps can go back on (the 150P dewed over
+  about 02:00-02:50 on 20 November without one).
 - The motor check (`[mount] nudge_check`) has been off since 3 November
   2026.
 
@@ -115,6 +119,8 @@ motor turned and the knob did not, so focus was by hand with the spoken aid.
 - The night's diary entry: written from the running notes and published
   through the inbox (`~/ryanclinton.uk/POSTING.md`) at the end of every
   night, with that night's stacks, without being asked.
+- The dew shields come off and the lens caps go back on, after the dawn
+  flats are done.
 - What stays running, always: the status page (`ty-serve`), the stream's
   watcher (`ty-stream`), the live client (`ryanclinton-live`), the
   night-end timer (`ty-night-end.timer`) and the satellite keeper
