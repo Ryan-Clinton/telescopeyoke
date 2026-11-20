@@ -150,7 +150,11 @@ python companion.py report --nina-log "...\DATE.log" --phd2-log "...\PHD2_GuideL
 
 `--night` keeps one night (noon to noon) of a log covering several;
 `--tz Europe/Rome` reads logs written on a computer in another zone (both
-programs write their own local time).
+programs write their own local time). When NINA and PHD2 ran on two
+computers, `--nina-tz` and `--phd2-tz` give each its own zone, and
+`--nina-offset` and `--phd2-offset` the seconds to add to a log whose
+computer's clock was off. The clocks are never measured against each other:
+the report says they are taken to agree with the frames' UTC.
 
 ## A real report
 

@@ -12,7 +12,7 @@
 | `ty capabilities` | what is available, motion limits, each component's state | |
 | `ty status` | mount / camera / imaging / solver states | |
 | `ty doctor` | readiness and every check | same as `doctor.py --skip-handset` |
-| `companion.py check|report|watch FOLDER` | another observatory's night from its saved frames, PHD2 (`--phd2-log`, `--phd2`) and NINA's own log (`--nina-log`; `report` without a folder reads the logs alone; `--night`, `--tz`): what spoiled frames, where the time went, NINA's saves reconciled with the files; `--json` | reads only (`watch` keeps its own record under cache/companion) |
+| `companion.py check|report|watch FOLDER` | another observatory's night from its saved frames, PHD2 (`--phd2-log`, `--phd2`) and NINA's own log (`--nina-log`; `report` without a folder reads the logs alone; `--night`, `--tz`, `--nina-tz`/`--phd2-tz`, `--nina-offset`/`--phd2-offset`): what spoiled frames, where the time went, NINA's saves reconciled with the files; `--json` | reads only (`watch` keeps its own record under cache/companion) |
 | `phd2.py status` | PHD2's state, its equipment and pixel scale, through its server | reads only |
 | `alpaca.py find`, `alpaca.py status` | the Alpaca servers on the network and their devices; what the configured Alpaca telescope says | reads only |
 | `doctor.py --need mount,imaging` | the same check; succeeds only if every part named is ready (`planner`, `mount`, `goto`, `camera`, `imaging`; default `planner`; `camera` is the camera alone, `imaging` adds the plate solver; `goto` is the mount answering with nothing in its setting-up refusing a GoTo). With `--json`, `ok`, the exit code and `data.needed` agree: a part not ready is a `NOT_READY` error | the mount part fails on the example site |

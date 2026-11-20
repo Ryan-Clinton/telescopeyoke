@@ -25,7 +25,8 @@ never touched, so NINA and PHD2 can keep running while it reads. Read
    frames to hand: `report --nina-log FILE --phd2-log FILE --night DATE`
    gives the night from the logs alone, judging the saved frames by NINA's
    own star detection where its log has it. Logs from a computer in
-   another zone: `--tz ZONE`.
+   another zone: `--tz ZONE`; NINA and PHD2 on two computers: `--nina-tz`,
+   `--phd2-tz`, and `--nina-offset`/`--phd2-offset` SECONDS for a clock that was off.
 4. Tell them in a few lines, in this order: how much was measured and how
    much is acceptable by its own best frames, setup by setup; the biggest
    losses with their likely causes; the gaps, explained (by NINA's or
