@@ -55,8 +55,15 @@ def _read(path=None):
         return {}
 
 
+STORE_VERSION = 1   # the store's shape; a newer one is refused, never misread (records.readable)
+
+
 def load(path=None):
     store = _read(path)
+    try:
+        records.readable(store, "The jobs owed", STORE_VERSION)
+    except records.TooNew as why:
+        raise interface.Refusal("INVALID_REQUEST", str(why)) from None
     store.setdefault("obligations", [])
     store.setdefault("allowance", {})
     return store
@@ -65,7 +72,7 @@ def load(path=None):
 def save(store, path=None):
     path = Path(path or FILE)
     path.parent.mkdir(parents=True, exist_ok=True)
-    records.write(path, store, stamp=True)
+    records.write(path, store, stamp=True, record_version=STORE_VERSION)
 
 
 def _day(stamp):

@@ -464,7 +464,7 @@ Documentation only; `docs/validation.md` is the authority and is unchanged.
 | 6 | A reference version can be half published, two can take one number | P1 | Confirmed and fixed | Under the field's lock: the stack and its depth copied whole and renamed into place, and the version's record, which makes it kept, written last |
 | 7 | One torn line hides a whole session's frame log | P1 | Confirmed and fixed | A line that is not whole is left out and said; nothing is made up, and the file is left as it is |
 | 8 | Activity history written directly, its runs list without a lock | P2 | Confirmed and fixed | `records.write` for the last activity and `records.change` for the runs, still never failing the run |
-| 9 | No common rule for reading older records | P2 | Agreed and planned | For the candidate books, obligations, references and calibration first: each reader to say the versions it reads and refuse a newer one |
+| 9 | No common rule for reading older records | P2 | Agreed, fixed after the loop | `records.readable`: a stamped record whose `record_version` is above what its reader reads is refused with a clear message, never misread. The candidate books (`BOOK_VERSION`), the jobs owed (`STORE_VERSION`) and the reference versions (`VERSION_SHAPE`) say what they write and read, all 1 now. Calibration masters are FITS matched by their header cards, with no JSON record to version. Demo: a book stamped version 2 refused |
 
 ## 12, re-audited at 148bdfe
 

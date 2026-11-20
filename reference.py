@@ -32,6 +32,7 @@ import stacking
 
 
 CURRENT = object()     # the band of the light path in use (default_band)
+VERSION_SHAPE = 1      # a kept version's record shape; a newer one is refused (records.readable)
 
 
 def default_band():
@@ -56,7 +57,11 @@ def kept(name, band=CURRENT):
     out = []
     versions = [p for p in folder(name, band).glob("v*.json") if p.stem[1:].isdigit()]   # not v1-depth.json
     for path in sorted(versions, key=lambda p: int(p.stem[1:])):
-        out.append(json.loads(path.read_text(encoding="utf-8")))
+        try:
+            out.append(records.readable(json.loads(path.read_text(encoding="utf-8")), f"Reference {path}",
+                                        VERSION_SHAPE))
+        except records.TooNew as why:
+            raise interface.Refusal("INVALID_REQUEST", str(why)) from None
     return out
 
 
@@ -219,7 +224,8 @@ def make(name, source=None, force=False, solver=None):
                       sessions=sessions, made=time.time(), held_back=held)
         if band not in (None, CURRENT):
             record["band"] = band
-        records.write(where / f"v{number}.json", record, schema="reference#/$defs/version", stamp=True)
+        records.write(where / f"v{number}.json", record, schema="reference#/$defs/version", stamp=True,
+                      record_version=VERSION_SHAPE)
     return record
 
 

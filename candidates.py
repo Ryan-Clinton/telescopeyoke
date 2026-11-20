@@ -47,19 +47,30 @@ def path(name):
     return config.DATA / "candidates" / f"{stacking.folder_name(name)}.json"
 
 
+BOOK_VERSION = 1   # the book's shape; a newer one is refused, never misread (records.readable)
+
+
 def load(name):
-    return records.read(path(name), {"name": name, "candidates": []})
+    return _readable(records.read(path(name), {"name": name, "candidates": []}), name)
+
+
+def _readable(book, name):
+    try:
+        return records.readable(book, f"{name}'s candidate book", BOOK_VERSION)
+    except records.TooNew as why:
+        raise interface.Refusal("INVALID_REQUEST", str(why)) from None
 
 
 def save(book):
-    records.write(path(book["name"]), book, schema="candidates", stamp=True)
+    records.write(path(book["name"]), book, schema="candidates", stamp=True, record_version=BOOK_VERSION)
 
 
 def change(name, how):
     """Change a field's book under its lock: how(book) changes it in place,
     and whatever it returns is returned. The patrol and a person dismissing
     a candidate can both be at it at once without losing either's change."""
-    return records.change(path(name), how, {"name": name, "candidates": []}, schema="candidates", stamp=True)[1]
+    return records.change(path(name), lambda book: how(_readable(book, name)), {"name": name, "candidates": []},
+                          schema="candidates", stamp=True, record_version=BOOK_VERSION)[1]
 
 
 def arcsec(a, b):

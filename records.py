@@ -110,6 +110,32 @@ def provenance(record_version=1):
             "created_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
 
 
+class TooNew(Exception):
+    """A kept record written in a newer shape than this copy reads."""
+
+
+def readable(record, what, reads=1):
+    """`record` itself, if this copy of TelescopeYoke reads its shape: one
+    stamped with a record_version above `reads` was written by a newer one,
+    and is refused rather than misread (after a way back to an older
+    folder, or one copy on two computers). Unstamped records are version 1."""
+    if isinstance(record, dict):
+        made = record.get("provenance") or {}
+        version = made.get("record_version", 1)
+        if isinstance(version, int) and version > reads:
+            raise TooNew(f"{what} was written by a newer TelescopeYoke ({made.get('telescopeyoke', '?')}, "
+                         f"record version {version}); this one ({version_of_this()}) reads up to version "
+                         f"{reads}. Use the newer one, or move the file aside to start it again.")
+    return record
+
+
+def version_of_this():
+    try:
+        return version()
+    except Exception:
+        return "?"
+
+
 @functools.cache
 def schema(name):
     return json.loads((SCHEMAS / f"{name}.schema.json").read_text(encoding="utf-8"))
