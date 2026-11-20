@@ -35,6 +35,8 @@ ERRORS = {
     "GOTO_REFUSED": (True, "The handset would not accept the GoTo."),
     "MOUNT_NOT_MOVING": (False, "The mount says it moved and the camera says it did not. Watch one small "
                                 "move; if the tube does not turn, switch the mount off and on."),
+    "MOUNT_IN_USE": (True, "Another command is moving the mount (the message names it): let it finish, "
+                           "or stop it, then try again. ./mount.py stop always works."),
     "FOCUSER_NOT_MOVING": (False, "The focuser's motor turns and the stars do not change. Watch "
                                   "./focuser.py test: if the knob stays still, the coupler is slipping."),
     "FILTER_NOT_CONFIRMED": (True, "The filter wheel did not confirm the filter asked for: ./sxwheel.py status, "
@@ -69,7 +71,7 @@ ERRORS = {
 # Refusals that cloud cannot cause: a step that ends on one of these is a
 # fault to be told, whatever the satellite shows (schedule.py's runner).
 NOT_CLOUD = {"MOTION_LOCKED", "HANDSET_NOT_ANSWERING", "HANDSET_NOT_SET_UP", "HANDSET_NOT_SUPPORTED",
-             "MOUNT_NOT_CONNECTED", "SLEW_TIMED_OUT", "GOTO_REFUSED", "MOUNT_NOT_MOVING", "FOCUSER_NOT_MOVING",
+             "MOUNT_NOT_CONNECTED", "SLEW_TIMED_OUT", "GOTO_REFUSED", "MOUNT_NOT_MOVING", "MOUNT_IN_USE", "FOCUSER_NOT_MOVING",
              "FILTER_NOT_CONFIRMED", "CALIBRATION_MISSING", "CAMERA_BUSY", "CAMERA_NOT_CONNECTED", "SITE_NOT_SET",
              "NO_CONFIG"}
 # Set by the runner for each step it starts: where a refusal's code is kept,

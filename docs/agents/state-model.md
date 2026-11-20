@@ -47,6 +47,7 @@ Defined in `interface.py`; `schemas/errors.schema.json` lists them.
 | `ALTITUDE_OUT_OF_RANGE` | no | `point` needs 2° to 89°. |
 | `SLEW_TIMED_OUT` | yes | The mount was stopped. |
 | `GOTO_REFUSED` | yes | The handset would not accept the GoTo. |
+| `MOUNT_IN_USE` | yes | Another process is commanding the mount (the message names it and its process). One command moves the mount at a time; a patrol's GoTos and runs count as the patrol. Let it finish or stop it, then try again. `./mount.py stop` always works. |
 | `MOUNT_NOT_MOVING` | no | The mount reported its moves as made, but the camera's view did not change (or a plate solve came back the same). The mount has been stopped. A person must watch one small move; if the tube does not turn, switch the mount off and on. |
 | `FILTER_NOT_CONFIRMED` | yes | A light path with the filter wheel and no position the wheel confirmed (not answering, turning, still on its power-up turn), or not the filter the step asked for: no frame was kept. |
 | `REFOCUS_NEEDED` | no | A filter change needed a focus offset that is not usable (fewer than three nights measured, or too spread), the focuser could not make the move, or the first frame after the change was wider than the last run in L by more than the tolerance. Focus with that filter in the light path (`./focus.py --auto`). |

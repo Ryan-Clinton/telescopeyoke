@@ -53,6 +53,7 @@
               "DEMO_UNSUPPORTED",
               "GOTO_REFUSED",
               "MOUNT_NOT_MOVING",
+              "MOUNT_IN_USE",
               "HANDSET_NOT_ANSWERING",
               "HANDSET_NOT_SET_UP",
               "INTERNAL_ERROR",

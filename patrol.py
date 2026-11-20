@@ -1021,6 +1021,12 @@ def run(args, say=print):
                                 + next(i["detail"] for i in stopping if i["what"] == "motion lock"))
     if stopping:
         raise interface.Refusal("INVALID_REQUEST", "Not now: " + "; ".join(i["detail"] for i in stopping))
+    if not args.dry_run:
+        # The patrol holds the mount from its first GoTo to its end, and its
+        # mount.py and shoot.py inherit it: another command's move cannot
+        # slip in between them.
+        import mount
+        mount.claim("patrol.py " + " ".join(chosen))
     answer["fields"] = []
     # A mosaic's panels are finished (the final picture, then the search) in
     # the background while the mount goes on to the next: on 18 October 2026

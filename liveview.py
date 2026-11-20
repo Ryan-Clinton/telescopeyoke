@@ -78,7 +78,13 @@ def hold_moon(scope, site, aim, matrix, mosaic, say=print):
         return aim
     east, north = lunar.correction(matrix, down, right)
     aim = [aim[0] + east, aim[1] + north]
-    scope.goto_target("Moon", site, aim_off=tuple(aim))
+    import mount
+    try:
+        scope.goto_target("Moon", site, aim_off=tuple(aim))
+    finally:
+        # The live view gives way to an imaging run, which must be able to
+        # take the mount before its first frame: it is held only for the nudge.
+        mount.release()
     say(f"{time.strftime('%H:%M:%S')}  Moon re-centred: {down:+.0f} px down, {right:+.0f} px right; "
         f"aim {aim[0]:+.1f}' east, {aim[1]:+.1f}' north")
     return aim

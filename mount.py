@@ -50,6 +50,7 @@ Add --demo to any command to try it against a simulated mount with nothing
 plugged in:  ./mount.py --demo goto M27
 """
 import argparse
+import atexit
 import contextlib
 import os
 import json
@@ -100,6 +101,78 @@ CLEARANCE_TEST_HOURS = 8.0
 LOCK_FILE = ROOT / "MOTION_LOCKED"
 # Pointing error found by plate solving, carried into later GoTos.
 POINTING_FILE = config.DATA / "cache" / "pointing.json"
+# Which process is commanding the mount: one at a time. The first to move it
+# holds it until that process ends, and its children (a patrol's GoTos and
+# imaging runs, a run's guiding) hold it through TY_MOUNT_OWNER, which it
+# passes down. Anyone else's move is refused with MOUNT_IN_USE; stopping
+# never asks. A process that has ended holds nothing, so a crash never
+# leaves the mount held.
+OWNER_FILE = config.DATA / "cache" / "mount-owner.json"
+OWNER_ENV = "TY_MOUNT_OWNER"
+
+
+def _command_of(pid):
+    """A process's command words where they can be read (Linux), else None."""
+    try:
+        with open(f"/proc/{pid}/cmdline", "rb") as f:
+            return [w.decode(errors="replace") for w in f.read().split(b"\0") if w]
+    except OSError:
+        return None
+
+
+def owner():
+    """The record of the process holding the mount, or None when none does."""
+    try:
+        held = records.read(OWNER_FILE)
+    except ValueError:
+        return None
+    if not held or not host.alive(held.get("pid")):
+        return None
+    words = _command_of(held["pid"])
+    if words is not None and held.get("argv") and words != held["argv"]:
+        return None      # that process number has been given to another since
+    return held
+
+
+def claim(what=None):
+    """Hold the mount for this process and its children, or refuse with
+    MOUNT_IN_USE when another process holds it."""
+    mine = os.environ.get(OWNER_ENV)
+    with records.locked(OWNER_FILE):
+        held = owner()
+        if held and (held["pid"] == os.getpid() or str(held["pid"]) == mine):
+            return
+        if held:
+            since = time.strftime("%H:%M", time.localtime(held.get("since", 0)))
+            raise Refusal("MOUNT_IN_USE", f"The mount is being commanded by {held.get('what', 'another command')} "
+                          f"(process {held['pid']}, since {since}): let it finish or stop it first. "
+                          "./mount.py stop always works.")
+        what = what or " ".join([Path(sys.argv[0]).name, *sys.argv[1:]])
+        records.write(OWNER_FILE, {"pid": os.getpid(), "argv": _command_of(os.getpid()),
+                                   "what": what, "since": time.time()}, indent=None)
+    os.environ[OWNER_ENV] = str(os.getpid())
+    atexit.register(_release, os.getpid())
+
+
+def release():
+    """Let go of the mount now, for a long-lived process that moves it only
+    now and then and gives way to others between (the live view's Moon)."""
+    if os.environ.get(OWNER_ENV) == str(os.getpid()):
+        del os.environ[OWNER_ENV]
+    _release(os.getpid())
+
+
+def _release(pid):
+    """Let go of the mount on the way out, if this process still holds it."""
+    try:
+        with records.locked(OWNER_FILE):
+            held = records.read(OWNER_FILE)
+            if held and held.get("pid") == pid:
+                OWNER_FILE.unlink()
+    except (OSError, ValueError):
+        pass
+
+
 CENTRED = 2 / 60  # degrees; close enough to stop correcting
 LAST_SOLVE = config.DATA / "cache" / "last_solve.json"
 
@@ -471,6 +544,11 @@ class Mount:
                               f"{found['why']} A person moving the mount (any mount command) clears this.")
             moved.SUSPECT.unlink()
             self.say("A person is moving the mount: the suspected slip or stall noted earlier is cleared.")
+        if not self.demo or config.DEMO:
+            # A simulated handset inside a real command (a plan's dry run)
+            # moves nothing real, so it holds nothing; the full demo does,
+            # under demo/, to be tried there.
+            claim()
         if not self.site_set:
             raise Refusal("SITE_NOT_SET", "config.toml has no location of its own (missing, unreadable or "
                                           "still the example's): set your own latitude and longitude "
