@@ -134,9 +134,12 @@ motor turned and the knob did not, so focus was by hand with the spoken aid.
   keeps 120 s frames round. The jobs owed are [owner-jobs.md](owner-jobs.md).
 - **Latitude bolts**: the rear bolt in lowers the axis, the front bolt in
   raises it (13 October 2026); the old rear bolt rises then jerks lower.
-- **Focuser**: backlash 156 half-steps (measured 19 November); the
-  drawtube slips about 4 half-steps a round trip since the tension screw
-  was eased. `--measure-step` stays refused by the small-focus guard.
+- **Focuser**: backlash 16 and 32 half-steps at two reversals, 48 kept
+  (measured 20 November, after the owner tightened the four screws holding
+  the wheel to the barrel and adjusted the tension screw; 156 on 19
+  November). Focus moved about 2,200 half-steps out with that work. The
+  drawtube slipped about 4 half-steps a round trip on 19 November; not
+  measured since the tension screw was adjusted again. `--measure-step` stays refused by the small-focus guard.
 - **Guide camera**: gain 400 (`[guider] gain`, the default since
   20 November); the guide scope dews below about 2 °C.
 - **Stacking**: the desktop has no Python for `restack.py --on desktop`
