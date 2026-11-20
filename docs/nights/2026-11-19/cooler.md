@@ -86,9 +86,9 @@ are in the agent's logs only; the figures below are copied from them.
 
 - The bench procedure in daylight: what Gary described. 12 V out, the
   camera warmed in software with its cooler off, the 12 V in, then the
-  ramp. The SV241 power box, due on 20 November, can switch the 12 V from
-  the laptop, so that order no longer needs hands (daylight checks 7
-  and 12).
+  ramp. The SV241 power box (arrived 20 November) cannot switch its 12 V
+  from the laptop: its outputs are always on (only the SV241 Pro switches
+  them), so the 12 V still goes in by hand, after the warm-up.
 - On the bench: start with the 12 V out (the new check should stop it in
   about 3 minutes), take the lead out mid-ramp, and the USB reset apart
   from the order the 12 V goes in.

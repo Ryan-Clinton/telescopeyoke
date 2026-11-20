@@ -32,19 +32,22 @@ result is recorded.
    to half a turn, then jerks lower. Then start the altitude record in
    `cache/polar_bolts.json` again: its entries disagree with the 13 October
    notes (rear bolt in lowers the axis, front bolt in raises it).
-6. **The SV241 power box, as a project command** before its first use:
-   the 183M's 12 V through a switchable output, so the camera is warmed in
-   software before its 12 V goes on and the cooler lead is never plugged in
-   by hand with the cooler running (19 November 16:31: it ran away to
-   -7.3 °C that way). Tried on the bench first.
+6. **The SV241 power box** (arrived 20 November 2026), tested indoors
+   before any night depends on it (`docs/usb-hub.md`, "Bought: the Svbony
+   SV241"). Its 12 V outputs are always on, with no software switching
+   (only the Pro has it), so the 183M's 12 V still goes in by hand, after
+   the camera is warmed in software, never with the cooler running (19
+   November 16:31: it ran away to -7.3 °C that way). It came with one
+   5.5 × 2.1 DC lead, as SVBONY's box list says: a second is needed for
+   the mount and the camera both.
 7. **The 183M after a power cut**: a procedure that brings it back without
    the cooler running away. Gary: if the cooler ran with the 12 V out, warm
    it to ambient in software before the 12 V goes back in, then the normal
    slow ramp. Untried: TEC off, set point re-sent, TEC on, before failing
    safe; check whether one bad temperature reading can trip the runaway
    check (18 November 20:40 looked like one).
-8. **Dew**: the guide scope's dew strap fitted (from the SV241's dew
-   outputs), and a dew shield for the main tube (the 150P dewed over about
+8. **Dew**: the guide scope's USB dew strap fitted (from one of the SV241's
+   USB ports; the plain SV241 has no dew outputs), and a dew shield for the main tube (the 150P dewed over about
    02:00-02:50 on 20 November).
 9. **The skyline survey again** (`./horizon.py --trace`): the tube moved up
    its rings on 17 November and was lowered on 20 November.
