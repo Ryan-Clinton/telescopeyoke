@@ -199,7 +199,7 @@ cameras through INDI need a different `[indi] port` each.
 
 telescopeyoke runs natively on Windows 10 and 11: no WSL, and no ASCOM unless
 you choose to reach your ASCOM drivers through Alpaca ([Hardware](hardware.md#already-using-eqmod-or-ascom),
-development branch, tried on simulators only). What
+0.4.1 and later, tried on simulators only). What
 has and has not been proven there is in the README's "What has been proven" and, in full, in
 [validation.md](validation.md#what-has-and-has-not-been-proven-in-full).
 

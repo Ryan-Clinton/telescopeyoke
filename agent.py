@@ -20,7 +20,7 @@ import stacking
 
 ROOT = Path(__file__).parent
 WEB = config.DATA / "web"
-VERSION = "0.4.0"
+VERSION = "0.4.1"
 _night_cache = {}
 
 

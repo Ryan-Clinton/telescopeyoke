@@ -53,10 +53,9 @@ the companion for you.
 
 ## Running it (Windows)
 
-**The companion is not in the 0.4.0 download**: it was added on 19
-November 2026, after that release. Until a release has it, take the
-development version: on [the project's page](https://github.com/Ryan-Clinton/telescopeyoke),
-Code > Download ZIP (or `git clone https://github.com/Ryan-Clinton/telescopeyoke`),
+The companion is in release 0.4.1 and later:
+[download TelescopeYoke-v0.4.1.zip](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.1/TelescopeYoke-v0.4.1.zip)
+(or `git clone https://github.com/Ryan-Clinton/telescopeyoke` for the newest code),
 unpack it, and install as [Setup](setup.md) says for Windows (Python 3.11
 or newer, then `install.ps1`). No `config.toml` is needed for this. Then,
 in the TelescopeYoke folder:
@@ -203,5 +202,5 @@ each part can be reached through its own ASCOM driver over Alpaca: in
 `[focuser]` `backend = "alpaca"`, each with the driver's `address`
 (`./alpaca.py find` lists them), and `[guider] backend = "phd2"` for PHD2
 ([Mounts](mounts.md), [Hardware](hardware.md), [Autoguiding](autoguiding.md)).
-That is on the development branch only, and tried on ASCOM's simulator and
+That is in 0.4.1 and later, and tried only on ASCOM's simulator and
 a pretend PHD2, never yet on real equipment: watch it first.

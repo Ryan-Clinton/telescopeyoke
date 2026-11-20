@@ -4,7 +4,7 @@ What each release changed, in short, with a link to where it is explained.
 This is history: how to use a feature is in the guides, and what has been
 proven is `docs/validation.md` ("Current conclusions").
 
-## Not yet released
+## 0.4.1: the companion, and other makers' equipment through Alpaca
 
 - **The companion** (`companion.py`, [Companion](docs/companion.md)): for an
   observatory that already runs a night with its own software. It reads
