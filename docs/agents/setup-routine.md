@@ -79,7 +79,11 @@ Then, either way:
 It moves nothing. Through the handset it gives the handset this laptop's
 date, time and site; through the adapter there is nothing to set, as the
 laptop's own clock and site are used. Either way it measures the clock
-afresh, and every later step depends on it.
+afresh, and every later step depends on it. Check the link
+(`[mount] link`) before telling the person what it did: on the adapter,
+say the clock was checked and where the mount is, never that the mount's
+time was set (20 November 2026: "the mount time is set" on the Wi-Fi
+adapter confused the owner).
 
 Through the adapter, two things the handset knew are kept on the laptop
 instead (`cache/direct_mount.json`): where home is and which way the Dec
