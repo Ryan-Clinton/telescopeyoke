@@ -61,8 +61,13 @@ Green, Red, Orange, Yellow, Blue, Purple, Pink, Cyan.
 
 ## What to know
 
-- The bridge's key is kept in `cache/hue.json`, which git ignores. Everything
-  said to the bridge stays on your network.
+- The bridge's key is kept in `cache/hue.json`, which git ignores, readable
+  by you only. Everything said to the bridge stays on your network.
+- The bridge's certificate is kept beside the key when it is paired (or the
+  first time it is asked, for an older pairing), and a bridge showing another
+  is refused without being sent the key: the light is not changed, and the
+  speaker still speaks. After the bridge is reset or updated, `./alert.py pin`
+  keeps the certificate it shows now.
 - The speech is made by gTTS, which uses an unofficial Google service and
   can stop working without notice. A sentence is rendered once and kept, so
   one that has been said before needs no internet. A speaker that fails

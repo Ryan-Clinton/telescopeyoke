@@ -11,6 +11,7 @@ Home speaker says so.
     ./alert.py flash "Living room"  pulse only the lights in that room of the Hue app (green),
                                no speaker: for a house with other people in it
     ./alert.py pair            press the button on the Hue bridge, then run this once
+    ./alert.py pin             keep the certificate the bridge shows now (after it was reset or updated)
     ./alert.py lights          the lights the bridge has, and which do colour
     ./alert.py speakers        the speakers found on the network
 
@@ -23,6 +24,7 @@ Hue and speaker code follows pastie's (github.com/Ryan-Clinton/pastie-hon).
 """
 import argparse
 import hashlib
+import http.client
 import http.server
 import json
 import secrets
@@ -102,31 +104,47 @@ class Bridge:
     def __init__(self, address, key):
         if not address or not key:
             raise AlertError("No Hue bridge is set up: press its button and run ./alert.py pair")
-        self.base, self.key = f"https://{address}/clip/v2/resource", key
-        # The bridge's certificate names its own id, not its address, and it
-        # is a device on this network told to make a light orange: it is not
-        # checked.
+        self.address, self.key = address, key
+        # The bridge's certificate names its own id, not its address, so no
+        # name is checked; the certificate itself is. The one it showed when
+        # it was paired (or first asked, for a pairing older than this) is
+        # kept, and a bridge showing another is refused: the key is never
+        # sent to it. Only the light is refused; the speaker still speaks.
+        self.pin = kept_pin(address)
         self.context = ssl.create_default_context()
         self.context.check_hostname, self.context.verify_mode = False, ssl.CERT_NONE
 
     def ask(self, path, method="GET", body=None):
-        request = urllib.request.Request(
-            self.base + path, method=method, data=None if body is None else json.dumps(body).encode(),
-            headers={"hue-application-key": self.key, "Content-Type": "application/json"})
+        data = None if body is None else json.dumps(body).encode()
+        headers = {"hue-application-key": self.key, "Content-Type": "application/json"}
         # Tried a few times: on 14 October 2026, over a weak Wi-Fi link, a
         # light was turned green and the call to put it back timed out, so
         # it stayed green.
         for attempt in range(TRIES):
+            link = http.client.HTTPSConnection(self.address, timeout=10, context=self.context)
             try:
-                with urllib.request.urlopen(request, timeout=10, context=self.context) as answer:
-                    return json.load(answer).get("data", [])
-            except urllib.error.HTTPError as error:
-                raise AlertError("The Hue bridge refused the key: run ./alert.py pair again" if error.code in (401, 403)
-                                 else f"The Hue bridge answered {error.code}") from error
-            except (urllib.error.URLError, OSError) as error:
+                link.connect()
+                seen = hashlib.sha256(link.sock.getpeercert(binary_form=True)).hexdigest()
+                if not self.pin:
+                    keep_pin(self.address, seen)
+                    self.pin = seen
+                elif seen != self.pin:
+                    raise AlertError(f"The Hue bridge at {self.address} showed a different certificate from the "
+                                     "one kept for it, so it was not sent the key. If the bridge was reset or "
+                                     "updated, run ./alert.py pin")
+                link.request(method, "/clip/v2/resource" + path, body=data, headers=headers)
+                answer = link.getresponse()
+                if answer.status in (401, 403):
+                    raise AlertError("The Hue bridge refused the key: run ./alert.py pair again")
+                if answer.status >= 400:
+                    raise AlertError(f"The Hue bridge answered {answer.status}")
+                return json.load(answer).get("data", [])
+            except (OSError, http.client.HTTPException, ValueError) as error:
                 if attempt == TRIES - 1:
                     raise AlertError(f"Could not reach the Hue bridge: {error}") from error
                 time.sleep(2)
+            finally:
+                link.close()
 
     def lights(self):
         return self.ask("/light")
@@ -198,6 +216,30 @@ def colour_light(bridge, light, colour, brightness=100, seconds=20, restore=True
     return f"{name} went {colour.lower()} for {seconds:g} s and was put back"
 
 
+def certificate(address):
+    """The SHA-256 of the certificate the bridge at `address` shows now."""
+    pem = ssl.get_server_certificate((address, 443), timeout=10)
+    return hashlib.sha256(ssl.PEM_cert_to_DER_cert(pem)).hexdigest()
+
+
+def kept_pin(address):
+    """The certificate kept for the bridge at `address`, or None."""
+    try:
+        kept = json.loads(PAIRING.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return kept.get("hue_cert") if kept.get("hue_address") == address else None
+
+
+def keep_pin(address, fingerprint):
+    """Keep `fingerprint` as the bridge's certificate, beside its key."""
+    def add(kept):
+        if not kept or kept.get("hue_address") != address:
+            raise AlertError("No pairing is kept for that bridge: press its button and run ./alert.py pair")
+        kept["hue_cert"] = fingerprint
+    records.change(PAIRING, add, indent=None, private=True)
+
+
 def pair(address=None):
     """Ask the bridge for a key. Its button must have been pressed in the last
     half minute; the key and the address are kept in cache/hue.json."""
@@ -207,6 +249,7 @@ def pair(address=None):
         if not bridges:
             raise AlertError("No Hue bridge was found on this network. Give its address with --address.")
         address = bridges[0]["internalipaddress"]
+    pinned = certificate(address)
     context = ssl.create_default_context()
     context.check_hostname, context.verify_mode = False, ssl.CERT_NONE
     request = urllib.request.Request(f"https://{address}/api", method="POST",
@@ -217,8 +260,8 @@ def pair(address=None):
         raise AlertError(f"The bridge at {address} said: {reply['error'].get('description', reply['error'])}. "
                          "Press the round button on top of it and run this again within half a minute.")
     PAIRING.parent.mkdir(parents=True, exist_ok=True)
-    records.write(PAIRING, {"hue_address": address, "hue_key": reply["success"]["username"]}, indent=None,
-                  private=True)
+    records.write(PAIRING, {"hue_address": address, "hue_key": reply["success"]["username"], "hue_cert": pinned},
+                  indent=None, private=True)
     return address
 
 
@@ -615,7 +658,8 @@ def flash(room, colour="Green", dry_run=False, say_it=print, bridge=None):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    ap.add_argument("command", choices=["watch", "check", "test", "say", "call", "flash", "pair", "lights", "speakers"])
+    ap.add_argument("command", choices=["watch", "check", "test", "say", "call", "flash", "pair", "pin", "lights",
+                                            "speakers"])
     ap.add_argument("what", nargs="?", help="for test: cloud, clouded, rain or clear; for say and call: the words; "
                     "for flash: the room's name in the Hue app")
     ap.add_argument("--address", help="for pair: the bridge's address, if it is not found by itself")
@@ -624,6 +668,13 @@ def main(argv=None):
     try:
         if args.command == "pair":
             print(f"Paired with the bridge at {pair(args.address)}. ./alert.py lights shows what it has.")
+        elif args.command == "pin":
+            # After a bridge was reset or updated: keep the certificate it shows now.
+            address = settings().get("hue_address")
+            if not address:
+                raise AlertError("No Hue bridge is set up: press its button and run ./alert.py pair")
+            keep_pin(address, certificate(address))
+            print(f"Kept the certificate the bridge at {address} shows now; another will be refused.")
         elif args.command == "lights":
             s = settings()
             for light in Bridge(s.get("hue_address"), s.get("hue_key")).lights():
