@@ -1610,10 +1610,11 @@ class Settled:
             self.motor.move(n)
         except KeyboardInterrupt:
             # focuser.Focuser.move lets a move ordered finish before it stops,
-            # and says whether the Nano confirmed it: if not, where the
-            # drawtube is from the start is not known (None), and no move
+            # and says whether the Nano confirmed it: if not, or with a
+            # focuser that does not say (an Alpaca one halts part way), where
+            # the drawtube is from the start is not known (None), and no move
             # back is made from a guess.
-            self.moved = self.moved + n if getattr(self.motor, "confirmed", True) and self.moved is not None else None
+            self.moved = self.moved + n if getattr(self.motor, "confirmed", False) and self.moved is not None else None
             raise
         except Exception:
             self.moved = None   # the order may have gone part way: not known
@@ -2016,19 +2017,26 @@ def run(args):
         if args.dry_run:
             return {"would_move": True, "field": name}
     cam = Camera(args.port, args.gain)
-    reading, live = {}, {}
-    scale = arcsec_per_pixel()
-    tracker = FocusTracker(usual_best() / scale)
-    if not args.scene:
-        cam.use("focus_fast")
+    try:
+        # Everything between the open and the loop's own cleanup: a failure
+        # here still lets the camera go warmed (let_go), as the loop's does.
+        reading, live = {}, {}
+        scale = arcsec_per_pixel()
+        tracker = FocusTracker(usual_best() / scale)
+        if not args.scene:
+            cam.use("focus_fast")
 
-    exposure, best = args.exposure, None
-    frame, previous, seen = 0, None, []
-    heard, rising, timings = None, False, []
-    FRAMES_FILE.parent.mkdir(parents=True, exist_ok=True)
-    FRAMES_FILE.write_text("", encoding="utf-8")
-    end = time.monotonic() + args.minutes * 60
-    pending = ahead(cam, exposure)
+        exposure, best = args.exposure, None
+        frame, previous, seen = 0, None, []
+        heard, rising, timings = None, False, []
+        FRAMES_FILE.parent.mkdir(parents=True, exist_ok=True)
+        FRAMES_FILE.write_text("", encoding="utf-8")
+        end = time.monotonic() + args.minutes * 60
+        pending = ahead(cam, exposure)
+    except BaseException:
+        let_go(cam)
+        cam.close()
+        raise
     try:
         while True:
             got, pending = collect(pending), None
@@ -2178,7 +2186,11 @@ def run(args):
             try:
                 pending.get(timeout=3 * (exposure + 30))
             except queue.Empty:
-                print("camera: the last focus frame did not finish; closing the camera anyway", file=sys.stderr)
+                # Never closed under a frame still being taken or recovered
+                # (a lost frame's probe can take minutes): waited out.
+                print("camera: the last focus frame has not finished; waiting for it before the camera closes",
+                      file=sys.stderr, flush=True)
+                pending.get()
         try:
             cam.use("imaging")      # leave it as every other script expects to find it
         except Exception:

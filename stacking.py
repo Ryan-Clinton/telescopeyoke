@@ -667,8 +667,15 @@ def save_light(folder, index, mosaic, header):
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / f"light-{index:04d}.fits"
     kept = fits.Header({k: header[k] for k in KEPT if k in header})
-    fits.HDUList([fits.PrimaryHDU(), fits.CompImageHDU(mosaic, kept, compression_type="RICE_1")]
-                 ).writeto(path, overwrite=True)
+    # Written under another name and renamed whole: a write that fails part
+    # way leaves no light-NNNN.fits for the quality pass to find.
+    partial = path.with_name(f".{path.name}.partial")
+    try:
+        fits.HDUList([fits.PrimaryHDU(), fits.CompImageHDU(mosaic, kept, compression_type="RICE_1")]
+                     ).writeto(partial, overwrite=True)
+        partial.replace(path)
+    finally:
+        partial.unlink(missing_ok=True)
     return path
 
 

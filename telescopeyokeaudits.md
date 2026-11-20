@@ -24,7 +24,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 3 | AI agent autonomy and permissions | done 20 Nov 2026, re-checked |
 | 4 | Autonomous full-night operation | done 20 Nov 2026, re-checked |
 | 5 | Guiding and calibration | done 20 Nov 2026, re-checked |
-| 6 | Camera, cooling, filters and focusing | done 20 Nov 2026; re-check asked |
+| 6 | Camera, cooling, filters and focusing | done 20 Nov 2026, re-checked |
 | 7 | Scientific discovery reliability | not started |
 | 8 | Calibration and scientific measurement accuracy | not started |
 | 9 | Demo claims versus real-world proof | not started |
@@ -318,5 +318,13 @@ This initial pass was an architectural and risk assessment, not an exhaustive li
 | 7 | A provisional offset need not have approached focus inward | P2 | Confirmed and fixed | Only a verified measurement that approached inward can be provisional; no offsets are kept yet, so nothing in use changes |
 | - | The 19 Nov cooler record's open questions | - | Agreed | Hardware questions, not settled by code; they stay open in the record |
 
-Demo after the changes: `./focus.py --check` (HFR 1.75 against 1.97) and a three-frame `./shoot.py M81` ran as before.
+## 6, re-audited at b1a701b
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | The interactive view still closes the camera after its longer wait | P1 | Confirmed and fixed | After the wait it says so and waits for the frame (or its recovery) to end, never closing the camera under it |
+| 2 | An interrupted Alpaca focuser move is counted as made | P1 | Confirmed and fixed | An interrupted move counts only when the focuser itself confirmed it; one that does not say is unknown |
+| 3 | The interactive view's setup can fail before its cleanup | P1 | Confirmed and fixed | A failure between opening the camera and the loop lets it go warmed and closed |
+| 4 | A failed deferred save can leave a half-written light file | P2 | Confirmed and fixed | `stacking.save_light` writes to a hidden partial name and renames it whole |
+| 5 | Demo runs were recorded as checks of these changes | - | Right | Against AGENTS.md (the demo only for a change to how the mount moves): the line is gone from this plan, and no demo is run to check a change that does not move the mount |
 
