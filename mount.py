@@ -1077,6 +1077,58 @@ class Mount:
         hand.set_dec_sign(-1 if said == "e" else 1)
         print("Recorded. GoTo is now allowed on this link.")
 
+    def dec_test(self, site, rate=7.5, seconds=1.5, steps=12, gap=30):
+        """The Dec drive measured on the main camera, no guide camera needed
+        (20 November 2026: the guide scope's lens misted). Two plate solves
+        `gap` seconds apart give the natural Dec drift; then `steps` pulses
+        one way at `rate` arcsec/s for `seconds`, a plate solve after each,
+        then as many the other way. Each solve's Dec, less the drift, says how
+        far the tube really went: the pulses before it moves at all after a
+        reversal are the slack, and a way that never moves is the fault of
+        job 2 (docs/agents/owner-jobs.md). Returns the readings."""
+        self.may_move()
+        error = load_pointing_error(self.west())
+        hint_ra = true_sidereal(site) - self.true_hour_angle(site)
+        first = self.where_really(hint_ra, wrap(self.radec()[1]) + error[1], radius=20)
+        if not first:
+            raise Refusal("PLATE_SOLVE_FAILED", "Could not plate-solve here: no Dec test (cloud?).")
+        time.sleep(gap)
+        second = self.where_really(first["ra"], first["dec"], radius=5)
+        if not second:
+            raise Refusal("PLATE_SOLVE_FAILED", "The second plate solve failed: no Dec test (cloud?).")
+        t0 = first["when"]
+        span = (second["when"] - t0).sec
+        drift = (second["dec"] - first["dec"]) * 3600 / span
+        self.say(f"Natural Dec drift {drift:+.2f}\"/s over {span:.0f} s (north positive)")
+        each = rate * seconds
+        readings, last = [], second
+        for way in (1, -1):
+            name = "plus" if way > 0 else "minus"
+            self.say(f"{steps} pulses of {seconds:g} s at {rate:g}\"/s, motor {name} (about {each:.1f}\" each):")
+            for k in range(1, steps + 1):
+                self.pulse(DEC, way * rate, seconds, creep=0.0)
+                found = self.where_really(last["ra"], last["dec"], radius=5)
+                if not found:
+                    self.say(f"  {name} {k:2d}: no plate solve")
+                    continue
+                gone = (found["when"] - last["when"]).sec
+                moved = (found["dec"] - last["dec"]) * 3600 - drift * gone
+                readings.append({"way": name, "pulse": k, "moved_arcsec": round(moved, 1),
+                                 "dec_deg": found["dec"], "seconds": round((found["when"] - t0).sec, 1)})
+                self.say(f"  {name} {k:2d}: Dec moved {moved:+6.1f}\" (drift taken off)")
+                last = found
+        for name in ("plus", "minus"):
+            mine = [r for r in readings if r["way"] == name]
+            moving = [r for r in mine if abs(r["moved_arcsec"]) > each / 2]
+            if not moving:
+                self.say(f"Motor {name}: the tube never moved more than half a pulse in {len(mine)} pulses.")
+            else:
+                self.say(f"Motor {name}: moved from pulse {moving[0]['pulse']} (slack about "
+                         f"{(moving[0]['pulse'] - 1) * each:.0f}\"); {len(moving)} of {len(mine)} pulses moved, "
+                         f"{sum(r['moved_arcsec'] for r in moving) / len(moving):+.1f}\" on average against "
+                         f"{each:.1f}\" sent.")
+        return {"drift_arcsec_s": round(drift, 3), "pulse_arcsec": each, "readings": readings}
+
     def nudge(self, degrees=NUDGE, hold=3):
         """From home, tip the tube `degrees` away from the pole on the Dec
         axis, hold, and bring it back. The counterweight bar does not move.
@@ -2195,7 +2247,7 @@ def main():
     ap.add_argument("command", choices=["status", "settime", "nudge", "zenith", "home", "stop", "goto", "point",
                                        "sync", "drift", "compensate", "pointing",
                                        "findhome", "truehome",
-                                       "sethome", "directions"])
+                                       "sethome", "directions", "dectest"])
     ap.add_argument("target", nargs="*",
                     help="object for goto (e.g. M81), or bearing and height for point")
     ap.add_argument("--port", help="serial port (default: found by the adapter name "
@@ -2232,7 +2284,7 @@ def main():
 
     args.demo = args.demo or config.DEMO
     if args.demo and not config.DEMO:
-        if args.command in ("sync", "drift", "compensate", "pointing", "findhome") and not args.dry_run:
+        if args.command in ("sync", "drift", "compensate", "pointing", "findhome", "dectest") and not args.dry_run:
             ap.error(f"{args.command} needs the real camera; there is no demo of it")
         if args.command in ("sethome", "directions"):
             ap.error(f"{args.command} is for a real mount reached without its handset")
@@ -2316,7 +2368,10 @@ def dry_run(args, site):
                  "compensate": "Slews about 25° twice on the side of the meridian it is on, "
                                "then returns.",
                  "directions": "Tips the tube 5° from home on the Dec axis, asks which way it "
-                               "went, and puts it back. Someone must be watching the mount."}
+                               "went, and puts it back. Someone must be watching the mount.",
+                 "dectest": "Stays where it is: two plate solves 30 s apart for the Dec drift, then 12 Dec "
+                            "pulses of 1.5 s at 7.5\"/s one way and 12 the other (about 11\" each, two "
+                            "arcminutes at most), a main-camera plate solve after each."}
         return {"would_move": True, "safe": True, "warnings": [notes[args.command]]}
 
     result = answer(f"mount.{args.command}.dry_run", plan)
@@ -2438,6 +2493,8 @@ def act(args, site):
                 mount.set_home()
             elif args.command == "directions":
                 mount.check_directions()
+            elif args.command == "dectest":
+                mount.dec_test(site)
     except BaseException:
         # Never leave a motor running after an error or Ctrl+C.
         mount.stop()
