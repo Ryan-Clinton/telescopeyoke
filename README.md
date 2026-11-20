@@ -233,11 +233,20 @@ commit made it. **0.4.1 does not refuse a GoTo to a named target within 40°
 of the Sun** (pointing by altitude and azimuth does): the newest code does,
 and the next release will. Until then, use 0.4.1's GoTo by night only.
 
-To move to a newer release, unpack it beside the old one and copy across
-what the old folder keeps of yours, none of which is in the zip:
-`config.toml`, `rigs/`, `cache/`, `calibration/`, `frames/`, `horizon/` and
-`web/`. Then run its `install.sh` (or `install.ps1`) again, which points the
-launchers at the new folder. The old folder is the way back. `git clone https://github.com/Ryan-Clinton/telescopeyoke` gets the newest
+To move to a newer release, close TelescopeYoke and stop anything running
+from the old folder (an imaging run, the status page's service), unpack the
+new one beside it, and copy across what the old folder keeps of yours, none
+of which is in the zip:
+
+- your settings and place: `config.toml`, `rigs/`, `spots/`, `horizon/`;
+- your records: `calibration/`, `reference/`, `candidates/`, `mosaics/`,
+  `frames/`, `reports/`, `logs/`, `polaris-runs/`, `recordings/`, `clips/`;
+- the camera makers' libraries you installed: `vendor/`;
+- remembered measurements, which can be made again: `cache/`, `web/`.
+
+Leave behind files ending `.lock` or `.part`, and the motion lock. Then run
+the new folder's `install.sh` (or `install.ps1`), which points the launchers
+at it. The old folder is the way back. `git clone https://github.com/Ryan-Clinton/telescopeyoke` gets the newest
 code instead, which changes from day to day. Either is proven on one
 telescope (see [What it has been tried on](docs/hardware.md)).
 

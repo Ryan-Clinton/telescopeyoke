@@ -35,7 +35,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 14 | Weather and environmental decisions | done 20 Nov 2026, re-checked |
 | 15 | Operational performance | done 20 Nov 2026, re-checked; 1-4 and 6 planned |
 | 16 | Network security and external integrations | done 20 Nov 2026, re-checked; 2, 5 and 8 planned |
-| 17 | Public releases and installation | done 20 Nov 2026; re-check asked |
+| 17 | Public releases and installation | done 20 Nov 2026, re-checked; release 0.4.2 waits for the owner |
 | 18 | Architecture, documentation and maintainability | not started |
 
 ## **1. Initial assessment**
@@ -579,4 +579,11 @@ The rain alert stays on in every case (the owner's rule, 15 November 2026): thes
 | 6 | No record of the library versions proven | P2 | Agreed and planned | The versions on the owner's laptop recorded in docs/validation.md with the next release |
 | 7 | Windows claims need qualifying | P2 | Already so | The README says the camera has taken frames indoors and that the installer, demo launcher, Start Menu entries and window are untried |
 | - | A SHA-256 with each zip | - | Agreed and planned | With the next release |
+
+## 17, re-audited at 1bacb9d
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | The upgrade list leaves out folders of the person's | P1 | Confirmed and fixed | Checked against .gitignore: the README now lists every kept folder in four groups (settings and place, records, the camera makers' libraries, remembered measurements), says to stop everything first, and to leave lock and partial files and the motion lock behind |
+| 2 | The 0.4.1 release page should carry the Sun warning | P0 | Agreed; waits for the owner | Editing a published release is the owner's, with 0.4.2 itself |
 
