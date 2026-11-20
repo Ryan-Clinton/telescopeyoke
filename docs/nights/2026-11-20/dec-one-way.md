@@ -11,7 +11,7 @@ measure which way Dec drifts and guide Dec one way only, against the
 drift, so the motor never turns back into the slack.
 
 **The short answer: Dec does not move south at all, and moving north it
-sticks and then jumps 20 to 30". Guiding Dec north only held it at 1.4"
+sticks and then jumps, 20 to 50". Guiding Dec north only held it at 1.4"
 RMS for four clear minutes, but cannot undo a jump north: only the
 natural drift south (about 0.1"/s) brings the star back, which takes
 minutes. RA guided at 1.1 to 2.4" RMS throughout. This is mechanical
@@ -51,7 +51,7 @@ guides Dec north only; without `--dec-one-way`, Dec stays unguided.
 | 1, ~20:25 | 0-4 | 1.6" | 3.7-4.2" | -3.8 to -3.0" | pulling in from about 4" south after calibration |
 | | 4-8 | 1.4-1.7" | **1.4-1.5"** | -0.9" | Dec held as well as RA |
 | | 8-10 | 2.5-2.8" | 4.5-6.4" | +3.9" | the star lost 5 times (thin cloud); Dec swung to +11" north and came back slowly |
-| 2, 21:02 | 0-2 | 2.1" | 29" | +17" (peak +49") | north pulses piled up, then Dec jumped north (5.3 guide pixels, about 25", in one frame) |
+| 2, 21:02 | 0-2 | 2.1" | 29" | +17" (peak +49") | north pulses piled up, then Dec jumped north (5.3 guide pixels at 9.55"/px, about 50", in one frame) |
 | | 2-8 | 1.4-1.7" | 21-39" | +39" falling to +21" | no south pulses: only the drift brings it back |
 | | 8-10 | 1.1" | 3.3" | +3" | back near the target |
 | 3, ~21:15, with `--dec-stuck 3` | 0-2 | 1.9" | 6.4" | -1.6" | |
@@ -69,19 +69,27 @@ move, not while it is stuck.
   camera as on the guide camera, with the guide scope on or off. Measured:
   134" of pulses, under 2" of movement, twice.
 - **North: it sticks, then jumps.** A run of north pulses moves little,
-  then 20-30" goes at once; between jumps it can follow at the full rate
+  then 20-50" goes at once (about 50" in one frame in run 2): sticking
+  (stiction), not ordinary backlash, which would be a delay after a
+  reversal and then steady movement; between jumps it can follow at the full rate
   (run 1, minutes 4-8). Measured on the guide camera; the main-camera test
   saw the same uneven steps (+20", +10", +15", +9" for 11.2" sent).
 - **The balance change did not cure it**: the failing way was south with
   the guide scope off and on. Whether the failing way follows the motor
   or the sky (the west-side test) is not yet known.
 - **One-way guiding** works where Dec follows smoothly and fails where it
-  jumps. A larger natural drift south (the polar axis set a little off on
+  jumps. North only also needs the natural drift to carry the star south,
+  and the drift's sign changes with where the tube points (+0.04"/s at
+  NGC 869, -0.07"/s at M31 tonight): it is measured for each target, and
+  where it is northward, north-only guiding has nothing to correct. A larger natural drift south (the polar axis set a little off on
   purpose) would bring the star back faster after a jump; it would not
   stop the jumps. Not tried.
 - **For Gary (job 2)**: the worm's mesh with the Dec wheel first. Moving
-  south the motor turns and the tube does not; moving north it sticks
-  and releases.
+  south the tube does not move; moving north it sticks and releases.
+  Whether the motor shaft itself turns south is not known: the board's
+  step count is open-loop, so where the movement is lost (motor, coupling
+  and gears, worm, wheel, clutch) is the daylight drive-response test,
+  job 4.
 
 ## What changed
 
