@@ -111,7 +111,8 @@
             "type": [
               "object",
               "null"
-            ]
+            ],
+            "description": "A known variable star (VSX) within 5 arcsec, with its brightest magnitude (max) when known."
           },
           "reported": {
             "type": [
@@ -159,6 +160,28 @@
             "type": "array",
             "items": {
               "type": "string"
+            }
+          },
+          "ruled_out": {
+            "type": "array",
+            "description": "Known asteroids and variables near the candidate that cannot be it (beyond where the asteroid's motion puts it, or too faint at their brightest), with why.",
+            "items": {
+              "type": "object",
+              "required": [
+                "kind",
+                "why"
+              ],
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "asteroid",
+                    "variable"
+                  ]
+                },
+                "why": {
+                  "type": "string"
+                }
+              }
             }
           }
         }

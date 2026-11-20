@@ -51,8 +51,10 @@ VIZIER_URL = "https://vizier.cds.unistra.fr/viz-bin/asu-tsv"
 HALVES_FROM = 8     # frames needed to stack and check each half of the night
 ROCHESTER = ("https://www.rochesterastronomy.org/sn{year}/novae.html",
              "https://www.rochesterastronomy.org/sn{year}/index.html")
-ASTEROID_WITHIN = 30.0    # arcsec: a known asteroid this close at mid-session is the candidate
+ASTEROID_WITHIN = 30.0    # arcsec: the search for a known asteroid at mid-session, and its reach when the night's span is not known
+ASTEROID_NEAR = 6.0       # arcsec: the stack's centroid against SkyBoT's place, before its own error and motion
 VARIABLE_WITHIN = 5.0     # arcsec, for VSX
+FAINTER_BY = 1.5          # mag: a catalogued source this much fainter than the candidate, at its brightest, cannot be it
 REPORTED_WITHIN = 5.0     # arcsec, for a listed nova or supernova
 GAIA_WITHIN = 2.0         # arcsec: a Gaia star this close is the candidate's own star
 # Gaia's places are for 2016.0. A star moving 0.1"/yr or more has moved a
@@ -97,6 +99,7 @@ def read_skybot(text):
             out.append({"name": cells[1], "ra": 15 * (h + m / 60 + s / 3600),
                         "dec": sign * (d + dm / 60 + ds / 3600),
                         "v": float(cells[5]) if cells[5] not in ("", "-") else None,
+                        "err": float(cells[6]) if cells[6] not in ("", "-") else None,
                         "motion": round(math.hypot(float(cells[8]), float(cells[9])), 1)})
         except (ValueError, IndexError):
             continue
@@ -115,7 +118,8 @@ def vsx_table(text):
 
 
 def variables(ra, dec, radius_deg, get=None):
-    """Known variable stars in a circle, from VSX: (name, ra, dec, type).
+    """Known variable stars in a circle, from VSX: (name, ra, dec, type, its
+    brightest magnitude when VSX gives one; None in an answer kept before it was asked).
     Kept on disk for VSX_KEPT_DAYS, with any kept circle that holds this one
     used instead; VizieR's mirror tried when Strasbourg does not answer
     (1 November 2026: VizieR down, the night's search stopped)."""
@@ -144,7 +148,7 @@ def variables(ra, dec, radius_deg, get=None):
             try:
                 reply = get(url, timeout=(10, 120), params={
                     "-source": "B/vsx/vsx", "-c": f"{ra:.5f} {dec:+.5f}", "-c.rd": f"{radius_deg:.3f}",
-                    "-out": "Name,RAJ2000,DEJ2000,Type", "-out.max": "50000"})
+                    "-out": "Name,RAJ2000,DEJ2000,Type,max", "-out.max": "50000"})
                 reply.raise_for_status()
                 if not vsx_table(reply.text):
                     # Answered, but not VizieR's table (an empty page, an error
@@ -165,8 +169,14 @@ def variables(ra, dec, radius_deg, get=None):
     for line in lines[3:]:
         cells = line.split("\t")
         try:
+            brightest = None
+            if len(cells) > 4:
+                try:
+                    brightest = float(cells[4].strip().strip("()<>:"))
+                except ValueError:
+                    pass
             out.append({"name": cells[0].strip(), "ra": float(cells[1]), "dec": float(cells[2]),
-                        "type": cells[3].strip()})
+                        "type": cells[3].strip(), "max": brightest})
         except (ValueError, IndexError):
             continue
     return out
@@ -346,6 +356,7 @@ def clues(e):
         out.append(f"light already there in the reference (G {e['in_reference']}): a brightening?")
     if e.get("halves") is None:
         out.append("the halves of the night were not checked")
+    out += [r["why"] for r in e.get("ruled_out", [])]
     return out
 
 
@@ -357,9 +368,41 @@ def moved(checks):
     return checks["gaia"] + (checks.get("gaia_moving") or [])
 
 
-def vet(record, checks, half_scores=None, ref=None, zeropoint=None, radius=4.0):
+def ruled_out(c, key, m, span_hours=None):
+    """Why a catalogued neighbour cannot be the candidate, or None when it
+    can. Nearness alone is not enough (Audit 7, 20 November 2026; on 4
+    November M33's G~18.2 candidate was closed as 2019 NV51, V 21):
+    - an asteroid is where its motion puts it: within its place's error and
+      half the distance it moves across the night of mid-session (the stack
+      is a streak whose middle is there), and no fainter than the candidate
+      by FAINTER_BY;
+    - a variable is no fainter at its brightest than the candidate by
+      FAINTER_BY: M31 and M33 hold thousands of faint catalogued variables,
+      and a nova on top of one is still a nova."""
+    mag = c.get("mag")
+    if key == "asteroid":
+        if span_hours is None:
+            reach = ASTEROID_WITHIN
+        else:
+            reach = ASTEROID_NEAR + (m.get("err") or 0) + 0.5 * (m.get("motion") or 0) * span_hours
+        if m["arcsec"] > reach:
+            return (f"known asteroid {m['name']} {m['arcsec']}\" away at mid-session, beyond the {reach:.0f}\" "
+                    "its place and motion across the night allow: not it")
+        if mag is not None and m.get("v") is not None and m["v"] > mag + FAINTER_BY:
+            return (f"known asteroid {m['name']} {m['arcsec']}\" away is V {m['v']:.1f}, too faint to be a "
+                    f"G~{mag:.1f} source: not it")
+    if key == "variable" and mag is not None and m.get("max") is not None and m["max"] > mag + FAINTER_BY:
+        return (f"known variable {m['name']} ({m['type']}) {m['arcsec']}\" away is never brighter than "
+                f"{m['max']:.1f}, too faint to be a G~{mag:.1f} source: a new source on top of it, or "
+                "it brightening far past its known range")
+    return None
+
+
+def vet(record, checks, half_scores=None, ref=None, zeropoint=None, radius=4.0, span_hours=None):
     """The evidence and verdict for every candidate. `checks` holds what was
-    fetched: asteroids, variables, reported, gaia (lists of rows)."""
+    fetched: asteroids, variables, reported, gaia (lists of rows).
+    `span_hours`: from the night's first frame to its last, for how far an
+    asteroid moves (None: unknown, and the old reach is used)."""
     out = []
     for n, c in enumerate(record["candidates"]):
         e = {"x": c["x"], "y": c["y"], "ra": c.get("ra"), "dec": c.get("dec"), "score": c["score"],
@@ -376,6 +419,10 @@ def vet(record, checks, half_scores=None, ref=None, zeropoint=None, radius=4.0):
                     continue
                 e[key] = nearest(c, rows, within)
                 kinds[key] = "reported"
+                why = e[key] and key in ("asteroid", "variable") and ruled_out(c, key, e[key], span_hours)
+                if why:
+                    e.setdefault("ruled_out", []).append(dict(e[key], kind=key, why=why))
+                    e[key] = None
         if half_scores is not None:
             e["halves"] = half_scores[n]
             kinds["halves"] = "measured"
@@ -456,7 +503,7 @@ def run(args, say=print):
     kept_ref = depth.record_path(ref_path)
     zeropoint = json.loads(kept_ref.read_text(encoding="utf-8"))["zeropoint"] if kept_ref.exists() else None
     say(f"{len(record['candidates'])} candidates in {session}")
-    checks = {}
+    checks, span_hours = {}, None
     if record["candidates"] and not args.offline:
         ra = np.array([c["ra"] for c in record["candidates"]])
         dec = np.array([c["dec"] for c in record["candidates"]])
@@ -465,6 +512,9 @@ def run(args, say=print):
         stamps = [stacking.load_light(p)[1].get("DATE-OBS") for p in sorted(session.glob("light-*.fits"))[::50]]
         stamps = [s for s in stamps if s]
         jd = float(np.mean([Time(s).jd for s in stamps])) if stamps else Time.now().jd
+        ends = sorted(session.glob("light-*.fits"))
+        ends = [stacking.load_light(p)[1].get("DATE-OBS") for p in (ends[:1] + ends[-1:])]
+        span_hours = (Time(ends[-1]).jd - Time(ends[0]).jd) * 24 if all(ends) and ends else None
         year = Time(jd, format="jd").datetime.year
         for key, fetch in (("asteroids", lambda: asteroids(centre_ra, centre_dec, reach, jd)),
                            ("variables", lambda: variables(centre_ra, centre_dec, reach)),
@@ -487,7 +537,8 @@ def run(args, say=print):
         if len(paths) >= HALVES_FROM:
             say(f"stacking each half of {len(paths)} frames")
             half_scores = each_half(record, ref, ref_wcs, paths, name, say)
-    evidence = vet(record, checks, half_scores, ref, zeropoint, radius=max(record.get("fwhm_px", 4.0), 2.0))
+    evidence = vet(record, checks, half_scores, ref, zeropoint, radius=max(record.get("fwhm_px", 4.0), 2.0),
+                   span_hours=span_hours)
     cut = classify(evidence, session, ref, record.get("fwhm_px", 4.8))
     residue(evidence, cut)
     left = [e for e in evidence if e["verdict"] == UNEXPLAINED]
