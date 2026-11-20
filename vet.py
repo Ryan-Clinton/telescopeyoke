@@ -132,6 +132,12 @@ def variables(ra, dec, radius_deg, get=None):
                     "-source": "B/vsx/vsx", "-c": f"{ra:.5f} {dec:+.5f}", "-c.rd": f"{radius_deg:.3f}",
                     "-out": "Name,RAJ2000,DEJ2000,Type", "-out.max": "50000"})
                 reply.raise_for_status()
+                if not any(line.split("\t")[0].strip() == "Name" for line in reply.text.splitlines()
+                           if not line.startswith("#")):
+                    # Answered, but not VizieR's table (an empty page, an error
+                    # page): never kept as "no known variables here".
+                    failures.append(f"{url.split('/')[2]}: no VSX table in its answer")
+                    continue
                 text = reply.text
                 break
             except requests.RequestException as problem:
@@ -158,14 +164,19 @@ def reported(years):
     built into their designations (PNV J00425223+4101447 and the like)."""
     out = {}
     for year in years:
+        answered = False
         for url in ROCHESTER:
             try:
                 reply = requests.get(url.format(year=year), timeout=60)
             except requests.RequestException:
                 continue
             if reply.ok:
+                answered = True
                 for name, ra, dec in read_designations(reply.text):
                     out[name] = (ra, dec)
+        if not answered:
+            # No page for that year answered: "not asked", never "none reported".
+            raise interface.Refusal("REMOTE_FAILED", f"The Rochester lists for {year} could not be fetched.")
     return [{"name": n, "ra": ra, "dec": dec} for n, (ra, dec) in out.items()]
 
 
@@ -286,12 +297,18 @@ def residue(evidence, cut):
     alert, and the person wants every one (2 November 2026). `cut` is kept
     for the record. Returns how many were relabelled."""
     def apart(a, b):
-        return 3600 * math.hypot((a["ra"] - b["ra"]) * math.cos(math.radians(a["dec"])), a["dec"] - b["dec"])
+        dra = (a["ra"] - b["ra"] + 180) % 360 - 180      # across RA 0 too
+        return 3600 * math.hypot(dra * math.cos(math.radians(a["dec"])), a["dec"] - b["dec"])
+
+    def unexplained_too(o):
+        # A known asteroid or variable beside it is a real source, not the
+        # subtraction's flaw: only what nothing explained makes a group.
+        return o["verdict"].startswith((UNEXPLAINED, RESIDUE))
     changed = 0
     for e in evidence:
         if e["verdict"] != UNEXPLAINED:
             continue
-        group = 1 + sum(1 for o in evidence if o is not e and apart(e, o) <= CLUSTER_ARCSEC)
+        group = 1 + sum(1 for o in evidence if o is not e and unexplained_too(o) and apart(e, o) <= CLUSTER_ARCSEC)
         if group >= CLUSTER_N:
             e["verdict"] = f"{RESIDUE}: one of {group} within 2 arcminutes, a flaw in the subtraction"
             changed += 1
@@ -401,6 +418,10 @@ def run(args, say=print):
                 say(f"  {key}: {len(checks[key])} in the field")
             except requests.RequestException as error:
                 say(f"  {key}: not asked ({error.__class__.__name__})")
+            except interface.Refusal as refused:
+                # A catalogue down is that check not made, said in the record
+                # ("asked"), never the night's candidates kept from the person.
+                say(f"  {key}: not asked ({refused.message})")
     half_scores = None
     if record["candidates"] and not args.no_halves:
         paths = restack_frames(session)

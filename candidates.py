@@ -63,8 +63,9 @@ def change(name, how):
 
 
 def arcsec(a, b):
-    """Arcseconds between two (ra, dec) in degrees, near enough for 5″."""
-    dra = (a[0] - b[0]) * np.cos(np.radians((a[1] + b[1]) / 2))
+    """Arcseconds between two (ra, dec) in degrees, near enough for 5″, and
+    across RA 0 (359.9999° and 0.0001° are 0.7″ apart on the equator)."""
+    dra = ((a[0] - b[0] + 180) % 360 - 180) * np.cos(np.radians((a[1] + b[1]) / 2))
     return float(np.hypot(dra, a[1] - b[1]) * 3600)
 
 

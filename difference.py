@@ -35,6 +35,7 @@ here moves the mount or uses the camera.
 import argparse
 import json
 import math
+from pathlib import Path
 
 import numpy as np
 from astropy.io import fits
@@ -638,6 +639,13 @@ def run(args, say=print):
     owner = None
     if args.reference:
         ref_path = depth.find_stack(args.reference)
+        # Which reference may be chosen; that it is another night's may not.
+        kept, kept_owner = reference.for_field(name, band)
+        if Path(ref_path).resolve().parent == new_path.resolve().parent or (
+                kept is not None and Path(kept).resolve() == Path(ref_path).resolve()
+                and new_path.parent.resolve() in reference.sessions_used(kept_owner, band)):
+            raise interface.Refusal("INVALID_REQUEST", f"{ref_path} is, or was made with, {new_path.parent}: a "
+                                    "night is never compared with itself.")
     else:
         ref_path, owner = reference.for_field(name, band)
         if ref_path is None:

@@ -25,7 +25,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 4 | Autonomous full-night operation | done 20 Nov 2026, re-checked |
 | 5 | Guiding and calibration | done 20 Nov 2026, re-checked |
 | 6 | Camera, cooling, filters and focusing | done 20 Nov 2026, re-checked |
-| 7 | Scientific discovery reliability | not started |
+| 7 | Scientific discovery reliability | done 20 Nov 2026; re-check asked |
 | 8 | Calibration and scientific measurement accuracy | not started |
 | 9 | Demo claims versus real-world proof | not started |
 | 10 | Hardware onboarding and compatibility | not started |
@@ -327,4 +327,20 @@ This initial pass was an architectural and risk assessment, not an exhaustive li
 | 3 | The interactive view's setup can fail before its cleanup | P1 | Confirmed and fixed | A failure between opening the camera and the loop lets it go warmed and closed |
 | 4 | A failed deferred save can leave a half-written light file | P2 | Confirmed and fixed | `stacking.save_light` writes to a hidden partial name and renames it whole |
 | 5 | Demo runs were recorded as checks of these changes | - | Right | Against AGENTS.md (the demo only for a change to how the mount moves): the line is gone from this plan, and no demo is run to check a change that does not move the mount |
+
+## 7. Scientific discovery reliability, 20 November 2026
+
+Verdicts and searches already recorded are not remade: every change below applies to searches run from now on (each result is stamped with the code that made it).
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | Explained neighbours can make a new candidate "residue" | P0 | Confirmed and fixed | `vet.residue()` counts only unexplained (or residue) detections within 2': a known variable and asteroid beside a new source leave it unexplained |
+| 2 | A search a passing failure stopped is never swept again | P1 | Confirmed and fixed | `patrol.searchable()`: a session whose depth, difference or vet step was stopped by anything but a verdict on the data (INVALID_REQUEST: too shallow, a skewed subtraction) can be searched again |
+| 3 | A catalogue outage stops the alert; an empty answer counts as "none" | P1 | Confirmed and fixed | A catalogue that refuses is "not asked" in the record and the vetting goes on to the alert; a VizieR answer without the VSX table is a failure, never kept for 30 days as no variables; Rochester pages that all fail for a year are "not asked", never "none reported" |
+| 4 | Nearness alone closes a candidate as a known asteroid or variable | P1 | Agreed and planned | Checking the asteroid's predicted motion against the frames' times (SkyBoT gives it), and keeping a VSX match within 5" ambiguous where the source cannot be told apart, are changes to the verdicts' science: for a new version with the old verdicts compared against it |
+| 5 | Candidates do not match across RA 0 | P1 | Confirmed and fixed | `candidates.arcsec` and the residue's distance wrap RA (359.9999 and 0.0001 at the equator: 0.72") |
+| 6 | An explicit `--reference` can be the night itself | P1 | Confirmed and fixed | `difference.py` refuses a reference from the same session, or the field's kept reference made with this night, however it was named |
+| 7 | A second look can call a candidate a false alarm without the depth to | P1 | Confirmed and fixed | A candidate not seen again is a false alarm only where the second look's limit there reached its brightest; otherwise it is said to be not ruled out |
+| 8 | References are chosen by depth, not subtraction quality | P1 | Agreed and planned | The M31-P8 record (4 candidates against 24 from a deeper reference) is the evidence; a quality measure for choosing references is a change of its own, made against the recorded subtractions |
+| 9 | The real/bogus model is not checked against the code it was trained for; its score is called a probability | P2 | Agreed and planned | The score stays advisory (it never dismisses a candidate); checking the model's provenance against the subtraction code, and saying "score" where it is not a calibrated probability, are planned |
 

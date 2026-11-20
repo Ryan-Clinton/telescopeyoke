@@ -361,9 +361,24 @@ def second_look_said(name, first, second, say=print, send=None):
     else:
         book = {k["id"]: k for k in second["followed"]}
         back = [i for i in alerted if (book.get(i, {}).get("tonight") or {}).get("seen")]
-        words = (f"{name}: second look done. {len(back)} of {len(alerted)} candidate(s) seen again"
-                 + (f" ({', '.join(back)}): look hard, nothing is claimed yet." if back else
-                    ": a false alarm, nothing new here."))
+
+        def ruled_out(i):
+            # Missed where the second look was deep enough to show it as
+            # bright as it was seen: only that is a false alarm.
+            k = book.get(i) or {}
+            limit, peak = (k.get("tonight") or {}).get("limit"), k.get("peak")
+            return limit is not None and peak is not None and limit >= peak
+        unsure = [i for i in alerted if i not in back and not ruled_out(i)]
+        if back:
+            words = (f"{name}: second look done. {len(back)} of {len(alerted)} candidate(s) seen again "
+                     f"({', '.join(back)}): look hard, nothing is claimed yet.")
+        elif not unsure:
+            words = (f"{name}: second look done. None of the {len(alerted)} candidate(s) seen again, where it was "
+                     "deep enough to show them: a false alarm, nothing new here.")
+        else:
+            words = (f"{name}: second look done. None of the {len(alerted)} candidate(s) seen again, but "
+                     f"{len(unsure)} ({', '.join(unsure)}) not ruled out: the second look did not reach as faint as "
+                     "they were, or its depth there is not known.")
     (send or notify.send)(words, say=say)
     return words
 
@@ -568,7 +583,7 @@ def follow(name, night, vetted, measure, both_halves=True):
         return book
     book = candidates.change(name, tonight_too)
     return [{"id": k["id"], "ra": k["ra"], "dec": k["dec"], "seen_on": candidates.nights_seen(k),
-             "of": len(k["nights"]), "first": k.get("first"),
+             "of": len(k["nights"]), "first": k.get("first"), "peak": candidates.k_peak(k),
              "tonight": next((n for n in k["nights"] if n["night"] == night), None)}
             for k in book["candidates"] if k["open"]]
 
@@ -1147,8 +1162,21 @@ def searchable(session):
     been searched already."""
     import reference
     session = Path(session)
-    if not (session / "final.fits").is_file() or (session / "patrol.json").exists():
+    if not (session / "final.fits").is_file():
         return False
+    if (session / "patrol.json").exists():
+        # Searched already, unless a step was stopped by something that
+        # passes (a catalogue or the network down, a step that failed): only
+        # a verdict on the data itself (too shallow, a skewed subtraction,
+        # INVALID_REQUEST) keeps it from being searched again.
+        try:
+            answer = json.loads((session / "patrol.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return False
+        passing = [s for s in ("depth", "difference", "vet") if isinstance(answer.get(s), dict)
+                   and answer[s].get("refused") not in (None, "INVALID_REQUEST")]
+        if not passing:
+            return False
     ref, owner = reference.for_field(session.parent.name)
     if ref is None or (reference.newest(session.parent.name) is None and is_panel(session.parent.name)):
         # A mosaic panel with no reference of its own: searched all the same,
