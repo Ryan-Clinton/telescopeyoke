@@ -282,7 +282,8 @@ class GuideLog:
         for a, b in self.sessions:
             b = b if b is not None else (self.steps[-1][0] if self.steps else a)
             steps = sum(1 for t, _ in self.steps if a <= t <= b)
-            if b - a >= 4 * self.cycle and steps * self.cycle < 0.5 * (b - a):
+            cycle = self.at(a)[1]          # this session's own guide cycle
+            if b - a >= 4 * cycle and steps * cycle < 0.5 * (b - a):
                 out.append((a, b, steps))
         return out
 
@@ -294,7 +295,8 @@ class GuideLog:
         for a, b in self.sessions:
             b = b if b is not None else (self.steps[-1][0] if self.steps else a)
             times = [a] + [t for t, _ in self.steps if a <= t <= b] + [b]
-            out += [(x, y) for x, y in zip(times, times[1:]) if y - x > max(phd2.GAP_FACTOR * self.cycle, least)]
+            cycle = self.at(a)[1]          # this session's own guide cycle
+            out += [(x, y) for x, y in zip(times, times[1:]) if y - x > max(phd2.GAP_FACTOR * cycle, least)]
         return out
 
     def events_between(self, start, end):
@@ -360,16 +362,28 @@ ZONE = None          # the zone the logs' local times are in (--tz); None: this 
 ZONES, OFFSETS = {"nina": None, "phd2": None}, {"nina": 0.0, "phd2": 0.0}
 
 
-def local(text, fmt, source=None):
+def local(text, fmt, source=None, offset=True):
     """A local time from a log, as UTC seconds: in the source's own zone, or
     ZONE when given (a log from another computer's clock), else this
-    computer's; plus the source's clock offset."""
+    computer's; plus the source's clock offset (not for a noon boundary)."""
     when = dt.datetime.strptime(text, fmt)
     zone = ZONES.get(source) or ZONE
     if zone:
         from zoneinfo import ZoneInfo
         when = when.replace(tzinfo=ZoneInfo(zone))
-    return when.timestamp() + OFFSETS.get(source, 0.0)
+    return when.timestamp() + (OFFSETS.get(source, 0.0) if offset else 0.0)
+
+
+def observing_date(when):
+    """The night a UTC time belongs to, noon to noon in the observing zone
+    (--nina-tz, else --tz, else this computer's)."""
+    zone = ZONES.get("nina") or ZONE
+    if zone:
+        from zoneinfo import ZoneInfo
+        moment = dt.datetime.fromtimestamp(when, ZoneInfo(zone))
+    else:
+        moment = dt.datetime.fromtimestamp(when)
+    return (moment - dt.timedelta(hours=12)).date().isoformat()
 
 
 # NINA's sequencer logs every step "Starting Category: C, Item: NAME, ..."
@@ -402,8 +416,8 @@ def night_span(day):
     of the clocks is 23 or 25 hours, as it really is."""
     first = dt.date.fromisoformat(day)
     following = first + dt.timedelta(days=1)
-    return (local(f"{first} 12:00:00", "%Y-%m-%d %H:%M:%S"),
-            local(f"{following} 12:00:00", "%Y-%m-%d %H:%M:%S"))
+    return (local(f"{first} 12:00:00", "%Y-%m-%d %H:%M:%S", "nina", offset=False),
+            local(f"{following} 12:00:00", "%Y-%m-%d %H:%M:%S", "nina", offset=False))
 
 
 TYPES = ("DARKFLAT", "FLATDARK", "FLAT", "DARK", "BIAS", "LIGHT", "SNAPSHOT")
@@ -479,6 +493,7 @@ def logs_only(nina, guide=None):
 
 
 SAVE_WITHIN_S = 120   # a file saved more than this after its exposure's end belongs to no exposure
+SAVE_EARLY_S = 5      # a save this long before an exposure could end is not that exposure's
 
 
 class NinaLog:
@@ -497,14 +512,18 @@ class NinaLog:
         self.typed = []             # the sequencer's TakeExposure steps: {"start", "end", "type"}
         self._taking = None
         open_steps = {}
+        # Every file's lines in one time order, each line once, before any is
+        # read: a step begun in one log and finished in the next closes,
+        # whatever order the logs were given in.
+        lines = set()
         for path in paths:
             for line in Path(path).read_text(encoding="utf-8", errors="replace").splitlines():
-                found = LINE.match(line)
-                if not found:
-                    continue
-                stamp, level, source, method, _, text = found.groups()
-                when = local(stamp[:26], "%Y-%m-%dT%H:%M:%S.%f" if "." in stamp else "%Y-%m-%dT%H:%M:%S", "nina")
-                self._take(when, level, source, method, text.strip(), open_steps)
+                if LINE.match(line):
+                    lines.add(line)
+        for line in sorted(lines, key=lambda line: LINE.match(line).group(1)):
+            stamp, level, source, method, _, text = LINE.match(line).groups()
+            when = local(stamp[:26], "%Y-%m-%dT%H:%M:%S.%f" if "." in stamp else "%Y-%m-%dT%H:%M:%S", "nina")
+            self._take(when, level, source, method, text.strip(), open_steps)
         for (name, kind), began in open_steps.items():
             self.steps.append({"kind": kind, "name": name, "start": began, "end": None, "failed": False})
         self.steps.sort(key=lambda s: s["start"])
@@ -614,9 +633,13 @@ class NinaLog:
             # The last exposure started before it, and only if it could have
             # ended by then (its length and two minutes): else unmatched.
             i = bisect.bisect_right(starts, when) - 1
-            if i < 0 or when - starts[i] > ordered_e[i]["seconds"] + SAVE_WITHIN_S:
-                return None
-            return starts[i]
+            while i >= 0:
+                done = starts[i] + ordered_e[i]["seconds"]
+                if when < done - SAVE_EARLY_S:
+                    i -= 1            # before this one could have ended: an earlier exposure's, if any
+                    continue
+                return starts[i] if when <= done + SAVE_WITHIN_S else None
+            return None
         self._saved = {owner(s["time"]) for s in self.saves} - {None}
         self._file = {owner(s["time"]): s for s in self.saves}
         self._solved = {owner(when) for when in self.solver_saves} - {None}
@@ -847,7 +870,7 @@ def setup(row):
     (from noon to noon, local), target, filter, camera, gain, exposure and
     pixel scale. A folder holding several nights or setups is split, never
     given one baseline."""
-    night = dt.datetime.fromtimestamp(row["start"] - 12 * 3600).date().isoformat() if row.get("start") else "?"
+    night = observing_date(row["start"]) if row.get("start") else "?"
     return (night, row.get("object", "?"), row.get("filter", "?"), row.get("camera") or "", row.get("gain"),
             row.get("exposure"), round(row["scale"], 2) if row.get("scale") else None)
 
@@ -1064,7 +1087,14 @@ def report(rows, guide=None, left=(), nina=None):
         # into folders of other names (no folder-and-name matches at all).
         key = file_key
         if not ({file_key(s["file"]) for s in nina.saves} & {file_key(r["file"]) for r in rows + left}):
-            key = lambda path: base_name(str(path)).lower()  # noqa: E731
+            # By name, but only a name that is one file on each side: a name
+            # two targets share stays its folder-and-name, and so unmatched.
+            from collections import Counter
+            logged = Counter(base_name(s["file"]).lower() for s in nina.saves)
+            here = Counter(base_name(str(r["file"])).lower() for r in rows + left)
+            key = lambda path: (base_name(str(path)).lower()  # noqa: E731
+                                if logged[base_name(str(path)).lower()] <= 1 and here[base_name(str(path)).lower()] <= 1
+                                else file_key(path))
         saved = {key(nina.saved_file(e)["file"]) for e in lights if nina.saved(e)}
         every_save = {key(s["file"]) for s in nina.saves}
         found = {key(r["file"]) for r in rows} | {key(r["file"]) for r in left}
@@ -1166,11 +1196,13 @@ def watch(folder, guide=None, say=print, poll=5.0, sleep=time.sleep, once=False)
     seen, sizes, rows, state, last_new = set(), {}, [], None, time.time()
     name = dt.date.today().isoformat()
     for path in frames(folder):
-        seen.add(path)                       # what was there before: the night so far is not re-said
-        # ...but it is the night's reference: joined part way, each new frame
-        # is still judged against that setup's best so far.
+        # What was there before: the night so far is not re-said, but it is
+        # the night's reference (joined part way, each new frame is still
+        # judged against its setup's best so far). One that cannot be read
+        # yet (still being written) is left to the loop, which waits for it.
         row = read_one(path)
         if "skip" not in row:
+            seen.add(path)
             rows.append(row)
     say(f"watching {folder}: {len(seen)} frames already there, {len(rows)} of them the night's reference so far; "
         "nothing is sent to any device")

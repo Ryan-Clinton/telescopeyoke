@@ -29,7 +29,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 8 | Calibration and scientific measurement accuracy | done 20 Nov 2026, re-checked |
 | 9 | Demo claims versus real-world proof | done 20 Nov 2026, re-checked |
 | 10 | Hardware onboarding and compatibility | done 20 Nov 2026, re-checked; 3, 4, 8 and 9 open |
-| 11 | NINA/PHD2 companion | done 20 Nov 2026; re-check asked |
+| 11 | NINA/PHD2 companion | done 20 Nov 2026, re-checked |
 | 12 | State management and data integrity | not started |
 | 13 | Observing scheduler and scientific yield | not started |
 | 14 | Weather and environmental decisions | not started |
@@ -440,4 +440,15 @@ Documentation only; `docs/validation.md` is the authority and is unchanged.
 | 8 | The live watch ignores the frames already there as its reference | P2 | Confirmed and fixed | They are read into the reference without being said again |
 | 9 | Frames with no start time weaken the timeline silently | P2 | Confirmed and fixed | The report says how many were measured but left out of the timeline |
 | 10 | The report says unsaved frames are not seen even with NINA's log | P2 | Confirmed and fixed | With NINA's log it says they are from the log |
+
+## 11, re-audited at ae1a11a
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | `--night` and the night a frame belongs to ignore the new zones | P1 | Confirmed and fixed | Both use the observing zone (`--nina-tz`, else `--tz`, else this computer's): `night_span` and `observing_date` |
+| 2 | NINA's lines are interpreted in the order the files were given | P1 | Confirmed and fixed | Every file's lines are put in one time order, each once, before any is read, so a step begun in one log and finished in the next closes |
+| 3 | The name-only fallback brings back the collision | P1 | Confirmed and fixed | A name is matched alone only when it is one file on each side; a name two targets share keeps its folder and stays unmatched |
+| 4 | `sparse()` and `interruptions()` still use the log's one cycle | P1 | Confirmed and fixed | Each uses its own session's cycle (`at()`) |
+| 5 | A frame being written when the watch starts is marked seen and never read | P2 | Confirmed and fixed | Only a frame that reads is taken in at the start; one that does not is left to the loop, which waits for it to stop growing |
+| 6 | A save before its exposure could have ended is still given to it | P2 | Confirmed and fixed | A save more than 5 s before an exposure's end (`SAVE_EARLY_S`) is tried against the one before, and belongs to none if that does not fit either |
 
