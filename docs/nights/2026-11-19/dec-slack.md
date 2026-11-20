@@ -263,3 +263,55 @@ What it does not show:
   (eight 2 s frames, then extrapolated over minutes): the 55" and the
   flatness after it carry that uncertainty, a few arcseconds a minute,
   not the hundreds of arcseconds a working drive would have moved.
+
+## The balance changes which way Dec fails (20 November, 01:20-01:40)
+
+Before this test the owner took the hot water bottle off the guide scope
+(it had been taped there since about 23:45) and took off the **700 g of
+sand at the back of the tube** (Dec balance along the tube); the 300 g
+opposite the guide scope stayed. The new direction-counting test
+(d12362c), the ST4 lead, IC 405, Dec +22.1, east of the pier:
+[dec-engage-test-0120-st4.json](dec-records/dec-engage-test-0120-st4.json).
+
+| Leg | Board's Dec count | Star along Dec |
+|---|---|---|
+| North, 35 steps | +346" | **286"**: little for 20 steps, then the full rate (about 10.5" a step) |
+| North after a 2 min rest, 10 steps | | at once: 0.2, 0.7, then 0.8-1.5 of the rate a step |
+| South, 80 steps | **-828"** | **about 15"**: nothing; stopped at 80 steps as designed |
+
+Against 00:57 (bottle on, all the sand: north never engaged), **the
+direction that fails flipped from north to south when the load on Dec
+changed.** The board counted every step both ways, so the ST4 lead and the
+board are not where the movement is lost. What it points at: the drive
+moving the axis one way and not the other under an out-of-balance torque
+(the clutch slipping, or the motor or worm stalling at guide-rate force),
+not slack: 828" (14') is far beyond any gear's backlash. Which way the
+out-of-balance pulls at that pointing was not measured.
+
+The `--native` test (the mount's own slow move) began straight after and
+was stopped after 19 north steps when the owner wanted the mount home to
+check the balance: the board counted 199" north, the star moved under 5".
+Those steps came straight after the failed south leg, so they show the axis
+still held after it, not a clean native result
+([partial track](dec-records/dec-engage-test-native-partial.json)).
+
+After the owner rebalanced at home (what changed was not recorded), the
+guide scope saw no star at IC 405 (dew, the bottle off) and guiding was
+ended for the night at the owner's word.
+
+**Next, by daylight:** the balance checked and recorded both ways, then
+the guide-lead test and the `--native` test back to back at one pointing,
+with the out-of-balance noted; and the drive-response test (a hand on the
+motor, a mark across the clutch) for which part slips. For Gary.
+
+## The west side near the meridian
+
+Every GoTo tonight that went wrong was on the west side within about an
+hour of the meridian, with the tube near vertical: two re-centres that
+swung the wrong way and timed out (evening), and at 02:33 a dither at hour
+angle -0.09 h that swung the tube to the west side, then got garbled
+answers from the motor board ("03=211", "4") and was found still moving at
+02:35. The owner thinks the tube catches the tripod leg there and lowered
+the scope; a GoTo to the California Nebula at hour angle +2.2 h on the west
+side went cleanly. Unproven; a daylight clearance check near the meridian
+on the west side would settle it.
