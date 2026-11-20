@@ -432,7 +432,7 @@ class Mount:
             self.move_failed = True
             try:
                 self.stop()
-            except Exception:       # noqa: BLE001 - the first error is the one raised
+            except (Exception, SystemExit):     # a Refusal is a SystemExit; the first error is raised
                 pass
             raise
 
@@ -496,10 +496,19 @@ class Mount:
         for part in parts:
             try:
                 part()
-            except Exception as error:
+            except (Exception, SystemExit) as error:    # a Refusal is a SystemExit
                 first = first or error
         if first:
             raise first
+        # Sent is not stopped: a reply lost in the serial timeout reads as
+        # nothing. Stopped is the mount saying no GoTo is under way, within
+        # a few seconds of slowing down; anything else is said as unknown.
+        until = time.monotonic() + STOP_CONFIRM_S
+        while self.slewing():
+            if time.monotonic() > until:
+                raise Refusal("HANDSET_NOT_ANSWERING", f"Stop was sent, and {STOP_CONFIRM_S:g} s later the mount "
+                              "still says it is moving. Switch the mount off at the mount if it is.")
+            time.sleep(0.25)
 
     def tracking(self, on):
         # Mode 2 is equatorial tracking, 0 is off.
@@ -1465,6 +1474,7 @@ def refuse_near_sun(hour_angle, dec, site):
         raise Refusal("TARGET_NEAR_SUN", "That is within 40° of the Sun; not slewing.")
 
 
+STOP_CONFIRM_S = 6.0     # seconds a stopped GoTo may take to slow down before the stop is doubted
 NEAR_MERIDIAN = 0.33     # hours from the meridian inside which the handset's choice of side is not to be relied on
 
 

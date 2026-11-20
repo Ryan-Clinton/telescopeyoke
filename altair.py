@@ -866,13 +866,14 @@ class AltairCamera:
             say(f"camera: the warm-up stopped ({problem}); the cooler goes off now")
         finally:
             option = getattr(lib, "ALTAIRCAM_OPTION_TEC", None)
+            off = True
             if option is not None:
                 try:
                     handle.put_Option(option, 0)
                 except Exception:
-                    pass
+                    off = False         # closing the camera stops the cooler; the caller says it is not confirmed
             self.target = None
-        return True
+        return off
 
     # --- the library's thread ----------------------------------------------------
 

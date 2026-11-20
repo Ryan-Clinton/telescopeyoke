@@ -494,7 +494,7 @@ class DirectHandset:
         for axis in (RA, DEC):
             try:
                 self.board.halt(axis)
-            except Exception as error:
+            except (Exception, SystemExit) as error:    # a Refusal is a SystemExit
                 first = first or error
         if first:
             raise first

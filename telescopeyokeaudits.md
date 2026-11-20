@@ -20,7 +20,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | # | Audit | Status |
 |---|---|---|
 | 1 | Mount safety and movement | done 20 Nov 2026, re-checked |
-| 2 | Hardware failure and recovery | done 20 Nov 2026; re-check asked |
+| 2 | Hardware failure and recovery | done 20 Nov 2026, re-checked |
 | 3 | AI agent autonomy and permissions | not started |
 | 4 | Autonomous full-night operation | not started |
 | 5 | Guiding and calibration | not started |
@@ -219,9 +219,19 @@ This initial pass was an architectural and risk assessment, not an exhaustive li
 | 1 | An unanswered slewing query reads as "stopped" | P0 | Confirmed and fixed | `Mount.slewing()` asks again on a reply that is neither 0 nor 1 and refuses (HANDSET_NOT_ANSWERING) after four, so a GoTo never ends on a lost reply |
 | 2 | A move that fails part way can leave an axis turning | P0 | Confirmed and fixed | `Mount.stopped_if_it_fails()` stops the mount whenever a GoTo, home or seek raises, whoever called it and whatever they catch |
 | 3 | A failed re-centre counts as a success | P0 | Partly right, fixed | A refusal before anything moves (a limit, the Sun) still lets the run go on, tracking where it was; a move that began and failed, or a telescope found not turning, now ends the run |
-| 4 | Stop gives up at the first failure | P0 | Already fixed in 0893325 (`Mount.stop`); `direct.py`'s stop now halts each axis whether or not the other answered |
+| 4 | Stop gives up at the first failure | P0 | Confirmed | Fixed in 0893325 (`Mount.stop`); `direct.py`'s stop now halts each axis whether or not the other answered (and see 2, re-checked) |
 | 5 | A cooler fault inside a keeper request leaves the keeper running | P0 | Confirmed and fixed | The keeper ends at once when a request leaves the cooler latched faulty: cooler off, camera closed, fault kept |
 | 6 | A wheel reset between checks mislabels frames | P1 | Confirmed and fixed | The wheel is asked again as every frame ends, before it is kept; one that moved or does not answer stops the run with that frame not kept. The `check_every_s` setting is gone |
 | 7 | An interrupted focuser move corrupts the kept position | P1 | Partly right, fixed | The Nano finishes every move it is given, so a move whose answer came is counted; one whose answer never came, or came wrong, now forgets the kept position until the next zero |
 | 8 | Keeper stop reports success it has not seen | P1 | Confirmed and fixed | `keeper.stop()` says so and returns False when the keeper has not gone; the closing message says when the warm-up was cut short, with the temperature |
+
+## 2, re-audited at 60fc90e
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | The stops catch `Exception`, and a Refusal is a `SystemExit` | P0 | Confirmed and fixed | `Mount.stop()`, `stopped_if_it_fails()` and `direct.py`'s stop catch `SystemExit` too, so a refused part no longer ends the stop |
+| 2 | A stop sent is not a stop confirmed | P0 | Confirmed and fixed | After its parts, `Mount.stop()` waits up to 6 s (`STOP_CONFIRM_S`) for the mount to say no GoTo is under way, and refuses saying so if it does not |
+| 3 | A refused re-centre still returns True | P1 | Smaller than claimed, no change | Inside a run the re-centre is always to the run's own target, and the run's first GoTo is planned and refused before it starts (`plan_goto` in `main`); a refusal mid-run leaves the mount tracking that target |
+| 4 | The focuser counts any newline, and a serial failure keeps the old position | P1 | Confirmed and fixed | An interrupted move is counted only on its own `OK N` answer; any other failure after the order forgets the kept position |
+| 5 | The keeper can still say "warmed up" without knowing | P1 | Confirmed and fixed | `warm_up()` returns whether the cooler took the off command; the keeper says "not known" when it did not, or the sensor could not be read |
 

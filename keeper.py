@@ -188,13 +188,19 @@ def serve(cam, say=print):
         stopping.set()
         say("camera: the keeper is stopping: warming the sensor slowly, then closing the camera")
         with calls:
-            cam.warm_up(say=say)
+            off = cam.warm_up(say=say)
             try:
                 degrees = cam.temperature()
             except Exception:       # noqa: BLE001 - the message goes either way
                 degrees = None
         ambient = getattr(cam, "ambient", None)
-        if degrees is not None and ambient is not None and degrees < ambient - 2 * altair.WARM_STEP_C:
+        if off is False or degrees is None:
+            # What is known, said as known: the cooler's off command refused,
+            # or the sensor not read, is not a finished warm-up.
+            warmed = ("The camera is closing, but " + ("its cooler did not take the off command (closing the "
+                      "camera stops it)" if off is False else "its sensor's temperature could not be read")
+                      + ": whether it has warmed up is not known. Leave it a few minutes before switching off.")
+        elif degrees is not None and ambient is not None and degrees < ambient - 2 * altair.WARM_STEP_C:
             # The warm-up was cut short (its time up, a refused step, a
             # faulted cooler): said as it is, not as a finished warm-up.
             warmed = (f"The camera's warm-up was cut short at {degrees:.1f} °C, below the {ambient:.1f} °C it "

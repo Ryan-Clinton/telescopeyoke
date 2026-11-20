@@ -172,14 +172,21 @@ class Focuser:
         except (KeyboardInterrupt, SystemExit):     # Ctrl-C, or main()'s SIGTERM, which exits
             # The Nano finishes a move once ordered: wait for its answer, so
             # whoever counts where the motor is can count this move, and the
-            # answer is not taken for the next order's.
-            until, ended = time.monotonic() + wait, False
-            while time.monotonic() < until and not ended:
-                ended = self.link.read(1).endswith(b"\n")
-            if ended:
+            # answer is not taken for the next order's. Counted only on its
+            # own answer; anything else and where the drawtube is is unknown.
+            until, heard = time.monotonic() + wait, b""
+            try:
+                while time.monotonic() < until and not heard.endswith(b"\n"):
+                    heard += self.link.read(1)
+            except Exception:       # noqa: BLE001 - the port went: the position is forgotten below
+                pass
+            if heard.decode(errors="replace").strip() == f"OK {sent}":
                 counted(steps)
             else:
                 forget_position()
+            raise
+        except Exception:
+            forget_position()       # the order may have gone and the link with it
             raise
         if reply != f"OK {sent}":
             forget_position()
