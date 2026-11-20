@@ -1269,18 +1269,22 @@ def read_log(session):
     the earlier one (a deferred frame whose raw file could not be written)."""
     lines = Path(session) / "frames.jsonl"
     if lines.exists():
-        found, torn = {}, 0
-        for line in lines.read_text(encoding="utf-8").splitlines():
-            if not line.strip():
-                continue
+        found, bad = {}, []
+        text = [line for line in lines.read_text(encoding="utf-8").splitlines() if line.strip()]
+        for number, line in enumerate(text):
             try:
                 entry = json.loads(line)
             except ValueError:
-                torn += 1           # a line cut short by an interrupted write: left out, never made up
+                bad.append(number)  # left out, never made up
                 continue
             found[entry.get("index", len(found))] = entry
-        if torn:
-            print(f"{lines}: {torn} line(s) that are not whole left out; the file is kept as it is",
+        if bad == [len(text) - 1]:
+            print(f"{lines}: its last line was cut short (an interrupted write) and is left out", file=sys.stderr)
+        elif bad:
+            # Damage before the end: frames' records may be missing, said
+            # loudly; the file itself is kept as it is.
+            print(f"{lines}: {len(bad)} damaged line(s) inside the log (line(s) "
+                  f"{', '.join(str(n + 1) for n in bad[:5])}): those frames' records are missing from it",
                   file=sys.stderr)
         return list(found.values())
     path = Path(session) / "frames.json"   # sessions from before the line-per-frame log

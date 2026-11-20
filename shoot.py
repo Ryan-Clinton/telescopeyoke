@@ -332,7 +332,7 @@ def tell(order, run=None):
     with records.locked(ORDERS):
         waiting = _orders()
         waiting.append({"order": order, "run": run, "at": time.time()})
-        ORDERS.write_text(json.dumps(waiting), encoding="utf-8")
+        records.write(ORDERS, waiting, indent=None)
     return {"order": order, "run": run, "note": "The run acts on it after its next frame."}
 
 
@@ -346,7 +346,13 @@ def _orders():
     try:
         left = json.loads(text)
     except ValueError:
-        return [{"order": text, "run": None, "at": None}] if text else []
+        # A bare word is an order as written before 1 November 2026; anything
+        # else is a broken file, said and never taken for an order.
+        if text in KNOWN_ORDERS:
+            return [{"order": text, "run": None, "at": None}]
+        if text:
+            print(f"  the orders file {ORDERS} is not whole; no order taken from it", file=sys.stderr, flush=True)
+        return []
     if isinstance(left, dict):
         return [left]
     return [o for o in left if isinstance(o, dict)] if isinstance(left, list) else []
@@ -365,7 +371,7 @@ def clear_old_orders(since=None):
     with records.locked(ORDERS):
         kept = [o for o in _orders() if o.get("at") is not None and o["at"] >= since]
         if kept:
-            ORDERS.write_text(json.dumps(kept), encoding="utf-8")
+            records.write(ORDERS, kept, indent=None)
         else:
             ORDERS.unlink(missing_ok=True)
 
@@ -393,7 +399,7 @@ def order(name=None, now=None, only=None):
         taken = next((o for o in mine if o["order"] == "stop"), mine[0] if mine else None)
         left = [o for o in waiting if o is not taken]
         if left:
-            ORDERS.write_text(json.dumps(left), encoding="utf-8")
+            records.write(ORDERS, left, indent=None)
         else:
             ORDERS.unlink(missing_ok=True)
     return taken["order"] if taken else None

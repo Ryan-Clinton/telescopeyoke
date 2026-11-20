@@ -30,7 +30,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 9 | Demo claims versus real-world proof | done 20 Nov 2026, re-checked |
 | 10 | Hardware onboarding and compatibility | done 20 Nov 2026, re-checked; 3, 4, 8 and 9 open |
 | 11 | NINA/PHD2 companion | done 20 Nov 2026, re-checked |
-| 12 | State management and data integrity | done 20 Nov 2026; re-check asked |
+| 12 | State management and data integrity | done 20 Nov 2026, re-checked |
 | 13 | Observing scheduler and scientific yield | not started |
 | 14 | Weather and environmental decisions | not started |
 | 15 | Operational performance | not started |
@@ -465,4 +465,14 @@ Documentation only; `docs/validation.md` is the authority and is unchanged.
 | 7 | One torn line hides a whole session's frame log | P1 | Confirmed and fixed | A line that is not whole is left out and said; nothing is made up, and the file is left as it is |
 | 8 | Activity history written directly, its runs list without a lock | P2 | Confirmed and fixed | `records.write` for the last activity and `records.change` for the runs, still never failing the run |
 | 9 | No common rule for reading older records | P2 | Agreed and planned | For the candidate books, obligations, references and calibration first: each reader to say the versions it reads and refuse a newer one |
+
+## 12, re-audited at 148bdfe
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | The orders queue is rewritten with `write_text`; a broken one read as an order | P1 | Confirmed and fixed | Written with `records.write` under the lock; a file that is not whole is said and gives no order (a bare word is read as an order only if it is one of the known ones). The acknowledgement stays planned |
+| 2 | `schedule.py clear` and `add_blocks` bypass the lock | P1 | Confirmed and fixed | Clear holds the plan's lock; `add_blocks` adds all its blocks under one lock (`_add` inside, `add` its locked form) |
+| 3 | The archive copy is checked by size only; a relative archive path breaks the link | P1 | Confirmed and fixed | The copy is synced to disk and its SHA-256 compared with the original's before anything is replaced; the archive path is made absolute |
+| 4 | A torn last log line and damage inside the log are said alike | P2 | Confirmed and fixed | A cut-short last line is said as an interrupted write; damage before the end is said loudly, with the line numbers, as frames' records missing |
+| 5 | `runs.clear()` does not make a dict | P2 | Confirmed and fixed | A history of any other shape is begun again as a dict, under its lock |
 

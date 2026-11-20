@@ -148,14 +148,16 @@ def _ended(entry, when, stopped=False):
         return
 
     def add(runs):
-        if not isinstance(runs, dict):
-            runs.clear()
+        for old in sorted(runs, key=lambda k: (runs[k] or {}).get("ended") or 0)[:-(KEEP_RUNS - 1) or None]:
+            del runs[old]
         runs[entry["session"]] = {"ended": when, "stopped": stopped, "frames": entry.get("frames"),
                                   "planned": entry.get("planned")}
-        for old in sorted(runs, key=lambda k: runs[k].get("ended") or 0)[:-KEEP_RUNS]:
-            del runs[old]
     try:
-        records.change(_runs_file(), add, empty={}, indent=None)
+        with records.locked(_runs_file()):
+            runs = records.read(_runs_file(), {})
+            runs = runs if isinstance(runs, dict) else {}       # a history of another shape: begun again
+            add(runs)
+            records.write(_runs_file(), runs, indent=None)
     except Exception:
         pass
 

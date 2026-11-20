@@ -19,6 +19,7 @@ transit at 4 s needs about 50 GB, with 15 GB free and 115 GB of old
 frames on the laptop.
 """
 import argparse
+import os
 import shutil
 import time
 from pathlib import Path
@@ -46,22 +47,34 @@ def free(path=None):
     return shutil.disk_usage(path).free
 
 
+def digest(path):
+    """The file's SHA-256, read in pieces."""
+    import hashlib
+    sha = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            sha.update(block)
+    return sha.hexdigest()
+
+
 def move(path, store, data=None):
     """Move one file to the same place under `store`, leaving a link where
     it was. Returns the new path, or None if it was already moved."""
     path, data = Path(path), Path(data or config.DATA)
     if path.is_symlink() or not path.is_file():
         return None
-    target = Path(store) / path.resolve().relative_to(data.resolve())
+    target = Path(store).expanduser().resolve() / path.resolve().relative_to(data.resolve())   # absolute: the link works from anywhere
     target.parent.mkdir(parents=True, exist_ok=True)
     # Copied whole under another name and checked, renamed into place, the
     # link made beside the original and swapped in for it: at every moment
     # the frame is at its own path, the original or the link to a whole copy.
     partial = target.with_name(f".{target.name}.partial")
     shutil.copy2(str(path), str(partial))
-    if partial.stat().st_size != path.stat().st_size:
+    with open(partial, "rb") as written:
+        os.fsync(written.fileno())          # on the disk before the original goes
+    if digest(partial) != digest(path):
         partial.unlink(missing_ok=True)
-        raise OSError(f"the copy of {path.name} on the storage disk came out a different size; the original stays")
+        raise OSError(f"the copy of {path.name} on the storage disk does not match it; the original stays")
     partial.replace(target)
     link = path.with_name(f".{path.name}.link")
     link.unlink(missing_ok=True)

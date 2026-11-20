@@ -209,8 +209,7 @@ def due(plan=None, now=None):
     return queued["label"] if queued else None
 
 
-@transaction
-def add(label, minutes, command, not_before_=None, pid=None, until=None, protect=None, deadline=None,
+def _add(label, minutes, command, not_before_=None, pid=None, until=None, protect=None, deadline=None,
         uncertainty=None):
     """A step at the end of tonight's plan. `protect` ("hard" for an
     occultation, a transit or an urgent transient), `deadline` and
@@ -232,6 +231,10 @@ def add(label, minutes, command, not_before_=None, pid=None, until=None, protect
     return step_id
 
 
+add = transaction(_add)
+
+
+@transaction
 def add_blocks(label, minutes, command, blocks_text, protect=None, **step):
     """A colour set as blocks, one step per filter ("L:10,R:5,G:5,B:5"):
     each the imaging command with --filter and --frames added, its minutes
@@ -255,7 +258,7 @@ def add_blocks(label, minutes, command, blocks_text, protect=None, **step):
         raise interface.Refusal("INVALID_REQUEST", f"--filters {blocks_text}: {problem}") from None
     total = sum(n for _, n in parts)
     first = step.pop("not_before_", None)        # the set starts then; the blocks follow one another
-    return [add(f"{label} {name}", round(minutes * n / total, 1),
+    return [_add(f"{label} {name}", round(minutes * n / total, 1),
                 list(command) + ["--filter", name, "--frames", str(n)],
                 not_before_=first if i == 0 else None, protect=protect, **step)
             for i, (name, n) in enumerate(parts)]
@@ -1502,7 +1505,8 @@ def main(argv=None):
     elif args.action == "run":
         sys.exit(0 if run(reload=restart) else 1)
     elif args.action == "clear":
-        save({"steps": [], "made": time.time()})
+        with records.locked(FILE):          # as every change to the plan is (transaction)
+            save({"steps": [], "made": time.time()})
     elif args.action == "end":
         sys.exit(0 if end() else 1)
     elif args.action == "tidy":
