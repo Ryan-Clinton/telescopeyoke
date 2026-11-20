@@ -483,6 +483,12 @@ def check(dry_run=False, say_it=print):
     try:
         site = config.load()["site"]
         rain, cloud = forecast(feeds.weather(site["latitude"], site["longitude"]))
+        if any(u.get("state") in ("stale", "unavailable") and u["source"].startswith("Open-Meteo")
+               for u in feeds.used.values()):
+            # An old copy of the forecast is not tonight's: not known, so it
+            # can never clear a rain warning (tonight.py holds a GO back the same way).
+            say_it("forecast is an old copy (its source did not answer): rain in the next hour not known")
+            rain, cloud = None, None
     except Exception as error:      # no network, no site: the frames still count
         say_it(f"forecast not read: {error}")
         rain, cloud = None, None    # not known: neither rain nor dry

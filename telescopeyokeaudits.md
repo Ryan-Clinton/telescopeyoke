@@ -32,7 +32,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 11 | NINA/PHD2 companion | done 20 Nov 2026, re-checked |
 | 12 | State management and data integrity | done 20 Nov 2026, re-checked |
 | 13 | Observing scheduler and scientific yield | done 20 Nov 2026, re-checked; 7 planned |
-| 14 | Weather and environmental decisions | done 20 Nov 2026; re-check asked |
+| 14 | Weather and environmental decisions | done 20 Nov 2026, re-checked |
 | 15 | Operational performance | not started |
 | 16 | Network security and external integrations | not started |
 | 17 | Public releases and installation | not started |
@@ -516,4 +516,13 @@ The rain alert stays on in every case (the owner's rule, 15 November 2026): thes
 | 7 | No forecast means "no rain" in the alerts | P1 | Confirmed and fixed | A forecast not read, or not reaching the hour ahead, is "not known": it keeps the rain state it had and is said as not known |
 | 8 | No physical weather protection | P1 | Agreed, no change | The alerts are to fetch the person; parking is not shelter. The docs already say so (docs/alerts.md); nothing claims unattended weather protection |
 | 9 | Sky quality not used to choose between targets | P2 | Agreed and planned | Measured frame quality and forecast seeing as advice between otherwise equal targets, later |
+
+## 14, re-audited at 482fe49
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | A stale radar picture can still start a warning, and is scored as a new look | P1 | Partly right, fixed for the scores | A stale picture is kept out of the forecast scores (`note_seen`). One that shows rain still warns: a rain warning errs on the safe side, and the owner's rule is never to quieten the rain alert (15 Nov 2026) |
+| 2 | A stale forecast copy can clear a rain alert | P1 | Confirmed and fixed | `alert.check` takes a stale or unavailable Open-Meteo forecast as not known, so it can never clear the rain state |
+| 3 | A failed radar look can slow the watch to its relaxed pace | P1 | Confirmed and fixed | Without a fresh picture (none, an error, or stale) the watch keeps its normal pace; the relaxed one is only for a fresh radar showing nothing near |
+| 4 | One-centre coverage judged by the spell's best hour | P2 | Confirmed and fixed | By its weakest hour (`min`) |
 

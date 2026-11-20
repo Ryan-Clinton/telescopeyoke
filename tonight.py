@@ -147,7 +147,7 @@ def weather_report(night, lat, lon, source=feeds):
     # centre left of several, is not enough for a GO: said, and MARGINAL.
     stale = [u["source"] for u in getattr(source, "used", {}).values()
              if u.get("state") in ("stale", "unavailable") and u["source"].startswith("Open-Meteo")]
-    lone = centres and best and max((h["centres"] or {}).get("of", 0) for h in best) <= 1
+    lone = centres and best and min((h["centres"] or {}).get("of", 0) for h in best) <= 1   # the spell's weakest hour
     if verdict == "GO" and (stale or lone):
         verdict = "MARGINAL"
         notes.insert(0, "GO held back: " + ("the forecast is an old copy (its source did not answer)" if stale else

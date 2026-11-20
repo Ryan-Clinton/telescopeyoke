@@ -98,7 +98,9 @@ def look(site=None):
               "rain_here": bool(now[int(sy), int(sx)]), "age_min": round(age_min, 1),
               # Older than this, the picture is history: kept, never said as the rain now.
               "stale": age_min > STALE_MIN}
-    clouds.note_seen("radar", "rain", answer["rain_here"], f"radar {answer['picture']}")
+    if not answer["stale"]:
+        # A stale picture is not a new look at the sky: kept out of the scores.
+        clouds.note_seen("radar", "rain", answer["rain_here"], f"radar {answer['picture']}")
 
     ys, xs = np.nonzero(now)
     if len(xs):
@@ -229,6 +231,10 @@ def pace(a, every, until, weather=None):
     perfect clear skies forecast all night, these can be turned down."""
     if a and a.get("nearest_km") is not None and a["nearest_km"] <= CLOSE_KM:
         return CLOSE_EVERY_MIN, f"rain {a['nearest_km']} km away"
+    if not a or a.get("error") or a.get("stale"):
+        # No fresh radar: never the relaxed pace, which is for a radar that
+        # shows nothing near, not for one that cannot be seen.
+        return every, "no fresh radar picture"
     try:
         if weather is None:
             import feeds
