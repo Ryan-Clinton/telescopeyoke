@@ -7,7 +7,7 @@ import sys
 import tomllib
 from pathlib import Path
 
-import host  # noqa: F401  (every script passes through here: makes output UTF-8)
+import host  # every script passes through here: makes output UTF-8
 
 ROOT = Path(__file__).parent
 EXAMPLE = ROOT / "config.example.toml"
@@ -626,11 +626,11 @@ def save(changes, path=None):
     if path.exists():
         backup = path.with_suffix(".toml.bak")
         backup.touch(mode=0o600)
-        backup.chmod(0o600)
+        host.private(backup)
         backup.write_text(old, encoding="utf-8")
     partial = path.with_suffix(".toml.part")
     partial.touch(mode=0o600)
-    partial.chmod(0o600)
+    host.private(partial)
     partial.write_text(new, encoding="utf-8")
     partial.replace(path)
     return new

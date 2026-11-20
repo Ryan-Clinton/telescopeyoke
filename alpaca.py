@@ -85,7 +85,7 @@ class Client:
                                              headers={"Content-Type": "application/x-www-form-urlencoded"})
         try:
             with urllib.request.urlopen(request, timeout=timeout or self.timeout) as answer:
-                found = json.loads(answer.read().decode("utf-8"))
+                found = json.loads(bounded(answer, MOST_REPLY).decode("utf-8"))
         except urllib.error.HTTPError as error:
             raise DriverError(error.code, f"{what}: the server said {error.code} {error.reason}") from None
         except (OSError, ValueError) as error:
@@ -100,6 +100,25 @@ class Client:
 
     def put(self, what, timeout=None, **params):
         return self._call("PUT", what, params, timeout)
+
+
+# The most an Alpaca server is read for: an answer to a call is a few
+# hundred bytes, a picture the sensor's pixels (a 183's 20 million at four
+# bytes each, or JSON's several times that). A server that sends more is
+# refused rather than let fill this computer's memory.
+MOST_REPLY = 1 << 20
+MOST_IMAGE = 1 << 30
+
+
+def bounded(answer, most):
+    """An HTTP answer's body, refused if it is longer than `most` bytes."""
+    length = answer.headers.get("Content-Length")
+    if length and length.isdigit() and int(length) > most:
+        raise ValueError(f"the server sent {int(length):,} bytes, more than the {most:,} allowed")
+    body = answer.read(most + 1)
+    if len(body) > most:
+        raise ValueError(f"the server sent more than the {most:,} bytes allowed")
+    return body
 
 
 def find(wait=1.5):
@@ -130,7 +149,7 @@ def devices(address, timeout=5.0):
     """What an Alpaca server offers: [{"type", "number", "name"}]."""
     url = f"http://{address}/management/v1/configureddevices?ClientID={CLIENT_ID}&ClientTransactionID=1"
     with urllib.request.urlopen(url, timeout=timeout) as answer:
-        found = json.loads(answer.read().decode("utf-8")).get("Value") or []
+        found = json.loads(bounded(answer, MOST_REPLY).decode("utf-8")).get("Value") or []
     return [{"type": d.get("DeviceType"), "number": d.get("DeviceNumber"), "name": d.get("DeviceName")}
             for d in found]
 
@@ -711,15 +730,21 @@ class Camera:
             f"{self.client.base}imagearray?ClientID={CLIENT_ID}&ClientTransactionID={next(self.client.ids)}",
             headers={"Accept": "application/imagebytes"})
         with urllib.request.urlopen(request, timeout=120) as answer:
-            body, kind = answer.read(), answer.headers.get("Content-Type", "")
+            body, kind = bounded(answer, MOST_IMAGE), answer.headers.get("Content-Type", "")
         if "imagebytes" in kind:
+            if len(body) < 44:
+                raise RuntimeError("the camera's driver sent a picture shorter than its own header")
             fields = np.frombuffer(body[:44], "<i4")
             error, start, sent_as, rank, x, y = fields[1], fields[4], fields[6], fields[7], fields[8], fields[9]
             if error:
                 raise RuntimeError(f"the camera's driver sent error {error:#x} with the picture")
             if rank != 2:
                 raise RuntimeError("the camera sent a colour (three-plane) picture: only a raw mosaic is used here")
-            return np.frombuffer(body[start:], IMAGE_TYPES[int(sent_as)]).reshape(x, y)
+            kind = IMAGE_TYPES.get(int(sent_as))
+            if kind is None or x <= 0 or y <= 0 or start < 44 \
+                    or len(body) - start != int(x) * int(y) * np.dtype(kind).itemsize:
+                raise RuntimeError("the camera's driver sent a picture whose size does not match its own header")
+            return np.frombuffer(body[start:], kind).reshape(x, y)
         found = json.loads(body.decode("utf-8"))
         if found.get("ErrorNumber"):
             raise RuntimeError(f"the camera's driver: {found.get('ErrorMessage')}")

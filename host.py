@@ -69,6 +69,18 @@ def alive(pid):
         return False
 
 
+def private(path):
+    """Make `path` readable and writable by this user only, before a secret
+    goes in it. On Windows a mode does not do that, so the file stops
+    inheriting its folder's permissions and is given to this user alone."""
+    os.chmod(path, 0o600)
+    if WINDOWS:
+        user = os.environ.get("USERNAME")
+        if user:
+            subprocess.run(["icacls", str(path), "/inheritance:r", "/grant:r", f"{user}:F"],
+                           capture_output=True, timeout=30, **QUIET)
+
+
 def processes():
     """[(pid, [command words])] of the running processes: /proc on Linux,
     the process table through PowerShell on Windows; [] if neither answers."""

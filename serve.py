@@ -181,20 +181,29 @@ def share_pictures(discovery):
             row.setdefault("shared", []).append(f"discovery/{target.name}")
 
 
+# Fields that would say where the telescope stands, left out of every
+# answer and of web/status.json by their names, whatever adds them later:
+# none is published now (checked 20 November 2026), and none ever may be.
+# "site" stays: the night's answer names it (schemas/night.schema.json),
+# and its name is blanked below.
+PLACE_FIELDS = {"latitude", "longitude", "lat", "lon", "lat_deg", "lon_deg", "elevation", "elevation_m",
+                "height_m", "altitude_m", "location", "address", "skyline", "horizon_points"}
+
+
 def unplaced(answer, name=None):
-    """An answer with the site's name blanked wherever it appears: the page
-    and its feeds are for the person, who knows where they are, and the
-    name says where the telescope stands to anyone else who reads them
-    (20 October 2026: "i really dont see the benefit of giving my
-    geographical location"). The planner keeps using the site; it never
-    leaves the laptop."""
+    """An answer with the place left out: every field in PLACE_FIELDS, and
+    the site's name blanked wherever it appears. The page and its feeds are
+    for the person, who knows where they are, and the place says where the
+    telescope stands to anyone else who reads them (20 October 2026: "i
+    really dont see the benefit of giving my geographical location"). The
+    planner keeps using the site; it never leaves the laptop."""
     if name is None:
         try:
             name = (config.load() if config.FILE.exists() else config.example())["site"]["name"]
         except Exception:
             return answer
     if isinstance(answer, dict):
-        return {k: unplaced(v, name) for k, v in answer.items()}
+        return {k: unplaced(v, name) for k, v in answer.items() if str(k).lower() not in PLACE_FIELDS}
     if isinstance(answer, list):
         return [unplaced(v, name) for v in answer]
     if isinstance(answer, str) and name and name in answer:
@@ -259,7 +268,7 @@ def status_forever(seconds=2):
             status["notes"] = notes
             status["discovery"] = discovery
             partial = target.with_suffix(".part")
-            partial.write_text(json.dumps(status), encoding="utf-8")
+            partial.write_text(json.dumps(unplaced(status)), encoding="utf-8")
             host.replace_preview(partial, target)
         except Exception:
             traceback.print_exc()

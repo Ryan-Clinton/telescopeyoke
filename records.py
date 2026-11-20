@@ -147,7 +147,8 @@ def write(path, record, schema=None, stamp=False, record_version=1, indent=1, de
     partial = path.with_name(path.name + ".part")
     with open(partial, "w", encoding="utf-8") as f:
         if private:
-            os.chmod(partial, 0o600)       # before the secret is in it
+            import host
+            host.private(partial)          # before the secret is in it
         f.write(text)
         f.flush()
         os.fsync(f.fileno())
