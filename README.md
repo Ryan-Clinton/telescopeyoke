@@ -235,9 +235,14 @@ does): 0.4.2 does. Anyone on 0.4.1 should move to 0.4.2, or use its GoTo by
 night only.
 
 To move to a newer release, close TelescopeYoke and stop anything running
-from the old folder (an imaging run, the status page's service), unpack the
-new one beside it, and copy across what the old folder keeps of yours, none
-of which is in the zip:
+from the old folder (an imaging run, the status page's service) and unpack
+the new one beside it. An install made fresh from 0.4.3 on keeps your
+settings and files apart from the program, in
+`~/.local/share/telescopeyoke/data` (on Windows,
+`%LOCALAPPDATA%\TelescopeYoke\data`): the new folder finds them there, so
+copy only `vendor/` and the motion lock (below), and run its installer. An
+older install keeps them in its own folder: copy across what it keeps of
+yours, none of which is in the zip:
 
 - your settings and place: `config.toml`, `rigs/`, `spots/`, `horizon/`;
 - your records: `calibration/`, `reference/`, `candidates/`, `mosaics/`,

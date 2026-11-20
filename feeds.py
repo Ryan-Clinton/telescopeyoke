@@ -18,7 +18,9 @@ import requests
 
 import records
 
-CACHE = Path(__file__).parent / "cache"
+import config  # noqa: E402
+
+CACHE = config.DATA / "cache"   # with the rest of the kept files (the code's folder before 20 Nov 2026)
 TIMEOUT = 25
 HEADERS = {"User-Agent": "telescopeyoke/0.1 (personal observing planner)"}
 

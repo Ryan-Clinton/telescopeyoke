@@ -40,11 +40,19 @@ if ($LASTEXITCODE -ne 0) {
 }
 Write-Host "Python libraries: installed"
 
+# Settings: an install that has them in this folder keeps them here, as
+# before. A fresh one keeps them, and every file made from them, in a folder
+# of their own, so moving to a newer release copies nothing (config.py).
+$data = Join-Path $env:LOCALAPPDATA "TelescopeYoke\data"
 if (Test-Path config.toml) {
-    Write-Host "config.toml: already there, left alone"
+    Write-Host "config.toml: in this folder, left alone"
+} elseif (Test-Path (Join-Path $data "config.toml")) {
+    Write-Host "config.toml: $data, left alone"
 } else {
-    Copy-Item config.example.toml config.toml
-    Write-Host "config.toml: created from the example. Edit it and put in your own location."
+    New-Item -ItemType Directory -Force -Path $data | Out-Null
+    Copy-Item config.example.toml (Join-Path $data "config.toml")
+    Write-Host "config.toml: created in $data from the example. Edit it and put in your own location."
+    Write-Host "Your frames, pictures and records will be kept beside it, apart from the program."
 }
 
 # The application's window. pywebview shows it in Windows' own WebView2

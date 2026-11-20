@@ -253,7 +253,7 @@ def rigs():
     newest imaging run is doing, from its own files. It reads; it asks no
     mount or camera anything. The telescope run with no rig named is listed
     first, as "default", when it has settings."""
-    listed = [("default", config.ROOT / "config.toml", config.ROOT)] if (config.ROOT / "config.toml").exists() else []
+    listed = [("default", config.HOME / "config.toml", config.HOME)] if (config.HOME / "config.toml").exists() else []
     listed += [(name, config.RIGS / f"{name}.toml", config.RIGS / name) for name in config.rigs()]
     found = []
     for name, file, data in listed:

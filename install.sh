@@ -51,9 +51,19 @@ echo "Installing: ${packages[*]}"
 sudo apt-get update
 sudo apt-get install -y "${packages[@]}"
 
-if [ ! -f config.toml ]; then
-    cp config.example.toml config.toml
-    echo "Created config.toml from the example. Edit it and put in your own location."
+# Settings: an install that has them in this folder keeps them here, as
+# before. A fresh one keeps them, and every file made from them, in a folder
+# of their own, so moving to a newer release copies nothing (config.py).
+data="${XDG_DATA_HOME:-$HOME/.local/share}/telescopeyoke/data"
+if [ -f config.toml ]; then
+    echo "Settings: config.toml in this folder, left alone"
+elif [ -f "$data/config.toml" ]; then
+    echo "Settings: $data/config.toml, left alone"
+else
+    mkdir -p "$data"
+    cp config.example.toml "$data/config.toml"
+    echo "Created $data/config.toml from the example. Edit it and put in your own location."
+    echo "Your frames, pictures and records will be kept beside it, apart from the program."
 fi
 
 # TelescopeYoke and its demo in the applications menu.

@@ -24,12 +24,25 @@ DEMO = os.environ.get("TY_DEMO") == "1"
 # telescopes out runs the program once for each, with TY_RIG, "ty --rig NAME"
 # or "app.py --rig NAME" saying which. With no rig named it is as it always
 # was: config.toml and the folders beside it.
-RIGS = ROOT / "rigs"
+#
+# Where the person's own files live: beside the code (config.toml in this
+# folder, as every install before 0.4.3 has it), or, for an install made
+# with its data apart (USER_DATA/config.toml, which install.sh and
+# install.ps1 make on a fresh install), in a folder of their own, so an
+# upgrade is a new folder of code and nothing to copy (Audit 17, 20
+# November 2026). This folder's own config.toml always wins.
+if host.WINDOWS:
+    USER_DATA = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "TelescopeYoke" / "data"
+else:
+    USER_DATA = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "telescopeyoke" / "data"
+APART = not (ROOT / "config.toml").exists() and (USER_DATA / "config.toml").exists()
+HOME = USER_DATA if APART else ROOT
+RIGS = HOME / "rigs"
 RIG = os.environ.get("TY_RIG") or None
 if RIG and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,30}", RIG):
     sys.exit(f"A rig's name is letters, digits, - and _ (it names a file): not {RIG!r}")
-DATA = Path(os.environ.get("TY_DATA") or (ROOT / "demo" if DEMO else RIGS / RIG if RIG else ROOT))
-FILE = RIGS / f"{RIG}.toml" if RIG else ROOT / "config.toml"
+DATA = Path(os.environ.get("TY_DATA") or (ROOT / "demo" if DEMO else RIGS / RIG if RIG else HOME))
+FILE = RIGS / f"{RIG}.toml" if RIG else HOME / "config.toml"
 if RIG and not DEMO and not FILE.exists():
     # A mistyped name must not quietly become a new, empty telescope.
     sys.exit(f"There is no rig called {RIG}. Make it with:  ./app.py --new-rig {RIG}\n"
@@ -52,7 +65,7 @@ def new_rig(name):
     RIGS.mkdir(exist_ok=True)
     made = RIGS / f"{name}.toml"
     if not made.exists():
-        shutil.copy(ROOT / "config.toml" if (ROOT / "config.toml").exists() else EXAMPLE, made)
+        shutil.copy(HOME / "config.toml" if (HOME / "config.toml").exists() else EXAMPLE, made)
     return made
 
 # Used for anything config.toml leaves out. These describe the hardware the
@@ -268,7 +281,7 @@ def _read(path):
 # [site] spot in config.toml says where the telescope stands tonight; with
 # none named it is as it always was: config.toml's [horizon] and
 # cache/horizon.json.
-SPOTS = ROOT / "spots"
+SPOTS = HOME / "spots"
 NAME = r"[a-z0-9][a-z0-9_-]{0,30}"
 
 
