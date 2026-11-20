@@ -46,7 +46,8 @@ Focus comes before anything that plate-solves.
 wherever the focuser is: no move beforehand, nothing set out of focus.
 The NEMA 17 moves the drawtube either way (18 November 2026). With no
 star measuring it runs the far search itself (`--find`: a thirty-second
-of a turn a step, half a turn each way, to the smallest rings, stopping
+of a turn a step, half a turn each way and on while the rings keep
+shrinking, to the smallest rings, stopping
 if the star leaves the frame). Far out, 64 half-steps at a time the way
 the stars shrink; near focus, seven places 32 half-steps apart measured
 moving inward and a curve fitted through them; then to its focus. Every

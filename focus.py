@@ -1134,7 +1134,8 @@ def motor_focus(motor, read, usual, say=progress, step=None, backlash=None, swee
 
 def find_stars(motor, read, usual, say=progress, stride=128, turns=0.5, ring=None, live=None):
     """Far out of focus, where no star measures: a thirty-second of a turn at a
-    time in, then out, to half a turn each way, a check after each, until
+    time in, then out, to half a turn each way (on past it while the
+    doughnuts keep shrinking), a check after each, until
     stars measure (HFR under CEILING), so a sweep has something to fit.
     18 November 2026: on the NEMA 17, coupled one to one, half a turn of the
     knob is about half the drawtube's whole travel (the person's measure),
@@ -1849,7 +1850,7 @@ def run_motor(args, mode="focus"):
                 progress("by filter: " + "; ".join(f"{n} {', '.join(str(h) for h in v)}" for n, v in by.items()))
                 return {"practise": done, "positions": positions, "start": here}
             if mode == "find":
-                progress("looking for stars: a thirty-second of a turn at a time, in and then out, to half a turn each way")
+                progress("looking for stars: a thirty-second of a turn at a time, in and then out, to half a turn each way, further while the doughnuts shrink")
                 found = find_stars(drive, read, usual, say=say, ring=ring, live=live)
                 progress({"found": f"Stars measure {found['at']:+d} half-steps from the start.",
                           "smallest": f"Left at the smallest doughnuts, {found['at']:+d} half-steps from the start; "
@@ -1982,7 +1983,7 @@ def main():
                     help="from focus, measure how far the motor must turn to grow the stars 2.5 times; keeps a "
                          "quarter of it as the sweep step")
     ap.add_argument("--find", action="store_true",
-                    help="far out of focus: a thirty-second of a turn at a time in, then out (half a turn each way), "
+                    help="far out of focus: a thirty-second of a turn at a time in, then out (half a turn each way, further while the doughnuts shrink), "
                          "until stars measure")
     ap.add_argument("--auto", action="store_true",
                     help="focus with the motor from wherever it is, moving either way: the far search first if no "
