@@ -338,6 +338,13 @@ def draw_stack(stacked, count, name, exposure, web, finish=True):
 
 
 ORDER_STALE_S = 600    # an order not taken within this long is for a run that has gone
+# What became of each order: the run notes it when it takes one, so `ty run
+# status` can say "taken" and not leave the person guessing (the guider's
+# orders have had this; Audit 12, 20 November 2026). The last ORDERS_KEPT.
+ORDERS_TAKEN = config.DATA / "cache" / "run_order_taken.json"
+ORDERS_KEPT = 20
+WHAT_ORDERS_DO = {"stop": "the run stops after this frame", "recentre": "re-centring with a plate solve",
+                  "assist-on": "drift assist on", "assist-off": "drift assist off"}
 
 
 def tell(order, run=None):
@@ -352,9 +359,59 @@ def tell(order, run=None):
     # both kept, never the second written over the first (a stop included).
     with records.locked(ORDERS):
         waiting = _orders()
-        waiting.append({"order": order, "run": run, "at": time.time()})
+        at = time.time()
+        given = f"{int(at * 1000):x}"
+        waiting.append({"order": order, "run": run, "at": at, "id": given})
         records.write(ORDERS, waiting, indent=None)
-    return {"order": order, "run": run, "note": "The run acts on it after its next frame."}
+    return {"order": order, "run": run, "id": given,
+            "note": "The run acts on it after its next frame; ./ty run status says when it is taken."}
+
+
+def _note_taken(taken, name, done=None):
+    """Keep what became of an order, newest last; never fails the run."""
+    def add(kept):
+        kept.append({"id": taken.get("id"), "order": taken["order"], "run": taken.get("run"),
+                     "at": taken.get("at"), "taken": time.time(), "by": name, "pid": os.getpid(),
+                     "done": done or WHAT_ORDERS_DO.get(taken["order"])})
+        del kept[:-ORDERS_KEPT]
+    try:
+        records.change(ORDERS_TAKEN, add, empty=[], indent=None)
+    except (OSError, ValueError) as why:
+        print(f"  the order was taken but not noted ({why})", file=sys.stderr, flush=True)
+
+
+def note_order(done):
+    """Say what the last order taken came to, when it was not done as asked."""
+    def change(kept):
+        if kept and kept[-1].get("pid") == os.getpid():
+            kept[-1]["done"] = done
+    try:
+        records.change(ORDERS_TAKEN, change, empty=[], indent=None)
+    except (OSError, ValueError):
+        pass
+
+
+def order_status(now=None):
+    """The orders still waiting (with how long, and whether they have gone
+    stale) and what became of the last ones taken: `ty run status`."""
+    now = time.time() if now is None else now
+    with records.locked(ORDERS):
+        waiting = _orders()
+    try:
+        taken = records.read(ORDERS_TAKEN, []) or []
+    except ValueError:
+        taken = []
+    waiting = [dict(o, waiting_s=round(now - o["at"]) if o.get("at") else None,
+                    stale=bool(o.get("at") and now - o["at"] > ORDER_STALE_S)) for o in waiting]
+    def clock(t):
+        return time.strftime("%H:%M:%S", time.localtime(t)) if t else "?"
+    said = [f"{o['order']}: waiting {o['waiting_s']} s" + (" (stale: never acted on)" if o["stale"] else "")
+            for o in waiting]
+    said += [f"{o['order']}: given {clock(o.get('at'))}, taken {clock(o.get('taken'))} by the {o.get('by')} run: "
+             f"{o.get('done')}" for o in taken[-5:]]
+    return {"said": said or ["no orders given lately"], "waiting": waiting, "taken": taken[-5:],
+            "note": ("An order waiting more than a frame's length means the run is not reading them: "
+                     "is it still going? One over 10 minutes old is never acted on.") if waiting else None}
 
 
 def _orders():
@@ -423,6 +480,8 @@ def order(name=None, now=None, only=None):
             records.write(ORDERS, left, indent=None)
         else:
             ORDERS.unlink(missing_ok=True)
+    if taken:
+        _note_taken(taken, name)
     return taken["order"] if taken else None
 
 
@@ -1903,6 +1962,8 @@ def image(args, session, exposure, moving, holding, tracker):
                         if asked in ("assist-on", "assist-off"):
                             # Guided, the guider owns Dec: the assist's trims stay off.
                             args.assist = asked == "assist-on" and not getattr(args, "supervisor", None)
+                            if asked == "assist-on" and not args.assist:
+                                note_order("not done: the run is guided, and the guider owns Dec")
                         told["recentre"] = told["recentre"] or asked == "recentre"
                         if moving and session.unaligned >= UNALIGNED and not session.unaligned_solved:
                             # Frames good enough to keep whose stars no longer sit on the
