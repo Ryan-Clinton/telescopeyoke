@@ -105,7 +105,9 @@ is `docs/agents/setup-routine.md` step 6b.
    own GoTo and imaging, with their checks.
 3. When asked, or when the plan says it is due: `./starwatch.py tabby
    --plan`, then `./starwatch.py tabby` (a 10-minute look); `./transits.py`
-   lists whole transits tonight, and one is taken only if they ask.
+   lists whole transits tonight; on a rig whose nights are for discovery
+   (the owner's: transits come first, AGENTS.md), a whole one goes into
+   the night's plan at its time without being asked.
 4. Each panel's answer: how deep it reached and how many candidates are
    unexplained. The night-note bullet for each step comes from
    `./outcome.py SESSION` (the schedule also says it when the step ends):

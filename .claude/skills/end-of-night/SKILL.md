@@ -25,9 +25,13 @@ Only on the person's word. The imaging run stops at its own limits
    of a cooled camera is let go by the warm-up (`./keeper.py stop`, or
    `schedule.py end`). Services the person installed to run always (the
    owner's are in `docs/agents/owner-rig.md`) stay.
-2. By hand, park only if they ask. `schedule.py end` (the scheduler's
-   own end, or the night-end timer at dawn) parks by itself: that is the
-   unattended end, and its flats need the mount home.
+2. Park by `./schedule.py end`, without being asked, once they say they
+   are done: it parks, starts the dawn flats and warms the camera. Not
+   `./mount.py home` alone: the night-end timer then finds the mount home
+   and takes no flats. The one exception is a night whose optics are known
+   to be spoiled (dew seen or measured: stars many times their usual size
+   at a focus that was sharp), when flats would not match the frames: then
+   `./mount.py home` and `./keeper.py stop`, and say why.
 3. Where the person stacks on another computer (the owner: the desktop),
    `./restack.py SESSION --on HOST` for each session tonight (SESSION is
    the folder, `frames/OBJECT/DATE-TIME`), and where the other computer
