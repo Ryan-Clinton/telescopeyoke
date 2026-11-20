@@ -128,7 +128,9 @@ class Watch:
         self.clear("stalled", f"{name}: frames coming again", lines)
         kept = [f for f in log if f["accepted"]]
         since = now - (kept[-1]["taken"] if kept else log[0]["taken"])
-        if since > UNKEPT and len(log) >= 2:
+        # The same allowance for the run's pace: a 120 s run's last kept frame
+        # is over UNKEPT old before the next is checked (20 November 2026).
+        if since > UNKEPT + 2 * pace and len(log) >= 2:
             self.once("unkept", f"{name}: no frame kept for {minutes(since)} (the last: {log[-1]['reason']})",
                       lines)
         else:
