@@ -898,6 +898,12 @@ def main(argv=None):
         sub.choices[name].add_argument("--exposure", type=float, default=2.0, help="guide exposure, seconds (0.5 to 4)")
         sub.choices[name].add_argument("--gain", type=int, help="the camera's gain, per cent (100 = none)")
     args = ap.parse_args(argv)
+    if args.action in ("star", "calibrate", "guide", "focus", "dectest") and args.gain is None:
+        # [guider] gain, 400 unless set: with none the camera ran at its own
+        # default and found no star (20 November 2026, the run's guider and
+        # then the Dec test, where gain 400 found it at SNR 47).
+        import config
+        args.gain = int(config.hardware().get("guider", {}).get("gain", 400))
     if args.action in ("star", "calibrate", "guide", "focus", "dectest") and not 0.5 <= args.exposure <= 4:
         sys.exit("The guide exposure is 0.5 to 4 s.")
     if args.action == "calibrate":
