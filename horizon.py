@@ -3,6 +3,9 @@
 
     ./horizon.py --trace         follow the top of whatever is in the way right round
     ./horizon.py --trace --daylight      the same by day: bright, even and sky-coloured means sky
+    ./horizon.py --trace --daylight --colour-check 270-315
+                                 with a filter wheel: B and R frames at those bearings too,
+                                 recorded beside each look, not yet part of its verdict
     ./horizon.py --trace --fresh         start again, not from the skyline already measured
                                  (nor from a survey cut short earlier the same day)
     ./horizon.py                 the older way: look on a fixed grid and report what is blocked
@@ -478,12 +481,51 @@ def daylight_exposure(cam, exposure=0.002):
                             f"frame was at {level:.0%} of full brightness.")
 
 
+# Filters by day, on a light path with the wheel (the 183M has no colour of its own).
+# A look still burnt out at the shortest exposure is looked at again through a
+# narrowband filter, which passes tens of times less light: the 2 November 2026
+# survey was lost to the low Sun's glare. --colour-check takes B and R frames
+# as well on the bearings named, and only records how blue each look is next
+# to the high sky: on the 183C's own colour pixels sky was 1.16 and walls 0.98
+# (3 November 2026, 178 looks) and the doubtful west read 1.13-1.18, so
+# whether real filters tell a sunlit wall from sky is not yet known.
+GLARE_FILTER = "Ha"
+COLOUR_FILTERS = ("B", "R")
+
+
+def wheel_filter():
+    """The filter's name in the light path when a wheel the survey may turn
+    is in it and has just said where it is; None otherwise (no wheel, the
+    demo, or a wheel that does not answer), and then no filter is used."""
+    import filters
+    import sxwheel
+    if config.DEMO or not filters.wheel_in_train():
+        return None
+    here = sxwheel.confirmed()
+    return here[1] if here else None
+
+
+def band_ratio(blue, red, mask):
+    """How blue a look is next to the high sky, from (squares' level per
+    second, the high sky's) through B and through R: the median over the
+    squares read as sky and over the rest. 1 is the high sky's colour."""
+    ratio = (blue[0] / np.maximum(red[0], 1e-9)) / (blue[1] / max(red[1], 1e-9))
+    out = {"all": round(float(np.median(ratio)), 3)}
+    if mask is not None and mask.shape == ratio.shape:
+        if mask.any():
+            out["sky_squares"] = round(float(np.median(ratio[mask])), 3)
+        if (~mask).any():
+            out["other_squares"] = round(float(np.median(ratio[~mask])), 3)
+    return out
+
+
 @contextmanager
-def eye(site, exposure, gain, daylight=False, torch=False):
+def eye(site, exposure, gain, daylight=False, torch=False, colour_check=None):
     """The mount and camera as one function: look(az, alt) aims there, takes a
     frame and returns True for open sky, False for something in the way, None
     where the mount may not go, or, when the frame shows the top itself, the
-    height of that top as a float. `look.log` lists every look made."""
+    height of that top as a float. `look.log` lists every look made.
+    `colour_check` (FROM, TO) bearings: B and R frames there too, recorded."""
     import mount
     import skywatch
     import snap
@@ -499,13 +541,38 @@ def eye(site, exposure, gain, daylight=False, torch=False):
     watch, last = moved.Watch(daylight=daylight), []      # what the last look saw, and where it was
     field = config.field_height(config.hardware())    # degrees from the bottom of a frame to the top
 
-    def by_day():
+    def through(name):
+        """Turn the wheel to `name` and have it confirmed; a wheel that does
+        not get there stops the survey (FILTER_NOT_CONFIRMED), since every
+        later look would be through a filter nobody knows."""
+        import filters
+        filters.turn_wheel(name, say=lambda *_: None)
+
+    def filter_references():
+        """At the high sky: each filter the survey may use, metered and its
+        sky's look kept, then back to the survey's own filter."""
+        state["refs"] = {}
+        wanted = [GLARE_FILTER] + (list(COLOUR_FILTERS) if colour_check else [])
+        try:
+            for name in wanted:
+                through(name)
+                try:
+                    metered, _ = daylight_exposure(look.cam, min(state["metered"] * 10, 2.0))
+                    state["refs"][name] = (sky_reference(look.cam.frame(metered)[0]), metered)
+                except interface.Refusal as refusal:
+                    print(f"filter {name}: the high sky could not be metered ({refusal}); not used", flush=True)
+        finally:
+            through(state["home_filter"])
+
+    def by_day(reference=None, metered=None, exposure=None):
         """A frame once the tube has stopped shaking: two running that read
-        the same, or the one in hand when STEADY_DAY is up."""
+        the same, or the one in hand when STEADY_DAY is up. Through the
+        survey's own filter unless another's reference is given."""
         began, before = time.time(), None
-        reference = at_exposure(state["reference"], state["metered"], state["exposure"])
+        exposure = exposure or state["exposure"]
+        reference = at_exposure(reference or state["reference"], metered or state["metered"], exposure)
         while True:
-            mosaic, _ = look.cam.frame(state["exposure"])
+            mosaic, _ = look.cam.frame(exposure)
             seen = read_day(mosaic, reference)
             waited = time.time() - began
             if waited >= STEADY_DAY or (before and before["view"] == seen["view"]
@@ -562,6 +629,8 @@ def eye(site, exposure, gain, daylight=False, torch=False):
                 state["metered"] = state["exposure"]
                 state["referenced"] = time.time()
                 state.setdefault("sky_at", (az, alt))
+                if state["home_filter"]:
+                    filter_references()
             # Every look starts at the high sky's exposure; only one that
             # burns out is metered again, here.
             state["exposure"] = state["metered"]
@@ -572,13 +641,58 @@ def eye(site, exposure, gain, daylight=False, torch=False):
                     mosaic, seen = by_day()
                 except interface.Refusal:
                     pass        # too bright even at the shortest exposure: the Sun's glare
+            filtered = None
+            if seen["view"] == "burnt" and GLARE_FILTER in state.get("refs", {}):
+                # Still burnt out: through the narrowband filter, against the
+                # high sky through the same filter.
+                reference, metered = state["refs"][GLARE_FILTER]
+                through(GLARE_FILTER)
+                try:
+                    filtered = metered
+                    mosaic, seen = by_day(reference, metered, filtered)
+                    if seen["view"] == "burnt":
+                        try:
+                            filtered, _ = daylight_exposure(look.cam, filtered)
+                            mosaic, seen = by_day(reference, metered, filtered)
+                        except interface.Refusal:
+                            pass
+                finally:
+                    through(state["home_filter"])
+                if seen["view"] != "burnt":
+                    seen = dict(seen, filter=GLARE_FILTER, exposure_s=filtered)
             if seen["view"] == "burnt":
                 print(f"bearing {az:>5g}°, {alt:>4g}° up: too bright to tell (glare), left out", flush=True)
                 log.append(dict({"az": az, "alt": alt, "open": None, "glare": True}, **where))
                 return None
             detail = f"{seen['share']:.0%} sky, brightness {seen['level']:.0%} of the high sky"
-            if state["exposure"] != state["metered"]:
+            if seen.get("filter"):
+                detail += f", through {seen['filter']} at {filtered * 1000:.2g} ms (glare)"
+            elif state["exposure"] != state["metered"]:
                 detail += f", metered again at {state['exposure'] * 1000:.2g} ms"
+            if colour_check and within(az, colour_check) \
+                    and all(name in state.get("refs", {}) for name in COLOUR_FILTERS):
+                # Recorded only, never part of the verdict, until it has been
+                # compared with what a person sees there.
+                levels = {}
+                try:
+                    for name in COLOUR_FILTERS:
+                        reference, metered = state["refs"][name]
+                        through(name)
+                        taken, _ = look.cam.frame(metered)
+                        used = metered
+                        if burnt_share(taken) >= BURNT_DAY:
+                            used, _ = daylight_exposure(look.cam, metered)
+                            taken, _ = look.cam.frame(used)
+                        levels[name] = (squares(taken)[0] / used, reference["level"] / metered)
+                except interface.Refusal as refusal:
+                    if refusal.code_name == "FILTER_NOT_CONFIRMED":
+                        raise
+                    print(f"bearing {az:>5g}°, {alt:>4g}° up: no colour check ({refusal})", flush=True)
+                finally:
+                    through(state["home_filter"])
+                if len(levels) == len(COLOUR_FILTERS):
+                    seen = dict(seen, bands=band_ratio(levels["B"], levels["R"], seen.get("mask")))
+                    detail += f", B/R {seen['bands']['all']:.2f} of the high sky's"
         else:
             time.sleep(STEADY)   # let the tube stop shaking
             mosaic, _ = look.cam.frame(state["exposure"])
@@ -640,6 +754,12 @@ def eye(site, exposure, gain, daylight=False, torch=False):
         cam = Reopening(lambda: Camera(gain=gain))
         try:
             look.cam = cam
+            state["home_filter"] = wheel_filter() if daylight else None
+            if state["home_filter"]:
+                print(f"filter wheel: looks through {state['home_filter']}; {GLARE_FILTER} where glare burns "
+                      "a look out" + (", B and R in the colour check's bearings" if colour_check else ""), flush=True)
+            elif daylight and colour_check:
+                print("--colour-check: no filter wheel confirmed in this light path, so no colour check", flush=True)
             if LOOKS.exists():
                 for old in LOOKS.glob("*.jpg"):     # the last survey's pictures
                     old.unlink()
@@ -1316,6 +1436,8 @@ def main():
                          "set-aside survey into the skyline in use")
     ap.add_argument("--checked", metavar="WHAT",
                     help="with --use-aside: what the person saw, in their words (kept with the skyline)")
+    ap.add_argument("--colour-check", metavar="FROM-TO",
+                    help="with --daylight and a filter wheel: B and R frames at these bearings too, recorded only")
     ap.add_argument("--exposure", type=float, help="seconds (default 1; by day it is found from the sky)")
     ap.add_argument("--gain", type=int, help="default 2000, or 100 by day")
     ap.add_argument("--dry-run", action="store_true", help="say where it would look; no camera, no mount")
@@ -1551,7 +1673,8 @@ def run(args):
         raise interface.Refusal("INVALID_REQUEST", "--only looks again at bearings of a skyline in use; there is none.")
     if args.fresh and PARTIAL.exists():
         PARTIAL.unlink()
-    with eye(site, exposure, gain, args.daylight, args.torch and not args.daylight) as look:
+    with eye(site, exposure, gain, args.daylight, args.torch and not args.daylight,
+             span(args.colour_check) if args.daylight else None) as look:
         if args.trace:
             done = None
             if earlier and earlier[0]:
