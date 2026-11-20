@@ -22,7 +22,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 1 | Mount safety and movement | done 20 Nov 2026, re-checked |
 | 2 | Hardware failure and recovery | done 20 Nov 2026, re-checked |
 | 3 | AI agent autonomy and permissions | done 20 Nov 2026, re-checked |
-| 4 | Autonomous full-night operation | not started |
+| 4 | Autonomous full-night operation | done 20 Nov 2026; re-check asked |
 | 5 | Guiding and calibration | not started |
 | 6 | Camera, cooling, filters and focusing | not started |
 | 7 | Scientific discovery reliability | not started |
@@ -255,4 +255,19 @@ This initial pass was an architectural and risk assessment, not an exhaustive li
 | 2 | `.+` and `^.*$` get through the settings-search guard | P1 | Confirmed and fixed | A search of the settings file is allowed only when the whole pattern names one setting (`^latitude`, `focal_length_mm\s*=`); everything else is refused |
 | 3 | Failed commands are counted as hardware commands that ran | P2 | Confirmed and fixed | A failed call is recorded as `event: failed` and left out of the hardware count |
 | - | The owner's choices (Claude edits safety code; a person's ask is the go) | - | Agreed with the reviewer | They are trust decisions, written as such in rows 1 and 4 above, not technical enforcement |
+
+## 4. Autonomous full-night operation, 20 November 2026
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | The application left open keeps the morning guard from parking | P0 | Confirmed and fixed | `app.py` and `console.py` are out of `schedule.IMAGING`; what they start (`mount.py`, `shoot.py` ...) is still found by its own name |
+| 2 | A failed park is recorded as a night ended | P0 | Partly right, no change to the marker | `night.ended` is written before the move on purpose, so a move that went wrong is never tried again unattended; the person is told on their phone at once that it could NOT be parked. The camera part is 4 |
+| 3 | An ordinary imaging step can run past its minutes | P0 | Confirmed and fixed | A `shoot.py` step with no end time is told `--minutes` (its step's) and given the same backstop as a patrol |
+| 4 | The camera is not let go when the mount does not answer, or is already home | P0 | Confirmed and fixed | `end()` warms and lets the camera go when the mount does not answer; the guard does the same when the mount is already home or does not answer |
+| 5 | A cloud watch retried after its deadline waits a day | P0 | Confirmed and fixed | `skywatch.watch()` takes a deadline less than 12 hours gone as passed and returns at once; one more than 12 hours gone is still the coming night's (02:00 asked at 20:55) |
+| 6 | A step that ignores the backstop's Ctrl-C holds the night | P1 | Confirmed and fixed | Every backstop now has `--kill-after=900` (`KILL_AFTER_S`): 15 minutes for the run's warm-up and stack, then a kill, which exits 137 and counts as failed. The keeper holds the cooled camera, so a killed run does not cut its cooler |
+| 7 | A step left "running" by a runner that died is passed over | P1 | Confirmed and fixed | At each pass, a running step with no process of its own that this runner did not start is marked failed (`interrupted`) and said |
+| 8 | Old guider evidence can call a hardware failure cloud | P1 | Partly right, fixed | The guider's reason counts only when written since the step started; the satellite's cloud still counts, as the person asked (15 Nov: no alarm for a step lost to cloud) |
+| 9 | The cloud live view is not stopped at the night's end | P1 | Confirmed and fixed | `liveview.py` is in `WATCHERS`, so `tidy()` stops it before the dawn flats |
+| 10 | The cloud watch puts the filter back only when it finds stars | P2 | Confirmed and fixed | The filter goes back in the watch's `finally`, however it ends |
 

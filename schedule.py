@@ -62,8 +62,11 @@ ENDED = config.DATA / "cache" / "night.ended"          # when a night was last e
 MORNING = (3, 9)           # local hours in which a night may be ended: after it, the person may be at the scope
 IDLE_MINUTES = 30          # guard: no frame kept for this long
 NIGHT_HOURS = 16           # a night's sessions: those begun within this many hours
+# The application and its console are not here: left open all night they
+# would keep the morning guard from ever parking. What they start (mount.py,
+# shoot.py ...) is a process of its own, and is found by its own name.
 IMAGING = ("shoot.py", "patrol.py", "starwatch.py", "focus.py", "focuser.py", "polaralign.py", "camera_setup.py",
-           "mount.py", "direct.py", "console.py", "app.py", "planet.py", "skywatch.py", "snap.py", "tour.py",
+           "mount.py", "direct.py", "planet.py", "skywatch.py", "snap.py", "tour.py",
            "guidecam.py", "mountprobe.py")
 TY_MOVING = ("shoot", "mount", "focus", "run", "polar-align", "goto")   # `ty` commands that drive the mount or camera
 LOOKED = config.DATA / "cache" / "night.looked"        # guard: the mount's place at its last look
@@ -318,6 +321,11 @@ def alive(pid):
 
 
 BACKSTOP_S = 240   # a step told its end time is stopped this long after it, whatever it is doing
+# A step still there this long after the backstop's Ctrl-C is killed, so one
+# stuck process cannot hold the night: long enough for a run's warm-up (at
+# most 10 minutes) and its stack to finish. The keeper holds the cooled
+# camera apart, so a killed run does not cut its cooler.
+KILL_AFTER_S = 900
                    # (was 900: on 2 November 2026 the M31 panels ran 10 minutes into the transit's time)
 RETRIES = 2       # a failed step is started again this many times before the person is fetched
 RETRY_S = 30      # seconds between
@@ -413,13 +421,22 @@ def prepared(step, now, last=None, sunset=last_sunset, cut=None):
     left = None
     own = not_before(step["until"], now, sunset) if step.get("until") else None
     ends = [x for x in (own, cut) if x is not None]
+    shooting = any(Path(c).name == "shoot.py" for c in command[:2])
+    if shooting and not ends and step.get("minutes") and "--minutes" not in command:
+        # An imaging step with no end time is told its minutes all the same,
+        # so it cannot run on into the next step or the morning; the hard stop
+        # is the backstop, BACKSTOP_S after.
+        command = command + ["--minutes", f"{step['minutes']:g}"]
+        command = ["timeout", "--signal=INT", f"--kill-after={KILL_AFTER_S}",
+                   str(round(60 * step["minutes"]) + BACKSTOP_S)] + command
     if patrolling and not ends and "--budget" not in command:
         # A patrol is told the step's minutes and takes the panels that fit
         # (4 November 2026: 8 panels in a 45-minute step ran 99 minutes).
         command = command + ["--budget", f"{step['minutes']:g}"]
         # The patrol keeps to it itself; this hard stop is a backstop only,
         # BACKSTOP_S after, as for a step with an end time.
-        command = ["timeout", "--signal=INT", str(round(60 * step["minutes"]) + BACKSTOP_S)] + command
+        command = ["timeout", "--signal=INT", f"--kill-after={KILL_AFTER_S}",
+                   str(round(60 * step["minutes"]) + BACKSTOP_S)] + command
     if ends:
         # More of whatever was imaged last, to fill the time before a
         # step that keeps to the clock (20 October 2026: the panels
@@ -438,7 +455,7 @@ def prepared(step, now, last=None, sunset=last_sunset, cut=None):
             # A patrol's --minutes is each field's; its whole time is --budget.
             command = command + ["--budget" if patrolling else "--minutes", f"{(left - early) / 60:.1f}"]
             left += BACKSTOP_S - early
-        command = ["timeout", "--signal=INT", str(left)] + command
+        command = ["timeout", "--signal=INT", f"--kill-after={KILL_AFTER_S}", str(left)] + command
     return command, left
 
 
@@ -460,6 +477,7 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
     except OSError:
         pass
     ran = False
+    started_here = set()
     try:
         loaded = SOURCE.stat().st_mtime
     except OSError:
@@ -478,6 +496,13 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
         steps = plan["steps"]
         for step in steps:
             step.setdefault("id", step["label"])
+        # A step this runner did not start, marked running with no process of
+        # its own to wait for: the runner that started it has gone (killed, a
+        # crash, a reboot). It is failed and said, never silently passed over.
+        for s in steps:
+            if s["status"] == "running" and not s.get("pid") and not s.get("session") and s["id"] not in started_here:
+                mark_id(s["id"], status="failed", finished=time.time(), exit=None, interrupted=True)
+                say(f"{datetime.now():%H:%M} {s['label']}: left running by a runner that has gone; marked failed")
         # A session's own blocks (shoot.py --blocks) are waited on, never
         # started: the session marks them; its process gone, the rest are ended.
         for s in steps:
@@ -541,6 +566,7 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
             say(f"{datetime.now():%H:%M} disk not checked: {problem.__class__.__name__}: {problem}")
         say(f"{datetime.now():%H:%M} starting {step['label']}")
         ran = True
+        started_here.add(step["id"])
         mark_id(step["id"], status="running", started=time.time())
         with activity.doing("Schedule", step["label"], number, len(steps)):
             try:
@@ -554,7 +580,7 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
                 say(f"{datetime.now():%H:%M} {step['label']} could not start: {error}")
                 done = subprocess.CompletedProcess(command, 127)
         # Stopped at its time by timeout is how a step with an end time ends.
-        backstopped = done.returncode == 124 and command[:1] == ["timeout"]
+        backstopped = done.returncode == 124 and command[:1] == ["timeout"]     # ended by Ctrl-C; 137 is a kill
         ok = done.returncode == 0 or backstopped
         if backstopped and not step.get("until"):
             say(f"{datetime.now():%H:%M} {step['label']}: ran past its {step['minutes']:g} minutes and was "
@@ -576,7 +602,7 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
             if chooser:
                 # Its retries used up: a hard window that failed is owed (Phase 4).
                 owe_interrupted(step, done.returncode, say)
-            cloud = lost_to_cloud()
+            cloud = lost_to_cloud(since=step.get("started"))
             if cloud:
                 # Cloud, expected on a patchy night, is no reason to call anyone
                 # (15 November 2026, 21:58: a step lost to cloud set the house's
@@ -592,13 +618,15 @@ def run(say=print, sleep=time.sleep, call=None, start=subprocess.run, reload=Non
             return False
 
 
-def lost_to_cloud():
+def lost_to_cloud(since=None):
     """Why a failed step was cloud's doing, or None: the guider's last fault
-    is a missing or lost star, or the satellite and airports put cloud over
+    is a missing or lost star (one written since the step started, `since`,
+    never an earlier step's), or the satellite and airports put cloud over
     the site (clouds.evidence)."""
     try:
         import guider
-        why = str((guider.read_state() or {}).get("reason") or "")
+        fresh = since is None or guider.STATE_FILE.stat().st_mtime >= since
+        why = str((guider.read_state() or {}).get("reason") or "") if fresh else ""
         if any(w in why.lower() for w in ("guide star", "star was lost", "no star")):
             return why.rstrip(".")
     except Exception:      # noqa: BLE001 - no guider state: the sky is asked
@@ -808,7 +836,7 @@ def release_camera(popen=subprocess.Popen):
 # What watches the sky or the guide star for a night and has no business
 # after it: stopped by tidy() at the night's end. The status page, the
 # stream's watcher and the night-end timer are services and stay.
-WATCHERS = ("skywatch.py", "rain.py", "mountprobe.py", "runwatch.py")
+WATCHERS = ("skywatch.py", "rain.py", "mountprobe.py", "runwatch.py", "liveview.py")
 
 
 def tidy(say=print, wait_s=20):
@@ -880,6 +908,10 @@ def end(say=print, send=None, run=subprocess.run, now=None, home=None, start_fla
     if state is None:
         words = f"Observation is over. Tonight: {got}. The mount did not answer, so it may not be parked: please check it."
         parked = False
+        # The camera is another device: a mount that does not answer is no
+        # reason to leave the sensor cold.
+        if release_camera():
+            words += " The camera is being warmed slowly, then let go."
     else:
         if not state.get("at_home"):
             go_home(home)
@@ -998,10 +1030,13 @@ def guard(say=print, send=None, run=subprocess.run, now=None, running=None):
     if (running or busy)():
         return "something is driving the mount or camera"
     state = mount_state(run)
-    if state is None:
-        return "the mount did not answer"
-    if state.get("at_home"):
-        return "already at home"
+    if state is None or state.get("at_home"):
+        # Parked already (by hand, or a person ended the night), or a mount
+        # that does not answer: nothing to move, but a camera still kept
+        # cold all morning is warmed and let go.
+        let_go = release_camera()
+        why = "the mount did not answer" if state is None else "already at home"
+        return why + ("; the camera is being warmed and let go" if let_go else "")
     if not unmoved(state, now):
         return "not yet seen tracking unmoved"
     end(say=say, send=send, run=run, now=now)

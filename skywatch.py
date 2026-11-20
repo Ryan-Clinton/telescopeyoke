@@ -139,12 +139,24 @@ def watch(until, every, exposure, guide_check=False):
     on the status page meanwhile."""
     hour, minute = (int(x) for x in until.split(":"))
     end = datetime.now().replace(hour=hour, minute=minute, second=0, microsecond=0)
-    if end <= datetime.now():
+    if end <= datetime.now() - timedelta(hours=12):
         end += timedelta(days=1)   # 02:00 asked at 20:55 is tonight's, not this morning's
-    streak = 0
-    looked = None    # when the cloud data was last printed
-    stars = None
+    elif end <= datetime.now():
+        # Just gone (a retry at 02:00:30 of a watch until 02:00): the
+        # deadline is over, never tomorrow's 02:00.
+        print(f"The deadline {until} has passed: not watching.", flush=True)
+        return False
     was = clear_filter()
+    try:
+        return _watch(end, every, exposure, guide_check)
+    finally:
+        # The observing filter back in however the watch ends (stars, the
+        # deadline, an error): restore_filter says if the wheel will not.
+        restore_filter(was)
+
+
+def _watch(end, every, exposure, guide_check):
+    streak, looked, stars = 0, None, None    # looked: when the cloud data was last printed
     with Camera() as cam:
         while datetime.now() < end:
             started = time.monotonic()
@@ -170,8 +182,7 @@ def watch(until, every, exposure, guide_check=False):
                     streak = 0
             if streak >= 2:
                 print(f"STARS VISIBLE: frame saved as {save(mosaic, header)}", flush=True)
-                restore_filter(was)
-                print(GO_NOW, flush=True)
+                print(GO_NOW, flush=True)       # the filter goes back in as watch() returns
                 return True
             time.sleep(max(0, every - (time.monotonic() - started)))
     print("No clear sky before the deadline.", flush=True)
