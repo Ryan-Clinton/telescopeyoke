@@ -37,7 +37,12 @@ tube** within 134" of pulses. A run through cloud just before (11 of 24
 solves) looked the same. So it is not simply "south fails": on the east
 side north moves and south does not; on the west side, with the tube's
 weight on the other side of the axis, neither moves within 12 pulses.
-Whether a longer run of pulses would move it there is not measured.
+A longer run at 22:34 (`--pulses 36`, about 403" each way, 66 of 72
+plate solves): motor plus (south) moved the tube -11" in all, all of it
+in the last 6 pulses (about 2" a pulse against 11.2" sent: perhaps the
+start of movement, perhaps not); motor minus (north) +17" in all, spread
+over the run. Against 403" sent each way, the Dec axis on the west side
+barely moves at all.
 
 An earlier run is left out: a cloudy retry had been refused, and a refused
 command stops the motors, so it ran untracked (fixed: the test turns

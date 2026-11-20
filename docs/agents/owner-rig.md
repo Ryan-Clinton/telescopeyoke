@@ -137,7 +137,8 @@ motor turned and the knob did not, so focus was by hand with the spoken aid.
 
 - **Dec guiding, until Gary has fixed the Dec drive (job 2)**: on the
   east side Dec does not move south at all and moving north sticks then
-  jumps 20-50"; on the west side neither way moved within 134" of pulses
+  jumps 20-50"; on the west side neither way moved more than about 17" for 403" of
+  pulses
   (20 November, on the main camera and the guide camera:
   [dec-one-way.md](../nights/2026-11-20/dec-one-way.md); 19 November:
   [dec-slack.md](../nights/2026-11-19/dec-slack.md)). How to work with it:

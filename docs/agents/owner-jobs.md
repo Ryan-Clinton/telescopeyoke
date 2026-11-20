@@ -25,7 +25,7 @@ result is recorded.
    mesh first, then grub screws on the worm gear, worm end-play, the
    clutch. A hand-rock test first. 20 November, on the main camera
    (`./mount.py dectest`): south moves nothing at all, north sticks then
-   jumps 20-50"; west of the meridian neither way moved within 134"
+   jumps 20-50"; west of the meridian neither way moved more than about 17" for 403"
    ([dec-one-way.md](../nights/2026-11-20/dec-one-way.md)).
 3. **The balance**, checked and recorded both ways before the next Dec
    test: on 20 November the 700 g of sand at the back came off and the tube
