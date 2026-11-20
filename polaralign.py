@@ -510,14 +510,14 @@ def guidance(azimuth, altitude, feet_apart_cm=None, cm_per_degree=None, degrees_
             out.update(known=True, turns=round(abs(turns), 2), tighten=goes_in, loosen=eases,
                        turns_least=round(least, 2), turns_most=round(most, 2), times_seen=know["times"],
                        deg_per_turn=abs(know["deg_per_turn"]),
-                       words=f"Ease the {eases} bolt out (anticlockwise) first, then turn the {goes_in} bolt in (clockwise) about "
+                       words=f"Ease the {SIDES[eases]} bolt out (anticlockwise) first, then turn the {SIDES[goes_in]} bolt in (clockwise) about "
                              f"{turns_in_words(turns)}"
                              + (f": on this mount a turn has moved it between {know['low']:g}° and {know['high']:g}°, "
                                 f"seen {know['times']} times." if know["times"] > 1 else
                                 f": on this mount a turn moved it {abs(know['deg_per_turn']):g}°, seen once."))
         else:
-            out["words"] = (f"Which bolt moves the axis {towards} on this mount is not known yet. Ease the {second} "
-                            f"bolt out (anticlockwise) a little and turn the {first} bolt in (clockwise) a quarter of a turn, then "
+            out["words"] = (f"Which bolt moves the axis {towards} on this mount is not known yet. Ease the {SIDES[second]} "
+                            f"bolt out (anticlockwise) a little and turn the {SIDES[first]} bolt in (clockwise) a quarter of a turn, then "
                             "measure again with --turned and it will be learned.")
         return out
 
