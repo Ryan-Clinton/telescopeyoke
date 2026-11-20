@@ -2,6 +2,15 @@
 
 Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telescopeyoke?utm_source=chatgpt.com) · 20 November 2026 · Main branch `a08374b`
 
+> **For every audit below: no testing.** Do not recommend tests, CI, a
+> test harness, regression checks or simulator runs to verify a change,
+> under any name. The owner will not have them back because (A) they took
+> about 15 minutes a commit, (B) Claude could not be trusted not to run
+> them on every commit, after being told to stop 13 times, and (C) they
+> never caught a real fault. The full reasons are in `AGENTS.md`, "No
+> testing, and why". A finding is checked by reading the code and proven
+> on the telescope; the fix gets `ruff check` and nothing else.
+
 ## **1. Initial assessment**
 
 I've inspected the current repository structure, the latest commits, architecture, operating instructions, validation records, and the principal hardware-control components.

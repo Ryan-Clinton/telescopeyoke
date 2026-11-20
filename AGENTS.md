@@ -24,6 +24,33 @@ in `docs/agents/owner-rig.md`. For another rig, `config.toml`,
 expect of other equipment") say what it has and what TelescopeYoke can do
 with it.
 
+## No testing, and why
+
+The owner removed every test and CI run on 4 November 2026 and will not
+have them back. Reviewers and auditors (ChatGPT included): do not
+recommend tests, a test suite, CI, regression tests, a test harness, or
+simulator or demo runs as a check on each change, under any name. The
+reasons:
+
+- **A. It takes too long.** The suite took about 15 minutes, and every
+  commit waited on it.
+- **B. Claude cannot be trusted not to run it on every commit.** It was
+  told to stop 13 times between 21 October and 4 November 2026 and kept
+  bringing it back in a narrower form each time, ending at 814 tests and
+  11 minutes for one change.
+- **C. It never caught anything.** Of 300 GitHub runs from 23 October,
+  226 failed, almost all on the tests themselves (style, the clock, the
+  Windows install, bookkeeping), and none was found to have caught a real
+  fault before a night. The real faults were found on the telescope, by
+  the people at it, and by code reviews.
+
+A change gets `ruff check` on the files it touches, and is proven on the
+telescope and recorded in `docs/validation.md`. The telescope's own
+protections (the camera's cooling ramp, the mount's limits, dry runs and
+motion lock, calibration refusals, fail-closed checks) are not testing and
+stay. A change to how the mount moves is still tried in the demo first
+(safety invariant 4), once, for that change.
+
 ## Start here
 
 ```bash
@@ -202,7 +229,8 @@ a motor's creep rate. `mount.py stop` is always allowed.
   scoring code's commit, so a later change to the scoring can be told apart
   from a change in the forecasts.
 - There are no tests and no CI (removed 4 November 2026 at the user's
-  request). Before a commit: `ruff check` on the changed files.
+  request). Before a commit: `ruff check` on the changed files. Why, and
+  what not to suggest: "No testing, and why" above.
 - What is proven on real hardware is recorded once, in `docs/validation.md`.
   The README and the other pages follow it and may lag.
 - The table of tried hardware is in the README ("Hardware"). The version is in
