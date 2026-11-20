@@ -23,7 +23,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 2 | Hardware failure and recovery | done 20 Nov 2026, re-checked |
 | 3 | AI agent autonomy and permissions | done 20 Nov 2026, re-checked |
 | 4 | Autonomous full-night operation | done 20 Nov 2026, re-checked |
-| 5 | Guiding and calibration | not started |
+| 5 | Guiding and calibration | done 20 Nov 2026; re-check asked |
 | 6 | Camera, cooling, filters and focusing | not started |
 | 7 | Scientific discovery reliability | not started |
 | 8 | Calibration and scientific measurement accuracy | not started |
@@ -281,4 +281,18 @@ This initial pass was an architectural and risk assessment, not an exhaustive li
 | 4 | A run with its own `--minutes` gets no backstop | P1 | Confirmed and fixed | Every imaging step with no end time is backstopped at the longer of the step's minutes and the run's own |
 | 5 | The satellite's cloud can still cover a hardware failure | P1 | Agreed and planned | The runner sees only the exit code (1 for every refusal), so it cannot yet tell a refused filter wheel from cloud. Planned: a run's refusal code kept beside its session for the runner to read; until then the person's rule (no alarm for a step lost to cloud, 15 Nov) stands |
 | 6 | The 12-hour rule misreads a daytime ask for 02:00 | P2 | Smaller than claimed, no change | A cloud watch is started when its step runs, at night; a watch asked for by day sees no stars anyway |
+
+## 5. Guiding and calibration, 20 November 2026
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | A south leg that never moved is made up from north and guided both ways | P0 | Confirmed and fixed | Fewer than three south steps that moved the star now gives a calibration for RA alone (`ra_only`), as a failed north does, with the reason kept |
+| 2 | An RA-only guider is asked to dither in Dec | P1 | Confirmed and fixed | With Dec not guided, the guide loop makes only the dither's RA part, so the lock can be reached |
+| 3 | The Dec-stuck cap cannot reach a run's guider | P1 | Partly right, fixed as a setting | `guidecam.py guide` takes `[guider] dec_stuck_s` from the settings when not given, so `shoot.py --guide` has it once a person sets it; off by default, as the reviewer advises (the Dec drive is waiting on its mechanical check, owner-jobs item 2) |
+| 4 | Guide-camera library answers ignored (gain, exposure, pulse state, stop) | P1 | Confirmed and fixed | A refused gain or exposure stops the frame; a pulse state the library cannot give is never taken for ended (a stop is sent and the run told); `stop_pulse()` says whether the camera took it |
+| 5 | Late guide frames can make their own cadence the normal one | P1 | Confirmed and fixed | The cycle a guide frame covers is never longer than its exposure plus 2 s (`CYCLE_EXTRA_S`), so late frames leave the gaps counted as lost |
+| 6 | Frames do not say RA-only from two-axis guiding | P1 | Confirmed and fixed | Every guided frame carries `GUIDEMOD`: `RA`, `RA+Dec` or `PHD2` |
+| 7 | PHD2 "Guiding" with no guide steps keeps the run going | P1 | Confirmed and fixed (untried on PHD2 itself) | No fresh guide step for `LOST_WAIT_S`, kept across frames, is a fault that stops guided imaging, as a stopped PHD2 is |
+| 8 | PHD2's errors in arcseconds from an assumed 1"/px | P1 | Confirmed and fixed (untried on PHD2 itself) | No scale from PHD2, no RMS or largest error in arcseconds; GUIDED is still judged from the steps |
+| 9 | Drift taken off over a long Dec test is not labelled uncertain | P2 | Agreed and planned | For the Dec drive's investigation once its mechanics are checked (owner-jobs item 2); no long calibrations run in its place |
 

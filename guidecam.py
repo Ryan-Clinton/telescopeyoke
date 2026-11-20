@@ -156,7 +156,8 @@ class Driver:
         return self.lib.Altaircam_put_ExpoTime(handle, ctypes.c_uint(int(round(seconds * 1e6))))
 
     def gain(self, handle, percent):
-        self.lib.Altaircam_put_ExpoAGain(handle, ctypes.c_ushort(int(percent)))
+        """Set the gain; the library's answer (below zero is a refusal)."""
+        return self.lib.Altaircam_put_ExpoAGain(handle, ctypes.c_ushort(int(percent)))
 
     def pull(self, handle):
         """The next frame as (width, height, bytes), or None if none is ready.
@@ -224,8 +225,11 @@ class Driver:
         return self.lib.Altaircam_ST4PlusGuide(handle, direction, ms)
 
     def st4_busy(self, handle):
+        """True while a pulse is going (S_OK), False once none is (S_FALSE),
+        None when the library cannot say (an error): never taken for ended."""
         self.lib.Altaircam_ST4PlusGuideState.argtypes = [ctypes.c_void_p]
-        return self.lib.Altaircam_ST4PlusGuideState(handle) == 0     # S_OK while a pulse is going
+        hr = self.lib.Altaircam_ST4PlusGuideState(handle)
+        return None if hr < 0 else hr == 0
 
     def close(self, handle):
         self.lib.Altaircam_Close(handle)
@@ -287,10 +291,11 @@ class GuideCamera:
             raise
 
     def frame(self, seconds, gain=None):
-        if gain is not None:
-            self.driver.gain(self.handle, gain)
+        if gain is not None and (self.driver.gain(self.handle, gain) or 0) < 0:
+            refuse(f"The guide camera's library refused gain {gain}.")
         if seconds != self.seconds:
-            self.driver.exposure(self.handle, seconds)
+            if (self.driver.exposure(self.handle, seconds) or 0) < 0:
+                refuse(f"The guide camera's library refused a {seconds:g} s exposure.")
             self.seconds = seconds
         asked = self.clock()
         while True:
@@ -335,14 +340,24 @@ class GuideCamera:
             refuse("The guide camera refused to send an ST4 pulse.")
         end = self.clock() + seconds + 1
         self.sleep(seconds)
-        while self.driver.st4_busy(self.handle):
+        while True:
+            busy = self.driver.st4_busy(self.handle)
+            if busy is None:
+                stopped = self.stop_pulse()
+                refuse(f"The guide camera could not say whether its ST4 pulse {direction} had ended"
+                       + ("; a stop was sent." if stopped else ", and refused the stop: the mount may still be "
+                          "turning at the guide rate."))
+            if not busy:
+                return
             if self.clock() > end:
-                self.stop_pulse()
-                refuse(f"The guide camera's ST4 pulse {direction} did not end 1 s after its {seconds:.2f} s.")
+                stopped = self.stop_pulse()
+                refuse(f"The guide camera's ST4 pulse {direction} did not end 1 s after its {seconds:.2f} s"
+                       + ("." if stopped else ", and the camera refused the stop."))
             self.sleep(0.02)
 
     def stop_pulse(self):
-        self.driver.st4(self.handle, STOP, 0)
+        """Any pulse ended; whether the camera took the stop."""
+        return (self.driver.st4(self.handle, STOP, 0) or 0) >= 0
 
     def close(self):
         try:
@@ -909,6 +924,11 @@ def main(argv=None):
         args.gain = int(config.hardware().get("guider", {}).get("gain", 400))
     if args.action in ("star", "calibrate", "guide", "focus", "dectest") and not 0.5 <= args.exposure <= 4:
         sys.exit("The guide exposure is 0.5 to 4 s.")
+    if args.action == "guide" and args.dec_stuck is None:
+        # [guider] dec_stuck_s, off unless set: so a run's guider (shoot.py
+        # --guide starts this) can have it too, once a person has chosen it.
+        import config
+        args.dec_stuck = config.hardware().get("guider", {}).get("dec_stuck_s")
     if args.action == "calibrate":
         args.recalibrate, args.minutes, args.dec_one_way, args.dec_stuck = True, None, None, None
     try:

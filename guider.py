@@ -108,6 +108,7 @@ RUNAWAY_FRAMES = 10        # frames running at the longest pulse the same way
 HEARTBEAT_S = 1.0          # the state file's heartbeat, on its own timer
 STALE_S = 5.0              # a heartbeat older than this: the guider is not to be trusted
 ORDERS = ("pause", "resume", "relock", "dither", "stop")
+CYCLE_EXTRA_S = 2.0   # the most a guide cycle is taken to add to its exposure: readout and a pulse
 ORDER_TIMEOUT = {"pause": 10, "resume": 30, "relock": 60, "dither": 60, "stop": 15}
 ORDER_STALE_S = 120        # an order not taken within this long is answered as failed
 RELOCK_PATIENCE = 50.0     # seconds a relock looks for a star
@@ -754,8 +755,15 @@ def _calibrate(cam, seconds, dec, west, gain, say, rate, tick, looks):
     # The south column from the steps after the slack, as the motor turns as fast either way.
     moving = [i for i in range(1, len(south_points))
               if np.dot(np.subtract(south_points[i], south_points[i - 1]), -unit) > 0.5 * north_strength * dec_step]
-    columns["south"] = (_rate(south_points[moving[0] - 1:], dec_step)
-                        if len(moving) >= 3 else -columns["north"])
+    if len(moving) < 3:
+        # South did not move the star: a Dec that answers one way only (19-20
+        # November 2026, the failing way flipping with the balance) is not
+        # given a south made up from north and guided both ways. RA alone, as
+        # when north fails.
+        return ra_only(columns, steps, ra_step, dec_step, dec, west, rate,
+                       f"{len(south_points) - 1} south steps moved the star in {len(moving)}: Dec answered "
+                       "north only", say)
+    columns["south"] = _rate(south_points[moving[0] - 1:], dec_step)
     for direction, sign in (("north", 1), ("south", -1)):
         points = c.back(direction, dec_step, CAL_REVERSAL_STEPS)
         slacks.append(_slack_of(points, dec_step, north_strength, sign * unit))
@@ -1535,6 +1543,13 @@ def guide(cam, cols, cal, seconds=2.0, gain=None, minutes=None, one_way=None, sa
                         answer(order, False, f"{math.hypot(dx, dy):.1f} px is past the {DITHER_MOST_PX:g} px a "
                                              "dither may go from the origin")
                     else:
+                        if not ctl.dec_guided:
+                            # RA alone: a lock moved in Dec could never be reached, so
+                            # only the dither's RA part is made.
+                            ra = ctl.columns[("RA", 1)]
+                            unit = ra / max(float(np.hypot(*ra)), 1e-9)
+                            along = dx * unit[0] + dy * unit[1]
+                            dx, dy = along * unit[0], along * unit[1]
                         if dithering:
                             answer(dithering["order"], False, "a newer dither came before it settled")
                         lock = (origin[0] + dx, origin[1] + dy)
@@ -1962,6 +1977,10 @@ class Supervisor:
         mids = sorted((r.get("time") or {}).get("mid", 0) for r in rows)
         spacing = [b - a for a, b in zip(mids, mids[1:]) if b > a]
         cycle = float(np.median(spacing)) if len(spacing) >= 2 else self.exposure + 1.0
+        # Never longer than a guide frame should take: a camera sending its
+        # frames late (15 s apart where 3 s is due) must not make the late
+        # cycle the normal one and the gaps between them count as guided.
+        cycle = min(cycle, self.exposure + CYCLE_EXTRA_S)
         # Each good guide frame covers its own cycle, centred on its midpoint.
         # Lost: every part of the frame no good guide frame covered, a
         # rejected frame and one that never came alike, counted in full.
@@ -1994,7 +2013,14 @@ class Supervisor:
         return {"rms": round(float(np.sqrt(np.mean(np.square(errors)))), 2) if errors else None,
                 "max": round(max(errors), 2) if errors else None,
                 "lost_s": round(lost, 1), "rejected": rejected, "coverage": coverage,
-                "frames": len(rows), "guided": ok, "why": why, "by": "the GPCAM's ST4 lead (guider.py)"}
+                "frames": len(rows), "guided": ok, "why": why, "by": "the GPCAM's ST4 lead (guider.py)",
+                "mode": self.mode()}
+
+    def mode(self):
+        """Which axes the guider corrects, from the calibration it guides by:
+        "RA" when Dec was dropped (ra_only), "RA+Dec" otherwise."""
+        cal = load_calibration() or {}
+        return "RA" if cal.get("dec_guided", True) is False else "RA+Dec"
 
     def stop(self):
         """The guider stopped if this run started it, and the creep put back.

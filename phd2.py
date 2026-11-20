@@ -293,11 +293,19 @@ class Supervisor:
                     begun, troubled = time.monotonic(), None
                     continue
             else:
-                troubled = None
                 recent = [e for e in self.link.steps(time.time() - 3 * 60, time.time()) if e["Event"] == "GuideStep"][-3:]
                 # The newest step fresh too: a stream that has stopped cannot
                 # pass on steps from before it stopped.
                 fresh = recent and time.time() - recent[-1].get("Timestamp", recent[-1]["_seen"]) <= GAP_FACTOR * self.cycle
+                troubled = None
+                # Kept across frames (settle gives up on each frame sooner):
+                # "Guiding" with no guide step coming is a fault of its own, as
+                # a stopped PHD2 is, never frame after frame taken unguided.
+                self.silent_since = None if fresh else (getattr(self, "silent_since", None) or now)
+                if self.silent_since is not None:
+                    if now - self.silent_since > LOST_WAIT_S:
+                        raise Fault(f"PHD2 says it is guiding but has sent no guide step for "
+                                    f"{LOST_WAIT_S / 60:.0f} minutes: guided imaging stops.")
                 if fresh and len(recent) == 3 and all(math.hypot(e.get("RADistanceRaw", 0), e.get("DECDistanceRaw", 0))
                                                       < self.settle_rule["pixels"] for e in recent):
                     return True
@@ -321,8 +329,9 @@ class Supervisor:
         steps = sorted((e.get("Timestamp", e["_seen"]), math.hypot(e.get("RADistanceRaw", 0), e.get("DECDistanceRaw", 0)))
                        for e in rows if e["Event"] == "GuideStep")
         rejected = sum(1 for e in rows if e["Event"] == "StarLost")
-        scale = self.scale or 1.0
-        errors = [d * scale for t, d in steps if t >= start]
+        # Arcseconds only from a pixel scale PHD2 gave: never an assumed 1"/px.
+        moved = [d for t, d in steps if t >= start]
+        errors = [d * self.scale for d in moved] if self.scale else []
         # Time unguided, from the steps' own times against the cycle PHD2 is
         # set to: every stretch between steps (and from the frame's start to
         # the first, and the last to its end) longer than GAP_FACTOR cycles
@@ -335,7 +344,7 @@ class Supervisor:
         ok, why = True, ""
         if state != "Guiding":
             ok, why = False, f"PHD2 was {state} at the frame's end"
-        elif not errors:
+        elif not moved:
             ok, why = False, "no guide step during it"
         elif rejected:
             ok, why = False, f"PHD2 lost the star {rejected} time(s) during it"
@@ -345,7 +354,8 @@ class Supervisor:
                 "max": round(max(errors), 2) if errors else None,
                 "lost_s": round(lost, 1), "rejected": rejected,
                 "coverage": round(covered / (end - start), 3) if end - start >= 2 * cycle else None,
-                "frames": len(steps), "guided": ok, "why": why, "by": getattr(self, "identity", "PHD2")}
+                "frames": len(steps), "guided": ok, "why": why, "by": getattr(self, "identity", "PHD2"),
+                "mode": "PHD2"}
 
     def stop(self):
         """PHD2 stopped if this run started it, and the creep put back; one

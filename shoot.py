@@ -1766,6 +1766,8 @@ def image(args, session, exposure, moving, holding, tracker):
                                                 if went["guided"] else f"not guided to its end: {went['why']}"[:68])
                             if went.get("by"):
                                 header["GUIDER"] = (str(went["by"])[:68], "what guided")
+                            if went.get("mode"):
+                                header["GUIDEMOD"] = (str(went["mode"]), "axes the guider corrected: RA, RA+Dec or PHD2")
                             header["GUIDESET"] = (bool(settled), "guiding had settled when the frame began")
                             if went["rms"] is not None:
                                 header["GUIDERMS"] = (went["rms"], "guide error RMS during the frame, arcsec")
