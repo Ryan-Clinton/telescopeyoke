@@ -66,7 +66,9 @@ project's commands refuse what is unsafe.
    cold for every step until the night's end. Say it is cooling only once
    `./keeper.py status` says so. A cooled camera without `keeper`: its own
    software cools it, if at all; say so. Not cooled: no keeper.
-2. Ask where the sky is clear, and choose every star from the answer.
+2. Where the sky is clear: check the satellite, airports and radar first
+   (`./clouds.py --approach`, `./rain.py`), say what they show, and ask
+   the person only what they leave open; choose every star from that.
 3. Only if the settime dry run says the motor check is on (`[mount]
    nudge_check`, off since 3 Nov 2026): `./ty mount nudge`, and ask whether
    they saw it tip and come back. If the screen says it moved and they say

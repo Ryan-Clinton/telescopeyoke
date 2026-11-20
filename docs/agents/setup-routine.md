@@ -110,13 +110,17 @@ once, at the night's end (`schedule.py end`, after the dawn flats), or on
 closed the camera, the cooler stopped each time, and the night went on
 warming and re-cooling.
 
-## 2. Ask where the sky is clear
+## 2. Where the sky is clear: check, then ask only what is left open
 
-**Ask the person.** They can see the sky and the forecast cannot: a forecast
-of cloud may be wrong either way, and a failed plate solve can be cloud,
-focus or too short an exposure. Ask which parts of the sky are clear (the
-pole? the south? overhead?) and choose every star and target from their
-answer. Never send them out, or keep them waiting, on the forecast's word.
+**Check the sky's evidence first** (20 November 2026, the owner's rule):
+the satellite, the airports and the radar (`./clouds.py --approach`,
+`./rain.py`; the sky hook puts the last saved answers in front of the
+agent). Say what they show. Ask the person only what they leave open:
+where they disagree or the cloud is patchy, which parts of the sky are
+clear (the pole? the south? overhead?). A forecast alone settles nothing:
+a forecast of cloud may be wrong either way, and a failed plate solve can
+be cloud, focus or too short an exposure. Never send them out, or keep
+them waiting, on the forecast's word.
 
 ## 3. See that the motors really turn
 
