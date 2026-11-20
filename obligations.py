@@ -118,7 +118,8 @@ def weigh(c, depth_g=None, today=None, purpose="nova-patrol"):
     if depth_g is not None and mag is not None and mag > depth_g - SETTLE_MARGIN:
         return {**out, "verdict": "wait", "why": f"G {mag:.2f} at the stack's limit (G {depth_g:.2f}): another look at "
                                                  "the same depth can't settle it; it waits for a deeper night"}
-    strong = out["level"] >= 2 and rb is not None and rb >= RB_STRONG and (local is None or local >= LOCAL_STRONG)
+    # A local score not measured is not evidence for it: strong needs it measured.
+    strong = out["level"] >= 2 and rb is not None and rb >= RB_STRONG and local is not None and local >= LOCAL_STRONG
     if strong:
         return {**out, "verdict": "now", "why": f"strong: level 2, real-or-bogus {rb:.2f}"}
     return {**out, "verdict": "allowance", "why": "uncertain: from the night's follow-up allowance"
@@ -174,7 +175,10 @@ def refresh(today=None, data=None, path=None, nights=3):
                     "what": f"{c['id']}: brightness with its error and last non-detection, then the person vets it",
                     "why": "seen again on another night (level 3)",
                     "until": w["until"], "worth": w["verdict"] == "now", "weighed": w}
-    for back in range(nights):
+    met = {}            # field -> its latest session that met its goals, in the window
+    # Oldest night first, so a later night's success clears an earlier one's
+    # shortfall, never the other way round.
+    for back in reversed(range(nights)):
         evening = today - timedelta(days=back + 1)
         for session in outcome.night_sessions(evening, data):
             try:
@@ -199,8 +203,10 @@ def refresh(today=None, data=None, path=None, nights=3):
                               "why": "; ".join(r["limited_by"][:2]) or "short of its goals",
                               "until": (evening + timedelta(days=FIELD_DAYS)).isoformat(), "worth": True,
                               "since": Path(session).name}
-            elif r["worth_it"] == "met" and key in found and found[key].get("since", "") < Path(session).name:
-                found.pop(key)
+            elif r["worth_it"] == "met":
+                met[field] = max(met.get(field, ""), Path(session).name)
+                if key in found and found[key].get("since", "") < Path(session).name:
+                    found.pop(key)
     kept = {_key(o): o for o in store["obligations"]}
     now_iso = datetime.now().isoformat(timespec="seconds")
     for key, o in kept.items():
@@ -210,6 +216,15 @@ def refresh(today=None, data=None, path=None, nights=3):
             continue
         if o["kind"] == "interrupted":
             if o["until"] < today.isoformat():
+                o.update(state="expired", closed=now_iso)
+            continue
+        if o["kind"] == "field short":
+            # Owed until a later night meets the field's goals or its own
+            # time runs out (FIELD_DAYS), never closed only because the
+            # night that fell short has left the window scanned.
+            if met.get(o["field"], "") > o.get("since", ""):
+                o.update(state="done", closed=now_iso)
+            elif o["until"] < today.isoformat():
                 o.update(state="expired", closed=now_iso)
             continue
         o.update(state="done" if o["until"] >= today.isoformat() else "expired", closed=now_iso)

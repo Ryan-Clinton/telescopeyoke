@@ -257,7 +257,9 @@ def capture_rule(goals, minutes, share=STACKED_SHARE, exposure=None, model=None,
     if want is None and goals["desired"].get("depth") is not None and model and prior and exposure \
             and prior.get("fwhm"):
         seconds = seconds_for_depth(model, prior["fwhm"], prior["sky"], goals["desired"]["depth"])
-        want = max(math.ceil(seconds * share / exposure), goals["minimum"].get("stacked") or 0)
+        # The model's seconds are stacked seconds: so many stacked frames,
+        # which accepted_for turns into accepted ones through the share, once.
+        want = max(math.ceil(seconds / exposure), goals["minimum"].get("stacked") or 0)
     if want is None:
         return None
     accepted = accepted_for(want, share)

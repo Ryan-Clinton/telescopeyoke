@@ -206,7 +206,7 @@ def steps(p, dry_run=False):
         count = ["--accepted", str(rule["accepted"]), "--most", str(rule["most_frames"])]
     return [[sys.executable, str(ROOT / "mount.py"), "goto", p["target"], *extra],
             [sys.executable, str(ROOT / "shoot.py"), p["target"], *count,
-             "--minutes", f"{p['minutes'] * SHOOT_CAP:g}",
+             "--minutes", f"{rule['cap_minutes'] if rule else p['minutes'] * SHOOT_CAP:g}",   # the programme's own cap
              "--exposure", str(p["exposure"]), "--gain", str(p["gain"]),
              *(["--dither", str(p["dither"])] if p.get("dither") else []), *extra]]
 
@@ -486,8 +486,12 @@ def second_look(p, name, say=print, dry_run=False, run_command=None, search=None
     camera does not move with the sky, a real object does."""
     minutes = live.get("patrol.second_look_minutes", CONFIRM_MINUTES)
     frames = second_look_frames(minutes, p["exposure"])
+    # Its frames are the depth it needs; its own cap (SHOOT_CAP times its
+    # minutes) keeps a slow camera or a recovery from running it into the
+    # next step's time.
     cmd = [sys.executable, str(ROOT / "shoot.py"), name, "--frames", str(frames), "--exposure", str(p["exposure"]),
-           "--gain", str(p["gain"]), "--dither-first", *(["--dry-run"] if dry_run else [])]
+           "--gain", str(p["gain"]), "--minutes", f"{minutes * SHOOT_CAP:g}", "--dither-first",
+           *(["--dry-run"] if dry_run else [])]
     say(f"== a second look at {name}: {minutes:g} minutes more")
     if not dry_run:
         import director
@@ -714,8 +718,9 @@ def frames_for(minutes, exposure):
 
 
 def second_look_frames(minutes, exposure):
-    """A second look's frames: its minutes over the exposure alone, with no
-    --minutes, so it runs on for as long as they take."""
+    """A second look's frames: its minutes over the exposure alone; its time
+    is capped apart (SHOOT_CAP times its minutes) so it cannot run on into
+    the next step."""
     return max(1, round(60 * minutes / exposure))
 
 

@@ -31,7 +31,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 10 | Hardware onboarding and compatibility | done 20 Nov 2026, re-checked; 3, 4, 8 and 9 open |
 | 11 | NINA/PHD2 companion | done 20 Nov 2026, re-checked |
 | 12 | State management and data integrity | done 20 Nov 2026, re-checked |
-| 13 | Observing scheduler and scientific yield | not started |
+| 13 | Observing scheduler and scientific yield | done 20 Nov 2026; re-check asked |
 | 14 | Weather and environmental decisions | not started |
 | 15 | Operational performance | not started |
 | 16 | Network security and external integrations | not started |
@@ -475,4 +475,20 @@ Documentation only; `docs/validation.md` is the authority and is unchanged.
 | 3 | The archive copy is checked by size only; a relative archive path breaks the link | P1 | Confirmed and fixed | The copy is synced to disk and its SHA-256 compared with the original's before anything is replaced; the archive path is made absolute |
 | 4 | A torn last log line and damage inside the log are said alike | P2 | Confirmed and fixed | A cut-short last line is said as an interrupted write; damage before the end is said loudly, with the line numbers, as frames' records missing |
 | 5 | `runs.clear()` does not make a dict | P2 | Confirmed and fixed | A history of any other shape is begun again as a dict, under its lock |
+
+## 13. Observing scheduler and scientific yield, 20 November 2026
+
+The goals, windows and dispatch phases are off on the owner's rig ([goals], [windows] and [dispatch] unset), so findings 1, 3, 4, 6 and 8 change nothing on its nights until they are switched on.
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | A depth goal's frames go through the stacked share twice | P1 | Confirmed and fixed | `goals.capture_rule`: the model's stacked seconds give stacked frames (seconds over exposure), turned into accepted frames through the share once (960 s of 16 s frames: 60 stacked, 72 accepted, where it was 61) |
+| 2 | A timed step with its own target is skipped with no field imaged last | P1 | Confirmed and fixed | Only a step whose command fills `{last}` waits on a field imaged last |
+| 3 | Outcomes read newest first; a short field forgotten after three nights | P1 | Confirmed and fixed | Oldest night first, so a later success clears an earlier shortfall; a short field stays owed until a later night meets its goals or its 10 days run out, never closed for leaving the window scanned |
+| 4 | A ranking that fails takes the list in order, dropping protected windows | P1 | Confirmed and fixed | It falls back to `windows.choose` (protected starts and their cut-offs kept), and to the list only if that fails too |
+| 5 | A second look has no time limit of its own | P1 | Partly right, fixed | Its frames stay the depth it needs, and it now has `--minutes` at 1.5 times its minutes (`SHOOT_CAP`). Asking the next step's time in the single-field path, as the mosaic path does, is planned |
+| 6 | A missing local score counts towards "strong" | P1 | Confirmed and fixed | Strong needs the local score measured and at least 5 |
+| 7 | A protected event is started however late | P2 | Agreed and planned | A latest useful start for each time-critical step, after which the miss is recorded |
+| 8 | The programme's own cap is ignored by the patrol | P2 | Confirmed and fixed | The patrol's capture uses the capture rule's `cap_minutes` when goals are on |
+| 9 | Night replay cannot show more discoveries | P2 | Agreed, no change | The replay already says what it does not model; no claim of more discoveries is made from it |
 

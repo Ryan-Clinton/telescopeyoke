@@ -400,9 +400,17 @@ def choose_step(steps, say=print, now=None, cfg=None, sky=None, owed=None, costs
                 "next protected start and its setup")
         return step, cut, hold
     except Exception as problem:     # never a reason to stop the night
-        say(f"{datetime.now():%H:%M} next step not chosen ({problem.__class__.__name__}: {problem}); "
-            "taking the list in order")
-        return next((s for s in steps if s.get("status") == "queued"), None), None, None
+        # The ranking failed: the protected windows still hold (windows.choose,
+        # no ranking), and only if that fails too the list in order.
+        try:
+            step, cut, hold = windows.choose(steps, now, costs if isinstance(costs, dict) else None)
+            say(f"{datetime.now():%H:%M} next step not ranked ({problem.__class__.__name__}: {problem}); "
+                "taken by the protected windows alone")
+            return step, cut, hold
+        except Exception as again:
+            say(f"{datetime.now():%H:%M} next step not chosen ({again.__class__.__name__}: {again}); "
+                "taking the list in order")
+            return next((s for s in steps if s.get("status") == "queued"), None), None, None
 
 
 def owe_interrupted(step, code, say=print):
@@ -474,7 +482,10 @@ def prepared(step, now, last=None, sunset=last_sunset, cut=None):
         # the step is told to end BACKSTOP_S early, so the hard stop falls on
         # the cutoff (the replay of 3 November found windows 209 s late by it).
         early = BACKSTOP_S if cut is not None and (own is None or cut < own) else 0
-        if left - early < 120 or (own is not None and not last):
+        # A step that fills with {last} needs a field imaged last; one that
+        # names its own target never waits on that.
+        fills = any("{last}" in c for c in step["command"])
+        if left - early < 120 or (own is not None and fills and not last):
             return None, left
         if any(Path(c).name in ("shoot.py", "patrol.py") for c in command[:2]):
             # The run is told its time and finishes gracefully, picture and all;
