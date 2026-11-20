@@ -374,7 +374,9 @@ def _refresh(max_age_s):
                 break
             except BlockingIOError:
                 if time.monotonic() > give_up:
-                    return _kept(10 ** 9) or {"satellite": None, "airports": None, "partial": True,
+                    # Another look still running: the last kept one only if it is
+                    # still within twice the age asked (never an old night's verdict).
+                    return _kept(2 * (max_age_s or FRESH_S)) or {"satellite": None, "airports": None, "partial": True,
                                               "satellite_why": "another script's look is still running",
                                               "together": together(None, None)}
                 time.sleep(0.5)

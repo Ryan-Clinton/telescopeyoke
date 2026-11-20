@@ -32,7 +32,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 11 | NINA/PHD2 companion | done 20 Nov 2026, re-checked |
 | 12 | State management and data integrity | done 20 Nov 2026, re-checked |
 | 13 | Observing scheduler and scientific yield | done 20 Nov 2026, re-checked; 7 planned |
-| 14 | Weather and environmental decisions | not started |
+| 14 | Weather and environmental decisions | done 20 Nov 2026; re-check asked |
 | 15 | Operational performance | not started |
 | 16 | Network security and external integrations | not started |
 | 17 | Public releases and installation | not started |
@@ -500,4 +500,20 @@ The goals, windows and dispatch phases are off on the owner's rig ([goals], [win
 | 2 | A second look's cap ignores the time left; the single field does not ask the next step | P1 | Confirmed and fixed | Its `--minutes` is the smaller of 1.5 times its minutes and the patrol's time left; the single-field path asks `due_step()` as the mosaic does |
 | 3 | The replay's caps no longer match the live patrol's | P1 | Confirmed (a mismatch of d52437e) and fixed | The replay uses the programme's own cap kept to the budget, and caps the second look as the live one is |
 | 4 | The fallback can fail again on the costs | P2 | Confirmed and fixed | It passes `{}` (the setup defaults) when the costs could not be had |
+
+## 14. Weather and environmental decisions, 20 November 2026
+
+The rain alert stays on in every case (the owner's rule, 15 November 2026): these changes make it earlier and keep it from being cleared without evidence, never quieter.
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | A stale forecast copy can still give GO | P1 | Confirmed and fixed | When the Open-Meteo forecast used is a stale or unavailable copy, a GO is held back to MARGINAL with the reason said |
+| 2 | The radar's newest picture has no age limit | P1 | Confirmed and fixed | Each look keeps the picture's age; older than 30 min (`STALE_MIN`) it is marked stale, and a stale picture never clears a rain warning |
+| 3 | The warning counts arrival from the picture, not from now | P1 | Confirmed and fixed | `arrives_in_min` is the arrival from now (picture's minutes less its age) and decides the warning; `arrives_min` stays from the picture for the scores |
+| 4 | Gusts and a lone wet centre do not touch the verdict | P1 | Partly right, fixed for wind | Gusts at or over 35 km/h (`GUST_SHAKES`) hold a GO back to MARGINAL. Rain stays the centres' majority for the verdict, as decided 4 November 2026, but the alert's own forecast and the radar still warn on their own |
+| 5 | One centre left reads as full agreement | P2 | Confirmed and fixed | With only one centre answering, a GO is held back, said as no agreement to go by |
+| 6 | Cloud can still cover a hardware failure; old evidence on lock contention | P1 | Partly fixed | The lock-contention fallback now takes kept evidence only within twice the age asked. A step's own failure reason reaching the runner is still planned (as in 4, re-checked, 5) |
+| 7 | No forecast means "no rain" in the alerts | P1 | Confirmed and fixed | A forecast not read, or not reaching the hour ahead, is "not known": it keeps the rain state it had and is said as not known |
+| 8 | No physical weather protection | P1 | Agreed, no change | The alerts are to fetch the person; parking is not shelter. The docs already say so (docs/alerts.md); nothing claims unattended weather protection |
+| 9 | Sky quality not used to choose between targets | P2 | Agreed and planned | Measured frame quality and forecast seeing as advice between otherwise equal targets, later |
 

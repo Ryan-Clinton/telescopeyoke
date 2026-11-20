@@ -398,12 +398,13 @@ def run_going(now=None, frames=FRAMES):
 
 
 def forecast(weather, now=None):
-    """(rain coming, cloud coming) for the hour ahead, from feeds.weather()."""
+    """(rain coming, cloud coming) for the hour ahead, from feeds.weather();
+    None for either when the forecast does not reach the hour ahead."""
     now = now or time.time()
     t = np.array(weather["time"], dtype=float)
     here = int(np.searchsorted(t, now, side="right")) - 1
     if here < 0 or here + 1 >= len(t):
-        return False, False
+        return None, None
     ahead = (here, here + 1)
     rain = any((weather["precipitation_probability"][i] or 0) >= RAIN_CHANCE
                or (weather["precipitation"][i] or 0) >= RAIN_MM for i in ahead)
@@ -419,7 +420,8 @@ def decide(before, sky, rain, cloud_forecast):
     events, now = [], dict(before)
     if rain and not before.get("rain"):
         events.append("rain")
-    now["rain"] = bool(rain)
+    # Not known (no forecast) keeps what was known: never "no rain" from no forecast.
+    now["rain"] = before.get("rain", False) if rain is None else bool(rain)
     if sky is None and cloud_forecast and before.get("sky") in (None, "clear"):
         sky = "cloud"
     was = before.get("sky")
@@ -483,10 +485,11 @@ def check(dry_run=False, say_it=print):
         rain, cloud = forecast(feeds.weather(site["latitude"], site["longitude"]))
     except Exception as error:      # no network, no site: the frames still count
         say_it(f"forecast not read: {error}")
-        rain, cloud = False, False
+        rain, cloud = None, None    # not known: neither rain nor dry
     events, now = decide(before, sky, rain, cloud)
     watching = "no run going" if counts is None else f"a run going, {len(counts)} frames, sky {sky or 'not yet judged'}"
-    say_it(f"{time.strftime('%H:%M')}  {watching}; rain in the next hour: {'yes' if rain else 'no'}"
+    say_it(f"{time.strftime('%H:%M')}  {watching}; rain in the next hour: "
+           f"{'not known (no forecast)' if rain is None else 'yes' if rain else 'no'}"
            + (f"  -> {', '.join(events)}" if events else ""))
     for event in events:
         tell(event, dry_run, say_it)

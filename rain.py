@@ -46,6 +46,7 @@ ZOOM = 7                 # the deepest the public tiles go
 TILES = 1                # tiles each side of the site's: a 3 x 3 block
 NEAR_KM = 5              # rain this close to a point on the track counts as there
 WARN_MIN = 45            # rain due within this: a warning
+STALE_MIN = 30           # a radar picture older than this is history, not the rain now (the service sends one each 10)
 SHOWER_MIN = 30          # rain lasting no more than this on the track: a shower
 AHEAD_H = 4
 STATE = config.DATA / "cache" / "rain.json"
@@ -92,8 +93,11 @@ def look(site=None):
         frames = list(pool.map(lambda f: _frame(maps["host"], f["path"], x0, y0), chosen))
     now = frames[-1]
     taken = datetime.fromtimestamp(chosen[-1]["time"])
+    age_min = max(0.0, (datetime.now() - taken).total_seconds() / 60)
     answer = {"picture": taken.strftime("%H:%M"), "picture_at": taken.astimezone().isoformat(),
-              "rain_here": bool(now[int(sy), int(sx)])}
+              "rain_here": bool(now[int(sy), int(sx)]), "age_min": round(age_min, 1),
+              # Older than this, the picture is history: kept, never said as the rain now.
+              "stale": age_min > STALE_MIN}
     clouds.note_seen("radar", "rain", answer["rain_here"], f"radar {answer['picture']}")
 
     ys, xs = np.nonzero(now)
@@ -169,6 +173,9 @@ def look(site=None):
         return start, None
 
     best, lasts = along(move)
+    # Arrival counted from the picture (for the scores) and from now (for a
+    # warning): a picture 20 minutes old saying 55 minutes is 35 from now.
+    answer["arrives_in_min"] = None if best is None else max(0, round(best - answer["age_min"]))
     others = [along((move[0] * f, move[1] * f))[0] for f in (0.75, 1.25)]
     starts = [s for s in [best] + others if s is not None]
     answer.update(arrives_min=best, lasts_min=lasts,
@@ -256,8 +263,13 @@ def watch(every, until, room=None, say=print):
             say(f"{datetime.now():%H:%M} rain check failed ({problem}); trying again next time")
             a = None
         if a and not a.get("error"):
-            due = a.get("arrives_min")
+            # From now, not from the picture; a stale picture never clears a warning.
+            due = a.get("arrives_in_min", a.get("arrives_min"))
             state = ("here" if a["rain_here"] else "due" if due is not None and due <= WARN_MIN else "dry")
+            if a.get("stale") and last in ("here", "due") and state == "dry":
+                say(f"{datetime.now():%H:%M} the radar's newest picture is {a['age_min']:.0f} min old: the rain "
+                    "warning stands until a fresh one says otherwise")
+                state = last
             if state != last:
                 if state != "dry" or last is not None:
                     say(f"{datetime.now():%H:%M} " + ("RAIN WARNING: " if state != "dry" else "rain warning over: ")

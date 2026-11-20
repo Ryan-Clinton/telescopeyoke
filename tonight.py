@@ -45,6 +45,9 @@ def foggy(h):
     return h["temp"] - h["dew_point"] <= FOG_DEW_GAP and (h["wind"] or 0) <= FOG_WIND
 
 
+GUST_SHAKES = 35     # km/h: gusts this strong shake the scope, and a night with them is not a GO
+
+
 def weather_report(night, lat, lon, source=feeds):
     """Hourly conditions through the night plus a go/no-go verdict."""
     w = source.weather(lat, lon)
@@ -111,7 +114,7 @@ def weather_report(night, lat, lon, source=feeds):
         notes.append(f"rain possible from {wet[0]['time']:%H:%M} "
                      f"({by('wet', wet) or str(max(h['rain_chance'] for h in wet)) + '% chance'})")
     gust = max(h["gust"] for h in hours)
-    if gust >= 35:
+    if gust >= GUST_SHAKES:
         notes.append(f"gusts to {gust:.0f} km/h will shake the scope")
     elif gust >= 25:
         notes.append(f"breezy, gusts to {gust:.0f} km/h")
@@ -140,6 +143,18 @@ def weather_report(night, lat, lon, source=feeds):
         verdict = "NO-GO"
     if len(wet) > len(hours) / 2:
         verdict = "NO-GO"
+    # A forecast that is only an old copy (its source not answering), or one
+    # centre left of several, is not enough for a GO: said, and MARGINAL.
+    stale = [u["source"] for u in getattr(source, "used", {}).values()
+             if u.get("state") in ("stale", "unavailable") and u["source"].startswith("Open-Meteo")]
+    lone = centres and best and max((h["centres"] or {}).get("of", 0) for h in best) <= 1
+    if verdict == "GO" and (stale or lone):
+        verdict = "MARGINAL"
+        notes.insert(0, "GO held back: " + ("the forecast is an old copy (its source did not answer)" if stale else
+                                            "only one forecast centre answered, so no agreement to go by"))
+    # Gusts that shake the scope spoil a clear night as much as cloud would.
+    if gust >= GUST_SHAKES and verdict == "GO":
+        verdict = "MARGINAL"
     return {
         "verdict": verdict, "mean_cloud": round(mean_cloud),
         "clear_from": best[0]["time"] if best else None,
