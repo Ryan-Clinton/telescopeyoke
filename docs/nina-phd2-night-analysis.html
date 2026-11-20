@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>NINA and PHD2 night analysis: why last night's imaging went wrong</title>
-<meta name="description" content="A free, read-only companion for an observatory run by NINA (or SGP, APT, Ekos) and PHD2: it measures every saved frame against the night's best and says where the time went, cloud, guiding, focus or gaps, without touching the rig.">
+<title>NINA and PHD2 night analysis | TelescopeYoke</title>
+<meta name="description" content="Why last night's imaging went wrong: a free, read-only tool that reads NINA and PHD2 logs and the saved frames, and says where the time went.">
 <link rel="canonical" href="https://ryan-clinton.github.io/telescopeyoke/nina-phd2-night-analysis.html">
-<meta property="og:title" content="NINA and PHD2 night analysis: why last night's imaging went wrong">
+<meta property="og:title" content="NINA and PHD2 night analysis | TelescopeYoke">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://ryan-clinton.github.io/telescopeyoke/nina-phd2-night-analysis.html">
-<meta property="og:description" content="A free, read-only companion for an observatory run by NINA (or SGP, APT, Ekos) and PHD2: it measures every saved frame against the night's best and says where the time went, cloud, guiding, focus or gaps, without touching the rig.">
+<meta property="og:description" content="Why last night's imaging went wrong: a free, read-only tool that reads NINA and PHD2 logs and the saved frames, and says where the time went.">
 <meta property="og:image" content="https://ryan-clinton.github.io/telescopeyoke/social-preview.png">
 <link rel="icon" href="logo.svg">
 <style>
@@ -46,7 +46,7 @@
 </head>
 <body>
 <main>
-<p class="quiet" style="margin-top:24px"><a href="./">TelescopeYoke</a> · <a href="nina-phd2-night-analysis.html">NINA and PHD2 night analysis</a> · <a href="synscan-automation.html">SynScan automation</a> · <a href="ascom-alpaca.html">ASCOM Alpaca</a></p>
+<nav aria-label="TelescopeYoke pages" class="quiet" style="margin-top:24px"><a href="./">TelescopeYoke</a> · <a href="nina-phd2-night-analysis.html">NINA and PHD2 night analysis</a> · <a href="synscan-automation.html">SynScan automation</a> · <a href="ascom-alpaca.html">ASCOM Alpaca</a></nav>
 <header>
 <h1>Why did last night go wrong?</h1>
 <p class="lead">A read-only companion for an observatory that already works: NINA, SGP, APT, SharpCap or Ekos taking the frames, PHD2 guiding.</p>
@@ -62,11 +62,30 @@
 </ul>
 
 <h2>What it does</h2>
-<p><code>companion.py</code> reads the frames your capture program saved (FITS or XISF), PHD2's guide log (or PHD2 live, through its server) and, if you give it, NINA's own log. Every frame is measured: stars, sharpness (FWHM), roundness, sky brightness, sensor temperature against its target, and the guiding during it. Each is judged against the best frames of the same target and filter that night, so no figure from another telescope is assumed. Frames are then called <b>dimmed</b>, <b>bright sky</b>, <b>soft</b>, <b>trailed</b>, <b>off cooling target</b> or <b>guide star lost</b>, and stretches with no frames are explained from PHD2 and NINA where they can be. What was measured is always said apart from what is only inferred.</p>
+<p><code>companion.py</code> reads the frames your capture program saved, PHD2's guide log (or PHD2 live, through its server) and, if you give it, NINA's own log. Every light frame it can read is measured (FITS, or XISF uncompressed or zlib-compressed); what it cannot read or leaves out (calibration frames, stacks, colour pictures, other compression) is listed, never silently dropped. For each: stars, sharpness (FWHM), roundness, sky brightness, sensor temperature against its target, and the guiding during it. Each is judged against the best frames of the same target and filter that night, so no figure from another telescope is assumed. Frames are then called <b>dimmed</b>, <b>bright sky</b>, <b>soft</b>, <b>trailed</b>, <b>off cooling target</b> or <b>guide star lost</b>, and stretches with no frames are explained from PHD2 and NINA where they can be. What was measured is always said apart from what is only inferred.</p>
 <p><b>It never touches the observatory.</b> It has no command that can move a mount, take a frame, turn a focuser or a wheel, or change a setting.</p>
 
-<h2>A real night</h2>
-<p>The author's own night of 5 November 2026, trimmed:</p>
+<h2>No images to hand? Start with the logs</h2>
+<p>The NINA and PHD2 logs alone are enough for a first look, a few megabytes instead of a night's frames:</p>
+<pre><code>python companion.py report --nina-log "...\NINA\Logs\DATE.log" --phd2-log "...\PHD2_GuideLog_DATE.txt" --night 2026-09-13</code></pre>
+<p>Here is what it said, in full, about a night that another observatory published: NINA 3.2 running a sequence on M 27 with PHD2 guiding and a dome (<a href="https://github.com/maininimassimo-bit/digital-stargate-manual/tree/HEAD/data/sessions/2026/09/2026-09-13_2026-09-14">their logs</a>, 13-14 September 2026), read offline:</p>
+<pre>lights: M 27 no filter, 600 s: 27 exposures, 270 min of exposure, 21:09-02:24
+lights: M 27 L-Pro, 6 s: 2 exposures, 0 min of exposure, 21:50-21:53
+autofocus: L-Pro, 6 s: 42 exposures, 4 min of exposure, 20:56-01:50
+plate solving: L-Pro, 15 s: 7 exposures, 2 min of exposure, 20:59-21:55
+focusing: L-Pro, 6 s: 13 exposures, 1 min of exposure, 21:50-21:53
+Science lights: 27 saved of 29 exposures, 270 min saved; 62 more exposures for calibration, snapshots, autofocus, plate solving or focusing, not counted as science
+M 27 no filter, 600 s: 23 of 27 frames acceptable by NINA's own star detection (best HFR 2.65 px, 635 stars); 3 with fewer stars (likely cloud or haze), 1 soft
+Time in the sequencer's steps: waiting 139 min, dithering 16 min, autofocus 12 min, camera warming 7 min, camera cooling 5 min, starting guiding 3 min, centring (plate solving) 3 min, dome 2 min, slewing 1 min, finding home 1 min, ...
+Events: the dome shutter closed (3), the dome shutter opened (3), the safety monitor said safe (1), the safety monitor said unsafe (1)
+Errors: 37, the first 21:04: PHD2Guider.cs: PHD2 error:Guiding stopped
+Guiding (PHD2's log): 27 of 91 exposures taken while PHD2 was guiding; 20 of those guided all through, 7 with gaps in the guide steps; the star lost 326 time(s) during them
+Guide error during exposures: median RMS 1.42 arcsec, worst 4.39
+From the logs alone: no frame was measured here; any judgement of the frames is NINA's own star detection, where its log has it.</pre>
+<p>From the logs alone it told 27 ten-minute lights from 62 autofocus, plate-solving and focusing exposures, found that 7 of the 27 had gaps in their guiding, and put more than two hours down to the sequence waiting. What it could not say without the frames is how sharp each light really was: for that it used NINA's own star counts, and said so. The same observatory's November night, and others' NINA and PHD2 logs, are in <a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/companion.md#what-has-been-tried">What has been tried</a>.</p>
+
+<h2>With the frames: the author's own night</h2>
+<p>Given the frames as well, each is measured itself. The author's night of 5 November 2026 (no guiding then), trimmed:</p>
 <pre>706 files: 693 light frames measured; 13 left out, no single-plane image (a stack or a colour picture).
 M33 L (183m, gain 1500, 16 s) 00:23-01:41: 57 min measured; 37 min acceptable by its own best frames (139 of 213 frames)
     15 min (56 frames) dimmed: likely cloud or haze
@@ -80,7 +99,7 @@ Where the time went: no frames (explained) 44 min, dimmed 38 min, no frames (une
 python companion.py report "C:\path\to\tonights\frames" --phd2-log "...\PHD2_GuideLog_DATE.txt" --nina-log "...\NINA\Logs\DATE.log"</code></pre>
 <p><code>watch</code> instead of <code>report</code> follows a night as it happens. The full guide, every option and how to read a report: <a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/companion.md">The companion</a>.</p>
 
-<div class="note"><b>How far it is proven.</b> Not in the 0.4.0 download: it is on the development branch, added on 19 November 2026. Tried on the author's own frames, on made-up nights with known faults, and offline on NINA and PHD2 logs other observatories have published. Not yet run live beside anyone else's observatory.</div>
+<div class="note"><b>How far it is proven.</b> Not in the 0.4.0 download: it is on the development branch, added on 19 November 2026. Tried on the author's own frames, on made-up nights with known faults, and offline on NINA and PHD2 logs other observatories have published. No other observatory's night with its frames, logs and guiding together has been read yet, and it has not yet run live beside anyone else's observatory.</div>
 
 <footer>TelescopeYoke is free and MIT licensed. What is proven on real hardware is kept in one place: <a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/validation.md#current-conclusions">Validation</a>. Not made or endorsed by Sky-Watcher, NINA, PHD2 or ASCOM.</footer>
 </main>

@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sky-Watcher SynScan automation: plate-solved GoTo centring, polar alignment and whole nights</title>
-<meta name="description" content="Free software that drives an ordinary Sky-Watcher SynScan mount through its handset: plate-solved GoTos that centre themselves despite a rough home position, polar alignment by the stars, motor focus and whole imaging nights. Proven on an EQ3 Pro.">
+<title>Sky-Watcher SynScan automation | TelescopeYoke</title>
+<meta name="description" content="Plate-solved GoTos that centre themselves, home found by measurement, polar alignment by the stars and imaging runs, for a SynScan mount. Proven on an EQ3 Pro.">
 <link rel="canonical" href="https://ryan-clinton.github.io/telescopeyoke/synscan-automation.html">
-<meta property="og:title" content="Sky-Watcher SynScan automation: plate-solved GoTo centring, polar alignment and whole nights">
+<meta property="og:title" content="Sky-Watcher SynScan automation | TelescopeYoke">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://ryan-clinton.github.io/telescopeyoke/synscan-automation.html">
-<meta property="og:description" content="Free software that drives an ordinary Sky-Watcher SynScan mount through its handset: plate-solved GoTos that centre themselves despite a rough home position, polar alignment by the stars, motor focus and whole imaging nights. Proven on an EQ3 Pro.">
+<meta property="og:description" content="Plate-solved GoTos that centre themselves, home found by measurement, polar alignment by the stars and imaging runs, for a SynScan mount. Proven on an EQ3 Pro.">
 <meta property="og:image" content="https://ryan-clinton.github.io/telescopeyoke/social-preview.png">
 <link rel="icon" href="logo.svg">
 <style>
@@ -46,10 +46,11 @@
 </head>
 <body>
 <main>
-<p class="quiet" style="margin-top:24px"><a href="./">TelescopeYoke</a> · <a href="nina-phd2-night-analysis.html">NINA and PHD2 night analysis</a> · <a href="synscan-automation.html">SynScan automation</a> · <a href="ascom-alpaca.html">ASCOM Alpaca</a></p>
+<nav aria-label="TelescopeYoke pages" class="quiet" style="margin-top:24px"><a href="./">TelescopeYoke</a> · <a href="nina-phd2-night-analysis.html">NINA and PHD2 night analysis</a> · <a href="synscan-automation.html">SynScan automation</a> · <a href="ascom-alpaca.html">ASCOM Alpaca</a></nav>
 <header>
 <h1>A SynScan mount that centres its own GoTos</h1>
-<p class="lead">TelescopeYoke drives an ordinary Sky-Watcher SynScan mount through its handset (or an EQDIR lead or Wi-Fi adapter) and measures what a careful setup would otherwise have to get right by hand.</p>
+<p class="lead">TelescopeYoke drives an ordinary Sky-Watcher SynScan mount through its handset, and measures what a careful setup would otherwise have to get right by hand.</p>
+<p class="quiet">The handset is the proven route. Without a handset, through Sky-Watcher's Wi-Fi adapter, it has found home and made a GoTo on the same mount (16 and 19 November 2026), but not yet run a night; an EQDIR lead is untried.</p>
 <div class="buttons"><a class="main" href="./#try">Try the demo, no telescope needed</a><a href="https://github.com/Ryan-Clinton/telescopeyoke/releases/latest">Download</a></div>
 </header>
 
@@ -63,8 +64,8 @@
 <ul>
 <li>Polar alignment by plate solving, saying which bolt to turn and which way (<a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/calibration.md">Calibrating a mount</a>).</li>
 <li>Focusing with a motor focuser, or by ear with a manual one (<a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/focus.md">Focus</a>).</li>
-<li>Whole nights imaged and stacked, with re-centring between blocks and the cloud noticed (<a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/imaging.md">Imaging</a>).</li>
-<li>Limits kept in the code: 20&deg; minimum altitude, the meridian, the Sun; every move a dry run first.</li>
+<li>Imaging runs, stacked as they go, with re-centring between blocks and the cloud noticed (<a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/imaging.md">Imaging</a>). The night's end by itself, parked and the person told, is built but not yet proven through a real night.</li>
+<li>Limits kept in the code: never below 20&deg; altitude, the meridian limit, 40&deg; from the Sun; every move is checked against them before it is sent, and <code>--dry-run</code> shows a move without making it.</li>
 </ul>
 <p>The full list, each with how far it is proven: <a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/features.md">What makes it different</a>.</p>
 

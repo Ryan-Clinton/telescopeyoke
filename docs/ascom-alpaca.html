@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ASCOM Alpaca from Python: a mount, camera, focuser and filter wheel in TelescopeYoke</title>
-<meta name="description" content="TelescopeYoke drives a mount, camera, filter wheel and focuser through their ASCOM drivers over Alpaca, from Python on Windows or Linux. Built and tried on ASCOM's own simulator; no real device yet.">
+<title>ASCOM Alpaca telescope control from Python | TelescopeYoke</title>
+<meta name="description" content="A mount, camera, filter wheel and focuser through their ASCOM drivers over Alpaca, from Python. Tried on ASCOM's simulator only; no real device yet.">
 <link rel="canonical" href="https://ryan-clinton.github.io/telescopeyoke/ascom-alpaca.html">
-<meta property="og:title" content="ASCOM Alpaca from Python: a mount, camera, focuser and filter wheel in TelescopeYoke">
+<meta property="og:title" content="ASCOM Alpaca telescope control from Python | TelescopeYoke">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://ryan-clinton.github.io/telescopeyoke/ascom-alpaca.html">
-<meta property="og:description" content="TelescopeYoke drives a mount, camera, filter wheel and focuser through their ASCOM drivers over Alpaca, from Python on Windows or Linux. Built and tried on ASCOM's own simulator; no real device yet.">
+<meta property="og:description" content="A mount, camera, filter wheel and focuser through their ASCOM drivers over Alpaca, from Python. Tried on ASCOM's simulator only; no real device yet.">
 <meta property="og:image" content="https://ryan-clinton.github.io/telescopeyoke/social-preview.png">
 <link rel="icon" href="logo.svg">
 <style>
@@ -46,7 +46,7 @@
 </head>
 <body>
 <main>
-<p class="quiet" style="margin-top:24px"><a href="./">TelescopeYoke</a> · <a href="nina-phd2-night-analysis.html">NINA and PHD2 night analysis</a> · <a href="synscan-automation.html">SynScan automation</a> · <a href="ascom-alpaca.html">ASCOM Alpaca</a></p>
+<nav aria-label="TelescopeYoke pages" class="quiet" style="margin-top:24px"><a href="./">TelescopeYoke</a> · <a href="nina-phd2-night-analysis.html">NINA and PHD2 night analysis</a> · <a href="synscan-automation.html">SynScan automation</a> · <a href="ascom-alpaca.html">ASCOM Alpaca</a></nav>
 <header>
 <h1>ASCOM Alpaca, from Python</h1>
 <p class="lead">TelescopeYoke reaches another maker's mount, camera, filter wheel and focuser through their ASCOM drivers over Alpaca (HTTP and JSON on the network), and guides through PHD2.</p>
@@ -57,17 +57,33 @@
 <p>In <code>config.toml</code>:</p>
 <pre><code>[mount]
 link = "alpaca"
-address = "HOST:PORT"
-device = 0
+address = "192.168.1.20:11111"   # each device its own address and number,
+device = 0                       # as ./alpaca.py find lists them
 
 [camera]
-backend = "alpaca"      # likewise [filterwheel] and [focuser]
+backend = "alpaca"
+address = "192.168.1.20:11111"
+device = 0
+
+[filterwheel]
+backend = "alpaca"
+address = "192.168.1.20:11111"
+device = 0
+
+[focuser]
+backend = "alpaca"
+address = "192.168.1.20:11111"
+device = 0
+
+[imaging]
+gain = 100                       # in this camera's own units
 
 [guider]
 backend = "phd2"</code></pre>
+<p>The addresses are an example. Each section needs its own <code>address</code>; without one it is refused, never guessed. The gain in the example config (1500) is the author's camera: a gain outside the camera's range, or not one of its named gains, is refused.</p>
 <p><code>./alpaca.py find</code> lists the Alpaca servers and their devices; nothing is ever picked from that list by itself. Setting <code>alpaca_name</code> to the driver's name makes a different telescope at that address a refusal, and until the driver has this computer's site and clock (<code>./mount.py settime</code>) a GoTo is refused. The same limits and dry runs apply as on a SynScan mount.</p>
 
-<h2>What works through it</h2>
+<h2>What has run, on ASCOM's simulator only</h2>
 <ul>
 <li><b>Mount</b>: GoTo on both sides of the pier, a stop in mid-slew, home, RA and Dec rates.</li>
 <li><b>Camera</b>: frames full and 2&times;2 binned, mono, by ImageBytes or JSON; a short imaging run end to end. Cooling is left to the driver's own program.</li>
