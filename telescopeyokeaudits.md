@@ -515,7 +515,7 @@ The rain alert stays on in every case (the owner's rule, 15 November 2026): thes
 | 6 | Cloud can still cover a hardware failure; old evidence on lock contention | P1 | Partly fixed | The lock-contention fallback now takes kept evidence only within twice the age asked. A step's own failure reason now reaches the runner (fixed after the loop, as in 4, 5) |
 | 7 | No forecast means "no rain" in the alerts | P1 | Confirmed and fixed | A forecast not read, or not reaching the hour ahead, is "not known": it keeps the rain state it had and is said as not known |
 | 8 | No physical weather protection | P1 | Agreed, no change | The alerts are to fetch the person; parking is not shelter. The docs already say so (docs/alerts.md); nothing claims unattended weather protection |
-| 9 | Sky quality not used to choose between targets | P2 | Agreed and planned | Measured frame quality and forecast seeing as advice between otherwise equal targets, later |
+| 9 | Sky quality not used to choose between targets | P2 | Agreed, fixed after the loop | `tonight.sky_quality`: tonight's median star width against this camera and focal length's usual over 30 days (sharp at 0.9 or less, soft at 1.2 or more), or the forecast's seeing when nothing is measured tonight; said on the plan's Stars line and as tags (small targets and planets on a sharp night, big ones on a soft night). The ranking and the discovery plan are unchanged. Measured on the 183M at 675 mm: the evening's M31-P4 run 5.38 px against a usual 5.03 over 16 sessions, "as usual" |
 
 ## 14, re-audited at 482fe49
 

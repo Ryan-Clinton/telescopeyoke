@@ -11,6 +11,7 @@
 """
 import argparse
 import json
+import re
 import statistics
 import sys
 import time
@@ -496,7 +497,89 @@ def build(cfg, date=None, offline=False, demo=False):
     # How old each feed's data is: a copy kept because the source failed is
     # said to be stale, never passed off as tonight's.
     report["sources"] = [] if demo or offline else feeds.freshness()
+    weather = report["weather"] or {}
+    report["sky_quality"] = sky_quality(None if demo else weather.get("hours"))
+    for t in results:
+        tag = quality_tag(t, report["sky_quality"]["verdict"])
+        if tag:
+            t["tags"].append(tag)
     return report
+
+
+SHARPER, SOFTER = 0.9, 1.2       # tonight's star width against the usual, past which the night is sharp or soft
+SMALL_ARCMIN, LARGE_ARCMIN = 5, 30   # targets that gain from a sharp night; those that lose least on a soft one
+QUALITY_DAYS, TONIGHT_HOURS = 30, 3  # the usual is from this many days; tonight is frames from the last hours
+FWHM_RE = re.compile(r'"fwhm": ([0-9.]+)')
+
+
+def sky_quality(forecast=None, now=None, root=None):
+    """How sharp the stars are tonight against this camera and light path's
+    usual, from the frames kept (each session's median star width, sessions
+    grouped by the camera and focal length in their first frame's header),
+    and the forecast's seeing when nothing has been measured tonight.
+    Advice between otherwise equal targets only: it changes no score and
+    no discovery plan (Audit 14, 20 November 2026)."""
+    import glob
+    import statistics
+    import time as clock
+    from astropy.io import fits
+    now = clock.time() if now is None else now
+    root = root or (config.DATA / "frames")
+    widths = {}
+    for log in glob.glob(str(root / "*" / "*" / "frames.jsonl")):
+        log = Path(log)
+        try:
+            changed = log.stat().st_mtime
+        except OSError:
+            continue
+        if now - changed > QUALITY_DAYS * 86400:
+            continue
+        lights = sorted(log.parent.glob("light-*.fits"))
+        try:
+            values = [float(m) for m in FWHM_RE.findall(log.read_text(encoding="utf-8", errors="replace"))]
+            with fits.open(lights[0]) as hdul:
+                head = hdul[-1].header
+        except (OSError, IndexError, ValueError):
+            continue
+        if len(values) >= 5:
+            path = (head.get("INSTRUME"), head.get("FOCALLEN"))
+            widths.setdefault(path, []).append((changed, statistics.median(values)))
+    recent = sorted((changed, w, path) for path, rows in widths.items() for changed, w in rows
+                    if now - changed <= TONIGHT_HOURS * 3600)
+    answer = {"measured": None, "forecast": None, "verdict": None, "advice": None}
+    if recent:
+        _, tonight, path = recent[-1]
+        usual = [w for changed, w in widths[path] if now - changed > TONIGHT_HOURS * 3600]
+        if len(usual) >= 3:
+            usual_w = statistics.median(usual)
+            ratio = tonight / usual_w
+            answer["measured"] = {"camera": path[0], "focal_mm": path[1], "tonight_px": round(tonight, 2),
+                                  "usual_px": round(usual_w, 2), "ratio": round(ratio, 2), "sessions": len(usual)}
+            answer["verdict"] = "sharp" if ratio <= SHARPER else "soft" if ratio >= SOFTER else "usual"
+    if forecast:
+        codes = [h["seeing"] for h in forecast if h.get("seeing")]
+        if codes:
+            code = statistics.median(codes)
+            answer["forecast"] = {"seeing_code": code, "seeing": feeds.SEEING.get(round(code))}
+            if answer["verdict"] is None:
+                answer["verdict"] = "sharp" if code <= 3 else "soft" if code >= 6 else "usual"
+    words = {"sharp": f"sharper than usual: small targets (under {SMALL_ARCMIN}') and planets gain most",
+             "soft": f"softer than usual: big targets (over {LARGE_ARCMIN}') lose least",
+             "usual": "as usual"}
+    if answer["verdict"]:
+        how = "measured" if answer["measured"] else "forecast"
+        answer["advice"] = f"Stars {how} {words[answer['verdict']]}. Advice only: the ranking is unchanged."
+    return answer
+
+
+def quality_tag(t, verdict):
+    """The tag a target gets from the night's sharpness, if any."""
+    size = t.get("size_arcmin") if t.get("size_arcmin") is not None else t.get("size")
+    if verdict == "sharp" and (t["kind"] == "planet" or (size is not None and size < SMALL_ARCMIN)):
+        return "SHARP NIGHT SUITS"
+    if verdict == "soft" and size is not None and size > LARGE_ARCMIN:
+        return "SOFT NIGHT SUITS"
+    return None
 
 
 def target_tags(t, pollution, now):
@@ -605,7 +688,7 @@ def summary_lines(rep):
         ("Moon", moon_text(rep["moon"])),
         ("Sky", sky_text(rep["light_pollution"])),
         ("Weather", weather_line(rep["weather"])),
-    ]
+    ] + ([("Stars", rep["sky_quality"]["advice"])] if (rep.get("sky_quality") or {}).get("advice") else [])
 
 
 def render_text(rep, top):
