@@ -572,10 +572,6 @@ def stream_advice(guidance, exposure=FRAME_S):
     lines = []
     az, alt = guidance["azimuth"], guidance["altitude"]
     for name, pair in (("Azimuth", az), ("Altitude", alt)):
-        if not pair.get("worth_turning", True):
-            lines.append(f"{name} {pair['by_deg']:.1f}°: drifts a {exposure:g} s frame about {pair['drift_px']:g} px, "
-                         f"under a star's own size: leave it.")
-            continue
         if name == "Azimuth" and az.get("whole_tripod"):
             tripod = az["tripod"]
             words = f"Turn the whole tripod {tripod['turn_deg']:g}° {tripod['way']}, seen from above"
@@ -593,6 +589,8 @@ def stream_advice(guidance, exposure=FRAME_S):
         if pair.get("known"):
             words += (f": the {SIDES[pair['tighten']]} bolt in (clockwise) about {turns_in_words(pair['turns'])}, "
                       f"the {SIDES[pair['loosen']]} bolt eased out first")
+        if not pair.get("worth_turning", True):
+            words += f" (small: about {pair['drift_px']:g} px over a {exposure:g} s frame)"
         lines.append(words + ".")
     return lines
 
@@ -797,10 +795,13 @@ def run(args):
         pixels, worth = shows(error, exposure)
         result["guidance"][axis].update(drift_px=pixels, worth_turning=worth)
         if not worth:
-            name = "left-right" if axis == "azimuth" else "up-down"
-            result["guidance"][axis]["words"] = (
-                f"{name.capitalize()} {abs(error):.1f}°: drifts a {exposure:g} s frame about {pixels:g} px, "
-                f"under a star's own size ({SHOWS_PX:g}): leave it.")
+            # The turn is still said: the person decides, not the frame
+            # length this was asked for (20 November 2026: 0.2° each way was
+            # "leave it" for 16 s frames, with no bolts named, while 120 s
+            # guided frames with Dec uncorrected drifted 2.8"/min).
+            result["guidance"][axis]["words"] += (
+                f" (Small: it drifts a {exposure:g} s frame about {pixels:g} px, under a star's own size "
+                f"({SHOWS_PX:g}); longer frames show it more.)")
         print("  " + result["guidance"][axis]["words"])
     print(f"  (Left and right, rear and front: {VIEW}.)")
     broadcast(result, exposure)
