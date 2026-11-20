@@ -56,6 +56,19 @@ def camera(cfg=None):
             "width": cam.get("width"), "height": cam.get("height"), "backend": cam.get("backend")}
 
 
+def mount_identity(cfg=None):
+    """Which mount the settings reach, as far as they say: how (link) and
+    by what (the lead's adapter, the address, the driver's device). The
+    person's word for its first moves holds for this mount only."""
+    m = (cfg or config.hardware()).get("mount", {})
+    return {k: m[k] for k in ("link", "serial_match", "address", "device") if m.get(k) not in (None, "")}
+
+
+def train(cfg=None):
+    """The light path's (train's) name, as frames carry it in TELESCOP."""
+    return str(((cfg or config.hardware()).get("train") or {}).get("name") or "") or None
+
+
 def kept():
     try:
         return json.loads(RECORD.read_text(encoding="utf-8"))
@@ -76,6 +89,8 @@ def confirm(step):
         entry["settings"] = camera()
     elif step in ("frame", "first-light"):
         entry["light_path"] = list(config.light_path())
+    elif step == "moves":
+        entry["mount"] = mount_identity()
 
     def note(record):
         said = record.setdefault("confirmed", {})
@@ -106,19 +121,25 @@ def solved_scale():
     return record.get("scale")
 
 
-def settings_step(what, now, example, said):
+def settings_step(what, now, example, said, measured=()):
     """Whether one part of the light path in the settings is this rig's, and
-    how that is known: the person's word for these very settings, or set by
-    them (any value of that part changed from the example's), or still the
-    example's. The plate solve's check of the two together is apart."""
+    how that is known: the person's word for these very settings, or every
+    value either set by them (changed from the example's) or `measured`
+    (the plate solve's scale, a kept frame's size). One value changed does
+    not make the rest theirs: a value still the example's and not measured
+    leaves the part open until they confirm it."""
     if (said.get(what) or {}).get("settings") == now:
         return True, "the person's word", "confirmed as theirs"
-    if now != example:
-        changed = [k for k in now if now[k] != example[k]]
-        same = [k for k in now if now[k] == example[k]]
-        return True, "set by the person", (f"changed from the example: {', '.join(changed)}"
-                                           + (f"; still the example's: {', '.join(same)}" if same else ""))
-    return False, "", "still the example's"
+    changed = [k for k in now if now[k] != example[k]]
+    proven = [k for k in now if now[k] == example[k] and k in measured]
+    same = [k for k in now if now[k] == example[k] and k not in measured]
+    if not changed:
+        return False, "", "still the example's"
+    detail = f"changed from the example: {', '.join(changed)}" + (
+        f"; measured: {', '.join(proven)}" if proven else "")
+    if same:
+        return False, "", f"{detail}; still the example's and not measured: {', '.join(same)}"
+    return True, "set by the person" + (", and measured" if proven else ""), detail
 
 
 def scale_step():
@@ -162,7 +183,10 @@ def sessions():
         except (OSError, ValueError):
             continue
         focal = head.get("FOCALLEN")
-        yield place, [head.get("INSTRUME"), round(focal) if focal else None]
+        binning = head.get("XBINNING") or 1
+        yield place, [head.get("INSTRUME"), round(focal) if focal else None], {
+            "train": head.get("TELESCOP"),
+            "size": (head.get("NAXIS1", 0) * binning, head.get("NAXIS2", 0) * binning)}
 
 
 def steps(check=True):
@@ -175,7 +199,16 @@ def steps(check=True):
 
     def word(step, bound=False):
         entry = said.get(step) or {}
+        if step == "moves":
+            # Given for one mount: another lead, address or link is another mount.
+            return entry.get("at") if entry.get("mount") == mount_identity() else None
         return entry.get("at") if not bound or entry.get("light_path") == path else None
+
+    # The frames by the light path in use, newest first: its camera and focal
+    # length, and its train when the frame names one (frames before
+    # TELESCOP was written count by the first two).
+    mine = [(place, more) for place, made_with, more in sessions()
+            if made_with == path and more["train"] in (None, train())]
 
     out = []
 
@@ -189,11 +222,17 @@ def steps(check=True):
     add("site", own_site(), "checked now", "the person's own latitude and longitude in config.toml",
         "put their latitude and longitude in config.toml (never guessed)")
     example = config.example()
-    done, how, detail = settings_step("telescope", telescope(), telescope(example), said)
-    add("telescope", done, how, detail, "set [scope] in config.toml to their telescope, or --confirm telescope")
-    done, how, detail = settings_step("camera", camera(), camera(example), said)
-    add("camera", done, how, detail, "set [camera] in config.toml to their camera, or --confirm camera")
     scale = scale_step()
+    solved = ("focal_length_mm", "pixel_size_um") if scale and scale[0] else ()
+    cam = camera()
+    sized = ("width", "height") if any(more["size"] == (cam.get("width"), cam.get("height"))
+                                       for _, more in mine) else ()
+    done, how, detail = settings_step("telescope", telescope(), telescope(example), said, solved)
+    add("telescope", done, how, detail, "set [scope] in config.toml to their telescope, or --confirm telescope "
+        "once they say the values still the example's are theirs")
+    done, how, detail = settings_step("camera", cam, camera(example), said, solved + sized)
+    add("camera", done, how, detail, "set [camera] in config.toml to their camera, or --confirm camera "
+        "once they say the values still the example's are theirs")
     if scale:
         done, how, detail = scale
         add("pixel scale", done, how, detail, "check [scope] focal_length_mm and [camera] pixel_size_um")
@@ -209,12 +248,11 @@ def steps(check=True):
             "the camera, its driver and the plate solver, as doctor.py finds them",
             "./doctor.py --need imaging, plugging in as it asks", now=True)
     frame = light = None
-    for place, made_with in sessions():
-        if made_with == path:
-            frame = frame or place
-            if (place / "final.jpg").exists():
-                light = place
-                break
+    for place, _ in mine:
+        frame = frame or place
+        if (place / "final.jpg").exists():
+            light = place
+            break
     camera_now = f"the {path[0]} at {path[1]} mm"
     add("camera frame", frame or word("frame", True),
         "kept on disk" if frame else "the person's word",

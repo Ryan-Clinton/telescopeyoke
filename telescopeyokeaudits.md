@@ -28,7 +28,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 7 | Scientific discovery reliability | done 20 Nov 2026, re-checked |
 | 8 | Calibration and scientific measurement accuracy | done 20 Nov 2026, re-checked |
 | 9 | Demo claims versus real-world proof | done 20 Nov 2026, re-checked |
-| 10 | Hardware onboarding and compatibility | done 20 Nov 2026, re-checked; 3, 4, 8 and 9 open |
+| 10 | Hardware onboarding and compatibility | done 20 Nov 2026, re-checked; 3, 4, 8 and 9 done after |
 | 11 | NINA/PHD2 companion | done 20 Nov 2026, re-checked |
 | 12 | State management and data integrity | done 20 Nov 2026, re-checked |
 | 13 | Observing scheduler and scientific yield | done 20 Nov 2026, re-checked; 7 done after |
@@ -409,13 +409,13 @@ Documentation only; `docs/validation.md` is the authority and is unchanged.
 |---|---|---|---|---|
 | 1 | Two INDI cameras: the first is used, labelled as the profile's | P1 | Confirmed and fixed | `camera.py` refuses two eligible INDI cameras unless `[indi] camera` names one, and uses only that one; the doctor says the same (a FAIL, no longer a WARN) |
 | 2 | The mount can be the first lead or Wi-Fi adapter found | P1 | Partly right, fixed | Two leads matching `serial_match`, or two Wi-Fi adapters answering, are refused, naming them. The `/dev/ttyUSB0` fallback is smaller than claimed: the handset's echo test (`Kx` answered `x#`) refuses anything that is not a SynScan handset before any command |
-| 3 | First moves counted done from corrected GoTos | P1 | Smaller than claimed; open (see 10, re-checked) | The step already says how it is known ("proven by use ... not the same as someone watching") apart from the person's word, and without a handset `direct.py` refuses GoTos until a person has watched the Dec direction, whatever onboarding says. Binding the word to the mount's identity is planned |
-| 4 | One changed setting marks a whole part set | P1 | Smaller than claimed; open (see 10, re-checked) | The step lists what is still the example's ("still the example's: ..."), and the plate solve's scale check judges focal length and pixel size together |
+| 3 | First moves counted done from corrected GoTos | P1 | Smaller than claimed; open (see 10, re-checked) | The step already says how it is known ("proven by use ... not the same as someone watching") apart from the person's word, and without a handset `direct.py` refuses GoTos until a person has watched the Dec direction, whatever onboarding says. Fixed after the loop: `--confirm moves` keeps the mount it was given for (`onboard.mount_identity`: link, lead adapter, address, device), and counts only while the settings reach that mount |
+| 4 | One changed setting marks a whole part set | P1 | Fixed after the loop | A part is done only when every value is changed from the example's, measured (focal length and pixel size by a plate solve that agrees; width and height by a kept frame's size), or confirmed. The owner's telescope is now open: its aperture is the example's 150 mm, so `--confirm telescope` is theirs to give |
 | 5 | The first-night skill and newhardware call Alpaca-reachable devices impossible | P1 | Confirmed and fixed | Both say "experimental through its ASCOM driver (Alpaca), tried only on ASCOM's simulator" where that route exists, apart from proven and unsupported |
 | 6 | The doctor tells an Alpaca user to close their ASCOM driver | P2 | Confirmed and fixed | With `[mount] link = "alpaca"` it says to leave the driver and its Alpaca server running |
 | 7 | A managed INDI server not yet running fails the camera check | P2 | Confirmed and fixed | It is a WARN: the server starts when the camera is first opened, and the camera is not yet checked |
-| 8 | Two identical USB adapters share one identity in newhardware | P2 | Agreed and planned | A private local identity per device (serial number or port path), kept out of the public report |
-| 9 | First-frame evidence does not name the light path's train | P2 | Agreed and planned | Use TELESCOP with the camera profile and focal length |
+| 8 | Two identical USB adapters share one identity in newhardware | P2 | Agreed; fixed after the loop | `host.serial_details` gives a hash of each adapter's serial number (or USB socket) as `local`; newhardware keeps devices known by it in cache/, and no report or answer carries it. Devices marked known before still count by kind |
+| 9 | First-frame evidence does not name the light path's train | P2 | Agreed; fixed after the loop | A kept frame counts for the light path in use only when its TELESCOP is that train (frames from before TELESCOP was written count by camera and focal length) |
 
 ## 10, re-audited at 25ca017
 

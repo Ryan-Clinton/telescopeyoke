@@ -149,14 +149,23 @@ def windows_ports(listing=None):
 def serial_details():
     """Every serial port with what its USB adapter says of itself: for a
     hardware report, where the adapter's make is how a controller is told
-    from a handset's lead. Each is {"device", "description", "maker", "usb"}."""
+    from a handset's lead. Each is {"device", "description", "maker", "usb",
+    "local"}: "local" tells two identical adapters apart on this computer, a
+    hash of the adapter's serial number (or, without one, the USB socket it
+    hangs from), never the number itself, and never put in a report."""
     try:
         from serial.tools import list_ports
         ports = sorted(list_ports.comports(), key=lambda p: p.device)
     except Exception:       # pyserial missing or the system will not list them: the names alone
-        return [{"device": device, "description": name, "maker": "", "usb": ""} for device, name in serial_ports()]
+        return [{"device": device, "description": name, "maker": "", "usb": "", "local": ""}
+                for device, name in serial_ports()]
+    import hashlib
+
+    def local(p):
+        own = getattr(p, "serial_number", None) or getattr(p, "location", None)
+        return hashlib.sha256(str(own).encode()).hexdigest()[:12] if own else ""
     return [{"device": p.device, "description": p.description or "", "maker": p.manufacturer or "",
-             "usb": f"{p.vid:04X}:{p.pid:04X}" if p.vid is not None and p.pid is not None else ""}
+             "usb": f"{p.vid:04X}:{p.pid:04X}" if p.vid is not None and p.pid is not None else "", "local": local(p)}
             for p in ports if WINDOWS or p.vid is not None]      # Linux lists sixteen ttyS that are nothing
 
 

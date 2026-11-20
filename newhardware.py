@@ -97,6 +97,13 @@ def key(d):
     return f"{d.get('usb') or '?'}|{d.get('description') or d.get('device')}"
 
 
+def local_key(d):
+    """A device's identity on this computer alone: key(d) and a hash of its
+    own serial number or USB socket (host.serial_details), so two identical
+    adapters are two devices. Kept in cache/ only; reports use key(d)."""
+    return f"{key(d)}#{d['local']}" if d.get("local") else key(d)
+
+
 def scrub(text):
     """The text with adapters' serial numbers taken out: they identify one
     person's lead, and a report has no use for them."""
@@ -190,8 +197,10 @@ def look(details=None, known=None, used=None, networks=None):
     used = in_use() if used is None else used
     out = []
     for d in details:
-        state = "in use" if d["device"] in used else "known" if key(d) in known else "new"
-        out.append(dict(d, state=state, key=key(d)))
+        # A device marked known before 20 November 2026 was kept by key(d)
+        # alone, which still counts for every adapter of its kind.
+        state = "in use" if d["device"] in used else "known" if {local_key(d), key(d)} & known else "new"
+        out.append(dict(d, state=state, key=local_key(d)))
     return out
 
 
@@ -199,7 +208,7 @@ def mark_known(port, details=None):
     found = [d for d in (host.serial_details() if details is None else details) if d["device"] == port]
     if not found:
         raise interface.Refusal("INVALID_REQUEST", f"No serial device on {port} now.")
-    known = load_known() | {key(found[0])}
+    known = load_known() | {local_key(found[0])}
     records.write(KNOWN, {"known": sorted(known)})
     return key(found[0])
 

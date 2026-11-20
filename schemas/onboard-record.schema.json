@@ -36,6 +36,10 @@
           },
           "light_path": {
             "type": "array"
+          },
+          "mount": {
+            "type": "object",
+            "description": "For moves: the mount the word was given for (onboard.mount_identity)."
           }
         }
       }
