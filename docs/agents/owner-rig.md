@@ -109,6 +109,9 @@ motor turned and the knob did not, so focus was by hand with the spoken aid.
 - Flats with the 183M: `schedule.py end` starts the dawn sky flats itself
   after parking (cache/dawn-flats.log). Ending by hand before dawn:
   `./calibrate.py flat --filters B G R L --twilight` in the background.
+- The night's diary entry: written from the running notes and published
+  through the inbox (`~/ryanclinton.uk/POSTING.md`) at the end of every
+  night, with that night's stacks, without being asked.
 - What stays running, always: the status page (`ty-serve`), the stream's
   watcher (`ty-stream`), the live client (`ryanclinton-live`), the
   night-end timer (`ty-night-end.timer`) and the satellite keeper
