@@ -437,6 +437,14 @@ class Mount:
         lock file. Stopping (a zero rate, tracking off, stop) never comes here."""
         if LOCK_FILE.exists():
             raise Refusal("MOTION_LOCKED", f"Motion is locked: {LOCK_FILE.read_text(encoding='utf-8').strip()}")
+        import moved
+        if moved.SUSPECT.exists():
+            found = json.loads(moved.SUSPECT.read_text(encoding="utf-8"))
+            if os.environ.get("TY_SCHEDULED"):
+                raise Refusal("MOUNT_NOT_MOVING", f"Not moved unattended: at {time.strftime('%H:%M', time.localtime(found['when']))} "
+                              f"{found['why']} A person moving the mount (any mount command) clears this.")
+            moved.SUSPECT.unlink()
+            self.say("A person is moving the mount: the suspected slip or stall noted earlier is cleared.")
         if not self.site_set:
             raise Refusal("SITE_NOT_SET", "config.toml has no location of its own (missing, unreadable or "
                                           "still the example's): set your own latitude and longitude "
@@ -448,17 +456,26 @@ class Mount:
         self.ask(bytes([ord("P"), 2, axis, direction, rate, 0, 0, 0]))
 
     def stop(self):
-        self.ask(b"M")  # cancel any GoTo
-        for axis in (RA, DEC):
-            self.rate(axis, POSITIVE, 0)
-            self.rate(axis, NEGATIVE, 0)
+        """Every way the mount can be moving, stopped. Each part is tried
+        whichever of the others fails, and the first failure is raised after
+        all of them, so one refused command never leaves a motor running."""
         # The Dec creep is the handset's other kind of rate (mode 3): whether
         # a fixed rate of 0 also ends it is not known, so it is ended itself,
         # as home() does before a seek. Tracking goes off too, as without a
         # handset it always has: a tube caught on a leg is not driven on at
         # the sidereal rate. The next GoTo turns it on again.
-        self.dec_creep(0)
-        self.tracking(False)
+        parts = [lambda: self.ask(b"M")]       # cancel any GoTo
+        parts += [lambda axis=axis, way=way: self.rate(axis, way, 0) for axis in (RA, DEC)
+                  for way in (POSITIVE, NEGATIVE)]
+        parts += [lambda: self.dec_creep(0), lambda: self.tracking(False)]
+        first = None
+        for part in parts:
+            try:
+                part()
+            except Exception as error:
+                first = first or error
+        if first:
+            raise first
 
     def tracking(self, on):
         # Mode 2 is equatorial tracking, 0 is off.
@@ -2214,9 +2231,12 @@ def dry_run(args, site):
         if args.command == "goto":
             found = plan_goto(" ".join(args.target), site)
             if any(args.aim_off):
+                # The altitude, hour angle and side of the place aimed at,
+                # which near the meridian can be the other side's.
                 moved = offset_target(find_target(" ".join(args.target)), *args.aim_off)
-                check_target(moved, site, f"{found['target']} aimed {args.aim_off[0]:+.0f}' east, "
-                                          f"{args.aim_off[1]:+.0f}' north")
+                aimed = check_target(moved, site, f"{found['target']} aimed {args.aim_off[0]:+.0f}' east, "
+                                                  f"{args.aim_off[1]:+.0f}' north")
+                found = dict(found, **aimed, aim_off_arcmin=list(args.aim_off))
             return found
         if args.command == "point":
             return plan_point(float(args.target[0]), float(args.target[1]), site, args.clearance_test)

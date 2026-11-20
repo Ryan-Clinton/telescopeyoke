@@ -167,7 +167,14 @@ def _keep_pair(before, after, name):
     Image.fromarray(np.hstack([small(before), small(after)])).save(PAIRS / f"{name}.jpg", quality=80)
 
 
+SUSPECT = config.DATA / "cache" / "mount-suspect.json"
+
+
 def refusal(what):
+    """MOUNT_NOT_MOVING, and kept: until a person next moves the mount,
+    nothing run unattended may (Mount.may_move). A slipped clutch or a tube
+    held by a leg is not a fault a retry clears; the retry drives it again."""
+    records.write(SUSPECT, {"when": time.time(), "why": what}, indent=None)
     return interface.Refusal(
         "MOUNT_NOT_MOVING",
         f"{what} The mount reports each move as made, but the telescope does not seem to be turning. "

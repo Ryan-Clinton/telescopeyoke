@@ -19,7 +19,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 
 | # | Audit | Status |
 |---|---|---|
-| 1 | Mount safety and movement | done 20 Nov 2026; re-check asked |
+| 1 | Mount safety and movement | done 20 Nov 2026, re-checked |
 | 2 | Hardware failure and recovery | not started |
 | 3 | AI agent autonomy and permissions | not started |
 | 4 | Autonomous full-night operation | not started |
@@ -197,9 +197,18 @@ This initial pass was an architectural and risk assessment, not an exhaustive li
 | 5 | Alpaca stop hides a failed AbortSlew | P0 | Confirmed and fixed | A stop with any part refused now refuses unless the driver says it is no longer slewing. Untried on a real Alpaca mount |
 | 6 | A safe end point is not a safe path | P0 | Agreed and planned | Same measurement as 1; the route home was changed on 17 Nov from the record. Waiting for the owner's hands |
 | 7 | Polar alignment's moves skip the Sun check | P0 | Smaller than claimed (night only), fixed | `polaralign.positions()` calls `mount.refuse_near_sun()` for each of its three positions |
-| 8 | A slipped clutch leaves a false position | P0 | Partly right, planned | The pointing survey stops on a jump (mount.py, `JUMP`) and a solved GoTo on an unchanged miss (`moved.py`); a blind GoTo has no camera to tell. Planned: a kept "slip suspected" mark that `ty context` reports until home is set again |
+| 8 | A slipped clutch leaves a false position | P0 | Partly right, fixed in the re-check | The pointing survey stops on a jump (mount.py, `JUMP`) and a solved GoTo on an unchanged miss (`moved.py`); a blind GoTo has no camera to tell. See 1, re-checked |
 | 9 | No one process owns the mount | P1 | Agreed and planned | A lock taken at the first move would refuse `shoot.py` started by a patrol that has already moved the mount, so it needs an owner passed from parent to child; not done blind. No collision between processes is on record |
 | 10 | Console Stop kills before stopping | P1 | Smaller than claimed, no change | Done in that order because Windows lets one process hold the port; the gap is the new process starting, a second or two |
 | 11 | Point by bearing goes down to 2° | P1 | Owner's design, no change | The skyline trace and landmarks need low points, made by day with someone there |
 | 12 | v0.4.1 lacks the Sun refusal | P0 | Confirmed, waiting | A 0.4.2 release waits for the owner's go |
+
+## 1, re-audited at 233cdf1
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | Stop gives up at the first command that fails | P1 | Confirmed and fixed | `Mount.stop()` tries every part (cancel, the four rates, the Dec creep, tracking) and raises the first failure after all of them |
+| 2 | The aim-off dry run reports the object, not the place aimed at | P1 | Confirmed and fixed | The dry run returns the aimed place's altitude, Dec, hour angle and side, with `aim_off_arcmin` (schema `goto-plan` updated). Demo: M81 5.527 h, aimed 30' east 5.435 h |
+| 3 | Alpaca clears an axis's rate whose stop was refused | P1 | Confirmed and fixed | Only an axis whose zero rate was taken is recorded as stopped |
+| 4 | The scheduler retries a step that failed on a suspected slip | P0 | Confirmed and fixed | `moved.refusal()` keeps `cache/mount-suspect.json`; while it is there `Mount.may_move` refuses anything run unattended (`TY_SCHEDULED`), and a person's next mount command clears it. Demo: the scheduled GoTo refused, the person's went and cleared it |
 

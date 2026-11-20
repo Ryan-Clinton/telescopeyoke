@@ -38,6 +38,13 @@
         "east",
         "west"
       ]
+    },
+    "aim_off_arcmin": {
+      "description": "with --aim-off: arcminutes east and north; the altitude, Dec, hour angle and side are then the place aimed at's",
+      "type": "array",
+      "items": {"type": "number"},
+      "minItems": 2,
+      "maxItems": 2
     }
   }
 }

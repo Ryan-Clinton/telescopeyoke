@@ -277,16 +277,17 @@ class AlpacaHandset:
         one that failed."""
         if _quiet(self.client, "atpark"):
             return                      # parked is stopped; ASCOM refuses AbortSlew there
-        actions = [lambda: self.client.put("abortslew")]
-        actions += [lambda axis=axis: self.client.put("moveaxis", Axis=axis, Rate=0)
+        actions = [(None, lambda: self.client.put("abortslew"))]
+        actions += [(axis, lambda axis=axis: self.client.put("moveaxis", Axis=axis, Rate=0))
                     for axis in (0, 1) if self.axis_moves[axis]]
         failed = []
-        for action in actions:
+        for axis, action in actions:
             try:
                 action()
+                if axis is not None:
+                    self.moving[axis] = 0.0     # only an axis whose stop was taken
             except (DriverError, Refusal) as error:
                 failed.append(str(error))
-        self.moving = {0: 0.0, 1: 0.0}
         if len(failed) == len(actions):
             raise Refusal("HANDSET_NOT_ANSWERING", "Nothing reached the mount's driver to stop it: "
                           + "; ".join(failed) + ". Switch the mount off at the mount if it is moving.")
