@@ -89,3 +89,4 @@ is built). What is proven is decided in one place,
 | [Planning a night by what it gets](observing-plan-spec.md) | specification | The outcome-led planner, phase by phase. |
 | [Flexible plans](flexible-plans.md) | specification | Changing a night's plan when it goes wrong. |
 | [Changelog](../CHANGELOG.md) | record | What each release added. |
+| [Where it is listed](listings.md) | record | The entry pages, GitHub's description and topics, and the directories it has been sent to, with where each stands. |
