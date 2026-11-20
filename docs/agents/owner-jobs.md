@@ -58,8 +58,9 @@ result is recorded.
    slow ramp. Untried: TEC off, set point re-sent, TEC on, before failing
    safe; check whether one bad temperature reading can trip the runaway
    check (18 November 20:40 looked like one).
-8. **Dew**: the guide scope's USB dew strap fitted (from one of the SV241's
-   USB ports; the plain SV241 has no dew outputs). The dew shields from
+8. **Dew**: the guide scope's USB dew strap fitted when it comes (due
+   4 December; from one of the SV241's USB ports; the plain SV241 has no
+   dew outputs). The dew shields from
    Gary (20 November) are not a job: they go on each night at setup
    (`owner-rig.md`).
 9. **The skyline survey again** (`./horizon.py --trace`): the tube moved up
@@ -76,6 +77,12 @@ result is recorded.
 
 ## In code, no hands needed
 
+16. **The demo drives the real focuser**: on 20 November `TY_DEMO=1
+    ./focus.py --auto` opened the real Nano while `--measure-backlash` was
+    using it, broke that measurement and lost the focuser's kept position.
+    The demo needs a pretend focuser, or to refuse the real one; until
+    then, never run the demo's focus while the focuser is in use.
+
 13. **Automatic recovery from mount faults**: one garbled motor-board answer
     asked again before giving up; a command that leaves the mount stopped
     mid-job restarts tracking or says so; trailed stars all the same way
@@ -83,6 +90,15 @@ result is recorded.
     resumes. In the demo first (`TY_DEMO_BOARD`).
 
 ## In the next clear gap
+
+17. **The Dec test west of the meridian**: `./mount.py dectest` on the
+    west side (20 or more of its 24 plate solves): whether the dead way
+    follows the motor or the sky. Tried 20 November at NGC 7789 through
+    cloud, 11 of 24 solves: not judged.
+18. **truehome**: `./mount.py findhome`, and if accepted `truehome`
+    (20 November: refused twice, the runs 0.4-0.5° apart). After job 2.
+19. **Collimation** for Gary: 14% off centre, towards the left of the
+    frame (20 November).
 
 14. **The guide camera window on a star**: `./guidecam.py star --count 30
     --compare-window`, binned against the full-resolution window, then the

@@ -92,7 +92,14 @@ motor turned and the knob did not, so focus was by hand with the spoken aid.
   the knob, no move first. A plus move is out; 4096
   half-steps is a turn of the knob, half a turn about half the travel.
 - Far out (rings, no star measuring): `./focus.py --find`, a thirty-second
-  of a turn a step, half a turn each way at most; `--auto` runs it itself.
+  of a turn a step, half a turn each way, further only while the doughnuts
+  keep shrinking (from 20 November, not yet tried on the sky; that night
+  focus was about 2,200 half-steps out after the focuser was worked on, and
+  the old half-turn limit stopped two searches); `--auto` runs it itself.
+- Focus moves as the night cools: 20 November, 190 half-steps between
+  18:46 and 19:58 as the focuser went from 2.1 to 0.6 °C, the stars from
+  HFR 1.96 to 6-8 (taken at first for cloud). Soft stars with clear sky:
+  `./focus.py --check` before blaming the sky.
 - The sweeps (`--motor`, `--measure-step`) stay refused by the guard: on
   23 October 2026 two of them, each stopped part way, left the old drive's
   drawtube about an inch from the Sharpie line. `--measure-backlash`
@@ -128,12 +135,28 @@ motor turned and the knob did not, so focus was by hand with the spoken aid.
 
 ## As of 20 November 2026
 
-- **Dec guiding**: since the service Dec moves one way only under guide
-  pulses, the failing way flipping with the balance
-  ([dec-slack.md](../nights/2026-11-19/dec-slack.md)); RA-only guiding
-  keeps 120 s frames round. 20 November: south does not move at all,
-  north sticks then jumps 20-50"; `--dec-one-way north` guides north only
-  but cannot undo a jump ([dec-one-way.md](../nights/2026-11-20/dec-one-way.md)).
+- **Dec guiding, until Gary has fixed the Dec drive (job 2)**: on the
+  east side Dec does not move south at all and moving north sticks then
+  jumps 20-50" (20 November, on the main camera and the guide camera:
+  [dec-one-way.md](../nights/2026-11-20/dec-one-way.md); 19 November:
+  [dec-slack.md](../nights/2026-11-19/dec-slack.md)). The west side is not
+  yet measured. How to work with it:
+  - **Guide with plain `--guide`**: the kept calibration (20 November)
+    says Dec answers north only, so the guider guides RA and sends Dec
+    nothing. RA holds 1-2" RMS; Dec drifts 0.07-0.2"/s, so frames of
+    120 s or less (round at 120 s on 19 November); re-centring between
+    blocks keeps the framing.
+  - **`--dec-one-way north`** guides Dec north only (held 1.4" RMS for four
+    clear minutes on 20 November) but only where the natural drift is
+    south (measure it: `./mount.py dectest` gives it first, or
+    `./guidecam.py star`), and a 20-50" jump north takes minutes to drift
+    back. Not the everyday setting.
+  - **`./mount.py dectest`** measures the Dec drive on the main camera:
+    the drift, then 12 pulses each way with a plate solve after each
+    (moves at most 2', needs a clear sky: 20 of 24 solves or more).
+  - **truehome waits**: findhome turned down its own answer twice on
+    20 November (the two runs 0.4-0.5° apart, home out by about 1-1.6° in
+    RA and 1.9-2.3° in Dec); the Dec sticking is the likely cause.
   The jobs owed are [owner-jobs.md](owner-jobs.md).
 - **Latitude bolts**: the rear bolt in lowers the axis, the front bolt in
   raises it (13 October 2026); the old rear bolt rises then jerks lower.
@@ -144,6 +167,13 @@ motor turned and the knob did not, so focus was by hand with the spoken aid.
   drawtube slipped about 4 half-steps a round trip on 19 November; not
   measured since the tension screw was adjusted again. `--measure-step` stays refused by the small-focus guard.
 - **Guide camera**: gain 400 (`[guider] gain`, the default since
-  20 November); the guide scope dews below about 2 °C.
+  20 November); the guide scope dews below about 2 °C, and its heater
+  strip is now due 4 December. 20 November its lens was misted inside
+  from the night before: the lens unscrews from the tube in its cell
+  (never take the glass out of the cell), and an hour or two warm and
+  open dried it. After it is refitted the guide camera came up on USB
+  only at the second plugging.
+- **Collimation**: 14% of the ring's radius off centre, towards the left
+  of the frame (the focus run of 20 November): for Gary.
 - **Stacking**: the desktop has no Python for `restack.py --on desktop`
   yet: stack on the laptop.
