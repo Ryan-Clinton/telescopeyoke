@@ -1,4 +1,4 @@
-# The guide camera's dropped frames
+# The guide camera's dropped frames: an Altair GPCAM MT9M034M stalling at full resolution
 
 [README](../README.md) · [All docs](README.md) · [Validation](validation.md) · [Autoguiding](autoguiding.md) · [The 6 November record](nights/2026-11-06/guide-camera.md)
 

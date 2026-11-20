@@ -23,6 +23,8 @@ What is left is a dip; a star with one 5% deep or more is Tabby-like.
 
 ## The recovery test, 3 November 2026
 
+No telescope needed, and anyone can repeat it: `./archive.py dips KIC 8462852` downloads Tabby's star's Kepler light curve and should give the table below.
+
 On Tabby's star (18 quarters, 56,346 points, scatter 0.029%) it finds the
 four dips the discovery paper (Boyajian et al. 2016) is known for, and
 nothing else at 1% or deeper:

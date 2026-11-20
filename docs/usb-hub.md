@@ -1,4 +1,4 @@
-# The USB hub
+# The USB hub at the telescope: devices dropping off
 
 The camera, the focuser's Nano and sometimes the handset lead go through one
 powered hub at the telescope. This page is the record of that hub: what it

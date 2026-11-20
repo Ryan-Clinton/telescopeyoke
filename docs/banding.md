@@ -1,4 +1,4 @@
-# The camera's row stripes: what others have found
+# Altair Hypercam 183C (IMX183) row stripes: what others have found
 
 Researched 19 October 2026, for the green and magenta row stripes of the Altair Hypercam 183C (`docs/validation.md`, `stacking.destripe`).
 

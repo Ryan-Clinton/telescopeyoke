@@ -52,6 +52,7 @@ inward-only rule; that was the 28BYJ-48's.
 | Part | |
 |---|---|
 | Motor | 17HS4401 NEMA 17, 1.7 A, 4-wire lead with a black 4-pin plug |
+| Bracket | Printed: Printables 436129, the motor turning the knob one to one |
 | Carrier | Black A4988/DRV8825-style screw-terminal board: green VIN/GND terminal, 3 microstep switches, EN/STEP/DIR header, a 5 V row (CN5, V) and a ground row (CN6, G); no 5 V of its own |
 | Driver | BigTreeTech TMC2209 V1.3 (two on order, 9 November 2026). The two unbranded TMC2209s: one holds the motor but has never turned it (it ran backwards under 12 V first, so it may be damaged); one turns it only with DIR high |
 | Supply | 12 V 2 A, + to VIN and − to GND on the green terminal |

@@ -20,6 +20,17 @@ and the real centring, focusing and stacking code runs on it.*
 [All the docs](docs/README.md) ·
 [Ask a question](https://github.com/Ryan-Clinton/telescopeyoke/discussions)**
 
+**What brought you here?**
+
+| I want to... | Start with |
+|---|---|
+| Make my Sky-Watcher SynScan mount's GoTos land on target | [SynScan automation](https://ryan-clinton.github.io/telescopeyoke/synscan-automation.html), then [From box to first galaxy](docs/first-night.md) |
+| Fix a home position or polar alignment set by eye | [Calibrating a mount](docs/calibration.md): home found from 10.66° out to 0.19° on a real EQ3 |
+| Know why a night run by NINA and PHD2 went wrong | [The companion](https://ryan-clinton.github.io/telescopeyoke/nina-phd2-night-analysis.html) |
+| Have Claude Code help run a telescope, with code keeping control of what moves | [With Claude Code](#with-claude-code), [A person and an AI, together](#a-person-and-an-ai-together), [For programs and AI agents](docs/agents/README.md) |
+| Search Kepler and TESS light curves for strange dips, with no telescope | [Searching the Kepler archive](docs/archive.md) |
+| Build a motor focuser, or fix a camera, guide camera or USB fault | [The motor focuser](docs/focuser.md), and [faults by hardware](docs/README.md#faults-by-hardware) |
+
 telescopeyoke takes the kind of GoTo mount many amateur astronomers already
 own, starting with Sky-Watcher's SynScan family, and adds what much bigger
 systems do. It measures its own pointing, polar alignment, focus, drift,
@@ -152,7 +163,7 @@ Every script and what it does: [Commands](docs/commands.md).
 **AI proposes; deterministic code decides what is safe; a person decides
 what the telescope does.** An AI agent (the author uses Claude) can read
 everything the observatory knows, plan a night, investigate a candidate and
-propose the next step: thirteen skills hold the routines (setup at the
+propose the next step: fourteen skills hold the routines (setup at the
 telescope, focusing, polar alignment, a discovery night, a claim) and
 six specialist agents do focused jobs (vetting a candidate,
 researching a place in catalogues, reviewing a
@@ -162,7 +173,7 @@ motion lock, the handset's state, dry runs, moves checked against the
 camera, and hooks that refuse any attempt to work round them. The MCP server
 and web API are read-only, every agent action is logged, and every move is
 one the person asked for, or part of a night's plan they agreed.
-[AGENTS.md](AGENTS.md) has the detail.
+[AGENTS.md](AGENTS.md) has the detail, and [worked examples](docs/agents/examples.md) show what an agent is asked and what it runs.
 
 It learns from real nights: a transit
 that could not be measured became a precision diagnosis, a hold on the same

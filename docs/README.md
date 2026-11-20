@@ -74,11 +74,22 @@ is built). What is proven is decided in one place,
 |---|---|---|
 | [Adding the 183M, filter wheel and corrector](mono-upgrade.md) | specification | The cooled mono train: what changed and why. |
 | [Autoguiding](autoguiding.md) | specification | Guiding through the guide camera's ST4 lead, with dithering, or by PHD2. Proven: 120 s guided subs (10 November 2026); longer subs not yet. PHD2: tried against a pretend PHD2 only. |
-| [The guide camera's dropped frames](guide-camera-fault.md) | record | Why the guide camera does not stream: what was measured, what is ruled out, what others found, what is left to try. |
-| [The main camera's lost-frame fault](camera-fault.md) | record | The 183C's fault from the first sign to the latest test. |
-| [The camera's row stripes](banding.md) | record | What others found, and what was measured here. |
-| [The USB hub](usb-hub.md) | record | The powered hub at the telescope. |
 | [The cloud sensor](cloudsensor.md) | specification | A plan for a box on the wall that says whether the sky is clear. Not built. |
+
+## Faults by hardware
+
+Each is a record of a real fault on the author's equipment: the symptom, what was measured, what was ruled out, and what fixed it or is left to try.
+
+| Page | Kind | What is in it |
+|---|---|---|
+| [Altair GPCAM MT9M034M: frames stall at full resolution](guide-camera-fault.md) | record | The guide camera's gaps of seconds between frames, on hubs and laptop ports; streams 2 x 2 binned, or in a narrow window, at USB speed 0. |
+| [Altair Hypercam 183C: lost frames and jams](camera-fault.md) | record | Short exposures lost and the camera jamming, from the first sign to the latest test; Altair ticket #3470. |
+| [Altair Hypercam 183C (IMX183): row stripes](banding.md) | record | Green and magenta row banding, worse on a cold damp night: what others found, and what was measured here. |
+| [A powered USB hub at the telescope: devices dropping off](usb-hub.md) | record | Every way the hub failed, what other owners report, and what replaced it. |
+| [A motor focuser that cannot lift the drawtube](focuser.md#when-the-motor-cannot-lift-the-drawtube) | record | A 28BYJ-48 stalling on a 150P's Crayford with a camera on, measured, and the NEMA 17 that replaced it. |
+| [EQ3 Pro: broken latitude bolts](latitude-bolts.md) | record | Replacing the bolts that set the polar axis's altitude: what the forums and parts trade say. Not yet tried. |
+| [Dec slack and flex across the sky](mount-probe.md) | record | Why the guider could not hold Dec on one night, measured passively on the sky. |
+| [YouTube stream not starting](youtube-stream-problems.md) | record | Seven failed starts collected, against Twitch working. |
 
 ## Plans and designs
 

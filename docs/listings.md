@@ -30,9 +30,12 @@ site, not in this repository.
 
 The repository's description names the SynScan observatory and the
 read-only companion for NINA and PHD2 nights. Its 20 topics include
-`astrophotography`, `synscan`, `skywatcher`, `eq3`, `plate-solving`,
-`observatory-automation`, `indi`, `nina`, `phd2`, `ascom-alpaca` and
-`autoguiding`. EQ5, HEQ5 and EQ6 are not topics: nobody has tried them.
+`astrophotography`, `synscan`, `skywatcher`, `eq3`, `telescope-mount`,
+`plate-solving`, `observatory-automation`, `astronomy-software`, `indi`,
+`nina`, `phd2`, `ascom-alpaca`, `autoguiding`, `claude-code` and
+`model-context-protocol` (the MCP server is read-only). EQ5, HEQ5 and EQ6
+are not topics: nobody has tried them. `python`, `linux` and `windows` are
+left out: GitHub shows the language, and the README the systems.
 
 ## Directories
 

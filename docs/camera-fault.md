@@ -1,4 +1,4 @@
-# The main camera's lost-frame fault
+# The main camera's lost-frame fault: an Altair Hypercam 183C losing frames and jamming
 
 The whole record in one place, from the first sign to the latest test. The
 details are in the dated night files linked from each entry.
