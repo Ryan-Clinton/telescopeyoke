@@ -17,6 +17,9 @@ proven is `docs/validation.md` ("Current conclusions").
   guide steps all through it (the same rule as the PHD2 guider); only
   frames of one setup (night, target, filter, camera, gain, exposure,
   scale) are compared; every file is accounted for.
+  Gaps are counted within a night, never the day between two; FWHM is in
+  arcseconds only for a setup whose frames all give a pixel scale; live,
+  a setup with too few frames yet says it is not judged, never "good".
 - **A mount through ASCOM Alpaca** (`alpaca.py`, `[mount] link = "alpaca"`):
   any mount with an ASCOM driver, on this computer or a Windows one on
   the network, through the same motion lock, limits and dry runs.

@@ -385,10 +385,13 @@ def gaps(rows, guide=None):
     """Stretches with no frame, longer than the night's usual time between
     frames by GAP_MIN_S: [(from, to, minutes, what was happening)]."""
     timed = sorted((r for r in rows if r.get("start") and r.get("end")), key=lambda r: r["start"])
-    between = [b["start"] - a["end"] for a, b in zip(timed, timed[1:])]
+    # Within one night only (noon to noon): the day between two nights is
+    # not time lost, and a folder of several nights is several nights.
+    pairs = [(a, b) for a, b in zip(timed, timed[1:]) if setup(a)[0] == setup(b)[0]]
+    between = [b["start"] - a["end"] for a, b in pairs]
     usual = statistics.median([g for g in between if g >= 0]) if between else 0
     out = []
-    for a, b in zip(timed, timed[1:]):
+    for a, b in pairs:
         gap = b["start"] - a["end"]
         if gap - usual < GAP_MIN_S:
             continue
@@ -468,6 +471,7 @@ def report(rows, guide=None, left=()):
             part["kept_seconds"] += seconds
             if row.get("fwhm_arcsec") or row.get("fwhm_px"):
                 part["fwhm"].append(row.get("fwhm_arcsec") or row["fwhm_px"])
+                part.setdefault("units", set()).add("arcsec" if row.get("fwhm_arcsec") else "px")
         elif causes[0][0] == UNASSESSABLE:
             part["unassessable"] += 1
             part["unassessable_seconds"] += seconds
@@ -484,13 +488,14 @@ def report(rows, guide=None, left=()):
         known = not why[0].startswith("not known")
         name = "no frames (explained)" if known else "no frames (unexplained)"
         lost[name] = lost.get(name, 0.0) + minutes * 60
-    arcsec = any(r.get("fwhm_arcsec") for r in rows)
+    for part in parts.values():
+        part["units"] = sorted(part.get("units") or ())      # for --json
     reasons = {}
     for row in left:
         reason = row["skip"].split(":")[0] if row.get("unreadable") else row["skip"]
         reasons[reason] = reasons.get(reason, 0) + 1
     return {"frames": len(rows), "files": len(rows) + len(left), "left_out": reasons, "parts": parts, "gaps": holes,
-            "lost": lost, "fwhm_unit": "arcsec" if arcsec else "px", "rows": rows}
+            "lost": lost, "rows": rows}
 
 
 def words(night):
@@ -505,8 +510,13 @@ def words(night):
                 f"frames ({p['kept']} of {p['frames']} frames)")
         if p["unassessable"]:
             kept += f"; {p['unassessable_seconds'] / 60:.0f} min ({p['unassessable']} frames) unassessable"
-        sharp = f", FWHM {statistics.median(p['fwhm']):.2f}{'″' if night['fwhm_unit'] == 'arcsec' else ' px'}" \
-            if p["fwhm"] else ""
+        # The unit is the setup's own: arcseconds only when every frame of it
+        # gave its pixel scale, pixels when none did, and no figure when they
+        # are mixed (one median of the two would mean nothing).
+        units = set(p.get("units") or ())
+        sharp = (f", FWHM {statistics.median(p['fwhm']):.2f}{'″' if units == {'arcsec'} else ' px'}"
+                 if p["fwhm"] and len(units) == 1 else
+                 ", FWHM not given: some frames with a pixel scale and some without" if p["fwhm"] else "")
         guided = f", guide RMS {statistics.median(p['guide_rms']):.2f}" if p["guide_rms"] else ""
         lines.append(f"{(when + ' ') if several else ''}{target} {band}{f' ({kit})' if kit else ''} "
                      f"{_clock(p['first'])}-{_clock(p['last'])}: {kept}{sharp}{guided}")
@@ -563,7 +573,7 @@ def watch(folder, guide=None, say=print, poll=5.0, sleep=time.sleep, once=False)
             rows.append(row)
             record([row], name)
             last_new = time.time()
-            causes = [c for c in judge(row, references(rows).get(setup(row))) if c[0] != UNASSESSABLE]
+            causes = judge(row, references(rows).get(setup(row)))
             sharp = f"FWHM {row['fwhm_arcsec']:.2f}″" if row.get("fwhm_arcsec") else \
                 f"FWHM {row['fwhm_px']:.2f} px" if row.get("fwhm_px") else "no stars"
             guided = f", guide RMS {row['guide']['rms']}" if (row.get("guide") or {}).get("rms") is not None else ""
@@ -572,10 +582,16 @@ def watch(folder, guide=None, say=print, poll=5.0, sleep=time.sleep, once=False)
                                                                     if causes else ""))
             now = tuple(sorted(c for c, _, _ in causes))
             if now != state:
-                if causes:
+                if now == (UNASSESSABLE,):
+                    # Too few frames of this setup yet to judge by: said once,
+                    # and never followed by "good again" from it.
+                    say("  NOTE: not judged yet: fewer than three frames of this setup with stars to compare with")
+                elif causes:
                     say("  NOTE: " + "; ".join(f"{c}: {m}" + (f" (likely {i})" if i else "") for c, m, i in causes))
-                elif state:
+                elif state and state != (UNASSESSABLE,):
                     say("  NOTE: frames good again")
+                elif state == (UNASSESSABLE,):
+                    say("  NOTE: judged from here on: good so far")
                 state = now
         expected = max(300.0, 3 * statistics.median([r["exposure"] for r in rows if r.get("exposure")] or [100]))
         if rows and time.time() - last_new > expected and state != ("stopped",):

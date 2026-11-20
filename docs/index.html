@@ -103,6 +103,16 @@
   </figure>
 </div>
 
+<h2 id="companion">Already using NINA and PHD2? Analyse last night without changing a thing</h2>
+<p>The companion reads the frames your capture program saved and PHD2's guide log, measures every frame against that night's best of the same setup, and says where the time went. It touches no device. What it measured is kept apart from what it only infers, and every file is accounted for. Here is a real night (the author's own, 5 November 2026), trimmed:</p>
+<pre>706 files: 693 light frames measured; 13 left out, no single-plane image (a stack or a colour picture).
+M33 L (183m, gain 1500, 16 s) 00:23-01:41: 57 min measured; 37 min acceptable by its own best frames (139 of 213 frames)
+    15 min (56 frames) dimmed: likely cloud or haze
+    5 min (18 frames) trailed: likely the mount's tracking or the wind (no guiding to compare)
+No frames 01:15-01:33 (18 min beyond the usual gap): not known: nothing it reads says
+Where the time went: no frames (explained) 44 min, dimmed 38 min, no frames (unexplained) 36 min, trailed 11 min, soft 6 min</pre>
+<p>On the development branch, not in the 0.4.0 download yet; tried on the author's frames and on made-up nights with known faults, not yet beside anyone else's observatory. <a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/companion.md">How to run it</a>.</p>
+
 <h2 id="try">Try the demo: no telescope needed</h2>
 <p>The demo is the whole application on a pretend telescope. Nothing is connected to your mount and nothing can move, so it is safe to try on the computer that sits beside real equipment.</p>
 <p><b>Ubuntu or Debian</b></p>

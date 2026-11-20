@@ -66,20 +66,18 @@ Close EQMOD first, since only one program can have the port.
 
 ## Already using EQMOD or ASCOM?
 
-Keep them. In the 0.4.0 release telescopeyoke does not use ASCOM and
-changes nothing about an ASCOM or EQMOD installation: it talks to the
-mount's COM port itself. On the development branch it can also reach an
-ASCOM mount, camera, focuser and filter wheel through Alpaca, and guide by
-PHD2 (tried on ASCOM's simulator only: [Mounts](mounts.md)); and
-[the companion](companion.md) watches a night run by NINA or the like,
-from the frames it saves and PHD2, without touching anything. The
-one rule is that two programs cannot hold the same port at once, so close
-EQMOD (or NINA, or the SynScan app) before starting telescopeyoke on that
-mount, and the other way round. On Windows the doctor says so when it sees
-ASCOM or EQMOD installed. What it adds to a setup that already works is the
-part in between: targets ranked for your own horizon, a GoTo that
-plate-solves and centres itself, focusing by ear, and short exposures
-checked and stacked as they arrive.
+Keep them. There are three ways TelescopeYoke can sit beside them, and only
+two of them share any equipment:
+
+| How | NINA, EQMOD, PHD2 meanwhile |
+|---|---|
+| [The companion](companion.md): reads the frames your capture program saves and PHD2's guiding, and says what went wrong and why (development branch) | Run exactly as usual: it touches no device and no port |
+| TelescopeYoke driving the mount itself, through the handset's serial lead (the 0.4.0 release) | Close EQMOD (or NINA, or the SynScan app) first: two programs cannot hold one COM port; on Windows the doctor says so when it sees ASCOM or EQMOD installed |
+| TelescopeYoke driving your ASCOM mount, camera, focuser and wheel through Alpaca, and guiding by PHD2 (development branch, tried on ASCOM's simulator only: [Mounts](mounts.md)) | Not both at once: whether a driver lets two programs command it together is the driver's own, so check it before letting TelescopeYoke move anything NINA also has |
+
+What it adds when it drives is the part in between: targets ranked for
+your own horizon, a GoTo that plate-solves and centres itself, focusing by
+ear, and short exposures checked and stacked as they arrive.
 
 ## More than one telescope
 
