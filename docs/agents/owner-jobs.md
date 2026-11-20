@@ -25,8 +25,8 @@ result is recorded.
    mesh first, then grub screws on the worm gear, worm end-play, the
    clutch. A hand-rock test first. 20 November, on the main camera
    (`./mount.py dectest`): south moves nothing at all, north sticks then
-   jumps 20-50" ([dec-one-way.md](../nights/2026-11-20/dec-one-way.md));
-   the same west of the meridian is still to measure.
+   jumps 20-50"; west of the meridian neither way moved within 134"
+   ([dec-one-way.md](../nights/2026-11-20/dec-one-way.md)).
 3. **The balance**, checked and recorded both ways before the next Dec
    test: on 20 November the 700 g of sand at the back came off and the tube
    was rebalanced (the change not recorded).
@@ -91,10 +91,6 @@ result is recorded.
 
 ## In the next clear gap
 
-17. **The Dec test west of the meridian**: `./mount.py dectest` on the
-    west side (20 or more of its 24 plate solves): whether the dead way
-    follows the motor or the sky. Tried 20 November at NGC 7789 through
-    cloud, 11 of 24 solves: not judged.
 18. **truehome**: `./mount.py findhome`, and if accepted `truehome`
     (20 November: refused twice, the runs 0.4-0.5° apart). After job 2.
 19. **Collimation** for Gary: 14% off centre, towards the left of the

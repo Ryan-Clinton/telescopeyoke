@@ -30,10 +30,18 @@ indoors, its lens unscrewed from the tube).
 | ~19:45 | NGC 869, east, Dec +57 | off the tube | +0.04"/s | slack 2 pulses, then about +10" a pulse (9 of 11) | 12 pulses, 134" sent: moved about +1" net, nothing |
 | ~20:12 | M31, east, Dec +45 | back on | -0.07"/s | slack 4 pulses (about 45"), then +13" a pulse (8 of 12) | 12 pulses, 134" sent: never moved more than half a pulse |
 
+| 22:06 | NGC 7789, **west**, Dec +54 | on | -0.07"/s | 12 pulses, 134" sent (south on this side): never more than 2.2" | 12 pulses, 134" sent (north on this side): never more than 1.7" |
+
+West of the meridian, with 24 of 24 plate solves, **neither way moved the
+tube** within 134" of pulses. A run through cloud just before (11 of 24
+solves) looked the same. So it is not simply "south fails": on the east
+side north moves and south does not; on the west side, with the tube's
+weight on the other side of the axis, neither moves within 12 pulses.
+Whether a longer run of pulses would move it there is not measured.
+
 An earlier run is left out: a cloudy retry had been refused, and a refused
 command stops the motors, so it ran untracked (fixed: the test turns
-tracking on first). The same test on the west side, where the motor's
-north and south change places, was cut off by cloud.
+tracking on first). The same test on the west side is below the table.
 
 ## The guider's calibration, 20:21, M31, east of the pier
 
@@ -75,8 +83,9 @@ move, not while it is stuck.
   (run 1, minutes 4-8). Measured on the guide camera; the main-camera test
   saw the same uneven steps (+20", +10", +15", +9" for 11.2" sent).
 - **The balance change did not cure it**: the failing way was south with
-  the guide scope off and on. Whether the failing way follows the motor
-  or the sky (the west-side test) is not yet known.
+  the guide scope off and on. West of the meridian neither way moved
+  within 134" (22:06), so the failure follows the side of the pier, and
+  the load on the axis, not one motor direction.
 - **One-way guiding** works where Dec follows smoothly and fails where it
   jumps. North only also needs the natural drift to carry the star south,
   and the drift's sign changes with where the tube points (+0.04"/s at

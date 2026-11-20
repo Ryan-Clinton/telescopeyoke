@@ -137,10 +137,10 @@ motor turned and the knob did not, so focus was by hand with the spoken aid.
 
 - **Dec guiding, until Gary has fixed the Dec drive (job 2)**: on the
   east side Dec does not move south at all and moving north sticks then
-  jumps 20-50" (20 November, on the main camera and the guide camera:
+  jumps 20-50"; on the west side neither way moved within 134" of pulses
+  (20 November, on the main camera and the guide camera:
   [dec-one-way.md](../nights/2026-11-20/dec-one-way.md); 19 November:
-  [dec-slack.md](../nights/2026-11-19/dec-slack.md)). The west side is not
-  yet measured. How to work with it:
+  [dec-slack.md](../nights/2026-11-19/dec-slack.md)). How to work with it:
   - **Guide with plain `--guide`**: the kept calibration (20 November)
     says Dec answers north only, so the guider guides RA and sends Dec
     nothing. RA holds 1-2" RMS; Dec drifts 0.07-0.2"/s, so frames of
@@ -150,7 +150,8 @@ motor turned and the knob did not, so focus was by hand with the spoken aid.
     clear minutes on 20 November) but only where the natural drift is
     south (measure it: `./mount.py dectest` gives it first, or
     `./guidecam.py star`), and a 20-50" jump north takes minutes to drift
-    back. Not the everyday setting.
+    back. East of the meridian only: on the west side Dec did not move
+    either way. Not the everyday setting.
   - **`./mount.py dectest`** measures the Dec drive on the main camera:
     the drift, then 12 pulses each way with a plate solve after each
     (moves at most 2', needs a clear sky: 20 of 24 solves or more).
