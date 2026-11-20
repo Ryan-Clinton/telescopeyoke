@@ -2277,6 +2277,8 @@ def main():
     ap.add_argument("--record", metavar="FOLDER",
                     help="keep each plate-solve frame and message there, for replay.py to animate "
                          "(findhome keeps its own under cache/findhome/ unasked)")
+    ap.add_argument("--pulses", type=int, default=12, choices=range(4, 61), metavar="N",
+                    help="with dectest: Dec pulses each way, 4 to 60 (12); each is about 11\"")
     ap.add_argument("--clearance-test", action="store_true",
                     help=f"with point: go past the hour-angle limit, up to {CLEARANCE_TEST_HOURS:g} h and no lower "
                          f"than {MIN_ALTITUDE}°, to find with someone watching where the tube meets the tripod")
@@ -2372,9 +2374,10 @@ def dry_run(args, site):
                                "then returns.",
                  "directions": "Tips the tube 5° from home on the Dec axis, asks which way it "
                                "went, and puts it back. Someone must be watching the mount.",
-                 "dectest": "Stays where it is: two plate solves 30 s apart for the Dec drift, then 12 Dec "
-                            "pulses of 1.5 s at 7.5\"/s one way and 12 the other (about 11\" each, two "
-                            "arcminutes at most), a main-camera plate solve after each."}
+                 "dectest": f"Stays where it is: two plate solves 30 s apart for the Dec drift, then "
+                            f"{args.pulses} Dec pulses of 1.5 s at 7.5\"/s one way and {args.pulses} the other "
+                            f"(about 11\" each, {args.pulses * 11.2 / 60:.1f} arcminutes at most), a "
+                            "main-camera plate solve after each."}
         return {"would_move": True, "safe": True, "warnings": [notes[args.command]]}
 
     result = answer(f"mount.{args.command}.dry_run", plan)
@@ -2497,7 +2500,7 @@ def act(args, site):
             elif args.command == "directions":
                 mount.check_directions()
             elif args.command == "dectest":
-                mount.dec_test(site)
+                mount.dec_test(site, steps=args.pulses)
     except BaseException:
         # Never leave a motor running after an error or Ctrl+C.
         mount.stop()
