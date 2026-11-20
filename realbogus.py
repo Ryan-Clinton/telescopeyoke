@@ -4,7 +4,7 @@ something the subtraction left behind, learnt from this rig's own nights.
 
     ./realbogus.py train            learn from every night with a subtraction (minutes; run it in the background)
     ./realbogus.py train --plant 300 --runs 3
-    ./realbogus.py score SESSION    the probability for each candidate of a night already vetted
+    ./realbogus.py score SESSION    the real-bogus score of each candidate of a night already vetted
     ./realbogus.py show             what the model learnt and how much it removes
 
 A person's dismissals are too few to learn from yet, so the examples are
@@ -26,9 +26,13 @@ held-out night's false candidates above 5 sigma it would set aside while
 keeping 95% of the planted stars found there. That fall in false
 candidates is the proof phase 8 asks for (docs/discovery.md).
 
-The probability is advice. vet.py adds it to each candidate's evidence
-(`real_bogus`, inferred) and says so in its clues; it never dismisses
-anything. Kept in cache/realbogus.json, stamped with the code that made it.
+The score (0 to 1) is a logistic regression's output, not a calibrated
+probability: nobody has measured how often a 0.8 is real. It is advice.
+vet.py adds it to each candidate's evidence (`real_bogus`, inferred) and
+says so in its clues; it never dismisses anything. Kept in
+cache/realbogus.json, stamped with the code that made it; a model made
+before the subtraction or its measurements last changed is said to be
+(stale()), since what it learnt may not be what the code now makes.
 Nothing here moves the mount or uses the camera.
 """
 import argparse
@@ -279,8 +283,34 @@ def load():
     return json.loads(p.read_text(encoding="utf-8")) if p.exists() else None
 
 
+# The code whose output the model learnt from: a change to either may change
+# what a real or a bogus candidate looks like to it.
+TRAINED_ON = ("difference.py", "realbogus.py")
+
+
+def stale(kept):
+    """Why the kept model may not fit the code now, or None: made from
+    uncommitted code, from no known commit, or before difference.py or the
+    measurements here last changed."""
+    import subprocess
+    made = (kept or {}).get("provenance", {})
+    sha = made.get("git_commit")
+    if not sha:
+        return "the model does not say which code it was trained on"
+    if made.get("uncommitted_changes"):
+        return "the model was trained on code with changes never committed"
+    try:
+        differs = subprocess.run(["git", "diff", "--quiet", sha, "HEAD", "--", *TRAINED_ON],
+                                 cwd=Path(__file__).parent, capture_output=True, timeout=30).returncode
+    except (OSError, subprocess.SubprocessError):
+        return None          # no git here: nothing to compare, nothing said
+    return (f"the subtraction or its measurements have changed since the model was trained ({sha[:7]}): "
+            "./realbogus.py train again") if differs == 1 else None
+
+
 def score_candidates(candidates, significance, ref, fwhm, kept=None):
-    """Each candidate's probability of being real, or None with no model."""
+    """Each candidate's real-bogus score (0 to 1, not a calibrated
+    probability), or None with no model."""
     kept = kept or load()
     if kept is None:
         return [None] * len(candidates)
@@ -298,6 +328,8 @@ def run(args, say=print):
         for f in FEATURES:
             say(f"  {f:13s} {kept['model']['weights'][f]:+.2f}")
         s = kept["summary"]
+        if stale(kept):
+            say(f"  note: {stale(kept)}")
         say(f"set aside {s['set_aside']} of {s['bogus_above_5_sigma']} false candidates, kept {s['planted_kept']} "
             f"of {s['planted_above_5_sigma']} planted, below {kept['model']['cut']:.2f}")
         return kept

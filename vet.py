@@ -378,7 +378,7 @@ def vet(record, checks, half_scores=None, ref=None, zeropoint=None, radius=4.0):
 
 
 def classify(evidence, session, ref, fwhm):
-    """Each candidate's probability of being real, from realbogus.py's model
+    """Each candidate's real-bogus score (not a calibrated probability), from realbogus.py's model
     if one has been trained, as advice in its evidence and clues: a low one
     is said, never acted on: a real nova below the cut must still be
     alerted. Returns the model's cut, or None."""
@@ -388,12 +388,16 @@ def classify(evidence, session, ref, fwhm):
         return None
     significance = fits.getdata(session / "difference.fits").astype(float)
     cut = kept["model"]["cut"]
+    old = realbogus.stale(kept)
     for e, p in zip(evidence, realbogus.score_candidates(evidence, significance, ref, fwhm, kept)):
         e["real_bogus"] = p
         e["kinds"]["real_bogus"] = "inferred"
+        if p is not None and old:
+            e.setdefault("clues", []).append(f"the real-or-bogus score is from an older model: {old}")
         if p is not None and p < cut:
             e.setdefault("clues", []).append(
-                f"the real-or-bogus classifier rates it {p:.2f}, below {cut:.2f} (where it keeps 95% of planted "
+                f"the real-or-bogus classifier scores it {p:.2f} (a score, not a probability), below {cut:.2f} "
+                f"(where it keeps 95% of planted "
                 f"stars): most like what the subtraction leaves behind")
     return cut
 

@@ -342,7 +342,7 @@ Verdicts and searches already recorded are not remade: every change below applie
 | 6 | An explicit `--reference` can be the night itself | P1 | Confirmed and fixed | `difference.py` refuses a reference from the same session, or the field's kept reference made with this night, however it was named |
 | 7 | A second look can call a candidate a false alarm without the depth to | P1 | Confirmed and fixed | A candidate not seen again is a false alarm only where the second look's limit there reached its brightest; otherwise it is said to be not ruled out |
 | 8 | References are chosen by depth, not subtraction quality | P1 | Agreed and planned | The M31-P8 record (4 candidates against 24 from a deeper reference) is the evidence; a quality measure for choosing references is a change of its own, made against the recorded subtractions |
-| 9 | The real/bogus model is not checked against the code it was trained for; its score is called a probability | P2 | Agreed and planned | The score stays advisory (it never dismisses a candidate); checking the model's provenance against the subtraction code, and saying "score" where it is not a calibrated probability, are planned |
+| 9 | The real/bogus model is not checked against the code it was trained for; its score is called a probability | P2 | Agreed; fixed after the loop | `realbogus.stale()` compares the model's stamped commit with `difference.py` and `realbogus.py` now; vet adds a clue to every scored candidate when it is older, and `show` says so. It is called a score, not a probability, in the docs and clues. The kept model was trained on uncommitted code, so it is flagged until `./realbogus.py train` is run again |
 
 ## 7, re-audited at ae9ae91
 
