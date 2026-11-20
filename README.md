@@ -369,7 +369,7 @@ real archive data (not this rig's) is said as such.
 | The application window | not yet | ⚠️ opened on Ubuntu, in the demo only | ✅ |
 | Windows | not yet | ⚠️ camera frames indoors; no mount driven | ✅ |
 | Checking that the telescope really turned | not yet | ⚠️ by day: one real record, and it caught a real fault; 109 checked looks on a working mount, none stopped wrongly | ✅ |
-| Discovery: subtraction, candidates, vetting | ⚠️ on real M31 and M33 stacks, with planted fakes; no find of our own yet | ✅ | ✅ planted fakes; and on real archive data, not the rig: a known nova found again in ZTF's images |
+| Discovery: subtraction, candidates, vetting | ⚠️ on real M31 and M33 stacks, with planted fakes; no find of our own yet | ✅ | ✅ planted fakes |
 | Kepler and TESS archive search (`archive.py`, `investigate.py`) | does not need them | ✅ Tabby's star's four known dips found and nothing else (3 November 2026); 16 leads looked into, none unexplained | ✅ |
 | Lights, speaker and phone alerts (`alert.py`) | does not need them | ✅ cloud and rain alerts on a real light and speaker; the call that woke the author when a run stopped (20 October 2026) | ✅ |
 | Live stream on Twitch and YouTube (`stream.py`) | ✅ Twitch on air 20 October 2026 on the WASP-12 b run; YouTube on air 1 November 2026 | ✅ | ✅ |
@@ -379,6 +379,8 @@ real archive data (not this rig's) is said as such.
 | Several rigs, `--probe` | not yet | not yet | ✅ |
 | Dark frames | does not need them | ✅ 183M master darks at -5 °C, 4 November 2026 | ✅ |
 | Flat frames, gain sweep | not yet | not yet | ✅ |
+
+Real astronomy that is neither this rig nor the simulator: the discovery search found a known nova again in ZTF's archive images ([results](docs/discovery/results.md)).
 
 **[docs/validation.md](docs/validation.md#current-conclusions) is the one
 record of what has been proven**: this table follows its "Current

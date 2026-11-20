@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TelescopeYoke: a robotic observatory and discovery station for affordable GoTo telescopes</title>
-<meta name="description" content="Free, open-source robotic observatory software for Sky-Watcher SynScan mounts (run on an EQ3 Pro; EQ5, HEQ5 and EQ6 untried): self-centring GoTos by plate solving, polar alignment, focusing, stacking and whole nights run with an AI agent, plus nova patrols and Kepler archive searches. Already run NINA and PHD2? A read-only companion says what spoiled last night. Linux, with a Windows port. Try the demo with no telescope.">
+<meta name="description" content="Free, open-source robotic observatory software for Sky-Watcher SynScan mounts (run on an EQ3 Pro; EQ5, HEQ5 and EQ6 untried): self-centring GoTos by plate solving, polar alignment, focusing, stacking and nights run with an AI agent (a whole night ended by it alone not yet tried), plus nova patrols and Kepler archive searches. Already run NINA and PHD2? A read-only companion says what spoiled last night. Linux, with a Windows port. Try the demo with no telescope.">
 <link rel="canonical" href="https://ryan-clinton.github.io/telescopeyoke/">
 <meta property="og:title" content="TelescopeYoke: a robotic observatory and discovery station for affordable GoTo telescopes">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://ryan-clinton.github.io/telescopeyoke/">
-<meta property="og:description" content="Free, open-source robotic observatory software for Sky-Watcher SynScan mounts: self-centring GoTos, polar alignment, focusing, stacking and whole nights run with an AI agent, plus nova patrols and Kepler archive searches, and a read-only companion that says what spoiled a NINA and PHD2 night.">
+<meta property="og:description" content="Free, open-source robotic observatory software for Sky-Watcher SynScan mounts: self-centring GoTos, polar alignment, focusing, stacking and nights run with an AI agent (a whole night ended by it alone not yet tried), plus nova patrols and Kepler archive searches, and a read-only companion that says what spoiled a NINA and PHD2 night.">
 <meta property="og:image" content="https://ryan-clinton.github.io/telescopeyoke/social-preview.png">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="logo.svg">
@@ -148,7 +148,7 @@ cd TelescopeYoke-v0.4.1
   <tr class="wanted"><td>a mount with an EQStar or other EQMOD-style controller</td><td>none</td><td>any</td><td>Linux or Windows</td><td>wanted: whether it answers at all</td><td>could be you</td></tr>
 </table>
 </div>
-<p>EQ5, HEQ5 and EQ6 mounts with a SynScan handset speak the same serial protocol, so they are likely to work, but nobody has tried. On Linux the camera is read through INDI; on Windows, Altair cameras through their own library. New in 0.4.1, and tried only on ASCOM's own simulator so far: a mount, camera, focuser and filter wheel through their ASCOM drivers (Alpaca), guiding by PHD2, and a <a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/companion.md">companion</a> that watches an observatory you already run, from the frames it saves and PHD2, without touching it.</p>
+<p>EQ5, HEQ5 and EQ6 mounts with a SynScan handset speak the same serial protocol, so they are likely to work, but nobody has tried. On Linux the camera is read through INDI; on Windows, Altair cameras through their own library. New in 0.4.1: a mount, camera, focuser and filter wheel through their ASCOM drivers (Alpaca), tried only on ASCOM's own simulator so far; guiding by PHD2, tried only against a pretend PHD2; and a <a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/companion.md">companion</a> that watches an observatory you already run, from the frames it saves and PHD2, without touching it, run on the owner's own 693-frame night and on published NINA and PHD2 logs of three other observatories, not yet live beside anyone else's.</p>
 
 <div class="note">
   <b>Looking for testers.</b> If you have one of these mounts, a report from you is worth more than any new feature, and you do not have to let it move your mount. <code>./doctor.py --report</code> only looks at what is connected: it writes out what the handset says the mount is, its firmware, and what was found, with your location left out. Paste that into a

@@ -27,7 +27,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 6 | Camera, cooling, filters and focusing | done 20 Nov 2026, re-checked |
 | 7 | Scientific discovery reliability | done 20 Nov 2026, re-checked |
 | 8 | Calibration and scientific measurement accuracy | done 20 Nov 2026, re-checked |
-| 9 | Demo claims versus real-world proof | done 20 Nov 2026; re-check asked |
+| 9 | Demo claims versus real-world proof | done 20 Nov 2026, re-checked |
 | 10 | Hardware onboarding and compatibility | not started |
 | 11 | NINA/PHD2 companion | not started |
 | 12 | State management and data integrity | not started |
@@ -394,4 +394,12 @@ Documentation only; `docs/validation.md` is the authority and is unchanged.
 | 6 | The page's search description lists EQ5, HEQ5 and EQ6 bare | P2 | Confirmed and fixed | "run on an EQ3 Pro; EQ5, HEQ5 and EQ6 untried" |
 | 7 | The README's evidence table puts ZTF archive data under the simulated rig, and says everything runs there | P2 | Confirmed and fixed | The cell says real archive data, not the rig, beside the planted fakes; "everything" is now "most of it", the column saying which |
 | 8 | "Tested" in the agents' page reads as proof | P2 | Confirmed and fixed | A project command is "a script of the project's", with validation.md as the word on what is proven; the hooks' list says it was checked when built and there are no tests now; the page's own note on "tested" stays |
+
+## 9, re-audited at 5abf3d6
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | The page's search descriptions still say "whole nights run with an AI agent" | P1 | Confirmed and fixed | Both say "nights run with an AI agent (a whole night ended by it alone not yet tried)" |
+| 2 | The ZTF result is still in the simulated rig's column | P2 | Confirmed and fixed | The cell keeps the planted fakes; the ZTF result is a line under the table, as real astronomy that is neither this rig nor the simulator |
+| 3 | Alpaca, PHD2 and the companion are said as one level of proof | P2 | Confirmed and fixed | Three claims: Alpaca on ASCOM's simulator, PHD2 against a pretend PHD2, the companion on the owner's 693-frame night and three observatories' published logs, not yet live |
 
