@@ -10,6 +10,8 @@ Home speaker says so.
                                says it, and it goes to their phone by Telegram
     ./alert.py flash "Living room"  pulse only the lights in that room of the Hue app (green),
                                no speaker: for a house with other people in it
+    ./alert.py ntfy            make the phone's ntfy topic (once) and say how to subscribe
+    ./alert.py wake ["words"]  wake the person: an urgent ntfy push every minute until "I'm up"
     ./alert.py pair            press the button on the Hue bridge, then run this once
     ./alert.py pin             keep the certificate the bridge shows now (after it was reset or updated)
     ./alert.py lights          the lights the bridge has, and which do colour
@@ -614,6 +616,63 @@ def call(words, dry_run=False, say_it=print, bridge=None, speak=None, send=None)
         say_it(line)
 
 
+NTFY = CACHE / "ntfy.json"      # the person's ntfy topic: random, so only their phone hears it
+NTFY_SERVER = "https://ntfy.sh"
+WAKE_EVERY, WAKE_TIMES = 60, 10  # seconds between pushes, and how many before giving up
+
+
+def ntfy_topic(make=False):
+    """The kept topic, made (random, unguessable: on ntfy.sh the topic is
+    the only lock) when `make` and there is none."""
+    if NTFY.exists():
+        return json.loads(NTFY.read_text(encoding="utf-8"))["topic"]
+    if not make:
+        raise AlertError("No ntfy topic yet: run ./alert.py ntfy and subscribe to it in the ntfy app")
+    topic = "ty-" + secrets.token_urlsafe(18).replace("_", "").replace("-", "")[:22]
+    records.write(NTFY, {"topic": topic, "server": NTFY_SERVER})
+    return topic
+
+
+def _ntfy_post(topic, words, headers):
+    request = urllib.request.Request(f"{NTFY_SERVER}/{topic}", data=words.encode("utf-8"), method="POST",
+                                     headers=headers)
+    with urllib.request.urlopen(request, timeout=15) as reply:
+        reply.read()
+
+
+def acknowledged(topic, since):
+    """Whether "I'm up" was pressed since `since` (the button posts to TOPIC-ok)."""
+    try:
+        with urllib.request.urlopen(f"{NTFY_SERVER}/{topic}-ok/json?poll=1&since={int(since)}", timeout=15) as r:
+            return any(line.strip() for line in r.read().decode("utf-8").splitlines())
+    except (OSError, ValueError):
+        return False
+
+
+def wake(words, every=WAKE_EVERY, times=WAKE_TIMES, say_it=print, sleep=time.sleep):
+    """Wake the person: an urgent ntfy push (the app's alarm, through Do Not
+    Disturb where they allowed it), sent again every `every` seconds until
+    they press "I'm up" or `times` have gone. 20 November 2026: "a text or
+    multiple texts probably wont do it". The words stay generic: they pass
+    through ntfy.sh, so never the site's name."""
+    topic, started = ntfy_topic(), time.time()
+    headers = {"Title": "Telescope", "Priority": "urgent", "Tags": "umbrella,rotating_light",
+               "Actions": f"http, I'm up, {NTFY_SERVER}/{topic}-ok, method=POST, body=up, clear=true"}
+    for n in range(1, times + 1):
+        try:
+            _ntfy_post(topic, words, headers)
+            say_it(f"  wake {n}/{times}: pushed by ntfy")
+        except OSError as problem:
+            say_it(f"  wake {n}/{times}: ntfy failed ({problem})")
+        for _ in range(int(every // 5)):
+            sleep(5)
+            if acknowledged(topic, started):
+                say_it("  wake: acknowledged (I'm up)")
+                return True
+    say_it(f"  wake: no answer after {times} pushes")
+    return False
+
+
 def room_lights(bridge, room):
     """The lights the bridge puts in the room named `room` (the Hue app's
     room, matched whole, ignoring case), never by the lights' own names:
@@ -659,7 +718,7 @@ def flash(room, colour="Green", dry_run=False, say_it=print, bridge=None):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("command", choices=["watch", "check", "test", "say", "call", "flash", "pair", "pin", "lights",
-                                            "speakers"])
+                                            "speakers", "ntfy", "wake"])
     ap.add_argument("what", nargs="?", help="for test: cloud, clouded, rain or clear; for say and call: the words; "
                     "for flash: the room's name in the Hue app")
     ap.add_argument("--address", help="for pair: the bridge's address, if it is not found by itself")
@@ -690,6 +749,17 @@ def main(argv=None):
                 raise AlertError("No speaker is chosen: see docs/alerts.md")
             print(f"Would say \"{args.what}\" on {s['speaker']}." if args.dry_run
                   else announce(args.what, s["speaker"], s.get("speaker_address"), s.get("volume")))
+        elif args.command == "ntfy":
+            topic = ntfy_topic(make=True)
+            print(f"In the ntfy app: + (subscribe), server {NTFY_SERVER}, topic {topic}. Then on the phone, "
+                  "the topic's settings: allow it through Do Not Disturb. Try it: ./alert.py wake")
+        elif args.command == "wake":
+            words = args.what or "Test: the telescope's wake-up. Press I'm up."
+            if args.dry_run:
+                print(f"Would push \"{words}\" to ntfy topic {ntfy_topic()} every {WAKE_EVERY} s, "
+                      f"up to {WAKE_TIMES} times, until I'm up is pressed.")
+            else:
+                wake(words)
         elif args.command == "call":
             if not args.what:
                 ap.error("call needs the words")

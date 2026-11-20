@@ -252,7 +252,7 @@ def pace(a, every, until, weather=None):
     return every, f"forecast cloud up to {cloud}%, rain chance up to {wet}%"
 
 
-def watch(every, until, room=None, say=print):
+def watch(every, until, room=None, say=print, wake=False):
     """Look every `every` minutes until `until` (HH:MM), more or less often
     as pace() says; say a line only when the warning changes (rain due
     within WARN_MIN, rain here, or clear again) or the pace does."""
@@ -285,6 +285,12 @@ def watch(every, until, room=None, say=print):
                         alert.flash(room, "Blue")
                     except Exception as problem:        # a light that fails never stops the watch
                         say(f"  the {room} lights could not be pulsed: {problem}")
+                if state != "dry" and wake:
+                    # The phone, in the background so the watch keeps looking while it rings.
+                    import threading
+                    words = "Rain is here. Cover the telescope." if state == "here" else \
+                        "Rain is on the way. Cover the telescope."
+                    threading.Thread(target=alert.wake, args=(words,), kwargs={"say_it": say}, daemon=True).start()
                 if last is None and state == "dry":
                     say(f"{datetime.now():%H:%M} rain watch on: " + "; ".join(a["lines"]))
                 last = state
@@ -313,9 +319,11 @@ def main():
     ap.add_argument("--every", type=float, default=15)
     ap.add_argument("--until", default="06:00", help="HH:MM")
     ap.add_argument("--flash", metavar="ROOM", help="with --watch: pulse this Hue room's lights blue on a warning")
+    ap.add_argument("--wake", action="store_true",
+                    help="with --watch: on a warning, wake the person by ntfy (./alert.py ntfy) until they answer")
     args = ap.parse_args()
     if args.watch:
-        watch(args.every, args.until, args.flash, say=lambda line: print(line, flush=True))
+        watch(args.every, args.until, args.flash, say=lambda line: print(line, flush=True), wake=args.wake)
         return
 
     def work():

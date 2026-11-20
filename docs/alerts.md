@@ -106,3 +106,18 @@ and the lights were flashed for nothing. A deadline already past today is
 tonight's (9 November: `--until 02:00` at 20:55 ended at once and flashed).
 
 **Calls for the person are Telegram only.** `alert.call` (the schedule's fetch when a step fails twice) pulsed every light on the bridge, a child's bedroom among them, and spoke on the speaker; on 15 November 2026 at 21:58 it woke the children. The lights and the speaker now join a call only with `[alerts] call_house = true`.
+
+## Waking the person: the bedroom light and the phone
+
+A text does not wake anyone. `./rain.py --watch --flash ROOM --wake` does
+two things on a rain warning: it pulses that Hue room's lights blue, and it
+sends an urgent push by [ntfy](https://ntfy.sh) every minute, up to ten
+times, until "I'm up" is pressed on the phone.
+
+    ./alert.py ntfy     # makes a random topic (kept in cache/ntfy.json) and says what to subscribe to
+    ./alert.py wake     # a test push
+
+On the phone: install ntfy, subscribe to the topic it names on ntfy.sh, and
+in that topic's settings allow it through Do Not Disturb. The topic is the
+only lock on ntfy.sh, so it is random and kept out of the repository, and
+the words pushed say nothing of where the telescope is.
