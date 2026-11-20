@@ -21,7 +21,7 @@ it, and how far it is proven:
 
 **All four are published and live** (20 November 2026): each address
 above answers, and the home page, the NINA and PHD2 page and the Alpaca
-page name release 0.4.1. Their sources are in `docs/` (`index.html` and
+page name the current release. Their sources are in `docs/` (`index.html` and
 the three `*.html` pages). Publishing them, and the site's own upkeep (its
 sitemap, indexing, Search Console), is done with the rest of the author's
 site, not in this repository.
@@ -49,7 +49,7 @@ Each entry says the author wrote it, and how far it has been tried.
 
 ## Downloads
 
-Release [0.4.1](https://github.com/Ryan-Clinton/telescopeyoke/releases/tag/v0.4.1)
-(20 November 2026) is the first with the companion, Alpaca and PHD2 in the
-download, so every entry above leads to a release that has what it
-describes.
+Release [0.4.2](https://github.com/Ryan-Clinton/telescopeyoke/releases/tag/v0.4.2)
+(20 November 2026) is the current download. 0.4.1, the same day, was the
+first with the companion, Alpaca and PHD2; 0.4.2 adds the refusal of a
+GoTo by name within 40° of the Sun, so every entry above leads to 0.4.2.

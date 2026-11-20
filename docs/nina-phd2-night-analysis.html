@@ -94,12 +94,12 @@ No frames 01:15-01:33 (18 min beyond the usual gap): not known: nothing it reads
 Where the time went: no frames (explained) 44 min, dimmed 38 min, no frames (unexplained) 36 min, trailed 11 min, soft 6 min</pre>
 
 <h2>Running it</h2>
-<p>On Windows, with Python 3.11 or newer: <a href="https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.1/TelescopeYoke-v0.4.1.zip">download TelescopeYoke-v0.4.1.zip</a>, unpack it and run <code>install.ps1</code> (no <code>config.toml</code> needed). Then, in its folder:</p>
+<p>On Windows, with Python 3.11 or newer: <a href="https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.2/TelescopeYoke-v0.4.2.zip">download TelescopeYoke-v0.4.2.zip</a>, unpack it and run <code>install.ps1</code> (no <code>config.toml</code> needed). Then, in its folder:</p>
 <pre><code>python companion.py check "C:\path\to\tonights\frames"
 python companion.py report "C:\path\to\tonights\frames" --phd2-log "...\PHD2_GuideLog_DATE.txt" --nina-log "...\NINA\Logs\DATE.log"</code></pre>
 <p><code>watch</code> instead of <code>report</code> follows a night as it happens. The full guide, every option and how to read a report: <a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/companion.md">The companion</a>.</p>
 
-<div class="note"><b>How far it is proven.</b> In release 0.4.1 (20 November 2026). Tried on the author's own frames, on made-up nights with known faults, and offline on NINA and PHD2 logs other observatories have published. No other observatory's night with its frames, logs and guiding together has been read yet, and it has not yet run live beside anyone else's observatory.</div>
+<div class="note"><b>How far it is proven.</b> In releases 0.4.1 and later (0.4.2, 20 November 2026, is the current one). Tried on the author's own frames, on made-up nights with known faults, and offline on NINA and PHD2 logs other observatories have published. No other observatory's night with its frames, logs and guiding together has been read yet, and it has not yet run live beside anyone else's observatory.</div>
 
 <footer>TelescopeYoke is free and MIT licensed. What is proven on real hardware is kept in one place: <a href="https://github.com/Ryan-Clinton/telescopeyoke/blob/main/docs/validation.md#current-conclusions">Validation</a>. Not made or endorsed by Sky-Watcher, NINA, PHD2 or ASCOM.</footer>
 </main>

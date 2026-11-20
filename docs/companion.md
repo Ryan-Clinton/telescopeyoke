@@ -54,7 +54,7 @@ the companion for you.
 ## Running it (Windows)
 
 The companion is in release 0.4.1 and later:
-[download TelescopeYoke-v0.4.1.zip](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.1/TelescopeYoke-v0.4.1.zip)
+[download TelescopeYoke-v0.4.2.zip](https://github.com/Ryan-Clinton/telescopeyoke/releases/download/v0.4.2/TelescopeYoke-v0.4.2.zip)
 (or `git clone https://github.com/Ryan-Clinton/telescopeyoke` for the newest code),
 unpack it, and install as [Setup](setup.md) says for Windows (Python 3.11
 or newer, then `install.ps1`). No `config.toml` is needed for this. Then,
