@@ -237,3 +237,29 @@ What it does not show:
   pulses go, separates them.
 - RA's ±10" wander during the test is about the size of the seeing and of
   the drift left after the drift measured before the test was taken off.
+
+## After the result: what changed, and what is next
+
+- **The test now counts only Dec movement, the way it pushes** (d12362c):
+  across the calibrated RA direction, with the sign learned from the first
+  leg that engages. 00:57's test counted movement of any direction; its
+  failure stands (nothing moved for 45 steps), but a success under the old
+  rule would not have proved Dec moved the right way.
+- **The board's Dec count is now kept with every look** (`dec_axis`): does
+  the controller register each step when the star does not move.
+- **`--native`** sends the same steps as the mount's own slow move (the
+  handset's variable rate, the command the photometric hold uses) in place
+  of the ST4 lead. Run back to back with the ST4 test, at one pointing:
+  both failing points at the drive (motor, gears, worm, clutch, load);
+  native working and ST4 not points at the ST4 path.
+- **Accurate GoTos do not show the drive answers guide-rate moves**: a
+  slew's force can carry it through a resistance a 7"/s move does not.
+- **The load on the axis is not known.** The assembled tube (150P,
+  183M, filter wheel, motor focuser, guide scope and camera, 1 kg of sand,
+  and tonight a hot water bottle on the guide scope) has never been
+  weighed; set against the mount's rated payload it may be over. To weigh:
+  the tube off the mount, on bathroom scales.
+- **The drift measured before a test is taken off for the whole test**
+  (eight 2 s frames, then extrapolated over minutes): the 55" and the
+  flatness after it carry that uncertainty, a few arcseconds a minute,
+  not the hundreds of arcseconds a working drive would have moved.
