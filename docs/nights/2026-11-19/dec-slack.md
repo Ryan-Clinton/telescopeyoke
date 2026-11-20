@@ -90,8 +90,9 @@ then full rate. 23:52 does too: Dec had not been reversed by the guider
    when Dec does not follow; and `--dec-one-way` so Dec is only ever
    pulsed one way and the slack is crossed once. **The one-way Dec
    guiding has not run with pulses going out**: every guided run tonight
-   either failed to start or dropped Dec. Nothing sends an extra pulse
-   the size of the slack on a reversal; one-way guiding was chosen instead.
+   either failed to start or dropped Dec. The guider does take up slack on a Dec
+   reversal when guiding both ways (`SLACK_START`, half the measured slack
+   to start); one-way guiding avoids reversals altogether.
 4. **The calibration's 60-step limit** is less than 23:52 needed.
 5. **22:31 does not add up as Dec movement.** North moved the star 77",
    south 127", and it ended 153" from its start: for opposite moves it
@@ -99,10 +100,10 @@ then full rate. 23:52 does too: Dec had not been reversed by the guider
    slipping then; drift is taken off before the legs, but the track itself
    was not kept, so whether the tube moved sideways, sagged or the drift
    changed is unknown.
-6. **A calibration that kept RA alone was never tried on Dec again.** The
-   check on a reused calibration checked RA only. Changed with this page:
-   the check now sends north steps first (up to 60), and if the star moves
-   it refuses the old calibration, so a fresh one guides Dec again.
+6. **A calibration that kept RA alone is not tried on Dec again** until a
+   person asks for a fresh calibration (`./guidecam.py calibrate`). An
+   automatic retry of up to 60 north steps was added and taken out again
+   the same night: an automatic test on a drive not yet understood.
 
 ## The guided run, RA only (23:54 on)
 
@@ -122,7 +123,49 @@ The frames are still good at 120 s: 5 kept, FWHM 5.9-6.1 px, roundness
 0.89-0.90, 300 stars each (unguided 16 s frames earlier: 4.2-4.8 px,
 0.79-0.90, 107-124 stars). 300 s is off: about 10" of Dec drift a frame.
 
-## The test that would settle it
+## The explanations, as the evidence stands
+
+| Explanation | Supported by | Contradicted by | Unknown |
+|---|---|---|---|
+| The clutch slipped | the 3° slip at 22:20, 12%/20% at 22:31, the tube moved by hand at 23:07; nothing slipped after it was tightened | | whether it still gives a little at guide-rate force |
+| A large slack (backlash) of a fixed size | full rate once caught (21:24, 21:31, 23:16, 23:29) | the size: 4 to more than 60 steps | whether it repeats when the last real Dec movement is controlled |
+| The slack depends on which way Dec last moved | could explain the spread | | **not shown**: the -0.4' and +1.0' before 23:29 and 23:52 were plate-solve residuals, under the 2' centring limit, so **no centring move was made** after either. The last Dec movements were the GoTos, the earlier calibration's legs and the unguided run's dithers, and their final directions were not recorded |
+| Sticking (stiction) | 21:24's creep then a ~55" jump; 23:52 moving nothing for 60 steps; **10 November 2026, before the service**: one-way south pulses moved nothing for half a minute, then a 20-30" jump (the `--dec-stuck` note in `guider.py`) | | whether it is the grease (1-2 °C), the worm's mesh, balance or the clutch |
+| The service caused it | 18 November's Capella calibrations failed the same way | 10 November's sticking and 12 November's ~11 s slack came before it; 14-15 November calibrations passed (4-5 steps) | what the service changed |
+| The mount's Dec creep fought the guide pulses | `mount.py` sets a Dec creep after every GoTo from the drift model, and `guidecam.py calibrate` and `dectest` do not turn it off | the creep is set in 0.25"/s steps (`dec_creep`): tonight's drift (0.03-0.08"/s from a 0.2-0.3° polar error) rounds to 0, and at most it is 0.25"/s against 7.1"/s pulses; guided runs turn it off (`Supervisor.creep_off`); `cache/drift_model.json` holds no drift observations and creep 0.0 | the creep actually set before the standalone tests (20:31, 20:44, the Dec tests): only the latest is kept |
+| The electronics | | the board counts guide-rate steps both ways (20:46) | whether the motor shaft turns: the count is open-loop |
+| The guide star not being seen | 23:31-23:52: the run's guider ran at the camera's default gain and saw nothing (fixed, 2ac4572); before that, dew | | **a separate fault**: it stopped guiding from starting, not Dec from moving |
+
+## The controlled test (designed, not run)
+
+Not to be run until the owner says so. It needs a new mode of `guidecam.py
+dectest`, written as a command first. Through the same ST4 path the guider
+uses, the guide camera measuring the star after every step:
+
+0. Set the Dec creep to 0 and record it; tracking on; nothing else moving
+   (no run, no dither, no GoTo during the test). Note the last GoTo.
+1. **Engage north**: 1.5 s north steps until the star moves north at 80% of
+   the rate due or more for 5 steps in a row. Record the steps it took.
+   Stop at 80 steps: "never engaged north".
+2. **Idle control**: 120 s with no pulses (the drift measured), then 10
+   north steps: once engaged, the same way after a rest should answer at
+   once. If it does not, it is sticking, not slack.
+3. **Reverse south**: south steps until it moves south at 80% for 5 in a
+   row. The steps before that are the reversal's slack. Stop at 80.
+4. **Idle control** south, as in 2.
+5. **Reverse north** again, as in 3. Then the whole cycle once more.
+
+Stop at once on: 80 steps in one direction without engaging, the star
+lost, or the star more than 15' from where it started. At most about 14'
+of pulses each way (80 x 10.7"); about 25-40 minutes, at about 4 s a step.
+
+What it tells: the slack the same on each reversal and none after an idle
+rest is backlash of a fixed size; slack that varies, or a rest that needs
+taking up again, is sticking or the mesh. Neither settles the mechanical
+cause: that is the daylight drive-response test below, and Gary.
+
+## The daylight drive-response test
+
 
 First find **where** the movement is lost, before any more calibration
 changes or long Dec tests. Daylight, the tube on a distant landmark, the
@@ -143,10 +186,7 @@ clutch tight and untouched, nothing else moving:
 | the worm turns, the axis does not | the worm's mesh with the wheel, binding, or the clutch |
 | the axis turns, the picture does not | the camera, the guide scope's mounting, or the measuring |
 
-Only once that is known: a repeat Dec test at one pointing (four
-north/south cycles of 80 steps is about 40 minutes, not 12: 23:16's test
-took about 8 minutes for 120 steps, about 4 s a step), to size the slack
-for one-way Dec guiding.
-
-Tonight stays on RA-only guiding at 120 s; a fresh polar alignment would
-take the Dec drift down. The daylight test needs the owner at the mount.
+Tonight stays on RA-only guiding at 120 s. A polar alignment at 00:30
+measured 0.3° (0.15° east, 0.24° low); the bolts were left alone: with Dec
+guided the error would not matter, and with RA only it is what keeps the
+Dec drift one way.
