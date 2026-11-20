@@ -454,8 +454,11 @@ class Mount:
             self.rate(axis, NEGATIVE, 0)
         # The Dec creep is the handset's other kind of rate (mode 3): whether
         # a fixed rate of 0 also ends it is not known, so it is ended itself,
-        # as home() does before a seek. Tracking is left as it is.
+        # as home() does before a seek. Tracking goes off too, as without a
+        # handset it always has: a tube caught on a leg is not driven on at
+        # the sidereal rate. The next GoTo turns it on again.
         self.dec_creep(0)
+        self.tracking(False)
 
     def tracking(self, on):
         # Mode 2 is equatorial tracking, 0 is off.
@@ -1153,7 +1156,10 @@ class Mount:
         import director
         target = find_target(name)
         if any(aim_off):
+            # The place actually aimed at is held to the same limits as the
+            # object: an aim-off is not bounded, so it is checked itself.
             target = offset_target(target, *aim_off)
+            check_target(target, site, f"{target['id']} aimed {aim_off[0]:+.0f}' east, {aim_off[1]:+.0f}' north")
         if config.DEMO:
             import simulator
             simulator.set_sky(target=target["id"])     # the pretend sky shows this target's stars
@@ -1453,16 +1459,21 @@ def plan_goto(name, site):
     """What a GoTo to a catalogue object would do, checked against the limits,
     without moving anything."""
     target = find_target(name)
-    hour_angle, dec, altitude = where(target, site)
-    if altitude < MIN_ALTITUDE:
-        raise Refusal("TARGET_BELOW_ALTITUDE_LIMIT",
-                      f"{target['id']} is only {altitude:.0f}° up; not slewing.")
-    refuse_near_sun(hour_angle, dec, site)
-    plan = _plan(hour_angle, dec, altitude, target["id"])
-    hidden = behind(hour_angle, dec, altitude, site)
+    plan = check_target(target, site, target["id"])
+    hidden = behind(plan["hour_angle_hours"] * 15, plan["dec_deg"], plan["altitude_deg"], site)
     if hidden:
         plan = dict(plan, warnings=plan.get("warnings", []) + [f"{target['id']} is {hidden}"])
     return dict(plan, target=target["id"], name=target.get("name", ""))
+
+
+def check_target(target, site, label):
+    """The altitude, Sun and hour-angle limits for one place on the sky (a
+    catalogue entry, or one moved by an aim-off), as _plan's plan."""
+    hour_angle, dec, altitude = where(target, site)
+    if altitude < MIN_ALTITUDE:
+        raise Refusal("TARGET_BELOW_ALTITUDE_LIMIT", f"{label} is only {altitude:.0f}° up; not slewing.")
+    refuse_near_sun(hour_angle, dec, site)
+    return _plan(hour_angle, dec, altitude, label)
 
 
 def behind(hour_angle, dec, altitude, site):
@@ -2201,7 +2212,12 @@ def dry_run(args, site):
         if args.command not in ("status", "stop") and not args.demo:
             refuse_example_site(site)
         if args.command == "goto":
-            return plan_goto(" ".join(args.target), site)
+            found = plan_goto(" ".join(args.target), site)
+            if any(args.aim_off):
+                moved = offset_target(find_target(" ".join(args.target)), *args.aim_off)
+                check_target(moved, site, f"{found['target']} aimed {args.aim_off[0]:+.0f}' east, "
+                                          f"{args.aim_off[1]:+.0f}' north")
+            return found
         if args.command == "point":
             return plan_point(float(args.target[0]), float(args.target[1]), site, args.clearance_test)
         if args.command in ("status", "sync", "drift", "stop"):

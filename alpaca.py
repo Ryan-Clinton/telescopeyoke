@@ -290,6 +290,12 @@ class AlpacaHandset:
         if len(failed) == len(actions):
             raise Refusal("HANDSET_NOT_ANSWERING", "Nothing reached the mount's driver to stop it: "
                           + "; ".join(failed) + ". Switch the mount off at the mount if it is moving.")
+        # One part refused (AbortSlew, say) and another taken is not a stop
+        # unless the driver says it is no longer slewing.
+        if failed and _quiet(self.client, "slewing") is not False:
+            raise Refusal("HANDSET_NOT_ANSWERING", "The mount's driver did not take every stop ("
+                          + "; ".join(failed) + ") and does not say it has stopped slewing. "
+                          "Switch the mount off at the mount if it is moving.")
 
     def go_home(self, timeout=150):
         """The driver's own home (FindHome), or else its park position, and

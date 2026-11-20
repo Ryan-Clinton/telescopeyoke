@@ -19,7 +19,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 
 | # | Audit | Status |
 |---|---|---|
-| 1 | Mount safety and movement | not started |
+| 1 | Mount safety and movement | done 20 Nov 2026; re-check asked |
 | 2 | Hardware failure and recovery | not started |
 | 3 | AI agent autonomy and permissions | not started |
 | 4 | Autonomous full-night operation | not started |
@@ -185,3 +185,21 @@ I would also use a consistent format for each detailed audit: verified findings 
 This initial pass was an architectural and risk assessment, not an exhaustive line-by-line audit of all 131 Python modules.
 
 **My choice for Audit #1 is Mount Safety and Movement.** The recent Sun-exclusion fix, the outstanding meridian-clearance issue, and the number of different ways TelescopeYoke can command movement make this the most valuable place to start.
+
+## 1. Mount safety and movement, 20 November 2026
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | Tube/tripod clearance is not modelled | P0 | Agreed and planned | Nothing to put in code yet: the safe envelope has to be measured with the tube as it is now (lowered on 20 Nov), west of the pier near the meridian (owner-jobs, item 1), with `./mount.py point --clearance-test` and someone at the mount. Waiting for the owner's hands |
+| 2 | An aim-off moves the destination past the checks | P0 | Confirmed and fixed (the aim-off part) | `check_target()` holds the place actually aimed at (target plus `--aim-off`) to the altitude, Sun and hour-angle limits, in the GoTo and in its dry run. Demo: `goto M81 --aim-off 0 -6000` refused at -18°, `--aim-off 5 5` went. The pointing correction part is wrong: the correction makes the tube reach the checked place; the handset's own coordinates are not where the tube goes |
+| 3 | Without a handset, power-on counts become home | P0 | Smaller than claimed, no change | The SynScan handset makes the same assumption (switched on at home); `direct.py` follows it, and GoTos still need the Dec direction watched. A mount switched on away from home is wrong with either |
+| 4 | Stop leaves tracking on | P0 | Confirmed and fixed | `Mount.stop()` now turns tracking off too, as `direct.py` and `polaris.py` already did; every caller is an error or Ctrl+C path, and the next GoTo turns tracking on |
+| 5 | Alpaca stop hides a failed AbortSlew | P0 | Confirmed and fixed | A stop with any part refused now refuses unless the driver says it is no longer slewing. Untried on a real Alpaca mount |
+| 6 | A safe end point is not a safe path | P0 | Agreed and planned | Same measurement as 1; the route home was changed on 17 Nov from the record. Waiting for the owner's hands |
+| 7 | Polar alignment's moves skip the Sun check | P0 | Smaller than claimed (night only), fixed | `polaralign.positions()` calls `mount.refuse_near_sun()` for each of its three positions |
+| 8 | A slipped clutch leaves a false position | P0 | Partly right, planned | The pointing survey stops on a jump (mount.py, `JUMP`) and a solved GoTo on an unchanged miss (`moved.py`); a blind GoTo has no camera to tell. Planned: a kept "slip suspected" mark that `ty context` reports until home is set again |
+| 9 | No one process owns the mount | P1 | Agreed and planned | A lock taken at the first move would refuse `shoot.py` started by a patrol that has already moved the mount, so it needs an owner passed from parent to child; not done blind. No collision between processes is on record |
+| 10 | Console Stop kills before stopping | P1 | Smaller than claimed, no change | Done in that order because Windows lets one process hold the port; the gap is the new process starting, a second or two |
+| 11 | Point by bearing goes down to 2° | P1 | Owner's design, no change | The skyline trace and landmarks need low points, made by day with someone there |
+| 12 | v0.4.1 lacks the Sun refusal | P0 | Confirmed, waiting | A 0.4.2 release waits for the owner's go |
+

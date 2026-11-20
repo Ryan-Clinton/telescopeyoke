@@ -175,6 +175,9 @@ def positions(start_ha, dec, west, site, step=STEP, skyline=None):
                                     f"Turning {2 * step:.0f}° from here would reach {abs(hour_angle) / 15:.1f} h "
                                     f"from the meridian, beyond the {mount.MAX_HOUR_ANGLE} h limit. Start "
                                     "from a target nearer the meridian.")
+        # The same 40° from the Sun as every other aimed move: by night it
+        # never applies, but nothing stops this being run by day.
+        mount.refuse_near_sun(hour_angle, dec, site)
         altitude = to_altaz(vector(hour_angle, dec), site["latitude"])[0]
         if altitude < mount.MIN_ALTITUDE:
             raise interface.Refusal("TARGET_BELOW_ALTITUDE_LIMIT",
