@@ -19,9 +19,12 @@ it, and how far it is proven:
 | [SynScan automation](https://ryan-clinton.github.io/telescopeyoke/synscan-automation.html) | someone with a Sky-Watcher SynScan mount | one EQ3 Pro, through its handset; the Wi-Fi adapter partly, EQDIR untried |
 | [ASCOM Alpaca](https://ryan-clinton.github.io/telescopeyoke/ascom-alpaca.html) | someone with ASCOM drivers | ASCOM's own simulator only; no real device |
 
-The pages' sources are in `docs/` (`index.html` and the three
-`*.html` pages). The site itself (its sitemap, indexing, Search Console) is
-looked after with the rest of the author's site, not in this repository.
+**All four are published and live** (20 November 2026): each address
+above answers, and the home page, the NINA and PHD2 page and the Alpaca
+page name release 0.4.1. Their sources are in `docs/` (`index.html` and
+the three `*.html` pages). Publishing them, and the site's own upkeep (its
+sitemap, indexing, Search Console), is done with the rest of the author's
+site, not in this repository.
 
 ## GitHub
 
