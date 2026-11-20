@@ -456,6 +456,106 @@ def calibrate(cam, seconds, dec, west, gain=None, say=print, rate=GUIDE_RATE, ti
 
 
 DEC_TEST_STEPS = 80     # north steps, then south, of the Dec test: 2 minutes of pulses each way at 1.5 s
+ENGAGE_SHARE = 0.8      # a step moving the star this share of the rate due or more counts as moving
+ENGAGE_RUN = 5          # that many such steps in a row: the axis is engaged that way
+ENGAGE_MOST = 80        # steps one way without engaging: the test stops
+ENGAGE_IDLE_S = 120     # the rest before the same-way control
+ENGAGE_CONTROL = 10     # steps of the same-way control after the rest
+ENGAGE_FARTHEST = 900   # arcsec from the start: past this the test stops
+
+
+def dec_engage_test(cam, seconds, dec, west, gain=None, cycles=1, rate=GUIDE_RATE, say=print, tick=None,
+                    sleep=time.sleep):
+    """The controlled Dec test (docs/nights/2026-11-19/dec-slack.md): the
+    creep set to 0, then north in calibration's steps until the star moves
+    at ENGAGE_SHARE of the rate for ENGAGE_RUN steps in a row; a rest of
+    ENGAGE_IDLE_S and ENGAGE_CONTROL more steps the same way (once engaged,
+    a rest should cost nothing: if it does, it is sticking); then south the
+    same, and north again, `cycles` times. Each reversal's count of steps
+    before it engaged is its slack. Stops on ENGAGE_MOST steps without
+    engaging, the star lost, or the star ENGAGE_FARTHEST from its start.
+    The track goes to CAL_STEPS_FILE. Returns the results."""
+    import mount
+    motion_check()
+    set_to = mount.Mount(watch=False).dec_creep(0)
+    say(f"Dec creep set to {set_to:g}\"/s (off) for the test")
+    _, dec_step = step_seconds(dec, rate)
+    due = dec_step * rate / SCALE           # px a step should move the star
+    star = first_star(cam, seconds, gain, say, tick=tick)
+    looks = []
+    c = Calibrator(cam, seconds, gain, say, tick, looks=looks)
+    c.where = (star.x, star.y)
+    c.still_drift()
+    start = c.look()
+    results, outcome = [], "stopped"
+
+    def engage(direction, label):
+        before, run, k = c.last, 0, 0
+        while k < ENGAGE_MOST:
+            k += 1
+            here = c.step(direction, dec_step)
+            moved = math.hypot(here[0] - before[0], here[1] - before[1])
+            before = here
+            run = run + 1 if moved >= ENGAGE_SHARE * due else 0
+            if math.hypot(here[0] - start[0], here[1] - start[1]) * SCALE > ENGAGE_FARTHEST:
+                raise Fault(f"the star is more than {ENGAGE_FARTHEST}\" from where the test began")
+            if run == ENGAGE_RUN:
+                slack = k - ENGAGE_RUN
+                say(f"  {label} {direction}: engaged after {slack} steps ({slack * dec_step:.0f} s) of no or "
+                    f"little movement, then {ENGAGE_RUN} steps at {ENGAGE_SHARE:.0%} of the rate or more")
+                results.append({"what": label, "direction": direction, "slack_steps": slack})
+                return
+        say(f"  {label} {direction}: NOT engaged in {ENGAGE_MOST} steps")
+        results.append({"what": label, "direction": direction, "slack_steps": None})
+        raise Fault(f"{direction} never engaged in {ENGAGE_MOST} steps")
+
+    def control(direction):
+        say(f"  resting {ENGAGE_IDLE_S} s")
+        waited = 0
+        while waited < ENGAGE_IDLE_S:
+            if tick:
+                tick()
+            sleep(5)
+            waited += 5
+        before, first, shares = c.look(), None, []
+        for k in range(1, ENGAGE_CONTROL + 1):
+            here = c.step(direction, dec_step)
+            share = math.hypot(here[0] - before[0], here[1] - before[1]) / due
+            before = here
+            shares.append(round(share, 2))
+            if first is None and share >= ENGAGE_SHARE:
+                first = k
+        say(f"  after the rest, {direction}: first full step was step {first}; each step's share of the rate: "
+            + " ".join(f"{v:.1f}" for v in shares))
+        results.append({"what": "after rest", "direction": direction, "first_full_step": first, "shares": shares})
+
+    say(f"Dec engage test at Dec {dec:+.1f}: steps of {dec_step:.2f} s ({due * SCALE:.1f}\" due each), "
+        f"{cycles} cycle(s)")
+    try:
+        engage("north", "first")
+        control("north")
+        for _ in range(cycles):
+            engage("south", "reversal")
+            control("south")
+            engage("north", "reversal")
+            control("north")
+        outcome = "Dec engage test: " + "; ".join(
+            f"{r['what']} {r['direction']} " + (f"{r['slack_steps']} steps" if "slack_steps" in r
+                                                else f"first full step {r['first_full_step']}") for r in results)
+    except Fault as problem:
+        outcome = f"Dec engage test stopped: {problem}"
+    finally:
+        try:
+            CAL_STEPS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            CAL_STEPS_FILE.write_text(json.dumps({
+                "kind": "Dec engage test", "made": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                "dec": dec, "west": west, "scale": SCALE, "rate": rate,
+                "step_ms": {"ra": 0, "dec": round(dec_step * 1000)}, "outcome": outcome,
+                "results": results, "looks": looks}, indent=1), encoding="utf-8")
+        except OSError:
+            pass
+    say(outcome)
+    return results
 
 
 def dec_test(cam, seconds, dec, west, gain=None, steps=DEC_TEST_STEPS, rate=GUIDE_RATE, say=print, tick=None):

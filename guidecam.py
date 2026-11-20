@@ -749,7 +749,11 @@ def run_guider(args):
                 desk.between_pulses()
             if args.action == "dectest":
                 try:
-                    guider.dec_test(cam, args.exposure, dec, west, args.gain, steps=args.steps, tick=tick)
+                    if args.engage:
+                        guider.dec_engage_test(cam, args.exposure, dec, west, args.gain, cycles=args.cycles,
+                                               tick=tick)
+                    else:
+                        guider.dec_test(cam, args.exposure, dec, west, args.gain, steps=args.steps, tick=tick)
                 finally:
                     beat.stop()
                     cam.stop_pulse()
@@ -877,6 +881,11 @@ def main(argv=None):
         g.add_argument("--dry-run", action="store_true", help="say what it would do, open nothing")
         if name == "dectest":
             g.add_argument("--steps", type=int, default=80, help="steps each way (default 80: 2 minutes at 1.5 s)")
+            g.add_argument("--engage", action="store_true",
+                           help="the controlled test: the creep off, each way until engaged (5 steps in a row at "
+                                "80%% of the rate), a 2-minute rest and 10 steps the same way, then reverse; stops "
+                                "at 80 steps without engaging or 15' from the start")
+            g.add_argument("--cycles", type=int, default=1, help="with --engage: south-then-north cycles (default 1)")
         if name == "guide":
             g.add_argument("--minutes", type=float, help="stop after this long (default: until Ctrl-C)")
             g.add_argument("--recalibrate", action="store_true", help="calibrate again first")
@@ -914,6 +923,13 @@ def main(argv=None):
         if args.action == "focus":
             with GuideCamera(role="focus", size=GUIDE_SIZE, speed=GUIDE_SPEED) as cam:
                 focus_aid(cam, args.exposure, args.minutes, args.gain)
+            return
+        if args.action == "dectest" and args.dry_run and args.engage:
+            import guider
+            print(f"would: set the Dec creep to 0, find a guide star, engage north, rest {guider.ENGAGE_IDLE_S} s "
+                  f"and step north {guider.ENGAGE_CONTROL} times, then reverse south and north the same, "
+                  f"{args.cycles} cycle(s); stop at {guider.ENGAGE_MOST} steps without engaging or "
+                  f"{guider.ENGAGE_FARTHEST}\" from the start")
             return
         if args.action == "dectest" and args.dry_run:
             print(f"would: find a guide star; {args.steps} north pulses of calibration's Dec step, the star "
