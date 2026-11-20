@@ -24,8 +24,10 @@ at this computer only: it listens on `127.0.0.1`, needs a key made at
 start-up, shows the dry-run plan and moves only on that plan being
 confirmed, and makes the plan again at the moment of confirming. It runs
 `mount.py` and the other scripts as they are, so the limits and the lock
-apply unchanged. It adds no protection against a program on the same
-computer running `mount.py` itself. Rule 1 is a convention: nothing in the code can tell a person's
+apply unchanged. A program on the same computer running `mount.py`
+itself gets the same limits and lock, and while another command is moving
+the mount its moves are refused (`MOUNT_IN_USE`: one command, with the
+children it starts, holds the mount from its first move to its end). Rule 1 is a convention: nothing in the code can tell a person's
 request from an agent's own idea when both run the same command.
 
 **Weather is advice, not protection.** `clouds.py` and `rain.py` choose

@@ -89,6 +89,19 @@ result is recorded.
     reported as "not tracking", never "cloud"; a run that loses the mount
     resumes. In the demo first (`TY_DEMO_BOARD`).
 
+20. **An L reference for M31-P8**: P8 has none in L, and the deepest stack
+    is the withdrawn v2. `./reference.py M31-P8 --trial` (20 November)
+    would keep the 18 Oct 21:43 stack: `./reference.py M31-P8 --make`.
+
+21. **M33's 19 October candidate** (G~15.4, both halves, 1.8" from a
+    Cepheid VSX gives as never brighter than 18.57): closed as a known
+    variable until 20 November, now unexplained by the new rule. Look at
+    its stamps before anything else; its kept vetted.json still says the
+    old verdict.
+
+22. **The real/bogus model is stale** (trained on uncommitted code):
+    `./realbogus.py train`, minutes of computing, not while imaging.
+
 ## In the next clear gap
 
 18. **truehome**: `./mount.py findhome`, and if accepted `truehome`

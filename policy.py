@@ -222,6 +222,8 @@ def classify(argv):
                     given.append(w)
             if not given:
                 return "read_only"
+            if given[:2] == ["run", "status"]:
+                return "read_only"      # what the orders came to; it gives none
             if given[0] in TY:
                 return TY[given[0]]
             if given[0] not in TY_READS:

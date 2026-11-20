@@ -13,8 +13,10 @@ For each candidate it records:
   in both; a satellite, an aeroplane, a cosmic ray or one bad frame is in
   one at most.
 - a known asteroid there at the time (IMCCE SkyBoT, for the middle of the
-  session, with each one's motion);
-- a known variable star (the AAVSO's VSX);
+  session, with each one's motion), counted only where its motion across
+  the night puts it and when it is bright enough to be the candidate;
+- a known variable star (the AAVSO's VSX), counted only when it is ever
+  bright enough to be the candidate (ruled_out says why one is not);
 - already reported: the novae and supernovae listed by the Rochester pages
   for this year and last, whose designations give their positions;
 - a Gaia star at the place, which makes it a known star brightening, not a

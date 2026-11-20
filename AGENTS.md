@@ -136,7 +136,8 @@ With none named it is `config.toml` and the repository root, as before.
 
 ## Safe without hardware
 
-All of `ty` except `ty run` (an order for the imaging run) and the
+All of `ty` except `ty run` (an order for the imaging run; `ty run status`
+only reads) and the
 pass-throughs that drive hardware: `ty mount` with a motion command, `ty
 shoot` (it re-centres), `ty focus` (the focuser, and `--field` slews), `ty
 moon`, and the camera through `ty lucky capture` and `ty collimation`. Anything with `--demo`; anything with `--dry-run`;
@@ -156,7 +157,10 @@ a motor's creep rate. `mount.py stop` is always allowed.
    say each move first.) Never remove `MOTION_LOCKED`, and never move on
    the example site (`Mount.may_move` refuses every movement, whichever
    command asks, while the lock is there or until config.toml has the
-   person's own site; stopping never goes through it).
+   person's own site; stopping never goes through it). One command moves
+   the mount at a time: `may_move` holds it for the first to move it and
+   that command's children, and refuses anyone else's move with
+   `MOUNT_IN_USE`; never work round that hold either.
 2. **The web server and the MCP server are read-only.** No motion, no
    capture, no writes; do not add any without authentication designed first.
    The control console (`console.py`) is the one place with buttons, and it

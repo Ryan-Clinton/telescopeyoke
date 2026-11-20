@@ -76,11 +76,18 @@ ruff check FILE.py                          # before a commit: mistakes, not sty
 - The motion lock is a file named `MOTION_LOCKED` in the repository root
   (ignored by git); its text is the reason shown in the refusal. `mount.py`
   checks it, `agent.py` reports it. Never create a way round it or remove it.
+- One command moves the mount at a time: `Mount.may_move` claims it
+  (`cache/mount-owner.json`) for the process and the children it starts
+  (`TY_MOUNT_OWNER`), a patrol from its start; another's move is refused
+  with `MOUNT_IN_USE`, stop never asks, and a long-lived process that moves
+  only now and then lets go (`mount.release()`, the live view's Moon).
 - `config.toml` holds the user's real site and is ignored. `config.load()`
   needs it; `config.hardware()` works without it and `config.example()`
   never reads it. `--demo` takes its site from `config.example()`.
 - Every file a script keeps (frames, pictures, remembered measurements) is
-  under `config.DATA`: the repository root for real, `rigs/NAME/` for a
+  under `config.DATA`: the repository root for real (or, for a fresh install
+  made with its data apart, `config.USER_DATA`, where its config.toml, rigs
+  and spots are too; a config.toml in the repository always wins), `rigs/NAME/` for a
   named rig (`config.RIG`, from `TY_RIG`, whose settings are
   `rigs/NAME.toml`), `demo/` in the demo (`config.DEMO`, from `TY_DEMO=1`).
   Never build a path to `frames/`, `web/`, `cache/` or `horizon/` from

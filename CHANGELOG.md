@@ -4,6 +4,30 @@ What each release changed, in short, with a link to where it is explained.
 This is history: how to use a feature is in the guides, and what has been
 proven is `docs/validation.md` ("Current conclusions").
 
+## Not yet released
+
+What is left of the eighteen reviews' plan, done on 20 November 2026
+(`telescopeyokeaudits.md`), and that night's Dec drive work.
+
+- **One command moves the mount at a time** (`mount.py`): the first to
+  move it holds it, with the commands it starts; another's move is refused
+  with `MOUNT_IN_USE`; stop always goes through.
+- **Vetting**: a known asteroid or variable closes a candidate only if it
+  can be it (where its motion puts it, bright enough); on the recorded
+  nights two verdicts change.
+- **References** are chosen by what their subtractions leave on the
+  field's other nights, of the deepest few (`reference.py --trial`).
+- **Run orders** are acknowledged: `ty run status`.
+- **Kept records** written by a newer version are refused, not misread.
+- **Tonight's plan** says whether the stars are sharper or softer than
+  usual, as advice.
+- **A fresh install** keeps its settings and files apart from the program,
+  so an upgrade copies almost nothing; existing installs are unchanged.
+- `ty` and the safety policy share one table of pass-through commands.
+- **The Dec drive**: `mount.py dectest` measures it on the main camera
+  (`--pulses N`); the guider can guide Dec one way only. The focus's far
+  search goes past half a turn while the doughnuts keep shrinking.
+
 ## 0.4.2: a GoTo by name keeps clear of the Sun, and eighteen reviews' fixes
 
 The fixes from eighteen reviews of the whole project, made on 20 November
