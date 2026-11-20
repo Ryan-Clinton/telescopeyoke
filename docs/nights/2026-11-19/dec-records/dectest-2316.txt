@@ -1,0 +1,20 @@
+23:08:03 plate solve: camera and frame 1.8 s, preparing 0.9 s, solving 1.0 s
+really at RA 2.6904 h, Dec +55.72° (J2000); the mount was out by +0.5° in hour angle, +12.7° in Dec
+tracking: RA 2.7593 h, Dec +43.18°  (axes: RA 88.12°, Dec 43.18°)
+Dec test at Dec +43.2: 60 north steps of 1.50 s, then 60 south, the star measured after each
+  north 10 steps (15 s): star moved 11" of 106" due
+  north 20 steps (30 s): star moved 32" of 213" due
+  north 30 steps (45 s): star moved 52" of 320" due
+  north 40 steps (60 s): star moved 112" of 426" due
+  north 50 steps (75 s): star moved 208" of 532" due
+  north 60 steps (90 s): star moved 322" of 639" due
+  south 10 steps (15 s): star moved 4" of 106" due
+  south 20 steps (30 s): star moved 19" of 213" due
+  south 30 steps (45 s): star moved 38" of 320" due
+  south 40 steps (60 s): star moved 59" of 426" due
+  south 50 steps (75 s): star moved 107" of 532" due
+  south 60 steps (90 s): star moved 206" of 639" due
+Dec test, 60 steps each way: the star ended 116" from its start
+web/guide-calibration.png: Dec test 19 Nov 23:16, Dec +43.2: north: 60 steps of 1.5 s, moved 322", pulses due 639" (50%); south: 60 steps of 1.5 s, moved 206", pulses due 639" (32%). Outcome: Dec test, 60 steps each way: the star ended 116" from its start
+sent by Telegram
+[exited with code 0]

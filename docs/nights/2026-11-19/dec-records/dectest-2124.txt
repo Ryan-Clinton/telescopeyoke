@@ -1,0 +1,10 @@
+Dec test at Dec +57.1: 80 north steps of 1.50 s, then 80 south, the star measured after each
+  north 10 steps (15 s): star moved 8" of 106" due
+  north 20 steps (30 s): star moved 118" of 213" due
+  north 30 steps (45 s): star moved 238" of 320" due
+  north 40 steps (60 s): star moved 353" of 426" due
+  north 50 steps (75 s): star moved 467" of 532" due
+The star was lost during calibration: no star in the window passes (SNR 6, not a hot pixel, inside the frame).
+web/guide-calibration.png: Dec test 19 Nov 21:24, Dec +57.1: north: 53 steps of 1.5 s, moved 502", pulses due 564" (89%). Outcome: stopped
+sent by Telegram
+[exited with code 0]

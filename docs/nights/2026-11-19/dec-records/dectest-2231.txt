@@ -1,0 +1,20 @@
+M34 : altitude 75°, hour angle -0.88 h (east)
+tracking: RA 2.7591 h, Dec +43.18°  (axes: RA 76.71°, Dec 43.18°)
+tracking: RA 2.7592 h, Dec +43.18°  (axes: RA 76.74°, Dec 43.18°)
+Dec test at Dec +43.2: 60 north steps of 1.50 s, then 60 south, the star measured after each
+  north 10 steps (15 s): star moved 5" of 106" due
+  north 20 steps (30 s): star moved 36" of 213" due
+  north 30 steps (45 s): star moved 63" of 320" due
+  north 40 steps (60 s): star moved 70" of 426" due
+  north 50 steps (75 s): star moved 73" of 532" due
+  north 60 steps (90 s): star moved 77" of 639" due
+  south 10 steps (15 s): star moved 18" of 106" due
+  south 20 steps (30 s): star moved 33" of 213" due
+  south 30 steps (45 s): star moved 41" of 320" due
+  south 40 steps (60 s): star moved 66" of 426" due
+  south 50 steps (75 s): star moved 94" of 532" due
+  south 60 steps (90 s): star moved 127" of 639" due
+Dec test, 60 steps each way: the star ended 153" from its start
+web/guide-calibration.png: Dec test 19 Nov 22:31, Dec +43.2: north: 60 steps of 1.5 s, moved 77", pulses due 639" (12%); south: 60 steps of 1.5 s, moved 127", pulses due 639" (20%). Outcome: Dec test, 60 steps each way: the star ended 153" from its start
+sent by Telegram
+[exited with code 0]

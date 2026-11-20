@@ -1,0 +1,312 @@
+checking the calibration of 2026-11-10T18:15:50+00:00
+  check: west +0.19,-0.73 px/s, east -0.29,+0.83 px/s, north +0.32,+0.07 px/s, south +0.07,+0.03 px/s
+calibrating: north moved the star 0.33 px/s against 0.72
+calibrating at Dec +31.2, west of the pier: steps of 1750 ms in RA, 1500 ms in Dec
+  west: 10 steps, 0.80 px/s
+  east: 10 steps back, 0.77 px/s
+  Dec slack taken up after 5 north steps
+  north: 10 steps, 0.88 px/s
+  Dec slack: 13.11, 9.00, 8.37 s; 10.16 +/- 2.10 s (at least: a reversal moved nothing)
+  camera angle -71.5 deg, axes 92.5 deg apart, guide rate RA 8.9"/s, Dec 8.4"/s
+  short of the first night's pass: Dec slack may be longer than the reversal steps measured
+  short of the first night's pass: RA guide rate 8.9"/s, not within 20 % of 7.1
+  usable for guiding; does NOT meet the first night's calibration pass
+locked on the star at 224.4, 450.2 (SNR 40.1); guiding
+  order pause: done
+  relocked on the star at 279.5, 14.9
+  order relock: done
+  order pause: done
+  relocked on the star at 273.2, 27.4
+  order relock: done
+  order stop: done (pulses stopped and the guide camera let go)
+checking the calibration of 2026-11-10T21:07:54+00:00
+  check: west -0.18,+0.57 px/s, east +0.11,-0.41 px/s, north +0.76,+0.32 px/s, south +0.03,-0.04 px/s
+calibrating: south did not move the star back towards where it came from (116 degrees off)
+calibrating at Dec +58.7, east of the pier: steps of 2850 ms in RA, 1500 ms in Dec
+  drift with no pulses: +0.050, +0.006 px/s (29"/min), taken off every leg
+  west: 10 steps, 0.46 px/s
+  east: 10 steps back, 0.38 px/s
+  Dec slack taken up after 6 north steps
+  north: 12 steps, 0.77 px/s
+  Dec slack: 16.76, 8.49, 8.55 s; 11.26 +/- 3.88 s
+  camera angle 107.2 deg, axes 88.9 deg apart, guide rate RA 8.6"/s, Dec 7.4"/s
+  short of the first night's pass: RA guide rate 8.6"/s, not within 20 % of 7.1
+  usable for guiding; does NOT meet the first night's calibration pass
+locked on the star at 104.0, 276.1 (SNR 119.3); guiding
+  star lost (jumped 4.2 px); no pulses; looking within 5 px of the lock
+  star back; guiding
+  star lost (jumped 4.3 px); no pulses; looking within 5 px of the lock
+  star back; guiding
+  order stop: done (pulses stopped and the guide camera let go)
+checking the calibration of 2026-11-10T21:17:20+00:00
+  check: west -0.17,+0.43 px/s, east +0.12,-0.38 px/s, north +0.42,+0.17 px/s, south +0.05,-0.05 px/s
+calibrating: north moved the star 0.45 px/s against 0.77
+calibrating at Dec +58.7, east of the pier: steps of 2850 ms in RA, 1500 ms in Dec
+  drift with no pulses: +0.037, -0.016 px/s (23"/min), taken off every leg
+  west: 10 steps, 0.49 px/s
+  east: 10 steps back, 0.41 px/s
+  Dec slack taken up after 5 north steps
+  north: 10 steps, 0.86 px/s
+  Dec slack: 14.45, 8.14, 8.67 s; 10.42 +/- 2.86 s (at least: a reversal moved nothing)
+  camera angle 103.6 deg, axes 83.8 deg apart, guide rate RA 9.0"/s, Dec 8.2"/s
+  short of the first night's pass: Dec slack may be longer than the reversal steps measured
+  short of the first night's pass: RA guide rate 9.0"/s, not within 20 % of 7.1
+  usable for guiding; does NOT meet the first night's calibration pass
+locked on the star at 202.7, 257.0 (SNR 87.4); guiding
+  star lost (jumped 4.8 px); no pulses; looking within 5 px of the lock
+  star back; guiding
+guiding stopped: -10.0' of Dec correction since the lock was set, past 10'.
+-10.0' of Dec correction since the lock was set, past 10'.
+checking the calibration of 2026-11-10T21:51:01+00:00
+  check: west -0.10,+0.48 px/s, east +0.18,-0.46 px/s, north +0.46,+0.09 px/s, south +0.02,-0.13 px/s
+calibrating: north moved the star 0.47 px/s against 0.86
+calibrating at Dec +58.7, east of the pier: steps of 2850 ms in RA, 1500 ms in Dec
+  drift with no pulses: +0.050, -0.016 px/s (30"/min), taken off every leg
+  west: 10 steps, 0.48 px/s
+  east: 10 steps back, 0.40 px/s
+  Dec slack taken up after 6 north steps
+  north: 12 steps, 0.77 px/s
+  Dec slack: 16.01, 8.38, 8.19 s; 10.86 +/- 3.64 s
+  camera angle 107.5 deg, axes 89.4 deg apart, guide rate RA 8.8"/s, Dec 7.4"/s
+  short of the first night's pass: RA guide rate 8.8"/s, not within 20 % of 7.1
+  usable for guiding; does NOT meet the first night's calibration pass
+locked on the star at 278.9, 234.0 (SNR 81.3); guiding
+  order pause: done
+  relocked on the star at 284.5, 220.9
+  order relock: done
+  order stop: done (pulses stopped and the guide camera let go)
+checking the calibration of 2026-11-10T22:16:06+00:00
+checking the calibration of 2026-11-10T22:16:06+00:00
+checking the calibration of 2026-11-10T22:16:06+00:00
+checking the calibration of 2026-11-10T22:16:06+00:00
+FAULT: The star was lost during calibration: no star in the window.
+checking the calibration of 2026-11-10T22:16:06+00:00
+FAULT: The star was lost during calibration: no star in the window.
+checking the calibration of 2026-11-10T22:16:06+00:00
+FAULT: The star was lost during calibration: no star in the window.
+checking the calibration of 2026-11-12T03:49:41+00:00
+  check: west +0.28,-0.76 px/s, east -0.25,+0.68 px/s, north +0.33,+0.24 px/s, south -0.03,+0.13 px/s
+calibrating: south did not move the star back towards where it came from (99 degrees off)
+calibrating at Dec +31.7, west of the pier: steps of 1750 ms in RA, 1500 ms in Dec
+  drift with no pulses: +0.008, +0.048 px/s (28"/min), taken off every leg
+  west: 9 steps, 0.89 px/s
+  east: 9 steps back, 0.69 px/s
+  Dec slack taken up after 6 north steps
+  north: 12 steps, 0.81 px/s
+  Dec slack: 15.75, 8.88, 8.99 s; 11.21 +/- 3.21 s (at least: a reversal moved nothing)
+  camera angle -69.5 deg, axes 80.9 deg apart, guide rate RA 10.0"/s, Dec 7.7"/s
+  short of the first night's pass: Dec slack may be longer than the reversal steps measured
+  short of the first night's pass: RA guide rate 10.0"/s, not within 20 % of 7.1
+  usable for guiding; does NOT meet the first night's calibration pass
+locked on the star at 175.0, 118.8 (SNR 63.2); guiding
+  order stop: done (pulses stopped and the guide camera let go)
+checking the calibration of 2026-11-13T22:29:49+00:00
+  check: west +0.16,-0.56 px/s, east -0.16,+0.50 px/s, north +0.19,+0.05 px/s, south -0.05,+0.16 px/s
+calibrating: east moved the star 0.52 px/s against 0.32
+calibrating at Dec +59.2, west of the pier: steps of 2850 ms in RA, 1500 ms in Dec
+  drift with no pulses: +0.001, -0.005 px/s (3"/min), taken off every leg
+  west: 9 steps, 0.56 px/s
+  east: 9 steps back, 0.44 px/s
+  Dec slack taken up after 5 north steps
+  north: 11 steps, 0.84 px/s
+  Dec slack: 14.15, 8.03, 8.41 s; 10.20 +/- 2.80 s
+  camera angle -70.8 deg, axes 83.7 deg apart, guide rate RA 10.5"/s, Dec 8.0"/s
+  short of the first night's pass: RA guide rate 10.5"/s, not within 20 % of 7.1
+  usable for guiding; does NOT meet the first night's calibration pass
+locked on the star at 54.2, 430.1 (SNR 164.0); guiding
+  dither: lock moved -1.12, -0.19 px from the origin
+  order dither: done (settled in 24 s)
+  order pause: done
+  relocked on the star at 28.3, 439.6
+  order relock: done
+  order stop: done (pulses stopped and the guide camera let go)
+checking the calibration of 2026-11-13T22:56:59+00:00
+  check: west +0.14,-0.49 px/s, east -0.09,+0.40 px/s, north +0.44,+0.07 px/s, south -0.02,+0.07 px/s
+calibrating: north moved the star 0.44 px/s against 0.84
+calibrating at Dec +59.2, west of the pier: steps of 2850 ms in RA, 1500 ms in Dec
+  drift with no pulses: -0.003, +0.006 px/s (4"/min), taken off every leg
+  west: 8 steps, 0.58 px/s
+  east: 8 steps back, 0.39 px/s
+  Dec slack taken up after 5 north steps
+  north: 12 steps, 0.78 px/s
+  Dec slack: 15.28, 7.99, 8.03 s; 10.44 +/- 3.43 s
+  camera angle -71.9 deg, axes 86.3 deg apart, guide rate RA 10.8"/s, Dec 7.5"/s
+  short of the first night's pass: RA guide rate 10.8"/s, not within 20 % of 7.1
+  usable for guiding; does NOT meet the first night's calibration pass
+locked on the star at 46.1, 437.4 (SNR 127.4); guiding
+  dither: lock moved +0.83, +0.18 px from the origin
+  order dither: failed (not settled within 50 s)
+  order stop: done (pulses stopped and the guide camera let go)
+checking the calibration of 2026-11-13T23:39:47+00:00
+  check: west +0.17,-0.47 px/s, east -0.18,+0.55 px/s, north +0.60,+0.30 px/s, south +0.00,+0.05 px/s
+calibrating: east moved the star 0.58 px/s against 0.39
+calibrating at Dec +59.2, west of the pier: steps of 2850 ms in RA, 1500 ms in Dec
+  drift with no pulses: +0.011, -0.044 px/s (26"/min), taken off every leg
+  west: 10 steps, 0.47 px/s
+  east: 10 steps back, 0.46 px/s
+  Dec slack taken up after 5 north steps
+  north: 12 steps, 0.78 px/s
+  Dec slack: 15.50, 8.02, 8.14 s; 10.55 +/- 3.50 s
+  camera angle -71.3 deg, axes 95.9 deg apart, guide rate RA 8.8"/s, Dec 7.4"/s
+  short of the first night's pass: RA guide rate 8.8"/s, not within 20 % of 7.1
+  usable for guiding; does NOT meet the first night's calibration pass
+locked on the star at 43.9, 434.2 (SNR 119.4); guiding
+  dither: lock moved +0.97, -0.45 px from the origin
+  order dither: failed (not settled within 50 s)
+  order stop: done (pulses stopped and the guide camera let go)
+checking the calibration of 2026-11-14T00:06:59+00:00
+  check: west +0.16,-0.47 px/s, east -0.15,+0.48 px/s, north +0.54,+0.30 px/s, south -0.01,+0.13 px/s
+calibrating: south did not move the star back towards where it came from (111 degrees off)
+calibrating at Dec +59.2, west of the pier: steps of 2850 ms in RA, 1500 ms in Dec
+FAULT: The star was lost during calibration: no star in the window.
+checking the calibration of 2026-11-14T00:06:59+00:00
+  check: west +0.20,-0.47 px/s, east -0.15,+0.48 px/s, north +0.60,+0.19 px/s, south -0.00,+0.01 px/s
+calibrating: south did not move the star back towards where it came from (114 degrees off)
+calibrating at Dec +59.2, west of the pier: steps of 2850 ms in RA, 1500 ms in Dec
+  drift with no pulses: +0.009, -0.021 px/s (13"/min), taken off every leg
+FAULT: The star was lost during calibration: no star in the window.
+checking the calibration of 2026-11-14T00:06:59+00:00
+FAULT: The star was lost during calibration: no star in the window.
+checking the calibration of 2026-11-14T00:06:59+00:00
+FAULT: The star was lost during calibration: no star in the window.
+checking the calibration of 2026-11-14T00:06:59+00:00
+FAULT: No guide star in 300 s: no star above the background.
+checking the calibration of 2026-11-14T00:06:59+00:00
+FAULT: No guide star in 300 s: no star above the background.
+checking the calibration of 2026-11-14T00:06:59+00:00
+FAULT: No guide star in 300 s: no star above the background.
+checking the calibration of 2026-11-14T00:06:59+00:00
+FAULT: The star was lost during calibration: no star in the window.
+checking the calibration of 2026-11-14T00:06:59+00:00
+calibrating: east did not bring the star back: 1.9 px from where it started, more than 1.1
+calibrating at Dec +55.5, east of the pier: steps of 2600 ms in RA, 1500 ms in Dec
+  drift with no pulses: -0.013, +0.017 px/s (12"/min), taken off every leg
+  west: 11 steps, 0.47 px/s
+  east: 11 steps back, 0.43 px/s
+  Dec slack taken up after 4 north steps
+  north: 12 steps, 0.75 px/s
+  Dec slack: 15.30, 8.48, 7.89 s; 10.56 +/- 3.36 s
+  camera angle 106.9 deg, axes 90.6 deg apart, guide rate RA 7.9"/s, Dec 7.2"/s
+  usable for guiding; meets the first night's calibration pass
+locked on the star at 48.3, 33.8 (SNR 36.9); guiding
+  order stop: done (pulses stopped and the guide camera let go)
+checking the calibration of 2026-11-15T20:32:57+00:00
+  check: west -0.16,+0.57 px/s, east +0.13,-0.46 px/s, north +0.73,+0.24 px/s, south -0.00,-0.01 px/s
+calibrating: south did not move the star back towards where it came from (67 degrees off)
+calibrating at Dec +55.5, east of the pier: steps of 2600 ms in RA, 1500 ms in Dec
+  drift with no pulses: -0.034, +0.042 px/s (31"/min), taken off every leg
+  west: 11 steps, 0.45 px/s
+  east: 11 steps back, 0.46 px/s
+  Dec slack taken up after 4 north steps
+  north: 10 steps, 0.89 px/s
+  Dec slack: 13.66, 7.99, 8.53 s; 10.06 +/- 2.56 s
+  camera angle 101.7 deg, axes 86.0 deg apart, guide rate RA 7.7"/s, Dec 8.5"/s
+  usable for guiding; meets the first night's calibration pass
+locked on the star at 46.8, 38.4 (SNR 26.0); guiding
+  star lost (no star in the window); no pulses; looking within 5 px of the lock
+  star back; guiding
+  order stop: done (pulses stopped and the guide camera let go)
+checking the calibration of 2026-11-15T20:59:38+00:00
+  check: west -0.07,+0.35 px/s, east +0.16,-0.46 px/s, north +0.65,+0.04 px/s, south +0.06,-0.13 px/s
+calibrating: south did not move the star back towards where it came from (98 degrees off)
+calibrating at Dec +55.5, east of the pier: steps of 2600 ms in RA, 1500 ms in Dec
+  drift with no pulses: -0.012, +0.044 px/s (26"/min), taken off every leg
+  west: 11 steps, 0.45 px/s
+  east: 11 steps back, 0.44 px/s
+  Dec slack taken up after 5 north steps
+  north: 12 steps, 0.75 px/s
+  Dec slack: 14.73, 8.19, 7.96 s; 10.29 +/- 3.14 s
+  camera angle 107.3 deg, axes 94.7 deg apart, guide rate RA 7.7"/s, Dec 7.1"/s
+  usable for guiding; meets the first night's calibration pass
+locked on the star at 50.1, 44.2 (SNR 41.0); guiding
+  star lost (no star in the window); no pulses; looking within 5 px of the lock
+  order stop: done (pulses stopped and the guide camera let go)
+checking the calibration of 2026-11-15T21:21:44+00:00
+  order stop: done (pulses stopped and the guide camera let go)
+checking the calibration of 2026-11-15T21:21:44+00:00
+FAULT: No guide star in 300 s: no star above the background.
+checking the calibration of 2026-11-15T21:21:44+00:00
+FAULT: No guide star in 300 s: no star above the background.
+checking the calibration of 2026-11-15T21:21:44+00:00
+FAULT: No guide star in 300 s: no star above the background.
+checking the calibration of 2026-11-15T21:21:44+00:00
+FAULT: No guide star in 300 s: no star above the background.
+checking the calibration of 2026-11-15T21:21:44+00:00
+FAULT: No guide star in 300 s: no star above the background.
+checking the calibration of 2026-11-15T21:21:44+00:00
+FAULT: No guide star in 300 s: no star above the background.
+The handset could not be read (No SynScan Wi-Fi adapter answered. Is the mount on with the adapter in, and the adapter on this router? Set its address under [mount] in config.toml, or join its own network (SynScan_WiFi_xxxx).): not guiding a mount whose state is not known.
+checking the calibration of 2026-11-19T21:31:19+00:00
+  check: west +0.18,-0.52 px/s, east -0.14,+0.42 px/s, north +0.27,+0.08 px/s, south +0.03,+0.02 px/s
+calibrating: north moved the star 0.29 px/s against 0.80
+calibrating at Dec +57.0, west of the pier: steps of 2700 ms in RA, 1500 ms in Dec
+  drift with no pulses: +0.004, -0.026 px/s (15"/min), taken off every leg
+  west: 11 steps, 0.46 px/s
+  east: 11 steps back, 0.44 px/s
+  order stop: done (pulses stopped and the guide camera let go)
+The mount is stopped, not tracking: guide only while it tracks.
+checking the calibration of 2026-11-19T21:31:19+00:00
+  check: west -0.24,+0.69 px/s, east +0.18,-0.56 px/s, north +0.18,-0.07 px/s, south +0.16,-0.04 px/s
+calibrating: north moved the star 0.19 px/s against 0.80
+calibrating at Dec +22.1, east of the pier: steps of 1600 ms in RA, 1500 ms in Dec
+  drift with no pulses: -0.004, +0.009 px/s (6"/min), taken off every leg
+  west: 11 steps, 0.73 px/s
+  east: 11 steps back, 0.58 px/s
+  Dec slack taken up after 7 north steps
+  north: 12 steps, 0.77 px/s
+  Dec slack: 18.00, 8.71, 9.00 s; 11.90 +/- 4.31 s (at least: a reversal moved nothing)
+  camera angle 107.5 deg, axes 95.4 deg apart, guide rate RA 7.5"/s, Dec 7.3"/s
+  short of the first night's pass: Dec slack may be longer than the reversal steps measured
+  usable for guiding; does NOT meet the first night's calibration pass
+guiding stopped: No guide star in 300 s: no star above the background.
+Traceback (most recent call last):
+  File "guidecam.py", line 788, in run_guider
+    _, stop_order = guider.guide(cam, cols, cal, args.exposure, args.gain, args.minutes,
+                    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                 args.dec_one_way, run_id=run, desk=desk,
+                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                 stuck_s=args.dec_stuck)
+                                 ^^^^^^^^^^^^^^^^^^^^^^^
+  File "guider.py", line 1312, in guide
+    star = first_star(cam, seconds, gain, say, tick=starting)
+  File "guider.py", line 274, in first_star
+    raise Fault(f"No guide star in {patience:.0f} s: {why}.")
+guider.Fault: No guide star in 300 s: no star above the background.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "guidecam.py", line 969, in <module>
+    main()
+    ~~~~^^
+  File "guidecam.py", line 923, in main
+    run_guider(args)
+    ~~~~~~~~~~^^^^^^
+  File "guidecam.py", line 738, in run_guider
+    with GuideCamera(role="guider", run=run, size=GUIDE_SIZE, speed=GUIDE_SPEED) as cam:
+         ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "guidecam.py", line 357, in __exit__
+    self.close()
+    ~~~~~~~~~~^^
+  File "guidecam.py", line 349, in close
+    self.driver.close(self.handle)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "guidecam.py", line 231, in close
+    self.lib.Altaircam_Close(handle)
+    ~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+  File "mount.py", line 239, in _interrupted
+    raise KeyboardInterrupt
+KeyboardInterrupt
+checking the calibration of 2026-11-19T23:28:57+00:00
+  order stop: done (pulses stopped and the guide camera let go)
+checking the calibration of 2026-11-19T23:28:57+00:00
+  order stop: failed (sent to run 7a08a013; this guider is run 4d536699)
+calibrating: east did not bring the star back: 2.1 px from where it started, more than 1.7
+calibrating at Dec +22.0, east of the pier: steps of 1600 ms in RA, 1500 ms in Dec
+  drift with no pulses: -0.001, +0.024 px/s (14"/min), taken off every leg
+  west: 12 steps, 0.74 px/s
+  east: 12 steps back, 0.65 px/s
+  Dec did not follow: 60 north steps of 1.50 s did not move the star: Dec slack longer than that, or the ST4 north line is not working.
+  kept RA alone (guide rate 7.7"/s): RA will be guided, Dec sent no pulses and left to drift
+guiding RA only: the calibration found Dec does not follow guide pulses; Dec is sent none
+locked on the star at 436.0, 75.3 (SNR 44.5); guiding

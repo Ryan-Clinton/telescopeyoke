@@ -1,6 +1,6 @@
 # 19 November 2026: Dec does not follow at guide rate (for Gary)
 
-[All docs](../../README.md) · [Tonight's tests](test-plan.md) · [The 18 November guiding](../2026-11-18/focuser.md)
+[All docs](../../README.md) · [Tonight's tests](test-plan.md) · [The 18 November guiding](../2026-11-18/focuser.md) · [After the clutch: the slack](dec-slack.md)
 
 The EQ3 Pro since its service on 16 November, on the SynScan Wi-Fi
 adapter. Balance: 1 kg of sand taped to the tube (700 g at the back,
