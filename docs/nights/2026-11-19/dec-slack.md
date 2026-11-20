@@ -131,10 +131,12 @@ The frames are still good at 120 s: 5 kept, FWHM 5.9-6.1 px, roundness
 | A large slack (backlash) of a fixed size | full rate once caught (21:24, 21:31, 23:16, 23:29) | the size: 4 to more than 60 steps | whether it repeats when the last real Dec movement is controlled |
 | The slack depends on which way Dec last moved | could explain the spread | | **not shown**: the -0.4' and +1.0' before 23:29 and 23:52 were plate-solve residuals, under the 2' centring limit, so **no centring move was made** after either. The last Dec movements were the GoTos, the earlier calibration's legs and the unguided run's dithers, and their final directions were not recorded |
 | Sticking (stiction) | 21:24's creep then a ~55" jump; 23:52 moving nothing for 60 steps; **10 November 2026, before the service**: one-way south pulses moved nothing for half a minute, then a 20-30" jump (the `--dec-stuck` note in `guider.py`) | | whether it is the grease (1-2 °C), the worm's mesh, balance or the clutch |
-| The service caused it | 18 November's Capella calibrations failed the same way | 10 November's sticking and 12 November's ~11 s slack came before it; 14-15 November calibrations passed (4-5 steps) | what the service changed |
+| The service caused it | 18 November's Capella calibrations failed the same way | 10 November's sticking and 12 November's ~11 s slack came before it; 14-15 November calibrations passed (4-5 steps); Gary (20 November) did not work on Dec at the service | what the service changed |
 | The mount's Dec creep fought the guide pulses | `mount.py` sets a Dec creep after every GoTo from the drift model, and `guidecam.py calibrate` and `dectest` do not turn it off | the creep is set in 0.25"/s steps (`dec_creep`): tonight's drift (0.03-0.08"/s from a 0.2-0.3° polar error) rounds to 0, and at most it is 0.25"/s against 7.1"/s pulses; guided runs turn it off (`Supervisor.creep_off`); `cache/drift_model.json` holds no drift observations and creep 0.0 | the creep actually set before the standalone tests (20:31, 20:44, the Dec tests): only the latest is kept |
 | The electronics | | the board counts guide-rate steps both ways (20:46) | whether the motor shaft turns: the count is open-loop |
 | The guide star not being seen | 23:31-23:52: the run's guider ran at the camera's default gain and saw nothing (fixed, 2ac4572); before that, dew | | **a separate fault**: it stopped guiding from starting, not Dec from moving |
+
+Gary on 20 November: he did not work on the Dec axis at the 16 November service, and the fault is probably the Dec gears not meshing right.
 
 ## The controlled test (designed, not run)
 

@@ -17,7 +17,9 @@ guide camera (`./guidecam.py`) on an Orion Deluxe Mini 50 mm guide scope
 The EQ3 Pro was serviced by Gary on 16 November 2026: the motors taken off,
 all the old yellow and brown grease cleaned out, new grease put in and the
 worm gears set (no thrust bearings fitted: Gary says they are not needed);
-the bent south latitude bolt straightened the same evening.
+the bent south latitude bolt straightened the same evening. Gary said on
+20 November that he did not work on the Dec axis that night, and that the
+Dec fault is probably its gears not meshing right.
 Guiding figures from before that date (Dec slack, RMS) are from the old
 grease and worm settings.
 

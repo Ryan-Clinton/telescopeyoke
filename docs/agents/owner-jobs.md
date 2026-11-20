@@ -14,11 +14,12 @@ result is recorded.
    meridian with the tube near vertical; the owner thinks the tube catches
    the tripod leg there and lowered the scope. The 17 November check
    (`docs/nights/2026-11-17/clearance.md`) passed east of the pier only.
-2. **The Dec drive** (since the 16 November service): Dec moves one way
-   only, and the failing way flips with the balance
-   ([dec-slack.md](../nights/2026-11-19/dec-slack.md)). For Gary: the worm
-   mesh, grub screws on the worm gear, worm end-play, the clutch. A
-   hand-rock test first.
+2. **The Dec drive**: Dec moves one way only, and the failing way flips
+   with the balance ([dec-slack.md](../nights/2026-11-19/dec-slack.md)).
+   Gary (20 November): he did not work on Dec at the 16 November service,
+   and it is probably the gears not meshing right. For Gary: the worm
+   mesh first, then grub screws on the worm gear, worm end-play, the
+   clutch. A hand-rock test first.
 3. **The balance**, checked and recorded both ways before the next Dec
    test: on 20 November the 700 g of sand at the back came off and the tube
    was rebalanced (the change not recorded).
@@ -47,8 +48,9 @@ result is recorded.
    safe; check whether one bad temperature reading can trip the runaway
    check (18 November 20:40 looked like one).
 8. **Dew**: the guide scope's USB dew strap fitted (from one of the SV241's
-   USB ports; the plain SV241 has no dew outputs), and a dew shield for the main tube (the 150P dewed over about
-   02:00-02:50 on 20 November).
+   USB ports; the plain SV241 has no dew outputs), and the dew shields
+   from Gary (20 November) fitted (the 150P dewed over about 02:00-02:50
+   on 20 November).
 9. **The skyline survey again** (`./horizon.py --trace`): the tube moved up
    its rings on 17 November and was lowered on 20 November.
 10. **Darks for the 183M**, cap on, -5 °C: 60 s, then 180 s and 240 s (20
