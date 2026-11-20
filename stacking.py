@@ -338,7 +338,7 @@ class MatchedCalibration(Calibration):
         self.flat = None
         raw = self._newest(folder, flat_stem(cards), cards, ("TELESCOP", "FILTER"), "flat")
         if raw is not None:
-            flat_cards = dict(cards, EXPTIME=self._flat_exposure)
+            flat_cards = dict(cards, **self._flat_cards)
             flat_dark = self._newest(folder, dark_stem(flat_cards), flat_cards, DARK_CARDS, "flat-dark")
             if flat_dark is not None:
                 light = raw - flat_dark
@@ -359,7 +359,8 @@ class MatchedCalibration(Calibration):
                         continue          # another size of frame (binning, a cropped read): not this one's
                     self.masters[kind] = path.name
                     if kind == "flat":
-                        self._flat_exposure = float(head.get("EXPTIME", 0))
+                        # Its flat-dark is the flat's own settings', not the light's.
+                        self._flat_cards = {k: head[k] for k in DARK_CARDS if k in head}
                     return hdul[0].data.astype(np.float32)
         what = {"dark": "a dark at " + ", ".join(f"{k} {cards.get(k)}" for k in DARK_CARDS),
                 "flat": f"a flat for {cards.get('TELESCOP')} in {cards.get('FILTER') or 'no filter'}",
@@ -415,15 +416,20 @@ def require(calibration, purpose):
     return calibration
 
 
+CALIBRATION_KEYS = DARK_CARDS + ("INSTRUME", "TELESCOP", "FILTER")   # what chooses a frame's masters
+
+
 def require_frames(paths, purpose):
-    """require() for a set of raw frames, judged by the first of each folder."""
+    """require() for a set of raw frames: once for each set of settings
+    among them (a camera reopened part way can change one), every frame's
+    header read, so no frame enters science on another frame's masters."""
     seen = set()
     for path in paths:
-        folder = Path(path).parent
-        if folder in seen:
-            continue
-        seen.add(folder)
         head = fits.getheader(path, 1)
+        key = (Path(path).parent,) + tuple(head.get(k) for k in CALIBRATION_KEYS)
+        if key in seen:
+            continue
+        seen.add(key)
         require(Calibration(float(head.get("EXPTIME", 0)), int(float(head.get("GAIN", 0))), head), purpose)
 
 
@@ -449,6 +455,11 @@ def stack_cards(calibration, header):
     cards = {k: header[k] for k in ("INSTRUME", "TELESCOP", "FOCALLEN", "FILTER", "FILTPOS") if k in header}
     missing, masters = getattr(calibration, "missing", ()), getattr(calibration, "masters", {})
     cards["TY_CALIB"] = bool(not missing)
+    # TY_CALIB is "may enter science". For a camera whose masters are not
+    # required (the 183C), say which it had: none is not a full calibration.
+    if not getattr(calibration, "matched", False):
+        have = [k for k in ("dark", "bias", "flat") if k in masters]
+        cards["TY_CALFUL"] = (len(have) == 3, "dark, bias and flat all applied")
     for kind, key in (("dark", "TY_DARK"), ("flat", "TY_FLAT"), ("flat-dark", "TY_FDARK"),
                       ("bad-pixel map", "TY_BPM"), ("bias", "TY_BIAS")):
         if kind in masters:

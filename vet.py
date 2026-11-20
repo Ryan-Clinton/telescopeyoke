@@ -222,7 +222,10 @@ def stacked(groups, done=lambda part: None):
     frame of the first group so they share pixels."""
     stacking.same_camera([p for part in groups for p in part])
     mosaic, header = stacking.load_light(groups[0][0])
-    calibration = stacking.Calibration(float(header.get("EXPTIME", 0)), int(float(header.get("GAIN", 0))))
+    # From the frame's own header: its camera, filter and settings choose the
+    # masters (with none, the camera in use and its defaults did, and a 183C
+    # frame was calibrated as the 183M's).
+    calibration = stacking.Calibration(float(header.get("EXPTIME", 0)), int(float(header.get("GAIN", 0))), header)
     mono = stacking.is_mono(header)
     rgb = stacking.prepare(mosaic, calibration, mono=mono)
     lum = rgb.sum(axis=2)

@@ -518,14 +518,28 @@ def measure(session, planet, size=BIN, say=print, rows=None, night=None):
         mag = group.pop("curve")
     else:
         group.pop("curve", None)
-    middles = transits_between(p, jd.min() - 0.5, jd.max() + 0.5)
-    predicted = min(middles, key=lambda m: abs(m - jd.mean())) if middles else None
-    result = fit(jd, mag, predicted, p["hours"]) if predicted is not None else None
     try:
         site = config.load()["site"]
     except (SystemExit, KeyError, OSError):
         site = None
-    looked = checks(session, jd, mag, predicted, p["hours"], site)
+    # The fit in the ephemeris's own time: the Exoplanet Archive's transit
+    # middles are BJD_TDB as a rule, and a JD (UTC) frame time is up to about
+    # 8 minutes off it, which an early or late middle must not be. With no
+    # site to make BJD_TDB from, JD is used and the record says so.
+    times, standard = jd, "JD_UTC against an ephemeris taken as BJD_TDB: early or late uncertain by up to 8 min"
+    if site is not None and len(jd):
+        from astropy.coordinates import EarthLocation
+        import astropy.units as u
+        here = EarthLocation(lat=site["latitude"] * u.deg, lon=site["longitude"] * u.deg,
+                             height=site.get("elevation_m", 0) * u.m)
+        times, standard = np.asarray(bjd_tdb(jd, p["ra"], p["dec"], here), float), \
+            "BJD_TDB, as the ephemeris is taken to be (the archive's usual standard)"
+    middles = transits_between(p, times.min() - 0.5, times.max() + 0.5)
+    predicted = min(middles, key=lambda m: abs(m - times.mean())) if middles else None
+    result = fit(times, mag, predicted, p["hours"]) if predicted is not None else None
+    if result is not None:
+        result["time_standard"] = standard
+    looked = checks(session, times, mag, predicted, p["hours"], site)
     looked["headroom"] = headroom(session, p["ra"], p["dec"], size)
     where = looked.pop("_where", None)
     answer = {"planet": p["planet"], "star": p["star"], "session": session.name,

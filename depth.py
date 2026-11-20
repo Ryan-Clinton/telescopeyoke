@@ -663,7 +663,7 @@ def sweep_stacks(paths, seconds_list, say=print):
     exposure, gain = float(header.get("EXPTIME", 0)), int(float(header.get("GAIN", 0)))
     if exposure <= 0:
         raise interface.Refusal("INVALID_REQUEST", f"{paths[0]} does not say its exposure.")
-    calibration = stacking.Calibration(exposure, gain)
+    calibration = stacking.Calibration(exposure, gain, header)    # the frame's own masters (vet.stacked)
     mono = stacking.is_mono(header)
     rgb = stacking.prepare(mosaic, calibration, mono=mono)
     lum = rgb.sum(axis=2)
@@ -892,7 +892,7 @@ def destripe_check(session, frames=5, per_frame=300, fwhm=4.0, seed=11, say=prin
     rings = []
     for path in files:
         mosaic, header = stacking.load_light(path)
-        raw = stacking.Calibration(float(header["EXPTIME"]), int(header["GAIN"])).apply(mosaic).astype(np.float32)
+        raw = stacking.Calibration(float(header["EXPTIME"]), int(header["GAIN"]), header).apply(mosaic).astype(np.float32)
         base = lum(raw)
         noise = 1.4826 * float(np.median(np.abs(base - np.median(base))))
         xy = places(base.shape, per_frame, rng)

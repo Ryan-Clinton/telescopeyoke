@@ -36,7 +36,8 @@
     "fit": {"type": ["object", "null"], "properties": {
       "depth": {"type": "number"}, "depth_error": {"type": "number"}, "middle": {"type": "number"},
       "early_late_min": {"type": "number"}, "scatter_mmag": {"type": "number"},
-      "in_transit_points": {"type": "integer"}, "out_of_transit_points": {"type": "integer"}}},
+      "in_transit_points": {"type": "integer"}, "out_of_transit_points": {"type": "integer"},
+      "time_standard": {"type": "string", "description": "the time the middle and early_late_min are in (BJD_TDB, or JD_UTC when the site is not known)"}}},
     "jd": {"type": "array", "items": {"type": "number"}},
     "mag": {"type": "array", "items": {"type": ["number", "null"]}},
     "kind": {"enum": ["inferred", "measured"]},

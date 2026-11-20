@@ -26,7 +26,7 @@ Repository: [Ryan-Clinton/telescopeyoke](https://github.com/Ryan-Clinton/telesco
 | 5 | Guiding and calibration | done 20 Nov 2026, re-checked |
 | 6 | Camera, cooling, filters and focusing | done 20 Nov 2026, re-checked |
 | 7 | Scientific discovery reliability | done 20 Nov 2026, re-checked |
-| 8 | Calibration and scientific measurement accuracy | not started |
+| 8 | Calibration and scientific measurement accuracy | done 20 Nov 2026; re-check asked |
 | 9 | Demo claims versus real-world proof | not started |
 | 10 | Hardware onboarding and compatibility | not started |
 | 11 | NINA/PHD2 companion | not started |
@@ -353,4 +353,19 @@ Verdicts and searches already recorded are not remade: every change below applie
 | 3 | A search's answer and its alert's delivery are not told apart | P1 | Confirmed and fixed | The patrol record now keeps `alerted` and `alert_delivered` (schema updated), written again after the alert; an undelivered alert is said in the run's log and reaches the agent as "(not delivered)"; nothing is sent twice. `outcome.search_state` takes a failed `search.json` over an earlier answer |
 | 4 | A bad VSX answer cached before the fix is still trusted | P1 | Confirmed and fixed | A cached answer is judged as a fresh one (`vsx_table`), and one that fails is deleted and asked again |
 | 5 | A second look with one seen again says nothing of the rest | P2 | Confirmed and fixed | Every alerted candidate is said as seen again, gone where the look was deep enough, or not ruled out |
+
+## 8. Calibration and scientific measurement accuracy, 20 November 2026
+
+Results already recorded are not remade; each new one is stamped with the code that made it.
+
+| # | Finding | Severity | Verdict | What was done |
+|---|---|---|---|---|
+| 1 | Vetting's stacks, and so the variable-star and transit light curves, calibrate without the frame's header | P1 | Confirmed and fixed (worse than claimed) | With no header the camera in use chose the masters: a 183C frame measured today was calibrated as the 183M's, and a 183M frame got the settings' defaults and no filter's flat. `vet.stacked` passes the frame's header |
+| 2 | The flat-dark is looked for at the light's gain | P1 | Confirmed and fixed | The flat-dark is matched to the flat's own exposure, gain, offset, binning, readout and temperature. Measured first: all ten kept 183M flats were taken at the lights' settings (gain 1500, offset 80, speed 3, -5 °C), so no recorded calibration changes |
+| 3 | The depth sweep calibrates without the header | P1 | Confirmed and fixed | `depth.sweep_stacks` and the planted-star test pass the frame's header |
+| 4 | Transit middles in JD (UTC) against an ephemeris in BJD_TDB | P1 | Confirmed and fixed | The fit is made in BJD_TDB when the site is known, and every fit says its `time_standard` (schema updated); without a site it says the early or late is uncertain by up to 8 minutes |
+| 5 | The calibration check reads only each folder's first frame | P1 | Confirmed and fixed | `stacking.require_frames` reads every frame's header and checks each set of settings (camera, train, filter and the dark's cards) once |
+| 6 | The 183C's stacks say TY_CALIB with no masters | P2 | Confirmed and fixed | TY_CALIB stays "may enter science"; a 183C stack also says `TY_CALFUL`, whether dark, bias and flat were all applied |
+| 7 | DATE-OBS is when the exposure was asked for, about 0.4-0.5 s before it began | P2 | Agreed and planned | A card with the measured lag and its uncertainty, for transit timing |
+| 8 | Gaia positions are J2016, not the night's | P2 | Agreed and planned | Proper motion carried to the frame's epoch where Gaia gives it, and a position uncertainty on reported candidates |
 
