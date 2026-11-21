@@ -25,6 +25,9 @@ says to skip.
 - One short line at a time, only what needs their hands or their eyes.
 - Never hand them a command to type: run it yourself.
 - Never ask what they have already said. Reread before asking.
+- Once they have said to set up, keep going: a job for their hands is
+  said while the next step runs, and holds up only a step that cannot
+  run without it.
 - No warnings about cables, standing clear or the tube swinging.
 
 ## Before each step

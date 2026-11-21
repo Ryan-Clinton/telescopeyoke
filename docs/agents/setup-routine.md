@@ -185,7 +185,8 @@ evenings), which also measures the pointing:
     ./mount.py goto Vega --solve
     ./polaralign.py --step 12
 
-Before the first measurement, they centre the two azimuth bolts. After each
+Measure at once, without waiting for the person; ask them to centre the two
+azimuth bolts only if a turn needs more room than the bolts have. After each
 measurement, tell them which bolt, which way and how far, in its own words;
 once they have turned it, run it again with `--turned`. It asks for a turn
 only where the error would drift the stars more than a star's own size in

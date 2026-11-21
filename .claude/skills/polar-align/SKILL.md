@@ -17,7 +17,9 @@ are in `docs/calibration.md` ("Polar alignment") and
    evenings): `./ty mount goto Vega --solve`. Loading this skill because
    they said the tripod moved is not a go to slew: the move runs under
    nightly-setup's rule for moves.
-3. Before the first measurement, they centre the two azimuth bolts.
+3. Measure at once: never wait for the person before the first
+   measurement. Ask them to centre the two azimuth bolts only if a turn
+   it asks for needs more room than the bolts have.
 4. `./polaralign.py --step 12` (dry-run first). A house or tree in the
    way of the third picture: a smaller `--step`.
 5. After each round, tell them which bolt, which way and how far, in the
