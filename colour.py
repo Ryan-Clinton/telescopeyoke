@@ -141,6 +141,8 @@ MIN_COVERED = 0.75   # share of the frame every filter must cover for the target
 GREEN_KEPT = 0.25    # of the green above the red and blue's average, in the Hubble palette
 LINEAR_OIII = 0.55   # OIII fills two channels in HOO: mixed linearly at full strength the nebula goes grey
 NARROWBAND_SATURATION = 1.8   # mixed linearly the palette is paler than separate stretches' colours
+EDGE_TRIM = 0.035    # of the picture's shorter side, off every edge of a linear narrowband picture
+SKY_CELLS = 5        # how smooth the sky map is, in cells of 16 pixels: far wider than any star
 STAR_TINT = 0.25     # of each star's colour kept: a filter's stars differ by more than the eye expects
 OIII_SHARE = 0.8     # OIII fills two channels in HOO: at full strength the stars come out cyan
 
@@ -203,6 +205,39 @@ def sky_surface(plane, clear):
     return sum(k * t.astype(np.float32) for k, t in zip(fit, terms(full_y / rows, full_x / cols)))
 
 
+def clear_of_nebula(guide):
+    """Where the sky is, from the filter showing the nebula best, judged
+    after a first bowl is off: on the raw level a gradient across the frame
+    counted a whole side of the sky as nebula (21 November 2026)."""
+    shape = smoothed(guide)
+    rest = shape - sky_surface(shape, shape < np.percentile(shape, 50))
+    middle = np.median(rest)
+    bright = rest >= middle + 2 * 1.4826 * np.median(np.abs(rest - middle))
+    # The nebula is the largest bright patch. Smaller ones, such as a glow
+    # along the frame's edge, are sky for the map to follow.
+    coarse = ndimage.binary_opening(bright[::8, ::8], iterations=2)
+    labels, count = ndimage.label(coarse)
+    if not count:
+        return ~bright
+    sizes = ndimage.sum_labels(coarse, labels, range(1, count + 1))
+    nebula = ndimage.binary_dilation(labels == int(np.argmax(sizes)) + 1, iterations=3)
+    full = np.repeat(np.repeat(nebula, 8, axis=0), 8, axis=1)[:guide.shape[0], :guide.shape[1]]
+    return ~full
+
+
+def sky_model(plane, clear):
+    """The bowl, plus what it misses: a smooth map of the clear sky's
+    remainder, carried across the nebula. 21 November 2026: NGC 2174's SII and
+    OIII keep a bright patch at one corner of the sensor, which no bowl follows."""
+    bowl = sky_surface(plane, clear)
+    rest = ndimage.median_filter((plane - bowl)[::16, ::16], 5)
+    weight = (clear[::16, ::16] & (plane[::16, ::16] != 0)).astype(np.float32)
+    level = ndimage.gaussian_filter(rest * weight, SKY_CELLS, mode="nearest")
+    share = ndimage.gaussian_filter(weight, SKY_CELLS, mode="nearest")
+    extra = level / np.maximum(share, 0.05)
+    return bowl + ndimage.zoom(extra, (plane.shape[0] / extra.shape[0], plane.shape[1] / extra.shape[1]), order=1)
+
+
 def layers(plane, star):
     """A linear plane as (nebula, stars), which add back up to it. Only the
     stars' own pixels are replaced, so the nebula keeps its fine detail."""
@@ -228,9 +263,8 @@ def linear_narrowband(rgb, channels, saturation, background=2, say=print):
     # filter cannot tell its own nebula from its sky, and scaled up to match,
     # NGC 2174's SII turned the sky red (21 November 2026).
     guide = max(planes, key=lambda b: nebula_level(planes[b]))
-    shape = smoothed(planes[guide])
-    clear = shape < np.percentile(shape, 50)
-    planes = {b: p - sky_surface(p, clear) for b, p in planes.items()}
+    clear = clear_of_nebula(planes[guide])
+    planes = {b: p - sky_model(p, clear) for b, p in planes.items()}
     say(f"  sky fitted outside the nebula as {guide} shows it")
     scale = {b: nebula_level(p) for b, p in planes.items()}
     even, before, after = matched_widths(planes, say)
@@ -375,6 +409,12 @@ def combine(stacks, saturation=1.25, say=print, min_covered=MIN_COVERED, palette
                                         f"(at least {min_covered:.0%} keeps the target, framed in the middle "
                                         "of each): the colour picture would cut it off. --any-coverage makes "
                                         "it anyway.")
+    if linear is not None:
+        # The stacks' outer edge is covered by only some of the frames and
+        # shows as thin bright strips (21 November 2026, NGC 2174).
+        trim = int(EDGE_TRIM * min(colour.shape[:2]))
+        colour, linear = colour[trim:-trim, trim:-trim], linear[trim:-trim, trim:-trim]
+        used["edge_trimmed_px"] = trim
     return np.clip(colour, 0, 255).astype(np.uint8), used, linear
 
 
