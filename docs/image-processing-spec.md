@@ -243,7 +243,9 @@ Each picture's JSON is now stamped through `records.write` (schema `colour`),
 with every effective setting and each source stack's SHA-256. Comparison runs
 get their own file names. The usual name is the latest picture, and each
 different make is also kept in `web/colour-runs/` under an identifier from its
-method version, settings and stacks. Section 7's other measures have not been run.
+method version, settings, stacks and the picture's own contents. A run that
+replaces a picture first keeps the old picture and record there, and runs with
+`--night` or `--any-coverage` get their own file names. Section 7's other measures have not been run.
 
 ### 4.2 PSF matching
 

@@ -631,6 +631,24 @@ def main():
     return interface.main("colour", lambda: show_plan(args.name) if args.plan else run(args), args.json)
 
 
+def keep_replaced(out):
+    """A copy in colour-runs/ of the picture and record at `out`, before a new
+    run replaces them, named by the picture's own contents so that nothing
+    kept is ever written over (21 November 2026: a trial run replaced M33's
+    record, and how that picture was made was lost)."""
+    if not out.exists():
+        return None
+    digest = hashlib.sha256(out.read_bytes()).hexdigest()[:12]
+    copy = out.parent / "colour-runs" / f"{out.stem}-replaced-{digest}.jpg"
+    copy.parent.mkdir(exist_ok=True)
+    if not copy.exists():
+        shutil.copy2(out, copy)
+    record = out.with_suffix(".json")
+    if record.exists() and not copy.with_suffix(".json").exists():
+        shutil.copy2(record, copy.with_suffix(".json"))
+    return copy
+
+
 def show_plan(name):
     plan = restack_plan(name)
     for band, p in plan.items():
@@ -668,8 +686,15 @@ def run(args):
         suffix += f"-sharp{args.sharpen}"
     if args.saturation:
         suffix += f"-sat{args.saturation:g}"
+    # A picture of part of the data, or of filters barely overlapping, is not
+    # the target's usual picture.
+    if args.night:
+        suffix += f"-{args.night}"
+    if args.any_coverage:
+        suffix += "-anycoverage"
     out = config.DATA / "web" / f"{stacking.folder_name(args.name)}-{suffix}.jpg"
     out.parent.mkdir(exist_ok=True)
+    keep_replaced(out)
     Image.fromarray(picture).save(out, quality=93)
     print(f"saved {out}")
     settings = {"saturation": saturation, "background": background, "stretched": args.stretched,
@@ -684,7 +709,9 @@ def run(args):
     # The usual name is always the latest; each different make is kept too.
     made = json.dumps([PICTURE_VERSION, args.palette, settings, sorted(
         (b, v["sha256"]) for b, v in used.items() if isinstance(v, dict) and "sha256" in v)], sort_keys=True)
-    run_id = hashlib.sha256(made.encode()).hexdigest()[:12]
+    # The picture's bytes are in it: changed code gives a different picture
+    # and so a different copy, even at the same settings.
+    run_id = hashlib.sha256(made.encode() + out.read_bytes()).hexdigest()[:12]
     copy = out.parent / "colour-runs" / f"{out.stem}-{run_id}.jpg"
     copy.parent.mkdir(exist_ok=True)
     shutil.copy2(out, copy)
